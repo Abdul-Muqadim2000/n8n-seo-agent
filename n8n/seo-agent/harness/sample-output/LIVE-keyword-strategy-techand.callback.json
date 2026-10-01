@@ -1,0 +1,748 @@
+{
+ "status": "completed",
+ "stage": "keyword_strategy",
+ "request_id": "T2-discover-techand",
+ "execution_id": "18",
+ "domain": "techand.ai",
+ "country": "United Arab Emirates",
+ "goal": "leads",
+ "summary": {
+  "keywords_researched": 624,
+  "ai_reviewed": 240,
+  "relevant": 126,
+  "clusters": 46,
+  "competitors": [
+   "instalogic.ae",
+   "craftinteractive.ae",
+   "hamtinfotech.com"
+  ]
+ },
+ "start_with": {
+  "keyword": "e invoicing",
+  "volume": 1900,
+  "kd": 9,
+  "cpc": 7.949999809265137,
+  "intent": "commercial",
+  "page_type": "Service Page",
+  "topic": "e-invoicing uae",
+  "traffic_potential": 371,
+  "opportunity": 1070.8,
+  "ai_search_volume": 64,
+  "serp_features": [
+   "ai_overview",
+   "organic",
+   "people_also_ask",
+   "related_searches",
+   "images"
+  ],
+  "why": "low competition; high commercial value (CPC 7.949999809265137); buyers comparing providers; 1 competitor(s) already rank for it; AI Overview present — write a quotable answer block.",
+  "live": {
+   "top_domains": [
+    "tax.gov.ae",
+    "mof.gov.ae",
+    "edicomgroup.com",
+    "tallysolutions.com",
+    "europe.thomsonreuters.com"
+   ],
+   "your_position": null,
+   "features": [
+    "ai_overview",
+    "people_also_ask",
+    "images",
+    "related_searches"
+   ],
+   "ai_overview": true,
+   "paa": [
+    "What is meant by e-invoicing?",
+    "Is e-invoicing mandatory in the UAE?",
+    "What is an e-invoice and how does it work?",
+    "What is the rule for e-invoicing?"
+   ]
+  }
+ },
+ "priority": [
+  {
+   "keyword": "e invoicing",
+   "volume": 1900,
+   "kd": 9,
+   "cpc": 7.949999809265137,
+   "intent": "commercial",
+   "page_type": "Service Page",
+   "topic": "e-invoicing uae",
+   "traffic_potential": 371,
+   "opportunity": 1070.8,
+   "ai_search_volume": 64,
+   "serp_features": [
+    "ai_overview",
+    "organic",
+    "people_also_ask",
+    "related_searches",
+    "images"
+   ],
+   "why": "low competition; high commercial value (CPC 7.949999809265137); buyers comparing providers; 1 competitor(s) already rank for it; AI Overview present — write a quotable answer block.",
+   "live": {
+    "top_domains": [
+     "tax.gov.ae",
+     "mof.gov.ae",
+     "edicomgroup.com",
+     "tallysolutions.com",
+     "europe.thomsonreuters.com"
+    ],
+    "your_position": null,
+    "features": [
+     "ai_overview",
+     "people_also_ask",
+     "images",
+     "related_searches"
+    ],
+    "ai_overview": true,
+    "paa": [
+     "What is meant by e-invoicing?",
+     "Is e-invoicing mandatory in the UAE?",
+     "What is an e-invoice and how does it work?",
+     "What is the rule for e-invoicing?"
+    ]
+   }
+  },
+  {
+   "keyword": "what is e invoicing in uae",
+   "volume": 390,
+   "kd": 13,
+   "cpc": 3.7100000381469727,
+   "intent": "informational",
+   "page_type": "Guide",
+   "topic": "e-invoicing uae",
+   "traffic_potential": 76,
+   "opportunity": 115,
+   "ai_search_volume": 9,
+   "serp_features": [
+    "ai_overview",
+    "people_also_ask",
+    "organic",
+    "related_searches"
+   ],
+   "why": "low competition; research-stage traffic that builds authority; 1 competitor(s) already rank for it; AI Overview present — write a quotable answer block.",
+   "live": {
+    "top_domains": [
+     "tax.gov.ae",
+     "mof.gov.ae",
+     "grantthornton.ae",
+     "cleartax.com",
+     "edicomgroup.com"
+    ],
+    "your_position": null,
+    "features": [
+     "ai_overview",
+     "people_also_ask",
+     "paid",
+     "related_searches"
+    ],
+    "ai_overview": true,
+    "paa": [
+     "What is the concept of e-invoicing?",
+     "How does e-invoicing work?",
+     "Who is exempted from e-invoicing in the UAE?",
+     "Why do you need an e-invoice?"
+    ]
+   }
+  },
+  {
+   "keyword": "erp consultants",
+   "volume": 110,
+   "kd": 0,
+   "cpc": 8.140000343322754,
+   "intent": "commercial",
+   "page_type": "Service Page",
+   "topic": "erp implementation services",
+   "traffic_potential": 21,
+   "opportunity": 36.5,
+   "ai_search_volume": 3,
+   "serp_features": [
+    "ai_overview",
+    "organic",
+    "people_also_ask",
+    "related_searches"
+   ],
+   "why": "low competition; high commercial value (CPC 8.140000343322754); buyers comparing providers; 1 competitor(s) already rank for it; AI Overview present — write a quotable answer block.",
+   "live": {
+    "top_domains": [
+     "goodfirms.co",
+     "linkedin.com",
+     "erpadvisorsgroup.com",
+     "datixinc.com",
+     "ae.indeed.com"
+    ],
+    "your_position": null,
+    "features": [
+     "ai_overview",
+     "people_also_ask",
+     "discussions_and_forums",
+     "related_searches"
+    ],
+    "ai_overview": true,
+    "paa": [
+     "What does an ERP consultant do?",
+     "Which ERP is mostly used in UAE?",
+     "What are the top 10 ERP consulting companies?",
+     "What does ERP mean in consulting?"
+    ]
+   }
+  },
+  {
+   "keyword": "finance erp system",
+   "volume": 40,
+   "kd": null,
+   "cpc": null,
+   "intent": "commercial",
+   "page_type": "Product Page",
+   "topic": "dynamics 365 finance erp",
+   "traffic_potential": 12,
+   "opportunity": 5.3,
+   "ai_search_volume": 0,
+   "serp_features": [],
+   "why": "buyers comparing providers.",
+   "live": {
+    "top_domains": [
+     "oracle.com",
+     "ecisolutions.com",
+     "pwc.de",
+     "gartner.com",
+     "spendesk.com"
+    ],
+    "your_position": null,
+    "features": [
+     "ai_overview",
+     "people_also_ask",
+     "video",
+     "related_searches"
+    ],
+    "ai_overview": true,
+    "paa": [
+     "What are ERP systems in finance?",
+     "Which ERP is mostly used in UAE?",
+     "Which ERP is best for finance?",
+     "What are the top 5 ERP systems?"
+    ]
+   }
+  },
+  {
+   "keyword": "erp finance",
+   "volume": 40,
+   "kd": null,
+   "cpc": null,
+   "intent": "commercial",
+   "page_type": "Product Page",
+   "topic": "dynamics 365 finance erp",
+   "traffic_potential": 12,
+   "opportunity": 5.3,
+   "ai_search_volume": 0,
+   "serp_features": [],
+   "why": "buyers comparing providers.",
+   "live": {
+    "top_domains": [
+     "navan.com",
+     "hyperbots.com",
+     "oracle.com",
+     "withless.com",
+     "umbrex.com"
+    ],
+    "your_position": null,
+    "features": [
+     "ai_overview",
+     "images",
+     "people_also_ask"
+    ],
+    "ai_overview": true,
+    "paa": [
+     "What does ERP stand for in finance?",
+     "What is an ERP example?",
+     "What are the four types of ERP?",
+     "Which ERP is best for finance?"
+    ]
+   }
+  },
+  {
+   "keyword": "ai in accounts payable",
+   "volume": 20,
+   "kd": null,
+   "cpc": null,
+   "intent": "commercial",
+   "page_type": "Blog Post",
+   "topic": "ai in finance",
+   "traffic_potential": 6,
+   "opportunity": 3.8,
+   "ai_search_volume": 0,
+   "serp_features": [],
+   "why": "buyers comparing providers.",
+   "live": {
+    "top_domains": [
+     "rillion.com",
+     "ramp.com",
+     "sap.com",
+     "abbyy.com",
+     "precoro.com"
+    ],
+    "your_position": null,
+    "features": [
+     "ai_overview",
+     "people_also_ask",
+     "video",
+     "related_searches"
+    ],
+    "ai_overview": true,
+    "paa": [
+     "Can AI take over accounts payable?",
+     "What are some AI solutions for accounts payable?",
+     "Is there an AI course specifically for accounts payable?",
+     "How is AI currently used in accounting?"
+    ]
+   }
+  }
+ ],
+ "content_plan": [
+  {
+   "tier": "Now",
+   "topic": "erp implementation services",
+   "primary_keyword": "erp consultants",
+   "page_type": "Service Page",
+   "keyword_count": 3,
+   "total_volume": 130,
+   "supporting": [
+    "erp implementation consulting services",
+    "implementing accounting system"
+   ]
+  },
+  {
+   "tier": "Now",
+   "topic": "dynamics 365 finance erp",
+   "primary_keyword": "finance erp system",
+   "page_type": "Product Page",
+   "keyword_count": 9,
+   "total_volume": 180,
+   "supporting": [
+    "erp finance",
+    "erp financials",
+    "uae accounting system",
+    "financial and accounting software",
+    "erp financial systems",
+    "financial business management system",
+    "finance tracker software",
+    "accounting software purchase"
+   ]
+  },
+  {
+   "tier": "Now",
+   "topic": "dynamics 365 finance",
+   "primary_keyword": "integrated financial management system",
+   "page_type": "Product Page",
+   "keyword_count": 12,
+   "total_volume": 120,
+   "supporting": [
+    "finance and accounting system",
+    "inventory and accounting system",
+    "automated financial management system",
+    "financial management information system",
+    "financial erp solutions",
+    "erp financial accounting",
+    "erp accounting module",
+    "erp financial modules"
+   ]
+  },
+  {
+   "tier": "Now",
+   "topic": "finance accounting solutions",
+   "primary_keyword": "solutions for accounting",
+   "page_type": "Service Page",
+   "keyword_count": 9,
+   "total_volume": 90,
+   "supporting": [
+    "financial accounting solutions",
+    "finance management solutions",
+    "finance and accounting solutions",
+    "accounting and financial solutions",
+    "accounting and finance solutions",
+    "tax & accounting solutions",
+    "money management solutions",
+    "quick accounting solutions"
+   ]
+  },
+  {
+   "tier": "Now",
+   "topic": "dynamics 365 finance operations",
+   "primary_keyword": "corporate accounting system",
+   "page_type": "Product Page",
+   "keyword_count": 8,
+   "total_volume": 80,
+   "supporting": [
+    "accounting inventory system",
+    "financial information system",
+    "accounting system demo",
+    "accounting system training",
+    "accounting system setup",
+    "accounting system price",
+    "revenue accounting system"
+   ]
+  },
+  {
+   "tier": "Next",
+   "topic": "financial management solution",
+   "primary_keyword": "enterprise financial management",
+   "page_type": "Service Page",
+   "keyword_count": 5,
+   "total_volume": 50,
+   "supporting": [
+    "financial management solution",
+    "solution financial management",
+    "business financial solution",
+    "financial planning solution"
+   ]
+  },
+  {
+   "tier": "Next",
+   "topic": "accounts receivable system",
+   "primary_keyword": "accounts receivable management system",
+   "page_type": "Product Page",
+   "keyword_count": 4,
+   "total_volume": 40,
+   "supporting": [
+    "account receivable solutions",
+    "manage receivables system options",
+    "business receivables"
+   ]
+  },
+  {
+   "tier": "Next",
+   "topic": "cash management erp",
+   "primary_keyword": "erp cash management",
+   "page_type": "Product Page",
+   "keyword_count": 4,
+   "total_volume": 40,
+   "supporting": [
+    "business cash flow management software",
+    "cash management implementation",
+    "liquidity management solution"
+   ]
+  },
+  {
+   "tier": "Next",
+   "topic": "cash flow management",
+   "primary_keyword": "cash flow management solution",
+   "page_type": "Service Page",
+   "keyword_count": 4,
+   "total_volume": 40,
+   "supporting": [
+    "cash forecast software",
+    "financial projection software",
+    "cashflow forecast software"
+   ]
+  },
+  {
+   "tier": "Next",
+   "topic": "spend management",
+   "primary_keyword": "expense management solutions",
+   "page_type": "Service Page",
+   "keyword_count": 4,
+   "total_volume": 40,
+   "supporting": [
+    "spend management system",
+    "expense solutions",
+    "spend management solutions"
+   ]
+  },
+  {
+   "tier": "Next",
+   "topic": "ai in finance",
+   "primary_keyword": "ai in accounts payable",
+   "page_type": "Blog Post",
+   "keyword_count": 1,
+   "total_volume": 20,
+   "supporting": []
+  },
+  {
+   "tier": "Next",
+   "topic": "erp costing module",
+   "primary_keyword": "erp cost accounting",
+   "page_type": "Product Page",
+   "keyword_count": 2,
+   "total_volume": 20,
+   "supporting": [
+    "erp costing module"
+   ]
+  },
+  {
+   "tier": "Next",
+   "topic": "financial management software",
+   "primary_keyword": "financial management software examples",
+   "page_type": "Guide",
+   "keyword_count": 4,
+   "total_volume": 40,
+   "supporting": [
+    "financial management software list",
+    "best financial tracking software",
+    "software project financial management"
+   ]
+  },
+  {
+   "tier": "Later",
+   "topic": "e-invoicing uae",
+   "primary_keyword": "e invoicing",
+   "page_type": "Guide",
+   "keyword_count": 3,
+   "total_volume": 2300,
+   "supporting": [
+    "what is e invoicing in uae",
+    "invoicing best practices"
+   ]
+  },
+  {
+   "tier": "Later",
+   "topic": "what is erp",
+   "primary_keyword": "erp",
+   "page_type": "Guide",
+   "keyword_count": 2,
+   "total_volume": 5420,
+   "supporting": [
+    "erp accounting definition"
+   ]
+  },
+  {
+   "tier": "Later",
+   "topic": "financial compliance",
+   "primary_keyword": "financial compliance solutions",
+   "page_type": "Guide",
+   "keyword_count": 6,
+   "total_volume": 70,
+   "supporting": [
+    "compliance with ifrs",
+    "accounting and tax compliance",
+    "financial compliance",
+    "financial compliance monitoring",
+    "financial data compliance"
+   ]
+  },
+  {
+   "tier": "Later",
+   "topic": "accounting software guide",
+   "primary_keyword": "accounting software feature",
+   "page_type": "Guide",
+   "keyword_count": 4,
+   "total_volume": 40,
+   "supporting": [
+    "accounting software advantages",
+    "accounting software benefits",
+    "financial software examples"
+   ]
+  },
+  {
+   "tier": "Later",
+   "topic": "finance process transformation",
+   "primary_keyword": "accounts payable transformation",
+   "page_type": "Service Page",
+   "keyword_count": 3,
+   "total_volume": 30,
+   "supporting": [
+    "finance process transformation",
+    "shared accounting services"
+   ]
+  },
+  {
+   "tier": "Later",
+   "topic": "finance erp software",
+   "primary_keyword": "accounting solutions",
+   "page_type": "Service Page",
+   "keyword_count": 1,
+   "total_volume": 20,
+   "supporting": []
+  },
+  {
+   "tier": "Later",
+   "topic": "financial reporting solutions",
+   "primary_keyword": "financial reporting solutions",
+   "page_type": "Service Page",
+   "keyword_count": 2,
+   "total_volume": 20,
+   "supporting": [
+    "financial ratio software"
+   ]
+  }
+ ],
+ "quick_wins": [
+  {
+   "keyword": "e invoicing",
+   "volume": 1900,
+   "kd": 9,
+   "cpc": 7.949999809265137,
+   "intent": "commercial",
+   "page_type": "Service Page",
+   "topic": "e-invoicing uae",
+   "traffic_potential": 371,
+   "opportunity": 1070.8,
+   "ai_search_volume": 64,
+   "serp_features": [
+    "ai_overview",
+    "organic",
+    "people_also_ask",
+    "related_searches",
+    "images"
+   ],
+   "why": null,
+   "live": null
+  },
+  {
+   "keyword": "what is e invoicing in uae",
+   "volume": 390,
+   "kd": 13,
+   "cpc": 3.7100000381469727,
+   "intent": "informational",
+   "page_type": "Guide",
+   "topic": "e-invoicing uae",
+   "traffic_potential": 76,
+   "opportunity": 115,
+   "ai_search_volume": 9,
+   "serp_features": [
+    "ai_overview",
+    "people_also_ask",
+    "organic",
+    "related_searches"
+   ],
+   "why": null,
+   "live": null
+  },
+  {
+   "keyword": "erp consultants",
+   "volume": 110,
+   "kd": 0,
+   "cpc": 8.140000343322754,
+   "intent": "commercial",
+   "page_type": "Service Page",
+   "topic": "erp implementation services",
+   "traffic_potential": 21,
+   "opportunity": 36.5,
+   "ai_search_volume": 3,
+   "serp_features": [
+    "ai_overview",
+    "organic",
+    "people_also_ask",
+    "related_searches"
+   ],
+   "why": null,
+   "live": null
+  }
+ ],
+ "questions": [
+  "what is e invoicing in uae"
+ ],
+ "competitor_gaps": [
+  {
+   "keyword": "e invoicing",
+   "volume": 1900,
+   "kd": 9,
+   "cpc": 7.949999809265137,
+   "intent": "commercial",
+   "page_type": "Service Page",
+   "topic": "e-invoicing uae",
+   "traffic_potential": 371,
+   "opportunity": 1070.8,
+   "ai_search_volume": null,
+   "serp_features": [
+    "ai_overview",
+    "organic",
+    "people_also_ask",
+    "related_searches",
+    "images"
+   ],
+   "why": null,
+   "live": null
+  },
+  {
+   "keyword": "what is e invoicing in uae",
+   "volume": 390,
+   "kd": 13,
+   "cpc": 3.7100000381469727,
+   "intent": "informational",
+   "page_type": "Guide",
+   "topic": "e-invoicing uae",
+   "traffic_potential": 76,
+   "opportunity": 115,
+   "ai_search_volume": null,
+   "serp_features": [
+    "ai_overview",
+    "people_also_ask",
+    "organic",
+    "related_searches"
+   ],
+   "why": null,
+   "live": null
+  },
+  {
+   "keyword": "erp consultants",
+   "volume": 110,
+   "kd": 0,
+   "cpc": 8.140000343322754,
+   "intent": "commercial",
+   "page_type": "Service Page",
+   "topic": "erp implementation services",
+   "traffic_potential": 21,
+   "opportunity": 36.5,
+   "ai_search_volume": null,
+   "serp_features": [
+    "ai_overview",
+    "organic",
+    "people_also_ask",
+    "related_searches"
+   ],
+   "why": null,
+   "live": null
+  }
+ ],
+ "ai_demand": {
+  "available": true,
+  "error": "",
+  "top": [
+   {
+    "keyword": "erp",
+    "ai_search_volume": 546,
+    "google_volume": 5400
+   },
+   {
+    "keyword": "e invoicing",
+    "ai_search_volume": 64,
+    "google_volume": 1900
+   },
+   {
+    "keyword": "what is e invoicing in uae",
+    "ai_search_volume": 9,
+    "google_volume": 390
+   },
+   {
+    "keyword": "erp consultants",
+    "ai_search_volume": 3,
+    "google_volume": 110
+   }
+  ]
+ },
+ "research_failures": [],
+ "follow_ups": {
+  "content": false,
+  "audit": false
+ },
+ "run_ledger": {
+  "dataforseo_usd": 0.2214,
+  "dataforseo_calls": 17,
+  "by_node": {
+   "Candidate SERP": 0.012,
+   "Run Research": 0.1512,
+   "Run Competitor Keywords": 0.0381,
+   "AI Demand": 0.02
+  },
+  "ai_calls": 2,
+  "ai_nodes": [
+   "Site Describer",
+   "Keyword Seeds"
+  ],
+  "started_at": "2026-10-01T12:10:31.289Z",
+  "finished_at": "2026-10-01T12:12:33.976Z",
+  "duration_min": 2
+ },
+ "callback_url": "http://localhost:5678/webhook/seo-callback"
+}

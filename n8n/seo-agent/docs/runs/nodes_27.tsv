@@ -1,0 +1,70 @@
+API Entry	runs=1	items=1	1ms
+Normalize Input	runs=1	items=1	37ms
+Rate Limit	runs=1	items=1	20ms
+Input OK?	runs=1	items=1/0	6ms
+Need Site Read?	runs=1	items=1/0	3ms
+Read Website	runs=1	items=1	1220ms
+Clean Site Text	runs=1	items=1	20ms
+Site Read OK?	runs=1	items=1/0	3ms
+Claude — Site Describer	runs=1	items=	6694ms
+Parser — Site Describer	runs=1	items=	9ms
+Site Describer	runs=1	items=1	7290ms
+Parse Description	runs=1	items=1	43ms
+Route Mode	runs=1	items=0/0/0/0/1/0	108ms
+Prepare Keyword Run	runs=1	items=1	27ms
+Has Domain?	runs=1	items=1/0	4ms
+Fetch Sitemap Index	runs=1	items=1	503ms
+Parse Sitemap Index	runs=1	items=1	18ms
+Fetch Sitemaps	runs=1	items=1	502ms
+Collect Site URLs	runs=1	items=1	28ms
+Read Client Pages?	runs=1	items=1/0	5ms
+Client Page Requests	runs=1	items=2	18ms
+Read Client Pages	runs=1	items=2	3156ms
+Collect Client Pages	runs=1	items=1	30ms
+SERP Top 10	runs=1	items=1	22112ms
+Pick Top 6	runs=1	items=8	1264ms
+Read Competitor Pages	runs=1	items=8	45859ms
+Find Blocked Pages	runs=1	items=1	1388ms
+Any Blocked?	runs=1	items=1/0	14ms
+Blocked Page Items	runs=1	items=2	20ms
+Retry Blocked Pages	runs=1	items=2	186863ms
+Analyze Competitor Pages	runs=1	items=1	1148ms
+Facts SERP	runs=1	items=1	12770ms
+Collect Facts	runs=1	items=1	30ms
+Claude — Competitor Analyzer	runs=1	items=	27452ms
+Parser — Competitor Analyzer	runs=1	items=	1ms
+Competitor Analyzer	runs=1	items=1	27563ms
+Parse Analysis	runs=1	items=1	1113ms
+Keyword Data	runs=1	items=1	574ms
+Has Domain (Authority)?	runs=1	items=0/1	2ms
+Merge Keyword Data	runs=1	items=1	110ms
+Verdict Chat Model	runs=1	items=	9527ms
+Parser — Verdict	runs=1	items=	1ms
+Verdict Agent	runs=1	items=1	9716ms
+Parse Verdict	runs=1	items=1	39ms
+Ladder Mode?	runs=1	items=1/0	2ms
+Ladder Requests	runs=1	items=4	23ms
+Run Ladder Research	runs=1	items=4	3700ms
+Ladder Pool	runs=1	items=1	77ms
+Ladder Relevance Chunks	runs=1	items=1	19ms
+Claude — Ladder Relevance	runs=1	items=	6553ms
+Parser — Ladder Relevance	runs=1	items=	1ms
+Ladder Keyword Relevance	runs=1	items=1	6587ms
+Ladder Plan	runs=1	items=1	42ms
+Build Ladder Report	runs=1	items=1	160ms
+Prepare PDF Ladder	runs=1	items=1	36ms
+Render PDF Ladder	runs=1	items=1	244ms
+Attach PDF Ladder	runs=1	items=1	31ms
+Ensure Ladder Table	runs=1	items=1	30ms
+Ensure History Table	runs=1	items=1	7ms
+Ladder Rows	runs=1	items=9	26ms
+Save Ladder Rows	runs=1	items=9	15ms
+Ladder Delivery	runs=1	items=1	26ms
+Spawn Page Runs	runs=1	items=1	26ms
+Start Page Runs	runs=1	items=1	55ms
+Has Email (Ladder)?	runs=1	items=1/0	5ms
+Send Ladder Report	runs=1	items=1	4480ms
+Via Webhook (Ladder)?	runs=1	items=1/0	2ms
+Build Ladder Response	runs=1	items=1	33ms
+Has Callback?	runs=1	items=1/0	2ms
+POST Callback	runs=1	items=1	29ms

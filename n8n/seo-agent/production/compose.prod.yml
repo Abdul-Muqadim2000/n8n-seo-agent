@@ -1,0 +1,99 @@
+# Production-grade n8n stack for the SEO Agent (NOT applied automatically).
+# Postgres instead of SQLite, Redis + queue mode with a worker, pinned encryption key, public URL, Gotenberg for PDFs.
+# Usage (from this folder, after filling .env.prod):
+#   docker compose --env-file .env.prod -f compose.prod.yml up -d
+# Migration from the current SQLite stack: export workflows + credentials first (see PRODUCTION.md).
+volumes:
+  n8n-data:
+  postgres-data:
+  redis-data:
+
+x-n8n-env: &n8n-env
+  env_file: .env.prod
+  environment:
+    DB_TYPE: postgresdb
+    DB_POSTGRESDB_HOST: postgres
+    DB_POSTGRESDB_PORT: '5432'
+    DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+    DB_POSTGRESDB_USER: ${POSTGRES_USER}
+    DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+    EXECUTIONS_MODE: queue
+    QUEUE_BULL_REDIS_HOST: redis
+    QUEUE_BULL_REDIS_PORT: '6379'
+    QUEUE_HEALTH_CHECK_ACTIVE: 'true'
+    N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+    N8N_HOST: ${N8N_HOST}
+    N8N_PROTOCOL: https
+    N8N_PORT: '5678'
+    WEBHOOK_URL: https://${N8N_HOST}/
+    GENERIC_TIMEZONE: ${GENERIC_TIMEZONE}
+    TZ: ${GENERIC_TIMEZONE}
+    EXECUTIONS_DATA_PRUNE: 'true'
+    EXECUTIONS_DATA_MAX_AGE: '336'
+    EXECUTIONS_DATA_PRUNE_MAX_COUNT: '20000'
+    EXECUTIONS_TIMEOUT: '3600'
+    EXECUTIONS_TIMEOUT_MAX: '7200'
+    N8N_RUNNERS_ENABLED: 'true'
+    N8N_RUNNERS_MODE: internal
+    N8N_PAYLOAD_SIZE_MAX: '64'
+    N8N_DEFAULT_BINARY_DATA_MODE: filesystem
+    N8N_BLOCK_ENV_ACCESS_IN_NODE: 'true'
+    N8N_DIAGNOSTICS_ENABLED: 'false'
+    N8N_PROXY_HOPS: '1'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--maxmemory', '256mb', '--maxmemory-policy', 'noeviction']
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  n8n:
+    <<: *n8n-env
+    image: docker.io/n8nio/n8n:${N8N_VERSION}
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    ports:
+      - '127.0.0.1:5678:5678'   # put a TLS reverse proxy (Caddy / nginx / Traefik) in front; do not expose directly
+    volumes:
+      - n8n-data:/home/node/.n8n
+
+  n8n-worker:
+    <<: *n8n-env
+    image: docker.io/n8nio/n8n:${N8N_VERSION}
+    restart: unless-stopped
+    command: worker --concurrency=5
+    depends_on:
+      n8n: { condition: service_started }
+    volumes:
+      - n8n-data:/home/node/.n8n
+    deploy:
+      replicas: 2
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    command: ['gotenberg', '--api-timeout=120s', '--chromium-disable-javascript=true']

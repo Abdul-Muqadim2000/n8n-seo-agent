@@ -1,0 +1,141 @@
+[
+  {
+    "id": "SEOagentWordPres",
+    "name": "SEO Agent — Publish to WordPress",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 1800,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "id": "fe181729-8b76-584c-a6ba-045dfe3a04f1",
+        "name": "From Content Run",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Turns the generated page into a WordPress REST payload: a DRAFT post with title, slug, excerpt (meta description),\n// HTML content, JSON-LD blocks and SEO-plugin meta (Yoast / RankMath keys; they must be exposed to the REST API by the plugin).\nconst d = $input.first().json;\nconst md0 = String(d.page_markdown || d.output || '');\nconst metaRe = /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):\\s*(.+)$/gim;\nconst meta = {}; let m; while ((m = metaRe.exec(md0)) !== null) meta[m[1].toLowerCase()] = m[2].trim();\nlet md = md0.replace(metaRe, '').replace(/<script type=\"application\\/ld\\+json\">[\\s\\S]*?<\\/script>/gi, '').trim();\nconst h1 = (md.match(/^#\\s+(.+)$/m) || [])[1] || '';\nmd = md.replace(/^#\\s+.+$\\n?/m, '').trim();\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst inline = (s) => { let t = esc(s); t = t.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>'); t = t.replace(/\\[([^\\[\\]]+)\\]\\(([^)]+)\\)/g, '<a href=\"$2\">$1</a>'); return t; };\nfunction mdToHtml(text) {\n  const out = []; let list = null, table = null;\n  const closeList = () => { if (list) { out.push('</' + list + '>'); list = null; } };\n  const closeTable = () => { if (table) { out.push('</tbody></table>'); table = null; } };\n  for (const raw of text.split('\\n')) {\n    const l = raw.trim();\n    if (l.startsWith('|')) {\n      closeList();\n      if (/^\\|[\\s:|-]+\\|$/.test(l)) continue;\n      const cells = l.replace(/^\\||\\|$/g, '').split('|').map(c => c.trim());\n      if (!table) { out.push('<table><thead><tr>' + cells.map(c => '<th>' + inline(c) + '</th>').join('') + '</tr></thead><tbody>'); table = 'open'; }\n      else out.push('<tr>' + cells.map(c => '<td>' + inline(c) + '</td>').join('') + '</tr>');\n      continue;\n    }\n    closeTable();\n    if (!l) { closeList(); continue; }\n    let x;\n    if ((x = l.match(/^(#{2,4})\\s+(.+)$/))) { closeList(); const h = x[1].length; out.push('<h' + h + '>' + inline(x[2]) + '</h' + h + '>'); continue; }\n    if ((x = l.match(/^>\\s*(.+)$/))) { closeList(); out.push('<blockquote><p>' + inline(x[1]) + '</p></blockquote>'); continue; }\n    if ((x = l.match(/^Q\\d+:\\s*(.+)$/))) { closeList(); out.push('<h3>' + inline(x[1]) + '</h3>'); continue; }\n    if ((x = l.match(/^A\\d+:\\s*(.+)$/))) { closeList(); out.push('<p>' + inline(x[1]) + '</p>'); continue; }\n    if ((x = l.match(/^[-*]\\s+(.+)$/))) { if (list !== 'ul') { closeList(); out.push('<ul>'); list = 'ul'; } out.push('<li>' + inline(x[1]) + '</li>'); continue; }\n    if ((x = l.match(/^\\d+\\.\\s+(.+)$/))) { if (list !== 'ol') { closeList(); out.push('<ol>'); list = 'ol'; } out.push('<li>' + inline(x[1]) + '</li>'); continue; }\n    closeList(); out.push('<p>' + inline(l) + '</p>');\n  }\n  closeList(); closeTable();\n  return out.join('\\n');\n}\nconst schema = Array.isArray(d.schema_blocks) ? d.schema_blocks : [];\nconst content = mdToHtml(md) + schema.map(b => '\\n<script type=\"application/ld+json\">' + JSON.stringify(b.json) + '</script>').join('');\nconst title = meta.title || h1 || d.keyword || 'New page';\nconst slug = String(d.content_brief_slug || meta.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\nconst excerpt = meta['meta description'] || '';\nreturn [{ json: {\n  wordpress_url: String(d.wordpress_url || '').replace(/\\/+$/, ''),\n  wp_payload: { title, content, slug, status: 'draft', excerpt,\n    meta: { _yoast_wpseo_title: title, _yoast_wpseo_metadesc: excerpt, _yoast_wpseo_focuskw: d.keyword || '', rank_math_title: title, rank_math_description: excerpt, rank_math_focus_keyword: d.keyword || '' } },\n  keyword: d.keyword || '', ladder_id: d.ladder_id || '', request_id: d.request_id || '', email: d.email || '', schema_blocks: schema.length, content_chars: content.length\n} }];\n"
+        },
+        "id": "ee214138-836b-55e8-bfb7-d5360589e942",
+        "name": "Build WP Draft",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.wordpress_url + '/wp-json/wp/v2/posts' }}",
+          "authentication": "predefinedCredentialType",
+          "nodeCredentialType": "wordpressApi",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.wp_payload) }}",
+          "options": {
+            "timeout": 60000,
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "feee00e7-c9d0-56f9-af4e-8b4c5202cf84",
+        "name": "Create WP Draft",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          480,
+          0
+        ],
+        "credentials": {
+          "wordpressApi": {
+            "id": "SEOcredWordPress",
+            "name": "WordPress (SEO Agent)"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Normalised result of the draft creation (inspect it in the execution; nothing else depends on it).\nconst r = $input.first().json || {};\nconst src = $('Build WP Draft').first().json;\nconst ok = !!r.id && !r.error && !r.code;\nreturn [{ json: { ok, post_id: r.id || null, link: r.link || null, status: r.status || null, slug: r.slug || null, edit_link: ok ? src.wordpress_url + '/wp-admin/post.php?post=' + r.id + '&action=edit' : null,\n  error: ok ? null : String((r.error && (r.error.message || r.error)) || r.message || r.code || 'no post id returned').slice(0, 300), keyword: src.keyword, ladder_id: src.ladder_id, request_id: src.request_id } }];"
+        },
+        "id": "7979345e-89d1-51a1-bc26-28330c00e8ef",
+        "name": "WP Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          720,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Publish to WordPress (optional)\nCalled by SEO Agent v4 after a page is finished when `CONFIG.wordpress_publish` is true **and** the request carries `wordpress_url` (API field; add a form field if needed). Creates a **draft** post through the WordPress REST API: title, slug, excerpt (meta description), HTML content with internal links, JSON-LD blocks, and Yoast / RankMath meta keys (`_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, `rank_math_title`, `rank_math_description`; the plugin must expose them to the REST API, otherwise WordPress ignores the `meta` object silently).\nCredential: **WordPress (SEO Agent)** (id SEOcredWordPress): site URL, username and an Application Password. The sub-workflow needs no activation.",
+          "height": 240,
+          "width": 820,
+          "color": 7
+        },
+        "id": "64819fbc-4066-52e1-9dfd-e18f577c7dfd",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -300
+        ]
+      }
+    ],
+    "connections": {
+      "From Content Run": {
+        "main": [
+          [
+            {
+              "node": "Build WP Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build WP Draft": {
+        "main": [
+          [
+            {
+              "node": "Create WP Draft",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Create WP Draft": {
+        "main": [
+          [
+            {
+              "node": "WP Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

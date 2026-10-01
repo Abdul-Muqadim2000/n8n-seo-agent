@@ -1,0 +1,63 @@
+API Entry	runs=1	items=1	0ms
+Normalize Input	runs=1	items=1	31ms
+Rate Limit	runs=1	items=1	16ms
+Input OK?	runs=1	items=1/0	6ms
+Need Site Read?	runs=1	items=0/1	4ms
+Route Mode	runs=1	items=0/0/1/0/0/0	18ms
+Prepare Keyword Run	runs=1	items=1	16ms
+Has Domain?	runs=1	items=1/0	4ms
+Fetch Sitemap Index	runs=1	items=1	782ms
+Parse Sitemap Index	runs=1	items=1	60ms
+Fetch Sitemaps	runs=1	items=1	543ms
+Collect Site URLs	runs=1	items=1	31ms
+Read Client Pages?	runs=1	items=1/0	7ms
+Client Page Requests	runs=1	items=2	28ms
+Read Client Pages	runs=1	items=2	10404ms
+Collect Client Pages	runs=1	items=1	37ms
+SERP Top 10	runs=1	items=1	28425ms
+Pick Top 6	runs=1	items=8	1082ms
+Read Competitor Pages	runs=1	items=8	32948ms
+Find Blocked Pages	runs=1	items=1	1100ms
+Any Blocked?	runs=1	items=0/1	11ms
+Analyze Competitor Pages	runs=1	items=1	85ms
+Facts SERP	runs=1	items=1	37192ms
+Collect Facts	runs=1	items=1	1228ms
+Claude — Competitor Analyzer	runs=1	items=	24702ms
+Parser — Competitor Analyzer	runs=1	items=	4ms
+Competitor Analyzer	runs=1	items=1	25757ms
+Parse Analysis	runs=1	items=1	1099ms
+Keyword Data	runs=1	items=1	1716ms
+Has Domain (Authority)?	runs=1	items=0/1	2ms
+Merge Keyword Data	runs=1	items=1	37ms
+Verdict Chat Model	runs=1	items=	9492ms
+Parser — Verdict	runs=1	items=	2ms
+Verdict Agent	runs=1	items=1	9636ms
+Parse Verdict	runs=1	items=1	32ms
+Ladder Mode?	runs=1	items=0/1	4ms
+Verdict Router	runs=1	items=0/1	7ms
+Need Content?	runs=1	items=1/0	5ms
+Claude — Strategy Brief	runs=1	items=	114623ms
+Parser — Strategy Brief	runs=1	items=	2ms
+Strategy Brief	runs=1	items=1	114826ms
+Parse Brief	runs=1	items=1	1167ms
+Claude — Copywriter	runs=1	items=	113482ms
+Copywriter	runs=1	items=1	113606ms
+Claude — Critic	runs=1	items=	21518ms
+Parser — Critic	runs=1	items=	2ms
+Critic	runs=1	items=1	21627ms
+Parse Critique	runs=1	items=1	1166ms
+Content QA	runs=2	items=1,1	72ms
+Needs Revision?	runs=2	items=1/0,0/1	9ms
+Claude — Editor	runs=1	items=	208131ms
+Editor	runs=1	items=1	208232ms
+Build Word File	runs=1	items=1	121ms
+Prepare PDF Report	runs=1	items=1	32ms
+Render PDF Report	runs=1	items=1	328ms
+Attach PDF Report	runs=1	items=1	37ms
+Publish To WordPress?	runs=1	items=0/1	7ms
+Has Email?	runs=1	items=0/1	4ms
+Deliver Via Download?	runs=1	items=0/1	5ms
+Is Webhook?	runs=1	items=1/0	3ms
+Build Webhook Response	runs=1	items=1	38ms
+Has Callback?	runs=1	items=1/0	4ms
+POST Callback	runs=1	items=1	34ms

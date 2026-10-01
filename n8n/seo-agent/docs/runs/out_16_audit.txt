@@ -1,0 +1,47 @@
+--- run 0: 1 item(s), 114ms
+{
+ "status": "completed",
+ "stage": "site_audit",
+ "request_id": "T1-audit-techand",
+ "execution_id": "16",
+ "domain": "techand.ai",
+ "health_score": 70,
+ "grade": "Needs Improvement",
+ "issue_counts": {
+  "Critical": 1,
+  "High": 3,
+  "Medium": 6,
+  "Low": 10,
+  "Info": 3
+ },
+ "top_issues": [
+  "Broken pages (4xx, 5xx or timeout)",
+  "www and non-www versions are not consolidated",
+  "HTML cannot be cached by the CDN (no-store / private)",
+  "Broken internal links"
+ ],
+ "emailed_to": "kinnngahmed@gmail.com",
+ "run_ledger": {
+  "dataforseo_usd": 0.09,
+  "dataforseo_calls": 7,
+  "by_node": {
+   "Start Crawl": 0.09
+  },
+  "ai_calls": 0,
+  "ai_nodes": [],
+  "started_at": "2026-10-01T12:09:32.319Z",
+  "finished_at": "2026-10-01T12:14:58.933Z",
+  "duration_min": 5.4
+ },
+ "pdf": {
+  "data": "JVBERi0xLjQKJdPr6eEKMSAwIG9iago8PC9UaXRsZSA8RkVGRjAwNTMwMDY5MDA3NDAwNjUwMDIwMDA0MTAwNzUwMDY0MDA2OTAwNzQwMDIwMjAxNDAwMjAwMDc0MDA2NTAwNjMwMDY4MDA2MTAwNkUwMDY0MDAyRTAwNjEwMDY5PgovQ3JlYXRvciAoTW96aWxsYS81LjAgXChYMTE7IExpbnV4IHg4Nl82NFwpIEFwcGxlV2ViS2l0LzUzNy4zNiBcKEtIVE1MLCBsaWtlIEdlY2tvXCkgSGVhZGxlc3NDaHJvbWUvMTUyLjAuMC4wIFNhZmFyaS81MzcuMzYpCi9Qcm9kdWNlciAoU2tpYS9QREYgbTE1MikKL0NyZWF0aW9uRGF0ZSAoRDoyMDI2MTAwMTEyMTQ1OSswMCcwMCcpCi9Nb2REYXRlIChEOjIwMjYxMDAxMTIxNDU5KzAwJzAwJyk+PgplbmRvYmoKMyAwIG9iago8PC9jYSAxCi9CTSAvTm9ybWFsPj4KZW5kb2JqCjYgMCBvYmoKPDwvRmlsdGVyIC9GbGF0ZURlY29kZQovTGVuZ3RoIDE1NzU+PiBz…(+150040)",
+  "fileName": "site-audit-techand-ai-2026-10-01.pdf",
+  "mimeType": "application/pdf"
+ },
+ "file": {
+  "data": "77u/PGh0bWwgeG1sbnM6bz0idXJuOnNjaGVtYXMtbWljcm9zb2Z0LWNvbTpvZmZpY2U6b2ZmaWNlIiB4bWxuczp3PSJ1cm46c2NoZW1hcy1taWNyb3NvZnQtY29tOm9mZmljZTp3b3JkIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvVFIvUkVDLWh0bWw0MCI+CjxoZWFkPjxtZXRhIGNoYXJzZXQ9InV0Zi04Ij48dGl0bGU+U2l0ZSBBdWRpdCDigJQgdGVjaGFuZC5haTwvdGl0bGU+CjwhLS1baWYgZ3RlIG1zbyA5XT48eG1sPjx3OldvcmREb2N1bWVudD48dzpWaWV3PlByaW50PC93OlZpZXc+PC93OldvcmREb2N1bWVudD48L3htbD48IVtlbmRpZl0tLT4KPHN0eWxlPgpAcGFnZSB7IG1hcmdpbjogMC44aW47IH0KYm9keSB7IGZvbnQtZmFtaWx5OiBDYWxpYnJpLCBBcmlhbCwgc2Fucy1zZXJpZjsgZm9udC1zaXplOiAxMXB0OyBsaW5lLWhlaWdodDogMS41OyBjb2xvcjogIzFlMjkzYjsgfQou…(+50712)",
+  "fileName": "site-audit-techand-ai-2026-10-01.doc",
+  "mimeType": "application/msword"
+ },
+ "callback_url": "http://localhost:5678/webhook/seo-callback"
+}

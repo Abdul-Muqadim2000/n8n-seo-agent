@@ -1,0 +1,72 @@
+API Entry	runs=1	items=1	0ms
+Normalize Input	runs=1	items=1	40ms
+Rate Limit	runs=1	items=1	22ms
+Input OK?	runs=1	items=1/0	4ms
+Need Site Read?	runs=1	items=0/1	2ms
+Route Mode	runs=1	items=0/0/0/1/0/0	11ms
+Start Crawl	runs=1	items=1	511ms
+Save Task ID	runs=1	items=1	18ms
+Wait 1 min	runs=5	items=1,1,1,1,1	60002ms
+Get Crawl Summary	runs=5	items=1,1,1,1,1	511ms
+Check Crawl	runs=5	items=1,1,1,1,1	27ms
+Crawl Done?	runs=5	items=0/1,0/1,0/1,0/1,1/0	2ms
+Get Crawled Pages	runs=1	items=1	1455ms
+Crawl Extra Requests	runs=1	items=4	95ms
+Run Crawl Extras	runs=1	items=4	1517ms
+Collect Crawl Extras	runs=1	items=1	72ms
+Build Probes	runs=1	items=4	39ms
+Run Probes	runs=1	items=4	1140ms
+Content Probes	runs=1	items=17	18ms
+Run Content Probes	runs=1	items=17	4070ms
+Analyze Probes	runs=1	items=1	106ms
+Full Report?	runs=1	items=1/0	2ms
+Pick Key Pages	runs=1	items=10	26ms
+Fetch Page HTML	runs=1	items=10	1707ms
+Analyze HTML	runs=1	items=1	68ms
+URLs To Check	runs=1	items=1	17ms
+Check Schema URLs	runs=1	items=1	1127ms
+Schema Findings	runs=1	items=1	17ms
+Find Competitors	runs=1	items=1	1441ms
+Fallback Queries	runs=1	items=3	173ms
+Fallback SERP	runs=1	items=3	27350ms
+Pick Competitors	runs=1	items=4	1367ms
+Domain Overview	runs=1	items=4	1031ms
+DataForSEO Whois	runs=1	items=4	595ms
+RDAP Lookup	runs=1	items=4	1251ms
+Competitor Analysis	runs=1	items=1	41ms
+KW Targets	runs=1	items=4	17ms
+Ranked Keywords	runs=1	items=4	6612ms
+Keyword Ideas	runs=1	items=1	2650ms
+Analyze Keywords	runs=1	items=1	103ms
+BL Targets	runs=1	items=4	16ms
+Backlink Summary	runs=1	items=4	1146ms
+Backlink Gap	runs=1	items=1	1460ms
+Analyze Backlinks	runs=1	items=1	24ms
+PS Targets	runs=1	items=4	14ms
+PageSpeed	runs=1	items=4	34160ms
+Analyze PageSpeed	runs=1	items=1	1138ms
+Competitor Homes	runs=1	items=3	17ms
+Read Competitor Homes	runs=1	items=3	10088ms
+Build Content Prompt	runs=1	items=1	126ms
+Claude — Content Reviewer	runs=1	items=	18510ms
+Parser — Content Reviewer	runs=1	items=	2ms
+Content Reviewer	runs=1	items=1	18578ms
+Parse Content Review	runs=1	items=1	1132ms
+AI Queries	runs=1	items=4	18ms
+AI SERP	runs=1	items=4	37190ms
+LLM Prompts	runs=1	items=3	1546ms
+Ask LLMs	runs=1	items=3	5255ms
+AI Visibility	runs=1	items=1	43ms
+Build Site Issues	runs=1	items=1	57ms
+Is Full Report?	runs=1	items=1/0	6ms
+Build Full Report	runs=1	items=1	336ms
+Prepare PDF Audit	runs=1	items=1	34ms
+Render PDF Audit	runs=1	items=1	376ms
+Attach PDF Audit	runs=1	items=1	32ms
+Via Webhook (Audit)?	runs=1	items=1/0	2ms
+Build Audit Response	runs=1	items=1	52ms
+Has Callback?	runs=1	items=1/0	3ms
+POST Callback	runs=1	items=1	37ms
+Has Email (Audit)?	runs=1	items=1/0	2ms
+Send Audit Report	runs=1	items=1	4025ms
+From Audit Form?	runs=1	items=0/1	4ms

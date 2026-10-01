@@ -1,0 +1,622 @@
+{
+ "status": "completed",
+ "stage": "ladder_plan",
+ "request_id": "T4b-ladder-techand",
+ "execution_id": "27",
+ "ladder_id": "lad_mupia2l2c0tp",
+ "keyword": "e invoicing in uae",
+ "domain": "techand.ai",
+ "country": "United Arab Emirates",
+ "goal": "leads",
+ "head": {
+  "keyword": "e invoicing in uae",
+  "volume": 880,
+  "kd": 2,
+  "cpc": 6.85,
+  "intent": "informational",
+  "your_position": null
+ },
+ "feasibility": {
+  "status": "winnable",
+  "verdict": "GO_WITH_CHANGES",
+  "score": 72,
+  "reasons": [
+   "Volume of 880/month with a CPC of $6.85 shows real commercial value. The mandate is close: Wave 1 must appoint an ASP by 30 Oct 2026 and go live on 1 Jan 2027, and Wave 1 is exactly Tech&'s enterprise audience (revenue ≥ AED 50m).",
+   "Keyword difficulty is 2 (Easy) and competitors average only 5 referring domains and 10 backlinks. Link barriers are low, even though the site's authority is unknown.",
+   "The content gaps are clear. All six ranking pages have 0 tables, and none offers a wave-finder, an ASP selection scorecard or a backwards-planned onboarding timeline. A structured page with a lead path can beat ClearTax (2,628 words) and EDICOM (1,888 words), and MoF (713 words, no lead path) is a weak competitor on conversion.",
+   "The SERP is informational and mixed. It has government, Big-4 and vendor pages, an AI Overview and no featured snippet. A pure service page would mismatch that intent, so the page needs to be a guide-style service page."
+  ],
+  "what_must_change": [
+   "Build a hybrid service page: open with a 40-70 word answer on what e-invoicing is and the mandatory dates, then give the detailed guide content, then the Dynamics 365 / Microsoft e-invoicing service offer.",
+   "Add a Wave 1 vs Wave 2 wave-finder table, a backwards-planned timeline from 30 Oct 2026 and 31 Mar 2027, and an ASP selection scorecard labelled as Tech&'s own framework.",
+   "Add question-style H2s and FAQ schema matching the People Also Ask questions, plus a sample invoice field table and a readiness checklist, with a free readiness assessment CTA.",
+   "Add trust signals: a named expert author, a last-updated date, citations to MoF, Ministerial Decisions 243, 244 and 64, and Cabinet Decision 106, ASP partner or accreditation status, a UAE contact, and case studies.",
+   "Support the page with spoke content on deadline, requirements, ASP list and ERP readiness (D365, SAP), and build internal links and a few UAE finance backlinks."
+  ],
+  "alternatives": [],
+  "expected_visits_top3": 300,
+  "time_to_rank_months": 4,
+  "navigational": false
+ },
+ "rungs": [
+  {
+   "rung": 1,
+   "label": "Rung 1 — long-tail pages (difficulty up to 25)",
+   "months": [
+    1,
+    2
+   ],
+   "available_keywords": 6,
+   "pages": [
+    {
+     "page_no": 1,
+     "rung": 1,
+     "keyword": "uae e invoicing penalties",
+     "supporting": [],
+     "page_type": "Blog Post",
+     "intent": "informational",
+     "volume": 1600,
+     "total_volume": 1600,
+     "kd": 0,
+     "traffic_potential": 312,
+     "your_position": null,
+     "exists": false,
+     "target_url": "https://techand.ai/uae-e-invoicing-penalties/",
+     "status": "new",
+     "links_to": [
+      {
+       "url": "https://techand.ai/e-invoicing-in-uae/",
+       "role": "top",
+       "keyword": "e invoicing in uae"
+      },
+      {
+       "url": "https://techand.ai/e-invoicing-uae-fta/",
+       "role": "sibling",
+       "keyword": "e invoicing uae fta"
+      }
+     ],
+     "months": null
+    },
+    {
+     "page_no": 2,
+     "rung": 1,
+     "keyword": "e invoicing uae fta",
+     "supporting": [],
+     "page_type": "Guide",
+     "intent": "informational",
+     "volume": 260,
+     "total_volume": 260,
+     "kd": 9,
+     "traffic_potential": 51,
+     "your_position": null,
+     "exists": false,
+     "target_url": "https://techand.ai/e-invoicing-uae-fta/",
+     "status": "new",
+     "links_to": [
+      {
+       "url": "https://techand.ai/e-invoicing-in-uae/",
+       "role": "top",
+       "keyword": "e invoicing in uae"
+      },
+      {
+       "url": "https://techand.ai/accredited-service-provider-for-e-invoicing-in-uae/",
+       "role": "sibling",
+       "keyword": "accredited service provider for e invoicing in uae"
+      }
+     ],
+     "months": null
+    },
+    {
+     "page_no": 3,
+     "rung": 1,
+     "keyword": "accredited service provider for e invoicing in uae",
+     "supporting": [
+      "uae e invoicing accredited service provider"
+     ],
+     "page_type": "Service Page",
+     "intent": "commercial",
+     "volume": 110,
+     "total_volume": 220,
+     "kd": 2,
+     "traffic_potential": 54,
+     "your_position": null,
+     "exists": false,
+     "target_url": "https://techand.ai/accredited-service-provider-for-e-invoicing-in-uae/",
+     "status": "new",
+     "links_to": [
+      {
+       "url": "https://techand.ai/e-invoicing-in-uae/",
+       "role": "top",
+       "keyword": "e invoicing in uae"
+      },
+      {
+       "url": "https://techand.ai/uae-e-invoicing-requirements/",
+       "role": "sibling",
+       "keyword": "uae e invoicing requirements"
+      }
+     ],
+     "months": null
+    },
+    {
+     "page_no": 4,
+     "rung": 1,
+     "keyword": "uae e invoicing requirements",
+     "supporting": [],
+     "page_type": "Guide",
+     "intent": "informational",
+     "volume": 140,
+     "total_volume": 140,
+     "kd": 10,
+     "traffic_potential": 25,
+     "your_position": null,
+     "exists": false,
+     "target_url": "https://techand.ai/uae-e-invoicing-requirements/",
+     "status": "new",
+     "links_to": [
+      {
+       "url": "https://techand.ai/e-invoicing-in-uae/",
+       "role": "top",
+       "keyword": "e invoicing in uae"
+      },
+      {
+       "url": "https://techand.ai/uae-e-invoicing-penalties/",
+       "role": "sibling",
+       "keyword": "uae e invoicing penalties"
+      }
+     ],
+     "months": null
+    }
+   ]
+  },
+  {
+   "rung": 2,
+   "label": "Rung 2 — mid-difficulty pages (26-45)",
+   "months": [
+    3,
+    5
+   ],
+   "available_keywords": 10,
+   "pages": [
+    {
+     "page_no": 5,
+     "rung": 2,
+     "keyword": "e invoicing uae 2026",
+     "supporting": [
+      "e invoicing in uae timeline",
+      "when is e invoicing applicable in uae"
+     ],
+     "page_type": "Blog Post",
+     "intent": "informational",
+     "volume": 110,
+     "total_volume": 130,
+     "kd": null,
+     "traffic_potential": 39,
+     "your_position": null,
+     "exists": false,
+     "target_url": "https://techand.ai/e-invoicing-uae-2026/",
+     "status": "new",
+     "links_to": [
+      {
+       "url": "https://techand.ai/e-invoicing-in-uae/",
+       "role": "top",
+       "keyword": "e invoicing in uae"
+      },
+      {
+       "url": "https://techand.ai/list-of-asp-for-e-invoicing-in-uae/",
+       "role": "sibling",
+       "keyword": "list of asp for e invoicing in uae"
+      }
+     ],
+     "months": null
+    },
+    {
+     "page_no": 6,
+     "rung": 2,
+     "keyword": "list of asp for e invoicing in uae",
+     "supporting": [
+      "uae e invoicing accredited service provider list",
+      "accredited service providers in uae"
+     ],
+     "page_type": "Comparison Page",
+     "intent": "commercial",
+     "volume": 140,
+     "total_volume": 210,
+     "kd": null,
+     "traffic_potential": 63,
+     "your_position": null,
+     "exists": false,
+     "target_url": "https://techand.ai/list-of-asp-for-e-invoicing-in-uae/",
+     "status": "new",
+     "links_to": [
+      {
+       "url": "https://techand.ai/e-invoicing-in-uae/",
+       "role": "top",
+       "keyword": "e invoicing in uae"
+      },
+      {
+       "url": "https://techand.ai/is-e-invoicing-mandatory-in-uae/",
+       "role": "sibling",
+       "keyword": "is e invoicing mandatory in uae"
+      }
+     ],
+     "months": null
+    },
+    {
+     "page_no": 7,
+     "rung": 2,
+     "keyword": "is e invoicing mandatory in uae",
+     "supporting": [
+      "is e-invoicing mandatory in uae"
+     ],
+     "page_type": "FAQ Page",
+     "intent": "informational",
+     "volume": 50,
+     "total_volume": 100,
+     "kd": null,
+     "traffic_potential": 30,
+     "your_position": null,
+     "exists": false,
+     "target_url": "https://techand.ai/is-e-invoicing-mandatory-in-uae/",
+     "status": "new",
+     "links_to": [
+      {
+       "url": "https://techand.ai/e-invoicing-in-uae/",
+       "role": "top",
+       "keyword": "e invoicing in uae"
+      },
+      {
+       "url": "https://techand.ai/e-invoicing-service-providers-in-uae/",
+       "role": "sibling",
+       "keyword": "e invoicing service providers in uae"
+      }
+     ],
+     "months": null
+    },
+    {
+     "page_no": 8,
+     "rung": 2,
+     "keyword": "e invoicing service providers in uae",
+     "supporting": [],
+     "page_type": "Service Page",
+     "intent": "commercial",
+     "volume": 20,
+     "total_volume": 20,
+     "kd": null,
+     "traffic_potential": 6,
+     "your_position": null,
+     "exists": false,
+     "target_url": "https://techand.ai/e-invoicing-service-providers-in-uae/",
+     "status": "new",
+     "links_to": [
+      {
+       "url": "https://techand.ai/e-invoicing-in-uae/",
+       "role": "top",
+       "keyword": "e invoicing in uae"
+      },
+      {
+       "url": "https://techand.ai/e-invoicing-uae-2026/",
+       "role": "sibling",
+       "keyword": "e invoicing uae 2026"
+      }
+     ],
+     "months": null
+    }
+   ]
+  },
+  {
+   "rung": 3,
+   "label": "Rung 3 — strong pages (46-60)",
+   "months": null,
+   "available_keywords": 0,
+   "pages": []
+  }
+ ],
+ "top_page": {
+  "page_no": 9,
+  "rung": 4,
+  "keyword": "e invoicing in uae",
+  "supporting": [
+   "uae e-invoicing requirements",
+   "e invoicing uae deadline",
+   "e invoicing uae 2026",
+   "list of asp for e invoicing in uae",
+   "uae e-invoicing accredited service provider",
+   "e invoicing uae fta"
+  ],
+  "page_type": "Service Page",
+  "intent": "informational",
+  "volume": 880,
+  "kd": 2,
+  "traffic_potential": 264,
+  "your_position": null,
+  "exists": false,
+  "target_url": "https://techand.ai/e-invoicing-in-uae/",
+  "status": "new",
+  "links_to": [
+   {
+    "url": "https://techand.ai/uae-e-invoicing-penalties/",
+    "role": "rung 1",
+    "keyword": "uae e invoicing penalties"
+   },
+   {
+    "url": "https://techand.ai/e-invoicing-uae-fta/",
+    "role": "rung 1",
+    "keyword": "e invoicing uae fta"
+   },
+   {
+    "url": "https://techand.ai/accredited-service-provider-for-e-invoicing-in-uae/",
+    "role": "rung 1",
+    "keyword": "accredited service provider for e invoicing in uae"
+   },
+   {
+    "url": "https://techand.ai/uae-e-invoicing-requirements/",
+    "role": "rung 1",
+    "keyword": "uae e invoicing requirements"
+   },
+   {
+    "url": "https://techand.ai/e-invoicing-uae-2026/",
+    "role": "rung 2",
+    "keyword": "e invoicing uae 2026"
+   },
+   {
+    "url": "https://techand.ai/list-of-asp-for-e-invoicing-in-uae/",
+    "role": "rung 2",
+    "keyword": "list of asp for e invoicing in uae"
+   },
+   {
+    "url": "https://techand.ai/is-e-invoicing-mandatory-in-uae/",
+    "role": "rung 2",
+    "keyword": "is e invoicing mandatory in uae"
+   },
+   {
+    "url": "https://techand.ai/e-invoicing-service-providers-in-uae/",
+    "role": "rung 2",
+    "keyword": "e invoicing service providers in uae"
+   }
+  ],
+  "months": [
+   6,
+   9
+  ]
+ },
+ "link_map": [
+  {
+   "from": "https://techand.ai/uae-e-invoicing-penalties/",
+   "to": "https://techand.ai/e-invoicing-in-uae/",
+   "type": "up"
+  },
+  {
+   "from": "https://techand.ai/uae-e-invoicing-penalties/",
+   "to": "https://techand.ai/e-invoicing-uae-fta/",
+   "type": "sideways"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-uae-fta/",
+   "to": "https://techand.ai/e-invoicing-in-uae/",
+   "type": "up"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-uae-fta/",
+   "to": "https://techand.ai/accredited-service-provider-for-e-invoicing-in-uae/",
+   "type": "sideways"
+  },
+  {
+   "from": "https://techand.ai/accredited-service-provider-for-e-invoicing-in-uae/",
+   "to": "https://techand.ai/e-invoicing-in-uae/",
+   "type": "up"
+  },
+  {
+   "from": "https://techand.ai/accredited-service-provider-for-e-invoicing-in-uae/",
+   "to": "https://techand.ai/uae-e-invoicing-requirements/",
+   "type": "sideways"
+  },
+  {
+   "from": "https://techand.ai/uae-e-invoicing-requirements/",
+   "to": "https://techand.ai/e-invoicing-in-uae/",
+   "type": "up"
+  },
+  {
+   "from": "https://techand.ai/uae-e-invoicing-requirements/",
+   "to": "https://techand.ai/uae-e-invoicing-penalties/",
+   "type": "sideways"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-uae-2026/",
+   "to": "https://techand.ai/e-invoicing-in-uae/",
+   "type": "up"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-uae-2026/",
+   "to": "https://techand.ai/list-of-asp-for-e-invoicing-in-uae/",
+   "type": "sideways"
+  },
+  {
+   "from": "https://techand.ai/list-of-asp-for-e-invoicing-in-uae/",
+   "to": "https://techand.ai/e-invoicing-in-uae/",
+   "type": "up"
+  },
+  {
+   "from": "https://techand.ai/list-of-asp-for-e-invoicing-in-uae/",
+   "to": "https://techand.ai/is-e-invoicing-mandatory-in-uae/",
+   "type": "sideways"
+  },
+  {
+   "from": "https://techand.ai/is-e-invoicing-mandatory-in-uae/",
+   "to": "https://techand.ai/e-invoicing-in-uae/",
+   "type": "up"
+  },
+  {
+   "from": "https://techand.ai/is-e-invoicing-mandatory-in-uae/",
+   "to": "https://techand.ai/e-invoicing-service-providers-in-uae/",
+   "type": "sideways"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-service-providers-in-uae/",
+   "to": "https://techand.ai/e-invoicing-in-uae/",
+   "type": "up"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-service-providers-in-uae/",
+   "to": "https://techand.ai/e-invoicing-uae-2026/",
+   "type": "sideways"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-in-uae/",
+   "to": "https://techand.ai/uae-e-invoicing-penalties/",
+   "type": "down"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-in-uae/",
+   "to": "https://techand.ai/e-invoicing-uae-fta/",
+   "type": "down"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-in-uae/",
+   "to": "https://techand.ai/accredited-service-provider-for-e-invoicing-in-uae/",
+   "type": "down"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-in-uae/",
+   "to": "https://techand.ai/uae-e-invoicing-requirements/",
+   "type": "down"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-in-uae/",
+   "to": "https://techand.ai/e-invoicing-uae-2026/",
+   "type": "down"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-in-uae/",
+   "to": "https://techand.ai/list-of-asp-for-e-invoicing-in-uae/",
+   "type": "down"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-in-uae/",
+   "to": "https://techand.ai/is-e-invoicing-mandatory-in-uae/",
+   "type": "down"
+  },
+  {
+   "from": "https://techand.ai/e-invoicing-in-uae/",
+   "to": "https://techand.ai/e-invoicing-service-providers-in-uae/",
+   "type": "down"
+  }
+ ],
+ "timeline": [
+  {
+   "rung": 1,
+   "label": "Rung 1",
+   "months": [
+    1,
+    2
+   ],
+   "pages": 4
+  },
+  {
+   "rung": 2,
+   "label": "Rung 2",
+   "months": [
+    3,
+    5
+   ],
+   "pages": 4
+  },
+  {
+   "rung": 4,
+   "label": "Top — e invoicing in uae",
+   "months": [
+    6,
+    9
+   ],
+   "pages": 1
+  }
+ ],
+ "write_now": [
+  {
+   "page_no": 1,
+   "rung": 1,
+   "keyword": "uae e invoicing penalties",
+   "page_type": "Blog Post",
+   "target_url": "https://techand.ai/uae-e-invoicing-penalties/",
+   "exists": false,
+   "supporting": [],
+   "links_to": [
+    {
+     "url": "https://techand.ai/e-invoicing-in-uae/",
+     "role": "top",
+     "keyword": "e invoicing in uae"
+    },
+    {
+     "url": "https://techand.ai/e-invoicing-uae-fta/",
+     "role": "sibling",
+     "keyword": "e invoicing uae fta"
+    }
+   ]
+  }
+ ],
+ "pages_started": [
+  "uae e invoicing penalties"
+ ],
+ "later": [],
+ "requirements": [
+  {
+   "item": "Links to the top page",
+   "detail": "Top-10 pages for \"e invoicing in uae\" average 5 referring domains. Plan 5+ relevant links (partners, directories, PR, guest articles) to the top page over the ladder period."
+  },
+  {
+   "item": "Local trust signals",
+   "detail": "The head term is local (uae): a complete Google Business Profile, consistent name/address/phone and recent reviews support every rung."
+  },
+  {
+   "item": "Entity and trust pages",
+   "detail": "Organization schema, an about page with real credentials, author bylines and case studies; the content QA already adds schema to every generated page."
+  },
+  {
+   "item": "Publish on schedule and interlink",
+   "detail": "Each rung page links up to the top page and sideways to one sibling; the top page links down to every rung page. Ranking only starts once the pages are live."
+  }
+ ],
+ "stats": {
+  "pool_size": 19,
+  "ai_reviewed": 16,
+  "relevant": 16,
+  "pages_total": 9,
+  "rung_pages": 8,
+  "keywords_covered": 21,
+  "traffic_potential_total": 844,
+  "site_rankings_found": 0,
+  "research_failures": []
+ },
+ "notes": [
+  "No keywords fell into rung 3; the ladder skips it."
+ ],
+ "tracker": {
+  "cadence": "weekly",
+  "auto_next_rung": false,
+  "stop_rule": "top rung in the top 3 for 4 consecutive checks"
+ },
+ "tracking_registered": true,
+ "stored_rows": 9,
+ "store_error": null,
+ "run_ledger": {
+  "dataforseo_usd": 0.1208,
+  "dataforseo_calls": 7,
+  "by_node": {
+   "SERP Top 10": 0.006,
+   "Keyword Data": 0.0121,
+   "Facts SERP": 0.004,
+   "Run Ladder Research": 0.0986
+  },
+  "ai_calls": 4,
+  "ai_nodes": [
+   "Site Describer",
+   "Competitor Analyzer",
+   "Verdict Agent",
+   "Ladder Keyword Relevance"
+  ],
+  "started_at": "2026-10-01T12:23:57.590Z",
+  "finished_at": "2026-10-01T12:29:34.029Z",
+  "duration_min": 5.6
+ },
+ "emailed_to": "kinnngahmed@gmail.com",
+ "callback_url": "http://localhost:5678/webhook/seo-callback"
+}

@@ -1,0 +1,48 @@
+48	SEOagentCallback	success	webhook	2026-10-01 14:00:34.944	2026-10-01 14:00:35.972	Summarise Callback
+47	SEOagentCallback	success	webhook	2026-10-01 13:58:33.745	2026-10-01 13:58:33.786	Summarise Callback
+46	SEOagentV4Full01	success	integrated	2026-10-01 13:48:16.367	2026-10-01 13:58:33.798	POST Callback
+45	SEOagentTestRun1	success	webhook	2026-10-01 13:48:15.236	2026-10-01 13:48:16.385	Run Target
+44	SEOagentV4Full01	waiting	webhook	2026-10-01 13:38:46.168	2026-10-01 13:38:46.200	Show Input Error
+43	SEOagentV4Full01	success	integrated	2026-10-01 13:38:12.014	2026-10-01 13:42:42.645	Send Audit Report
+42	SEOagentV4Full01	waiting	webhook	2026-10-01 13:37:39.946	2026-10-01 13:37:39.979	Audit Started
+41	SEOagentV4Full01	waiting	webhook	2026-10-01 13:26:11.033	2026-10-01 13:26:11.067	Download Keyword Ideas
+40	SEOagentV4Full01	waiting	webhook	2026-10-01 13:21:11.158	2026-10-01 13:21:11.191	Show Input Error
+39	SEOagentV4Full01	waiting	webhook	2026-10-01 13:14:49.293	2026-10-01 13:14:49.334	Page Ladder
+38	SEOagentV4Full01	waiting	webhook	2026-10-01 13:12:48.718	2026-10-01 13:12:48.759	Download Report
+37	SEOagentCallback	success	webhook	2026-10-01 12:34:52.814	2026-10-01 12:34:53.990	Summarise Callback
+36	SEOagentCallback	success	webhook	2026-10-01 12:31:51.467	2026-10-01 12:31:51.543	Summarise Callback
+35	SEOagentTracker1	success	integrated	2026-10-01 12:30:52.782	2026-10-01 12:31:51.481	POST Progress
+34	SEOagentTestRun1	success	webhook	2026-10-01 12:30:51.697	2026-10-01 12:30:52.788	Run Target
+33	SEOagentCallback	success	webhook	2026-10-01 12:29:39.992	2026-10-01 12:29:40.034	Summarise Callback
+32	SEOagentCallback	success	webhook	2026-10-01 12:29:35.466	2026-10-01 12:29:35.486	Summarise Callback
+31	SEOagentV4Full01	success	integrated	2026-10-01 12:29:35.043	2026-10-01 12:29:35.494	POST Rejection
+30	SEOagentErrHandl	success	error	2026-10-01 12:23:57.966	2026-10-01 12:24:01.744	Email Ops
+29	SEOagentV4Full01	error	integrated	2026-10-01 12:23:57.641	2026-10-01 12:23:57.928	API Reject	ERROR: API request rejected (no callback_url to notify): API requests need a callback_url (https) or an email address so the result can be delivered. [line 4]
+28	SEOagentTestRun1	success	webhook	2026-10-01 12:23:57.408	2026-10-01 12:23:57.685	Run Target
+27	SEOagentV4Full01	success	integrated	2026-10-01 12:23:57.405	2026-10-01 12:29:40.053	POST Callback
+26	SEOagentTestRun1	success	webhook	2026-10-01 12:23:56.123	2026-10-01 12:23:57.438	Run Target
+25	SEOagentCallback	success	webhook	2026-10-01 12:22:00.445	2026-10-01 12:22:00.615	Summarise Callback
+24	SEOagentCallback	success	webhook	2026-10-01 12:15:00.026	2026-10-01 12:15:00.122	Summarise Callback
+23	SEOagentV4Full01	error	integrated	2026-10-01 12:14:49.732	2026-10-01 12:17:16.484	Ladder Keyword Relevance	ERROR: Error in sub-node Claude — Ladder Relevance
+22	SEOagentTestRun1	success	webhook	2026-10-01 12:14:49.467	2026-10-01 12:14:49.804	Run Target
+21	SEOagentV4Full01	success	integrated	2026-10-01 12:13:51.255	2026-10-01 12:22:05.494	From Audit Form?
+20	SEOagentTestRun1	success	webhook	2026-10-01 12:13:51.118	2026-10-01 12:13:51.287	Run Target
+19	SEOagentCallback	success	webhook	2026-10-01 12:12:35.524	2026-10-01 12:12:35.624	Summarise Callback
+18	SEOagentV4Full01	success	integrated	2026-10-01 12:10:31.159	2026-10-01 12:12:35.867	Discover Audit?
+17	SEOagentTestRun1	success	webhook	2026-10-01 12:10:29.877	2026-10-01 12:10:31.195	Run Target
+16	SEOagentV4Full01	success	integrated	2026-10-01 12:09:31.924	2026-10-01 12:15:04.655	From Audit Form?
+15	SEOagentTestRun1	success	webhook	2026-10-01 12:09:30.543	2026-10-01 12:09:31.965	Run Target
+14	SEOagentCallback	success	webhook	2026-10-01 12:07:27.253	2026-10-01 12:07:28.479	Summarise Callback
+13	SEOagentCallback	success	webhook	2026-10-01 07:15:07.395	2026-10-01 07:15:07.489	Summarise Callback
+12	SEOagentV4Full01	success	integrated	2026-10-01 06:49:03.438	2026-10-01 07:15:07.513	POST Callback
+11	SEOagentAPIentry	success	webhook	2026-10-01 06:49:02.228	2026-10-01 06:49:03.470	Start SEO Run
+10	SEOagentV4Full01	error	integrated	2026-10-01 06:44:53.221	2026-10-01 06:47:17.823	Strategy Brief	ERROR: Streaming is required for operations that may take longer than 10 minutes. See https://github.com/anthropics/anthropic-sdk-typescript#long-requests for more det
+9	SEOagentAPIentry	success	webhook	2026-10-01 06:44:52.114	2026-10-01 06:44:53.247	Start SEO Run
+8	SEOagentCallback	success	webhook	2026-10-01 06:38:01.021	2026-10-01 06:38:01.105	Summarise Callback
+7	SEOagentV4Full01	error	integrated	2026-10-01 06:35:44.941	2026-10-01 06:43:35.699	Strategy Brief	ERROR: The AI model returned an empty response to the Structured Output Parser
+6	SEOagentAPIentry	success	webhook	2026-10-01 06:35:43.904	2026-10-01 06:35:44.970	Start SEO Run
+5	SEOagentV4Full01	error	integrated	2026-10-01 06:20:14.957	2026-10-01 06:20:15.231	API Reject	ERROR: API request rejected (no callback_url to notify): Please add your email — the extra reports you selected are sent by email. [line 4]
+4	SEOagentAPIentry	success	webhook	2026-10-01 06:20:13.899	2026-10-01 06:20:14.977	Start SEO Run
+3	SEOagentCallback	success	webhook	2026-10-01 06:13:20.830	2026-10-01 06:13:20.900	Summarise Callback
+2	SEOagentV4Full01	success	integrated	2026-10-01 06:11:02.168	2026-10-01 06:13:20.911	POST Callback
+1	SEOagentAPIentry	success	webhook	2026-10-01 06:11:00.180	2026-10-01 06:11:02.211	Start SEO Run

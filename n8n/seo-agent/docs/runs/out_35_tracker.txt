@@ -1,0 +1,151 @@
+--- run 0: 1 item(s), 27ms
+{
+ "ladder_id": "lad_mupia2l2c0tp",
+ "domain": "techand.ai",
+ "head_keyword": "e invoicing in uae",
+ "email": "kinnngahmed@gmail.com",
+ "callback_url": "http://localhost:5678/webhook/seo-callback",
+ "request_id": "T4b-ladder-techand",
+ "subject": "[Keyword ladder] e invoicing in uae — techand.ai: top page not yet in the top 100",
+ "html": "<p>Hi,</p><p>Position check for your keyword ladder towards <b>e invoicing in uae</b> on <b>techand.ai</b> (9 keywords, Google top 100).</p><table style=\"border-collapse:collapse;font-size:13px\"><tr><th align=\"left\" style=\"padding:4px 8px;border:1px solid #cbd5e1\">Rung</th><th align=\"left\" style=\"padding:4px 8px;border:1px solid #cbd5e1\">Keyword</th><th style=\"padding:4px 8px;border:1px solid #cbd5e1\">Now</th><th style=\"padding:4px 8px;border:1px solid #cbd5e1\">Before</th><th align=\"left\" style=\"padding:4px 8px;border:1px solid #cbd5e1\">Ranking URL</th></tr><tr><td style=\"padding:4px 8px;borde…(+4696)",
+ "status": "progress",
+ "stage": "rank_tracker",
+ "checked_at": "2026-10-01T12:31:47.539Z",
+ "positions": [
+  {
+   "rung": 1,
+   "keyword": "uae e invoicing penalties",
+   "position": 0,
+   "previous": null,
+   "delta": null,
+   "url": ""
+  },
+  {
+   "rung": 1,
+   "keyword": "e invoicing uae fta",
+   "position": 0,
+   "previous": null,
+   "delta": null,
+   "url": ""
+  },
+  {
+   "rung": 1,
+   "keyword": "accredited service provider for e invoicing in uae",
+   "position": 0,
+   "previous": null,
+   "delta": null,
+   "url": ""
+  },
+  {
+   "rung": 1,
+   "keyword": "uae e invoicing requirements",
+   "position": 0,
+   "previous": null,
+   "delta": null,
+   "url": ""
+  },
+  {
+   "rung": 2,
+   "keyword": "e invoicing uae 2026",
+   "position": 0,
+   "previous": null,
+   "delta": null,
+   "url": ""
+  },
+  {
+   "rung": 2,
+   "keyword": "list of asp for e invoicing in uae",
+   "position": 0,
+   "previous": null,
+   "delta": null,
+   "url": ""
+  },
+  {
+   "rung": 2,
+   "keyword": "is e invoicing mandatory in uae",
+   "position": 0,
+   "previous": null,
+   "delta": null,
+   "url": ""
+  },
+  {
+   "rung": 2,
+   "keyword": "e invoicing service providers in uae",
+   "position": 0,
+   "previous": null,
+   "delta": null,
+   "url": ""
+  },
+  {
+   "rung": 4,
+   "keyword": "e invoicing in uae",
+   "position": 0,
+   "previous": null,
+   "delta": null,
+   "url": ""
+  }
+ ],
+ "rungs": [
+  {
+   "rung": 1,
+   "pages": 4,
+   "top10": 0,
+   "top3": 0,
+   "reached": false
+  },
+  {
+   "rung": 2,
+   "pages": 4,
+   "top10": 0,
+   "top3": 0,
+   "reached": false
+  }
+ ],
+ "gains": [],
+ "drops": [],
+ "next_step": {
+  "action": "write_rung_1",
+  "rung": 1,
+  "text": "Work on rung 1: none of its pages is in the top 10 yet. Write or improve: \"uae e invoicing penalties\" (already written — publish it), \"e invoicing uae fta\", \"accredited service provider for e invoicing in uae\", \"uae e invoicing requirements\".",
+  "pages": [
+   {
+    "keyword": "uae e invoicing penalties",
+    "page_type": "Blog Post",
+    "target_url": "https://techand.ai/uae-e-invoicing-penalties/",
+    "status": "writing"
+   },
+   {
+    "keyword": "e invoicing uae fta",
+    "page_type": "Guide",
+    "target_url": "https://techand.ai/e-invoicing-uae-fta/",
+    "status": "planned"
+   },
+   {
+    "keyword": "accredited service provider for e invoicing in uae",
+    "page_type": "Service Page",
+    "target_url": "https://techand.ai/accredited-service-provider-for-e-invoicing-in-uae/",
+    "status": "planned"
+   },
+   {
+    "keyword": "uae e invoicing requirements",
+    "page_type": "Guide",
+    "target_url": "https://techand.ai/uae-e-invoicing-requirements/",
+    "status": "planned"
+   }
+  ]
+ },
+ "api_body": {
+  "mode": "keyword",
+  "keyword": "e invoicing uae fta",
+  "page_type": "Guide",
+  "country": "United Arab Emirates",
+  "domain": "techand.ai",
+  "existing_page_url": "",
+  "email": "kinnngahmed@gmail.com",
+  "ladder_id": "lad_mupia2l2c0tp",
+  "ladder_rung": 1,
+  "ladder_head": "e invoicing in uae",
+  "force_content": true
+ },
+ "done": false
+}

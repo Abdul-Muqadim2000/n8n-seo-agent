@@ -1,0 +1,36 @@
+{
+ "status": "completed",
+ "stage": "site_audit",
+ "request_id": "T1-audit-techand",
+ "execution_id": "16",
+ "domain": "techand.ai",
+ "health_score": 70,
+ "grade": "Needs Improvement",
+ "issue_counts": {
+  "Critical": 1,
+  "High": 3,
+  "Medium": 6,
+  "Low": 10,
+  "Info": 3
+ },
+ "top_issues": [
+  "Broken pages (4xx, 5xx or timeout)",
+  "www and non-www versions are not consolidated",
+  "HTML cannot be cached by the CDN (no-store / private)",
+  "Broken internal links"
+ ],
+ "emailed_to": "kinnngahmed@gmail.com",
+ "run_ledger": {
+  "dataforseo_usd": 0.09,
+  "dataforseo_calls": 7,
+  "by_node": {
+   "Start Crawl": 0.09
+  },
+  "ai_calls": 0,
+  "ai_nodes": [],
+  "started_at": "2026-10-01T12:09:32.319Z",
+  "finished_at": "2026-10-01T12:14:58.933Z",
+  "duration_min": 5.4
+ },
+ "callback_url": "http://localhost:5678/webhook/seo-callback"
+}

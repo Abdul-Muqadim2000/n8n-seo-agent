@@ -1,0 +1,7 @@
+API Entry	runs=1	items=1	1ms
+Normalize Input	runs=1	items=1	17ms
+Rate Limit	runs=1	items=1	13ms
+Input OK?	runs=1	items=0/1	3ms
+Error Via API?	runs=1	items=1/0	3ms
+API Reject	runs=1	items=	24ms	ERROR: API request rejected (no callback_url to notify): API requests need a callback_url (https) or an email address so the result can be delivered. [line 4]
+EXECUTION ERROR: API request rejected (no callback_url to notify): API requests need a callback_url (https) or an email address so the result can be delivered. [line 4] | node: undefined

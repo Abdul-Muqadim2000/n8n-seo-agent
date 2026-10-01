@@ -1,0 +1,35 @@
+Start Form	runs=1	items=1	0ms
+Choose Path	runs=1	items=0/1/0/0/0/0/0	7ms
+Page Discover	runs=1	items=1	1ms
+Normalize Input	runs=1	items=1	1134ms
+Rate Limit	runs=1	items=1	18ms
+Input OK?	runs=1	items=1/0	4ms
+Need Site Read?	runs=1	items=0/1	2ms
+Route Mode	runs=1	items=0/1/0/0/0/0	5ms
+Anthropic Chat Model	runs=1	items=	4580ms
+Parser — Keyword Seeds	runs=1	items=	2ms
+Keyword Seeds	runs=1	items=1	4655ms
+Seed List	runs=1	items=1	29ms
+Research Requests	runs=1	items=7	19ms
+Run Research	runs=1	items=7	17738ms
+Competitor Keyword Requests	runs=1	items=3	2795ms
+Run Competitor Keywords	runs=1	items=3	2191ms
+Collect Research	runs=1	items=1	91ms
+Relevance Chunks	runs=1	items=3	49ms
+Claude — Keyword Relevance	runs=3	items=,,	19468ms
+Parser — Keyword Relevance	runs=3	items=,,	24ms
+Keyword Relevance	runs=1	items=3	59220ms
+Rank Keywords	runs=1	items=1	1323ms
+AI Demand	runs=1	items=1	1705ms
+Priority Keywords	runs=1	items=7	25ms
+Candidate SERP	runs=1	items=7	43967ms
+Build Keyword Strategy	runs=1	items=1	1208ms
+Choice Step?	runs=1	items=1/0	14ms
+Choose Keyword	runs=1	items=1	0ms
+Apply Choice	runs=1	items=1	1143ms
+Build Keyword File	runs=1	items=1	285ms
+Prepare PDF Ideas	runs=1	items=1	112ms
+Render PDF Ideas	runs=1	items=1	355ms
+Attach PDF Ideas	runs=1	items=1	61ms
+Via Webhook (Ideas)?	runs=1	items=0/1	10ms
+Download Keyword Ideas	runs=1	items=1	3ms

@@ -1,0 +1,50 @@
+API Entry	runs=1	items=1	1ms
+Normalize Input	runs=1	items=1	46ms
+Rate Limit	runs=1	items=1	20ms
+Input OK?	runs=1	items=1/0	5ms
+Need Site Read?	runs=1	items=1/0	2ms
+Read Website	runs=1	items=1	1080ms
+Clean Site Text	runs=1	items=1	22ms
+Site Read OK?	runs=1	items=1/0	3ms
+Claude — Site Describer	runs=1	items=	6751ms
+Parser — Site Describer	runs=1	items=	0ms
+Site Describer	runs=1	items=1	6777ms
+Parse Description	runs=1	items=1	19ms
+Route Mode	runs=1	items=0/0/0/0/1/0	10ms
+Prepare Keyword Run	runs=1	items=1	16ms
+Has Domain?	runs=1	items=1/0	4ms
+Fetch Sitemap Index	runs=1	items=1	520ms
+Parse Sitemap Index	runs=1	items=1	147ms
+Fetch Sitemaps	runs=1	items=1	471ms
+Collect Site URLs	runs=1	items=1	70ms
+Read Client Pages?	runs=1	items=1/0	8ms
+Client Page Requests	runs=1	items=2	64ms
+Read Client Pages	runs=1	items=2	7518ms
+Collect Client Pages	runs=1	items=1	43ms
+SERP Top 10	runs=1	items=1	24715ms
+Pick Top 6	runs=1	items=8	1104ms
+Read Competitor Pages	runs=1	items=8	32714ms
+Find Blocked Pages	runs=1	items=1	33ms
+Any Blocked?	runs=1	items=0/1	8ms
+Analyze Competitor Pages	runs=1	items=1	82ms
+Facts SERP	runs=1	items=1	24451ms
+Collect Facts	runs=1	items=1	1171ms
+Claude — Competitor Analyzer	runs=1	items=	26877ms
+Parser — Competitor Analyzer	runs=1	items=	1ms
+Competitor Analyzer	runs=1	items=1	27063ms
+Parse Analysis	runs=1	items=1	28ms
+Keyword Data	runs=1	items=1	533ms
+Has Domain (Authority)?	runs=1	items=0/1	2ms
+Merge Keyword Data	runs=1	items=1	31ms
+Verdict Chat Model	runs=1	items=	9704ms
+Parser — Verdict	runs=1	items=	1ms
+Verdict Agent	runs=1	items=1	9842ms
+Parse Verdict	runs=1	items=1	45ms
+Ladder Mode?	runs=1	items=1/0	3ms
+Ladder Requests	runs=1	items=4	20ms
+Run Ladder Research	runs=1	items=4	3007ms
+Ladder Pool	runs=1	items=1	34ms
+Ladder Relevance Chunks	runs=1	items=1	16ms
+Claude — Ladder Relevance	runs=1	items=	1ms	ERROR: Node does not have any credentials set
+Ladder Keyword Relevance	runs=1	items=	3086ms	ERROR: Error in sub-node Claude — Ladder Relevance
+EXECUTION ERROR: Error in sub-node Claude — Ladder Relevance | node: Claude — Ladder Relevance

@@ -1,0 +1,18 @@
+You are an SEO strategist screening keyword ideas for one specific business. Judge each keyword by whether THIS business could credibly publish the best page for it and get business value from the visit.
+
+Business: {{ $json.business }}
+Customers: {{ $json.audience }}
+Services/products: {{ $json.services }}
+Country: {{ $json.country }} · SEO goal: {{ $json.goal }}
+Chunk {{ $json.chunk_index }} of {{ $json.chunk_total }} ({{ $json.chunk_size }} keywords)
+
+KEYWORDS
+{{ $json.keywords_text }}
+
+For EVERY keyword, in the same order, return:
+- relevance: 2 = a buyer or user of this business would search it and a page from this business can genuinely be the best answer; 1 = adjacent (useful for a guide, glossary or supporting article that leads to the services); 0 = irrelevant — other industry or product category, job seekers, students or homework, consumers when the business sells to businesses (or the reverse), tools or software the business does not sell, people, places or other meanings of the words.
+- intent: informational | commercial | transactional | navigational (navigational = a specific brand, login, app or website).
+- page_type: Service Page | Product Page | Landing Page | Comparison Page | Blog Post | Guide | FAQ Page | Location Page | Category Page.
+- topic: a short label (2-4 words) for the page that would target this keyword. Reuse the exact same label for keywords that belong on the same page, so labels form clusters.
+
+Return ONLY valid JSON: {"items": [{"keyword": "...", "relevance": 2, "intent": "commercial", "page_type": "Service Page", "topic": "erp implementation services"}, ...]} with exactly {{ $json.chunk_size }} items. If there are no keywords, return {"items": []}.

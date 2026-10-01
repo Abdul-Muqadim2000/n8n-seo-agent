@@ -1,0 +1,1 @@
+return $('Pick Competitors').all().map(i => ({ json: { domain: i.json.domain, is_you: !!i.json.is_you, url: 'https://' + i.json.domain + '/' } }));

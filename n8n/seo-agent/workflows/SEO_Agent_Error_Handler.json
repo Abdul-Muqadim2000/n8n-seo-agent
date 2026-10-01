@@ -1,0 +1,103 @@
+[
+  {
+    "name": "SEO Agent — Error Handler",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "nodes": [
+      {
+        "parameters": {},
+        "id": "4f0225e4-a9c8-4d55-9e43-0c19b6968d0d",
+        "name": "Error Trigger",
+        "type": "n8n-nodes-base.errorTrigger",
+        "typeVersion": 1,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Turns the Error Trigger payload into a readable ops alert.\nconst e = $input.first().json;\nconst ex = e.execution || {};\nconst err = ex.error || {};\nconst wfName = (e.workflow || {}).name || 'unknown workflow';\nconst node = ex.lastNodeExecuted || (err.node && err.node.name) || 'unknown node';\nconst msg = String(err.message || err.description || 'no message').slice(0, 800);\nconst url = ex.url || '';\nconst mode = ex.mode || '';\nconst when = new Date().toISOString();\nconst subject = `[SEO Agent] Run failed at \"${node}\" — ${wfName}`;\nconst html = `<p><b>Workflow:</b> ${wfName}<br><b>Execution:</b> ${ex.id || '?'} (${mode}) ${url ? '— <a href=\"' + url + '\">open</a>' : ''}<br><b>Failed node:</b> ${node}<br><b>When:</b> ${when}</p>\n<pre style=\"background:#f1f5f9;padding:10px;white-space:pre-wrap\">${msg.replace(/</g, '&lt;')}</pre>\n<p>Typical causes: DataForSEO/Jina credentials or credits, a site that blocks readers, an AI response that was not valid JSON, or a crawl that never finished.<br>\nIf a customer is waiting for an emailed report, re-run the execution from the failed node or tell them what happened.</p>`;\nreturn [{ json: { subject, html, node, workflow: wfName, execution_id: ex.id || null, execution_url: url, message: msg } }];"
+        },
+        "id": "6dcbf3af-f989-409c-a8c8-8f3518465ec9",
+        "name": "Format Alert",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "fromEmail": "Dev SEO <kinnngahmed@gmail.com>",
+          "toEmail": "kinnngahmed@gmail.com",
+          "subject": "={{ $json.subject }}",
+          "emailFormat": "html",
+          "html": "={{ $json.html }}",
+          "options": {
+            "appendAttribution": false
+          }
+        },
+        "id": "726edbd0-e934-4e51-b31b-dd35b0c0da58",
+        "name": "Email Ops",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 2.1,
+        "position": [
+          480,
+          0
+        ],
+        "credentials": {
+          "smtp": {
+            "id": "SEOcredSmtpGmail",
+            "name": "Gmail SMTP (SEO Agent)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Error Handler\nAttach this as **Settings → Error workflow** on the SEO Agent workflow.\n\n1. *Email Ops* sends through the \"Gmail SMTP (SEO Agent)\" credential to kinnngahmed@gmail.com — change the address if ops alerts should go elsewhere.\n2. Optional: add a Slack / Teams node after *Format Alert*.\n\nThe payload has the execution id, a link to open it, the failed node and the error message. It does **not** contain the customer's form data (n8n error triggers only carry execution metadata); open the execution to see who was waiting for a report.",
+          "height": 320,
+          "width": 520,
+          "color": 3
+        },
+        "id": "9436cfa3-eb0b-480e-a53c-fe0c63ff39ea",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -60,
+          -380
+        ]
+      }
+    ],
+    "connections": {
+      "Error Trigger": {
+        "main": [
+          [
+            {
+              "node": "Format Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Alert": {
+        "main": [
+          [
+            {
+              "node": "Email Ops",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "tags": [],
+    "id": "SEOagentErrHandl"
+  }
+]

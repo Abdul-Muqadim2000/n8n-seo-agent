@@ -1,0 +1,1 @@
+throw new Error('Internal routing error: unrecognized mode. Please contact support.');

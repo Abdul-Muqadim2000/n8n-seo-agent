@@ -1,0 +1,35 @@
+API Entry	runs=1	items=1	1ms
+Normalize Input	runs=1	items=1	56ms
+Rate Limit	runs=1	items=1	25ms
+Input OK?	runs=1	items=1/0	14ms
+Need Site Read?	runs=1	items=0/1	5ms
+Route Mode	runs=1	items=0/0/0/1/0/0	47ms
+Start Crawl	runs=1	items=1	866ms
+Save Task ID	runs=1	items=1	23ms
+Wait 1 min	runs=5	items=1,1,1,1,1	60005ms
+Get Crawl Summary	runs=5	items=1,1,1,1,1	1814ms
+Check Crawl	runs=5	items=1,1,1,1,1	21ms
+Crawl Done?	runs=5	items=0/1,0/1,0/1,0/1,1/0	5ms
+Get Crawled Pages	runs=1	items=1	3532ms
+Crawl Extra Requests	runs=1	items=4	136ms
+Run Crawl Extras	runs=1	items=4	1349ms
+Collect Crawl Extras	runs=1	items=1	51ms
+Build Probes	runs=1	items=4	18ms
+Run Probes	runs=1	items=4	1904ms
+Content Probes	runs=1	items=17	19ms
+Run Content Probes	runs=1	items=17	3833ms
+Analyze Probes	runs=1	items=1	93ms
+Full Report?	runs=1	items=0/1	5ms
+Build Site Issues	runs=1	items=1	63ms
+Is Full Report?	runs=1	items=0/1	4ms
+Build Audit Report	runs=1	items=1	180ms
+Prepare PDF Audit	runs=1	items=1	32ms
+Render PDF Audit	runs=1	items=1	244ms
+Attach PDF Audit	runs=1	items=1	28ms
+Via Webhook (Audit)?	runs=1	items=1/0	1ms
+Build Audit Response	runs=1	items=1	114ms
+Has Callback?	runs=1	items=1/0	2ms
+POST Callback	runs=1	items=1	71ms
+Has Email (Audit)?	runs=1	items=1/0	5ms
+Send Audit Report	runs=1	items=1	4134ms
+From Audit Form?	runs=1	items=0/1	11ms

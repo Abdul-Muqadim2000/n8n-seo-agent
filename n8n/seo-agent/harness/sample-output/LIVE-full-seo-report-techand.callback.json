@@ -1,0 +1,51 @@
+{
+ "status": "completed",
+ "stage": "full_report",
+ "request_id": "T3-fullreport-techand",
+ "execution_id": "21",
+ "domain": "techand.ai",
+ "health_score": 64,
+ "grade": "Needs Improvement",
+ "issue_counts": {
+  "Critical": 1,
+  "High": 22,
+  "Medium": 18,
+  "Low": 16,
+  "Info": 3
+ },
+ "top_issues": [
+  "Broken pages (4xx, 5xx or timeout)",
+  "www and non-www versions are not consolidated",
+  "HTML cannot be cached by the CDN (no-store / private)",
+  "Malformed sameAs profile link",
+  "Structured contact details are thinner than what the site shows",
+  "Experience claim conflicts with the founding date",
+  "Service pages have no Service schema"
+ ],
+ "emailed_to": "kinnngahmed@gmail.com",
+ "run_ledger": {
+  "dataforseo_usd": 1.02,
+  "dataforseo_calls": 36,
+  "by_node": {
+   "Start Crawl": 0.09,
+   "Find Competitors": 0.012,
+   "Fallback SERP": 0.01,
+   "Domain Overview": 0.0483,
+   "DataForSEO Whois": 0.4848,
+   "Ranked Keywords": 0.12,
+   "Keyword Ideas": 0.048,
+   "Backlink Summary": 0.096,
+   "Backlink Gap": 0.024,
+   "AI SERP": 0.022,
+   "Ask LLMs": 0.0646
+  },
+  "ai_calls": 1,
+  "ai_nodes": [
+   "Content Reviewer"
+  ],
+  "started_at": "2026-10-01T12:13:51.371Z",
+  "finished_at": "2026-10-01T12:21:58.374Z",
+  "duration_min": 8.1
+ },
+ "callback_url": "http://localhost:5678/webhook/seo-callback"
+}

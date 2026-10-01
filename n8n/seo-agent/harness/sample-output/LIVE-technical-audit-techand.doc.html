@@ -1,0 +1,241 @@
+﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>Site Audit — techand.ai</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+<style>
+@page { margin: 0.8in; }
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1e293b; }
+.cover { background: #0F172A; color: #fff; padding: 28px 30px; margin-bottom: 24px; }
+.brand { font-size: 10pt; letter-spacing: 2px; text-transform: uppercase; color: #93C5FD; }
+.title { font-size: 28pt; margin: 6px 0; color: #fff; }
+.sub { color: #CBD5E1; margin: 0 0 14px; }
+.scorebox td { vertical-align: middle; padding-right: 18px; color: #fff; }
+.big { font-size: 44pt; font-weight: bold; }
+.big span { font-size: 14pt; color: #CBD5E1; }
+.grade { font-size: 16pt; font-weight: bold; color: #fff; }
+.lbl { color: #93C5FD; font-size: 10pt; }
+.by { color: #93C5FD; margin: 14px 0 0; font-size: 10pt; }
+h2 { color: #1E3A8A; font-size: 15pt; margin-top: 26px; border-bottom: 1px solid #CBD5E1; padding-bottom: 4px; }
+h3 { color: #334155; font-size: 12.5pt; margin-top: 16px; }
+p { margin: 0 0 8px; }
+.toc li { margin-bottom: 4px; }
+.ct { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; }
+.ct th { background: #1E3A8A; color: #fff; padding: 7px; text-align: left; }
+.ct td { padding: 7px; border: 1px solid #CBD5E1; vertical-align: middle; }
+.kv { width: 100%; border-collapse: collapse; margin: 10px 0 16px; }
+.kv td { padding: 7px 10px; border: 1px solid #E2E8F0; font-size: 10pt; }
+.kv .k { width: 220px; font-weight: bold; background: #EEF2FF; color: #0F172A; }
+.bar { width: 100%; border-collapse: collapse; }
+.bar td { height: 10px; padding: 0; border: none; font-size: 4pt; }
+.good li { color: #15803D; }
+.note { border-left: 4px solid #D97706; background: #FFFBEB; padding: 10px 14px; margin: 12px 0; }
+.finding { border-left: 5px solid #CBD5E1; background: #F8FAFC; padding: 10px 14px; margin: 12px 0; }
+.ftitle { font-weight: bold; font-size: 11.5pt; color: #0F172A; }
+.badge { color: #fff; font-size: 8pt; padding: 2px 6px; font-weight: bold; }
+.fmeta { font-size: 9pt; color: #64748B; margin: 3px 0 8px; }
+.small { font-size: 9pt; color: #64748B; }
+.pb { page-break-before: always; }</style></head><body>
+<div class="cover">
+  <div class="brand">Site Audit Report</div>
+  <h1 class="title">techand.ai</h1>
+  <p class="sub">88 pages crawled &nbsp;•&nbsp; 2026-10-01</p>
+  <table class="scorebox"><tr>
+    <td class="big" style="color:#CA8A04">70<span>/100</span></td>
+    <td><div class="grade">Needs Improvement</div><div class="lbl">Site Health Score (technical)</div></td>
+  </tr></table>
+  <p class="by">Prepared by Dev SEO</p>
+</div><h2>Contents</h2><ol class="toc">
+<li>Executive Summary</li><li>Scores by Category</li><li>What Works Well</li>
+<li>Issues Found</li><li>Action Plan</li><li>Not Assessed in This Audit</li><li>Methodology</li></ol><h2 class="pb">1. Executive Summary</h2>
+<p>We crawled <b>88</b> pages of <b>techand.ai</b> and ran additional checks on security, caching, crawler access and the sitemap. We found:</p>
+<table class="ct"><tr><th style="background:#B91C1C">Critical</th><th style="background:#EA580C">High</th><th style="background:#CA8A04">Medium</th><th style="background:#2563EB">Low</th><th style="background:#64748B">Info</th></tr>
+<tr><td style="text-align:center;font-size:14pt"><b>1</b></td><td style="text-align:center;font-size:14pt"><b>3</b></td><td style="text-align:center;font-size:14pt"><b>6</b></td><td style="text-align:center;font-size:14pt"><b>10</b></td><td style="text-align:center;font-size:14pt"><b>3</b></td></tr></table>
+<div class="note"><b>Score limit applied:</b> 1 critical issue found — score capped at 70 until fixed. Calculated score before the limit: 81/100.</div>
+<h3>Fix These First</h3><ol><li><b>Broken pages (4xx, 5xx or timeout)</b> <span class="small">(3 of 88 crawled pages)</span><br>Fix or 301-redirect broken URLs to the most relevant live page.</li><li><b>www and non-www versions are not consolidated</b> <span class="small">(Crawler canonicalization test failed)</span><br>Make the www version redirect (301) to the main domain with a valid certificate for both hostnames.</li><li><b>HTML cannot be cached by the CDN (no-store / private)</b> <span class="small">(Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate; CDN cache status on two requests: MISS / MISS)</span><br>Remove the setting that forces dynamic rendering (for Next.js: force-dynamic, or cookies()/headers() in server components) or enable revalidation so the CDN can cache HTML. Verify: repeat requests should show a cache HIT.</li><li><b>Broken internal links</b> <span class="small">(21 broken links across 88 pages)</span><br>Export the broken links from the crawl and fix or remove each one; redirect deleted pages to the closest live page.</li></ol><h3>Key Measurements</h3><table class="kv"><tr><td class="k">Homepage server response</td><td>N/A</td></tr><tr><td class="k">Cache-Control header</td><td>private, no-cache, no-store, max-age=0, must-revalidate</td></tr><tr><td class="k">CDN cache status</td><td>MISS / MISS</td></tr><tr><td class="k">URLs in sitemap</td><td>43</td></tr><tr><td class="k">Pages found by crawling</td><td>88</td></tr><tr><td class="k">Server</td><td>Vercel</td></tr></table><h2>2. Scores by Category</h2><table class="ct"><tr><th>Category</th><th style="width:60px">Score</th><th style="width:60px">Weight</th><th style="width:45%"></th></tr><tr><td>Crawlability &amp; Indexing</td><td><b style="color:#B91C1C">41</b></td><td>22%</td><td><table class="bar"><tr>
+  <td style="width:41%;background:#B91C1C">&nbsp;</td>
+  <td style="width:59%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>On-Page</td><td><b style="color:#65A30D">89</b></td><td>18%</td><td><table class="bar"><tr>
+  <td style="width:89%;background:#65A30D">&nbsp;</td>
+  <td style="width:11%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Content</td><td><b style="color:#15803D">97</b></td><td>13%</td><td><table class="bar"><tr>
+  <td style="width:97%;background:#15803D">&nbsp;</td>
+  <td style="width:3%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Performance</td><td><b style="color:#65A30D">76</b></td><td>15%</td><td><table class="bar"><tr>
+  <td style="width:76%;background:#65A30D">&nbsp;</td>
+  <td style="width:24%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Security</td><td><b style="color:#15803D">97</b></td><td>10%</td><td><table class="bar"><tr>
+  <td style="width:97%;background:#15803D">&nbsp;</td>
+  <td style="width:3%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Images</td><td><b style="color:#15803D">100</b></td><td>7%</td><td><table class="bar"><tr>
+  <td style="width:100%;background:#15803D">&nbsp;</td>
+  <td style="width:0%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Technical</td><td><b style="color:#15803D">100</b></td><td>5%</td><td><table class="bar"><tr>
+  <td style="width:100%;background:#15803D">&nbsp;</td>
+  <td style="width:0%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>AI Search Readiness</td><td><b style="color:#15803D">100</b></td><td>10%</td><td><table class="bar"><tr>
+  <td style="width:100%;background:#15803D">&nbsp;</td>
+  <td style="width:0%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr></table><h2>3. What Works Well</h2><ul class="good"><li>Valid SSL certificate on the main domain (expires 2026-12-29)</li><li>HTTP correctly redirects to HTTPS</li><li>robots.txt is present</li><li>HTTP/2 is enabled</li><li>Missing pages return a proper 404</li><li>No broken images, scripts or stylesheets</li><li>No duplicate page titles</li><li>No duplicate meta descriptions</li><li>No duplicate content across pages</li><li>No redirect loops</li><li>All crawled pages are indexable</li><li>Every page has an H1</li><li>Every page has a title tag</li><li>One canonical host: https://techand.ai 301-redirects to https://www.techand.ai</li><li>HTTP redirects to HTTPS</li><li>robots.txt lists the sitemap</li><li>XML sitemap lists 43 URLs</li><li>Every live page is listed in the sitemap</li><li>llms.txt exists (10296 characters)</li><li>Site serves Markdown to AI agents on request</li><li>All 11 search and AI crawlers tested (GPTBot, ClaudeBot, PerplexityBot, Googlebot and more) receive the full page</li></ul><h2 class="pb">4. Issues Found</h2><h3 style="color:#B91C1C">Critical Priority (1)</h3><div class="finding" style="border-left-color:#B91C1C">
+      <div class="ftitle"><span class="badge" style="background:#B91C1C">Critical</span> Broken pages (4xx, 5xx or timeout)</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 3 of 88 pages (3%)</div>
+      <p><b>Evidence:</b> 3 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Pages that return errors waste crawl budget and lose any ranking signals pointing to them.</p>
+      <p><b>How to fix:</b> Fix or 301-redirect broken URLs to the most relevant live page.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/capabilities/dynamics-365-project-operations-uae<br>https://www.techand.ai/insights/dynamics-365-project-operations-uae<br>https://www.techand.ai/whatwedo/dynamics-365-project-operations-uae</p>
+    </div><h3 style="color:#EA580C">High Priority (3)</h3><div class="finding" style="border-left-color:#EA580C">
+      <div class="ftitle"><span class="badge" style="background:#EA580C">High</span> www and non-www versions are not consolidated</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Crawler canonicalization test failed</p>
+      <p><b>Why it matters:</b> If both versions do not resolve to one canonical host, links and signals are split.</p>
+      <p><b>How to fix:</b> Make the www version redirect (301) to the main domain with a valid certificate for both hostnames.</p>
+      
+    </div><div class="finding" style="border-left-color:#EA580C">
+      <div class="ftitle"><span class="badge" style="background:#EA580C">High</span> HTML cannot be cached by the CDN (no-store / private)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate; CDN cache status on two requests: MISS / MISS</p>
+      <p><b>Why it matters:</b> Every visit forces the server to rebuild the page from scratch, which slows the first byte for every user and hurts Core Web Vitals. This is sometimes intentional (carts, logged-in areas) — confirm before changing.</p>
+      <p><b>How to fix:</b> Remove the setting that forces dynamic rendering (for Next.js: force-dynamic, or cookies()/headers() in server components) or enable revalidation so the CDN can cache HTML. Verify: repeat requests should show a cache HIT.</p>
+      
+    </div><div class="finding" style="border-left-color:#EA580C">
+      <div class="ftitle"><span class="badge" style="background:#EA580C">High</span> Broken internal links</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> 21 broken links across 88 pages</p>
+      <p><b>Why it matters:</b> Links to pages that no longer exist waste crawl budget and send users to dead ends.</p>
+      <p><b>How to fix:</b> Export the broken links from the crawl and fix or remove each one; redirect deleted pages to the closest live page.</p>
+      
+    </div><h3 style="color:#CA8A04">Medium Priority (6)</h3><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Missing canonical tag</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 45 of 88 pages (51%)</div>
+      <p><b>Evidence:</b> 45 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Without a canonical, duplicate URL versions can compete with each other.</p>
+      <p><b>How to fix:</b> Add a self-referencing canonical tag to every indexable page.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/capabilities/dynamics-365-project-operations-uae — No canonical<br>https://www.techand.ai/insights/dynamics-365-project-operations-uae — No canonical<br>https://www.techand.ai/whatwedo/dynamics-365-project-operations-uae — No canonical<br>https://techand.ai/ai-copilot-advisory-uae — No canonical<br>https://techand.ai/business-central-implementation-uae — No canonical<br>https://techand.ai/business-central-post-go-live-support-uae — No canonical<br>https://techand.ai/capabilities — No canonical<br>https://techand.ai/capabilities/business-applications — No canonical<br>https://techand.ai/capabilities/cloud-services — No canonical<br>https://techand.ai/capabilities/data — No canonical<br>…and 35 more</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Canonical points to a redirect</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 42 of 88 pages (48%)</div>
+      <p><b>Evidence:</b> 42 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Mixed signals slow down consolidation of ranking signals.</p>
+      <p><b>How to fix:</b> Point canonicals directly to the final URL.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/ai-copilot-advisory-uae<br>https://www.techand.ai/business-central-implementation-uae<br>https://www.techand.ai/business-central-post-go-live-support-uae<br>https://www.techand.ai/capabilities<br>https://www.techand.ai/capabilities/business-applications<br>https://www.techand.ai/capabilities/cloud-services<br>https://www.techand.ai/capabilities/data<br>https://www.techand.ai/contact-us<br>https://www.techand.ai/cookies<br>https://www.techand.ai/d365-finance-operations-implementation-rollout-uae<br>…and 32 more</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> No compression (gzip/brotli)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; 42 of 88 pages (48%)</div>
+      <p><b>Evidence:</b> 42 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Uncompressed pages take longer to download.</p>
+      <p><b>How to fix:</b> Enable gzip or brotli compression on the server.</p>
+      <p class="small"><b>Affected pages:</b><br>https://techand.ai/ai-copilot-advisory-uae<br>https://techand.ai/business-central-implementation-uae<br>https://techand.ai/business-central-post-go-live-support-uae<br>https://techand.ai/capabilities<br>https://techand.ai/capabilities/business-applications<br>https://techand.ai/capabilities/cloud-services<br>https://techand.ai/capabilities/data<br>https://techand.ai/contact-us<br>https://techand.ai/cookies<br>https://techand.ai/d365-finance-operations-implementation-rollout-uae<br>…and 32 more</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Large image payload (over 1MB of images per page)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; 33 of 88 pages (38%)</div>
+      <p><b>Evidence:</b> 33 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Large images are the most common cause of slow mobile pages. The figure is the total size of image files the page references (including responsive sizes), so the real download may be smaller, but it signals unoptimised images.</p>
+      <p><b>How to fix:</b> Compress images, serve WebP/AVIF, and make sure image CDN optimisation (e.g. f_auto,q_auto) is on.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/ — 3.5MB of image files referenced<br>https://www.techand.ai/business-central-implementation-uae — 3.4MB of image files referenced<br>https://www.techand.ai/business-central-post-go-live-support-uae — 1.1MB of image files referenced<br>https://www.techand.ai/capabilities/business-applications — 1.8MB of image files referenced<br>https://www.techand.ai/d365-finance-operations-implementation-rollout-uae — 31.8MB of image files referenced<br>https://www.techand.ai/dynamics-365-business-central-uae — 9.0MB of image files referenced<br>https://www.techand.ai/dynamics-365-cloud-migration-uae — 31.2MB of image files referenced<br>https://www.techand.ai/dynamics-365-crm-uae — 4.3MB of image files referenced<br>https://www.techand.ai/dynamics-365-finance-and-operations-uae — 40.0MB of image files referenced<br>https://www.techand.ai/dynamics-365-managed-services-uae — 15.7MB of image files referenced<br>…and 23 more</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Structured data with errors</div>
+      <div class="fmeta">Schema &nbsp;•&nbsp; 12 of 88 pages (14%)</div>
+      <p><b>Evidence:</b> 12 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Search engines ignore structured data blocks that fail validation, so the page loses rich-result eligibility.</p>
+      <p><b>How to fix:</b> Validate each page in the Rich Results Test / Schema Markup Validator and fix the reported properties.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/insights/agentic-ai<br>https://www.techand.ai/insights/autonomous-ai-customer-service<br>https://www.techand.ai/insights/data-sovereign-asset<br>https://www.techand.ai/insights/how-microsoft-365-copilot-is-changing-business-productivity<br>https://www.techand.ai/insights/how-microsoft-dynamics-365-finance-operations-supports-uae-vat-compliance<br>https://www.techand.ai/insights/microsofts-saudi-arabia-east-datacenter-goes-live-in-november-2026-what-it-means-for-your-d365-roadmap<br>https://www.techand.ai/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs<br>https://www.techand.ai/insights/the-financial-reporting-trap-why-d365-fo-users-still-reach-for-excel<br>https://www.techand.ai/insights/top-peppol-e-invoicing-software-features-every-uae-cfo-must-look-for<br>https://www.techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance-a-technical-integration-guide<br>…and 2 more</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Brand name repeated in the title</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 1 of 88 pages (1%)</div>
+      <p><b>Evidence:</b> 1 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> A doubled brand suffix wastes title space and usually means the template adds the brand twice.</p>
+      <p><b>How to fix:</b> Fix the title template so the brand appears once.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/power-platform-analytics-uae — "Power Platform &amp; Analytics Services in UAE | Tech&amp; | Tech&amp;"</p>
+    </div><h3 style="color:#2563EB">Low Priority (10)</h3><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Missing security headers</div>
+      <div class="fmeta">Security &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Not found: Content-Security-Policy</p>
+      <p><b>Why it matters:</b> Security headers protect visitors. They are not a direct ranking factor but show a well-maintained site.</p>
+      <p><b>How to fix:</b> Add the missing headers in your hosting or CDN configuration; start Content-Security-Policy in Report-Only mode.</p>
+      
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Missing Open Graph tags</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 45 of 88 pages (51%)</div>
+      <p><b>Evidence:</b> 45 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Without them, links shared on LinkedIn, WhatsApp or Facebook show a poor preview.</p>
+      <p><b>How to fix:</b> Add og:title, og:description and og:image.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/capabilities/dynamics-365-project-operations-uae — Missing og:title, og:image<br>https://www.techand.ai/insights/dynamics-365-project-operations-uae — Missing og:title, og:image<br>https://www.techand.ai/whatwedo/dynamics-365-project-operations-uae — Missing og:title, og:image<br>https://techand.ai/ai-copilot-advisory-uae — Missing og:title, og:image<br>https://techand.ai/business-central-implementation-uae — Missing og:title, og:image<br>https://techand.ai/business-central-post-go-live-support-uae — Missing og:title, og:image<br>https://techand.ai/capabilities — Missing og:title, og:image<br>https://techand.ai/capabilities/business-applications — Missing og:title, og:image<br>https://techand.ai/capabilities/cloud-services — Missing og:title, og:image<br>https://techand.ai/capabilities/data — Missing og:title, og:image<br>…and 35 more</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> URLs are not SEO-friendly</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 43 of 88 pages (49%)</div>
+      <p><b>Evidence:</b> 43 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Dynamic parameters, long paths or non-descriptive URLs are harder to read and share.</p>
+      <p><b>How to fix:</b> Use short, lowercase, hyphenated, descriptive URLs.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/<br>https://www.techand.ai/ai-copilot-advisory-uae<br>https://www.techand.ai/business-central-implementation-uae<br>https://www.techand.ai/business-central-post-go-live-support-uae<br>https://www.techand.ai/capabilities<br>https://www.techand.ai/capabilities/business-applications<br>https://www.techand.ai/capabilities/cloud-services<br>https://www.techand.ai/capabilities/data<br>https://www.techand.ai/contact-us<br>https://www.techand.ai/cookies<br>…and 33 more</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Internal URLs that redirect</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 42 of 88 pages (48%)</div>
+      <p><b>Evidence:</b> 42 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Redirects add load time and dilute crawl efficiency.</p>
+      <p><b>How to fix:</b> Link directly to the final URL.</p>
+      <p class="small"><b>Affected pages:</b><br>https://techand.ai/ai-copilot-advisory-uae<br>https://techand.ai/business-central-implementation-uae<br>https://techand.ai/business-central-post-go-live-support-uae<br>https://techand.ai/capabilities<br>https://techand.ai/capabilities/business-applications<br>https://techand.ai/capabilities/cloud-services<br>https://techand.ai/capabilities/data<br>https://techand.ai/contact-us<br>https://techand.ai/cookies<br>https://techand.ai/d365-finance-operations-implementation-rollout-uae<br>…and 32 more</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Links pointing to redirects</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 42 of 88 pages (48%)</div>
+      <p><b>Evidence:</b> 42 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Extra hops for users and crawlers.</p>
+      <p><b>How to fix:</b> Update links to point to the final URL.</p>
+      <p class="small"><b>Affected pages:</b><br>https://techand.ai/ai-copilot-advisory-uae<br>https://techand.ai/business-central-implementation-uae<br>https://techand.ai/business-central-post-go-live-support-uae<br>https://techand.ai/capabilities<br>https://techand.ai/capabilities/business-applications<br>https://techand.ai/capabilities/cloud-services<br>https://techand.ai/capabilities/data<br>https://techand.ai/contact-us<br>https://techand.ai/cookies<br>https://techand.ai/d365-finance-operations-implementation-rollout-uae<br>…and 32 more</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Articles with no outbound links to sources</div>
+      <div class="fmeta">Content &nbsp;•&nbsp; 13 of 88 pages (15%)</div>
+      <p><b>Evidence:</b> 13 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Articles that cite no sources are less trustworthy and less likely to be quoted by AI answers.</p>
+      <p><b>How to fix:</b> Link key facts and statistics to their primary sources.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/insights/dynamics-365-project-operations-uae — 0 external links<br>https://techand.ai/insights/agentic-ai — 0 external links<br>https://techand.ai/insights/autonomous-ai-customer-service — 0 external links<br>https://techand.ai/insights/data-sovereign-asset — 0 external links<br>https://techand.ai/insights/how-microsoft-365-copilot-is-changing-business-productivity — 0 external links<br>https://techand.ai/insights/how-microsoft-dynamics-365-finance-operations-supports-uae-vat-compliance — 0 external links<br>https://techand.ai/insights/microsofts-saudi-arabia-east-datacenter-goes-live-in-november-2026-what-it-means-for-your-d365-roadmap — 0 external links<br>https://techand.ai/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs — 0 external links<br>https://techand.ai/insights/the-financial-reporting-trap-why-d365-fo-users-still-reach-for-excel — 0 external links<br>https://techand.ai/insights/top-peppol-e-invoicing-software-features-every-uae-cfo-must-look-for — 0 external links<br>…and 3 more</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Title shorter than 30 characters</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 12 of 88 pages (14%)</div>
+      <p><b>Evidence:</b> 12 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Short titles waste space to include keywords and a reason to click.</p>
+      <p><b>How to fix:</b> Expand to 50-60 characters with the main keyword and benefit.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/capabilities — 20 characters: "Capabilities | Tech&amp;"<br>https://www.techand.ai/capabilities/business-applications — 29 characters: "Business Applications | Tech&amp;"<br>https://www.techand.ai/capabilities/cloud-services — 22 characters: "Cloud Services | Tech&amp;"<br>https://www.techand.ai/capabilities/data — 24 characters: "Data &amp; Analytics | Tech&amp;"<br>https://www.techand.ai/contact-us — 18 characters: "Contact Us | Tech&amp;"<br>https://www.techand.ai/cookies — 21 characters: "Cookie Policy | Tech&amp;"<br>https://www.techand.ai/industries — 27 characters: "Industries We Serve | Tech&amp;"<br>https://www.techand.ai/insights — 16 characters: "Insights | Tech&amp;"<br>https://www.techand.ai/privacy — 22 characters: "Privacy Policy | Tech&amp;"<br>https://www.techand.ai/security — 23 characters: "Security Policy | Tech&amp;"<br>…and 2 more</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Long or messy URLs</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 9 of 88 pages (10%)</div>
+      <p><b>Evidence:</b> 9 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Long URLs, capitals or underscores are harder to read, share and remember.</p>
+      <p><b>How to fix:</b> Use short, lowercase, hyphenated URLs.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/insights/how-microsoft-dynamics-365-finance-operations-supports-uae-vat-compliance — 105 characters<br>https://www.techand.ai/insights/microsofts-saudi-arabia-east-datacenter-goes-live-in-november-2026-what-it-means-for-your-d365-roadmap — 134 characters<br>https://www.techand.ai/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs — 101 characters<br>https://www.techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance-a-technical-integration-guide — 114 characters<br>https://www.techand.ai/insights/your-current-pdf-invoices-will-be-illegal-in-the-uae-by-2027-and-how-to-fix-it — 110 characters<br>https://techand.ai/insights/how-microsoft-dynamics-365-finance-operations-supports-uae-vat-compliance — 101 characters<br>https://techand.ai/insights/microsofts-saudi-arabia-east-datacenter-goes-live-in-november-2026-what-it-means-for-your-d365-roadmap — 130 characters<br>https://techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance-a-technical-integration-guide — 110 characters<br>https://techand.ai/insights/your-current-pdf-invoices-will-be-illegal-in-the-uae-by-2027-and-how-to-fix-it — 106 characters</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Few internal links pointing to the page</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 6 of 88 pages (7%)</div>
+      <p><b>Evidence:</b> 6 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Pages with few internal links look less important to search engines.</p>
+      <p><b>How to fix:</b> Add contextual links from related pages with descriptive anchor text.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/whatwedo/ai-automation — 1 internal links in<br>https://www.techand.ai/whatwedo/assess-envision — 1 internal links in<br>https://www.techand.ai/whatwedo/build-implement — 1 internal links in<br>https://www.techand.ai/whatwedo/global-rollouts — 1 internal links in<br>https://www.techand.ai/whatwedo/managed-services — 1 internal links in<br>https://www.techand.ai/whatwedo/run-optimize — 1 internal links in</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Light content (300-500 words)</div>
+      <div class="fmeta">Content &nbsp;•&nbsp; 1 of 88 pages (1%)</div>
+      <p><b>Evidence:</b> 1 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Commercial pages usually need more depth to compete.</p>
+      <p><b>How to fix:</b> Expand with answers to the questions buyers ask before contacting you.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/contact-us — 334 words</p>
+    </div><h3 style="color:#64748B">Info Priority (3)</h3><div class="finding" style="border-left-color:#64748B">
+      <div class="ftitle"><span class="badge" style="background:#64748B">Info</span> Missing Twitter/X card tags</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 45 of 88 pages (51%)</div>
+      <p><b>Evidence:</b> 45 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Shared links on X show a plain preview.</p>
+      <p><b>How to fix:</b> Add twitter:card and twitter:image tags.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/capabilities/dynamics-365-project-operations-uae — No twitter:card<br>https://www.techand.ai/insights/dynamics-365-project-operations-uae — No twitter:card<br>https://www.techand.ai/whatwedo/dynamics-365-project-operations-uae — No twitter:card<br>https://techand.ai/ai-copilot-advisory-uae — No twitter:card<br>https://techand.ai/business-central-implementation-uae — No twitter:card<br>https://techand.ai/business-central-post-go-live-support-uae — No twitter:card<br>https://techand.ai/capabilities — No twitter:card<br>https://techand.ai/capabilities/business-applications — No twitter:card<br>https://techand.ai/capabilities/cloud-services — No twitter:card<br>https://techand.ai/capabilities/data — No twitter:card<br>…and 35 more</p>
+    </div><div class="finding" style="border-left-color:#64748B">
+      <div class="ftitle"><span class="badge" style="background:#64748B">Info</span> Canonical points to a different page</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 43 of 88 pages (49%)</div>
+      <p><b>Evidence:</b> 43 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> Fine if intentional, but this page will not rank on its own.</p>
+      <p><b>How to fix:</b> Confirm each of these is intentional.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/ — → https://techand.ai/<br>https://www.techand.ai/ai-copilot-advisory-uae — → https://techand.ai/ai-copilot-advisory-uae<br>https://www.techand.ai/business-central-implementation-uae — → https://techand.ai/business-central-implementation-uae<br>https://www.techand.ai/business-central-post-go-live-support-uae — → https://techand.ai/business-central-post-go-live-support-uae<br>https://www.techand.ai/capabilities — → https://techand.ai/capabilities<br>https://www.techand.ai/capabilities/business-applications — → https://techand.ai/capabilities/business-applications<br>https://www.techand.ai/capabilities/cloud-services — → https://techand.ai/capabilities/cloud-services<br>https://www.techand.ai/capabilities/data — → https://techand.ai/capabilities/data<br>https://www.techand.ai/contact-us — → https://techand.ai/contact-us<br>https://www.techand.ai/cookies — → https://techand.ai/cookies<br>…and 33 more</p>
+    </div><div class="finding" style="border-left-color:#64748B">
+      <div class="ftitle"><span class="badge" style="background:#64748B">Info</span> H1 is identical to the title tag</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 2 of 88 pages (2%)</div>
+      <p><b>Evidence:</b> 2 of 88 crawled pages</p>
+      <p><b>Why it matters:</b> A slightly different H1 lets you target a second keyword variation.</p>
+      <p><b>How to fix:</b> Optional: vary the H1 wording from the title.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.techand.ai/insights/autonomous-ai-customer-service — Both: "How Customer Services Are Achieving Productivity with AI"<br>https://www.techand.ai/insights/how-microsoft-365-copilot-is-changing-business-productivity — Both: "How Microsoft 365 Copilot Is Changing Business Productivity"</p>
+    </div><h2 class="pb">5. Action Plan</h2><h3>Phase 1 — Urgent <span class="small">(this week)</span></h3><ul><li>Broken pages (4xx, 5xx or timeout)</li><li>www and non-www versions are not consolidated</li><li>HTML cannot be cached by the CDN (no-store / private)</li><li>Broken internal links</li></ul><h3>Phase 2 — Important <span class="small">(next 2-4 weeks)</span></h3><ul><li>Missing canonical tag</li><li>Canonical points to a redirect</li><li>No compression (gzip/brotli)</li><li>Large image payload (over 1MB of images per page)</li><li>Structured data with errors</li><li>Brand name repeated in the title</li></ul><h3>Phase 3 — Polish <span class="small">(when time allows)</span></h3><ul><li>Missing security headers</li><li>Missing Open Graph tags</li><li>URLs are not SEO-friendly</li><li>Internal URLs that redirect</li><li>Links pointing to redirects</li><li>Articles with no outbound links to sources</li><li>Title shorter than 30 characters</li><li>Long or messy URLs</li><li>Few internal links pointing to the page</li><li>Light content (300-500 words)</li><li>Missing Twitter/X card tags</li><li>Canonical points to a different page</li><li>H1 is identical to the title tag</li></ul><h2>6. Not Assessed in This Audit</h2>
+<p>This is a technical site audit. The following areas are part of the Full SEO Report and are not included in this score:</p>
+<ul><li>Structured data (schema) and HTML-level checks</li><li>Competitor benchmark (organic keywords, rankings, traffic, domain age)</li><li>Core Web Vitals (LCP, CLS, INP) from Google PageSpeed and real users</li><li>Content quality and E-E-A-T review (authors, case studies, claims, pricing)</li><li>Backlinks and referring domains</li><li>Keyword rankings by search intent and keyword gap</li><li>AI answer visibility (AI Overviews, ChatGPT brand mentions)</li></ul><h2>7. Methodology</h2>
+<p>Technical site health only. Each category starts at 100. Findings written by the AI content review, and notes about data that could not be collected, are listed but do not change the score. Each other finding deducts Critical 30, High 15, Medium 7, Low 3, Info 1 points, scaled by the share of pages affected (60%-100% of the penalty); site-wide issues take the full penalty. Within a category, each further finding of the same severity counts 70% of the previous one, so many small issues cannot zero a category on their own. The score is the weighted average of category scores, capped at 70 with one critical issue, 60 with two or more, and 85 with five or more high-priority issues.</p>
+<table class="ct"><tr><th>Severity</th><th>Points deducted</th></tr>
+<tr><td>Critical</td><td>30</td></tr><tr><td>High</td><td>15</td></tr><tr><td>Medium</td><td>7</td></tr><tr><td>Low</td><td>3</td></tr><tr><td>Info</td><td>1</td></tr></table>
+<h3>Data Sources</h3>
+<table class="ct"><tr><th>Source</th><th>Used for</th></tr>
+<tr><td>Full site crawl (DataForSEO On-Page)</td><td>Page-level checks on up to 200 pages, including sitemap URLs; duplicate tags, non-indexable pages and redirect chains reports</td></tr>
+<tr><td>Direct HTTP checks</td><td>www/HTTPS, caching, security headers, robots.txt, sitemap, llms.txt</td></tr>
+<tr><td>Crawler simulation</td><td>Access for 11 search and AI crawlers (user-agent based)</td></tr></table>
+<p class="small">AI crawler checks use the crawler user-agent only; real crawlers are also verified by IP, so a pass here means no user-agent based blocking.</p><p class="small">Some extra crawl reports were unavailable: duplicate_title: Task Not Found.; duplicate_description: Task Not Found.; non_indexable: Task Not Found.; redirect_chains: Task Not Found.</p></body></html>

@@ -1,0 +1,8 @@
+# Added for the SEO Agent: HTML -> PDF conversion for customer reports.
+# Docker Compose merges this file automatically with compose.yml. Internal-only: n8n reaches it at http://gotenberg:3000.
+services:
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    restart: unless-stopped
+    command: ['gotenberg', '--api-timeout=120s', '--chromium-disable-javascript=true']
+    # Never publish port 3000 to the host.

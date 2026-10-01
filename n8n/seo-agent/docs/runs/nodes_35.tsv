@@ -1,0 +1,16 @@
+Manual Run	runs=1	items=1	1ms
+Ensure Ladder Table	runs=1	items=1	8ms
+Ensure History Table	runs=1	items=1	10ms
+Load Ladders	runs=1	items=9	10ms
+Load History	runs=1	items=1	7ms
+Tracker Plan	runs=1	items=9	18ms
+Any Checks?	runs=1	items=9/0	14ms
+SERP Check	runs=1	items=9	53242ms
+Parse Positions	runs=1	items=9	1438ms
+Save History	runs=1	items=9	63ms
+Tracker Report	runs=1	items=1	27ms
+Has Report?	runs=1	items=1/0	9ms
+Has Email (Tracker)?	runs=1	items=1/0	2ms
+Send Progress Email	runs=1	items=1	3759ms
+Has Callback (Tracker)?	runs=1	items=1/0	9ms
+POST Progress	runs=1	items=1	60ms

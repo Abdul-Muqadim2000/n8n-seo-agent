@@ -1,0 +1,515 @@
+const H = require('./harness');
+const F = require('./fixtures');
+const V = require('./fixtures_v5');
+const { run, mock, begin, expectError, save, scanHtml, store } = H;
+(async () => {
+const decode = (items) => Buffer.from(items[0].binary.data.data, 'base64').toString('utf8');
+const guard = async (name, fn) => { try { await fn(); } catch (e) { console.log(`   !! scenario "${name}" aborted at: ${(e.message || e).split('\n')[0]}`); } };
+const reset = () => { for (const k of Object.keys(store)) delete store[k]; };
+
+// ===================================================================================
+await guard('validation', async () => {
+  begin('S0 Normalize Input — validation & webhook parsing');
+  mock('Start Form', F.forms.startKeyword);
+  const v1 = await run('Normalize Input', F.forms.badCountry); console.log('   bad country ->', JSON.stringify(v1[0].json.validation_error), '| via_webhook', v1[0].json.via_webhook);
+  mock('Start Form', F.forms.startAudit);
+  const v2 = await run('Normalize Input', F.forms.badDomain); console.log('   bad domain ->', JSON.stringify(v2[0].json.validation_error));
+  mock('Start Form', F.forms.startDescribe);
+  const v3 = await run('Normalize Input', F.forms.localhostDomain); console.log('   internal host ->', JSON.stringify(v3[0].json.validation_error));
+  const v4 = await run('Rate Limit', v3); console.log('   rate limit passthrough keeps error ->', !!v4[0].json.validation_error);
+  // webhook verdict (no Start Form)
+  reset();
+  const wv = await run('Normalize Input', F.forms.webhookVerdict);
+  console.log('   webhook verdict ->', JSON.stringify({ mode: wv[0].json.mode, verdict_only: wv[0].json.verdict_only, country: wv[0].json.country, location_code: wv[0].json.location_code, via_webhook: wv[0].json.via_webhook, callback_url: wv[0].json.callback_url, include_content: wv[0].json.include_content, need_site_description: wv[0].json.need_site_description }));
+  const wk = await run('Normalize Input', F.forms.webhookKeywordDefault);
+  console.log('   webhook default ->', JSON.stringify({ mode: wk[0].json.mode, include_content: wk[0].json.include_content, include_seo_report: wk[0].json.include_seo_report, page_type: wk[0].json.page_type, run_page_check: wk[0].json.run_page_check }));
+  // rate limit
+  H.staticData.rate = undefined;
+  for (let i = 0; i < 6; i++) await run('Rate Limit', wk);
+  const rl7 = await run('Rate Limit', wk); console.log('   7th run ->', JSON.stringify(rl7[0].json.validation_error));
+  const wnc = await run('Normalize Input', { body: { keyword: 'x', country: 'US' } }); console.log('   API without callback/email ->', JSON.stringify(wnc[0].json.validation_error));
+});
+
+// ===================================================================================
+await guard('keyword', async () => {
+  reset(); begin('S1 Keyword mode (form) — full content pipeline');
+  mock('Start Form', F.forms.startKeyword);
+  const n = await run('Normalize Input', F.forms.pageKeyword);
+  console.log('   new fields ->', JSON.stringify({ goal: n[0].json.goal, tone: n[0].json.tone, cta: n[0].json.cta, business_facts: n[0].json.business_facts }));
+  console.log('   normalized ->', JSON.stringify({ keyword: n[0].json.keyword, domain: n[0].json.domain, email: n[0].json.email, include_content: n[0].json.include_content, include_seo_report: n[0].json.include_seo_report, run_page_check: n[0].json.run_page_check, need_site_description: n[0].json.need_site_description, language_code: n[0].json.language_code }));
+  await run('Rate Limit');
+  const nro = await run('Normalize Input', F.forms.pageKeywordReportOnly); console.log('   report-only request -> include_content', nro[0].json.include_content, '| include_seo_report', nro[0].json.include_seo_report);
+  store['Normalize Input'] = n;
+  mock('Read Website', { site_text: F.jinaSite });
+  const cs = await run('Clean Site Text', store['Read Website']);
+  console.log('   clean site ->', JSON.stringify({ page_title: cs[0].json.page_title, read_ok: cs[0].json.read_ok, len: cs[0].json.site_text.length }));
+  mock('Site Describer', { output: { business_name: 'Northwind ERP', one_line_summary: 'ERP partner for distributors', business_description: 'Northwind ERP implements and customises Odoo and Dynamics 365 for distributors in the UAE.', industry: 'IT services', products_or_services: ['ERP implementation', 'Data migration'], target_audience: ['Distributors', 'Wholesalers'], unique_selling_points: ['Bilingual consultants'], location_served: 'UAE', tone_of_brand: 'Professional', suggested_meta_title: 'Northwind ERP | ERP Implementation Dubai', suggested_meta_description: 'ERP implementation for UAE distributors. Book a call.', seed_keywords: ['erp implementation dubai', 'odoo partner uae', 'erp for distributors', 'northwind erp'] } });
+  await run('Parse Description', store['Site Describer']);
+  mock('Route Mode', store['Parse Description']);
+  await run('Prepare Keyword Run', store['Route Mode']);
+  mock('Fetch Sitemap Index', { statusCode: 200, headers: {}, sitemap_xml: F.sitemapIndex });
+  const sm = await run('Parse Sitemap Index', store['Fetch Sitemap Index']);
+  console.log('   sitemaps to read ->', sm.map(i => i.json.url).join(' , '));
+  mock('Fetch Sitemaps', sm.map((s, i) => ({ statusCode: i === 2 ? 404 : 200, headers: {}, sitemap_xml: i === 0 ? F.urlset(F.siteUrls.slice(0, 11)) : (i === 1 ? F.urlset(F.siteUrls.slice(11)) : '') })));
+  const cu = await run('Collect Site URLs', store['Fetch Sitemaps']);
+  console.log('   site urls ->', JSON.stringify({ count: cu[0].json.site_urls_count, existing_page: cu[0].json.existing_page, candidates: cu[0].json.internal_link_candidates.slice(0, 5).map(c => c.path) }));
+  const cpr = await run('Client Page Requests', cu);
+  console.log('   client page requests ->', cpr.map(r => r.json.kind + ':' + r.json.url).join(' | '));
+  mock('Read Client Pages', cpr.map((r, i) => i === 1 ? { error: { message: 'timeout' } } : { page_text: F.jinaSite }));
+  const ccp = await run('Collect Client Pages', store['Read Client Pages']);
+  console.log('   client pages ->', ccp[0].json.client_pages_read, 'read | existing text', ccp[0].json.existing_page_text.length, 'chars | signals', JSON.stringify(ccp[0].json.client_signals));
+  mock('SERP Top 10', F.serpTop);
+  const top = await run('Pick Top 6', store['SERP Top 10']);
+  console.log('   picked ->', top.map(t => `#${t.json.rank} ${t.json.domain}`).join(', '), '| first url:', top[0].json.url);
+  mock('Read Competitor Pages', top.map((t, i) => i === 2 ? { error: { message: 'Request failed with status code 522' } } : (i === 4 ? { page_text: F.jinaBlocked } : { page_text: F.compPage(i, 260 + i * 40) })));
+  const fb = await run('Find Blocked Pages', store['Read Competitor Pages']);
+  console.log('   blocked ->', JSON.stringify(fb[0].json.blocked.map(b => b.domain + ':' + b.reason)));
+  const bpi = await run('Blocked Page Items', fb);
+  mock('Retry Blocked Pages', bpi.map((b, i) => i === 0 ? { page_text: F.compPage(2, 420) } : { page_text: F.jinaBlocked }));
+  const cc = await run('Analyze Competitor Pages', store['Retry Blocked Pages']);
+  console.log('   retried pages merged ->', cc[0].json.retried_pages);
+  console.log('   competitors read ->', cc[0].json.competitors_read, '| failed:', JSON.stringify(cc[0].json.failed_pages), '| avg words:', cc[0].json.avg_competitor_words, '| features:', cc[0].json.serp_features.features_present.join(','), '| AIO cites:', cc[0].json.serp_features.ai_overview.cited_domains.join(','));
+  console.log('   digest chars ->', cc[0].json.competitor_digest.length, '| headings[0]:', JSON.stringify(cc[0].json.competitors[0].headings.slice(0, 4)));
+  console.log('   term model ->', cc[0].json.term_model.slice(0, 8).map(t => t.term + '(' + t.docs + ')').join(', '), '| questions', cc[0].json.competitor_questions.length, '| stats', cc[0].json.stats_seen.length, '| forum', cc[0].json.serp_features.forum_threads.length);
+  mock('Facts SERP', V.factsSerp);
+  const cf = await run('Collect Facts', store['Facts SERP']);
+  console.log('   facts ->', cf[0].json.facts.map(f => f.source + '[' + f.authority + ']').join(', '), '| extra questions', cf[0].json.extra_questions.length);
+  mock('Competitor Analyzer', { output: F.competitorAnalysis });
+  const pa = await run('Parse Analysis', store['Competitor Analyzer']);
+  console.log('   parse analysis keeps facts?', Array.isArray(pa[0].json.facts), '| term_digest?', !!pa[0].json.term_digest);
+  mock('Keyword Data', F.keywordOverview);
+  mock('Site Authority', F.rankOverview(F.OUR));
+  const mk = await run('Merge Keyword Data', store['Site Authority']);
+  console.log('   site authority ->', JSON.stringify(mk[0].json.site_authority));
+  console.log('   keyword data ->', JSON.stringify(mk[0].json.keyword_data).slice(0, 220));
+  mock('Verdict Agent', { output: F.verdictGo });
+  const pv = await run('Parse Verdict', store['Verdict Agent']);
+  console.log('   verdict ->', pv[0].json.verdict, pv[0].json.verdict_score, '| include_content:', pv[0].json.include_content);
+  mock('Strategy Brief', { output: V.briefV5 });
+  await run('Parse Brief', store['Strategy Brief']);
+  mock('Copywriter', { output: V.draftV5() });
+  mock('Critic', { output: V.critique });
+  const pcq = await run('Parse Critique', store['Critic']);
+  console.log('   critique ->', pcq[0].json.critique.score, pcq[0].json.critique.verdict, '| problems', pcq[0].json.critique.problems.length);
+  const qa1 = await run('Content QA', pcq, { runIndex: 0 });
+  console.log('   QA v5 ->', JSON.stringify({ score: qa1[0].json.content_qa.content_score, breakdown: qa1[0].json.content_qa.score_breakdown, coverage: qa1[0].json.content_qa.coverage_pct, missing: qa1[0].json.content_qa.missing_terms, banned: qa1[0].json.content_qa.banned_phrases.map(b => b.phrase), readability: qa1[0].json.content_qa.readability, specificity: qa1[0].json.content_qa.specificity_per_100_words, sources: qa1[0].json.content_qa.sources_cited.map(s => s.host) }));
+  console.log('   QA round 1 ->', JSON.stringify({ passed: qa1[0].json.content_qa.passed, main_words: qa1[0].json.content_qa.main_content_words, faq: qa1[0].json.content_qa.faq_count, internal_links: qa1[0].json.content_qa.internal_links, external: qa1[0].json.content_qa.external_links, answer_words: qa1[0].json.content_qa.answer_block_words }));
+  console.log('   QA fixes ->', JSON.stringify(qa1[0].json.content_qa.auto_fixes));
+  console.log('   QA warnings ->', JSON.stringify(qa1[0].json.content_qa.warnings));
+  console.log('   placeholder word still present?', /placeholder/i.test(qa1[0].json.output), '| AED price still present?', /AED\s?\d/.test(qa1[0].json.output), '| gartner link kept?', /gartner/.test(qa1[0].json.output), '| pricing link removed?', !/\/pricing\//.test(qa1[0].json.output));
+  // Editor returns a corrected draft -> QA round 2
+  mock('Editor', { output: V.draftV5({ longTitle: true }) });
+  const qa2 = await run('Content QA', store['Editor'], { runIndex: 1 });
+  console.log('   QA round 2 ->', 'round', qa2[0].json.qa_round, '| passed', qa2[0].json.content_qa.passed, '| score', qa2[0].json.content_qa.content_score, '| critic carried', qa2[0].json.content_qa.critic_score, '| warnings', qa2[0].json.content_qa.warnings.length);
+  const wf = await run('Build Word File', qa2);
+  const doc = decode(wf); save('keyword-report.doc.html', doc); scanHtml('keyword report+content', doc);
+  console.log('   word file ->', wf[0].json.file_name, '| report_type:', wf[0].json.report_type, '| qa_summary:', wf[0].json.qa_summary);
+  console.log('   JSON-LD blocks in doc:', (doc.match(/application\/ld\+json/g) || []).length, '| has FAQPage:', /FAQPage/.test(doc), '| has Service schema:', /"@type": "Service"/.test(doc));
+  const prep = await run('Prepare PDF Report', wf);
+  console.log('   prepare pdf -> binaries', Object.keys(prep[0].binary).join(','), '| html name', prep[0].binary.html.fileName, '| ledger', JSON.stringify(wf[0].json.run_ledger));
+  mock('Render PDF Report', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
+  const att = await run('Attach PDF Report', store['Render PDF Report']);
+  console.log('   attach pdf ->', JSON.stringify({ pdf_ready: att[0].json.pdf_ready, pdf_file_name: att[0].json.pdf_file_name, binaries: Object.keys(att[0].binary) }));
+  mock('Render PDF Report', [{ json: { error: { message: 'connect ECONNREFUSED gotenberg:3000' } } }]);
+  const att2 = await run('Attach PDF Report', store['Render PDF Report']);
+  console.log('   attach pdf (renderer down) -> pdf_ready', att2[0].json.pdf_ready, '| binaries', Object.keys(att2[0].binary).join(','), '| error', att2[0].json.pdf_error);
+  const wr = await run('Build Webhook Response', att);
+  console.log('   webhook response keys ->', Object.keys(wr[0].json).join(','), '| file bytes (b64):', wr[0].json.file && wr[0].json.file.data.length, '| pdf:', wr[0].json.pdf && wr[0].json.pdf.fileName);
+
+  // Truncated copywriter output (max_tokens hit)
+  begin('S1b Keyword — truncated Copywriter output (4096-token cap simulation)');
+  mock('Copywriter', { output: F.draft({ truncate: true }) });
+  mock('Critic', { output: '```json\n{"score": 30, "verdict": "rewrite", "problems": [], "revision_instructions": "Finish the draft."}\n```' });
+  await run('Parse Critique', store['Critic']);
+  const qat = await run('Content QA', store['Parse Critique'], { runIndex: 0 });
+  console.log('   truncated QA ->', JSON.stringify({ passed: qat[0].json.content_qa.passed, main_words: qat[0].json.content_qa.main_content_words, faq: qat[0].json.content_qa.faq_count, warnings: qat[0].json.content_qa.warnings.length }));
+
+  // AVOID verdict path -> Build Word File directly (no content)
+  begin('S1c Keyword — AVOID verdict goes straight to report');
+  mock('Verdict Agent', { output: F.verdictAvoid });
+  const pva = await run('Parse Verdict', store['Verdict Agent']);
+  const wfa = await run('Build Word File', pva);
+  const doca = decode(wfa); save('keyword-avoid.doc.html', doca); scanHtml('avoid report', doca);
+  console.log('   avoid ->', wfa[0].json.report_type, wfa[0].json.file_name, '| verdict in doc:', /AVOID/.test(doca));
+
+  // No competitors in SERP
+  begin('S1d Keyword — SERP returned nothing');
+  mock('SERP Top 10', F.serpEmpty);
+  const t0 = await run('Pick Top 6', store['SERP Top 10']);
+  console.log('   pick top 6 (empty) ->', JSON.stringify(t0[0].json));
+  mock('Read Competitor Pages', [{ error: { message: 'Invalid URL' } }]);
+  delete store['Retry Blocked Pages']; delete store['Blocked Page Items'];
+  const fb0 = await run('Find Blocked Pages', store['Read Competitor Pages']);
+  console.log('   blocked (empty serp) ->', fb0[0].json.blocked_count);
+  const cc0 = await run('Analyze Competitor Pages', store['Read Competitor Pages']);
+  console.log('   clean (empty) -> competitors_read', cc0[0].json.competitors_read, '| avg', cc0[0].json.avg_competitor_words, '| digest empty?', !cc0[0].json.competitor_digest.trim());
+  mock('Keyword Data', F.keywordOverviewEmpty);
+  mock('Parse Analysis', { ...store['Analyze Competitor Pages'][0].json, competitor_analysis: F.competitorAnalysis });
+  const mk0 = await run('Merge Keyword Data', store['Keyword Data']);
+  console.log('   merged (empty kw data) ->', JSON.stringify(mk0[0].json.keyword_data));
+});
+
+// ===================================================================================
+await guard('verdict', async () => {
+  reset(); begin('S2 Verdict-only mode (form)');
+  mock('Start Form', F.forms.startVerdict);
+  const n = await run('Normalize Input', F.forms.pageVerdict);
+  console.log('   ->', JSON.stringify({ mode: n[0].json.mode, verdict_only: n[0].json.verdict_only, include_seo_report: n[0].json.include_seo_report, include_content: n[0].json.include_content, need_site_description: n[0].json.need_site_description, domain: n[0].json.domain }));
+  mock('Route Mode', n);
+  await run('Prepare Keyword Run', n);
+  mock('Fetch Sitemaps', []);
+  const cu = await run('Collect Site URLs', []);
+  console.log('   collect (no domain) ->', JSON.stringify({ sitemap_ok: cu[0].json.sitemap_ok, candidates: cu[0].json.internal_link_candidates.length, existing: cu[0].json.existing_page }));
+});
+
+// ===================================================================================
+await guard('describe', async () => {
+  reset(); begin('S3 Describe mode');
+  mock('Start Form', F.forms.startDescribe);
+  const n = await run('Normalize Input', F.forms.pageDescribe);
+  console.log('   ->', JSON.stringify({ mode: n[0].json.mode, country: n[0].json.country, need_site_description: n[0].json.need_site_description }));
+  await run('Rate Limit');
+  mock('Read Website', { error: { message: 'timeout of 30000ms exceeded' } });
+  const cs = await run('Clean Site Text', store['Read Website']);
+  console.log('   read failed -> read_ok', cs[0].json.read_ok, '| site_text len', cs[0].json.site_text.length, '(Site Describer would still be called with empty text)');
+  const fb = await run('Describe Fallback', cs);
+  console.log('   fallback ->', JSON.stringify({ failed: fb[0].json.site_read_failed, name: fb[0].json.site_description.business_name }));
+  const bp = await run('Build Description Page', fb);
+  console.log('   warning shown on page?', /could not read/.test(bp[0].json.result_html));
+  const dr = await run('Build Describe Response', bp);
+  console.log('   describe callback ->', dr[0].json.stage, '| html', !!dr[0].json.html);
+  save('description-page.html', bp[0].json.result_html); scanHtml('description page', bp[0].json.result_html);
+});
+
+// ===================================================================================
+await guard('discover', async () => {
+  reset(); begin('S4 Discover mode -> keyword ideas -> chained content run');
+  mock('Start Form', F.forms.startDiscover);
+  const n = await run('Normalize Input', F.forms.pageDiscover);
+  console.log('   ->', JSON.stringify({ mode: n[0].json.mode, include_content: n[0].json.include_content, include_seo_report: n[0].json.include_seo_report, include_audit: n[0].json.include_audit, audit_level: n[0].json.audit_level, need_site_description: n[0].json.need_site_description }));
+  mock('Route Mode', n);
+  mock('Keyword Seeds', { output: { primary_seed: 'erp implementation services', seed_groups: { services: ['erp implementation services', 'odoo implementation', 'dynamics 365 business central partner', 'erp customisation'], problems: ['inventory software for distributors', 'replace excel stock control'], comparisons: ['best erp for distributors', 'odoo vs dynamics 365'], pricing: ['erp implementation cost', 'odoo pricing uae'], local: ['erp implementation dubai', 'erp company abu dhabi'], audience: ['erp for wholesale distributors', 'northwind erp reviews'] }, services: ['ERP implementation', 'Data migration'] } });
+  const sl = await run('Seed List', store['Keyword Seeds']);
+  console.log('   seeds ->', sl[0].json.seeds.length, 'seeds | primary', sl[0].json.primary_seed, '| groups', Object.keys(sl[0].json.seed_groups).join(','));
+  const rr = await run('Research Requests', sl);
+  console.log('   research requests ->', rr.map(r => r.json.kind).join(','));
+  mock('Run Research', V.runResearch(rr.map(r => r.json)));
+  const ckr = await run('Competitor Keyword Requests', store['Run Research']);
+  console.log('   competitor requests ->', ckr.map(r => r.json.kind + ':' + (r.json.domain || '-')).join(','));
+  mock('Run Competitor Keywords', V.runCompetitorKeywords(ckr.map(r => r.json)));
+  const col = await run('Collect Research', store['Run Competitor Keywords']);
+  console.log('   pool ->', JSON.stringify({ pool: col[0].json.research.pool_size, candidates: col[0].json.research.candidates.length, by_source: col[0].json.research.by_source, failures: col[0].json.research.failures, top3: col[0].json.research.candidates.slice(0, 3).map(k => k.keyword + ' ' + k.pre_score) }));
+  const ch = await run('Relevance Chunks', col);
+  console.log('   chunks ->', ch.map(c => c.json.chunk_size).join(','));
+  mock('Keyword Relevance', ch.map(c => V.relevance(c.json)));
+  const rk = await run('Rank Keywords', store['Keyword Relevance']);
+  const kst = rk[0].json.keyword_strategy;
+  console.log('   ranked ->', JSON.stringify({ relevant: kst.total_relevant, reviewed: kst.ai_reviewed, clusters: kst.clusters.slice(0, 5).map(c => c.tier + ':' + c.topic + '(' + c.keyword_count + ')'), quick: kst.quick_wins.length, questions: kst.questions.length, gaps: kst.competitor_gaps.length, priority: kst.priority.map(k => k.keyword), pipeline: kst.pipeline_keyword && kst.pipeline_keyword.keyword }));
+  mock('AI Demand', V.aiDemand(kst.keywords.map(k => k.keyword)));
+  const pk = await run('Priority Keywords', store['AI Demand']);
+  mock('Candidate SERP', pk.map(p => F.aiSerp({ type: 'category', query: p.json.keyword })));
+  const ks = await run('Build Keyword Strategy', store['Candidate SERP']);
+  console.log('   strategy ->', JSON.stringify({ recommended0: ks[0].json.keyword_suggestions.recommended[0].keyword, ai: ks[0].json.keyword_strategy.ai_demand.available, live0: ks[0].json.keyword_strategy.priority[0].live, clusters: ks[0].json.keyword_suggestions.topic_clusters.length }));
+  save('keyword-strategy.html', ks[0].json.result_html); scanHtml('keyword strategy page', ks[0].json.result_html);
+  console.log('   choice options ->', ks[0].json.choice_options.length, '|', ks[0].json.choice_options[1]);
+  const ch1 = await run('Apply Choice', { 'Which keyword should we write for?': ks[0].json.choice_options[2], submittedAt: '2026-10-01T10:00:00.000Z', formMode: 'production' });
+  console.log('   user choice ->', ch1[0].json.chosen_by, '|', ch1[0].json.chosen_keyword, '| equals priority[1]?', ch1[0].json.chosen_keyword === ks[0].json.keyword_strategy.priority[1].keyword, '| recommended[0]:', ch1[0].json.keyword_suggestions.recommended[0].keyword, '| html updated?', /Your choice/.test(ch1[0].json.result_html));
+  const ch2 = await run('Apply Choice', { 'Which keyword should we write for?': 'Let the system choose for my goal' });
+  console.log('   system choice ->', ch2[0].json.chosen_by, '|', ch2[0].json.chosen_keyword === ks[0].json.keyword_strategy.pipeline_keyword.keyword);
+  store['Build Keyword Strategy'] = ch1;   // the file/email/content steps see the user's pick
+  const kf0 = await run('Build Keyword File', ks);
+  await run('Prepare PDF Ideas', kf0); mock('Render PDF Ideas', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
+  const kf = await run('Attach PDF Ideas', store['Render PDF Ideas']);
+  console.log('   ideas pdf ->', kf[0].json.pdf_file_name, '| ledger calls', kf[0].json.run_ledger.dataforseo_calls);
+  const ir = await run('Build Ideas Response', kf);
+  console.log('   ideas callback ->', JSON.stringify({ stage: ir[0].json.stage, start_with: ir[0].json.start_with && ir[0].json.start_with.keyword, priority: ir[0].json.priority.length, plan: ir[0].json.content_plan.length, pdf_b64: ir[0].json.pdf && ir[0].json.pdf.data.length, follow_ups: ir[0].json.follow_ups }));
+  const kdoc = decode(kf); save('keyword-ideas.doc.html', kdoc); scanHtml('keyword ideas doc', kdoc);
+  console.log('   keyword file ->', kf[0].json.file_name, '| note present:', /will be emailed/.test(kdoc));
+  const sfu = await run('Spawn Follow-ups', kf);
+  console.log('   follow-ups ->', sfu.length, '|', sfu.map(i => i.json.body.mode + ':' + (i.json.body.keyword || i.json.body.report_type)).join(' | '), '| keyword = recommended[0]?', sfu[0].json.body.keyword === kf[0].json.keyword_suggestions.recommended[0].keyword, '| receive', JSON.stringify(sfu[0].json.body.receive), '| chosen_by', sfu[0].json.body.chosen_by);
+  delete store['Start Form'];
+  const nsf = await run('Normalize Input', sfu[0]);
+  console.log('   spawned keyword run ->', JSON.stringify({ mode: nsf[0].json.mode, via_webhook: nsf[0].json.via_webhook, keyword: nsf[0].json.keyword, include_content: nsf[0].json.include_content, include_seo_report: nsf[0].json.include_seo_report, pipeline_source: nsf[0].json.pipeline_source, reason: nsf[0].json.chosen_keyword_reason.slice(0, 40), err: nsf[0].json.validation_error }));
+  const rlsf = await run('Rate Limit', nsf); console.log('   spawned run estimate ->', rlsf[0].json.ai_spend_estimate_usd);
+  const nsa = await run('Normalize Input', sfu[1]);
+  console.log('   spawned audit run ->', JSON.stringify({ mode: nsa[0].json.mode, audit_level: nsa[0].json.audit_level, email: nsa[0].json.email, err: nsa[0].json.validation_error }));
+  mock('Start Form', F.forms.startDiscover);
+  await run('Prepare Keyword Run', nsf); console.log('   pipeline_source kept ->', store['Prepare Keyword Run'][0].json.pipeline_source);
+  // Pick Top 6 falls back to $('Route Mode') for domain in this chained path
+  mock('SERP Top 10', F.serpTop);
+  const top = await run('Pick Top 6', store['SERP Top 10']);
+  console.log('   chained pick top 6 -> own domain excluded?', !top.some(t => t.json.domain === F.OUR));
+});
+
+// ===================================================================================
+await guard('audit-full', async () => {
+  reset(); begin('S5 Audit mode — Full SEO Report');
+  mock('Start Form', F.forms.startAudit);
+  const n = await run('Normalize Input', F.forms.pageAuditFull);
+  console.log('   ->', JSON.stringify({ mode: n[0].json.mode, audit_level: n[0].json.audit_level, competitors: n[0].json.competitors, include_full_report: n[0].json.include_full_report, language_code: n[0].json.language_code }));
+  mock('Route Mode', n);
+  const sar = await run('Spawn Audit Run', n);
+  console.log('   form audit spawns ->', JSON.stringify(sar[0].json.body).slice(0, 200));
+  delete store['Start Form'];
+  const nsar = await run('Normalize Input', sar[0]); console.log('   spawned audit normalised ->', JSON.stringify({ mode: nsar[0].json.mode, via_webhook: nsar[0].json.via_webhook, include_full_report: nsar[0].json.include_full_report, competitors: nsar[0].json.competitors, email: nsar[0].json.email, err: nsar[0].json.validation_error }));
+  mock('Start Form', F.forms.startAudit);
+  await expectError('Save Task ID', F.crawlTaskPostFail, /Could not start site crawl/);
+  await run('Save Task ID', F.crawlTaskPost);
+  const c1 = await run('Check Crawl', F.summaryRunning, { runIndex: 0 });
+  console.log('   crawl poll 1 ->', c1[0].json.crawl_finished, c1[0].json.crawl_progress, c1[0].json.pages_crawled);
+  const c2 = await run('Check Crawl', F.summaryDone, { runIndex: 3 });
+  console.log('   crawl poll 2 ->', c2[0].json.crawl_finished, '| pages_crawled', c2[0].json.pages_crawled);
+  await expectError('Check Crawl', F.summaryRunning, /too long/, 26) || null;
+  H.results[H.results.length - 1].node = 'Check Crawl (timeout guard)';
+  store['Check Crawl'] = c2;
+  mock('Get Crawled Pages', F.crawledPagesRes);
+  const cer = await run('Crawl Extra Requests', store['Get Crawled Pages']);
+  console.log('   extra requests ->', cer.map(i => i.json.extra).join(','));
+  mock('Run Crawl Extras', F.extrasRes);
+  const cce = await run('Collect Crawl Extras', store['Run Crawl Extras']);
+  console.log('   extras ->', JSON.stringify({ dup_titles: cce[0].json.crawl_extras.duplicate_title.length, non_indexable: cce[0].json.crawl_extras.non_indexable.length, errors: cce[0].json.crawl_extras.errors }));
+  const hostP = await run('Build Probes', cce);
+  const contP = await run('Content Probes', cce);
+  console.log('   probes ->', hostP.length, 'host +', contP.length, 'content');
+  const all0 = F.probeResults('apex');
+  mock('Run Probes', [all0[0], all0[2], all0[3], all0[4]]);
+  mock('Run Content Probes', [all0[0], all0[1], all0[5], all0[6], all0[7], all0[8], ...all0.slice(9)]);
+  const ap = await run('Analyze Probes', store['Run Content Probes']);
+  console.log('   probe findings ->', ap[0].json.probe.findings.map(f => `[${f.severity}] ${f.title}`).join(' | '));
+  console.log('   probe works ->', ap[0].json.probe.what_works.join(' | '));
+  console.log('   measurements ->', JSON.stringify(ap[0].json.probe.measurements));
+  const pk = await run('Pick Key Pages', ap);
+  console.log('   key pages ->', pk.map(p => p.json.kind + ':' + p.json.url.replace('https://northwind-erp.com', '')).join(' '));
+  mock('Fetch Page HTML', F.pageHtmlResults(pk.map(p => p.json)));
+  const ah = await run('Analyze HTML', store['Fetch Page HTML']);
+  console.log('   html findings ->', ah[0].json.html_analysis.findings.map(f => `[${f.severity}] ${f.title}`).join(' | '));
+  console.log('   html works ->', ah[0].json.html_analysis.works.join(' | '));
+  const utc = await run('URLs To Check', ah);
+  console.log('   urls to check ->', utc.map(u => u.json.purpose + ' ' + u.json.url).join(' | '));
+  mock('Check Schema URLs', F.headResults(utc.map(u => u.json)));
+  const sf = await run('Schema Findings', store['Check Schema URLs']);
+  console.log('   schema url findings ->', sf[0].json.extra_findings.filter(f => /URL is broken/.test(f.title)).map(f => `[${f.severity}] ${f.title}`).join(' | '));
+  mock('Find Competitors', F.labsCompetitors);
+  const fq = await run('Fallback Queries', store['Find Competitors']);
+  console.log('   fallback queries ->', fq.map(q => q.json.query).join(' | '));
+  mock('Fallback SERP', fq.map(q => F.aiSerp({ type: 'category', query: q.json.query })));
+  const pc = await run('Pick Competitors', store['Fallback SERP']);
+  console.log('   competitors ->', pc.map(c => c.json.domain + (c.json.is_you ? '(you)' : '')).join(', '), '| method:', pc[1] && pc[1].json.method);
+  mock('Domain Overview', pc.map(c => F.rankOverview(c.json.domain)));
+  mock('DataForSEO Whois', pc.map(c => F.whois(c.json.domain)));
+  mock('RDAP Lookup', pc.map(c => c.json.domain === 'gulferp.ae' ? { objectClassName: 'domain', events: [{ eventAction: 'registration', eventDate: '2015-06-01T00:00:00Z' }, { eventAction: 'expiration', eventDate: '2027-06-01T00:00:00Z' }] } : { errorCode: 404, title: 'Not Found' }));
+  const ca = await run('Competitor Analysis', store['RDAP Lookup']);
+  console.log('   benchmark rows ->', JSON.stringify(ca[0].json.competitor_benchmark.rows.map(r => ({ d: r.domain, kw: r.organic_keywords, top10: r.top10, age: r.domain_age_years }))));
+  console.log('   benchmark findings ->', ca[0].json.extra_findings.filter(f => f.category === 'Authority').map(f => `[${f.severity}] ${f.title}`).join(' | '));
+  const kt = await run('KW Targets', ca);
+  mock('Ranked Keywords', kt.map(t => F.ranked(t.json.domain)));
+  mock('Keyword Ideas', F.keywordIdeas);
+  const ak = await run('Analyze Keywords', store['Keyword Ideas']);
+  console.log('   keywords ->', JSON.stringify({ domains: ak[0].json.site_keywords.domains.map(d => d.domain + ':' + d.total + '/' + d.top10), gap: ak[0].json.site_keywords.keyword_gap.length, easy: ak[0].json.site_keywords.easy_wins.length, striking: ak[0].json.site_keywords.striking_distance.map(k => k.keyword) }));
+  await run('BL Targets', ak);
+  mock('Backlink Summary', store['BL Targets'].map(t => F.backlinkSummary(t.json.domain)));
+  mock('Backlink Gap', F.backlinkGap);
+  const ab = await run('Analyze Backlinks', store['Backlink Gap']);
+  console.log('   backlinks ->', JSON.stringify({ available: ab[0].json.authority.available, you: ab[0].json.authority.rows.find(r => r.is_you), gap: ab[0].json.authority.gap.map(g => g.referring_domain + 'x' + g.links_to_competitors) }));
+  const ps = await run('PS Targets', ab);
+  mock('PageSpeed', ps.map(t => F.psi(t.json.domain)));
+  const aps = await run('Analyze PageSpeed', store['PageSpeed']);
+  console.log('   pagespeed ->', JSON.stringify(aps[0].json.pagespeed.rows.map(r => ({ d: r.domain, score: r.score, lcp: r.field.lcp, avail: r.available }))));
+  console.log('   perf findings ->', aps[0].json.extra_findings.filter(f => f.category === 'Performance').map(f => `[${f.severity}] ${f.title}`).join(' | '));
+  const ch = await run('Competitor Homes', aps);
+  mock('Read Competitor Homes', ch.map((c, i) => ({ page_text: F.compPage(i, 300) })));
+  const bcp = await run('Build Content Prompt', store['Read Competitor Homes']);
+  console.log('   content prompt ->', JSON.stringify({ skip: bcp[0].json.content_skip, pages_read: bcp[0].json.content_pages_read, our_len: bcp[0].json.content_prompt_our.length, comp_len: bcp[0].json.content_prompt_comp.length }));
+  mock('Content Reviewer', { output: F.contentReview });
+  const pcr = await run('Parse Content Review', store['Content Reviewer']);
+  console.log('   content review findings ->', pcr[0].json.extra_findings.filter(f => f.source === 'ai_review').map(f => `[${f.severity}] ${f.title}`).join(' | '));
+  const aq = await run('AI Queries', pcr);
+  console.log('   ai queries ->', aq.map(q => q.json.type + ':"' + q.json.query + '"').join(' | '), '| brand:', aq[0].json.brand_name);
+  mock('AI SERP', aq.map(q => F.aiSerp(q.json)));
+  const lp = await run('LLM Prompts', store['AI SERP']);
+  console.log('   llm prompts ->', lp.map(p => p.json.platform + '/' + p.json.kind).join(', '), '| rec prompt:', lp[1].json.prompt.slice(0, 120));
+  mock('Ask LLMs', F.llmAnswers(lp.map(p => p.json)));
+  const av = await run('AI Visibility', store['Ask LLMs']);
+  console.log('   ai visibility ->', JSON.stringify({ brand: av[0].json.ai_visibility.brand_name, index_est: av[0].json.ai_visibility.index_estimate, llm: av[0].json.ai_visibility.llm_answers.map(l => l.platform + ':' + (l.ok ? (l.mentions_you ? 'mentions' : 'no-mention') : 'ERR')), queries: av[0].json.ai_visibility.queries.map(q => q.type + ':' + (q.ai_overview ? 'AIO' : '-') + ':' + q.your_position) }));
+  console.log('   ai findings ->', av[0].json.extra_findings.filter(f => f.category === 'AI Search Readiness' || /indexed/.test(f.title)).map(f => `[${f.severity}] ${f.title}`).join(' | '));
+  const bsi = await run('Build Site Issues', av);
+  const a = bsi[0].json.site_audit;
+  console.log('   findings by severity (scored only) ->', JSON.stringify(a.findings.filter(f => f.scoring !== false).reduce((m, f) => (m[f.severity] = (m[f.severity] || 0) + 1, m), {})));
+  console.log('   SITE AUDIT ->', JSON.stringify({ score: a.health_score, raw: a.raw_score, cap: a.score_cap, grade: a.grade, counts: a.issue_counts, cats: a.category_scores, not_assessed: a.not_assessed }));
+  console.log('   top findings ->', a.findings.slice(0, 12).map(f => `[${f.severity}/${f.category}] ${f.title}`).join('\n      '));
+  console.log('   total findings', a.findings.length, '| what works', a.what_works.length, '| notes', JSON.stringify(a.notes));
+  const bfr0 = await run('Build Full Report', bsi);
+  await run('Prepare PDF Audit', bfr0); mock('Render PDF Audit', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
+  const bfr = await run('Attach PDF Audit', store['Render PDF Audit']);
+  const ar = await run('Build Audit Response', bfr);
+  console.log('   audit callback ->', JSON.stringify({ stage: ar[0].json.stage, score: ar[0].json.health_score, pdf_b64: ar[0].json.pdf && ar[0].json.pdf.data.length, doc_b64: ar[0].json.file && ar[0].json.file.data.length }));
+  console.log('   full report ledger ->', JSON.stringify(bfr[0].json.run_ledger), '| pdf', bfr[0].json.pdf_file_name);
+  const fdoc = decode(bfr); save('full-seo-report.doc.html', fdoc); scanHtml('full report', fdoc);
+  console.log('   full report ->', bfr[0].json.file_name, '| subject data:', JSON.stringify({ score: bfr[0].json.health_score, grade: bfr[0].json.grade, top: bfr[0].json.top_issues.slice(0, 3) }));
+
+  // apex -> www redirect variant (false positive check)
+  begin('S5b Audit — site whose apex 301s to www');
+  const allw = F.probeResults('www');
+  mock('Run Probes', [allw[0], allw[2], allw[3], allw[4]]);
+  mock('Run Content Probes', [allw[2], allw[2], allw[5], allw[6], allw[7], allw[8], ...allw.slice(9)]);
+  const apw = await run('Analyze Probes', store['Run Content Probes']);
+  console.log('   canonical host ->', apw[0].json.canonical_host);
+  console.log('   www-variant probe findings ->', apw[0].json.probe.findings.map(f => `[${f.severity}] ${f.title}`).join(' | '));
+  console.log('   www-variant works ->', apw[0].json.probe.what_works.join(' | '));
+});
+
+// ===================================================================================
+await guard('audit-tech', async () => {
+  reset(); begin('S6 Audit mode — technical Site Audit only (Germany)');
+  mock('Start Form', F.forms.startAudit);
+  const n = await run('Normalize Input', F.forms.pageAuditTech);
+  console.log('   ->', JSON.stringify({ audit_level: n[0].json.audit_level, location_code: n[0].json.location_code, language_code: n[0].json.language_code, language_name: n[0].json.language_name }));
+  mock('Route Mode', n);
+  await run('Save Task ID', F.crawlTaskPost);
+  await run('Check Crawl', F.summaryDone, { runIndex: 2 });
+  mock('Get Crawled Pages', F.crawledPagesRes);
+  await run('Crawl Extra Requests', store['Get Crawled Pages']);
+  mock('Run Crawl Extras', F.extrasRes);
+  await run('Collect Crawl Extras', store['Run Crawl Extras']);
+  await run('Build Probes'); await run('Content Probes', store['Collect Crawl Extras']);
+  const all6 = F.probeResults('apex');
+  mock('Run Probes', [all6[0], all6[2], all6[3], all6[4]]);
+  mock('Run Content Probes', [all6[0], all6[1], all6[5], all6[6], all6[7], all6[8], ...all6.slice(9)]);
+  const ap = await run('Analyze Probes', store['Run Content Probes']);
+  const bsi = await run('Build Site Issues', ap);
+  const a = bsi[0].json.site_audit;
+  console.log('   SITE AUDIT (tech) ->', JSON.stringify({ score: a.health_score, raw: a.raw_score, cap: a.score_cap, grade: a.grade, counts: a.issue_counts, cats: a.category_scores }));
+  console.log('   findings ->', a.findings.map(f => `[${f.severity}] ${f.title}`).join(' | '));
+  const bar = await run('Build Audit Report', bsi);
+  const adoc = decode(bar); save('site-audit-report.doc.html', adoc); scanHtml('site audit report', adoc);
+  console.log('   audit report ->', bar[0].json.file_name);
+});
+
+// ===================================================================================
+let ladderRows = null;
+await guard('ladder', async () => {
+  reset(); begin('S7 Ladder mode — verdict, rungs, link map, report, Data Table rows, page runs');
+  mock('Start Form', F.forms.startLadder);
+  const bad = await run('Normalize Input', F.forms.pageLadderNoEmail); console.log('   no email ->', JSON.stringify(bad[0].json.validation_error));
+  const n = await run('Normalize Input', F.forms.pageLadder);
+  const j = n[0].json;
+  console.log('   form ladder ->', JSON.stringify({ mode: j.mode, keyword: j.keyword, domain: j.domain, pages_now: j.pages_now, ladder_id: /^lad_/.test(j.ladder_id), include_content: j.include_content, need_site_description: j.need_site_description, run_page_check: j.run_page_check, business: j.business, email: j.email, tracker: j.tracker_cadence, wp: j.publish_wordpress }));
+  H.staticData.rate = undefined; H.staticData.ai_budget = undefined;
+  const rl = await run('Rate Limit', n); console.log('   rate limit est ->', rl[0].json.ai_spend_estimate_usd, '| error:', rl[0].json.validation_error || 'none');
+  delete store['Start Form'];
+  const na = await run('Normalize Input', { body: { mode: 'ladder', keyword: 'E Invoicing in UAE', country: 'AE', domain: 'techand.ai', business: 'ERP partner', pages_now: 2, callback_url: 'https://hooks.example.com/x' } });
+  console.log('   api ladder ->', JSON.stringify({ mode: na[0].json.mode, pages_now: na[0].json.pages_now, via_webhook: na[0].json.via_webhook, err: na[0].json.validation_error }));
+  const np = await run('Normalize Input', { body: { mode: 'keyword', keyword: 'peppol e invoicing uae', page_type: 'Guide', country: 'United Arab Emirates', domain: 'northwind-erp.com', business: 'x', customers: 'y', business_facts: 'f', cta: 'Book', tone: 'Bold and confident', goal: 'Get leads and enquiries', receive: ['Keyword Report', 'Page Content'], email: 'o@e.com', force_content: true, ladder_id: 'lad_1', ladder_rung: 1, ladder_head: 'e invoicing in uae', ladder_links: [{ url: 'https://northwind-erp.com/e-invoicing-in-uae/', path: '/e-invoicing-in-uae/', role: 'top', keyword: 'e invoicing in uae', planned: true }, { url: 'https://northwind-erp.com/services/odoo-erp/', path: '/services/odoo-erp/', role: 'sibling', planned: false }] } });
+  const pj = np[0].json;
+  console.log('   page run ->', JSON.stringify({ mode: pj.mode, force_content: pj.force_content, ladder_id: pj.ladder_id, rung: pj.ladder_rung, head: pj.ladder_head, links: pj.ladder_links.length, include_content: pj.include_content, include_seo_report: pj.include_seo_report, business: pj.business, facts: pj.business_facts, cta: pj.cta, page_type: pj.page_type, err: pj.validation_error }));
+  // ladder links become internal-link candidates (brief + QA allow them) on a page run
+  await run('Prepare Keyword Run', np); console.log('   page run pipeline_source ->', store['Prepare Keyword Run'][0].json.pipeline_source);
+  mock('Fetch Sitemaps', [{ statusCode: 200, headers: {}, sitemap_xml: F.urlset(F.siteUrls) }]);
+  const cuP = await run('Collect Site URLs', store['Fetch Sitemaps']);
+  const cand = cuP[0].json.internal_link_candidates;
+  console.log('   candidates ->', cand.slice(0, 4).map(c => (c.ladder ? '[' + c.ladder + '] ' : '') + c.path).join(' | '), '| planned top present?', cand.some(c => c.ladder === 'top' && c.planned), '| sibling deduped?', cand.filter(c => /odoo-erp/.test(c.url)).length === 1);
+  // ladder run base: keyword pipeline up to the verdict on the head term
+  mock('Start Form', F.forms.startLadder); mock('Route Mode', n);
+  await run('Prepare Keyword Run', n); console.log('   ladder pipeline_source ->', store['Prepare Keyword Run'][0].json.pipeline_source);
+  const cu = await run('Collect Site URLs', store['Fetch Sitemaps']);
+  mock('Parse Analysis', { ...cu[0].json, competitor_analysis: F.competitorAnalysis, competitors: [] });
+  mock('Keyword Data', F.keywordOverview); mock('Site Authority', F.rankOverview(F.OUR));
+  await run('Merge Keyword Data', store['Site Authority']);
+  mock('Verdict Agent', { output: { ...F.verdictGo, what_must_change: ['Earn 20+ referring domains', 'Consider "e invoicing software uae" first'], expected_monthly_visits_top3: 90, time_to_rank_months: 9 } });
+  const pv = await run('Parse Verdict', store['Verdict Agent']);
+  console.log('   verdict base -> mode', pv[0].json.mode, '| site_urls', pv[0].json.site_urls.length, '| authority', JSON.stringify(pv[0].json.site_authority));
+  const lr = await run('Ladder Requests', pv);
+  console.log('   ladder requests ->', lr.map(r => r.json.kind + (r.json.body[0].limit ? ':' + r.json.body[0].limit : '')).join(', '), '| ideas seeds:', JSON.stringify(lr[2].json.body[0].keywords));
+  mock('Run Ladder Research', lr.map(() => ({ error: { message: 'Node does not have any credentials set' } })));
+  await expectError('Ladder Pool', store['Run Ladder Research'], /every research pull failed/);
+  mock('Run Ladder Research', V.ladderResearch(lr.map(r => r.json)));
+  const lp = await run('Ladder Pool', store['Run Ladder Research']);
+  const R = lp[0].json.research;
+  console.log('   pool ->', JSON.stringify({ pool: R.pool_size, candidates: R.candidates.length, by_source: R.by_source, failures: R.failures, rankings: lp[0].json.site_rankings.count, head_rank: lp[0].json.site_rankings.head, head_tokens: lp[0].json.head_tokens, head_geo: lp[0].json.head_geo }));
+  console.log('   head excluded from candidates?', !R.candidates.some(c => c.keyword === 'e invoicing in uae'), '| brand excluded?', !R.candidates.some(c => /northwind/.test(c.keyword)), '| top3:', R.candidates.slice(0, 3).map(c => c.keyword + ' kd' + c.kd + ' v' + c.volume + (c.your_position ? ' #' + c.your_position : '')).join(' | '));
+  const ch = await run('Ladder Relevance Chunks', lp);
+  console.log('   chunks ->', ch.map(c => c.json.chunk_size).join(','), '| business mentions ladder?', /KEYWORD LADDER/.test(ch[0].json.business));
+  mock('Ladder Keyword Relevance', ch.map(c => V.ladderRelevance(c.json)));
+  const plan = await run('Ladder Plan', store['Ladder Keyword Relevance']);
+  const L = plan[0].json.ladder;
+  const bandOk = L.rungs.every(r => r.pages.every(p => { const kd = p.kd == null ? 35 : p.kd; return r.rung === 1 ? (kd <= 25 && p.total_volume >= 20) : r.rung === 2 ? (kd <= 45) : (kd > 45 && kd <= 60); }));
+  const rungPages = L.rungs.flatMap(r => r.pages);
+  const linkOk = rungPages.every(p => p.links_to.some(l => l.role === 'top' && l.url === L.top.target_url)) && L.rungs.every(r => r.pages.length < 2 || r.pages.every(p => p.links_to.some(l => l.role === 'sibling'))) && L.top.links_to.length === rungPages.length;
+  const monthsOk = L.timeline.every((t, i) => i === 0 ? t.months[0] === 1 : t.months[0] === L.timeline[i - 1].months[1] + 1);
+  console.log('   LADDER ->', JSON.stringify({ status: L.feasibility.status, pages: L.stats.pages_total, per_rung: L.rungs.map(r => r.rung + ':' + r.pages.length + '/' + r.available), bands_ok: bandOk, links_ok: linkOk, link_map: L.link_map.length, months_ok: monthsOk, timeline: L.timeline.map(t => t.label + ' ' + t.months.join('-')), write_now: L.write_now.map(w => w.keyword), later: L.later.length, notes: L.notes, alternatives: L.feasibility.alternatives }));
+  console.log('   top ->', JSON.stringify({ url: L.top.target_url, exists: L.top.exists, source: L.top.existing_source, your_position: L.top.your_position, kd: L.top.kd }), '| existing rung pages:', rungPages.filter(p => p.exists).map(p => p.keyword + '->' + p.target_url).join(' ; ') || 'none');
+  console.log('   requirements ->', L.requirements.map(r => r.item).join(' | '));
+  const rep = await run('Build Ladder Report', plan);
+  const ldoc = decode(rep); save('ladder-plan.doc.html', ldoc); scanHtml('ladder plan', ldoc);
+  console.log('   report ->', rep[0].json.file_name, '|', rep[0].json.report_type, '| ledger calls', rep[0].json.run_ledger.dataforseo_calls, '| slimmed?', rep[0].json.site_urls === undefined && !!rep[0].json.ladder);
+  await run('Prepare PDF Ladder', rep); mock('Render PDF Ladder', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
+  const att = await run('Attach PDF Ladder', store['Render PDF Ladder']);
+  console.log('   pdf ->', att[0].json.pdf_file_name, '| binaries', Object.keys(att[0].binary).join(','));
+  const rows = await run('Ladder Rows', att);
+  const COLS = ['ladder_id', 'domain', 'head_keyword', 'rung', 'page_no', 'keyword', 'supporting', 'page_type', 'target_url', 'page_exists', 'status', 'months', 'start_date', 'country', 'location_code', 'language_code', 'email', 'callback_url', 'request_id'];
+  console.log('   rows ->', rows.length, '| columns exact?', rows.every(r => JSON.stringify(Object.keys(r.json).sort()) === JSON.stringify(COLS.slice().sort())), '| statuses', JSON.stringify(rows.reduce((m, r) => (m[r.json.status] = (m[r.json.status] || 0) + 1, m), {})), '| top row rung', rows[rows.length - 1].json.rung);
+  ladderRows = rows.map(r => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ...r.json } }));
+  mock('Save Ladder Rows', ladderRows);
+  const del = await run('Ladder Delivery', store['Save Ladder Rows']);
+  console.log('   delivery ->', JSON.stringify({ tracking_registered: del[0].json.tracking_registered, stored_rows: del[0].json.stored_rows, binaries: Object.keys(del[0].binary), email: del[0].json.email }));
+  const sp = await run('Spawn Page Runs', del);
+  const b = sp[0].json.body;
+  console.log('   page runs ->', sp.length, '| body:', JSON.stringify({ mode: b.mode, keyword: b.keyword, page_type: b.page_type, country: b.country, domain: b.domain, goal: b.goal, receive: b.receive, email: b.email, force_content: b.force_content, ladder_id: !!b.ladder_id, rung: b.ladder_rung, links: b.ladder_links.map(l => l.role) }));
+  delete store['Start Form'];
+  const nsp = await run('Normalize Input', sp[0]);
+  console.log('   spawned run normalised ->', JSON.stringify({ mode: nsp[0].json.mode, via_webhook: nsp[0].json.via_webhook, keyword: nsp[0].json.keyword, include_content: nsp[0].json.include_content, force_content: nsp[0].json.force_content, ladder_id: nsp[0].json.ladder_id === b.ladder_id, links: nsp[0].json.ladder_links.length, goal: nsp[0].json.goal, err: nsp[0].json.validation_error }));
+  const resp = await run('Build Ladder Response', del);
+  console.log('   ladder callback ->', JSON.stringify({ stage: resp[0].json.stage, rungs: resp[0].json.rungs.length, top: resp[0].json.top_page.keyword, started: resp[0].json.pages_started, pdf_b64: resp[0].json.pdf && resp[0].json.pdf.data.length, doc_b64: resp[0].json.file && resp[0].json.file.data.length, registered: resp[0].json.tracking_registered }));
+  mock('Save Ladder Rows', [{ json: { error: { message: 'Data table with name "seo_ladders" not found' } } }]);
+  const del2 = await run('Ladder Delivery', store['Save Ladder Rows']);
+  console.log('   store failure ->', JSON.stringify({ tracking_registered: del2[0].json.tracking_registered, store_error: del2[0].json.store_error }));
+  // the rung-1 page run keeps content even on an AVOID verdict (Verdict Router honours force_content) — checked by the IF expression, nothing to run here
+});
+
+// ===================================================================================
+await guard('tracker', async () => {
+  reset(); begin('S8 Rank tracker — plan, positions, progress report');
+  if (!ladderRows) throw new Error('ladder scenario did not produce rows');
+  mock('Load Ladders', ladderRows); mock('Load History', [{ json: {} }]);
+  const tp = await run('Tracker Plan', store['Load History']);
+  console.log('   checks ->', tp.length, '| first:', JSON.stringify({ kw: tp[0].json.keyword, rung: tp[0].json.rung, depth: tp[0].json.body[0].depth, loc: tp[0].json.body[0].location_code, email: tp[0].json.email }), '| head included?', tp.some(c => c.json.rung === 4));
+  const posOf = (c, i) => c.json.rung === 4 ? 0 : (i % 3 === 0 ? 7 : i % 3 === 1 ? 2 : 0);
+  mock('SERP Check', tp.map((c, i) => i === 2 ? { error: { message: 'timeout' } } : V.serpFor(c.json.keyword, c.json.domain, posOf(c, i))));
+  const pp = await run('Parse Positions', store['SERP Check']);
+  const HCOLS = ['ladder_id', 'keyword', 'checked_at', 'position', 'url', 'serp_features', 'domain', 'rung'];
+  console.log('   positions ->', pp.map(p => p.json.position).join(','), '| columns exact?', pp.every(p => JSON.stringify(Object.keys(p.json).sort()) === JSON.stringify(HCOLS.slice().sort())), '| failed check = -1?', pp[2].json.position === -1, '| url for #7:', pp[0].json.url);
+  mock('Save History', pp);
+  const tr = await run('Tracker Report', store['Save History']);
+  const r = tr[0].json;
+  console.log('   report ->', JSON.stringify({ ladders: tr.length, subject: r.subject, next: r.next_step.action, rung: r.next_step.rung, rungs: r.rungs, email: r.email, api_body_kw: r.api_body && r.api_body.keyword, done: r.done }));
+  save('tracker-email.html', r.html); scanHtml('tracker email', r.html);
+  console.log('   form link in email?', /\/form\//.test(r.html), '| api body in email?', /ladder_rung/.test(r.html));
+  // second check a week later: gains, drops, previous positions
+  const prev = pp.map(p => ({ json: { ...p.json, checked_at: '2026-09-24T08:00:00.000Z', position: p.json.position > 0 ? p.json.position + 6 : (p.json.rung === 4 ? 0 : 30) } }));
+  mock('Load History', prev);
+  const tp2 = await run('Tracker Plan', prev);
+  mock('SERP Check', tp2.map((c, i) => V.serpFor(c.json.keyword, c.json.domain, c.json.rung === 4 ? 12 : (i === 1 ? 40 : posOf(c, i)))));
+  const pp2 = await run('Parse Positions', store['SERP Check']); mock('Save History', pp2);
+  const tr2 = await run('Tracker Report', store['Save History']);
+  console.log('   week 2 ->', JSON.stringify({ gains: tr2[0].json.gains.length, drops: tr2[0].json.drops, head_now: tr2[0].json.positions.find(p => p.rung === 4), next: tr2[0].json.next_step.action }));
+  // stop rule: the head term has held the top 3 for 4 checks -> ladder skipped; nothing to do when no ladders
+  const headKw = ladderRows[ladderRows.length - 1].json.keyword;
+  const topHist = [0, 1, 2, 3].map(i => ({ json: { ladder_id: ladderRows[0].json.ladder_id, keyword: headKw, checked_at: '2026-09-' + (10 + i) + 'T08:00:00.000Z', position: 2, url: 'u', serp_features: '', domain: 'northwind-erp.com', rung: 4 } }));
+  mock('Load History', topHist);
+  const tp3 = await run('Tracker Plan', topHist);
+  console.log('   stop rule ->', JSON.stringify(tp3[0].json));
+  mock('Load Ladders', [{ json: {} }]); mock('Load History', [{ json: {} }]);
+  const tp4 = await run('Tracker Plan', store['Load History']);
+  console.log('   no ladders ->', JSON.stringify(tp4[0].json));
+});
+
+// ===================================================================================
+await guard('wordpress', async () => {
+  reset(); begin('S9 WordPress draft payload');
+  const wp = await run('Build WP Draft', { keyword: 'erp implementation services', page_markdown: V.draftV5(), wordpress_url: 'https://blog.example.com/', schema_blocks: [{ type: 'FAQPage', json: { '@context': 'https://schema.org', '@type': 'FAQPage' } }], content_brief_slug: 'erp-implementation-services', ladder_id: 'lad_1', request_id: 'r1', email: 'o@e.com' });
+  const p = wp[0].json.wp_payload;
+  console.log('   payload ->', JSON.stringify({ url: wp[0].json.wordpress_url, title: p.title, slug: p.slug, status: p.status, excerpt_len: p.excerpt.length, h2s: (p.content.match(/<h2>/g) || []).length, h1_left: /<h1>|^# /m.test(p.content), tables: (p.content.match(/<table>/g) || []).length, scripts: (p.content.match(/application\/ld\+json/g) || []).length, meta_keys: Object.keys(p.meta).length, links: (p.content.match(/<a href/g) || []).length }));
+});
+
+H.report();
+})();

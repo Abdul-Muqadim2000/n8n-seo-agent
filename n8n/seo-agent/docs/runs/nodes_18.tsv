@@ -1,0 +1,42 @@
+API Entry	runs=1	items=1	1ms
+Normalize Input	runs=1	items=1	45ms
+Rate Limit	runs=1	items=1	26ms
+Input OK?	runs=1	items=1/0	7ms
+Need Site Read?	runs=1	items=1/0	1ms
+Read Website	runs=1	items=1	4560ms
+Clean Site Text	runs=1	items=1	42ms
+Site Read OK?	runs=1	items=1/0	11ms
+Claude — Site Describer	runs=1	items=	7040ms
+Parser — Site Describer	runs=1	items=	2ms
+Site Describer	runs=1	items=1	7897ms
+Parse Description	runs=1	items=1	26ms
+Route Mode	runs=1	items=0/1/0/0/0/0	9ms
+Anthropic Chat Model	runs=1	items=	4400ms
+Parser — Keyword Seeds	runs=1	items=	1ms
+Keyword Seeds	runs=1	items=1	4467ms
+Seed List	runs=1	items=1	35ms
+Research Requests	runs=1	items=7	20ms
+Run Research	runs=1	items=7	8563ms
+Competitor Keyword Requests	runs=1	items=3	59ms
+Run Competitor Keywords	runs=1	items=3	2710ms
+Collect Research	runs=1	items=1	118ms
+Relevance Chunks	runs=1	items=3	25ms
+Claude — Keyword Relevance	runs=3	items=,,	19406ms
+Parser — Keyword Relevance	runs=3	items=,,	13ms
+Keyword Relevance	runs=1	items=3	59558ms
+Rank Keywords	runs=1	items=1	1212ms
+AI Demand	runs=1	items=1	2718ms
+Priority Keywords	runs=1	items=6	25ms
+Candidate SERP	runs=1	items=6	27225ms
+Build Keyword Strategy	runs=1	items=1	1260ms
+Choice Step?	runs=1	items=0/1	13ms
+Build Keyword File	runs=1	items=1	241ms
+Prepare PDF Ideas	runs=1	items=1	79ms
+Render PDF Ideas	runs=1	items=1	457ms
+Attach PDF Ideas	runs=1	items=1	81ms
+Via Webhook (Ideas)?	runs=1	items=1/0	5ms
+Build Ideas Response	runs=1	items=1	47ms
+Has Callback?	runs=1	items=1/0	7ms
+POST Callback	runs=1	items=1	45ms
+Discover Extras?	runs=1	items=0/1	4ms
+Discover Audit?	runs=1	items=0/1	5ms

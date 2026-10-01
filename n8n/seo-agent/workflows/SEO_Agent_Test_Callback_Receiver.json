@@ -1,0 +1,72 @@
+[
+  {
+    "id": "SEOagentCallback",
+    "name": "SEO Agent — Test Callback Receiver",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "seo-callback",
+          "responseMode": "onReceived",
+          "options": {}
+        },
+        "id": "88412a7b-cee7-5061-a1ce-cabbd56fddc0",
+        "name": "Callback Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "7a43c31a-2d79-535b-b31e-5d0e9bfa59b4"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Summarise the SEO Agent callback (the full payload stays in this execution for inspection)\nconst b = $input.first().json.body || {};\nconst size = (s) => s ? Math.round(String(s).length * 0.75 / 1024) + ' KB' : null;\nreturn [{ json: { received_at: new Date().toISOString(), status: b.status, request_id: b.request_id, execution_id: b.execution_id, keyword: b.keyword, domain: b.domain, verdict: b.verdict, score: b.score, error: b.error || null, qa_summary: b.qa_summary || null, pdf_kb: b.pdf ? size(b.pdf.data) : null, doc_kb: b.file ? size(b.file.data) : null, run_ledger: b.run_ledger || null, keys: Object.keys(b), payload: b } }];"
+        },
+        "id": "b2137e80-57cd-50a8-b2d1-846e14c17ff9",
+        "name": "Summarise Callback",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## Test callback receiver\nUsed only for testing the API: `callback_url` = `http://localhost:5678/webhook/seo-callback` (n8n calling itself). Each callback becomes one execution here; read it in Executions or through the n8n API. Deactivate or delete when done.",
+          "height": 220,
+          "width": 480,
+          "color": 7
+        },
+        "id": "37655d29-32bb-5896-9534-060719766ae6",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -280
+        ]
+      }
+    ],
+    "connections": {
+      "Callback Webhook": {
+        "main": [
+          [
+            {
+              "node": "Summarise Callback",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

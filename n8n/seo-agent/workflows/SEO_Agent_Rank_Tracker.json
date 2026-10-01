@@ -1,0 +1,839 @@
+[
+  {
+    "id": "SEOagentTracker1",
+    "name": "SEO Agent — Rank Tracker",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 1800,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "weeks",
+                "weeksInterval": 1,
+                "triggerAtDay": [
+                  1
+                ],
+                "triggerAtHour": 8,
+                "triggerAtMinute": 0
+              }
+            ]
+          }
+        },
+        "id": "1ca6f007-bac6-57eb-b427-b867c9c3d77a",
+        "name": "Weekly Schedule",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "id": "18104b03-77a5-5377-89cb-acaee9b247c0",
+        "name": "Manual Run",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_ladders",
+          "columns": {
+            "column": [
+              {
+                "name": "ladder_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "head_keyword",
+                "type": "string"
+              },
+              {
+                "name": "rung",
+                "type": "number"
+              },
+              {
+                "name": "page_no",
+                "type": "number"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "supporting",
+                "type": "string"
+              },
+              {
+                "name": "page_type",
+                "type": "string"
+              },
+              {
+                "name": "target_url",
+                "type": "string"
+              },
+              {
+                "name": "page_exists",
+                "type": "boolean"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "months",
+                "type": "string"
+              },
+              {
+                "name": "start_date",
+                "type": "string"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "location_code",
+                "type": "number"
+              },
+              {
+                "name": "language_code",
+                "type": "string"
+              },
+              {
+                "name": "email",
+                "type": "string"
+              },
+              {
+                "name": "callback_url",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "ea03b189-23bc-5df5-88cf-ff3e9b12acd6",
+        "name": "Ensure Ladder Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          240,
+          100
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_rank_history",
+          "columns": {
+            "column": [
+              {
+                "name": "ladder_id",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "checked_at",
+                "type": "string"
+              },
+              {
+                "name": "position",
+                "type": "number"
+              },
+              {
+                "name": "url",
+                "type": "string"
+              },
+              {
+                "name": "serp_features",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "rung",
+                "type": "number"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "1f2b7775-4a73-58c0-afe7-44597b6bcb82",
+        "name": "Ensure History Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          460,
+          100
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ladders"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "5a432f49-93fa-5f72-8d07-0c8b35536879",
+        "name": "Load Ladders",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          680,
+          100
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_rank_history"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "50fb2030-15c7-5294-9f88-45e79df8e403",
+        "name": "Load History",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          900,
+          100
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Rank tracker: one SERP check (Google top 50) per tracked keyword: the primary keyword of every ladder page, plus the head term.\n// Reads the ladders and the history from the Data Tables, skips finished ladders and caps the spend per run.\nconst LIMITS = { max_keywords_per_ladder: 15, max_checks_per_run: 120, stop_after_top3_checks: 4 };\nconst rows = $('Load Ladders').all().map(i => i.json).filter(r => r && r.ladder_id);\nlet history = []; try { history = $('Load History').all().map(i => i.json).filter(r => r && r.ladder_id); } catch (e) { history = []; }\nconst byLadder = new Map();\nfor (const r of rows) { if (!byLadder.has(r.ladder_id)) byLadder.set(r.ladder_id, []); byLadder.get(r.ladder_id).push(r); }\nconst checks = []; const skipped = [];\nfor (const [id, pages] of byLadder) {\n  const top = pages.find(p => Number(p.rung) === 4) || pages[0];\n  const topHist = history.filter(h => h.ladder_id === id && h.keyword === top.keyword).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));\n  const last = topHist.slice(0, LIMITS.stop_after_top3_checks);\n  if (last.length >= LIMITS.stop_after_top3_checks && last.every(h => Number(h.position) > 0 && Number(h.position) <= 3)) {\n    skipped.push({ ladder_id: id, reason: 'top rung has held the top 3 for ' + last.length + ' checks — tracking stopped' }); continue;\n  }\n  const sorted = [...pages].sort((a, b) => Number(a.rung) - Number(b.rung) || Number(a.page_no) - Number(b.page_no)).slice(0, LIMITS.max_keywords_per_ladder);\n  for (const p of sorted) {\n    if (checks.length >= LIMITS.max_checks_per_run) break;\n    checks.push({ ladder_id: id, domain: p.domain, head_keyword: p.head_keyword, rung: Number(p.rung), page_no: Number(p.page_no), keyword: p.keyword, page_type: p.page_type || '', target_url: p.target_url || '', status: p.status || '',\n      location_code: Number(p.location_code), language_code: p.language_code || 'en', email: p.email || '', callback_url: p.callback_url || '', request_id: p.request_id || '', country: p.country || '',\n      endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: [{ keyword: p.keyword, location_code: Number(p.location_code), language_code: p.language_code || 'en', depth: 50 }] });   // depth 50: ~$0.015 per check (depth 100 measured at $0.028); positions below 50 add little for a ladder\n  }\n}\nif (!checks.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped } }];\nreturn checks.map(c => ({ json: { ...c, skipped_ladders: skipped } }));\n"
+        },
+        "id": "f25fa9bc-8619-5c95-870d-ee0f100d8ef5",
+        "name": "Tracker Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1120,
+          100
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "3c832724-40b2-56e0-a6ff-cdcea06dfdde",
+                "leftValue": "={{ !$json.nothing_to_do }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "09112c14-80d1-5819-a70a-86969bac8ad0",
+        "name": "Any Checks?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1340,
+          100
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.endpoint }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.body) }}",
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 1,
+                "batchInterval": 300
+              }
+            },
+            "timeout": 90000
+          }
+        },
+        "id": "9181588b-7c30-5982-baa9-a3d6db248ed8",
+        "name": "SERP Check",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1560,
+          0
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "SEOcredDataForSE",
+            "name": "DataForSEO"
+          }
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Locates the client's domain in each SERP (top 50): position, ranking URL and the features present.\n// One history row per keyword; position 0 = not in the top 50, -1 = the check failed.\nconst reqs = $('Tracker Plan').all().map(i => i.json);\nconst res = $input.all().map(i => i.json);\nconst now = new Date().toISOString();\nconst normD = (x) => String(x || '').toLowerCase().replace(/^www\\./, '');\nreturn reqs.map((r, i) => {\n  const items = res[i]?.tasks?.[0]?.result?.[0]?.items || [];\n  const ours = normD(r.domain);\n  const organic = items.filter(x => x.type === 'organic');\n  const mine = organic.find(o => { const dd = normD(o.domain); return dd === ours || dd.endsWith('.' + ours); });\n  const feats = [...new Set(items.map(x => x.type))].filter(t => t !== 'organic');\n  const err = !res[i] || res[i].error || (((res[i].tasks || [])[0] || {}).status_code >= 40000);\n  return { json: { ladder_id: String(r.ladder_id), keyword: String(r.keyword), checked_at: now, position: mine ? Number(mine.rank_group) : (err ? -1 : 0), url: mine ? String(mine.url || '') : '', serp_features: feats.join(','), domain: String(r.domain || ''), rung: Number(r.rung) || 0 } };\n});\n"
+        },
+        "id": "fedb8639-e07f-52ae-8bd4-64c09d255561",
+        "name": "Parse Positions",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1780,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "insert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_rank_history"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "ladder_id",
+                "displayName": "ladder_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "checked_at",
+                "displayName": "checked_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "position",
+                "displayName": "position",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "url",
+                "displayName": "url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "serp_features",
+                "displayName": "serp_features",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rung",
+                "displayName": "rung",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "b40c4457-1459-5ba3-a26d-e97ae3477b51",
+        "name": "Save History",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2000,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Rank tracker report: per ladder, positions vs the previous check, rungs reached, drops and the recommended next step.\nconst FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';\nconst plan = $('Tracker Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do);\nconst pos = $('Parse Positions').all().map(i => i.json);\nlet history = []; try { history = $('Load History').all().map(i => i.json).filter(r => r && r.ladder_id); } catch (e) {}\nconst nowCheck = pos[0] ? pos[0].checked_at : new Date().toISOString();\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst posText = (v) => v == null || v === 0 ? 'not in top 50' : v < 0 ? 'check failed' : '#' + v;\nconst td = 'style=\"padding:4px 8px;border:1px solid #cbd5e1\"';\nconst byLadder = new Map();\nplan.forEach((p, i) => { if (!byLadder.has(p.ladder_id)) byLadder.set(p.ladder_id, []); byLadder.get(p.ladder_id).push({ ...p, result: pos[i] || {} }); });\nconst out = [];\nfor (const [id, items] of byLadder) {\n  const prevOf = (kw) => { const h = history.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && Number(x.position) >= 0).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0]; return h ? Number(h.position) : null; };\n  const rowsK = items.map(it => { const cur = Number(it.result.position); const prev = prevOf(it.keyword);\n    const delta = (cur > 0 && prev > 0) ? prev - cur : (cur > 0 && prev === 0) ? 100 : (cur === 0 && prev > 0) ? -100 : null;\n    return { ...it, current: cur, previous: prev, delta, url: it.result.url || '' }; }).sort((a, b) => a.rung - b.rung || a.page_no - b.page_no);\n  const head = rowsK.find(r => r.rung === 4) || rowsK[0];\n  const rungs = [1, 2, 3].map(r => { const ps = rowsK.filter(x => x.rung === r); return { rung: r, pages: ps.length, top10: ps.filter(x => x.current > 0 && x.current <= 10).length, top3: ps.filter(x => x.current > 0 && x.current <= 3).length, reached: ps.length > 0 && ps.every(x => x.current > 0 && x.current <= 10) }; }).filter(r => r.pages);\n  const drops = rowsK.filter(r => r.delta != null && r.delta <= -5).map(r => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + ')');\n  const gains = rowsK.filter(r => r.delta != null && r.delta >= 5).map(r => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + ')');\n  const topTop3Before = history.filter(x => x.ladder_id === id && x.keyword === head.keyword && String(x.checked_at) < nowCheck && Number(x.position) > 0 && Number(x.position) <= 3).length;\n  const done = head.current > 0 && head.current <= 3 && topTop3Before >= 3;\n  let next;\n  if (done) next = { action: 'complete', rung: 4, text: 'The top rung \"' + head.keyword + '\" has held the top 3 for 4 checks. Tracking stops; keep the pages fresh and the links growing.', pages: [] };\n  else {\n    const pending = rungs.find(r => !r.reached);\n    const target = pending ? rowsK.filter(x => x.rung === pending.rung) : [head];\n    next = { action: pending ? 'write_rung_' + pending.rung : 'write_top', rung: pending ? pending.rung : 4,\n      text: pending ? 'Work on rung ' + pending.rung + ': ' + (pending.top10 ? pending.top10 + ' of ' + pending.pages + ' pages are in the top 10. ' : 'none of its pages is in the top 10 yet. ') + 'Write or improve: ' + target.map(t => '\"' + t.keyword + '\"' + (t.status === 'writing' ? ' (already written — publish it)' : '')).join(', ') + '.' : 'Every rung is in the top 10: write or improve the top page for \"' + head.keyword + '\".',\n      pages: target.map(t => ({ keyword: t.keyword, page_type: t.page_type, target_url: t.target_url, status: t.status })) };\n  }\n  const firstPending = (next.pages || []).find(p => p.status !== 'writing') || (next.pages || [])[0];\n  const apiBody = firstPending ? { mode: 'keyword', keyword: firstPending.keyword, page_type: firstPending.page_type || 'Service Page', country: head.country || '', domain: head.domain, existing_page_url: '', email: head.email, ladder_id: id, ladder_rung: next.rung, ladder_head: head.head_keyword, force_content: true } : null;\n  const formLink = FORM_URL + '?' + encodeURIComponent('What do you want?') + '=' + encodeURIComponent('I know my keyword');\n  const table = '<table style=\"border-collapse:collapse;font-size:13px\"><tr><th align=\"left\" ' + td + '>Rung</th><th align=\"left\" ' + td + '>Keyword</th><th ' + td + '>Now</th><th ' + td + '>Before</th><th align=\"left\" ' + td + '>Ranking URL</th></tr>' +\n    rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + '</td><td align=\"center\" ' + td + '>' + esc(posText(r.current)) + '</td><td align=\"center\" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous))) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';\n  const subject = '[Keyword ladder] ' + head.head_keyword + ' — ' + head.domain + ': ' + (head.current > 0 ? 'top page at #' + head.current : 'top page not yet in the top 100') + (drops.length ? ' · ' + drops.length + ' drop(s)' : '');\n  const html = '<p>Hi,</p><p>Position check for your keyword ladder towards <b>' + esc(head.head_keyword) + '</b> on <b>' + esc(head.domain) + '</b> (' + rowsK.length + ' keywords, Google top 50).</p>' + table +\n    '<p><b>Rungs:</b> ' + (rungs.map(r => 'Rung ' + r.rung + ': ' + r.top10 + '/' + r.pages + ' in top 10, ' + r.top3 + ' in top 3' + (r.reached ? ' ✓ reached' : '')).join(' · ') || 'no rung pages tracked') + '</p>' +\n    (gains.length ? '<p style=\"color:#15803d\"><b>Gains:</b> ' + esc(gains.join('; ')) + '</p>' : '') + (drops.length ? '<p style=\"color:#b91c1c\"><b>Drops to look at:</b> ' + esc(drops.join('; ')) + '</p>' : '') +\n    '<p><b>Next step:</b> ' + esc(next.text) + '</p>' +\n    (apiBody ? '<p>Start the next page: open the <a href=\"' + formLink + '\">SEO Assistant form</a> (\"I know my keyword\", keyword <b>' + esc(apiBody.keyword) + '</b>, domain ' + esc(head.domain) + '), or send this to the API (' + esc(API_URL) + '):</p><pre style=\"background:#f1f5f9;padding:8px;font-size:12px\">' + esc(JSON.stringify(apiBody, null, 2)) + '</pre>' : '') +\n    '<p style=\"color:#64748b;font-size:12px\">Checks run weekly; tracking stops once the top page holds the top 3 for four checks. Positions come from DataForSEO live SERPs.</p>';\n  out.push({ json: { ladder_id: id, domain: head.domain, head_keyword: head.head_keyword, email: head.email || '', callback_url: head.callback_url || '', request_id: head.request_id || '',\n    subject, html, status: 'progress', stage: 'rank_tracker', checked_at: nowCheck,\n    positions: rowsK.map(r => ({ rung: r.rung, keyword: r.keyword, position: r.current, previous: r.previous, delta: r.delta, url: r.url })), rungs, gains, drops, next_step: next, api_body: apiBody, done } });\n}\nreturn out.length ? out : [{ json: { nothing_to_do: true } }];\n"
+        },
+        "id": "9a9e5b88-60b4-501e-9bb3-9aa4c05a23ef",
+        "name": "Tracker Report",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2220,
+          0
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "af5e8b3d-3bf2-5d31-aca5-5748b6147091",
+                "leftValue": "={{ !$json.nothing_to_do }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "727884de-c9c3-5bd5-9b84-22d292145861",
+        "name": "Has Report?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2440,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "436275b5-898d-5ed7-b0ea-132da48124f9",
+                "leftValue": "={{ !!$json.email }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "bddf5309-b8ed-5390-b6b8-5ab36d39a596",
+        "name": "Has Email (Tracker)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2660,
+          -100
+        ]
+      },
+      {
+        "parameters": {
+          "fromEmail": "Dev SEO <kinnngahmed@gmail.com>",
+          "toEmail": "={{ $json.email }}",
+          "subject": "={{ $json.subject }}",
+          "emailFormat": "html",
+          "html": "={{ $json.html }}",
+          "options": {
+            "appendAttribution": false
+          }
+        },
+        "id": "6d612e15-c828-5e46-b9b2-8b0c4a39512b",
+        "name": "Send Progress Email",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 2.1,
+        "position": [
+          2880,
+          -100
+        ],
+        "credentials": {
+          "smtp": {
+            "id": "SEOcredSmtpGmail",
+            "name": "Gmail SMTP (SEO Agent)"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "d8dcfa95-a4f8-5881-ba37-2c8542d8c450",
+                "leftValue": "={{ !!$json.callback_url }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "6c0a2484-a39e-560d-a985-d0a9cc1f1f0d",
+        "name": "Has Callback (Tracker)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2660,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.callback_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ status: 'progress', stage: 'rank_tracker', request_id: $json.request_id || null, ladder_id: $json.ladder_id, domain: $json.domain, head_keyword: $json.head_keyword, checked_at: $json.checked_at, positions: $json.positions, rungs: $json.rungs, gains: $json.gains, drops: $json.drops, next_step: $json.next_step, api_body: $json.api_body, done: $json.done }) }}",
+          "options": {
+            "timeout": 20000
+          }
+        },
+        "id": "fe707793-65cc-5a93-981c-51b54e407d72",
+        "name": "POST Progress",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          2880,
+          120
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {},
+        "id": "ad1ca342-1425-5665-b57a-df20376e622c",
+        "name": "Nothing To Track",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          1560,
+          260
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Rank Tracker\nRuns **weekly (Monday 08:00)** and on demand through *Manual Run* (Execute Workflow Trigger). Reads every ladder from the Data Table `seo_ladders` (written by the ladder mode of SEO Agent v4; both tables are created on first use), checks the Google top 50 for each page's primary keyword and the head term (DataForSEO SERP live, about $0.015 per keyword; a 9-page ladder costs about $0.60 per month), appends `seo_rank_history`, and sends one progress e-mail / callback per ladder: positions vs the previous check, rungs in the top 10 / top 3, drops of 5+ positions, and the **recommended next rung** with a form link and a ready-to-send API body (recommend-only mode).\nGuardrails: at most 15 keywords per ladder and 120 checks per run; a ladder stops being tracked once its top page has held the top 3 for 4 consecutive checks.\nForm: http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d · API: http://localhost:5678/webhook/seo-keyword-check",
+          "height": 330,
+          "width": 900,
+          "color": 5
+        },
+        "id": "64819fbc-4066-52e1-9dfd-e18f577c7dfd",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -420
+        ]
+      }
+    ],
+    "connections": {
+      "Weekly Schedule": {
+        "main": [
+          [
+            {
+              "node": "Ensure Ladder Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Run": {
+        "main": [
+          [
+            {
+              "node": "Ensure Ladder Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Ladder Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure History Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure History Table": {
+        "main": [
+          [
+            {
+              "node": "Load Ladders",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Ladders": {
+        "main": [
+          [
+            {
+              "node": "Load History",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load History": {
+        "main": [
+          [
+            {
+              "node": "Tracker Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Tracker Plan": {
+        "main": [
+          [
+            {
+              "node": "Any Checks?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "SERP Check": {
+        "main": [
+          [
+            {
+              "node": "Parse Positions",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Positions": {
+        "main": [
+          [
+            {
+              "node": "Save History",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save History": {
+        "main": [
+          [
+            {
+              "node": "Tracker Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Tracker Report": {
+        "main": [
+          [
+            {
+              "node": "Has Report?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Checks?": {
+        "main": [
+          [
+            {
+              "node": "SERP Check",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Nothing To Track",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Report?": {
+        "main": [
+          [
+            {
+              "node": "Has Email (Tracker)?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Has Callback (Tracker)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Email (Tracker)?": {
+        "main": [
+          [
+            {
+              "node": "Send Progress Email",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Callback (Tracker)?": {
+        "main": [
+          [
+            {
+              "node": "POST Progress",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

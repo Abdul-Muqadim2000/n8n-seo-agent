@@ -1,0 +1,47 @@
+- Normalize Input: validation errors returned as data (not thrown); API needs callback_url or email; keyword mode honours the deliverable checkboxes
+- Rate Limit: limit hits returned as validation_error instead of crashing
+- API: webhook moved to the separate "SEO Agent — API" workflow, which answers 202/400 immediately and starts this workflow through "API Entry"; validation failures inside the run are POSTed to callback_url ("API Reject"); form users see validation messages on a proper page
+- API: removed orphaned "Respond to Webhook"; Build Webhook Response -> Has Callback? -> POST Callback now actually runs
+- Site read: new "Site Read OK?" gate; unreadable sites skip the Site Describer LLM call and get an honest fallback
+- Claude nodes: max tokens 16384 (Copywriter, Editor) / 8192 (others) instead of the 4096 default; removed temperature (ignored on Sonnet 5+)
+- Pick Top 6: removed reference to non-existent node "Hand Off To Keyword"
+- AI Queries: brand-name regex bug fixed (String(match)[1] returned a single letter, e.g. "o")
+- Content QA: keyword density now mentions-based (was inflated 2-3x, forcing needless Editor rounds); invented prices always become [Price] unless the user supplied prices
+- Pick Key Pages: blog/news hub pages no longer sampled as "service" pages
+- URLs To Check: SSRF guard — only public http(s) hosts are HEAD-checked
+- Schema Findings: only a broken Organization logo is Critical; a broken article publisher logo is High
+- Competitor Analysis: "no top-10 rankings" is High (a business outcome, not a site defect) so it no longer caps the score; data-availability notes are not scored
+- Scoring: "API/data not available" notes no longer deduct points from the customer's score
+- AI Visibility: AI Overview misses merged into one finding (was one High per query = double penalty)
+- Probes: split into host probes (no redirects) + content probes (redirects followed). Sites whose apex 301s to www are no longer flagged as "duplicate host"; headers, cache and crawler checks now measure the real page
+- Scoring: merged duplicate broken-page checks; tiny shares of broken pages are High not Critical; diminishing returns per severity; Let's Encrypt-style certs not flagged at <30 days; High cap at 5+ (was 2+)
+- Audit pipeline: DataForSEO calls use the market language (de/fr/es/it/nl/pt) instead of hard-coded English
+- Settings: 60-minute execution timeout, progress saved (Wait-node resumes survive restarts); "Form" renamed "Download Report"
+- Added 6 sticky notes documenting the pipeline, credentials, config and scoring
+- Run ledger: every report node now records DataForSEO spend per node, AI call count and run duration (run_ledger on the final item and in the API callback)
+- PDF reports: every report (keyword, keyword ideas, site audit, full report) is rendered to PDF by Gotenberg; PDF is the download and first email attachment, the .doc stays as fallback; renderer failures never fail the run
+- Domain age: free RDAP lookup added as a fallback to DataForSEO WHOIS (covers .ae, .pk, .de and other ccTLDs)
+- Competitor discovery: queries come from H1s/titles of shallow service pages, skipping generic or brand-only strings
+- Keyword ideas: topic clusters now require the same search intent and are capped at 12 keywords
+- Small fixes: keyword form recommends an email (long runs), keyword escaped in the HTML email, API rate limit keyed by client IP when no email
+- Models: all agents on Claude Sonnet 5.5 (current Sonnet, same price as Sonnet 5); Site Describer moved from OpenAI gpt-5-mini to Claude Haiku 4.5 — one vendor, one credential
+- Credential slots pre-wired (DataForSEO, Jina Reader, Google PageSpeed, Anthropic, form login); Gmail must be connected in the UI (OAuth)
+- Cosmetic: medians in evidence text are rounded (no 12.850000000000001 years)
+- v5 intake: goal, tone of voice, call to action and real business facts collected (form + API); up to 2 editor rounds
+- v5 discovery: seeds by buyer motive -> 7 research pulls (ideas, long-tail, related, competitors who rank) -> opportunity score (traffic potential x winnability x value x goal intent x trend) -> AI relevance screen -> topic clusters & content plan -> AI search demand -> live SERP check on the priority keywords
+- v5 content: client pages read for real facts; competitor term model, questions and statistics; verified facts with sources from a second search; site authority in the verdict (plus expected visits and time to rank); richer brief (pain points, objections, information gain, evidence plan, terms, snippet targets); rewritten copywriter rules; editorial critic; QA content score (structure, coverage, readability, specificity, clean language, length); report shows coverage, sources, alternatives and the review
+- v5 models: Opus 5.5 with adaptive thinking (effort high) for brief, copywriter and editor; Sonnet 5.5 with thinking for analysis, verdict, seeds, critic and content review; Haiku 4.5 for the site description
+- AI spend guard: Rate Limit estimates Claude spend per run and refuses new runs once the period estimate would exceed ai_budget_usd (set to $3 for testing)
+- API: callback_url may be a local http URL while testing (localhost / host.docker.internal); https required otherwise
+- E-mail: Gmail OAuth nodes replaced by SMTP Send Email nodes (credential "Gmail SMTP (SEO Agent)", Google App Password); PDF + Word attached
+- Live-test fixes: request_id kept through every report builder; API callback carries real PDF/Word bytes; ledger counts all DataForSEO nodes
+- Competitor reads: pages blocked by bot protection are retried through Jina browser engine + proxy pool and merged before analysis
+- API mode: describe, discover and audit runs deliver through the callback (stage: site_description / keyword_strategy / site_audit / full_report / content) instead of hitting form-only nodes
+- Delivery rules: API callers may rely on the callback alone (e-mail optional); rejections keep callback_url/request_id; audit e-mail only when an address was given
+- Live-test round 3: recommended length clamped by page type (900-2,400 service/landing, 1,200-3,000 guides); 6-9 sections; copywriter/editor forbid production notes and length overrun; QA strips pre-H1 notes, matches keyword/term variants, trusts government and vendor sources, fails pages >25% off target; one editor pass; Opus at medium effort
+- Ladder intake: start option "Rank my site for a keyword" + form page (destination keyword, domain, business, pages to write now 1-3, e-mail); API mode "ladder" with pages_now; CONFIG flags for pages, tracker cadence, auto next rung and WordPress; ladder page runs carry ladder_id / rung / head / links / force_content
+- Ladder routing: Route Mode sends ladder runs into the keyword pipeline (sitemap, client pages, SERP, competitors, keyword data, site authority, verdict on the head term); "Ladder Mode?" after Parse Verdict branches into the ladder chain; rung page runs force content even on an AVOID verdict and may link to planned ladder pages
+- Ladder chain: 4 DataForSEO pulls around the head term (long-tail, related, ideas for head + services, keywords the site ranks for) -> topic-filtered pool with opportunity score -> AI relevance screen anchored on the head term -> rung assignment by difficulty (1: <=25 long-tail, 2: 26-45, 3: 46-60, top = head), one page per topic cluster (2-4 per rung, 8-12 pages), existing-page matching, internal link map (up / sideways / down), timeline in months, feasibility with alternative tops, link and trust requirements -> Keyword Ladder Plan (PDF + Word) -> rows into Data Table "seo_ladders" (tables created on first use) -> e-mail / download / callback (stage ladder_plan) -> the first page(s) start as separate content runs tagged with the ladder
+- Discovery choice step (form only): after the keyword strategy, a "Choose your keyword" page lists the priority keywords (keyword · searches/mo · difficulty · intent · page type) plus "Let the system choose"; the pick replaces the pipeline keyword and is shown in the report. API callers keep choosing through mode keyword / ladder
+- WordPress (optional, off): finished pages can be created as WordPress drafts (title, slug, excerpt, HTML, JSON-LD, Yoast/RankMath meta) through the sub-workflow SEOagentWordPres; enable with CONFIG.wordpress_publish and a wordpress_url in the request, and attach the "WordPress (SEO Agent)" credential
+- Form flows: a Form completion page ends the execution (live finding), so discovery follow-ups (keyword report / content for the chosen keyword, site audit) and form-requested audits now run as separate executions through API Entry; the download / "audit started" page is always the last step; WordPress gate ordered before the delivery step; Rate Limit estimates per execution (report-only keyword run $0.30)

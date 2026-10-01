@@ -1,0 +1,1 @@
+throw new Error('Please choose one of the 6 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword).');

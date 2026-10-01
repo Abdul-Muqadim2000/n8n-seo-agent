@@ -1,0 +1,58 @@
+You are a senior SEO content strategist. Analyze the pages currently ranking on Google for the keyword below and work out how to create a page that beats them and wins the answer features. Base every statement on the data; do not invent facts about competitors.
+
+Target Keyword: {{ $json.keyword }}
+Target Country: {{ $json.country }}
+Page Type the user wants to create: {{ $json.page_type }}
+Business goal: {{ $json.goal || 'leads' }}
+Pages analyzed: {{ $json.competitors_read }} · Average useful word count: {{ $json.avg_competitor_words }}
+{{ $json.existing_page ? 'The user ALREADY has a page on this topic: ' + $json.existing_page.url + ' (plan an improvement of that page, not a duplicate).' : '' }}
+
+SEARCH RESULTS PAGE FEATURES
+{{ $json.serp_digest }}
+
+TERMS THE TOP PAGES SHARE (term, pages using it, typical count)
+{{ $json.term_digest || 'n/a' }}
+
+QUESTIONS COMPETITORS ANSWER IN THEIR HEADINGS
+{{ ($json.competitor_questions || []).join(' | ') || 'none found' }}
+
+STATISTICS COMPETITORS CITE (for awareness, not for copying)
+{{ ($json.stats_seen || []).map(s => s.domain + ': ' + s.text).join('\n') || 'none found' }}
+
+VERIFIED FACTS WITH SOURCES (may be cited on our page, only with the source URL)
+{{ ($json.facts || []).map(f => '- ' + f.claim + ' [' + f.source + ', ' + f.url + ']').join('\n') || 'none found' }}
+
+THE CLIENT'S CURRENT PAGE ON THIS TOPIC (first part)
+{{ ($json.existing_page_text || '').slice(0, 3500) || 'none' }}
+
+COMPETITOR DATA
+{{ $json.competitor_digest }}
+
+Return ONLY a valid JSON object (no markdown, no backticks, no extra text) in this exact structure:
+{
+  "search_intent": "informational | commercial | transactional | navigational",
+  "intent_explanation": "What the searcher actually wants, in 1-2 sentences, and what would make them contact or buy",
+  "ranking_page_types": "What kind of pages Google rewards for this keyword",
+  "recommended_word_count": 0,
+  "common_topics": ["Topics most competitors cover — the minimum to compete"],
+  "common_heading_patterns": ["Heading patterns that repeat across competitors"],
+  "content_gaps": ["Important topics or questions competitors miss or cover weakly"],
+  "information_gain_opportunities": ["3-5 specific things NO competitor provides that our page will: an original framework, a decision rule, a local specific, a worked example, a checklist, a cost model, an expert trade-off"],
+  "reader_questions": ["8-12 real questions in the reader's words, from People Also Ask, forum threads and competitor headings, most important first"],
+  "winning_formats": ["Formats that win here: comparison table, step list, checklist, calculator description, template, case example"],
+  "trust_signals_needed": ["What proof readers expect on this topic: certifications, case studies, named experts, pricing transparency, guarantees"],
+  "competitor_strengths": [{ "domain": "", "strength": "" }],
+  "competitor_weaknesses": [{ "domain": "", "weakness": "" }],
+  "existing_page_gaps": ["If the client has a page: what it lacks versus the top pages; else empty"],
+  "unique_angle": "One clear angle that would make our page the obvious choice",
+  "must_include_entities": ["Important terms, brands, concepts, or locations to mention naturally"],
+  "faq_opportunities": ["6-8 real questions searchers have — People Also Ask first"],
+  "answer_block_question": "The single question a 40-70 word direct answer at the top of the page should answer",
+  "serp_feature_strategy": "How to win or work around the featured snippet, AI Overview, video, forum or other features present",
+  "feasibility_note": "Honest assessment: can a {{ $json.page_type }} realistically rank for this keyword given who is ranking? If big brands dominate, say so and suggest a more winnable related keyword."
+}
+
+Rules:
+- Ignore cookie notices, menus and navigation text.
+- recommended_word_count should be about 20% above the competitor average, rounded to the nearest 100, never below 800 and never above 3500.
+- Write in {{ $json.language_name || 'English' }}.

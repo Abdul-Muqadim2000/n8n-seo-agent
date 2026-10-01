@@ -1,0 +1,168 @@
+[
+  {
+    "id": "SEOagentTestRun1",
+    "name": "SEO Agent — Test Runner",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 1800,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "seo-test-run",
+          "authentication": "headerAuth",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "cb0a5b0e-c36b-5855-9909-580dc6ef2f73",
+        "name": "Test Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "3f1c8e2a-5b7d-5c4e-9a1f-7e2d4b6c8a01",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "SEOcredApiTest01",
+            "name": "SEO API Key (test)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// body.workflow picks the target (default: SEO Agent v4); the rest of the body is forwarded like the API does.\nconst raw = $input.first().json || {}; const b = (raw.body && typeof raw.body === 'object') ? raw.body : {};\nconst target = String(b.workflow || 'SEOagentV4Full01');\nconst request_id = String(b.request_id || $execution.id);\nreturn [{ json: { target, request_id, forward: { headers: raw.headers || {}, body: { ...b, workflow: undefined, request_id, client_ip: 'test-runner' } } } }];"
+        },
+        "id": "c03b6554-f4c6-5459-af56-4e89ad5e744c",
+        "name": "Route Test",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ status: 'started', target: $json.target, request_id: $json.request_id }) }}",
+          "options": {
+            "responseCode": 202
+          }
+        },
+        "id": "efb3e5a1-7176-575d-b5fd-e9f3cb907a5f",
+        "name": "Respond Started",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{ json: $input.first().json.forward }];"
+        },
+        "id": "2f8c7721-512e-566e-a204-e4c94aaa44bd",
+        "name": "Prepare Forward",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          720,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Route Test').first().json.target }}"
+          },
+          "mode": "once",
+          "options": {
+            "waitForSubWorkflow": false
+          }
+        },
+        "id": "2fe9886e-e161-5fc2-bb16-3e4b43548cfc",
+        "name": "Run Target",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          960,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Test Runner (testing only)\n`POST /webhook/seo-test-run` with header `X-API-Key` = credential **SEO API Key (test)**. Body: the normal API body plus optional `workflow` (default SEOagentV4Full01; `SEOagentTracker1` runs the rank tracker now). Answers 202 and starts the target in the background. It bypasses the API front door's Quick Validate on purpose. **Deactivate or delete after testing.**",
+          "height": 200,
+          "width": 760,
+          "color": 3
+        },
+        "id": "64819fbc-4066-52e1-9dfd-e18f577c7dfd",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -260
+        ]
+      }
+    ],
+    "connections": {
+      "Test Webhook": {
+        "main": [
+          [
+            {
+              "node": "Route Test",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route Test": {
+        "main": [
+          [
+            {
+              "node": "Respond Started",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Respond Started": {
+        "main": [
+          [
+            {
+              "node": "Prepare Forward",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare Forward": {
+        "main": [
+          [
+            {
+              "node": "Run Target",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

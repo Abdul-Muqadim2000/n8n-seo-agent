@@ -1,0 +1,62 @@
+--- run 0: 1 item(s), 52ms
+{
+ "status": "completed",
+ "stage": "full_report",
+ "request_id": "T3-fullreport-techand",
+ "execution_id": "21",
+ "domain": "techand.ai",
+ "health_score": 64,
+ "grade": "Needs Improvement",
+ "issue_counts": {
+  "Critical": 1,
+  "High": 22,
+  "Medium": 18,
+  "Low": 16,
+  "Info": 3
+ },
+ "top_issues": [
+  "Broken pages (4xx, 5xx or timeout)",
+  "www and non-www versions are not consolidated",
+  "HTML cannot be cached by the CDN (no-store / private)",
+  "Malformed sameAs profile link",
+  "Structured contact details are thinner than what the site shows",
+  "Experience claim conflicts with the founding date",
+  "Service pages have no Service schema"
+ ],
+ "emailed_to": "kinnngahmed@gmail.com",
+ "run_ledger": {
+  "dataforseo_usd": 1.02,
+  "dataforseo_calls": 36,
+  "by_node": {
+   "Start Crawl": 0.09,
+   "Find Competitors": 0.012,
+   "Fallback SERP": 0.01,
+   "Domain Overview": 0.0483,
+   "DataForSEO Whois": 0.4848,
+   "Ranked Keywords": 0.12,
+   "Keyword Ideas": 0.048,
+   "Backlink Summary": 0.096,
+   "Backlink Gap": 0.024,
+   "AI SERP": 0.022,
+   "Ask LLMs": 0.0646
+  },
+  "ai_calls": 1,
+  "ai_nodes": [
+   "Content Reviewer"
+  ],
+  "started_at": "2026-10-01T12:13:51.371Z",
+  "finished_at": "2026-10-01T12:21:58.374Z",
+  "duration_min": 8.1
+ },
+ "pdf": {
+  "data": "JVBERi0xLjQKJdPr6eEKMSAwIG9iago8PC9UaXRsZSA8RkVGRjAwNDYwMDc1MDA2QzAwNkMwMDIwMDA1MzAwNDUwMDRGMDAyMDAwNTIwMDY1MDA3MDAwNkYwMDcyMDA3NDAwMjAyMDE0MDAyMDAwNzQwMDY1MDA2MzAwNjgwMDYxMDA2RTAwNjQwMDJFMDA2MTAwNjk+Ci9DcmVhdG9yIChNb3ppbGxhLzUuMCBcKFgxMTsgTGludXggeDg2XzY0XCkgQXBwbGVXZWJLaXQvNTM3LjM2IFwoS0hUTUwsIGxpa2UgR2Vja29cKSBIZWFkbGVzc0Nocm9tZS8xNTIuMC4wLjAgU2FmYXJpLzUzNy4zNikKL1Byb2R1Y2VyIChTa2lhL1BERiBtMTUyKQovQ3JlYXRpb25EYXRlIChEOjIwMjYxMDAxMTIyMTU5KzAwJzAwJykKL01vZERhdGUgKEQ6MjAyNjEwMDExMjIxNTkrMDAnMDAnKT4+CmVuZG9iagozIDAgb2JqCjw8L2NhIDEKL0JNIC9Ob3JtYWw+PgplbmRvYmoKNiAwIG9iago8PC9GaWx0ZXIgL0ZsYXRlRGVj…(+306324)",
+  "fileName": "full-seo-report-techand-ai-2026-10-01.pdf",
+  "mimeType": "application/pdf"
+ },
+ "file": {
+  "data": "77u/PGh0bWwgeG1sbnM6bz0idXJuOnNjaGVtYXMtbWljcm9zb2Z0LWNvbTpvZmZpY2U6b2ZmaWNlIiB4bWxuczp3PSJ1cm46c2NoZW1hcy1taWNyb3NvZnQtY29tOm9mZmljZTp3b3JkIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvVFIvUkVDLWh0bWw0MCI+CjxoZWFkPjxtZXRhIGNoYXJzZXQ9InV0Zi04Ij48dGl0bGU+RnVsbCBTRU8gUmVwb3J0IOKAlCB0ZWNoYW5kLmFpPC90aXRsZT4KPCEtLVtpZiBndGUgbXNvIDldPjx4bWw+PHc6V29yZERvY3VtZW50Pjx3OlZpZXc+UHJpbnQ8L3c6Vmlldz48L3c6V29yZERvY3VtZW50PjwveG1sPjwhW2VuZGlmXS0tPgo8c3R5bGU+CkBwYWdlIHsgbWFyZ2luOiAwLjhpbjsgfQpib2R5IHsgZm9udC1mYW1pbHk6IENhbGlicmksIEFyaWFsLCBzYW5zLXNlcmlmOyBmb250LXNpemU6IDExcHQ7IGxpbmUtaGVpZ2h0OiAxLjU7IGNvbG9yOiAjMWUyOTNi…(+122456)",
+  "fileName": "full-seo-report-techand-ai-2026-10-01.doc",
+  "mimeType": "application/msword"
+ },
+ "callback_url": "http://localhost:5678/webhook/seo-callback"
+}

@@ -1,0 +1,134 @@
+--- run 0: 1 item(s), 30ms
+{
+ "run_ledger": {
+  "dataforseo_usd": 0.0221,
+  "dataforseo_calls": 3,
+  "by_node": {
+   "SERP Top 10": 0.006,
+   "Keyword Data": 0.0121,
+   "Facts SERP": 0.004
+  },
+  "ai_calls": 2,
+  "ai_nodes": [
+   "Competitor Analyzer",
+   "Verdict Agent"
+  ],
+  "started_at": "2026-10-01T13:21:45.723Z",
+  "finished_at": "2026-10-01T13:24:37.788Z",
+  "duration_min": 2.9
+ },
+ "request_id": null,
+ "keyword": "e invoicing in uae",
+ "country": "United Arab Emirates",
+ "domain": "techand.ai",
+ "email": "kinnngahmed@gmail.com",
+ "report_type": "Keyword Verdict",
+ "file_name": "keyword-verdict-e-invoicing-in-uae-2026-10-01.doc",
+ "via_webhook": false,
+ "callback_url": "",
+ "mode": "keyword",
+ "brand": "Dev SEO",
+ "existing_page": null,
+ "qa_summary": "",
+ "verdict": "GO_WITH_CHANGES",
+ "verdict_score": 72,
+ "verdict_reasons": [
+  "Demand is real and rising: 880 monthly searches, +85% year on year, and a CPC of $6.85 that shows commercial value. The -18% quarterly dip and the 720 in Aug 2026 look like seasonality, not decline. Mandate deadlines should keep interest high into 2027.",
+  "Ranking is realistic: KD is 2 (Easy), and top-10 competitors average only 5 referring domains and 10 backlinks. Thin pages rank, such as ajmsglobal.com at 664 words and youngandright.ae at about 122 words. An unknown-authority site can compete on content quality.",
+  "Intent does not match a pure service page. Google labels it informational, and the SERP is guides from advisory firms and vendors (roedl.com, auditfirmsdubai.ae, wafeq.com). No pure service page ranks. A guide-style service page with lead CTAs fits the pattern.",
+  "Content gaps are clear: competitors disagree on dates (30 Oct 2026 vs 31 July 2026), cover penalties weakly, and give no ASP selection criteria, cost guidance or sector detail. Tech& can win with a dated, cited guide that includes a phase table and a readiness scorecard."
+ ],
+ "verdict_risks": [
+  "The AI Overview cites tax.gov.ae, PwC and Grant Thornton and will absorb many clicks. Real organic traffic may be well below the 880 volume.",
+  "Many searchers are researching rather than buying. Lead conversion will be low unless the CTAs are strong. Tech& is also a Dynamics 365 partner, not a tax advisory firm, so E-E-A-T on tax topics is weaker.",
+  "Deadlines and rules are shifting, so the page needs frequent updates to stay accurate and cited."
+ ],
+ "recommended_page": "Guide-style Service Page (e-invoicing readiness and implementation guide with lead CTAs)",
+ "secondary_keywords": [
+  "e-invoicing UAE implementation",
+  "UAE e-invoicing ASP",
+  "accredited service provider UAE e-invoicing",
+  "UAE e-invoicing penalties",
+  "UAE e-invoicing deadline 2026",
+  "Peppol UAE e-invoicing",
+  "e-invoicing Dynamics 365 UAE",
+  "is e-invoicing mandatory in UAE",
+  "UAE e-invoicing requirements",
+  "PINT-AE"
+ ],
+ "keyword_data": {
+  "search_volume": 880,
+  "cpc": 6.85,
+  "ads_competition": "MEDIUM",
+  "keyword_difficulty": 2,
+  "difficulty_label": "Easy",
+  "google_intent": "informational",
+  "trend_yearly_pct": 85,
+  "trend_quarterly_pct": -18,
+  "monthly_trend": [
+   {
+    "month": "2026-08",
+    "searches": 720
+   },
+   {
+    "month": "2026-07",
+    "searches": 880
+   },
+   {
+    "month": "2026-06",
+    "searches": 880
+   },
+   {
+    "month": "2026-05",
+    "searches": 1000
+   },
+   {
+    "month": "2026-04",
+    "searches": 720
+   },
+   {
+    "month": "2026-03",
+    "searches": 480
+   },
+   {
+    "month": "2026-02",
+    "searches": 720
+   },
+   {
+    "month": "2026-01",
+    "searches": 880
+   },
+   {
+    "month": "2025-12",
+    "searches": 1000
+   },
+   {
+    "month": "2025-11",
+    "searches": 880
+   },
+   {
+    "month": "2025-10",
+    "searches": 880
+   },
+   {
+    "month": "2025-09",
+    "searches": 590
+   }
+  ],
+  "competitor_backlink_strength": {
+   "avg_referring_domains": 5,
+   "avg_backlinks": 10,
+   "avg_dofollow": 7
+  }
+ },
+ "ladder_id": "",
+ "ladder_rung": null,
+ "ladder_head": "",
+ "publish_wordpress": false,
+ "wordpress_url": "",
+ "content_brief_slug": "",
+ "pdf_ready": true,
+ "pdf_file_name": "keyword-verdict-e-invoicing-in-uae-2026-10-01.pdf",
+ "pdf_error": null
+}
+binary: data:keyword-verdict-e-invoicing-in-uae-2026-10-01.doc , pdf:keyword-verdict-e-invoicing-in-uae-2026-10-01.pdf 49.1 kB

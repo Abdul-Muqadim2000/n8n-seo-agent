@@ -1,0 +1,21 @@
+// Discovery choice step (form only): the user's pick replaces the system's pipeline keyword.
+const base = $('Build Keyword Strategy').first().json;
+const ans = $input.first().json || {};
+const key = Object.keys(ans).find(k => /keyword/i.test(k));
+const choice = String(key ? ans[key] : '').trim();
+const ks = JSON.parse(JSON.stringify(base.keyword_strategy || {}));
+const sug = JSON.parse(JSON.stringify(base.keyword_suggestions || {}));
+const systemPick = ks.pipeline_keyword ? ks.pipeline_keyword.keyword : null;
+if (!choice || /^let the system/i.test(choice)) return [{ json: { ...base, chosen_by: 'system', chosen_keyword: systemPick } }];
+const m = choice.match(/^(\d+)\.\s*(.+?)(\s+·.*)?$/);
+const text = (m ? m[2] : choice.split(' · ')[0]).toLowerCase().trim();
+const idx = m ? Number(m[1]) - 1 : -1;
+const list = ks.priority || [];
+const pick = (list[idx] && list[idx].keyword === text) ? list[idx] : (list.find(k => k.keyword === text) || (ks.keywords || []).find(k => k.keyword === text));
+if (!pick) return [{ json: { ...base, chosen_by: 'system', chosen_keyword: systemPick, choice_error: 'Choice not recognised: ' + choice } }];
+const chosen = { ...pick, why: pick.why || 'chosen by you' };
+ks.pipeline_keyword = chosen;
+sug.recommended = [{ ...chosen, reason: 'chosen by you' }, ...(sug.recommended || []).filter(r => r.keyword !== chosen.keyword)];
+const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const html = String(base.result_html || '').replace('<b>Where to start:</b>', '<b>Your choice:</b> "' + esc(chosen.keyword) + '" — ' + esc(chosen.why) + '<br><b>System suggestion:</b>');
+return [{ json: { ...base, keyword_strategy: ks, keyword_suggestions: sug, result_html: html, chosen_by: 'user', chosen_keyword: chosen.keyword } }];
