@@ -1,0 +1,713 @@
+[
+  {
+    "id": "SEOagentConsole1",
+    "name": "SEO Agent — Console Alerts",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 1800,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "mailbox": "INBOX",
+          "postProcessAction": "nothing",
+          "downloadAttachments": false,
+          "format": "simple",
+          "options": {}
+        },
+        "id": "e60a44bd-fc18-5ab0-8bb1-251324687e99",
+        "name": "Mailbox Trigger",
+        "type": "n8n-nodes-base.emailReadImap",
+        "typeVersion": 2.2,
+        "position": [
+          0,
+          0
+        ],
+        "credentials": {
+          "imap": {
+            "id": "SEOcredImapGmail",
+            "name": "Gmail IMAP (SEO Agent)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Google Search Console notification e-mails (the agent's mailbox is a user of the property) -> typed alerts; anything else is ignored.\n// Covers what the API cannot see: manual actions, security issues, site-wide indexing / Core Web Vitals / rich-result / sitemap notices.\nconst j = $input.first().json || {}; const meta = j.metadata || {};\nconst subject = String(j.subject || meta.subject || '').replace(/\\s+/g, ' ').trim();\nconst from = String(j.from || meta.from || '').toLowerCase();\nconst text = String(j.textPlain || j.textHtml || '').replace(/<style[\\s\\S]*?<\\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\\s+/g, ' ').trim();\nconst rawDate = j.date || meta.date || ''; const received_at = isNaN(Date.parse(rawDate)) ? new Date().toISOString() : new Date(rawDate).toISOString();\nconst message_id = String(meta['message-id'] || j.messageId || '').trim() || ('gsc:' + Buffer.from(subject + '|' + received_at).toString('base64').replace(/[^A-Za-z0-9]/g, '').slice(0, 48));\nconst google = /sc-noreply@google\\.com|search console|google search console|webmasters/i.test(from + ' ' + subject);\nconst s = subject + ' ' + text.slice(0, 800);\nlet kind = 'other', severity = 'info';\nif (/manual action/i.test(s)) { kind = 'manual_action'; severity = 'critical'; }\nelse if (/security issue|hacked|malware|social engineering|deceptive pages|harmful downloads/i.test(s)) { kind = 'security'; severity = 'critical'; }\nelse if (/not (being )?indexed|indexing issue|page indexing|coverage|reasons preventing/i.test(s)) { kind = 'coverage'; severity = 'high'; }\nelse if (/core web vitals|\\bcwv\\b|page experience/i.test(s)) { kind = 'cwv'; severity = 'medium'; }\nelse if (/rich result|structured data|breadcrumb|faq|product snippet|merchant listing|video issue|review snippet/i.test(s)) { kind = 'rich_results'; severity = 'medium'; }\nelse if (/sitemap/i.test(s)) { kind = 'sitemap'; severity = 'medium'; }\nelse if (/https issue|mobile usability|crawl error|server error|robots\\.txt/i.test(s)) { kind = 'crawl'; severity = 'medium'; }\nelse if (/new owner|added you|added as|removed|permission|verif/i.test(s)) { kind = 'access'; severity = 'info'; }\nelse if (/performance|top queries|search performance|monthly|summary|new report|tips/i.test(s)) { kind = 'summary'; severity = 'info'; }\nconst m = s.match(/(?:sc-domain:|for\\s+(?:https?:\\/\\/)?(?:www\\.)?)([a-z0-9][a-z0-9.-]*\\.[a-z]{2,})/i) || subject.match(/([a-z0-9][a-z0-9.-]*\\.[a-z]{2,})/i);\nconst domain = m ? m[1].toLowerCase().replace(/^www\\./, '').replace(/\\/$/, '') : '';\nreturn [{ json: { relevant: google && kind !== 'summary' && !!domain, kind, severity, domain, site_id: domain ? 'site_' + domain.replace(/[^a-z0-9]+/g, '-') : '', subject: subject.slice(0, 200), summary: text.slice(0, 400), received_at, message_id: message_id.slice(0, 120), from: from.slice(0, 120), google } }];\n"
+        },
+        "id": "6f418896-0b8f-5550-b11b-fd0ba649a92e",
+        "name": "Classify Notification",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "0eeea87e-817a-5ea3-b831-d378ac24445e",
+                "leftValue": "={{ !!$json.relevant }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "5764fd9c-562d-5422-aa82-8b2c391201db",
+        "name": "Relevant?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "a03b1768-0ced-552f-a2f6-a8e80f2ea8a9",
+        "name": "Ignore",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          720,
+          200
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_console_alerts",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "severity",
+                "type": "string"
+              },
+              {
+                "name": "subject",
+                "type": "string"
+              },
+              {
+                "name": "summary",
+                "type": "string"
+              },
+              {
+                "name": "received_at",
+                "type": "string"
+              },
+              {
+                "name": "message_id",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "8c273c36-0f30-5c03-982a-4f7117ab2355",
+        "name": "Ensure Alerts Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          720,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "da436cb1-e591-5b71-b800-5149e0894e6f",
+        "name": "Load Sites (Alerts)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          960,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ladders"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "ab749ef2-d46b-5b69-979b-862fa2039bc1",
+        "name": "Load Ladders (Alerts)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1200,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Row for the Data Table seo_console_alerts (upserted by message id, so a re-read mail never duplicates).\nconst a = $('Classify Notification').first().json;\nreturn [{ json: { site_id: a.site_id, domain: a.domain, kind: a.kind, severity: a.severity, subject: a.subject, summary: a.summary, received_at: a.received_at, message_id: a.message_id, status: 'new', source: 'mail' } }];\n"
+        },
+        "id": "194dfcbb-db91-57d8-8996-9adcd5fe41f7",
+        "name": "Alert Row",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_console_alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "message_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.message_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "severity",
+                "displayName": "severity",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "subject",
+                "displayName": "subject",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "summary",
+                "displayName": "summary",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "received_at",
+                "displayName": "received_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "message_id",
+                "displayName": "message_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "290adb12-cbc5-5815-b55c-d90ffff5571d",
+        "name": "Save Alert",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1680,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "db82885f-3aee-524b-b49f-52981261c728",
+                "leftValue": "={{ $('Classify Notification').first().json.severity === 'critical' }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "d50688b0-cd58-5ac7-9619-f2abd69f604d",
+        "name": "Urgent?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1920,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Who to tell about an urgent notice: the site's e-mail / callback from seo_sites, the ladder's as fallback.\nconst a = $('Classify Notification').first().json;\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst site = rowsOf('Load Sites (Alerts)').find(s => normD(s.domain) === a.domain) || {}; const lad = rowsOf('Load Ladders (Alerts)').find(l => normD(l.domain) === a.domain) || {};\nconst esc = (x) => String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst what = a.kind === 'manual_action' ? 'Google has applied a <b>manual action</b> to the site. Rankings are suppressed until it is fixed and a review is requested.' : 'Google reports a <b>security issue</b> on the site (hacked content, malware or deceptive pages). Visitors see warnings and rankings drop until it is cleaned.';\nconst steps = a.kind === 'manual_action' ? ['Open Search Console → Security &amp; Manual Actions → Manual actions and read the exact reason and the affected pages.', 'Fix every page it names (remove spam, unnatural links, thin or cloaked content) across the whole site, not only the examples.', 'Click Request review and describe what was fixed; reviews take days to weeks.'] : ['Open Search Console → Security issues for the details and the sample URLs.', 'Clean the site: remove malware / injected content, update the CMS and plugins, change all passwords, check file integrity.', 'Request a review in Search Console once clean; the warning stays until Google re-checks.'];\nconst html = '<p><b>Urgent Search Console notice for ' + esc(a.domain) + '</b></p><p>' + what + '</p><p><i>' + esc(a.subject) + '</i> (received ' + esc(a.received_at.slice(0, 16).replace('T', ' ')) + ' UTC)</p><p>' + esc(a.summary.slice(0, 300)) + '</p><ol>' + steps.map(x => '<li>' + x + '</li>').join('') + '</ol><p>The Monday report keeps this notice until Search Console confirms it is resolved; reply to this e-mail if you need help with the fix.</p>';\nreturn [{ json: { ...a, email: site.email || lad.email || '', callback_url: site.callback_url || lad.callback_url || '', subject_line: '[URGENT] Search Console: ' + (a.kind === 'manual_action' ? 'manual action' : 'security issue') + ' on ' + a.domain, html, stage: 'console_alert', status: 'alert' } }];\n"
+        },
+        "id": "472c2130-38a1-5b63-95ae-79cbb7ba3b3f",
+        "name": "Alert Target",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2160,
+          -100
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "f2cf297a-ff1e-5b04-92f4-fa0124a48a80",
+                "leftValue": "={{ !!$json.email }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "58c2226b-42bf-5f3e-b96f-cc330796e287",
+        "name": "Has Email (Alert)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2400,
+          -200
+        ]
+      },
+      {
+        "parameters": {
+          "fromEmail": "Dev SEO <kinnngahmed@gmail.com>",
+          "toEmail": "={{ $json.email }}",
+          "subject": "={{ $json.subject_line }}",
+          "emailFormat": "html",
+          "html": "={{ $json.html }}",
+          "options": {
+            "appendAttribution": false
+          }
+        },
+        "id": "7d2dd231-e849-53b9-a549-2d8fa4d485c9",
+        "name": "Email Owner (Alert)",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 2.1,
+        "position": [
+          2640,
+          -200
+        ],
+        "credentials": {
+          "smtp": {
+            "id": "SEOcredSmtpGmail",
+            "name": "Gmail SMTP (SEO Agent)"
+          }
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "3af2ab31-9696-5088-bfb4-bcfabb8d0aaf",
+                "leftValue": "={{ !!$json.callback_url }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "d3abf1a8-02d5-5612-b4ae-fda55c350742",
+        "name": "Has Callback (Alert)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2400,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.callback_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ status: 'alert', stage: 'console_alert', domain: $json.domain, site_id: $json.site_id, kind: $json.kind, severity: $json.severity, subject: $json.subject, summary: $json.summary, received_at: $json.received_at }) }}",
+          "options": {
+            "timeout": 20000
+          }
+        },
+        "id": "e01e5f16-5ed9-5669-a6bb-0bde1c0118cb",
+        "name": "POST Alert",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          2640,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {},
+        "id": "18270867-a373-560c-99ad-289770c3eae7",
+        "name": "Stored",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          2160,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Console Alerts (v4.3)\nGoogle exposes **no API** for manual actions, security issues, the site-wide Pages (index coverage) report, Core Web Vitals and rich-result issue reports — but it **e-mails every user of the property** when they appear. This workflow reads the agent's mailbox over IMAP (credential **Gmail IMAP (SEO Agent)**: imap.gmail.com, 993, SSL, the agent's Gmail address + App Password) and turns Search Console notifications into typed alerts in `seo_console_alerts` (upsert by message id; other mails are ignored and never marked read).\n**Set-up per site:** add the agent's Gmail address as a user (Restricted is enough) of the property in Search Console → Settings → Users and permissions, so Google sends it the notices.\nManual actions and security issues are e-mailed / posted to the owner immediately with the fix steps; all notices appear in the Monday report and the brief for 35 days. The monthly **Search Console check-in** (form / API `mode: checkin`) is the manual safety net for the same items and for the Pages report export.",
+          "height": 340,
+          "width": 1100,
+          "color": 5
+        },
+        "id": "b29e0ebf-1db1-5344-a84b-4f1a99c64291",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -420
+        ]
+      }
+    ],
+    "connections": {
+      "Mailbox Trigger": {
+        "main": [
+          [
+            {
+              "node": "Classify Notification",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Classify Notification": {
+        "main": [
+          [
+            {
+              "node": "Relevant?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Alerts Table": {
+        "main": [
+          [
+            {
+              "node": "Load Sites (Alerts)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Sites (Alerts)": {
+        "main": [
+          [
+            {
+              "node": "Load Ladders (Alerts)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Ladders (Alerts)": {
+        "main": [
+          [
+            {
+              "node": "Alert Row",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert Row": {
+        "main": [
+          [
+            {
+              "node": "Save Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Alert": {
+        "main": [
+          [
+            {
+              "node": "Urgent?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert Target": {
+        "main": [
+          [
+            {
+              "node": "Has Email (Alert)?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Has Callback (Alert)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Relevant?": {
+        "main": [
+          [
+            {
+              "node": "Ensure Alerts Table",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Ignore",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Urgent?": {
+        "main": [
+          [
+            {
+              "node": "Alert Target",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Stored",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Email (Alert)?": {
+        "main": [
+          [
+            {
+              "node": "Email Owner (Alert)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Callback (Alert)?": {
+        "main": [
+          [
+            {
+              "node": "POST Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

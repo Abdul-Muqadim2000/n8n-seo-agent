@@ -27,9 +27,10 @@ async function run(node, input, opts = {}) {
   const t0 = Date.now();
   try {
     const src = loadCode(node);
-    const fn = new AsyncFunction('$input', '$', '$runIndex', '$getWorkflowStaticData', '$now', '$execution', '$workflow', '$json', src);
+    // 'URL' is shadowed on purpose: the n8n Code sandbox has no URL constructor (live finding 2026-10-02), so any use must fail here too
+    const fn = new AsyncFunction('$input', '$', '$runIndex', '$getWorkflowStaticData', '$now', '$execution', '$workflow', '$json', 'URL', src);
     const thisArg = { helpers: { getBinaryDataBuffer: async (i, prop) => { const b = inputItems[i] && inputItems[i].binary && inputItems[i].binary[prop]; if (!b || !b.data) throw new Error('no binary ' + prop); return Buffer.from(b.data, 'base64'); } } };
-    const out = await fn.call(thisArg, wrap(inputItems), $, opts.runIndex || 0, () => staticData, new Date(), { id: 'test-exec' }, { id: 'wf', name: 'test' }, inputItems[0] && inputItems[0].json);
+    const out = await fn.call(thisArg, wrap(inputItems), $, opts.runIndex || 0, () => staticData, new Date(), { id: 'test-exec' }, { id: 'wf', name: 'test' }, inputItems[0] && inputItems[0].json, undefined);
     const items = toItems(out);
     store[node] = items;
     results.push({ scenario, node, ok: true, ms: Date.now() - t0, items });

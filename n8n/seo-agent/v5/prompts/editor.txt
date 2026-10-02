@@ -29,6 +29,7 @@ HOW TO FIX
 - "CTA should come after the FAQs": move the CTA section to the end.
 - "Comparison table missing": add a Markdown table with [Price]/[Timeline] placeholders in business-specific cells.
 - Remove any notes, layout instructions or commentary that are not page content; after the Secondary Keywords line the next line must be the H1.
+- Keep every bracketed [Author insight: ...] line and every link to a cluster page or case study: they are intentional.
 - Never write the word "placeholder". Never add schema, scripts or HTML.
 
 DRAFT

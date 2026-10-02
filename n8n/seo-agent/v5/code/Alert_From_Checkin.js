@@ -1,0 +1,5 @@
+// A reported manual action / security issue also becomes a console alert (so the Monday report and the brief carry it).
+const p = $('Parse Check-in').first().json; const r = p.checkin_row; const out = [];
+if (r.manual_action) out.push({ json: { site_id: r.site_id, domain: r.domain, kind: 'manual_action', severity: 'critical', subject: 'Manual action reported in the ' + r.month + ' check-in', summary: r.notes || 'reported by the site owner', received_at: r.submitted_at, message_id: 'checkin:' + r.site_id + ':' + r.month + ':manual_action', status: 'new', source: 'checkin' } });
+if (r.security_issue) out.push({ json: { site_id: r.site_id, domain: r.domain, kind: 'security', severity: 'critical', subject: 'Security issue reported in the ' + r.month + ' check-in', summary: r.notes || 'reported by the site owner', received_at: r.submitted_at, message_id: 'checkin:' + r.site_id + ':' + r.month + ':security', status: 'new', source: 'checkin' } });
+return out.length ? out : [{ json: { skip: true } }];

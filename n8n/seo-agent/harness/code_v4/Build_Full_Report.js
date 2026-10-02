@@ -39,6 +39,55 @@ const yn = (v) => { const t = String(v || '').toLowerCase(); const c = t === 'ye
 const youTag = (r) => r.is_you ? '<b>' + esc(r.domain) + ' (you)</b>' : esc(r.domain);
 const diffLabel = (v) => v == null ? 'N/A' : v + (v < 30 ? ' (easy)' : v < 50 ? ' (medium)' : v < 70 ? ' (hard)' : ' (very hard)');
 
+// ---- Search Console & site structure section (v4.3) ----
+const scSection = (a, num) => {
+  const sc = a.search_console || {}, st = a.site_structure || {};
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const n2 = (v) => (Number(v) || 0).toLocaleString('en-GB');
+  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  let h = `<h2 class="pb">${num}. Search Console &amp; Site Structure</h2>`;
+  if (st.crawled_pages != null) {
+    const db = st.depth_buckets || {}; const sm = st.sitemap || {};
+    h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` +
+      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td></tr></table>` +
+      ((st.sections || []).length ? `<table class="ct"><tr><th>Section</th><th>Pages crawled</th></tr>` + st.sections.map(s => `<tr><td>${e2(s.section)}</td><td>${n2(s.pages)}</td></tr>`).join('') + `</table>` : '') +
+      `<p>XML sitemap: ${sm.status === 200 ? n2(sm.urls) + ' URLs' + (sm.is_index ? ' (index of ' + n2(sm.children) + ' sitemaps)' : '') : 'not readable at ' + e2(sm.url)}${st.indexable_not_in_sitemap ? '; ' + n2(st.indexable_not_in_sitemap) + ' indexable pages missing from it' : ''}${st.sitemap_only ? '; ' + n2(st.sitemap_only) + ' sitemap URLs that no internal link reaches' : ''}${st.sitemap_broken ? '; ' + n2(st.sitemap_broken) + ' sitemap URLs not returning 200' : ''}.</p>`;
+  }
+  h += `<h3>Google Search Console</h3>`;
+  if (!sc.connected) h += `<p>Not connected (${e2(sc.error || 'no access')}). Add the service account as a Full user of the property in Search Console to get submitted-sitemap status, index coverage and search performance in this audit.</p>`;
+  else {
+    const t = sc.totals;
+    h += `<p>Property <b>${e2(sc.property)}</b> (${e2(sc.permission)}).</p>`;
+    if (t) h += `<p>Last 28 days (${e2(t.period.start)} to ${e2(t.period.end)}): <b>${n2(t.clicks)}</b> clicks, <b>${n2(t.impressions)}</b> impressions, CTR ${(t.ctr * 100).toFixed(2)}%, average position ${t.position}; ${n2(sc.pages_with_impressions)} pages and ${n2(sc.queries_with_impressions)} queries with impressions.</p>`;
+    h += `<table class="ct"><tr><th>Submitted sitemap</th><th>URLs</th><th>Last read</th><th>Errors</th><th>Warnings</th></tr>` + ((sc.sitemaps || []).length ? sc.sitemaps.map(s => `<tr><td>${e2(s.path)}</td><td>${n2(s.urls)}</td><td>${e2(String(s.downloaded || '').slice(0, 10) || (s.pending ? 'pending' : '—'))}</td><td>${n2(s.errors)}</td><td>${n2(s.warnings)}</td></tr>`).join('') : `<tr><td colspan="5">none submitted${sc.sitemaps_error ? ' (' + e2(sc.sitemaps_error) + ')' : ''}</td></tr>`) + `</table>`;
+    const covRows = Object.entries(sc.coverage || {});
+    if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} sampled pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
+    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}</td></tr>`).join('') + `</table>`;
+    if ((sc.top_queries || []).length) h += `<table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_queries.slice(0, 10).map(q => `<tr><td>${e2(q.query)}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
+    if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_pages.slice(0, 10).map(q => `<tr><td>${e2(p2(q.page))}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
+  }
+  return h;
+};
+// ---- v4.5 sections: since the last audit, internal links to add, brand & entity, fix pack ----
+const v45Section = (a, num) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  const D = a.audit_diff || {}; const IL = a.internal_links || []; const E = a.entity || {}; const FP = a.fix_pack || {};
+  let h = `<h2 class="pb">${num}. Progress, Links, Brand & Fix Pack</h2><h3>Since the last audit</h3>`;
+  if (D.baseline !== false) h += `<p>${e2(D.summary || 'First audit stored.')}</p>`;
+  else {
+    h += `<p>Previous audit ${e2(String(D.previous.audited_at).slice(0, 10))} (${D.days_since} days ago): score ${D.previous.health_score} → <b>${a.health_score}</b> (${D.score_delta > 0 ? '+' : ''}${D.score_delta}). ${e2(D.summary)}.</p>`;
+    const rows = [...D.fixed.slice(0, 15).map(f => ['<span class="ok">fixed</span>', f.severity, f.title]), ...D.new.slice(0, 15).map(f => ['<span class="bad">new</span>', f.severity, f.title]), ...D.open.slice(0, 15).map(f => ['still open', f.severity + (f.was && f.was !== f.severity ? ' (was ' + f.was + ')' : ''), f.title + (f.affected != null && f.affected_before != null && f.affected !== f.affected_before ? ' — ' + f.affected_before + ' → ' + f.affected + ' affected' : '')])];
+    if (rows.length) h += `<table class="ct"><tr><th>Status</th><th>Severity</th><th>Finding</th></tr>` + rows.map(r => `<tr><td>${r[0]}</td><td>${e2(r[1])}</td><td>${e2(r[2])}</td></tr>`).join('') + `</table>`;
+  }
+  h += `<h3>Internal links to add</h3>`;
+  h += IL.length ? `<p>Pages with few or no links pointing to them, and strong pages on the same topic that can link to them (also in the fix pack as internal-links.csv).</p><table class="ct"><tr><th>On page</th><th>Link to</th><th>Anchor text</th><th>Why</th></tr>` + IL.slice(0, 15).map(l => `<tr><td>${e2(p2(l.from_url))}</td><td>${e2(p2(l.to_url))}</td><td>${e2(l.anchor)}</td><td>${e2(l.reason)}</td></tr>`).join('') + `</table>` : `<p>No page needs extra internal links.</p>`;
+  h += `<h3>Brand & entity consistency</h3>`;
+  if (!E.business_name) h += `<p>Not checked: no business name on file. Set up the business profile so name, address and phone can be compared with Google Business Profile.</p>`;
+  else { const g = E.gbp; h += `<table class="ct"><tr><th></th><th>Google Business Profile</th><th>Your site / profile</th></tr><tr><td>Name</td><td>${e2(g ? g.title : 'not found')}</td><td>${e2(E.business_name)}</td></tr><tr><td>Phone</td><td>${e2(g ? g.phone : '—')}</td><td>${e2([(E.homepage_org || {}).telephone, ...(E.homepage_phones || [])].filter(Boolean).slice(0, 2).join(', ') || '—')}</td></tr><tr><td>Website</td><td>${e2(g ? g.website : '—')}</td><td>${e2(a.domain)}</td></tr>` + (g ? `<tr><td>Rating</td><td>${e2(g.rating != null ? g.rating + '★ (' + (g.reviews || 0) + ' reviews)' : '—')}${g.claimed ? '' : ' · <span class="bad">unclaimed</span>'}</td><td></td></tr>` : '') + `<tr><td>Official profiles (sameAs)</td><td colspan="2">${e2(((E.homepage_org || {}).sameAs || []).join(', ') || 'none in the homepage schema')}</td></tr></table>`; }
+  h += `<h3>Fix pack (attached)</h3>` + ((FP.files || []).length ? `<table class="ct"><tr><th>File</th><th>What to do with it</th></tr>` + FP.files.map(f => `<tr><td>${e2(f.name)}</td><td>${e2(f.purpose)}</td></tr>`).join('') + `</table>` : `<p>No files.</p>`);
+  return h;
+};
 const findings = a.findings || [];
 const counts = a.issue_counts || {};
 const byCat = (cat) => findings.filter(f => f.category === cat);
@@ -90,7 +139,7 @@ html += `<div class="cover">
 </div>`;
 
 // ---------- Contents ----------
-const TOC = ['Executive Summary', 'Scorecard', 'Competitor Benchmark', 'Keywords by Search Intent', 'Authority & Backlinks', 'Content Quality & E-E-A-T', 'Performance & Core Web Vitals', 'AI Search Visibility', 'Structured Data (Schema)', 'Crawlability & Indexing', 'On-Page SEO', 'Images, Security & Technical', 'What Works Well', 'Action Plan', 'Leading Indicators', 'Methodology & Data Sources'];
+const TOC = ['Executive Summary', 'Scorecard', 'Competitor Benchmark', 'Keywords by Search Intent', 'Authority & Backlinks', 'Content Quality & E-E-A-T', 'Performance & Core Web Vitals', 'AI Search Visibility', 'Structured Data (Schema)', 'Crawlability & Indexing', 'On-Page SEO', 'Images, Security & Technical', 'Search Console & Site Structure (12b)', 'Progress, Links, Brand & Fix Pack (12c)', 'What Works Well', 'Action Plan', 'Leading Indicators', 'Methodology & Data Sources'];
 html += '<h2>Contents</h2><ol class="toc">' + TOC.map(t => '<li>' + t + '</li>').join('') + '</ol>';
 
 // ---------- 1. Executive summary ----------
@@ -232,6 +281,9 @@ html += section(10, 'Crawlability & Indexing', ['Crawlability & Indexing']);
 html += section(11, 'On-Page SEO', ['On-Page']);
 html += section(12, 'Images, Security & Technical', ['Images', 'Security', 'Technical']);
 
+html += scSection(a, '12b');
+html += v45Section(a, '12c');
+
 // ---------- 13. What works ----------
 html += `<h2 class="pb">13. What Works Well</h2><ul class="good">` + (a.what_works || []).map(w => `<li>${esc(w)}</li>`).join('') + `</ul>`;
 
@@ -334,6 +386,8 @@ return [{
     callback_url: d.callback_url || '',
     via_webhook: !!d.via_webhook,
     health_score: a.health_score,
+    search_console: a.search_console || null,
+    site_structure: a.site_structure || null,
     grade: a.grade,
     issue_counts: counts,
     top_issues: top.map(f => f.title),

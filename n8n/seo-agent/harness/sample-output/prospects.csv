@@ -1,0 +1,17 @@
+site,prospect_domain,type,status,authority,spam,detail,source_url,target_url,first_seen,last_seen,won_at,outreach_subject,outreach_body,note
+"northwind-erp.com","peppol.org","lost","new","598","0","Linked to / from https://peppol.org/members/full-members-list/ until 2026-07-12","https://peppol.org/members/full-members-list/","https://techand.ai/","2026-10-02T12:48:02.732Z","2026-10-02T12:48:02.732Z","","Your Peppol members list and Northwind ERP","Hello,
+
+Your full-members list used to link to our site; the link seems to have gone during an update. Could you restore it to https://northwind-erp.com/ ? Thank you.
+
+[Your name], Northwind ERP",""
+"northwind-erp.com","robuta.com","lost","new","192","0","Linked to / from https://robuta.com/?q=business+impact until 2026-09-10","https://robuta.com/?q=business+impact","https://techand.ai/","2026-10-02T12:48:02.732Z","2026-10-02T12:48:02.732Z","","","",""
+"northwind-erp.com","tradenews.ae","reclaim","new","0","0","Links to /old-odoo-pricing/ (HTTP 404): 301-redirect it to /","","https://northwind-erp.com/","2026-10-02T12:48:02.732Z","2026-10-02T12:48:02.732Z","","","",""
+"northwind-erp.com","erpforum.org","reclaim","new","0","0","Links to /old-odoo-pricing/ (HTTP 404): 301-redirect it to /","","https://northwind-erp.com/","2026-10-02T12:48:02.732Z","2026-10-02T12:48:02.732Z","","","",""
+"northwind-erp.com","gulfbusiness.example.org","mention","new","310","2","Mentions you without a link: ERP partners to watch in 2026","https://gulfbusiness.example.org/erp-partners-2026/","https://northwind-erp.com/","2026-10-02T12:48:02.732Z","2026-10-02T12:48:02.732Z","","Thanks for mentioning Northwind ERP","Hello,
+
+Thank you for naming Northwind ERP in your 2026 ERP partners piece. Would you link the mention to https://northwind-erp.com/ so readers can find us? 
+
+[Your name], Northwind ERP",""
+"northwind-erp.com","mof.gov.ae","gap","new","18","0","Links to azentio.com, cleartax.com (18 links), not to you","","https://northwind-erp.com/e-invoicing-uae/","2026-10-02T12:48:02.732Z","2026-10-02T12:48:02.732Z","","","",""
+"northwind-erp.com","uae-asp.ae","gap","won","25","0","old","","","2026-08-01T00:00:00.000Z","2026-08-01T00:00:00.000Z","2026-10-02T12:48:02.732Z","s","b","emailed Ali"
+"northwind-erp.com","zawya.com","ai_source","new","0","0","Cited 4x in AI answers","","","2026-10-01T00:00:00.000Z","2026-10-01T00:00:00.000Z","","","",""

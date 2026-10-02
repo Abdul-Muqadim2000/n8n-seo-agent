@@ -1,0 +1,49 @@
+# Tech&
+
+> Empowering businesses with innovative technology solutions for enterprise automation and digital transformation across UAE and GCC.
+
+## Services
+
+- [Dynamics 365 Managed Services & Support in UAE](https://www.techand.ai/dynamics-365-managed-services-uae): Tech& provides Dynamics 365 managed services and support in UAE for monitoring, troubleshooting, integrations, and maintenance.
+
+## Guides and articles
+
+- [Insights](https://www.techand.ai/insights): Perspectives on AI, Dynamics 365, cloud, and UAE e-invoicing compliance from Tech& — practical guidance for enterprise digital transformation.
+- [Top Peppol E-Invoicing Software Features Every UAE CFO Must Look For](https://www.techand.ai/insights/top-peppol-e-invoicing-software-features-every-uae-cfo-must-look-for): Discover the key Peppol e-invoicing software features UAE CFOs should evaluate for compliance, integration, automation and scalability.
+- [How Microsoft Dynamics 365 Finance & Operations Supports UAE VAT Compliance](https://www.techand.ai/insights/how-microsoft-dynamics-365-finance-operations-supports-uae-vat-compliance): Learn how Microsoft Dynamics 365 supports UAE VAT, FTA reporting, tax processes, and financial reconciliation.
+- [Your Current PDF Invoices Will Be Illegal in the UAE by 2027 (And How to Fix It)](https://www.techand.ai/insights/your-current-pdf-invoices-will-be-illegal-in-the-uae-by-2027-and-how-to-fix-it): Learn how UAE e-invoicing will affect PDF invoices and how businesses can prepare their ERP and accounting systems.
+- [Microsoft's Saudi Arabia East Datacenter Goes Live in November 2026: What It Means for Your D365 Roadmap](https://www.techand.ai/insights/microsofts-saudi-arabia-east-datacenter-goes-live-in-november-2026-what-it-means-for-your-d365-roadmap): Microsoft has confirmed that its Saudi Arabia East Azure region will become available to customers in November 2026. For organisations across the GCC…
+- [Value Driven Innovation through Automation](https://www.techand.ai/insights/value-driven-innovation-automation): Digital transformation is no longer defined by system deployments alone. It's measured by quantifiable business impact. Organizations and businesses…
+- [Agentic AI is Revolutionizing the Industries](https://www.techand.ai/insights/agentic-ai): Customer experience has evolved into one of the most decisive competitive differentiators for modern enterprises. Insight-only AI and rule-based automation…
+- [How Customer Services Are Achieving Productivity with AI](https://www.techand.ai/insights/autonomous-ai-customer-service): Enterprise leaders are facing more service requests, higher expectations and tighter budgets. Without smart technology, keeping up seems impossible for…
+- [Data is Going to Be Your New Sovereign Asset](https://www.techand.ai/insights/data-sovereign-asset): Modern leadership runs on data. Executives are expected to make high-stakes decisions quickly, backed by reliable insights. However, trust and the capacity…
+- [How Microsoft 365 Copilot Is Changing Business Productivity](https://www.techand.ai/insights/how-microsoft-365-copilot-is-changing-business-productivity): Discover how Microsoft 365 Copilot helps businesses automate repetitive work, improve collaboration, analyze data, and build smarter workflows with AI.
+- [The Financial Reporting Trap: Why D365 F&O Users Still Reach for Excel](https://www.techand.ai/insights/the-financial-reporting-trap-why-d365-fo-users-still-reach-for-excel): Discover why D365 F&O users still rely on Excel for financial reporting, the limitations behind the Excel trap, and how to streamline reporting.
+- [The Cost of Non-Compliance: UAE E-Invoicing Penalties & Mitigation Costs](https://www.techand.ai/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs): Learn the true cost of UAE e-invoicing non-compliance, mitigation costs, ERP readiness, and UAE e-invoicing compliance requirements for businesses.
+- [Upgrading Your ERP for UAE Peppol PINT-AE Compliance: A Technical Integration Guide](https://www.techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance-a-technical-integration-guide): Upgrade your ERP for UAE Peppol PINT-AE compliance. Learn technical integration, e-invoicing requirements, and best practices for UAE businesses.
+
+## Case studies
+
+- [Dynamics 365 Project Operations in UAE](https://www.techand.ai/dynamics-365-project-operations-uae): Dynamics 365 Project Operations in the UAE: quoting, resource scheduling, time and expense, and project billing on one system, set up by certified consultants.
+
+## Pages
+
+- [AI Consulting & Copilot Advisory Services in UAE](https://www.techand.ai/ai-copilot-advisory-uae): Explore AI consulting and Microsoft Copilot advisory services in UAE, from strategy and readiness to adoption and AI governance.
+- [Business Central Implementation in UAE](https://www.techand.ai/business-central-implementation-uae): Tech& is a Microsoft Business Central Partner helping UAE businesses implement and optimize their ERP.
+- [Business Central Support in UAE](https://www.techand.ai/business-central-post-go-live-support-uae): Get Business Central support in UAE from Tech& for post-go-live issues, maintenance, updates, optimization, and ongoing improvements.
+- [Tech& Capabilities](https://www.techand.ai/capabilities): Enterprise platforms, AI, cloud, and data services from Tech& — Microsoft-powered capabilities driving measurable transformation across the UAE & GCC.
+- [Tech& Capabilities](https://www.techand.ai/capabilities/business-applications): Dynamics 365 across finance, operations, sales, and service — Tech& connects your enterprise into one intelligent system for measurable efficiency.
+- [Tech& Capabilities](https://www.techand.ai/capabilities/cloud-services): Secure, scalable Azure platforms from Tech& — infrastructure modernization, cost optimization, and stronger security for enterprise workloads in the GCC.
+- [Tech& Capabilities](https://www.techand.ai/capabilities/data): Turn scattered data into decision-ready insight with Microsoft Fabric, analytics, and governance — a single source of truth for GCC enterprises.
+- [Dynamics 365 Finance & Operations Implementation & Rollout Services](https://www.techand.ai/d365-finance-operations-implementation-rollout-uae): Implement Dynamics 365 Finance & Operations with Tech&, a trusted Microsoft Partner in UAE
+- [Certified Microsoft Dynamics 365 Business Central Partner in UAE](https://www.techand.ai/dynamics-365-business-central-uae): Tech& is a Dynamics 365 Business Central Partner in UAE, offering ERP solutions, migration, integration, Power BI, and ongoing support.
+- [Dynamics 365 On-Premises to Cloud Migration Services in UAE](https://www.techand.ai/dynamics-365-cloud-migration-uae): Tech& provides Dynamics 365 migration services in UAE, helping businesses move from on-premises ERP to secure, scalable cloud solutions.
+- [Dynamics 365 CRM Services in UAE](https://www.techand.ai/dynamics-365-crm-uae): Tech& Dynamics 365 CRM services in UAE for implementation, integration, automation, customer engagement, support, and optimization.
+- [Microsoft Dynamics 365 Finance & Operations Partner in UAE](https://www.techand.ai/dynamics-365-finance-and-operations-uae): Tech& is a trusted Microsoft Dynamics Partner in UAE offering Dynamics 365 Finance & Operations implementation, integration, and support.
+- [Industries We Serve](https://www.techand.ai/industries): Industry-specific digital transformation across the UAE & GCC — Tech& helps organizations improve efficiency and drive measurable business outcomes.
+- [NAV & GP Migration to Business Central in UAE](https://www.techand.ai/nav-gp-migration-to-business-central-uae): Migrate from Dynamics NAV or GP to Business Central with Tech&. Get support for data migration, customizations, testing, and go-live in the UAE.
+- [Power Platform & Analytics Services in UAE](https://www.techand.ai/power-platform-analytics-uae)
+
+## Company
+
+- [Contact Tech&](https://www.techand.ai/contact-us): Talk to Tech& about enterprise automation, Dynamics 365, and digital transformation across the UAE & GCC. Let's turn technology into business impact.

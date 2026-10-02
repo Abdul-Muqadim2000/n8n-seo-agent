@@ -333,6 +333,7 @@ if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review
 if (!input.authority) not_assessed.push('Backlinks and referring domains');
 if (!input.site_keywords) not_assessed.push('Keyword rankings by search intent and keyword gap');
 if (!input.ai_visibility) not_assessed.push('AI answer visibility (AI Overviews, ChatGPT brand mentions)');
+if (!(input.search_console && input.search_console.connected)) not_assessed.push('Search Console: submitted sitemaps, index coverage and search performance (connect the service account to the property)');
 
 return [{
   json: {
@@ -353,6 +354,9 @@ return [{
       issue_counts: counts,
       findings,
       what_works: whatWorks,
+      search_console: input.search_console || null,
+      site_structure: input.site_structure || null,
+      entity: input.entity || null,
       measurements: probe.measurements || {},
       sampled_pages: (input.html_analysis || {}).sampled_pages || [],
       competitor_benchmark: input.competitor_benchmark || null,

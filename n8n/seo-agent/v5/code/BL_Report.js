@@ -1,0 +1,42 @@
+// Backlink report per site: monthly FULL report (profile vs last month, 12-month history, lost / new / spammy links, broken links to reclaim,
+// link gap, unlinked mentions, the prospect pipeline with outreach drafts) or, on light weeks, a short ALERT e-mail when an important link was
+// lost or spam arrived. Attachments: prospects.csv and, when needed, disavow-candidates.txt. Sites with nothing to report stay quiet.
+/*__REPORT_KIT__*/
+const sites = $('Parse Backlinks').all().map(i => i.json);
+let rows = []; try { rows = $('Prospect Rows').all().map(i => i.json).filter(r => !r.skip); } catch (e) {}
+let stored = []; try { stored = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}
+const csvCell = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+const TYPE = { lost: 'Lost link — ask to restore', mention: 'Unlinked mention — ask for the link', gap: 'Links to competitors', ai_source: 'Cited by AI answers', reclaim: 'Broken page — redirect' };
+return sites.filter(s => s.deliver).map(s => {
+  const S = s.summary, P = s.previous; const full = s.mode === 'full';
+  const pipe = [...rows.filter(r => r.site_id === s.site_id), ...stored.filter(x => x.site_id === s.site_id && !rows.some(r => r.site_id === s.site_id && r.prospect_domain === x.prospect_domain && r.type === x.type))];
+  const won = pipe.filter(r => r.status === 'won' && String(r.won_at || '').slice(0, 10) === s.checked_at.slice(0, 10));
+  const counts = ['new', 'contacted', 'won', 'rejected', 'ignored'].map(st => st + ' ' + pipe.filter(r => (r.status || 'new') === st).length).join(' · ');
+  const dv = (cur, prev) => P ? (cur - prev > 0 ? '<span style="color:#15803d">+' + n(cur - prev) + '</span>' : cur - prev < 0 ? '<span style="color:#b91c1c">' + n(cur - prev) + '</span>' : 'no change') : 'first check';
+  let html = '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:900px">';
+  html += '<h2 style="margin:0 0 2px;font-size:20px">' + (full ? 'Backlinks: ' : 'Backlink alert: ') + esc(s.domain) + '</h2>' + p_(esc(s.checked_at.slice(0, 10)) + ' · changes since ' + esc(s.since.slice(0, 10)) + (full ? ' · monthly report' : ' · weekly watch') + (s.on_demand ? ' · on-demand run' : ''), true);
+  html += alertBox(s.alerts.filter(a => full || a.level !== 'low'));
+  if (!S.available) html += p_('The Backlinks API returned no summary (' + esc(S.error || 'no data') + ').', true);
+  html += '<table style="border-collapse:collapse;margin:8px 0"><tr>' + tile('Referring domains', n(S.referring_domains), P ? dv(S.referring_domains, P.referring_domains) : '') + tile('Backlinks', n(S.backlinks), P ? dv(S.backlinks, P.backlinks) : '') + tile('Authority (0-1000)', n(S.rank), P ? dv(S.rank, P.rank) : '') +
+    tile('Spam score', S.spam_score + '/100', S.spam_score >= 40 ? '<span style="color:#b91c1c">high</span>' : 'ok') + tile('New / lost', n(s.new_links.length) + ' / ' + n(s.lost.length), 'since ' + s.since.slice(0, 10)) + '</tr></table>';
+  if (s.important_lost.length || !full) html += h3('Important links lost') + table(['From', 'Authority', 'Pointed to', 'Last seen', 'What to do'], s.important_lost.map(l => [link(l.from_url, l.from_domain), n(l.domain_rank), esc(pathOf(l.to_url)), esc(l.last_seen), 'Ask the site owner to restore it (draft below); check the page still exists']), 'none');
+  if (full) {
+    if (s.timeseries.length) html += h3('Last 12 months') + table(['Month', 'Referring domains', 'Backlinks'], s.timeseries.slice(-12).map(t => [esc(t.month), n(t.referring_domains), n(t.backlinks)]));
+    html += h3('New links') + table(['From', 'Authority', 'Anchor', 'First seen', ''], s.new_links.slice(0, 20).map(l => [link(l.from_url, l.from_domain), n(l.domain_rank), esc(l.anchor), esc(l.first_seen), l.spammy ? '<span style="color:#b91c1c">spammy</span>' : (l.dofollow ? 'follow' : 'nofollow')]), 'no new links since the last check');
+    html += h3('Links to broken pages (reclaim with a 301)') + table(['Broken page', 'Status', 'Links', 'From', 'Redirect to'], s.reclaim.map(r => [esc(pathOf(r.broken_url)), esc(r.status || 'error'), n(r.links), esc(r.domains.join(', ')), link(r.redirect_to)]), 'none — every linked page works');
+    html += h3('Link gap: sites that link to ' + (s.competitors.length ? s.competitors.join(', ') : 'your competitors') + ' but not to you') + (s.gap_error ? p_('Not available: ' + esc(s.gap_error), true) : '') + table(['Site', 'Authority', 'Links to'], s.gap.slice(0, 15).map(g => [esc(g.domain), n(g.rank), esc(g.links_to.join(', '))]), s.competitors.length ? 'no gap found' : 'no competitors known yet — add them with Site Admin action "monitors"');
+    html += h3('Unlinked mentions') + table(['Site', 'Page', 'Authority'], s.mentions.map(m => [esc(m.domain), link(m.url, m.title || m.url), n(m.domain_rank)]), 'no pages found that name you without linking');
+  }
+  if (s.spammy.length) html += h3('Spammy new links') + table(['From', 'Spam', 'Anchor'], s.spammy.slice(0, 12).map(l => [esc(l.from_domain), n(l.spam), esc(l.anchor)])) + p_('Google ignores most spam links on its own. ' + (s.disavow_text ? 'A disavow list is attached for review: upload it only for a manual action or a paid-link pattern you did not create.' : ''), true);
+  const drafts = pipe.filter(r => r.outreach_body && (r.status || 'new') === 'new').slice(0, 8);
+  if (full || drafts.length) html += h3('Outreach — this month\'s drafts') + (drafts.length ? drafts.map(r => '<div style="border:1px solid #e2e8f0;padding:8px 10px;margin:6px 0"><div style="font-size:12px;color:#64748b">' + esc(r.prospect_domain) + ' · ' + esc(TYPE[r.type] || r.type) + ' · ' + esc(r.detail) + '</div><div style="font-weight:600;font-size:13px;margin-top:4px">' + esc(r.outreach_subject) + '</div><pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;margin:4px 0 0">' + esc(r.outreach_body) + '</pre></div>').join('') : p_('No new drafts this month.', true));
+  if (full) html += h3('Prospect pipeline') + p_(esc(counts) + (won.length ? ' · <b>won this month: ' + esc(won.map(w => w.prospect_domain).join(', ')) + '</b>' : '')) + p_('Mark a prospect as contacted / won / rejected with Site Admin action "prospect" (domain, prospect_domain, status). "Won" is also set automatically when the site starts linking to you. Full list: prospects.csv.', true);
+  html += h3('How this works') + p_('Every Monday the monitor checks for lost and new links (alert e-mail only when something important happened); the first run of each month is the full report. Data: DataForSEO Backlinks and Content Analysis. Cost this run: $' + s.cost_usd.toFixed(2) + '.', true) + '</div>';
+  const csv = ['site,prospect_domain,type,status,authority,spam,detail,source_url,target_url,first_seen,last_seen,won_at,outreach_subject,outreach_body,note'].concat(pipe.map(r => [r.domain, r.prospect_domain, r.type, r.status, r.rank, r.spam_score, r.detail, r.source_url, r.target_url, r.first_seen, r.last_seen, r.won_at, r.outreach_subject, r.outreach_body, r.note].map(csvCell).join(','))).join('\n');
+  const subject = (full ? '[Backlinks] ' : '[Backlink alert] ') + s.domain + ' — ' + n(S.referring_domains) + ' referring domains' + (s.important_lost.length ? ' · ' + s.important_lost.length + ' important link(s) lost' : '') + (s.spammy.length >= 3 ? ' · ' + s.spammy.length + ' spammy' : '') + (won.length ? ' · ' + won.length + ' won' : '');
+  const file_name = 'backlinks-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + s.checked_at.slice(0, 10) + '.html';
+  const binary = { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } };
+  if (full && pipe.length) binary.prospects_csv = { data: b64(csv), mimeType: 'text/csv', fileName: 'prospects-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '.csv', fileExtension: 'csv' };
+  if (s.disavow_text) binary.disavow_txt = { data: b64(s.disavow_text), mimeType: 'text/plain', fileName: 'disavow-candidates-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '.txt', fileExtension: 'txt' };
+  return { json: { ...s, refdomains: undefined, pipeline: { counts, won: won.map(w => w.prospect_domain), total: pipe.length }, prospects: pipe.slice(0, 60), subject, html, file_name, status: 'progress', stage: 'backlinks' }, binary };
+});

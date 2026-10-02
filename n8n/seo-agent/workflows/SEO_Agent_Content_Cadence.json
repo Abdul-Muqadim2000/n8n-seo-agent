@@ -1,0 +1,1424 @@
+[
+  {
+    "id": "SEOagentCadence1",
+    "name": "SEO Agent — Content Cadence",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 1800,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "weeks",
+                "weeksInterval": 1,
+                "triggerAtDay": [
+                  1
+                ],
+                "triggerAtHour": 10,
+                "triggerAtMinute": 0
+              }
+            ]
+          }
+        },
+        "id": "51d29042-f8b4-5857-bd92-9201142950c7",
+        "name": "Weekly Schedule",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "id": "8570c256-4492-5dcb-a12f-245792cd7458",
+        "name": "Manual Run",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_content_log",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "page_type",
+                "type": "string"
+              },
+              {
+                "name": "existing_page_url",
+                "type": "string"
+              },
+              {
+                "name": "rung",
+                "type": "number"
+              },
+              {
+                "name": "ladder_id",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "started_at",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "published_url",
+                "type": "string"
+              },
+              {
+                "name": "published_at",
+                "type": "string"
+              },
+              {
+                "name": "week",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "4884052d-ee84-5664-a1b6-b2fe6dd4ce3c",
+        "name": "Ensure Log Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          220,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_cadence",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "pages_per_week",
+                "type": "number"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "50900310-4c2a-557f-a376-9c86eb3831de",
+        "name": "Ensure Cadence Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          440,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_trends",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "checked_at",
+                "type": "string"
+              },
+              {
+                "name": "period_end",
+                "type": "string"
+              },
+              {
+                "name": "direction",
+                "type": "string"
+              },
+              {
+                "name": "change_pct",
+                "type": "number"
+              },
+              {
+                "name": "peak_date",
+                "type": "string"
+              },
+              {
+                "name": "latest",
+                "type": "number"
+              },
+              {
+                "name": "average",
+                "type": "number"
+              },
+              {
+                "name": "rising",
+                "type": "string"
+              },
+              {
+                "name": "top",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "bcb17771-da65-5022-8f3e-3d01e48428a3",
+        "name": "Ensure Trends Table (Cadence)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "665d201d-d653-5044-bb75-5bc2840c4723",
+        "name": "Load Sites",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cadence"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "3ad50f03-f73e-5921-a040-0a9f68c3d532",
+        "name": "Load Cadence",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ladders"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "8d585c09-3108-5007-bfa2-df5bfc1c204c",
+        "name": "Load Ladders",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_query_history"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "593c041a-d96f-5c6d-9333-4e5099a2c3d2",
+        "name": "Load Query History",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_trends"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "944c3a53-46e1-5f6e-bbec-9d5f513cc048",
+        "name": "Load Trends",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1760,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_content_log"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "a46ec22c-135b-5ca1-927b-5dd50beb3086",
+        "name": "Load Content Log",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1980,
+          0
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Content cadence: picks this week's blog topics per site (pages per week from seo_cadence, max 3), in this order: the keyword ladder's next\n// planned pages (rung order, with the ladder's internal links), striking-distance queries from Search Console (positions 4-20 with impressions:\n// strengthen the page that already ranks), rising related searches from Google Trends. Skips keywords written in the last 90 days, pages already\n// written or published, brand queries, and paused sites. Each pick becomes a content run (mode keyword, force_content) that delivers the blog package.\nconst CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4 };\nlet trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}\nif (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), cad = rowsOf('Load Cadence').filter(r => r.site_id), ladders = rowsOf('Load Ladders').filter(r => r.ladder_id && r.keyword), qh = rowsOf('Load Query History'), trends = rowsOf('Load Trends'), logs = rowsOf('Load Content Log').filter(r => r.keyword);\nconst cadOf = new Map(cad.map(c => [c.site_id, c]));\nconst want = normD(trigger.domain) || String(trigger.site_id || '').trim(); const on_demand = !!want; const dry_run = !!trigger.dry_run;\nconst now = new Date(); const nowIso = now.toISOString(); const week = nowIso.slice(0, 10);\nconst byDomain = new Map(); for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d }); }\nfor (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }\nlet list = [...byDomain.values()];\nif (on_demand) list = list.filter(s => s.domain === want || s.site_id === want); else list = list.filter(s => String(s.status || 'active') !== 'paused');\nconst byRung = (a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0) || (Number(a.page_no) || 0) - (Number(b.page_no) || 0);\nconst out = [];\nfor (const s of list) {\n  const c = cadOf.get(s.site_id);\n  let pages = (on_demand && trigger.pages != null && trigger.pages !== '') ? Number(trigger.pages) : (c ? (String(c.status || 'active') === 'off' ? 0 : Number(c.pages_per_week)) : (on_demand ? CONFIG.default_pages_per_week : 0));\n  pages = Math.min(CONFIG.max_pages_per_week, Math.max(0, pages || 0));\n  if (!pages) continue;\n  const slog = logs.filter(l => normD(l.domain) === s.domain);\n  const recent = new Set(slog.filter(l => l.status === 'published' || (now - new Date(l.started_at || 0)) < CONFIG.skip_recent_days * 864e5).map(l => norm(l.keyword)));\n  const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort(byRung);\n  const ladderKw = new Set(lrows.map(l => norm(l.keyword)));\n  for (const l of lrows) if (l.status === 'writing' || l.status === 'published') recent.add(norm(l.keyword));\n  const cands = [];\n  const top = lrows.find(l => Number(l.rung) === 4);\n  for (const l of lrows) {\n    if (String(l.status || 'planned') !== 'planned' || recent.has(norm(l.keyword))) continue;\n    const links = [];\n    if (Number(l.rung) === 4) { for (const r of lrows.filter(x => Number(x.rung) !== 4 && x.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword }); }   // the top page is the hub: it lists the whole cluster (12, was 6; v4.4)\n    else { if (top && top.target_url && top.keyword !== l.keyword) links.push({ url: top.target_url, role: 'top', keyword: top.keyword }); const sib = lrows.find(x => Number(x.rung) === Number(l.rung) && x.keyword !== l.keyword && x.target_url); if (sib) links.push({ url: sib.target_url, role: 'sibling', keyword: sib.keyword }); }\n    cands.push({ keyword: l.keyword, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '', source: 'ladder', ladder_id: l.ladder_id, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '', links, why: 'keyword ladder, rung ' + (Number(l.rung) === 4 ? 'top' : l.rung) + ' towards \"' + (l.head_keyword || '') + '\"' });\n  }\n  const sq = qh.filter(q => normD(q.domain) === s.domain && q.query); const latest = sq.reduce((m, q) => String(q.period_end) > m ? String(q.period_end) : m, '');\n  const brand = s.domain.split('.')[0].toLowerCase().replace(/[^a-z0-9]/g, '');\n  const strikes = sq.filter(q => String(q.period_end) === latest && Number(q.position) >= CONFIG.striking_min_position && Number(q.position) <= CONFIG.striking_max_position && Number(q.impressions) >= CONFIG.striking_min_impressions && !(brand.length >= 4 && norm(q.query).replace(/\\s/g, '').includes(brand)) && !recent.has(norm(q.query)) && !ladderKw.has(norm(q.query))).sort((a, b) => Number(b.impressions) - Number(a.impressions));\n  for (const q of strikes) cands.push({ keyword: q.query, page_type: (q.page && !/\\/(blog|news|insights|articles)\\//i.test(q.page)) ? 'Service Page' : 'Guide', existing_page_url: q.page || '', source: 'striking', why: 'ranks #' + Math.round(Number(q.position)) + ' with ' + q.impressions + ' impressions in 28 days (Search Console): one push from the top 3' });\n  const st = trends.filter(t => normD(t.domain) === s.domain && t.direction === 'rising' && t.rising); const latestT = st.reduce((m, t) => String(t.checked_at) > m ? String(t.checked_at) : m, '');\n  for (const t of st.filter(t => String(t.checked_at) === latestT)) for (const rq of String(t.rising).split(',').map(x => x.replace(/\\s*\\([^)]*\\)\\s*$/, '').trim().toLowerCase()).filter(Boolean)) {\n    if (recent.has(norm(rq)) || ladderKw.has(norm(rq)) || cands.some(x => norm(x.keyword) === norm(rq))) continue;\n    cands.push({ keyword: rq, page_type: 'Guide', existing_page_url: '', source: 'trend', why: 'rising related search for \"' + t.keyword + '\" (Google Trends, ' + (t.change_pct > 0 ? '+' : '') + t.change_pct + '% vs the 12-month average)' }); }\n  const seen = new Set(); const uniq = cands.filter(x => { const k = norm(x.keyword); if (!k || seen.has(k)) return false; seen.add(k); return true; });\n  const picks = uniq.slice(0, pages), upcoming = uniq.slice(pages, pages + CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));\n  const pending = slog.filter(l => l.status === 'started' && !l.published_url).map(l => ({ keyword: l.keyword, started_at: l.started_at, days: Math.round((now - new Date(l.started_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);\n  picks.forEach((p, i) => { const request_id = 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_' + (i + 1);\n    out.push({ json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', source: p.source, keyword: p.keyword, page_type: p.page_type, existing_page_url: p.existing_page_url || '', ladder_id: p.ladder_id || '', rung: p.rung || 0, page_no: p.page_no || 0, why: p.why, request_id, pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week,\n      body: { mode: 'keyword', keyword: p.keyword, page_type: p.page_type, country: s.country || '', domain: s.domain, receive: ['Keyword Report', 'Page Content'], existing_page_url: p.existing_page_url || '', email: s.email || '', callback_url: s.callback_url || '', request_id, client_ip: 'cadence:' + s.site_id, force_content: true,\n        ...(p.source === 'ladder' ? { ladder_id: p.ladder_id, ladder_rung: p.rung, ladder_head: p.head, ladder_page_no: p.page_no, ladder_links: (p.links || []).map(l => ({ url: l.url, path: String(l.url).replace(/^https?:\\/\\/[^\\/]+/i, '') || '/', role: l.role, keyword: l.keyword, planned: true })) } : {}) } } }); });\n}\nif (!out.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'nothing to write for \"' + want + '\" (no cadence set, nothing planned, or everything written recently)' : 'no site has a content cadence this week', sites: list.length, dry_run } }];\nreturn out;\n"
+        },
+        "id": "dbde4df4-5076-5e2a-be04-bb8d29fa1565",
+        "name": "Cadence Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2200,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "076d72f4-ad99-51be-80fd-1d6960d55103",
+                "leftValue": "={{ !$json.nothing_to_do }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "4a70a5a5-0de5-5b83-b6a0-dfa0f7c83ce7",
+        "name": "Any Pages?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2420,
+          0
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "35c6b00e-da88-583d-8d28-907cb059c6ad",
+        "name": "Nothing To Write",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          2640,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "267a144f-a2a4-51f0-9cbf-172c10fdcf2d",
+                "leftValue": "={{ !!$json.dry_run }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "e6916cd8-4103-53a9-989c-24a24907f7dd",
+        "name": "Dry Run?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2640,
+          0
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "eee5c98d-29de-5de2-a146-b679762013dd",
+        "name": "Planned Only",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          2860,
+          -220
+        ]
+      },
+      {
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "SEOagentV4Full01"
+          },
+          "mode": "each",
+          "options": {
+            "waitForSubWorkflow": false
+          }
+        },
+        "id": "48a4d3ad-3be7-5237-8409-ec2725c98633",
+        "name": "Start Content Runs",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          2860,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// One seo_content_log row per page started this week (status \"started\"; \"I published a page\" later sets published_url).\nreturn $('Cadence Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && !p.dry_run).map(p => ({ json: { site_id: p.site_id, domain: p.domain, keyword: p.keyword, source: p.source, page_type: p.page_type, existing_page_url: p.existing_page_url || '', rung: Number(p.rung) || 0, ladder_id: p.ladder_id || '', request_id: p.request_id, started_at: new Date().toISOString(), status: 'started', published_url: '', published_at: '', week: p.week } }));\n"
+        },
+        "id": "e8d6073f-67a1-57a5-924a-d0dacb2753b6",
+        "name": "Log Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3080,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "insert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_content_log"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_type",
+                "displayName": "page_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "existing_page_url",
+                "displayName": "existing_page_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rung",
+                "displayName": "rung",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ladder_id",
+                "displayName": "ladder_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "started_at",
+                "displayName": "started_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "published_url",
+                "displayName": "published_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "published_at",
+                "displayName": "published_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "week",
+                "displayName": "week",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "25305f40-04eb-581f-b9e3-e2e941776d9b",
+        "name": "Save Content Log",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          3300,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Ladder rows of the pages started this week -> status \"writing\" (so the Rank Tracker and the next cadence know).\nconst m = $('Cadence Plan').all().map(i => i.json).filter(p => p.ladder_id && !p.dry_run && !p.nothing_to_do).map(p => ({ json: { ladder_id: p.ladder_id, keyword: p.keyword, status: 'writing' } }));\nreturn m.length ? m : [{ json: { skip: true } }];\n"
+        },
+        "id": "65d0c11a-576a-52cf-8276-a9a2e2602c7b",
+        "name": "Ladder Marks",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3520,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "c888835b-d2e7-596f-b44f-57c2c535ab7b",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "5fa5783c-84ab-5bfd-bfe1-dfaa3b1cc98c",
+        "name": "Any Ladder Marks?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3740,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ladders"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "ladder_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.ladder_id }}"
+              },
+              {
+                "keyName": "keyword",
+                "condition": "eq",
+                "keyValue": "={{ $json.keyword }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "={{ $json.status }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "ladder_id",
+                "displayName": "ladder_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "head_keyword",
+                "displayName": "head_keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rung",
+                "displayName": "rung",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_no",
+                "displayName": "page_no",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "supporting",
+                "displayName": "supporting",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_type",
+                "displayName": "page_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "target_url",
+                "displayName": "target_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_exists",
+                "displayName": "page_exists",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "months",
+                "displayName": "months",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "start_date",
+                "displayName": "start_date",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "country",
+                "displayName": "country",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "location_code",
+                "displayName": "location_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "language_code",
+                "displayName": "language_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "callback_url",
+                "displayName": "callback_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "837e3dc3-60c6-543d-9c1a-f73f6582715e",
+        "name": "Mark Ladder Writing",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          3960,
+          0
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// One note per site: this week's page(s) and why, what comes next, and pages still waiting for a publish link.\nconst FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';\nconst plan = $('Cadence Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst path = (u) => String(u || '').replace(/^https?:\\/\\/[^\\/]+/, '') || '/';\nconst bySite = new Map(); for (const p of plan) { if (!bySite.has(p.site_id)) bySite.set(p.site_id, []); bySite.get(p.site_id).push(p); }\nreturn [...bySite.values()].map(items => { const s = items[0];\n  const html = '<p>Hi,</p><p>This week\\'s content for <b>' + esc(s.domain) + '</b> (' + items.length + ' of ' + s.pages_per_week + ' per week):</p><ol>' + items.map(p => '<li><b>' + esc(p.keyword) + '</b> (' + esc(p.page_type) + ') — ' + esc(p.why) + (p.existing_page_url ? '; improves <a href=\"' + esc(p.existing_page_url) + '\">' + esc(path(p.existing_page_url)) + '</a>' : '') + '</li>').join('') + '</ol>' +\n    '<p>Each page arrives in its own e-mail within 10-15 minutes as HTML, Markdown and meta.json next to the PDF report. Publish it in your CMS, then report the link through the <a href=\"' + esc(FORM_URL) + '\">form</a> (\"I published a page\") or the API (' + esc(API_URL) + ', <code>mode: published</code>) so the trackers check indexing and positions.</p>' +\n    (s.upcoming.length ? '<p><b>Coming next:</b> ' + s.upcoming.map(u => esc(u.keyword) + ' (' + esc(u.source) + ')').join(', ') + '</p>' : '') +\n    (s.pending_publish.length ? '<p style=\"color:#b45309\"><b>Still waiting for your publish link:</b> ' + s.pending_publish.map(p => esc(p.keyword) + ' (written ' + p.days + ' days ago)').join(', ') + '</p>' : '') +\n    '<p style=\"color:#64748b;font-size:12px\">Change the posts per week through \"Track my site\" (form, or API field blogs_per_week) or the Site Admin workflow. About $1.20 of AI cost per page.</p>';\n  return { json: { site_id: s.site_id, domain: s.domain, email: s.email, callback_url: s.callback_url, request_id: s.request_id, subject: '[Content] ' + s.domain + ': ' + items.map(p => p.keyword).join(', '), html, status: 'progress', stage: 'content_cadence', week: s.week,\n    pages: items.map(p => ({ keyword: p.keyword, source: p.source, page_type: p.page_type, existing_page_url: p.existing_page_url, request_id: p.request_id, why: p.why })), upcoming: s.upcoming, pending_publish: s.pending_publish, candidates: s.candidates } }; });\n"
+        },
+        "id": "4c7ba2a3-1f56-5764-9459-5fb5c1756069",
+        "name": "Cadence Note",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4180,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "5c4f0f69-55eb-5a1f-90a5-01186a04c7af",
+                "leftValue": "={{ !!$json.email }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "40e11e31-844d-534d-983a-ee137d289108",
+        "name": "Has Email (Cadence)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          4400,
+          -220
+        ]
+      },
+      {
+        "parameters": {
+          "fromEmail": "Dev SEO <kinnngahmed@gmail.com>",
+          "toEmail": "={{ $json.email }}",
+          "subject": "={{ $json.subject }}",
+          "emailFormat": "html",
+          "html": "={{ $json.html }}",
+          "options": {
+            "appendAttribution": false
+          }
+        },
+        "id": "9963da1b-51fd-54c2-a59d-10c16a06f76c",
+        "name": "Send Cadence Note",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 2.1,
+        "position": [
+          4620,
+          -220
+        ],
+        "credentials": {
+          "smtp": {
+            "id": "SEOcredSmtpGmail",
+            "name": "Gmail SMTP (SEO Agent)"
+          }
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "dc78522c-4f13-52b6-8c08-6f65dbd69027",
+                "leftValue": "={{ !!$json.callback_url }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "9ba3b43b-0bdf-5340-bc2f-e04dacf9693a",
+        "name": "Has Callback (Cadence)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          4400,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.callback_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ status: 'progress', stage: 'content_cadence', request_id: $json.request_id, site_id: $json.site_id, domain: $json.domain, week: $json.week, pages: $json.pages, upcoming: $json.upcoming, pending_publish: $json.pending_publish, candidates: $json.candidates }) }}",
+          "options": {
+            "timeout": 20000
+          }
+        },
+        "id": "4765972f-cd4c-53e4-bd5c-316d89b54575",
+        "name": "POST Cadence Note",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          4620,
+          220
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Content Cadence (v4.3)\nRuns **every Monday 10:00** (after the trackers) and on demand through *Manual Run* (`{ site_id | domain, pages?, dry_run? }`). For every site with a cadence in `seo_cadence` (set by \"Track my site\" / API `blogs_per_week`, or Site Admin `cadence`; 1-3 per week) it picks the week's topics in this order: the keyword ladder's next **planned** pages (rung order, with the ladder's internal links), **striking-distance** queries from `seo_query_history` (positions 4-20 with impressions: the page that already ranks gets strengthened), **rising** related searches from `seo_trends`. Keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites are skipped.\nEach pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`, internal rate-limit key `cadence:<site>`) that delivers the PDF/Word report **plus the blog package** (article HTML, Markdown, meta.json) by e-mail / callback (`stage: content`). The run is logged in `seo_content_log` (status started), ladder rows go to *writing*, and one note per site goes out (`stage: content_cadence`): this week's pages and why, what comes next, pages still waiting for a publish link.\nThe owner publishes in any CMS and reports the URL (\"I published a page\" in the form, or API `mode: published`): the page is checked live, logged as published, the ladder row gets the real URL, and the Site Tracker inspects indexing and positions from the next Monday. `dry_run: true` only plans. Cost: about $1.20 of AI per page.\nForm: http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d · API: http://localhost:5678/webhook/seo-keyword-check",
+          "height": 420,
+          "width": 1180,
+          "color": 5
+        },
+        "id": "b29e0ebf-1db1-5344-a84b-4f1a99c64291",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -560
+        ]
+      }
+    ],
+    "connections": {
+      "Weekly Schedule": {
+        "main": [
+          [
+            {
+              "node": "Ensure Log Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Run": {
+        "main": [
+          [
+            {
+              "node": "Ensure Log Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Log Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Cadence Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Cadence Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Trends Table (Cadence)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Trends Table (Cadence)": {
+        "main": [
+          [
+            {
+              "node": "Load Sites",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Sites": {
+        "main": [
+          [
+            {
+              "node": "Load Cadence",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Cadence": {
+        "main": [
+          [
+            {
+              "node": "Load Ladders",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Ladders": {
+        "main": [
+          [
+            {
+              "node": "Load Query History",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Query History": {
+        "main": [
+          [
+            {
+              "node": "Load Trends",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Trends": {
+        "main": [
+          [
+            {
+              "node": "Load Content Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Content Log": {
+        "main": [
+          [
+            {
+              "node": "Cadence Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cadence Plan": {
+        "main": [
+          [
+            {
+              "node": "Any Pages?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Start Content Runs": {
+        "main": [
+          [
+            {
+              "node": "Log Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Log Rows": {
+        "main": [
+          [
+            {
+              "node": "Save Content Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Content Log": {
+        "main": [
+          [
+            {
+              "node": "Ladder Marks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ladder Marks": {
+        "main": [
+          [
+            {
+              "node": "Any Ladder Marks?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Ladder Writing": {
+        "main": [
+          [
+            {
+              "node": "Cadence Note",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cadence Note": {
+        "main": [
+          [
+            {
+              "node": "Has Email (Cadence)?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Has Callback (Cadence)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Pages?": {
+        "main": [
+          [
+            {
+              "node": "Dry Run?",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Nothing To Write",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Dry Run?": {
+        "main": [
+          [
+            {
+              "node": "Planned Only",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Start Content Runs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Ladder Marks?": {
+        "main": [
+          [
+            {
+              "node": "Mark Ladder Writing",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Cadence Note",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Email (Cadence)?": {
+        "main": [
+          [
+            {
+              "node": "Send Cadence Note",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Callback (Cadence)?": {
+        "main": [
+          [
+            {
+              "node": "POST Cadence Note",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

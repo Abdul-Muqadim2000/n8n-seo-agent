@@ -1,0 +1,5 @@
+// API answer for mode "track" (POSTed to callback_url): registration confirmed; the first report follows as stage "site_tracker".
+const d = $input.first().json; const r = $('Site Row (Track)').first().json;
+return [{ json: { status: 'accepted', stage: 'site_tracker_setup', request_id: r.request_id || null, site_id: r.site_id, domain: r.domain, keywords: r.keywords ? r.keywords.split(', ') : [], ga4_property_id: r.ga4_property_id || null, blogs_per_week: Number(($('Normalize Input').first().json || {}).blogs_per_week) || 0,
+  stored: !!d.stored, store_error: d.store_error || null, callback_url: r.callback_url,
+  next: 'The first performance report is being generated now (about 3 minutes) and then every Monday; each one is POSTed to callback_url with stage "site_tracker". Blog posts per week > 0: the Content Cadence writes that many pages every Monday and delivers them as HTML + Markdown + meta.json; report each published URL with mode "published". If Google is not connected yet, the report names the service-account e-mail to add in Search Console (Settings → Users and permissions, Full) and GA4 (Admin → Property access management, Viewer).' } }];

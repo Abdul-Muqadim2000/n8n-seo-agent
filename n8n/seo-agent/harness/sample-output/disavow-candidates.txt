@@ -1,0 +1,8 @@
+# Disavow candidates for northwind-erp.com (2026-10-02)
+# Review before uploading at https://search.google.com/search-console/disavow-links — Google ignores most spam links on its own;
+# disavow only for a manual action or a clear paid-link pattern you did not create.
+domain:onvaxs.com
+domain:betulcrime.com
+domain:thedocmag.com
+domain:quotesblom.com
+domain:betwinnermirror.com

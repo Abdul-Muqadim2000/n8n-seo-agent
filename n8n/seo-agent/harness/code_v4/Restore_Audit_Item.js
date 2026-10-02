@@ -1,0 +1,3 @@
+// The audit item with the fix-pack files and, when zipping worked, fix-pack.zip for the e-mail (the Compression node replaces the item's binaries).
+const f = $('Fix Pack').first(); let zip = null; try { const z = $input.first(); zip = z && z.binary && z.binary.fix_pack_zip && !(z.json && z.json.error) ? z.binary.fix_pack_zip : null; } catch (e) {}
+return [{ json: { ...f.json, fix_pack_zipped: !!zip }, binary: { ...(f.binary || {}), ...(zip ? { fix_pack_zip: { ...zip, mimeType: 'application/zip' } } : {}) } }];

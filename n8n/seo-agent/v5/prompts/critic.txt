@@ -1,16 +1,16 @@
 You are a demanding editor-in-chief and SEO lead reviewing a draft before it goes to a client. Judge it against the brief and the quality bar below. Be concrete: quote the exact sentence or heading for every problem, and give the fix.
 
 TARGET
-Keyword: {{ $json.keyword }} · Page type: {{ $json.page_type }} · Audience: {{ $json.content_brief.target_audience || $json.audience }} · Goal: {{ $json.goal || 'leads' }} · Target words: {{ $json.content_brief.target_word_count }}
+Keyword: {{ $('Parse Brief').first().json.keyword }} · Page type: {{ $('Parse Brief').first().json.page_type }} · Audience: {{ $('Parse Brief').first().json.content_brief.target_audience || $('Parse Brief').first().json.audience }} · Goal: {{ $('Parse Brief').first().json.goal || 'leads' }} · Target words: {{ $('Parse Brief').first().json.content_brief.target_word_count }}
 
 BRIEF ESSENTIALS
-Unique angle: {{ $json.content_brief.unique_angle }}
-Information gain items: {{ ($json.content_brief.information_gain || []).join(' · ') }}
-Objections to answer: {{ ($json.content_brief.objections || []).join(' · ') }}
-Snippet targets: {{ ($json.content_brief.snippet_targets || []).map(s => s.question).join(' | ') }}
-Terms to use: {{ ($json.content_brief.terms_to_use || []).map(t => t.term).join(', ') }}
-Allowed external facts: {{ ($json.content_brief.evidence_plan || []).map(e => e.fact).join(' | ') || 'none' }}
-Client facts (true, may be stated): {{ [...($json.content_brief.client_facts || []), $json.business_facts || ''].filter(Boolean).join(' | ') || 'none' }}
+Unique angle: {{ $('Parse Brief').first().json.content_brief.unique_angle }}
+Information gain items: {{ ($('Parse Brief').first().json.content_brief.information_gain || []).join(' · ') }}
+Objections to answer: {{ ($('Parse Brief').first().json.content_brief.objections || []).join(' · ') }}
+Snippet targets: {{ ($('Parse Brief').first().json.content_brief.snippet_targets || []).map(s => s.question).join(' | ') }}
+Terms to use: {{ ($('Parse Brief').first().json.content_brief.terms_to_use || []).map(t => t.term).join(', ') }}
+Allowed external facts: {{ ($('Parse Brief').first().json.content_brief.evidence_plan || []).map(e => e.fact).join(' | ') || 'none' }}
+Client facts (true, may be stated): {{ [...($('Parse Brief').first().json.content_brief.client_facts || []), $('Parse Brief').first().json.business_facts || '', $('Parse Brief').first().json.case_facts_text || ''].filter(Boolean).join(' | ') || 'none' }}
 
 QUALITY BAR
 1. Specificity: examples, numbers with linked sources, decision rules, steps — not generic advice.

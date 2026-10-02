@@ -1,0 +1,2 @@
+// One seo_content_log row per page started this week (status "started"; "I published a page" later sets published_url).
+return $('Cadence Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && !p.dry_run).map(p => ({ json: { site_id: p.site_id, domain: p.domain, keyword: p.keyword, source: p.source, page_type: p.page_type, existing_page_url: p.existing_page_url || '', rung: Number(p.rung) || 0, ladder_id: p.ladder_id || '', request_id: p.request_id, started_at: new Date().toISOString(), status: 'started', published_url: '', published_at: '', week: p.week } }));

@@ -21,6 +21,14 @@ Verified external facts — cite ONLY these numbers, each with its source as a M
 {{ ($json.content_brief.evidence_plan || []).map(e => '- ' + e.fact + ' — ' + e.source_url).join('\n') || 'none — use [Statistic] for any external number' }}
 {{ $json.existing_page_text ? 'CURRENT PAGE TEXT (keep its true facts):\n' + $json.existing_page_text.slice(0, 5000) : '' }}
 
+AUTHOR AND PROOF (E-E-A-T)
+{{ $json.eeat_context || '' }}
+Case studies you may cite (facts only as written; link a case study only when a URL is given): {{ $json.proof_context || 'none' }}
+EXPERIENCE NOTES — weave each into the most relevant section as 1-3 sentences in the business's voice ("In our projects ..."); a note in [square brackets] stays as a bracketed line for the author to complete. Never invent an experience:
+{{ (($json.content_brief || {}).experience_notes || []).map(n => '- ' + n).join('\n') || 'none' }}
+{{ $json.role_writer || '' }}
+{{ $json.video_context || '' }}
+
 TERMS TO USE NATURALLY (term: minimum count): {{ ($json.content_brief.terms_to_use || []).map(t => t.term + ': ' + (t.min_count || 1)).join(', ') }}
 SNIPPET TARGETS — each question becomes a heading followed immediately by a 40-60 word direct answer:
 {{ ($json.content_brief.snippet_targets || []).map(s => '- ' + s.question + ' → ' + s.answer).join('\n') || 'none' }}

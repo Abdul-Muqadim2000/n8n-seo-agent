@@ -1,0 +1,321 @@
+{
+  "title": "ERP Implementation Services in the UAE | Northwind ERP",
+  "h1": "ERP Implementation Services for UAE Distributors",
+  "slug": "erp-implementation-services",
+  "suggested_url": "https://northwind-erp.com/erp-implementation-services/",
+  "meta_description": "Plan, migrate and go live with ERP implementation services built for UAE distributors. Fixed scope, certified consultants. Get a quote today.",
+  "meta_description_length": 141,
+  "title_length": 54,
+  "primary_keyword": "erp implementation services",
+  "secondary_keywords": [
+    "erp implementation partner uae",
+    "erp implementation cost uae",
+    "odoo implementation dubai"
+  ],
+  "page_type": "Service Page",
+  "language": "English",
+  "country": "United Arab Emirates",
+  "domain": "northwind-erp.com",
+  "word_count": 2074,
+  "content_score": 73,
+  "qa_summary": "Quality check: 6 item(s) to review",
+  "headings": [
+    {
+      "level": 2,
+      "text": "What Are ERP Implementation Services?"
+    },
+    {
+      "level": 2,
+      "text": "How Much Does ERP Implementation Cost in the UAE?"
+    },
+    {
+      "level": 2,
+      "text": "Our Implementation Methodology"
+    },
+    {
+      "level": 2,
+      "text": "Odoo vs Dynamics 365 for Distribution"
+    },
+    {
+      "level": 2,
+      "text": "Data Migration Checklist for Distributors"
+    },
+    {
+      "level": 2,
+      "text": "Why Choose Northwind ERP"
+    },
+    {
+      "level": 2,
+      "text": "Frequently Asked Questions"
+    },
+    {
+      "level": 2,
+      "text": "Book Your Free Scoping Call"
+    }
+  ],
+  "internal_links": [
+    {
+      "text": "Odoo ERP services",
+      "url": "https://northwind-erp.com/services/odoo-erp/"
+    },
+    {
+      "text": "data migration",
+      "url": "https://northwind-erp.com/services/data-migration/"
+    },
+    {
+      "text": "Contact us",
+      "url": "https://northwind-erp.com/contact/"
+    }
+  ],
+  "external_links": [
+    {
+      "text": "Gartner",
+      "url": "https://www.gartner.com/en/erp-survey"
+    },
+    {
+      "text": "this guide",
+      "url": "https://www.gartner.com/erp"
+    }
+  ],
+  "schema_blocks": [
+    {
+      "type": "ProfessionalService",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "ProfessionalService",
+        "@id": "https://northwind-erp.com/#business",
+        "name": "Northwind ERP",
+        "url": "https://northwind-erp.com/",
+        "telephone": "+971 4 555 0100",
+        "email": "hello@northwind-erp.com",
+        "address": {
+          "@type": "PostalAddress",
+          "streetAddress": "Office 1203, Aspect Tower, Business Bay",
+          "addressLocality": "Dubai",
+          "addressRegion": "Dubai",
+          "addressCountry": "AE"
+        },
+        "areaServed": [
+          {
+            "@type": "Place",
+            "name": "Dubai Marina"
+          },
+          {
+            "@type": "Place",
+            "name": "Dubai"
+          },
+          {
+            "@type": "Place",
+            "name": "Abu Dhabi"
+          },
+          {
+            "@type": "Place",
+            "name": "Sharjah"
+          }
+        ],
+        "openingHours": [
+          "Mo-Fr 09:00-18:00"
+        ],
+        "logo": "https://northwind-erp.com/logo.png",
+        "image": "https://northwind-erp.com/logo.png",
+        "hasMap": "https://maps.google.com/?cid=123"
+      }
+    },
+    {
+      "type": "Service",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": "ERP Implementation Services for UAE Distributors",
+        "serviceType": "erp implementation services",
+        "description": "Plan, migrate and go live with ERP implementation services built for UAE distributors. Fixed scope, certified consultants. Get a quote today.",
+        "provider": {
+          "@id": "https://northwind-erp.com/#business",
+          "name": "Northwind ERP"
+        },
+        "areaServed": {
+          "@type": "Place",
+          "name": "Dubai Marina"
+        },
+        "url": "https://northwind-erp.com/services/erp-implementation/"
+      }
+    },
+    {
+      "type": "BreadcrumbList",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://northwind-erp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "ERP Implementation Services for UAE Distributors",
+            "item": "https://northwind-erp.com/services/erp-implementation/"
+          }
+        ]
+      }
+    },
+    {
+      "type": "FAQPage",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How much does ERP implementation cost in the UAE?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How long does an ERP implementation take?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What are the phases of ERP implementation?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do you migrate historical data?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which ERP is best for distributors?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What support do you offer after go-live?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "images": [
+    {
+      "slot": 1,
+      "purpose": "hero",
+      "placement": "hero",
+      "subject": "Warehouse team using a tablet ERP in a UAE distribution centre",
+      "alt_text": "ERP implementation for a UAE distributor: warehouse team checking stock on a tablet",
+      "caption": "",
+      "filename": "erp-implementation-services-uae-hero.webp",
+      "path": "images/erp-implementation-services-uae-hero.webp",
+      "width": 1200,
+      "height": 675,
+      "max_kb": 200
+    },
+    {
+      "slot": 2,
+      "purpose": "diagram",
+      "placement": "How the implementation works",
+      "subject": "Four-phase timeline: discovery, configuration, data migration, go-live",
+      "alt_text": "ERP implementation phases from discovery to go-live",
+      "caption": "The four phases of a fixed-scope ERP implementation",
+      "filename": "erp-implementation-phases.webp",
+      "path": "images/erp-implementation-phases.webp",
+      "width": 1000,
+      "height": 600,
+      "max_kb": 150
+    },
+    {
+      "slot": 3,
+      "purpose": "chart",
+      "placement": "What it costs",
+      "subject": "Cost split between licences and services",
+      "alt_text": "ERP implementation cost breakdown: licences versus services",
+      "caption": "",
+      "filename": "erp-implementation-cost-breakdown.webp",
+      "path": "images/erp-implementation-cost-breakdown.webp",
+      "width": 1000,
+      "height": 600,
+      "max_kb": 150
+    }
+  ],
+  "featured_image": {
+    "slot": 1,
+    "purpose": "hero",
+    "placement": "hero",
+    "subject": "Warehouse team using a tablet ERP in a UAE distribution centre",
+    "alt_text": "ERP implementation for a UAE distributor: warehouse team checking stock on a tablet",
+    "caption": "",
+    "filename": "erp-implementation-services-uae-hero.webp",
+    "path": "images/erp-implementation-services-uae-hero.webp",
+    "width": 1200,
+    "height": 675,
+    "max_kb": 200
+  },
+  "open_graph": {
+    "og:title": "ERP Implementation Services in the UAE | Northwind ERP",
+    "og:description": "Plan, migrate and go live with ERP implementation services built for UAE distributors. Fixed scope, certified consultants. Get a quote today.",
+    "og:image": "images/erp-implementation-services-uae-hero.webp",
+    "og:image:width": 1200,
+    "og:image:height": 630,
+    "twitter:card": "summary_large_image"
+  },
+  "ladder": null,
+  "request_id": null,
+  "generated_at": "2026-10-02T11:23:17.038Z",
+  "page_role": "local",
+  "article_like": false,
+  "author": null,
+  "reviewer": {
+    "name": "Omar Haddad",
+    "job_title": "Chartered Accountant (ICAEW)",
+    "url": "https://www.linkedin.com/in/omarhaddad/"
+  },
+  "updated": "2026-10-02",
+  "table_of_contents": [],
+  "hub": null,
+  "case_study": null,
+  "local": {
+    "area": "Dubai Marina",
+    "business_name": "Northwind ERP",
+    "address": "Office 1203, Aspect Tower, Business Bay, Dubai, Dubai",
+    "phone": "+971 4 555 0100",
+    "opening_hours": "Mo-Fr 09:00-18:00",
+    "map_url": "https://maps.google.com/?cid=123",
+    "complete": true
+  },
+  "video": null,
+  "eeat_notes": [],
+  "publish_checklist": [
+    "Use \"title\" as the page <title> and \"h1\" as the main heading",
+    "Paste \"meta_description\" into the page or SEO settings",
+    "Keep the slug (URL) unless your CMS needs another",
+    "Keep the internal links in the article and add 2-3 links to this page from existing pages",
+    "Add the JSON-LD blocks to the page head or body",
+    "Create the three images in \"images\" (or pick stock photos matching \"subject\"), save them as WebP under the given file names and sizes, keep the alt text and captions",
+    "Use the hero as the featured and Open Graph image (1200×630 for sharing) and set the og:image / twitter:card tags from \"open_graph\"",
+    "Name, address and phone must match the Google Business Profile exactly; add the map embed; keep the LocalBusiness schema",
+    "Then report the published URL (\"I published a page\" in the form, or API mode \"published\") so indexing and positions are tracked"
+  ]
+}

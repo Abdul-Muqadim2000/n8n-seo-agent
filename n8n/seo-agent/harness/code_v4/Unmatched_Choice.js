@@ -1,1 +1,1 @@
-throw new Error('Please choose one of the 6 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword).');
+throw new Error('Please choose one of the 13 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site / I published a page / Search Console check-in / Write a case study / Set up my business profile / Check my AI visibility / Check my backlinks).');

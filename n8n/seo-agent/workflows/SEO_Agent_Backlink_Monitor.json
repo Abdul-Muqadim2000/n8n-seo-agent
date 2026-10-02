@@ -1,0 +1,2478 @@
+[
+  {
+    "id": "SEOagentBacklnk1",
+    "name": "SEO Agent — Backlink Monitor",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 2400,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "weeks",
+                "weeksInterval": 1,
+                "triggerAtDay": [
+                  1
+                ],
+                "triggerAtHour": 7,
+                "triggerAtMinute": 30
+              }
+            ]
+          }
+        },
+        "id": "8a3964b9-8529-5777-9db3-692b45142f69",
+        "name": "Weekly Schedule",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "id": "763c4115-2da1-5cee-b2e2-fcc3adfa0af1",
+        "name": "Manual Run",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_monitors",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "ai_visibility",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_engines",
+                "type": "string"
+              },
+              {
+                "name": "ai_prompts_max",
+                "type": "number"
+              },
+              {
+                "name": "backlinks",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_monthly",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_pages",
+                "type": "number"
+              },
+              {
+                "name": "audit_js",
+                "type": "boolean"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "brand_names",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "ed7e53a6-eb78-5ce6-ba7d-b2bd5591fb7c",
+        "name": "Ensure Monitors Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          220,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_backlink_snapshots",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "checked_at",
+                "type": "string"
+              },
+              {
+                "name": "mode",
+                "type": "string"
+              },
+              {
+                "name": "rank",
+                "type": "number"
+              },
+              {
+                "name": "backlinks",
+                "type": "number"
+              },
+              {
+                "name": "referring_domains",
+                "type": "number"
+              },
+              {
+                "name": "referring_domains_nofollow",
+                "type": "number"
+              },
+              {
+                "name": "spam_score",
+                "type": "number"
+              },
+              {
+                "name": "broken_backlinks",
+                "type": "number"
+              },
+              {
+                "name": "new_links",
+                "type": "number"
+              },
+              {
+                "name": "lost_links",
+                "type": "number"
+              },
+              {
+                "name": "important_lost",
+                "type": "number"
+              },
+              {
+                "name": "spammy_new",
+                "type": "number"
+              },
+              {
+                "name": "lost_json",
+                "type": "string"
+              },
+              {
+                "name": "new_json",
+                "type": "string"
+              },
+              {
+                "name": "competitors_json",
+                "type": "string"
+              },
+              {
+                "name": "timeseries_json",
+                "type": "string"
+              },
+              {
+                "name": "cost_usd",
+                "type": "number"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "0c0d32a5-330b-5191-b839-ed5083277a95",
+        "name": "Ensure Snapshots Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          440,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_link_prospects",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "prospect_domain",
+                "type": "string"
+              },
+              {
+                "name": "type",
+                "type": "string"
+              },
+              {
+                "name": "rank",
+                "type": "number"
+              },
+              {
+                "name": "spam_score",
+                "type": "number"
+              },
+              {
+                "name": "detail",
+                "type": "string"
+              },
+              {
+                "name": "source_url",
+                "type": "string"
+              },
+              {
+                "name": "target_url",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "first_seen",
+                "type": "string"
+              },
+              {
+                "name": "last_seen",
+                "type": "string"
+              },
+              {
+                "name": "won_at",
+                "type": "string"
+              },
+              {
+                "name": "outreach_subject",
+                "type": "string"
+              },
+              {
+                "name": "outreach_body",
+                "type": "string"
+              },
+              {
+                "name": "note",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "3a7da0c9-8a1c-5d1f-9f6c-09d7cb5af36b",
+        "name": "Ensure Prospects Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_sites",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "gsc_property",
+                "type": "string"
+              },
+              {
+                "name": "ga4_property_id",
+                "type": "string"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "location_code",
+                "type": "number"
+              },
+              {
+                "name": "language_code",
+                "type": "string"
+              },
+              {
+                "name": "email",
+                "type": "string"
+              },
+              {
+                "name": "callback_url",
+                "type": "string"
+              },
+              {
+                "name": "keywords",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "last_run_at",
+                "type": "string"
+              },
+              {
+                "name": "last_status",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "e95ca648-da98-5f22-aab6-4539d4314881",
+        "name": "Ensure Sites Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_profiles",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "business_name",
+                "type": "string"
+              },
+              {
+                "name": "business_type",
+                "type": "string"
+              },
+              {
+                "name": "logo_url",
+                "type": "string"
+              },
+              {
+                "name": "street_address",
+                "type": "string"
+              },
+              {
+                "name": "city",
+                "type": "string"
+              },
+              {
+                "name": "region",
+                "type": "string"
+              },
+              {
+                "name": "postal_code",
+                "type": "string"
+              },
+              {
+                "name": "country_code",
+                "type": "string"
+              },
+              {
+                "name": "phone",
+                "type": "string"
+              },
+              {
+                "name": "public_email",
+                "type": "string"
+              },
+              {
+                "name": "opening_hours",
+                "type": "string"
+              },
+              {
+                "name": "price_range",
+                "type": "string"
+              },
+              {
+                "name": "service_areas",
+                "type": "string"
+              },
+              {
+                "name": "map_url",
+                "type": "string"
+              },
+              {
+                "name": "author_name",
+                "type": "string"
+              },
+              {
+                "name": "author_job_title",
+                "type": "string"
+              },
+              {
+                "name": "author_credentials",
+                "type": "string"
+              },
+              {
+                "name": "author_bio",
+                "type": "string"
+              },
+              {
+                "name": "author_url",
+                "type": "string"
+              },
+              {
+                "name": "author_image_url",
+                "type": "string"
+              },
+              {
+                "name": "author_same_as",
+                "type": "string"
+              },
+              {
+                "name": "author_knows_about",
+                "type": "string"
+              },
+              {
+                "name": "reviewer_name",
+                "type": "string"
+              },
+              {
+                "name": "reviewer_job_title",
+                "type": "string"
+              },
+              {
+                "name": "reviewer_url",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "d291397e-3a06-538e-bfa2-e6cdb015ec74",
+        "name": "Ensure Profiles Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_case_studies",
+          "columns": {
+            "column": [
+              {
+                "name": "case_id",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "title",
+                "type": "string"
+              },
+              {
+                "name": "client_name",
+                "type": "string"
+              },
+              {
+                "name": "client_public",
+                "type": "boolean"
+              },
+              {
+                "name": "industry",
+                "type": "string"
+              },
+              {
+                "name": "location",
+                "type": "string"
+              },
+              {
+                "name": "service",
+                "type": "string"
+              },
+              {
+                "name": "challenge",
+                "type": "string"
+              },
+              {
+                "name": "solution",
+                "type": "string"
+              },
+              {
+                "name": "timeline",
+                "type": "string"
+              },
+              {
+                "name": "results",
+                "type": "string"
+              },
+              {
+                "name": "quote",
+                "type": "string"
+              },
+              {
+                "name": "quote_by",
+                "type": "string"
+              },
+              {
+                "name": "page_url",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "1466f328-e2bb-5e91-9820-d2e7ff79c9f8",
+        "name": "Ensure Case Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_content_log",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "page_type",
+                "type": "string"
+              },
+              {
+                "name": "existing_page_url",
+                "type": "string"
+              },
+              {
+                "name": "rung",
+                "type": "number"
+              },
+              {
+                "name": "ladder_id",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "started_at",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "published_url",
+                "type": "string"
+              },
+              {
+                "name": "published_at",
+                "type": "string"
+              },
+              {
+                "name": "week",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "a96d9fcd-b64d-557d-bf3d-eb995fafa737",
+        "name": "Ensure Log Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "9ec494c3-a65d-5058-ac73-b8ebabe77d3d",
+        "name": "Load Sites",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          220,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ladders"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "a1affbb7-a156-50ba-ad7a-e603eb9d2d7f",
+        "name": "Load Ladders",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          440,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_monitors"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "d90e0171-0ef5-59bc-9387-03213a2d388c",
+        "name": "Load Monitors",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_profiles"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "d1fd99a6-1c70-5a99-9e53-257052e2a246",
+        "name": "Load Profiles",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_backlink_snapshots"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "145cbb5b-36e7-5743-9311-a9578f5e18f7",
+        "name": "Load Backlink Snapshots",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_link_prospects"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "ee795cdc-4179-5486-8b64-8e4b24ac41d6",
+        "name": "Load Link Prospects",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_content_log"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "1625fe36-efed-5cf5-9556-ff32454ce774",
+        "name": "Load Content Log",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_case_studies"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "75a3cfb8-1c36-532b-a7c1-eded4e98e2f3",
+        "name": "Load Case Studies",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1760,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Backlink monitor plan (weekly Monday 07:30; the first run of each month is the FULL run, the others are LIGHT): per site the window since the\n// last check, the competitors (configured, else found once through DataForSEO Labs and kept), the brand names for mention search, the pages\n// worth pitching (ladder top / published pages, case studies) and the existing prospects. Light runs only watch for lost and spammy links\n// and stay quiet unless something important happened.\n// ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----\n// Sites = the Data Table seo_sites (\"Track my site\") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).\n// On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc\n// with the trigger's country, e-mail and callback.\nlet trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}\nif (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst siteIdFor = (d) => 'site_' + d.replace(/[^a-z0-9]+/g, '-');\nconst listOf = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst flag = (v, dflt) => (v === undefined || v === null || v === '') ? dflt : !(v === false || /^(false|0|no|off)$/i.test(String(v)));\nconst DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];\nfunction monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit'\n  const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), ladders = rowsOf('Load Ladders').filter(r => r.domain), mons = rowsOf('Load Monitors'), profiles = rowsOf('Load Profiles');\n  const byDomain = new Map();\n  for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: listOf(s.keywords).map(k => k.toLowerCase()), virtual: false }); }\n  for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', virtual: true }); }\n  for (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }\n  const want = normD(trigger.domain) || String(trigger.site_id || '').trim();\n  let list = [...byDomain.values()];\n  if (want) {\n    list = list.filter(s => s.domain === want || s.site_id === want);\n    if (!list.length && normD(trigger.domain)) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];\n  } else list = list.filter(s => String(s.status || 'active') !== 'paused');\n  const out = list.map(s => {\n    const m = mons.find(x => x.site_id === s.site_id) || {};\n    const p = profiles.find(x => x.site_id === s.site_id) || {};\n    const engines = listOf(m.ai_engines).map(e => e.toLowerCase()).filter(e => DEFAULT_ENGINES.includes(e));\n    const settings = { ai_visibility: flag(m.ai_visibility, true), backlinks: flag(m.backlinks, true), audit_monthly: flag(m.audit_monthly, true), engines: engines.length ? engines : DEFAULT_ENGINES,\n      prompts_max: Math.min(15, Math.max(3, Number(m.ai_prompts_max) || 8)), audit_pages: Math.min(1000, Math.max(50, Number(m.audit_pages) || 200)), audit_js: flag(m.audit_js, false),\n      competitors: [...new Set([...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD).filter(d => d && d !== s.domain))].slice(0, 5),\n      brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || ''].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };\n    const o = { ...s, settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '' } };\n    if (want) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }\n    o.request_id = String(trigger.request_id || s.request_id || '');\n    return o;\n  });\n  const flagOf = { ai: 'ai_visibility', backlinks: 'backlinks', audit: 'audit_monthly' }[kind];\n  return { list: want ? out : out.filter(s => s.settings[flagOf]), on_demand: !!want, want, trigger, total: byDomain.size };\n}\n\nconst CONFIG = { max_sites_per_run: 15, first_lookback_days: 30 };\nconst { list, on_demand, want, total } = monitorSites('backlinks');   // `trigger` comes from the shared snippet\nif (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches \"' + want + '\"' : (total ? 'the backlink monitor is switched off for every site' : 'no sites yet (register one through \"Track my site\" or plan a keyword ladder)') } }];\nconst snaps = rowsOf('Load Backlink Snapshots'), prospects = rowsOf('Load Link Prospects'), ladders = rowsOf('Load Ladders'), logs = rowsOf('Load Content Log'), cases = rowsOf('Load Case Studies');\nconst now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);\nconst dfs = (d) => new Date(d).toISOString().replace('T', ' ').slice(0, 19) + ' +00:00';\nconst parse = (t, d) => { try { return JSON.parse(t || ''); } catch (e) { return d; } };\nreturn list.slice(0, CONFIG.max_sites_per_run).map(s => {\n  const mine = snaps.filter(x => x.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));\n  const last = mine[0] || null, lastFull = mine.find(x => x.mode === 'full') || null;\n  const mode = on_demand ? (trigger.light ? 'light' : 'full') : ((!lastFull || String(lastFull.checked_at).slice(0, 7) !== month) ? 'full' : 'light');\n  const since = last ? dfs(last.checked_at) : dfs(now.getTime() - CONFIG.first_lookback_days * 864e5);\n  const kept = lastFull ? (parse(lastFull.competitors_json, []) || []).map(c => c.domain).filter(Boolean) : [];\n  const competitors = (s.settings.competitors.length ? s.settings.competitors : kept).slice(0, 3);\n  const lad = ladders.filter(l => normD(l.domain) === s.domain && l.target_url && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true'));\n  const assets = [...lad.sort((a, b) => (Number(b.rung) || 0) - (Number(a.rung) || 0)).map(l => ({ url: l.target_url, title: l.keyword, kind: Number(l.rung) === 4 ? 'hub page' : 'guide' })),\n    ...cases.filter(c => c.site_id === s.site_id && c.page_url).map(c => ({ url: c.page_url, title: c.title, kind: 'case study' })),\n    ...logs.filter(l => normD(l.domain) === s.domain && l.published_url).map(l => ({ url: l.published_url, title: l.keyword, kind: 'article' }))].filter((a, i, arr) => arr.findIndex(b => b.url === a.url) === i).slice(0, 8);\n  const brand = [...new Set([s.domain, s.profile.business_name].filter(b => b && (b.includes('.') || b.split(/\\s+/).length >= 2 || b.length >= 8)))];\n  return { json: { site_id: s.site_id, domain: s.domain, country: s.country || '', location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',\n    on_demand, adhoc: !!s.adhoc, mode, since, competitors, need_competitors: mode === 'full' && !competitors.length, business_name: s.profile.business_name || '', brand_names: brand, assets,\n    previous: last ? { checked_at: last.checked_at, mode: last.mode, rank: Number(last.rank) || 0, backlinks: Number(last.backlinks) || 0, referring_domains: Number(last.referring_domains) || 0, spam_score: Number(last.spam_score) || 0, broken_backlinks: Number(last.broken_backlinks) || 0 } : null,\n    existing_prospects: prospects.filter(p => p.site_id === s.site_id).length, checked_at: iso } };\n});\n"
+        },
+        "id": "b021fb26-16b8-5da2-9160-6a0c4fda8145",
+        "name": "BL Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1980,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "7057adb9-0f8a-516e-9a2c-8a66ffa174b2",
+                "leftValue": "={{ !$json.nothing_to_do }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "6ddedd2e-bb65-5680-8b88-754b41db0f49",
+        "name": "Any Sites (BL)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2200,
+          220
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "3d4a6a90-cfca-52e7-9d5f-144ca294703b",
+        "name": "Nothing To Do (BL)",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          2420,
+          440
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Backlink requests per site (DataForSEO Backlinks API, $0.024 per request + $0.000036 per row, measured 2026-10-02). Every run: summary,\n// links lost since the last check, new links since the last check. Full runs add: links pointing to broken pages (reclaim), the referring\n// domains (to see which prospects linked), 12 months of history, unlinked brand mentions (Content Analysis) and, once, the competitors.\nconst API = 'https://api.dataforseo.com/v3/';\nconst plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nconst out = [];\nconst add = (p, kind, endpoint, body) => out.push({ json: { site_id: p.site_id, domain: p.domain, kind, endpoint: API + endpoint, body: [body] } });\nconst ymd = (d) => d.toISOString().slice(0, 10);\nfor (const p of plans) {\n  const t = p.domain;\n  add(p, 'summary', 'backlinks/summary/live', { target: t, include_subdomains: true, internal_list_limit: 10, backlinks_status_type: 'live' });\n  add(p, 'lost', 'backlinks/backlinks/live', { target: t, mode: 'as_is', backlinks_status_type: 'lost', filters: ['last_seen', '>', p.since], order_by: ['domain_from_rank,desc'], limit: 100 });\n  add(p, 'new', 'backlinks/backlinks/live', { target: t, mode: 'one_per_domain', backlinks_status_type: 'live', filters: ['first_seen', '>', p.since], order_by: ['domain_from_rank,desc'], limit: 100 });\n  if (p.mode !== 'full') continue;\n  add(p, 'broken', 'backlinks/backlinks/live', { target: t, mode: 'as_is', filters: ['is_broken', '=', true], order_by: ['domain_from_rank,desc'], limit: 50 });\n  add(p, 'refdomains', 'backlinks/referring_domains/live', { target: t, backlinks_status_type: 'live', order_by: ['rank,desc'], limit: 500 });\n  add(p, 'timeseries', 'backlinks/timeseries_summary/live', { target: t, date_from: ymd(new Date(Date.now() - 365 * 864e5)), date_to: ymd(new Date()), group_range: 'month' });\n  for (const b of p.brand_names) add(p, 'mentions', 'content_analysis/search/live', { keyword: b, search_mode: 'as_is', limit: 50 });\n  if (p.need_competitors) add(p, 'competitors', 'dataforseo_labs/google/competitors_domain/live', { target: t, location_code: p.location_code, language_code: p.language_code, limit: 10, exclude_top_domains: true });\n}\nreturn out.length ? out : [{ json: { skip: true } }];\n"
+        },
+        "id": "6256f0ae-56ca-570a-85ad-199c9d3d05d9",
+        "name": "BL Requests",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2420,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.endpoint }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.body) }}",
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 4,
+                "batchInterval": 300
+              }
+            },
+            "timeout": 120000
+          }
+        },
+        "id": "3005d8dc-e9d3-5914-866b-1fafa11b62a3",
+        "name": "Run BL Requests",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          2640,
+          0
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "SEOcredDataForSE",
+            "name": "DataForSEO"
+          }
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Link gap (full runs): the domains that link to at least one competitor but not to you (backlinks/domain_intersection; the linking domain is the\n// item's `target` field), one request per site.\n// Competitors: configured, kept from earlier runs, or picked now from the Labs competitors (big platforms and the site itself excluded).\nconst API = 'https://api.dataforseo.com/v3/';\nconst plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nconst reqs = $('BL Requests').all().map(i => i.json); const resps = $('Run BL Requests').all().map(i => i.json || {});\nconst BIG = /(^|\\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|x|twitter|tiktok|medium|github|indeed|glassdoor|gov)\\./i;\nconst out = [];\nfor (const p of plans) {\n  let comps = [...p.competitors];\n  if (!comps.length) { const i = reqs.findIndex(r => r.site_id === p.site_id && r.kind === 'competitors'); const items = i >= 0 ? (((resps[i].tasks || [])[0] || {}).result || [{}])[0]?.items || [] : [];\n    comps = items.map(x => String(x.domain || '').replace(/^www\\./, '')).filter(d => d && d !== p.domain && !BIG.test(d + '.') && !/\\.gov(\\.|$)/.test(d)).slice(0, 3); }\n  if (p.mode !== 'full' || !comps.length) continue;\n  const targets = {}; comps.forEach((c, i) => { targets[String(i + 1)] = c; });\n  out.push({ json: { site_id: p.site_id, domain: p.domain, kind: 'gap', competitors: comps, endpoint: API + 'backlinks/domain_intersection/live', body: [{ targets, exclude_targets: [p.domain], intersection_mode: 'partial', limit: 100, order_by: ['1.rank,desc'] }] } });   // partial = links to at least one competitor (verified live 2026-10-02)\n}\nreturn out.length ? out : [{ json: { skip: true } }];\n"
+        },
+        "id": "4adefc4d-ce77-5e6c-beda-646d63032c73",
+        "name": "Gap Requests",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2860,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "c5ec91ce-4f41-54e4-82c0-ea3ae11d702d",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "1f70c24c-659e-5a0f-a732-f8cf8c15f845",
+        "name": "Any Gap?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3080,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.endpoint }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.body) }}",
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 1,
+                "batchInterval": 300
+              }
+            },
+            "timeout": 120000
+          }
+        },
+        "id": "0b82e8c6-3eef-5b74-9cc8-bc0c59001c90",
+        "name": "Run Gap Requests",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          3300,
+          -220
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "SEOcredDataForSE",
+            "name": "DataForSEO"
+          }
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Per site: link profile now vs the last check, links lost (important ones = alert), new links (spammy ones flagged), links pointing to broken\n// pages on the site (reclaim with a redirect), 12 months of history, unlinked brand mentions, the link gap (domains linking to competitors, not\n// to you), alerts and the prospect candidates (gap / mention / lost / reclaim). Rank and spam score are DataForSEO's 0-1000 and 0-100 scales.\nconst plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nconst reqs = $('BL Requests').all().map(i => i.json); const resps = $('Run BL Requests').all().map(i => i.json || {});\nlet greqs = [], gresps = []; try { greqs = $('Gap Requests').all().map(i => i.json); gresps = $('Run Gap Requests').all().map(i => i.json || {}); } catch (e) {}\nconst SPAM_WORDS = /\\b(pbn|buy (?:cheap )?backlinks?|backlinks? (?:service|package)|link ?farm|casino|betting|slots?|porn|xxx|viagra|cialis|payday|escort|essay writing)\\b/i;\nconst BIG = /(^|\\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|blogspot|wordpress|tumblr)\\.[a-z.]+$/i;\nconst result = (rs, i) => { const t = ((rs[i] || {}).tasks || [])[0] || {}; return { ok: t.status_code === 20000, res: (t.result || [])[0] || null, cost: Number(t.cost) || 0, error: t.status_code && t.status_code !== 20000 ? t.status_message : ((rs[i] || {}).error ? String((rs[i].error.message || rs[i].error)).slice(0, 160) : null) }; };\nconst pathOf = (u) => String(u || '').replace(/^https?:\\/\\/[^\\/]+/i, '') || '/';\nconst toks = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter(t => t.length > 2);\nreturn plans.map(p => {\n  const get = (kind) => { const out = []; reqs.forEach((r, i) => { if (r.site_id === p.site_id && r.kind === kind) out.push(result(resps, i)); }); return out; };\n  const one = (kind) => get(kind)[0] || { ok: false, res: null, cost: 0, error: 'not requested' };\n  const cost = reqs.reduce((s, r, i) => s + (r.site_id === p.site_id ? result(resps, i).cost : 0), 0) + greqs.reduce((s, r, i) => s + (r.site_id === p.site_id ? result(gresps, i).cost : 0), 0);\n  const S = one('summary'); const sm = S.res || {};\n  const summary = { rank: Number(sm.rank) || 0, backlinks: Number(sm.backlinks) || 0, referring_domains: Number(sm.referring_domains) || 0, referring_domains_nofollow: Number(sm.referring_domains_nofollow) || 0, spam_score: Number(sm.backlinks_spam_score) || 0, broken_backlinks: Number(sm.broken_backlinks) || 0, broken_pages: Number(sm.broken_pages) || 0, available: S.ok, error: S.error };\n  const spamOf = (x) => Number(x.backlink_spam_score) >= 50 || SPAM_WORDS.test(String(x.anchor || '') + ' ' + String(x.page_from_title || ''));\n  const link = (x) => ({ from_domain: String(x.domain_from || '').replace(/^www\\./, ''), from_url: x.url_from || '', to_url: x.url_to || '', anchor: String(x.anchor || '').slice(0, 120), dofollow: !!x.dofollow, domain_rank: Number(x.domain_from_rank) || 0, page_rank: Number(x.page_from_rank) || 0, spam: Number(x.backlink_spam_score) || 0, first_seen: String(x.first_seen || '').slice(0, 10), last_seen: String(x.last_seen || '').slice(0, 10), title: String(x.page_from_title || '').slice(0, 120) });\n  const lost = ((one('lost').res || {}).items || []).map(link);\n  const isImportant = (l) => l.spam < 40 && (l.domain_rank >= 150 || l.page_rank >= 100 || (l.dofollow && l.domain_rank >= 80));\n  const important_lost = lost.filter(isImportant);\n  const news = ((one('new').res || {}).items || []).map(x => ({ ...link(x), spammy: spamOf(x) }));\n  const spammy = news.filter(x => x.spammy);\n  // reclaim: links that point to broken pages here -> 301 to the closest live page\n  const live = [...p.assets.map(a => a.url), 'https://' + p.domain + '/'];\n  const suggest = (u) => { const t = new Set(toks(pathOf(u))); let best = live[live.length - 1], score = 0; for (const c of live) { const s = toks(pathOf(c)).filter(x => t.has(x)).length; if (s > score) { score = s; best = c; } } return best; };\n  const brokenLinks = ((one('broken').res || {}).items || []).map(x => ({ ...link(x), status: Number(x.url_to_status_code) || null }));\n  const reclaimMap = new Map();\n  for (const b of brokenLinks) { const k = b.to_url; const r = reclaimMap.get(k) || { broken_url: k, status: b.status, links: 0, domains: new Set(), redirect_to: suggest(k) }; r.links++; r.domains.add(b.from_domain); reclaimMap.set(k, r); }\n  const reclaim = [...reclaimMap.values()].map(r => ({ ...r, domains: [...r.domains].slice(0, 8) })).sort((a, b) => b.links - a.links).slice(0, 20);\n  const refdomains = new Set(((one('refdomains').res || {}).items || []).map(x => String(x.domain || '').replace(/^www\\./, '')).filter(Boolean));\n  const ts = ((one('timeseries').res || {}).items || []).map(x => ({ month: String(x.date || '').slice(0, 7), backlinks: Number(x.backlinks) || 0, referring_domains: Number(x.referring_domains) || 0, rank: Number(x.rank) || 0 }));\n  // unlinked mentions: pages naming the brand on a domain that does not link to you\n  const brandRe = p.brand_names.map(b => new RegExp(String(b).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'i'));\n  const mentions = [];\n  for (const m of get('mentions')) for (const x of ((m.res || {}).items || [])) { const d = String(x.domain || '').replace(/^www\\./, ''); const ci = x.content_info || {}; const txt = (ci.title || '') + ' ' + (ci.snippet || '');\n    if (!d || d === p.domain || d.endsWith('.' + p.domain) || refdomains.has(d) || BIG.test(d) || !brandRe.some(re => re.test(txt)) || mentions.some(y => y.domain === d)) continue;\n    mentions.push({ domain: d, url: x.url || '', title: String(ci.title || '').slice(0, 140), domain_rank: Number(x.domain_rank) || 0, spam: Number(x.spam_score) || 0 }); }\n  // link gap\n  const gi = greqs.findIndex(g => g.site_id === p.site_id); const G = gi >= 0 ? result(gresps, gi) : null; const competitors = gi >= 0 ? greqs[gi].competitors : p.competitors;\n  const gap = ((G && G.res && G.res.items) || []).map(it => { const vals = Object.entries(it.domain_intersection || {}); const f = (vals[0] || [])[1] || {};\n    return { domain: String(f.target || '').replace(/^www\\./, ''), rank: Number(f.rank) || 0, spam: Number(f.backlinks_spam_score) || 0, links_to: vals.map(([k]) => competitors[Number(k) - 1]).filter(Boolean), backlinks: vals.reduce((s, [, v]) => s + (Number(v.backlinks) || 0), 0) }; })\n    .filter(g => g.domain && g.spam < 30 && !BIG.test(g.domain) && !refdomains.has(g.domain) && g.domain !== p.domain).sort((a, b) => (b.links_to.length - a.links_to.length) || (b.rank - a.rank)).slice(0, 30);\n  // alerts\n  const prev = p.previous; const alerts = [];\n  if (important_lost.length) alerts.push({ level: 'high', text: important_lost.length + ' important link(s) lost: ' + important_lost.slice(0, 3).map(l => l.from_domain + ' (authority ' + l.domain_rank + ')').join(', ') + '.' });\n  if (spammy.length >= 3) alerts.push({ level: 'medium', text: spammy.length + ' new spammy links (PBN / link-farm pages) since ' + p.since.slice(0, 10) + '.' });\n  if (prev && summary.available && prev.spam_score && summary.spam_score - prev.spam_score >= 15) alerts.push({ level: 'medium', text: 'Link spam score rose from ' + prev.spam_score + ' to ' + summary.spam_score + '.' });\n  if (prev && summary.available && prev.referring_domains >= 10 && summary.referring_domains < prev.referring_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring domains fell from ' + prev.referring_domains + ' to ' + summary.referring_domains + '.' });\n  if (reclaim.length) alerts.push({ level: 'low', text: reclaim.reduce((s, r) => s + r.links, 0) + ' link(s) point to ' + reclaim.length + ' broken page(s): redirect them to keep the value.' });\n  const deliver = p.mode === 'full' || p.on_demand || alerts.some(a => a.level === 'high' || a.level === 'medium');\n  // disavow candidates (review, do not upload blindly: Google ignores most spam on its own)\n  const disavow = [...new Set([...spammy.filter(x => x.spam >= 60 || SPAM_WORDS.test(x.anchor + ' ' + x.title)).map(x => x.from_domain)])];\n  const disavow_text = disavow.length ? '# Disavow candidates for ' + p.domain + ' (' + p.checked_at.slice(0, 10) + ')\\n# Review before uploading at https://search.google.com/search-console/disavow-links — Google ignores most spam links on its own;\\n# disavow only for a manual action or a clear paid-link pattern you did not create.\\n' + disavow.map(d => 'domain:' + d).join('\\n') + '\\n' : '';\n  const candidates = [\n    ...important_lost.map(l => ({ prospect_domain: l.from_domain, type: 'lost', rank: l.domain_rank, spam_score: l.spam, detail: 'Linked to ' + pathOf(l.to_url) + ' from ' + l.from_url + ' until ' + l.last_seen, source_url: l.from_url, target_url: l.to_url })),\n    ...reclaim.flatMap(r => r.domains.slice(0, 3).map(d => ({ prospect_domain: d, type: 'reclaim', rank: 0, spam_score: 0, detail: 'Links to ' + pathOf(r.broken_url) + ' (HTTP ' + (r.status || 'error') + '): 301-redirect it to ' + pathOf(r.redirect_to), source_url: '', target_url: r.redirect_to }))),\n    ...mentions.slice(0, 10).map(m => ({ prospect_domain: m.domain, type: 'mention', rank: m.domain_rank, spam_score: m.spam, detail: 'Mentions you without a link: ' + m.title, source_url: m.url, target_url: 'https://' + p.domain + '/' })),\n    ...gap.slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', rank: g.rank, spam_score: g.spam, detail: 'Links to ' + g.links_to.join(', ') + ' (' + g.backlinks + ' links), not to you', source_url: '', target_url: (p.assets[0] || {}).url || '' }))];\n  return { json: { ...p, competitors, summary, lost, important_lost, new_links: news, spammy, reclaim, refdomains: [...refdomains].slice(0, 500), timeseries: ts, mentions, gap, alerts, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };\n});\n"
+        },
+        "id": "5a44b948-b7f0-573e-93de-789bade35e40",
+        "name": "Parse Backlinks",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3520,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Up to 8 new prospects per site get an outreach draft (Claude, low effort): lost links first (ask to restore), then unlinked mentions\n// (ask for the link), then link-gap and AI-source domains (pitch a page worth linking to). Prospects that already have a draft are skipped.\nconst sites = $('Parse Backlinks').all().map(i => i.json);\nlet existing = []; try { existing = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}\nconst ORDER = { lost: 0, mention: 1, gap: 2, ai_source: 3 };\nconst jobs = [];\nfor (const s of sites) {\n  const aiSources = existing.filter(x => x.site_id === s.site_id && x.type === 'ai_source' && !x.outreach_body && x.status === 'new').map(x => ({ prospect_domain: x.prospect_domain, type: 'ai_source', rank: Number(x.rank) || 0, detail: x.detail, source_url: '', target_url: '' }));\n  const todo = [...s.candidates.filter(c => c.type !== 'reclaim'), ...aiSources]\n    .filter(c => { const e = existing.find(x => x.site_id === s.site_id && x.prospect_domain === c.prospect_domain && x.type === c.type); return !e || (!e.outreach_body && (e.status || 'new') === 'new'); })\n    .sort((a, b) => (ORDER[a.type] - ORDER[b.type]) || (b.rank - a.rank)).slice(0, 8);\n  if (s.mode === 'full' && todo.length) jobs.push({ json: { site_id: s.site_id, domain: s.domain, business_name: s.business_name || s.domain, assets: s.assets, prospects: todo } });\n}\nreturn jobs.length ? jobs : [{ json: { skip: true } }];\n"
+        },
+        "id": "4ba1344c-2204-5c5b-ae1e-b0c4072f5855",
+        "name": "Outreach Jobs",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3740,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "f0f432e8-d2fa-5f74-a658-ca6371ac72c7",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "f26b897e-aae0-53d1-8a3a-0757939baf45",
+        "name": "Any Outreach?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3960,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=You write short, honest link-outreach e-mails for {{ $json.business_name }} ({{ $json.domain }}). Each goes to the editor of one website. No flattery templates, no fake familiarity, no SEO jargon (\"backlink\", \"DA\", \"link juice\"), no promises you cannot keep.\n\nPAGES WORTH LINKING TO (use only these URLs; if none fits, point to https://{{ $json.domain }}/)\n{{ ($json.assets || []).map(a => '- ' + a.kind + ': ' + a.title + ' — ' + a.url).join('\\n') || '- homepage: https://' + $json.domain + '/' }}\n\nPROSPECTS\n{{ ($json.prospects || []).map(p => '- ' + p.prospect_domain + ' [' + p.type + '] ' + p.detail + (p.source_url ? ' (page: ' + p.source_url + ')' : '')).join('\\n') }}\n\nAngle by type:\n- lost: their page used to link to us; it seems the link was removed or the page changed. Ask kindly whether it could be restored, give the current URL.\n- mention: they mention us without a link. Thank them, ask to make the mention a link to the given URL.\n- gap: they link to similar businesses' resources on this topic. Offer our page as a useful addition for their readers, say in one sentence what it adds.\n- ai_source: AI assistants cite this site on our topic. Offer expert input (a quote, data, a guest article or a listing) tied to our page.\n\nRules: subject under 60 characters; body 70-130 words, plain text, one link, sign as \"[Your name], {{ $json.business_name }}\". Never claim facts about their site you were not given.\n\nReturn ONLY JSON: {\"drafts\": [{\"prospect_domain\": \"\", \"subject\": \"\", \"body\": \"\"}]}\n",
+          "hasOutputParser": true,
+          "options": {}
+        },
+        "id": "a53d774c-4152-5529-a9e6-bfe6683db7ff",
+        "name": "Outreach Writer",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          4180,
+          -220
+        ],
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "claude-sonnet-5-5",
+            "cachedResultName": "Claude Sonnet 5.5"
+          },
+          "options": {
+            "maxTokensToSample": 8192,
+            "thinking": true,
+            "thinkingMode": "adaptive",
+            "effort": "low"
+          }
+        },
+        "id": "d7a653d9-ebe7-51dc-86dd-924be2d88b94",
+        "name": "Claude — Outreach Writer",
+        "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+        "typeVersion": 1.6,
+        "position": [
+          4080,
+          -20
+        ],
+        "credentials": {
+          "anthropicApi": {
+            "id": "SEOcredAnthropic",
+            "name": "Anthropic (SEO Agent)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "schemaType": "manual",
+          "inputSchema": "{\"type\": \"object\", \"properties\": {\"drafts\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {\"prospect_domain\": {\"type\": \"string\"}, \"subject\": {\"type\": \"string\"}, \"body\": {\"type\": \"string\"}}, \"required\": [\"prospect_domain\", \"body\"]}}}, \"required\": [\"drafts\"]}"
+        },
+        "id": "837f03bf-c9a5-5dab-9703-1b60428114c1",
+        "name": "Parser — Outreach Writer",
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          4300,
+          -20
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// The link-prospect pipeline (seo_link_prospects, upsert by site + prospect domain + type; exact columns): this run's candidates merged with\n// the stored rows (status, notes and drafts kept), outreach drafts attached, and prospects that now link to you marked \"won\" automatically.\nconst sites = $('Parse Backlinks').all().map(i => i.json);\nlet existing = []; try { existing = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}\nlet jobs = [], outs = []; try { jobs = $('Outreach Jobs').all().map(i => i.json).filter(j => !j.skip); outs = $('Outreach Writer').all().map(i => i.json); } catch (e) {}\nconst parse = (raw) => { if (raw && typeof raw === 'object') return raw; const s = String(raw || '').replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/i, ''); try { return JSON.parse(s); } catch (e) { const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) { return null; } } };\nconst rows = [];\nfor (const s of sites) {\n  const now = s.checked_at; const ji = jobs.findIndex(j => j.site_id === s.site_id);\n  const drafts = ji >= 0 && outs[ji] && !outs[ji].error ? ((parse(outs[ji].output) || {}).drafts || []) : [];\n  const linking = new Set([...s.refdomains, ...s.new_links.filter(l => !l.spammy).map(l => l.from_domain)]);\n  const key = (x) => x.prospect_domain + '|' + x.type;\n  const mine = new Map(existing.filter(x => x.site_id === s.site_id).map(x => [key(x), x]));\n  const seen = new Set();\n  const emit = (c, old) => { const d = drafts.find(x => String(x.prospect_domain || '').toLowerCase() === c.prospect_domain && !old.outreach_body);\n    const won = c.type !== 'reclaim' && linking.has(c.prospect_domain) && (old.status || 'new') !== 'won';\n    rows.push({ site_id: s.site_id, domain: s.domain, prospect_domain: c.prospect_domain, type: c.type, rank: Number(c.rank ?? old.rank) || 0, spam_score: Number(c.spam_score ?? old.spam_score) || 0, detail: String(c.detail || old.detail || '').slice(0, 300),\n      source_url: c.source_url || old.source_url || '', target_url: c.target_url || old.target_url || '', status: won ? 'won' : (old.status || 'new'), first_seen: old.first_seen || now, last_seen: c.fresh ? now : (old.last_seen || now),\n      won_at: won ? now : (old.won_at || ''), outreach_subject: old.outreach_subject || (d ? String(d.subject || '').slice(0, 120) : ''), outreach_body: old.outreach_body || (d ? String(d.body || '').slice(0, 1500) : ''), note: old.note || '' }); };\n  for (const c of s.candidates) { const k = key(c); if (seen.has(k)) continue; seen.add(k); emit({ ...c, fresh: true }, mine.get(k) || {}); }\n  // stored prospects not seen this run: only touched when they now link (won) or a draft was written for them (ai_source)\n  for (const [k, old] of mine) { if (seen.has(k)) continue; const won = old.type !== 'reclaim' && linking.has(old.prospect_domain) && old.status !== 'won'; const d = drafts.find(x => String(x.prospect_domain || '').toLowerCase() === old.prospect_domain && !old.outreach_body);\n    if (won || d) { seen.add(k); emit({ prospect_domain: old.prospect_domain, type: old.type }, old); } }\n}\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "5e98319a-d9a1-5e41-aeaf-d4e283d4aef8",
+        "name": "Prospect Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4400,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "3a36c92d-7f61-550c-9716-834e9b806306",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "4b9cef0f-c2e6-5cb5-8776-d2b1a1c1684b",
+        "name": "Any Prospect Rows?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          4620,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_link_prospects"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              },
+              {
+                "keyName": "prospect_domain",
+                "condition": "eq",
+                "keyValue": "={{ $json.prospect_domain }}"
+              },
+              {
+                "keyName": "type",
+                "condition": "eq",
+                "keyValue": "={{ $json.type }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prospect_domain",
+                "displayName": "prospect_domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "type",
+                "displayName": "type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rank",
+                "displayName": "rank",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "spam_score",
+                "displayName": "spam_score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "detail",
+                "displayName": "detail",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source_url",
+                "displayName": "source_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "target_url",
+                "displayName": "target_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "first_seen",
+                "displayName": "first_seen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_seen",
+                "displayName": "last_seen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "won_at",
+                "displayName": "won_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "outreach_subject",
+                "displayName": "outreach_subject",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "outreach_body",
+                "displayName": "outreach_body",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "note",
+                "displayName": "note",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "817cb6c3-b1c4-5641-84b1-41a5a909e493",
+        "name": "Save Prospects",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          4840,
+          -220
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// One seo_backlink_snapshots row per site per run (exact columns); lists are kept short.\nreturn $('Parse Backlinks').all().map(i => { const s = i.json; const J = (o) => JSON.stringify(o);\n  return { json: { site_id: s.site_id, domain: s.domain, checked_at: s.checked_at, mode: s.mode, rank: s.summary.rank, backlinks: s.summary.backlinks, referring_domains: s.summary.referring_domains, referring_domains_nofollow: s.summary.referring_domains_nofollow,\n    spam_score: s.summary.spam_score, broken_backlinks: s.summary.broken_backlinks, new_links: s.new_links.length, lost_links: s.lost.length, important_lost: s.important_lost.length, spammy_new: s.spammy.length,\n    lost_json: J(s.important_lost.slice(0, 20)), new_json: J(s.new_links.filter(l => !l.spammy).slice(0, 20)), competitors_json: J(s.competitors.map(d => ({ domain: d }))), timeseries_json: J(s.timeseries), cost_usd: s.cost_usd } }; });\n"
+        },
+        "id": "e8a40031-7569-5369-90ea-1bd98ef46aa7",
+        "name": "BL Snapshot Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2420,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "insert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_backlink_snapshots"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "checked_at",
+                "displayName": "checked_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mode",
+                "displayName": "mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rank",
+                "displayName": "rank",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "backlinks",
+                "displayName": "backlinks",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "referring_domains",
+                "displayName": "referring_domains",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "referring_domains_nofollow",
+                "displayName": "referring_domains_nofollow",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "spam_score",
+                "displayName": "spam_score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "broken_backlinks",
+                "displayName": "broken_backlinks",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "new_links",
+                "displayName": "new_links",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "lost_links",
+                "displayName": "lost_links",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "important_lost",
+                "displayName": "important_lost",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "spammy_new",
+                "displayName": "spammy_new",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "lost_json",
+                "displayName": "lost_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "new_json",
+                "displayName": "new_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "competitors_json",
+                "displayName": "competitors_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "timeseries_json",
+                "displayName": "timeseries_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_usd",
+                "displayName": "cost_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "1da40a72-e0cf-5015-9ba2-e51bc6be4054",
+        "name": "Save BL Snapshot",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2640,
+          660
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Backlink report per site: monthly FULL report (profile vs last month, 12-month history, lost / new / spammy links, broken links to reclaim,\n// link gap, unlinked mentions, the prospect pipeline with outreach drafts) or, on light weeks, a short ALERT e-mail when an important link was\n// lost or spam arrived. Attachments: prospects.csv and, when needed, disavow-candidates.txt. Sites with nothing to report stay quiet.\n// ---- shared report helpers (inlined by the build): the same look as the Site Tracker report ----\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst n = (v) => (Number(v) || 0).toLocaleString('en-GB');\nconst td = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;font-size:13px;vertical-align:top\"', th = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:12px\"';\nconst table = (headers, rows, empty) => rows.length ? '<table style=\"border-collapse:collapse;margin:6px 0;max-width:100%\">' + '<tr>' + headers.map(h => '<th ' + th + '>' + esc(h) + '</th>').join('') + '</tr>' + rows.map(r => '<tr>' + r.map(c => '<td ' + td + '>' + c + '</td>').join('') + '</tr>').join('') + '</table>' : '<p style=\"color:#64748b;font-size:13px\">' + esc(empty || 'nothing to show') + '</p>';\nconst tile = (label, value, delta, color) => '<td style=\"padding:8px 12px;border:1px solid #e2e8f0;min-width:110px;vertical-align:top\"><div style=\"font-size:11px;color:#64748b;text-transform:uppercase\">' + esc(label) + '</div><div style=\"font-size:20px;font-weight:700\">' + value + '</div><div style=\"font-size:12px;color:' + (color || '#475569') + '\">' + delta + '</div></td>';\nconst h3 = (t) => '<h3 style=\"margin:18px 0 4px;font-size:15px;color:#0f172a\">' + esc(t) + '</h3>';\nconst p_ = (t, muted) => '<p style=\"margin:4px 0;font-size:13px' + (muted ? ';color:#64748b' : '') + '\">' + t + '</p>';\nconst pathOf = (u) => { const p = String(u || '').replace(/^https?:\\/\\/[^\\/]+/i, ''); return p || '/'; };\nconst link = (u, label) => u ? '<a href=\"' + esc(u) + '\" style=\"color:#1d4ed8\">' + esc(label || pathOf(u)) + '</a>' : '—';\nconst dpts = (v) => v == null ? '' : (v > 0 ? '<span style=\"color:#15803d\">▲ ' + v + ' pts</span>' : v < 0 ? '<span style=\"color:#b91c1c\">▼ ' + Math.abs(v) + ' pts</span>' : 'no change');\nconst briefBox = (b) => b ? '<div style=\"background:#f8fafc;border-left:4px solid #1d4ed8;padding:10px 12px;margin:8px 0\"><div style=\"font-weight:700;font-size:15px\">' + esc(b.headline) + '</div><p style=\"margin:6px 0 0;font-size:13px\">' + esc(b.summary) + '</p></div>' : '';\nconst alertBox = (alerts) => (alerts || []).length ? '<div style=\"background:#fef2f2;border-left:4px solid #b91c1c;padding:8px 12px;margin:8px 0\">' + alerts.map(a => '<div style=\"font-size:13px\">⚠ ' + esc(a.text || a) + '</div>').join('') + '</div>' : '';\nconst wrapDoc = (title, body) => '<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>' + esc(title) + '</title></head><body style=\"margin:24px\">' + body + '</body></html>';\nconst b64 = (s) => Buffer.from(String(s), 'utf8').toString('base64');\n\nconst sites = $('Parse Backlinks').all().map(i => i.json);\nlet rows = []; try { rows = $('Prospect Rows').all().map(i => i.json).filter(r => !r.skip); } catch (e) {}\nlet stored = []; try { stored = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}\nconst csvCell = (v) => '\"' + String(v == null ? '' : v).replace(/\"/g, '\"\"') + '\"';\nconst TYPE = { lost: 'Lost link — ask to restore', mention: 'Unlinked mention — ask for the link', gap: 'Links to competitors', ai_source: 'Cited by AI answers', reclaim: 'Broken page — redirect' };\nreturn sites.filter(s => s.deliver).map(s => {\n  const S = s.summary, P = s.previous; const full = s.mode === 'full';\n  const pipe = [...rows.filter(r => r.site_id === s.site_id), ...stored.filter(x => x.site_id === s.site_id && !rows.some(r => r.site_id === s.site_id && r.prospect_domain === x.prospect_domain && r.type === x.type))];\n  const won = pipe.filter(r => r.status === 'won' && String(r.won_at || '').slice(0, 10) === s.checked_at.slice(0, 10));\n  const counts = ['new', 'contacted', 'won', 'rejected', 'ignored'].map(st => st + ' ' + pipe.filter(r => (r.status || 'new') === st).length).join(' · ');\n  const dv = (cur, prev) => P ? (cur - prev > 0 ? '<span style=\"color:#15803d\">+' + n(cur - prev) + '</span>' : cur - prev < 0 ? '<span style=\"color:#b91c1c\">' + n(cur - prev) + '</span>' : 'no change') : 'first check';\n  let html = '<div style=\"font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:900px\">';\n  html += '<h2 style=\"margin:0 0 2px;font-size:20px\">' + (full ? 'Backlinks: ' : 'Backlink alert: ') + esc(s.domain) + '</h2>' + p_(esc(s.checked_at.slice(0, 10)) + ' · changes since ' + esc(s.since.slice(0, 10)) + (full ? ' · monthly report' : ' · weekly watch') + (s.on_demand ? ' · on-demand run' : ''), true);\n  html += alertBox(s.alerts.filter(a => full || a.level !== 'low'));\n  if (!S.available) html += p_('The Backlinks API returned no summary (' + esc(S.error || 'no data') + ').', true);\n  html += '<table style=\"border-collapse:collapse;margin:8px 0\"><tr>' + tile('Referring domains', n(S.referring_domains), P ? dv(S.referring_domains, P.referring_domains) : '') + tile('Backlinks', n(S.backlinks), P ? dv(S.backlinks, P.backlinks) : '') + tile('Authority (0-1000)', n(S.rank), P ? dv(S.rank, P.rank) : '') +\n    tile('Spam score', S.spam_score + '/100', S.spam_score >= 40 ? '<span style=\"color:#b91c1c\">high</span>' : 'ok') + tile('New / lost', n(s.new_links.length) + ' / ' + n(s.lost.length), 'since ' + s.since.slice(0, 10)) + '</tr></table>';\n  if (s.important_lost.length || !full) html += h3('Important links lost') + table(['From', 'Authority', 'Pointed to', 'Last seen', 'What to do'], s.important_lost.map(l => [link(l.from_url, l.from_domain), n(l.domain_rank), esc(pathOf(l.to_url)), esc(l.last_seen), 'Ask the site owner to restore it (draft below); check the page still exists']), 'none');\n  if (full) {\n    if (s.timeseries.length) html += h3('Last 12 months') + table(['Month', 'Referring domains', 'Backlinks'], s.timeseries.slice(-12).map(t => [esc(t.month), n(t.referring_domains), n(t.backlinks)]));\n    html += h3('New links') + table(['From', 'Authority', 'Anchor', 'First seen', ''], s.new_links.slice(0, 20).map(l => [link(l.from_url, l.from_domain), n(l.domain_rank), esc(l.anchor), esc(l.first_seen), l.spammy ? '<span style=\"color:#b91c1c\">spammy</span>' : (l.dofollow ? 'follow' : 'nofollow')]), 'no new links since the last check');\n    html += h3('Links to broken pages (reclaim with a 301)') + table(['Broken page', 'Status', 'Links', 'From', 'Redirect to'], s.reclaim.map(r => [esc(pathOf(r.broken_url)), esc(r.status || 'error'), n(r.links), esc(r.domains.join(', ')), link(r.redirect_to)]), 'none — every linked page works');\n    html += h3('Link gap: sites that link to ' + (s.competitors.length ? s.competitors.join(', ') : 'your competitors') + ' but not to you') + (s.gap_error ? p_('Not available: ' + esc(s.gap_error), true) : '') + table(['Site', 'Authority', 'Links to'], s.gap.slice(0, 15).map(g => [esc(g.domain), n(g.rank), esc(g.links_to.join(', '))]), s.competitors.length ? 'no gap found' : 'no competitors known yet — add them with Site Admin action \"monitors\"');\n    html += h3('Unlinked mentions') + table(['Site', 'Page', 'Authority'], s.mentions.map(m => [esc(m.domain), link(m.url, m.title || m.url), n(m.domain_rank)]), 'no pages found that name you without linking');\n  }\n  if (s.spammy.length) html += h3('Spammy new links') + table(['From', 'Spam', 'Anchor'], s.spammy.slice(0, 12).map(l => [esc(l.from_domain), n(l.spam), esc(l.anchor)])) + p_('Google ignores most spam links on its own. ' + (s.disavow_text ? 'A disavow list is attached for review: upload it only for a manual action or a paid-link pattern you did not create.' : ''), true);\n  const drafts = pipe.filter(r => r.outreach_body && (r.status || 'new') === 'new').slice(0, 8);\n  if (full || drafts.length) html += h3('Outreach — this month\\'s drafts') + (drafts.length ? drafts.map(r => '<div style=\"border:1px solid #e2e8f0;padding:8px 10px;margin:6px 0\"><div style=\"font-size:12px;color:#64748b\">' + esc(r.prospect_domain) + ' · ' + esc(TYPE[r.type] || r.type) + ' · ' + esc(r.detail) + '</div><div style=\"font-weight:600;font-size:13px;margin-top:4px\">' + esc(r.outreach_subject) + '</div><pre style=\"white-space:pre-wrap;font-family:inherit;font-size:13px;margin:4px 0 0\">' + esc(r.outreach_body) + '</pre></div>').join('') : p_('No new drafts this month.', true));\n  if (full) html += h3('Prospect pipeline') + p_(esc(counts) + (won.length ? ' · <b>won this month: ' + esc(won.map(w => w.prospect_domain).join(', ')) + '</b>' : '')) + p_('Mark a prospect as contacted / won / rejected with Site Admin action \"prospect\" (domain, prospect_domain, status). \"Won\" is also set automatically when the site starts linking to you. Full list: prospects.csv.', true);\n  html += h3('How this works') + p_('Every Monday the monitor checks for lost and new links (alert e-mail only when something important happened); the first run of each month is the full report. Data: DataForSEO Backlinks and Content Analysis. Cost this run: $' + s.cost_usd.toFixed(2) + '.', true) + '</div>';\n  const csv = ['site,prospect_domain,type,status,authority,spam,detail,source_url,target_url,first_seen,last_seen,won_at,outreach_subject,outreach_body,note'].concat(pipe.map(r => [r.domain, r.prospect_domain, r.type, r.status, r.rank, r.spam_score, r.detail, r.source_url, r.target_url, r.first_seen, r.last_seen, r.won_at, r.outreach_subject, r.outreach_body, r.note].map(csvCell).join(','))).join('\\n');\n  const subject = (full ? '[Backlinks] ' : '[Backlink alert] ') + s.domain + ' — ' + n(S.referring_domains) + ' referring domains' + (s.important_lost.length ? ' · ' + s.important_lost.length + ' important link(s) lost' : '') + (s.spammy.length >= 3 ? ' · ' + s.spammy.length + ' spammy' : '') + (won.length ? ' · ' + won.length + ' won' : '');\n  const file_name = 'backlinks-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + s.checked_at.slice(0, 10) + '.html';\n  const binary = { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } };\n  if (full && pipe.length) binary.prospects_csv = { data: b64(csv), mimeType: 'text/csv', fileName: 'prospects-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '.csv', fileExtension: 'csv' };\n  if (s.disavow_text) binary.disavow_txt = { data: b64(s.disavow_text), mimeType: 'text/plain', fileName: 'disavow-candidates-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '.txt', fileExtension: 'txt' };\n  return { json: { ...s, refdomains: undefined, pipeline: { counts, won: won.map(w => w.prospect_domain), total: pipe.length }, prospects: pipe.slice(0, 60), subject, html, file_name, status: 'progress', stage: 'backlinks' }, binary };\n});\n"
+        },
+        "id": "fa974d14-4356-522c-ab33-1f18d7d8543b",
+        "name": "BL Report",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2860,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Copy of each report HTML named index.html for the PDF renderer (Gotenberg requires that exact file name); one item per site.\nreturn $input.all().map(item => { const doc = (item.binary || {}).data; if (!doc) return item; return { json: item.json, binary: { ...(item.binary || {}), html: { ...doc, fileName: 'index.html', mimeType: 'text/html', fileExtension: 'html' } } }; });"
+        },
+        "id": "d5434319-e5a2-5923-9b0a-8884e6b6adf1",
+        "name": "Prepare PDF BL",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3080,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://gotenberg:3000/forms/chromium/convert/html",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "parameterType": "formBinaryData",
+                "name": "files",
+                "inputDataFieldName": "html"
+              },
+              {
+                "name": "paperWidth",
+                "value": "8.27"
+              },
+              {
+                "name": "paperHeight",
+                "value": "11.69"
+              },
+              {
+                "name": "marginTop",
+                "value": "0.5"
+              },
+              {
+                "name": "marginBottom",
+                "value": "0.5"
+              },
+              {
+                "name": "marginLeft",
+                "value": "0.5"
+              },
+              {
+                "name": "marginRight",
+                "value": "0.5"
+              },
+              {
+                "name": "printBackground",
+                "value": "true"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 120000,
+            "response": {
+              "response": {
+                "responseFormat": "file",
+                "outputPropertyName": "pdf"
+              }
+            }
+          }
+        },
+        "id": "716c9efb-5ba3-5b7a-8ccb-fb652fbd96b4",
+        "name": "Render PDF BL",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          3300,
+          660
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Attach the PDF (when the renderer succeeded) next to the report's other files, per site; a renderer failure never fails the run.\nconst src = $('Prepare PDF BL').all(); const got = $input.all();\nreturn src.map((s, i) => { const g = got[i] || {}; const pdf = (g.binary && g.binary.pdf && !(g.json && g.json.error)) ? g.binary.pdf : null;\n  const name = String(s.json.file_name || 'report.html').replace(/\\.html?$/i, '') + '.pdf'; const binary = { ...(s.binary || {}) }; delete binary.html;\n  if (pdf) binary.pdf = { ...pdf, fileName: name, mimeType: 'application/pdf', fileExtension: 'pdf' };\n  return { json: { ...s.json, pdf_ready: !!pdf, pdf_file_name: pdf ? name : null }, binary }; });"
+        },
+        "id": "03609a6b-7a5c-5d95-bf10-2c8cb5372ba1",
+        "name": "Attach PDF BL",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3520,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Callback payload per site for API callers: the backlink data, the PDF and the CSV / disavow files (bytes from n8n's binary store).\nconst items = $input.all(); const out = [];\nconst bytes = async (i, k, bin) => { try { const b = await this.helpers.getBinaryDataBuffer(i, k); return b && b.length ? b.toString('base64') : null; } catch (e) { return bin[k] && bin[k].data && String(bin[k].data).length > 20 ? bin[k].data : null; } };\nfor (let i = 0; i < items.length; i++) {\n  const it = items[i]; const d = it.json || {}; const bin = it.binary || {}; const files = {};\n  for (const k of ['pdf', 'prospects_csv', 'disavow_txt']) if (bin[k]) { const data = await bytes(i, k, bin); if (data) files[k] = { data, fileName: bin[k].fileName, mimeType: bin[k].mimeType }; }\n  const { html, candidates, assets, ...rest } = d;\n  out.push({ json: { ...rest, pdf: files.pdf || null, files } });\n}\nreturn out;\n"
+        },
+        "id": "c5edf8fe-020f-549d-8d97-139805cc2497",
+        "name": "Build BL Callback",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3740,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "153d771b-f14f-552f-8181-72b10473284b",
+                "leftValue": "={{ !!$json.email }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "e7b3765d-9b04-5c9f-a64c-79fb714063d2",
+        "name": "Has Email (BL)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3740,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "fromEmail": "Dev SEO <kinnngahmed@gmail.com>",
+          "toEmail": "={{ $json.email }}",
+          "subject": "={{ $json.subject }}",
+          "emailFormat": "html",
+          "html": "={{ $json.html }}",
+          "options": {
+            "appendAttribution": false,
+            "fileAttachments": "={{ ['pdf', 'prospects_csv', 'disavow_txt'].filter(k => $binary[k]).join(',') || 'data' }}"
+          }
+        },
+        "id": "3efafb86-32c3-5c85-a999-15284ba6ec90",
+        "name": "Send BL Report",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 2.1,
+        "position": [
+          3960,
+          660
+        ],
+        "credentials": {
+          "smtp": {
+            "id": "SEOcredSmtpGmail",
+            "name": "Gmail SMTP (SEO Agent)"
+          }
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "0a7d20f4-6d35-50ed-b246-b9bb583aaf83",
+                "leftValue": "={{ !!$json.callback_url }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "d89c2ef7-3485-5dbf-a827-270c3baf7cb2",
+        "name": "Has Callback (BL)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3960,
+          860
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.callback_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "id": "1525fee2-365c-5f3f-a625-0514cd81b270",
+        "name": "POST BL Report",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          4180,
+          860
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Backlink Monitor (v4.5)\n**Every Monday 07:30**: a light watch (links lost / new since the last check, spam) that e-mails only when an **important link was lost** or spam arrived; the **first run of each month** is the full report. On demand: *Manual Run* `{ domain | site_id, light?, email?, callback_url? }`; form option \"Check my backlinks\" / API `mode: backlinks`.\nDataForSEO Backlinks ($0.024 per request): summary, lost (`backlinks_status_type: lost`, `last_seen` since the last check), new (`first_seen` since), and on full runs: links to **broken pages** (`is_broken` → 301 suggestion), referring domains, 12-month history, **unlinked brand mentions** (Content Analysis), competitors once (Labs), the **link gap** (`domain_intersection`, `intersection_mode: partial`: links to a competitor, not to you). About $0.10 per site for a light run, $0.25-0.35 for a full one.\nProspects (`seo_link_prospects`; types lost / mention / gap / reclaim + the AI Visibility Tracker's ai_source): merged with the stored pipeline (status kept; Site Admin `prospect` sets contacted / won / rejected), **won** set automatically when the site starts linking, **outreach drafts** by Claude for up to 8 new prospects a month. Snapshot per run → `seo_backlink_snapshots`. Report: e-mail + PDF + `prospects.csv` + `disavow-candidates.txt` (review only) + callback `stage: backlinks`.",
+          "height": 380,
+          "width": 1300,
+          "color": 5
+        },
+        "id": "52aa506b-4f0a-558f-b125-b58b38e8d9f4",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -700
+        ]
+      }
+    ],
+    "connections": {
+      "Claude — Outreach Writer": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Outreach Writer",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parser — Outreach Writer": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "Outreach Writer",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Email (BL)?": {
+        "main": [
+          [
+            {
+              "node": "Send BL Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Callback (BL)?": {
+        "main": [
+          [
+            {
+              "node": "POST BL Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Weekly Schedule": {
+        "main": [
+          [
+            {
+              "node": "Ensure Monitors Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Monitors Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Snapshots Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Snapshots Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Prospects Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Prospects Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Sites Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Sites Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Profiles Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Profiles Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Case Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Case Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Log Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Log Table": {
+        "main": [
+          [
+            {
+              "node": "Load Sites",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Sites": {
+        "main": [
+          [
+            {
+              "node": "Load Ladders",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Ladders": {
+        "main": [
+          [
+            {
+              "node": "Load Monitors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Monitors": {
+        "main": [
+          [
+            {
+              "node": "Load Profiles",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Profiles": {
+        "main": [
+          [
+            {
+              "node": "Load Backlink Snapshots",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Backlink Snapshots": {
+        "main": [
+          [
+            {
+              "node": "Load Link Prospects",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Link Prospects": {
+        "main": [
+          [
+            {
+              "node": "Load Content Log",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Content Log": {
+        "main": [
+          [
+            {
+              "node": "Load Case Studies",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Case Studies": {
+        "main": [
+          [
+            {
+              "node": "BL Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "BL Plan": {
+        "main": [
+          [
+            {
+              "node": "Any Sites (BL)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Run": {
+        "main": [
+          [
+            {
+              "node": "Ensure Monitors Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Sites (BL)?": {
+        "main": [
+          [
+            {
+              "node": "BL Requests",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Nothing To Do (BL)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "BL Requests": {
+        "main": [
+          [
+            {
+              "node": "Run BL Requests",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run BL Requests": {
+        "main": [
+          [
+            {
+              "node": "Gap Requests",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Gap Requests": {
+        "main": [
+          [
+            {
+              "node": "Any Gap?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Gap?": {
+        "main": [
+          [
+            {
+              "node": "Run Gap Requests",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Parse Backlinks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run Gap Requests": {
+        "main": [
+          [
+            {
+              "node": "Parse Backlinks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse Backlinks": {
+        "main": [
+          [
+            {
+              "node": "Outreach Jobs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Outreach Jobs": {
+        "main": [
+          [
+            {
+              "node": "Any Outreach?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Outreach?": {
+        "main": [
+          [
+            {
+              "node": "Outreach Writer",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prospect Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Outreach Writer": {
+        "main": [
+          [
+            {
+              "node": "Prospect Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prospect Rows": {
+        "main": [
+          [
+            {
+              "node": "Any Prospect Rows?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Prospect Rows?": {
+        "main": [
+          [
+            {
+              "node": "Save Prospects",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "BL Snapshot Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Prospects": {
+        "main": [
+          [
+            {
+              "node": "BL Snapshot Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "BL Snapshot Rows": {
+        "main": [
+          [
+            {
+              "node": "Save BL Snapshot",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save BL Snapshot": {
+        "main": [
+          [
+            {
+              "node": "BL Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "BL Report": {
+        "main": [
+          [
+            {
+              "node": "Prepare PDF BL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare PDF BL": {
+        "main": [
+          [
+            {
+              "node": "Render PDF BL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Render PDF BL": {
+        "main": [
+          [
+            {
+              "node": "Attach PDF BL",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Attach PDF BL": {
+        "main": [
+          [
+            {
+              "node": "Has Email (BL)?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Build BL Callback",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build BL Callback": {
+        "main": [
+          [
+            {
+              "node": "Has Callback (BL)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

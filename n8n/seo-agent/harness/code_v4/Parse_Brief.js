@@ -8,7 +8,7 @@ const parseAgentJson = (raw) => {
   throw new Error('AI did not return valid JSON. Output was: ' + s.slice(0, 300));
 };
 
-const prev = $('Parse Verdict').first().json;   // includes verdict + keyword data + site context
+const prev = $('Brief Context').first().json;   // Parse Verdict + business profile, proof, page role, hub pages, video (v4.4)
 const brief = parseAgentJson($input.first().json.output);
 
 // Word count check

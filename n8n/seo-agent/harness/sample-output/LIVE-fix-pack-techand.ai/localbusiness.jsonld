@@ -1,0 +1,23 @@
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "@id": "https://www.techand.ai/#business",
+  "name": "Tech&",
+  "url": "https://www.techand.ai/",
+  "telephone": "+971507020541",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Office 704, 7th Floor, 5EA Building (East Wing), Dubai Airport Freezone Authority (DAFZA)",
+    "addressLocality": "Dubai",
+    "addressRegion": "Dubai",
+    "addressCountry": "AE"
+  },
+  "sameAs": [
+    "https://www.linkedin.com/company/techand.ai/"
+  ],
+  "parentOrganization": {
+    "@id": "https://www.techand.ai/#organization"
+  }
+}
+</script>

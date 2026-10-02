@@ -1,0 +1,25 @@
+# robots.txt for www.techand.ai — proposed by the SEO audit on 2026-10-02
+# Changes: added an explicit allow group for AI search crawlers (they fetch pages to cite them in answers)
+
+User-Agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin/
+Disallow: /private/
+
+Host: https://www.techand.ai
+
+# AI search crawlers: they fetch a page when a user asks, so your pages can be cited in ChatGPT, Perplexity and Claude answers
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+Allow: /
+
+# AI training crawlers (GPTBot, ClaudeBot, Google-Extended, CCBot) are left as they were. To opt out of model training, add:
+# User-agent: GPTBot
+# Disallow: /
+
+Sitemap: https://www.techand.ai/sitemap.xml
