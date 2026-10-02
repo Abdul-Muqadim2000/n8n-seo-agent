@@ -1,0 +1,21 @@
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://northwind-erp.com/#organization",
+  "name": "Northwind ERP",
+  "url": "https://northwind-erp.com/",
+  "logo": "https://northwind-erp.com/logo.png",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "telephone": "+971 4 555 0100",
+    "contactType": "customer service"
+  },
+  "sameAs": [
+    "https://www.linkedin.com/company/northwind-erp",
+    "https://twitter.com/northwind erp",
+    "https://www.linkedin.com/company/x",
+    "https://maps.google.com/?cid=1234567890"
+  ]
+}
+</script>

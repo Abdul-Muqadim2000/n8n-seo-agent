@@ -180,7 +180,7 @@ log('Content QA: keyword density now mentions-based (was inflated 2-3x, forcing 
 patch('Pick Key Pages', "pages.filter(p => !isHome(p.url) && !isLegal(p.url) && !isArticle(p.url) && !isContact(p.url) && !isAbout(p.url))", "const isHub = (u) => /\\/(insights|blog|news|articles?|guides?|tag|category|author)\\/?$/i.test(u);\npages.filter(p => !isHome(p.url) && !isLegal(p.url) && !isArticle(p.url) && !isHub(p.url) && !isContact(p.url) && !isAbout(p.url))")
 log('Pick Key Pages: blog/news hub pages no longer sampled as "service" pages')
 
-patch('URLs To Check', "const seen = new Set();", "// Only probe public http(s) URLs (schema can point anywhere, including internal hosts)\nconst publicUrl = (u) => { try { const x = new URL(u); const h = x.hostname.toLowerCase(); if (!/^https?:$/.test(x.protocol) || !h.includes('.')) return false; if (/^(\\d{1,3}\\.){3}\\d{1,3}$/.test(h) || h.includes(':')) return false; if (/(^|\\.)(localhost|local|internal|localdomain|lan|corp|intranet|test|invalid)$/.test(h)) return false; return true; } catch (e) { return false; } };\nconst seen = new Set();")
+patch('URLs To Check', "const seen = new Set();", "// Only probe public http(s) URLs (schema can point anywhere, including internal hosts)\nconst publicUrl = (u) => { const m = String(u || '').trim().match(/^(https?):\\/\\/(?:[^@\\/?#]*@)?([^\\/?#]+)/i); if (!m) return false; const hp = m[2].toLowerCase(); if (hp.includes(':') || hp.startsWith('[')) return false; const h = hp; if (!h.includes('.')) return false; if (/^(\\d{1,3}\\.){3}\\d{1,3}$/.test(h)) return false; if (/(^|\\.)(localhost|local|internal|localdomain|lan|corp|intranet|test|invalid)$/.test(h)) return false; return true; };   // regex parser: the n8n Code sandbox has no URL constructor\nconst seen = new Set();")
 patch('URLs To Check', "  if (!url || seen.has(url)) continue;", "  if (!url || seen.has(url) || !publicUrl(url)) continue;")
 log('URLs To Check: SSRF guard — only public http(s) hosts are HEAD-checked')
 
@@ -834,6 +834,7 @@ sb['properties'].update({'title_variants': ARR, 'meta_variants': ARR, 'audience_
   'evidence_plan': OBJ({'fact': {'type': 'string'}, 'source_url': {'type': 'string'}}), 'client_facts': ARR, 'proof_elements': ARR, 'voice_rules': ARR})
 sb['properties']['outline']['items']['properties'].update({'format': {'type': 'string'}, 'evidence': ARR})
 sb['properties']['comparison_table']['properties']['rows_hint'] = {'type': 'string'}
+sb['properties']['image_suggestions'] = OBJ({'placement': {'type': 'string'}, 'purpose': {'type': 'string'}, 'subject': {'type': 'string'}, 'alt_text': {'type': 'string'}, 'caption': {'type': 'string'}, 'filename': {'type': 'string'}})
 set_schema('Parser — Strategy Brief', sb)
 set_prompt('Copywriter', 'copywriter.txt')
 cw = pos('Copywriter')
@@ -929,7 +930,7 @@ log('API: callback_url may be a local http URL while testing (localhost / host.d
 # =============================================================================
 # 8f. e-mail via SMTP (Gmail App Password) instead of Gmail OAuth — no browser consent, fully automatable
 # =============================================================================
-SENDER = 'Dev SEO <kinnngahmed@gmail.com>'
+from env_settings import SENDER, BRAND, OPS_EMAIL, SA_EMAIL   # from n8n/.env at build time (run apply_env.py after editing .env)
 for gm in ('Send Report', 'Send Audit Report'):
     g = nodes[gm]; gp = g['parameters']
     g['type'] = 'n8n-nodes-base.emailSend'; g['typeVersion'] = 2.1
@@ -1204,6 +1205,673 @@ log('Form flows: a Form completion page ends the execution (live finding), so di
 
 
 # =============================================================================
+# 12. SITE TRACKING (v4.3) — "Track my site" (form option + API mode "track"): registers the site in the Data Table seo_sites and starts the
+#     Site Tracker workflow at once (Search Console, GA4, Google Trends, live SERP checks; weekly e-mail / callback, see build_site_tracker.py).
+#     Domains with a keyword ladder are tracked automatically by the Site Tracker; nothing to register for them.
+# =============================================================================
+from ladder_common import SITES_TABLE, SITES_COLS, dt_upsert_params
+nodes['Start Form']['parameters']['formFields']['values'][0]['fieldOptions']['values'].append({'option': 'Track my site (rankings & traffic)'})
+nodes['Start Form']['parameters']['formDescription'] += ' Or track your site: real Search Console and Analytics data every week, with the next actions.'
+nodes['Choose Path']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': False, 'leftValue': '', 'typeValidation': 'strict', 'version': 3}, 'conditions': [{'id': nid('Choose Path:track'), 'leftValue': "={{ $json['What do you want?'] }}", 'rightValue': 'Track my site (rankings & traffic)', 'operator': {'type': 'string', 'operation': 'equals'}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': 'track'})
+conns['Choose Path']['main'].insert(6, [{'node': 'Page Track', 'type': 'main', 'index': 0}])
+add_node('Page Track', 'n8n-nodes-base.form', 2.5, {'formFields': {'values': [
+    {'fieldLabel': 'Website Domain', 'placeholder': 'example.com', 'requiredField': True},
+    copy.deepcopy(COUNTRY_FIELD),
+    {'fieldLabel': 'Search terms to track (optional)', 'fieldType': 'textarea', 'placeholder': 'One per line, up to 20: the searches you care about. Keyword-ladder terms are tracked automatically.'},
+    {'fieldLabel': 'GA4 property ID (optional)', 'placeholder': 'e.g. 123456789 (Analytics → Admin → Property details). Leave empty: it is detected from the site URL once access is granted.'},
+    {'fieldLabel': 'Email me the weekly report', 'fieldType': 'email', 'placeholder': 'Required: the first report arrives within minutes, then every Monday', 'requiredField': True}
+]}, 'options': {'formTitle': 'Track my site', 'formDescription': 'Every Monday: clicks, impressions, positions and traffic from your own Search Console and Google Analytics, the keywords within reach of page 1, pages losing traffic, whether your new pages are indexed, search trends, and what to do next. The first report explains which Google account to add so real data flows in.'}}, [448, 760])
+connect('Page Track', 'Normalize Input')
+nodes['Unmatched Choice']['parameters']['jsCode'] = "throw new Error('Please choose one of the 7 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site).');"
+patch('Normalize Input', "else if (choice.includes('rank my site') || choice.includes('ladder')) mode = 'ladder';", "else if (choice.includes('rank my site') || choice.includes('ladder')) mode = 'ladder';\nelse if (choice.includes('track')) mode = 'track';")
+patch('Normalize Input', "  else if (m === 'ladder') mode = 'ladder';", "  else if (m === 'ladder') mode = 'ladder';\n  else if (m === 'track') mode = 'track';")
+patch('Normalize Input', "const keyword  = String(pick(p2, 'keyword') || '')", "const keyword  = (mode === 'track' ? '' : String(pick(p2, 'keyword') || ''))")
+patch('Normalize Input', "const pagesRaw = parseInt(", "const track_keywords = asArray(pick(p2, 'terms to track') || p2.keywords || p2.track_keywords).flatMap(k => String(k).split(/[\\n,;]+/)).map(k => k.trim().toLowerCase().replace(/\\s+/g, ' ')).filter(Boolean).filter((k, i, a) => a.indexOf(k) === i).slice(0, 20);\nconst ga4_property_id = String(pick(p2, 'ga4') || '').replace(/^properties\\//, '').replace(/[^0-9]/g, '').slice(0, 16);\nconst pagesRaw = parseInt(")
+patch('Normalize Input', "if (mode === 'ladder' && !deliverable) throw new Error('Please add your email — the ladder plan and the pages are sent by email.');",
+      "if (mode === 'ladder' && !deliverable) throw new Error('Please add your email — the ladder plan and the pages are sent by email.');\nif (mode === 'track' && !domain) throw new Error('Website Domain is required: tracking is set up for your site.');\nif (mode === 'track' && !deliverable) throw new Error('Please add your email — the weekly tracking report is sent by email.');")
+patch('Normalize Input', "    pages_now,\n    pipeline_source:", "    pages_now,\n    track_keywords,\n    ga4_property_id,\n    pipeline_source:")
+patch('Rate Limit', "describe: 0.03, ladder: 0.55, report: 0.3 };", "describe: 0.03, ladder: 0.55, report: 0.3, track: 0 };   // track: the Site Tracker's brief runs in its own execution (~$0.03 per site per week)")
+patch('Rate Limit', "else if (d.mode === 'ladder') est = EST.ladder;", "else if (d.mode === 'ladder') est = EST.ladder;\nelse if (d.mode === 'track') est = EST.track;")
+nodes['Route Mode']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3}, 'conditions': [{'id': nid('Route Mode:track'), 'leftValue': "={{ $json.mode === 'track' }}", 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': 'track'})
+conns['Route Mode']['main'].insert(5, [{'node': 'Ensure Sites Table (Track)', 'type': 'main', 'index': 0}])
+rm_ = pos('Route Mode'); TX, TY = rm_[0] + 300, rm_[1] + 1000
+add_node('Ensure Sites Table (Track)', DT_TYPE, DT_VERSION, dt_create_params(SITES_TABLE, SITES_COLS), [TX, TY], {'onError': 'continueRegularOutput'})
+add_node('Site Row (Track)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Site_Row_Track.js')}, [TX + 220, TY])
+add_node('Save Site (Track)', DT_TYPE, DT_VERSION, dt_upsert_params(SITES_TABLE, SITES_COLS, 'site_id'), [TX + 440, TY], {'onError': 'continueRegularOutput'})
+add_node('Tracker Payload (Track)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Tracker_Payload_Track.js')}, [TX + 660, TY])
+add_node('Start Site Tracker', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentSiteTrk1'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, [TX + 880, TY], {'onError': 'continueRegularOutput'})
+if_node('Via Webhook (Track)?', "{{ !!$('Normalize Input').first().json.via_webhook }}", [TX + 1100, TY])
+add_node('Build Track Response', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Build_Track_Response.js')}, [TX + 1320, TY - 120])
+add_node('Tracking Started', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "=Tracking is set up for {{ $('Normalize Input').first().json.domain }}", 'completionMessage': "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then every Monday. It tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page.", 'options': {}}, [TX + 1320, TY + 120])
+for a, b in [('Ensure Sites Table (Track)', 'Site Row (Track)'), ('Site Row (Track)', 'Save Site (Track)'), ('Save Site (Track)', 'Tracker Payload (Track)'), ('Tracker Payload (Track)', 'Start Site Tracker'), ('Start Site Tracker', 'Via Webhook (Track)?'), ('Build Track Response', 'Has Callback?')]:
+    connect(a, b)
+connect('Via Webhook (Track)?', 'Build Track Response', 0); connect('Via Webhook (Track)?', 'Tracking Started', 1)
+nodes['Note 1']['parameters']['content'] = nodes['Note 1']['parameters']['content'].replace("· **Rank my site for a keyword** (ladder).", "· **Rank my site for a keyword** (ladder) · **Track my site** (weekly Search Console / GA4 / Trends report through the Site Tracker workflow).")
+sticky("""### Track my site (form option / API mode `track`, v4.3)
+Registers the site in the Data Table `seo_sites` (upsert by site id: domain, country, search terms to track, GA4 property id, e-mail / callback) and starts **SEO Agent — Site Tracker** at once for this site; the tracker then runs every Monday. The form ends on "Tracking is set up"; API callers get `stage: site_tracker_setup` and later one `stage: site_tracker` callback per weekly report. Domains with a keyword ladder are tracked automatically.""", TX - 60, TY - 420, 900, 240, 5)
+log('Site tracking (v4.3): start option "Track my site (rankings & traffic)" + form page (domain, country, search terms, GA4 property id, e-mail); API mode "track" (keywords, ga4_property_id); rows upserted into seo_sites and the Site Tracker workflow started at once; completion page / callback stage site_tracker_setup')
+
+
+# =============================================================================
+# 13. CONTENT CADENCE + "I PUBLISHED A PAGE" (v4.3): blog package on every content run (article HTML + Markdown + meta.json, CMS-agnostic),
+#     configurable blog posts per week per site (seo_cadence; written every Monday by SEO Agent — Content Cadence), published-URL feedback
+#     (live publish check, content log, ladder row, link suggestions), internal spawns exempt from the per-address rate limit.
+# =============================================================================
+from ladder_common import LOG_TABLE, LOG_COLS, CADENCE_TABLE, CADENCE_COLS, QUERY_TABLE, dt_get_all_params, dt_upsert_params_keys, dt_update_params
+FORM_URL_MAIN = os.environ.get('N8N_PUBLIC_URL', 'http://localhost:5678').rstrip('/') + '/form/' + nodes['Start Form']['webhookId']
+# ---------- A. blog package on every content run ----------
+patch('Build Word File', "    page_markdown: d.publish_wordpress ? md : undefined, content_brief_slug: brief.slug || '', schema_blocks: d.publish_wordpress ? schemaBlocks : undefined",
+      "    page_markdown: md || undefined, content_brief_slug: brief.slug || '', schema_blocks: schemaBlocks, content_score: qa.content_score == null ? null : qa.content_score, language_name: d.language_name || 'English', language_code: d.language_code || 'en', content_images: Array.isArray(brief.image_suggestions) ? brief.image_suggestions : []")
+apr13 = pos('Attach PDF Report')
+add_node('Blog Package', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Blog_Package.js')}, [apr13[0] + 110, apr13[1] - 460])
+_targets = [t['node'] for t in conns['Attach PDF Report']['main'][0]]
+for _t in _targets: disconnect('Attach PDF Report', _t)
+connect('Attach PDF Report', 'Blog Package')
+for _t in _targets: connect('Blog Package', _t)
+nodes['Send Report']['parameters']['options']['attachmentsUi'] = {'attachmentsBinary': [{'property': "={{ ['pdf', 'data', 'article_html', 'article_md', 'meta_json'].filter(k => $binary[k]).join(',') }}"}]}
+sr13 = nodes['Send Report']['parameters']; assert sr13['html'].count('<p>Regards,<br>{{ $json.brand }}</p>') == 1
+sr13['html'] = sr13['html'].replace('<p>Regards,<br>{{ $json.brand }}</p>', "{{ $json.article_meta ? '<p><b>Ready to publish:</b> the article is attached as <b>' + $json.article_slug + '.html</b> and <b>' + $json.article_slug + '.md</b>, with <b>' + $json.article_slug + '.meta.json</b> (title, slug, meta description, keywords, internal links, schema). Publish it in your CMS, then report the link through the <a href=\"" + FORM_URL_MAIN + "\">form</a> (\"I published a page\") or the API (mode published) so indexing and positions are tracked.</p>' : '' }}<p>Regards,<br>{{ $json.brand }}</p>")
+patch('Build Webhook Response', "    emailed_to: d.email || null,", "    markdown: d.page_markdown || null,\n    html: d.article_html || null,\n    meta: d.article_meta || null,\n    emailed_to: d.email || null,")
+# ---------- B. internal spawns are not charged against the owner's daily runs; reporting a published page is free ----------
+patch('Rate Limit', "const key = (d.email || d.client_ip || d.domain || d.keyword || 'anon').toLowerCase();", "// Internal spawns (ladder page runs, content cadence) are keyed by their marker, not the owner's e-mail: they are capped by the AI budget guard and their own weekly limits.\nconst internal = /^(ladder|cadence|tracker):/.test(String(d.client_ip || ''));\nconst key = (internal ? d.client_ip : (d.email || d.client_ip || d.domain || d.keyword || 'anon')).toLowerCase();")
+patch('Rate Limit', "if (used >= LIMITS.per_key_per_day) {", "if (used >= LIMITS.per_key_per_day && d.mode !== 'published') {   // reporting a published page costs nothing and is never blocked")
+patch('Rate Limit', "store.rate.keys[key] = used + 1;", "if (d.mode !== 'published') store.rate.keys[key] = used + 1;")
+patch('Rate Limit', "describe: 0.03, ladder: 0.55, report: 0.3, track: 0 };", "describe: 0.03, ladder: 0.55, report: 0.3, track: 0, published: 0 };")
+patch('Rate Limit', "else if (d.mode === 'track') est = EST.track;", "else if (d.mode === 'track') est = EST.track;\nelse if (d.mode === 'published') est = EST.published;")
+# ---------- C. "I published a page": form option, page, normalisation, chain ----------
+nodes['Start Form']['parameters']['formFields']['values'][0]['fieldOptions']['values'].append({'option': 'I published a page'})
+nodes['Choose Path']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': False, 'leftValue': '', 'typeValidation': 'strict', 'version': 3}, 'conditions': [{'id': nid('Choose Path:published'), 'leftValue': "={{ $json['What do you want?'] }}", 'rightValue': 'I published a page', 'operator': {'type': 'string', 'operation': 'equals'}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': 'published'})
+conns['Choose Path']['main'].insert(7, [{'node': 'Page Published', 'type': 'main', 'index': 0}])
+add_node('Page Published', 'n8n-nodes-base.form', 2.5, {'formFields': {'values': [
+    {'fieldLabel': 'Website Domain', 'placeholder': 'example.com', 'requiredField': True},
+    {'fieldLabel': 'Keyword of the page', 'placeholder': 'the keyword the page was written for (as in the e-mail subject)', 'requiredField': True},
+    {'fieldLabel': 'Published page URL', 'placeholder': 'https://example.com/blog/your-new-page/', 'requiredField': True}
+]}, 'options': {'formTitle': 'I published a page', 'formDescription': 'Tell us where the page went live. We check the live page (title, meta description, H1, canonical, schema, indexability), record it, suggest pages to link from, and the trackers follow its indexing and positions from the next Monday.', 'buttonLabel': 'Record it'}}, [448, 960])
+connect('Page Published', 'Normalize Input')
+nodes['Unmatched Choice']['parameters']['jsCode'] = "throw new Error('Please choose one of the 8 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site / I published a page).');"
+patch('Normalize Input', "else if (choice.includes('track')) mode = 'track';", "else if (choice.includes('track')) mode = 'track';\nelse if (choice.includes('published')) mode = 'published';")
+patch('Normalize Input', "if (mode !== 'site_description' && !c) throw new Error('Please select a Target Country.');", "if (mode !== 'site_description' && mode !== 'published' && !c) throw new Error('Please select a Target Country.');   // a published-page report needs no market")
+patch('Normalize Input', "  else if (m === 'track') mode = 'track';", "  else if (m === 'track') mode = 'track';\n  else if (m === 'published') mode = 'published';")
+patch('Normalize Input', "const pagesRaw = parseInt(", "const published_url = String(pick(p2, 'published', 'url') || p2.published_url || p2.url || '').trim();\nconst content_request_id = String(p2.content_request_id || '').trim();\nconst blogs_per_week = Math.min(3, Math.max(0, parseInt(String(pick(p2, 'posts per week') || p2.blogs_per_week || '0'), 10) || 0));\nconst pagesRaw = parseInt(")
+patch('Normalize Input', "if (mode === 'track' && !deliverable) throw new Error('Please add your email — the weekly tracking report is sent by email.');",
+      "if (mode === 'track' && !deliverable) throw new Error('Please add your email — the weekly tracking report is sent by email.');\nif (mode === 'published' && !domain) throw new Error('Website Domain is required.');\nif (mode === 'published' && !/^https?:\\/\\/\\S+$/i.test(published_url)) throw new Error('Please enter the full URL of the published page (https://...).');\nif (mode === 'published') { const __m = published_url.match(/^https?:\\/\\/(?:[^@\\/?#]*@)?([^\\/?#:]+)/i); const __h = __m ? __m[1].toLowerCase().replace(/^www\\./, '') : ''; if (!(__h === domain || __h.endsWith('.' + domain))) throw new Error('The published URL must be on ' + domain + '.'); }\nif (mode === 'published' && !keyword && !content_request_id) throw new Error('Please enter the keyword of the page (as in the e-mail) or the content request id.');")
+patch('Normalize Input', "    track_keywords,\n    ga4_property_id,\n", "    track_keywords,\n    ga4_property_id,\n    blogs_per_week,\n    published_url,\n    content_request_id,\n")
+nodes['Route Mode']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3}, 'conditions': [{'id': nid('Route Mode:published'), 'leftValue': "={{ $json.mode === 'published' }}", 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': 'published'})
+conns['Route Mode']['main'].insert(6, [{'node': 'Ensure Log Table (Published)', 'type': 'main', 'index': 0}])
+PX, PY = TX, TY + 420
+LOAD13 = {'alwaysOutputData': True, 'executeOnce': True, 'onError': 'continueRegularOutput'}
+add_node('Ensure Log Table (Published)', DT_TYPE, DT_VERSION, dt_create_params(LOG_TABLE, LOG_COLS), [PX, PY], {'onError': 'continueRegularOutput'})
+add_node('Fetch Published Page', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': "={{ $('Normalize Input').first().json.published_url }}", 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.3; +https://github.com/n8n-io/n8n)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'timeout': 45000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, [PX + 220, PY], {'onError': 'continueRegularOutput', 'executeOnce': True})   # 45 s: a WordPress 404 page on a slow host took longer than 20 s live
+add_node('Load Content Log (Published)', DT_TYPE, DT_VERSION, dt_get_all_params(LOG_TABLE), [PX + 440, PY], LOAD13)
+add_node('Load Ladders (Published)', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABLE), [PX + 660, PY], LOAD13)
+add_node('Load Query History (Published)', DT_TYPE, DT_VERSION, dt_get_all_params(QUERY_TABLE), [PX + 880, PY], LOAD13)
+add_node('Publish Check', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Publish_Check.js')}, [PX + 1100, PY])
+add_node('Published Log Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Published_Log_Row.js')}, [PX + 1320, PY])
+add_node('Save Published (Log)', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LOG_TABLE, LOG_COLS, ['site_id', 'keyword']), [PX + 1540, PY], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Published Ladder Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Published_Ladder_Row.js')}, [PX + 1760, PY])
+if_node('Ladder Page?', "{{ !$json.skip }}", [PX + 1980, PY])
+add_node('Mark Ladder Published', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}', 'target_url': '={{ $json.target_url }}', 'page_exists': '={{ $json.page_exists }}'}), [PX + 2200, PY - 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Published Delivery', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Published_Delivery.js')}, [PX + 2420, PY])
+if_node('Via Webhook (Published)?', "{{ !!$('Normalize Input').first().json.via_webhook }}", [PX + 2640, PY])
+add_node('Build Published Response', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Build_Published_Response.js')}, [PX + 2860, PY - 120])
+add_node('Published Recorded', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "=Recorded: {{ $json.keyword }}", 'completionMessage': "={{ $json.plain }}", 'options': {}}, [PX + 2860, PY + 120])
+for a, b in [('Ensure Log Table (Published)', 'Fetch Published Page'), ('Fetch Published Page', 'Load Content Log (Published)'), ('Load Content Log (Published)', 'Load Ladders (Published)'), ('Load Ladders (Published)', 'Load Query History (Published)'), ('Load Query History (Published)', 'Publish Check'),
+             ('Publish Check', 'Published Log Row'), ('Published Log Row', 'Save Published (Log)'), ('Save Published (Log)', 'Published Ladder Row'), ('Published Ladder Row', 'Ladder Page?'), ('Mark Ladder Published', 'Published Delivery'), ('Published Delivery', 'Via Webhook (Published)?'), ('Build Published Response', 'Has Callback?')]:
+    connect(a, b)
+connect('Ladder Page?', 'Mark Ladder Published', 0); connect('Ladder Page?', 'Published Delivery', 1)
+connect('Via Webhook (Published)?', 'Build Published Response', 0); connect('Via Webhook (Published)?', 'Published Recorded', 1)
+# ---------- C2. no URL constructor in the n8n Code sandbox (live finding 2026-10-02): Pick Top 6 stripped tracking parameters with new URL() inside a try/catch, so it silently kept them ----------
+patch('Pick Top 6', "const cleanUrl = (u) => {\n  try {\n    const x = new URL(u);\n    ['srsltid', 'utm_source', 'utm_medium', 'utm_campaign', 'gclid', 'fbclid'].forEach(p => x.searchParams.delete(p));\n    return x.toString();\n  } catch (e) { return u; }\n};",
+      "const cleanUrl = (u) => { const s = String(u || ''); const i = s.indexOf('?'); if (i < 0) return s; const rest = s.slice(i + 1); const hi = rest.indexOf('#'); const hash = hi >= 0 ? rest.slice(hi) : ''; const q = (hi >= 0 ? rest.slice(0, hi) : rest).split('&').filter(p => p && !/^(srsltid|utm_source|utm_medium|utm_campaign|gclid|fbclid)=/i.test(p)); return s.slice(0, i) + (q.length ? '?' + q.join('&') : '') + hash; };   // regex version: the n8n Code sandbox has no URL constructor")
+# ---------- D. blog posts per week on "Track my site" ----------
+nodes['Page Track']['parameters']['formFields']['values'].insert(4, {'fieldLabel': 'Blog posts per week', 'fieldType': 'dropdown', 'fieldOptions': {'values': [{'option': '0 (off)'}, {'option': '1'}, {'option': '2'}, {'option': '3'}]}})
+add_node('Ensure Cadence Table (Track)', DT_TYPE, DT_VERSION, dt_create_params(CADENCE_TABLE, CADENCE_COLS), [TX + 110, TY - 160], {'onError': 'continueRegularOutput'})
+add_node('Cadence Row (Track)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Cadence_Row_Track.js')}, [TX + 550, TY - 160])
+add_node('Save Cadence (Track)', DT_TYPE, DT_VERSION, dt_upsert_params(CADENCE_TABLE, CADENCE_COLS, 'site_id'), [TX + 770, TY - 160], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+disconnect('Ensure Sites Table (Track)', 'Site Row (Track)'); connect('Ensure Sites Table (Track)', 'Ensure Cadence Table (Track)'); connect('Ensure Cadence Table (Track)', 'Site Row (Track)')
+disconnect('Save Site (Track)', 'Tracker Payload (Track)'); connect('Save Site (Track)', 'Cadence Row (Track)'); connect('Cadence Row (Track)', 'Save Cadence (Track)'); connect('Save Cadence (Track)', 'Tracker Payload (Track)')
+nodes['Tracking Started']['parameters']['completionMessage'] = "=Your first performance report is being prepared now and will be e-mailed to {{ $('Normalize Input').first().json.email }} within a few minutes, then every Monday. {{ $('Normalize Input').first().json.blogs_per_week ? 'Every Monday the Content Cadence also writes ' + $('Normalize Input').first().json.blogs_per_week + ' blog page(s) for you (HTML + Markdown + meta.json); publish them and report the links with \"I published a page\". ' : '' }}The report tells you which Google account to add to Search Console and Google Analytics so your real search data flows in. You can close this page."
+# ---------- E. notes ----------
+nodes['Note 1']['parameters']['content'] = nodes['Note 1']['parameters']['content'].replace("· **Track my site** (weekly Search Console / GA4 / Trends report through the Site Tracker workflow).", "· **Track my site** (weekly Search Console / GA4 / Trends report through the Site Tracker workflow; blog posts per week through the Content Cadence workflow) · **I published a page** (publish check + tracking of the live URL).")
+sticky("""### Blog package, content cadence and "I published a page" (v4.3)
+Every content run now also delivers the article as **HTML + Markdown + meta.json** (`Blog Package`: title, slug, meta description, keywords, headings, internal links, schema, word count, content score, publish checklist) by e-mail and in the callback (`markdown`, `html`, `meta`). The owner publishes in **any CMS**.
+"Track my site" takes **blog posts per week** (0-3 → `seo_cadence`); the workflow **SEO Agent — Content Cadence** writes them every Monday (ladder rung → striking-distance query → rising trend) and logs them in `seo_content_log`.
+"I published a page" (form / API `mode: published`): fetches the live page, checks title / meta description / H1 / canonical / noindex / JSON-LD / length, upserts the content-log row with the URL, marks the ladder row published with the real URL, suggests pages to link from; the Site Tracker inspects the page and tracks the keyword from the next Monday. Internal spawns (`ladder:` / `cadence:` keys) do not consume the owner's 6 public runs per day.""", TX - 60, TY + 160, 1100, 300, 5)
+log('Content cadence + published pages (v4.3): blog package (article HTML, Markdown, meta.json) on every content run; "Blog posts per week" on Track my site (seo_cadence, written weekly by SEO Agent — Content Cadence); "I published a page" form option / API mode published (live publish check, content log, ladder row, link suggestions); internal spawns exempt from the per-address rate limit; reporting a published page is free')
+
+
+# =============================================================================
+# 14. SEARCH CONSOLE IN THE AUDIT (v4.3): submitted-sitemap status, index coverage of the key pages (URL inspection), a 28-day search
+#     performance snapshot, the site's sitemap compared with the crawl, and a site-structure summary. Runs for the technical audit and the
+#     full report; without Search Console access it still does the sitemap / structure part and notes what could not be checked.
+# =============================================================================
+GOOGLE14 = {'googleApi': {'id': 'SEOcredGoogleSvc', 'name': 'Google Service Account (SEO Agent)'}}
+G14_GET = lambda url: {'method': 'GET', 'url': url, 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi', 'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}}
+G14_POST = lambda url: {'method': 'POST', 'url': url, 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}}
+PLAIN14 = lambda url: {'method': 'GET', 'url': url, 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.3)'}, {'name': 'Accept', 'value': 'application/xml,text/xml,*/*'}]}, 'options': {'timeout': 45000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}
+HX14 = {'onError': 'continueRegularOutput', 'retryOnFail': True, 'maxTries': 2, 'waitBetweenTries': 3000}
+bsi14 = pos('Build Site Issues'); AX, AY = bsi14[0] - 2420, bsi14[1] + 1120
+disconnect('Full Report?', 'Build Site Issues'); disconnect('AI Visibility', 'Build Site Issues')
+add_node('GSC Audit Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GSC_Audit_Plan.js')}, [AX, AY])
+add_node('Fetch Sitemap (Audit)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN14('={{ $json.sitemap_url }}'), [AX + 220, AY], {'onError': 'continueRegularOutput', 'executeOnce': True, 'retryOnFail': True, 'maxTries': 2, 'waitBetweenTries': 3000})
+add_node('Sitemap Children (Audit)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Sitemap_Children_Audit.js')}, [AX + 440, AY])
+if_node('Any Sitemap Children?', "{{ !$json.skip }}", [AX + 660, AY])
+add_node('Fetch Sitemap Children (Audit)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN14('={{ $json.url }}'), [AX + 880, AY - 120], {'onError': 'continueRegularOutput'})
+add_node('GSC Sites (Audit)', 'n8n-nodes-base.httpRequest', 4.5, G14_GET('https://www.googleapis.com/webmasters/v3/sites'), [AX + 1100, AY], {'credentials': GOOGLE14, 'executeOnce': True, **HX14})
+add_node('GSC Audit Requests', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GSC_Audit_Requests.js')}, [AX + 1320, AY])
+if_node('GSC Audit?', "{{ !$json.skip }}", [AX + 1540, AY])
+add_node('GSC Audit Query', 'n8n-nodes-base.httpRequest', 4.5, G14_POST('={{ $json.url }}'), [AX + 1760, AY - 120], {'credentials': GOOGLE14, **HX14})
+add_node('GSC Sitemaps (Audit)', 'n8n-nodes-base.httpRequest', 4.5, G14_GET("={{ $('GSC Audit Requests').first().json.sitemaps_url }}"), [AX + 1980, AY - 120], {'credentials': GOOGLE14, 'executeOnce': True, **HX14})
+add_node('GSC Audit Findings', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GSC_Audit_Findings.js')}, [AX + 2200, AY])
+connect('Full Report?', 'GSC Audit Plan', 1); connect('AI Visibility', 'GSC Audit Plan')
+for a, b in [('GSC Audit Plan', 'Fetch Sitemap (Audit)'), ('Fetch Sitemap (Audit)', 'Sitemap Children (Audit)'), ('Sitemap Children (Audit)', 'Any Sitemap Children?'), ('Fetch Sitemap Children (Audit)', 'GSC Sites (Audit)'), ('GSC Sites (Audit)', 'GSC Audit Requests'), ('GSC Audit Requests', 'GSC Audit?'), ('GSC Audit Query', 'GSC Sitemaps (Audit)'), ('GSC Sitemaps (Audit)', 'GSC Audit Findings'), ('GSC Audit Findings', 'Build Site Issues')]:
+    connect(a, b)
+connect('Any Sitemap Children?', 'Fetch Sitemap Children (Audit)', 0); connect('Any Sitemap Children?', 'GSC Sites (Audit)', 1)
+connect('GSC Audit?', 'GSC Audit Query', 0); connect('GSC Audit?', 'GSC Audit Findings', 1)
+# scoring node: carry the new blocks into site_audit; note the missing data when not connected
+patch('Build Site Issues', "      what_works: whatWorks,\n", "      what_works: whatWorks,\n      search_console: input.search_console || null,\n      site_structure: input.site_structure || null,\n")
+patch('Build Site Issues', "if (!input.ai_visibility) not_assessed.push('AI answer visibility (AI Overviews, ChatGPT brand mentions)');", "if (!input.ai_visibility) not_assessed.push('AI answer visibility (AI Overviews, ChatGPT brand mentions)');\nif (!(input.search_console && input.search_console.connected)) not_assessed.push('Search Console: submitted sitemaps, index coverage and search performance (connect the service account to the property)');")
+# report section (both report types) and API fields
+SC_SECTION_JS = r"""// ---- Search Console & site structure section (v4.3) ----
+const scSection = (a, num) => {
+  const sc = a.search_console || {}, st = a.site_structure || {};
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const n2 = (v) => (Number(v) || 0).toLocaleString('en-GB');
+  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  let h = `<h2 class="pb">${num}. Search Console &amp; Site Structure</h2>`;
+  if (st.crawled_pages != null) {
+    const db = st.depth_buckets || {}; const sm = st.sitemap || {};
+    h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` +
+      `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td></tr></table>` +
+      ((st.sections || []).length ? `<table class="ct"><tr><th>Section</th><th>Pages crawled</th></tr>` + st.sections.map(s => `<tr><td>${e2(s.section)}</td><td>${n2(s.pages)}</td></tr>`).join('') + `</table>` : '') +
+      `<p>XML sitemap: ${sm.status === 200 ? n2(sm.urls) + ' URLs' + (sm.is_index ? ' (index of ' + n2(sm.children) + ' sitemaps)' : '') : 'not readable at ' + e2(sm.url)}${st.indexable_not_in_sitemap ? '; ' + n2(st.indexable_not_in_sitemap) + ' indexable pages missing from it' : ''}${st.sitemap_only ? '; ' + n2(st.sitemap_only) + ' sitemap URLs that no internal link reaches' : ''}${st.sitemap_broken ? '; ' + n2(st.sitemap_broken) + ' sitemap URLs not returning 200' : ''}.</p>`;
+  }
+  h += `<h3>Google Search Console</h3>`;
+  if (!sc.connected) h += `<p>Not connected (${e2(sc.error || 'no access')}). Add the service account as a Full user of the property in Search Console to get submitted-sitemap status, index coverage and search performance in this audit.</p>`;
+  else {
+    const t = sc.totals;
+    h += `<p>Property <b>${e2(sc.property)}</b> (${e2(sc.permission)}).</p>`;
+    if (t) h += `<p>Last 28 days (${e2(t.period.start)} to ${e2(t.period.end)}): <b>${n2(t.clicks)}</b> clicks, <b>${n2(t.impressions)}</b> impressions, CTR ${(t.ctr * 100).toFixed(2)}%, average position ${t.position}; ${n2(sc.pages_with_impressions)} pages and ${n2(sc.queries_with_impressions)} queries with impressions.</p>`;
+    h += `<table class="ct"><tr><th>Submitted sitemap</th><th>URLs</th><th>Last read</th><th>Errors</th><th>Warnings</th></tr>` + ((sc.sitemaps || []).length ? sc.sitemaps.map(s => `<tr><td>${e2(s.path)}</td><td>${n2(s.urls)}</td><td>${e2(String(s.downloaded || '').slice(0, 10) || (s.pending ? 'pending' : '—'))}</td><td>${n2(s.errors)}</td><td>${n2(s.warnings)}</td></tr>`).join('') : `<tr><td colspan="5">none submitted${sc.sitemaps_error ? ' (' + e2(sc.sitemaps_error) + ')' : ''}</td></tr>`) + `</table>`;
+    const covRows = Object.entries(sc.coverage || {});
+    if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} sampled pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
+    if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}</td></tr>`).join('') + `</table>`;
+    if ((sc.top_queries || []).length) h += `<table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_queries.slice(0, 10).map(q => `<tr><td>${e2(q.query)}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
+    if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_pages.slice(0, 10).map(q => `<tr><td>${e2(p2(q.page))}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
+  }
+  return h;
+};
+"""
+patch('Build Audit Report', "const findings = a.findings || [];", SC_SECTION_JS + "const findings = a.findings || [];")
+patch('Build Audit Report', "<li>Issues Found</li><li>Action Plan</li><li>Not Assessed in This Audit</li><li>Methodology</li></ol>", "<li>Issues Found</li><li>Action Plan</li><li>Search Console &amp; Site Structure (5b)</li><li>Not Assessed in This Audit</li><li>Methodology</li></ol>")
+patch('Build Audit Report', "// ---------- 6. Not assessed ----------", "html += scSection(a, '5b');\n\n// ---------- 6. Not assessed ----------")
+patch('Build Audit Report', "    health_score: a.health_score,", "    health_score: a.health_score,\n    search_console: a.search_console || null,\n    site_structure: a.site_structure || null,")
+patch('Build Full Report', "const findings = a.findings || [];", SC_SECTION_JS + "const findings = a.findings || [];")
+_c = code('Build Full Report'); assert _c.count("'Images, Security & Technical', '") == 1, 'full report TOC anchor'
+setcode('Build Full Report', _c.replace("'Images, Security & Technical', '", "'Images, Security & Technical', 'Search Console & Site Structure (12b)', '", 1))
+patch('Build Full Report', "// ---------- 13. What works ----------", "html += scSection(a, '12b');\n\n// ---------- 13. What works ----------")
+patch('Build Full Report', "    health_score: a.health_score,", "    health_score: a.health_score,\n    search_console: a.search_console || null,\n    site_structure: a.site_structure || null,")
+patch('Build Audit Response', "domain: d.domain, health_score: d.health_score,", "domain: d.domain, health_score: d.health_score,\n  search_console: d.search_console ? { connected: d.search_console.connected, property: d.search_console.property, error: d.search_console.error || null, totals: d.search_console.totals, sitemaps: d.search_console.sitemaps, coverage: d.search_console.coverage, not_indexed: d.search_console.not_indexed, canonical_mismatch: d.search_console.canonical_mismatch, top_queries: d.search_console.top_queries, top_pages: d.search_console.top_pages, rich_results: d.search_console.rich_results } : null,\n  site_structure: d.site_structure || null,")
+for n in list(nodes.values()):
+    if n['type'] == 'n8n-nodes-base.httpRequest' and n['parameters'].get('authentication') == 'predefinedCredentialType': assert n.get('credentials'), 'google node without credential: ' + n['name']
+sticky("""### Search Console in the audit (v4.3)
+Both audit types now read the site's `/sitemap.xml` (+ up to 3 child sitemaps) and, with the service account, Search Console: the **submitted sitemaps** (errors, warnings, last read), a **28-day search snapshot** (totals, top pages and queries, pages shown but never clicked), and **URL inspection** of up to 25 key pages (index coverage, robots blocks, Google-chosen canonicals, rich results). `GSC Audit Findings` adds the findings (category Crawlability & Indexing), a site-structure summary (clicks from home, sections, sitemap vs crawl: indexable pages missing from the sitemap, sitemap URLs without internal links, non-200 sitemap URLs) and the report section "Search Console & Site Structure". Without access the audit still runs and lists Search Console under "Not assessed".""", AX - 60, AY - 320, 980, 260, 5)
+log('Search Console in the audit (v4.3): submitted-sitemap status, index coverage of the key pages (URL inspection), 28-day search snapshot, sitemap-vs-crawl comparison and site-structure summary for both audit types; report section "Search Console & Site Structure"; API callback carries search_console and site_structure')
+
+
+# =============================================================================
+# 15. MONTHLY SEARCH CONSOLE CHECK-IN (v4.3): the owner answers two questions (manual action? security issue?) and uploads the Pages report
+#     export — the items Google offers no API for. Form option + API mode "checkin"; one row per site and month (seo_console_checkins); a
+#     reported manual action / security issue also becomes a console alert; the Monday report reminds until the month's check-in exists.
+# =============================================================================
+from ladder_common import ALERTS_TABLE, ALERTS_COLS, CHECKIN_TABLE, CHECKIN_COLS
+nodes['Start Form']['parameters']['formFields']['values'][0]['fieldOptions']['values'].append({'option': 'Search Console check-in (monthly)'})
+nodes['Choose Path']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': False, 'leftValue': '', 'typeValidation': 'strict', 'version': 3}, 'conditions': [{'id': nid('Choose Path:checkin'), 'leftValue': "={{ $json['What do you want?'] }}", 'rightValue': 'Search Console check-in (monthly)', 'operator': {'type': 'string', 'operation': 'equals'}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': 'checkin'})
+conns['Choose Path']['main'].insert(8, [{'node': 'Page Check-in', 'type': 'main', 'index': 0}])
+add_node('Page Check-in', 'n8n-nodes-base.form', 2.5, {'formFields': {'values': [
+    {'fieldLabel': 'Website Domain', 'placeholder': 'example.com', 'requiredField': True},
+    {'fieldLabel': 'Any manual action in Search Console?', 'fieldType': 'dropdown', 'fieldOptions': {'values': [{'option': 'No'}, {'option': 'Yes'}]}, 'requiredField': True},
+    {'fieldLabel': 'Any security issue in Search Console?', 'fieldType': 'dropdown', 'fieldOptions': {'values': [{'option': 'No'}, {'option': 'Yes'}]}, 'requiredField': True},
+    {'fieldLabel': 'Notes (optional)', 'fieldType': 'textarea', 'placeholder': 'What Search Console shows, e.g. the manual action reason or the pages it names'},
+    {'fieldLabel': 'Pages report export (optional CSV)', 'fieldType': 'file', 'multipleFiles': False, 'acceptFileTypes': '.csv'},
+    {'fieldLabel': 'Email (optional)', 'fieldType': 'email', 'placeholder': 'only if you want a copy of the next report at a different address'}
+]}, 'options': {'formTitle': 'Search Console check-in', 'formDescription': 'Once a month: open Search Console → Security & Manual Actions, then Pages. Answer the two questions and, if you can, upload the Pages report export (Pages → Export → CSV, the Table file). Google offers no API for these, so this check-in keeps them in your Monday report.', 'buttonLabel': 'Record check-in'}}, [448, 1160])
+add_node('Check-in Intake', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Checkin_Intake.js')}, [700, 1160])
+connect('Page Check-in', 'Check-in Intake'); connect('Check-in Intake', 'Normalize Input')
+nodes['Unmatched Choice']['parameters']['jsCode'] = "throw new Error('Please choose one of the 9 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site / I published a page / Search Console check-in).');"
+patch('Normalize Input', "else if (choice.includes('published')) mode = 'published';", "else if (choice.includes('published')) mode = 'published';\nelse if (choice.includes('check-in') || choice.includes('checkin')) mode = 'checkin';")
+patch('Normalize Input', "  else if (m === 'published') mode = 'published';", "  else if (m === 'published') mode = 'published';\n  else if (m === 'checkin' || m === 'check-in') mode = 'checkin';")
+patch('Normalize Input', "if (mode !== 'site_description' && mode !== 'published' && !c) throw new Error('Please select a Target Country.');   // a published-page report needs no market", "if (!['site_description', 'published', 'checkin'].includes(mode) && !c) throw new Error('Please select a Target Country.');   // published-page reports and check-ins need no market")
+patch('Normalize Input', "const pagesRaw = parseInt(", "const yes = (v) => /^(y|true|1)/i.test(String(v == null ? '' : v).trim());\nconst checkin_manual_action = yes(pick(p2, 'manual action') || p2.manual_action);\nconst checkin_security_issue = yes(pick(p2, 'security issue') || p2.security_issue);\nconst checkin_notes = String(pick(p2, 'notes') || p2.notes || '').trim().slice(0, 1000);\nconst checkin_csv_text = String(p2.pages_csv_text || p2.pages_csv || '').slice(0, 400000);\nconst pagesRaw = parseInt(")
+patch('Normalize Input', "if (mode === 'published' && !domain) throw new Error('Website Domain is required.');", "if (mode === 'checkin' && !domain) throw new Error('Website Domain is required.');\nif (mode === 'published' && !domain) throw new Error('Website Domain is required.');")
+patch('Normalize Input', "    published_url,\n    content_request_id,\n", "    published_url,\n    content_request_id,\n    checkin_manual_action,\n    checkin_security_issue,\n    checkin_notes,\n    checkin_csv_text,\n")
+patch('Rate Limit', "if (used >= LIMITS.per_key_per_day && d.mode !== 'published') {   // reporting a published page costs nothing and is never blocked", "if (used >= LIMITS.per_key_per_day && !['published', 'checkin'].includes(d.mode)) {   // reporting a published page or a check-in costs nothing and is never blocked")
+patch('Rate Limit', "if (d.mode !== 'published') store.rate.keys[key] = used + 1;", "if (!['published', 'checkin'].includes(d.mode)) store.rate.keys[key] = used + 1;")
+patch('Rate Limit', "describe: 0.03, ladder: 0.55, report: 0.3, track: 0, published: 0 };", "describe: 0.03, ladder: 0.55, report: 0.3, track: 0, published: 0, checkin: 0 };")
+patch('Rate Limit', "else if (d.mode === 'published') est = EST.published;", "else if (d.mode === 'published') est = EST.published;\nelse if (d.mode === 'checkin') est = EST.checkin;")
+nodes['Route Mode']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3}, 'conditions': [{'id': nid('Route Mode:checkin'), 'leftValue': "={{ $json.mode === 'checkin' }}", 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': 'checkin'})
+conns['Route Mode']['main'].insert(7, [{'node': 'Ensure Checkin Table', 'type': 'main', 'index': 0}])
+KX, KY = TX, TY + 840
+LOAD15 = {'onError': 'continueRegularOutput', 'alwaysOutputData': True}
+add_node('Ensure Checkin Table', DT_TYPE, DT_VERSION, dt_create_params(CHECKIN_TABLE, CHECKIN_COLS), [KX, KY], {'onError': 'continueRegularOutput'})
+add_node('Ensure Alerts Table (Check-in)', DT_TYPE, DT_VERSION, dt_create_params(ALERTS_TABLE, ALERTS_COLS), [KX + 220, KY], {'onError': 'continueRegularOutput'})
+add_node('Parse Check-in', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Parse_Checkin.js')}, [KX + 440, KY])
+add_node('Checkin Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Checkin_Row.js')}, [KX + 660, KY])
+add_node('Save Check-in', DT_TYPE, DT_VERSION, dt_upsert_params_keys(CHECKIN_TABLE, CHECKIN_COLS, ['site_id', 'month']), [KX + 880, KY], LOAD15)
+if_node('Checkin Alert?', "{{ !!(($('Parse Check-in').first().json.checkin_row || {}).manual_action || ($('Parse Check-in').first().json.checkin_row || {}).security_issue) }}", [KX + 1100, KY])
+add_node('Alert From Checkin', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Alert_From_Checkin.js')}, [KX + 1320, KY - 120])
+add_node('Save Check-in Alert', DT_TYPE, DT_VERSION, dt_upsert_params(ALERTS_TABLE, ALERTS_COLS, 'message_id'), [KX + 1540, KY - 120], LOAD15)
+add_node('Check-in Delivery', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Checkin_Delivery.js')}, [KX + 1760, KY])
+if_node('Via Webhook (Check-in)?', "{{ !!$('Normalize Input').first().json.via_webhook }}", [KX + 1980, KY])
+add_node('Build Check-in Response', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Build_Checkin_Response.js')}, [KX + 2200, KY - 120])
+add_node('Check-in Recorded', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "=Check-in recorded for {{ $json.domain }}", 'completionMessage': "={{ $json.plain }}", 'options': {}}, [KX + 2200, KY + 120])
+for a, b in [('Ensure Checkin Table', 'Ensure Alerts Table (Check-in)'), ('Ensure Alerts Table (Check-in)', 'Parse Check-in'), ('Parse Check-in', 'Checkin Row'), ('Checkin Row', 'Save Check-in'), ('Save Check-in', 'Checkin Alert?'), ('Alert From Checkin', 'Save Check-in Alert'), ('Save Check-in Alert', 'Check-in Delivery'), ('Check-in Delivery', 'Via Webhook (Check-in)?'), ('Build Check-in Response', 'Has Callback?')]:
+    connect(a, b)
+connect('Checkin Alert?', 'Alert From Checkin', 0); connect('Checkin Alert?', 'Check-in Delivery', 1)
+connect('Via Webhook (Check-in)?', 'Build Check-in Response', 0); connect('Via Webhook (Check-in)?', 'Check-in Recorded', 1)
+nodes['Note 1']['parameters']['content'] = nodes['Note 1']['parameters']['content'].replace("· **I published a page** (publish check + tracking of the live URL).", "· **I published a page** (publish check + tracking of the live URL) · **Search Console check-in** (monthly: manual action / security issue / Pages report export, the items Google offers no API for).")
+sticky("""### Monthly Search Console check-in (form / API `mode: checkin`, v4.3)
+Google exposes no API for manual actions, security issues and the site-wide Pages (index coverage) report. The owner answers two questions and uploads the Pages export once a month (reminded in every Monday report until done); the CSV is parsed (`Parse Check-in`: reasons × pages, URL lists or the chart) into `seo_console_checkins`, a reported manual action / security issue also lands in `seo_console_alerts`, and the Site Tracker shows it with fix steps. The automatic counterpart is the **Console Alerts** workflow (IMAP watcher on the agent's mailbox). Check-ins are free and never rate-limited.""", KX - 60, KY - 360, 1000, 240, 5)
+log('Monthly Search Console check-in (v4.3): form option with CSV upload + API mode checkin; seo_console_checkins (one row per site and month); reported manual action / security issue -> seo_console_alerts; Monday report reminds until the month is covered; Console Alerts mail watcher as the automatic path')
+
+
+# =============================================================================
+# 16. ENV-BASED SETTINGS (v4.3): brand, sender and ops address come from n8n/.env (SEO_BRAND, SEO_MAIL_FROM, SEO_OPS_EMAIL) with the old
+#     literals as fallbacks; credentials reference .env through {{ $env.X }} expressions (sync_credentials.py).
+# =============================================================================
+patch('Normalize Input', "  brand: 'Dev SEO',                 // shown on reports and emails", "  brand: " + json.dumps(BRAND) + ",   // from n8n/.env (SEO_BRAND) at build time; shown on reports and e-mails")
+# the Error Handler is a static workflow: sender and ops recipient from .env
+_eh = os.path.join(HERE0, 'workflows', 'SEO_Agent_Error_Handler.json'); _ehw = json.load(open(_eh, encoding='utf-8')); _ehl = _ehw if isinstance(_ehw, list) else [_ehw]
+for _n in _ehl[0]['nodes']:
+    if _n['type'].endswith('emailSend') and _n['name'] == 'Email Ops': _n['parameters']['fromEmail'] = SENDER; _n['parameters']['toEmail'] = OPS_EMAIL; _n.update({'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+json.dump(_ehw, open(_eh, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+log('Settings from n8n/.env at build time: brand (SEO_BRAND), sender (SEO_MAIL_FROM), ops address (SEO_OPS_EMAIL), service-account e-mail (SEO_GOOGLE_SA_EMAIL); credentials are written from .env by sync_credentials.py; apply_env.py does all of it in one command')
+
+
+# =============================================================================
+# 17. IMAGE PLAN (v4.3): the brief's three images (hero + two in-body) are carried into the blog package as <figure> placeholders, the
+#     images / featured_image / open_graph blocks of meta.json and a richer table in the report; the publish check verifies the live images.
+# =============================================================================
+patch('Build Word File', "    parts.push(h2('Image Suggestions') + '<table class=\"ct\"><tr><th>Placement</th><th>Alt text</th></tr>' +\n      imgs.map(i => '<tr><td>' + esc(i.placement) + '</td><td>' + esc(i.alt_text) + '</td></tr>').join('') + '</table>');",
+      "    parts.push(h2('Image Plan') + '<p>Three images per page: a hero (also the featured and Open Graph image, 1200×630 for sharing) and two in-body visuals. Save them as WebP under the suggested file names and keep the alt text.</p><table class=\"ct\"><tr><th>Placement</th><th>Purpose</th><th>What it shows</th><th>Alt text</th><th>File name</th></tr>' +\n      imgs.map(i => '<tr><td>' + esc(i.placement) + '</td><td>' + esc(i.purpose || '') + '</td><td>' + esc(i.subject || '') + (i.caption ? '<br><i>' + esc(i.caption) + '</i>' : '') + '</td><td>' + esc(i.alt_text) + '</td><td>' + esc(i.filename || '') + '</td></tr>').join('') + '</table>');")
+log('Image plan (v4.3): the brief specifies a hero + two in-body images (purpose, subject, alt, caption, file name); the blog package carries <figure> placeholders and images / featured_image / open_graph in meta.json; the publish check verifies the live images (count, alt, topic in alt, file names, dimensions, modern format, og:image)')
+
+
+# =============================================================================
+# 18. E-E-A-T AND PAGE TYPES (v4.4, 2026-10-02): one business profile per site (author, expert reviewer, address / NAP) loaded by every
+#     content run -> byline, author box, Person schema; pillar / hub pages (ladder top page or page type "Pillar / hub page") with a linked
+#     table of contents, cluster summaries and a "Guides in this series" block; case studies from a short intake form (stored as proof that
+#     later pages cite); local pages with LocalBusiness schema and a verified NAP block; VideoObject schema + transcript for pages with a video.
+# =============================================================================
+from ladder_common import PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS, dt_get_where_params
+# ---------- A. intake: two new start options, their form pages, normalisation ----------
+nodes['Start Form']['parameters']['formFields']['values'][0]['fieldOptions']['values'] += [{'option': 'Write a case study'}, {'option': 'Set up my business profile (author & address)'}]
+nodes['Start Form']['parameters']['formDescription'] += ' Turn a real project into a case study, and set up your business profile once so every page carries its author and address.'
+for _key, _label in [('case_study', 'Write a case study'), ('profile', 'Set up my business profile (author & address)')]:
+    _i = len(nodes['Choose Path']['parameters']['rules']['values'])
+    nodes['Choose Path']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': False, 'leftValue': '', 'typeValidation': 'strict', 'version': 3}, 'conditions': [{'id': nid('Choose Path:' + _key), 'leftValue': "={{ $json['What do you want?'] }}", 'rightValue': _label, 'operator': {'type': 'string', 'operation': 'equals'}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': _key})
+    conns['Choose Path']['main'].insert(_i, [{'node': 'Page Case Study' if _key == 'case_study' else 'Page Profile', 'type': 'main', 'index': 0}])
+nodes['Unmatched Choice']['parameters']['jsCode'] = "throw new Error('Please choose one of the 11 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site / I published a page / Search Console check-in / Write a case study / Set up my business profile).');"
+COUNTRY18 = copy.deepcopy(next(f for f in nodes['Page Keyword']['parameters']['formFields']['values'] if f['fieldLabel'] == 'Target Country'))
+add_node('Page Case Study', 'n8n-nodes-base.form', 2.5, {'formFields': {'values': [
+    {'fieldLabel': 'Website Domain', 'placeholder': 'example.com', 'requiredField': True}, COUNTRY18,
+    {'fieldLabel': 'Service you delivered', 'placeholder': 'e.g. Odoo ERP implementation — the service this case study proves', 'requiredField': True},
+    {'fieldLabel': 'Client name or description', 'placeholder': 'e.g. Northwind Foods, or "a Dubai food distributor"', 'requiredField': True},
+    {'fieldLabel': 'May we name the client?', 'fieldType': 'dropdown', 'fieldOptions': {'values': [{'option': 'Yes, name them'}, {'option': 'No, keep them anonymous'}]}, 'requiredField': True},
+    {'fieldLabel': 'Client industry', 'placeholder': 'e.g. food distribution'},
+    {'fieldLabel': 'Client location', 'placeholder': 'e.g. Dubai, UAE'},
+    {'fieldLabel': 'The challenge', 'fieldType': 'textarea', 'placeholder': 'What was wrong before you started, in the client\'s words if possible (systems, manual work, deadlines, cost).', 'requiredField': True},
+    {'fieldLabel': 'What you did', 'fieldType': 'textarea', 'placeholder': 'Approach, modules or services, team, tools, the main steps.', 'requiredField': True},
+    {'fieldLabel': 'Timeline', 'placeholder': 'e.g. 14 weeks, March to June 2026'},
+    {'fieldLabel': 'Results (with numbers)', 'fieldType': 'textarea', 'placeholder': 'Before -> after: e.g. month-end close from 9 days to 3; 99.6% of e-invoices accepted first time; 2 finance staff hours saved per day.', 'requiredField': True},
+    {'fieldLabel': 'Client quote (optional)', 'fieldType': 'textarea', 'placeholder': 'Verbatim, approved by the client'},
+    {'fieldLabel': 'Quote by (name, role)', 'placeholder': 'e.g. Sara Khan, Finance Director'},
+    {'fieldLabel': 'Keyword for this page (optional)', 'placeholder': 'default: "<service> case study"'},
+    {'fieldLabel': 'Email me the case study', 'fieldType': 'email', 'requiredField': True}
+]}, 'options': {'formTitle': 'Write a case study', 'formDescription': 'Five minutes of facts about a real project. We write the case study page (story, results table, quote, lessons, schema) and e-mail it as a ready-to-publish article. The facts are also stored as proof: later pages for your site may cite them. Only what you enter here is stated as fact.', 'buttonLabel': 'Write it'}}, [448, 1360])
+add_node('Page Profile', 'n8n-nodes-base.form', 2.5, {'formFields': {'values': [
+    {'fieldLabel': 'Website Domain', 'placeholder': 'example.com', 'requiredField': True},
+    {'fieldLabel': 'Author name', 'placeholder': 'the person who signs the articles'},
+    {'fieldLabel': 'Author job title', 'placeholder': 'e.g. Head of Tax Technology'},
+    {'fieldLabel': 'Author credentials and experience', 'fieldType': 'textarea', 'placeholder': 'e.g. ACCA; 12 years in UAE VAT; led 40 ERP rollouts for distributors'},
+    {'fieldLabel': 'Author bio', 'fieldType': 'textarea', 'placeholder': '2-3 sentences: what the author does, for whom, and what they have done'},
+    {'fieldLabel': 'Author profile links (one per line)', 'fieldType': 'textarea', 'placeholder': 'https://yourdomain.com/team/name/\nhttps://www.linkedin.com/in/name/'},
+    {'fieldLabel': 'Author photo URL (optional)', 'placeholder': 'https://yourdomain.com/images/author-name.webp'},
+    {'fieldLabel': 'Topics the author knows best', 'placeholder': 'e.g. e-invoicing, UAE VAT, ERP implementation'},
+    {'fieldLabel': 'Expert reviewer (optional)', 'placeholder': 'Name, job title, profile URL — for finance, legal or health topics'},
+    {'fieldLabel': 'Company name', 'placeholder': 'exactly as on your Google Business Profile'},
+    {'fieldLabel': 'Category (for local search)', 'placeholder': 'e.g. Accounting firm, IT consultancy, Dental clinic'},
+    {'fieldLabel': 'Street address', 'placeholder': 'e.g. Office 1203, Aspect Tower, Business Bay'},
+    {'fieldLabel': 'City'}, {'fieldLabel': 'Region / state / emirate'}, {'fieldLabel': 'Postal code'},
+    {**copy.deepcopy(COUNTRY18), 'fieldLabel': 'Country', 'requiredField': False},
+    {'fieldLabel': 'Phone', 'placeholder': '+971 4 000 0000'},
+    {'fieldLabel': 'Public e-mail on the website', 'placeholder': 'hello@yourdomain.com'},
+    {'fieldLabel': 'Opening hours', 'placeholder': 'Mo-Fr 09:00-18:00 (this format becomes schema)'},
+    {'fieldLabel': 'Areas you serve', 'placeholder': 'e.g. Dubai, Abu Dhabi, Sharjah'},
+    {'fieldLabel': 'Google Maps link (optional)'},
+    {'fieldLabel': 'Logo URL (optional)'},
+    {'fieldLabel': 'Email (optional)', 'fieldType': 'email', 'placeholder': 'not needed: the result is shown on the next page'}
+]}, 'options': {'formTitle': 'Set up my business profile', 'formDescription': 'Once per website. Every page we write for it then carries a real author (byline, author box, Person schema: Google\'s E-E-A-T signals) and local pages carry your verified name, address, phone and hours (LocalBusiness schema). Send the form again to change anything: empty fields keep what is stored, "-" clears a field.', 'buttonLabel': 'Save profile'}}, [448, 1560])
+connect('Page Case Study', 'Normalize Input'); connect('Page Profile', 'Normalize Input')
+# page types and per-page extras on "I know my keyword"
+_pt = next(f for f in nodes['Page Keyword']['parameters']['formFields']['values'] if f['fieldLabel'] == 'Page Type')
+_pt['fieldOptions']['values'] += [{'option': 'Guide'}, {'option': 'Pillar / hub page'}, {'option': 'Local page (city or area)'}]
+insert_fields('Page Keyword', 'Existing page URL (optional)', [{'fieldLabel': 'City or area (local pages only)', 'placeholder': 'e.g. Dubai Marina — for "Local page" only'},
+    {'fieldLabel': 'Video URL for this page (optional)', 'placeholder': 'YouTube or Vimeo link — embedded with VideoObject schema'},
+    {'fieldLabel': 'Video transcript (optional)', 'fieldType': 'textarea', 'placeholder': 'Paste the transcript (YouTube Studio → Subtitles → Download). Lines like "0:45 Setting up" become key moments.'}])
+patch('Normalize Input', "else if (choice.includes('check-in') || choice.includes('checkin')) mode = 'checkin';", "else if (choice.includes('check-in') || choice.includes('checkin')) mode = 'checkin';\nelse if (choice.includes('case study')) mode = 'case_study';\nelse if (choice.includes('business profile')) mode = 'profile';")
+patch('Normalize Input', "  else if (m === 'checkin' || m === 'check-in') mode = 'checkin';", "  else if (m === 'checkin' || m === 'check-in') mode = 'checkin';\n  else if (m === 'case_study' || m === 'case-study' || m === 'casestudy') mode = 'case_study';\n  else if (m === 'profile') mode = 'profile';")
+patch('Normalize Input', "if (!['site_description', 'published', 'checkin'].includes(mode) && !c)", "if (!['site_description', 'published', 'checkin', 'profile'].includes(mode) && !c)")
+patch('Normalize Input', "const keyword  = (mode === 'track' ? '' :", "let keyword  = (mode === 'track' || mode === 'profile' ? '' :")
+patch('Normalize Input', "const pageType = String(pick(p2, 'page', 'type') || '').trim() || 'Service Page';",
+      "const pageType0 = String(pick(p2, 'page', 'type') || '').trim();\nconst pageType = (mode === 'case_study' || /case stud/i.test(pageType0)) ? 'Case Study' : /pillar|hub/i.test(pageType0) ? 'Pillar Page' : /^local/i.test(pageType0) ? 'Local Page' : (pageType0 || 'Service Page');")
+patch('Normalize Input', "const pagesRaw = parseInt(", r"""// ---- v4.4: business profile (author, reviewer, address), case-study intake, local pages, video ----
+const lab = (label) => { const v = p2[label]; return v == null ? '' : String(v).trim(); };   // exact form labels: several new labels share words with older ones
+const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+const s0 = (v, n) => String(v == null ? '' : v).trim().slice(0, n || 400);
+const urlOk = (u) => /^https?:\/\/\S+$/i.test(String(u || ''));
+const A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video);
+const authorLinks = (Array.isArray(A.same_as) ? A.same_as : String(A.same_as || A.links || lab('Author profile links (one per line)')).split(/[\s,]+/)).map(x => String(x).trim()).filter(urlOk).slice(0, 8);
+const authorUrl = s0(A.url, 400) || authorLinks.find(u => cleanDomain(u) === domain) || '';   // the author page on the site; LinkedIn & co. go to sameAs (an update without a page link keeps the stored one)
+const revText = lab('Expert reviewer (optional)'); const revUrl = (revText.match(/https?:\/\/\S+/) || [''])[0]; const revParts = revText.replace(/https?:\/\/\S+/, '').split(',').map(x => x.trim()).filter(Boolean);
+const profile_input = {
+  business_name: s0(p2.business_name || lab('Company name'), 160), business_type: s0(p2.business_type || lab('Category (for local search)'), 80), logo_url: s0(p2.logo_url || lab('Logo URL (optional)'), 400),
+  street_address: s0(AD.street || AD.street_address || p2.street_address || lab('Street address'), 200), city: s0(AD.city || (mode === 'profile' ? p2.city : '') || lab('City'), 100),
+  region: s0(AD.region || p2.region || lab('Region / state / emirate'), 100), postal_code: s0(AD.postal_code || p2.postal_code || lab('Postal code'), 30),
+  country_code: mode === 'profile' ? (c ? c.iso : s0(AD.country, 2).toUpperCase()) : '', phone: s0(p2.phone || lab('Phone'), 40), public_email: s0(p2.public_email || lab('Public e-mail on the website'), 120),
+  opening_hours: s0(p2.opening_hours || lab('Opening hours'), 200), price_range: s0(p2.price_range, 20),
+  service_areas: asArray(p2.service_areas || lab('Areas you serve')).map(x => s0(x, 80)).filter(Boolean).slice(0, 20).join(', '), map_url: s0(p2.map_url || lab('Google Maps link (optional)'), 400),
+  author_name: s0(A.name || p2.author_name || lab('Author name'), 120), author_job_title: s0(A.job_title || A.title || lab('Author job title'), 160), author_credentials: s0(A.credentials || lab('Author credentials and experience'), 600),
+  author_bio: s0(A.bio || lab('Author bio'), 1200), author_url: authorUrl, author_image_url: s0(A.image_url || A.image || lab('Author photo URL (optional)'), 400),
+  author_same_as: authorLinks.filter(u => u !== authorUrl).join(' '), author_knows_about: asArray(A.knows_about || lab('Topics the author knows best')).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),
+  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400)
+};
+for (const k of ['logo_url', 'author_url', 'author_image_url', 'reviewer_url', 'map_url']) if (profile_input[k] && profile_input[k] !== '-' && !urlOk(profile_input[k])) throw new Error('Please enter full links (https://...) for the logo, author page, photo, reviewer and map.');
+const csIn = mode === 'case_study' || Object.keys(CS).length > 0;
+const pubRaw = CS.client_public != null ? String(CS.client_public) : lab('May we name the client?');
+const case_study = csIn ? { client_name: s0(CS.client_name || CS.client || lab('Client name or description'), 160), client_public: !/^(no|false|0|anonymous)/i.test(pubRaw.trim() || 'yes'),
+  industry: s0(CS.industry || lab('Client industry'), 100), location: s0(CS.location || lab('Client location'), 100), service: s0(CS.service || lab('Service you delivered'), 160),
+  challenge: s0(CS.challenge || lab('The challenge'), 2000), solution: s0(CS.solution || CS.what_we_did || lab('What you did'), 3000), timeline: s0(CS.timeline || lab('Timeline'), 200),
+  results: s0(CS.results || lab('Results (with numbers)'), 2000), quote: s0(CS.quote || lab('Client quote (optional)'), 600), quote_by: s0(CS.quote_by || lab('Quote by (name, role)'), 160) } : null;
+if (mode === 'case_study' && !keyword && case_study && case_study.service) keyword = (case_study.service + ' case study').toLowerCase().replace(/\s+/g, ' ').trim();
+const case_id = String(p2.case_id || (mode === 'case_study' ? 'cs_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : ''));
+let local_area = s0(p2.local_area || lab('City or area (local pages only)'), 80);
+if (pageType === 'Local Page' && !local_area) { const g = keyword.match(/\b(?:in|near|around)\s+([a-z][a-z .'-]{2,40})$/i); if (g) local_area = g[1].trim().replace(/\b\w/g, ch => ch.toUpperCase()); }
+const video_url = s0(VI.url || p2.video_url || lab('Video URL for this page (optional)'), 400);
+if (video_url && !urlOk(video_url)) throw new Error('The video URL must be a full link (https://...).');
+const ytm = video_url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/i); const vim = video_url.match(/vimeo\.com\/(?:video\/)?(\d{6,12})/i);
+const video = video_url ? { url: video_url, provider: ytm ? 'youtube' : vim ? 'vimeo' : 'file', id: ytm ? ytm[1] : vim ? vim[1] : '',
+  embed_url: ytm ? 'https://www.youtube.com/embed/' + ytm[1] : vim ? 'https://player.vimeo.com/video/' + vim[1] : '',
+  fetch_url: ytm ? 'https://www.youtube.com/watch?v=' + ytm[1] : vim ? 'https://vimeo.com/api/oembed.json?url=' + encodeURIComponent('https://vimeo.com/' + vim[1]) : '',
+  thumbnail_url: s0(VI.thumbnail_url, 400) || (ytm ? 'https://i.ytimg.com/vi/' + ytm[1] + '/hqdefault.jpg' : ''), title: s0(VI.title || p2.video_title, 200), description: s0(VI.description || p2.video_description, 2000),
+  transcript: String(VI.transcript || p2.video_transcript || lab('Video transcript (optional)') || '').trim().slice(0, 60000), upload_date: s0(VI.upload_date || p2.video_upload_date, 40), duration: s0(VI.duration || p2.video_duration, 20), placement: s0(VI.placement, 160) } : null;
+const pagesRaw = parseInt(""")
+patch('Normalize Input', "if (mode === 'checkin' && !domain) throw new Error('Website Domain is required.');",
+      "if (mode === 'checkin' && !domain) throw new Error('Website Domain is required.');\nif (mode === 'profile' && !domain) throw new Error('Website Domain is required: the profile belongs to your site.');\n"
+      "if (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name or the business details.');\n"
+      "if (mode === 'case_study' && !domain) throw new Error('Website Domain is required: the case study is written for your site.');\n"
+      "if (mode === 'case_study' && !keyword) throw new Error('Please enter the service you delivered (or a keyword for the page).');\n"
+      "if (mode === 'case_study' && !(case_study.challenge && case_study.solution && case_study.results)) throw new Error('Please describe the challenge, what you did and the results: the case study states only these facts.');\n"
+      "if (mode === 'case_study' && !deliverable) throw new Error('Please add your email — the case study is sent by email.');\n"
+      "if (mode === 'keyword' && !verdict_only && pageType === 'Local Page' && !local_area) throw new Error('Please enter the city or area for a local page (or put it in the keyword, e.g. \"accountant in dubai marina\").');")
+patch('Normalize Input', "    checkin_csv_text,\n", "    checkin_csv_text,\n    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name) ? profile_input : null,\n    case_study,\n    case_id,\n    local_area,\n    video,\n")
+patch('Rate Limit', "const internal = /^(ladder|cadence|tracker):/.test(String(d.client_ip || ''));", "const internal = /^(ladder|cadence|tracker|casestudy):/.test(String(d.client_ip || ''));")
+patch('Rate Limit', "if (used >= LIMITS.per_key_per_day && !['published', 'checkin'].includes(d.mode)) {", "if (used >= LIMITS.per_key_per_day && !['published', 'checkin', 'profile'].includes(d.mode)) {")
+patch('Rate Limit', "if (!['published', 'checkin'].includes(d.mode)) store.rate.keys[key] = used + 1;", "if (!['published', 'checkin', 'profile'].includes(d.mode)) store.rate.keys[key] = used + 1;")
+patch('Rate Limit', "published: 0, checkin: 0 };", "published: 0, checkin: 0, profile: 0, case_study: 0 };")
+patch('Rate Limit', "else if (d.mode === 'checkin') est = EST.checkin;", "else if (d.mode === 'checkin') est = EST.checkin;\nelse if (d.mode === 'profile') est = EST.profile;\nelse if (d.mode === 'case_study') est = EST.case_study;   // the page itself runs as its own execution and is counted there")
+patch('Rate Limit', "if (budget > 0 && store.ai_budget.spent_est + est > budget) {", "const __room = d.mode === 'case_study' ? EST.content : 0;   // reject the intake at once when the case-study page could not run today\nif (budget > 0 && store.ai_budget.spent_est + est + __room > budget) {")
+patch('Rate Limit', "this run would add about $' + est.toFixed(2) + ').", "this run would add about $' + (est + __room).toFixed(2) + ').")
+# ---------- B. routing + the profile chain (free, never rate-limited) ----------
+from ladder_common import LOG_TABLE as LOG18, LOG_COLS as LOGC18
+def route18(key, target):
+    _i = len(nodes['Route Mode']['parameters']['rules']['values'])
+    nodes['Route Mode']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3}, 'conditions': [{'id': nid('Route Mode:' + key), 'leftValue': "={{ $json.mode === '" + key + "' }}", 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': key})
+    conns['Route Mode']['main'].insert(_i, [{'node': target, 'type': 'main', 'index': 0}])
+route18('profile', 'Ensure Profile Table'); route18('case_study', 'Ensure Case Table')
+SITE18 = "={{ 'site_' + String($('Normalize Input').first().json.domain || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-') }}"
+LOAD18 = {'alwaysOutputData': True, 'executeOnce': True, 'onError': 'continueRegularOutput'}
+FX, FY = TX, TY + 1260
+add_node('Ensure Profile Table', DT_TYPE, DT_VERSION, dt_create_params(PROFILE_TABLE, PROFILE_COLS), [FX, FY], {'onError': 'continueRegularOutput'})
+add_node('Load Profile (Profile)', DT_TYPE, DT_VERSION, dt_get_where_params(PROFILE_TABLE, 'site_id', 'eq', SITE18), [FX + 220, FY], LOAD18)
+add_node('Profile Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Profile_Row.js')}, [FX + 440, FY])
+add_node('Save Profile', DT_TYPE, DT_VERSION, dt_upsert_params(PROFILE_TABLE, PROFILE_COLS, 'site_id'), [FX + 660, FY], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Profile Delivery', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Profile_Delivery.js')}, [FX + 880, FY])
+if_node('Via Webhook (Profile)?', "{{ !!$('Normalize Input').first().json.via_webhook }}", [FX + 1100, FY])
+add_node('Build Profile Response', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Build_Profile_Response.js')}, [FX + 1320, FY - 120])
+add_node('Profile Saved', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "=Business profile saved for {{ $json.domain }}", 'completionMessage': "={{ $json.plain }}", 'options': {}}, [FX + 1320, FY + 120])
+for a, b in [('Ensure Profile Table', 'Load Profile (Profile)'), ('Load Profile (Profile)', 'Profile Row'), ('Profile Row', 'Save Profile'), ('Save Profile', 'Profile Delivery'), ('Profile Delivery', 'Via Webhook (Profile)?'), ('Build Profile Response', 'Has Callback?')]:
+    connect(a, b)
+connect('Via Webhook (Profile)?', 'Build Profile Response', 0); connect('Via Webhook (Profile)?', 'Profile Saved', 1)
+# ---------- C. the case-study chain: store the intake, log the page, start the page run (own execution), confirm ----------
+CX, CY = TX, TY + 1680
+add_node('Ensure Case Table', DT_TYPE, DT_VERSION, dt_create_params(CASE_TABLE, CASE_COLS), [CX, CY], {'onError': 'continueRegularOutput'})
+add_node('Ensure Log Table (Case)', DT_TYPE, DT_VERSION, dt_create_params(LOG18, LOGC18), [CX + 220, CY], {'onError': 'continueRegularOutput'})
+add_node('Case Study Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Case_Study_Row.js')}, [CX + 440, CY])
+add_node('Save Case Study', DT_TYPE, DT_VERSION, dt_upsert_params(CASE_TABLE, CASE_COLS, 'case_id'), [CX + 660, CY], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Case Study Log Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Case_Study_Log_Row.js')}, [CX + 880, CY])
+add_node('Log Case Study', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LOG18, LOGC18, ['site_id', 'keyword']), [CX + 1100, CY], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Spawn Case Study Run', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Spawn_Case_Study_Run.js')}, [CX + 1320, CY])
+add_node('Start Case Study Run', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentV4Full01'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, [CX + 1540, CY], {'onError': 'continueRegularOutput'})
+add_node('Case Study Delivery', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Case_Study_Delivery.js')}, [CX + 1760, CY])
+if_node('Via Webhook (Case Study)?', "{{ !!$('Normalize Input').first().json.via_webhook }}", [CX + 1980, CY])
+add_node('Build Case Study Response', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Build_Case_Study_Response.js')}, [CX + 2200, CY - 120])
+add_node('Case Study Started', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "=Your case study is being written", 'completionMessage': "={{ $json.plain }}", 'options': {}}, [CX + 2200, CY + 120])
+for a, b in [('Ensure Case Table', 'Ensure Log Table (Case)'), ('Ensure Log Table (Case)', 'Case Study Row'), ('Case Study Row', 'Save Case Study'), ('Save Case Study', 'Case Study Log Row'), ('Case Study Log Row', 'Log Case Study'), ('Log Case Study', 'Spawn Case Study Run'),
+             ('Spawn Case Study Run', 'Start Case Study Run'), ('Start Case Study Run', 'Case Study Delivery'), ('Case Study Delivery', 'Via Webhook (Case Study)?'), ('Build Case Study Response', 'Has Callback?')]:
+    connect(a, b)
+connect('Via Webhook (Case Study)?', 'Build Case Study Response', 0); connect('Via Webhook (Case Study)?', 'Case Study Started', 1)
+# a published case study becomes linkable proof (status + URL on its row; no row = nothing to update)
+_spl = pos('Save Published (Log)')
+add_node('Mark Case Study Published', DT_TYPE, DT_VERSION, dt_update_params(CASE_TABLE, CASE_COLS, [('site_id', "={{ $('Publish Check').first().json.log_row.site_id }}"), ('keyword', "={{ $('Publish Check').first().json.log_row.keyword }}")], {'status': 'published', 'page_url': "={{ $('Publish Check').first().json.published_url }}"}), [_spl[0] + 110, _spl[1] + 200], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+disconnect('Save Published (Log)', 'Published Ladder Row'); connect('Save Published (Log)', 'Mark Case Study Published'); connect('Mark Case Study Published', 'Published Ladder Row')
+# ---------- D. content runs: profile + case studies + video details -> Brief Context -> Strategy Brief ----------
+SITE18B = "={{ 'site_' + String($('Parse Verdict').first().json.domain || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-') }}"
+nc18 = pos('Need Content?'); BX, BY = nc18[0] - 220, nc18[1] + 420
+add_node('Load Profile (Brief)', DT_TYPE, DT_VERSION, dt_get_where_params(PROFILE_TABLE, 'site_id', 'eq', SITE18B), [BX, BY], LOAD18)
+add_node('Load Case Studies (Brief)', DT_TYPE, DT_VERSION, dt_get_where_params(CASE_TABLE, 'site_id', 'eq', SITE18B), [BX + 200, BY], LOAD18)
+if_node('Has Video?', "{{ !!(($('Parse Verdict').first().json.video || {}).fetch_url) }}", [BX + 400, BY])
+add_node('Fetch Video Details', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': "={{ $('Parse Verdict').first().json.video.fetch_url }}", 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.4)'}, {'name': 'Accept-Language', 'value': 'en'}]},
+    'options': {'timeout': 20000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, [BX + 600, BY - 120], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Brief Context', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Brief_Context.js')}, [BX + 800, BY])
+disconnect('Need Content?', 'Strategy Brief')
+_nc_out = conns['Need Content?']['main']; _nc_out[0] = [{'node': 'Load Profile (Brief)', 'type': 'main', 'index': 0}]
+for a, b in [('Load Profile (Brief)', 'Load Case Studies (Brief)'), ('Load Case Studies (Brief)', 'Has Video?'), ('Fetch Video Details', 'Brief Context'), ('Brief Context', 'Strategy Brief')]:
+    connect(a, b)
+connect('Has Video?', 'Fetch Video Details', 0); connect('Has Video?', 'Brief Context', 1)
+patch('Parse Brief', "const prev = $('Parse Verdict').first().json;   // includes verdict + keyword data + site context", "const prev = $('Brief Context').first().json;   // Parse Verdict + business profile, proof, page role, hub pages, video (v4.4)")
+sb18 = get_schema('Parser — Strategy Brief')
+sb18['properties']['experience_notes'] = ARR; sb18['properties']['video_placement'] = {'type': 'string'}
+sb18['properties']['outline']['items']['properties']['link_to'] = {'type': 'string'}
+set_schema('Parser — Strategy Brief', sb18)
+# length bands for the new page types (hub pages are longer, case studies and local pages shorter)
+patch('Parse Analysis', "const isGuide = /blog|guide|article/.test(pt);\nconst lo = isGuide ? 1200 : 900, hi = isGuide ? 3000 : 2400;",
+      "const isGuide = /blog|guide|article/.test(pt);\nconst isHub = /pillar|hub/.test(pt) || Number(prev.ladder_rung) === 4, isShort = /case stud|local/.test(pt);   // v4.4 page types\nconst lo = isHub ? 1800 : isShort ? 800 : isGuide ? 1200 : 900, hi = isHub ? 3500 : isShort ? 1800 : isGuide ? 3000 : 2400;")
+# ---------- E. report + package fields ----------
+patch('Build Word File', "content_images: Array.isArray(brief.image_suggestions) ? brief.image_suggestions : []",
+      "content_images: Array.isArray(brief.image_suggestions) ? brief.image_suggestions : [],\n    page_role: d.page_role || 'standard', article_like: d.article_like == null ? null : !!d.article_like, author: d.author || null, reviewer: d.reviewer || null, site_profile: d.site_profile || null, hub_pages: d.hub_pages || [], video: d.video || null, case_study: d.case_study || null, case_id: d.case_id || '', local_area: d.local_area || '', content_brief_video_placement: brief.video_placement || '', eeat_notes: qa.eeat_notes || [], page_type: d.page_type || ''")
+patch('Build Word File', "  const tc = (qa.term_coverage || []);\n  if (tc.length) parts.push(h2('Topic Coverage vs Top-Ranking Pages')",
+      """  // ---- v4.4: author, trust and page extras ----
+  const au = d.author || null, rv = d.reviewer || null, role = d.page_role || 'standard', vid = d.video || null, hp = d.hub_pages || [];
+  const extraRows = [['Page role', esc({ hub: 'Hub / pillar page (table of contents, cluster summaries, "Guides in this series")', case_study: 'Case study (snapshot box, facts from the intake only)', local: 'Local page for ' + (d.local_area || '[City]') + ' (verified NAP block, LocalBusiness schema)', standard: 'Standard page' }[role] || role)],
+    ['Author (byline, author box, Person schema)', au ? esc(au.name + (au.job_title ? ', ' + au.job_title : '')) + (au.url ? ' · ' + esc(au.url) : '') : '<span class="bad">No author on file — [placeholders] in the package; set up the business profile</span>'],
+    ['Expert reviewer', rv ? esc(rv.name + (rv.job_title ? ', ' + rv.job_title : '')) : 'none'],
+    ['Experience notes', (brief.experience_notes || []).length ? ul(brief.experience_notes) : 'none']];
+  if (role === 'hub') extraRows.push(['Cluster pages linked', hp.length ? ul(hp.map(p => (p.keyword || p.url) + ' — ' + p.url + (p.planned ? ' (planned)' : ''))) : 'none found']);
+  if (vid) extraRows.push(['Video', esc((vid.title || vid.url) + (vid.minutes ? ' · ' + vid.minutes + ' min' : '') + (vid.upload_date ? ' · uploaded ' + String(vid.upload_date).slice(0, 10) : '')) + ((vid.chapters || []).length ? ' · ' + vid.chapters.length + ' key moments' : '') + ' · transcript ' + (vid.transcript ? 'included' : '<span class="bad">missing</span>')]);
+  if (d.case_study) extraRows.push(['Case study', esc((d.case_study.client_public === false ? 'anonymised client' : d.case_study.client_name) + ' · ' + (d.case_study.service || '') + (d.case_study.timeline ? ' · ' + d.case_study.timeline : ''))]);
+  parts.push(h2('Author, Trust & Page Extras') + kv(extraRows) + ((qa.eeat_notes || []).length ? '<h3>Before publishing</h3>' + ul(qa.eeat_notes) : ''));
+  const tc = (qa.term_coverage || []);
+  if (tc.length) parts.push(h2('Topic Coverage vs Top-Ranking Pages')""")
+# ---------- F. cadence: the ladder's top page links down to every rung page (was 6) so the hub lists the whole cluster ----------
+# (Cadence_Plan.js, v5/code — edited in place)
+# ---------- G. notes ----------
+nodes['Note 1']['parameters']['content'] = nodes['Note 1']['parameters']['content'].replace("the items Google offers no API for).", "the items Google offers no API for) · **Write a case study** (intake → stored proof + case-study page run) · **Set up my business profile** (author, reviewer, address: byline, author box, Person / LocalBusiness schema on every page).", 1)
+sticky("""### E-E-A-T and page types (v4.4)
+**Business profile** (form / API `mode: profile`, `seo_profiles`): author (name, title, credentials, bio, profile links, photo, topics), expert reviewer, business name / category / address / phone / hours / areas. Every content run loads it (*Load Profile (Brief)*) → byline + author box + **Person** schema (+ **WebPage reviewedBy**), LocalBusiness for local pages. **Case studies** (form / API `mode: case_study`, `seo_case_studies`): the intake is stored as proof (later pages cite it, linked once published) and the page runs as its own execution (page type Case Study, snapshot box). **Hub pages**: the ladder's top page or page type "Pillar / hub page" → section per cluster page with `link_to`, linked table of contents, "Guides in this series", ItemList. **Local pages**: page type "Local page" + city/area → local rules in the brief, verified NAP block, LocalBusiness + Service(areaServed). **Video**: `video_url` (+ transcript) → YouTube page / Vimeo oEmbed read for upload date and duration, embed + transcript in the package, **VideoObject** with key moments. *Brief Context* builds all of it before the Strategy Brief; the publish check verifies it on the live page.""", BX - 60, BY + 220, 1100, 300, 5)
+log('E-E-A-T and page types (v4.4): business profile mode (author, reviewer, NAP; seo_profiles) loaded by every content run -> byline, author box, Person / WebPage reviewedBy schema, experience notes in the brief; case-study intake (seo_case_studies, stored proof cited by later pages, page run spawned, published status tracked); hub pages (ladder top page or "Pillar / hub page": cluster sections with link_to, linked table of contents, Guides in this series, ItemList); local pages (city/area, verified NAP block, LocalBusiness + Service areaServed); video pages (YouTube / Vimeo details, embed + transcript, VideoObject with key moments); publish check verifies author, date, TOC, cluster links, NAP and video on the live page')
+
+
+# =============================================================================
+# 19. GROWTH MONITORS (v4.5, 2026-10-02): on-demand "Check my AI visibility" / "Check my backlinks" (form + API) starting the new monitor workflows
+#     (build_monitors.py), monitor settings per site on "Track my site" (seo_monitors), and the audit upgrades: crawl size / JavaScript options,
+#     brand & entity check (Google Business Profile), audit history with the "since the last audit" diff, internal-link suggestions and the fix pack.
+#     Also: every e-mail attaches files through `fileAttachments` (live finding: Send Email 2.1 ignores `attachmentsUi`; `attachments` is inline).
+# =============================================================================
+from ladder_common import (MONITORS_TABLE, MONITORS_COLS, AUDITS_TABLE, AUDITS_COLS, AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS)
+# ---------- A. intake: two new start options + pages; normalisation of monitor settings, crawl options, schedule flag ----------
+nodes['Start Form']['parameters']['formFields']['values'][0]['fieldOptions']['values'] += [{'option': 'Check my AI visibility'}, {'option': 'Check my backlinks'}]
+nodes['Start Form']['parameters']['formDescription'] += ' Check how ChatGPT, Perplexity, Gemini and Google AI answer your buyers\' questions, and watch your backlinks.'
+for _key, _label, _page in [('ai_visibility', 'Check my AI visibility', 'Page AI Visibility'), ('backlinks', 'Check my backlinks', 'Page Backlinks')]:
+    _i = len(nodes['Choose Path']['parameters']['rules']['values'])
+    nodes['Choose Path']['parameters']['rules']['values'].append({'conditions': {'options': {'caseSensitive': False, 'leftValue': '', 'typeValidation': 'strict', 'version': 3}, 'conditions': [{'id': nid('Choose Path:' + _key), 'leftValue': "={{ $json['What do you want?'] }}", 'rightValue': _label, 'operator': {'type': 'string', 'operation': 'equals'}}], 'combinator': 'and'}, 'renameOutput': True, 'outputKey': _key})
+    conns['Choose Path']['main'].insert(_i, [{'node': _page, 'type': 'main', 'index': 0}])
+nodes['Unmatched Choice']['parameters']['jsCode'] = "throw new Error('Please choose one of the 13 options (I know my keyword / Suggest keywords / Just describe my website / Audit my website / Check if my keyword is right / Rank my site for a keyword / Track my site / I published a page / Search Console check-in / Write a case study / Set up my business profile / Check my AI visibility / Check my backlinks).');"
+COMP19 = {'fieldLabel': 'Competitors (optional)', 'placeholder': 'up to 3 competitor domains, comma-separated, e.g. rival1.com, rival2.ae'}
+add_node('Page AI Visibility', 'n8n-nodes-base.form', 2.5, {'formFields': {'values': [{'fieldLabel': 'Website Domain', 'placeholder': 'example.com', 'requiredField': True}, copy.deepcopy(COUNTRY18), {'fieldLabel': 'Main services or products (optional)', 'placeholder': 'e.g. e-invoicing implementation, Odoo ERP — the topics buyers ask AI about'}, COMP19,
+    {'fieldLabel': 'Email me the report', 'fieldType': 'email', 'requiredField': True}]}, 'options': {'formTitle': 'Check my AI visibility', 'formDescription': 'We ask the questions your buyers ask ChatGPT, Perplexity, Gemini, Claude and Google AI Mode, and check Google\'s AI Overviews: are you recommended, are your pages cited, who wins instead and which sources the assistants trust. The report arrives by e-mail in about 10 minutes.', 'buttonLabel': 'Check it'}}, [448, 1760])
+add_node('Page Backlinks', 'n8n-nodes-base.form', 2.5, {'formFields': {'values': [{'fieldLabel': 'Website Domain', 'placeholder': 'example.com', 'requiredField': True}, copy.deepcopy(COUNTRY18), COMP19,
+    {'fieldLabel': 'Email me the report', 'fieldType': 'email', 'requiredField': True}]}, 'options': {'formTitle': 'Check my backlinks', 'formDescription': 'Links gained and lost, links pointing to broken pages, spam, unlinked brand mentions and the sites that link to your competitors but not to you, with outreach drafts. The report arrives by e-mail in about 5 minutes.', 'buttonLabel': 'Check it'}}, [448, 1960])
+connect('Page AI Visibility', 'Normalize Input'); connect('Page Backlinks', 'Normalize Input')
+insert_fields('Page Track', 'Blog posts per week', [COMP19])
+_pa = nodes['Page Audit']['parameters']['formFields']['values']; _ri = next(i for i, f in enumerate(_pa) if f['fieldLabel'] == 'Report type') + 1
+_pa.insert(_ri, {'fieldLabel': 'Render JavaScript', 'fieldType': 'dropdown', 'fieldOptions': {'values': [{'option': 'No (standard)'}, {'option': 'Yes, the site is built with JavaScript (slower)'}]}})
+_pa.insert(_ri, {'fieldLabel': 'Pages to crawl', 'fieldType': 'dropdown', 'fieldOptions': {'values': [{'option': '200 (standard)'}, {'option': '500'}, {'option': '1000'}]}})
+patch('Normalize Input', "else if (choice.includes('business profile')) mode = 'profile';", "else if (choice.includes('business profile')) mode = 'profile';\nelse if (choice.includes('ai visibility')) mode = 'ai_visibility';\nelse if (choice.includes('backlink')) mode = 'backlinks';")
+patch('Normalize Input', "  else if (m === 'profile') mode = 'profile';", "  else if (m === 'profile') mode = 'profile';\n  else if (m === 'ai_visibility' || m === 'ai-visibility' || m === 'ai') mode = 'ai_visibility';\n  else if (m === 'backlinks' || m === 'links') mode = 'backlinks';")
+patch('Normalize Input', "const pagesRaw = parseInt(", r"""// ---- v4.5: monitor settings (Track my site / API `monitors`), audit crawl options, scheduled audits ----
+const MI = obj(p2.monitors);
+const monitor_input = {}; for (const k of ['ai_visibility', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));
+if (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'].includes(e)).join(', ');
+if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(15, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 8));
+if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
+if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
+const topics = asArray(p2.topics || lab('Main services or products (optional)')).map(x => String(x).trim().toLowerCase()).filter(x => x.length >= 3).slice(0, 6);
+const crawlRaw = String(p2.crawl_pages || pick(p2, 'pages to crawl') || '').match(/\d+/);
+const crawl_pages = crawlRaw ? Math.min(1000, Math.max(50, parseInt(crawlRaw[0], 10))) : CONFIG.crawl_max_pages;
+const crawl_js_req = p2.crawl_js !== undefined ? (!!p2.crawl_js && !/^(false|0|no)$/i.test(String(p2.crawl_js))) : /^yes/i.test(String(pick(p2, 'javascript') || ''));
+if (crawl_js_req && crawl_pages > 500) throw new Error('JavaScript rendering is limited to 500 pages per audit (it is about 10x slower); choose 500 or fewer pages.');
+const pagesRaw = parseInt(""")
+patch('Normalize Input', "if (mode === 'case_study' && !domain) throw new Error('Website Domain is required: the case study is written for your site.');",
+      "if (mode === 'case_study' && !domain) throw new Error('Website Domain is required: the case study is written for your site.');\nif ((mode === 'ai_visibility' || mode === 'backlinks') && !domain) throw new Error('Website Domain is required.');\nif ((mode === 'ai_visibility' || mode === 'backlinks') && !deliverable) throw new Error('Please add your email — the report is sent by email.');")
+patch('Normalize Input', "    crawl_max_pages: CONFIG.crawl_max_pages,\n    crawl_js: CONFIG.crawl_js,", "    crawl_max_pages: crawl_pages,\n    crawl_js: crawl_js_req || CONFIG.crawl_js,\n    scheduled: !!p2.scheduled,\n    monitor_input,\n    topics,")
+patch('Rate Limit', "const internal = /^(ladder|cadence|tracker|casestudy):/.test(String(d.client_ip || ''));", "const internal = /^(ladder|cadence|tracker|casestudy|audit):/.test(String(d.client_ip || ''));")
+patch('Rate Limit', "profile: 0, case_study: 0 };", "profile: 0, case_study: 0, ai_visibility: 0.06, backlinks: 0.04 };   // monitors: DataForSEO is the main cost (~$0.60 / ~$0.30 per check); Claude writes the questions, the brief and outreach drafts")
+patch('Rate Limit', "else if (d.mode === 'case_study') est = EST.case_study;", "else if (d.mode === 'case_study') est = EST.case_study;\nelse if (d.mode === 'ai_visibility') est = EST.ai_visibility;\nelse if (d.mode === 'backlinks') est = EST.backlinks;")
+patch('Check Crawl', "if ($runIndex > 25) {", "const __maxPolls = Math.min(50, 25 + Math.ceil(Math.max(0, (base.crawl_max_pages || 200) - 200) / 40) + (base.crawl_js ? 10 : 0));   // bigger / JavaScript crawls get more time (v4.5)\nif ($runIndex > __maxPolls) {")
+# ---------- B. routing: the on-demand monitor runs ----------
+route18('ai_visibility', 'Monitor Start'); route18('backlinks', 'Monitor Start')
+MX, MY = TX, TY + 2100
+add_node('Monitor Start', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Monitor_Start.js')}, [MX, MY])
+if_node('AI Visibility Run?', "{{ $('Normalize Input').first().json.mode === 'ai_visibility' }}", [MX + 220, MY])
+add_node('Start AI Visibility', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentAIVisib1'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, [MX + 440, MY - 120], {'onError': 'continueRegularOutput'})
+add_node('Start Backlink Monitor', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentBacklnk1'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, [MX + 440, MY + 120], {'onError': 'continueRegularOutput'})
+add_node('Monitor Started', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Monitor_Started.js')}, [MX + 660, MY])
+if_node('Via Webhook (Monitor)?', "{{ !!$('Normalize Input').first().json.via_webhook }}", [MX + 880, MY])
+add_node('Build Monitor Response', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Build_Monitor_Response.js')}, [MX + 1100, MY - 120])
+add_node('Monitor Check Started', 'n8n-nodes-base.form', 2.5, {'operation': 'completion', 'completionTitle': "={{ $json.mode === 'ai_visibility' ? 'Your AI visibility check has started' : 'Your backlink check has started' }}", 'completionMessage': "={{ $json.plain }}", 'options': {}}, [MX + 1100, MY + 120])
+connect('Monitor Start', 'AI Visibility Run?'); connect('AI Visibility Run?', 'Start AI Visibility', 0); connect('AI Visibility Run?', 'Start Backlink Monitor', 1)
+connect('Start AI Visibility', 'Monitor Started'); connect('Start Backlink Monitor', 'Monitor Started'); connect('Monitor Started', 'Via Webhook (Monitor)?')
+connect('Via Webhook (Monitor)?', 'Build Monitor Response', 0); connect('Via Webhook (Monitor)?', 'Monitor Check Started', 1); connect('Build Monitor Response', 'Has Callback?')
+# ---------- C. "Track my site": monitor settings row ----------
+_sc = pos('Save Cadence (Track)')
+add_node('Ensure Monitors Table (Track)', DT_TYPE, DT_VERSION, dt_create_params(MONITORS_TABLE, MONITORS_COLS), [_sc[0] + 110, _sc[1] - 180], {'onError': 'continueRegularOutput'})
+add_node('Load Monitors (Track)', DT_TYPE, DT_VERSION, dt_get_where_params(MONITORS_TABLE, 'site_id', 'eq', SITE18), [_sc[0] + 330, _sc[1] - 180], LOAD18)
+add_node('Monitor Row (Track)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Monitor_Row_Track.js')}, [_sc[0] + 550, _sc[1] - 180])
+add_node('Save Monitors (Track)', DT_TYPE, DT_VERSION, dt_upsert_params(MONITORS_TABLE, MONITORS_COLS, 'site_id'), [_sc[0] + 770, _sc[1] - 180], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+disconnect('Save Cadence (Track)', 'Tracker Payload (Track)')
+for a, b in [('Save Cadence (Track)', 'Ensure Monitors Table (Track)'), ('Ensure Monitors Table (Track)', 'Load Monitors (Track)'), ('Load Monitors (Track)', 'Monitor Row (Track)'), ('Monitor Row (Track)', 'Save Monitors (Track)'), ('Save Monitors (Track)', 'Tracker Payload (Track)')]:
+    connect(a, b)
+# ---------- D. audit: brand & entity check (between the Search Console step and the scoring) ----------
+patch('Analyze Probes', "        sitemap_urls: locs.length,\n", "        sitemap_urls: locs.length,\n        robots_txt: robotsText.slice(0, 20000),\n        ai_crawlers_blocked: aiBlocked,\n        llms_txt_present: llms.status === 200 && llms.body.length > 100 && !/<html/i.test(llms.body),\n")
+SITE_AUDIT19 = "={{ 'site_' + String($('Check Crawl').first().json.domain || 'none').toLowerCase().replace(/[^a-z0-9]+/g, '-') }}"
+_gf = pos('GSC Audit Findings'); EX, EY = _gf[0], _gf[1] + 360
+disconnect('GSC Audit Findings', 'Build Site Issues')
+add_node('Load Profile (Audit)', DT_TYPE, DT_VERSION, dt_get_where_params(PROFILE_TABLE, 'site_id', 'eq', SITE_AUDIT19), [EX, EY], LOAD18)
+add_node('GBP Request', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GBP_Request.js')}, [EX + 220, EY])
+if_node('Look Up GBP?', "{{ !$json.skip }}", [EX + 440, EY])
+add_node('Fetch GBP', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP(), [EX + 660, EY - 120], {'onError': 'continueRegularOutput', 'retryOnFail': True, 'maxTries': 2, 'waitBetweenTries': 3000})
+add_node('Entity Check', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Entity_Check.js')}, [EX + 880, EY])
+for a, b in [('GSC Audit Findings', 'Load Profile (Audit)'), ('Load Profile (Audit)', 'GBP Request'), ('GBP Request', 'Look Up GBP?'), ('Fetch GBP', 'Entity Check'), ('Entity Check', 'Build Site Issues')]:
+    connect(a, b)
+connect('Look Up GBP?', 'Fetch GBP', 0); connect('Look Up GBP?', 'Entity Check', 1)
+slot('Fetch GBP', 'dataforseo')
+patch('Build Site Issues', "      site_structure: input.site_structure || null,\n", "      site_structure: input.site_structure || null,\n      entity: input.entity || null,\n")
+# ---------- E. audit: history, diff, internal links, fix pack (between the scoring and the report) ----------
+_bs = pos('Build Site Issues'); HX, HY = _bs[0], _bs[1] + 400
+disconnect('Build Site Issues', 'Is Full Report?')
+add_node('Ensure Audits Table', DT_TYPE, DT_VERSION, dt_create_params(AUDITS_TABLE, AUDITS_COLS), [HX, HY], {'onError': 'continueRegularOutput'})
+add_node('Ensure Findings Table', DT_TYPE, DT_VERSION, dt_create_params(AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS), [HX + 200, HY], {'onError': 'continueRegularOutput'})
+add_node('Load Audit History', DT_TYPE, DT_VERSION, dt_get_where_params(AUDITS_TABLE, 'site_id', 'eq', SITE_AUDIT19), [HX + 400, HY], LOAD18)
+add_node('Load Audit Findings', DT_TYPE, DT_VERSION, dt_get_where_params(AUDIT_FINDINGS_TABLE, 'site_id', 'eq', SITE_AUDIT19), [HX + 600, HY], LOAD18)
+add_node('Audit Diff', 'n8n-nodes-base.code', 2, {'jsCode': "const __scored = $('Build Site Issues').first();   // the scored audit (the input here is the last table load)\n" + rd('code/Audit_Diff.js').replace("const d = $input.first().json;", "const d = __scored.json;")}, [HX + 800, HY])
+add_node('Audit Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Audit_Row.js')}, [HX + 1000, HY])
+add_node('Save Audit', DT_TYPE, DT_VERSION, dt_insert_params(AUDITS_TABLE, AUDITS_COLS), [HX + 1200, HY], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Finding Rows', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Finding_Rows.js')}, [HX + 1400, HY])
+if_node('Any Finding Rows?', "{{ !$json.skip }}", [HX + 1600, HY])
+add_node('Save Findings', DT_TYPE, DT_VERSION, dt_insert_params(AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS), [HX + 1800, HY - 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Fix Pack', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Fix_Pack.js')}, [HX + 2000, HY])
+add_node('Zip Fix Pack', 'n8n-nodes-base.compression', 1.1, {'operation': 'compress', 'binaryPropertyName': "={{ $json.fix_props.join(',') }}", 'outputFormat': 'zip', 'fileName': "=fix-pack-{{ $json.site_id.replace(/^site_/, '') }}.zip", 'binaryPropertyOutput': 'fix_pack_zip'}, [HX + 2200, HY], {'onError': 'continueRegularOutput'})
+add_node('Restore Audit Item', 'n8n-nodes-base.code', 2, {'jsCode': "// The audit item with the fix-pack files and, when zipping worked, fix-pack.zip for the e-mail (the Compression node replaces the item's binaries).\nconst f = $('Fix Pack').first(); let zip = null; try { const z = $input.first(); zip = z && z.binary && z.binary.fix_pack_zip && !(z.json && z.json.error) ? z.binary.fix_pack_zip : null; } catch (e) {}\nreturn [{ json: { ...f.json, fix_pack_zipped: !!zip }, binary: { ...(f.binary || {}), ...(zip ? { fix_pack_zip: { ...zip, mimeType: 'application/zip' } } : {}) } }];"}, [HX + 2400, HY])
+for a, b in [('Build Site Issues', 'Ensure Audits Table'), ('Ensure Audits Table', 'Ensure Findings Table'), ('Ensure Findings Table', 'Load Audit History'), ('Load Audit History', 'Load Audit Findings'), ('Load Audit Findings', 'Audit Diff'), ('Audit Diff', 'Audit Row'), ('Audit Row', 'Save Audit'), ('Save Audit', 'Finding Rows'), ('Finding Rows', 'Any Finding Rows?'), ('Save Findings', 'Fix Pack'), ('Fix Pack', 'Zip Fix Pack'), ('Zip Fix Pack', 'Restore Audit Item'), ('Restore Audit Item', 'Is Full Report?')]:
+    connect(a, b)
+connect('Any Finding Rows?', 'Save Findings', 0); connect('Any Finding Rows?', 'Fix Pack', 1)
+# report sections: since the last audit, internal links, brand & entity, fix pack (both report types)
+DIFF_SECTION_JS = r"""// ---- v4.5 sections: since the last audit, internal links to add, brand & entity, fix pack ----
+const v45Section = (a, num) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  const D = a.audit_diff || {}; const IL = a.internal_links || []; const E = a.entity || {}; const FP = a.fix_pack || {};
+  let h = `<h2 class="pb">${num}. Progress, Links, Brand & Fix Pack</h2><h3>Since the last audit</h3>`;
+  if (D.baseline !== false) h += `<p>${e2(D.summary || 'First audit stored.')}</p>`;
+  else {
+    h += `<p>Previous audit ${e2(String(D.previous.audited_at).slice(0, 10))} (${D.days_since} days ago): score ${D.previous.health_score} → <b>${a.health_score}</b> (${D.score_delta > 0 ? '+' : ''}${D.score_delta}). ${e2(D.summary)}.</p>`;
+    const rows = [...D.fixed.slice(0, 15).map(f => ['<span class="ok">fixed</span>', f.severity, f.title]), ...D.new.slice(0, 15).map(f => ['<span class="bad">new</span>', f.severity, f.title]), ...D.open.slice(0, 15).map(f => ['still open', f.severity + (f.was && f.was !== f.severity ? ' (was ' + f.was + ')' : ''), f.title + (f.affected != null && f.affected_before != null && f.affected !== f.affected_before ? ' — ' + f.affected_before + ' → ' + f.affected + ' affected' : '')])];
+    if (rows.length) h += `<table class="ct"><tr><th>Status</th><th>Severity</th><th>Finding</th></tr>` + rows.map(r => `<tr><td>${r[0]}</td><td>${e2(r[1])}</td><td>${e2(r[2])}</td></tr>`).join('') + `</table>`;
+  }
+  h += `<h3>Internal links to add</h3>`;
+  h += IL.length ? `<p>Pages with few or no links pointing to them, and strong pages on the same topic that can link to them (also in the fix pack as internal-links.csv).</p><table class="ct"><tr><th>On page</th><th>Link to</th><th>Anchor text</th><th>Why</th></tr>` + IL.slice(0, 15).map(l => `<tr><td>${e2(p2(l.from_url))}</td><td>${e2(p2(l.to_url))}</td><td>${e2(l.anchor)}</td><td>${e2(l.reason)}</td></tr>`).join('') + `</table>` : `<p>No page needs extra internal links.</p>`;
+  h += `<h3>Brand & entity consistency</h3>`;
+  if (!E.business_name) h += `<p>Not checked: no business name on file. Set up the business profile so name, address and phone can be compared with Google Business Profile.</p>`;
+  else { const g = E.gbp; h += `<table class="ct"><tr><th></th><th>Google Business Profile</th><th>Your site / profile</th></tr><tr><td>Name</td><td>${e2(g ? g.title : 'not found')}</td><td>${e2(E.business_name)}</td></tr><tr><td>Phone</td><td>${e2(g ? g.phone : '—')}</td><td>${e2([(E.homepage_org || {}).telephone, ...(E.homepage_phones || [])].filter(Boolean).slice(0, 2).join(', ') || '—')}</td></tr><tr><td>Website</td><td>${e2(g ? g.website : '—')}</td><td>${e2(a.domain)}</td></tr>` + (g ? `<tr><td>Rating</td><td>${e2(g.rating != null ? g.rating + '★ (' + (g.reviews || 0) + ' reviews)' : '—')}${g.claimed ? '' : ' · <span class="bad">unclaimed</span>'}</td><td></td></tr>` : '') + `<tr><td>Official profiles (sameAs)</td><td colspan="2">${e2(((E.homepage_org || {}).sameAs || []).join(', ') || 'none in the homepage schema')}</td></tr></table>`; }
+  h += `<h3>Fix pack (attached)</h3>` + ((FP.files || []).length ? `<table class="ct"><tr><th>File</th><th>What to do with it</th></tr>` + FP.files.map(f => `<tr><td>${e2(f.name)}</td><td>${e2(f.purpose)}</td></tr>`).join('') + `</table>` : `<p>No files.</p>`);
+  return h;
+};
+"""
+patch('Build Audit Report', "const findings = a.findings || [];", DIFF_SECTION_JS + "const findings = a.findings || [];")
+patch('Build Audit Report', "html += scSection(a, '5b');\n", "html += scSection(a, '5b');\nhtml += v45Section(a, '5c');\n")
+patch('Build Audit Report', "<li>Search Console &amp; Site Structure (5b)</li>", "<li>Search Console &amp; Site Structure (5b)</li><li>Progress, Links, Brand &amp; Fix Pack (5c)</li>")
+patch('Build Full Report', "const findings = a.findings || [];", DIFF_SECTION_JS + "const findings = a.findings || [];")
+patch('Build Full Report', "html += scSection(a, '12b');\n", "html += scSection(a, '12b');\nhtml += v45Section(a, '12c');\n")
+_c = code('Build Full Report'); assert _c.count("'Search Console & Site Structure (12b)', '") == 1
+setcode('Build Full Report', _c.replace("'Search Console & Site Structure (12b)', '", "'Search Console & Site Structure (12b)', 'Progress, Links, Brand & Fix Pack (12c)', '", 1))
+# the PDF attach step keeps the fix pack; the e-mail and the callback carry it
+patch('Attach PDF Audit', "return [{ json:", "let __fp = {}; try { __fp = $('Restore Audit Item').first().binary || {}; } catch (e) {}\nif (__fp.fix_pack_zip) binary.fix_pack_zip = __fp.fix_pack_zip; else for (const k of Object.keys(__fp)) if (k.startsWith('fix_')) binary[k] = __fp[k];\nreturn [{ json:") if code('Attach PDF Audit').count("return [{ json:") == 1 else None
+_sar = nodes['Send Audit Report']['parameters']
+_sar['options'].pop('attachments', None); _sar['options']['fileAttachments'] = "={{ ['pdf', 'data', ...($binary.fix_pack_zip ? ['fix_pack_zip'] : Object.keys($binary).filter(k => k.startsWith('fix_')))].filter(k => $binary[k]).join(',') }}"
+assert _sar['html'].count('<p>The full report is attached.</p>') == 1
+_sar['html'] = _sar['html'].replace('<p>The full report is attached.</p>', "<p>The full report is attached{{ $binary.fix_pack_zip || $binary.fix_robots ? ', with the <b>fix pack</b> (robots.txt, llms.txt, redirect map, schema files, internal links to add; see README.txt)' : '' }}.</p>{{ (() => { try { const D = $('Restore Audit Item').first().json.site_audit.audit_diff; return D && D.baseline === false ? '<p><b>Since the last audit (' + String(D.previous.audited_at).slice(0, 10) + '):</b> score ' + D.previous.health_score + ' → ' + $json.health_score + '; ' + D.summary + '.</p>' : ''; } catch (e) { return ''; } })() }}")
+patch('Build Audit Response', "  site_structure: d.site_structure || null,", "  site_structure: d.site_structure || null,\n  ...(() => { try { const r = $('Restore Audit Item').first().json; const a = r.site_audit || {}; return { audit_id: r.audit_id, audit_diff: a.audit_diff || null, internal_links: a.internal_links || [], entity: a.entity || null, fix_pack: r.fix_pack || null }; } catch (e) { return {}; } })(),")
+# ---------- F. every e-mail attaches real files (fileAttachments); inline `attachments` and the ignored `attachmentsUi` are dropped ----------
+for _n in nodes.values():
+    if _n['type'] != 'n8n-nodes-base.emailSend': continue
+    _o = _n['parameters'].setdefault('options', {})
+    if _n['name'] == 'Send Report': _o['fileAttachments'] = "={{ ['pdf', 'data', 'article_html', 'article_md', 'meta_json'].filter(k => $binary[k]).join(',') }}"
+    elif 'fileAttachments' not in _o and (_o.get('attachments') or _o.get('attachmentsUi')): _o['fileAttachments'] = "={{ ['pdf', 'data'].filter(k => $binary[k]).join(',') }}"
+    _o.pop('attachments', None); _o.pop('attachmentsUi', None)
+    _n['retryOnFail'] = True; _n['maxTries'] = 3; _n['waitBetweenTries'] = 5000   # live finding 2026-10-02: a transient DNS failure (EAI_AGAIN smtp.gmail.com) lost two e-mails
+# ---------- G. full report: the link gap read the wrong field (domain_intersection items carry the linking domain in `target`) ----------
+patch('Analyze Backlinks', "referring_domain: first.domain || it.domain || it.referring_domain || null", "referring_domain: first.target || first.domain || it.domain || it.referring_domain || null")
+# ---------- H. notes ----------
+nodes['Note 1']['parameters']['content'] = nodes['Note 1']['parameters']['content'].replace("· **Set up my business profile**", "· **Check my AI visibility** / **Check my backlinks** (on-demand runs of the AI Visibility Tracker / Backlink Monitor) · **Set up my business profile**", 1)
+sticky("""### Growth monitors and audit upgrades (v4.5)
+**Workflows** (build_monitors.py): *AI Visibility Tracker* (Mon 07:00: buyer questions × ChatGPT / Perplexity / Gemini / Claude / Google AI Mode + AI Overviews → mention & citation rate, share of voice, sources AI trusts, lost questions), *Backlink Monitor* (Mon 07:30 light watch, monthly full report: lost / new / broken / spam, link gap, unlinked mentions, prospects with outreach drafts) and *Audit Scheduler* (1st of the month: technical re-audit per site). Settings per site in `seo_monitors` ("Track my site" competitors / API `monitors`, Site Admin `monitors`). Form / API `ai_visibility` and `backlinks` start a run at once.
+**Every audit** now: crawl size 200 / 500 / 1000 and JavaScript rendering; **brand & entity check** against the Google Business Profile (name, phone, website, claimed) and the homepage Organization schema (sameAs); stored in `seo_audits` / `seo_audit_findings` → **since the last audit** (fixed / new / still open, score change); **internal links to add**; **fix pack** (robots.txt, llms.txt, redirect map, schema, internal-links.csv, README; zipped for the e-mail, text in the callback).""", HX - 60, HY + 220, 1150, 260, 5)
+log('Growth monitors (v4.5): on-demand modes ai_visibility / backlinks (form + API) starting the new AI Visibility Tracker / Backlink Monitor workflows; monitor settings per site on Track my site (seo_monitors); audits: crawl size and JavaScript options, brand & entity check (Google Business Profile, Organization sameAs), audit history (seo_audits, seo_audit_findings) with the since-the-last-audit diff, internal-link suggestions and a fix pack (robots.txt, llms.txt, redirect map, schema, internal links; zipped); every e-mail attaches files through fileAttachments; full-report link gap reads the linking domain from `target`')
+
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
@@ -1231,7 +1899,7 @@ print(f'\nwrote {OUT_JSON}: {len(nodes)} nodes, {sum(len(l) for o in conns.value
 
 # the API front door and the ladder extras (Rank Tracker, WordPress publisher, test runner) are generated alongside
 import subprocess
-for _s in ('build_api.py', 'build_ladder_extras.py'):
+for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py'):
     _r = subprocess.run([sys.executable, os.path.join(HERE0, _s)], cwd=HERE0)
     assert _r.returncode == 0, _s + ' failed'
 

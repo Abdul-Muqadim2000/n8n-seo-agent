@@ -1,0 +1,18 @@
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "@id": "https://www.techand.ai/#organization",
+  "name": "Tech&",
+  "url": "https://www.techand.ai/",
+  "logo": "https://www.techand.ai/logo1.png",
+  "contactPoint": {
+    "@type": "ContactPoint",
+    "telephone": "+971507020541",
+    "contactType": "customer service"
+  },
+  "sameAs": [
+    "https://www.linkedin.com/company/techand.ai/"
+  ]
+}
+</script>

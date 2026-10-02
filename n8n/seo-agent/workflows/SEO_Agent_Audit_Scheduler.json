@@ -1,0 +1,828 @@
+[
+  {
+    "id": "SEOagentAuditSc1",
+    "name": "SEO Agent — Audit Scheduler",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 600,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 6 1 * *"
+              }
+            ]
+          }
+        },
+        "id": "e4774fde-d9c8-59c5-bf2c-65975f47a519",
+        "name": "Monthly Schedule",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "id": "8422342f-d754-587f-a165-0c77a0122b73",
+        "name": "Manual Run",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_monitors",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "ai_visibility",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_engines",
+                "type": "string"
+              },
+              {
+                "name": "ai_prompts_max",
+                "type": "number"
+              },
+              {
+                "name": "backlinks",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_monthly",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_pages",
+                "type": "number"
+              },
+              {
+                "name": "audit_js",
+                "type": "boolean"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "brand_names",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "0e49b48d-fd43-5fe0-8ce2-6cb0a3e6fe6f",
+        "name": "Ensure Monitors Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          220,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_audits",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "audit_id",
+                "type": "string"
+              },
+              {
+                "name": "audited_at",
+                "type": "string"
+              },
+              {
+                "name": "report_type",
+                "type": "string"
+              },
+              {
+                "name": "health_score",
+                "type": "number"
+              },
+              {
+                "name": "grade",
+                "type": "string"
+              },
+              {
+                "name": "pages_crawled",
+                "type": "number"
+              },
+              {
+                "name": "findings",
+                "type": "number"
+              },
+              {
+                "name": "critical",
+                "type": "number"
+              },
+              {
+                "name": "high",
+                "type": "number"
+              },
+              {
+                "name": "medium",
+                "type": "number"
+              },
+              {
+                "name": "low",
+                "type": "number"
+              },
+              {
+                "name": "scheduled",
+                "type": "boolean"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "ae6e94ef-b2fb-59d5-b00f-e6dff53ac9ea",
+        "name": "Ensure Audits Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          440,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_sites",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "gsc_property",
+                "type": "string"
+              },
+              {
+                "name": "ga4_property_id",
+                "type": "string"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "location_code",
+                "type": "number"
+              },
+              {
+                "name": "language_code",
+                "type": "string"
+              },
+              {
+                "name": "email",
+                "type": "string"
+              },
+              {
+                "name": "callback_url",
+                "type": "string"
+              },
+              {
+                "name": "keywords",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "last_run_at",
+                "type": "string"
+              },
+              {
+                "name": "last_status",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "b92a34fb-1ebb-5ceb-82a2-640f8523781b",
+        "name": "Ensure Sites Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_profiles",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "business_name",
+                "type": "string"
+              },
+              {
+                "name": "business_type",
+                "type": "string"
+              },
+              {
+                "name": "logo_url",
+                "type": "string"
+              },
+              {
+                "name": "street_address",
+                "type": "string"
+              },
+              {
+                "name": "city",
+                "type": "string"
+              },
+              {
+                "name": "region",
+                "type": "string"
+              },
+              {
+                "name": "postal_code",
+                "type": "string"
+              },
+              {
+                "name": "country_code",
+                "type": "string"
+              },
+              {
+                "name": "phone",
+                "type": "string"
+              },
+              {
+                "name": "public_email",
+                "type": "string"
+              },
+              {
+                "name": "opening_hours",
+                "type": "string"
+              },
+              {
+                "name": "price_range",
+                "type": "string"
+              },
+              {
+                "name": "service_areas",
+                "type": "string"
+              },
+              {
+                "name": "map_url",
+                "type": "string"
+              },
+              {
+                "name": "author_name",
+                "type": "string"
+              },
+              {
+                "name": "author_job_title",
+                "type": "string"
+              },
+              {
+                "name": "author_credentials",
+                "type": "string"
+              },
+              {
+                "name": "author_bio",
+                "type": "string"
+              },
+              {
+                "name": "author_url",
+                "type": "string"
+              },
+              {
+                "name": "author_image_url",
+                "type": "string"
+              },
+              {
+                "name": "author_same_as",
+                "type": "string"
+              },
+              {
+                "name": "author_knows_about",
+                "type": "string"
+              },
+              {
+                "name": "reviewer_name",
+                "type": "string"
+              },
+              {
+                "name": "reviewer_job_title",
+                "type": "string"
+              },
+              {
+                "name": "reviewer_url",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "d8e15919-50c8-5668-902c-1c442c4efd93",
+        "name": "Ensure Profiles Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "56a88d3a-a958-5c12-8647-2a9353937707",
+        "name": "Load Sites",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          220,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ladders"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "4f845861-9b18-57df-ab2d-c4679a1d1266",
+        "name": "Load Ladders",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          440,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_monitors"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "f7998a02-824d-584d-aa5a-8b26853f2b20",
+        "name": "Load Monitors",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_profiles"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "37b56bb3-7bef-5d0e-b285-3b2e3c0a8970",
+        "name": "Load Profiles",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_audits"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "10140d36-6f16-5e19-8f0c-141aafd736a6",
+        "name": "Load Audits",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Monthly technical re-audit (1st of the month 06:00, and on demand): one technical audit per site with audits switched on, unless the site was\n// audited in the last 25 days. Each audit runs as its own execution through API Entry (internal key \"audit:\") and delivers itself: report +\n// \"since the last audit\" diff + fix pack. The crawl size / JavaScript rendering come from the site's monitor settings.\n// ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----\n// Sites = the Data Table seo_sites (\"Track my site\") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).\n// On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc\n// with the trigger's country, e-mail and callback.\nlet trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}\nif (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst siteIdFor = (d) => 'site_' + d.replace(/[^a-z0-9]+/g, '-');\nconst listOf = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst flag = (v, dflt) => (v === undefined || v === null || v === '') ? dflt : !(v === false || /^(false|0|no|off)$/i.test(String(v)));\nconst DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];\nfunction monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit'\n  const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), ladders = rowsOf('Load Ladders').filter(r => r.domain), mons = rowsOf('Load Monitors'), profiles = rowsOf('Load Profiles');\n  const byDomain = new Map();\n  for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: listOf(s.keywords).map(k => k.toLowerCase()), virtual: false }); }\n  for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', virtual: true }); }\n  for (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }\n  const want = normD(trigger.domain) || String(trigger.site_id || '').trim();\n  let list = [...byDomain.values()];\n  if (want) {\n    list = list.filter(s => s.domain === want || s.site_id === want);\n    if (!list.length && normD(trigger.domain)) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];\n  } else list = list.filter(s => String(s.status || 'active') !== 'paused');\n  const out = list.map(s => {\n    const m = mons.find(x => x.site_id === s.site_id) || {};\n    const p = profiles.find(x => x.site_id === s.site_id) || {};\n    const engines = listOf(m.ai_engines).map(e => e.toLowerCase()).filter(e => DEFAULT_ENGINES.includes(e));\n    const settings = { ai_visibility: flag(m.ai_visibility, true), backlinks: flag(m.backlinks, true), audit_monthly: flag(m.audit_monthly, true), engines: engines.length ? engines : DEFAULT_ENGINES,\n      prompts_max: Math.min(15, Math.max(3, Number(m.ai_prompts_max) || 8)), audit_pages: Math.min(1000, Math.max(50, Number(m.audit_pages) || 200)), audit_js: flag(m.audit_js, false),\n      competitors: [...new Set([...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD).filter(d => d && d !== s.domain))].slice(0, 5),\n      brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || ''].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };\n    const o = { ...s, settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '' } };\n    if (want) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }\n    o.request_id = String(trigger.request_id || s.request_id || '');\n    return o;\n  });\n  const flagOf = { ai: 'ai_visibility', backlinks: 'backlinks', audit: 'audit_monthly' }[kind];\n  return { list: want ? out : out.filter(s => s.settings[flagOf]), on_demand: !!want, want, trigger, total: byDomain.size };\n}\n\nconst CONFIG = { max_sites_per_run: 20, min_days_between: 25 };\nconst { list, on_demand, want, total } = monitorSites('audit');\nconst audits = rowsOf('Load Audits');\nconst now = Date.now(); const ym = new Date().toISOString().slice(0, 7).replace('-', '');\nconst out = [], skipped = [];\nfor (const s of list.slice(0, CONFIG.max_sites_per_run)) {\n  const last = audits.filter(a => a.site_id === s.site_id).sort((a, b) => String(b.audited_at).localeCompare(String(a.audited_at)))[0];\n  const days = last ? Math.floor((now - new Date(last.audited_at).getTime()) / 864e5) : null;\n  if (!on_demand && days != null && days < CONFIG.min_days_between) { skipped.push(s.domain + ' (audited ' + days + ' days ago)'); continue; }\n  if (!s.email && !s.callback_url) { skipped.push(s.domain + ' (no e-mail or callback to deliver to)'); continue; }\n  out.push({ json: { body: { mode: 'audit', domain: s.domain, country: s.country || 'United States', report_type: 'Site Audit (technical issues only)', email: s.email || '', callback_url: s.callback_url || '',\n    request_id: s.request_id || ('aud_' + ym + '_' + s.site_id.replace(/^site_/, '')), client_ip: 'audit:' + s.site_id, crawl_pages: s.settings.audit_js ? Math.min(500, s.settings.audit_pages) : s.settings.audit_pages, crawl_js: s.settings.audit_js, scheduled: true },\n    domain: s.domain, last_audit_days: days, skipped } });\n}\nif (!out.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches \"' + want + '\"' : (total ? 'no audit due' : 'no sites yet'), skipped } }];\nreturn out;\n"
+        },
+        "id": "46385acf-592f-56b5-988f-38eba0cc4607",
+        "name": "Audit Schedule Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1320,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "5d3c6e92-0117-5257-be7e-44e8c65b5df8",
+                "leftValue": "={{ !$json.nothing_to_do }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "2867366a-9826-513f-9829-ffef7a135bb2",
+        "name": "Any Audits Due?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1540,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "SEOagentV4Full01"
+          },
+          "mode": "each",
+          "options": {
+            "waitForSubWorkflow": false
+          }
+        },
+        "id": "d670ecc0-7558-5d05-b18a-e3c462f97539",
+        "name": "Start Scheduled Audits",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          1760,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// What was started (each audit delivers its own report, diff and fix pack by e-mail / callback).\nconst plan = $('Audit Schedule Plan').all().map(i => i.json);\nreturn [{ json: { started: plan.map(p => p.domain), skipped: (plan[0] || {}).skipped || [], at: new Date().toISOString() } }];"
+        },
+        "id": "6c66013f-e7ec-53be-a930-0973c8cd1443",
+        "name": "Audits Started",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1980,
+          0
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "8acee463-7447-534b-96ae-f86659811f12",
+        "name": "Nothing Due",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          1760,
+          440
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Audit Scheduler (v4.5)\n**1st of every month, 06:00** (cron `0 6 1 * *`) and on demand (*Manual Run* `{ domain | site_id }`). For every site with `audit_monthly` on (`seo_monitors`; default on) and no audit in the last 25 days, it starts a **technical audit** in its own execution through API Entry (internal key `audit:`, crawl size / JavaScript rendering from the site's settings). Each audit compares itself with the site's previous audit (`seo_audits` + `seo_audit_findings`: fixed / new / still open, score change) and delivers the report with the **fix pack** (robots.txt, llms.txt, redirect map, schema, internal links) by e-mail and/or callback.",
+          "height": 220,
+          "width": 1100,
+          "color": 5
+        },
+        "id": "43691d66-4ffe-561a-ae50-ba454daa5dd7",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -400
+        ]
+      }
+    ],
+    "connections": {
+      "Monthly Schedule": {
+        "main": [
+          [
+            {
+              "node": "Ensure Monitors Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Monitors Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Audits Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Audits Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Sites Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Sites Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Profiles Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Profiles Table": {
+        "main": [
+          [
+            {
+              "node": "Load Sites",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Sites": {
+        "main": [
+          [
+            {
+              "node": "Load Ladders",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Ladders": {
+        "main": [
+          [
+            {
+              "node": "Load Monitors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Monitors": {
+        "main": [
+          [
+            {
+              "node": "Load Profiles",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Profiles": {
+        "main": [
+          [
+            {
+              "node": "Load Audits",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Audits": {
+        "main": [
+          [
+            {
+              "node": "Audit Schedule Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Audit Schedule Plan": {
+        "main": [
+          [
+            {
+              "node": "Any Audits Due?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Run": {
+        "main": [
+          [
+            {
+              "node": "Ensure Monitors Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Audits Due?": {
+        "main": [
+          [
+            {
+              "node": "Start Scheduled Audits",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Nothing Due",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Start Scheduled Audits": {
+        "main": [
+          [
+            {
+              "node": "Audits Started",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

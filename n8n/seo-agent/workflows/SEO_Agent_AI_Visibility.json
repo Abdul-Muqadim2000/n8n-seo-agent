@@ -1,0 +1,3153 @@
+[
+  {
+    "id": "SEOagentAIVisib1",
+    "name": "SEO Agent — AI Visibility Tracker",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 3600,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "weeks",
+                "weeksInterval": 1,
+                "triggerAtDay": [
+                  1
+                ],
+                "triggerAtHour": 7,
+                "triggerAtMinute": 0
+              }
+            ]
+          }
+        },
+        "id": "a283f55d-30cc-503d-9cf1-80f5f2caf04e",
+        "name": "Weekly Schedule",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "id": "bf0b0f5f-2104-51e1-84c1-d6b46571f965",
+        "name": "Manual Run",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_monitors",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "ai_visibility",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_engines",
+                "type": "string"
+              },
+              {
+                "name": "ai_prompts_max",
+                "type": "number"
+              },
+              {
+                "name": "backlinks",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_monthly",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_pages",
+                "type": "number"
+              },
+              {
+                "name": "audit_js",
+                "type": "boolean"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "brand_names",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "57228bdc-5fd8-5f3c-89f2-ec936ef67214",
+        "name": "Ensure Monitors Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          220,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_ai_prompts",
+          "columns": {
+            "column": [
+              {
+                "name": "prompt_id",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "prompt",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "topic",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "2fb37677-9526-5ab5-bf74-24ce8823b2bb",
+        "name": "Ensure AI Prompts Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          440,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_ai_answers",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "run_id",
+                "type": "string"
+              },
+              {
+                "name": "checked_at",
+                "type": "string"
+              },
+              {
+                "name": "prompt_id",
+                "type": "string"
+              },
+              {
+                "name": "prompt",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "topic",
+                "type": "string"
+              },
+              {
+                "name": "engine",
+                "type": "string"
+              },
+              {
+                "name": "answered",
+                "type": "boolean"
+              },
+              {
+                "name": "mentioned",
+                "type": "boolean"
+              },
+              {
+                "name": "cited",
+                "type": "boolean"
+              },
+              {
+                "name": "rank",
+                "type": "number"
+              },
+              {
+                "name": "our_urls",
+                "type": "string"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "sources",
+                "type": "string"
+              },
+              {
+                "name": "excerpt",
+                "type": "string"
+              },
+              {
+                "name": "cost",
+                "type": "number"
+              },
+              {
+                "name": "error",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "ff54a511-a95b-5f7d-be0d-d492ab02603f",
+        "name": "Ensure AI Answers Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_ai_visibility",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "run_id",
+                "type": "string"
+              },
+              {
+                "name": "checked_at",
+                "type": "string"
+              },
+              {
+                "name": "prompts",
+                "type": "number"
+              },
+              {
+                "name": "answers",
+                "type": "number"
+              },
+              {
+                "name": "mention_rate",
+                "type": "number"
+              },
+              {
+                "name": "citation_rate",
+                "type": "number"
+              },
+              {
+                "name": "share_of_voice",
+                "type": "number"
+              },
+              {
+                "name": "avg_rank",
+                "type": "number"
+              },
+              {
+                "name": "aio_presence",
+                "type": "number"
+              },
+              {
+                "name": "aio_citation_rate",
+                "type": "number"
+              },
+              {
+                "name": "engines_json",
+                "type": "string"
+              },
+              {
+                "name": "competitors_json",
+                "type": "string"
+              },
+              {
+                "name": "sources_json",
+                "type": "string"
+              },
+              {
+                "name": "pages_json",
+                "type": "string"
+              },
+              {
+                "name": "gaps_json",
+                "type": "string"
+              },
+              {
+                "name": "market_json",
+                "type": "string"
+              },
+              {
+                "name": "market_month",
+                "type": "string"
+              },
+              {
+                "name": "cost_usd",
+                "type": "number"
+              },
+              {
+                "name": "alerts",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "646cd855-b562-5225-ada8-cca9aa2252d2",
+        "name": "Ensure AI Visibility Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_link_prospects",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "prospect_domain",
+                "type": "string"
+              },
+              {
+                "name": "type",
+                "type": "string"
+              },
+              {
+                "name": "rank",
+                "type": "number"
+              },
+              {
+                "name": "spam_score",
+                "type": "number"
+              },
+              {
+                "name": "detail",
+                "type": "string"
+              },
+              {
+                "name": "source_url",
+                "type": "string"
+              },
+              {
+                "name": "target_url",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "first_seen",
+                "type": "string"
+              },
+              {
+                "name": "last_seen",
+                "type": "string"
+              },
+              {
+                "name": "won_at",
+                "type": "string"
+              },
+              {
+                "name": "outreach_subject",
+                "type": "string"
+              },
+              {
+                "name": "outreach_body",
+                "type": "string"
+              },
+              {
+                "name": "note",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "d040f7a9-7c7e-58ba-b8a6-852577f5475e",
+        "name": "Ensure Prospects Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_sites",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "gsc_property",
+                "type": "string"
+              },
+              {
+                "name": "ga4_property_id",
+                "type": "string"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "location_code",
+                "type": "number"
+              },
+              {
+                "name": "language_code",
+                "type": "string"
+              },
+              {
+                "name": "email",
+                "type": "string"
+              },
+              {
+                "name": "callback_url",
+                "type": "string"
+              },
+              {
+                "name": "keywords",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "last_run_at",
+                "type": "string"
+              },
+              {
+                "name": "last_status",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "67add9df-a6bf-53dd-9bd8-6e05575d5414",
+        "name": "Ensure Sites Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_profiles",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "business_name",
+                "type": "string"
+              },
+              {
+                "name": "business_type",
+                "type": "string"
+              },
+              {
+                "name": "logo_url",
+                "type": "string"
+              },
+              {
+                "name": "street_address",
+                "type": "string"
+              },
+              {
+                "name": "city",
+                "type": "string"
+              },
+              {
+                "name": "region",
+                "type": "string"
+              },
+              {
+                "name": "postal_code",
+                "type": "string"
+              },
+              {
+                "name": "country_code",
+                "type": "string"
+              },
+              {
+                "name": "phone",
+                "type": "string"
+              },
+              {
+                "name": "public_email",
+                "type": "string"
+              },
+              {
+                "name": "opening_hours",
+                "type": "string"
+              },
+              {
+                "name": "price_range",
+                "type": "string"
+              },
+              {
+                "name": "service_areas",
+                "type": "string"
+              },
+              {
+                "name": "map_url",
+                "type": "string"
+              },
+              {
+                "name": "author_name",
+                "type": "string"
+              },
+              {
+                "name": "author_job_title",
+                "type": "string"
+              },
+              {
+                "name": "author_credentials",
+                "type": "string"
+              },
+              {
+                "name": "author_bio",
+                "type": "string"
+              },
+              {
+                "name": "author_url",
+                "type": "string"
+              },
+              {
+                "name": "author_image_url",
+                "type": "string"
+              },
+              {
+                "name": "author_same_as",
+                "type": "string"
+              },
+              {
+                "name": "author_knows_about",
+                "type": "string"
+              },
+              {
+                "name": "reviewer_name",
+                "type": "string"
+              },
+              {
+                "name": "reviewer_job_title",
+                "type": "string"
+              },
+              {
+                "name": "reviewer_url",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "24ab3197-6f24-58cb-bf9b-b04dcf887ba0",
+        "name": "Ensure Profiles Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "abfe54c7-9227-5e55-9ac1-8bb0fd4424f0",
+        "name": "Load Sites",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          220,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ladders"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "694633ff-0418-52f7-bb19-a65312ca3d1d",
+        "name": "Load Ladders",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          440,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_monitors"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "5896beb6-a90e-5086-8206-6810ec48f25e",
+        "name": "Load Monitors",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_profiles"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "48733932-7fd8-5365-9217-bb7713b6e2b3",
+        "name": "Load Profiles",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_prompts"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "3d33b051-2e04-5412-a9ad-f7cc382af7d1",
+        "name": "Load AI Prompts",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_visibility"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "de67f291-c077-51f0-bcce-fc46f9644e98",
+        "name": "Load AI Visibility",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_link_prospects"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "77ec06aa-d488-54dc-9eaf-b2a7c7c054ba",
+        "name": "Load Link Prospects",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1540,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// AI visibility plan (weekly, Monday 07:00, and on demand): one job per site — the brand names to look for, the competitors, the topics,\n// the stored prompt set (seo_ai_prompts: stable week to week so the trend means something), whether new prompts must be written,\n// the engines, the previous week's numbers and whether the monthly market view (DataForSEO LLM Mentions) is due.\n// ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----\n// Sites = the Data Table seo_sites (\"Track my site\") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).\n// On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc\n// with the trigger's country, e-mail and callback.\nlet trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}\nif (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst siteIdFor = (d) => 'site_' + d.replace(/[^a-z0-9]+/g, '-');\nconst listOf = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst flag = (v, dflt) => (v === undefined || v === null || v === '') ? dflt : !(v === false || /^(false|0|no|off)$/i.test(String(v)));\nconst DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];\nfunction monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit'\n  const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), ladders = rowsOf('Load Ladders').filter(r => r.domain), mons = rowsOf('Load Monitors'), profiles = rowsOf('Load Profiles');\n  const byDomain = new Map();\n  for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: listOf(s.keywords).map(k => k.toLowerCase()), virtual: false }); }\n  for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', virtual: true }); }\n  for (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }\n  const want = normD(trigger.domain) || String(trigger.site_id || '').trim();\n  let list = [...byDomain.values()];\n  if (want) {\n    list = list.filter(s => s.domain === want || s.site_id === want);\n    if (!list.length && normD(trigger.domain)) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];\n  } else list = list.filter(s => String(s.status || 'active') !== 'paused');\n  const out = list.map(s => {\n    const m = mons.find(x => x.site_id === s.site_id) || {};\n    const p = profiles.find(x => x.site_id === s.site_id) || {};\n    const engines = listOf(m.ai_engines).map(e => e.toLowerCase()).filter(e => DEFAULT_ENGINES.includes(e));\n    const settings = { ai_visibility: flag(m.ai_visibility, true), backlinks: flag(m.backlinks, true), audit_monthly: flag(m.audit_monthly, true), engines: engines.length ? engines : DEFAULT_ENGINES,\n      prompts_max: Math.min(15, Math.max(3, Number(m.ai_prompts_max) || 8)), audit_pages: Math.min(1000, Math.max(50, Number(m.audit_pages) || 200)), audit_js: flag(m.audit_js, false),\n      competitors: [...new Set([...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD).filter(d => d && d !== s.domain))].slice(0, 5),\n      brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || ''].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };\n    const o = { ...s, settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '' } };\n    if (want) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }\n    o.request_id = String(trigger.request_id || s.request_id || '');\n    return o;\n  });\n  const flagOf = { ai: 'ai_visibility', backlinks: 'backlinks', audit: 'audit_monthly' }[kind];\n  return { list: want ? out : out.filter(s => s.settings[flagOf]), on_demand: !!want, want, trigger, total: byDomain.size };\n}\n\nconst CONFIG = { max_sites_per_run: 15, max_topics: 8 };\nconst { list, on_demand, want, total } = monitorSites('ai');\nif (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches \"' + want + '\"' : (total ? 'AI visibility is switched off for every site' : 'no sites yet (register one through \"Track my site\" or plan a keyword ladder)') } }];\nconst promptRows = rowsOf('Load AI Prompts'), visRows = rowsOf('Load AI Visibility'), ladders = rowsOf('Load Ladders');\nconst now = new Date(); const iso = now.toISOString(); const month = iso.slice(0, 7);\nreturn list.slice(0, CONFIG.max_sites_per_run).map(s => {\n  const label = s.domain.split('.')[0];\n  const brand_names = [...new Set([s.domain, ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : [])].map(x => String(x).trim()).filter(x => x.length >= 3))];\n  const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort((a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0));\n  const asked = on_demand ? listOf(trigger.topics).map(x => x.toLowerCase()) : [];   // \"Main services or products\" on the on-demand form / API `topics`\n  const topics = [...new Set([...asked, ...lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()), ...(s.keywords || []), ...lrows.filter(l => Number(l.rung) !== 4).map(l => String(l.keyword || '').toLowerCase().trim())].filter(Boolean))].slice(0, CONFIG.max_topics);\n  const mine = promptRows.filter(p => p.site_id === s.site_id && String(p.status || 'active') !== 'off' && p.prompt);\n  const custom = mine.filter(p => p.source === 'custom'), auto = mine.filter(p => p.source !== 'custom');\n  const prev = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;\n  const parse = (t, d) => { try { return JSON.parse(t || ''); } catch (e) { return d; } };\n  const autoRivals = prev ? (parse(prev.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2).map(c => c.domain) : [];\n  const competitors = [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8);\n  const room = Math.max(0, s.settings.prompts_max - custom.length);\n  const deficit = Math.max(0, room - auto.length);\n  const need = (!auto.length || deficit >= 2) ? deficit : 0;   // top up only when 2+ questions are missing (not every week for one)\n  return { json: { site_id: s.site_id, domain: s.domain, country: s.country || '', location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '',\n    request_id: s.request_id || '', on_demand, adhoc: !!s.adhoc, business_name: s.profile.business_name || '', business_type: s.profile.business_type || '', city: s.profile.city || '',\n    brand_names, competitors, configured_competitors: s.settings.competitors, topics, engines: s.settings.engines, prompts_max: s.settings.prompts_max,\n    prompts: [...custom, ...auto].slice(0, s.settings.prompts_max).map(p => ({ prompt_id: p.prompt_id, prompt: p.prompt, kind: p.kind || 'custom', topic: p.topic || '', keyword: p.keyword || '', source: p.source || 'auto' })),\n    need_prompts: need > 0, prompts_needed: need, need_site_text: need > 0 && !topics.length && !s.profile.business_name, market_due: !!topics.length && (!prev || String(prev.market_month || '') !== month), market_keyword: topics[0] || '',\n    previous: prev ? { checked_at: prev.checked_at, mention_rate: Number(prev.mention_rate), citation_rate: Number(prev.citation_rate), share_of_voice: Number(prev.share_of_voice), avg_rank: Number(prev.avg_rank), engines: parse(prev.engines_json, {}), market_month: prev.market_month || '', market: parse(prev.market_json, null) } : null,\n    run_id: 'ai_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso } };\n});\n"
+        },
+        "id": "b5c28074-6b75-588d-ad7c-4cf4aab46994",
+        "name": "AI Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1760,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "314eec9b-3d94-59e5-b991-1454c727ce06",
+                "leftValue": "={{ !$json.nothing_to_do }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "965d9c89-23cb-507b-b03b-0ea1e3d5b7c5",
+        "name": "Any Sites (AI)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1980,
+          220
+        ]
+      },
+      {
+        "parameters": {},
+        "id": "f42a7ef9-9fda-5dae-9979-b70e7cf21fe6",
+        "name": "Nothing To Do (AI)",
+        "type": "n8n-nodes-base.noOp",
+        "typeVersion": 1,
+        "position": [
+          2200,
+          440
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Sites that need questions but have no topics and no business name on file (e.g. an ad-hoc check of a new domain): the homepage is read\n// (Jina Reader) so the Prompt Writer knows what the business sells.\nconst jobs = $('AI Plan').all().map(i => i.json).filter(p => p.need_site_text && !p.nothing_to_do);\nreturn jobs.length ? jobs.map(p => ({ json: { site_id: p.site_id, domain: p.domain } })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "4eefd6a1-ee94-544d-bee9-548109630680",
+        "name": "Site Text Jobs",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2200,
+          -440
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "6342bac1-9008-5282-907c-30ea626243e9",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "0ef53b21-0634-5a67-9767-6d3bec991f0f",
+        "name": "Need Site Text?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2420,
+          -440
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://r.jina.ai/https://{{ $json.domain }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Retain-Images",
+                "value": "none"
+              }
+            ]
+          },
+          "options": {
+            "response": {
+              "response": {
+                "responseFormat": "text",
+                "outputPropertyName": "site_text"
+              }
+            },
+            "timeout": 30000
+          }
+        },
+        "id": "b3bd0030-0d4a-5b47-87ae-c986a74a45b2",
+        "name": "Read Site (AI)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          2640,
+          -660
+        ],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "SEOcredJinaReade",
+            "name": "Jina Reader"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Sites whose prompt set is short get one Prompt Writer job each (Claude writes the buyer questions once; they are stored and reused weekly).\nconst jobs = $('AI Plan').all().map(i => i.json).filter(p => p.need_prompts && !p.nothing_to_do);\nif (!jobs.length) return [{ json: { skip: true } }];\nlet reads = [], texts = []; try { reads = $('Site Text Jobs').all().map(i => i.json).filter(j => !j.skip); texts = $('Read Site (AI)').all().map(i => String((i.json || {}).site_text || '')); } catch (e) {}\nconst textOf = (id) => { const k = reads.findIndex(r => r.site_id === id); return k >= 0 ? (texts[k] || '').replace(/\\n{3,}/g, '\\n\\n').slice(0, 3500) : ''; };\nreturn jobs.map(p => ({ json: { site_id: p.site_id, domain: p.domain, business_name: p.business_name || p.domain, business_type: p.business_type || '', country: p.country || '', city: p.city || '',\n  topics: p.topics, count: p.prompts_needed, existing: p.prompts.map(x => x.prompt), has_brand_prompt: p.prompts.some(x => x.kind === 'brand'), site_text: textOf(p.site_id) } }));\n"
+        },
+        "id": "9c5ee1e0-eb46-521c-9f26-566f4b808b85",
+        "name": "Prompt Jobs",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2860,
+          -440
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "1a6b733e-549b-57ac-8d30-2d4dd144c72d",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "c8d75127-4af3-5549-9cf0-3a36995d27da",
+        "name": "Any Prompt Jobs?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2420,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=You write the questions real buyers type into ChatGPT, Perplexity, Gemini and Google's AI Mode before they choose a provider. These questions are asked every week to measure whether the business below is recommended or cited by AI assistants, so they must be realistic, varied and stable.\n\nBUSINESS\nName: {{ $json.business_name }} · Website: {{ $json.domain }} · Type: {{ $json.business_type || 'see the topics' }}\nMarket: {{ $json.country || 'not given' }}{{ $json.city ? ' (' + $json.city + ')' : '' }}\nTopics it wants to be found for: {{ ($json.topics || []).join(' · ') || 'infer from the website name' }}\n{{ $json.site_text ? 'WEBSITE TEXT (the homepage, to understand what the business sells):\\n' + $json.site_text + '\\n' : '' }}Questions already tracked (do not repeat or rephrase them): {{ ($json.existing || []).join(' | ') || 'none' }}\n\nWrite exactly {{ $json.count }} new questions. Mix these kinds across the topics, most valuable first:\n- recommend: \"Which companies / who are the best … in <market>?\" — the questions where AI lists providers\n- choose: how to choose, what to look for, red flags\n- cost: price, cost, fees, budget\n- compare: X vs Y, alternatives, which option is better for a given situation\n- problem: the problem the buyer wants solved, in their words (deadline, regulation, failure, migration)\n{{ $json.has_brand_prompt ? '' : '- brand: exactly one question asking what ' + $json.business_name + ' (' + $json.domain + ') is and offers — this checks whether AI knows the brand' }}\n\nRules: plain buyer language, 8-22 words, the market named where the buyer would name it, no other company names unless the topic itself is a product comparison, never the business name except in the single brand question. For each question also give a short Google search phrase (2-6 words) for the same intent, and the topic it belongs to.\n\nReturn ONLY JSON: {\"prompts\": [{\"prompt\": \"\", \"kind\": \"recommend | choose | cost | compare | problem | brand\", \"topic\": \"\", \"keyword\": \"\"}]}\n",
+          "hasOutputParser": true,
+          "options": {}
+        },
+        "id": "ca3c9348-9488-5c2c-b58b-345332e74ff1",
+        "name": "Prompt Writer",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          2640,
+          -220
+        ],
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "claude-sonnet-5-5",
+            "cachedResultName": "Claude Sonnet 5.5"
+          },
+          "options": {
+            "maxTokensToSample": 8192,
+            "thinking": true,
+            "thinkingMode": "adaptive",
+            "effort": "low"
+          }
+        },
+        "id": "79d8d99f-0028-5bb7-a046-c2de1f55e626",
+        "name": "Claude — Prompt Writer",
+        "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+        "typeVersion": 1.6,
+        "position": [
+          2540,
+          -20
+        ],
+        "credentials": {
+          "anthropicApi": {
+            "id": "SEOcredAnthropic",
+            "name": "Anthropic (SEO Agent)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "schemaType": "manual",
+          "inputSchema": "{\"type\": \"object\", \"properties\": {\"prompts\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {\"prompt\": {\"type\": \"string\"}, \"kind\": {\"type\": \"string\"}, \"topic\": {\"type\": \"string\"}, \"keyword\": {\"type\": \"string\"}}, \"required\": [\"prompt\"]}}}, \"required\": [\"prompts\"]}"
+        },
+        "id": "0ad52c43-c1a8-5983-be3d-40e1f009bb8a",
+        "name": "Parser — Prompt Writer",
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          2760,
+          -20
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// New prompt rows for seo_ai_prompts: the Prompt Writer's questions (Claude), or template questions when the writer failed or did not run.\n// Exact table columns. Existing prompts are never rewritten, so the weekly trend compares the same questions.\nconst plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nlet jobs = []; try { jobs = $('Prompt Jobs').all().map(i => i.json).filter(j => !j.skip); } catch (e) {}\nlet outs = []; try { outs = $('Prompt Writer').all().map(i => i.json); } catch (e) {}\nconst parse = (raw) => { if (raw && typeof raw === 'object') return raw; const s = String(raw || '').replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/i, ''); try { return JSON.parse(s); } catch (e) { const a = s.indexOf('{'), b = s.lastIndexOf('}'); try { return JSON.parse(s.slice(a, b + 1)); } catch (e2) { return null; } } };\nconst hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };\nconst norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst now = new Date().toISOString(); const rows = [];\nconst KINDS = ['recommend', 'choose', 'cost', 'compare', 'problem', 'brand'];\nfor (const p of plans) {\n  if (!p.need_prompts) continue;\n  const ji = jobs.findIndex(j => j.site_id === p.site_id);\n  const got = ji >= 0 && outs[ji] && !outs[ji].error ? parse(outs[ji].output) : null;\n  let qs = (got && Array.isArray(got.prompts) ? got.prompts : []).filter(q => q && q.prompt && String(q.prompt).length >= 12).map(q => ({ prompt: String(q.prompt).trim().slice(0, 300), kind: KINDS.includes(String(q.kind).toLowerCase()) ? String(q.kind).toLowerCase() : 'recommend', topic: String(q.topic || '').slice(0, 120), keyword: String(q.keyword || q.topic || '').toLowerCase().slice(0, 120), source: 'auto' }));\n  if (!qs.length) {   // template fallback: the same buyer journey, less natural wording\n    const where = p.country ? ' in ' + (p.city || p.country) : '';\n    for (const t of (p.topics.length ? p.topics : [p.domain.split('.')[0]]).slice(0, 4)) qs.push({ prompt: 'Which companies offer ' + t + where + '? Recommend the best options with their websites.', kind: 'recommend', topic: t, keyword: t, source: 'template' }, { prompt: 'How do I choose a provider for ' + t + where + ', and what should it cost?', kind: 'choose', topic: t, keyword: t + ' cost', source: 'template' });\n    if (!p.prompts.some(x => x.kind === 'brand')) qs.unshift({ prompt: 'What is ' + (p.business_name || p.domain) + ' (' + p.domain + ') and what does it offer?', kind: 'brand', topic: 'brand', keyword: p.business_name || p.domain.split('.')[0], source: 'template' });\n  }\n  const have = new Set(p.prompts.map(x => norm(x.prompt)));\n  for (const q of qs) { if (rows.filter(r => r.site_id === p.site_id).length >= p.prompts_needed) break; if (have.has(norm(q.prompt))) continue; have.add(norm(q.prompt));\n    rows.push({ prompt_id: 'p_' + hash(p.site_id + '|' + norm(q.prompt)), site_id: p.site_id, domain: p.domain, prompt: q.prompt, kind: q.kind, topic: q.topic, keyword: q.keyword || q.topic, source: q.source, status: 'active', created_at: now }); }\n}\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "6f05284c-ff15-5b7e-bee9-9909f8013a31",
+        "name": "Prompt Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2860,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "90e40277-a69e-57c0-b305-c22d879231f1",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "8461ddb5-cb19-57a2-9cda-125ef628931d",
+        "name": "Any New Prompts?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3080,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "insert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_prompts"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "prompt_id",
+                "displayName": "prompt_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prompt",
+                "displayName": "prompt",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "topic",
+                "displayName": "topic",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "6bfbd642-1452-5e30-a812-61b23d5e6408",
+        "name": "Save Prompts",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          3300,
+          -220
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// One DataForSEO request per question x engine (ChatGPT = the real chatgpt.com answer through the LLM scraper; Perplexity, Gemini and Claude =\n// LLM Responses with web search; Google AI Mode with the question; the Google AI Overview on the matching search phrase), plus the monthly market\n// view (LLM Mentions: which domains AI answers cite for the main topic). Costs measured live on 2026-10-02.\nconst CONFIG = { max_requests_per_run: 500, max_cost_per_run_usd: 12,\n  models: { perplexity: 'sonar', gemini: 'gemini-3.5-flash', claude: 'claude-haiku-4-5' },\n  cost: { chatgpt: 0.004, perplexity: 0.006, gemini: 0.035, claude: 0.025, ai_overview: 0.002, ai_mode: 0.004, market: 0.115 } };\nconst API = 'https://api.dataforseo.com/v3/';\nconst plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nlet fresh = []; try { fresh = $('Prompt Rows').all().map(i => i.json).filter(r => !r.skip && r.prompt_id); } catch (e) {}\nconst out = []; let spend = 0; const skipped = [];\nconst add = (p, q, engine, endpoint, body) => {\n  const c = CONFIG.cost[engine] || 0.01;\n  if (out.length >= CONFIG.max_requests_per_run || spend + c > CONFIG.max_cost_per_run_usd) { skipped.push(p.domain + ':' + engine); return; }\n  spend += c; out.push({ json: { site_id: p.site_id, domain: p.domain, run_id: p.run_id, prompt_id: q.prompt_id, prompt: q.prompt, kind: q.kind, topic: q.topic, keyword: q.keyword, engine, endpoint: API + endpoint, body, est_cost: c } });\n};\nfor (const p of plans) {\n  const qs = [...p.prompts, ...fresh.filter(r => r.site_id === p.site_id).map(r => ({ prompt_id: r.prompt_id, prompt: r.prompt, kind: r.kind, topic: r.topic, keyword: r.keyword, source: r.source }))].slice(0, p.prompts_max);\n  const loc = { location_code: p.location_code, language_code: p.language_code };\n  const seenKw = new Set();\n  for (const q of qs) {\n    const e = p.engines;\n    if (e.includes('chatgpt')) add(p, q, 'chatgpt', 'ai_optimization/chat_gpt/llm_scraper/live/advanced', [{ keyword: q.prompt, ...loc }]);\n    if (e.includes('perplexity')) add(p, q, 'perplexity', 'ai_optimization/perplexity/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.perplexity, max_output_tokens: 1000 }]);\n    if (e.includes('gemini')) add(p, q, 'gemini', 'ai_optimization/gemini/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.gemini, web_search: true, max_output_tokens: 1200 }]);\n    if (e.includes('claude')) add(p, q, 'claude', 'ai_optimization/claude/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.claude, web_search: true, max_output_tokens: 1200 }]);\n    if (e.includes('ai_mode')) add(p, q, 'ai_mode', 'serp/google/ai_mode/live/advanced', [{ keyword: q.prompt, ...loc }]);\n    const kw = String(q.keyword || '').trim().toLowerCase();\n    if (e.includes('ai_overview') && kw && q.kind !== 'brand' && !seenKw.has(kw)) { seenKw.add(kw); add(p, q, 'ai_overview', 'serp/google/organic/live/advanced', [{ keyword: kw, ...loc, depth: 10, load_async_ai_overview: true }]); }\n  }\n  if (p.market_due && p.market_keyword) add(p, { prompt_id: 'market', prompt: p.market_keyword, kind: 'market', topic: p.market_keyword, keyword: p.market_keyword }, 'market', 'ai_optimization/llm_mentions/top_domains/live', [{ target: [{ keyword: p.market_keyword }], ...loc, limit: 15 }]);\n}\nif (!out.length) return [{ json: { skip: true, reason: plans.length ? 'no questions to ask (no topics and no business name on file)' : 'nothing to do', skipped } }];\nout[0].json.skipped_by_cap = skipped;\nreturn out;\n"
+        },
+        "id": "0a58a63e-ab19-5a50-ac89-07477959e71d",
+        "name": "AI Requests",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3520,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "d605e47e-4c8b-574f-8abd-4611fc0f6990",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "5299219e-7dfa-5448-bd48-f01380c24c0d",
+        "name": "Any AI Requests?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3740,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.endpoint }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.body) }}",
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 6,
+                "batchInterval": 300
+              }
+            },
+            "timeout": 150000
+          }
+        },
+        "id": "7de68c5d-8f03-5025-bc64-8ae4aedfb404",
+        "name": "Run AI Requests",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          3960,
+          -220
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "SEOcredDataForSE",
+            "name": "DataForSEO"
+          }
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "jsCode": "// One row per question x engine for seo_ai_answers (exact columns): did the answer mention the brand, cite one of your pages, at which rank\n// among the businesses it names, which competitors / businesses appeared and which sources it cited. The market view (LLM Mentions) is\n// read by AI Metrics, not stored here. Engines: chatgpt (llm_scraper), perplexity / gemini / claude (llm_responses), ai_overview / ai_mode (SERP).\nconst reqs = $('AI Requests').all().map(i => i.json);\nconst resps = $input.all().map(i => i.json || {});\nif (!reqs.length || reqs[0].skip) return [{ json: { skip: true } }];\nconst plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nconst now = new Date().toISOString();\nconst hostOf = (u) => { const m = String(u || '').match(/^https?:\\/\\/(?:[^@\\/?#]*@)?([^\\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\\./, '') : ''; };   // no URL constructor in the n8n sandbox\nconst cleanUrl = (u) => String(u || '').replace(/[?&](utm_[a-z]+|srsltid)=[^&#]*/gi, '').replace(/\\?&/, '?').replace(/\\?$/, '');\nconst DOMAIN_RE = /\\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(?:com|net|org|io|ai|co|ae|sa|qa|om|kw|bh|eg|uk|de|fr|es|it|nl|in|pk|sg|au|ca|nz|za|br|mx|us|biz|info|tech|app|cloud|global|digital|solutions|consulting|agency|me))\\b/gi;\n// sources AI cites that are not businesses competing for the client's buyers (they are PR / listing targets instead)\nconst GENERIC = /(^|\\.)(wikipedia\\.org|wikimedia\\.org|youtube\\.com|youtu\\.be|linkedin\\.com|facebook\\.com|instagram\\.com|x\\.com|twitter\\.com|tiktok\\.com|reddit\\.com|quora\\.com|medium\\.com|github\\.com|google\\.com|goo\\.gl|bing\\.com|apple\\.com|amazon\\.com|forbes\\.com|reuters\\.com|bloomberg\\.com|gulfnews\\.com|khaleejtimes\\.com|thenationalnews\\.com|zawya\\.com|arabianbusiness\\.com|gartner\\.com|g2\\.com|capterra\\.com|trustpilot\\.com|clutch\\.co|glassdoor\\.com|indeed\\.com|statista\\.com|pwc\\.com|kpmg\\.com|deloitte\\.com|ey\\.com|vertexaisearch\\.cloud\\.google\\.com|chatgpt\\.com|openai\\.com|perplexity\\.ai|anthropic\\.com|claude\\.ai|gemini\\.google\\.com)$|\\.gov(\\.[a-z]{2})?$|\\.edu(\\.[a-z]{2})?$|\\.ac\\.[a-z]{2}$|(^|\\.)u\\.ae$|\\.int$/i;\nconst esc = (s) => String(s).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\nconst rows = [];\nreqs.forEach((q, i) => {\n  if (q.engine === 'market') return;\n  const plan = plans.find(p => p.site_id === q.site_id) || { brand_names: [q.domain], competitors: [], domain: q.domain };\n  const r = resps[i] || {}; const task = (r.tasks || [])[0] || {}; const res = (task.result || [])[0] || null;\n  let text = '', cites = [], answered = false, error = '';\n  if (r.error || !task.status_code) error = String((r.error && (r.error.message || r.error)) || 'no response').slice(0, 200);\n  else if (task.status_code !== 20000) error = String(task.status_message || task.status_code).slice(0, 200);\n  else if (res) {\n    if (q.engine === 'chatgpt') { text = String(res.markdown || (res.items || []).map(x => x.markdown || x.text || '').join('\\n')); cites = (res.sources || []).map(s => ({ url: s.url, host: hostOf(s.url) || String(s.domain || '').replace(/^www\\./, '') })); answered = !!text; }\n    else if (q.engine === 'ai_overview' || q.engine === 'ai_mode') {\n      const ao = (res.items || []).find(x => x && x.type === 'ai_overview');\n      if (ao) { text = String(ao.markdown || (ao.items || []).map(x => x.markdown || x.text || '').join('\\n'));\n        const refs = [...(ao.references || []), ...(ao.items || []).flatMap(x => x.references || [])];\n        cites = refs.map(x => ({ url: x.url, host: hostOf(x.url) || String(x.domain || '').replace(/^www\\./, '') })); answered = !!(text || cites.length); }\n    } else {   // llm_responses: sections with text + annotations (Gemini annotations point to a Google redirect; their title is the source domain)\n      const secs = (res.items || []).flatMap(it => it.sections || []);\n      text = secs.map(s => s.text || '').join('');\n      cites = secs.flatMap(s => s.annotations || []).map(a => { let h = hostOf(a.url); if (/vertexaisearch\\.cloud\\.google\\.com/.test(h) && /^[a-z0-9.-]+\\.[a-z]{2,}$/i.test(String(a.title || '').trim())) h = String(a.title).trim().toLowerCase().replace(/^www\\./, ''); return { url: /vertexaisearch/.test(String(a.url)) ? '' : a.url, host: h }; });\n      answered = !!text;\n    }\n  }\n  const low = text.toLowerCase().replace(/[?&](utm_[a-z]+|srsltid)=[^\\s)&\\]]*/g, '');   // ChatGPT tags every link with utm_source=chatgpt.com\n  const brandRes = plan.brand_names.map(b => new RegExp('(^|[^a-z0-9])' + esc(String(b).toLowerCase()) + '($|[^a-z0-9])', 'i'));\n  const firstAt = (res_) => { let best = -1; for (const re of res_) { const m = low.match(re); if (m && (best < 0 || m.index < best)) best = m.index; } return best; };\n  const ourAt = firstAt(brandRes);\n  const isOurs = (h) => !!h && (h === plan.domain || h.endsWith('.' + plan.domain));\n  const ourUrls = [...new Set(cites.filter(c => isOurs(c.host) && c.url).map(c => cleanUrl(c.url)))];\n  const cited = cites.some(c => isOurs(c.host));\n  const mentioned = ourAt >= 0 || cited;\n  // businesses named in the answer: configured competitors (domain or name) + business domains written in the text or linked from it\n  const named = new Map();\n  for (const c of plan.competitors) { const lab = c.split('.')[0]; const at = firstAt([new RegExp('(^|[^a-z0-9])' + esc(c) + '($|[^a-z0-9])', 'i'), ...(lab.length >= 5 ? [new RegExp('(^|[^a-z0-9])' + esc(lab) + '($|[^a-z0-9])', 'i')] : [])]); if (at >= 0 || cites.some(x => x.host === c || x.host.endsWith('.' + c))) named.set(c, at >= 0 ? at : 1e9); }\n  for (const m of low.matchAll(DOMAIN_RE)) { const d = m[1].replace(/^www\\./, ''); if (isOurs(d) || GENERIC.test(d) || named.has(d)) continue; named.set(d, m.index); }\n  for (const c of cites) { const d = c.host; if (!d || isOurs(d) || GENERIC.test(d) || named.has(d)) continue; const lab = d.split('.')[0]; const at2 = lab.length >= 4 ? low.indexOf(lab) : -1; named.set(d, at2 >= 0 ? at2 : 1e9); }   // businesses cited as sources\n  const others = [...named.entries()].sort((a, b) => a[1] - b[1]);\n  const rank = ourAt >= 0 ? 1 + others.filter(([, at]) => at < ourAt).length : 0;   // position among the businesses the answer names; 0 = not named (a citation alone is not a recommendation)\n  const sources = [...new Set(cites.map(c => c.host).filter(Boolean))];\n  const at = ourAt >= 0 ? ourAt : 0;\n  const excerpt = text ? text.slice(Math.max(0, at - 160), at + 340).replace(/\\s+/g, ' ').trim() : '';\n  rows.push({ site_id: q.site_id, domain: q.domain, run_id: q.run_id, checked_at: now, prompt_id: q.prompt_id, prompt: q.prompt, kind: q.kind, topic: q.topic || '', engine: q.engine,\n    answered, mentioned: answered && mentioned, cited: answered && cited, rank: answered ? rank : 0, our_urls: ourUrls.join(' '), competitors: others.map(([d]) => d).slice(0, 12).join(', '),\n    sources: sources.slice(0, 15).join(', '), excerpt: excerpt.slice(0, 520), cost: Number(task.cost) || 0, error });\n});\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "8614c0af-34e8-5d61-9c04-dec6b7751e66",
+        "name": "Parse AI Answers",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4180,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "cc2eab1c-fab3-5c6c-be63-cb39b77fbb93",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "8a4aab65-128b-54fc-92f4-54721822c18c",
+        "name": "Any Answer Rows?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          4400,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "insert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_answers"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "run_id",
+                "displayName": "run_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "checked_at",
+                "displayName": "checked_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prompt_id",
+                "displayName": "prompt_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prompt",
+                "displayName": "prompt",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "topic",
+                "displayName": "topic",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "engine",
+                "displayName": "engine",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "answered",
+                "displayName": "answered",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mentioned",
+                "displayName": "mentioned",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cited",
+                "displayName": "cited",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rank",
+                "displayName": "rank",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "our_urls",
+                "displayName": "our_urls",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "competitors",
+                "displayName": "competitors",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "sources",
+                "displayName": "sources",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "excerpt",
+                "displayName": "excerpt",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost",
+                "displayName": "cost",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "error",
+                "displayName": "error",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "f9495e3c-a491-5744-9bec-1d503d251099",
+        "name": "Save AI Answers",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          4620,
+          -220
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Per site: how often AI answers mention / cite the business, share of voice against the competitors, rank in recommendation lists, the\n// per-engine picture, the sources AI trusts (PR and listing targets), your pages it cites, the questions where competitors win (content gaps),\n// the monthly market view (LLM Mentions), week-over-week changes, alerts and ranked actions. Also the seo_ai_visibility row and\n// 'ai_source' rows for the link-prospect pipeline (seo_link_prospects; existing statuses kept).\nconst plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nlet rows = []; try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}\nlet reqs = [], resps = []; try { reqs = $('AI Requests').all().map(i => i.json); resps = $('Run AI Requests').all().map(i => i.json || {}); } catch (e) {}\nlet prospects = []; try { prospects = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}\nconst GENERIC_SOCIAL = /(^|\\.)(youtube\\.com|linkedin\\.com|facebook\\.com|instagram\\.com|x\\.com|twitter\\.com|tiktok\\.com|reddit\\.com|quora\\.com|wikipedia\\.org|medium\\.com)$/i;\nconst MEDIA = /(^|\\.)(gulfnews|khaleejtimes|thenationalnews|zawya|arabianbusiness|gulfbusiness|reuters|bloomberg|forbes|cnbc|bbc|ft|wsj|techcrunch|entrepreneur|economist|businessinsider|thenational|arabnews|timesofindia|dawn)\\.[a-z.]+$/i;\nconst DIRECTORY = /(^|\\.)(g2|capterra|clutch|trustpilot|goodfirms|getapp|softwareadvice|crunchbase|yelp|sortlist|designrush|themanifest|[a-z-]*yellowpages[a-z-]*|[a-z-]*directory[a-z-]*)\\.[a-z.]+$/i;\nconst AUTHORITY = /(^|\\.)(deloitte|pwc|kpmg|ey|gartner|forrester|mckinsey|accenture|statista|bcg|bain|idc)\\.[a-z.]+$/i;\nconst kindOf = (d) => GOV.test(d) ? 'official' : GENERIC_SOCIAL.test(d) ? 'platform' : MEDIA.test(d) ? 'media' : DIRECTORY.test(d) ? 'directory' : AUTHORITY.test(d) ? 'authority' : 'site';\nconst GOV = /\\.gov(\\.[a-z]{2})?$|(^|\\.)u\\.ae$|\\.int$|\\.edu(\\.[a-z]{2})?$/i;\nconst pct = (a, b) => b ? Math.round(1000 * a / b) / 10 : 0;\nconst ENG = { chatgpt: 'ChatGPT', perplexity: 'Perplexity', gemini: 'Gemini', claude: 'Claude', ai_overview: 'Google AI Overview', ai_mode: 'Google AI Mode' };\nconst FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';\nreturn plans.map(p => {\n  const Rall = rows.filter(r => r.site_id === p.site_id);\n  // the brand question (\"what is <brand>?\") only measures recognition: rates, share of voice and competitors use the buyer questions\n  const RB = Rall.filter(r => r.kind === 'brand'), R = Rall.filter(r => r.kind !== 'brand');\n  const ans = R.filter(r => r.answered); const ansAll = Rall.filter(r => r.answered);\n  const errors = Rall.filter(r => r.error).length;\n  const mentioned = ans.filter(r => r.mentioned).length, cited = ans.filter(r => r.cited).length;\n  const ranks = ans.filter(r => r.rank > 0).map(r => r.rank);\n  // competitors: configured ones always; plus businesses AI names in at least 2 answers (auto-detected rivals)\n  const counts = new Map();\n  for (const r of ans) for (const d of String(r.competitors || '').split(/,\\s*/).filter(Boolean)) counts.set(d, (counts.get(d) || 0) + 1);\n  const comp = [...new Set([...p.configured_competitors, ...[...counts.entries()].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([d]) => d)])].slice(0, 8)\n    .map(d => ({ domain: d, mentions: counts.get(d) || 0, auto: !p.configured_competitors.includes(d) }));\n  const compTotal = comp.reduce((s, c) => s + c.mentions, 0);\n  const share_of_voice = pct(mentioned, mentioned + compTotal);\n  comp.forEach(c => { c.share = pct(c.mentions, mentioned + compTotal); });\n  // per engine\n  const engines = {};\n  for (const e of p.engines) { const er = R.filter(r => r.engine === e), ea = er.filter(r => r.answered); const eb = RB.filter(r => r.engine === e && r.answered);\n    engines[e] = { name: ENG[e] || e, asked: er.length, answered: ea.length, mentioned: ea.filter(r => r.mentioned).length, cited: ea.filter(r => r.cited).length, mention_rate: pct(ea.filter(r => r.mentioned).length, ea.length), citation_rate: pct(ea.filter(r => r.cited).length, ea.length), errors: Rall.filter(r => r.engine === e && r.error).length, knows_brand: eb.length ? eb.some(r => r.mentioned) : null }; }\n  const aio = R.filter(r => r.engine === 'ai_overview');\n  const aio_presence = pct(aio.filter(r => r.answered).length, aio.length), aio_citation_rate = pct(aio.filter(r => r.cited).length, aio.filter(r => r.answered).length);\n  // sources AI cites (not you, not a competitor): where to get listed / featured\n  const src = new Map();\n  for (const r of ansAll) for (const h of String(r.sources || '').split(/,\\s*/).filter(Boolean)) { if (h === p.domain || h.endsWith('.' + p.domain) || comp.some(c => c.domain === h)) continue; const s = src.get(h) || { domain: h, citations: 0, engines: new Set(), topics: new Set() }; s.citations++; s.engines.add(ENG[r.engine] || r.engine); if (r.topic) s.topics.add(r.topic); src.set(h, s); }\n  const sources = [...src.values()].sort((a, b) => b.citations - a.citations).slice(0, 15).map(s => ({ domain: s.domain, citations: s.citations, engines: [...s.engines], topics: [...s.topics].slice(0, 3), kind: kindOf(s.domain) }));\n  const pages = new Map(); for (const r of ansAll) for (const u of String(r.our_urls || '').split(/\\s+/).filter(Boolean)) pages.set(u, (pages.get(u) || 0) + 1);\n  const our_pages = [...pages.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).map(([url, n]) => ({ url, citations: n }));\n  // per question: who wins\n  const byQ = new Map();\n  for (const r of Rall) { const q = byQ.get(r.prompt_id) || { prompt: r.prompt, kind: r.kind, topic: r.topic, engines: {}, competitors: new Set(), sources: new Set() }; q.engines[r.engine] = !r.answered ? (r.error ? 'error' : 'none') : r.cited ? 'cited' : r.mentioned ? 'mentioned' : 'absent';\n    if (r.answered) { String(r.competitors || '').split(/,\\s*/).filter(Boolean).forEach(d => q.competitors.add(d)); String(r.sources || '').split(/,\\s*/).filter(Boolean).forEach(d => q.sources.add(d)); } byQ.set(r.prompt_id, q); }\n  const questions = [...byQ.entries()].map(([id, q]) => ({ prompt_id: id, prompt: q.prompt, kind: q.kind, topic: q.topic, engines: q.engines, won: Object.values(q.engines).some(v => v === 'cited' || v === 'mentioned'), competitors: [...q.competitors].slice(0, 6), sources: [...q.sources].filter(h => h !== p.domain).slice(0, 5) }));\n  const gaps = questions.filter(q => !q.won && q.kind !== 'brand' && q.competitors.length).slice(0, 8);\n  const brandQ = questions.find(q => q.kind === 'brand');\n  const bAns = RB.filter(r => r.answered); const brand = { asked: RB.length, answered: bAns.length, known: bAns.filter(r => r.mentioned).length, engines: bAns.filter(r => r.mentioned).map(r => ENG[r.engine] || r.engine) };\n  const brand_known = bAns.length ? brand.known * 2 >= bAns.length : null;\n  // market view: domains AI answers cite for the main topic (LLM Mentions, monthly)\n  let market = null; const mi = reqs.findIndex(q => q.site_id === p.site_id && q.engine === 'market');\n  if (mi >= 0) { const t = ((resps[mi] || {}).tasks || [])[0] || {}; const res = (t.result || [])[0] || null;\n    const items = (res && res.items) || []; const tot = res && res.total ? ((res.total.platform || [])[0] || {}) : {};\n    const list = items.map(x => ({ domain: String(x.key || '').replace(/^www\\./, ''), mentions: ((x.location || [])[0] || {}).mentions || x.mentions || 0, ai_search_volume: ((x.location || [])[0] || {}).ai_search_volume || x.ai_search_volume || 0 })).filter(x => x.domain);\n    market = { keyword: p.market_keyword, checked_at: p.checked_at.slice(0, 10), total_mentions: tot.mentions || null, ai_search_volume: tot.ai_search_volume || null, top: list.slice(0, 12), you: list.findIndex(x => x.domain === p.domain || x.domain.endsWith('.' + p.domain)) + 1 || null, error: t.status_code && t.status_code !== 20000 ? t.status_message : null }; }\n  else if (p.previous && p.previous.market) market = { ...p.previous.market, carried: true };\n  // changes vs last week, alerts\n  const prev = p.previous; const mention_rate = pct(mentioned, ans.length), citation_rate = pct(cited, ans.length);\n  const delta = prev ? { mention_rate: +(mention_rate - prev.mention_rate).toFixed(1), citation_rate: +(citation_rate - prev.citation_rate).toFixed(1), share_of_voice: +(share_of_voice - prev.share_of_voice).toFixed(1) } : null;\n  const alerts = [];\n  if (delta && delta.mention_rate <= -15) alerts.push({ level: 'high', text: 'AI mentions dropped ' + Math.abs(delta.mention_rate) + ' points to ' + mention_rate + '% of answers.' });\n  if (prev && prev.engines) for (const [e, v] of Object.entries(prev.engines)) if ((v.cited || 0) > 0 && engines[e] && engines[e].answered && !engines[e].cited) alerts.push({ level: 'medium', text: (ENG[e] || e) + ' no longer cites any of your pages (cited ' + v.cited + ' times last time).' });\n  if (brand_known === false) alerts.push({ level: 'medium', text: 'Only ' + brand.known + ' of ' + brand.answered + ' AI assistants recognise ' + (p.business_name || p.domain) + ' when asked about it directly.' });\n  if (ans.length && errors > Rall.length / 2) alerts.push({ level: 'low', text: errors + ' of ' + R.length + ' AI requests failed; this week\\'s numbers are partial.' });\n  // actions, most valuable first\n  const actions = [];\n  for (const g of gaps.slice(0, 3)) actions.push({ priority: 1, type: 'content', action: 'Win the answer to \"' + g.prompt + '\"', why: 'AI recommends ' + g.competitors.slice(0, 3).join(', ') + ' here and not you' + (g.sources.length ? '; it relies on ' + g.sources.slice(0, 3).join(', ') : '') + '.', keyword: g.topic || g.prompt,\n    api_body: { mode: 'keyword', keyword: (g.topic || g.prompt).toLowerCase().slice(0, 80), country: p.country, domain: p.domain, page_type: g.kind === 'compare' ? 'Guide' : 'Service Page', receive: ['Keyword Report', 'Page Content'] } });\n  const VERB = { site: 'Get featured on ', media: 'Pitch an expert comment to ', directory: 'Get listed (with reviews) on ' };\n  for (const s of sources.filter(s => VERB[s.kind] && s.citations >= 2).slice(0, 4)) actions.push({ priority: 2, type: s.kind === 'site' ? 'pr' : s.kind, action: VERB[s.kind] + s.domain, why: 'AI answers cite it ' + s.citations + ' times (' + s.engines.join(', ') + ')' + (s.topics.length ? ' for ' + s.topics.join(', ') : '') + (s.kind === 'site' ? '. A guest article, a comparison mention or a quote there feeds the answers directly.' : s.kind === 'media' ? '. Assistants quote news coverage: offer data, a deadline explainer or a client story.' : '. Assistants lean on these lists when they recommend providers.') });\n  const plat = sources.filter(s => s.kind === 'platform').slice(0, 2);\n  if (plat.length) actions.push({ priority: 3, type: 'platform', action: 'Publish where AI looks: ' + plat.map(s => s.domain).join(', '), why: 'AI answers cite these platforms ' + plat.reduce((n, s) => n + s.citations, 0) + ' times for your topics (e.g. a short explainer video, a LinkedIn article, an answer in a relevant thread).' });\n  const off = sources.filter(s => s.kind === 'official').slice(0, 2);\n  if (off.length) actions.push({ priority: 3, type: 'official', action: 'Be listed on ' + off.map(s => s.domain).join(', '), why: 'Official sources AI trusts for this topic; registry listings (e.g. accredited-provider lists) are cited directly.' });\n  if (brand_known === false) actions.push({ priority: 2, type: 'entity', action: 'Make the brand recognisable to AI', why: 'Complete the business profile, add Organization schema with sameAs (LinkedIn, Google Business Profile), keep name / address / phone identical everywhere, publish an About page and get listed on the sources above.' });\n  if (cited === 0 && ans.length) actions.push({ priority: 2, type: 'citable', action: 'Give AI something to cite', why: 'No answer cited your pages. Pages with a direct 40-60 word answer, a dated fact table and clear headings (every page the agent writes has them) are the ones assistants quote.' });\n  // seo_ai_visibility row (exact columns) and ai_source prospects (status kept when the prospect already exists)\n  const J = (o) => JSON.stringify(o);\n  const vis_row = { site_id: p.site_id, domain: p.domain, run_id: p.run_id, checked_at: p.checked_at, prompts: byQ.size, answers: ansAll.length, mention_rate, citation_rate, share_of_voice, avg_rank: ranks.length ? +(ranks.reduce((a, b) => a + b, 0) / ranks.length).toFixed(1) : 0,\n    aio_presence, aio_citation_rate, engines_json: J(engines), competitors_json: J(comp), sources_json: J(sources), pages_json: J(our_pages), gaps_json: J(gaps.map(g => ({ prompt: g.prompt, competitors: g.competitors, sources: g.sources }))), market_json: market ? J(market) : '',\n    market_month: market && !market.carried && !market.error ? p.checked_at.slice(0, 7) : ((prev && prev.market_month) || ''), cost_usd: +(Rall.reduce((s, r) => s + (Number(r.cost) || 0), 0) + (mi >= 0 ? (Number((((resps[mi] || {}).tasks || [])[0] || {}).cost) || 0) : 0)).toFixed(4), alerts: alerts.map(a => a.level + ': ' + a.text).join(' | ') };\n  const now = p.checked_at;\n  const prospect_rows = sources.filter(s => !['platform', 'authority'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};\n    return { site_id: p.site_id, domain: p.domain, prospect_domain: s.domain, type: 'ai_source', rank: Number(old.rank) || 0, spam_score: Number(old.spam_score) || 0, detail: 'Cited ' + s.citations + 'x in AI answers (' + s.engines.join(', ') + ')' + (s.topics.length ? ' about ' + s.topics.join(', ') : ''), source_url: '', target_url: old.target_url || '',\n      status: old.status || 'new', first_seen: old.first_seen || now, last_seen: now, won_at: old.won_at || '', outreach_subject: old.outreach_subject || '', outreach_body: old.outreach_body || '', note: old.note || ({ official: 'official source: ask to be listed', media: 'news site: pitch a story or expert comment', directory: 'directory / review site: get listed' }[s.kind] || '') }; });\n  return { json: { ...p, metrics: { asked: R.length, answered: ans.length, errors, mentioned, cited, mention_rate, citation_rate, share_of_voice, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta },\n    engines, competitors: comp, sources, our_pages, questions, gaps, market, alerts, actions: actions.slice(0, 8), vis_row, prospect_rows, cost_usd: vis_row.cost_usd, form_url: FORM_URL, api_url: API_URL } };\n});\n"
+        },
+        "id": "2fa1fda5-44a9-541d-b317-c0a66e2ac74a",
+        "name": "AI Metrics",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2200,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// The seo_ai_visibility rows (one per site per run; exact columns).\nreturn $('AI Metrics').all().map(i => ({ json: i.json.vis_row }));\n"
+        },
+        "id": "19747c49-02cd-5ba2-9663-6daffd6f3ccb",
+        "name": "AI Vis Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2420,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "insert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_visibility"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "run_id",
+                "displayName": "run_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "checked_at",
+                "displayName": "checked_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prompts",
+                "displayName": "prompts",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "answers",
+                "displayName": "answers",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mention_rate",
+                "displayName": "mention_rate",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "citation_rate",
+                "displayName": "citation_rate",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "share_of_voice",
+                "displayName": "share_of_voice",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "avg_rank",
+                "displayName": "avg_rank",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "aio_presence",
+                "displayName": "aio_presence",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "aio_citation_rate",
+                "displayName": "aio_citation_rate",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "engines_json",
+                "displayName": "engines_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "competitors_json",
+                "displayName": "competitors_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "sources_json",
+                "displayName": "sources_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "pages_json",
+                "displayName": "pages_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "gaps_json",
+                "displayName": "gaps_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "market_json",
+                "displayName": "market_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "market_month",
+                "displayName": "market_month",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_usd",
+                "displayName": "cost_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "alerts",
+                "displayName": "alerts",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "b3ca251a-8336-559a-8ef5-96a98ab91a9c",
+        "name": "Save AI Visibility",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2640,
+          660
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Sites AI cites become link / PR prospects (type ai_source) in seo_link_prospects, next to the Backlink Monitor's prospects; statuses are kept.\nconst rows = $('AI Metrics').all().flatMap(i => i.json.prospect_rows || []);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "d2214450-6538-56e4-a509-8b3b2f0a1ca5",
+        "name": "AI Prospect Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2860,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "0c6f6f7c-fdda-539a-8082-3b490ecb6a51",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "fb947854-90ba-5c7d-8519-ec4ad0febfc6",
+        "name": "Any AI Prospects?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3080,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_link_prospects"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              },
+              {
+                "keyName": "prospect_domain",
+                "condition": "eq",
+                "keyValue": "={{ $json.prospect_domain }}"
+              },
+              {
+                "keyName": "type",
+                "condition": "eq",
+                "keyValue": "={{ $json.type }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prospect_domain",
+                "displayName": "prospect_domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "type",
+                "displayName": "type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rank",
+                "displayName": "rank",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "spam_score",
+                "displayName": "spam_score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "detail",
+                "displayName": "detail",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source_url",
+                "displayName": "source_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "target_url",
+                "displayName": "target_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "first_seen",
+                "displayName": "first_seen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_seen",
+                "displayName": "last_seen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "won_at",
+                "displayName": "won_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "outreach_subject",
+                "displayName": "outreach_subject",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "outreach_body",
+                "displayName": "outreach_body",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "note",
+                "displayName": "note",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "1b20b87d-63bf-5e61-9203-3fd31910a1d0",
+        "name": "Save AI Prospects",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          3300,
+          440
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Compact facts per site for the AI-visibility brief (Claude Sonnet, low effort): numbers, per engine, competitors, sources, gaps, market, alerts.\nreturn $('AI Metrics').all().map(i => { const m = i.json;\n  const facts = { domain: m.domain, business: m.business_name || m.domain, week: m.checked_at.slice(0, 10), questions_tracked: m.questions.length, numbers: m.metrics, note: 'rates and share of voice exclude the brand question (\"what is <brand>?\"), which only measures recognition (numbers.brand)', previous_week: m.previous ? { mention_rate: m.previous.mention_rate, citation_rate: m.previous.citation_rate, share_of_voice: m.previous.share_of_voice } : 'first run',\n    per_engine: Object.values(m.engines).map(e => e.name + ': ' + e.mentioned + '/' + e.answered + ' mention you, ' + e.cited + ' cite your pages'), competitors: m.competitors.map(c => c.domain + ' ' + c.share + '% share (' + c.mentions + ' mentions)'),\n    sources_ai_trusts: m.sources.slice(0, 10).map(s => s.domain + ' (' + s.kind + ', ' + s.citations + ' citations)'), your_cited_pages: m.our_pages, questions_lost: m.gaps.map(g => g.prompt + ' → ' + g.competitors.slice(0, 3).join(', ')),\n    market_view: m.market ? { topic: m.market.keyword, top_domains: (m.market.top || []).slice(0, 8).map(x => x.domain + ' ' + x.mentions), your_position: m.market.you || 'not in the list' } : null, alerts: m.alerts.map(a => a.text), computed_actions: m.actions.map(a => a.action + ' — ' + a.why) };\n  return { json: { site_id: m.site_id, domain: m.domain, facts: JSON.stringify(facts) } }; });\n"
+        },
+        "id": "69aeb3ff-ff4d-54cf-bbbe-596a93b2812d",
+        "name": "AI Brief Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3520,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=You are an AI-search (GEO) strategist. Below are this week's measured facts about how ChatGPT, Perplexity, Gemini, Claude and Google's AI Overview / AI Mode answer the buyer questions of one business. Write the weekly brief for the business owner: plain words, specific, no hype, numbers only from the facts.\n\nFACTS\n{{ $json.facts }}\n\nReturn ONLY JSON:\n{\n  \"headline\": \"one sentence with the single most important finding and its number\",\n  \"summary\": \"3-4 sentences: where the business stands in AI answers, what changed since last week, who wins instead and why (which sources the assistants rely on)\",\n  \"actions\": [{ \"priority\": 1, \"action\": \"concrete next step\", \"why\": \"the fact that makes it worth doing\" }],\n  \"watch\": [\"1-3 things to watch next week\"]\n}\nRules: 3-5 actions, most valuable first, each tied to a fact (a lost question, a source AI cites, an engine that ignores the business, the brand not being recognised). Prefer actions the business can do this month: a page that answers a lost question, a listing or article on a cited source, fixing how the brand is described. Never invent numbers, competitors or sources.\n",
+          "hasOutputParser": true,
+          "options": {}
+        },
+        "id": "df091b26-2191-5954-b739-196892479b81",
+        "name": "AI Brief",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          3740,
+          660
+        ],
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "claude-sonnet-5-5",
+            "cachedResultName": "Claude Sonnet 5.5"
+          },
+          "options": {
+            "maxTokensToSample": 8192,
+            "thinking": true,
+            "thinkingMode": "adaptive",
+            "effort": "low"
+          }
+        },
+        "id": "58d336c1-dafe-52ec-80d9-74191d524f8f",
+        "name": "Claude — AI Brief",
+        "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+        "typeVersion": 1.6,
+        "position": [
+          3640,
+          860
+        ],
+        "credentials": {
+          "anthropicApi": {
+            "id": "SEOcredAnthropic",
+            "name": "Anthropic (SEO Agent)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "schemaType": "manual",
+          "inputSchema": "{\"type\": \"object\", \"properties\": {\"headline\": {\"type\": \"string\"}, \"summary\": {\"type\": \"string\"}, \"actions\": {\"type\": \"array\", \"items\": {\"type\": \"object\", \"properties\": {\"priority\": {\"type\": \"number\"}, \"action\": {\"type\": \"string\"}, \"why\": {\"type\": \"string\"}}, \"required\": [\"action\"]}}, \"watch\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"headline\", \"summary\", \"actions\"]}"
+        },
+        "id": "f741b7ee-ba5d-5545-8d27-115d9b58701c",
+        "name": "Parser — AI Brief",
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          3860,
+          860
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Weekly AI-visibility report per site (e-mail HTML + the same document for the PDF): headline, KPI tiles with last week's change, alerts,\n// actions (with ready-to-send API bodies for content gaps), the answer grid (question x engine), competitors' share, the sources AI trusts,\n// your cited pages, the monthly market view and the method. Uses the Claude brief when present, the computed facts otherwise.\n// ---- shared report helpers (inlined by the build): the same look as the Site Tracker report ----\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst n = (v) => (Number(v) || 0).toLocaleString('en-GB');\nconst td = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;font-size:13px;vertical-align:top\"', th = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:12px\"';\nconst table = (headers, rows, empty) => rows.length ? '<table style=\"border-collapse:collapse;margin:6px 0;max-width:100%\">' + '<tr>' + headers.map(h => '<th ' + th + '>' + esc(h) + '</th>').join('') + '</tr>' + rows.map(r => '<tr>' + r.map(c => '<td ' + td + '>' + c + '</td>').join('') + '</tr>').join('') + '</table>' : '<p style=\"color:#64748b;font-size:13px\">' + esc(empty || 'nothing to show') + '</p>';\nconst tile = (label, value, delta, color) => '<td style=\"padding:8px 12px;border:1px solid #e2e8f0;min-width:110px;vertical-align:top\"><div style=\"font-size:11px;color:#64748b;text-transform:uppercase\">' + esc(label) + '</div><div style=\"font-size:20px;font-weight:700\">' + value + '</div><div style=\"font-size:12px;color:' + (color || '#475569') + '\">' + delta + '</div></td>';\nconst h3 = (t) => '<h3 style=\"margin:18px 0 4px;font-size:15px;color:#0f172a\">' + esc(t) + '</h3>';\nconst p_ = (t, muted) => '<p style=\"margin:4px 0;font-size:13px' + (muted ? ';color:#64748b' : '') + '\">' + t + '</p>';\nconst pathOf = (u) => { const p = String(u || '').replace(/^https?:\\/\\/[^\\/]+/i, ''); return p || '/'; };\nconst link = (u, label) => u ? '<a href=\"' + esc(u) + '\" style=\"color:#1d4ed8\">' + esc(label || pathOf(u)) + '</a>' : '—';\nconst dpts = (v) => v == null ? '' : (v > 0 ? '<span style=\"color:#15803d\">▲ ' + v + ' pts</span>' : v < 0 ? '<span style=\"color:#b91c1c\">▼ ' + Math.abs(v) + ' pts</span>' : 'no change');\nconst briefBox = (b) => b ? '<div style=\"background:#f8fafc;border-left:4px solid #1d4ed8;padding:10px 12px;margin:8px 0\"><div style=\"font-weight:700;font-size:15px\">' + esc(b.headline) + '</div><p style=\"margin:6px 0 0;font-size:13px\">' + esc(b.summary) + '</p></div>' : '';\nconst alertBox = (alerts) => (alerts || []).length ? '<div style=\"background:#fef2f2;border-left:4px solid #b91c1c;padding:8px 12px;margin:8px 0\">' + alerts.map(a => '<div style=\"font-size:13px\">⚠ ' + esc(a.text || a) + '</div>').join('') + '</div>' : '';\nconst wrapDoc = (title, body) => '<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>' + esc(title) + '</title></head><body style=\"margin:24px\">' + body + '</body></html>';\nconst b64 = (s) => Buffer.from(String(s), 'utf8').toString('base64');\n\nconst metrics = $('AI Metrics').all().map(i => i.json);\nlet briefs = []; try { briefs = $('AI Brief').all().map(i => (i.json && i.json.output && typeof i.json.output === 'object') ? i.json.output : null); } catch (e) { briefs = []; }\nconst SYM = { cited: '<b style=\"color:#15803d\">✓ cited</b>', mentioned: '<span style=\"color:#15803d\">✓ named</span>', absent: '<span style=\"color:#b91c1c\">✗</span>', none: '<span style=\"color:#94a3b8\">no AI answer</span>', error: '<span style=\"color:#94a3b8\">error</span>' };\nreturn metrics.map((m, i) => {\n  const b = briefs[i] || null; const M = m.metrics; const d = M.delta || {};\n  const engs = Object.keys(m.engines);\n  let html = '<div style=\"font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:900px\">';\n  html += '<h2 style=\"margin:0 0 2px;font-size:20px\">AI search visibility: ' + esc(m.domain) + '</h2>' + p_(esc(m.checked_at.slice(0, 10)) + ' · ' + m.questions.length + ' buyer questions × ' + engs.length + ' AI engines' + (m.on_demand ? ' · on-demand run' : '') + (m.previous ? ' · compared with ' + esc(String(m.previous.checked_at).slice(0, 10)) : ' · first run (baseline)'), true);\n  html += briefBox(b) + alertBox(m.alerts);\n  html += '<table style=\"border-collapse:collapse;margin:8px 0\"><tr>' + tile('Mentioned in', M.mention_rate + '%', m.previous ? dpts(d.mention_rate) : 'of ' + M.answered + ' AI answers') + tile('Your pages cited', M.citation_rate + '%', m.previous ? dpts(d.citation_rate) : M.cited + ' answers') +\n    tile('Share of voice', M.share_of_voice + '%', m.previous ? dpts(d.share_of_voice) : 'vs ' + m.competitors.length + ' competitors') + tile('Avg. position', M.avg_rank ? '#' + M.avg_rank : '—', 'when named') + tile('AI Overview', M.aio_presence + '%', 'of searches show one; you cited in ' + M.aio_citation_rate + '%') + (M.brand && M.brand.answered ? tile('Brand recognised', M.brand.known + ' of ' + M.brand.answered, 'assistants know who you are', M.brand_known === false ? '#b91c1c' : '#15803d') : '') + '</tr></table>';\n  const acts = (b && Array.isArray(b.actions) && b.actions.length) ? b.actions.map(a => ({ action: a.action, why: a.why })) : m.actions;\n  html += h3('Do this next') + (acts.length ? '<ol style=\"margin:4px 0 4px 18px;padding:0;font-size:13px\">' + acts.map(a => '<li style=\"margin:3px 0\"><b>' + esc(a.action) + '</b> — ' + esc(a.why) + '</li>').join('') + '</ol>' : p_('Nothing urgent.', true));\n  const gapActs = m.actions.filter(a => a.api_body);\n  if (gapActs.length) html += p_('Write the missing pages with one call each (or use the form: <a href=\"' + esc(m.form_url) + '\">' + esc(m.form_url) + '</a>):', true) + gapActs.map(a => '<pre style=\"background:#f1f5f9;padding:6px;font-size:11px;white-space:pre-wrap\">POST ' + esc(m.api_url) + '\\n' + esc(JSON.stringify(a.api_body)) + '</pre>').join('');\n  html += h3('Answer by answer') + table(['Question', ...engs.map(e => m.engines[e].name)], m.questions.map(q => [esc(q.prompt) + '<br><span style=\"color:#64748b;font-size:11px\">' + esc(q.kind) + (q.competitors.length && !q.won ? ' · named instead: ' + esc(q.competitors.slice(0, 3).join(', ')) : '') + '</span>', ...engs.map(e => SYM[q.engines[e]] || '—')]), 'no answers this week');\n  html += h3('By engine') + table(['Engine', 'Answers', 'Named you', 'Cited your pages', 'Failed'], engs.map(e => { const x = m.engines[e]; return [esc(x.name), n(x.answered), x.mentioned + ' (' + x.mention_rate + '%)', x.cited + ' (' + x.citation_rate + '%)', n(x.errors)]; }));\n  html += h3('Who AI recommends instead') + table(['Business', 'Answers naming it', 'Share of voice', ''], [['<b>' + esc(m.domain) + ' (you)</b>', n(M.mentioned), M.share_of_voice + '%', ''], ...m.competitors.map(c => [esc(c.domain), n(c.mentions), c.share + '%', c.auto ? 'detected' : 'your competitor'])], 'no other businesses named');\n  html += h3('Sources AI relies on (where to get featured)') + table(['Source', 'Citations', 'Engines', 'Topics', 'Kind'], m.sources.map(s => [esc(s.domain), n(s.citations), esc(s.engines.join(', ')), esc(s.topics.join(', ')), esc({ official: 'official', platform: 'platform', media: 'news / media', directory: 'directory / reviews', authority: 'consultancy / research', site: 'site (PR target)' }[s.kind] || s.kind)]), 'no sources cited') + p_('These also appear in your link-prospect list (type ai_source); the Backlink Monitor drafts outreach for them.', true);\n  html += h3('Your pages AI cites') + table(['Page', 'Citations'], m.our_pages.map(x => [link(x.url), n(x.citations)]), 'none yet');\n  if (m.market) html += h3('Market view: who AI cites for \"' + m.market.keyword + '\"' + (m.market.carried ? ' (from ' + m.market.checked_at + ')' : '')) + (m.market.error ? p_('Not available: ' + esc(m.market.error), true) : p_((m.market.total_mentions ? n(m.market.total_mentions) + ' AI answers in the DataForSEO index (Google AI Overview and ChatGPT) mention this topic. ' : '') + (m.market.you ? 'You are #' + m.market.you + ' of the cited domains.' : 'Your domain is not among the cited domains yet.')) + table(['Domain', 'Mentions', 'AI search volume'], (m.market.top || []).slice(0, 10).map(x => [esc(x.domain), n(x.mentions), n(x.ai_search_volume)])));\n  html += h3('How this is measured') + p_('Every Monday the same buyer questions are asked to ChatGPT (the real chatgpt.com answer), Perplexity, Gemini and Claude with web search, and to Google AI Mode; the matching Google search is checked for an AI Overview. Rates and share of voice use the buyer questions only; the question about the brand itself measures recognition. \"Named\" = the answer mentions ' + esc(m.brand_names.join(' / ')) + '; \"cited\" = it links one of your pages; share of voice = your mentions against the competitors\\' mentions; position = your place among the businesses an answer names. Answers vary between runs, so read the trend over several weeks. Cost this run: $' + m.cost_usd.toFixed(2) + ' (DataForSEO).', true);\n  html += '</div>';\n  const subject = '[AI visibility] ' + m.domain + ' — named in ' + M.mention_rate + '% of AI answers' + (m.previous && d.mention_rate ? ' (' + (d.mention_rate > 0 ? '+' : '') + d.mention_rate + ' pts)' : '') + (m.alerts.length ? ' · ' + m.alerts.length + ' alert(s)' : '');\n  const file_name = 'ai-visibility-' + m.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + m.checked_at.slice(0, 10) + '.html';\n  return { json: { ...m, brief: b, subject, html, file_name, status: 'progress', stage: 'ai_visibility' }, binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };\n});\n"
+        },
+        "id": "dfbe7517-9ede-5c3b-aece-904e2e592d70",
+        "name": "AI Report",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3960,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Copy of each report HTML named index.html for the PDF renderer (Gotenberg requires that exact file name); one item per site.\nreturn $input.all().map(item => { const doc = (item.binary || {}).data; if (!doc) return item; return { json: item.json, binary: { ...(item.binary || {}), html: { ...doc, fileName: 'index.html', mimeType: 'text/html', fileExtension: 'html' } } }; });"
+        },
+        "id": "0d7d61f3-7f7c-5862-b30e-d932a213aba9",
+        "name": "Prepare PDF AI",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4180,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://gotenberg:3000/forms/chromium/convert/html",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "parameterType": "formBinaryData",
+                "name": "files",
+                "inputDataFieldName": "html"
+              },
+              {
+                "name": "paperWidth",
+                "value": "8.27"
+              },
+              {
+                "name": "paperHeight",
+                "value": "11.69"
+              },
+              {
+                "name": "marginTop",
+                "value": "0.5"
+              },
+              {
+                "name": "marginBottom",
+                "value": "0.5"
+              },
+              {
+                "name": "marginLeft",
+                "value": "0.5"
+              },
+              {
+                "name": "marginRight",
+                "value": "0.5"
+              },
+              {
+                "name": "printBackground",
+                "value": "true"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 120000,
+            "response": {
+              "response": {
+                "responseFormat": "file",
+                "outputPropertyName": "pdf"
+              }
+            }
+          }
+        },
+        "id": "7f693fa3-0739-598e-821c-1c125b318649",
+        "name": "Render PDF AI",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          4400,
+          660
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Attach the PDF (when the renderer succeeded) next to the report's other files, per site; a renderer failure never fails the run.\nconst src = $('Prepare PDF AI').all(); const got = $input.all();\nreturn src.map((s, i) => { const g = got[i] || {}; const pdf = (g.binary && g.binary.pdf && !(g.json && g.json.error)) ? g.binary.pdf : null;\n  const name = String(s.json.file_name || 'report.html').replace(/\\.html?$/i, '') + '.pdf'; const binary = { ...(s.binary || {}) }; delete binary.html;\n  if (pdf) binary.pdf = { ...pdf, fileName: name, mimeType: 'application/pdf', fileExtension: 'pdf' };\n  return { json: { ...s.json, pdf_ready: !!pdf, pdf_file_name: pdf ? name : null }, binary }; });"
+        },
+        "id": "2b0fd1f4-0fd7-56f9-933e-99482bc1ab04",
+        "name": "Attach PDF AI",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4620,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Callback payload per site for API callers: the AI-visibility data plus the PDF (bytes from n8n's binary store); internals dropped.\nconst items = $input.all(); const out = [];\nfor (let i = 0; i < items.length; i++) {\n  const it = items[i]; const d = it.json || {}; const bin = it.binary || {}; let pdf = null;\n  if (bin.pdf) { try { const buf = await this.helpers.getBinaryDataBuffer(i, 'pdf'); if (buf && buf.length) pdf = { data: buf.toString('base64'), fileName: bin.pdf.fileName || d.pdf_file_name, mimeType: 'application/pdf' }; } catch (e) { if (bin.pdf.data && String(bin.pdf.data).length > 100) pdf = { data: bin.pdf.data, fileName: bin.pdf.fileName || d.pdf_file_name, mimeType: 'application/pdf' }; } }\n  const { html, vis_row, prospect_rows, form_url, api_url, previous, prompts, ...rest } = d;\n  out.push({ json: { ...rest, pdf } });\n}\nreturn out;\n"
+        },
+        "id": "9f30839b-2b9e-5365-9b69-f7f788fcdf8b",
+        "name": "Build AI Callback",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4840,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "d2cd1a20-b978-5e11-b0cf-5d00245df24c",
+                "leftValue": "={{ !!$json.email }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "158b309d-4cba-5ef2-8840-e76766daa313",
+        "name": "Has Email (AI)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          4840,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "fromEmail": "Dev SEO <kinnngahmed@gmail.com>",
+          "toEmail": "={{ $json.email }}",
+          "subject": "={{ $json.subject }}",
+          "emailFormat": "html",
+          "html": "={{ $json.html }}",
+          "options": {
+            "appendAttribution": false,
+            "fileAttachments": "={{ $binary.pdf ? 'pdf' : 'data' }}"
+          }
+        },
+        "id": "6732da22-2b02-58b5-a308-28bae36d4703",
+        "name": "Send AI Report",
+        "type": "n8n-nodes-base.emailSend",
+        "typeVersion": 2.1,
+        "position": [
+          5060,
+          660
+        ],
+        "credentials": {
+          "smtp": {
+            "id": "SEOcredSmtpGmail",
+            "name": "Gmail SMTP (SEO Agent)"
+          }
+        },
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "30e18c1d-6d07-5765-ae34-fa811b275f90",
+                "leftValue": "={{ !!$json.callback_url }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "4a0b7afc-6849-5da8-99cf-01b3a442d06d",
+        "name": "Has Callback (AI)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          5060,
+          860
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.callback_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json) }}",
+          "options": {
+            "timeout": 30000
+          }
+        },
+        "id": "55484cbc-6f28-573f-8c13-76d07cbb2dc2",
+        "name": "POST AI Report",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          5280,
+          860
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — AI Visibility Tracker (v4.5)\n**Every Monday 07:00** (before the Site Tracker, whose report shows the summary) and on demand (*Manual Run* `{ domain | site_id, email?, callback_url?, country?, location_code?, competitors? }`; form option \"Check my AI visibility\" / API `mode: ai_visibility`).\nPer site (`seo_sites` + ladder domains; settings in `seo_monitors`: engines, questions per site, competitors, brand names): a stable set of **buyer questions** (`seo_ai_prompts`; written once by Claude, template fallback; custom ones through Site Admin `ai_prompts`) is asked to **ChatGPT** (the real chatgpt.com answer, LLM scraper $0.004), **Perplexity** (sonar $0.006), **Gemini** (with Google search $0.035), **Claude** (Haiku with web search $0.025), **Google AI Mode** ($0.004), and the matching Google search is checked for an **AI Overview** ($0.002). Monthly market view: DataForSEO LLM Mentions top domains for the main topic ($0.115). About $0.60 per site per week at 8 questions.\n*Parse AI Answers* → one row per answer (`seo_ai_answers`: named? cited? rank among the businesses named, competitors, sources). *AI Metrics* → mention rate, citation rate, share of voice, rank, per engine, competitors (configured + detected), **sources AI relies on** (also written to `seo_link_prospects` as `ai_source` prospects for the Backlink Monitor's outreach), your cited pages, **lost questions** with ready API bodies, week-over-week change, alerts → `seo_ai_visibility` → Claude brief → report (e-mail + PDF + callback `stage: ai_visibility`).",
+          "height": 380,
+          "width": 1300,
+          "color": 5
+        },
+        "id": "899d5295-1046-51b2-9142-f92fcdf464bf",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -700
+        ]
+      }
+    ],
+    "connections": {
+      "Claude — Prompt Writer": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Prompt Writer",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parser — Prompt Writer": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "Prompt Writer",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claude — AI Brief": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "AI Brief",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parser — AI Brief": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "AI Brief",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Email (AI)?": {
+        "main": [
+          [
+            {
+              "node": "Send AI Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Has Callback (AI)?": {
+        "main": [
+          [
+            {
+              "node": "POST AI Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Weekly Schedule": {
+        "main": [
+          [
+            {
+              "node": "Ensure Monitors Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Monitors Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure AI Prompts Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure AI Prompts Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure AI Answers Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure AI Answers Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure AI Visibility Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure AI Visibility Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Prospects Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Prospects Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Sites Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Sites Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Profiles Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Profiles Table": {
+        "main": [
+          [
+            {
+              "node": "Load Sites",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Sites": {
+        "main": [
+          [
+            {
+              "node": "Load Ladders",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Ladders": {
+        "main": [
+          [
+            {
+              "node": "Load Monitors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Monitors": {
+        "main": [
+          [
+            {
+              "node": "Load Profiles",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Profiles": {
+        "main": [
+          [
+            {
+              "node": "Load AI Prompts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load AI Prompts": {
+        "main": [
+          [
+            {
+              "node": "Load AI Visibility",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load AI Visibility": {
+        "main": [
+          [
+            {
+              "node": "Load Link Prospects",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Link Prospects": {
+        "main": [
+          [
+            {
+              "node": "AI Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Plan": {
+        "main": [
+          [
+            {
+              "node": "Any Sites (AI)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Manual Run": {
+        "main": [
+          [
+            {
+              "node": "Ensure Monitors Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Sites (AI)?": {
+        "main": [
+          [
+            {
+              "node": "Site Text Jobs",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Nothing To Do (AI)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Site Text Jobs": {
+        "main": [
+          [
+            {
+              "node": "Need Site Text?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Need Site Text?": {
+        "main": [
+          [
+            {
+              "node": "Read Site (AI)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prompt Jobs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read Site (AI)": {
+        "main": [
+          [
+            {
+              "node": "Prompt Jobs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prompt Jobs": {
+        "main": [
+          [
+            {
+              "node": "Any Prompt Jobs?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Prompt Jobs?": {
+        "main": [
+          [
+            {
+              "node": "Prompt Writer",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Prompt Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prompt Writer": {
+        "main": [
+          [
+            {
+              "node": "Prompt Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prompt Rows": {
+        "main": [
+          [
+            {
+              "node": "Any New Prompts?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any New Prompts?": {
+        "main": [
+          [
+            {
+              "node": "Save Prompts",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI Requests",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Prompts": {
+        "main": [
+          [
+            {
+              "node": "AI Requests",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Requests": {
+        "main": [
+          [
+            {
+              "node": "Any AI Requests?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any AI Requests?": {
+        "main": [
+          [
+            {
+              "node": "Run AI Requests",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Parse AI Answers",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run AI Requests": {
+        "main": [
+          [
+            {
+              "node": "Parse AI Answers",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse AI Answers": {
+        "main": [
+          [
+            {
+              "node": "Any Answer Rows?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Answer Rows?": {
+        "main": [
+          [
+            {
+              "node": "Save AI Answers",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI Metrics",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save AI Answers": {
+        "main": [
+          [
+            {
+              "node": "AI Metrics",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Metrics": {
+        "main": [
+          [
+            {
+              "node": "AI Vis Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Vis Rows": {
+        "main": [
+          [
+            {
+              "node": "Save AI Visibility",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save AI Visibility": {
+        "main": [
+          [
+            {
+              "node": "AI Prospect Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Prospect Rows": {
+        "main": [
+          [
+            {
+              "node": "Any AI Prospects?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any AI Prospects?": {
+        "main": [
+          [
+            {
+              "node": "Save AI Prospects",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI Brief Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save AI Prospects": {
+        "main": [
+          [
+            {
+              "node": "AI Brief Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Brief Input": {
+        "main": [
+          [
+            {
+              "node": "AI Brief",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Brief": {
+        "main": [
+          [
+            {
+              "node": "AI Report",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Report": {
+        "main": [
+          [
+            {
+              "node": "Prepare PDF AI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare PDF AI": {
+        "main": [
+          [
+            {
+              "node": "Render PDF AI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Render PDF AI": {
+        "main": [
+          [
+            {
+              "node": "Attach PDF AI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Attach PDF AI": {
+        "main": [
+          [
+            {
+              "node": "Has Email (AI)?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Build AI Callback",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Build AI Callback": {
+        "main": [
+          [
+            {
+              "node": "Has Callback (AI)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

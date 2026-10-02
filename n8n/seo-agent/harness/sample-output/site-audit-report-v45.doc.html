@@ -1,0 +1,395 @@
+﻿<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>Site Audit — northwind-erp.com</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+<style>
+@page { margin: 0.8in; }
+body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1e293b; }
+.cover { background: #0F172A; color: #fff; padding: 28px 30px; margin-bottom: 24px; }
+.brand { font-size: 10pt; letter-spacing: 2px; text-transform: uppercase; color: #93C5FD; }
+.title { font-size: 28pt; margin: 6px 0; color: #fff; }
+.sub { color: #CBD5E1; margin: 0 0 14px; }
+.scorebox td { vertical-align: middle; padding-right: 18px; color: #fff; }
+.big { font-size: 44pt; font-weight: bold; }
+.big span { font-size: 14pt; color: #CBD5E1; }
+.grade { font-size: 16pt; font-weight: bold; color: #fff; }
+.lbl { color: #93C5FD; font-size: 10pt; }
+.by { color: #93C5FD; margin: 14px 0 0; font-size: 10pt; }
+h2 { color: #1E3A8A; font-size: 15pt; margin-top: 26px; border-bottom: 1px solid #CBD5E1; padding-bottom: 4px; }
+h3 { color: #334155; font-size: 12.5pt; margin-top: 16px; }
+p { margin: 0 0 8px; }
+.toc li { margin-bottom: 4px; }
+.ct { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 10pt; }
+.ct th { background: #1E3A8A; color: #fff; padding: 7px; text-align: left; }
+.ct td { padding: 7px; border: 1px solid #CBD5E1; vertical-align: middle; }
+.kv { width: 100%; border-collapse: collapse; margin: 10px 0 16px; }
+.kv td { padding: 7px 10px; border: 1px solid #E2E8F0; font-size: 10pt; }
+.kv .k { width: 220px; font-weight: bold; background: #EEF2FF; color: #0F172A; }
+.bar { width: 100%; border-collapse: collapse; }
+.bar td { height: 10px; padding: 0; border: none; font-size: 4pt; }
+.good li { color: #15803D; }
+.note { border-left: 4px solid #D97706; background: #FFFBEB; padding: 10px 14px; margin: 12px 0; }
+.finding { border-left: 5px solid #CBD5E1; background: #F8FAFC; padding: 10px 14px; margin: 12px 0; }
+.ftitle { font-weight: bold; font-size: 11.5pt; color: #0F172A; }
+.badge { color: #fff; font-size: 8pt; padding: 2px 6px; font-weight: bold; }
+.fmeta { font-size: 9pt; color: #64748B; margin: 3px 0 8px; }
+.small { font-size: 9pt; color: #64748B; }
+.pb { page-break-before: always; }</style></head><body>
+<div class="cover">
+  <div class="brand">Site Audit Report</div>
+  <h1 class="title">northwind-erp.com</h1>
+  <p class="sub">14 pages crawled &nbsp;•&nbsp; 2026-09-30</p>
+  <table class="scorebox"><tr>
+    <td class="big" style="color:#CA8A04">70<span>/100</span></td>
+    <td><div class="grade">Needs Improvement</div><div class="lbl">Site Health Score (technical)</div></td>
+  </tr></table>
+  <p class="by">Prepared by Dev SEO</p>
+</div><h2>Contents</h2><ol class="toc">
+<li>Executive Summary</li><li>Scores by Category</li><li>What Works Well</li>
+<li>Issues Found</li><li>Action Plan</li><li>Search Console &amp; Site Structure (5b)</li><li>Progress, Links, Brand &amp; Fix Pack (5c)</li><li>Not Assessed in This Audit</li><li>Methodology</li></ol><h2 class="pb">1. Executive Summary</h2>
+<p>We crawled <b>14</b> pages of <b>northwind-erp.com</b> and ran additional checks on security, caching, crawler access and the sitemap. We found:</p>
+<table class="ct"><tr><th style="background:#B91C1C">Critical</th><th style="background:#EA580C">High</th><th style="background:#CA8A04">Medium</th><th style="background:#2563EB">Low</th><th style="background:#64748B">Info</th></tr>
+<tr><td style="text-align:center;font-size:14pt"><b>1</b></td><td style="text-align:center;font-size:14pt"><b>6</b></td><td style="text-align:center;font-size:14pt"><b>20</b></td><td style="text-align:center;font-size:14pt"><b>17</b></td><td style="text-align:center;font-size:14pt"><b>1</b></td></tr></table>
+<div class="note"><b>Score limit applied:</b> 1 critical issue found — score capped at 70 until fixed. Calculated score before the limit: 70/100.</div>
+<h3>Fix These First</h3><ol><li><b>Broken pages (4xx, 5xx or timeout)</b> <span class="small">(1 of 14 crawled pages)</span><br>Fix or 301-redirect broken URLs to the most relevant live page.</li><li><b>www and non-www versions are not consolidated</b> <span class="small">(Crawler canonicalization test failed)</span><br>Make the www version redirect (301) to the main domain with a valid certificate for both hostnames.</li><li><b>Slow server response (TTFB)</b> <span class="small">(Homepage server wait time 950ms (good is under 200ms))</span><br>Enable CDN/edge caching and host close to your main audience.</li><li><b>Some search and AI crawlers are blocked or get less content</b> <span class="small">(ClaudeBot (403); PerplexityBot (200, 2% of content))</span><br>Check firewall, bot-protection and CDN rules so these crawlers receive the same page as browsers.</li><li><b>Missing H1 heading</b> <span class="small">(1 of 14 crawled pages)</span><br>Add one clear H1 per page that includes the page topic.</li><li><b>Orphan pages (no crawlable internal links)</b> <span class="small">(1 of 14 crawled pages)</span><br>Link to these pages with normal &lt;a href&gt; links from relevant hub pages and menus.</li></ol><h3>Key Measurements</h3><table class="kv"><tr><td class="k">Homepage server response</td><td>950 ms</td></tr><tr><td class="k">Cache-Control header</td><td>public, max-age=0, must-revalidate</td></tr><tr><td class="k">CDN cache status</td><td>DYNAMIC / DYNAMIC</td></tr><tr><td class="k">URLs in sitemap</td><td>12</td></tr><tr><td class="k">Pages found by crawling</td><td>14</td></tr><tr><td class="k">Server</td><td>cloudflare</td></tr></table><h2>2. Scores by Category</h2><table class="ct"><tr><th>Category</th><th style="width:60px">Score</th><th style="width:60px">Weight</th><th style="width:45%"></th></tr><tr><td>Crawlability &amp; Indexing</td><td><b style="color:#B91C1C">38</b></td><td>22%</td><td><table class="bar"><tr>
+  <td style="width:38%;background:#B91C1C">&nbsp;</td>
+  <td style="width:62%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>On-Page</td><td><b style="color:#CA8A04">71</b></td><td>18%</td><td><table class="bar"><tr>
+  <td style="width:71%;background:#CA8A04">&nbsp;</td>
+  <td style="width:29%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Content</td><td><b style="color:#65A30D">87</b></td><td>13%</td><td><table class="bar"><tr>
+  <td style="width:87%;background:#65A30D">&nbsp;</td>
+  <td style="width:13%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Performance</td><td><b style="color:#B91C1C">59</b></td><td>15%</td><td><table class="bar"><tr>
+  <td style="width:59%;background:#B91C1C">&nbsp;</td>
+  <td style="width:41%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Security</td><td><b style="color:#15803D">97</b></td><td>10%</td><td><table class="bar"><tr>
+  <td style="width:97%;background:#15803D">&nbsp;</td>
+  <td style="width:3%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Images</td><td><b style="color:#15803D">100</b></td><td>7%</td><td><table class="bar"><tr>
+  <td style="width:100%;background:#15803D">&nbsp;</td>
+  <td style="width:0%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>Technical</td><td><b style="color:#15803D">100</b></td><td>5%</td><td><table class="bar"><tr>
+  <td style="width:100%;background:#15803D">&nbsp;</td>
+  <td style="width:0%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr><tr><td>AI Search Readiness</td><td><b style="color:#CA8A04">65</b></td><td>10%</td><td><table class="bar"><tr>
+  <td style="width:65%;background:#CA8A04">&nbsp;</td>
+  <td style="width:35%;background:#E2E8F0">&nbsp;</td></tr></table></td></tr></table><h2>3. What Works Well</h2><ul class="good"><li>Valid SSL certificate on the main domain (expires 2026-10-20)</li><li>HTTP correctly redirects to HTTPS</li><li>robots.txt is present</li><li>HTTP/2 is enabled</li><li>Missing pages return a proper 404</li><li>No redirect loops</li><li>Every page has a title tag</li><li>www redirects to the main domain (301)</li><li>HTTP redirects to HTTPS</li><li>HTML is cacheable (Cache-Control: public, max-age=0, must-revalidate)</li><li>robots.txt lists the sitemap</li><li>XML sitemap lists 12 URLs</li><li>Shallow site structure: 93% of crawled pages are within 3 clicks of the homepage</li><li>XML sitemap lists 8 URLs (index of 3 sitemaps)</li><li>Sitemap submitted to Search Console (48 URLs, last read 2026-09-28)</li><li>Search Console (last 28 days): 120 clicks from 9000 impressions, average position 8.4</li><li>All 13 sampled pages are indexed by Google</li><li>Organization schema lists 2 official profile(s) (sameAs)</li></ul><h2 class="pb">4. Issues Found</h2><h3 style="color:#B91C1C">Critical Priority (1)</h3><div class="finding" style="border-left-color:#B91C1C">
+      <div class="ftitle"><span class="badge" style="background:#B91C1C">Critical</span> Broken pages (4xx, 5xx or timeout)</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Pages that return errors waste crawl budget and lose any ranking signals pointing to them.</p>
+      <p><b>How to fix:</b> Fix or 301-redirect broken URLs to the most relevant live page.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/careers/</p>
+    </div><h3 style="color:#EA580C">High Priority (6)</h3><div class="finding" style="border-left-color:#EA580C">
+      <div class="ftitle"><span class="badge" style="background:#EA580C">High</span> www and non-www versions are not consolidated</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Crawler canonicalization test failed</p>
+      <p><b>Why it matters:</b> If both versions do not resolve to one canonical host, links and signals are split.</p>
+      <p><b>How to fix:</b> Make the www version redirect (301) to the main domain with a valid certificate for both hostnames.</p>
+      
+    </div><div class="finding" style="border-left-color:#EA580C">
+      <div class="ftitle"><span class="badge" style="background:#EA580C">High</span> Slow server response (TTFB)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Homepage server wait time 950ms (good is under 200ms)</p>
+      <p><b>Why it matters:</b> A slow first byte delays everything else and hurts LCP.</p>
+      <p><b>How to fix:</b> Enable CDN/edge caching and host close to your main audience.</p>
+      
+    </div><div class="finding" style="border-left-color:#EA580C">
+      <div class="ftitle"><span class="badge" style="background:#EA580C">High</span> Some search and AI crawlers are blocked or get less content</div>
+      <div class="fmeta">AI Search Readiness &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> ClaudeBot (403); PerplexityBot (200, 2% of content)</p>
+      <p><b>Why it matters:</b> Blocked crawlers cannot index or cite your pages in search and AI answers.</p>
+      <p><b>How to fix:</b> Check firewall, bot-protection and CDN rules so these crawlers receive the same page as browsers.</p>
+      
+    </div><div class="finding" style="border-left-color:#EA580C">
+      <div class="ftitle"><span class="badge" style="background:#EA580C">High</span> Missing H1 heading</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> The H1 tells users and search engines what the page is about.</p>
+      <p><b>How to fix:</b> Add one clear H1 per page that includes the page topic.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/services/odoo-erp/</p>
+    </div><div class="finding" style="border-left-color:#EA580C">
+      <div class="ftitle"><span class="badge" style="background:#EA580C">High</span> Orphan pages (no crawlable internal links)</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> These pages are only discoverable through the sitemap. They get little internal authority and are crawled less. Often caused by cards or buttons built without real &lt;a href&gt; links.</p>
+      <p><b>How to fix:</b> Link to these pages with normal &lt;a href&gt; links from relevant hub pages and menus.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/industries/food-distribution/</p>
+    </div><div class="finding" style="border-left-color:#EA580C">
+      <div class="ftitle"><span class="badge" style="background:#EA580C">High</span> Very slow Largest Contentful Paint (over 4s)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> LCP over 4 seconds is rated Poor by Google and hurts rankings and conversions.</p>
+      <p><b>How to fix:</b> Optimise the main image, enable caching, reduce blocking scripts.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/ — 4500ms (lab)</p>
+    </div><h3 style="color:#CA8A04">Medium Priority (20)</h3><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> robots.txt blocks some AI crawlers</div>
+      <div class="fmeta">AI Search Readiness &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Blocked: gptbot, ccbot</p>
+      <p><b>Why it matters:</b> Blocked AI crawlers cannot use your pages as sources in AI answers. This can be intentional, so confirm it is a business decision.</p>
+      <p><b>How to fix:</b> Allow search-related AI crawlers (e.g. OAI-SearchBot, PerplexityBot) if you want to be cited in AI answers.</p>
+      
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Phone number differs between Google Business Profile and the site</div>
+      <div class="fmeta">AI Search Readiness &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Profile: +971 4 555 0199 · site: +971 4 555 0100, +971 4 123 4567</p>
+      <p><b>Why it matters:</b> Inconsistent name / address / phone weakens local rankings and confuses assistants.</p>
+      <p><b>How to fix:</b> Use one phone number everywhere: site footer, schema, business profile and Google Business Profile.</p>
+      
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Phone in the homepage schema differs from the business profile</div>
+      <div class="fmeta">AI Search Readiness &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Schema: +971 4 123 4567 · profile: +971 4 555 0100</p>
+      <p><b>Why it matters:</b> Two phone numbers for one business split its signals.</p>
+      <p><b>How to fix:</b> Update the schema or the profile so both carry the same number.</p>
+      
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Slow Largest Contentful Paint (2.5-4s)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; 9 of 14 pages (64%)</div>
+      <p><b>Evidence:</b> 9 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Google rates LCP above 2.5 seconds as Needs Improvement.</p>
+      <p><b>How to fix:</b> Preload the main image and speed up server response.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/services/data-migration/ — 2600ms (lab)<br>https://northwind-erp.com/industries/food-distribution/ — 2700ms (lab)<br>https://northwind-erp.com/about/ — 2800ms (lab)<br>https://northwind-erp.com/contact/ — 2900ms (lab)<br>https://northwind-erp.com/privacy-policy/ — 3000ms (lab)<br>https://northwind-erp.com/careers/ — 3100ms (lab)<br>https://northwind-erp.com/blog/ — 3200ms (lab)<br>https://northwind-erp.com/blog/erp-implementation-cost-guide/ — 3300ms (lab)<br>https://northwind-erp.com/blog/odoo-vs-dynamics/ — 3400ms (lab)</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Indexable pages missing from the XML sitemap</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 7 of 14 pages (54%)</div>
+      <p><b>Evidence:</b> 7 of 13 crawled indexable pages are not listed in sitemap.xml</p>
+      <p><b>Why it matters:</b> Google still finds them through links, but a complete sitemap is the fastest way to get new and updated pages crawled.</p>
+      <p><b>How to fix:</b> Regenerate the sitemap to include every indexable page (most CMS SEO plugins do this automatically) and resubmit it.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/industries/food-distribution/<br>https://northwind-erp.com/about/<br>https://northwind-erp.com/contact/<br>https://northwind-erp.com/privacy-policy/<br>https://northwind-erp.com/blog/<br>…and 2 more</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Render-blocking CSS/JavaScript</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; 5 of 14 pages (36%)</div>
+      <p><b>Evidence:</b> 5 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> The browser must wait for these files before showing the page, slowing first paint.</p>
+      <p><b>How to fix:</b> Defer non-critical JavaScript and inline critical CSS.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/<br>https://northwind-erp.com/services/odoo-erp/<br>https://northwind-erp.com/industries/food-distribution/<br>https://northwind-erp.com/privacy-policy/<br>https://northwind-erp.com/blog/erp-implementation-cost-guide/</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Missing meta description</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 4 of 14 pages (29%)</div>
+      <p><b>Evidence:</b> 4 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Google writes its own snippet, often less compelling, lowering click-through rate.</p>
+      <p><b>How to fix:</b> Write a unique 140-155 character description with a clear call to action.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/services/<br>https://northwind-erp.com/services/data-migration/<br>https://northwind-erp.com/privacy-policy/<br>https://northwind-erp.com/blog/odoo-vs-dynamics/</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Sitemap URLs that no internal link reaches</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 2 of 14 pages (25%)</div>
+      <p><b>Evidence:</b> 2 sitemap URLs were not reached by a complete crawl of 58 pages</p>
+      <p><b>Why it matters:</b> These pages exist only in the sitemap: Google may crawl them, but without internal links they rarely rank and visitors cannot find them.</p>
+      <p><b>How to fix:</b> Link to them from relevant pages (navigation, hub pages, related articles) or remove them from the sitemap if they should not rank.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/only-in-sitemap<br>https://northwind-erp.com/old-redirected</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Broken internal links</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> 3 broken links across 14 pages</p>
+      <p><b>Why it matters:</b> Links to pages that no longer exist waste crawl budget and send users to dead ends.</p>
+      <p><b>How to fix:</b> Export the broken links from the crawl and fix or remove each one; redirect deleted pages to the closest live page.</p>
+      
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Duplicate page titles across the site</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 3 of 14 pages (21%)</div>
+      <p><b>Evidence:</b> 1 title(s) reused on 3 pages</p>
+      <p><b>Why it matters:</b> Pages sharing a title look interchangeable to search engines and compete for the same query.</p>
+      <p><b>How to fix:</b> Give every page a unique title that names its specific topic.</p>
+      <p class="small"><b>Affected pages:</b><br>"Page 1 | Northwind ERP" (3 pages): https://northwind-erp.com/a, https://northwind-erp.com/b<br>…and 2 more</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Broken images, scripts or stylesheets</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> 2 broken resources referenced</p>
+      <p><b>Why it matters:</b> Missing resources cause layout breakage and slow the page while the browser waits.</p>
+      <p><b>How to fix:</b> Fix or remove references to resources that return errors.</p>
+      
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Pages with duplicate content</div>
+      <div class="fmeta">Content &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> 2 pages with duplicate content</p>
+      <p><b>Why it matters:</b> Near-identical pages compete with each other and dilute ranking signals.</p>
+      <p><b>How to fix:</b> Consolidate duplicates with a canonical tag or a 301 redirect, or make each page substantively different.</p>
+      
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Brand name repeated in the title</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> A doubled brand suffix wastes title space and usually means the template adds the brand twice.</p>
+      <p><b>How to fix:</b> Fix the title template so the brand appears once.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/services/data-migration/ — "Data Migration Services for Distributors in the UAE and GCC Region | Northwind ERP | Northwind ERP"</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> More than one H1 on the page</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Multiple H1s blur what the page is mainly about.</p>
+      <p><b>How to fix:</b> Keep one H1; turn the others into H2s.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/services/dynamics-365-business-central/ — 2 H1 tags</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Thin content (under 300 words)</div>
+      <div class="fmeta">Content &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Very short pages rarely answer the searcher fully and struggle to rank.</p>
+      <p><b>How to fix:</b> Add specific, useful information: process, pricing factors, examples, FAQs.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/services/ — 180 words</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Missing canonical tag</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Without a canonical, duplicate URL versions can compete with each other.</p>
+      <p><b>How to fix:</b> Add a self-referencing canonical tag to every indexable page.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/privacy-policy/ — No canonical</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Pages buried deep in the site (3+ clicks from home)</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Deep pages get crawled less often and receive less internal authority.</p>
+      <p><b>How to fix:</b> Link to them from the homepage, menus or hub pages.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/blog/erp-implementation-cost-guide/ — 5 clicks deep</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Layout shift above 0.1 (CLS)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Content jumping while loading annoys users and fails Core Web Vitals.</p>
+      <p><b>How to fix:</b> Set width/height on images and reserve space for embeds and banners.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/ — CLS 0.18</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Slow server response on individual pages (over 800ms)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Slow first byte delays everything else.</p>
+      <p><b>How to fix:</b> Enable caching for these pages and check heavy server-side work.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/ — 950ms</p>
+    </div><div class="finding" style="border-left-color:#CA8A04">
+      <div class="ftitle"><span class="badge" style="background:#CA8A04">Medium</span> Large image payload (over 1MB of images per page)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Large images are the most common cause of slow mobile pages. The figure is the total size of image files the page references (including responsive sizes), so the real download may be smaller, but it signals unoptimised images.</p>
+      <p><b>How to fix:</b> Compress images, serve WebP/AVIF, and make sure image CDN optimisation (e.g. f_auto,q_auto) is on.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/ — 2.3MB of image files referenced</p>
+    </div><h3 style="color:#2563EB">Low Priority (17)</h3><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Missing security headers</div>
+      <div class="fmeta">Security &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Not found: Content-Security-Policy, X-Frame-Options, Referrer-Policy</p>
+      <p><b>Why it matters:</b> Security headers protect visitors. They are not a direct ranking factor but show a well-maintained site.</p>
+      <p><b>How to fix:</b> Add the missing headers in your hosting or CDN configuration; start Content-Security-Policy in Report-Only mode.</p>
+      
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> No llms.txt file</div>
+      <div class="fmeta">AI Search Readiness &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> https://northwind-erp.com/llms.txt returned 404</p>
+      <p><b>Why it matters:</b> llms.txt gives AI tools a clean summary of your site. Google does not use it; it is a low-cost extra for AI agents, not a ranking lever.</p>
+      <p><b>How to fix:</b> Optionally publish /llms.txt with a short site summary and links to your key pages.</p>
+      
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Pages Google shows in search are missing from the sitemap</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 5 of 14 pages (100%)</div>
+      <p><b>Evidence:</b> 5 page(s) with impressions are not in sitemap.xml</p>
+      <p><b>Why it matters:</b> Google found these pages on its own; listing them in the sitemap keeps their updates flowing and confirms they are meant to rank.</p>
+      <p><b>How to fix:</b> Add them to the sitemap (or set the right canonical / noindex if they should not rank).</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.northwind-erp.com/erp-implementation-dubai/<br>https://www.northwind-erp.com/never-clicked/<br>https://www.northwind-erp.com/shown-1/<br>https://www.northwind-erp.com/shown-2/<br>https://www.northwind-erp.com/shown-3/</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Google Business Profile is not claimed</div>
+      <div class="fmeta">AI Search Readiness &nbsp;•&nbsp; Whole website</div>
+      <p><b>Evidence:</b> Listing "Northwind ERP LLC" is unclaimed</p>
+      <p><b>Why it matters:</b> Anyone can suggest edits to an unclaimed listing.</p>
+      <p><b>How to fix:</b> Claim it at business.google.com and verify it.</p>
+      
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Title shorter than 30 characters</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 13 of 14 pages (93%)</div>
+      <p><b>Evidence:</b> 13 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Short titles waste space to include keywords and a reason to click.</p>
+      <p><b>How to fix:</b> Expand to 50-60 characters with the main keyword and benefit.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/ — 22 characters: "Page 0 | Northwind ERP"<br>https://northwind-erp.com/services/ — 22 characters: "Page 1 | Northwind ERP"<br>https://northwind-erp.com/services/erp-implementation/ — 3 characters: "ERP"<br>https://northwind-erp.com/services/odoo-erp/ — 22 characters: "Page 3 | Northwind ERP"<br>https://northwind-erp.com/services/dynamics-365-business-central/ — 22 characters: "Page 4 | Northwind ERP"<br>https://northwind-erp.com/industries/food-distribution/ — 22 characters: "Page 6 | Northwind ERP"<br>https://northwind-erp.com/about/ — 22 characters: "Page 7 | Northwind ERP"<br>https://northwind-erp.com/contact/ — 22 characters: "Page 8 | Northwind ERP"<br>https://northwind-erp.com/privacy-policy/ — 22 characters: "Page 9 | Northwind ERP"<br>https://northwind-erp.com/careers/ — 23 characters: "Page 10 | Northwind ERP"<br>…and 3 more</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Slow to become interactive (over 5s)</div>
+      <div class="fmeta">Performance &nbsp;•&nbsp; 11 of 14 pages (79%)</div>
+      <p><b>Evidence:</b> 11 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Heavy JavaScript makes the page unresponsive after it appears.</p>
+      <p><b>How to fix:</b> Reduce and defer JavaScript.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/services/odoo-erp/ — 5100ms<br>https://northwind-erp.com/services/dynamics-365-business-central/ — 5400ms<br>https://northwind-erp.com/services/data-migration/ — 5700ms<br>https://northwind-erp.com/industries/food-distribution/ — 6000ms<br>https://northwind-erp.com/about/ — 6300ms<br>https://northwind-erp.com/contact/ — 6600ms<br>https://northwind-erp.com/privacy-policy/ — 6900ms<br>https://northwind-erp.com/careers/ — 7200ms<br>https://northwind-erp.com/blog/ — 7500ms<br>https://northwind-erp.com/blog/erp-implementation-cost-guide/ — 7800ms<br>…and 1 more</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Missing Open Graph tags</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 7 of 14 pages (50%)</div>
+      <p><b>Evidence:</b> 7 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Without them, links shared on LinkedIn, WhatsApp or Facebook show a poor preview.</p>
+      <p><b>How to fix:</b> Add og:title, og:description and og:image.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/ — Missing og:title, og:image<br>https://northwind-erp.com/services/erp-implementation/ — Missing og:title, og:image<br>https://northwind-erp.com/services/dynamics-365-business-central/ — Missing og:title, og:image<br>https://northwind-erp.com/industries/food-distribution/ — Missing og:title, og:image<br>https://northwind-erp.com/contact/ — Missing og:title, og:image<br>https://northwind-erp.com/careers/ — Missing og:title, og:image<br>https://northwind-erp.com/blog/erp-implementation-cost-guide/ — Missing og:title, og:image</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Duplicate meta descriptions across the site</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 4 of 14 pages (29%)</div>
+      <p><b>Evidence:</b> 1 description(s) reused on 4 pages</p>
+      <p><b>Why it matters:</b> Reused descriptions lower click-through and signal templated, low-effort pages.</p>
+      <p><b>How to fix:</b> Write a unique description for each important page; leave it empty on pages that are not meant to rank rather than duplicating.</p>
+      <p class="small"><b>Affected pages:</b><br>"A meta description of the page that explains...…" (4 pages)<br>…and 3 more</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Pages shown in Google but never clicked</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 1 of 14 pages (17%)</div>
+      <p><b>Evidence:</b> 1 page(s) with 50+ impressions and 0 clicks in 28 days</p>
+      <p><b>Why it matters:</b> These pages earn impressions without clicks: the snippet does not match what searchers want, or they rank too low to be seen.</p>
+      <p><b>How to fix:</b> Check each page's main query, rewrite its title and description, and strengthen the page for that query.</p>
+      <p class="small"><b>Affected pages:</b><br>https://www.northwind-erp.com/never-clicked/</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Crawled pages that are not indexable</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 2 of 14 pages (14%)</div>
+      <p><b>Evidence:</b> 2 non-indexable pages — reasons: meta_robots_noindex (1), canonical (1)</p>
+      <p><b>Why it matters:</b> Often intentional (noindex, canonicals to other pages), but every important page in this list is invisible to Google.</p>
+      <p><b>How to fix:</b> Confirm each non-indexable page is meant to be excluded; remove noindex/canonical rules from pages that should rank.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/thank-you/ — meta_robots_noindex<br>https://northwind-erp.com/tag/erp/ — canonical</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Indexable pages missing from the sitemap</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 2 of 14 pages (14%)</div>
+      <p><b>Evidence:</b> 2 live pages are not in sitemap.xml</p>
+      <p><b>Why it matters:</b> Search engines rely on the sitemap to discover and prioritise pages.</p>
+      <p><b>How to fix:</b> Add these URLs to the sitemap, or noindex them if they should not rank.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/blog/erp-implementation-cost-guide/<br>https://northwind-erp.com/blog/odoo-vs-dynamics/</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Title longer than 60 characters</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Long titles get cut off in search results.</p>
+      <p><b>How to fix:</b> Keep the important words in the first 60 characters.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/services/data-migration/ — 98 characters</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Meta description shorter than 70 characters</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Too short to persuade searchers to click.</p>
+      <p><b>How to fix:</b> Write 140-155 characters with a clear benefit and call to action.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/contact/ — 10 characters</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Heading order skips a level</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Skipping from H1 to H3 breaks the outline that search engines and screen readers use.</p>
+      <p><b>How to fix:</b> Use H2 before H3, in a logical order.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/about/ — H3 used without any H2</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Light content (300-500 words)</div>
+      <div class="fmeta">Content &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Commercial pages usually need more depth to compete.</p>
+      <p><b>How to fix:</b> Expand with answers to the questions buyers ask before contacting you.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/industries/food-distribution/ — 420 words</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Few internal links pointing to the page</div>
+      <div class="fmeta">Crawlability &amp; Indexing &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Pages with few internal links look less important to search engines.</p>
+      <p><b>How to fix:</b> Add contextual links from related pages with descriptive anchor text.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/blog/odoo-vs-dynamics/ — 1 internal links in</p>
+    </div><div class="finding" style="border-left-color:#2563EB">
+      <div class="ftitle"><span class="badge" style="background:#2563EB">Low</span> Articles with no outbound links to sources</div>
+      <div class="fmeta">Content &nbsp;•&nbsp; 1 of 14 pages (7%)</div>
+      <p><b>Evidence:</b> 1 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Articles that cite no sources are less trustworthy and less likely to be quoted by AI answers.</p>
+      <p><b>How to fix:</b> Link key facts and statistics to their primary sources.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/blog/erp-implementation-cost-guide/ — 0 external links</p>
+    </div><h3 style="color:#64748B">Info Priority (1)</h3><div class="finding" style="border-left-color:#64748B">
+      <div class="ftitle"><span class="badge" style="background:#64748B">Info</span> Missing Twitter/X card tags</div>
+      <div class="fmeta">On-Page &nbsp;•&nbsp; 7 of 14 pages (50%)</div>
+      <p><b>Evidence:</b> 7 of 14 crawled pages</p>
+      <p><b>Why it matters:</b> Shared links on X show a plain preview.</p>
+      <p><b>How to fix:</b> Add twitter:card and twitter:image tags.</p>
+      <p class="small"><b>Affected pages:</b><br>https://northwind-erp.com/ — No twitter:card<br>https://northwind-erp.com/services/erp-implementation/ — No twitter:card<br>https://northwind-erp.com/services/dynamics-365-business-central/ — No twitter:card<br>https://northwind-erp.com/industries/food-distribution/ — No twitter:card<br>https://northwind-erp.com/contact/ — No twitter:card<br>https://northwind-erp.com/careers/ — No twitter:card<br>https://northwind-erp.com/blog/erp-implementation-cost-guide/ — No twitter:card</p>
+    </div><h2 class="pb">5. Action Plan</h2><h3>Phase 1 — Urgent <span class="small">(this week)</span></h3><ul><li>Broken pages (4xx, 5xx or timeout)</li><li>www and non-www versions are not consolidated</li><li>Slow server response (TTFB)</li><li>Some search and AI crawlers are blocked or get less content</li><li>Missing H1 heading</li><li>Orphan pages (no crawlable internal links)</li><li>Very slow Largest Contentful Paint (over 4s)</li></ul><h3>Phase 2 — Important <span class="small">(next 2-4 weeks)</span></h3><ul><li>robots.txt blocks some AI crawlers</li><li>Phone number differs between Google Business Profile and the site</li><li>Phone in the homepage schema differs from the business profile</li><li>Slow Largest Contentful Paint (2.5-4s)</li><li>Indexable pages missing from the XML sitemap</li><li>Render-blocking CSS/JavaScript</li><li>Missing meta description</li><li>Sitemap URLs that no internal link reaches</li><li>Broken internal links</li><li>Duplicate page titles across the site</li><li>Broken images, scripts or stylesheets</li><li>Pages with duplicate content</li><li>Brand name repeated in the title</li><li>More than one H1 on the page</li><li>Thin content (under 300 words)</li><li>Missing canonical tag</li><li>Pages buried deep in the site (3+ clicks from home)</li><li>Layout shift above 0.1 (CLS)</li><li>Slow server response on individual pages (over 800ms)</li><li>Large image payload (over 1MB of images per page)</li></ul><h3>Phase 3 — Polish <span class="small">(when time allows)</span></h3><ul><li>Missing security headers</li><li>No llms.txt file</li><li>Pages Google shows in search are missing from the sitemap</li><li>Google Business Profile is not claimed</li><li>Title shorter than 30 characters</li><li>Slow to become interactive (over 5s)</li><li>Missing Open Graph tags</li><li>Duplicate meta descriptions across the site</li><li>Pages shown in Google but never clicked</li><li>Crawled pages that are not indexable</li><li>Indexable pages missing from the sitemap</li><li>Title longer than 60 characters</li><li>Meta description shorter than 70 characters</li><li>Heading order skips a level</li><li>Light content (300-500 words)</li><li>Few internal links pointing to the page</li><li>Articles with no outbound links to sources</li><li>Missing Twitter/X card tags</li></ul><h2 class="pb">5b. Search Console &amp; Site Structure</h2><h3>Site structure (from the crawl)</h3><p>14 pages crawled, 13 indexable; 93% of pages are within 3 clicks of the homepage.</p><table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr><tr><td>Pages</td><td>1</td><td>6</td><td>6</td><td>0</td><td>1</td></tr></table><table class="ct"><tr><th>Section</th><th>Pages crawled</th></tr><tr><td>/services/</td><td>5</td></tr><tr><td>/blog/</td><td>3</td></tr><tr><td>/</td><td>1</td></tr><tr><td>/industries/</td><td>1</td></tr><tr><td>/about/</td><td>1</td></tr><tr><td>/contact/</td><td>1</td></tr><tr><td>/privacy-policy/</td><td>1</td></tr><tr><td>/careers/</td><td>1</td></tr></table><p>XML sitemap: 8 URLs (index of 3 sitemaps); 7 indexable pages missing from it; 2 sitemap URLs that no internal link reaches.</p><h3>Google Search Console</h3><p>Property <b>sc-domain:northwind-erp.com</b> (siteFullUser).</p><p>Last 28 days (2026-09-02 to 2026-09-29): <b>120</b> clicks, <b>9,000</b> impressions, CTR 1.33%, average position 8.4; 6 pages and 13 queries with impressions.</p><table class="ct"><tr><th>Submitted sitemap</th><th>URLs</th><th>Last read</th><th>Errors</th><th>Warnings</th></tr><tr><td>https://www.northwind-erp.com/sitemap.xml</td><td>48</td><td>2026-09-28</td><td>0</td><td>0</td></tr></table><p>Index coverage of 13 sampled pages: 13 × Submitted and indexed.</p><table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr><tr><td>erp implementation dubai</td><td>40</td><td>900</td><td>6.2</td></tr><tr><td>erp software uae</td><td>55</td><td>2,400</td><td>3.1</td></tr><tr><td>e invoicing software uae</td><td>12</td><td>500</td><td>9.8</td></tr><tr><td>northwind erp login</td><td>90</td><td>120</td><td>1</td></tr><tr><td>erp for distributors</td><td>8</td><td>260</td><td>14.5</td></tr><tr><td>peppol uae</td><td>0</td><td>45</td><td>24</td></tr><tr><td>erp cost dubai</td><td>3</td><td>80</td><td>12</td></tr><tr><td>sap vs oracle uae</td><td>6</td><td>300</td><td>7</td></tr><tr><td>e invoicing in uae</td><td>2</td><td>140</td><td>18</td></tr><tr><td>uae e invoicing penalties</td><td>0</td><td>30</td><td>35</td></tr></table><table class="ct"><tr><th>Top page</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr><tr><td>/</td><td>60</td><td>3,000</td><td>5.1</td></tr><tr><td>/erp-implementation-dubai/</td><td>30</td><td>2,000</td><td>6.5</td></tr><tr><td>/never-clicked/</td><td>0</td><td>300</td><td>15</td></tr><tr><td>/shown-1/</td><td>2</td><td>100</td><td>20</td></tr><tr><td>/shown-2/</td><td>1</td><td>80</td><td>22</td></tr><tr><td>/shown-3/</td><td>1</td><td>60</td><td>25</td></tr></table><h2 class="pb">5c. Progress, Links, Brand & Fix Pack</h2><h3>Since the last audit</h3><p>First audit stored: the next one shows what was fixed, what is new and what is still open.</p><h3>Internal links to add</h3><p>Pages with few or no links pointing to them, and strong pages on the same topic that can link to them (also in the fix pack as internal-links.csv).</p><table class="ct"><tr><th>On page</th><th>Link to</th><th>Anchor text</th><th>Why</th></tr><tr><td>/</td><td>/industries/food-distribution/</td><td>Heading 6</td><td>orphan page (no links in)</td></tr><tr><td>/services/</td><td>/industries/food-distribution/</td><td>Heading 6</td><td>orphan page (no links in)</td></tr><tr><td>/</td><td>/blog/odoo-vs-dynamics/</td><td>Heading 13</td><td>1 internal link(s) in</td></tr><tr><td>/services/</td><td>/blog/odoo-vs-dynamics/</td><td>Heading 13</td><td>1 internal link(s) in</td></tr></table><h3>Brand & entity consistency</h3><table class="ct"><tr><th></th><th>Google Business Profile</th><th>Your site / profile</th></tr><tr><td>Name</td><td>Northwind ERP LLC</td><td>Northwind ERP</td></tr><tr><td>Phone</td><td>+971 4 555 0199</td><td>+971 4 123 4567, +97141234567</td></tr><tr><td>Website</td><td>https://northwind-erp.com/</td><td>northwind-erp.com</td></tr><tr><td>Rating</td><td>4.8★ (23 reviews) · <span class="bad">unclaimed</span></td><td></td></tr><tr><td>Official profiles (sameAs)</td><td colspan="2">https://www.linkedin.com/company/northwind-erp, https://twitter.com/northwind erp</td></tr></table><h3>Fix pack (attached)</h3><table class="ct"><tr><th>File</th><th>What to do with it</th></tr><tr><td>robots.txt</td><td>Replace /robots.txt (1 change(s))</td></tr><tr><td>llms.txt</td><td>Publish at /llms.txt (a clean map of the site for AI tools)</td></tr><tr><td>redirects.csv</td><td>1 broken URL(s) → closest live page (301)</td></tr><tr><td>redirects-nginx.conf</td><td>The same map for nginx (server block)</td></tr><tr><td>redirects.htaccess</td><td>The same map for Apache / .htaccess</td></tr><tr><td>organization.jsonld</td><td>Organization schema for the homepage (4 official profiles in sameAs)</td></tr><tr><td>localbusiness.jsonld</td><td>LocalBusiness schema for the contact / location page (name, address and phone must match Google Business Profile)</td></tr><tr><td>website.jsonld</td><td>WebSite schema for the homepage (site name shown in Google results)</td></tr><tr><td>internal-links.csv</td><td>4 internal links to add (from page → to page, with an anchor)</td></tr><tr><td>README.txt</td><td>What each file is and how to deploy it</td></tr></table><h2>6. Not Assessed in This Audit</h2>
+<p>This is a technical site audit. The following areas are part of the Full SEO Report and are not included in this score:</p>
+<ul><li>Structured data (schema) and HTML-level checks</li><li>Competitor benchmark (organic keywords, rankings, traffic, domain age)</li><li>Core Web Vitals (LCP, CLS, INP) from Google PageSpeed and real users</li><li>Content quality and E-E-A-T review (authors, case studies, claims, pricing)</li><li>Backlinks and referring domains</li><li>Keyword rankings by search intent and keyword gap</li><li>AI answer visibility (AI Overviews, ChatGPT brand mentions)</li></ul><h2>7. Methodology</h2>
+<p>Technical site health only. Each category starts at 100. Findings written by the AI content review, and notes about data that could not be collected, are listed but do not change the score. Each other finding deducts Critical 30, High 15, Medium 7, Low 3, Info 1 points, scaled by the share of pages affected (60%-100% of the penalty); site-wide issues take the full penalty. Within a category, each further finding of the same severity counts 70% of the previous one, so many small issues cannot zero a category on their own. The score is the weighted average of category scores, capped at 70 with one critical issue, 60 with two or more, and 85 with five or more high-priority issues.</p>
+<table class="ct"><tr><th>Severity</th><th>Points deducted</th></tr>
+<tr><td>Critical</td><td>30</td></tr><tr><td>High</td><td>15</td></tr><tr><td>Medium</td><td>7</td></tr><tr><td>Low</td><td>3</td></tr><tr><td>Info</td><td>1</td></tr></table>
+<h3>Data Sources</h3>
+<table class="ct"><tr><th>Source</th><th>Used for</th></tr>
+<tr><td>Full site crawl (DataForSEO On-Page)</td><td>Page-level checks on up to 200 pages, including sitemap URLs; duplicate tags, non-indexable pages and redirect chains reports</td></tr>
+<tr><td>Direct HTTP checks</td><td>www/HTTPS, caching, security headers, robots.txt, sitemap, llms.txt</td></tr>
+<tr><td>Crawler simulation</td><td>Access for 11 search and AI crawlers (user-agent based)</td></tr></table>
+<p class="small">AI crawler checks use the crawler user-agent only; real crawlers are also verified by IP, so a pass here means no user-agent based blocking.</p><p class="small">Some extra crawl reports were unavailable: redirect_chains: Not Found.</p><p class="small">Only 14 of 58 crawled pages were analysed in detail.</p></body></html>

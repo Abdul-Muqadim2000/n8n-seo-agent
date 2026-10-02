@@ -167,6 +167,9 @@ return [{
         homepage_ttfb_ms: ttfb,
         server: h(MAIN, 'server') || null,
         sitemap_urls: locs.length,
+        robots_txt: robotsText.slice(0, 20000),
+        ai_crawlers_blocked: aiBlocked,
+        llms_txt_present: llms.status === 200 && llms.body.length > 100 && !/<html/i.test(llms.body),
         crawled_urls: crawled.length
       },
       note: 'AI crawler checks use the crawler user-agent only; real crawlers are also verified by IP, so a pass here means no user-agent based blocking.'

@@ -1,0 +1,28 @@
+# Northwind ERP
+
+> A meta description of the page that explains what visitors will find and why they should click through to learn more about it here.
+
+Based in Dubai, AE. Phone: +971 4 555 0100. Website: https://northwind-erp.com/
+
+## Services
+
+- [Heading 1](https://northwind-erp.com/services/)
+- [Heading 2](https://northwind-erp.com/services/erp-implementation/): A meta description of the page that explains what visitors will find and why they should click through to learn more about it here.
+- [Page 3](https://northwind-erp.com/services/odoo-erp/): A meta description of the page that explains what visitors will find and why they should click through to learn more about it here.
+- [One](https://northwind-erp.com/services/dynamics-365-business-central/): A meta description of the page that explains what visitors will find and why they should click through to learn more about it here.
+- [Heading 5](https://northwind-erp.com/services/data-migration/)
+
+## Guides and articles
+
+- [Heading 11](https://northwind-erp.com/blog/): A meta description of the page that explains what visitors will find and why they should click through to learn more about it here.
+- [Heading 13](https://northwind-erp.com/blog/odoo-vs-dynamics/)
+- [Heading 12](https://northwind-erp.com/blog/erp-implementation-cost-guide/): A meta description of the page that explains what visitors will find and why they should click through to learn more about it here.
+
+## Pages
+
+- [Heading 6](https://northwind-erp.com/industries/food-distribution/): A meta description of the page that explains what visitors will find and why they should click through to learn more about it here.
+
+## Company
+
+- [Heading 7](https://northwind-erp.com/about/): A meta description of the page that explains what visitors will find and why they should click through to learn more about it here.
+- [Heading 8](https://northwind-erp.com/contact/): Short desc

@@ -87,7 +87,7 @@
       },
       {
         "parameters": {
-          "content": "## SEO Agent — Publish to WordPress (optional)\nCalled by SEO Agent v4 after a page is finished when `CONFIG.wordpress_publish` is true **and** the request carries `wordpress_url` (API field; add a form field if needed). Creates a **draft** post through the WordPress REST API: title, slug, excerpt (meta description), HTML content with internal links, JSON-LD blocks, and Yoast / RankMath meta keys (`_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, `rank_math_title`, `rank_math_description`; the plugin must expose them to the REST API, otherwise WordPress ignores the `meta` object silently).\nCredential: **WordPress (SEO Agent)** (id SEOcredWordPress): site URL, username and an Application Password. The sub-workflow needs no activation.",
+          "content": "## SEO Agent — Publish to WordPress (optional)\nCalled by SEO Agent v4 after a page is finished when `CONFIG.wordpress_publish` is true **and** the request carries `wordpress_url` (API field; add a form field if needed). Creates a **draft** post through the WordPress REST API: title, slug, excerpt (meta description), HTML content with internal links, JSON-LD blocks, and Yoast / RankMath meta keys (`_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, `rank_math_title`, `rank_math_description`; the plugin must expose them to the REST API, otherwise WordPress ignores the `meta` object silently).\nCredential: **WordPress (SEO Agent)** (id SEOcredWordPress): site URL, username and an Application Password. The sub-workflow must be **published** (n8n 2.x refuses to execute unpublished sub-workflows).",
           "height": 240,
           "width": 820,
           "color": 7

@@ -22,13 +22,7 @@ const SKIP = [
 ];
 const isSkipped = (d) => SKIP.some(s => d === s || d.endsWith('.' + s));
 
-const cleanUrl = (u) => {
-  try {
-    const x = new URL(u);
-    ['srsltid', 'utm_source', 'utm_medium', 'utm_campaign', 'gclid', 'fbclid'].forEach(p => x.searchParams.delete(p));
-    return x.toString();
-  } catch (e) { return u; }
-};
+const cleanUrl = (u) => { const s = String(u || ''); const i = s.indexOf('?'); if (i < 0) return s; const rest = s.slice(i + 1); const hi = rest.indexOf('#'); const hash = hi >= 0 ? rest.slice(hi) : ''; const q = (hi >= 0 ? rest.slice(0, hi) : rest).split('&').filter(p => p && !/^(srsltid|utm_source|utm_medium|utm_campaign|gclid|fbclid)=/i.test(p)); return s.slice(0, i) + (q.length ? '?' + q.join('&') : '') + hash; };   // regex version: the n8n Code sandbox has no URL constructor
 
 const seen = new Set();
 const picked = [];

@@ -1,0 +1,420 @@
+{
+  "title": "E-Invoicing UAE FTA: Deadlines, Phases & ASP Guide 2026",
+  "h1": "E-Invoicing UAE FTA Guide: Find Your Phase, Deadline and Readiness Plan",
+  "slug": "e-invoicing-uae-fta",
+  "suggested_url": "https://techand.ai/e-invoicing-uae-fta/",
+  "meta_description": "E-invoicing UAE FTA guide: find your phase, ASP deadline and PINT-AE fields, then follow a 12-week plan. Book a free readiness check.",
+  "meta_description_length": 133,
+  "title_length": 55,
+  "primary_keyword": "e invoicing uae fta",
+  "secondary_keywords": [
+    "UAE e-invoicing requirements",
+    "UAE e-invoicing deadline",
+    "is e-invoicing mandatory in UAE",
+    "UAE e-invoicing 2026",
+    "list of ASP for e-invoicing UAE",
+    "Peppol PINT-AE UAE",
+    "e-invoicing UAE sample",
+    "e-invoicing UAE penalties",
+    "UAE accredited service provider e-invoicing"
+  ],
+  "page_type": "Guide",
+  "language": "English",
+  "country": "United Arab Emirates",
+  "domain": "techand.ai",
+  "word_count": 3182,
+  "content_score": 89,
+  "qa_summary": "Quality check passed",
+  "headings": [
+    {
+      "level": 2,
+      "text": "Is e-invoicing mandatory in the UAE?"
+    },
+    {
+      "level": 3,
+      "text": "Is a PDF invoice a valid e-invoice in the UAE?"
+    },
+    {
+      "level": 3,
+      "text": "The legislation behind the mandate"
+    },
+    {
+      "level": 2,
+      "text": "What is the deadline for e-invoicing in the UAE? Find your phase"
+    },
+    {
+      "level": 3,
+      "text": "UAE e-invoicing timeline at a glance"
+    },
+    {
+      "level": 3,
+      "text": "Businesses under [Price] million: your Phase 2 dates"
+    },
+    {
+      "level": 3,
+      "text": "How to work out which revenue figure counts"
+    },
+    {
+      "level": 2,
+      "text": "Who is eligible for e-invoicing, and who must comply?"
+    },
+    {
+      "level": 3,
+      "text": "VAT groups and multi-entity businesses"
+    },
+    {
+      "level": 3,
+      "text": "Free zone, non-resident and non-VAT-registered businesses"
+    },
+    {
+      "level": 3,
+      "text": "Overseas customers and B2C"
+    },
+    {
+      "level": 2,
+      "text": "How the 5-corner Peppol model works: what the FTA sees and what your buyer sees"
+    },
+    {
+      "level": 3,
+      "text": "Corner by corner: from your ERP to the FTA"
+    },
+    {
+      "level": 3,
+      "text": "What the FTA does not do for you"
+    },
+    {
+      "level": 2,
+      "text": "What are the requirements for an FTA invoice in the UAE?"
+    },
+    {
+      "level": 3,
+      "text": "Annotated sample: the fields in a PINT-AE e-invoice"
+    },
+    {
+      "level": 3,
+      "text": "Is there an FTA e-invoice template or PDF?"
+    },
+    {
+      "level": 3,
+      "text": "Credit notes, advance payments, withholding tax and retention (Version 1.1)"
+    },
+    {
+      "level": 2,
+      "text": "How to choose an Accredited Service Provider (ASP)"
+    },
+    {
+      "level": 3,
+      "text": "Do I need an Accredited Service Provider for UAE e-invoicing?"
+    },
+    {
+      "level": 3,
+      "text": "Where to find the official list of accredited ASPs"
+    },
+    {
+      "level": 3,
+      "text": "ASP selection scorecard"
+    },
+    {
+      "level": 3,
+      "text": "Questions to ask on every ASP call"
+    },
+    {
+      "level": 2,
+      "text": "Your 12-week UAE e-invoicing readiness plan"
+    },
+    {
+      "level": 3,
+      "text": "Weeks 1–4: scope, mapping and gap analysis"
+    },
+    {
+      "level": 3,
+      "text": "Weeks 5–8: master data and ASP appointment"
+    },
+    {
+      "level": 3,
+      "text": "Weeks 9–12: integration, testing and go-live"
+    },
+    {
+      "level": 3,
+      "text": "What changes in your month-end close"
+    },
+    {
+      "level": 2,
+      "text": "What are the penalties for not complying with UAE e-invoicing under the FTA?"
+    },
+    {
+      "level": 2,
+      "text": "Sources"
+    },
+    {
+      "level": 2,
+      "text": "Frequently Asked Questions"
+    },
+    {
+      "level": 2,
+      "text": "Book a free e-invoicing UAE FTA readiness check"
+    }
+  ],
+  "internal_links": [
+    {
+      "text": "complete guide to e-invoicing in the UAE",
+      "url": "https://techand.ai/e-invoicing-in-uae/"
+    },
+    {
+      "text": "Peppol e-invoicing software features every UAE CFO should check",
+      "url": "https://techand.ai/insights/top-peppol-e-invoicing-software-features-every-uae-cfo-must-look-for"
+    },
+    {
+      "text": "technical guide to upgrading your ERP for Peppol PINT-AE",
+      "url": "https://techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance-a-technical-integration-guide"
+    },
+    {
+      "text": "Business Central implementation in the UAE",
+      "url": "https://techand.ai/business-central-implementation-uae"
+    },
+    {
+      "text": "UAE e-invoicing penalties explained",
+      "url": "https://techand.ai/uae-e-invoicing-penalties/"
+    },
+    {
+      "text": "Get my free readiness check",
+      "url": "https://techand.ai/contact-us"
+    }
+  ],
+  "external_links": [
+    {
+      "text": "Hawksford",
+      "url": "https://www.hawksford.com/insights-and-guides/uae-e-invoicing"
+    },
+    {
+      "text": "GFLO",
+      "url": "https://gflolaw.com/en/uae-e-invoicing-2026-guide/"
+    },
+    {
+      "text": "ClearTax",
+      "url": "https://www.cleartax.com/ae/e-invoicing-uae"
+    },
+    {
+      "text": "VATupdate",
+      "url": "https://www.vatupdate.com/2026/06/09/uae-publishes-updated-electronic-invoicing-guidelines-version-1-1-june-2026/"
+    },
+    {
+      "text": "u.ae",
+      "url": "https://u.ae/en/information-and-services/business/important-digital-services/digital-invoicing"
+    },
+    {
+      "text": "tax.gov.ae",
+      "url": "https://tax.gov.ae/en/taxes/Vat/uae.einvoicing.aspx"
+    },
+    {
+      "text": "Tally",
+      "url": "https://tallysolutions.com/mena/uae-vat/uae-e-invoicing-timeline-2026-2027-complete-phase-by-phase-implementation-guide/?srsltid=AU7gw4XwYkwOSmZ8OnwEFd5peBCLGehBFxY4ROZEBOjW53X4jzCq3Z-E"
+    },
+    {
+      "text": "Hawksford",
+      "url": "https://www.hawksford.com/insights-and-guides/uae-e-invoicing"
+    },
+    {
+      "text": "ClearTax",
+      "url": "https://www.cleartax.com/ae/e-invoicing-uae"
+    },
+    {
+      "text": "GFLO",
+      "url": "https://gflolaw.com/en/uae-e-invoicing-2026-guide/"
+    },
+    {
+      "text": "GFLO",
+      "url": "https://gflolaw.com/en/uae-e-invoicing-2026-guide/"
+    },
+    {
+      "text": "PwC",
+      "url": "https://www.pwc.com/m1/en/tax/documents/2024/uae-e-invoicing-newsletter.pdf"
+    },
+    {
+      "text": "PwC",
+      "url": "https://www.pwc.com/m1/en/tax/documents/2024/uae-e-invoicing-newsletter.pdf"
+    },
+    {
+      "text": "GTAG",
+      "url": "https://www.gtag.ae/post/uae-e-invoicing-2026"
+    },
+    {
+      "text": "VATupdate",
+      "url": "https://www.vatupdate.com/2026/06/09/uae-publishes-updated-electronic-invoicing-guidelines-version-1-1-june-2026/"
+    },
+    {
+      "text": "VATupdate",
+      "url": "https://www.vatupdate.com/2026/06/09/uae-publishes-updated-electronic-invoicing-guidelines-version-1-1-june-2026/"
+    },
+    {
+      "text": "ClearTax",
+      "url": "https://www.cleartax.com/ae/e-invoicing-uae"
+    },
+    {
+      "text": "tax.gov.ae",
+      "url": "https://tax.gov.ae/en/taxes/Vat/uae.einvoicing.aspx"
+    },
+    {
+      "text": "tax.gov.ae",
+      "url": "https://tax.gov.ae/en/taxes/Vat/uae.einvoicing.aspx"
+    },
+    {
+      "text": "u.ae",
+      "url": "https://u.ae/en/information-and-services/business/important-digital-services/digital-invoicing"
+    },
+    {
+      "text": "Hawksford",
+      "url": "https://www.hawksford.com/insights-and-guides/uae-e-invoicing"
+    },
+    {
+      "text": "ClearTax",
+      "url": "https://www.cleartax.com/ae/e-invoicing-uae"
+    },
+    {
+      "text": "GFLO",
+      "url": "https://gflolaw.com/en/uae-e-invoicing-2026-guide/"
+    },
+    {
+      "text": "Tally",
+      "url": "https://tallysolutions.com/mena/uae-vat/uae-e-invoicing-timeline-2026-2027-complete-phase-by-phase-implementation-guide/?srsltid=AU7gw4XwYkwOSmZ8OnwEFd5peBCLGehBFxY4ROZEBOjW53X4jzCq3Z-E"
+    }
+  ],
+  "schema_blocks": [
+    {
+      "type": "Article",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "E-Invoicing UAE FTA Guide: Find Your Phase, Deadline and Readiness Plan",
+        "description": "E-invoicing UAE FTA guide: find your phase, ASP deadline and PINT-AE fields, then follow a 12-week plan. Book a free readiness check.",
+        "author": {
+          "@type": "Person",
+          "name": "[Author Name]",
+          "url": "[Author Page URL]"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "techand.ai",
+          "url": "https://techand.ai/"
+        },
+        "datePublished": "2026-10-02",
+        "dateModified": "2026-10-02",
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": "https://techand.ai/e-invoicing-uae-fta"
+        },
+        "keywords": "e invoicing uae fta, UAE e-invoicing deadline, UAE e-invoicing requirements, is e-invoicing mandatory in UAE, e-invoicing UAE 2026, accredited service provider UAE"
+      }
+    },
+    {
+      "type": "BreadcrumbList",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://techand.ai/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "E-Invoicing UAE FTA Guide: Find Your Phase, Deadline and Readiness Plan",
+            "item": "https://techand.ai/e-invoicing-uae-fta"
+          }
+        ]
+      }
+    },
+    {
+      "type": "FAQPage",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Is e-invoicing mandatory in the UAE?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, in phases, for B2B and B2G transactions. Voluntary adoption starts on 1 July 2026. Businesses with annual revenue of [Price] million or more must issue e-invoices from 1 January 2027, and all other businesses from 1 July 2027. B2C transactions are not yet in scope, and no B2C date has been published."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What is the deadline for e-invoicing in the UAE?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Businesses with annual revenue of [Price] million or more must appoint an ASP by 30 October 2026 and go live on 1 January 2027. Businesses below that threshold go live from 1 July 2027. Their ASP appointment deadline has not been confirmed in our sources, so plan to appoint well before go-live."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What are the requirements for an FTA invoice in the UAE?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The invoice must be structured XML in PINT-AE format, exchanged over Peppol through an accredited ASP, with tax data reported to the FTA. It must carry the mandatory fields: seller and buyer TRN or TIN, endpoint IDs, invoice number, date, type code, line items and a VAT breakdown. A PDF does not meet these requirements."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Who is eligible for e-invoicing?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Businesses carrying out B2B and B2G transactions in the UAE are in scope, including VAT groups. In a VAT group, each member needs its own ASP endpoint under the group TRN. Businesses with revenue of [Price] million or more go first, and others follow from 1 July 2027. B2C is not yet included in any phase."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Is a PDF or emailed invoice a valid e-invoice in the UAE?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. PDFs, Word files, scanned copies and emailed invoices are not valid e-invoices, even when they contain every field. The legal invoice is the PINT-AE XML file exchanged through an accredited ASP. You may send a readable copy alongside it for your customer's convenience, but that copy has no legal status."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Can I submit e-invoices directly to the FTA without an ASP?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "No. Under the 5-corner Peppol model, every e-invoice passes through an MoF-accredited ASP, which validates, converts and exchanges it and reports the tax data to the FTA. The FTA does not issue or host invoices for you. Your business remains responsible for the accuracy of the data your ERP sends."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How do I choose an Accredited Service Provider, and where is the list of accredited ASPs?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Use the official list published by the UAE Ministry of Finance and check status on the day you sign. Score each shortlisted provider on accreditation, ERP connector, VAT-group handling, validation, onboarding time, support and SLA, pricing model, and data residency. Treat missing accreditation proof or a \"PDF plus QR\" offer as grounds to disqualify."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What are the penalties for not issuing e-invoices in the UAE?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "The violations and penalty amounts are set in Cabinet Decision No. 106 of 2025 on administrative penalties under the electronic invoicing system. Read the decision text published by the Ministry of Finance before relying on any figure. Penalties fall on your business, not your ASP, so treat your deadlines as firm."
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "ladder": {
+    "ladder_id": "lad_mupia2l2c0tp",
+    "rung": 1,
+    "head_keyword": "e invoicing in uae"
+  },
+  "request_id": "cad_20261001_techand-ai_1",
+  "generated_at": "2026-10-02T06:51:27.963Z",
+  "publish_checklist": [
+    "Use \"title\" as the page <title> and \"h1\" as the main heading",
+    "Paste \"meta_description\" into the page or SEO settings",
+    "Keep the slug (URL) unless your CMS needs another",
+    "Keep the internal links in the article and add 2-3 links to this page from existing pages",
+    "Add the JSON-LD blocks to the page head or body",
+    "Add your own images with descriptive alt text",
+    "Then report the published URL (\"I published a page\" in the form, or API mode \"published\") so indexing and positions are tracked"
+  ]
+}

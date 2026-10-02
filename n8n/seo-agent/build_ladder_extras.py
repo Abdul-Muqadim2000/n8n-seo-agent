@@ -14,7 +14,7 @@ BASE_URL = os.environ.get('N8N_PUBLIC_URL', 'http://localhost:5678').rstrip('/')
 FORM_URL, API_URL = BASE_URL + '/form/' + FORM_PATH, BASE_URL + '/webhook/seo-keyword-check'
 SMTP = {'smtp': {'id': 'SEOcredSmtpGmail', 'name': 'Gmail SMTP (SEO Agent)'}}
 DFS = {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}}
-SENDER = 'Dev SEO <kinnngahmed@gmail.com>'
+from env_settings import SENDER, BRAND, OPS_EMAIL, SA_EMAIL   # from n8n/.env at build time (run apply_env.py after editing .env)
 
 def wf(wid, name, nodes, conns, settings=None):
     return {'id': wid, 'name': name, 'active': False, 'settings': {'executionOrder': 'v1', 'errorWorkflow': 'SEOagentErrHandl', 'executionTimeout': 1800, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all', **(settings or {})}, 'tags': [], 'nodes': nodes, 'connections': conns}
@@ -29,6 +29,8 @@ def link(conns, a, b, out=0):
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 def write(wfobj, fname):
+    for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
+        if _n['type'] == 'n8n-nodes-base.emailSend': _n.update({'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
     names = {n['name'] for n in wfobj['nodes']}
     for src, outs in wfobj['connections'].items():
         assert src in names, src
@@ -90,7 +92,7 @@ return [{ json: { ok, post_id: r.id || null, link: r.link || null, status: r.sta
   error: ok ? null : String((r.error && (r.error.message || r.error)) || r.message || r.code || 'no post id returned').slice(0, 300), keyword: src.keyword, ladder_id: src.ladder_id, request_id: src.request_id } }];""", [720, 0]))
 N.append(sticky('Note', """## SEO Agent — Publish to WordPress (optional)
 Called by SEO Agent v4 after a page is finished when `CONFIG.wordpress_publish` is true **and** the request carries `wordpress_url` (API field; add a form field if needed). Creates a **draft** post through the WordPress REST API: title, slug, excerpt (meta description), HTML content with internal links, JSON-LD blocks, and Yoast / RankMath meta keys (`_yoast_wpseo_title`, `_yoast_wpseo_metadesc`, `rank_math_title`, `rank_math_description`; the plugin must expose them to the REST API, otherwise WordPress ignores the `meta` object silently).
-Credential: **WordPress (SEO Agent)** (id SEOcredWordPress): site URL, username and an Application Password. The sub-workflow needs no activation.""", [-40, -300], 820, 240, 7))
+Credential: **WordPress (SEO Agent)** (id SEOcredWordPress): site URL, username and an Application Password. The sub-workflow must be **published** (n8n 2.x refuses to execute unpublished sub-workflows).""", [-40, -300], 820, 240, 7))
 for a, b in [('From Content Run', 'Build WP Draft'), ('Build WP Draft', 'Create WP Draft'), ('Create WP Draft', 'WP Result')]: link(C, a, b)
 write(wf('SEOagentWordPres', 'SEO Agent — Publish to WordPress', N, C), 'SEO_Agent_Publish_WordPress.json')
 

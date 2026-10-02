@@ -1,0 +1,2453 @@
+[
+  {
+    "id": "SEOagentSiteAdm1",
+    "name": "SEO Agent — Site Admin",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 1800,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "inputSource": "passthrough"
+        },
+        "id": "be293a7e-e808-512f-94f5-cabbf2e2fd12",
+        "name": "Admin Run",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1.2,
+        "position": [
+          0,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_cadence",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "pages_per_week",
+                "type": "number"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "90ae8844-744e-5dad-8650-100722ea7ee6",
+        "name": "Ensure Cadence Table (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          160,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_content_log",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "page_type",
+                "type": "string"
+              },
+              {
+                "name": "existing_page_url",
+                "type": "string"
+              },
+              {
+                "name": "rung",
+                "type": "number"
+              },
+              {
+                "name": "ladder_id",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "started_at",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "published_url",
+                "type": "string"
+              },
+              {
+                "name": "published_at",
+                "type": "string"
+              },
+              {
+                "name": "week",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "00487899-a7eb-5011-ae2f-22b3c09be764",
+        "name": "Ensure Log Table (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          320,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_sites",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "gsc_property",
+                "type": "string"
+              },
+              {
+                "name": "ga4_property_id",
+                "type": "string"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "location_code",
+                "type": "number"
+              },
+              {
+                "name": "language_code",
+                "type": "string"
+              },
+              {
+                "name": "email",
+                "type": "string"
+              },
+              {
+                "name": "callback_url",
+                "type": "string"
+              },
+              {
+                "name": "keywords",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "last_run_at",
+                "type": "string"
+              },
+              {
+                "name": "last_status",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "2a235e64-5d96-51ca-a939-b39b6be9fa65",
+        "name": "Ensure Sites Table (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          480,
+          -160
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_monitors",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "ai_visibility",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_engines",
+                "type": "string"
+              },
+              {
+                "name": "ai_prompts_max",
+                "type": "number"
+              },
+              {
+                "name": "backlinks",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_monthly",
+                "type": "boolean"
+              },
+              {
+                "name": "audit_pages",
+                "type": "number"
+              },
+              {
+                "name": "audit_js",
+                "type": "boolean"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "brand_names",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "b4561609-14b8-552c-ab16-472a2b7a4d56",
+        "name": "Ensure Monitors Table (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          480,
+          -320
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_link_prospects",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "prospect_domain",
+                "type": "string"
+              },
+              {
+                "name": "type",
+                "type": "string"
+              },
+              {
+                "name": "rank",
+                "type": "number"
+              },
+              {
+                "name": "spam_score",
+                "type": "number"
+              },
+              {
+                "name": "detail",
+                "type": "string"
+              },
+              {
+                "name": "source_url",
+                "type": "string"
+              },
+              {
+                "name": "target_url",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "first_seen",
+                "type": "string"
+              },
+              {
+                "name": "last_seen",
+                "type": "string"
+              },
+              {
+                "name": "won_at",
+                "type": "string"
+              },
+              {
+                "name": "outreach_subject",
+                "type": "string"
+              },
+              {
+                "name": "outreach_body",
+                "type": "string"
+              },
+              {
+                "name": "note",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "ed420900-11ec-5c20-a80b-2acf5442c5a4",
+        "name": "Ensure Prospects Table (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          480,
+          -480
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_ai_prompts",
+          "columns": {
+            "column": [
+              {
+                "name": "prompt_id",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "prompt",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "topic",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "875707dd-aa1f-5225-a6ab-2a68a13a9e5f",
+        "name": "Ensure AI Prompts Table (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          480,
+          -640
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)\n// | prospect (prospect_domain + status contacted / won / rejected / ignored / new, note) | ai_prompts (add custom questions, switch some off) — by site_id or domain.\n// The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).\nlet t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }\nif (t.body && typeof t.body === 'object') t = { ...t, ...t.body };\nconst action = String(t.action || '').toLowerCase();\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');\nconst site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect or ai_prompts');\nif (!site_id) throw new Error('site_id or domain is required');\nconst pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));\nif (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');\nconst keyword = String(t.keyword || '').trim().toLowerCase().replace(/\\s+/g, ' ');\nif (action === 'unpublish' && !keyword) throw new Error('keyword is required for action unpublish');\nconst prospect_domain = normD(t.prospect_domain);\nconst pstatus = String(t.status || '').toLowerCase();\nif (action === 'prospect' && !prospect_domain) throw new Error('prospect_domain is required for action prospect');\nif (action === 'prospect' && pstatus && !['new', 'contacted', 'won', 'rejected', 'ignored'].includes(pstatus)) throw new Error('status must be new, contacted, won, rejected or ignored');\nconst add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? t.prompts : [])).map(x => String(typeof x === 'object' ? x.prompt : x).trim()).filter(x => x.length >= 10).slice(0, 15);\nconst off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean);\nif (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length) throw new Error('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');\nconst monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});\nreturn [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, monitors, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];\n"
+        },
+        "id": "e044e561-ffd1-5e5e-8992-1e3228ee45b4",
+        "name": "Admin Action",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          640,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_monitors"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "57b9f658-f3dd-5945-a031-4f117e94b426",
+        "name": "Load Monitors (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          760,
+          400
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Site Admin \"monitors\": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines\n// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode), ai_prompts_max (3-15), backlinks, audit_monthly, audit_pages (50-1000), audit_js,\n// competitors (domains), brand_names.\nconst a = $('Admin Action').first().json; const m = a.monitors || {};\nlet old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}\nconst has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';\nconst b = (k, dflt) => has(k) ? !/^(false|0|no|off)$/i.test(String(m[k])) : (old[k] === undefined || old[k] === null || old[k] === '' ? dflt : !(old[k] === false || old[k] === 'false'));\nconst list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst ENG = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];\nconst __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_visibility: b('ai_visibility', true), ai_engines: has('ai_engines') ? list(m.ai_engines).map(e => e.toLowerCase()).filter(e => ENG.includes(e)).join(', ') : String(old.ai_engines || ''),\n  ai_prompts_max: has('ai_prompts_max') ? Math.min(15, Math.max(3, parseInt(m.ai_prompts_max, 10) || 8)) : (Number(old.ai_prompts_max) || 8), backlinks: b('backlinks', true), audit_monthly: b('audit_monthly', true),\n  audit_pages: has('audit_pages') ? Math.min(1000, Math.max(50, parseInt(m.audit_pages, 10) || 200)) : (Number(old.audit_pages) || 200), audit_js: b('audit_js', false),\n  competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),\n  updated_at: a.updated_at, request_id: a.request_id || '' };\nif (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit\nreturn [{ json: __row }];\n"
+        },
+        "id": "80266f01-ece0-5661-af44-14a2c6591616",
+        "name": "Monitor Row (Admin)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1000,
+          400
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_monitors"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_visibility",
+                "displayName": "ai_visibility",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_engines",
+                "displayName": "ai_engines",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_prompts_max",
+                "displayName": "ai_prompts_max",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "backlinks",
+                "displayName": "backlinks",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "audit_monthly",
+                "displayName": "audit_monthly",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "audit_pages",
+                "displayName": "audit_pages",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "audit_js",
+                "displayName": "audit_js",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "competitors",
+                "displayName": "competitors",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "brand_names",
+                "displayName": "brand_names",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "c6be570b-6865-57d8-a1ad-66d2f6cc89b4",
+        "name": "Set Monitors",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1240,
+          400
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_link_prospects"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "1dc69369-820a-509f-ac3b-5707e41ad943",
+        "name": "Load Link Prospects (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          760,
+          560
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Site Admin \"prospect\": sets the status (and note) of a link prospect for the site — every type of that domain unless `type` is given.\n// Rows keep all other fields (exact seo_link_prospects columns). Status won also stamps won_at.\nconst a = $('Admin Action').first().json;\nlet rows = []; try { rows = $('Load Link Prospects (Admin)').all().map(i => i.json).filter(x => x && x.site_id === a.site_id && x.prospect_domain === a.prospect_domain && (!a.prospect_type || x.type === a.prospect_type)); } catch (e) {}\nconst COLS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note'];\nif (!rows.length) rows = [{ site_id: a.site_id, domain: a.domain, prospect_domain: a.prospect_domain, type: a.prospect_type || 'manual', rank: 0, spam_score: 0, detail: 'added by hand', source_url: '', target_url: '', status: 'new', first_seen: a.updated_at, last_seen: a.updated_at, won_at: '', outreach_subject: '', outreach_body: '', note: '' }];\nreturn rows.map(r => { const o = {}; for (const c of COLS) o[c] = r[c] == null ? (['rank', 'spam_score'].includes(c) ? 0 : '') : r[c];\n  if (a.prospect_status) { o.status = a.prospect_status; if (a.prospect_status === 'won' && !o.won_at) o.won_at = a.updated_at; }\n  if (a.note !== null && a.note !== undefined) o.note = a.note; return { json: o }; });\n"
+        },
+        "id": "ed2cd03b-6ab4-5361-b3ae-ba6d6604b5c4",
+        "name": "Prospect Rows (Admin)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1000,
+          560
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_link_prospects"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              },
+              {
+                "keyName": "prospect_domain",
+                "condition": "eq",
+                "keyValue": "={{ $json.prospect_domain }}"
+              },
+              {
+                "keyName": "type",
+                "condition": "eq",
+                "keyValue": "={{ $json.type }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prospect_domain",
+                "displayName": "prospect_domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "type",
+                "displayName": "type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rank",
+                "displayName": "rank",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "spam_score",
+                "displayName": "spam_score",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "detail",
+                "displayName": "detail",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source_url",
+                "displayName": "source_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "target_url",
+                "displayName": "target_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "first_seen",
+                "displayName": "first_seen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_seen",
+                "displayName": "last_seen",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "won_at",
+                "displayName": "won_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "outreach_subject",
+                "displayName": "outreach_subject",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "outreach_body",
+                "displayName": "outreach_body",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "note",
+                "displayName": "note",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "5edcb620-5285-5af9-a51f-f0f7ec84a97c",
+        "name": "Set Prospects",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1240,
+          560
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_prompts"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "91b5a83b-81d4-5685-ae0b-62d43adc0822",
+        "name": "Load AI Prompts (Admin)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          760,
+          720
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Site Admin \"ai_prompts\": adds custom buyer questions (source custom, tracked weekly before the automatic ones) and switches questions off\n// (by prompt id or exact text). Exact seo_ai_prompts columns; upsert by prompt_id.\nconst a = $('Admin Action').first().json;\nlet rows = []; try { rows = $('Load AI Prompts (Admin)').all().map(i => i.json).filter(x => x && x.site_id === a.site_id); } catch (e) {}\nconst hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };\nconst norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst out = [];\nfor (const q of a.add_prompts) { const id = 'p_' + hash(a.site_id + '|' + norm(q)); const old = rows.find(r => r.prompt_id === id);\n  out.push({ prompt_id: id, site_id: a.site_id, domain: a.domain || (old || {}).domain || '', prompt: q, kind: 'custom', topic: (old || {}).topic || '', keyword: (old || {}).keyword || norm(q).split(' ').slice(0, 5).join(' '), source: 'custom', status: 'active', created_at: (old || {}).created_at || a.updated_at }); }\nfor (const x of a.off_prompts) for (const r of rows.filter(r => r.prompt_id === x || norm(r.prompt) === norm(x))) out.push({ prompt_id: r.prompt_id, site_id: r.site_id, domain: r.domain, prompt: r.prompt, kind: r.kind, topic: r.topic, keyword: r.keyword, source: r.source, status: 'off', created_at: r.created_at });\nreturn out.length ? out.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "418dabbe-34a8-5469-b1d8-5adfa9f1cc4b",
+        "name": "AI Prompt Rows (Admin)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1000,
+          720
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_prompts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "prompt_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.prompt_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "prompt_id",
+                "displayName": "prompt_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prompt",
+                "displayName": "prompt",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "topic",
+                "displayName": "topic",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "0da4d9a2-a69b-5d12-9af1-34a4b8c6e774",
+        "name": "Set AI Prompts",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1240,
+          720
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "00925555-a64d-5a48-ab6d-587ffff43278",
+                      "leftValue": "={{ $json.action === 'delete' }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "delete"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "6f0e03f0-9128-5d26-b78f-3b15a6964755",
+                      "leftValue": "={{ $json.action === 'pause' || $json.action === 'resume' }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "status"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "35aad49e-da9e-5f29-803c-2df8588adf97",
+                      "leftValue": "={{ $json.action === 'cadence' }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "cadence"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "5a68a353-4137-51fb-9d7b-b01dc5045998",
+                      "leftValue": "={{ $json.action === 'unpublish' }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "unpublish"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "6541f4d4-7ece-55b0-95b9-48d0155e4cab",
+                      "leftValue": "={{ $json.action === 'monitors' }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "monitors"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "50648f37-6a49-559b-b865-06830d8b25e1",
+                      "leftValue": "={{ $json.action === 'prospect' }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "prospect"
+              },
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "loose",
+                    "version": 3
+                  },
+                  "conditions": [
+                    {
+                      "id": "7fc1ab66-62f8-5c56-854d-f8b0815f81cb",
+                      "leftValue": "={{ $json.action === 'ai_prompts' }}",
+                      "rightValue": "",
+                      "operator": {
+                        "type": "boolean",
+                        "operation": "true",
+                        "singleValue": true
+                      }
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "ai_prompts"
+              }
+            ]
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "5e17d801-52c1-55a2-935f-07ddab620367",
+        "name": "Admin Route",
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.4,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "deleteRows",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "37675b3c-4036-5276-93b9-33cd8e49c9cb",
+        "name": "Delete Site",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          760,
+          -240
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "={{ $json.status }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "gsc_property",
+                "displayName": "gsc_property",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ga4_property_id",
+                "displayName": "ga4_property_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "country",
+                "displayName": "country",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "location_code",
+                "displayName": "location_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "language_code",
+                "displayName": "language_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "callback_url",
+                "displayName": "callback_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keywords",
+                "displayName": "keywords",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_run_at",
+                "displayName": "last_run_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_status",
+                "displayName": "last_status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "0e0d809a-b17f-5fc3-b115-8a5ca482906d",
+        "name": "Set Site Status",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          760,
+          -80
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// seo_cadence row for the admin action \"cadence\" (upserted by site_id).\nconst a = $('Admin Action').first().json;\nreturn [{ json: { site_id: a.site_id, domain: a.domain, pages_per_week: a.pages_per_week, status: a.cadence_status, updated_at: a.updated_at, request_id: a.request_id } }];\n"
+        },
+        "id": "4eee5815-bea8-571a-b09c-8ff7ed36069a",
+        "name": "Cadence Row (Admin)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          760,
+          80
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cadence"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "pages_per_week",
+                "displayName": "pages_per_week",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "6de0459b-a616-53c4-bae8-daef3119099d",
+        "name": "Set Cadence",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1000,
+          80
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_content_log"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              },
+              {
+                "keyName": "keyword",
+                "condition": "eq",
+                "keyValue": "={{ $json.keyword }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "started",
+              "published_url": "",
+              "published_at": ""
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_type",
+                "displayName": "page_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "existing_page_url",
+                "displayName": "existing_page_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rung",
+                "displayName": "rung",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ladder_id",
+                "displayName": "ladder_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "started_at",
+                "displayName": "started_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "published_url",
+                "displayName": "published_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "published_at",
+                "displayName": "published_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "week",
+                "displayName": "week",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "96745f96-30cc-58a5-9d3c-da52aa0aa7e0",
+        "name": "Unpublish Log",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          760,
+          240
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ladders"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "domain",
+                "condition": "eq",
+                "keyValue": "={{ $('Admin Action').first().json.domain }}"
+              },
+              {
+                "keyName": "keyword",
+                "condition": "eq",
+                "keyValue": "={{ $('Admin Action').first().json.keyword }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "writing",
+              "page_exists": "false"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "ladder_id",
+                "displayName": "ladder_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "head_keyword",
+                "displayName": "head_keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rung",
+                "displayName": "rung",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_no",
+                "displayName": "page_no",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "supporting",
+                "displayName": "supporting",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_type",
+                "displayName": "page_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "target_url",
+                "displayName": "target_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_exists",
+                "displayName": "page_exists",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "months",
+                "displayName": "months",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "start_date",
+                "displayName": "start_date",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "country",
+                "displayName": "country",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "location_code",
+                "displayName": "location_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "language_code",
+                "displayName": "language_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "callback_url",
+                "displayName": "callback_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "dcbce07f-b2ad-5fbd-ad77-61c5356aab59",
+        "name": "Unpublish Ladder",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1000,
+          240
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Rows affected by the admin action (0 = no site / row with that id or keyword).\nconst a = $('Admin Action').first().json; const rows = $input.all().map(i => i.json).filter(r => r && typeof r === 'object');\nconst err = rows.find(r => r.error);\nreturn [{ json: { ...a, affected: rows.filter(r => r.site_id || r.ladder_id).length, error: err ? String((err.error.message || err.error.description || err.error)).slice(0, 200) : null } }];\n"
+        },
+        "id": "cd1a0cd7-1588-5380-b9ec-7877364f511d",
+        "name": "Admin Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Site Admin\nManages a tracked site without the n8n UI. Body: `{ action, site_id | domain, ... }` through the Test Runner (`workflow: SEOagentSiteAdm1`) or an Execute Workflow node:\n`pause` / `resume` set `status` in `seo_sites` (the weekly runs skip paused sites; on-demand runs still work) · `delete` removes the site row (history stays) · `cadence` + `pages_per_week` (0-3) sets the Content Cadence for the site (`seo_cadence`) · `unpublish` + `keyword` reverts a published page to \"started\" (content log + ladder row) · `monitors` (v4.5) sets the growth monitors (`ai_visibility`, `ai_engines`, `ai_prompts_max`, `backlinks`, `audit_monthly`, `audit_pages`, `audit_js`, `competitors`, `brand_names`; given fields replace, others kept) · `prospect` + `prospect_domain` + `status` (new / contacted / won / rejected / ignored) and/or `note` updates the link-prospect pipeline · `ai_prompts` + `add` (questions) / `remove` (prompt ids or texts) manages the tracked AI questions.\n**Must be published** (n8n 2.x refuses to execute an unpublished sub-workflow: live finding 2026-10-02).",
+          "height": 240,
+          "width": 900,
+          "color": 7
+        },
+        "id": "b29e0ebf-1db1-5344-a84b-4f1a99c64291",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -520
+        ]
+      }
+    ],
+    "connections": {
+      "Admin Run": {
+        "main": [
+          [
+            {
+              "node": "Ensure Cadence Table (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Cadence Table (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Log Table (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Log Table (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Sites Table (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Sites Table (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Monitors Table (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Monitors Table (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Prospects Table (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Prospects Table (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Ensure AI Prompts Table (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure AI Prompts Table (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Admin Action",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Admin Action": {
+        "main": [
+          [
+            {
+              "node": "Admin Route",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Delete Site": {
+        "main": [
+          [
+            {
+              "node": "Admin Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set Site Status": {
+        "main": [
+          [
+            {
+              "node": "Admin Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Cadence Row (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Set Cadence",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set Cadence": {
+        "main": [
+          [
+            {
+              "node": "Admin Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Unpublish Log": {
+        "main": [
+          [
+            {
+              "node": "Unpublish Ladder",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Unpublish Ladder": {
+        "main": [
+          [
+            {
+              "node": "Admin Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Admin Route": {
+        "main": [
+          [
+            {
+              "node": "Delete Site",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Set Site Status",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Cadence Row (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Unpublish Log",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Load Monitors (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Load Link Prospects (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Load AI Prompts (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Monitors (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Monitor Row (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Monitor Row (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Set Monitors",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set Monitors": {
+        "main": [
+          [
+            {
+              "node": "Admin Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Link Prospects (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Prospect Rows (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prospect Rows (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Set Prospects",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set Prospects": {
+        "main": [
+          [
+            {
+              "node": "Admin Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load AI Prompts (Admin)": {
+        "main": [
+          [
+            {
+              "node": "AI Prompt Rows (Admin)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Prompt Rows (Admin)": {
+        "main": [
+          [
+            {
+              "node": "Set AI Prompts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Set AI Prompts": {
+        "main": [
+          [
+            {
+              "node": "Admin Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

@@ -1,0 +1,430 @@
+{
+  "title": "ERP Implementation Services in the UAE | Northwind ERP",
+  "h1": "ERP Implementation Services for UAE Distributors",
+  "slug": "erp-implementation-services",
+  "suggested_url": "https://northwind-erp.com/erp-implementation-services/",
+  "meta_description": "Plan, migrate and go live with ERP implementation services built for UAE distributors. Fixed scope, certified consultants. Get a quote today.",
+  "meta_description_length": 141,
+  "title_length": 54,
+  "primary_keyword": "erp implementation services",
+  "secondary_keywords": [
+    "erp implementation partner uae",
+    "erp implementation cost uae",
+    "odoo implementation dubai"
+  ],
+  "page_type": "Service Page",
+  "language": "English",
+  "country": "United Arab Emirates",
+  "domain": "northwind-erp.com",
+  "word_count": 2074,
+  "content_score": 73,
+  "qa_summary": "Quality check: 6 item(s) to review",
+  "headings": [
+    {
+      "level": 2,
+      "text": "What Are ERP Implementation Services?"
+    },
+    {
+      "level": 2,
+      "text": "How Much Does ERP Implementation Cost in the UAE?"
+    },
+    {
+      "level": 2,
+      "text": "Our Implementation Methodology"
+    },
+    {
+      "level": 2,
+      "text": "Odoo vs Dynamics 365 for Distribution"
+    },
+    {
+      "level": 2,
+      "text": "Data Migration Checklist for Distributors"
+    },
+    {
+      "level": 2,
+      "text": "Why Choose Northwind ERP"
+    },
+    {
+      "level": 2,
+      "text": "Frequently Asked Questions"
+    },
+    {
+      "level": 2,
+      "text": "Book Your Free Scoping Call"
+    }
+  ],
+  "internal_links": [
+    {
+      "text": "Odoo ERP services",
+      "url": "https://northwind-erp.com/services/odoo-erp/"
+    },
+    {
+      "text": "data migration",
+      "url": "https://northwind-erp.com/services/data-migration/"
+    },
+    {
+      "text": "Contact us",
+      "url": "https://northwind-erp.com/contact/"
+    }
+  ],
+  "external_links": [
+    {
+      "text": "Gartner",
+      "url": "https://www.gartner.com/en/erp-survey"
+    },
+    {
+      "text": "this guide",
+      "url": "https://www.gartner.com/erp"
+    }
+  ],
+  "schema_blocks": [
+    {
+      "type": "Article",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "ERP Implementation Services for UAE Distributors",
+        "description": "Plan, migrate and go live with ERP implementation services built for UAE distributors. Fixed scope, certified consultants. Get a quote today.",
+        "author": {
+          "@type": "Person",
+          "@id": "https://northwind-erp.com/#author-sara-khan",
+          "name": "Sara Khan",
+          "url": "https://northwind-erp.com/team/sara-khan/"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://northwind-erp.com/#organization",
+          "name": "Northwind ERP",
+          "url": "https://northwind-erp.com/",
+          "logo": "https://northwind-erp.com/logo.png"
+        },
+        "datePublished": "2026-10-02",
+        "dateModified": "2026-10-02",
+        "mainEntityOfPage": {
+          "@type": "WebPage",
+          "@id": "https://northwind-erp.com/services/erp-implementation/"
+        },
+        "keywords": "erp implementation services, erp implementation partner uae, erp implementation cost, odoo implementation"
+      }
+    },
+    {
+      "type": "Person",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "Person",
+        "@id": "https://northwind-erp.com/#author-sara-khan",
+        "name": "Sara Khan",
+        "url": "https://northwind-erp.com/team/sara-khan/",
+        "jobTitle": "Head of ERP Delivery",
+        "description": "Sara leads ERP delivery at Northwind ERP and has moved 40 distributors off spreadsheets since 2014. ACCA; led 40 Odoo and Business Central rollouts",
+        "image": "https://northwind-erp.com/images/author-sara-khan.webp",
+        "sameAs": [
+          "https://www.linkedin.com/in/sarakhan/"
+        ],
+        "knowsAbout": [
+          "ERP implementation",
+          "UAE VAT"
+        ],
+        "worksFor": {
+          "@id": "https://northwind-erp.com/#organization",
+          "name": "Northwind ERP"
+        }
+      }
+    },
+    {
+      "type": "WebPage",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "@id": "https://northwind-erp.com/services/erp-implementation/",
+        "url": "https://northwind-erp.com/services/erp-implementation/",
+        "name": "ERP Implementation Services for UAE Distributors",
+        "reviewedBy": {
+          "@type": "Person",
+          "name": "Omar Haddad",
+          "jobTitle": "Chartered Accountant (ICAEW)",
+          "url": "https://www.linkedin.com/in/omarhaddad/"
+        },
+        "lastReviewed": "2026-10-02"
+      }
+    },
+    {
+      "type": "ItemList",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": "ERP Implementation Services for UAE Distributors: guides in this series",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Erp data migration checklist",
+            "url": "https://northwind-erp.com/erp-data-migration-checklist/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Erp implementation cost uae",
+            "url": "https://northwind-erp.com/erp-implementation-cost-uae/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 3,
+            "name": "Odoo vs business central",
+            "url": "https://northwind-erp.com/odoo-vs-business-central/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 4,
+            "name": "Erp go-live plan",
+            "url": "https://northwind-erp.com/erp-go-live-plan/"
+          }
+        ]
+      }
+    },
+    {
+      "type": "BreadcrumbList",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Home",
+            "item": "https://northwind-erp.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "ERP Implementation Services for UAE Distributors",
+            "item": "https://northwind-erp.com/services/erp-implementation/"
+          }
+        ]
+      }
+    },
+    {
+      "type": "FAQPage",
+      "json": {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "How much does ERP implementation cost in the UAE?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "How long does an ERP implementation take?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What are the phases of ERP implementation?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do you migrate historical data?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which ERP is best for distributors?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What support do you offer after go-live?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "integration budget planning reporting implementation finance workflow business inventory vendor system migration module process. training cloud data support timeline team integration budget planning reporting implementation finance workflow business. inventory vendor system migration module process training cloud data support timeline team integration budget. planning reporting implementation finance workflow business inventory vendor system migration"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "images": [
+    {
+      "slot": 1,
+      "purpose": "hero",
+      "placement": "hero",
+      "subject": "Warehouse team using a tablet ERP in a UAE distribution centre",
+      "alt_text": "ERP implementation for a UAE distributor: warehouse team checking stock on a tablet",
+      "caption": "",
+      "filename": "erp-implementation-services-uae-hero.webp",
+      "path": "images/erp-implementation-services-uae-hero.webp",
+      "width": 1200,
+      "height": 675,
+      "max_kb": 200
+    },
+    {
+      "slot": 2,
+      "purpose": "diagram",
+      "placement": "How the implementation works",
+      "subject": "Four-phase timeline: discovery, configuration, data migration, go-live",
+      "alt_text": "ERP implementation phases from discovery to go-live",
+      "caption": "The four phases of a fixed-scope ERP implementation",
+      "filename": "erp-implementation-phases.webp",
+      "path": "images/erp-implementation-phases.webp",
+      "width": 1000,
+      "height": 600,
+      "max_kb": 150
+    },
+    {
+      "slot": 3,
+      "purpose": "chart",
+      "placement": "What it costs",
+      "subject": "Cost split between licences and services",
+      "alt_text": "ERP implementation cost breakdown: licences versus services",
+      "caption": "",
+      "filename": "erp-implementation-cost-breakdown.webp",
+      "path": "images/erp-implementation-cost-breakdown.webp",
+      "width": 1000,
+      "height": 600,
+      "max_kb": 150
+    }
+  ],
+  "featured_image": {
+    "slot": 1,
+    "purpose": "hero",
+    "placement": "hero",
+    "subject": "Warehouse team using a tablet ERP in a UAE distribution centre",
+    "alt_text": "ERP implementation for a UAE distributor: warehouse team checking stock on a tablet",
+    "caption": "",
+    "filename": "erp-implementation-services-uae-hero.webp",
+    "path": "images/erp-implementation-services-uae-hero.webp",
+    "width": 1200,
+    "height": 675,
+    "max_kb": 200
+  },
+  "open_graph": {
+    "og:title": "ERP Implementation Services in the UAE | Northwind ERP",
+    "og:description": "Plan, migrate and go live with ERP implementation services built for UAE distributors. Fixed scope, certified consultants. Get a quote today.",
+    "og:image": "images/erp-implementation-services-uae-hero.webp",
+    "og:image:width": 1200,
+    "og:image:height": 630,
+    "twitter:card": "summary_large_image"
+  },
+  "ladder": {
+    "ladder_id": "lad_hub",
+    "rung": 4,
+    "head_keyword": "erp implementation services"
+  },
+  "request_id": null,
+  "generated_at": "2026-10-02T11:23:17.006Z",
+  "page_role": "hub",
+  "article_like": true,
+  "author": {
+    "name": "Sara Khan",
+    "job_title": "Head of ERP Delivery",
+    "bio": "Sara leads ERP delivery at Northwind ERP and has moved 40 distributors off spreadsheets since 2014.",
+    "credentials": "ACCA; led 40 Odoo and Business Central rollouts",
+    "url": "https://northwind-erp.com/team/sara-khan/",
+    "image_url": "https://northwind-erp.com/images/author-sara-khan.webp",
+    "same_as": [
+      "https://www.linkedin.com/in/sarakhan/"
+    ],
+    "knows_about": [
+      "ERP implementation",
+      "UAE VAT"
+    ],
+    "placeholder": false
+  },
+  "reviewer": {
+    "name": "Omar Haddad",
+    "job_title": "Chartered Accountant (ICAEW)",
+    "url": "https://www.linkedin.com/in/omarhaddad/"
+  },
+  "updated": "2026-10-02",
+  "table_of_contents": [
+    {
+      "text": "What Are ERP Implementation Services?",
+      "anchor": "#what-are-erp-implementation-services"
+    },
+    {
+      "text": "How Much Does ERP Implementation Cost in the UAE?",
+      "anchor": "#how-much-does-erp-implementation-cost-in-the-uae"
+    },
+    {
+      "text": "Our Implementation Methodology",
+      "anchor": "#our-implementation-methodology"
+    },
+    {
+      "text": "Odoo vs Dynamics 365 for Distribution",
+      "anchor": "#odoo-vs-dynamics-365-for-distribution"
+    },
+    {
+      "text": "Data Migration Checklist for Distributors",
+      "anchor": "#data-migration-checklist-for-distributors"
+    },
+    {
+      "text": "Why Choose Northwind ERP",
+      "anchor": "#why-choose-northwind-erp"
+    }
+  ],
+  "hub": {
+    "cluster_pages": [
+      {
+        "url": "https://northwind-erp.com/erp-data-migration-checklist/",
+        "keyword": "erp data migration checklist",
+        "role": "rung 1",
+        "planned": false
+      },
+      {
+        "url": "https://northwind-erp.com/erp-implementation-cost-uae/",
+        "keyword": "erp implementation cost uae",
+        "role": "rung 1",
+        "planned": false
+      },
+      {
+        "url": "https://northwind-erp.com/odoo-vs-business-central/",
+        "keyword": "odoo vs business central",
+        "role": "rung 2",
+        "planned": true
+      },
+      {
+        "url": "https://northwind-erp.com/erp-go-live-plan/",
+        "keyword": "erp go-live plan",
+        "role": "rung 2",
+        "planned": true
+      }
+    ],
+    "planned": 2
+  },
+  "case_study": null,
+  "local": null,
+  "video": null,
+  "eeat_notes": [
+    "2 cluster page(s) are planned and not live yet: publish them before the hub, or drop their links until they are."
+  ],
+  "publish_checklist": [
+    "Use \"title\" as the page <title> and \"h1\" as the main heading",
+    "Paste \"meta_description\" into the page or SEO settings",
+    "Keep the slug (URL) unless your CMS needs another",
+    "Keep the internal links in the article and add 2-3 links to this page from existing pages",
+    "Add the JSON-LD blocks to the page head or body",
+    "Create the three images in \"images\" (or pick stock photos matching \"subject\"), save them as WebP under the given file names and sizes, keep the alt text and captions",
+    "Use the hero as the featured and Open Graph image (1200×630 for sharing) and set the og:image / twitter:card tags from \"open_graph\"",
+    "Keep the byline (author, updated date, reviewer) under the H1 and the author box at the end; link the author name to the author page",
+    "Keep the table of contents and the \"Guides in this series\" block; publish the cluster pages first (2 are planned, not live: publish them or drop their links)",
+    "Then report the published URL (\"I published a page\" in the form, or API mode \"published\") so indexing and positions are tracked"
+  ]
+}

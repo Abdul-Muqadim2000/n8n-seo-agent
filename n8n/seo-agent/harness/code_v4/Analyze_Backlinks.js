@@ -33,7 +33,7 @@ const gapItems = gapRes.tasks?.[0]?.result?.[0]?.items || [];
 const gap = gapItems.map(it => {
   const vals = Object.values(it.domain_intersection || {});
   const first = vals[0] || {};
-  return { referring_domain: first.domain || it.domain || it.referring_domain || null, rank: first.rank ?? null, links_to_competitors: vals.length };
+  return { referring_domain: first.target || first.domain || it.domain || it.referring_domain || null, rank: first.rank ?? null, links_to_competitors: vals.length };
 }).filter(g => g.referring_domain).slice(0, 25);
 
 const findings = [];

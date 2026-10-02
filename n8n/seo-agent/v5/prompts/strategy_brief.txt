@@ -16,6 +16,13 @@ Site description: {{ JSON.stringify($json.site_description || {}) }}
 Signals found on their pages: {{ JSON.stringify($json.client_signals || {}) }}
 Their pages (excerpts): {{ ($json.client_pages || []).map(p => '[' + p.kind + '] ' + p.url + ': ' + p.text.slice(0, 1800)).join('\n\n') || 'none read' }}
 
+AUTHOR AND TRUST (E-E-A-T)
+{{ $json.eeat_context || 'No author profile on file: plan the experience notes as bracketed prompts for the author.' }}
+Case studies on file (real proof you may cite; link a case study only when it has a URL):
+{{ $json.proof_context || 'none recorded' }}
+{{ $json.role_brief || '' }}
+{{ $json.video_context || '' }}
+
 KEYWORD DATA
 {{ JSON.stringify($json.keyword_data, null, 1) }}
 
@@ -59,18 +66,20 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) in th
   "information_gain": ["3-5 things this page will provide that no competitor does (from the analysis), each concrete enough to write"],
   "unique_angle": "",
   "outline": [
-    { "h2": "", "purpose": "Why this section exists and what the reader can do after it", "key_points": ["", ""], "h3s": ["optional sub-headings"], "target_words": 0, "format": "prose | steps | checklist | table | comparison | example", "evidence": ["which verified fact or client fact to use here, or 'placeholder' if none"] }
+    { "h2": "", "purpose": "Why this section exists and what the reader can do after it", "key_points": ["", ""], "h3s": ["optional sub-headings"], "target_words": 0, "format": "prose | steps | checklist | table | comparison | example", "evidence": ["which verified fact or client fact to use here, or 'placeholder' if none"], "link_to": "hub pages only: the URL of the cluster page this section summarises and links to, else empty" }
   ],
   "snippet_targets": [{ "question": "exact question to use as an H2/H3", "answer": "40-60 word direct answer" }],
   "terms_to_use": [{ "term": "", "min_count": 1 }],
   "evidence_plan": [{ "fact": "", "source_url": "" }],
   "client_facts": ["facts from the client's pages/form the copy must use (name, services, locations, credentials, numbers)"],
+  "experience_notes": ["2-4 first-hand experience passages the page must carry (what the author or the business has seen or done), each tied to a section; from the client facts, case studies or the author's credentials, else a bracketed prompt for the author such as [Author insight: the most common mistake you see when ...]"],
+  "video_placement": "only when the page has a video: 'top' or the exact H2 it belongs under, else empty",
   "proof_elements": ["proof to show: case study, certification, numbers, testimonials — as placeholders if the client gave none"],
   "gaps_to_cover": ["Competitor gaps this page must fill"],
   "entities_to_mention": [""],
   "comparison_table": { "title": "", "columns": [""], "rows_hint": "what the rows compare; use [Price], [Timeline] for business-specific figures" },
   "internal_link_suggestions": [{ "anchor": "", "url": "must be one of the REAL PAGES above" }],
-  "image_suggestions": [{ "placement": "after which H2", "alt_text": "descriptive alt text with the topic" }],
+  "image_suggestions": [{ "placement": "hero | the exact H2 text the image belongs under", "purpose": "hero | diagram | screenshot | photo | chart | table", "subject": "what the image must show, specific enough for a designer or a stock search (no faces of real people, no competitor logos)", "alt_text": "what the image shows, naturally including the topic, under 125 characters, no 'image of'", "caption": "one line that adds information, or empty", "filename": "kebab-case-with-the-topic.webp" }],   // exactly 3: one hero (also the featured / Open Graph image) + two in-body images at the sections where a visual explains more than text
   "faqs": ["6-8 questions — reuse the People Also Ask questions where relevant"],
   "cta": "Main call to action for the page",
   "voice_rules": ["3-5 concrete style rules for this brand and audience"]
@@ -85,4 +94,6 @@ RULES
 - evidence_plan may ONLY contain facts from the VERIFIED FACTS list, copied exactly with their URL.
 - internal_link_suggestions may ONLY use URLs from the REAL PAGES list (3-6 links). Never invent a URL.
 - Do not copy competitor headings. Build a better, more complete structure.
+- experience_notes: never invent an experience, client, number or result. Experience is what separates this page from AI-written competitors: tie each note to a real fact when one exists.
+- A HUB PAGE, CASE STUDY or LOCAL PAGE block above overrides the section-count, length and internal-link-count rules where they conflict.
 - Write in {{ $json.language_name || 'English' }} with {{ $json.spelling }} spelling.
