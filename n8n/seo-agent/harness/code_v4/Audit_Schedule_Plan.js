@@ -1,60 +1,38 @@
-// Monthly technical re-audit (1st of the month 06:00, and on demand): one technical audit per site with audits switched on, unless the site was
-// audited in the last 25 days. Each audit runs as its own execution through API Entry (internal key "audit:") and delivers itself: report +
-// "since the last audit" diff + fix pack. The crawl size / JavaScript rendering come from the site's monitor settings.
-// ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----
-// Sites = the Data Table seo_sites ("Track my site") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).
-// On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc
-// with the trigger's country, e-mail and callback.
-let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
-if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
-const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };
-const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
-const siteIdFor = (d) => 'site_' + d.replace(/[^a-z0-9]+/g, '-');
-const listOf = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\n,;]+/)).map(x => String(x).trim()).filter(Boolean);
-const flag = (v, dflt) => (v === undefined || v === null || v === '') ? dflt : !(v === false || /^(false|0|no|off)$/i.test(String(v)));
-const DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];
-function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit'
-  const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), ladders = rowsOf('Load Ladders').filter(r => r.domain), mons = rowsOf('Load Monitors'), profiles = rowsOf('Load Profiles');
-  const byDomain = new Map();
-  for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: listOf(s.keywords).map(k => k.toLowerCase()), virtual: false }); }
-  for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', virtual: true }); }
-  for (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }
-  const want = normD(trigger.domain) || String(trigger.site_id || '').trim();
-  let list = [...byDomain.values()];
-  if (want) {
-    list = list.filter(s => s.domain === want || s.site_id === want);
-    if (!list.length && normD(trigger.domain)) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];
-  } else list = list.filter(s => String(s.status || 'active') !== 'paused');
-  const out = list.map(s => {
-    const m = mons.find(x => x.site_id === s.site_id) || {};
-    const p = profiles.find(x => x.site_id === s.site_id) || {};
-    const engines = listOf(m.ai_engines).map(e => e.toLowerCase()).filter(e => DEFAULT_ENGINES.includes(e));
-    const settings = { ai_visibility: flag(m.ai_visibility, true), backlinks: flag(m.backlinks, true), audit_monthly: flag(m.audit_monthly, true), engines: engines.length ? engines : DEFAULT_ENGINES,
-      prompts_max: Math.min(15, Math.max(3, Number(m.ai_prompts_max) || 8)), audit_pages: Math.min(1000, Math.max(50, Number(m.audit_pages) || 200)), audit_js: flag(m.audit_js, false),
-      competitors: [...new Set([...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD).filter(d => d && d !== s.domain))].slice(0, 5),
-      brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || ''].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };
-    const o = { ...s, settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '' } };
-    if (want) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }
-    o.request_id = String(trigger.request_id || s.request_id || '');
-    return o;
-  });
-  const flagOf = { ai: 'ai_visibility', backlinks: 'backlinks', audit: 'audit_monthly' }[kind];
-  return { list: want ? out : out.filter(s => s.settings[flagOf]), on_demand: !!want, want, trigger, total: byDomain.size };
-}
-
-const CONFIG = { max_sites_per_run: 20, min_days_between: 25 };
-const { list, on_demand, want, total } = monitorSites('audit');
-const audits = rowsOf('Load Audits');
-const now = Date.now(); const ym = new Date().toISOString().slice(0, 7).replace('-', '');
-const out = [], skipped = [];
-for (const s of list.slice(0, CONFIG.max_sites_per_run)) {
-  const last = audits.filter(a => a.site_id === s.site_id).sort((a, b) => String(b.audited_at).localeCompare(String(a.audited_at)))[0];
-  const days = last ? Math.floor((now - new Date(last.audited_at).getTime()) / 864e5) : null;
-  if (!on_demand && days != null && days < CONFIG.min_days_between) { skipped.push(s.domain + ' (audited ' + days + ' days ago)'); continue; }
-  if (!s.email && !s.callback_url) { skipped.push(s.domain + ' (no e-mail or callback to deliver to)'); continue; }
-  out.push({ json: { body: { mode: 'audit', domain: s.domain, country: s.country || 'United States', report_type: 'Site Audit (technical issues only)', email: s.email || '', callback_url: s.callback_url || '',
-    request_id: s.request_id || ('aud_' + ym + '_' + s.site_id.replace(/^site_/, '')), client_ip: 'audit:' + s.site_id, crawl_pages: s.settings.audit_js ? Math.min(500, s.settings.audit_pages) : s.settings.audit_pages, crawl_js: s.settings.audit_js, scheduled: true },
-    domain: s.domain, last_audit_days: days, skipped } });
-}
-if (!out.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'no audit due' : 'no sites yet'), skipped } }];
+// Monthly technical re-audit, step 2 (v4.6 — no repeated audits): a site is re-crawled only when it changed. The sitemap fingerprint (URLs +
+// lastmod dates, or the sitemap index entries) is compared with the one stored at the last check (seo_cache 'sitemap:<site>').
+// Audit when: on demand · never audited · the fingerprint changed · 60+ days since the last audit (safety net for changes a sitemap does not
+// show: theme, plugins, server, links) · no readable sitemap, or a sitemap index without lastmod dates, and 25+ days (change cannot be
+// detected: monthly as before). Otherwise skip; the weekly Site Tracker keeps watching indexing in
+// Search Console between audits. Each started audit compares itself with the previous one and delivers report + fix pack.
+const CONFIG = { min_days_between: 25, safety_net_days: 60 };
+const cands = $('Audit Candidates').all().map(i => i.json).filter(c => !c.nothing_to_do);
+const maps = $input.all().map(i => i.json || {});
+let cache = []; try { cache = $('Load Cache (Audit)').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}
+const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
+const ym = new Date().toISOString().slice(0, 7).replace('-', ''); const now = new Date().toISOString();
+const fingerprint = (r) => { const status = Number(r.statusCode) || 0; const body = String(r.body != null ? r.body : (r.data != null ? r.data : ''));
+  if (status !== 200 || !/<(urlset|sitemapindex)/i.test(body)) return null;
+  const entries = [...body.matchAll(/<(?:url|sitemap)>([\s\S]*?)<\/(?:url|sitemap)>/gi)].map(m => { const loc = (m[1].match(/<loc>\s*([^<\s]+)/i) || [])[1] || ''; const lm = (m[1].match(/<lastmod>\s*([^<\s]+)/i) || [])[1] || ''; return loc + '|' + lm; }).filter(x => x.length > 1).sort();
+  const lastmods = entries.map(e => e.split('|')[1]).filter(Boolean).sort();
+  const index = /<sitemapindex/i.test(body); if (!entries.length || (index && !lastmods.length)) return null;   // an index without dates hides page changes
+  return { fp: hash(entries.join('\n')), entries: entries.length, index, latest_lastmod: lastmods[lastmods.length - 1] || '' }; };
+// The stored fingerprint is replaced only when an audit starts now (or none is stored yet): a skipped site keeps the old one, so a change made
+// after the last audit is still caught next month.
+const out = [];
+cands.forEach((c, i) => {
+  const fp = fingerprint(maps[i] || {}); const stored = cache.find(r => r.key === 'sitemap:' + c.site_id); let prev = null; try { prev = stored ? JSON.parse(stored.value) : null; } catch (e) {}
+  const days = c.last_audit ? Math.floor((Date.now() - new Date(c.last_audit.audited_at).getTime()) / 864e5) : null;
+  let run, why;
+  if (c.on_demand) { run = true; why = 'on demand'; }
+  else if (days == null) { run = true; why = 'never audited'; }
+  else if (days < CONFIG.min_days_between) { run = false; why = 'audited ' + days + ' days ago'; }
+  else if (days >= CONFIG.safety_net_days) { run = true; why = days + ' days since the last audit (safety net)'; }
+  else if (!fp) { run = true; why = 'no readable sitemap (or an index without dates): change cannot be detected, monthly audit'; }
+  else if (!prev) { run = false; why = 'fingerprint stored now; the next change to the site triggers an audit'; }
+  else if (prev.fp !== fp.fp) { run = true; why = 'site changed since the last check (' + (fp.entries - (prev.entries || 0) >= 0 ? '+' : '') + (fp.entries - (prev.entries || 0)) + ' sitemap entries' + (fp.latest_lastmod && fp.latest_lastmod !== prev.latest_lastmod ? ', pages updated ' + fp.latest_lastmod.slice(0, 10) : '') + ')'; }
+  else { run = false; why = 'no change since ' + String(c.last_audit.audited_at).slice(0, 10) + ' (next safety audit after ' + CONFIG.safety_net_days + ' days)'; }
+  const pages = c.settings.audit_js ? Math.min(500, c.settings.audit_pages) : c.settings.audit_pages;
+  out.push({ json: { site_id: c.site_id, domain: c.domain, run, why, days_since_audit: days, fingerprint: fp, cache_row: fp && (run || !prev || prev.fp === fp.fp) ? { key: 'sitemap:' + c.site_id, kind: 'sitemap', site_id: c.site_id, value: JSON.stringify({ ...fp, url: c.sitemap_url, checked_at: now }), updated_at: now } : null,
+    body: run ? { mode: 'audit', domain: c.domain, country: c.country, report_type: 'Site Audit (technical issues only)', email: c.email, callback_url: c.callback_url, request_id: c.request_id || ('aud_' + ym + '_' + c.site_id.replace(/^site_/, '')), client_ip: 'audit:' + c.site_id, crawl_pages: pages, crawl_js: c.settings.audit_js, scheduled: true, audit_reason: why } : null, skipped: c.skipped } });
+});
 return out;

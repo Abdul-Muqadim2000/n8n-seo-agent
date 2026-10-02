@@ -123,6 +123,11 @@ await guard('keyword', async () => {
   console.log('   QA fixes ->', JSON.stringify(qa1[0].json.content_qa.auto_fixes));
   console.log('   QA warnings ->', JSON.stringify(qa1[0].json.content_qa.warnings));
   console.log('   placeholder word still present?', /placeholder/i.test(qa1[0].json.output), '| AED price still present?', /AED\s?\d/.test(qa1[0].json.output), '| gartner link kept?', /gartner/.test(qa1[0].json.output), '| pricing link removed?', !/\/pricing\//.test(qa1[0].json.output));
+  // v4.6 editor gate: a 73-point draft with SEO warnings always gets the editor pass, even when the review rates it 90
+  const pcqHi = pcq.map(x => ({ json: { ...x.json, critique: { ...x.json.critique, score: 90, problems: (x.json.critique.problems || []).map(pr => ({ ...pr, severity: 'medium' })) } } }));
+  const qaHi = await run('Content QA', pcqHi, { runIndex: 0 }); console.log('   editor gate ->', JSON.stringify({ round1_editor_needed: qa1[0].json.content_qa.editor_needed, with_review_90: qaHi[0].json.content_qa.editor_needed, score: qaHi[0].json.content_qa.content_score }));
+  if (qa1[0].json.content_qa.editor_needed !== true || qaHi[0].json.content_qa.editor_needed !== true) throw new Error('editor pass skipped on a draft that misses SEO checks');
+  store['Content QA'] = qa1;
   // Editor returns a corrected draft -> QA round 2
   mock('Editor', { output: V.draftV5({ longTitle: true }) });
   const qa2 = await run('Content QA', store['Editor'], { runIndex: 1 });
@@ -330,9 +335,24 @@ await guard('audit-full', async () => {
   const pc = await run('Pick Competitors', store['Fallback SERP']);
   console.log('   competitors ->', pc.map(c => c.json.domain + (c.json.is_you ? '(you)' : '')).join(', '), '| method:', pc[1] && pc[1].json.method);
   mock('Domain Overview', pc.map(c => F.rankOverview(c.json.domain)));
-  mock('DataForSEO Whois', pc.map(c => F.whois(c.json.domain)));
-  mock('RDAP Lookup', pc.map(c => c.json.domain === 'gulferp.ae' ? { objectClassName: 'domain', events: [{ eventAction: 'registration', eventDate: '2015-06-01T00:00:00Z' }, { eventAction: 'expiration', eventDate: '2027-06-01T00:00:00Z' }] } : { errorCode: 404, title: 'Not Found' }));
-  const ca = await run('Competitor Analysis', store['RDAP Lookup']);
+  // v4.6 domain ages: one competitor known from the cache, RDAP (free) answers gulferp.ae, paid WHOIS only for the rest
+  const cachedComp = pc.find(c => !c.json.is_you && c.json.domain !== 'gulferp.ae');
+  mock('Load Age Cache', [{ json: { key: 'age:' + cachedComp.json.domain, kind: 'age', site_id: '', value: JSON.stringify({ registered: '2011-03-01', source: 'whois' }), updated_at: new Date(Date.now() - 40 * 864e5).toISOString() } }]);
+  const alp = await run('Age Lookup Plan', store['Load Age Cache']); console.log('   age lookups (cache knows ' + cachedComp.json.domain + ') ->', alp.map(x => x.json.domain || 'skip').join(', '));
+  mock('RDAP Lookup', alp.map(c => c.json.domain === 'gulferp.ae' ? { objectClassName: 'domain', events: [{ eventAction: 'registration', eventDate: '2015-06-01T00:00:00Z' }, { eventAction: 'expiration', eventDate: '2027-06-01T00:00:00Z' }] } : { errorCode: 404, title: 'Not Found' }));
+  const rres = await run('RDAP Results', store['RDAP Lookup']); console.log('   paid WHOIS only for ->', rres.map(x => x.json.domain || 'skip').join(', '));
+  if (alp.some(x => x.json.domain === cachedComp.json.domain) || rres.some(x => x.json.domain === 'gulferp.ae')) throw new Error('domain age looked up again although known');
+  mock('DataForSEO Whois', rres.map(c => F.whois(c.json.domain)));
+  const dag = await run('Domain Ages', store['DataForSEO Whois']); console.log('   domain ages ->', JSON.stringify(dag[0].json.ages), '| rows to store', dag[0].json.rows.length, '| whois requests', dag[0].json.whois_requests);
+  const agr = await run('Age Rows', dag); console.log('   age rows ->', JSON.stringify(agr.map(r => Object.keys(r.json).join(','))[0]));
+  const ca = await run('Competitor Analysis', agr);
+  // a second report: every age known -> no RDAP, no WHOIS, nothing stored
+  const savedAges = { 'Load Age Cache': store['Load Age Cache'], 'Age Lookup Plan': store['Age Lookup Plan'], 'RDAP Lookup': store['RDAP Lookup'], 'RDAP Results': store['RDAP Results'], 'DataForSEO Whois': store['DataForSEO Whois'], 'Domain Ages': store['Domain Ages'] };
+  mock('Load Age Cache', agr.map(r => ({ json: r.json })).concat(store['Load Age Cache'])); delete store['RDAP Lookup']; delete store['RDAP Results']; delete store['DataForSEO Whois'];
+  const alp2 = await run('Age Lookup Plan', store['Load Age Cache']); const dag2 = await run('Domain Ages', alp2);
+  console.log('   second report ->', JSON.stringify({ lookups: alp2[0].json.skip ? 0 : alp2.length, rows: dag2[0].json.rows.length, ages: Object.values(dag2[0].json.ages).map(a => a.registered) }));
+  if (!alp2[0].json.skip || dag2[0].json.rows.length) throw new Error('second report looked ages up again');
+  Object.assign(store, savedAges);
   console.log('   benchmark rows ->', JSON.stringify(ca[0].json.competitor_benchmark.rows.map(r => ({ d: r.domain, kw: r.organic_keywords, top10: r.top10, age: r.domain_age_years }))));
   console.log('   benchmark findings ->', ca[0].json.extra_findings.filter(f => f.category === 'Authority').map(f => `[${f.severity}] ${f.title}`).join(' | '));
   const kt = await run('KW Targets', ca);
@@ -532,7 +552,18 @@ await guard('tracker', async () => {
   mock('SERP Check', tp2.map((c, i) => V.serpFor(c.json.keyword, c.json.domain, c.json.rung === 4 ? 12 : (i === 1 ? 40 : posOf(c, i)))));
   const pp2 = await run('Parse Positions', store['SERP Check']); mock('Save History', pp2);
   const tr2 = await run('Tracker Report', store['Save History']);
+  console.log('   week 2 checks ->', tp2.length, '|', (tp2[0].json.deferred_pages || []).length, 'unpublished pages carried (checked monthly)');
   console.log('   week 2 ->', JSON.stringify({ gains: tr2[0].json.gains.length, drops: tr2[0].json.drops, head_now: tr2[0].json.positions.find(p => p.rung === 4), next: tr2[0].json.next_step.action }));
+  // v4.6: pages not published yet are checked monthly (their last position is carried in the report); live pages every week
+  const recent = pp.map(p => ({ json: { ...p.json, checked_at: new Date(Date.now() - 6 * 864e5).toISOString() } }));
+  const mixed = ladderRows.map((r, i) => ({ json: { ...r.json, status: i % 2 ? 'published' : 'planned', page_exists: i % 2 ? true : false } }));
+  mock('Load Ladders', mixed); mock('Load History', recent);
+  const tp5 = await run('Tracker Plan', recent); const dfr = tp5[0].json.deferred_pages || [];
+  console.log('   unpublished pages ->', JSON.stringify({ checked_now: tp5.length, deferred: dfr.length, first_deferred: dfr[0] && { kw: dfr[0].keyword, last: dfr[0].last_position, at: String(dfr[0].last_checked).slice(0, 10) } }));
+  mock('SERP Check', tp5.map(c => V.serpFor(c.json.keyword, c.json.domain, 5))); const pp5 = await run('Parse Positions', store['SERP Check']); mock('Save History', pp5);
+  const tr5 = await run('Tracker Report', store['Save History']); console.log('   report keeps the deferred pages ->', tr5[0].json.positions.length, '| label', /not published yet: checked monthly/.test(tr5[0].json.html));
+  if (!dfr.length || tp5.length + dfr.length !== mixed.length) throw new Error('rank tracker deferral lost pages');
+  mock('Load Ladders', ladderRows);
   // stop rule: the head term has held the top 3 for 4 checks -> ladder skipped; nothing to do when no ladders
   const headKw = ladderRows[ladderRows.length - 1].json.keyword;
   const topHist = [0, 1, 2, 3].map(i => ({ json: { ladder_id: ladderRows[0].json.ladder_id, keyword: headKw, checked_at: '2026-09-' + (10 + i) + 'T08:00:00.000Z', position: 2, url: 'u', serp_features: '', domain: 'northwind-erp.com', rung: 4 } }));
@@ -639,6 +670,20 @@ await guard('site tracker', async () => {
   console.log('   trend rows ->', trows.length, '| cols exact?', trows.every(x => same(Object.keys(x.json), TCOLS)), '| first:', JSON.stringify({ kw: trows[0].json.keyword, dir: trows[0].json.direction, rising: trows[0].json.rising }));
   trendRows = trows;
   const sq = await run('Site SERP Requests', store['Resolve Properties']); console.log('   serp checks ->', sq.map(x => x.json.keyword).join(', '), '| depth', sq[0].json.body[0].depth);
+  // v4.6: a trend fetched in the last 25 days is read from seo_trends (not bought again)
+  mock('Load Trends (Site)', trows.slice(0, 2).map(r => ({ json: { ...r.json, checked_at: new Date(Date.now() - 7 * 864e5).toISOString() } })));
+  const tqc = await run('Trends Requests', store['Resolve Properties']); console.log('   trends with 2 stored ->', JSON.stringify({ requests: tqc.filter(x => !x.json.skip).map(x => x.json.keyword), cached: (tqc[0].json.cached_trends || []).map(c => c.keyword) }));
+  mock('Google Trends', tqc.map(r => T.trends(r.json))); const ptc = await run('Parse Trends', store['Google Trends']); const trc = await run('Trend Rows', ptc);
+  console.log('   parsed ->', ptc.map(x => x.json.keyword + (x.json.cached ? '(stored)' : '')).join(', '), '| rows stored again', trc.filter(x => !x.json.skip).length);
+  if (tqc.filter(x => !x.json.skip).length !== tq.length - 2 || ptc.length !== tq.length) throw new Error('trend cache is wrong');
+  delete store['Load Trends (Site)']; mock('Parse Trends', pt);
+  // v4.6: a keyword Search Console already reports, checked live 5 days ago -> not bought again this week (monthly cross-check)
+  const savedRP = store['Resolve Properties'], savedGsc = store['Parse GSC'];
+  mock('Resolve Properties', savedRP.map(x => ({ json: { ...x.json, serp_positions: { ...(x.json.serp_positions || {}), [sq[0].json.keyword]: { position: 5, checked_at: new Date(Date.now() - 5 * 864e5).toISOString() } } } })));
+  mock('Parse GSC', [{ json: { site_idx: 0, site_id: savedRP[0].json.site_id, tracked: [{ keyword: sq[0].json.keyword, position: 6.2 }, { keyword: sq[1].json.keyword, position: 9 }] } }]);
+  const sqS = await run('Site SERP Requests', store['Resolve Properties']); console.log('   live checks with Search Console data ->', sqS.map(x => x.json.keyword).join(', '), '(skipped: ' + sq[0].json.keyword + ', checked 5 days ago)');
+  if (sqS.some(x => x.json.keyword === sq[0].json.keyword) || !sqS.some(x => x.json.keyword === sq[1].json.keyword)) throw new Error('live SERP reuse is wrong');
+  store['Resolve Properties'] = savedRP; if (savedGsc) store['Parse GSC'] = savedGsc; else delete store['Parse GSC'];
   mock('SERP Check (Site)', sq.map((q, i) => i === 2 ? { error: { message: 'timeout' } } : V.serpFor(q.json.keyword, q.json.domain, [5, 0, 1][i])));
   const ps = await run('Parse Site SERP', store['SERP Check (Site)']);
   const HCOLS = ['ladder_id', 'keyword', 'checked_at', 'position', 'url', 'serp_features', 'domain', 'rung'];
@@ -1027,6 +1072,10 @@ await guard('ai visibility', async () => {
   const rq2 = await run('AI Requests', pr2); mock('Run AI Requests', rq2.map((q, i) => M.answerFor(q.json, i, { noAio: true })));
   await run('Parse AI Answers', store['Run AI Requests']); const mt2 = await run('AI Metrics', store['Parse AI Answers']);
   console.log('   week 2 ->', JSON.stringify({ mention: mt2[0].json.metrics.mention_rate, delta: mt2[0].json.metrics.delta, aio_presence: mt2[0].json.metrics.aio_presence, alerts: mt2[0].json.alerts.map(a => a.level), market_carried: !!(mt2[0].json.market || {}).carried, prospects_status_kept: mt2[0].json.prospect_rows[0].status, first_seen_kept: mt2[0].json.prospect_rows[0].first_seen === ap[0].json.first_seen }));
+  // v4.6: within the month only the core engines are asked; Gemini / Claude and the brand question are carried from the month's full run
+  const eng2 = rq2.reduce((m, q) => { m[q.json.engine] = (m[q.json.engine] || 0) + 1; return m; }, {});
+  console.log('   week 2 (core engines only) ->', JSON.stringify({ full_due: plan2[0].json.full_due, requests: eng2, brand_asked: rq2.some(q => q.json.kind === 'brand'), carried: Object.entries(mt2[0].json.engines).filter(([, v]) => v.carried).map(([k, v]) => k + ' ' + v.answered + '/' + v.asked + ' @' + String(v.checked_at).slice(0, 10)), brand: mt2[0].json.metrics.brand, asked: mt2[0].json.metrics.asked, grid_cell: Object.values(mt2[0].json.questions[0].engines).join(',') }));
+  if (plan2[0].json.full_due || eng2.gemini || eng2.claude || rq2.some(q => q.json.kind === 'brand') || !mt2[0].json.engines.gemini.carried || !mt2[0].json.metrics.brand.carried || mt2[0].json.metrics.brand_known !== false || mt2[0].json.alerts.some(x => /recognise/.test(x.text))) throw new Error('week 2 asked the monthly engines again or lost their numbers');
   // ad hoc on-demand domain, prompt writer failure -> templates, nothing to do
   mock('Manual Run', { domain: 'https://www.newclient.ae/', email: 'x@newclient.ae', country: 'United Arab Emirates', location_code: 2784, competitors: ['rival.ae'] }); loadAll();
   const p3 = await run('AI Plan', store['Load Link Prospects']); console.log('   ad hoc ->', JSON.stringify({ domain: p3[0].json.domain, adhoc: p3[0].json.adhoc, on_demand: p3[0].json.on_demand, email: p3[0].json.email, competitors: p3[0].json.competitors, topics: p3[0].json.topics, need_prompts: p3[0].json.need_prompts, need_site_text: p3[0].json.need_site_text }));
@@ -1050,7 +1099,7 @@ await guard('backlinks', async () => {
   const loadAll = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', M.profiles()); mock('Load Backlink Snapshots', o.snaps || [{ json: {} }]); mock('Load Link Prospects', o.prospects || [{ json: {} }]);
     mock('Load Content Log', [{ json: { site_id: M.SITE, domain: M.DOMAIN, keyword: 'erp for distributors', published_url: 'https://northwind-erp.com/erp-for-distributors/', status: 'published' } }]); mock('Load Case Studies', [{ json: { case_id: 'cs_1', site_id: M.SITE, title: 'Gulf Fresh Foods: Odoo', page_url: 'https://northwind-erp.com/case-studies/gulf-fresh/' } }]); };
   // an existing prospect that now links (won) and an AI-source prospect without a draft
-  loadAll({ prospects: [{ json: { site_id: M.SITE, domain: M.DOMAIN, prospect_domain: 'uae-asp.ae', type: 'gap', rank: 25, spam_score: 0, detail: 'old', source_url: '', target_url: '', status: 'contacted', first_seen: '2026-08-01T00:00:00.000Z', last_seen: '2026-08-01T00:00:00.000Z', won_at: '', outreach_subject: 's', outreach_body: 'b', note: 'emailed Ali' } },
+  loadAll({ prospects: [{ json: { site_id: M.SITE, domain: M.DOMAIN, prospect_domain: 'uae-asp.ae', type: 'gap', rank: 25, spam_score: 0, detail: 'old', source_url: '', target_url: '', status: 'contacted', first_seen: '2026-06-01T00:00:00.000Z', last_seen: '2026-06-01T00:00:00.000Z', won_at: '', outreach_subject: 's', outreach_body: 'b', note: 'emailed Ali' } },
     { json: { site_id: M.SITE, domain: M.DOMAIN, prospect_domain: 'zawya.com', type: 'ai_source', rank: 0, spam_score: 0, detail: 'Cited 4x in AI answers', status: 'new', first_seen: '2026-10-01T00:00:00.000Z', last_seen: '2026-10-01T00:00:00.000Z', outreach_body: '' } }] });
   const plan = await run('BL Plan', store['Load Case Studies']); const P = plan[0].json;
   console.log('   plan ->', JSON.stringify({ mode: P.mode, since: P.since.slice(0, 10), competitors: P.competitors, need_competitors: P.need_competitors, brand: P.brand_names, assets: P.assets.map(a => a.kind) }));
@@ -1085,6 +1134,16 @@ await guard('backlinks', async () => {
   mock('Run BL Requests', rq2.map(r => r.json.kind === 'lost' ? quietLost : r.json.kind === 'new' ? quietNew : M.blFor(r.json))); const g2 = await run('Gap Requests', store['Run BL Requests']); delete store['Run Gap Requests'];
   const pb2 = await run('Parse Backlinks', g2); console.log('   light parse ->', JSON.stringify({ deliver: pb2[0].json.deliver, alerts: pb2[0].json.alerts.map(a => a.level), gap: pb2[0].json.gap.length }));
   await run('Outreach Jobs', pb2); const pr2 = await run('Prospect Rows', [{ json: { skip: true } }]); await run('BL Snapshot Rows', pr2); const rp2 = await run('BL Report', store['BL Snapshot Rows']); console.log('   quiet week -> report items', rp2.length);
+  // v4.6: next month's full run, gap refreshed 0 days ago -> no gap request, the stored gap prospects are shown; the history is extended, not re-downloaded
+  const lastMonth = sr.map(r => ({ json: { ...r.json, checked_at: new Date(Date.now() - 33 * 864e5).toISOString() } }));
+  loadAll({ snaps: lastMonth, prospects: prw.map(r => ({ json: r.json })) });
+  const p4 = await run('BL Plan', store['Load Case Studies']); const rq4 = await run('BL Requests', p4);
+  mock('Run BL Requests', rq4.map(r => M.blFor(r.json))); const g4 = await run('Gap Requests', store['Run BL Requests']); delete store['Run Gap Requests'];
+  const pb4 = await run('Parse Backlinks', g4); const B4 = pb4[0].json;
+  console.log('   full run, gap stored ->', JSON.stringify({ mode: p4[0].json.mode, gap_due: p4[0].json.gap_due, gap_request: !g4[0].json.skip, gap: B4.gap.length, gap_stored: B4.gap_stored, gap_checked: B4.gap_checked, ts_from: (rq4.find(r => r.json.kind === 'timeseries').json.body[0] || {}).date_from, ts_months: B4.timeseries.length, stored_months: p4[0].json.stored_timeseries.length }));
+  if (p4[0].json.mode !== 'full' || p4[0].json.gap_due || !g4[0].json.skip || !B4.gap.length || !B4.gap_stored) throw new Error('quarterly gap reuse is wrong');
+  const oj4 = await run('Outreach Jobs', pb4); console.log('   stored gap -> no new gap candidates:', !B4.candidates.some(c => c.type === 'gap'));
+  const rp4 = await run('BL Report', await run('BL Snapshot Rows', await run('Prospect Rows', [{ json: { skip: true } }]))); console.log('   report says refreshed quarterly ->', /refreshed every 3 months/.test(rp4[0].json.html || ''));
   // no competitors configured: Labs competitors are requested and the gap uses them
   loadAll({ monitors: M.monitors({ competitors: '' }) }); const p3 = await run('BL Plan', store['Load Case Studies']); const rq3 = await run('BL Requests', p3);
   mock('Run BL Requests', rq3.map(r => M.blFor(r.json))); const g3 = await run('Gap Requests', store['Run BL Requests']);
@@ -1152,10 +1211,39 @@ await guard('audit upgrades', async () => {
   mock('Restore Audit Item', [{ json: { ...dd2[0].json, site_audit: { ...dd2[0].json.site_audit, fix_pack: fp[0].json.site_audit.fix_pack } } }]);
   const rep2 = await run('Build Audit Report', store['Restore Audit Item']); const doc2 = decode(rep2); scanHtml('audit report (second)', doc2); console.log('   second report ->', /fixed<\/span>/.test(doc2), /score .* → <b>/.test(doc2));
   // scheduler: due / recently audited / on demand; the spawned body through Normalize Input
-  mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors()); mock('Load Profiles', M.profiles()); mock('Load Audits', [{ json: {} }]);
-  const sp = await run('Audit Schedule Plan', store['Load Audits']); console.log('   scheduler (due) ->', JSON.stringify(sp[0].json.body));
-  mock('Load Audits', [{ json: { site_id: M.SITE, audited_at: new Date(Date.now() - 5 * 864e5).toISOString() } }]); const sp2 = await run('Audit Schedule Plan', store['Load Audits']); console.log('   scheduler (audited 5 days ago) ->', JSON.stringify(sp2[0].json));
-  mock('Manual Run', { domain: M.DOMAIN }); const sp3 = await run('Audit Schedule Plan', store['Load Audits']); console.log('   scheduler (on demand) ->', sp3[0].json.body ? 'started ' + sp3[0].json.domain : JSON.stringify(sp3[0].json)); delete store['Manual Run'];
+  // v4.6 change-aware scheduler: candidates -> sitemap fingerprint -> audit only when changed / 60+ days / never / no readable sitemap / on demand
+  mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors()); mock('Load Profiles', M.profiles()); mock('Load Audits', [{ json: {} }]); mock('Load Cache (Audit)', [{ json: {} }]);
+  const ac = await run('Audit Candidates', store['Load Cache (Audit)']); console.log('   audit candidates ->', ac.map(c => c.json.domain + ' ' + c.json.sitemap_url + ' last=' + JSON.stringify(c.json.last_audit)).join(' | '));
+  const smA = { statusCode: 200, headers: {}, data: F.urlset(['/', '/services/', '/blog/erp-guide/']) };
+  const smB = { statusCode: 200, headers: {}, data: F.urlset(['/', '/services/', '/blog/erp-guide/', '/blog/new-post/']) };
+  const sched = async (label, sitemap, auditedDaysAgo, cacheFrom) => {
+    mock('Load Audits', auditedDaysAgo == null ? [{ json: {} }] : [{ json: { site_id: M.SITE, audited_at: new Date(Date.now() - auditedDaysAgo * 864e5).toISOString(), health_score: 79 } }]);
+    mock('Load Cache (Audit)', cacheFrom ? [{ json: cacheFrom }] : [{ json: {} }]);
+    const c = await run('Audit Candidates', store['Load Cache (Audit)']); mock('Fetch Sitemap (Schedule)', c.map(() => sitemap));
+    const s = await run('Audit Schedule Plan', store['Fetch Sitemap (Schedule)']);
+    console.log('   scheduler (' + label + ') ->', s[0].json.run ? 'AUDIT' : 'skip', '|', s[0].json.why, '| fingerprint', s[0].json.fingerprint ? s[0].json.fingerprint.entries + ' entries' : 'none');
+    return s;
+  };
+  const sp = await sched('never audited', smA, null, null);
+  const fpr = await run('Fingerprint Rows', sp); console.log('   fingerprint rows ->', JSON.stringify(fpr.map(r => ({ key: r.json.key, kind: r.json.kind, cols: Object.keys(r.json).join(',') }))));
+  const ats = await run('Audits To Start', fpr); console.log('   audits to start ->', ats.map(a => a.json.domain + ': ' + a.json.why).join(' | '));
+  const storedFp = fpr[0].json;
+  const sp2 = await sched('audited 5 days ago', smA, 5, storedFp);
+  const sp4 = await sched('40 days, no fingerprint stored yet', smA, 40, null);
+  const sp5 = await sched('40 days, sitemap unchanged', smA, 40, storedFp);
+  const sp6 = await sched('40 days, new page in the sitemap', smB, 40, storedFp);
+  const sp2b = await sched('10 days after an audit, site changed since', smB, 10, storedFp); console.log('   fingerprint kept for the next check ->', !sp2b[0].json.cache_row, '| on the started audit ->', !!sp6[0].json.cache_row);
+  if (sp2b[0].json.run || sp2b[0].json.cache_row || !sp6[0].json.cache_row) throw new Error('fingerprint overwritten on a skipped site');
+  const sp7 = await sched('65 days, unchanged (safety net)', smA, 65, storedFp);
+  const sp8 = await sched('40 days, sitemap 404', { statusCode: 404, headers: {}, data: 'not found' }, 40, storedFp);
+  const sp9 = await sched('40 days, sitemap index without dates', { statusCode: 200, headers: {}, data: F.sitemapIndex }, 40, storedFp);
+  const sp5b = await sched('40 days, unchanged (again, for the summary)', smA, 40, storedFp); const nd = await run('Audits To Start', await run('Fingerprint Rows', sp5b));
+  if (!nd[0].json.nothing_to_do) throw new Error('an unchanged site was started'); console.log('   nothing due ->', JSON.stringify(nd[0].json));
+  const ast = await run('Audits Started', nd); console.log('   audits started summary ->', JSON.stringify(ast[0].json.skipped));
+  if (!(sp[0].json.run && !sp2[0].json.run && !sp4[0].json.run && !sp5[0].json.run && sp6[0].json.run && sp7[0].json.run && sp8[0].json.run && sp9[0].json.run)) throw new Error('audit scheduler decisions are wrong');
+  mock('Manual Run', { domain: M.DOMAIN }); const sp3 = await sched('on demand, audited 5 days ago', smA, 5, storedFp); delete store['Manual Run'];
+  if (!sp3[0].json.run) throw new Error('on-demand audit was skipped');
+  console.log('   scheduled body ->', JSON.stringify(sp[0].json.body));
   delete store['Start Form']; const sn = await run('Normalize Input', { body: sp[0].json.body }); H.staticData.rate = undefined;
   const srl = await run('Rate Limit', sn); console.log('   scheduled audit run ->', JSON.stringify({ mode: sn[0].json.mode, pages: sn[0].json.crawl_max_pages, js: sn[0].json.crawl_js, scheduled: sn[0].json.scheduled, err: sn[0].json.validation_error, internal_key: !!H.staticData.rate.keys['audit:' + M.SITE], est: srl[0].json.ai_spend_estimate_usd }));
 });

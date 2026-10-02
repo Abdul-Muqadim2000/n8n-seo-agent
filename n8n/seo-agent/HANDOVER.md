@@ -1,20 +1,21 @@
-# SEO Agent — handover (state on 2026-10-02, v4.5)
+# SEO Agent — handover (state on 2026-10-02, v4.6)
 
-For whoever continues this work (a new Claude Code session or a developer). Read this first, then `CLAUDE.md` (working rules) and `REVIEW.md` (design per feature: §3c ladder, §3d tracking, §3e cadence + blog package, §3f Search Console in the audit, §3g notices + check-in, §3h E-E-A-T and page types, **§3i growth monitors**; §5c live-test log; §6 roadmap). Feature specs: `LADDER_FEATURE_SPEC.md`, `TRACKING_FEATURE_SPEC.md`, `MONITORS_FEATURE_SPEC.md`.
+For whoever continues this work (a new Claude Code session or a developer). Read this first, then `CLAUDE.md` (working rules) and `REVIEW.md` (design per feature: §3c ladder, §3d tracking, §3e cadence + blog package, §3f Search Console in the audit, §3g notices + check-in, §3h E-E-A-T and page types, §3i growth monitors, **§3j no repeated work**; §5c live-test log; §6 roadmap). Feature specs: `LADDER_FEATURE_SPEC.md`, `TRACKING_FEATURE_SPEC.md`, `MONITORS_FEATURE_SPEC.md`.
 
 ## 1. Where things stand
 
-- **Live on the local n8n** (http://localhost:5678, Docker Compose in `n8n/`), all published: main workflow `SEOagentV4Full01` (345 nodes), API front door, Error Handler, Rank Tracker, Site Tracker, Content Cadence, Site Admin, Console Alerts, and since v4.5 **AI Visibility Tracker** (`SEOagentAIVisib1`), **Backlink Monitor** (`SEOagentBacklnk1`), **Audit Scheduler** (`SEOagentAuditSc1`). WordPress publisher and Test Runner stay unpublished on purpose.
-- **Weekly / monthly schedule**: Monday 07:00 AI visibility, 07:30 backlinks (light watch; full report on the first run of each month), 08:00 Rank Tracker, 09:00 Site Tracker (now with an "AI search, backlinks and technical health" block), 10:00 Content Cadence; 1st of the month 06:00 technical re-audits.
-- **Data Tables** (20): ladders, rank history, sites, site metrics, query history, trends, cadence, content log, console alerts, check-ins, profiles, case studies, and v4.5 `seo_monitors`, `seo_ai_prompts`, `seo_ai_answers`, `seo_ai_visibility`, `seo_backlink_snapshots`, `seo_link_prospects`, `seo_audits`, `seo_audit_findings`.
+- **Live on the local n8n** (http://localhost:5678, Docker Compose in `n8n/`), all published: main workflow `SEOagentV4Full01` (362 nodes), API front door, Error Handler, Rank Tracker, Site Tracker, Content Cadence, Site Admin, Console Alerts, and since v4.5 **AI Visibility Tracker** (`SEOagentAIVisib1`), **Backlink Monitor** (`SEOagentBacklnk1`), **Audit Scheduler** (`SEOagentAuditSc1`). WordPress publisher and Test Runner stay unpublished on purpose.
+- **Weekly / monthly schedule**: Monday 07:00 AI visibility (core engines weekly; Gemini, Claude and the brand question on the month's first run), 07:30 backlinks (light watch; full report on the first run of each month, link gap quarterly), 08:00 Rank Tracker (unpublished, non-ranking pages monthly), 09:00 Site Tracker (with an "AI search, backlinks and technical health" block; trends and Search Console-known keywords reused), 10:00 Content Cadence; 1st of the month 06:00 technical re-audits **only for sites that changed** (sitemap fingerprint) or after 60 days.
+- **Data Tables** (21): ladders, rank history, sites, site metrics, query history, trends, cadence, content log, console alerts, check-ins, profiles, case studies, and v4.5 `seo_monitors`, `seo_ai_prompts`, `seo_ai_answers`, `seo_ai_visibility`, `seo_backlink_snapshots`, `seo_link_prospects`, `seo_audits`, `seo_audit_findings`, and v4.6 `seo_cache` (sitemap fingerprints, domain ages, homepage descriptions).
 - **Secrets and settings** in `n8n/.env`; `python3 seo-agent/apply_env.py` (from `n8n/`) rebuilds, writes credentials, imports, publishes and restarts. Never print or export credential values.
-- **Harness**: `harness/scenarios_v5.js`, **467 node runs, 0 failed** (S0-S22); real DataForSEO responses captured 2026-10-02 in `harness/fixtures_live/`.
+- **Harness**: `harness/scenarios_v5.js`, **514 node runs, 0 failed** (S0-S22); real DataForSEO responses captured 2026-10-02 in `harness/fixtures_live/`.
 - **techand.ai today**: tracked; ladder "e invoicing in uae"; cadence 1 page / week; 8 stored AI buyer questions, one AI-visibility baseline (named in 0% of buyer answers, recognised by 5/5 assistants), one backlink snapshot + 10 link prospects with outreach drafts, three audits (latest 79/100); **no business profile and no monitor settings yet** (defaults: everything on, competitors detected automatically).
 
 ## 2. What each version added (short)
 
 - **v4.4 (E-E-A-T and page types)**: business profile (author box, Person schema, reviewer), hub pages, case-study intake, local pages, video schema. REVIEW §3h.
 - **v4.5 (growth monitors)**: the three monitor workflows above; on-demand form / API `ai_visibility` and `backlinks`; monitor settings per site (`seo_monitors`); every audit with crawl size / JavaScript options, brand & entity check against Google Business Profile, history + "since the last audit" diff, internal links to add and a **fix pack** (robots.txt, llms.txt, redirect map, schema, internal-links.csv; zipped); Site Admin `monitors`, `prospect`, `ai_prompts`. Fixed: **e-mail attachments** (Send Email 2.1 uses `fileAttachments`; the blog package and the Site Tracker PDF were never attached before), e-mail retries, the full report's empty link gap. REVIEW §3i, `MONITORS_FEATURE_SPEC.md`.
+- **v4.6 (no repeated work)**: stored results reused where they cannot have changed, a safety net where a change could be invisible, nothing that protects rankings dropped: change-aware audits (sitemap fingerprint, 60-day safety net), rank checks for unpublished non-ranking pages monthly, trends and Search Console-known keywords reused, Gemini / Claude / brand question monthly, backlink history extended and link gap quarterly, domain ages cached with free RDAP before paid WHOIS, homepage description reused 30 days, editor pass skipped only for drafts that already pass every SEO check. REVIEW §3j.
 
 ## 3. What is verified live (2026-10-02, techand.ai)
 
@@ -26,8 +27,9 @@ For whoever continues this work (a new Claude Code session or a developer). Read
 | Site Tracker on demand | Monday block with the monitor numbers; **e-mail with the PDF attached** |
 | Site Admin monitors / prospect / ai_prompts | each affected 1 row (test rows removed) |
 | Profile mode (v4.4) | end to end |
+| v4.6 reuse (Audit Scheduler monthly path, weekly AI run, Rank Tracker, Site Tracker) | audit skipped + fingerprint stored ($0); AI weekly 28 requests **$0.12** (full run $0.87), Gemini / Claude / brand carried; 1 rank check instead of 9; all 4 trends reused |
 
-Not yet run live: a **content run** with a stored profile (hub / case study / local / video, ~$1.20 each) and the **form** paths of the new options (the API paths are verified).
+Not yet run live: a **content run** with a stored profile (hub / case study / local / video, ~$1.20 each), the **form** paths of the new options (the API paths are verified), and two v4.6 paths that need a paid run: the full report's domain-age cache (#9 below: the first report stores the ages, a second one must look nothing up) and the homepage-description cache (#3 then #5: the second run must skip *Read Website*).
 
 ## 4. Whole-system live test (the next step, agreed with the user)
 
@@ -39,11 +41,11 @@ Run in this order (cheap first); every row says how to start it and what proves 
 | 2 | Check if my keyword is right / `verdict` | verdict page / callback, PDF | $0.20 |
 | 3 | I know my keyword / `keyword` (Guide, with a video URL + transcript) | page with **byline + author box**, TOC, video embed + transcript; e-mail carries **PDF, Word, .html, .md, .meta.json** | $1.20 |
 | 4 | Write a case study / `case_study` | "being written" page; later the case-study page with the snapshot box; row in `seo_case_studies` | $1.20 |
-| 5 | I know my keyword, page type Local page (city Dubai) | NAP block + LocalBusiness schema from the profile | $1.20 |
+| 5 | I know my keyword, page type Local page (city Dubai) | NAP block + LocalBusiness schema from the profile; *Read Website* skipped (description reused from #3, `site_description_cached`) | $1.20 |
 | 6 | Suggest keywords / `discover` (+ choose a keyword on the form) | keyword strategy PDF, choice step | $0.40 |
 | 7 | Rank my site for a keyword / `ladder` (1 page) | ladder plan PDF + rows; the page run arrives separately | $1.80 |
 | 8 | Audit my website (technical, 500 pages) / `audit` | report section 5c (progress, links, brand, fix pack), fix-pack.zip attached | $0.10 |
-| 9 | Audit my website (full report) | full report + link gap now filled | $1.30 |
+| 9 | Audit my website (full report) | full report + link gap now filled; `seo_cache` gets `age:` rows; WHOIS only for domains RDAP cannot answer | $0.90 |
 | 10 | Check my AI visibility / `ai_visibility` (with competitors) | report: answer grid, share of voice, sources, actions | $0.90 |
 | 11 | Check my backlinks / `backlinks` | report + prospects.csv (+ disavow list if spam) | $0.25 |
 | 12 | Track my site / `track` (with competitors, blog posts per week) | first Site Tracker report with the monitor block; `seo_monitors` row | $0.10 |
@@ -57,8 +59,9 @@ How to drive it: the form at http://localhost:5678/form/<Start Form webhookId> (
 ## 5. Open items for the user
 
 1. Real business profile for techand.ai (author, reviewer, address, phone) and monitor settings (competitors, `brand_names` such as "Tech&" so AI mentions are matched precisely).
-2. Decide whether Gemini stays in the weekly AI check ($0.035 per question; switch engines with Site Admin `monitors` → `ai_engines`).
-3. Security hygiene from earlier sessions: rotate the keys pasted in chat, and lower `ai_budget_usd` after testing.
+2. Gemini and Claude now run monthly in the AI check (v4.6); switch engines off entirely with Site Admin `monitors` → `ai_engines` if wanted.
+3. Security hygiene from earlier sessions: rotate the keys pasted in chat. `ai_budget_usd` is $6 per day since 2026-10-02.
+4. From the 2026-10-02 ladder test: approve the fix for the `[Price]` masking of verified amounts (Content QA), and remove one of the two "e invoicing in uae" ladders (`lad_mur2cjwk8gp0` from the test, or the 2026-10-01 one).
 
 ## 6. Lessons from this round (also in CLAUDE.md)
 
@@ -67,3 +70,4 @@ How to drive it: the form at http://localhost:5678/form/<Start Form webhookId> (
 - DataForSEO from the Mac fails TLS (proxy): probe from inside the container. `domain_intersection` wants `intersection_mode: partial`; the linking domain is `target`.
 - Name-based lookups (Google Business Profile, brand mentions, short domain labels) hit other companies: accept a match only with the site's website / phone, and set explicit brand names.
 - One-line JS edits with `//` comments swallow the rest of the line; keep comments at the end of statements.
+- Reuse rules (v4.6): reuse a stored result only where it cannot have changed; keep a safety net where a change could be invisible (60-day audit, monthly checks); never overwrite a stored fingerprint on a skipped run; treat a failed check (−1) as "check again", not as "does not rank".

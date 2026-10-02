@@ -1,0 +1,62 @@
+{
+ "SEOagentAIVisib1": {
+  "name": "SEO Agent \u2014 AI Visibility Tracker",
+  "active": true
+ },
+ "SEOagentAPIentry": {
+  "name": "SEO Agent \u2014 API",
+  "active": true
+ },
+ "SEOagentAuditSc1": {
+  "name": "SEO Agent \u2014 Audit Scheduler",
+  "active": true
+ },
+ "SEOagentBacklnk1": {
+  "name": "SEO Agent \u2014 Backlink Monitor",
+  "active": true
+ },
+ "SEOagentCadence1": {
+  "name": "SEO Agent \u2014 Content Cadence",
+  "active": true
+ },
+ "SEOagentCallback": {
+  "name": "SEO Agent \u2014 Test Callback Receiver",
+  "active": true
+ },
+ "SEOagentConsole1": {
+  "name": "SEO Agent \u2014 Console Alerts",
+  "active": true
+ },
+ "SEOagentErrHandl": {
+  "name": "SEO Agent \u2014 Error Handler",
+  "active": true
+ },
+ "SEOagentSiteAdm1": {
+  "name": "SEO Agent \u2014 Site Admin",
+  "active": true
+ },
+ "SEOagentSiteTrk1": {
+  "name": "SEO Agent \u2014 Site Tracker",
+  "active": true
+ },
+ "SEOagentTestRun1": {
+  "name": "SEO Agent \u2014 Test Runner",
+  "active": false
+ },
+ "SEOagentTracker1": {
+  "name": "SEO Agent \u2014 Rank Tracker",
+  "active": true
+ },
+ "SEOagentV4Full01": {
+  "name": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content",
+  "active": true
+ },
+ "SEOagentWordPres": {
+  "name": "SEO Agent \u2014 Publish to WordPress",
+  "active": false
+ },
+ "uMY3xr66Q7aLX9uA": {
+  "name": "SEO Agent v3 \u2014 Audit, Keywords, Verdict & Content",
+  "active": false
+ }
+}

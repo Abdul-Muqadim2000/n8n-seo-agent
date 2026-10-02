@@ -19,7 +19,10 @@ return plans.map(p => {
   const Rall = rows.filter(r => r.site_id === p.site_id);
   // the brand question ("what is <brand>?") only measures recognition: rates, share of voice and competitors use the buyer questions
   const RB = Rall.filter(r => r.kind === 'brand'), R = Rall.filter(r => r.kind !== 'brand');
-  const ans = R.filter(r => r.answered); const ansAll = Rall.filter(r => r.answered);
+  // headline figures use the weekly engines only, so every week compares like with like; Gemini / Claude (monthly) appear per engine
+  const MONTHLY = p.monthly_engines || [];
+  const RC = R.filter(r => !MONTHLY.includes(r.engine));
+  const ans = RC.filter(r => r.answered); const ansAll = Rall.filter(r => r.answered);
   const errors = Rall.filter(r => r.error).length;
   const mentioned = ans.filter(r => r.mentioned).length, cited = ans.filter(r => r.cited).length;
   const ranks = ans.filter(r => r.rank > 0).map(r => r.rank);
@@ -33,7 +36,9 @@ return plans.map(p => {
   comp.forEach(c => { c.share = pct(c.mentions, mentioned + compTotal); });
   // per engine
   const engines = {};
+  const carriedE = (p.carried && p.carried.engines) || {};
   for (const e of p.engines) { const er = R.filter(r => r.engine === e), ea = er.filter(r => r.answered); const eb = RB.filter(r => r.engine === e && r.answered);
+    if (!er.length && carriedE[e] && Number(carriedE[e].asked) > 0) { engines[e] = { ...carriedE[e], name: ENG[e] || e, carried: true, checked_at: carriedE[e].checked_at || p.carried.checked_at }; continue; }   // not asked this week: last full run
     engines[e] = { name: ENG[e] || e, asked: er.length, answered: ea.length, mentioned: ea.filter(r => r.mentioned).length, cited: ea.filter(r => r.cited).length, mention_rate: pct(ea.filter(r => r.mentioned).length, ea.length), citation_rate: pct(ea.filter(r => r.cited).length, ea.length), errors: Rall.filter(r => r.engine === e && r.error).length, knows_brand: eb.length ? eb.some(r => r.mentioned) : null }; }
   const aio = R.filter(r => r.engine === 'ai_overview');
   const aio_presence = pct(aio.filter(r => r.answered).length, aio.length), aio_citation_rate = pct(aio.filter(r => r.cited).length, aio.filter(r => r.answered).length);
@@ -47,11 +52,14 @@ return plans.map(p => {
   const byQ = new Map();
   for (const r of Rall) { const q = byQ.get(r.prompt_id) || { prompt: r.prompt, kind: r.kind, topic: r.topic, engines: {}, competitors: new Set(), sources: new Set() }; q.engines[r.engine] = !r.answered ? (r.error ? 'error' : 'none') : r.cited ? 'cited' : r.mentioned ? 'mentioned' : 'absent';
     if (r.answered) { String(r.competitors || '').split(/,\s*/).filter(Boolean).forEach(d => q.competitors.add(d)); String(r.sources || '').split(/,\s*/).filter(Boolean).forEach(d => q.sources.add(d)); } byQ.set(r.prompt_id, q); }
+  for (const e of p.engines) if (MONTHLY.includes(e) && !Rall.some(r => r.engine === e)) for (const q0 of byQ.values()) if (!(e in q0.engines)) q0.engines[e] = 'monthly';   // asked on the month's full run
   const questions = [...byQ.entries()].map(([id, q]) => ({ prompt_id: id, prompt: q.prompt, kind: q.kind, topic: q.topic, engines: q.engines, won: Object.values(q.engines).some(v => v === 'cited' || v === 'mentioned'), competitors: [...q.competitors].slice(0, 6), sources: [...q.sources].filter(h => h !== p.domain).slice(0, 5) }));
   const gaps = questions.filter(q => !q.won && q.kind !== 'brand' && q.competitors.length).slice(0, 8);
   const brandQ = questions.find(q => q.kind === 'brand');
-  const bAns = RB.filter(r => r.answered); const brand = { asked: RB.length, answered: bAns.length, known: bAns.filter(r => r.mentioned).length, engines: bAns.filter(r => r.mentioned).map(r => ENG[r.engine] || r.engine) };
-  const brand_known = bAns.length ? brand.known * 2 >= bAns.length : null;
+  const bAns = RB.filter(r => r.answered); let brand = { asked: RB.length, answered: bAns.length, known: bAns.filter(r => r.mentioned).length, engines: bAns.filter(r => r.mentioned).map(r => ENG[r.engine] || r.engine) };
+  if (!RB.length && p.carried) { const kb = Object.entries(carriedE).filter(([, v]) => v && v.knows_brand != null); brand = { asked: 0, answered: kb.length, known: kb.filter(([, v]) => v.knows_brand).length, engines: kb.filter(([, v]) => v.knows_brand).map(([k]) => ENG[k] || k), carried: true, checked_at: p.carried.checked_at };
+    for (const [k, v] of kb) if (engines[k] && !engines[k].carried) engines[k].knows_brand = v.knows_brand; }
+  const brand_known = brand.answered ? brand.known * 2 >= brand.answered : null;   // this month's brand check (asked now or carried from the full run)
   // market view: domains AI answers cite for the main topic (LLM Mentions, monthly)
   let market = null; const mi = reqs.findIndex(q => q.site_id === p.site_id && q.engine === 'market');
   if (mi >= 0) { const t = ((resps[mi] || {}).tasks || [])[0] || {}; const res = (t.result || [])[0] || null;
@@ -65,7 +73,7 @@ return plans.map(p => {
   const alerts = [];
   if (delta && delta.mention_rate <= -15) alerts.push({ level: 'high', text: 'AI mentions dropped ' + Math.abs(delta.mention_rate) + ' points to ' + mention_rate + '% of answers.' });
   if (prev && prev.engines) for (const [e, v] of Object.entries(prev.engines)) if ((v.cited || 0) > 0 && engines[e] && engines[e].answered && !engines[e].cited) alerts.push({ level: 'medium', text: (ENG[e] || e) + ' no longer cites any of your pages (cited ' + v.cited + ' times last time).' });
-  if (brand_known === false) alerts.push({ level: 'medium', text: 'Only ' + brand.known + ' of ' + brand.answered + ' AI assistants recognise ' + (p.business_name || p.domain) + ' when asked about it directly.' });
+  if (brand_known === false && !brand.carried) alerts.push({ level: 'medium', text: 'Only ' + brand.known + ' of ' + brand.answered + ' AI assistants recognise ' + (p.business_name || p.domain) + ' when asked about it directly.' });
   if (ans.length && errors > Rall.length / 2) alerts.push({ level: 'low', text: errors + ' of ' + R.length + ' AI requests failed; this week\'s numbers are partial.' });
   // actions, most valuable first
   const actions = [];
@@ -88,6 +96,6 @@ return plans.map(p => {
   const prospect_rows = sources.filter(s => !['platform', 'authority'].includes(s.kind) && s.citations >= 1).slice(0, 10).map(s => { const old = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === s.domain && x.type === 'ai_source') || {};
     return { site_id: p.site_id, domain: p.domain, prospect_domain: s.domain, type: 'ai_source', rank: Number(old.rank) || 0, spam_score: Number(old.spam_score) || 0, detail: 'Cited ' + s.citations + 'x in AI answers (' + s.engines.join(', ') + ')' + (s.topics.length ? ' about ' + s.topics.join(', ') : ''), source_url: '', target_url: old.target_url || '',
       status: old.status || 'new', first_seen: old.first_seen || now, last_seen: now, won_at: old.won_at || '', outreach_subject: old.outreach_subject || '', outreach_body: old.outreach_body || '', note: old.note || ({ official: 'official source: ask to be listed', media: 'news site: pitch a story or expert comment', directory: 'directory / review site: get listed' }[s.kind] || '') }; });
-  return { json: { ...p, metrics: { asked: R.length, answered: ans.length, errors, mentioned, cited, mention_rate, citation_rate, share_of_voice, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta },
+  return { json: { ...p, metrics: { asked: RC.length, asked_all: R.length, answered: ans.length, errors, mentioned, cited, mention_rate, citation_rate, share_of_voice, avg_rank: vis_row.avg_rank, aio_presence, aio_citation_rate, brand_known, brand, delta },
     engines, competitors: comp, sources, our_pages, questions, gaps, market, alerts, actions: actions.slice(0, 8), vis_row, prospect_rows, cost_usd: vis_row.cost_usd, form_url: FORM_URL, api_url: API_URL } };
 });

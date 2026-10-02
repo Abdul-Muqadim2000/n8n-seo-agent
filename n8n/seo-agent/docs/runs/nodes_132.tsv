@@ -1,0 +1,15 @@
+API Entry	runs=1	items=1	1ms
+Normalize Input	runs=1	items=1	48ms
+Rate Limit	runs=1	items=1	24ms
+Input OK?	runs=1	items=1	6ms
+Need Site Read?	runs=1	items=1	3ms
+Route Mode	runs=1	items=1	35ms
+Ensure Profile Table	runs=1	items=1	17ms
+Load Profile (Profile)	runs=1	items=1	27ms
+Profile Row	runs=1	items=1	20ms
+Save Profile	runs=1	items=1	21ms
+Profile Delivery	runs=1	items=1	26ms
+Via Webhook (Profile)?	runs=1	items=1	6ms
+Build Profile Response	runs=1	items=1	21ms
+Has Callback?	runs=1	items=1	4ms
+POST Callback	runs=1	items=1	42ms

@@ -1,0 +1,68 @@
+Ensure Sites Table	runs=1	items=1	8ms
+Manual Run	runs=1	items=1	0ms
+Ensure Metrics Table	runs=1	items=1	12ms
+Ensure Query Table	runs=1	items=1	5ms
+Ensure History Table (Site)	runs=1	items=1	4ms
+Ensure Trends Table	runs=1	items=1	3ms
+Ensure Log Table (Site)	runs=1	items=1	3ms
+Ensure Alerts Table (Site)	runs=1	items=1	4ms
+Ensure Checkin Table (Site)	runs=1	items=1	4ms
+Ensure AI Visibility Table (Site)	runs=1	items=1	6ms
+Ensure Snapshots Table (Site)	runs=1	items=1	5ms
+Ensure Audits Table (Site)	runs=1	items=1	4ms
+Load Sites	runs=1	items=1	10ms
+Load Ladders	runs=1	items=9	10ms
+Load Rank History	runs=1	items=27	8ms
+Load Site Metrics	runs=1	items=1	41ms
+Load Query History	runs=1	items=81	16ms
+Load Content Log	runs=1	items=1	6ms
+Load Console Alerts	runs=1	items=1	6ms
+Load Check-ins	runs=1	items=1	7ms
+Load AI Visibility (Site)	runs=1	items=2	6ms
+Load Backlink Snapshots (Site)	runs=1	items=1	5ms
+Load Audits (Site)	runs=1	items=3	4ms
+Load Trends (Site)	runs=1	items=20	5ms
+Site Plan	runs=1	items=1	58ms
+Any Sites?	runs=1	items=1	4ms
+GSC Sites	runs=1	items=1	1013ms
+Resolve Properties	runs=1	items=1	21ms
+GSC Requests	runs=1	items=30	37ms
+Any GSC?	runs=1	items=30	18ms
+GSC Query	runs=1	items=30	5892ms
+Parse GSC	runs=1	items=1	64ms
+Need GA4 Detect?	runs=1	items=1	10ms
+GA4 Requests	runs=1	items=3	24ms
+Any GA4?	runs=1	items=3	4ms
+GA4 Report	runs=1	items=3	2208ms
+Parse GA4	runs=1	items=1	35ms
+Inspect Requests	runs=1	items=1	25ms
+Any Inspections?	runs=1	items=1	1ms
+Trends Requests	runs=1	items=1	21ms
+Any Trends?	runs=1	items=1	1ms
+Parse Trends	runs=1	items=4	23ms
+Site SERP Requests	runs=1	items=3	33ms
+Any SERP?	runs=1	items=3	2ms
+SERP Check (Site)	runs=1	items=3	9746ms
+Parse Site SERP	runs=1	items=3	19ms
+Save Site Rank History	runs=1	items=3	15ms
+Site Metrics	runs=1	items=1	39ms
+Save Site Metrics	runs=1	items=1	5ms
+Query Rows	runs=1	items=112	12ms
+Any Query Rows?	runs=1	items=112	49ms
+Save Query Rows	runs=1	items=112	79ms
+Trend Rows	runs=1	items=1	10ms
+Any Trend Rows?	runs=1	items=1	1ms
+Site Rows	runs=1	items=1	10ms
+Save Sites	runs=1	items=1	22ms
+Brief Input	runs=1	items=1	35ms
+Site Brief	runs=1	items=1	13903ms
+Claude — Site Brief	runs=2	items=0	10051ms	Connection error.
+Site Report	runs=1	items=1	216ms
+Prepare PDF Site	runs=1	items=1	80ms
+Render PDF Site	runs=1	items=1	695ms
+Attach PDF Site	runs=1	items=1	60ms
+Has Email (Site)?	runs=1	items=1	11ms
+Send Site Report	runs=1	items=1	3365ms
+Build Site Callback	runs=1	items=1	44ms
+Has Callback (Site)?	runs=1	items=1	3ms
+POST Site Report	runs=1	items=1	58ms

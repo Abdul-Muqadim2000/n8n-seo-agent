@@ -81,6 +81,7 @@ N.append(node('Ensure Audits Table (Site)', DT_TYPE, DT_VERSION, dt_create_param
 N.append(node('Load AI Visibility (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(AI_VIS_TABLE), at(8, 3), **LOAD))
 N.append(node('Load Backlink Snapshots (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(BL_SNAP_TABLE), at(9, 3), **LOAD))
 N.append(node('Load Audits (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(AUDITS_TABLE), at(10, 3), **LOAD))
+N.append(node('Load Trends (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(TRENDS_TABLE), at(11, 3), **LOAD))   # v4.6: trends younger than 25 days are reused, not bought again
 N.append(node('Load Sites', DT_TYPE, DT_VERSION, dt_get_all_params(SITES_TABLE), at(5, 0), **LOAD))
 N.append(node('Load Ladders', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABLE), at(6, 0), **LOAD))
 N.append(node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_params(HISTORY_TABLE), at(7, 0), **LOAD))
@@ -167,7 +168,7 @@ Runs **every Monday 09:00** (after the Rank Tracker) and on demand through *Manu
 Credential **Google Service Account (SEO Agent)** (`googleApi`, "Set up for use in HTTP Request node" on, scopes `https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/analytics.readonly`). The owner adds the service-account e-mail to Search Console (Full) and GA4 (Viewer); put that e-mail into `CONFIG.service_account_email` in *Site Plan* so the connect instructions name it. Not connected = the report still runs (trends, live checks) and explains the two steps.
 Form: {FORM_URL} · API: {API_URL} (`mode: track`)""", [-40, -560], 1180, 500))
 for a, b in [('Weekly Schedule', 'Ensure Sites Table'), ('Manual Run', 'Ensure Sites Table'), ('Ensure Sites Table', 'Ensure Metrics Table'), ('Ensure Metrics Table', 'Ensure Query Table'), ('Ensure Query Table', 'Ensure History Table (Site)'), ('Ensure History Table (Site)', 'Ensure Trends Table'), ('Ensure Trends Table', 'Ensure Log Table (Site)'), ('Ensure Log Table (Site)', 'Ensure Alerts Table (Site)'), ('Ensure Alerts Table (Site)', 'Ensure Checkin Table (Site)'), ('Ensure Checkin Table (Site)', 'Ensure AI Visibility Table (Site)'), ('Ensure AI Visibility Table (Site)', 'Ensure Snapshots Table (Site)'), ('Ensure Snapshots Table (Site)', 'Ensure Audits Table (Site)'), ('Ensure Audits Table (Site)', 'Load Sites'),
-             ('Load Sites', 'Load Ladders'), ('Load Ladders', 'Load Rank History'), ('Load Rank History', 'Load Site Metrics'), ('Load Site Metrics', 'Load Query History'), ('Load Query History', 'Load Content Log'), ('Load Content Log', 'Load Console Alerts'), ('Load Console Alerts', 'Load Check-ins'), ('Load Check-ins', 'Load AI Visibility (Site)'), ('Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)'), ('Load Backlink Snapshots (Site)', 'Load Audits (Site)'), ('Load Audits (Site)', 'Site Plan'), ('Site Plan', 'Any Sites?'),
+             ('Load Sites', 'Load Ladders'), ('Load Ladders', 'Load Rank History'), ('Load Rank History', 'Load Site Metrics'), ('Load Site Metrics', 'Load Query History'), ('Load Query History', 'Load Content Log'), ('Load Content Log', 'Load Console Alerts'), ('Load Console Alerts', 'Load Check-ins'), ('Load Check-ins', 'Load AI Visibility (Site)'), ('Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)'), ('Load Backlink Snapshots (Site)', 'Load Audits (Site)'), ('Load Audits (Site)', 'Load Trends (Site)'), ('Load Trends (Site)', 'Site Plan'), ('Site Plan', 'Any Sites?'),
              ('GSC Sites', 'Resolve Properties'), ('Resolve Properties', 'GSC Requests'), ('GSC Requests', 'Any GSC?'), ('GSC Query', 'Parse GSC'), ('Parse GSC', 'Need GA4 Detect?'),
              ('GA4 Accounts', 'Stream Requests'), ('Stream Requests', 'Any Streams?'), ('GA4 Streams', 'GA4 Requests'), ('GA4 Requests', 'Any GA4?'), ('GA4 Report', 'Parse GA4'), ('Parse GA4', 'Inspect Requests'),
              ('Inspect Requests', 'Any Inspections?'), ('Inspect URL', 'Parse Inspection'), ('Parse Inspection', 'Trends Requests'), ('Trends Requests', 'Any Trends?'), ('Google Trends', 'Parse Trends'), ('Parse Trends', 'Site SERP Requests'),
@@ -181,7 +182,7 @@ link(C, 'Need GA4 Detect?', 'GA4 Accounts', 0); link(C, 'Need GA4 Detect?', 'GA4
 link(C, 'Any Streams?', 'GA4 Streams', 0); link(C, 'Any Streams?', 'GA4 Requests', 1)
 link(C, 'Any GA4?', 'GA4 Report', 0); link(C, 'Any GA4?', 'Inspect Requests', 1)
 link(C, 'Any Inspections?', 'Inspect URL', 0); link(C, 'Any Inspections?', 'Trends Requests', 1)
-link(C, 'Any Trends?', 'Google Trends', 0); link(C, 'Any Trends?', 'Site SERP Requests', 1)
+link(C, 'Any Trends?', 'Google Trends', 0); link(C, 'Any Trends?', 'Parse Trends', 1)   # all trends stored -> Parse Trends returns them from seo_trends
 link(C, 'Any SERP?', 'SERP Check (Site)', 0); link(C, 'Any SERP?', 'Site Metrics', 1)
 link(C, 'Any Query Rows?', 'Save Query Rows', 0); link(C, 'Any Query Rows?', 'Trend Rows', 1)
 link(C, 'Any Trend Rows?', 'Save Trends', 0); link(C, 'Any Trend Rows?', 'Site Rows', 1)

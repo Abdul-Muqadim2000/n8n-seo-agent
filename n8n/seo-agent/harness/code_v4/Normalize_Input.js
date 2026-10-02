@@ -10,7 +10,7 @@ const CONFIG = {
   crawl_js: false,                  // true = render JavaScript during the crawl (slower, costs more)
   qa_max_rounds: 2,   // one editor pass: live tests showed a second pass inflates length without raising the score                 // how many times the Editor may revise content that fails QA
   default_country: 'United States',
-  ai_budget_usd: 10,                // estimated Claude spend allowed per budget period (see Rate Limit); raised from 3 on 2026-10-01 at the user's request to finish the system test — the Anthropic Console workspace limit is the hard cap
+  ai_budget_usd: 6,                 // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 since 2026-10-02 at the user's request — the Anthropic Console workspace limit is the hard cap
   ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap
   ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)
   ladder_tracker_cadence: 'weekly', // the Rank Tracker workflow runs weekly; 'monthly' is documentation only until its schedule is changed

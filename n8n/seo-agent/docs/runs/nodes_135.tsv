@@ -1,0 +1,14 @@
+API Entry	runs=1	items=1	1ms
+Normalize Input	runs=1	items=1	63ms
+Rate Limit	runs=1	items=1	28ms
+Input OK?	runs=1	items=1	9ms
+Need Site Read?	runs=1	items=1	5ms
+Route Mode	runs=1	items=1	56ms
+Monitor Start	runs=1	items=1	35ms
+AI Visibility Run?	runs=1	items=1	8ms
+Start AI Visibility	runs=1	items=1	17ms
+Monitor Started	runs=1	items=1	146ms
+Via Webhook (Monitor)?	runs=1	items=1	5ms
+Build Monitor Response	runs=1	items=1	98ms
+Has Callback?	runs=1	items=1	7ms
+POST Callback	runs=1	items=1	37ms

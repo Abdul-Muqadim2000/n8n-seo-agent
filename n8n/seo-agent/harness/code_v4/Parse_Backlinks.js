@@ -30,7 +30,9 @@ return plans.map(p => {
   for (const b of brokenLinks) { const k = b.to_url; const r = reclaimMap.get(k) || { broken_url: k, status: b.status, links: 0, domains: new Set(), redirect_to: suggest(k) }; r.links++; r.domains.add(b.from_domain); reclaimMap.set(k, r); }
   const reclaim = [...reclaimMap.values()].map(r => ({ ...r, domains: [...r.domains].slice(0, 8) })).sort((a, b) => b.links - a.links).slice(0, 20);
   const refdomains = new Set(((one('refdomains').res || {}).items || []).map(x => String(x.domain || '').replace(/^www\./, '')).filter(Boolean));
-  const ts = ((one('timeseries').res || {}).items || []).map(x => ({ month: String(x.date || '').slice(0, 7), backlinks: Number(x.backlinks) || 0, referring_domains: Number(x.referring_domains) || 0, rank: Number(x.rank) || 0 }));
+  const tsNew = ((one('timeseries').res || {}).items || []).map(x => ({ month: String(x.date || '').slice(0, 7), backlinks: Number(x.backlinks) || 0, referring_domains: Number(x.referring_domains) || 0, rank: Number(x.rank) || 0 }));
+  const tsMap = new Map((p.stored_timeseries || []).filter(x => x && x.month).map(x => [x.month, x])); for (const x of tsNew) tsMap.set(x.month, x);   // stored history + the fresh months
+  const ts = [...tsMap.values()].sort((a, b) => a.month.localeCompare(b.month)).slice(-13);
   // unlinked mentions: pages naming the brand on a domain that does not link to you
   const brandRe = p.brand_names.map(b => new RegExp(String(b).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'));
   const mentions = [];
@@ -39,9 +41,10 @@ return plans.map(p => {
     mentions.push({ domain: d, url: x.url || '', title: String(ci.title || '').slice(0, 140), domain_rank: Number(x.domain_rank) || 0, spam: Number(x.spam_score) || 0 }); }
   // link gap
   const gi = greqs.findIndex(g => g.site_id === p.site_id); const G = gi >= 0 ? result(gresps, gi) : null; const competitors = gi >= 0 ? greqs[gi].competitors : p.competitors;
-  const gap = ((G && G.res && G.res.items) || []).map(it => { const vals = Object.entries(it.domain_intersection || {}); const f = (vals[0] || [])[1] || {};
+  const freshGap = ((G && G.res && G.res.items) || []).map(it => { const vals = Object.entries(it.domain_intersection || {}); const f = (vals[0] || [])[1] || {};
     return { domain: String(f.target || '').replace(/^www\./, ''), rank: Number(f.rank) || 0, spam: Number(f.backlinks_spam_score) || 0, links_to: vals.map(([k]) => competitors[Number(k) - 1]).filter(Boolean), backlinks: vals.reduce((s, [, v]) => s + (Number(v.backlinks) || 0), 0) }; })
     .filter(g => g.domain && g.spam < 30 && !BIG.test(g.domain) && !refdomains.has(g.domain) && g.domain !== p.domain).sort((a, b) => (b.links_to.length - a.links_to.length) || (b.rank - a.rank)).slice(0, 30);
+  const gap = gi >= 0 ? freshGap : (p.stored_gap || []).filter(g => !refdomains.has(g.domain));   // between quarterly refreshes: the stored gap prospects
   // alerts
   const prev = p.previous; const alerts = [];
   if (important_lost.length) alerts.push({ level: 'high', text: important_lost.length + ' important link(s) lost: ' + important_lost.slice(0, 3).map(l => l.from_domain + ' (authority ' + l.domain_rank + ')').join(', ') + '.' });
@@ -57,6 +60,6 @@ return plans.map(p => {
     ...important_lost.map(l => ({ prospect_domain: l.from_domain, type: 'lost', rank: l.domain_rank, spam_score: l.spam, detail: 'Linked to ' + pathOf(l.to_url) + ' from ' + l.from_url + ' until ' + l.last_seen, source_url: l.from_url, target_url: l.to_url })),
     ...reclaim.flatMap(r => r.domains.slice(0, 3).map(d => ({ prospect_domain: d, type: 'reclaim', rank: 0, spam_score: 0, detail: 'Links to ' + pathOf(r.broken_url) + ' (HTTP ' + (r.status || 'error') + '): 301-redirect it to ' + pathOf(r.redirect_to), source_url: '', target_url: r.redirect_to }))),
     ...mentions.slice(0, 10).map(m => ({ prospect_domain: m.domain, type: 'mention', rank: m.domain_rank, spam_score: m.spam, detail: 'Mentions you without a link: ' + m.title, source_url: m.url, target_url: 'https://' + p.domain + '/' })),
-    ...gap.slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', rank: g.rank, spam_score: g.spam, detail: 'Links to ' + g.links_to.join(', ') + ' (' + g.backlinks + ' links), not to you', source_url: '', target_url: (p.assets[0] || {}).url || '' }))];
-  return { json: { ...p, competitors, summary, lost, important_lost, new_links: news, spammy, reclaim, refdomains: [...refdomains].slice(0, 500), timeseries: ts, mentions, gap, alerts, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
+    ...freshGap.slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', rank: g.rank, spam_score: g.spam, detail: 'Links to ' + g.links_to.join(', ') + ' (' + g.backlinks + ' links), not to you', source_url: '', target_url: (p.assets[0] || {}).url || '' }))];
+  return { json: { ...p, competitors, summary, lost, important_lost, new_links: news, spammy, reclaim, refdomains: [...refdomains].slice(0, 500), timeseries: ts, mentions, gap, gap_stored: gi < 0 && gap.length > 0, gap_checked: gi < 0 ? ((p.stored_gap || [])[0] || {}).last_seen || '' : p.checked_at.slice(0, 10), alerts, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
 });

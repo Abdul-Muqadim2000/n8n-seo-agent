@@ -1136,9 +1136,9 @@ add_node('Publish WordPress Draft', 'n8n-nodes-base.executeWorkflow', 1.2, {'sou
 connect('Attach PDF Report', 'Publish To WordPress?'); connect('Publish To WordPress?', 'Publish WordPress Draft', 0)
 log('WordPress (optional, off): finished pages can be created as WordPress drafts (title, slug, excerpt, HTML, JSON-LD, Yoast/RankMath meta) through the sub-workflow SEOagentWordPres; enable with CONFIG.wordpress_publish and a wordpress_url in the request, and attach the "WordPress (SEO Agent)" credential')
 
-# ---------- AI budget cap raised at the user's request (2026-10-01) to finish the system test; lower it again when done ----------
+# ---------- AI budget cap: 3 → 10 on 2026-10-01 to finish the system test; set to 6 on 2026-10-02 at the user's request ----------
 patch('Normalize Input', "  ai_budget_usd: 3,                 // estimated Claude spend allowed per budget period (see Rate Limit); raise when ready",
-      "  ai_budget_usd: 10,                // estimated Claude spend allowed per budget period (see Rate Limit); raised from 3 on 2026-10-01 at the user's request to finish the system test — the Anthropic Console workspace limit is the hard cap")
+      "  ai_budget_usd: 6,                 // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 since 2026-10-02 at the user's request — the Anthropic Console workspace limit is the hard cap")
 
 # ---------- credential slots for the nodes created in this section (the generic pass in 8c-E ran before they existed) ----------
 for n in list(nodes.values()):
@@ -1869,6 +1869,65 @@ sticky("""### Growth monitors and audit upgrades (v4.5)
 **Workflows** (build_monitors.py): *AI Visibility Tracker* (Mon 07:00: buyer questions × ChatGPT / Perplexity / Gemini / Claude / Google AI Mode + AI Overviews → mention & citation rate, share of voice, sources AI trusts, lost questions), *Backlink Monitor* (Mon 07:30 light watch, monthly full report: lost / new / broken / spam, link gap, unlinked mentions, prospects with outreach drafts) and *Audit Scheduler* (1st of the month: technical re-audit per site). Settings per site in `seo_monitors` ("Track my site" competitors / API `monitors`, Site Admin `monitors`). Form / API `ai_visibility` and `backlinks` start a run at once.
 **Every audit** now: crawl size 200 / 500 / 1000 and JavaScript rendering; **brand & entity check** against the Google Business Profile (name, phone, website, claimed) and the homepage Organization schema (sameAs); stored in `seo_audits` / `seo_audit_findings` → **since the last audit** (fixed / new / still open, score change); **internal links to add**; **fix pack** (robots.txt, llms.txt, redirect map, schema, internal-links.csv, README; zipped for the e-mail, text in the callback).""", HX - 60, HY + 220, 1150, 260, 5)
 log('Growth monitors (v4.5): on-demand modes ai_visibility / backlinks (form + API) starting the new AI Visibility Tracker / Backlink Monitor workflows; monitor settings per site on Track my site (seo_monitors); audits: crawl size and JavaScript options, brand & entity check (Google Business Profile, Organization sameAs), audit history (seo_audits, seo_audit_findings) with the since-the-last-audit diff, internal-link suggestions and a fix pack (robots.txt, llms.txt, redirect map, schema, internal links; zipped); every e-mail attaches files through fileAttachments; full-report link gap reads the linking domain from `target`')
+
+
+# =============================================================================
+# 20. NO REPEATED WORK (v4.6, 2026-10-02): what the database already knows is reused instead of paid for again; nothing an SEO result needs is
+#     dropped. Full report: domain registration dates cached (seo_cache 'age:<domain>', 365 days) and looked up free through RDAP first, paid
+#     WHOIS only for the gaps (WHOIS was $0.48 of a $1.02 report). Keyword / ladder / cadence runs: the homepage description is reused for
+#     30 days ('desc:<domain>'). Content: the editor pass is skipped only when the draft already passes every SEO check (style notes only).
+# =============================================================================
+from ladder_common import CACHE_TABLE, CACHE_COLS
+# ---------- A. domain ages: cache -> RDAP (free) -> WHOIS (paid, only what RDAP cannot answer) ----------
+_wp = pos('DataForSEO Whois'); AX20, AY20 = _wp[0] - 220, _wp[1] + 420
+disconnect('Domain Overview', 'DataForSEO Whois'); disconnect('DataForSEO Whois', 'RDAP Lookup'); disconnect('RDAP Lookup', 'Competitor Analysis')
+add_node('Ensure Cache Table (Ages)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [AX20, AY20], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Age Cache', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'age'), [AX20 + 220, AY20], LOAD18)
+add_node('Age Lookup Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Age_Lookup_Plan.js')}, [AX20 + 440, AY20])
+if_node('Need Age Lookup?', "{{ !$json.skip }}", [AX20 + 660, AY20])
+nodes['RDAP Lookup']['position'] = [AX20 + 880, AY20 - 120]
+nodes['RDAP Lookup']['parameters']['url'] = "=https://rdap.org/domain/{{ $json.domain }}"
+add_node('RDAP Results', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/RDAP_Results.js')}, [AX20 + 1100, AY20 - 120])
+if_node('Need WHOIS?', "{{ !$json.skip }}", [AX20 + 1320, AY20 - 120])
+nodes['DataForSEO Whois']['position'] = [AX20 + 1540, AY20 - 240]; nodes['DataForSEO Whois']['onError'] = 'continueRegularOutput'
+assert "$('Pick Competitors').item.json.domain" in nodes['DataForSEO Whois']['parameters']['jsonBody']
+nodes['DataForSEO Whois']['parameters']['jsonBody'] = nodes['DataForSEO Whois']['parameters']['jsonBody'].replace("$('Pick Competitors').item.json.domain", "$json.domain")
+add_node('Domain Ages', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Domain_Ages.js')}, [AX20 + 1760, AY20])
+add_node('Age Rows', 'n8n-nodes-base.code', 2, {'jsCode': "// New registration dates to store (seo_cache, upsert by key; exact columns).\nconst rows = $input.first().json.rows || [];\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];"}, [AX20 + 1980, AY20])
+if_node('Any New Ages?', "{{ !$json.skip }}", [AX20 + 2200, AY20])
+add_node('Save Ages', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [AX20 + 2420, AY20 - 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+for a, b in [('Domain Overview', 'Ensure Cache Table (Ages)'), ('Ensure Cache Table (Ages)', 'Load Age Cache'), ('Load Age Cache', 'Age Lookup Plan'), ('Age Lookup Plan', 'Need Age Lookup?'),
+             ('RDAP Lookup', 'RDAP Results'), ('RDAP Results', 'Need WHOIS?'), ('DataForSEO Whois', 'Domain Ages'), ('Domain Ages', 'Age Rows'), ('Age Rows', 'Any New Ages?'), ('Save Ages', 'Competitor Analysis')]:
+    connect(a, b)
+connect('Need Age Lookup?', 'RDAP Lookup', 0); connect('Need Age Lookup?', 'Domain Ages', 1); connect('Need WHOIS?', 'DataForSEO Whois', 0); connect('Need WHOIS?', 'Domain Ages', 1)
+connect('Any New Ages?', 'Save Ages', 0); connect('Any New Ages?', 'Competitor Analysis', 1)
+patch('Competitor Analysis', "const ages = $('DataForSEO Whois').all().map(i => i.json);\nconst rdaps = $input.all().map(i => i.json);   // free RDAP lookup, fills the gaps in DataForSEO WHOIS",
+      "const AGES = $('Domain Ages').first().json.ages || {};   // v4.6: stored registration dates; free RDAP first, paid WHOIS only for the gaps")
+patch('Competitor Analysis', "  const w = ages[i]?.tasks?.[0]?.result?.[0]?.items?.[0] || null;\n  const rdap = (((rdaps[i] || {}).events) || []).find(e => /registration/i.test(e.eventAction || ''));\n  const regRaw = (w && (w.created_datetime || w.created_date)) || (rdap && rdap.eventDate) || null;",
+      "  const regRaw = (AGES[String(c.domain || '').toLowerCase()] || {}).registered || null;")
+# ---------- B. homepage description: reused for 30 days, saved after every fresh read ----------
+_ns = pos('Need Site Read?'); DX20, DY20 = _ns[0] - 660, _ns[1] - 260
+disconnect('Input OK?', 'Need Site Read?')
+add_node('Ensure Cache Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [DX20, DY20], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Site Cache', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', "={{ 'desc:' + String($('Rate Limit').first().json.domain || 'none').toLowerCase() }}"), [DX20 + 220, DY20], LOAD18)
+add_node('Use Cached Description', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Use_Cached_Description.js')}, [DX20 + 440, DY20])
+_ib = conns['Input OK?']['main'][0]; _ib.insert(0, {'node': 'Ensure Cache Table (Site)', 'type': 'main', 'index': 0})
+for a, b in [('Ensure Cache Table (Site)', 'Load Site Cache'), ('Load Site Cache', 'Use Cached Description'), ('Use Cached Description', 'Need Site Read?')]:
+    connect(a, b)
+_pd = pos('Parse Description')
+disconnect('Parse Description', 'Route Mode')
+add_node('Description Cache Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Description_Cache_Row.js')}, [_pd[0], _pd[1] + 200])
+add_node('Save Description', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [_pd[0] + 220, _pd[1] + 200], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Restore Description', 'n8n-nodes-base.code', 2, {'jsCode': "// The run continues with the fresh description (the Data Table upsert outputs the stored row, not the run's item).\nreturn [{ json: $('Parse Description').first().json }];"}, [_pd[0] + 440, _pd[1] + 200])
+for a, b in [('Parse Description', 'Description Cache Row'), ('Description Cache Row', 'Save Description'), ('Save Description', 'Restore Description'), ('Restore Description', 'Route Mode')]:
+    connect(a, b)
+# ---------- C. content: one editor pass only when it can still improve the page (Content_QA.js computes editor_needed) ----------
+_nr = nodes['Needs Revision?']['parameters']['conditions']['conditions'][0]
+assert _nr['leftValue'] == "={{ $json.content_qa.passed === false && $json.qa_round < ($json.qa_max_rounds || 2) }}"
+_nr['leftValue'] = "={{ $json.content_qa.passed === false && $json.content_qa.editor_needed !== false && $json.qa_round < ($json.qa_max_rounds || 2) }}"
+sticky("""### No repeated work (v4.6)
+**Domain ages** (full report): stored in `seo_cache` for a year; looked up through free RDAP first, paid WHOIS only for what RDAP cannot answer. **Homepage description**: reused for 30 days by keyword / ladder / cadence runs ("Just describe my website" always reads fresh; typed details always win). **Editor pass**: skipped only when the draft already scores 90+, the review rates it 85+ with no high-severity problem and only style notes remain; every SEO check still forces it.""", AX20 - 40, AY20 + 200, 900, 180, 6)
+log('No repeated work (v4.6): domain registration dates cached a year (seo_cache) with free RDAP before paid WHOIS; the homepage description reused for 30 days; the editor pass runs only when the draft misses an SEO check or the review finds a real problem')
 
 
 # =============================================================================

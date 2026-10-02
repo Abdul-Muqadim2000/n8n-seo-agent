@@ -6,7 +6,7 @@
     "settings": {
       "executionOrder": "v1",
       "errorWorkflow": "SEOagentErrHandl",
-      "executionTimeout": 600,
+      "executionTimeout": 900,
       "saveDataErrorExecution": "all",
       "saveDataSuccessExecution": "all"
     },
@@ -431,6 +431,49 @@
       },
       {
         "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_cache",
+          "columns": {
+            "column": [
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "value",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "fd876b66-5766-5208-a9ae-bc13e30b4292",
+        "name": "Ensure Cache Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
           "resource": "row",
           "operation": "get",
           "dataTableId": {
@@ -551,14 +594,295 @@
       },
       {
         "parameters": {
-          "jsCode": "// Monthly technical re-audit (1st of the month 06:00, and on demand): one technical audit per site with audits switched on, unless the site was\n// audited in the last 25 days. Each audit runs as its own execution through API Entry (internal key \"audit:\") and delivers itself: report +\n// \"since the last audit\" diff + fix pack. The crawl size / JavaScript rendering come from the site's monitor settings.\n// ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----\n// Sites = the Data Table seo_sites (\"Track my site\") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).\n// On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc\n// with the trigger's country, e-mail and callback.\nlet trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}\nif (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst siteIdFor = (d) => 'site_' + d.replace(/[^a-z0-9]+/g, '-');\nconst listOf = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst flag = (v, dflt) => (v === undefined || v === null || v === '') ? dflt : !(v === false || /^(false|0|no|off)$/i.test(String(v)));\nconst DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];\nfunction monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit'\n  const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), ladders = rowsOf('Load Ladders').filter(r => r.domain), mons = rowsOf('Load Monitors'), profiles = rowsOf('Load Profiles');\n  const byDomain = new Map();\n  for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: listOf(s.keywords).map(k => k.toLowerCase()), virtual: false }); }\n  for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', virtual: true }); }\n  for (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }\n  const want = normD(trigger.domain) || String(trigger.site_id || '').trim();\n  let list = [...byDomain.values()];\n  if (want) {\n    list = list.filter(s => s.domain === want || s.site_id === want);\n    if (!list.length && normD(trigger.domain)) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];\n  } else list = list.filter(s => String(s.status || 'active') !== 'paused');\n  const out = list.map(s => {\n    const m = mons.find(x => x.site_id === s.site_id) || {};\n    const p = profiles.find(x => x.site_id === s.site_id) || {};\n    const engines = listOf(m.ai_engines).map(e => e.toLowerCase()).filter(e => DEFAULT_ENGINES.includes(e));\n    const settings = { ai_visibility: flag(m.ai_visibility, true), backlinks: flag(m.backlinks, true), audit_monthly: flag(m.audit_monthly, true), engines: engines.length ? engines : DEFAULT_ENGINES,\n      prompts_max: Math.min(15, Math.max(3, Number(m.ai_prompts_max) || 8)), audit_pages: Math.min(1000, Math.max(50, Number(m.audit_pages) || 200)), audit_js: flag(m.audit_js, false),\n      competitors: [...new Set([...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD).filter(d => d && d !== s.domain))].slice(0, 5),\n      brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || ''].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };\n    const o = { ...s, settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '' } };\n    if (want) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }\n    o.request_id = String(trigger.request_id || s.request_id || '');\n    return o;\n  });\n  const flagOf = { ai: 'ai_visibility', backlinks: 'backlinks', audit: 'audit_monthly' }[kind];\n  return { list: want ? out : out.filter(s => s.settings[flagOf]), on_demand: !!want, want, trigger, total: byDomain.size };\n}\n\nconst CONFIG = { max_sites_per_run: 20, min_days_between: 25 };\nconst { list, on_demand, want, total } = monitorSites('audit');\nconst audits = rowsOf('Load Audits');\nconst now = Date.now(); const ym = new Date().toISOString().slice(0, 7).replace('-', '');\nconst out = [], skipped = [];\nfor (const s of list.slice(0, CONFIG.max_sites_per_run)) {\n  const last = audits.filter(a => a.site_id === s.site_id).sort((a, b) => String(b.audited_at).localeCompare(String(a.audited_at)))[0];\n  const days = last ? Math.floor((now - new Date(last.audited_at).getTime()) / 864e5) : null;\n  if (!on_demand && days != null && days < CONFIG.min_days_between) { skipped.push(s.domain + ' (audited ' + days + ' days ago)'); continue; }\n  if (!s.email && !s.callback_url) { skipped.push(s.domain + ' (no e-mail or callback to deliver to)'); continue; }\n  out.push({ json: { body: { mode: 'audit', domain: s.domain, country: s.country || 'United States', report_type: 'Site Audit (technical issues only)', email: s.email || '', callback_url: s.callback_url || '',\n    request_id: s.request_id || ('aud_' + ym + '_' + s.site_id.replace(/^site_/, '')), client_ip: 'audit:' + s.site_id, crawl_pages: s.settings.audit_js ? Math.min(500, s.settings.audit_pages) : s.settings.audit_pages, crawl_js: s.settings.audit_js, scheduled: true },\n    domain: s.domain, last_audit_days: days, skipped } });\n}\nif (!out.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches \"' + want + '\"' : (total ? 'no audit due' : 'no sites yet'), skipped } }];\nreturn out;\n"
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "kind",
+                "condition": "eq",
+                "keyValue": "sitemap"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "72b66c08-d26b-570c-9015-c395c1afa412",
+        "name": "Load Cache (Audit)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1320,
+          220
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Monthly technical re-audit, step 1: the sites with audits switched on (and an e-mail or callback to deliver to). Their sitemap is read next\n// (free) so the plan can tell whether anything changed since the last audit.\n// ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----\n// Sites = the Data Table seo_sites (\"Track my site\") + every domain with a keyword ladder; settings per site from seo_monitors (defaults: everything on).\n// On demand (Manual Run with { domain | site_id }) one site runs even when its weekly / monthly monitor is off; an untracked domain is checked ad hoc\n// with the trigger's country, e-mail and callback.\nlet trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}\nif (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst siteIdFor = (d) => 'site_' + d.replace(/[^a-z0-9]+/g, '-');\nconst listOf = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst flag = (v, dflt) => (v === undefined || v === null || v === '') ? dflt : !(v === false || /^(false|0|no|off)$/i.test(String(v)));\nconst DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];\nfunction monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit'\n  const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), ladders = rowsOf('Load Ladders').filter(r => r.domain), mons = rowsOf('Load Monitors'), profiles = rowsOf('Load Profiles');\n  const byDomain = new Map();\n  for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: listOf(s.keywords).map(k => k.toLowerCase()), virtual: false }); }\n  for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', virtual: true }); }\n  for (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }\n  const want = normD(trigger.domain) || String(trigger.site_id || '').trim();\n  let list = [...byDomain.values()];\n  if (want) {\n    list = list.filter(s => s.domain === want || s.site_id === want);\n    if (!list.length && normD(trigger.domain)) list = [{ site_id: siteIdFor(normD(trigger.domain)), domain: normD(trigger.domain), country: trigger.country || '', location_code: Number(trigger.location_code) || 0, language_code: trigger.language_code || 'en', email: '', callback_url: '', keywords: [], status: 'active', source: 'adhoc', virtual: true, adhoc: true }];\n  } else list = list.filter(s => String(s.status || 'active') !== 'paused');\n  const out = list.map(s => {\n    const m = mons.find(x => x.site_id === s.site_id) || {};\n    const p = profiles.find(x => x.site_id === s.site_id) || {};\n    const engines = listOf(m.ai_engines).map(e => e.toLowerCase()).filter(e => DEFAULT_ENGINES.includes(e));\n    const settings = { ai_visibility: flag(m.ai_visibility, true), backlinks: flag(m.backlinks, true), audit_monthly: flag(m.audit_monthly, true), engines: engines.length ? engines : DEFAULT_ENGINES,\n      prompts_max: Math.min(15, Math.max(3, Number(m.ai_prompts_max) || 8)), audit_pages: Math.min(1000, Math.max(50, Number(m.audit_pages) || 200)), audit_js: flag(m.audit_js, false),\n      competitors: [...new Set([...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD).filter(d => d && d !== s.domain))].slice(0, 5),\n      brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || ''].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };\n    const o = { ...s, settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '' } };\n    if (want) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }\n    o.request_id = String(trigger.request_id || s.request_id || '');\n    return o;\n  });\n  const flagOf = { ai: 'ai_visibility', backlinks: 'backlinks', audit: 'audit_monthly' }[kind];\n  return { list: want ? out : out.filter(s => s.settings[flagOf]), on_demand: !!want, want, trigger, total: byDomain.size };\n}\n\nconst { list, on_demand, want, total } = monitorSites('audit');\nconst audits = rowsOf('Load Audits');\nconst out = []; const skipped = [];\nfor (const s of list.slice(0, 20)) {\n  if (!s.email && !s.callback_url) { skipped.push(s.domain + ' (no e-mail or callback to deliver to)'); continue; }\n  const last = audits.filter(a => a.site_id === s.site_id).sort((a, b) => String(b.audited_at).localeCompare(String(a.audited_at)))[0] || null;\n  out.push({ json: { site_id: s.site_id, domain: s.domain, country: s.country || 'United States', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', settings: s.settings, on_demand,\n    last_audit: last ? { audited_at: last.audited_at, health_score: Number(last.health_score) || 0, critical: Number(last.critical) || 0, high: Number(last.high) || 0 } : null, sitemap_url: 'https://' + s.domain + '/sitemap.xml', skipped } });\n}\nif (!out.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches \"' + want + '\"' : (total ? 'no site to audit' : 'no sites yet'), skipped } }];\nreturn out;\n"
+        },
+        "id": "c8db3317-edf8-548d-a10a-bf7c03bd7252",
+        "name": "Audit Candidates",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1540,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "b43ec0b1-7e71-5d65-a3b5-bb2bd9d582e0",
+                "leftValue": "={{ !$json.nothing_to_do }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "fcdbc9d1-2a4a-5b54-b00b-c577af146142",
+        "name": "Any Candidates?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1760,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "={{ $json.sitemap_url }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (compatible; SEO-Agent/4.6)"
+              },
+              {
+                "name": "Accept",
+                "value": "application/xml,text/xml,*/*"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 45000,
+            "redirect": {
+              "redirect": {
+                "followRedirects": true,
+                "maxRedirects": 5
+              }
+            },
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "62a50ed0-2330-5911-a25f-2450cfe20183",
+        "name": "Fetch Sitemap (Schedule)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1980,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Monthly technical re-audit, step 2 (v4.6 — no repeated audits): a site is re-crawled only when it changed. The sitemap fingerprint (URLs +\n// lastmod dates, or the sitemap index entries) is compared with the one stored at the last check (seo_cache 'sitemap:<site>').\n// Audit when: on demand · never audited · the fingerprint changed · 60+ days since the last audit (safety net for changes a sitemap does not\n// show: theme, plugins, server, links) · no readable sitemap, or a sitemap index without lastmod dates, and 25+ days (change cannot be\n// detected: monthly as before). Otherwise skip; the weekly Site Tracker keeps watching indexing in\n// Search Console between audits. Each started audit compares itself with the previous one and delivers report + fix pack.\nconst CONFIG = { min_days_between: 25, safety_net_days: 60 };\nconst cands = $('Audit Candidates').all().map(i => i.json).filter(c => !c.nothing_to_do);\nconst maps = $input.all().map(i => i.json || {});\nlet cache = []; try { cache = $('Load Cache (Audit)').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}\nconst hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };\nconst ym = new Date().toISOString().slice(0, 7).replace('-', ''); const now = new Date().toISOString();\nconst fingerprint = (r) => { const status = Number(r.statusCode) || 0; const body = String(r.body != null ? r.body : (r.data != null ? r.data : ''));\n  if (status !== 200 || !/<(urlset|sitemapindex)/i.test(body)) return null;\n  const entries = [...body.matchAll(/<(?:url|sitemap)>([\\s\\S]*?)<\\/(?:url|sitemap)>/gi)].map(m => { const loc = (m[1].match(/<loc>\\s*([^<\\s]+)/i) || [])[1] || ''; const lm = (m[1].match(/<lastmod>\\s*([^<\\s]+)/i) || [])[1] || ''; return loc + '|' + lm; }).filter(x => x.length > 1).sort();\n  const lastmods = entries.map(e => e.split('|')[1]).filter(Boolean).sort();\n  const index = /<sitemapindex/i.test(body); if (!entries.length || (index && !lastmods.length)) return null;   // an index without dates hides page changes\n  return { fp: hash(entries.join('\\n')), entries: entries.length, index, latest_lastmod: lastmods[lastmods.length - 1] || '' }; };\n// The stored fingerprint is replaced only when an audit starts now (or none is stored yet): a skipped site keeps the old one, so a change made\n// after the last audit is still caught next month.\nconst out = [];\ncands.forEach((c, i) => {\n  const fp = fingerprint(maps[i] || {}); const stored = cache.find(r => r.key === 'sitemap:' + c.site_id); let prev = null; try { prev = stored ? JSON.parse(stored.value) : null; } catch (e) {}\n  const days = c.last_audit ? Math.floor((Date.now() - new Date(c.last_audit.audited_at).getTime()) / 864e5) : null;\n  let run, why;\n  if (c.on_demand) { run = true; why = 'on demand'; }\n  else if (days == null) { run = true; why = 'never audited'; }\n  else if (days < CONFIG.min_days_between) { run = false; why = 'audited ' + days + ' days ago'; }\n  else if (days >= CONFIG.safety_net_days) { run = true; why = days + ' days since the last audit (safety net)'; }\n  else if (!fp) { run = true; why = 'no readable sitemap (or an index without dates): change cannot be detected, monthly audit'; }\n  else if (!prev) { run = false; why = 'fingerprint stored now; the next change to the site triggers an audit'; }\n  else if (prev.fp !== fp.fp) { run = true; why = 'site changed since the last check (' + (fp.entries - (prev.entries || 0) >= 0 ? '+' : '') + (fp.entries - (prev.entries || 0)) + ' sitemap entries' + (fp.latest_lastmod && fp.latest_lastmod !== prev.latest_lastmod ? ', pages updated ' + fp.latest_lastmod.slice(0, 10) : '') + ')'; }\n  else { run = false; why = 'no change since ' + String(c.last_audit.audited_at).slice(0, 10) + ' (next safety audit after ' + CONFIG.safety_net_days + ' days)'; }\n  const pages = c.settings.audit_js ? Math.min(500, c.settings.audit_pages) : c.settings.audit_pages;\n  out.push({ json: { site_id: c.site_id, domain: c.domain, run, why, days_since_audit: days, fingerprint: fp, cache_row: fp && (run || !prev || prev.fp === fp.fp) ? { key: 'sitemap:' + c.site_id, kind: 'sitemap', site_id: c.site_id, value: JSON.stringify({ ...fp, url: c.sitemap_url, checked_at: now }), updated_at: now } : null,\n    body: run ? { mode: 'audit', domain: c.domain, country: c.country, report_type: 'Site Audit (technical issues only)', email: c.email, callback_url: c.callback_url, request_id: c.request_id || ('aud_' + ym + '_' + c.site_id.replace(/^site_/, '')), client_ip: 'audit:' + c.site_id, crawl_pages: pages, crawl_js: c.settings.audit_js, scheduled: true, audit_reason: why } : null, skipped: c.skipped } });\n});\nreturn out;\n"
         },
         "id": "46385acf-592f-56b5-988f-38eba0cc4607",
         "name": "Audit Schedule Plan",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          1320,
+          2200,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// The sitemap fingerprints to store (seo_cache, upsert by key; exact columns), for started and skipped sites alike.\nconst rows = $('Audit Schedule Plan').all().map(i => i.json.cache_row).filter(Boolean);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];"
+        },
+        "id": "394d112c-5192-5b92-a5e4-0ad8fcf20748",
+        "name": "Fingerprint Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2420,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "2216660b-0927-5da4-a3da-10f62f4bec84",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "223ecd97-a240-5e2a-a632-2bb20daed973",
+        "name": "Any Fingerprints?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2640,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ $json.key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "value",
+                "displayName": "value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "91446de1-c336-5a33-b96f-b236372cb8b8",
+        "name": "Save Fingerprints",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2860,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// Only the audits that are due; the others are listed with the reason they were skipped.\nconst plan = $('Audit Schedule Plan').all().map(i => i.json); const due = plan.filter(p => p.run && p.body);\nreturn due.length ? due.map(p => ({ json: { body: p.body, domain: p.domain, why: p.why } })) : [{ json: { nothing_to_do: true, skipped: plan.map(p => p.domain + ': ' + p.why) } }];"
+        },
+        "id": "c20fbae7-7ce5-526c-9d20-aa3112047bc5",
+        "name": "Audits To Start",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3080,
           220
         ]
       },
@@ -593,7 +917,7 @@
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.3,
         "position": [
-          1540,
+          3300,
           220
         ]
       },
@@ -615,21 +939,21 @@
         "type": "n8n-nodes-base.executeWorkflow",
         "typeVersion": 1.2,
         "position": [
-          1760,
+          3520,
           0
         ],
         "onError": "continueRegularOutput"
       },
       {
         "parameters": {
-          "jsCode": "// What was started (each audit delivers its own report, diff and fix pack by e-mail / callback).\nconst plan = $('Audit Schedule Plan').all().map(i => i.json);\nreturn [{ json: { started: plan.map(p => p.domain), skipped: (plan[0] || {}).skipped || [], at: new Date().toISOString() } }];"
+          "jsCode": "// What was started (each audit delivers its own report, diff and fix pack) and what was skipped, with the reason.\nconst plan = $('Audit Schedule Plan').all().map(i => i.json);\nreturn [{ json: { started: plan.filter(p => p.run).map(p => p.domain + ': ' + p.why), skipped: plan.filter(p => !p.run).map(p => p.domain + ': ' + p.why), at: new Date().toISOString() } }];"
         },
         "id": "6c66013f-e7ec-53be-a930-0973c8cd1443",
         "name": "Audits Started",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          1980,
+          3740,
           0
         ]
       },
@@ -640,15 +964,15 @@
         "type": "n8n-nodes-base.noOp",
         "typeVersion": 1,
         "position": [
-          1760,
+          3520,
           440
         ]
       },
       {
         "parameters": {
-          "content": "## SEO Agent — Audit Scheduler (v4.5)\n**1st of every month, 06:00** (cron `0 6 1 * *`) and on demand (*Manual Run* `{ domain | site_id }`). For every site with `audit_monthly` on (`seo_monitors`; default on) and no audit in the last 25 days, it starts a **technical audit** in its own execution through API Entry (internal key `audit:`, crawl size / JavaScript rendering from the site's settings). Each audit compares itself with the site's previous audit (`seo_audits` + `seo_audit_findings`: fixed / new / still open, score change) and delivers the report with the **fix pack** (robots.txt, llms.txt, redirect map, schema, internal links) by e-mail and/or callback.",
-          "height": 220,
-          "width": 1100,
+          "content": "## SEO Agent — Audit Scheduler (v4.6: no repeated audits)\n**1st of every month, 06:00** (cron `0 6 1 * *`) and on demand (*Manual Run* `{ domain | site_id }` always audits). Per site with `audit_monthly` on (`seo_monitors`): the sitemap is read (free) and its fingerprint (URLs + lastmod dates, or the sitemap index entries) compared with the one stored at the last check (`seo_cache`, key `sitemap:<site>`). **Audit only when** the site changed, 60+ days passed since the last audit (safety net for theme / plugin / server changes a sitemap does not show), the site was never audited, or no sitemap (or an index without dates) is readable (then monthly as before). Unchanged sites are skipped — the weekly Site Tracker keeps watching indexing in Search Console. Started audits run as their own executions (internal key `audit:`), compare themselves with the previous audit and deliver the report with the **fix pack**.",
+          "height": 240,
+          "width": 1150,
           "color": 5
         },
         "id": "43691d66-4ffe-561a-ae50-ba454daa5dd7",
@@ -657,7 +981,7 @@
         "typeVersion": 1,
         "position": [
           -40,
-          -400
+          -420
         ]
       }
     ],
@@ -707,6 +1031,17 @@
         ]
       },
       "Ensure Profiles Table": {
+        "main": [
+          [
+            {
+              "node": "Ensure Cache Table",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Cache Table": {
         "main": [
           [
             {
@@ -765,18 +1100,29 @@
         "main": [
           [
             {
-              "node": "Audit Schedule Plan",
+              "node": "Load Cache (Audit)",
               "type": "main",
               "index": 0
             }
           ]
         ]
       },
-      "Audit Schedule Plan": {
+      "Load Cache (Audit)": {
         "main": [
           [
             {
-              "node": "Any Audits Due?",
+              "node": "Audit Candidates",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Audit Candidates": {
+        "main": [
+          [
+            {
+              "node": "Any Candidates?",
               "type": "main",
               "index": 0
             }
@@ -794,6 +1140,97 @@
           ]
         ]
       },
+      "Any Candidates?": {
+        "main": [
+          [
+            {
+              "node": "Fetch Sitemap (Schedule)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Nothing Due",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Sitemap (Schedule)": {
+        "main": [
+          [
+            {
+              "node": "Audit Schedule Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Audit Schedule Plan": {
+        "main": [
+          [
+            {
+              "node": "Fingerprint Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fingerprint Rows": {
+        "main": [
+          [
+            {
+              "node": "Any Fingerprints?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Fingerprints?": {
+        "main": [
+          [
+            {
+              "node": "Save Fingerprints",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Audits To Start",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Fingerprints": {
+        "main": [
+          [
+            {
+              "node": "Audits To Start",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Audits To Start": {
+        "main": [
+          [
+            {
+              "node": "Any Audits Due?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
       "Any Audits Due?": {
         "main": [
           [
@@ -805,7 +1242,7 @@
           ],
           [
             {
-              "node": "Nothing Due",
+              "node": "Audits Started",
               "type": "main",
               "index": 0
             }

@@ -1,0 +1,13 @@
+Admin Run	runs=1	items=1	1ms
+Ensure Cadence Table (Admin)	runs=1	items=1	10ms
+Ensure Log Table (Admin)	runs=1	items=1	9ms
+Ensure Sites Table (Admin)	runs=1	items=1	5ms
+Ensure Monitors Table (Admin)	runs=1	items=1	4ms
+Ensure Prospects Table (Admin)	runs=1	items=1	4ms
+Ensure AI Prompts Table (Admin)	runs=1	items=1	4ms
+Admin Action	runs=1	items=1	22ms
+Admin Route	runs=1	items=1	46ms
+Load Monitors (Admin)	runs=1	items=1	24ms
+Monitor Row (Admin)	runs=1	items=1	12ms
+Set Monitors	runs=1	items=1	37ms
+Admin Result	runs=1	items=1	10ms

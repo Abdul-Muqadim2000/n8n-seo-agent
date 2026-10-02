@@ -1,0 +1,63 @@
+API Entry	runs=1	items=1	0ms
+Normalize Input	runs=1	items=1	84ms
+Rate Limit	runs=1	items=1	43ms
+Input OK?	runs=1	items=1	3ms
+Need Site Read?	runs=1	items=1	1ms
+Route Mode	runs=1	items=1	9ms
+Audit Via Form?	runs=1	items=1	4ms
+Start Crawl	runs=1	items=1	474ms
+Save Task ID	runs=1	items=1	38ms
+Wait 1 min	runs=3	items=3	180009ms
+Get Crawl Summary	runs=3	items=3	3264ms
+Check Crawl	runs=3	items=3	3629ms
+Crawl Done?	runs=3	items=3	7ms
+Get Crawled Pages	runs=1	items=1	1371ms
+Crawl Extra Requests	runs=1	items=4	88ms
+Run Crawl Extras	runs=1	items=4	1392ms
+Collect Crawl Extras	runs=1	items=1	57ms
+Build Probes	runs=1	items=4	24ms
+Run Probes	runs=1	items=4	1708ms
+Content Probes	runs=1	items=17	29ms
+Run Content Probes	runs=1	items=17	4041ms
+Analyze Probes	runs=1	items=1	174ms
+Full Report?	runs=1	items=1	11ms
+GSC Audit Plan	runs=1	items=1	38ms
+Fetch Sitemap (Audit)	runs=1	items=1	486ms
+Sitemap Children (Audit)	runs=1	items=1	28ms
+Any Sitemap Children?	runs=1	items=1	2ms
+GSC Sites (Audit)	runs=1	items=1	982ms
+GSC Audit Requests	runs=1	items=28	23ms
+GSC Audit?	runs=1	items=28	16ms
+GSC Audit Query	runs=1	items=28	11743ms
+GSC Sitemaps (Audit)	runs=1	items=1	864ms
+GSC Audit Findings	runs=1	items=1	208ms
+Load Profile (Audit)	runs=1	items=1	25ms
+GBP Request	runs=1	items=1	122ms
+Look Up GBP?	runs=1	items=1	2ms
+Fetch GBP	runs=1	items=1	10701ms
+Entity Check	runs=1	items=1	547ms
+Build Site Issues	runs=1	items=1	120ms
+Ensure Audits Table	runs=1	items=1	5ms
+Ensure Findings Table	runs=1	items=1	19ms
+Load Audit History	runs=1	items=1	12ms
+Load Audit Findings	runs=1	items=1	13ms
+Audit Diff	runs=1	items=1	224ms
+Audit Row	runs=1	items=1	46ms
+Save Audit	runs=1	items=1	13ms
+Finding Rows	runs=1	items=29	38ms
+Any Finding Rows?	runs=1	items=29	12ms
+Save Findings	runs=1	items=29	27ms
+Fix Pack	runs=1	items=1	58ms
+Zip Fix Pack	runs=1	items=1	24ms
+Restore Audit Item	runs=1	items=1	50ms
+Is Full Report?	runs=1	items=1	4ms
+Build Audit Report	runs=1	items=1	172ms
+Prepare PDF Audit	runs=1	items=1	55ms
+Render PDF Audit	runs=1	items=1	367ms
+Attach PDF Audit	runs=1	items=1	103ms
+Via Webhook (Audit)?	runs=1	items=1	18ms
+Build Audit Response	runs=1	items=1	70ms
+Has Callback?	runs=1	items=1	3ms
+POST Callback	runs=1	items=1	49ms
+Has Email (Audit)?	runs=1	items=1	2ms
+Send Audit Report	runs=1	items=1	4315ms

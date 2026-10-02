@@ -1,0 +1,43 @@
+Ensure Monitors Table	runs=1	items=1	17ms
+Manual Run	runs=1	items=1	0ms
+Ensure Snapshots Table	runs=1	items=1	35ms
+Ensure Prospects Table	runs=1	items=1	7ms
+Ensure Sites Table	runs=1	items=1	2ms
+Ensure Profiles Table	runs=1	items=1	2ms
+Ensure Case Table	runs=1	items=1	3ms
+Ensure Log Table	runs=1	items=1	3ms
+Load Sites	runs=1	items=1	7ms
+Load Ladders	runs=1	items=9	12ms
+Load Monitors	runs=1	items=1	12ms
+Load Profiles	runs=1	items=1	83ms
+Load Backlink Snapshots	runs=1	items=1	64ms
+Load Link Prospects	runs=1	items=1	14ms
+Load Content Log	runs=1	items=1	8ms
+Load Case Studies	runs=1	items=1	8ms
+BL Plan	runs=1	items=1	51ms
+Any Sites (BL)?	runs=1	items=1	3ms
+BL Requests	runs=1	items=7	24ms
+Run BL Requests	runs=1	items=7	4397ms
+Gap Requests	runs=1	items=1	43ms
+Any Gap?	runs=1	items=1	9ms
+Run Gap Requests	runs=1	items=1	830ms
+Parse Backlinks	runs=1	items=1	85ms
+Outreach Jobs	runs=1	items=1	31ms
+Any Outreach?	runs=1	items=1	2ms
+Outreach Writer	runs=1	items=1	11207ms
+Claude — Outreach Writer	runs=1	items=0	11007ms
+Parser — Outreach Writer	runs=1	items=0	3ms
+Prospect Rows	runs=1	items=10	64ms
+Any Prospect Rows?	runs=1	items=10	23ms
+Save Prospects	runs=1	items=10	375ms
+BL Snapshot Rows	runs=1	items=1	20ms
+Save BL Snapshot	runs=1	items=1	22ms
+BL Report	runs=1	items=1	52ms
+Prepare PDF BL	runs=1	items=1	30ms
+Render PDF BL	runs=1	items=1	434ms
+Attach PDF BL	runs=1	items=1	24ms
+Has Email (BL)?	runs=1	items=1	5ms
+Send BL Report	runs=1	items=1	9041ms
+Build BL Callback	runs=1	items=1	22ms
+Has Callback (BL)?	runs=1	items=1	7ms
+POST BL Report	runs=1	items=1	41ms

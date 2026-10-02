@@ -437,7 +437,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// v4: validation errors no longer crash the run. They are returned as { validation_error } and shown to the\n// user (form completion page) or returned as HTTP 400 (API). See \"Input OK?\" right after Rate Limit.\nlet __via_webhook = false;\ntry { $('Start Form').first(); } catch (e) { __via_webhook = true; }\nconst __main = () => {\n// ===================== CONFIG (edit here only) =====================\nconst CONFIG = {\n  brand: \"Dev SEO\",   // from n8n/.env (SEO_BRAND) at build time; shown on reports and e-mails\n  crawl_max_pages: 200,             // DataForSEO on-page crawl size (also used when reading crawled pages)\n  crawl_js: false,                  // true = render JavaScript during the crawl (slower, costs more)\n  qa_max_rounds: 2,   // one editor pass: live tests showed a second pass inflates length without raising the score                 // how many times the Editor may revise content that fails QA\n  default_country: 'United States',\n  ai_budget_usd: 10,                // estimated Claude spend allowed per budget period (see Rate Limit); raised from 3 on 2026-10-01 at the user's request to finish the system test — the Anthropic Console workspace limit is the hard cap\n  ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap\n  ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)\n  ladder_tracker_cadence: 'weekly', // the Rank Tracker workflow runs weekly; 'monthly' is documentation only until its schedule is changed\n  ladder_auto_next_rung: false,     // false = the tracker recommends the next rung (one-click form link + API body); true is not wired\n  wordpress_publish: false          // true + wordpress_url in the request = every generated page is also created as a WordPress DRAFT\n};\n\n// DataForSEO location codes are 2000 + ISO-3166 numeric code\nconst COUNTRIES = {\n  'United States':        { code: 2840, iso: 'US', lang: 'en', language: 'English', spelling: 'American English',   currency: 'USD' },\n  'United Kingdom':       { code: 2826, iso: 'GB', lang: 'en', language: 'English', spelling: 'British English',    currency: 'GBP' },\n  'Canada':               { code: 2124, iso: 'CA', lang: 'en', language: 'English', spelling: 'Canadian English',   currency: 'CAD' },\n  'Australia':            { code: 2036, iso: 'AU', lang: 'en', language: 'English', spelling: 'Australian English', currency: 'AUD' },\n  'New Zealand':          { code: 2554, iso: 'NZ', lang: 'en', language: 'English', spelling: 'British English',    currency: 'NZD' },\n  'Ireland':              { code: 2372, iso: 'IE', lang: 'en', language: 'English', spelling: 'British English',    currency: 'EUR' },\n  'Pakistan':             { code: 2586, iso: 'PK', lang: 'en', language: 'English', spelling: 'British English',    currency: 'PKR' },\n  'India':                { code: 2356, iso: 'IN', lang: 'en', language: 'English', spelling: 'British English',    currency: 'INR' },\n  'United Arab Emirates': { code: 2784, iso: 'AE', lang: 'en', language: 'English', spelling: 'British English',    currency: 'AED' },\n  'Saudi Arabia':         { code: 2682, iso: 'SA', lang: 'en', language: 'English', spelling: 'British English',    currency: 'SAR' },\n  'Singapore':            { code: 2702, iso: 'SG', lang: 'en', language: 'English', spelling: 'British English',    currency: 'SGD' },\n  'South Africa':         { code: 2710, iso: 'ZA', lang: 'en', language: 'English', spelling: 'British English',    currency: 'ZAR' },\n  'Germany':              { code: 2276, iso: 'DE', lang: 'de', language: 'German',  spelling: 'German',             currency: 'EUR' },\n  'France':               { code: 2250, iso: 'FR', lang: 'fr', language: 'French',  spelling: 'French',             currency: 'EUR' },\n  'Spain':                { code: 2724, iso: 'ES', lang: 'es', language: 'Spanish', spelling: 'European Spanish',   currency: 'EUR' },\n  'Italy':                { code: 2380, iso: 'IT', lang: 'it', language: 'Italian', spelling: 'Italian',            currency: 'EUR' },\n  'Netherlands':          { code: 2528, iso: 'NL', lang: 'nl', language: 'Dutch',   spelling: 'Dutch',              currency: 'EUR' },\n  'Brazil':               { code: 2076, iso: 'BR', lang: 'pt', language: 'Portuguese', spelling: 'Brazilian Portuguese', currency: 'BRL' },\n  'Mexico':               { code: 2484, iso: 'MX', lang: 'es', language: 'Spanish', spelling: 'Mexican Spanish',    currency: 'MXN' }\n};\n// ===================================================================\n\nlet p1, raw, via_webhook;\ntry {\n  p1 = $('Start Form').first().json;\n  raw = $input.first().json;\n  via_webhook = false;\n} catch (e) {\n  // No Start Form in this execution -> triggered by the Webhook\n  p1 = { 'What do you want?': 'I know my keyword' };\n  raw = $input.first().json || {};\n  via_webhook = true;\n}\n// n8n's Webhook node wraps the payload as { headers, params, query, body }\nconst p2 = (raw && raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : (raw || {});\n\nfunction pick(obj, ...words) {\n  const key = Object.keys(obj || {}).find(k =>\n    words.every(w => k.toLowerCase().replace(/[\\s_-]+/g, ' ').includes(w))\n  );\n  return key ? obj[key] : '';\n}\nfunction asArray(v) {\n  if (Array.isArray(v)) return v;\n  if (typeof v === 'string' && v) return v.split(/[,\\n]/).map(s => s.trim()).filter(Boolean);\n  return [];\n}\nfunction cleanDomain(v) {\n  return String(v || '').trim().toLowerCase()\n    .replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\n}\n// Public hostnames only: no IP literals, no localhost/internal names (SSRF guard)\nconst domainOk = (d) => {\n  if (!d || d.length > 253) return false;\n  if (/^(\\d{1,3}\\.){3}\\d{1,3}$/.test(d)) return false;\n  if (/^\\[?[0-9a-f:]+\\]?$/.test(d) && d.includes(':')) return false;\n  if (/(^|\\.)(localhost|local|internal|localdomain|home|lan|corp|intranet|test|example|invalid)$/.test(d)) return false;\n  return /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(xn--[a-z0-9-]+|[a-z]{2,24})$/.test(d);\n};\n\n// ---------- Mode ----------\nconst choice = String(pick(p1, 'what', 'want') || '').toLowerCase();\nlet mode = 'discover';\nlet verdict_only = false;\nif (choice.includes('check') && choice.includes('keyword')) { mode = 'keyword'; verdict_only = true; }\nelse if (choice.includes('know')) mode = 'keyword';\nelse if (choice.includes('describe')) mode = 'site_description';\nelse if (choice.includes('audit')) mode = 'audit';\nelse if (choice.includes('rank my site') || choice.includes('ladder')) mode = 'ladder';\nelse if (choice.includes('track')) mode = 'track';\nelse if (choice.includes('published')) mode = 'published';\nelse if (choice.includes('check-in') || choice.includes('checkin')) mode = 'checkin';\nelse if (choice.includes('case study')) mode = 'case_study';\nelse if (choice.includes('business profile')) mode = 'profile';\nelse if (choice.includes('ai visibility')) mode = 'ai_visibility';\nelse if (choice.includes('backlink')) mode = 'backlinks';\nif (via_webhook) {\n  const m = String(p2.mode || '').toLowerCase();\n  if (m === 'verdict' || m === 'check') { mode = 'keyword'; verdict_only = true; }\n  else if (m === 'audit') mode = 'audit';\n  else if (m === 'discover') mode = 'discover';\n  else if (m === 'describe') mode = 'site_description';\n  else if (m === 'ladder') mode = 'ladder';\n  else if (m === 'track') mode = 'track';\n  else if (m === 'published') mode = 'published';\n  else if (m === 'checkin' || m === 'check-in') mode = 'checkin';\n  else if (m === 'case_study' || m === 'case-study' || m === 'casestudy') mode = 'case_study';\n  else if (m === 'profile') mode = 'profile';\n  else if (m === 'ai_visibility' || m === 'ai-visibility' || m === 'ai') mode = 'ai_visibility';\n  else if (m === 'backlinks' || m === 'links') mode = 'backlinks';\n}\n\n// ---------- Country (name or ISO-2 code) ----------\nconst countryRaw = String(pick(p2, 'country') || '').trim();\nlet countryName = Object.keys(COUNTRIES).find(n => n.toLowerCase() === countryRaw.toLowerCase())\n  || Object.keys(COUNTRIES).find(n => COUNTRIES[n].iso === countryRaw.toUpperCase())\n  || (mode === 'site_description' ? CONFIG.default_country : '');\nconst c = COUNTRIES[countryName] || null;\nif (!['site_description', 'published', 'checkin', 'profile'].includes(mode) && !c) throw new Error('Please select a Target Country.');   // published-page reports and check-ins need no market\n\n// ---------- Domain / email ----------\nconst domain = cleanDomain(pick(p2, 'domain') || pick(p2, 'website'));\nif (domain && !domainOk(domain)) throw new Error('Please enter a public website address like example.com');\n\nconst email = String(pick(p2, 'email') || '').trim().toLowerCase();\nif (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('Please enter a valid email address.');\n\nconst callback_url = String(pick(p2, 'callback') || '').trim();\nif (callback_url && !/^(https:\\/\\/[^\\s]+|http:\\/\\/(localhost|127\\.0\\.0\\.1|host\\.docker\\.internal|n8n)(:\\d+)?\\/[^\\s]*)$/.test(callback_url)) throw new Error('callback_url must be an https URL (plain http is allowed only for localhost while testing).');\n\nconst competitors = asArray(pick(p2, 'competitor')).map(cleanDomain).filter(domainOk).filter(d => d !== domain).slice(0, 3);\n\n// ---------- Other fields ----------\nconst features = asArray(pick(p2, 'feature')).map(f => String(f).toLowerCase());\nconst wants = asArray(pick(p2, 'receive')).map(w => String(w).toLowerCase());\nconst reportType = String(pick(p2, 'report type') || pick(p2, 'report_type') || '').toLowerCase();\nlet keyword  = (mode === 'track' || mode === 'profile' ? '' : String(pick(p2, 'keyword') || '')).trim().toLowerCase().replace(/\\s+/g, ' ');\nconst business = String(pick(p2, 'business') || '').trim();\nconst audience = String(pick(p2, 'customer') || pick(p2, 'audience') || '').trim();\nconst pageType0 = String(pick(p2, 'page', 'type') || '').trim();\nconst pageType = (mode === 'case_study' || /case stud/i.test(pageType0)) ? 'Case Study' : /pillar|hub/i.test(pageType0) ? 'Pillar Page' : /^local/i.test(pageType0) ? 'Local Page' : (pageType0 || 'Service Page');\nconst business_facts = String(pick(p2, 'facts') || p2.business_facts || '').trim().slice(0, 2000);\nconst cta = String(pick(p2, 'call', 'action') || p2.cta || '').trim().slice(0, 200);\nconst tone = String(pick(p2, 'tone') || '').trim();\nconst goalRaw = String(pick(p2, 'goal') || '').toLowerCase();\nconst goal = /sell|sales/.test(goalRaw) ? 'sales' : /traffic|educat|rank/.test(goalRaw) ? 'traffic' : /brand/.test(goalRaw) ? 'brand' : 'leads';\nconst track_keywords = asArray(pick(p2, 'terms to track') || p2.keywords || p2.track_keywords).flatMap(k => String(k).split(/[\\n,;]+/)).map(k => k.trim().toLowerCase().replace(/\\s+/g, ' ')).filter(Boolean).filter((k, i, a) => a.indexOf(k) === i).slice(0, 20);\nconst ga4_property_id = String(pick(p2, 'ga4') || '').replace(/^properties\\//, '').replace(/[^0-9]/g, '').slice(0, 16);\nconst published_url = String(pick(p2, 'published', 'url') || p2.published_url || p2.url || '').trim();\nconst content_request_id = String(p2.content_request_id || '').trim();\nconst blogs_per_week = Math.min(3, Math.max(0, parseInt(String(pick(p2, 'posts per week') || p2.blogs_per_week || '0'), 10) || 0));\nconst yes = (v) => /^(y|true|1)/i.test(String(v == null ? '' : v).trim());\nconst checkin_manual_action = yes(pick(p2, 'manual action') || p2.manual_action);\nconst checkin_security_issue = yes(pick(p2, 'security issue') || p2.security_issue);\nconst checkin_notes = String(pick(p2, 'notes') || p2.notes || '').trim().slice(0, 1000);\nconst checkin_csv_text = String(p2.pages_csv_text || p2.pages_csv || '').slice(0, 400000);\n// ---- v4.4: business profile (author, reviewer, address), case-study intake, local pages, video ----\nconst lab = (label) => { const v = p2[label]; return v == null ? '' : String(v).trim(); };   // exact form labels: several new labels share words with older ones\nconst obj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};\nconst s0 = (v, n) => String(v == null ? '' : v).trim().slice(0, n || 400);\nconst urlOk = (u) => /^https?:\\/\\/\\S+$/i.test(String(u || ''));\nconst A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video);\nconst authorLinks = (Array.isArray(A.same_as) ? A.same_as : String(A.same_as || A.links || lab('Author profile links (one per line)')).split(/[\\s,]+/)).map(x => String(x).trim()).filter(urlOk).slice(0, 8);\nconst authorUrl = s0(A.url, 400) || authorLinks.find(u => cleanDomain(u) === domain) || '';   // the author page on the site; LinkedIn & co. go to sameAs (an update without a page link keeps the stored one)\nconst revText = lab('Expert reviewer (optional)'); const revUrl = (revText.match(/https?:\\/\\/\\S+/) || [''])[0]; const revParts = revText.replace(/https?:\\/\\/\\S+/, '').split(',').map(x => x.trim()).filter(Boolean);\nconst profile_input = {\n  business_name: s0(p2.business_name || lab('Company name'), 160), business_type: s0(p2.business_type || lab('Category (for local search)'), 80), logo_url: s0(p2.logo_url || lab('Logo URL (optional)'), 400),\n  street_address: s0(AD.street || AD.street_address || p2.street_address || lab('Street address'), 200), city: s0(AD.city || (mode === 'profile' ? p2.city : '') || lab('City'), 100),\n  region: s0(AD.region || p2.region || lab('Region / state / emirate'), 100), postal_code: s0(AD.postal_code || p2.postal_code || lab('Postal code'), 30),\n  country_code: mode === 'profile' ? (c ? c.iso : s0(AD.country, 2).toUpperCase()) : '', phone: s0(p2.phone || lab('Phone'), 40), public_email: s0(p2.public_email || lab('Public e-mail on the website'), 120),\n  opening_hours: s0(p2.opening_hours || lab('Opening hours'), 200), price_range: s0(p2.price_range, 20),\n  service_areas: asArray(p2.service_areas || lab('Areas you serve')).map(x => s0(x, 80)).filter(Boolean).slice(0, 20).join(', '), map_url: s0(p2.map_url || lab('Google Maps link (optional)'), 400),\n  author_name: s0(A.name || p2.author_name || lab('Author name'), 120), author_job_title: s0(A.job_title || A.title || lab('Author job title'), 160), author_credentials: s0(A.credentials || lab('Author credentials and experience'), 600),\n  author_bio: s0(A.bio || lab('Author bio'), 1200), author_url: authorUrl, author_image_url: s0(A.image_url || A.image || lab('Author photo URL (optional)'), 400),\n  author_same_as: authorLinks.filter(u => u !== authorUrl).join(' '), author_knows_about: asArray(A.knows_about || lab('Topics the author knows best')).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),\n  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400)\n};\nfor (const k of ['logo_url', 'author_url', 'author_image_url', 'reviewer_url', 'map_url']) if (profile_input[k] && profile_input[k] !== '-' && !urlOk(profile_input[k])) throw new Error('Please enter full links (https://...) for the logo, author page, photo, reviewer and map.');\nconst csIn = mode === 'case_study' || Object.keys(CS).length > 0;\nconst pubRaw = CS.client_public != null ? String(CS.client_public) : lab('May we name the client?');\nconst case_study = csIn ? { client_name: s0(CS.client_name || CS.client || lab('Client name or description'), 160), client_public: !/^(no|false|0|anonymous)/i.test(pubRaw.trim() || 'yes'),\n  industry: s0(CS.industry || lab('Client industry'), 100), location: s0(CS.location || lab('Client location'), 100), service: s0(CS.service || lab('Service you delivered'), 160),\n  challenge: s0(CS.challenge || lab('The challenge'), 2000), solution: s0(CS.solution || CS.what_we_did || lab('What you did'), 3000), timeline: s0(CS.timeline || lab('Timeline'), 200),\n  results: s0(CS.results || lab('Results (with numbers)'), 2000), quote: s0(CS.quote || lab('Client quote (optional)'), 600), quote_by: s0(CS.quote_by || lab('Quote by (name, role)'), 160) } : null;\nif (mode === 'case_study' && !keyword && case_study && case_study.service) keyword = (case_study.service + ' case study').toLowerCase().replace(/\\s+/g, ' ').trim();\nconst case_id = String(p2.case_id || (mode === 'case_study' ? 'cs_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : ''));\nlet local_area = s0(p2.local_area || lab('City or area (local pages only)'), 80);\nif (pageType === 'Local Page' && !local_area) { const g = keyword.match(/\\b(?:in|near|around)\\s+([a-z][a-z .'-]{2,40})$/i); if (g) local_area = g[1].trim().replace(/\\b\\w/g, ch => ch.toUpperCase()); }\nconst video_url = s0(VI.url || p2.video_url || lab('Video URL for this page (optional)'), 400);\nif (video_url && !urlOk(video_url)) throw new Error('The video URL must be a full link (https://...).');\nconst ytm = video_url.match(/(?:youtube\\.com\\/(?:watch\\?(?:.*&)?v=|embed\\/|shorts\\/|live\\/)|youtu\\.be\\/)([A-Za-z0-9_-]{11})/i); const vim = video_url.match(/vimeo\\.com\\/(?:video\\/)?(\\d{6,12})/i);\nconst video = video_url ? { url: video_url, provider: ytm ? 'youtube' : vim ? 'vimeo' : 'file', id: ytm ? ytm[1] : vim ? vim[1] : '',\n  embed_url: ytm ? 'https://www.youtube.com/embed/' + ytm[1] : vim ? 'https://player.vimeo.com/video/' + vim[1] : '',\n  fetch_url: ytm ? 'https://www.youtube.com/watch?v=' + ytm[1] : vim ? 'https://vimeo.com/api/oembed.json?url=' + encodeURIComponent('https://vimeo.com/' + vim[1]) : '',\n  thumbnail_url: s0(VI.thumbnail_url, 400) || (ytm ? 'https://i.ytimg.com/vi/' + ytm[1] + '/hqdefault.jpg' : ''), title: s0(VI.title || p2.video_title, 200), description: s0(VI.description || p2.video_description, 2000),\n  transcript: String(VI.transcript || p2.video_transcript || lab('Video transcript (optional)') || '').trim().slice(0, 60000), upload_date: s0(VI.upload_date || p2.video_upload_date, 40), duration: s0(VI.duration || p2.video_duration, 20), placement: s0(VI.placement, 160) } : null;\n// ---- v4.5: monitor settings (Track my site / API `monitors`), audit crawl options, scheduled audits ----\nconst MI = obj(p2.monitors);\nconst monitor_input = {}; for (const k of ['ai_visibility', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));\nif (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'].includes(e)).join(', ');\nif (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(15, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 8));\nif (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));\nif (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');\nconst topics = asArray(p2.topics || lab('Main services or products (optional)')).map(x => String(x).trim().toLowerCase()).filter(x => x.length >= 3).slice(0, 6);\nconst crawlRaw = String(p2.crawl_pages || pick(p2, 'pages to crawl') || '').match(/\\d+/);\nconst crawl_pages = crawlRaw ? Math.min(1000, Math.max(50, parseInt(crawlRaw[0], 10))) : CONFIG.crawl_max_pages;\nconst crawl_js_req = p2.crawl_js !== undefined ? (!!p2.crawl_js && !/^(false|0|no)$/i.test(String(p2.crawl_js))) : /^yes/i.test(String(pick(p2, 'javascript') || ''));\nif (crawl_js_req && crawl_pages > 500) throw new Error('JavaScript rendering is limited to 500 pages per audit (it is about 10x slower); choose 500 or fewer pages.');\nconst pagesRaw = parseInt(String(pick(p2, 'pages to write') || p2.pages_now || CONFIG.ladder_pages_default), 10);\nconst pages_now = Math.min(3, Math.max(1, isNaN(pagesRaw) ? CONFIG.ladder_pages_default : pagesRaw));\nconst ladder_links = Array.isArray(p2.ladder_links) ? p2.ladder_links.filter(l => l && l.url).slice(0, 20) : [];\nconst wordpress_url = String(p2.wordpress_url || '').trim();\nlet existing_page_url = String(pick(p2, 'existing') || '').trim();\nif (existing_page_url && !/^https?:\\/\\//i.test(existing_page_url)) existing_page_url = 'https://' + existing_page_url.replace(/^\\/+/, '');\nif (existing_page_url && domain && cleanDomain(existing_page_url) !== domain) throw new Error('The existing page URL must be on ' + domain);\n\n// ---------- What to produce ----------\nlet include_seo_report = false, include_content = false, include_audit = false, include_full_report = false;\n\nif (mode === 'audit') {\n  if (reportType.includes('full')) include_full_report = true; else include_audit = true;\n} else if (mode === 'ladder') {\n  include_seo_report = true; include_content = true;   // used by the page runs the ladder spawns (mode keyword)\n} else if (mode === 'keyword' || mode === 'discover') {\n  include_seo_report  = wants.some(w => w.includes('keyword report') || w.includes('seo report') || w === 'report');\n  include_content     = wants.some(w => w.includes('content'));\n  include_audit       = features.some(f => f.includes('site audit')) || wants.some(w => w.includes('site audit'));\n  include_full_report = features.some(f => f.includes('full seo')) || wants.some(w => w.includes('full seo'));\n  if (mode === 'keyword' && !verdict_only && !wants.length) {\n    // Nothing ticked under \"What do you want to receive?\" -> default to both deliverables\n    include_content = true;\n    include_seo_report = true;\n  }\n}\nif (include_full_report) include_audit = true;\nif (verdict_only) { include_seo_report = false; include_content = false; include_audit = false; include_full_report = false; }\n\n// ---------- Validation ----------\nif (mode === 'keyword' && !keyword) throw new Error('Please enter a Target Keyword.');\nif (mode === 'discover' && !business && !domain) throw new Error('Please describe your business OR enter your website domain.');\nif ((mode === 'site_description' || mode === 'audit') && !domain) throw new Error('Website Domain is required.');\nif (include_audit && !domain) throw new Error('Site Audit and Full SEO Report need your website domain.');\nconst deliverable = !!email || (via_webhook && !!callback_url);   // a callback is a valid delivery channel for API callers\nif (mode === 'audit' && !deliverable) throw new Error('Email is required — the audit report is sent by email.');\nif (mode === 'ladder' && !keyword) throw new Error('Please enter the keyword you want to rank for.');\nif (mode === 'ladder' && !domain) throw new Error('Website Domain is required: the ladder is planned for your site.');\nif (mode === 'ladder' && !deliverable) throw new Error('Please add your email — the ladder plan and the pages are sent by email.');\nif (mode === 'track' && !domain) throw new Error('Website Domain is required: tracking is set up for your site.');\nif (mode === 'track' && !deliverable) throw new Error('Please add your email — the weekly tracking report is sent by email.');\nif (mode === 'checkin' && !domain) throw new Error('Website Domain is required.');\nif (mode === 'profile' && !domain) throw new Error('Website Domain is required: the profile belongs to your site.');\nif (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name or the business details.');\nif (mode === 'case_study' && !domain) throw new Error('Website Domain is required: the case study is written for your site.');\nif ((mode === 'ai_visibility' || mode === 'backlinks') && !domain) throw new Error('Website Domain is required.');\nif ((mode === 'ai_visibility' || mode === 'backlinks') && !deliverable) throw new Error('Please add your email — the report is sent by email.');\nif (mode === 'case_study' && !keyword) throw new Error('Please enter the service you delivered (or a keyword for the page).');\nif (mode === 'case_study' && !(case_study.challenge && case_study.solution && case_study.results)) throw new Error('Please describe the challenge, what you did and the results: the case study states only these facts.');\nif (mode === 'case_study' && !deliverable) throw new Error('Please add your email — the case study is sent by email.');\nif (mode === 'keyword' && !verdict_only && pageType === 'Local Page' && !local_area) throw new Error('Please enter the city or area for a local page (or put it in the keyword, e.g. \"accountant in dubai marina\").');\nif (mode === 'published' && !domain) throw new Error('Website Domain is required.');\nif (mode === 'published' && !/^https?:\\/\\/\\S+$/i.test(published_url)) throw new Error('Please enter the full URL of the published page (https://...).');\nif (mode === 'published') { const __m = published_url.match(/^https?:\\/\\/(?:[^@\\/?#]*@)?([^\\/?#:]+)/i); const __h = __m ? __m[1].toLowerCase().replace(/^www\\./, '') : ''; if (!(__h === domain || __h.endsWith('.' + domain))) throw new Error('The published URL must be on ' + domain + '.'); }\nif (mode === 'published' && !keyword && !content_request_id) throw new Error('Please enter the keyword of the page (as in the e-mail) or the content request id.');\nif (mode === 'discover' && (include_content || include_seo_report || include_audit) && !deliverable) {\n  throw new Error('Please add your email — the extra reports you selected are sent by email.');\n}\n\nif (via_webhook && !callback_url && !email) throw new Error('API requests need a callback_url (https) or an email address so the result can be delivered.');\n\nconst need_site_description =\n  mode === 'site_description' ||\n  (mode === 'discover' && !business) ||\n  (mode === 'keyword' && !!domain && !business) ||\n  (mode === 'ladder' && !business);\n\nreturn [{\n  json: {\n    mode,\n    keyword,\n    business,\n    audience,\n    domain,\n    email,\n    competitors,\n    page_type: pageType,\n    business_facts,\n    cta,\n    tone,\n    goal,\n    existing_page_url,\n    country: c ? countryName : null,\n    country_iso: c ? c.iso : null,\n    location_code: c ? c.code : null,\n    language_code: c ? c.lang : 'en',\n    language_name: c ? c.language : 'English',\n    spelling: c ? c.spelling : 'American English',\n    currency: c ? c.currency : null,\n    include_seo_report,\n    include_content,\n    include_audit,\n    include_full_report,\n    verdict_only,\n    audit_level: include_full_report ? 'full' : (include_audit ? 'site_audit' : null),\n    need_site_description,\n    via_webhook,\n    callback_url,\n    request_id: String(p2.request_id || ''),\n    client_ip: String(p2.client_ip || ''),\n    run_page_check: domain !== '' && (features.some(f => f.includes('page exists')) || !!existing_page_url || mode === 'ladder'),\n    pages_now,\n    track_keywords,\n    ga4_property_id,\n    blogs_per_week,\n    published_url,\n    content_request_id,\n    checkin_manual_action,\n    checkin_security_issue,\n    checkin_notes,\n    checkin_csv_text,\n    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name) ? profile_input : null,\n    case_study,\n    case_id,\n    local_area,\n    video,\n    pipeline_source: String(p2.pipeline_source || ''),\n    chosen_keyword_reason: String(p2.chosen_keyword_reason || '').slice(0, 300),\n    ladder_id: String(p2.ladder_id || (mode === 'ladder' ? 'lad_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : '')),\n    ladder_rung: (p2.ladder_rung != null && p2.ladder_rung !== '') ? Number(p2.ladder_rung) : null,\n    ladder_head: String(p2.ladder_head || ''),\n    ladder_links,\n    force_content: !!p2.force_content,\n    publish_wordpress: !!CONFIG.wordpress_publish && !!wordpress_url,\n    wordpress_url,\n    tracker_cadence: CONFIG.ladder_tracker_cadence,\n    auto_next_rung: !!CONFIG.ladder_auto_next_rung,\n    run_site_audit: include_audit,\n    brand: CONFIG.brand,\n    crawl_max_pages: crawl_pages,\n    crawl_js: crawl_js_req || CONFIG.crawl_js,\n    scheduled: !!p2.scheduled,\n    monitor_input,\n    topics,\n    qa_max_rounds: CONFIG.qa_max_rounds,\n    ai_budget_usd: CONFIG.ai_budget_usd,\n    ai_budget_period: CONFIG.ai_budget_period,\n    started_at: new Date().toISOString(),\n    validation_error: ''\n  }\n}];\n\n};\ntry { return __main(); }\ncatch (e) {\n  // keep the delivery fields so the rejection can still be reported to the caller\n  let __raw = {}; try { const r = $input.first().json || {}; __raw = (r.body && typeof r.body === 'object' && !Array.isArray(r.body)) ? r.body : r; } catch (e2) {}\n  const __cb = String(__raw.callback_url || '').trim();\n  const __cbOk = /^(https:\\/\\/[^\\s]+|http:\\/\\/(localhost|127\\.0\\.0\\.1|host\\.docker\\.internal|n8n)(:\\d+)?\\/[^\\s]*)$/.test(__cb) ? __cb : '';\n  return [{ json: { validation_error: String(e && e.message || e).replace(/^Error:\\s*/, ''), via_webhook: __via_webhook, mode: null, brand: 'Dev SEO', callback_url: __cbOk, request_id: String(__raw.request_id || ''), email: String(__raw.email || '').trim().toLowerCase() } }];\n}\n"
+          "jsCode": "// v4: validation errors no longer crash the run. They are returned as { validation_error } and shown to the\n// user (form completion page) or returned as HTTP 400 (API). See \"Input OK?\" right after Rate Limit.\nlet __via_webhook = false;\ntry { $('Start Form').first(); } catch (e) { __via_webhook = true; }\nconst __main = () => {\n// ===================== CONFIG (edit here only) =====================\nconst CONFIG = {\n  brand: \"Dev SEO\",   // from n8n/.env (SEO_BRAND) at build time; shown on reports and e-mails\n  crawl_max_pages: 200,             // DataForSEO on-page crawl size (also used when reading crawled pages)\n  crawl_js: false,                  // true = render JavaScript during the crawl (slower, costs more)\n  qa_max_rounds: 2,   // one editor pass: live tests showed a second pass inflates length without raising the score                 // how many times the Editor may revise content that fails QA\n  default_country: 'United States',\n  ai_budget_usd: 6,                 // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 since 2026-10-02 at the user's request — the Anthropic Console workspace limit is the hard cap\n  ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap\n  ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)\n  ladder_tracker_cadence: 'weekly', // the Rank Tracker workflow runs weekly; 'monthly' is documentation only until its schedule is changed\n  ladder_auto_next_rung: false,     // false = the tracker recommends the next rung (one-click form link + API body); true is not wired\n  wordpress_publish: false          // true + wordpress_url in the request = every generated page is also created as a WordPress DRAFT\n};\n\n// DataForSEO location codes are 2000 + ISO-3166 numeric code\nconst COUNTRIES = {\n  'United States':        { code: 2840, iso: 'US', lang: 'en', language: 'English', spelling: 'American English',   currency: 'USD' },\n  'United Kingdom':       { code: 2826, iso: 'GB', lang: 'en', language: 'English', spelling: 'British English',    currency: 'GBP' },\n  'Canada':               { code: 2124, iso: 'CA', lang: 'en', language: 'English', spelling: 'Canadian English',   currency: 'CAD' },\n  'Australia':            { code: 2036, iso: 'AU', lang: 'en', language: 'English', spelling: 'Australian English', currency: 'AUD' },\n  'New Zealand':          { code: 2554, iso: 'NZ', lang: 'en', language: 'English', spelling: 'British English',    currency: 'NZD' },\n  'Ireland':              { code: 2372, iso: 'IE', lang: 'en', language: 'English', spelling: 'British English',    currency: 'EUR' },\n  'Pakistan':             { code: 2586, iso: 'PK', lang: 'en', language: 'English', spelling: 'British English',    currency: 'PKR' },\n  'India':                { code: 2356, iso: 'IN', lang: 'en', language: 'English', spelling: 'British English',    currency: 'INR' },\n  'United Arab Emirates': { code: 2784, iso: 'AE', lang: 'en', language: 'English', spelling: 'British English',    currency: 'AED' },\n  'Saudi Arabia':         { code: 2682, iso: 'SA', lang: 'en', language: 'English', spelling: 'British English',    currency: 'SAR' },\n  'Singapore':            { code: 2702, iso: 'SG', lang: 'en', language: 'English', spelling: 'British English',    currency: 'SGD' },\n  'South Africa':         { code: 2710, iso: 'ZA', lang: 'en', language: 'English', spelling: 'British English',    currency: 'ZAR' },\n  'Germany':              { code: 2276, iso: 'DE', lang: 'de', language: 'German',  spelling: 'German',             currency: 'EUR' },\n  'France':               { code: 2250, iso: 'FR', lang: 'fr', language: 'French',  spelling: 'French',             currency: 'EUR' },\n  'Spain':                { code: 2724, iso: 'ES', lang: 'es', language: 'Spanish', spelling: 'European Spanish',   currency: 'EUR' },\n  'Italy':                { code: 2380, iso: 'IT', lang: 'it', language: 'Italian', spelling: 'Italian',            currency: 'EUR' },\n  'Netherlands':          { code: 2528, iso: 'NL', lang: 'nl', language: 'Dutch',   spelling: 'Dutch',              currency: 'EUR' },\n  'Brazil':               { code: 2076, iso: 'BR', lang: 'pt', language: 'Portuguese', spelling: 'Brazilian Portuguese', currency: 'BRL' },\n  'Mexico':               { code: 2484, iso: 'MX', lang: 'es', language: 'Spanish', spelling: 'Mexican Spanish',    currency: 'MXN' }\n};\n// ===================================================================\n\nlet p1, raw, via_webhook;\ntry {\n  p1 = $('Start Form').first().json;\n  raw = $input.first().json;\n  via_webhook = false;\n} catch (e) {\n  // No Start Form in this execution -> triggered by the Webhook\n  p1 = { 'What do you want?': 'I know my keyword' };\n  raw = $input.first().json || {};\n  via_webhook = true;\n}\n// n8n's Webhook node wraps the payload as { headers, params, query, body }\nconst p2 = (raw && raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : (raw || {});\n\nfunction pick(obj, ...words) {\n  const key = Object.keys(obj || {}).find(k =>\n    words.every(w => k.toLowerCase().replace(/[\\s_-]+/g, ' ').includes(w))\n  );\n  return key ? obj[key] : '';\n}\nfunction asArray(v) {\n  if (Array.isArray(v)) return v;\n  if (typeof v === 'string' && v) return v.split(/[,\\n]/).map(s => s.trim()).filter(Boolean);\n  return [];\n}\nfunction cleanDomain(v) {\n  return String(v || '').trim().toLowerCase()\n    .replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\n}\n// Public hostnames only: no IP literals, no localhost/internal names (SSRF guard)\nconst domainOk = (d) => {\n  if (!d || d.length > 253) return false;\n  if (/^(\\d{1,3}\\.){3}\\d{1,3}$/.test(d)) return false;\n  if (/^\\[?[0-9a-f:]+\\]?$/.test(d) && d.includes(':')) return false;\n  if (/(^|\\.)(localhost|local|internal|localdomain|home|lan|corp|intranet|test|example|invalid)$/.test(d)) return false;\n  return /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(xn--[a-z0-9-]+|[a-z]{2,24})$/.test(d);\n};\n\n// ---------- Mode ----------\nconst choice = String(pick(p1, 'what', 'want') || '').toLowerCase();\nlet mode = 'discover';\nlet verdict_only = false;\nif (choice.includes('check') && choice.includes('keyword')) { mode = 'keyword'; verdict_only = true; }\nelse if (choice.includes('know')) mode = 'keyword';\nelse if (choice.includes('describe')) mode = 'site_description';\nelse if (choice.includes('audit')) mode = 'audit';\nelse if (choice.includes('rank my site') || choice.includes('ladder')) mode = 'ladder';\nelse if (choice.includes('track')) mode = 'track';\nelse if (choice.includes('published')) mode = 'published';\nelse if (choice.includes('check-in') || choice.includes('checkin')) mode = 'checkin';\nelse if (choice.includes('case study')) mode = 'case_study';\nelse if (choice.includes('business profile')) mode = 'profile';\nelse if (choice.includes('ai visibility')) mode = 'ai_visibility';\nelse if (choice.includes('backlink')) mode = 'backlinks';\nif (via_webhook) {\n  const m = String(p2.mode || '').toLowerCase();\n  if (m === 'verdict' || m === 'check') { mode = 'keyword'; verdict_only = true; }\n  else if (m === 'audit') mode = 'audit';\n  else if (m === 'discover') mode = 'discover';\n  else if (m === 'describe') mode = 'site_description';\n  else if (m === 'ladder') mode = 'ladder';\n  else if (m === 'track') mode = 'track';\n  else if (m === 'published') mode = 'published';\n  else if (m === 'checkin' || m === 'check-in') mode = 'checkin';\n  else if (m === 'case_study' || m === 'case-study' || m === 'casestudy') mode = 'case_study';\n  else if (m === 'profile') mode = 'profile';\n  else if (m === 'ai_visibility' || m === 'ai-visibility' || m === 'ai') mode = 'ai_visibility';\n  else if (m === 'backlinks' || m === 'links') mode = 'backlinks';\n}\n\n// ---------- Country (name or ISO-2 code) ----------\nconst countryRaw = String(pick(p2, 'country') || '').trim();\nlet countryName = Object.keys(COUNTRIES).find(n => n.toLowerCase() === countryRaw.toLowerCase())\n  || Object.keys(COUNTRIES).find(n => COUNTRIES[n].iso === countryRaw.toUpperCase())\n  || (mode === 'site_description' ? CONFIG.default_country : '');\nconst c = COUNTRIES[countryName] || null;\nif (!['site_description', 'published', 'checkin', 'profile'].includes(mode) && !c) throw new Error('Please select a Target Country.');   // published-page reports and check-ins need no market\n\n// ---------- Domain / email ----------\nconst domain = cleanDomain(pick(p2, 'domain') || pick(p2, 'website'));\nif (domain && !domainOk(domain)) throw new Error('Please enter a public website address like example.com');\n\nconst email = String(pick(p2, 'email') || '').trim().toLowerCase();\nif (email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) throw new Error('Please enter a valid email address.');\n\nconst callback_url = String(pick(p2, 'callback') || '').trim();\nif (callback_url && !/^(https:\\/\\/[^\\s]+|http:\\/\\/(localhost|127\\.0\\.0\\.1|host\\.docker\\.internal|n8n)(:\\d+)?\\/[^\\s]*)$/.test(callback_url)) throw new Error('callback_url must be an https URL (plain http is allowed only for localhost while testing).');\n\nconst competitors = asArray(pick(p2, 'competitor')).map(cleanDomain).filter(domainOk).filter(d => d !== domain).slice(0, 3);\n\n// ---------- Other fields ----------\nconst features = asArray(pick(p2, 'feature')).map(f => String(f).toLowerCase());\nconst wants = asArray(pick(p2, 'receive')).map(w => String(w).toLowerCase());\nconst reportType = String(pick(p2, 'report type') || pick(p2, 'report_type') || '').toLowerCase();\nlet keyword  = (mode === 'track' || mode === 'profile' ? '' : String(pick(p2, 'keyword') || '')).trim().toLowerCase().replace(/\\s+/g, ' ');\nconst business = String(pick(p2, 'business') || '').trim();\nconst audience = String(pick(p2, 'customer') || pick(p2, 'audience') || '').trim();\nconst pageType0 = String(pick(p2, 'page', 'type') || '').trim();\nconst pageType = (mode === 'case_study' || /case stud/i.test(pageType0)) ? 'Case Study' : /pillar|hub/i.test(pageType0) ? 'Pillar Page' : /^local/i.test(pageType0) ? 'Local Page' : (pageType0 || 'Service Page');\nconst business_facts = String(pick(p2, 'facts') || p2.business_facts || '').trim().slice(0, 2000);\nconst cta = String(pick(p2, 'call', 'action') || p2.cta || '').trim().slice(0, 200);\nconst tone = String(pick(p2, 'tone') || '').trim();\nconst goalRaw = String(pick(p2, 'goal') || '').toLowerCase();\nconst goal = /sell|sales/.test(goalRaw) ? 'sales' : /traffic|educat|rank/.test(goalRaw) ? 'traffic' : /brand/.test(goalRaw) ? 'brand' : 'leads';\nconst track_keywords = asArray(pick(p2, 'terms to track') || p2.keywords || p2.track_keywords).flatMap(k => String(k).split(/[\\n,;]+/)).map(k => k.trim().toLowerCase().replace(/\\s+/g, ' ')).filter(Boolean).filter((k, i, a) => a.indexOf(k) === i).slice(0, 20);\nconst ga4_property_id = String(pick(p2, 'ga4') || '').replace(/^properties\\//, '').replace(/[^0-9]/g, '').slice(0, 16);\nconst published_url = String(pick(p2, 'published', 'url') || p2.published_url || p2.url || '').trim();\nconst content_request_id = String(p2.content_request_id || '').trim();\nconst blogs_per_week = Math.min(3, Math.max(0, parseInt(String(pick(p2, 'posts per week') || p2.blogs_per_week || '0'), 10) || 0));\nconst yes = (v) => /^(y|true|1)/i.test(String(v == null ? '' : v).trim());\nconst checkin_manual_action = yes(pick(p2, 'manual action') || p2.manual_action);\nconst checkin_security_issue = yes(pick(p2, 'security issue') || p2.security_issue);\nconst checkin_notes = String(pick(p2, 'notes') || p2.notes || '').trim().slice(0, 1000);\nconst checkin_csv_text = String(p2.pages_csv_text || p2.pages_csv || '').slice(0, 400000);\n// ---- v4.4: business profile (author, reviewer, address), case-study intake, local pages, video ----\nconst lab = (label) => { const v = p2[label]; return v == null ? '' : String(v).trim(); };   // exact form labels: several new labels share words with older ones\nconst obj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};\nconst s0 = (v, n) => String(v == null ? '' : v).trim().slice(0, n || 400);\nconst urlOk = (u) => /^https?:\\/\\/\\S+$/i.test(String(u || ''));\nconst A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video);\nconst authorLinks = (Array.isArray(A.same_as) ? A.same_as : String(A.same_as || A.links || lab('Author profile links (one per line)')).split(/[\\s,]+/)).map(x => String(x).trim()).filter(urlOk).slice(0, 8);\nconst authorUrl = s0(A.url, 400) || authorLinks.find(u => cleanDomain(u) === domain) || '';   // the author page on the site; LinkedIn & co. go to sameAs (an update without a page link keeps the stored one)\nconst revText = lab('Expert reviewer (optional)'); const revUrl = (revText.match(/https?:\\/\\/\\S+/) || [''])[0]; const revParts = revText.replace(/https?:\\/\\/\\S+/, '').split(',').map(x => x.trim()).filter(Boolean);\nconst profile_input = {\n  business_name: s0(p2.business_name || lab('Company name'), 160), business_type: s0(p2.business_type || lab('Category (for local search)'), 80), logo_url: s0(p2.logo_url || lab('Logo URL (optional)'), 400),\n  street_address: s0(AD.street || AD.street_address || p2.street_address || lab('Street address'), 200), city: s0(AD.city || (mode === 'profile' ? p2.city : '') || lab('City'), 100),\n  region: s0(AD.region || p2.region || lab('Region / state / emirate'), 100), postal_code: s0(AD.postal_code || p2.postal_code || lab('Postal code'), 30),\n  country_code: mode === 'profile' ? (c ? c.iso : s0(AD.country, 2).toUpperCase()) : '', phone: s0(p2.phone || lab('Phone'), 40), public_email: s0(p2.public_email || lab('Public e-mail on the website'), 120),\n  opening_hours: s0(p2.opening_hours || lab('Opening hours'), 200), price_range: s0(p2.price_range, 20),\n  service_areas: asArray(p2.service_areas || lab('Areas you serve')).map(x => s0(x, 80)).filter(Boolean).slice(0, 20).join(', '), map_url: s0(p2.map_url || lab('Google Maps link (optional)'), 400),\n  author_name: s0(A.name || p2.author_name || lab('Author name'), 120), author_job_title: s0(A.job_title || A.title || lab('Author job title'), 160), author_credentials: s0(A.credentials || lab('Author credentials and experience'), 600),\n  author_bio: s0(A.bio || lab('Author bio'), 1200), author_url: authorUrl, author_image_url: s0(A.image_url || A.image || lab('Author photo URL (optional)'), 400),\n  author_same_as: authorLinks.filter(u => u !== authorUrl).join(' '), author_knows_about: asArray(A.knows_about || lab('Topics the author knows best')).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),\n  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400)\n};\nfor (const k of ['logo_url', 'author_url', 'author_image_url', 'reviewer_url', 'map_url']) if (profile_input[k] && profile_input[k] !== '-' && !urlOk(profile_input[k])) throw new Error('Please enter full links (https://...) for the logo, author page, photo, reviewer and map.');\nconst csIn = mode === 'case_study' || Object.keys(CS).length > 0;\nconst pubRaw = CS.client_public != null ? String(CS.client_public) : lab('May we name the client?');\nconst case_study = csIn ? { client_name: s0(CS.client_name || CS.client || lab('Client name or description'), 160), client_public: !/^(no|false|0|anonymous)/i.test(pubRaw.trim() || 'yes'),\n  industry: s0(CS.industry || lab('Client industry'), 100), location: s0(CS.location || lab('Client location'), 100), service: s0(CS.service || lab('Service you delivered'), 160),\n  challenge: s0(CS.challenge || lab('The challenge'), 2000), solution: s0(CS.solution || CS.what_we_did || lab('What you did'), 3000), timeline: s0(CS.timeline || lab('Timeline'), 200),\n  results: s0(CS.results || lab('Results (with numbers)'), 2000), quote: s0(CS.quote || lab('Client quote (optional)'), 600), quote_by: s0(CS.quote_by || lab('Quote by (name, role)'), 160) } : null;\nif (mode === 'case_study' && !keyword && case_study && case_study.service) keyword = (case_study.service + ' case study').toLowerCase().replace(/\\s+/g, ' ').trim();\nconst case_id = String(p2.case_id || (mode === 'case_study' ? 'cs_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : ''));\nlet local_area = s0(p2.local_area || lab('City or area (local pages only)'), 80);\nif (pageType === 'Local Page' && !local_area) { const g = keyword.match(/\\b(?:in|near|around)\\s+([a-z][a-z .'-]{2,40})$/i); if (g) local_area = g[1].trim().replace(/\\b\\w/g, ch => ch.toUpperCase()); }\nconst video_url = s0(VI.url || p2.video_url || lab('Video URL for this page (optional)'), 400);\nif (video_url && !urlOk(video_url)) throw new Error('The video URL must be a full link (https://...).');\nconst ytm = video_url.match(/(?:youtube\\.com\\/(?:watch\\?(?:.*&)?v=|embed\\/|shorts\\/|live\\/)|youtu\\.be\\/)([A-Za-z0-9_-]{11})/i); const vim = video_url.match(/vimeo\\.com\\/(?:video\\/)?(\\d{6,12})/i);\nconst video = video_url ? { url: video_url, provider: ytm ? 'youtube' : vim ? 'vimeo' : 'file', id: ytm ? ytm[1] : vim ? vim[1] : '',\n  embed_url: ytm ? 'https://www.youtube.com/embed/' + ytm[1] : vim ? 'https://player.vimeo.com/video/' + vim[1] : '',\n  fetch_url: ytm ? 'https://www.youtube.com/watch?v=' + ytm[1] : vim ? 'https://vimeo.com/api/oembed.json?url=' + encodeURIComponent('https://vimeo.com/' + vim[1]) : '',\n  thumbnail_url: s0(VI.thumbnail_url, 400) || (ytm ? 'https://i.ytimg.com/vi/' + ytm[1] + '/hqdefault.jpg' : ''), title: s0(VI.title || p2.video_title, 200), description: s0(VI.description || p2.video_description, 2000),\n  transcript: String(VI.transcript || p2.video_transcript || lab('Video transcript (optional)') || '').trim().slice(0, 60000), upload_date: s0(VI.upload_date || p2.video_upload_date, 40), duration: s0(VI.duration || p2.video_duration, 20), placement: s0(VI.placement, 160) } : null;\n// ---- v4.5: monitor settings (Track my site / API `monitors`), audit crawl options, scheduled audits ----\nconst MI = obj(p2.monitors);\nconst monitor_input = {}; for (const k of ['ai_visibility', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));\nif (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'].includes(e)).join(', ');\nif (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(15, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 8));\nif (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));\nif (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');\nconst topics = asArray(p2.topics || lab('Main services or products (optional)')).map(x => String(x).trim().toLowerCase()).filter(x => x.length >= 3).slice(0, 6);\nconst crawlRaw = String(p2.crawl_pages || pick(p2, 'pages to crawl') || '').match(/\\d+/);\nconst crawl_pages = crawlRaw ? Math.min(1000, Math.max(50, parseInt(crawlRaw[0], 10))) : CONFIG.crawl_max_pages;\nconst crawl_js_req = p2.crawl_js !== undefined ? (!!p2.crawl_js && !/^(false|0|no)$/i.test(String(p2.crawl_js))) : /^yes/i.test(String(pick(p2, 'javascript') || ''));\nif (crawl_js_req && crawl_pages > 500) throw new Error('JavaScript rendering is limited to 500 pages per audit (it is about 10x slower); choose 500 or fewer pages.');\nconst pagesRaw = parseInt(String(pick(p2, 'pages to write') || p2.pages_now || CONFIG.ladder_pages_default), 10);\nconst pages_now = Math.min(3, Math.max(1, isNaN(pagesRaw) ? CONFIG.ladder_pages_default : pagesRaw));\nconst ladder_links = Array.isArray(p2.ladder_links) ? p2.ladder_links.filter(l => l && l.url).slice(0, 20) : [];\nconst wordpress_url = String(p2.wordpress_url || '').trim();\nlet existing_page_url = String(pick(p2, 'existing') || '').trim();\nif (existing_page_url && !/^https?:\\/\\//i.test(existing_page_url)) existing_page_url = 'https://' + existing_page_url.replace(/^\\/+/, '');\nif (existing_page_url && domain && cleanDomain(existing_page_url) !== domain) throw new Error('The existing page URL must be on ' + domain);\n\n// ---------- What to produce ----------\nlet include_seo_report = false, include_content = false, include_audit = false, include_full_report = false;\n\nif (mode === 'audit') {\n  if (reportType.includes('full')) include_full_report = true; else include_audit = true;\n} else if (mode === 'ladder') {\n  include_seo_report = true; include_content = true;   // used by the page runs the ladder spawns (mode keyword)\n} else if (mode === 'keyword' || mode === 'discover') {\n  include_seo_report  = wants.some(w => w.includes('keyword report') || w.includes('seo report') || w === 'report');\n  include_content     = wants.some(w => w.includes('content'));\n  include_audit       = features.some(f => f.includes('site audit')) || wants.some(w => w.includes('site audit'));\n  include_full_report = features.some(f => f.includes('full seo')) || wants.some(w => w.includes('full seo'));\n  if (mode === 'keyword' && !verdict_only && !wants.length) {\n    // Nothing ticked under \"What do you want to receive?\" -> default to both deliverables\n    include_content = true;\n    include_seo_report = true;\n  }\n}\nif (include_full_report) include_audit = true;\nif (verdict_only) { include_seo_report = false; include_content = false; include_audit = false; include_full_report = false; }\n\n// ---------- Validation ----------\nif (mode === 'keyword' && !keyword) throw new Error('Please enter a Target Keyword.');\nif (mode === 'discover' && !business && !domain) throw new Error('Please describe your business OR enter your website domain.');\nif ((mode === 'site_description' || mode === 'audit') && !domain) throw new Error('Website Domain is required.');\nif (include_audit && !domain) throw new Error('Site Audit and Full SEO Report need your website domain.');\nconst deliverable = !!email || (via_webhook && !!callback_url);   // a callback is a valid delivery channel for API callers\nif (mode === 'audit' && !deliverable) throw new Error('Email is required — the audit report is sent by email.');\nif (mode === 'ladder' && !keyword) throw new Error('Please enter the keyword you want to rank for.');\nif (mode === 'ladder' && !domain) throw new Error('Website Domain is required: the ladder is planned for your site.');\nif (mode === 'ladder' && !deliverable) throw new Error('Please add your email — the ladder plan and the pages are sent by email.');\nif (mode === 'track' && !domain) throw new Error('Website Domain is required: tracking is set up for your site.');\nif (mode === 'track' && !deliverable) throw new Error('Please add your email — the weekly tracking report is sent by email.');\nif (mode === 'checkin' && !domain) throw new Error('Website Domain is required.');\nif (mode === 'profile' && !domain) throw new Error('Website Domain is required: the profile belongs to your site.');\nif (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name or the business details.');\nif (mode === 'case_study' && !domain) throw new Error('Website Domain is required: the case study is written for your site.');\nif ((mode === 'ai_visibility' || mode === 'backlinks') && !domain) throw new Error('Website Domain is required.');\nif ((mode === 'ai_visibility' || mode === 'backlinks') && !deliverable) throw new Error('Please add your email — the report is sent by email.');\nif (mode === 'case_study' && !keyword) throw new Error('Please enter the service you delivered (or a keyword for the page).');\nif (mode === 'case_study' && !(case_study.challenge && case_study.solution && case_study.results)) throw new Error('Please describe the challenge, what you did and the results: the case study states only these facts.');\nif (mode === 'case_study' && !deliverable) throw new Error('Please add your email — the case study is sent by email.');\nif (mode === 'keyword' && !verdict_only && pageType === 'Local Page' && !local_area) throw new Error('Please enter the city or area for a local page (or put it in the keyword, e.g. \"accountant in dubai marina\").');\nif (mode === 'published' && !domain) throw new Error('Website Domain is required.');\nif (mode === 'published' && !/^https?:\\/\\/\\S+$/i.test(published_url)) throw new Error('Please enter the full URL of the published page (https://...).');\nif (mode === 'published') { const __m = published_url.match(/^https?:\\/\\/(?:[^@\\/?#]*@)?([^\\/?#:]+)/i); const __h = __m ? __m[1].toLowerCase().replace(/^www\\./, '') : ''; if (!(__h === domain || __h.endsWith('.' + domain))) throw new Error('The published URL must be on ' + domain + '.'); }\nif (mode === 'published' && !keyword && !content_request_id) throw new Error('Please enter the keyword of the page (as in the e-mail) or the content request id.');\nif (mode === 'discover' && (include_content || include_seo_report || include_audit) && !deliverable) {\n  throw new Error('Please add your email — the extra reports you selected are sent by email.');\n}\n\nif (via_webhook && !callback_url && !email) throw new Error('API requests need a callback_url (https) or an email address so the result can be delivered.');\n\nconst need_site_description =\n  mode === 'site_description' ||\n  (mode === 'discover' && !business) ||\n  (mode === 'keyword' && !!domain && !business) ||\n  (mode === 'ladder' && !business);\n\nreturn [{\n  json: {\n    mode,\n    keyword,\n    business,\n    audience,\n    domain,\n    email,\n    competitors,\n    page_type: pageType,\n    business_facts,\n    cta,\n    tone,\n    goal,\n    existing_page_url,\n    country: c ? countryName : null,\n    country_iso: c ? c.iso : null,\n    location_code: c ? c.code : null,\n    language_code: c ? c.lang : 'en',\n    language_name: c ? c.language : 'English',\n    spelling: c ? c.spelling : 'American English',\n    currency: c ? c.currency : null,\n    include_seo_report,\n    include_content,\n    include_audit,\n    include_full_report,\n    verdict_only,\n    audit_level: include_full_report ? 'full' : (include_audit ? 'site_audit' : null),\n    need_site_description,\n    via_webhook,\n    callback_url,\n    request_id: String(p2.request_id || ''),\n    client_ip: String(p2.client_ip || ''),\n    run_page_check: domain !== '' && (features.some(f => f.includes('page exists')) || !!existing_page_url || mode === 'ladder'),\n    pages_now,\n    track_keywords,\n    ga4_property_id,\n    blogs_per_week,\n    published_url,\n    content_request_id,\n    checkin_manual_action,\n    checkin_security_issue,\n    checkin_notes,\n    checkin_csv_text,\n    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name) ? profile_input : null,\n    case_study,\n    case_id,\n    local_area,\n    video,\n    pipeline_source: String(p2.pipeline_source || ''),\n    chosen_keyword_reason: String(p2.chosen_keyword_reason || '').slice(0, 300),\n    ladder_id: String(p2.ladder_id || (mode === 'ladder' ? 'lad_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : '')),\n    ladder_rung: (p2.ladder_rung != null && p2.ladder_rung !== '') ? Number(p2.ladder_rung) : null,\n    ladder_head: String(p2.ladder_head || ''),\n    ladder_links,\n    force_content: !!p2.force_content,\n    publish_wordpress: !!CONFIG.wordpress_publish && !!wordpress_url,\n    wordpress_url,\n    tracker_cadence: CONFIG.ladder_tracker_cadence,\n    auto_next_rung: !!CONFIG.ladder_auto_next_rung,\n    run_site_audit: include_audit,\n    brand: CONFIG.brand,\n    crawl_max_pages: crawl_pages,\n    crawl_js: crawl_js_req || CONFIG.crawl_js,\n    scheduled: !!p2.scheduled,\n    monitor_input,\n    topics,\n    qa_max_rounds: CONFIG.qa_max_rounds,\n    ai_budget_usd: CONFIG.ai_budget_usd,\n    ai_budget_period: CONFIG.ai_budget_period,\n    started_at: new Date().toISOString(),\n    validation_error: ''\n  }\n}];\n\n};\ntry { return __main(); }\ncatch (e) {\n  // keep the delivery fields so the rejection can still be reported to the caller\n  let __raw = {}; try { const r = $input.first().json || {}; __raw = (r.body && typeof r.body === 'object' && !Array.isArray(r.body)) ? r.body : r; } catch (e2) {}\n  const __cb = String(__raw.callback_url || '').trim();\n  const __cbOk = /^(https:\\/\\/[^\\s]+|http:\\/\\/(localhost|127\\.0\\.0\\.1|host\\.docker\\.internal|n8n)(:\\d+)?\\/[^\\s]*)$/.test(__cb) ? __cb : '';\n  return [{ json: { validation_error: String(e && e.message || e).replace(/^Error:\\s*/, ''), via_webhook: __via_webhook, mode: null, brand: 'Dev SEO', callback_url: __cbOk, request_id: String(__raw.request_id || ''), email: String(__raw.email || '').trim().toLowerCase() } }];\n}\n"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -1518,7 +1518,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),\n// term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,\n// and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.\nconst prev = $('Parse Brief').first().json;\nconst inItem = $input.first().json;\nconst rawOut = inItem.output;\nlet md = (typeof rawOut === 'string' ? rawOut : JSON.stringify(rawOut || '')).trim();\nconst round = ($runIndex || 0) + 1;\nconst critique = round === 1 ? (inItem.critique || null) : null;\nlet lastCritique = null; try { lastCritique = $('Parse Critique').first().json.critique || null; } catch (e) {}\nconst fixes = [];\nconst warnings = [];\nconst brief = prev.content_brief || {};\nconst kw = String(prev.keyword || '').toLowerCase();\nconst domain = prev.domain || '';\nconst today = new Date().toISOString().slice(0, 10);\n\nconst plain = (s) => String(s || '').replace(/\\[([^\\[\\]]+)\\]\\([^)]*\\)/g, '$1').replace(/[*_`>]+/g, '').replace(/\\s+/g, ' ').trim();\nconst countWords = (t) => String(t || '').split(/\\s+/).filter(Boolean).length;\nconst escRe = (s) => s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n\n// 1. Strip any schema/script the model added\nconst before0 = md;\nmd = md.replace(/<script[\\s\\S]*?<\\/script>/gi, '').replace(/```(?:json|html)?\\s*\\{[\\s\\S]*?\"@context\"[\\s\\S]*?```/gi, '').trim();\nif (md !== before0) fixes.push('Removed model-written schema/script blocks (schema is generated by the QA step)');\n\n// 2. The word \"placeholder\" must never appear\nconst before1 = md;\nmd = md.replace(/\\s*\\((placeholders?|placeholder for [^)]*)\\)/gi, '').replace(/\\b(indicative\\s+)?price placeholders?\\b/gi, 'prices').replace(/\\bplaceholders?\\b/gi, 'details');\nif (md !== before1) fixes.push('Removed the word \"placeholder\" from text');\n\n// 3. Prices become [Price] unless the user gave prices (business facts / description)\nconst userText = String(prev.business || '') + ' ' + String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '');   // case-study facts (v4.4) are the client's own numbers\nconst userGavePrices = /\\d/.test(userText) && /(\\$|£|€|₹|\\b(aed|sar|pkr|inr|usd|gbp|eur|zar|brl|mxn|rs)\\b)/i.test(userText);\nif (!userGavePrices) {\n  const sym = { GBP: '£', USD: '\\\\$', CAD: '\\\\$', AUD: '\\\\$', NZD: '\\\\$', SGD: '\\\\$', PKR: '(?:Rs\\\\.?|PKR)', INR: '(?:Rs\\\\.?|₹|INR)', AED: '(?:AED|Dh)', SAR: '(?:SAR|SR)', EUR: '€', ZAR: 'R', BRL: 'R\\\\$', MXN: '\\\\$' }[prev.currency] || '[£$€]';\n  const priceRe = new RegExp(sym + '\\\\s?\\\\d[\\\\d.,]*(\\\\s?(–|-|to)\\\\s?' + sym + '?\\\\s?\\\\d[\\\\d.,]*)?', 'g');\n  const count = (md.match(priceRe) || []).length;\n  if (count) { md = md.replace(priceRe, '[Price]'); fixes.push(`Replaced ${count} invented price(s) with [Price]`); }\n}\n\n// 4. Meta lines — and nothing else may sit between them and the H1 (models sometimes add \"production notes\")\nconst metaOf = (label) => { const m = md.match(new RegExp('^' + label + ':\\\\s*(.+)$', 'im')); return m ? m[1].trim() : ''; };\nconst metaTitle = metaOf('Title'), metaDesc = metaOf('Meta Description'), slug = metaOf('Slug');\n{\n  const h1At = md.search(/^# .+$/m);\n  if (h1At > 0) {\n    const head = md.slice(0, h1At);\n    const metaLines = head.split('\\n').filter(l => /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):/i.test(l.trim()));\n    const other = head.split('\\n').filter(l => l.trim() && !/^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):/i.test(l.trim()));\n    if (other.length) { md = metaLines.join('\\n') + '\\n\\n' + md.slice(h1At); fixes.push('Removed ' + other.length + ' line(s) of notes that sat between the meta lines and the H1'); }\n  }\n}\n\n// 5. Internal links: only real pages on the user's site; external links kept (they are citations)\nconst allowed = new Set();\nconst normUrl = (u) => String(u || '').trim().replace(/\\/$/, '').toLowerCase();\n(prev.internal_link_candidates || []).forEach(c => allowed.add(normUrl(c.url)));\n(prev.site_urls || []).forEach(u => allowed.add(normUrl(u)));\nif (prev.existing_page && prev.existing_page.url) allowed.add(normUrl(prev.existing_page.url));\nif (domain) allowed.add(normUrl('https://' + domain));\nconst removedLinks = []; const externalUrls = [];\nlet internalLinks = 0, externalLinks = 0;\nmd = md.replace(/\\[([^\\[\\]]+)\\]\\(([^)\\s]+)\\)/g, (m, text, url) => {\n  let u = url.trim(); const isRelative = u.startsWith('/');\n  if (isRelative) u = domain ? 'https://' + domain + u : u;\n  const host = u.replace(/^https?:\\/\\//i, '').replace(/^www\\./i, '').split(/[\\/?#]/)[0].toLowerCase();\n  const internal = !!domain && (host === domain || host.endsWith('.' + domain));\n  if (internal || isRelative) { if (allowed.size && allowed.has(normUrl(u))) { internalLinks++; return '[' + text + '](' + u + ')'; } removedLinks.push(u); return text; }\n  externalLinks++; externalUrls.push({ anchor: text, url: u, host }); return m;\n});\nif (removedLinks.length) fixes.push(`Removed ${removedLinks.length} link(s) to pages that do not exist on ${domain || 'the site'}: ` + removedLinks.slice(0, 4).join(', '));\n// citations must point at sources the brief allowed (evidence plan) or at least be real-looking hosts\nconst allowedSources = new Set(((brief.evidence_plan || []).map(e => String(e.source_url || '').toLowerCase())).concat((prev.facts || []).map(f => String(f.url || '').toLowerCase())));\nconst TRUSTED = /(^|\\.)(gov|edu|int|mil)(\\.|$)|\\.gov\\.[a-z]{2}$|(^|\\.)(microsoft|odoo|sap|oracle|netsuite|google|zoho|sage|xero|quickbooks|intuit|salesforce|hubspot|shopify|stripe|who|oecd|worldbank|imf|un|europa)\\.(com|org|eu|int)$/i;\nconst unknownSources = externalUrls.filter(e => !TRUSTED.test(e.host) && allowedSources.size && ![...allowedSources].some(s => s && (e.url.toLowerCase().startsWith(s) || s.startsWith(e.url.toLowerCase()))));\nif (unknownSources.length > 2) warnings.push('External links to sources not in the evidence plan: ' + unknownSources.slice(0, 3).map(e => e.host).join(', ') + ' — verify each one');\nconst trusted_sources = externalUrls.filter(e => TRUSTED.test(e.host)).map(e => e.host);\n\n// 6. FAQs\nconst faqs = []; let cur = null, inAnswer = false;\nfor (const raw of md.split('\\n')) {\n  const l = raw.trim(); let m;\n  if ((m = l.match(/^\\**Q\\d+[:.]\\**\\s*(.+)$/))) { cur = { q: m[1].replace(/\\*+$/, '').trim(), a: '' }; faqs.push(cur); inAnswer = false; continue; }\n  if ((m = l.match(/^\\**A\\d+[:.]\\**\\s*(.*)$/)) && cur) { cur.a = m[1]; inAnswer = true; continue; }\n  if (inAnswer && l && !l.startsWith('#')) { cur.a += ' ' + l; continue; }\n  if (!l || l.startsWith('#')) inAnswer = false;\n}\nconst validFaqs = faqs.filter(f => f.q && f.a && countWords(f.a) >= 15);\n\n// 7. Sections\nconst withoutMeta = md.replace(/^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):.*$/gm, '');\nconst faqStart = withoutMeta.search(/^## (Frequently Asked Questions|FAQs?)/im);\nconst afterFaq = faqStart >= 0 ? withoutMeta.slice(faqStart + 5).search(/^## /m) : -1;\nconst faqPart = faqStart >= 0 ? withoutMeta.slice(faqStart, afterFaq >= 0 ? faqStart + 5 + afterFaq : undefined) : '';\nconst mainPart = withoutMeta.replace(faqPart, '');\nconst totalWords = countWords(withoutMeta), mainWords = countWords(mainPart), faqWords = countWords(faqPart);\nconst h1 = (md.match(/^# .+$/m) || [''])[0];\nconst h2s = md.match(/^## .+$/gm) || [];\nconst faqHeadings = h2s.filter(h => /faq|frequently asked/i.test(h)).length;\nconst lastH2 = h2s[h2s.length - 1] || '';\nconst qaMatch = withoutMeta.match(/^\\**\\s*Quick answer:?\\**\\s*(.+)$/im);\nconst answerWords = qaMatch ? countWords(plain(qaMatch[1])) : 0;\n// per-section word counts vs the outline\nconst sections = []; { const parts = mainPart.split(/^## /m).slice(1); for (const p of parts) { const nl = p.indexOf('\\n'); sections.push({ h2: plain(p.slice(0, nl)), words: countWords(p.slice(nl + 1)) }); } }\nconst outline = brief.outline || [];\nconst thinSections = sections.filter(s => { const o = outline.find(x => x.h2 && plain(x.h2).toLowerCase() === s.h2.toLowerCase()); const target = o ? Number(o.target_words) || 0 : 0; return target >= 150 && s.words < target * 0.6; }).map(s => s.h2 + ' (' + s.words + ' words)');\n\n// 8. Keyword checks — natural variants count (\"erp systems in the uae\", \"ERP system in UAE\", hyphens)\nconst flexRe = (phrase, flags) => new RegExp('\\\\b' + phrase.toLowerCase().split(/[\\s-]+/).filter(Boolean).map(w => escRe(w.replace(/(?:ies|es|s)$/, '')) + '(?:ies|es|s)?').join('[\\\\s-]+(?:(?:the|a|an|of|for|in|to|and)\\\\s+)?') + '\\\\b', flags);\nconst kwRe = kw ? flexRe(kw, 'gi') : null;\nconst kwCount = kwRe ? (withoutMeta.match(kwRe) || []).length : 0;\nconst density = totalWords ? +(kwCount / totalWords * 100).toFixed(2) : 0;\nconst first100 = plain(mainPart.replace(/^#.*$/gm, '')).split(/\\s+/).slice(0, 100).join(' ').toLowerCase();\n\n// 9. Unverified statistics: numbers outside brackets, tables and cited sentences\nconst bodyPlain = plain(withoutMeta.replace(/\\|[^\\n]*\\|/g, ''));\nconst citedSentences = new Set();\nwithoutMeta.split(/(?<=[.!?])\\s+/).forEach(s => { if (/\\]\\(https?:\\/\\//.test(s)) citedSentences.add(plain(s)); });\nconst noBrackets = withoutMeta.replace(/\\[[^\\]]*\\]\\([^)]*\\)/g, ' CITED ').replace(/\\[[^\\]]*\\]/g, '').replace(/\\|[^\\n]*\\|/g, '');\nconst statHits = new Set();\nfor (const s of noBrackets.split(/(?<=[.!?])\\s+/)) {\n  if (/CITED/.test(s)) continue;\n  for (const m of s.matchAll(/\\b\\d[\\d,.]*\\s?%/g)) statHits.add(m[0].trim());\n  for (const m of s.matchAll(/\\b(over|more than|up to|nearly|around|approximately|about)\\s+\\d[\\d,.]*\\+?(\\s?%|\\s+\\w+)?/gi)) statHits.add(m[0].trim());\n  for (const m of s.matchAll(/\\b\\d[\\d,.]*\\+\\s+(years?|clients?|customers?|projects?|users?|students?|universities|schools|companies|installations?|reviews?|countries|awards?)\\b/gi)) statHits.add(m[0].trim());\n}\nconst clientNums = (String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '')).toLowerCase();   // numbers the client gave (facts, case studies) need no external source\nconst stats = [...statHits].filter(s => !/^(19|20)\\d\\d/.test(s)).filter(s => !clientNums.includes(s.toLowerCase().replace(/^(over|more than|up to|nearly|around|approximately|about)\\s+/, ''))).slice(0, 8);\n\n// 10. Banned phrases (AI clichés and filler)\nconst BANNED = [\"in today's fast-paced world\", 'in the ever-evolving', 'ever-evolving landscape', 'delve', 'dive into', 'unlock', 'unleash', 'seamless', 'seamlessly', 'robust', 'leverage', 'cutting-edge', 'game-changer', 'game-changing', 'revolutioni', 'elevate your', 'empower', 'navigate the complexities', 'look no further', \"it's important to note\", 'it is important to note', 'at the end of the day', 'in conclusion', 'comprehensive solution', 'tailored solutions', 'harness the power', \"whether you're a\", 'a testament to', 'crucial', 'paramount', 'realm', 'tapestry', 'embark', 'foster', 'streamline', 'synergy', 'holistic', 'best-in-class', 'world-class', 'state-of-the-art', 'top-notch', 'one-stop shop', 'in this article', 'in this guide, we', 'without further ado', 'unparalleled', 'transformative', 'in the digital age', 'stay ahead of the curve', 'the bottom line is', 'when it comes to', 'a wide range of'];\nconst lower = bodyPlain.toLowerCase();\nconst banned_found = BANNED.map(p => ({ phrase: p, count: (lower.match(new RegExp(escRe(p), 'g')) || []).length })).filter(x => x.count > 0).sort((a, b) => b.count - a.count);\nconst bannedCount = banned_found.reduce((s, x) => s + x.count, 0);\n\n// 11. Readability (Flesch reading ease, approximate syllables), sentence length, passive voice\nconst sentences = bodyPlain.split(/(?<=[.!?])\\s+/).map(s => s.trim()).filter(s => countWords(s) >= 3);\nconst sentWords = sentences.map(countWords);\nconst avgSentence = sentWords.length ? +(sentWords.reduce((a, b) => a + b, 0) / sentWords.length).toFixed(1) : 0;\nconst longSentences = sentWords.filter(n => n > 28).length;\nconst syl = (w) => { w = w.toLowerCase().replace(/[^a-z]/g, ''); if (!w) return 0; if (w.length <= 3) return 1; const m = w.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, '').match(/[aeiouy]{1,2}/g); return m ? m.length : 1; };\nconst wordsArr = bodyPlain.split(/\\s+/).filter(Boolean);\nconst syllables = wordsArr.reduce((s, w) => s + syl(w), 0);\nconst flesch = wordsArr.length && sentences.length ? +(206.835 - 1.015 * (wordsArr.length / sentences.length) - 84.6 * (syllables / wordsArr.length)).toFixed(1) : null;\nconst passive = sentences.filter(s => /\\b(is|are|was|were|been|being|be)\\s+(\\w+ed|built|made|done|seen|known|given|taken|chosen|written)\\b/i.test(s)).length;\nconst passive_pct = sentences.length ? Math.round(passive / sentences.length * 100) : 0;\n\n// 12. Term coverage (brief terms first, else the competitor term model)\nconst termList = (brief.terms_to_use || []).map(t => ({ term: String(t.term || t).toLowerCase(), min: Number(t.min_count) || 1 }))\n  .concat((prev.term_model || []).slice(0, 25).map(t => ({ term: t.term, min: 1 })))\n  .filter((t, i, a) => t.term && a.findIndex(x => x.term === t.term) === i).slice(0, 30);\nconst termCoverage = termList.map(t => ({ term: t.term, target: t.min, found: (bodyPlain.match(flexRe(t.term, 'gi')) || []).length })).map(t => ({ ...t, ok: t.found >= t.target }));\nconst coverage = termCoverage.length ? termCoverage.filter(t => t.ok).length / termCoverage.length : 1;\nconst missingTerms = termCoverage.filter(t => !t.ok).slice(0, 10).map(t => t.term);\n\n// 13. Specificity: numbers, examples, steps, decision rules per 100 words\nconst specHits = (bodyPlain.match(/\\b\\d[\\d,.%]*\\b/g) || []).length + (lower.match(/\\b(for example|for instance|such as|e\\.g\\.|step \\d|case study|in practice|choose .* if|rule of thumb)\\b/g) || []).length;\nconst specificity = wordsArr.length ? +(specHits / wordsArr.length * 100).toFixed(2) : 0;\n// snippet targets answered?\nconst snippetTargets = brief.snippet_targets || [];\nconst unansweredSnippets = snippetTargets.filter(t => t.question && !new RegExp('^#{2,3}\\\\s*' + escRe(plain(t.question).replace(/\\?$/, '')), 'im').test(md)).map(t => t.question).slice(0, 4);\n\n// 14. Warnings\nconst target = brief.target_word_count || 800;\nif (mainWords < target * 0.8) warnings.push(`Main content is short: ${mainWords} words vs target ${target}`);\nif (mainWords > target * 1.25) warnings.push(`Main content is too long: ${mainWords} words vs target ${target} — cut repetition and secondary detail, do not add anything`);\nif (thinSections.length) warnings.push('Sections far below their target length: ' + thinSections.slice(0, 4).join('; '));\nif (!metaTitle) warnings.push('Meta title line missing');\nelse { if (metaTitle.length > 60) warnings.push(`Meta title is ${metaTitle.length} characters (max 60)`); if (metaTitle.length < 30) warnings.push(`Meta title is only ${metaTitle.length} characters (aim for 50-60)`); if (kw && !flexRe(kw, 'i').test(metaTitle)) warnings.push('Primary keyword missing from the meta title'); }\nif (!metaDesc) warnings.push('Meta description line missing');\nelse { if (metaDesc.length > 155) warnings.push(`Meta description is ${metaDesc.length} characters (max 155)`); if (metaDesc.length < 70) warnings.push(`Meta description is only ${metaDesc.length} characters (aim for 120-155)`); }\nif (slug && !/^\\/?[a-z0-9]+(-[a-z0-9]+)*\\/?$/.test(slug)) warnings.push('Slug should be lowercase words joined by hyphens');\nif (!h1) warnings.push('H1 missing'); else if (kw && !flexRe(kw, 'i').test(h1)) warnings.push('Primary keyword missing from H1');\nif (kw && !flexRe(kw, 'i').test(first100)) warnings.push('Primary keyword not in the first 100 words');\nif (kwCount < 3) warnings.push(`Primary keyword used only ${kwCount} time(s)`);\nif (density > 2) warnings.push(`Keyword density is high (${density}%) — risk of keyword stuffing`);\nif (h2s.length < 4) warnings.push(`Only ${h2s.length} H2 sections (brief expects ${outline.length || 'more'})`);\nif (!qaMatch) warnings.push('Quick answer block missing (a 40-70 word direct answer right after the introduction)');\nelse if (answerWords < 35 || answerWords > 90) warnings.push(`Quick answer is ${answerWords} words (aim for 40-70)`);\nif (validFaqs.length < 5) warnings.push(`Only ${validFaqs.length} complete FAQs found (need 5+, answers 40-70 words)`);\nif (faqHeadings > 1) warnings.push('Duplicate FAQ sections found');\nif (/faq|frequently asked/i.test(lastH2)) warnings.push('CTA section should come after the FAQs');\nif (!/\\|.*\\|/.test(md)) warnings.push('Comparison table missing');\nif (/guarantee/i.test(md) && !prev.business) warnings.push('Contains a guarantee claim — please verify');\nif (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));\nif ((prev.internal_link_candidates || []).length > 1 && internalLinks === 0) warnings.push('No internal links to existing pages on the site');\nif (bannedCount) warnings.push('Filler / AI-cliché phrases to rewrite (' + bannedCount + '): ' + banned_found.slice(0, 8).map(b => '\"' + b.phrase + '\"' + (b.count > 1 ? ' x' + b.count : '')).join(', '));\nif (flesch != null && flesch < 30) warnings.push(`Hard to read (Flesch ${flesch}, average sentence ${avgSentence} words) — shorten sentences and use plainer words`);\nif (longSentences > Math.max(3, sentences.length * 0.12)) warnings.push(`${longSentences} sentences longer than 28 words — split them`);\nif (passive_pct > 25) warnings.push(`Passive voice in about ${passive_pct}% of sentences — rewrite in active voice`);\nif (termCoverage.length >= 8 && coverage < 0.6) warnings.push('Topic coverage is thin — competitors cover these terms and this page does not: ' + missingTerms.join(', '));\nif (wordsArr.length > 400 && specificity < 0.6) warnings.push(`Too generic (${specificity} specifics per 100 words) — add concrete examples, numbers with sources, steps or decision rules`);\nif (unansweredSnippets.length) warnings.push('Snippet questions from the brief that have no matching heading: ' + unansweredSnippets.join(' | '));\nif (critique && Array.isArray(critique.problems)) critique.problems.filter(p => /high|medium/i.test(p.severity || '')).slice(0, 8).forEach(p => warnings.push('Editor review: ' + [p.location ? '\"' + String(p.location).slice(0, 80) + '\"' : '', p.issue, p.fix ? 'Fix: ' + p.fix : ''].filter(Boolean).join(' — ')));\n\n// 15. Content score (0-100)\nconst structuralChecks = [!!metaTitle && metaTitle.length <= 60, !!metaDesc && metaDesc.length <= 155, !!h1, h2s.length >= 4, !!qaMatch, validFaqs.length >= 5, /\\|.*\\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).length <= 1, kwCount >= 3 && density <= 2];\nconst structure_pts = 25 * structuralChecks.filter(Boolean).length / structuralChecks.length;\nconst coverage_pts = 25 * coverage;\nconst readability_pts = flesch == null ? 10 : (flesch >= 40 && avgSentence <= 22 ? 15 : (flesch >= 30 && avgSentence <= 26 ? 10 : 4));   // B2B copy normally scores 30-55\nconst specificity_pts = 10 * Math.min(1, specificity / 0.8);\nconst banned_pts = Math.max(0, 10 - 2 * bannedCount);\nconst length_pts = 15 * (1 - Math.min(1, Math.abs(mainWords - target) / target));\nconst content_score = Math.round(structure_pts + coverage_pts + readability_pts + specificity_pts + banned_pts + length_pts);\n\n// 16. Schema (deterministic, page-type aware). v4.4: the author as a Person (from the business profile), the expert reviewer, LocalBusiness\n//     for local pages, VideoObject for pages with a video, an ItemList of the cluster pages for hub pages. Unknown values stay [placeholders].\nconst P = prev.site_profile || {}; const PA = P.address || {}; const AU = prev.author || null; const RV = prev.reviewer || null; const role = prev.page_role || 'standard';\nconst bizName = String(P.business_name || ((prev.site_description && prev.site_description.business_name) ? prev.site_description.business_name : '')).trim();\nconst biz = bizName || '[Your Business Name]';\nconst pageUrl = (prev.existing_page && prev.existing_page.url) || (domain ? 'https://' + domain + '/' + String(slug || '').replace(/^\\/|\\/$/g, '') : '[Page URL]');\nconst h1Text = plain(h1.replace(/^#\\s*/, '')) || metaTitle;\nconst home = domain ? 'https://' + domain + '/' : '[Website URL]';\nconst slugId = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\nconst org = { '@type': 'Organization', ...(domain ? { '@id': home + '#organization' } : {}), name: biz, url: home, ...(P.logo_url ? { logo: P.logo_url } : {}) };\nconst blocks = [];\nconst pt = String(prev.page_type || '').toLowerCase();\nconst articleLike = /blog|guide|article|pillar|hub|case stud/.test(pt);\nconst authorRef = AU ? { '@type': 'Person', ...(domain ? { '@id': home + '#author-' + slugId(AU.name) } : {}), name: AU.name, ...(AU.url ? { url: AU.url } : {}) } : { '@type': 'Person', name: '[Author Name]', url: '[Author Page URL]' };\nif (articleLike) {\n  blocks.push({ type: 'Article', json: { '@context': 'https://schema.org', '@type': 'Article', headline: h1Text, description: plain(metaDesc), author: authorRef, publisher: org, datePublished: today, dateModified: today, mainEntityOfPage: { '@type': 'WebPage', '@id': pageUrl }, keywords: [prev.keyword, ...(brief.secondary_keywords || []).slice(0, 5)].filter(Boolean).join(', '), ...(role === 'case_study' ? { articleSection: 'Case study' } : {}) } });\n  const person = AU ? { '@context': 'https://schema.org', ...authorRef, ...(AU.job_title ? { jobTitle: AU.job_title } : {}), ...((AU.bio || AU.credentials) ? { description: [AU.bio, AU.credentials && !String(AU.bio || '').includes(AU.credentials) ? AU.credentials : ''].filter(Boolean).join(' ').slice(0, 600) } : {}),\n      ...(AU.image_url ? { image: AU.image_url } : {}), ...((AU.same_as || []).length ? { sameAs: AU.same_as } : {}), ...((AU.knows_about || []).length ? { knowsAbout: AU.knows_about } : {}), worksFor: domain ? { '@id': home + '#organization', name: biz } : { '@type': 'Organization', name: biz } }\n    : { '@context': 'https://schema.org', '@type': 'Person', name: '[Author Name]', jobTitle: '[Job title]', description: '[Two-sentence bio with credentials]', url: '[Author Page URL]', sameAs: ['[LinkedIn profile URL]'], worksFor: { '@type': 'Organization', name: biz } };\n  blocks.push({ type: 'Person', note: AU ? 'The author (business profile). Link the byline to the author page.' : 'No business profile on file: fill in the author, or set up the profile once (form \"Set up my business profile\" / API mode profile) so every page carries it.', json: person });\n  if (RV) blocks.push({ type: 'WebPage', note: 'Expert review (reviewedBy / lastReviewed).', json: { '@context': 'https://schema.org', '@type': 'WebPage', '@id': pageUrl, url: pageUrl, name: h1Text, reviewedBy: { '@type': 'Person', name: RV.name, ...(RV.job_title ? { jobTitle: RV.job_title } : {}), ...(RV.url ? { url: RV.url } : {}) }, lastReviewed: today } });\n} else if (pt.includes('product')) {\n  blocks.push({ type: 'Product', json: { '@context': 'https://schema.org', '@type': 'Product', name: h1Text, description: plain(metaDesc), brand: { '@type': 'Brand', name: biz }, url: pageUrl, offers: { '@type': 'Offer', priceCurrency: prev.currency || 'USD', price: '[Price as a number]', availability: 'https://schema.org/InStock', url: pageUrl } } });\n} else if (role === 'local') {\n  const area = String(prev.local_area || '').trim() || '[City]';\n  const LBT = [[/account|tax|bookkeep|audit/i, 'AccountingService'], [/legal|law|notar/i, 'LegalService'], [/financ|insur|bank/i, 'FinancialService'], [/medic|clinic|dental|health|doctor/i, 'MedicalBusiness'], [/restaurant|caf|food/i, 'FoodEstablishment'], [/store|shop|retail/i, 'Store'], [/home|plumb|electric|clean|repair|construct/i, 'HomeAndConstructionBusiness'], [/real estate|property/i, 'RealEstateAgent'], [/.+/, 'ProfessionalService']];\n  const lbType = P.business_type ? (LBT.find(x => x[0].test(P.business_type)) || [, 'LocalBusiness'])[1] : 'LocalBusiness';\n  const hoursOk = /^((Mo|Tu|We|Th|Fr|Sa|Su)(-(Mo|Tu|We|Th|Fr|Sa|Su))?(,(Mo|Tu|We|Th|Fr|Sa|Su))*\\s+\\d{2}:\\d{2}-\\d{2}:\\d{2}[;,]?\\s*)+$/.test(String(P.opening_hours || '').trim());\n  const lbId = domain ? home + '#business' : undefined;\n  blocks.push({ type: lbType, note: 'Local business details from the business profile' + (P.phone && PA.street ? '.' : ': fill in every [bracketed] value; name, address and phone must match the Google Business Profile exactly.'), json: { '@context': 'https://schema.org', '@type': lbType, ...(lbId ? { '@id': lbId } : {}), name: biz, url: home,\n    telephone: P.phone || '[Phone]', ...(P.public_email ? { email: P.public_email } : {}), address: { '@type': 'PostalAddress', streetAddress: PA.street || '[Street address]', addressLocality: PA.city || area, ...(PA.region ? { addressRegion: PA.region } : {}), ...(PA.postal_code ? { postalCode: PA.postal_code } : {}), addressCountry: PA.country_code || prev.country_iso || '[Country code]' },\n    areaServed: [area, ...(P.service_areas || []).filter(a => a.toLowerCase() !== area.toLowerCase())].slice(0, 12).map(a => ({ '@type': 'Place', name: a })), ...(hoursOk ? { openingHours: String(P.opening_hours).trim().split(/[;,]\\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su))/) } : {}),\n    ...(P.price_range ? { priceRange: P.price_range } : {}), ...(P.logo_url ? { logo: P.logo_url, image: P.logo_url } : {}), ...(P.map_url ? { hasMap: P.map_url } : {}) } });\n  blocks.push({ type: 'Service', json: { '@context': 'https://schema.org', '@type': 'Service', name: h1Text, serviceType: prev.keyword, description: plain(metaDesc), provider: lbId ? { '@id': lbId, name: biz } : org, areaServed: { '@type': 'Place', name: area }, url: pageUrl } });\n} else {\n  blocks.push({ type: 'Service', json: { '@context': 'https://schema.org', '@type': 'Service', name: h1Text, serviceType: prev.keyword, description: plain(metaDesc), provider: org, areaServed: prev.country || '[Country]', url: pageUrl } });\n}\nconst V = prev.video || null;\nif (V && V.url) {\n  const ytWatch = V.provider === 'youtube' && V.id ? 'https://www.youtube.com/watch?v=' + V.id : V.url;\n  const clips = (V.chapters || []).map((c, i, a) => ({ '@type': 'Clip', name: c.name, startOffset: c.start_seconds, ...(a[i + 1] ? { endOffset: a[i + 1].start_seconds } : (V.duration_seconds ? { endOffset: V.duration_seconds } : {})), url: V.provider === 'youtube' ? ytWatch + '&t=' + c.start_seconds + 's' : V.url + '#t=' + c.start_seconds }));\n  blocks.push({ type: 'VideoObject', note: (V.missing || []).filter(m => m !== 'transcript').length ? 'Fill in: ' + V.missing.filter(m => m !== 'transcript').join(', ') + ' (YouTube Studio shows them).' : 'Video details read from the video page.', json: { '@context': 'https://schema.org', '@type': 'VideoObject', name: V.title || h1Text, description: String(V.description || plain(metaDesc)).slice(0, 2000),\n    thumbnailUrl: V.thumbnail_url ? [V.thumbnail_url] : ['[Thumbnail URL]'], uploadDate: V.upload_date || '[Upload date, YYYY-MM-DD]', ...(V.duration_iso ? { duration: V.duration_iso } : {}), ...(V.embed_url ? { embedUrl: V.embed_url } : {}), ...(V.provider === 'file' ? { contentUrl: V.url } : {}), ...(clips.length ? { hasPart: clips } : {}) } });\n}\nconst HP = (prev.hub_pages || []).filter(p => p && p.url);\nif (role === 'hub' && HP.length) blocks.push({ type: 'ItemList', note: 'The cluster pages this hub links to' + (HP.some(p => p.planned) ? '; remove planned pages that are not live yet, or publish them first.' : '.'), json: { '@context': 'https://schema.org', '@type': 'ItemList', name: h1Text + ': guides in this series', itemListElement: HP.map((p, i) => ({ '@type': 'ListItem', position: i + 1, name: p.keyword ? p.keyword.charAt(0).toUpperCase() + p.keyword.slice(1) : p.url, url: p.url })) } });\nblocks.push({ type: 'BreadcrumbList', json: { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: home }, { '@type': 'ListItem', position: 2, name: h1Text, item: pageUrl }] } });\nif (validFaqs.length) blocks.push({ type: 'FAQPage', note: 'Google stopped showing FAQ rich results in May 2026; keep for other engines and AI assistants, or drop it.', json: { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: validFaqs.map(f => ({ '@type': 'Question', name: plain(f.q), acceptedAnswer: { '@type': 'Answer', text: plain(f.a) } })) } });\n// E-E-A-T notes for the report (not QA warnings: they never trigger an editor round)\nconst eeat_notes = [];\nif (articleLike && !AU) eeat_notes.push('No author on file: the byline, author box and Person schema carry [placeholders]. Set up the business profile once (author name, title, credentials, bio, profile links).');\nif (AU && !AU.has_author_page) eeat_notes.push('The author has no profile page URL: an author page on the site (bio, credentials, articles) strengthens attribution.');\nif (AU && !(AU.same_as || []).length) eeat_notes.push('Add the author\\'s LinkedIn or other public profiles (sameAs) to the business profile.');\nconst insightPrompts = (md.match(/\\[Author insight:[^\\]]*\\]/gi) || []).length;\nif (insightPrompts) eeat_notes.push(insightPrompts + ' [Author insight: ...] line(s) for the author to complete with first-hand experience before publishing.');\nif (role === 'local' && !(P.phone && PA.street)) eeat_notes.push('Local page without a full address and phone on file: fill in the business profile so the NAP block and LocalBusiness schema are complete.');\nif (V && (V.missing || []).length) eeat_notes.push('Video: missing ' + V.missing.join(', ') + (V.missing.includes('transcript') ? ' (paste the transcript from YouTube Studio → Subtitles)' : '') + '.');\nif (role === 'hub' && HP.some(p => p.planned)) eeat_notes.push(HP.filter(p => p.planned).length + ' cluster page(s) are planned and not live yet: publish them before the hub, or drop their links until they are.');\nfixes.push('Generated ' + blocks.map(b => b.type).join(' + ') + ' schema');\n\nconst passed = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25;\nreturn [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null,\n  content_qa: { round, passed, content_score, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },\n    total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections,\n    keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),\n    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats,\n    trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct }, term_coverage: termCoverage, coverage_pct: Math.round(coverage * 100), missing_terms: missingTerms, specificity_per_100_words: specificity,\n    critic_score: (critique || lastCritique || {}).score ?? null, critic_verdict: (critique || lastCritique || {}).verdict || null,\n    schema_types: blocks.map(b => b.type), eeat_notes, page_role: role, auto_fixes: fixes, warnings } } }];\n"
+          "jsCode": "// Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),\n// term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,\n// and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.\nconst prev = $('Parse Brief').first().json;\nconst inItem = $input.first().json;\nconst rawOut = inItem.output;\nlet md = (typeof rawOut === 'string' ? rawOut : JSON.stringify(rawOut || '')).trim();\nconst round = ($runIndex || 0) + 1;\nconst critique = round === 1 ? (inItem.critique || null) : null;\nlet lastCritique = null; try { lastCritique = $('Parse Critique').first().json.critique || null; } catch (e) {}\nconst fixes = [];\nconst warnings = [];\nconst brief = prev.content_brief || {};\nconst kw = String(prev.keyword || '').toLowerCase();\nconst domain = prev.domain || '';\nconst today = new Date().toISOString().slice(0, 10);\n\nconst plain = (s) => String(s || '').replace(/\\[([^\\[\\]]+)\\]\\([^)]*\\)/g, '$1').replace(/[*_`>]+/g, '').replace(/\\s+/g, ' ').trim();\nconst countWords = (t) => String(t || '').split(/\\s+/).filter(Boolean).length;\nconst escRe = (s) => s.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n\n// 1. Strip any schema/script the model added\nconst before0 = md;\nmd = md.replace(/<script[\\s\\S]*?<\\/script>/gi, '').replace(/```(?:json|html)?\\s*\\{[\\s\\S]*?\"@context\"[\\s\\S]*?```/gi, '').trim();\nif (md !== before0) fixes.push('Removed model-written schema/script blocks (schema is generated by the QA step)');\n\n// 2. The word \"placeholder\" must never appear\nconst before1 = md;\nmd = md.replace(/\\s*\\((placeholders?|placeholder for [^)]*)\\)/gi, '').replace(/\\b(indicative\\s+)?price placeholders?\\b/gi, 'prices').replace(/\\bplaceholders?\\b/gi, 'details');\nif (md !== before1) fixes.push('Removed the word \"placeholder\" from text');\n\n// 3. Prices become [Price] unless the user gave prices (business facts / description)\nconst userText = String(prev.business || '') + ' ' + String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '');   // case-study facts (v4.4) are the client's own numbers\nconst userGavePrices = /\\d/.test(userText) && /(\\$|£|€|₹|\\b(aed|sar|pkr|inr|usd|gbp|eur|zar|brl|mxn|rs)\\b)/i.test(userText);\nif (!userGavePrices) {\n  const sym = { GBP: '£', USD: '\\\\$', CAD: '\\\\$', AUD: '\\\\$', NZD: '\\\\$', SGD: '\\\\$', PKR: '(?:Rs\\\\.?|PKR)', INR: '(?:Rs\\\\.?|₹|INR)', AED: '(?:AED|Dh)', SAR: '(?:SAR|SR)', EUR: '€', ZAR: 'R', BRL: 'R\\\\$', MXN: '\\\\$' }[prev.currency] || '[£$€]';\n  const priceRe = new RegExp(sym + '\\\\s?\\\\d[\\\\d.,]*(\\\\s?(–|-|to)\\\\s?' + sym + '?\\\\s?\\\\d[\\\\d.,]*)?', 'g');\n  const count = (md.match(priceRe) || []).length;\n  if (count) { md = md.replace(priceRe, '[Price]'); fixes.push(`Replaced ${count} invented price(s) with [Price]`); }\n}\n\n// 4. Meta lines — and nothing else may sit between them and the H1 (models sometimes add \"production notes\")\nconst metaOf = (label) => { const m = md.match(new RegExp('^' + label + ':\\\\s*(.+)$', 'im')); return m ? m[1].trim() : ''; };\nconst metaTitle = metaOf('Title'), metaDesc = metaOf('Meta Description'), slug = metaOf('Slug');\n{\n  const h1At = md.search(/^# .+$/m);\n  if (h1At > 0) {\n    const head = md.slice(0, h1At);\n    const metaLines = head.split('\\n').filter(l => /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):/i.test(l.trim()));\n    const other = head.split('\\n').filter(l => l.trim() && !/^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):/i.test(l.trim()));\n    if (other.length) { md = metaLines.join('\\n') + '\\n\\n' + md.slice(h1At); fixes.push('Removed ' + other.length + ' line(s) of notes that sat between the meta lines and the H1'); }\n  }\n}\n\n// 5. Internal links: only real pages on the user's site; external links kept (they are citations)\nconst allowed = new Set();\nconst normUrl = (u) => String(u || '').trim().replace(/\\/$/, '').toLowerCase();\n(prev.internal_link_candidates || []).forEach(c => allowed.add(normUrl(c.url)));\n(prev.site_urls || []).forEach(u => allowed.add(normUrl(u)));\nif (prev.existing_page && prev.existing_page.url) allowed.add(normUrl(prev.existing_page.url));\nif (domain) allowed.add(normUrl('https://' + domain));\nconst removedLinks = []; const externalUrls = [];\nlet internalLinks = 0, externalLinks = 0;\nmd = md.replace(/\\[([^\\[\\]]+)\\]\\(([^)\\s]+)\\)/g, (m, text, url) => {\n  let u = url.trim(); const isRelative = u.startsWith('/');\n  if (isRelative) u = domain ? 'https://' + domain + u : u;\n  const host = u.replace(/^https?:\\/\\//i, '').replace(/^www\\./i, '').split(/[\\/?#]/)[0].toLowerCase();\n  const internal = !!domain && (host === domain || host.endsWith('.' + domain));\n  if (internal || isRelative) { if (allowed.size && allowed.has(normUrl(u))) { internalLinks++; return '[' + text + '](' + u + ')'; } removedLinks.push(u); return text; }\n  externalLinks++; externalUrls.push({ anchor: text, url: u, host }); return m;\n});\nif (removedLinks.length) fixes.push(`Removed ${removedLinks.length} link(s) to pages that do not exist on ${domain || 'the site'}: ` + removedLinks.slice(0, 4).join(', '));\n// citations must point at sources the brief allowed (evidence plan) or at least be real-looking hosts\nconst allowedSources = new Set(((brief.evidence_plan || []).map(e => String(e.source_url || '').toLowerCase())).concat((prev.facts || []).map(f => String(f.url || '').toLowerCase())));\nconst TRUSTED = /(^|\\.)(gov|edu|int|mil)(\\.|$)|\\.gov\\.[a-z]{2}$|(^|\\.)(microsoft|odoo|sap|oracle|netsuite|google|zoho|sage|xero|quickbooks|intuit|salesforce|hubspot|shopify|stripe|who|oecd|worldbank|imf|un|europa)\\.(com|org|eu|int)$/i;\nconst unknownSources = externalUrls.filter(e => !TRUSTED.test(e.host) && allowedSources.size && ![...allowedSources].some(s => s && (e.url.toLowerCase().startsWith(s) || s.startsWith(e.url.toLowerCase()))));\nif (unknownSources.length > 2) warnings.push('External links to sources not in the evidence plan: ' + unknownSources.slice(0, 3).map(e => e.host).join(', ') + ' — verify each one');\nconst trusted_sources = externalUrls.filter(e => TRUSTED.test(e.host)).map(e => e.host);\n\n// 6. FAQs\nconst faqs = []; let cur = null, inAnswer = false;\nfor (const raw of md.split('\\n')) {\n  const l = raw.trim(); let m;\n  if ((m = l.match(/^\\**Q\\d+[:.]\\**\\s*(.+)$/))) { cur = { q: m[1].replace(/\\*+$/, '').trim(), a: '' }; faqs.push(cur); inAnswer = false; continue; }\n  if ((m = l.match(/^\\**A\\d+[:.]\\**\\s*(.*)$/)) && cur) { cur.a = m[1]; inAnswer = true; continue; }\n  if (inAnswer && l && !l.startsWith('#')) { cur.a += ' ' + l; continue; }\n  if (!l || l.startsWith('#')) inAnswer = false;\n}\nconst validFaqs = faqs.filter(f => f.q && f.a && countWords(f.a) >= 15);\n\n// 7. Sections\nconst withoutMeta = md.replace(/^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):.*$/gm, '');\nconst faqStart = withoutMeta.search(/^## (Frequently Asked Questions|FAQs?)/im);\nconst afterFaq = faqStart >= 0 ? withoutMeta.slice(faqStart + 5).search(/^## /m) : -1;\nconst faqPart = faqStart >= 0 ? withoutMeta.slice(faqStart, afterFaq >= 0 ? faqStart + 5 + afterFaq : undefined) : '';\nconst mainPart = withoutMeta.replace(faqPart, '');\nconst totalWords = countWords(withoutMeta), mainWords = countWords(mainPart), faqWords = countWords(faqPart);\nconst h1 = (md.match(/^# .+$/m) || [''])[0];\nconst h2s = md.match(/^## .+$/gm) || [];\nconst faqHeadings = h2s.filter(h => /faq|frequently asked/i.test(h)).length;\nconst lastH2 = h2s[h2s.length - 1] || '';\nconst qaMatch = withoutMeta.match(/^\\**\\s*Quick answer:?\\**\\s*(.+)$/im);\nconst answerWords = qaMatch ? countWords(plain(qaMatch[1])) : 0;\n// per-section word counts vs the outline\nconst sections = []; { const parts = mainPart.split(/^## /m).slice(1); for (const p of parts) { const nl = p.indexOf('\\n'); sections.push({ h2: plain(p.slice(0, nl)), words: countWords(p.slice(nl + 1)) }); } }\nconst outline = brief.outline || [];\nconst thinSections = sections.filter(s => { const o = outline.find(x => x.h2 && plain(x.h2).toLowerCase() === s.h2.toLowerCase()); const target = o ? Number(o.target_words) || 0 : 0; return target >= 150 && s.words < target * 0.6; }).map(s => s.h2 + ' (' + s.words + ' words)');\n\n// 8. Keyword checks — natural variants count (\"erp systems in the uae\", \"ERP system in UAE\", hyphens)\nconst flexRe = (phrase, flags) => new RegExp('\\\\b' + phrase.toLowerCase().split(/[\\s-]+/).filter(Boolean).map(w => escRe(w.replace(/(?:ies|es|s)$/, '')) + '(?:ies|es|s)?').join('[\\\\s-]+(?:(?:the|a|an|of|for|in|to|and)\\\\s+)?') + '\\\\b', flags);\nconst kwRe = kw ? flexRe(kw, 'gi') : null;\nconst kwCount = kwRe ? (withoutMeta.match(kwRe) || []).length : 0;\nconst density = totalWords ? +(kwCount / totalWords * 100).toFixed(2) : 0;\nconst first100 = plain(mainPart.replace(/^#.*$/gm, '')).split(/\\s+/).slice(0, 100).join(' ').toLowerCase();\n\n// 9. Unverified statistics: numbers outside brackets, tables and cited sentences\nconst bodyPlain = plain(withoutMeta.replace(/\\|[^\\n]*\\|/g, ''));\nconst citedSentences = new Set();\nwithoutMeta.split(/(?<=[.!?])\\s+/).forEach(s => { if (/\\]\\(https?:\\/\\//.test(s)) citedSentences.add(plain(s)); });\nconst noBrackets = withoutMeta.replace(/\\[[^\\]]*\\]\\([^)]*\\)/g, ' CITED ').replace(/\\[[^\\]]*\\]/g, '').replace(/\\|[^\\n]*\\|/g, '');\nconst statHits = new Set();\nfor (const s of noBrackets.split(/(?<=[.!?])\\s+/)) {\n  if (/CITED/.test(s)) continue;\n  for (const m of s.matchAll(/\\b\\d[\\d,.]*\\s?%/g)) statHits.add(m[0].trim());\n  for (const m of s.matchAll(/\\b(over|more than|up to|nearly|around|approximately|about)\\s+\\d[\\d,.]*\\+?(\\s?%|\\s+\\w+)?/gi)) statHits.add(m[0].trim());\n  for (const m of s.matchAll(/\\b\\d[\\d,.]*\\+\\s+(years?|clients?|customers?|projects?|users?|students?|universities|schools|companies|installations?|reviews?|countries|awards?)\\b/gi)) statHits.add(m[0].trim());\n}\nconst clientNums = (String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '')).toLowerCase();   // numbers the client gave (facts, case studies) need no external source\nconst stats = [...statHits].filter(s => !/^(19|20)\\d\\d/.test(s)).filter(s => !clientNums.includes(s.toLowerCase().replace(/^(over|more than|up to|nearly|around|approximately|about)\\s+/, ''))).slice(0, 8);\n\n// 10. Banned phrases (AI clichés and filler)\nconst BANNED = [\"in today's fast-paced world\", 'in the ever-evolving', 'ever-evolving landscape', 'delve', 'dive into', 'unlock', 'unleash', 'seamless', 'seamlessly', 'robust', 'leverage', 'cutting-edge', 'game-changer', 'game-changing', 'revolutioni', 'elevate your', 'empower', 'navigate the complexities', 'look no further', \"it's important to note\", 'it is important to note', 'at the end of the day', 'in conclusion', 'comprehensive solution', 'tailored solutions', 'harness the power', \"whether you're a\", 'a testament to', 'crucial', 'paramount', 'realm', 'tapestry', 'embark', 'foster', 'streamline', 'synergy', 'holistic', 'best-in-class', 'world-class', 'state-of-the-art', 'top-notch', 'one-stop shop', 'in this article', 'in this guide, we', 'without further ado', 'unparalleled', 'transformative', 'in the digital age', 'stay ahead of the curve', 'the bottom line is', 'when it comes to', 'a wide range of'];\nconst lower = bodyPlain.toLowerCase();\nconst banned_found = BANNED.map(p => ({ phrase: p, count: (lower.match(new RegExp(escRe(p), 'g')) || []).length })).filter(x => x.count > 0).sort((a, b) => b.count - a.count);\nconst bannedCount = banned_found.reduce((s, x) => s + x.count, 0);\n\n// 11. Readability (Flesch reading ease, approximate syllables), sentence length, passive voice\nconst sentences = bodyPlain.split(/(?<=[.!?])\\s+/).map(s => s.trim()).filter(s => countWords(s) >= 3);\nconst sentWords = sentences.map(countWords);\nconst avgSentence = sentWords.length ? +(sentWords.reduce((a, b) => a + b, 0) / sentWords.length).toFixed(1) : 0;\nconst longSentences = sentWords.filter(n => n > 28).length;\nconst syl = (w) => { w = w.toLowerCase().replace(/[^a-z]/g, ''); if (!w) return 0; if (w.length <= 3) return 1; const m = w.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/, '').replace(/^y/, '').match(/[aeiouy]{1,2}/g); return m ? m.length : 1; };\nconst wordsArr = bodyPlain.split(/\\s+/).filter(Boolean);\nconst syllables = wordsArr.reduce((s, w) => s + syl(w), 0);\nconst flesch = wordsArr.length && sentences.length ? +(206.835 - 1.015 * (wordsArr.length / sentences.length) - 84.6 * (syllables / wordsArr.length)).toFixed(1) : null;\nconst passive = sentences.filter(s => /\\b(is|are|was|were|been|being|be)\\s+(\\w+ed|built|made|done|seen|known|given|taken|chosen|written)\\b/i.test(s)).length;\nconst passive_pct = sentences.length ? Math.round(passive / sentences.length * 100) : 0;\n\n// 12. Term coverage (brief terms first, else the competitor term model)\nconst termList = (brief.terms_to_use || []).map(t => ({ term: String(t.term || t).toLowerCase(), min: Number(t.min_count) || 1 }))\n  .concat((prev.term_model || []).slice(0, 25).map(t => ({ term: t.term, min: 1 })))\n  .filter((t, i, a) => t.term && a.findIndex(x => x.term === t.term) === i).slice(0, 30);\nconst termCoverage = termList.map(t => ({ term: t.term, target: t.min, found: (bodyPlain.match(flexRe(t.term, 'gi')) || []).length })).map(t => ({ ...t, ok: t.found >= t.target }));\nconst coverage = termCoverage.length ? termCoverage.filter(t => t.ok).length / termCoverage.length : 1;\nconst missingTerms = termCoverage.filter(t => !t.ok).slice(0, 10).map(t => t.term);\n\n// 13. Specificity: numbers, examples, steps, decision rules per 100 words\nconst specHits = (bodyPlain.match(/\\b\\d[\\d,.%]*\\b/g) || []).length + (lower.match(/\\b(for example|for instance|such as|e\\.g\\.|step \\d|case study|in practice|choose .* if|rule of thumb)\\b/g) || []).length;\nconst specificity = wordsArr.length ? +(specHits / wordsArr.length * 100).toFixed(2) : 0;\n// snippet targets answered?\nconst snippetTargets = brief.snippet_targets || [];\nconst unansweredSnippets = snippetTargets.filter(t => t.question && !new RegExp('^#{2,3}\\\\s*' + escRe(plain(t.question).replace(/\\?$/, '')), 'im').test(md)).map(t => t.question).slice(0, 4);\n\n// 14. Warnings\nconst target = brief.target_word_count || 800;\nif (mainWords < target * 0.8) warnings.push(`Main content is short: ${mainWords} words vs target ${target}`);\nif (mainWords > target * 1.25) warnings.push(`Main content is too long: ${mainWords} words vs target ${target} — cut repetition and secondary detail, do not add anything`);\nif (thinSections.length) warnings.push('Sections far below their target length: ' + thinSections.slice(0, 4).join('; '));\nif (!metaTitle) warnings.push('Meta title line missing');\nelse { if (metaTitle.length > 60) warnings.push(`Meta title is ${metaTitle.length} characters (max 60)`); if (metaTitle.length < 30) warnings.push(`Meta title is only ${metaTitle.length} characters (aim for 50-60)`); if (kw && !flexRe(kw, 'i').test(metaTitle)) warnings.push('Primary keyword missing from the meta title'); }\nif (!metaDesc) warnings.push('Meta description line missing');\nelse { if (metaDesc.length > 155) warnings.push(`Meta description is ${metaDesc.length} characters (max 155)`); if (metaDesc.length < 70) warnings.push(`Meta description is only ${metaDesc.length} characters (aim for 120-155)`); }\nif (slug && !/^\\/?[a-z0-9]+(-[a-z0-9]+)*\\/?$/.test(slug)) warnings.push('Slug should be lowercase words joined by hyphens');\nif (!h1) warnings.push('H1 missing'); else if (kw && !flexRe(kw, 'i').test(h1)) warnings.push('Primary keyword missing from H1');\nif (kw && !flexRe(kw, 'i').test(first100)) warnings.push('Primary keyword not in the first 100 words');\nif (kwCount < 3) warnings.push(`Primary keyword used only ${kwCount} time(s)`);\nif (density > 2) warnings.push(`Keyword density is high (${density}%) — risk of keyword stuffing`);\nif (h2s.length < 4) warnings.push(`Only ${h2s.length} H2 sections (brief expects ${outline.length || 'more'})`);\nif (!qaMatch) warnings.push('Quick answer block missing (a 40-70 word direct answer right after the introduction)');\nelse if (answerWords < 35 || answerWords > 90) warnings.push(`Quick answer is ${answerWords} words (aim for 40-70)`);\nif (validFaqs.length < 5) warnings.push(`Only ${validFaqs.length} complete FAQs found (need 5+, answers 40-70 words)`);\nif (faqHeadings > 1) warnings.push('Duplicate FAQ sections found');\nif (/faq|frequently asked/i.test(lastH2)) warnings.push('CTA section should come after the FAQs');\nif (!/\\|.*\\|/.test(md)) warnings.push('Comparison table missing');\nif (/guarantee/i.test(md) && !prev.business) warnings.push('Contains a guarantee claim — please verify');\nif (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));\nif ((prev.internal_link_candidates || []).length > 1 && internalLinks === 0) warnings.push('No internal links to existing pages on the site');\nif (bannedCount) warnings.push('Filler / AI-cliché phrases to rewrite (' + bannedCount + '): ' + banned_found.slice(0, 8).map(b => '\"' + b.phrase + '\"' + (b.count > 1 ? ' x' + b.count : '')).join(', '));\nif (flesch != null && flesch < 30) warnings.push(`Hard to read (Flesch ${flesch}, average sentence ${avgSentence} words) — shorten sentences and use plainer words`);\nif (longSentences > Math.max(3, sentences.length * 0.12)) warnings.push(`${longSentences} sentences longer than 28 words — split them`);\nif (passive_pct > 25) warnings.push(`Passive voice in about ${passive_pct}% of sentences — rewrite in active voice`);\nif (termCoverage.length >= 8 && coverage < 0.6) warnings.push('Topic coverage is thin — competitors cover these terms and this page does not: ' + missingTerms.join(', '));\nif (wordsArr.length > 400 && specificity < 0.6) warnings.push(`Too generic (${specificity} specifics per 100 words) — add concrete examples, numbers with sources, steps or decision rules`);\nif (unansweredSnippets.length) warnings.push('Snippet questions from the brief that have no matching heading: ' + unansweredSnippets.join(' | '));\nif (critique && Array.isArray(critique.problems)) critique.problems.filter(p => /high|medium/i.test(p.severity || '')).slice(0, 8).forEach(p => warnings.push('Editor review: ' + [p.location ? '\"' + String(p.location).slice(0, 80) + '\"' : '', p.issue, p.fix ? 'Fix: ' + p.fix : ''].filter(Boolean).join(' — ')));\n\n// 15. Content score (0-100)\nconst structuralChecks = [!!metaTitle && metaTitle.length <= 60, !!metaDesc && metaDesc.length <= 155, !!h1, h2s.length >= 4, !!qaMatch, validFaqs.length >= 5, /\\|.*\\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).length <= 1, kwCount >= 3 && density <= 2];\nconst structure_pts = 25 * structuralChecks.filter(Boolean).length / structuralChecks.length;\nconst coverage_pts = 25 * coverage;\nconst readability_pts = flesch == null ? 10 : (flesch >= 40 && avgSentence <= 22 ? 15 : (flesch >= 30 && avgSentence <= 26 ? 10 : 4));   // B2B copy normally scores 30-55\nconst specificity_pts = 10 * Math.min(1, specificity / 0.8);\nconst banned_pts = Math.max(0, 10 - 2 * bannedCount);\nconst length_pts = 15 * (1 - Math.min(1, Math.abs(mainWords - target) / target));\nconst content_score = Math.round(structure_pts + coverage_pts + readability_pts + specificity_pts + banned_pts + length_pts);\n\n// 16. Schema (deterministic, page-type aware). v4.4: the author as a Person (from the business profile), the expert reviewer, LocalBusiness\n//     for local pages, VideoObject for pages with a video, an ItemList of the cluster pages for hub pages. Unknown values stay [placeholders].\nconst P = prev.site_profile || {}; const PA = P.address || {}; const AU = prev.author || null; const RV = prev.reviewer || null; const role = prev.page_role || 'standard';\nconst bizName = String(P.business_name || ((prev.site_description && prev.site_description.business_name) ? prev.site_description.business_name : '')).trim();\nconst biz = bizName || '[Your Business Name]';\nconst pageUrl = (prev.existing_page && prev.existing_page.url) || (domain ? 'https://' + domain + '/' + String(slug || '').replace(/^\\/|\\/$/g, '') : '[Page URL]');\nconst h1Text = plain(h1.replace(/^#\\s*/, '')) || metaTitle;\nconst home = domain ? 'https://' + domain + '/' : '[Website URL]';\nconst slugId = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\nconst org = { '@type': 'Organization', ...(domain ? { '@id': home + '#organization' } : {}), name: biz, url: home, ...(P.logo_url ? { logo: P.logo_url } : {}) };\nconst blocks = [];\nconst pt = String(prev.page_type || '').toLowerCase();\nconst articleLike = /blog|guide|article|pillar|hub|case stud/.test(pt);\nconst authorRef = AU ? { '@type': 'Person', ...(domain ? { '@id': home + '#author-' + slugId(AU.name) } : {}), name: AU.name, ...(AU.url ? { url: AU.url } : {}) } : { '@type': 'Person', name: '[Author Name]', url: '[Author Page URL]' };\nif (articleLike) {\n  blocks.push({ type: 'Article', json: { '@context': 'https://schema.org', '@type': 'Article', headline: h1Text, description: plain(metaDesc), author: authorRef, publisher: org, datePublished: today, dateModified: today, mainEntityOfPage: { '@type': 'WebPage', '@id': pageUrl }, keywords: [prev.keyword, ...(brief.secondary_keywords || []).slice(0, 5)].filter(Boolean).join(', '), ...(role === 'case_study' ? { articleSection: 'Case study' } : {}) } });\n  const person = AU ? { '@context': 'https://schema.org', ...authorRef, ...(AU.job_title ? { jobTitle: AU.job_title } : {}), ...((AU.bio || AU.credentials) ? { description: [AU.bio, AU.credentials && !String(AU.bio || '').includes(AU.credentials) ? AU.credentials : ''].filter(Boolean).join(' ').slice(0, 600) } : {}),\n      ...(AU.image_url ? { image: AU.image_url } : {}), ...((AU.same_as || []).length ? { sameAs: AU.same_as } : {}), ...((AU.knows_about || []).length ? { knowsAbout: AU.knows_about } : {}), worksFor: domain ? { '@id': home + '#organization', name: biz } : { '@type': 'Organization', name: biz } }\n    : { '@context': 'https://schema.org', '@type': 'Person', name: '[Author Name]', jobTitle: '[Job title]', description: '[Two-sentence bio with credentials]', url: '[Author Page URL]', sameAs: ['[LinkedIn profile URL]'], worksFor: { '@type': 'Organization', name: biz } };\n  blocks.push({ type: 'Person', note: AU ? 'The author (business profile). Link the byline to the author page.' : 'No business profile on file: fill in the author, or set up the profile once (form \"Set up my business profile\" / API mode profile) so every page carries it.', json: person });\n  if (RV) blocks.push({ type: 'WebPage', note: 'Expert review (reviewedBy / lastReviewed).', json: { '@context': 'https://schema.org', '@type': 'WebPage', '@id': pageUrl, url: pageUrl, name: h1Text, reviewedBy: { '@type': 'Person', name: RV.name, ...(RV.job_title ? { jobTitle: RV.job_title } : {}), ...(RV.url ? { url: RV.url } : {}) }, lastReviewed: today } });\n} else if (pt.includes('product')) {\n  blocks.push({ type: 'Product', json: { '@context': 'https://schema.org', '@type': 'Product', name: h1Text, description: plain(metaDesc), brand: { '@type': 'Brand', name: biz }, url: pageUrl, offers: { '@type': 'Offer', priceCurrency: prev.currency || 'USD', price: '[Price as a number]', availability: 'https://schema.org/InStock', url: pageUrl } } });\n} else if (role === 'local') {\n  const area = String(prev.local_area || '').trim() || '[City]';\n  const LBT = [[/account|tax|bookkeep|audit/i, 'AccountingService'], [/legal|law|notar/i, 'LegalService'], [/financ|insur|bank/i, 'FinancialService'], [/medic|clinic|dental|health|doctor/i, 'MedicalBusiness'], [/restaurant|caf|food/i, 'FoodEstablishment'], [/store|shop|retail/i, 'Store'], [/home|plumb|electric|clean|repair|construct/i, 'HomeAndConstructionBusiness'], [/real estate|property/i, 'RealEstateAgent'], [/.+/, 'ProfessionalService']];\n  const lbType = P.business_type ? (LBT.find(x => x[0].test(P.business_type)) || [, 'LocalBusiness'])[1] : 'LocalBusiness';\n  const hoursOk = /^((Mo|Tu|We|Th|Fr|Sa|Su)(-(Mo|Tu|We|Th|Fr|Sa|Su))?(,(Mo|Tu|We|Th|Fr|Sa|Su))*\\s+\\d{2}:\\d{2}-\\d{2}:\\d{2}[;,]?\\s*)+$/.test(String(P.opening_hours || '').trim());\n  const lbId = domain ? home + '#business' : undefined;\n  blocks.push({ type: lbType, note: 'Local business details from the business profile' + (P.phone && PA.street ? '.' : ': fill in every [bracketed] value; name, address and phone must match the Google Business Profile exactly.'), json: { '@context': 'https://schema.org', '@type': lbType, ...(lbId ? { '@id': lbId } : {}), name: biz, url: home,\n    telephone: P.phone || '[Phone]', ...(P.public_email ? { email: P.public_email } : {}), address: { '@type': 'PostalAddress', streetAddress: PA.street || '[Street address]', addressLocality: PA.city || area, ...(PA.region ? { addressRegion: PA.region } : {}), ...(PA.postal_code ? { postalCode: PA.postal_code } : {}), addressCountry: PA.country_code || prev.country_iso || '[Country code]' },\n    areaServed: [area, ...(P.service_areas || []).filter(a => a.toLowerCase() !== area.toLowerCase())].slice(0, 12).map(a => ({ '@type': 'Place', name: a })), ...(hoursOk ? { openingHours: String(P.opening_hours).trim().split(/[;,]\\s*(?=(?:Mo|Tu|We|Th|Fr|Sa|Su))/) } : {}),\n    ...(P.price_range ? { priceRange: P.price_range } : {}), ...(P.logo_url ? { logo: P.logo_url, image: P.logo_url } : {}), ...(P.map_url ? { hasMap: P.map_url } : {}) } });\n  blocks.push({ type: 'Service', json: { '@context': 'https://schema.org', '@type': 'Service', name: h1Text, serviceType: prev.keyword, description: plain(metaDesc), provider: lbId ? { '@id': lbId, name: biz } : org, areaServed: { '@type': 'Place', name: area }, url: pageUrl } });\n} else {\n  blocks.push({ type: 'Service', json: { '@context': 'https://schema.org', '@type': 'Service', name: h1Text, serviceType: prev.keyword, description: plain(metaDesc), provider: org, areaServed: prev.country || '[Country]', url: pageUrl } });\n}\nconst V = prev.video || null;\nif (V && V.url) {\n  const ytWatch = V.provider === 'youtube' && V.id ? 'https://www.youtube.com/watch?v=' + V.id : V.url;\n  const clips = (V.chapters || []).map((c, i, a) => ({ '@type': 'Clip', name: c.name, startOffset: c.start_seconds, ...(a[i + 1] ? { endOffset: a[i + 1].start_seconds } : (V.duration_seconds ? { endOffset: V.duration_seconds } : {})), url: V.provider === 'youtube' ? ytWatch + '&t=' + c.start_seconds + 's' : V.url + '#t=' + c.start_seconds }));\n  blocks.push({ type: 'VideoObject', note: (V.missing || []).filter(m => m !== 'transcript').length ? 'Fill in: ' + V.missing.filter(m => m !== 'transcript').join(', ') + ' (YouTube Studio shows them).' : 'Video details read from the video page.', json: { '@context': 'https://schema.org', '@type': 'VideoObject', name: V.title || h1Text, description: String(V.description || plain(metaDesc)).slice(0, 2000),\n    thumbnailUrl: V.thumbnail_url ? [V.thumbnail_url] : ['[Thumbnail URL]'], uploadDate: V.upload_date || '[Upload date, YYYY-MM-DD]', ...(V.duration_iso ? { duration: V.duration_iso } : {}), ...(V.embed_url ? { embedUrl: V.embed_url } : {}), ...(V.provider === 'file' ? { contentUrl: V.url } : {}), ...(clips.length ? { hasPart: clips } : {}) } });\n}\nconst HP = (prev.hub_pages || []).filter(p => p && p.url);\nif (role === 'hub' && HP.length) blocks.push({ type: 'ItemList', note: 'The cluster pages this hub links to' + (HP.some(p => p.planned) ? '; remove planned pages that are not live yet, or publish them first.' : '.'), json: { '@context': 'https://schema.org', '@type': 'ItemList', name: h1Text + ': guides in this series', itemListElement: HP.map((p, i) => ({ '@type': 'ListItem', position: i + 1, name: p.keyword ? p.keyword.charAt(0).toUpperCase() + p.keyword.slice(1) : p.url, url: p.url })) } });\nblocks.push({ type: 'BreadcrumbList', json: { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: home }, { '@type': 'ListItem', position: 2, name: h1Text, item: pageUrl }] } });\nif (validFaqs.length) blocks.push({ type: 'FAQPage', note: 'Google stopped showing FAQ rich results in May 2026; keep for other engines and AI assistants, or drop it.', json: { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: validFaqs.map(f => ({ '@type': 'Question', name: plain(f.q), acceptedAnswer: { '@type': 'Answer', text: plain(f.a) } })) } });\n// E-E-A-T notes for the report (not QA warnings: they never trigger an editor round)\nconst eeat_notes = [];\nif (articleLike && !AU) eeat_notes.push('No author on file: the byline, author box and Person schema carry [placeholders]. Set up the business profile once (author name, title, credentials, bio, profile links).');\nif (AU && !AU.has_author_page) eeat_notes.push('The author has no profile page URL: an author page on the site (bio, credentials, articles) strengthens attribution.');\nif (AU && !(AU.same_as || []).length) eeat_notes.push('Add the author\\'s LinkedIn or other public profiles (sameAs) to the business profile.');\nconst insightPrompts = (md.match(/\\[Author insight:[^\\]]*\\]/gi) || []).length;\nif (insightPrompts) eeat_notes.push(insightPrompts + ' [Author insight: ...] line(s) for the author to complete with first-hand experience before publishing.');\nif (role === 'local' && !(P.phone && PA.street)) eeat_notes.push('Local page without a full address and phone on file: fill in the business profile so the NAP block and LocalBusiness schema are complete.');\nif (V && (V.missing || []).length) eeat_notes.push('Video: missing ' + V.missing.join(', ') + (V.missing.includes('transcript') ? ' (paste the transcript from YouTube Studio → Subtitles)' : '') + '.');\nif (role === 'hub' && HP.some(p => p.planned)) eeat_notes.push(HP.filter(p => p.planned).length + ' cluster page(s) are planned and not live yet: publish them before the hub, or drop their links until they are.');\nfixes.push('Generated ' + blocks.map(b => b.type).join(' + ') + ' schema');\n\nconst passed = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25;\n// v4.6: the editor pass (a full rewrite) runs only when it can still improve the page. It is skipped when the draft already scores 90+, the editorial\n// review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long\n// sentences, medium review remarks). Every SEO check (meta, H1 / keyword, quick answer, FAQs, table, CTA, links, sources, statistics, coverage,\n// specificity, fillers, readability, snippet questions) still forces the editor pass; open style notes stay in the report.\nconst STYLE_ONLY = /^(Passive voice in about|\\d+ sentences longer than 28 words|Editor review: )/;\nconst crit = critique || lastCritique || {};\nconst highProblem = (crit.problems || []).some(p => /high|critical/i.test(p.severity || ''));\nconst editor_needed = !passed && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && Math.abs(mainWords - target) <= target * 0.25 && warnings.every(w => STYLE_ONLY.test(w)));\nif (!passed && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (score ' + content_score + ', review ' + crit.score + '); the style notes below are left for a final read');\nreturn [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null,\n  content_qa: { round, passed, editor_needed, content_score, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },\n    total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections,\n    keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),\n    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats,\n    trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct }, term_coverage: termCoverage, coverage_pct: Math.round(coverage * 100), missing_terms: missingTerms, specificity_per_100_words: specificity,\n    critic_score: (critique || lastCritique || {}).score ?? null, critic_verdict: (critique || lastCritique || {}).verdict || null,\n    schema_types: blocks.map(b => b.type), eeat_notes, page_role: role, auto_fixes: fixes, warnings } } }];\n"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -2297,7 +2297,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const base = $('Schema Findings').first().json;\nconst list = $('Pick Competitors').all().map(i => i.json);\nconst ov = $('Domain Overview').all().map(i => i.json);\nconst ages = $('DataForSEO Whois').all().map(i => i.json);\nconst rdaps = $input.all().map(i => i.json);   // free RDAP lookup, fills the gaps in DataForSEO WHOIS\n\nconst rows = list.map((c, i) => {\n  const m = ov[i]?.tasks?.[0]?.result?.[0]?.items?.[0]?.metrics?.organic || {};\n  const top3 = (m.pos_1 || 0) + (m.pos_2_3 || 0);\n  const top10 = top3 + (m.pos_4_10 || 0);\n  const w = ages[i]?.tasks?.[0]?.result?.[0]?.items?.[0] || null;\n  const rdap = (((rdaps[i] || {}).events) || []).find(e => /registration/i.test(e.eventAction || ''));\n  const regRaw = (w && (w.created_datetime || w.created_date)) || (rdap && rdap.eventDate) || null;\n  const reg = regRaw ? String(regRaw).slice(0, 10) : null;\n  const age = reg ? Number(((Date.now() - new Date(reg)) / 31557600000).toFixed(1)) : null;\n  return {\n    domain: c.domain,\n    is_you: !!c.is_you,\n    shared_keywords: c.shared,\n    organic_keywords: m.count ?? 0,\n    top3, top10,\n    est_monthly_traffic: m.etv != null ? Math.round(m.etv) : 0,\n    traffic_value_usd: m.estimated_paid_traffic_cost != null ? Math.round(m.estimated_paid_traffic_cost) : 0,\n    registered: reg,\n    domain_age_years: age\n  };\n});\n\nconst you = rows.find(r => r.is_you) || {};\nconst comps = rows.filter(r => !r.is_you);\nconst median = (arr) => { const a = arr.filter(v => v != null).sort((x, y) => x - y); if (!a.length) return null; const m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };\nconst r1 = (v) => v == null ? null : Math.round(v * 10) / 10;\nconst med = {\n  organic_keywords: median(comps.map(c => c.organic_keywords)),\n  top10: median(comps.map(c => c.top10)),\n  est_monthly_traffic: median(comps.map(c => c.est_monthly_traffic)),\n  domain_age_years: r1(median(comps.map(c => c.domain_age_years)))\n};\n\nconst findings = [];\nconst works = [];\nconst F = (severity, title, evidence, why, fix) => findings.push({\n  category: 'Authority', severity, title, evidence, why, fix,\n  sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site'\n});\nconst names = comps.map(c => c.domain).join(', ');\n\nif ((you.top10 || 0) === 0) {\n  F('High', 'The site does not rank in Google’s top 10 for any keyword',\n    'Top-10 rankings in ' + (base.country || 'the target country') + ': ' + base.domain + ' 0' + (comps.length ? ' vs competitor median ' + (med.top10 ?? 'N/A') + ' (' + names + ')' : ''),\n    'Without top-10 rankings the site gets almost no organic traffic, however good the pages are.',\n    'Build authority first (partner listings, directories, reviews, mentions) and target long-tail keywords where competitors are weak.');\n} else if (med.top10 && you.top10 < med.top10 * 0.25) {\n  F('High', 'Far fewer top-10 rankings than competitors', base.domain + ' ' + you.top10 + ' vs competitor median ' + med.top10,\n    'Competitors are visible for many more searches.', 'Use the keyword gap to target terms competitors rank for, starting with low-difficulty ones.');\n} else if (comps.length) {\n  works.push('Top-10 rankings comparable with competitors (' + you.top10 + ' vs median ' + med.top10 + ')');\n}\n\nif (comps.length && med.est_monthly_traffic && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {\n  F('High', 'Organic traffic is under 10% of competitors',\n    'Estimated monthly organic visits: ' + base.domain + ' ' + (you.est_monthly_traffic || 0) + ' vs competitor median ' + Math.round(med.est_monthly_traffic).toLocaleString('en-GB'),\n    'Most searchers in this market are going to competitors.', 'Close the keyword and backlink gaps shown in this report.');\n}\n\nif (you.domain_age_years != null && you.domain_age_years < 1) {\n  F('High', 'Very young domain' + (med.domain_age_years ? ' competing with long-established sites' : ''),\n    base.domain + ' registered ' + you.registered + ' (' + you.domain_age_years + ' years)' + (med.domain_age_years != null ? ' vs competitor median ' + med.domain_age_years + ' years' : ''),\n    'New domains have little accumulated trust; on-page fixes alone rarely move competitive terms in the first year.',\n    'Invest in off-site entity building (partner directories, reviews, mentions) and target long-tail, lower-difficulty searches first.');\n}\n\nif (!comps.length) {\n  findings.push({ category: 'Authority', severity: 'Info', title: 'No competitors could be identified', evidence: 'No overlapping domains found for ' + base.country, why: 'Competitor comparisons in this report are limited.', fix: 'Add up to 3 competitors in the form for a full comparison.', sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false });\n}\n\nreturn [{\n  json: {\n    ...base,\n    competitor_benchmark: {\n      country: base.country,\n      source: (list[0] && list[0].method) || '',\n      rows,\n      medians: med\n    },\n    extra_findings: [...(base.extra_findings || []), ...findings],\n    extra_works: [...(base.extra_works || []), ...works]\n  }\n}];"
+          "jsCode": "const base = $('Schema Findings').first().json;\nconst list = $('Pick Competitors').all().map(i => i.json);\nconst ov = $('Domain Overview').all().map(i => i.json);\nconst AGES = $('Domain Ages').first().json.ages || {};   // v4.6: stored registration dates; free RDAP first, paid WHOIS only for the gaps\n\nconst rows = list.map((c, i) => {\n  const m = ov[i]?.tasks?.[0]?.result?.[0]?.items?.[0]?.metrics?.organic || {};\n  const top3 = (m.pos_1 || 0) + (m.pos_2_3 || 0);\n  const top10 = top3 + (m.pos_4_10 || 0);\n  const regRaw = (AGES[String(c.domain || '').toLowerCase()] || {}).registered || null;\n  const reg = regRaw ? String(regRaw).slice(0, 10) : null;\n  const age = reg ? Number(((Date.now() - new Date(reg)) / 31557600000).toFixed(1)) : null;\n  return {\n    domain: c.domain,\n    is_you: !!c.is_you,\n    shared_keywords: c.shared,\n    organic_keywords: m.count ?? 0,\n    top3, top10,\n    est_monthly_traffic: m.etv != null ? Math.round(m.etv) : 0,\n    traffic_value_usd: m.estimated_paid_traffic_cost != null ? Math.round(m.estimated_paid_traffic_cost) : 0,\n    registered: reg,\n    domain_age_years: age\n  };\n});\n\nconst you = rows.find(r => r.is_you) || {};\nconst comps = rows.filter(r => !r.is_you);\nconst median = (arr) => { const a = arr.filter(v => v != null).sort((x, y) => x - y); if (!a.length) return null; const m = Math.floor(a.length / 2); return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2; };\nconst r1 = (v) => v == null ? null : Math.round(v * 10) / 10;\nconst med = {\n  organic_keywords: median(comps.map(c => c.organic_keywords)),\n  top10: median(comps.map(c => c.top10)),\n  est_monthly_traffic: median(comps.map(c => c.est_monthly_traffic)),\n  domain_age_years: r1(median(comps.map(c => c.domain_age_years)))\n};\n\nconst findings = [];\nconst works = [];\nconst F = (severity, title, evidence, why, fix) => findings.push({\n  category: 'Authority', severity, title, evidence, why, fix,\n  sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site'\n});\nconst names = comps.map(c => c.domain).join(', ');\n\nif ((you.top10 || 0) === 0) {\n  F('High', 'The site does not rank in Google’s top 10 for any keyword',\n    'Top-10 rankings in ' + (base.country || 'the target country') + ': ' + base.domain + ' 0' + (comps.length ? ' vs competitor median ' + (med.top10 ?? 'N/A') + ' (' + names + ')' : ''),\n    'Without top-10 rankings the site gets almost no organic traffic, however good the pages are.',\n    'Build authority first (partner listings, directories, reviews, mentions) and target long-tail keywords where competitors are weak.');\n} else if (med.top10 && you.top10 < med.top10 * 0.25) {\n  F('High', 'Far fewer top-10 rankings than competitors', base.domain + ' ' + you.top10 + ' vs competitor median ' + med.top10,\n    'Competitors are visible for many more searches.', 'Use the keyword gap to target terms competitors rank for, starting with low-difficulty ones.');\n} else if (comps.length) {\n  works.push('Top-10 rankings comparable with competitors (' + you.top10 + ' vs median ' + med.top10 + ')');\n}\n\nif (comps.length && med.est_monthly_traffic && (you.est_monthly_traffic || 0) < med.est_monthly_traffic * 0.1) {\n  F('High', 'Organic traffic is under 10% of competitors',\n    'Estimated monthly organic visits: ' + base.domain + ' ' + (you.est_monthly_traffic || 0) + ' vs competitor median ' + Math.round(med.est_monthly_traffic).toLocaleString('en-GB'),\n    'Most searchers in this market are going to competitors.', 'Close the keyword and backlink gaps shown in this report.');\n}\n\nif (you.domain_age_years != null && you.domain_age_years < 1) {\n  F('High', 'Very young domain' + (med.domain_age_years ? ' competing with long-established sites' : ''),\n    base.domain + ' registered ' + you.registered + ' (' + you.domain_age_years + ' years)' + (med.domain_age_years != null ? ' vs competitor median ' + med.domain_age_years + ' years' : ''),\n    'New domains have little accumulated trust; on-page fixes alone rarely move competitive terms in the first year.',\n    'Invest in off-site entity building (partner directories, reviews, mentions) and target long-tail, lower-difficulty searches first.');\n}\n\nif (!comps.length) {\n  findings.push({ category: 'Authority', severity: 'Info', title: 'No competitors could be identified', evidence: 'No overlapping domains found for ' + base.country, why: 'Competitor comparisons in this report are limited.', fix: 'Add up to 3 competitors in the form for a full comparison.', sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false });\n}\n\nreturn [{\n  json: {\n    ...base,\n    competitor_benchmark: {\n      country: base.country,\n      source: (list[0] && list[0].method) || '',\n      rows,\n      medians: med\n    },\n    extra_findings: [...(base.extra_findings || []), ...findings],\n    extra_works: [...(base.extra_works || []), ...works]\n  }\n}];"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -2755,7 +2755,7 @@
           "genericAuthType": "httpBasicAuth",
           "sendBody": true,
           "specifyBody": "json",
-          "jsonBody": "={{ JSON.stringify([{ limit: 1, filters: [['domain', '=', $('Pick Competitors').item.json.domain]] }]) }}",
+          "jsonBody": "={{ JSON.stringify([{ limit: 1, filters: [['domain', '=', $json.domain]] }]) }}",
           "options": {
             "response": {
               "response": {
@@ -2767,8 +2767,8 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.5,
         "position": [
-          7632,
-          992
+          8952,
+          1172
         ],
         "id": "1dfb49a5-8359-4602-888f-7318b22964f5",
         "name": "DataForSEO Whois",
@@ -3528,7 +3528,7 @@
             "conditions": [
               {
                 "id": "10934457-2aa1-46ce-8a1c-3f27f3c1a352",
-                "leftValue": "={{ $json.content_qa.passed === false && $json.qa_round < ($json.qa_max_rounds || 2) }}",
+                "leftValue": "={{ $json.content_qa.passed === false && $json.content_qa.editor_needed !== false && $json.qa_round < ($json.qa_max_rounds || 2) }}",
                 "rightValue": "",
                 "operator": {
                   "type": "boolean",
@@ -4471,7 +4471,7 @@
       },
       {
         "parameters": {
-          "url": "=https://rdap.org/domain/{{ $('Pick Competitors').item.json.domain }}",
+          "url": "=https://rdap.org/domain/{{ $json.domain }}",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
@@ -4495,8 +4495,8 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.5,
         "position": [
-          7832,
-          1152
+          8292,
+          1292
         ],
         "onError": "continueRegularOutput"
       },
@@ -12859,6 +12859,556 @@
           4068,
           1228
         ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_cache",
+          "columns": {
+            "column": [
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "value",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "71e80c50-6257-55cc-8174-d8c615b4a630",
+        "name": "Ensure Cache Table (Ages)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          7412,
+          1412
+        ],
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "kind",
+                "condition": "eq",
+                "keyValue": "age"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "fb8ea910-6441-5694-bc8b-fc3e5e082f33",
+        "name": "Load Age Cache",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          7632,
+          1412
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Domain age for the competitor benchmark (v4.6 — no repeated lookups): registration dates are kept in seo_cache ('age:<domain>', 365 days;\n// a date nobody could answer is retried after 30 days) and looked up only when missing: first free RDAP, then paid DataForSEO WHOIS (~$0.12\n// per domain) only for what RDAP cannot answer.\nconst CONFIG = { ttl_days: 365, unknown_ttl_days: 30 };\nconst list = $('Pick Competitors').all().map(i => i.json);\nlet cache = []; try { cache = $('Load Age Cache').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}\nconst fresh = (r) => { let v = null; try { v = JSON.parse(r.value); } catch (e) {} if (!v) return null; const days = (Date.now() - new Date(r.updated_at).getTime()) / 864e5; return days < (v.registered ? CONFIG.ttl_days : CONFIG.unknown_ttl_days) ? v : null; };\nconst need = [...new Set(list.map(c => String(c.domain || '').toLowerCase()).filter(Boolean))].filter(d => { const r = cache.find(x => x.key === 'age:' + d); return !(r && fresh(r)); });\nreturn need.length ? need.map(d => ({ json: { domain: d } })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "217407b6-1fcc-544a-8e8e-261ffe11a7ab",
+        "name": "Age Lookup Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          7852,
+          1412
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "1c9433a5-f461-5d00-a903-ceb04a005533",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "e7061ca8-ebad-5c4c-a6e1-e5329a99d09b",
+        "name": "Need Age Lookup?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          8072,
+          1412
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// What free RDAP answered; the domains it could not answer go to DataForSEO WHOIS (one request each).\nconst asked = $('Age Lookup Plan').all().map(i => i.json);\nconst rd = $input.all().map(i => i.json || {});\nconst regOf = (r) => { const e = ((r && r.events) || []).find(x => /registration/i.test(x.eventAction || '')); return e && e.eventDate ? String(e.eventDate).slice(0, 10) : null; };\nconst left = asked.filter((a, i) => a.domain && !regOf(rd[i]));\nreturn left.length ? left.map(a => ({ json: { domain: a.domain } })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "13ffa625-7e31-5c13-81be-e63b9d2a7863",
+        "name": "RDAP Results",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          8512,
+          1292
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "9403788d-f1bb-5cf5-bd3b-4c8fc5ebdc81",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "c8f9dcd0-853c-5740-8fa2-c095f36c8e19",
+        "name": "Need WHOIS?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          8732,
+          1292
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Registration dates for every benchmark domain: stored ones, RDAP answers, WHOIS answers. New answers are stored (seo_cache 'age:<domain>').\nconst CONFIG = { ttl_days: 365, unknown_ttl_days: 30 };\nconst list = $('Pick Competitors').all().map(i => i.json);\nlet cache = []; try { cache = $('Load Age Cache').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}\nlet asked = [], rdaps = [], wasked = [], whois = [];\ntry { asked = $('Age Lookup Plan').all().map(i => i.json).filter(a => !a.skip); rdaps = $('RDAP Lookup').all().map(i => i.json || {}); } catch (e) {}\ntry { wasked = $('RDAP Results').all().map(i => i.json).filter(a => !a.skip); whois = $('DataForSEO Whois').all().map(i => i.json || {}); } catch (e) {}\nconst ages = {}; const now = new Date().toISOString();\nfor (const r of cache) { let v = null; try { v = JSON.parse(r.value); } catch (e) {} if (!v) continue; const days = (Date.now() - new Date(r.updated_at).getTime()) / 864e5;\n  if (days < (v.registered ? CONFIG.ttl_days : CONFIG.unknown_ttl_days)) ages[String(r.key).slice(4)] = { registered: v.registered || null, source: (v.source || 'stored') + ', stored ' + String(r.updated_at).slice(0, 10) }; }\nasked.forEach((a, i) => { const e = ((rdaps[i] || {}).events || []).find(x => /registration/i.test(x.eventAction || '')); if (e && e.eventDate) ages[a.domain] = { registered: String(e.eventDate).slice(0, 10), source: 'rdap' }; });\nwasked.forEach((a, i) => { const w = ((((whois[i] || {}).tasks || [])[0] || {}).result || [])[0]; const it = ((w || {}).items || [])[0] || null; const reg = it && (it.created_datetime || it.created_date); if (reg) ages[a.domain] = { registered: String(reg).slice(0, 10), source: 'whois' }; });\nconst rows = [];\nfor (const a of asked) { if (!ages[a.domain]) ages[a.domain] = { registered: null, source: 'unknown' }; rows.push({ key: 'age:' + a.domain, kind: 'age', site_id: '', value: JSON.stringify({ registered: ages[a.domain].registered, source: ages[a.domain].source }), updated_at: now }); }\nfor (const c of list) { const d = String(c.domain || '').toLowerCase(); if (d && !ages[d]) ages[d] = { registered: null, source: 'unknown' }; }\nreturn [{ json: { ages, rows, looked_up: asked.length, whois_requests: wasked.length } }];\n"
+        },
+        "id": "d4715ee7-50ee-59f3-9b39-02de1e7e8a70",
+        "name": "Domain Ages",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          9172,
+          1412
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// New registration dates to store (seo_cache, upsert by key; exact columns).\nconst rows = $input.first().json.rows || [];\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];"
+        },
+        "id": "cb211f79-c7dc-5d92-a94e-45066122914e",
+        "name": "Age Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          9392,
+          1412
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "64a2a9e9-6a17-5610-b63c-fb667cb60749",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "d53b4aa1-ea22-5e13-82b5-08d9cef201de",
+        "name": "Any New Ages?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          9612,
+          1412
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ $json.key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "value",
+                "displayName": "value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "6a63a18a-4ffb-53a5-8e69-cce23051bba1",
+        "name": "Save Ages",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          9832,
+          1292
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_cache",
+          "columns": {
+            "column": [
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "value",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "ca5bfc73-2251-57d5-9f54-550f3f1c0692",
+        "name": "Ensure Cache Table (Site)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          140,
+          364
+        ],
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ 'desc:' + String($('Rate Limit').first().json.domain || 'none').toLowerCase() }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "53ac661f-1f6c-580e-9dbc-5a1e4376a677",
+        "name": "Load Site Cache",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          360,
+          364
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// v4.6: the homepage description is reused for 30 days (seo_cache 'desc:<domain>'), so keyword, ladder and cadence runs for the same site do not\n// read and re-describe the homepage every time. \"Just describe my website\" always reads the site fresh, and what the user typed always wins.\nconst CONFIG = { ttl_days: 30 };\nconst d = $('Rate Limit').first().json;\nconst dom = String(d.domain || '').toLowerCase();\nconst row = $input.all().map(i => i.json || {}).find(r => r.key && r.key === 'desc:' + dom) || null;\nlet v = null; try { v = row ? JSON.parse(row.value) : null; } catch (e) {}\nconst desc = v && v.description;\nconst days = row ? (Date.now() - new Date(row.updated_at).getTime()) / 864e5 : Infinity;\nif (!d.need_site_description || d.mode === 'site_description' || !desc || !desc.business_description || !(days < CONFIG.ttl_days)) return [{ json: d }];\nreturn [{ json: { ...d, need_site_description: false, page_title: v.page_title || '', site_description: desc, site_description_cached: String(row.updated_at).slice(0, 10),\n  business: d.business || desc.business_description, audience: d.audience || (desc.target_audience || []).join(', ') } }];\n"
+        },
+        "id": "32ae6e08-308c-58c7-86f0-2414fb331f17",
+        "name": "Use Cached Description",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          580,
+          364
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// v4.6: keep the fresh homepage description for 30 days (seo_cache 'desc:<domain>') for the next runs on this site (exact columns for the upsert).\nconst p = $input.first().json; const dom = String(p.domain || 'none').toLowerCase();\nreturn [{ json: { key: 'desc:' + dom, kind: 'desc', site_id: 'site_' + dom.replace(/[^a-z0-9]+/g, '-'), value: JSON.stringify({ description: p.site_description || {}, page_title: p.page_title || '' }), updated_at: new Date().toISOString() } }];\n"
+        },
+        "id": "d154bff2-fdd5-5e0c-af2b-f57ed26927ca",
+        "name": "Description Cache Row",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1904,
+          840
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ $json.key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "value",
+                "displayName": "value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "f85263fc-29d7-5c2c-ac9e-15ef834e3842",
+        "name": "Save Description",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2124,
+          840
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// The run continues with the fresh description (the Data Table upsert outputs the stored row, not the run's item).\nreturn [{ json: $('Parse Description').first().json }];"
+        },
+        "id": "2da07fcf-a6d0-582f-95b5-d6dadf6ff796",
+        "name": "Restore Description",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2344,
+          840
+        ]
+      },
+      {
+        "parameters": {
+          "content": "### No repeated work (v4.6)\n**Domain ages** (full report): stored in `seo_cache` for a year; looked up through free RDAP first, paid WHOIS only for what RDAP cannot answer. **Homepage description**: reused for 30 days by keyword / ladder / cadence runs (\"Just describe my website\" always reads fresh; typed details always win). **Editor pass**: skipped only when the draft already scores 90+, the review rates it 85+ with no high-severity problem and only style notes remain; every SEO check still forces it.",
+          "height": 180,
+          "width": 900,
+          "color": 6
+        },
+        "id": "bb75a4c1-e014-565f-b29e-f94964416e8e",
+        "name": "Note 15",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          7372,
+          1612
+        ]
       }
     ],
     "connections": {
@@ -13085,7 +13635,7 @@
         "main": [
           [
             {
-              "node": "Route Mode",
+              "node": "Description Cache Row",
               "type": "main",
               "index": 0
             }
@@ -13608,7 +14158,7 @@
         "main": [
           [
             {
-              "node": "DataForSEO Whois",
+              "node": "Ensure Cache Table (Ages)",
               "type": "main",
               "index": 0
             }
@@ -13879,7 +14429,7 @@
         "main": [
           [
             {
-              "node": "RDAP Lookup",
+              "node": "Domain Ages",
               "type": "main",
               "index": 0
             }
@@ -14347,7 +14897,7 @@
         "main": [
           [
             {
-              "node": "Need Site Read?",
+              "node": "Ensure Cache Table (Site)",
               "type": "main",
               "index": 0
             }
@@ -14576,7 +15126,7 @@
         "main": [
           [
             {
-              "node": "Competitor Analysis",
+              "node": "RDAP Results",
               "type": "main",
               "index": 0
             }
@@ -16705,6 +17255,203 @@
           [
             {
               "node": "Fix Pack",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Cache Table (Ages)": {
+        "main": [
+          [
+            {
+              "node": "Load Age Cache",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Age Cache": {
+        "main": [
+          [
+            {
+              "node": "Age Lookup Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Age Lookup Plan": {
+        "main": [
+          [
+            {
+              "node": "Need Age Lookup?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "RDAP Results": {
+        "main": [
+          [
+            {
+              "node": "Need WHOIS?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Domain Ages": {
+        "main": [
+          [
+            {
+              "node": "Age Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Age Rows": {
+        "main": [
+          [
+            {
+              "node": "Any New Ages?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Ages": {
+        "main": [
+          [
+            {
+              "node": "Competitor Analysis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Need Age Lookup?": {
+        "main": [
+          [
+            {
+              "node": "RDAP Lookup",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Domain Ages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Need WHOIS?": {
+        "main": [
+          [
+            {
+              "node": "DataForSEO Whois",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Domain Ages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any New Ages?": {
+        "main": [
+          [
+            {
+              "node": "Save Ages",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Competitor Analysis",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Cache Table (Site)": {
+        "main": [
+          [
+            {
+              "node": "Load Site Cache",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Site Cache": {
+        "main": [
+          [
+            {
+              "node": "Use Cached Description",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Use Cached Description": {
+        "main": [
+          [
+            {
+              "node": "Need Site Read?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Description Cache Row": {
+        "main": [
+          [
+            {
+              "node": "Save Description",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Description": {
+        "main": [
+          [
+            {
+              "node": "Restore Description",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Restore Description": {
+        "main": [
+          [
+            {
+              "node": "Route Mode",
               "type": "main",
               "index": 0
             }
