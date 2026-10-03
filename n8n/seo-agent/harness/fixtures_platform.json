@@ -1,0 +1,656 @@
+[
+  {
+    "name": "verdict with site",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "verdict",
+      "keyword": "e invoicing in uae",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams"
+    },
+    "expect": {
+      "mode": "keyword",
+      "verdict_only": true,
+      "keyword": "e invoicing in uae",
+      "domain": "northwind-erp.com",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "need_site_description": false,
+      "include_content": false,
+      "country": "United Arab Emirates"
+    }
+  },
+  {
+    "name": "verdict without site",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "verdict",
+      "keyword": "odoo partner dubai",
+      "country": "United Arab Emirates",
+      "domain": "",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "ERP consultancy",
+      "customers": ""
+    },
+    "expect": {
+      "mode": "keyword",
+      "verdict_only": true,
+      "domain": "",
+      "business": "ERP consultancy",
+      "email": "",
+      "need_site_description": false
+    }
+  },
+  {
+    "name": "keyword pillar page, report + content, site facts",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "keyword",
+      "keyword": "erp for distributors",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "page_type": "Pillar Page",
+      "existing_page_url": "",
+      "local_area": "",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "cta": "Book a free scoping call",
+      "tone": "Technical and precise",
+      "goal": "Rank and educate (traffic)",
+      "features": [
+        "Check if page exists"
+      ],
+      "receive": [
+        "Keyword Report",
+        "Page Content"
+      ]
+    },
+    "expect": {
+      "mode": "keyword",
+      "page_type": "Pillar Page",
+      "goal": "traffic",
+      "tone": "Technical and precise",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "audience": "distributors, wholesalers, finance teams",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "cta": "Book a free scoping call",
+      "include_content": true,
+      "include_seo_report": true,
+      "run_page_check": true,
+      "email": "owner@northwind-erp.com"
+    }
+  },
+  {
+    "name": "keyword local page with video, content only",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "keyword",
+      "keyword": "odoo partner",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "page_type": "Local Page",
+      "existing_page_url": "",
+      "local_area": "Dubai Marina",
+      "video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "video_transcript": "0:00 Intro\n0:45 Setup",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "cta": "Call us today",
+      "tone": "Professional and direct",
+      "goal": "Sell online",
+      "features": [],
+      "receive": [
+        "Page Content"
+      ]
+    },
+    "expect": {
+      "page_type": "Local Page",
+      "local_area": "Dubai Marina",
+      "goal": "sales",
+      "cta": "Call us today",
+      "include_content": true,
+      "include_seo_report": false,
+      "video.provider": "youtube",
+      "video.id": "dQw4w9WgXcQ"
+    }
+  },
+  {
+    "name": "keyword improve existing page",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "keyword",
+      "keyword": "erp implementation dubai",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "page_type": "Service Page",
+      "existing_page_url": "https://www.northwind-erp.com/erp-implementation/",
+      "local_area": "",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "cta": "Book a free scoping call",
+      "tone": "Professional and direct",
+      "goal": "Get leads and enquiries",
+      "features": [],
+      "receive": [
+        "Keyword Report",
+        "Page Content"
+      ]
+    },
+    "expect": {
+      "existing_page_url": "https://www.northwind-erp.com/erp-implementation/",
+      "run_page_check": true
+    }
+  },
+  {
+    "name": "keyword: ladder page from the pipeline (write now)",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "keyword",
+      "keyword": "uae e invoicing requirements",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "page_type": "Guide",
+      "existing_page_url": "",
+      "local_area": "",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "cta": "Book a free scoping call",
+      "tone": "Professional and direct",
+      "goal": "Get leads and enquiries",
+      "features": [],
+      "receive": [
+        "Keyword Report",
+        "Page Content"
+      ],
+      "ladder_id": "lad_test123",
+      "ladder_rung": 1,
+      "ladder_head": "e invoicing in uae",
+      "ladder_page_no": 2,
+      "force_content": true
+    },
+    "expect": {
+      "mode": "keyword",
+      "email": "",
+      "ladder_id": "lad_test123",
+      "ladder_rung": 1,
+      "ladder_head": "e invoicing in uae",
+      "force_content": true,
+      "include_content": true,
+      "page_type": "Guide"
+    }
+  },
+  {
+    "name": "discover with site + audit follow-up",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "discover",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "goal": "Get leads and enquiries",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "features": [
+        "Site Audit"
+      ],
+      "receive": [
+        "Keyword Report",
+        "Page Content"
+      ]
+    },
+    "expect": {
+      "mode": "discover",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "audience": "distributors, wholesalers, finance teams",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "include_audit": true,
+      "include_full_report": false,
+      "include_content": true,
+      "include_seo_report": true,
+      "keyword": ""
+    }
+  },
+  {
+    "name": "discover from a description only",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "discover",
+      "keyword": "",
+      "country": "United Kingdom",
+      "domain": "",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "Bakery supplies wholesaler",
+      "customers": "cafes and bakeries",
+      "goal": "Build the brand",
+      "business_facts": "",
+      "features": [],
+      "receive": [
+        "Keyword Report"
+      ]
+    },
+    "expect": {
+      "mode": "discover",
+      "domain": "",
+      "business": "Bakery supplies wholesaler",
+      "audience": "cafes and bakeries",
+      "goal": "brand",
+      "need_site_description": false
+    }
+  },
+  {
+    "name": "describe",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "describe",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": ""
+    },
+    "expect": {
+      "mode": "site_description",
+      "domain": "northwind-erp.com",
+      "need_site_description": true
+    }
+  },
+  {
+    "name": "audit full report, 500 pages, JS",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "audit",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "report_type": "Full SEO Report",
+      "crawl_pages": 500,
+      "crawl_js": true,
+      "competitors": [
+        "rival.ae"
+      ]
+    },
+    "expect": {
+      "mode": "audit",
+      "include_full_report": true,
+      "include_audit": true,
+      "crawl_max_pages": 500,
+      "crawl_js": true,
+      "competitors": [
+        "rival.ae"
+      ]
+    }
+  },
+  {
+    "name": "audit technical with site competitors",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "audit",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "report_type": "Site Audit",
+      "crawl_pages": 200,
+      "crawl_js": false,
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ]
+    },
+    "expect": {
+      "include_full_report": false,
+      "include_audit": true,
+      "crawl_max_pages": 200,
+      "crawl_js": false,
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ]
+    }
+  },
+  {
+    "name": "ladder 2 pages",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "ladder",
+      "keyword": "e invoicing in uae",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "goal": "Get leads and enquiries",
+      "tone": "Professional and direct",
+      "cta": "Book a free scoping call",
+      "pages_now": 2
+    },
+    "expect": {
+      "mode": "ladder",
+      "keyword": "e invoicing in uae",
+      "pages_now": 2,
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "business_facts": "12 years in the UAE; 40 ERP rollouts; Odoo Gold Partner",
+      "need_site_description": false
+    }
+  },
+  {
+    "name": "track with monitors",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "track",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "keywords": [
+        "peppol uae",
+        "e invoicing software uae"
+      ],
+      "ga4_property_id": "543096312",
+      "blogs_per_week": 2,
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ],
+      "monitors": {
+        "ai_visibility": true,
+        "ai_engines": "chatgpt, perplexity",
+        "ai_prompts_max": 10,
+        "backlinks": false,
+        "audit_monthly": true,
+        "audit_pages": 500,
+        "audit_js": false,
+        "brand_names": "Northwind, Northwind ERP"
+      }
+    },
+    "expect": {
+      "mode": "track",
+      "keyword": "",
+      "track_keywords": [
+        "peppol uae",
+        "e invoicing software uae"
+      ],
+      "blogs_per_week": 2,
+      "ga4_property_id": "543096312",
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ],
+      "monitor_input.ai_engines": "chatgpt, perplexity",
+      "monitor_input.ai_prompts_max": 10,
+      "monitor_input.audit_pages": 500,
+      "monitor_input.backlinks": false,
+      "monitor_input.ai_visibility": true,
+      "monitor_input.brand_names": "Northwind, Northwind ERP"
+    }
+  },
+  {
+    "name": "published",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "published",
+      "keyword": "uae e invoicing penalties",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "published_url": "https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/"
+    },
+    "expect": {
+      "mode": "published",
+      "keyword": "uae e invoicing penalties",
+      "published_url": "https://www.northwind-erp.com/blog/uae-e-invoicing-penalties/"
+    }
+  },
+  {
+    "name": "checkin",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "checkin",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "manual_action": false,
+      "security_issue": true,
+      "notes": "Hacked content warning on /promo/",
+      "pages_csv": ""
+    },
+    "expect": {
+      "mode": "checkin",
+      "checkin_manual_action": false,
+      "checkin_security_issue": true,
+      "checkin_notes": "Hacked content warning on /promo/"
+    }
+  },
+  {
+    "name": "case study anonymous",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "case_study",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "We implement Odoo and Dynamics 365 ERP for distributors in the UAE",
+      "customers": "distributors, wholesalers, finance teams",
+      "case_study": {
+        "client_name": "a Dubai food distributor",
+        "client_public": false,
+        "industry": "",
+        "location": "",
+        "service": "Odoo ERP implementation",
+        "challenge": "Month-end close took 9 days across three systems.",
+        "solution": "Odoo rollout in 14 weeks with data migration and training.",
+        "timeline": "",
+        "results": "Close from 9 days to 3; 99.6% of e-invoices accepted.",
+        "quote": "",
+        "quote_by": ""
+      }
+    },
+    "expect": {
+      "mode": "case_study",
+      "keyword": "odoo erp implementation case study",
+      "case_study.client_public": false,
+      "case_study.service": "Odoo ERP implementation",
+      "page_type": "Case Study"
+    }
+  },
+  {
+    "name": "profile (public e-mail must not become the delivery e-mail)",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "profile",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "author": {
+        "name": "Sara Khan",
+        "job_title": "Head of Tax Technology",
+        "credentials": "ACCA; 12 years in UAE VAT",
+        "bio": "Sara leads e-invoicing rollouts.",
+        "url": "https://northwind-erp.com/team/sara/",
+        "same_as": [
+          "https://www.linkedin.com/in/sara-khan/"
+        ],
+        "image_url": "",
+        "knows_about": [
+          "e-invoicing",
+          "UAE VAT"
+        ]
+      },
+      "reviewer": {
+        "name": "Omar Ali",
+        "job_title": "Tax Partner",
+        "url": "https://northwind-erp.com/team/omar/"
+      },
+      "business_name": "Northwind ERP",
+      "business_type": "IT consultancy",
+      "address": {
+        "street": "Office 1203, Aspect Tower",
+        "city": "Dubai",
+        "region": "Dubai",
+        "postal_code": "00000",
+        "country": "United Arab Emirates"
+      },
+      "phone": "+971 4 000 0000",
+      "public_email": "hello@northwind-erp.com",
+      "opening_hours": "Mo-Fr 09:00-18:00",
+      "service_areas": [
+        "Dubai",
+        "Abu Dhabi"
+      ],
+      "map_url": "",
+      "logo_url": ""
+    },
+    "expect": {
+      "mode": "profile",
+      "email": "",
+      "profile_input.author_name": "Sara Khan",
+      "profile_input.public_email": "hello@northwind-erp.com",
+      "profile_input.city": "Dubai",
+      "profile_input.country_code": "AE",
+      "profile_input.reviewer_name": "Omar Ali",
+      "profile_input.author_same_as": "https://www.linkedin.com/in/sara-khan/",
+      "profile_input.service_areas": "Dubai, Abu Dhabi"
+    }
+  },
+  {
+    "name": "ai visibility with topics",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "ai_visibility",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "topics": [
+        "e-invoicing implementation",
+        "Odoo ERP"
+      ],
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ]
+    },
+    "expect": {
+      "mode": "ai_visibility",
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ],
+      "topics": [
+        "e-invoicing implementation",
+        "odoo erp"
+      ]
+    }
+  },
+  {
+    "name": "backlinks",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "backlinks",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "competitors": [
+        "rival.ae"
+      ]
+    },
+    "expect": {
+      "mode": "backlinks",
+      "competitors": [
+        "rival.ae"
+      ]
+    }
+  }
+]

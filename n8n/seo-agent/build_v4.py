@@ -728,7 +728,8 @@ log('Cosmetic: medians in evidence text are rounded (no 12.850000000000001 years
 # =============================================================================
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = next(p for p in [os.path.join(HERE, 'v5'), os.path.join(HERE, '..', 'v5')] if os.path.isdir(p))
-rd = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
+_rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
+rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n'))   # v4.8: the shared reach rules and published-page rows (one copy each) are inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -1136,9 +1137,9 @@ add_node('Publish WordPress Draft', 'n8n-nodes-base.executeWorkflow', 1.2, {'sou
 connect('Attach PDF Report', 'Publish To WordPress?'); connect('Publish To WordPress?', 'Publish WordPress Draft', 0)
 log('WordPress (optional, off): finished pages can be created as WordPress drafts (title, slug, excerpt, HTML, JSON-LD, Yoast/RankMath meta) through the sub-workflow SEOagentWordPres; enable with CONFIG.wordpress_publish and a wordpress_url in the request, and attach the "WordPress (SEO Agent)" credential')
 
-# ---------- AI budget cap raised at the user's request (2026-10-01) to finish the system test; lower it again when done ----------
+# ---------- AI budget cap: 3 → 10 on 2026-10-01 to finish the system test; set to 6 on 2026-10-02 at the user's request ----------
 patch('Normalize Input', "  ai_budget_usd: 3,                 // estimated Claude spend allowed per budget period (see Rate Limit); raise when ready",
-      "  ai_budget_usd: 10,                // estimated Claude spend allowed per budget period (see Rate Limit); raised from 3 on 2026-10-01 at the user's request to finish the system test — the Anthropic Console workspace limit is the hard cap")
+      "  ai_budget_usd: 6,                 // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 since 2026-10-02 at the user's request — the Anthropic Console workspace limit is the hard cap")
 
 # ---------- credential slots for the nodes created in this section (the generic pass in 8c-E ran before they existed) ----------
 for n in list(nodes.values()):
@@ -1869,6 +1870,172 @@ sticky("""### Growth monitors and audit upgrades (v4.5)
 **Workflows** (build_monitors.py): *AI Visibility Tracker* (Mon 07:00: buyer questions × ChatGPT / Perplexity / Gemini / Claude / Google AI Mode + AI Overviews → mention & citation rate, share of voice, sources AI trusts, lost questions), *Backlink Monitor* (Mon 07:30 light watch, monthly full report: lost / new / broken / spam, link gap, unlinked mentions, prospects with outreach drafts) and *Audit Scheduler* (1st of the month: technical re-audit per site). Settings per site in `seo_monitors` ("Track my site" competitors / API `monitors`, Site Admin `monitors`). Form / API `ai_visibility` and `backlinks` start a run at once.
 **Every audit** now: crawl size 200 / 500 / 1000 and JavaScript rendering; **brand & entity check** against the Google Business Profile (name, phone, website, claimed) and the homepage Organization schema (sameAs); stored in `seo_audits` / `seo_audit_findings` → **since the last audit** (fixed / new / still open, score change); **internal links to add**; **fix pack** (robots.txt, llms.txt, redirect map, schema, internal-links.csv, README; zipped for the e-mail, text in the callback).""", HX - 60, HY + 220, 1150, 260, 5)
 log('Growth monitors (v4.5): on-demand modes ai_visibility / backlinks (form + API) starting the new AI Visibility Tracker / Backlink Monitor workflows; monitor settings per site on Track my site (seo_monitors); audits: crawl size and JavaScript options, brand & entity check (Google Business Profile, Organization sameAs), audit history (seo_audits, seo_audit_findings) with the since-the-last-audit diff, internal-link suggestions and a fix pack (robots.txt, llms.txt, redirect map, schema, internal links; zipped); every e-mail attaches files through fileAttachments; full-report link gap reads the linking domain from `target`')
+
+
+# =============================================================================
+# 20. NO REPEATED WORK (v4.6, 2026-10-02): what the database already knows is reused instead of paid for again; nothing an SEO result needs is
+#     dropped. Full report: domain registration dates cached (seo_cache 'age:<domain>', 365 days) and looked up free through RDAP first, paid
+#     WHOIS only for the gaps (WHOIS was $0.48 of a $1.02 report). Keyword / ladder / cadence runs: the homepage description is reused for
+#     30 days ('desc:<domain>'). Content: the editor pass is skipped only when the draft already passes every SEO check (style notes only).
+# =============================================================================
+from ladder_common import CACHE_TABLE, CACHE_COLS
+# ---------- A. domain ages: cache -> RDAP (free) -> WHOIS (paid, only what RDAP cannot answer) ----------
+_wp = pos('DataForSEO Whois'); AX20, AY20 = _wp[0] - 220, _wp[1] + 420
+disconnect('Domain Overview', 'DataForSEO Whois'); disconnect('DataForSEO Whois', 'RDAP Lookup'); disconnect('RDAP Lookup', 'Competitor Analysis')
+add_node('Ensure Cache Table (Ages)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [AX20, AY20], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Age Cache', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'age'), [AX20 + 220, AY20], LOAD18)
+add_node('Age Lookup Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Age_Lookup_Plan.js')}, [AX20 + 440, AY20])
+if_node('Need Age Lookup?', "{{ !$json.skip }}", [AX20 + 660, AY20])
+nodes['RDAP Lookup']['position'] = [AX20 + 880, AY20 - 120]
+nodes['RDAP Lookup']['parameters']['url'] = "=https://rdap.org/domain/{{ $json.domain }}"
+add_node('RDAP Results', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/RDAP_Results.js')}, [AX20 + 1100, AY20 - 120])
+if_node('Need WHOIS?', "{{ !$json.skip }}", [AX20 + 1320, AY20 - 120])
+nodes['DataForSEO Whois']['position'] = [AX20 + 1540, AY20 - 240]; nodes['DataForSEO Whois']['onError'] = 'continueRegularOutput'
+assert "$('Pick Competitors').item.json.domain" in nodes['DataForSEO Whois']['parameters']['jsonBody']
+nodes['DataForSEO Whois']['parameters']['jsonBody'] = nodes['DataForSEO Whois']['parameters']['jsonBody'].replace("$('Pick Competitors').item.json.domain", "$json.domain")
+add_node('Domain Ages', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Domain_Ages.js')}, [AX20 + 1760, AY20])
+add_node('Age Rows', 'n8n-nodes-base.code', 2, {'jsCode': "// New registration dates to store (seo_cache, upsert by key; exact columns).\nconst rows = $input.first().json.rows || [];\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];"}, [AX20 + 1980, AY20])
+if_node('Any New Ages?', "{{ !$json.skip }}", [AX20 + 2200, AY20])
+add_node('Save Ages', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [AX20 + 2420, AY20 - 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+for a, b in [('Domain Overview', 'Ensure Cache Table (Ages)'), ('Ensure Cache Table (Ages)', 'Load Age Cache'), ('Load Age Cache', 'Age Lookup Plan'), ('Age Lookup Plan', 'Need Age Lookup?'),
+             ('RDAP Lookup', 'RDAP Results'), ('RDAP Results', 'Need WHOIS?'), ('DataForSEO Whois', 'Domain Ages'), ('Domain Ages', 'Age Rows'), ('Age Rows', 'Any New Ages?'), ('Save Ages', 'Competitor Analysis')]:
+    connect(a, b)
+connect('Need Age Lookup?', 'RDAP Lookup', 0); connect('Need Age Lookup?', 'Domain Ages', 1); connect('Need WHOIS?', 'DataForSEO Whois', 0); connect('Need WHOIS?', 'Domain Ages', 1)
+connect('Any New Ages?', 'Save Ages', 0); connect('Any New Ages?', 'Competitor Analysis', 1)
+patch('Competitor Analysis', "const ages = $('DataForSEO Whois').all().map(i => i.json);\nconst rdaps = $input.all().map(i => i.json);   // free RDAP lookup, fills the gaps in DataForSEO WHOIS",
+      "const AGES = $('Domain Ages').first().json.ages || {};   // v4.6: stored registration dates; free RDAP first, paid WHOIS only for the gaps")
+patch('Competitor Analysis', "  const w = ages[i]?.tasks?.[0]?.result?.[0]?.items?.[0] || null;\n  const rdap = (((rdaps[i] || {}).events) || []).find(e => /registration/i.test(e.eventAction || ''));\n  const regRaw = (w && (w.created_datetime || w.created_date)) || (rdap && rdap.eventDate) || null;",
+      "  const regRaw = (AGES[String(c.domain || '').toLowerCase()] || {}).registered || null;")
+# ---------- B. homepage description: reused for 30 days, saved after every fresh read ----------
+_ns = pos('Need Site Read?'); DX20, DY20 = _ns[0] - 660, _ns[1] - 260
+disconnect('Input OK?', 'Need Site Read?')
+add_node('Ensure Cache Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [DX20, DY20], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Site Cache', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'key', 'eq', "={{ 'desc:' + String($('Rate Limit').first().json.domain || 'none').toLowerCase() }}"), [DX20 + 220, DY20], LOAD18)
+add_node('Use Cached Description', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Use_Cached_Description.js')}, [DX20 + 440, DY20])
+_ib = conns['Input OK?']['main'][0]; _ib.insert(0, {'node': 'Ensure Cache Table (Site)', 'type': 'main', 'index': 0})
+for a, b in [('Ensure Cache Table (Site)', 'Load Site Cache'), ('Load Site Cache', 'Use Cached Description'), ('Use Cached Description', 'Need Site Read?')]:
+    connect(a, b)
+_pd = pos('Parse Description')
+disconnect('Parse Description', 'Route Mode')
+add_node('Description Cache Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Description_Cache_Row.js')}, [_pd[0], _pd[1] + 200])
+add_node('Save Description', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [_pd[0] + 220, _pd[1] + 200], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Restore Description', 'n8n-nodes-base.code', 2, {'jsCode': "// The run continues with the fresh description (the Data Table upsert outputs the stored row, not the run's item).\nreturn [{ json: $('Parse Description').first().json }];"}, [_pd[0] + 440, _pd[1] + 200])
+for a, b in [('Parse Description', 'Description Cache Row'), ('Description Cache Row', 'Save Description'), ('Save Description', 'Restore Description'), ('Restore Description', 'Route Mode')]:
+    connect(a, b)
+# ---------- C. content: one editor pass only when it can still improve the page (Content_QA.js computes editor_needed) ----------
+_nr = nodes['Needs Revision?']['parameters']['conditions']['conditions'][0]
+assert _nr['leftValue'] == "={{ $json.content_qa.passed === false && $json.qa_round < ($json.qa_max_rounds || 2) }}"
+_nr['leftValue'] = "={{ $json.content_qa.passed === false && $json.content_qa.editor_needed !== false && $json.qa_round < ($json.qa_max_rounds || 2) }}"
+sticky("""### No repeated work (v4.6)
+**Domain ages** (full report): stored in `seo_cache` for a year; looked up through free RDAP first, paid WHOIS only for what RDAP cannot answer. **Homepage description**: reused for 30 days by keyword / ladder / cadence runs ("Just describe my website" always reads fresh; typed details always win). **Editor pass**: skipped only when the draft already scores 90+, the review rates it 85+ with no high-severity problem and only style notes remain; every SEO check still forces it.""", AX20 - 40, AY20 + 200, 900, 180, 6)
+log('No repeated work (v4.6): domain registration dates cached a year (seo_cache) with free RDAP before paid WHOIS; the homepage description reused for 30 days; the editor pass runs only when the draft misses an SEO check or the review finds a real problem')
+
+# =============================================================================
+# 21. WEB APP REQUESTS (v4.7, 2026-10-03): the React app (app/, multi-company) calls the API front door from one server, so every request
+#     would share one client IP key (6 runs/day for all companies together). The app sends `X-Forwarded-For: app:<company id>`; Quick
+#     Validate turns that into client_ip, and the Rate Limit keys those runs per company with their own daily cap (the app enforces each
+#     company's monthly budget before it calls n8n). The global daily cap and the AI budget guard still apply to everything.
+# =============================================================================
+patch('Rate Limit', "const LIMITS = { per_key_per_day: 6, global_per_day: 150 };",
+      "const LIMITS = { per_key_per_day: 6, global_per_day: 150, per_app_company_per_day: 40 };   // app: requests from the web app, keyed per company (v4.7)")
+patch('Rate Limit', "const key = (internal ? d.client_ip : (d.email || d.client_ip || d.domain || d.keyword || 'anon')).toLowerCase();",
+      "const fromApp = /^app:[a-z0-9-]{6,64}$/i.test(String(d.client_ip || ''));   // the web app: one key per company, whoever's e-mail gets the copy\n"
+      "const key = ((internal || fromApp) ? d.client_ip : (d.email || d.client_ip || d.domain || d.keyword || 'anon')).toLowerCase();\n"
+      "const perKey = fromApp ? LIMITS.per_app_company_per_day : LIMITS.per_key_per_day;")
+patch('Rate Limit', "if (used >= LIMITS.per_key_per_day && !['published', 'checkin', 'profile'].includes(d.mode)) {",
+      "if (used >= perKey && !['published', 'checkin', 'profile'].includes(d.mode)) {")
+patch('Rate Limit', "validation_error: 'You have reached the daily limit of ' + LIMITS.per_key_per_day + ' runs. Please try again tomorrow.'",
+      "validation_error: 'You have reached the daily limit of ' + perKey + ' runs. Please try again tomorrow.'")
+log('Web app requests (v4.7): X-Forwarded-For app:<company> keys the Rate Limit per company (40 runs/day) instead of one shared IP key; global cap and AI budget unchanged')
+
+
+# =============================================================================
+# 22. THE RIGHT KEYWORD AND THE RIGHT PLAN (v4.8, 2026-10-03, PIPELINE_FEATURE_SPEC §5, §9.1 items 3-4): every ladder and every discovery with a
+#     website is measured against the site's REACH (the difficulty it already wins; v5/code/_reach.js, one copy inlined everywhere; seo_cache
+#     'reach:<site_id>', 30 days). Ladder: rungs relative to reach, plan type from the main keyword's difficulty for this site (direct = main page
+#     first / short / full / none), keywords of the site's other ladders never planned again, a duplicate main keyword refused, and one
+#     seo_ladder_settings row per new ladder. Discovery: labels (difficulty for your site, plan, months) and Now / Next / Later from reach.
+#     The synchronous keyword check (SEOagentAssess) is built in build_api.py.
+# =============================================================================
+from ladder_common import LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS, dt_get_any_params
+SITE_ID_EXPR = "String($('Rate Limit').first().json.domain || 'none').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-')"
+# ---------- A. one cache read per run: the homepage description AND the site's reach ----------
+_lsc = nodes['Load Site Cache']['parameters']
+assert _lsc['matchType'] == 'allConditions' and len(_lsc['filters']['conditions']) == 1 and _lsc['filters']['conditions'][0]['keyValue'].startswith("={{ 'desc:'")
+_lsc['matchType'] = 'anyCondition'
+_lsc['filters']['conditions'].append({'keyName': 'key', 'condition': 'eq', 'keyValue': "={{ 'reach:site_' + " + SITE_ID_EXPR + " }}"})
+# ---------- B. ladder: the site's other ladders and their settings, loaded before the research ----------
+_lr = pos('Ladder Requests'); LX22, LY22 = _lr[0] - 880, _lr[1] + 260
+disconnect('Ladder Mode?', 'Ladder Requests')
+DOMAIN_PV = "={{ String($('Parse Verdict').first().json.domain || '').toLowerCase() }}"
+add_node('Ensure Ladder Table (Plan)', DT_TYPE, DT_VERSION, dt_create_params(LADDER_TABLE, LADDER_COLS), [LX22, LY22], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Domain Ladders', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_TABLE, [('domain', DOMAIN_PV), ('domain', "={{ 'www.' + String($('Parse Verdict').first().json.domain || '').toLowerCase() }}")]), [LX22 + 220, LY22], LOAD18)
+add_node('Ensure Ladder Settings Table (Ladder)', DT_TYPE, DT_VERSION, dt_create_params(LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS), [LX22 + 440, LY22], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Domain Ladder Settings', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_SETTINGS_TABLE, [('domain', DOMAIN_PV), ('site_id', "={{ 'site_' + String($('Parse Verdict').first().json.domain || '').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}")]), [LX22 + 660, LY22], LOAD18)
+connect('Ladder Mode?', 'Ensure Ladder Table (Plan)', 0)
+for a, b in [('Ensure Ladder Table (Plan)', 'Load Domain Ladders'), ('Load Domain Ladders', 'Ensure Ladder Settings Table (Ladder)'), ('Ensure Ladder Settings Table (Ladder)', 'Load Domain Ladder Settings'), ('Load Domain Ladder Settings', 'Ladder Requests')]:
+    connect(a, b)
+# ---------- C. ladder: a newly measured reach is stored for discovery and the keyword check ----------
+_lp = pos('Ladder Plan')
+disconnect('Ladder Plan', 'Build Ladder Report')
+add_node('Reach Row (Ladder)', 'n8n-nodes-base.code', 2, {'jsCode': "// v4.8: a newly measured reach goes to seo_cache ('reach:<site_id>', 30 days) for discovery and the keyword check (exact columns).\nconst r = $('Ladder Plan').first().json.reach_cache_row;\nreturn [{ json: r || { skip: true } }];"}, [_lp[0], _lp[1] + 220])
+if_node('New Reach (Ladder)?', "{{ !$json.skip }}", [_lp[0] + 220, _lp[1] + 220])
+add_node('Save Reach (Ladder)', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [_lp[0] + 440, _lp[1] + 360], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+connect('Ladder Plan', 'Reach Row (Ladder)'); connect('Reach Row (Ladder)', 'New Reach (Ladder)?')
+connect('New Reach (Ladder)?', 'Save Reach (Ladder)', 0); connect('New Reach (Ladder)?', 'Build Ladder Report', 1); connect('Save Reach (Ladder)', 'Build Ladder Report')
+# ---------- D. ladder: rows only for a planned ladder; then its seo_ladder_settings row (+ priorities that keep the existing order) ----------
+_lw = pos('Ladder Rows')
+disconnect('Ladder Rows', 'Save Ladder Rows'); disconnect('Save Ladder Rows', 'Ladder Delivery')
+if_node('Any Ladder Rows?', "{{ !$json.skip }}", [_lw[0] + 110, _lw[1] + 200])
+add_node('Ladder Settings Rows', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Ladder_Settings_Rows.js')}, [_lw[0] + 330, _lw[1] + 200])
+if_node('Any Settings Rows?', "{{ !$json.skip }}", [_lw[0] + 550, _lw[1] + 200])
+add_node('Save Ladder Settings', DT_TYPE, DT_VERSION, dt_upsert_params(LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS, 'ladder_id'), [_lw[0] + 770, _lw[1] + 200], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+connect('Ladder Rows', 'Any Ladder Rows?'); connect('Any Ladder Rows?', 'Save Ladder Rows', 0); connect('Any Ladder Rows?', 'Ladder Delivery', 1)
+connect('Save Ladder Rows', 'Ladder Settings Rows'); connect('Ladder Settings Rows', 'Any Settings Rows?')
+connect('Any Settings Rows?', 'Save Ladder Settings', 0); connect('Any Settings Rows?', 'Ladder Delivery', 1); connect('Save Ladder Settings', 'Ladder Delivery')
+# e-mail and form page for a refused ladder (duplicate main keyword / not realistic) and the plan for this site
+_sl = nodes['Send Ladder Report']['parameters']
+_old = "<p>{{ $json.tracking_registered ? 'Positions are checked weekly; you will receive a progress e-mail with the next rung to work on.' : 'Note: the ladder could not be registered for tracking (' + ($json.store_error || 'Data Tables unavailable') + ').' }}</p>"
+assert _sl['html'].count(_old) == 1
+_sl['html'] = _sl['html'].replace(_old, "<p>{{ ($json.ladder && $json.ladder.label) ? 'Plan for your site: ' + $json.ladder.label + ' (reach ' + $json.ladder.reach + ').' : '' }}</p>"
+    "<p>{{ ($json.ladder && $json.ladder.planned === false) ? 'No ladder was planned. ' + String(($json.ladder.refusal || {}).message || '').replace(/</g, '&lt;') : ($json.tracking_registered ? 'Positions are checked weekly; you will receive a progress e-mail with the next rung to work on.' : 'Note: the ladder could not be registered for tracking (' + ($json.store_error || 'Data Tables unavailable') + ').') }}</p>")
+_dl = nodes['Download Ladder Plan']['parameters']
+assert _dl['completionMessage'].startswith('The plan is downloading. The first page is being written now')
+_dl['completionMessage'] = "={{ ($json.ladder && $json.ladder.planned === false) ? 'The plan is downloading. No ladder was planned: ' + (($json.ladder.refusal || {}).message || '') : 'The plan is downloading. " + _dl['completionMessage'][len('The plan is downloading. '):].replace("'", "\\'") + "' }}"
+# ---------- E. discovery with a website: the site's reach before the research (stored -> no call; else two DataForSEO Labs calls) ----------
+_sd = pos('Seed List'); RX22, RY22 = _sd[0], _sd[1] + 300
+disconnect('Seed List', 'Research Requests')
+add_node('Reach Requests (Discovery)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Reach_Requests_Discovery.js')}, [RX22, RY22])
+if_node('Measure Reach?', "{{ !$json.skip }}", [RX22 + 220, RY22])
+add_node('Run Reach Requests', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 60000}}, [RX22 + 440, RY22 - 120], {'onError': 'continueRegularOutput', 'retryOnFail': True, 'maxTries': 2, 'waitBetweenTries': 3000})
+add_node('Reach (Discovery)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Reach_Discovery.js')}, [RX22 + 660, RY22])
+if_node('New Reach (Discovery)?', "{{ !!$json.save }}", [RX22 + 880, RY22])
+add_node('Reach Row (Discovery)', 'n8n-nodes-base.code', 2, {'jsCode': "// v4.8: the newly measured reach, exact seo_cache columns ('reach:<site_id>', 30 days).\nreturn [{ json: $input.first().json.cache_row }];"}, [RX22 + 1100, RY22 - 120])
+add_node('Save Reach (Discovery)', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [RX22 + 1320, RY22 - 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+slot('Run Reach Requests', 'dataforseo')
+connect('Seed List', 'Reach Requests (Discovery)'); connect('Reach Requests (Discovery)', 'Measure Reach?')
+connect('Measure Reach?', 'Run Reach Requests', 0); connect('Measure Reach?', 'Reach (Discovery)', 1); connect('Run Reach Requests', 'Reach (Discovery)')
+connect('Reach (Discovery)', 'New Reach (Discovery)?'); connect('New Reach (Discovery)?', 'Reach Row (Discovery)', 0); connect('New Reach (Discovery)?', 'Research Requests', 1)
+connect('Reach Row (Discovery)', 'Save Reach (Discovery)'); connect('Save Reach (Discovery)', 'Research Requests')
+patch('Build Keyword File', "'Run Competitor Keywords', 'AI Demand'];", "'Run Competitor Keywords', 'AI Demand', 'Run Reach Requests'];")
+assert nodes['Run Reach Requests'].get('credentials'), 'reach request without credential'
+# every node that inlines the reach rules really got them (and no placeholder is left anywhere)
+for _n in ('Ladder Plan', 'Build Ladder Report', 'Ladder Settings Rows', 'Reach Requests (Discovery)', 'Reach (Discovery)', 'Rank Keywords', 'Build Keyword Strategy'):
+    assert 'function reachFrom(' in code(_n), _n + ': reach rules not inlined'
+assert not any('/*__REACH__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'reach placeholder left'
+sticky("""### The right keyword and the right plan (v4.8)
+**Reach** = the difficulty the site already wins (75th percentile of its top-10 keywords' difficulty, else by size), stored 30 days in `seo_cache` (`reach:<site_id>`), shared by the ladder, discovery and the keyword check (`v5/code/_reach.js`). **Ladder**: the site's other ladders are loaded first (their keywords are never planned again; a duplicate main keyword is refused); rungs relative to reach (1 ≤ reach, 2 ≤ +15, 3 ≤ +30); the main keyword's difficulty for this site picks the plan — **direct** (main page first + 2-3 pages), **short** (3-5 pages, then the main page), **full** (rungs, main page last; very hard = stretch) or **none** (not realistic: alternatives only); one `seo_ladder_settings` row per new ladder (mode from the `_site` row, after the existing ladders). **Discovery**: every keyword labelled for this site; Now = easy or reachable.""", LX22 - 40, LY22 + 160, 980, 240, 6)
+log('Pipeline phase 3 (v4.8): the site\'s reach (75th-percentile difficulty of its top-10 keywords, else by size; seo_cache reach:<site_id>, 30 days, one shared copy in v5/code/_reach.js); ladder: rungs relative to reach, plan type from the main keyword\'s difficulty for this site (direct: main page first / short / full / none = alternatives only), other ladders\' keywords excluded, duplicate main keyword refused, plan_type / reach / difficulty_for_you in the plan, report ("Why this plan") and callback, one seo_ladder_settings row per new ladder; discovery: difficulty for your site, plan and months per keyword, Now = easy or reachable')
+
+
+# =============================================================================
+# 23. PUBLISH DETECTION (v4.8, 2026-10-03, PIPELINE_FEATURE_SPEC §6.5, phase 4): the weekly Site Tracker finds written pages that went live
+#     (sitemap: planned slug, then title / H1) and stores them exactly like "I published a page" does. The rows come from one shared builder
+#     (v5/code/_publish_rows.js) inlined into Publish Check here and into Detect Published in build_site_tracker.py.
+# =============================================================================
+assert 'function publishedRows(' in code('Publish Check'), 'Publish Check: published-page rows not inlined'
+assert not any('/*__PUBLISH_ROWS__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'publish-rows placeholder left'
+log('Publish detection (v4.8, pipeline phase 4): the Site Tracker reads each site\'s sitemap (index + up to 5 child sitemaps) when pages are written but not published (content log "started" within 120 days, ladder rows "writing"), matches them by planned slug, then by <title> / first <h1> (at most 15 page fetches per site and week), and marks them published in seo_content_log / seo_ladders (and seo_case_studies) with the same row builder as "I published a page" (v5/code/_publish_rows.js); callback field detected_published and a report section')
 
 
 # =============================================================================

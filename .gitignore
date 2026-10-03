@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Local secrets (templates: n8n/.env.example, n8n/.env.seo.example)
+.env

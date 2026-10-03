@@ -14,7 +14,8 @@ for (const p of plans) {
   if (p.mode !== 'full') continue;
   add(p, 'broken', 'backlinks/backlinks/live', { target: t, mode: 'as_is', filters: ['is_broken', '=', true], order_by: ['domain_from_rank,desc'], limit: 50 });
   add(p, 'refdomains', 'backlinks/referring_domains/live', { target: t, backlinks_status_type: 'live', order_by: ['rank,desc'], limit: 500 });
-  add(p, 'timeseries', 'backlinks/timeseries_summary/live', { target: t, date_from: ymd(new Date(Date.now() - 365 * 864e5)), date_to: ymd(new Date()), group_range: 'month' });
+  const haveHistory = (p.stored_timeseries || []).length >= 6;   // stored months are kept; only the last 2 months are fetched again (v4.6)
+  add(p, 'timeseries', 'backlinks/timeseries_summary/live', { target: t, date_from: ymd(new Date(Date.now() - (haveHistory ? 62 : 365) * 864e5)), date_to: ymd(new Date()), group_range: 'month' });
   for (const b of p.brand_names) add(p, 'mentions', 'content_analysis/search/live', { keyword: b, search_mode: 'as_is', limit: 50 });
   if (p.need_competitors) add(p, 'competitors', 'dataforseo_labs/google/competitors_domain/live', { target: t, location_code: p.location_code, language_code: p.language_code, limit: 10, exclude_top_domains: true });
 }

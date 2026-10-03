@@ -121,11 +121,22 @@ for (const q of sq) { if (String(q.period_end) !== latest) continue; const p = S
   const s = pageScore.get(p) || { page: p, impressions: 0, overlap: 0 }; s.impressions += Number(q.impressions) || 0; s.overlap = Math.max(s.overlap, overlap); pageScore.set(p, s); }
 const link_from = [...pageScore.values()].sort((a, b) => (b.overlap - a.overlap) || (b.impressions - a.impressions)).slice(0, 5).map(s => ({ page: s.page, impressions: s.impressions, related: s.overlap > 0, ladder: false }));
 if (ladder) for (const l of ladders.filter(l => normD(l.domain) === domain && l.ladder_id === ladder.ladder_id && l.keyword !== ladder.keyword && l.target_url && (l.status === 'published' || l.page_exists)).slice(0, 3)) if (!link_from.some(x => same(x.page, l.target_url))) link_from.unshift({ page: l.target_url, impressions: 0, related: true, ladder: true });
-// ---- rows ----
+// ---- rows (v4.8: the same builder as the Site Tracker's publish detection, so reported and detected pages are stored alike) ----
+// ---- the rows a published page leaves (v4.8, PIPELINE_FEATURE_SPEC §6.5). ONE copy, inlined by the build into Publish Check ("I published a
+// page", main workflow) and Detect Published (Site Tracker, publish detection), so a reported page and a detected page are stored identically.
+//   log_row    seo_content_log, upsert by site_id + keyword, exactly the table columns: the written page's row (source, page type, rung, ladder,
+//              request id and start date kept) with status published, the live URL and now; without a written row, a new one (source ladder / manual)
+//   ladder_row seo_ladders, update by ladder_id + keyword: status published, target_url = the live URL, page_exists true (null when no ladder row)
+// o: { site_id, domain, keyword, url, log (content-log row or null), ladder (ladder row or null), request_id, now (ISO) }
+function publishedRows(o) {
+  const log = o.log || null, ladder = o.ladder || null, now = o.now;
+  const log_row = { site_id: o.site_id, domain: o.domain, keyword: o.keyword, source: (log || {}).source || (ladder ? 'ladder' : 'manual'), page_type: (log || {}).page_type || (ladder ? (ladder.page_type || '') : ''), existing_page_url: (log || {}).existing_page_url || '', rung: Number((log || ladder || {}).rung) || 0,
+    ladder_id: (log || ladder || {}).ladder_id || '', request_id: (log || {}).request_id || o.request_id || '', started_at: (log || {}).started_at || now, status: 'published', published_url: o.url, published_at: now, week: now.slice(0, 10) };
+  const ladder_row = ladder ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'published', target_url: o.url, page_exists: true } : null;
+  return { log_row, ladder_row };
+}
 const keyword = (log || ladder || {}).keyword || String(d.keyword || '').trim() || kw;
-const log_row = { site_id, domain, keyword, source: (log || {}).source || (ladder ? 'ladder' : 'manual'), page_type: (log || {}).page_type || (ladder ? (ladder.page_type || '') : ''), existing_page_url: (log || {}).existing_page_url || '', rung: Number((log || ladder || {}).rung) || 0,
-  ladder_id: (log || ladder || {}).ladder_id || '', request_id: (log || {}).request_id || rid, started_at: (log || {}).started_at || now, status: 'published', published_url: url, published_at: now, week: now.slice(0, 10) };
-const ladder_row = ladder ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'published', target_url: url, page_exists: true } : null;
+const { log_row, ladder_row } = publishedRows({ site_id, domain, keyword, url, log, ladder, request_id: rid, now });
 const checksFinal = checksOut; const passed = checksFinal.filter(c => c.ok === true).length; const failed = checksFinal.filter(c => c.ok === false);
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const path = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';

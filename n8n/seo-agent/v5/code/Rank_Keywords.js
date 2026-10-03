@@ -1,5 +1,8 @@
+/*__REACH__*/
 // Applies the AI relevance verdicts, computes the final opportunity score, builds topic clusters and the content plan,
 // and chooses the priority keywords (live SERP check next) and the keyword for the content pipeline.
+// v4.8: with a website, every keyword is labelled against the site's reach (difficulty_for_you, plan_type, months) and "Now" means easy or
+// reachable for THIS site (the pipeline keyword too); without a website the fixed difficulty limit (55) stays.
 const base = $('Collect Research').first().json;
 const chunks = $('Relevance Chunks').all().map(i => i.json);
 const outs = $input.all().map(i => i.json);
@@ -19,11 +22,15 @@ outs.forEach((o, i) => {
 });
 const RELF = { 2: 1, 1: 0.45, 0: 0 };
 const ai_reviewed = rel.size;
+let R = null; try { const x = $('Reach (Discovery)').first().json; if (x && reachNum(x.reach) != null) R = x; } catch (e) { R = null; }
+const strongR = R ? reachStrong(R, null) : false;
+const forYou = (kd) => { if (!R) return {}; const diff = difficultyForYou(kd, R.reach, {}); const plan = reachPlan(diff, strongR); return { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan) }; };
+const winnableFor = (diff, kd) => R ? (diff === 'easy' || diff === 'reachable') : (kd == null || kd <= 55);
 const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
-  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length };
+  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, ...forYou(k.kd) };
 }).filter(k => k.relevance > 0 && k.intent !== 'navigational').sort((a, b) => b.opportunity - a.opportunity);
 
 // ---- clusters (topic label from the AI pass) ----
@@ -39,7 +46,7 @@ const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; return {
   topic: c.topic, primary_keyword: p.keyword, page_type: mode(c.page_types), intent: mode(c.intents), keyword_count: c.keywords.length,
   total_volume: c.total_volume, total_opportunity: +c.total_opportunity.toFixed(1), primary_kd: p.kd, primary_volume: p.volume, primary_cpc: p.cpc,
   supporting: c.keywords.slice(1, 9).map(k => k.keyword), keywords: c.keywords.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, opportunity: k.opportunity })),
-  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase())
+  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), ...forYou(p.kd)
 }; }).sort((a, b) => b.total_opportunity - a.total_opportunity);
 // Tiers follow the goal: for leads/sales the first "Now" slots go to commercial/transactional topics; research topics support them
 const goalNow = (base.goal || 'leads');
@@ -47,7 +54,7 @@ const buyerIntent = (c) => c.intent === 'commercial' || c.intent === 'transactio
 const ordered = goalNow === 'traffic' ? clusters : [...clusters.filter(buyerIntent), ...clusters.filter(c => !buyerIntent(c))];
 let now = 0, nxt = 0;
 ordered.forEach(c => {
-  const winnable = c.primary_kd == null || c.primary_kd <= 55;
+  const winnable = winnableFor(c.difficulty_for_you, c.primary_kd);   // v4.8: easy or reachable for this site (fixed 55 without a website)
   if (now < 5 && winnable && (goalNow === 'traffic' || buyerIntent(c) || now >= 4)) { c.tier = 'Now'; now++; }
   else if (nxt < 8) { c.tier = 'Next'; nxt++; }
   else c.tier = 'Later';
@@ -67,10 +74,11 @@ pickPriority(50); if (priority.length < 8) pickPriority(20); if (priority.length
 if (!priority.length) priority.push(...kws.slice(0, 8));
 const goal = base.goal || 'leads';
 const want = goal === 'traffic' ? ['informational', 'commercial'] : goal === 'brand' ? ['informational', 'commercial', 'transactional'] : ['commercial', 'transactional'];
-const pipeline = kws.find(k => k.relevance === 2 && want.includes(k.intent) && (k.kd == null || k.kd <= 55)) || priority[0] || kws[0] || null;
+const pipeline = kws.find(k => k.relevance === 2 && want.includes(k.intent) && winnableFor(k.difficulty_for_you, k.kd)) || priority[0] || kws[0] || null;
 
 return [{ json: { ...base, keyword_strategy: {
   goal, pool_size: base.research.pool_size, ai_reviewed, total_relevant: kws.length, keywords: kws.slice(0, 200),
   clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline,
-  competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures
+  competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures,
+  reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR } : null
 } } }];

@@ -265,8 +265,17 @@ if (role === 'hub' && HP.some(p => p.planned)) eeat_notes.push(HP.filter(p => p.
 fixes.push('Generated ' + blocks.map(b => b.type).join(' + ') + ' schema');
 
 const passed = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25;
+// v4.6: the editor pass (a full rewrite) runs only when it can still improve the page. It is skipped when the draft already scores 90+, the editorial
+// review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long
+// sentences, medium review remarks). Every SEO check (meta, H1 / keyword, quick answer, FAQs, table, CTA, links, sources, statistics, coverage,
+// specificity, fillers, readability, snippet questions) still forces the editor pass; open style notes stay in the report.
+const STYLE_ONLY = /^(Passive voice in about|\d+ sentences longer than 28 words|Editor review: )/;
+const crit = critique || lastCritique || {};
+const highProblem = (crit.problems || []).some(p => /high|critical/i.test(p.severity || ''));
+const editor_needed = !passed && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && Math.abs(mainWords - target) <= target * 0.25 && warnings.every(w => STYLE_ONLY.test(w)));
+if (!passed && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (score ' + content_score + ', review ' + crit.score + '); the style notes below are left for a final read');
 return [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null,
-  content_qa: { round, passed, content_score, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
+  content_qa: { round, passed, editor_needed, content_score, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats,

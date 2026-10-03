@@ -1,0 +1,48 @@
+Manual Run	runs=1	items=1	1ms
+Ensure Monitors Table	runs=1	items=1	6ms
+Ensure AI Prompts Table	runs=1	items=1	4ms
+Ensure AI Answers Table	runs=1	items=1	15ms
+Ensure AI Visibility Table	runs=1	items=1	5ms
+Ensure Prospects Table	runs=1	items=1	7ms
+Ensure Sites Table	runs=1	items=1	5ms
+Ensure Profiles Table	runs=1	items=1	14ms
+Load Sites	runs=1	items=1	15ms
+Load Ladders	runs=1	items=9	20ms
+Load Monitors	runs=1	items=1	10ms
+Load Profiles	runs=1	items=1	20ms
+Load AI Prompts	runs=1	items=8	10ms
+Load AI Visibility	runs=1	items=1	19ms
+Load Link Prospects	runs=1	items=20	10ms
+AI Plan	runs=1	items=1	111ms
+Any Sites (AI)?	runs=1	items=1	11ms
+Site Text Jobs	runs=1	items=1	34ms
+Need Site Text?	runs=1	items=1	3ms
+Prompt Jobs	runs=1	items=1	27ms
+Any Prompt Jobs?	runs=1	items=1	2ms
+Prompt Rows	runs=1	items=1	26ms
+Any New Prompts?	runs=1	items=1	3ms
+AI Requests	runs=1	items=28	37ms
+Any AI Requests?	runs=1	items=28	99ms
+Run AI Requests	runs=1	items=28	35895ms
+Parse AI Answers	runs=1	items=28	1291ms
+Any Answer Rows?	runs=1	items=28	23ms
+Save AI Answers	runs=1	items=28	55ms
+AI Metrics	runs=1	items=1	48ms
+AI Vis Rows	runs=1	items=1	7ms
+Save AI Visibility	runs=1	items=1	18ms
+AI Prospect Rows	runs=1	items=10	7ms
+Any AI Prospects?	runs=1	items=10	6ms
+Save AI Prospects	runs=1	items=10	344ms
+AI Brief Input	runs=1	items=1	22ms
+AI Brief	runs=1	items=1	10019ms
+Claude — AI Brief	runs=1	items=0	9128ms
+Parser — AI Brief	runs=1	items=0	1ms
+AI Report	runs=1	items=1	30ms
+Prepare PDF AI	runs=1	items=1	11ms
+Render PDF AI	runs=1	items=1	241ms
+Attach PDF AI	runs=1	items=1	16ms
+Has Email (AI)?	runs=1	items=1	4ms
+Send AI Report	runs=1	items=1	3865ms
+Build AI Callback	runs=1	items=1	29ms
+Has Callback (AI)?	runs=1	items=1	4ms
+POST AI Report	runs=1	items=1	78ms

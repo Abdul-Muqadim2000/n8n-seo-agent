@@ -1,0 +1,22 @@
+Manual Run	runs=1	items=1	1ms
+Ensure Monitors Table	runs=1	items=1	7ms
+Ensure Audits Table	runs=1	items=1	5ms
+Ensure Sites Table	runs=1	items=1	3ms
+Ensure Profiles Table	runs=1	items=1	3ms
+Ensure Cache Table	runs=1	items=1	11ms
+Load Sites	runs=1	items=1	11ms
+Load Ladders	runs=1	items=9	7ms
+Load Monitors	runs=1	items=1	6ms
+Load Profiles	runs=1	items=1	6ms
+Load Audits	runs=1	items=3	4ms
+Load Cache (Audit)	runs=1	items=1	9ms
+Audit Candidates	runs=1	items=1	48ms
+Any Candidates?	runs=1	items=1	6ms
+Fetch Sitemap (Schedule)	runs=1	items=1	1126ms
+Audit Schedule Plan	runs=1	items=1	28ms
+Fingerprint Rows	runs=1	items=1	10ms
+Any Fingerprints?	runs=1	items=1	5ms
+Save Fingerprints	runs=1	items=1	22ms
+Audits To Start	runs=1	items=1	6ms
+Any Audits Due?	runs=1	items=1	1ms
+Audits Started	runs=1	items=1	6ms

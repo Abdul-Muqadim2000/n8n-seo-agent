@@ -46,3 +46,17 @@
 3	SEOagentCallback	success	webhook	2026-10-01 06:13:20.830	2026-10-01 06:13:20.900	Summarise Callback
 2	SEOagentV4Full01	success	integrated	2026-10-01 06:11:02.168	2026-10-01 06:13:20.911	POST Callback
 1	SEOagentAPIentry	success	webhook	2026-10-01 06:11:00.180	2026-10-01 06:11:02.211	Start SEO Run
+132	SEOagentV4Full01	success	integrated	2026-10-02 11:25:46.020	2026-10-02 11:25:46.954	POST Callback
+135	SEOagentV4Full01	success	integrated	2026-10-02 12:34:08.612	2026-10-02 12:34:10.812	POST Callback
+136	SEOagentAIVisib1	success	integrated	2026-10-02 12:34:09.413	2026-10-02 12:35:11.656	POST AI Report
+139	SEOagentV4Full01	success	integrated	2026-10-02 12:34:25.760	2026-10-02 12:34:26.855	POST Callback
+140	SEOagentBacklnk1	success	integrated	2026-10-02 12:34:26.392	2026-10-02 12:34:53.542	POST BL Report
+144	SEOagentAuditSc1	success	integrated	2026-10-02 12:34:58.995	2026-10-02 12:34:59.265	Audits Started
+145	SEOagentV4Full01	success	integrated	2026-10-02 12:34:59.161	2026-10-02 12:38:52.575	Send Audit Report
+153	SEOagentSiteAdm1	success	integrated	2026-10-02 12:42:42.707	2026-10-02 12:42:42.918	Admin Result
+163	SEOagentSiteTrk1	success	integrated	2026-10-02 12:50:06.873	2026-10-02 12:52:03.912	POST Site Report
+164	SEOagentV4Full01	success	integrated	2026-10-02 12:50:07.060	2026-10-02 12:54:45.467	Send Audit Report
+170	SEOagentAuditSc1	success	integrated	2026-10-02 13:47:36.575	2026-10-02 13:47:37.921	Audits Started
+172	SEOagentAIVisib1	success	integrated	2026-10-02 13:48:13.337	2026-10-02 13:49:05.939	POST AI Report
+176	SEOagentTracker1	success	integrated	2026-10-02 13:51:36.134	2026-10-02 13:51:46.294	POST Progress
+178	SEOagentSiteTrk1	success	integrated	2026-10-02 13:51:39.238	2026-10-02 13:52:17.437	POST Site Report

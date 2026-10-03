@@ -1,0 +1,23 @@
+{
+  "name": "seo-platform",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Multi-company web app (React + TypeScript) in front of the SEO Agent n8n workflows",
+  "workspaces": [
+    "shared",
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev:server": "npm run dev -w @seo/server",
+    "dev:web": "npm run dev -w @seo/web",
+    "build": "npm run build -w @seo/web && npm run build -w @seo/server",
+    "typecheck": "npm run typecheck -w @seo/shared && npm run typecheck -w @seo/server && npm run typecheck -w @seo/web",
+    "test": "npm run test -w @seo/shared && npm run test -w @seo/server",
+    "db:generate": "npm run db:generate -w @seo/server",
+    "export:payloads": "npm run export:payloads -w @seo/shared"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

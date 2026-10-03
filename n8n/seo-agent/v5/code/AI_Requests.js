@@ -18,7 +18,8 @@ for (const p of plans) {
   const loc = { location_code: p.location_code, language_code: p.language_code };
   const seenKw = new Set();
   for (const q of qs) {
-    const e = p.engines;
+    if (q.kind === 'brand' && !p.full_due) continue;   // brand recognition hardly changes week to week: once a month
+    const e = p.engines.filter(x => p.full_due || !(p.monthly_engines || []).includes(x));   // Gemini / Claude once a month (v4.6)
     if (e.includes('chatgpt')) add(p, q, 'chatgpt', 'ai_optimization/chat_gpt/llm_scraper/live/advanced', [{ keyword: q.prompt, ...loc }]);
     if (e.includes('perplexity')) add(p, q, 'perplexity', 'ai_optimization/perplexity/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.perplexity, max_output_tokens: 1000 }]);
     if (e.includes('gemini')) add(p, q, 'gemini', 'ai_optimization/gemini/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.gemini, web_search: true, max_output_tokens: 1200 }]);

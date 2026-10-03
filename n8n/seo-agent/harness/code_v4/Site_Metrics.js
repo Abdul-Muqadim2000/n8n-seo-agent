@@ -1,5 +1,6 @@
 // Joins everything per site: Search Console, GA4, index status, trends and the live SERP checks -> KPIs, alerts, ranked actions (with
 // ready-to-send API bodies), and the exact rows for the Data Tables seo_site_metrics / seo_query_history / seo_sites.
+// v4.8: pages the publish detection found live this week (`detected_published`, `publish_detection`) count as published pages here.
 const FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';
 const sites = $('Resolve Properties').all().map(i => i.json);
 const grab = (name) => { try { return $(name).all().map(i => i.json).filter(j => j && !j.skip && !j.error); } catch (e) { return []; } };
@@ -13,6 +14,12 @@ const now = new Date().toISOString();
 const pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? null : 0);
 const r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;
 const normD = (x) => String(x || '').toLowerCase().replace(/^www\./, '');
+// v4.8 publish detection (Detect Published): pages found live this week, and whether storing them worked (onError nodes: read their output)
+const detAll = (() => { try { return $('Detect Published').all().map(i => i.json).filter(x => x && x.site_id && Array.isArray(x.detected)); } catch (e) { return []; } })();
+const detErrors = (() => { const out = []; for (const nm of ['Save Detected (Log)', 'Mark Case Study Published (Detect)', 'Mark Ladder Published (Detect)']) { try { for (const i of $(nm).all()) if (i.json && i.json.error) out.push(nm + ': ' + gErr(i.json)); } catch (e) {} } return out; })();
+const detFail = (() => { for (const nm of ['Publish Candidates', 'Sitemap Children (Detect)', 'Match Slugs (Detect)', 'Detect Published']) { try { const e = $(nm).all().find(i => i.json && i.json.error); if (e) return nm + ': ' + gErr(e.json); } catch (x) {} } return ''; })();   // a failed detection step never stops the report
+const ukey = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');   // host-agnostic
+const kwKey = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 return sites.map((s, idx) => {
   const cfg = s.config || {}; const R = s.ranges;
   const gsc = gscAll.find(g => g.site_idx === idx) || null;
@@ -26,7 +33,11 @@ return sites.map((s, idx) => {
     const hist = queryHist.filter(h => h.site_id === s.site_id && h.query === t.keyword).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).map(h => r1(h.position)).slice(-12);
     return { ...t, gsc_position: g ? g.position : null, gsc_prev_position: g ? g.prev_position : null, clicks: g ? g.clicks : 0, impressions: g ? g.impressions : 0, prev_clicks: g ? g.prev_clicks : 0, page: g ? g.page : '',
       serp_position: sp ? sp.position : null, serp_url: sp ? sp.url : '', serp_checked_at: sp ? sp.checked_at : '', history: hist }; });
-  const pages = (s.ladder_pages || []).map(p => { const i = insp.find(x => x.url === p.url); return { ...p, inspected: !!i && !i.error, indexed: (i && !i.error) ? !!i.indexed : null, verdict: i ? i.verdict : '', coverage: i ? i.coverage : '', last_crawl: i ? i.last_crawl : '', canonical_ok: i ? i.canonical_ok : null, inspect_error: i ? i.error : (s.gsc_connected ? 'not inspected' : 'Search Console not connected') }; });
+  // pages found live this week replace their planned entry (live URL, published) or are added; they were inspected in this run
+  const det = detAll.find(x => x.site_id === s.site_id) || null; const found = det ? det.detected : [];
+  const basePages = (s.ladder_pages || []).map(p => { const f = found.find(f => kwKey(f.keyword) === kwKey(p.keyword) && (!f.ladder_id || !p.ladder_id || f.ladder_id === p.ladder_id)); return f ? { ...p, url: f.url, status: 'published', page_exists: true, detected: true } : p; });
+  for (const f of found) if (!basePages.some(p => ukey(p.url) === ukey(f.url))) basePages.push({ url: f.url, keyword: f.keyword, rung: 0, status: 'published', ladder_id: f.ladder_id || '', page_exists: true, detected: true });
+  const pages = basePages.map(p => { const i = insp.find(x => x.url === p.url); return { ...p, inspected: !!i && !i.error, indexed: (i && !i.error) ? !!i.indexed : null, verdict: i ? i.verdict : '', coverage: i ? i.coverage : '', last_crawl: i ? i.last_crawl : '', canonical_ok: i ? i.canonical_ok : null, inspect_error: i ? i.error : (s.gsc_connected ? 'not inspected' : 'Search Console not connected') }; });
   // pages not live yet are reported as such, never as 'not indexed'
   for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = p.status === 'writing' ? 'written, not published yet' : 'planned, not written yet'; p.indexed = null; }
   // ---- alerts ----
@@ -37,7 +48,7 @@ return sites.map((s, idx) => {
   if (gsc && gsc.deltas.impressions_pct != null && gsc.deltas.impressions_pct <= -drop && gsc.totals.prev.impressions >= 200) alerts.push({ level: 'medium', text: 'Impressions fell ' + Math.abs(gsc.deltas.impressions_pct) + '% (' + gsc.totals.prev.impressions + ' → ' + gsc.totals.cur.impressions + ')' });
   if (ga4 && ga4.organic.prev.sessions >= 20 && pct(ga4.organic.cur.sessions, ga4.organic.prev.sessions) <= -drop) alerts.push({ level: 'high', text: 'Organic sessions fell ' + Math.abs(pct(ga4.organic.cur.sessions, ga4.organic.prev.sessions)) + '% (' + ga4.organic.prev.sessions + ' → ' + ga4.organic.cur.sessions + ')' });
   if (ga4 && ga4.errors.length) alerts.push({ level: 'medium', text: 'Some GA4 requests failed: ' + ga4.errors.slice(0, 3).join('; ') });
-  for (const p of pages) if (p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')) alerts.push({ level: 'high', text: 'Page not indexed: ' + p.url + ' (' + (p.coverage || p.verdict || 'not indexed') + ')' });
+  for (const p of pages) if (p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')) alerts.push({ level: p.detected ? 'info' : 'high', text: 'Page not indexed: ' + p.url + ' (' + (p.coverage || p.verdict || 'not indexed') + ')' + (p.detected ? ' — found live this week; request indexing to speed it up' : '') });   // a page that just went live is not alarming yet
   for (const p of pages) if (p.inspected && p.indexed && p.canonical_ok === false) alerts.push({ level: 'medium', text: 'Google picked another canonical for ' + p.url });
   for (const t of tracked) if (t.gsc_position && t.gsc_prev_position && t.gsc_prev_position <= 10 && t.gsc_position - t.gsc_prev_position >= 5) alerts.push({ level: 'medium', text: '"' + t.keyword + '" slipped from #' + r1(t.gsc_prev_position) + ' to #' + r1(t.gsc_position) + ' (Search Console average)' });
   for (const t of tracked) if (t.serp_position > 0 && t.gsc_position && Math.abs(t.serp_position - t.gsc_position) >= 10) alerts.push({ level: 'info', text: '"' + t.keyword + '": live check #' + t.serp_position + ' vs Search Console average #' + r1(t.gsc_position) + ' — positions vary by location and device' });
@@ -46,6 +57,9 @@ return sites.map((s, idx) => {
   for (const n of notices) alerts.push({ level: n.severity === 'critical' ? 'high' : n.severity === 'high' ? 'high' : 'medium', text: 'Search Console notice (' + String(n.received_at).slice(0, 10) + '): ' + n.subject });
   if (ck && ck.manual_action && !notices.some(n => n.kind === 'manual_action')) alerts.push({ level: 'high', text: 'Manual action reported in the ' + ck.month + ' check-in' });
   if (ck && ck.security_issue && !notices.some(n => n.kind === 'security')) alerts.push({ level: 'high', text: 'Security issue reported in the ' + ck.month + ' check-in' });
+  if (found.length && detErrors.length) alerts.push({ level: 'medium', text: 'Pages found live on the site could not be recorded (' + detErrors[0] + '); report them with "I published a page"' });
+  if (detFail) alerts.push({ level: 'info', text: 'Publish detection failed this week (' + detFail.slice(0, 160) + '); report published pages with "I published a page"' });
+  if (det && !(det.sitemap || {}).ok) alerts.push({ level: 'info', text: 'Publish detection could not read the sitemap (' + ((det.sitemap || {}).error || 'no sitemap') + '); report published pages with "I published a page"' });
   // ---- actions (deterministic; the AI brief words them for the owner) ----
   const actions = []; const apiBase = { country: s.country || '', domain: s.domain, email: s.email || '' };
   const pageBody = (keyword, url, page_type) => ({ mode: 'keyword', keyword, page_type: page_type || 'Service Page', ...apiBase, existing_page_url: url || '', receive: ['Keyword Report', 'Page Content'] });
@@ -82,6 +96,9 @@ return sites.map((s, idx) => {
     gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, rising_pages: gsc.rising_pages, errors: gsc.errors } : {}) },
     ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },
     console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },
-    tracked, ladder_pages: pages, pending_publish: s.pending_publish || [], ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
+    tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
+    detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),
+    publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,
+      still_waiting: (det.unmatched || []).length, recorded: found.length ? !detErrors.length : null, error: found.length && detErrors.length ? detErrors.slice(0, 3).join('; ').slice(0, 300) : '' } : { checked: false, candidates: 0, found: 0, reason: detFail ? 'detection failed: ' + detFail.slice(0, 200) : 'no written page waiting for publication' },
     metrics_row, query_rows, site_row } };
 });

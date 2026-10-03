@@ -1,0 +1,2 @@
+// The insert gets exactly the table's columns: the Site Metrics item carries the whole report (live finding 2026-10-03: every insert failed on the nested `period` and continueRegularOutput hid it, so seo_site_metrics stayed empty).
+return $input.all().map(i => ({ json: i.json.metrics_row }));

@@ -1,0 +1,66 @@
+# Development: Postgres + API server (tsx watch) + Vite dev server with hot reload, all from the mounted source.
+#   docker compose -f compose.dev.yml up      → http://localhost:5173 (API on :4000)
+# First run installs node_modules into the mounted folder (Linux binaries; the host needs no Node).
+name: seo-platform-dev
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: seo
+      POSTGRES_PASSWORD: seo
+      POSTGRES_DB: seo
+    volumes:
+      - app-db-dev:/var/lib/postgresql/data
+    ports:
+      - '127.0.0.1:5433:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U seo -d seo']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  server:
+    image: node:22-bookworm-slim
+    working_dir: /app
+    command: sh -c "[ -d node_modules ] || npm install --no-audit --no-fund; cd server && npx tsx watch --clear-screen=false src/index.ts"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - npm-cache:/root/.npm
+    env_file:
+      - path: ../n8n/.env
+        required: false
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: development
+      # account e-mails are written to the log in development (remove to send through the n8n Gmail account)
+      SEO_SMTP_HOST: ''
+      DATABASE_URL: postgres://seo:seo@db:5432/seo
+      APP_URL: http://localhost:5173
+      N8N_BASE_URL: http://host.docker.internal:5678
+      CALLBACK_BASE_URL: http://host.docker.internal:4000
+    ports:
+      - '4000:4000'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+  web:
+    image: node:22-bookworm-slim
+    working_dir: /app/web
+    command: sh -c "until [ -d ../node_modules/vite ]; do sleep 2; done; npx vite --host 0.0.0.0"
+    depends_on:
+      - server
+    volumes:
+      - .:/app
+    environment:
+      API_PROXY: http://server:4000
+      VITE_POLL: '1'
+    ports:
+      - '5173:5173'
+
+volumes:
+  app-db-dev:
+  npm-cache:

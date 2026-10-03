@@ -1,16 +1,13 @@
 const base = $('Schema Findings').first().json;
 const list = $('Pick Competitors').all().map(i => i.json);
 const ov = $('Domain Overview').all().map(i => i.json);
-const ages = $('DataForSEO Whois').all().map(i => i.json);
-const rdaps = $input.all().map(i => i.json);   // free RDAP lookup, fills the gaps in DataForSEO WHOIS
+const AGES = $('Domain Ages').first().json.ages || {};   // v4.6: stored registration dates; free RDAP first, paid WHOIS only for the gaps
 
 const rows = list.map((c, i) => {
   const m = ov[i]?.tasks?.[0]?.result?.[0]?.items?.[0]?.metrics?.organic || {};
   const top3 = (m.pos_1 || 0) + (m.pos_2_3 || 0);
   const top10 = top3 + (m.pos_4_10 || 0);
-  const w = ages[i]?.tasks?.[0]?.result?.[0]?.items?.[0] || null;
-  const rdap = (((rdaps[i] || {}).events) || []).find(e => /registration/i.test(e.eventAction || ''));
-  const regRaw = (w && (w.created_datetime || w.created_date)) || (rdap && rdap.eventDate) || null;
+  const regRaw = (AGES[String(c.domain || '').toLowerCase()] || {}).registered || null;
   const reg = regRaw ? String(regRaw).slice(0, 10) : null;
   const age = reg ? Number(((Date.now() - new Date(reg)) / 31557600000).toFixed(1)) : null;
   return {

@@ -2,7 +2,7 @@
 """Builds the ladder extras: SEO Agent — Rank Tracker (weekly), SEO Agent — Publish to WordPress (optional, inactive),
 SEO Agent — Test Runner (local testing only). Code nodes are also written to harness/code_v4 for the offline harness."""
 import json, os, re, uuid, sys
-from ladder_common import LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params
+from ladder_common import LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 rd = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
@@ -54,6 +54,7 @@ N.append(node('Ensure Ladder Table', DT_TYPE, DT_VERSION, dt_create_params(LADDE
 N.append(node('Ensure History Table', DT_TYPE, DT_VERSION, dt_create_params(HISTORY_TABLE, HISTORY_COLS), [460, 100], onError='continueRegularOutput'))
 N.append(node('Load Ladders', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABLE), [680, 100], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(node('Load History', DT_TYPE, DT_VERSION, dt_get_all_params(HISTORY_TABLE), [900, 100], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
+N.append(node('Load Content Log (Tracker)', DT_TYPE, DT_VERSION, dt_get_where_params(LOG_TABLE, 'status', 'eq', 'published'), [1010, 260], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))   # v4.8: publish dates for the Stuck flag
 N.append(code('Tracker Plan', rd('code/Tracker_Plan.js'), [1120, 100]))
 N.append(iff('Any Checks?', '{{ !$json.nothing_to_do }}', [1340, 100]))
 N.append(node('SERP Check', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, [1560, 0], credentials=DFS, onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000))
@@ -64,13 +65,14 @@ N.append(iff('Has Report?', '{{ !$json.nothing_to_do }}', [2440, 0]))
 N.append(iff('Has Email (Tracker)?', '{{ !!$json.email }}', [2660, -100]))
 N.append(node('Send Progress Email', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, [2880, -100], credentials=SMTP, onError='continueRegularOutput'))
 N.append(iff('Has Callback (Tracker)?', '{{ !!$json.callback_url }}', [2660, 120]))
-N.append(node('POST Progress', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'rank_tracker', request_id: $json.request_id || null, ladder_id: $json.ladder_id, domain: $json.domain, head_keyword: $json.head_keyword, checked_at: $json.checked_at, positions: $json.positions, rungs: $json.rungs, gains: $json.gains, drops: $json.drops, next_step: $json.next_step, api_body: $json.api_body, done: $json.done }) }}", 'options': {'timeout': 20000}}, [2880, 120], onError='continueRegularOutput'))
+N.append(node('POST Progress', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'rank_tracker', request_id: $json.request_id || null, ladder_id: $json.ladder_id, domain: $json.domain, head_keyword: $json.head_keyword, checked_at: $json.checked_at, positions: $json.positions, rungs: $json.rungs, gains: $json.gains, drops: $json.drops, next_step: $json.next_step, api_body: $json.api_body, done: $json.done, won: !!$json.won, stuck: !!$json.stuck }) }}", 'options': {'timeout': 20000}}, [2880, 120], onError='continueRegularOutput'))
 N.append(node('Nothing To Track', 'n8n-nodes-base.noOp', 1, {}, [1560, 260]))
 N.append(sticky('Note', f"""## SEO Agent — Rank Tracker
 Runs **weekly (Monday 08:00)** and on demand through *Manual Run* (Execute Workflow Trigger). Reads every ladder from the Data Table `{LADDER_TABLE}` (written by the ladder mode of SEO Agent v4; both tables are created on first use), checks the Google top 50 for each page's primary keyword and the head term (DataForSEO SERP live, about $0.015 per keyword; a 9-page ladder costs about $0.60 per month), appends `{HISTORY_TABLE}`, and sends one progress e-mail / callback per ladder: positions vs the previous check, rungs in the top 10 / top 3, drops of 5+ positions, and the **recommended next rung** with a form link and a ready-to-send API body (recommend-only mode).
-Guardrails: at most 15 keywords per ladder and 120 checks per run; a ladder stops being tracked once its top page has held the top 3 for 4 consecutive checks.
-Form: {FORM_URL} · API: {API_URL}""", [-40, -420], 900, 330))
-for a, b in [('Weekly Schedule', 'Ensure Ladder Table'), ('Manual Run', 'Ensure Ladder Table'), ('Ensure Ladder Table', 'Ensure History Table'), ('Ensure History Table', 'Load Ladders'), ('Load Ladders', 'Load History'), ('Load History', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
+Guardrails: at most 15 keywords per ladder and 120 checks per run; once its top page has held the top 3 for 4 consecutive checks (failed checks skipped) a ladder is **won** and checked **monthly** (main keyword + published pages, v4.8) so a drop is noticed; a drop below the top 3 brings it back to weekly checks.
+v4.8: the callback carries display-only flags per ladder for the web app (the e-mail is unchanged): `won` (main keyword in the top 3 in each of the last 4 checks, this one included) and `stuck` (pages published, the first 8+ weeks ago — dates from `{LOG_TABLE}` — and none improved its position over the last 8 weeks).
+Form: {FORM_URL} · API: {API_URL}""", [-40, -500], 900, 410))
+for a, b in [('Weekly Schedule', 'Ensure Ladder Table'), ('Manual Run', 'Ensure Ladder Table'), ('Ensure Ladder Table', 'Ensure History Table'), ('Ensure History Table', 'Load Ladders'), ('Load Ladders', 'Load History'), ('Load History', 'Load Content Log (Tracker)'), ('Load Content Log (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
     link(C, a, b)
 link(C, 'Any Checks?', 'SERP Check', 0); link(C, 'Any Checks?', 'Nothing To Track', 1)
 link(C, 'Has Report?', 'Has Email (Tracker)?', 0); link(C, 'Has Report?', 'Has Callback (Tracker)?', 0)

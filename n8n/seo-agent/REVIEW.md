@@ -145,6 +145,8 @@ Severity reflects customer impact. "Fixed" means changed in v4 and covered by th
 
 **Blog posts per week.** "Track my site" has a *Blog posts per week* field (0-3; API `blogs_per_week`), stored in the Data Table `seo_cadence` (upsert by site id); Site Admin `cadence` changes it later. **SEO Agent — Content Cadence** (`SEOagentCadence1`, Monday 10:00, plus *Manual Run* `{ site_id | domain, pages?, dry_run? }`) picks each site's topics in this order: the keyword ladder's next *planned* pages (rung order, with the ladder's up/sideways/down links), striking-distance queries from `seo_query_history` (positions 4-20 with impressions: the page that already ranks is strengthened, `existing_page_url` set), rising related searches from `seo_trends` (written by the Site Tracker). It skips keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites, starts one content run per pick (`force_content`, internal rate-limit key `cadence:<site>`), logs it in `seo_content_log` (status *started*), marks ladder rows *writing*, and sends one note per site (`stage: content_cadence`): this week's pages and why, the next four topics, pages still waiting for a publish link. `dry_run` only plans. Cost about $1.20 of AI per page.
 
+**Pipeline rules (v4.8, 2026-10-03, `PIPELINE_FEATURE_SPEC.md` phase 2; built + harness-verified, not deployed yet).** The cadence also reads `seo_ladder_settings` (new Data Table, created on first use; written by the web app: one row per ladder with `mode` auto/manual, `priority`, `status` active/queued/paused/won/stuck/archived, `plan_type`; one `_site` row per website with the defaults `mode`, `opportunities`, `auto_start`, `max_active`, `max_waiting`) and the main keywords' rank checks (`seo_rank_history` rung-4 rows, newest 5,000). Per site: only **Auto** ladders with status active (or queued) are written, at most `max_active` (default 2) of those that still have planned pages, in **priority** order (no row = the site's default mode, else Auto; active; oldest start date first) — ladder 1's pages before ladder 2's, then opportunity posts; plan type *direct* writes the main page first. The **main page waits for support**: it is written once half of the supporting pages are published (ladder row or content-log publish link) or the main keyword's latest check is #1-30. **Won** (main keyword top 3 in the last 4 checks, failed checks skipped) → no more pages. **Pile-up guard**: `max_waiting` (default 3) pages written but not published in the last 120 days → nothing written for the site (`paused_reason: pileup`; an on-demand run bypasses it only with `force: true`). Opportunity posts only when `opportunities` is Auto, otherwise listed as `suggestions`; **Manual** ladders are never written, their next page goes to `awaiting_approval`. The note / callback (`stage: content_cadence`) gains `paused_reason`, `waiting_publish`, `max_waiting`, `awaiting_approval`, `suggestions`, `queued_ladders`, `won_ladders`, `waiting_for_support`; a site with no page but with one of those gets a *Cadence Status* note (`pages: []`). On by default for sites without settings rows: the main-page gate, Won, the pile-up guard, max 2 active ladders and the priority order (the oldest ladder first instead of all ladders interleaved by rung; links now stay inside each ladder). The Rank Tracker callback adds display-only `won` and `stuck` per ladder (stuck: pages published, the first 8+ weeks ago, none improved in 8 weeks; publish dates from `seo_content_log`). Harness S24.
+
 **"I published a page"** (form option / API `mode: published` with `domain`, `published_url`, `keyword` or `content_request_id`; free, never rate-limited). *Fetch Published Page* reads the live URL; *Publish Check* verifies HTTP 200, no noindex, title with the keyword, meta description 50-160 characters, one H1, canonical, JSON-LD, content length; it resolves the page to the content-log row (by request id or keyword) and the ladder row, upserts the log row with the URL (status *published*), marks the ladder row *published* with the real URL (`page_exists` true), and suggests pages to link from (pages with impressions whose path shares a word with the keyword, plus the other ladder pages). The form ends on "Recorded: <keyword>" with the plain-text check; API callers get `stage: published`. From the next Monday the Site Tracker tracks the keyword (source *blog*), inspects the URL and lists pages still waiting for a publish link; Site Admin `unpublish` reverts a mistake.
 
 **Rate limit.** Internal spawns (ladder page runs, cadence runs) are keyed by their marker (`ladder:` / `cadence:`), not the owner's e-mail, so they never consume the owner's six public runs a day (they remain under the AI budget guard and their own weekly caps).
@@ -210,6 +212,94 @@ Severity reflects customer impact. "Fixed" means changed in v4 and covered by th
 **Found and fixed on the way.** (1) **E-mail attachments**: Send Email 2.1 knows `attachments` (inline) and `fileAttachments`; `attachmentsUi` is ignored — so the blog package files and the Site Tracker's PDF were never attached. All e-mails now use `fileAttachments` (verified live: audit e-mail 274 KB with PDF + fix-pack.zip) and retry 3× (a transient `EAI_AGAIN smtp.gmail.com` lost two e-mails in the live test). (2) **Full-report link gap was always empty**: the linking domain is `target`, not `domain`. (3) Live: the domain-name lookup matched an unrelated company's Google listing ("CECEP Techand Adnan site office") → listings now need the site's website or phone.
 
 **Testing.** Harness S19 (AI visibility on real engine responses), S20 (backlinks on real responses), S21 (audit upgrades over two audits + scheduler), S22 (intake, settings, admin), S10 (Monday block); fixtures in `harness/fixtures_live/` (real DataForSEO responses captured 2026-10-02, no account data) and `fixtures_monitors.js`. **467 node runs, 0 failed.** Live runs: §5c.
+
+## 3j. No repeated work (v4.6, 2026-10-02)
+
+**Why.** The user asked for everything that is repeated without need to stop ("the site audit is done once, issues get fixed, and if nothing changed it should not run again"), because the stored data already holds the answer — while keeping everything good SEO needs. Rule applied to every change: reuse a stored result only where it cannot have changed, keep a safety net where a change could be invisible, and never skip a check that protects rankings.
+
+| Where | Before | Now (v4.6) | What is kept for SEO |
+|---|---|---|---|
+| **Audit Scheduler** (monthly) | Re-audited every site every month | Reads the sitemap (free) and compares its fingerprint (URLs + lastmod; `seo_cache` `sitemap:<site>`); audits only when the site changed, 60+ days passed (safety net for theme / plugin / server changes a sitemap does not show), the site was never audited, or no dated sitemap is readable (then monthly as before). A skipped site keeps its stored fingerprint, so a change made after the last audit is still caught | On-demand audits always run; the weekly Site Tracker keeps watching indexing in Search Console |
+| **Rank Tracker** (weekly) | Every ladder keyword every week (~$0.015 each) | Live pages, the head term and any keyword the site already ranks for: weekly. Pages not written / published that were "not in the top 50" at the last check: monthly, carried in the report with the last result ("not published yet: checked monthly") | A failed check (−1) or a ranking page stays weekly; publishing a page ("I published a page") makes it weekly at once |
+| **Site Tracker live SERP** (weekly) | Every site keyword checked live every week | A keyword Search Console already reports with a position gets one live cross-check a month; keywords without Search Console data stay weekly | Search Console gives the weekly position; the monthly live check keeps SERP features and the live-vs-average view |
+| **Google Trends** (weekly) | 4 trend requests per site per week | A 12-month curve fetched in the last 25 days is read from `seo_trends` (report and Content Cadence see it unchanged) | Rising queries still feed the cadence |
+| **AI Visibility** (weekly) | 6 engines + the brand question every week ($0.87) | ChatGPT, Perplexity, Google AI Mode and AI Overviews weekly; Gemini, Claude and the brand question on the first run of the month (or on demand) and carried in between, marked "monthly · last asked" (live: $0.12 for a weekly run). Headline rates use the weekly engines so the trend compares like with like | The engines most buyers use and Google's AI surfaces stay weekly; the brand alert fires once, on the run that measured it |
+| **Backlink Monitor** (monthly full run) | 12-month history and the link gap downloaded on every full run | History extended with the new months (2 months fetched once 6 months are stored); link gap refreshed every ~3 months, the stored gap prospects shown in between ("refreshed every 3 months; links won since then are removed") | Lost / new / broken / spam links are checked every week as before; on-demand runs always refresh the gap |
+| **Full report: domain age** | DataForSEO WHOIS for 4 domains on every report ($0.48 of $1.02) | Registration dates stored a year (`seo_cache` `age:<domain>`; an unanswered domain is retried after 30 days); missing ones looked up through free RDAP first, paid WHOIS only for what RDAP cannot answer | Same benchmark and "very young domain" finding |
+| **Homepage description** (keyword / ladder / cadence runs) | Homepage read (Jina) and described (Claude Haiku) on every run without a typed business description | Reused for 30 days (`seo_cache` `desc:<domain>`, saved after every fresh read) | "Just describe my website" always reads fresh; what the user types always wins |
+| **Editor pass** (content) | Ran whenever any warning was open | Skipped only when the draft scores 90+, the editorial review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long sentences, medium review remarks); the skip is noted in the report | Every SEO check (meta, H1 / keyword, quick answer, FAQs, table, CTA order, links, sources, statistics, coverage, specificity, fillers, readability, snippet questions) still forces the pass |
+
+**New store.** `seo_cache` (`key`, `kind`, `site_id`, `value`, `updated_at`; created on first use): `sitemap:<site>`, `age:<domain>`, `desc:<domain>`. Columns in `ladder_common.py`.
+
+**Testing.** Harness: S1 (editor gate never skips a draft that misses SEO checks), S5 (domain ages: cache, RDAP, WHOIS only for the gap; second report looks nothing up), S8 (unpublished pages monthly, failed checks weekly, report keeps every page), S10 (trend cache, Search Console-known keywords not re-checked live), S19 (weekly run asks the core engines only, carried Gemini / Claude / brand, no repeated brand alert), S20 (quarterly gap reuse, incremental history), S21 (scheduler decisions: never audited, 5 / 10 / 40 / 65 days, unchanged, changed, 404, undated index, on demand; fingerprint kept on skips). **514 node runs, 0 failed.** Live runs: §5c.
+
+## 3k. The right keyword and the right plan (v4.8, 2026-10-03, pipeline phase 3 — built, harness-verified, not deployed)
+
+**Why.** Rule R4 of `PIPELINE_FEATURE_SPEC.md`: difficulty is personal. The fixed limits (rungs 25 / 45 / 60, "winnable" ≤ 55) made a strong site
+climb months for a keyword it could win now, and promised a new site keywords it could not win. Rule R1: one search, one page — a ladder must not
+plan keywords another ladder of the site already covers.
+
+- **Reach** (`v5/code/_reach.js`, one copy inlined by the build wherever it is used): the 75th-percentile difficulty of the keywords the site ranks
+  top 10 for (≥ 5 of them), else by size (0-4 top-10 keywords → 10, 5-49 → 20, 50-499 → 35, 500+ → 50), the larger of the two. Stored 30 days per
+  site and market in `seo_cache` (`reach:<site_id>`), shared by the ladder, discovery and the keyword check; read in the same cache load as the
+  homepage description (*Load Site Cache* now asks for both keys).
+- **Difficulty for your site** and **plan type**: easy (≤ reach + 5 or already top 20) → direct, reachable (≤ + 20) → short, hard (≤ + 40) → full,
+  very hard → full (stretch), not realistic → none. Ladder: rungs relative to reach, direct writes the main page first, a refused ladder (not
+  realistic / duplicate main keyword) stores nothing and spawns no page; the plan report explains it in "Why this plan". Every new ladder writes
+  its `seo_ladder_settings` row. Details: `PIPELINE_FEATURE_SPEC.md` §5.3-5.5, §9.1 items 3-4.
+- **Discovery** with a website: the reach (stored, else two Labs calls, ~$0.03) labels every keyword and sets Now = easy or reachable; without a
+  website nothing changes (the harness compares with a frozen v4.7 copy).
+- **Keyword check** (`SEOagentAssess`, `POST /webhook/seo-keyword-assess`, synchronous): Labs overview + position (+ reach when not stored) in
+  parallel and one Claude Haiku call for topic fit / navigational / alternatives; 200 / 400 / 429 / 502. ~$0.02-0.05 per check.
+- **Rank Tracker**: a won ladder is checked monthly (main keyword + published pages) instead of being dropped; failed checks no longer break "won".
+
+**Behaviour changes for existing paths.** Ladder runs: rungs and plan type depend on reach (a new site with reach 10 gets fewer rung-1 pages; a
+strong site may get a direct plan with the main page written first); an AVOID / navigational head term now yields no pages (before: a full ladder
+with alternatives); keywords of the site's other ladders are left out; the main page's months come from the plan (full 9-15 instead of the rung
+sum); difficulty labels in the plan report are relative to reach; `Ladder Requests` / `Build Ladder Report` read their context by node name
+(nodes now run in between). Discovery with a website: Now / Next / Later and the pipeline keyword follow reach instead of kd ≤ 55. Rank Tracker:
+won ladders keep a monthly check; its e-mail text says so.
+
+**Testing.** Harness S25: reach (percentile, all size tiers, the larger of the two, failed calls, cache hit / stale / other market, no domain),
+classification boundaries at reach 35, plan types at reach 10 / 35 / 55 (full / short / direct) with relative rungs, write-now order, strong-site
+months, very hard = stretch, not realistic and duplicate refusals through report / rows / delivery / page runs / callback, cross-ladder exclusion
+(variants, supporting keywords, archived, `www.` rows), the settings row (exact columns, `_site` mode, priority after existing ladders, the
+app's own row kept, no row without stored ladder rows), discovery labels / tiers with and without a website (v4.7 equality), the keyword check
+(validation 400s, 429, success with and without a stored reach, alternatives filtering, Claude failure, own brand, 502s, unknown keyword) and
+the monthly check of won ladders. **1160 node runs and assertions, 0 failed** (774 before; S7's band log now uses relative rungs).
+
+## 3l. Publish detection (v4.8, 2026-10-03, pipeline phase 4 — n8n part built, harness-verified, not deployed)
+
+**Why.** Pages are written every week but only count once they are live; owners publish in any CMS and rarely report the link, so the
+pile-up guard (3 waiting pages) pauses their cadence and nothing gets tracked. WordPress publishing is not wanted, so the Site Tracker now
+finds the pages itself.
+
+- **Where**: Site Tracker, between *Any Sites?* and *GSC Sites* (19 nodes; 101 in the workflow). Candidates per site: content-log rows
+  "started" without a link (≤ 120 days) + ladder rows "writing". No candidate = no request.
+- **How** (`PIPELINE_FEATURE_SPEC.md` §6.5): `/sitemap.xml` (index → 5 newest child sitemaps), URLs compared host-agnostically; **slug**
+  first (planned path / planned slug / keyword slug), then **title / first H1** for ≤ 10 unmatched pages, reading ≤ 15 slug-similar pages per
+  site (≥ 60% of the keyword's words in the slug to be read, ≥ 80% in the title or H1 to match; the app's word rules from `_reach.js`).
+  Other pages' URLs and URLs last changed before the page was written are never taken; a rewrite of an existing URL needs a `lastmod` after the
+  rewrite. One URL per page, one page per URL.
+- **Stored like "I published a page"**: one row builder (`v5/code/_publish_rows.js`) now serves both *Publish Check* and *Detect Published*
+  (content log upsert by site_id + keyword with exactly the table columns, ladder row published + live URL, case study URL). The page is
+  inspected in Search Console in the same run; a page found this week that is not indexed yet is an info note, not a high alert.
+- **Output**: report box "We found these pages live on your site: … — tracking has started" (only when non-empty; subject "N pages found
+  live"), brief facts, callback `detected_published: [{ keyword, url, ladder_id, matched_by, source }]` + `publish_detection` (counts,
+  sitemap status, errors). The waiting list and the ladder-page table use the live URL at once.
+- **Safety**: every detection step is `onError: continueRegularOutput` and its output is read: a failed step or write is an info / medium
+  alert, never a stopped report. Cost $0 (plain HTTP).
+
+**Behaviour changes for existing paths.** Site Tracker callback: two more keys (`detected_published`, `publish_detection`; S10's key count
+29 → 31). *Publish Check* builds its rows through the shared builder (identical output; S13 unchanged). *Inspect Requests* also inspects the
+pages found this week.
+
+**Testing.** Harness S26: sitemap index (child order, 404 child, CDATA, other hosts, `?query` / http / bare-host duplicates), slug match on
+the www host in a folder without the trailing slash, planned path beating an `/ar/` copy, keyword slug, title match, the false-match pair
+("e invoicing uae penalties" vs a "UAE e-invoicing: FTA rules" page), one candidate per URL, known and old URLs never claimed, existing pages
+by `lastmod`, the 15-fetch cap with round robin, no candidates = no request, rows with exactly the table columns and identical to Publish
+Check's, inspection, metrics, report section (and its absence), callback field, failed write, failed step. **1227 node runs and assertions,
+0 failed** (1160 before). Live check pending: a Site Tracker run on techand.ai after deployment (free).
 
 ## 4. What changed in v4 (summary)
 
@@ -359,6 +449,15 @@ Fastest path: paste the values in chat and I will import them as n8n credentials
 | 2026-10-02 | Live A3: third audit after the GBP guard + Site Tracker on demand | **Pass**: unrelated listing ignored, sameAs = LinkedIn only, LocalBusiness from the homepage address, full llms.txt titles; diff 3 fixed · 1 new; e-mail with zip. Site Tracker (1 min): the Monday block shows the AI, backlink and audit numbers; **e-mail 250 OK with the PDF attached** (it never was before) |
 | 2026-10-02 | Live S1: Site Admin `monitors` / `prospect` / `ai_prompts` on the fictitious northwind-erp.com | **Pass** (affected 1 each; JavaScript + 1,000 pages clamped to 500); test rows deleted through the Data Table API. Test Runner deactivated again at the end |
 | 2026-10-02 | Spend v4.5 | DataForSEO ≈ $1.65 (probes $0.55, AI visibility $0.87, backlinks $0.20, three audits ≈ $0.30, Site Tracker ≈ $0.10); Claude ≈ $0.15 (questions, AI brief, outreach drafts, Site Brief). DataForSEO balance before the session: $30.26 |
+| 2026-10-02 | v4.6 "no repeated work" built (§3j): change-aware Audit Scheduler (26 nodes), domain-age cache with RDAP before WHOIS, homepage-description cache, editor gate (main workflow 362 nodes), rank-tracker deferral, trend cache, Search Console-aware live checks, monthly Gemini / Claude / brand, incremental backlink history and quarterly gap; harness 514 node runs, 0 failed; applied with `apply_env.py` | done |
+| 2026-10-02 | Live N1: Audit Scheduler, monthly path (Test Runner, no domain) | **Pass**, $0: techand.ai sitemap read (43 URLs, latest lastmod 2026-09-26), fingerprint stored in `seo_cache` (table created on first use), audit skipped ("audited 0 days ago") |
+| 2026-10-02 | Live N2: AI Visibility, weekly path | **Pass**: 28 requests (ChatGPT, Perplexity, AI Mode, AI Overview × 7 buyer questions), no brand question, **$0.12** (the full run this morning: $0.87); Gemini 7/7 and Claude 7/7 and brand recognition 5/5 carried from the morning run; report e-mailed. Found: the carried brand result left `brand_known` empty → fixed (computed from the carried check; the recognition alert only on the run that measures it) |
+| 2026-10-02 | Live N3: Rank Tracker | **Pass**: 1 SERP check (the head term) instead of 9; 8 planned pages that were not in the top 50 yesterday carried with their last result; report lists all 9; e-mail sent |
+| 2026-10-02 | Live N4: Site Tracker | **Pass**: all 4 trends read from `seo_trends` (fetched this morning), none bought; 3 live checks (keywords without Search Console positions stay weekly); report + PDF e-mailed. The Site Brief's Claude call failed with "Connection error." right after the n8n restart (2 tries; Anthropic reachable again a minute later) and the report went out without the brief — transient, not related to v4.6 |
+| 2026-10-02 | Spend v4.6 tests | DataForSEO ≈ $0.17 (AI weekly $0.12, rank check $0.015, 3 live checks $0.045); Claude ≈ $0.03 (AI brief). Test Runner deactivated afterwards |
+| 2026-10-02 | AI spend guard set to $6 / day at the user's request (it was $10 since 2026-10-01; today's estimate stood at $1.33) | done |
+| 2026-10-02 | Live L1: ladder for "e invoicing in uae" on techand.ai through the API (callback only, no e-mail) for a management report | **Pass**: ladder run 5.7 min (execution 184): homepage read and description stored in `seo_cache`, verdict GO_WITH_CHANGES 68/100, 8 rung pages + top page (same plan as 2026-10-01), 9 rows saved, first page spawned; page run 13.9 min (execution 185): brief, draft 2,441 words, critic 48 "rewrite", QA 84 → editor → 85, 1,635 words, Article + Person + BreadcrumbList + FAQPage. Cost: DataForSEO $0.14, Claude ≈ $1.78 (estimate). Report: `docs/run-reports/2026-10-02-e-invoicing-in-uae.html` (`run_report.py`) |
+| 2026-10-02 | Findings of L1 | (1) **Defect**: Content QA's price safeguard (amounts become `[Price]` unless the user gave prices) also masked the official fines from the verified facts (AED 5,000 per month, AED 100 per invoice, AED 50 million): 43 `[Price]` in the page and 2 in the meta description. Fix proposed: keep amounts that appear in the verified facts, mask only unsourced prices; not applied yet. (2) The Editor's model call was terminated by the provider after 3.7 min and retried successfully (+4 min). (3) A second ladder `lad_mur2cjwk8gp0` now exists next to `lad_mur0…` from 2026-10-01 for the same head term; remove one before Monday's Rank Tracker run |
 | 2026-10-01 | Spend | DataForSEO total for all live tests about $0.30. Anthropic spend is not metered by the workflow (streaming responses report no token usage); the two aborted briefs and two long editor passes make an estimate of $2.5-3.5 for the day realistic. **Set the Console workspace limit before more runs.** |
 
 ### 5d. Re-running a ladder page
@@ -390,6 +489,7 @@ Ordered by value per effort. Items 2, 3, 5 and 7 from the earlier version of thi
 10. **Tracking follow-ups** (see `TRACKING_FEATURE_SPEC.md`): Bing Webmaster Tools and Google Business Profile as further sources; charts in the PDF from the stored daily series and a hosted per-site dashboard reading `seo_site_metrics` / `seo_query_history`; feed Search Console striking-distance queries into discovery and ladder planning; auto-run the recommended improvement when `ladder_auto_next_rung` is on; prune `seo_query_history` after 12 months.
 11. **E-E-A-T follow-ups (v4.4)**: one live content run per page role with a real profile; several authors per site (pick by topic) instead of one default author; an author page generator (bio, credentials, list of articles, Person schema) from the profile; Site Admin actions to delete a profile or a case study; a case-study prompt in the Monday report for sites with none; transcripts fetched automatically (YouTube Data API captions need OAuth — today the owner pastes them); local pages planned by the ladder for geo head terms.
 12. **Monitor follow-ups (v4.5)**: AI-visibility trend charts from `seo_ai_visibility`; brand-name disambiguation (a short domain label like "techand" can match another company — set `brand_names` through Site Admin `monitors`); Google Business Profile through the official API (OAuth) for reviews and posts; a status page per prospect for outreach tracking; diff-aware fix pack (only what changed since the last audit); Bing / Copilot as an AI engine when DataForSEO offers it.
+13. **Reuse follow-ups (v4.6)**: a full report or keyword run that reuses a recent technical audit (crawl + PageSpeed) for the same domain instead of crawling again; Search Console's `lastmod` and the IndexNow / sitemap ping on publish as further change signals for the Audit Scheduler; per-site cost roll-up from `run_ledger` to show what each reuse saved.
 
 ## 7. Files
 

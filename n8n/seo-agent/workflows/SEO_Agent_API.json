@@ -17,7 +17,7 @@
           "responseMode": "responseNode",
           "options": {}
         },
-        "id": "832420ab-0888-45a0-aabf-d6a057d38e61",
+        "id": "1e58ab40-2bc3-41c4-937d-2edbcd8fbb88",
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 2,
@@ -37,7 +37,7 @@
         "parameters": {
           "jsCode": "// Fast validation so callers get an immediate, useful 400. The full validation happens again in the main workflow.\nconst raw = $input.first().json || {};\nconst b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};\nconst hdr = raw.headers || {};\nconst client_ip = String(hdr['x-forwarded-for'] || hdr['x-real-ip'] || hdr['cf-connecting-ip'] || '').split(',')[0].trim();\nconst errors = [];\nconst mode = String(b.mode || 'keyword').toLowerCase();\nif (!['keyword', 'verdict', 'check', 'audit', 'discover', 'describe', 'ladder', 'track', 'published', 'checkin', 'profile', 'case_study', 'ai_visibility', 'backlinks'].includes(mode)) errors.push('mode must be one of: keyword, verdict, audit, discover, describe, ladder, track, published, checkin, profile, case_study, ai_visibility, backlinks');\nif (['keyword', 'verdict', 'check', 'ladder'].includes(mode) && !b.keyword) errors.push('keyword is required');\nif (['audit', 'describe', 'ladder', 'track', 'published', 'checkin', 'profile', 'case_study', 'ai_visibility', 'backlinks'].includes(mode) && !b.domain) errors.push('domain is required');\nif (b.crawl_pages != null && !(Number(b.crawl_pages) >= 50 && Number(b.crawl_pages) <= 1000)) errors.push('crawl_pages must be between 50 and 1000');\nif (b.crawl_js && Number(b.crawl_pages || 200) > 500) errors.push('crawl_js (JavaScript rendering) allows at most 500 crawl_pages');\nif (b.competitors != null && !Array.isArray(b.competitors) && typeof b.competitors !== 'string') errors.push('competitors must be an array of domains or a comma-separated string');\nif (b.monitors != null && (typeof b.monitors !== 'object' || Array.isArray(b.monitors))) errors.push('monitors must be an object');\nconst cs = (b.case_study && typeof b.case_study === 'object') ? b.case_study : null;\nif (mode === 'case_study' && !(cs && cs.challenge && (cs.solution || cs.what_we_did) && cs.results)) errors.push('case_study.challenge, case_study.solution and case_study.results are required');\nif (mode === 'case_study' && !b.keyword && !(cs && cs.service)) errors.push('case_study.service (or keyword) is required');\nif (mode === 'profile' && !((b.author && b.author.name) || b.business_name || b.street_address || (b.address && b.address.street) || b.phone || (b.reviewer && b.reviewer.name))) errors.push('profile needs at least author.name or the business details (business_name, address, phone)');\nif (b.video != null && !(b.video && /^https?:\\/\\/\\S+$/i.test(String(b.video.url || '')))) errors.push('video.url (https://...) is required when video is given');\nif (b.video_url != null && !/^https?:\\/\\/\\S+$/i.test(String(b.video_url))) errors.push('video_url must be a full https:// link');\nif (mode === 'track' && b.blogs_per_week != null && !(Number(b.blogs_per_week) >= 0 && Number(b.blogs_per_week) <= 3)) errors.push('blogs_per_week must be 0, 1, 2 or 3');\nif (mode === 'published' && !/^https?:\\/\\/\\S+$/i.test(String(b.published_url || b.url || ''))) errors.push('published_url (https://...) is required');\nif (mode === 'published' && !b.keyword && !b.content_request_id) errors.push('keyword or content_request_id is required');\nif (mode === 'track' && b.keywords != null && !Array.isArray(b.keywords) && typeof b.keywords !== 'string') errors.push('keywords must be an array of strings or a comma-separated string');\nif (mode === 'ladder' && b.pages_now != null && !(Number(b.pages_now) >= 1 && Number(b.pages_now) <= 3)) errors.push('pages_now must be 1, 2 or 3');\nif (mode === 'discover' && !b.business && !b.domain) errors.push('business or domain is required');\nif (!['describe', 'profile'].includes(mode) && !b.country) errors.push('country is required (name or ISO-2 code)');\nif (!b.callback_url && !b.email) errors.push('callback_url (https) or email is required so the result can be delivered');\nif (b.callback_url && !/^(https:\\/\\/\\S+|http:\\/\\/(localhost|127\\.0\\.0\\.1|host\\.docker\\.internal|n8n)(:\\d+)?\\/\\S*)$/.test(String(b.callback_url))) errors.push('callback_url must be an https URL (http only for localhost while testing)');\nconst request_id = $execution.id;\nconst eta = mode === 'audit' ? 20 : (['verdict', 'check'].includes(mode) ? 4 : mode === 'ladder' ? 8 : mode === 'track' ? 3 : mode === 'published' || mode === 'checkin' || mode === 'profile' ? 1 : mode === 'case_study' ? 15 : mode === 'ai_visibility' ? 10 : mode === 'backlinks' ? 5 : 10);\nreturn [{ json: {\n  ok: errors.length === 0, error: errors.join('; '), request_id, mode, keyword: b.keyword || null, domain: b.domain || null, country: b.country || null,\n  delivery: b.callback_url ? 'POST to callback_url when finished' : 'email when finished', estimated_minutes: eta,\n  forward: { ...raw, body: { ...b, request_id, client_ip } }\n} }];"
         },
-        "id": "d00e8e79-e3a1-4f0f-9eb5-b63d889a9fd2",
+        "id": "fa2baa97-3190-4b35-ad77-9b72b3d97d77",
         "name": "Quick Validate",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -57,7 +57,7 @@
             },
             "conditions": [
               {
-                "id": "e97f6009-c21f-4bc8-9909-5bce2f9e647f",
+                "id": "289ed394-af6f-4c02-8723-4d317952b949",
                 "leftValue": "={{ $json.ok }}",
                 "rightValue": "",
                 "operator": {
@@ -72,7 +72,7 @@
           "looseTypeValidation": true,
           "options": {}
         },
-        "id": "0e7a32be-7746-4d2e-aaac-930e4eb04528",
+        "id": "a641c803-8063-4f1a-8c86-ff5bd4400f8f",
         "name": "Valid?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.3,
@@ -89,7 +89,7 @@
             "responseCode": 202
           }
         },
-        "id": "37e52be7-b92c-441a-9b4e-a81ccf325da0",
+        "id": "0a3d2431-52c7-43f2-bc66-cf985bdf1018",
         "name": "Respond Accepted",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -102,7 +102,7 @@
         "parameters": {
           "jsCode": "return [{ json: $input.first().json.forward }];"
         },
-        "id": "c9da0b64-64c2-49bb-a99d-5fc381f3195c",
+        "id": "f0f1a332-b3e6-4a56-b141-37928befd8a8",
         "name": "Prepare Payload",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -124,7 +124,7 @@
             "waitForSubWorkflow": false
           }
         },
-        "id": "6a04c06e-65c8-42f1-ab49-8c6ac9dce385",
+        "id": "34f6c5ee-447f-4b32-99a6-f1e603e9a40a",
         "name": "Start SEO Run",
         "type": "n8n-nodes-base.executeWorkflow",
         "typeVersion": 1.2,
@@ -141,7 +141,7 @@
             "responseCode": 400
           }
         },
-        "id": "5d2c0979-33c8-4c12-b2ca-14af0478a001",
+        "id": "e28218d7-c72c-491a-a9f2-56d3cd9d5135",
         "name": "Respond Bad Request",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -157,7 +157,7 @@
           "width": 700,
           "color": 4
         },
-        "id": "e4238473-8cc6-49ec-9738-9f04122baa83",
+        "id": "68657a8e-e969-4b11-bf94-942aae70295e",
         "name": "Note",
         "type": "n8n-nodes-base.stickyNote",
         "typeVersion": 1,

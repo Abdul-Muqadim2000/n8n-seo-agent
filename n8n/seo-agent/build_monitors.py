@@ -7,7 +7,7 @@ import json, os, re, uuid
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_upsert_params_keys,
                            SITES_TABLE, SITES_COLS, LADDER_TABLE, LADDER_COLS, LOG_TABLE, LOG_COLS, PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS, AI_ANSWERS_TABLE, AI_ANSWERS_COLS, AI_VIS_TABLE, AI_VIS_COLS,
-                           BL_SNAP_TABLE, BL_SNAP_COLS, PROSPECT_TABLE, PROSPECT_COLS, AUDITS_TABLE, AUDITS_COLS)
+                           BL_SNAP_TABLE, BL_SNAP_COLS, PROSPECT_TABLE, PROSPECT_COLS, AUDITS_TABLE, AUDITS_COLS, CACHE_TABLE, CACHE_COLS, dt_get_where_params)
 from env_settings import SENDER
 HERE = os.path.dirname(os.path.abspath(__file__)); V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 rd = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
@@ -165,19 +165,30 @@ B.write('SEO_Agent_Backlink_Monitor.json')
 # =============================================================================
 # 3. AUDIT SCHEDULER
 # =============================================================================
-S = WF('SEOagentAuditSc1', 'SEO Agent — Audit Scheduler', 'audsc', 600)
+S = WF('SEOagentAuditSc1', 'SEO Agent — Audit Scheduler', 'audsc', 900)
 S.node('Monthly Schedule', 'n8n-nodes-base.scheduleTrigger', 1.2, {'rule': {'interval': [{'field': 'cronExpression', 'expression': '0 6 1 * *'}]}}, at(0, 0))
 S.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
-ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Audits Table', AUDITS_TABLE, AUDITS_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS)]
-for i, (nm, t, c) in enumerate(ens): S.ensure(nm, t, c, at(1 + i, 0))
+ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Audits Table', AUDITS_TABLE, AUDITS_COLS), ('Ensure Sites Table', SITES_TABLE, SITES_COLS), ('Ensure Profiles Table', PROFILE_TABLE, PROFILE_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
+for i, (nm, t_, c) in enumerate(ens): S.ensure(nm, t_, c, at(1 + i, 0))
 loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Audits', AUDITS_TABLE)]
-for i, (nm, t) in enumerate(loads): S.load(nm, t, at(1 + i, 1))
-S.code('Audit Schedule Plan', 'Audit_Sched_Plan.js', at(6, 1)); S.iff('Any Audits Due?', '{{ !$json.nothing_to_do }}', at(7, 1))
-S.node('Start Scheduled Audits', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentV4Full01'}, 'mode': 'each', 'options': {'waitForSubWorkflow': False}}, at(8, 0), onError='continueRegularOutput')
-S.code('Audits Started', "// What was started (each audit delivers its own report, diff and fix pack by e-mail / callback).\nconst plan = $('Audit Schedule Plan').all().map(i => i.json);\nreturn [{ json: { started: plan.map(p => p.domain), skipped: (plan[0] || {}).skipped || [], at: new Date().toISOString() } }];", at(9, 0))
-S.node('Nothing Due', 'n8n-nodes-base.noOp', 1, {}, at(8, 2))
-S.chain('Monthly Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Audit Schedule Plan', 'Any Audits Due?'); S.link('Manual Run', ens[0][0])
-S.link('Any Audits Due?', 'Start Scheduled Audits', 0); S.link('Any Audits Due?', 'Nothing Due', 1); S.link('Start Scheduled Audits', 'Audits Started')
-S.sticky(f"""## SEO Agent — Audit Scheduler (v4.5)
-**1st of every month, 06:00** (cron `0 6 1 * *`) and on demand (*Manual Run* `{{ domain | site_id }}`). For every site with `audit_monthly` on (`{MONITORS_TABLE}`; default on) and no audit in the last 25 days, it starts a **technical audit** in its own execution through API Entry (internal key `audit:`, crawl size / JavaScript rendering from the site's settings). Each audit compares itself with the site's previous audit (`{AUDITS_TABLE}` + `seo_audit_findings`: fixed / new / still open, score change) and delivers the report with the **fix pack** (robots.txt, llms.txt, redirect map, schema, internal links) by e-mail and/or callback.""", [-40, -400], 1100, 220)
+for i, (nm, t_) in enumerate(loads): S.load(nm, t_, at(1 + i, 1))
+S.node('Load Cache (Audit)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'sitemap'), at(6, 1), **LOAD)
+S.code('Audit Candidates', 'Audit_Candidates.js', at(7, 1)); S.iff('Any Candidates?', '{{ !$json.nothing_to_do }}', at(8, 1))
+S.node('Fetch Sitemap (Schedule)', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': '={{ $json.sitemap_url }}', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.6)'}, {'name': 'Accept', 'value': 'application/xml,text/xml,*/*'}]},
+    'options': {'timeout': 45000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(9, 0), onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000)
+S.code('Audit Schedule Plan', 'Audit_Sched_Plan.js', at(10, 1))
+S.code('Fingerprint Rows', "// The sitemap fingerprints to store (seo_cache, upsert by key; exact columns), for started and skipped sites alike.\nconst rows = $('Audit Schedule Plan').all().map(i => i.json.cache_row).filter(Boolean);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(11, 1))
+S.iff('Any Fingerprints?', '{{ !$json.skip }}', at(12, 1))
+S.node('Save Fingerprints', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(13, 0), onError='continueRegularOutput', alwaysOutputData=True)
+S.code('Audits To Start', "// Only the audits that are due; the others are listed with the reason they were skipped.\nconst plan = $('Audit Schedule Plan').all().map(i => i.json); const due = plan.filter(p => p.run && p.body);\nreturn due.length ? due.map(p => ({ json: { body: p.body, domain: p.domain, why: p.why } })) : [{ json: { nothing_to_do: true, skipped: plan.map(p => p.domain + ': ' + p.why) } }];", at(14, 1))
+S.iff('Any Audits Due?', '{{ !$json.nothing_to_do }}', at(15, 1))
+S.node('Start Scheduled Audits', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentV4Full01'}, 'mode': 'each', 'options': {'waitForSubWorkflow': False}}, at(16, 0), onError='continueRegularOutput')
+S.code('Audits Started', "// What was started (each audit delivers its own report, diff and fix pack) and what was skipped, with the reason.\nconst plan = $('Audit Schedule Plan').all().map(i => i.json);\nreturn [{ json: { started: plan.filter(p => p.run).map(p => p.domain + ': ' + p.why), skipped: plan.filter(p => !p.run).map(p => p.domain + ': ' + p.why), at: new Date().toISOString() } }];", at(17, 0))
+S.node('Nothing Due', 'n8n-nodes-base.noOp', 1, {}, at(16, 2))
+S.chain('Monthly Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load Cache (Audit)', 'Audit Candidates', 'Any Candidates?'); S.link('Manual Run', ens[0][0])
+S.link('Any Candidates?', 'Fetch Sitemap (Schedule)', 0); S.link('Any Candidates?', 'Nothing Due', 1)
+S.chain('Fetch Sitemap (Schedule)', 'Audit Schedule Plan', 'Fingerprint Rows', 'Any Fingerprints?'); S.link('Any Fingerprints?', 'Save Fingerprints', 0); S.link('Any Fingerprints?', 'Audits To Start', 1); S.link('Save Fingerprints', 'Audits To Start')
+S.chain('Audits To Start', 'Any Audits Due?'); S.link('Any Audits Due?', 'Start Scheduled Audits', 0); S.link('Any Audits Due?', 'Audits Started', 1); S.link('Start Scheduled Audits', 'Audits Started')
+S.sticky(f"""## SEO Agent — Audit Scheduler (v4.6: no repeated audits)
+**1st of every month, 06:00** (cron `0 6 1 * *`) and on demand (*Manual Run* `{{ domain | site_id }}` always audits). Per site with `audit_monthly` on (`{MONITORS_TABLE}`): the sitemap is read (free) and its fingerprint (URLs + lastmod dates, or the sitemap index entries) compared with the one stored at the last check (`{CACHE_TABLE}`, key `sitemap:<site>`). **Audit only when** the site changed, 60+ days passed since the last audit (safety net for theme / plugin / server changes a sitemap does not show), the site was never audited, or no sitemap (or an index without dates) is readable (then monthly as before). Unchanged sites are skipped — the weekly Site Tracker keeps watching indexing in Search Console. Started audits run as their own executions (internal key `audit:`), compare themselves with the previous audit and deliver the report with the **fix pack**.""", [-40, -420], 1150, 240)
 S.write('SEO_Agent_Audit_Scheduler.json')

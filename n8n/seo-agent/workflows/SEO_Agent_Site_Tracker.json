@@ -1130,6 +1130,30 @@
           "dataTableId": {
             "__rl": true,
             "mode": "name",
+            "value": "seo_trends"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "b0e97f32-4af0-549d-8fd3-eaddf3dc6528",
+        "name": "Load Trends (Site)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2420,
+          660
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
             "value": "seo_sites"
           },
           "returnAll": true,
@@ -1313,6 +1337,1164 @@
       },
       {
         "parameters": {
+          "jsCode": "// Publish detection (v4.8, PIPELINE_FEATURE_SPEC §6.5), step 1: per tracked site, the pages written but not published yet — seo_content_log\n// rows \"started\" without a publish link from the last 120 days, plus seo_ladders rows \"writing\" (one candidate per keyword) — and the sitemap\n// to read. A site without such pages makes no request at all. A page that improves an EXISTING URL (striking-distance rewrite, ladder page\n// that already existed) cannot be told apart by its URL, so it is matched only when the sitemap says that URL changed after the page was written.\nconst CONFIG = { max_age_days: 120, max_candidates_per_site: 40 };\nconst plan = $('Site Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do && p.domain);\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();   // the keyword key of Publish Check\nconst isTrue = (v) => v === true || v === 'true';\nconst logs = rowsOf('Load Content Log').filter(r => r.keyword && r.domain);\nconst ladders = rowsOf('Load Ladders').filter(r => r.ladder_id && r.domain && r.keyword);\nconst cutoff = Date.now() - CONFIG.max_age_days * 864e5;\nconst out = [];\nplan.forEach((s, idx) => {\n  const d = s.domain;\n  const L = logs.filter(r => normD(r.domain) === d), LD = ladders.filter(r => normD(r.domain) === d);\n  const published = new Set(L.filter(r => r.status === 'published' || String(r.published_url || '').trim()).map(r => norm(r.keyword)));\n  const ladderOf = (kw) => LD.find(l => norm(l.keyword) === kw) || null;   // as Publish Check: the domain's ladder row for this keyword\n  const cands = new Map();\n  for (const r of L) {\n    if (r.status !== 'started' || String(r.published_url || '').trim()) continue;\n    const t = Date.parse(r.started_at); if (!(t >= cutoff)) continue;\n    const kw = norm(r.keyword); if (!kw || cands.has(kw) || published.has(kw)) continue;\n    const ladder = ladderOf(kw); if (ladder && ladder.status === 'published') continue;   // already recorded through the ladder\n    cands.set(kw, { key: kw, keyword: r.keyword, source: 'content_log', log: r, ladder, written_at: String(r.started_at || '') });\n  }\n  for (const l of LD) {\n    if (l.status !== 'writing') continue;\n    const kw = norm(l.keyword); if (!kw || cands.has(kw) || published.has(kw)) continue;\n    const log = L.filter(r => norm(r.keyword) === kw).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;   // an older log row of the same page (kept in the rows)\n    cands.set(kw, { key: kw, keyword: l.keyword, source: 'ladder', log, ladder: l, written_at: String((log && log.started_at) || l.start_date || '') });\n  }\n  if (!cands.size) return;\n  const list = [...cands.values()].map(c => {\n    const existing = String((c.log && c.log.existing_page_url) || '').trim() || (c.ladder && isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '');\n    const planned = c.ladder && !isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '';\n    return { ...c, existing_url: /^https?:\\/\\//i.test(existing) ? existing : '', planned_url: /^https?:\\/\\//i.test(planned) ? planned : '', ladder_id: (c.log && c.log.ladder_id) || (c.ladder && c.ladder.ladder_id) || '' };\n  }).sort((a, b) => String(b.written_at).localeCompare(String(a.written_at))).slice(0, CONFIG.max_candidates_per_site);\n  // URLs that already belong to other pages of the site (published pages, pages that existed before) are never claimed by a new page\n  const known = [...new Set([...L.flatMap(r => [r.published_url, r.existing_page_url]), ...LD.filter(l => l.status === 'published' || isTrue(l.page_exists)).map(l => l.target_url)].map(u => String(u || '').trim()).filter(u => /^https?:\\/\\//i.test(u)))];\n  out.push({ json: { site_idx: idx, site_id: s.site_id, domain: d, sitemap_url: 'https://' + d + '/sitemap.xml', candidates: list, known } });\n});\nreturn out.length ? out : [{ json: { skip: true, reason: 'no written page is waiting for publication', sites: plan.length } }];\n"
+        },
+        "id": "ca62a2c3-0dbe-5bcc-bf5b-594a37a8b578",
+        "name": "Publish Candidates",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2640,
+          -440
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "3113a488-eb0e-5f47-8fec-9e8a0f6e79d1",
+                "leftValue": "={{ !$json.skip && !$json.error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "2c4fd0a3-62d7-5857-b674-4a22713d1f1c",
+        "name": "Any Detect Candidates?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2860,
+          -440
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "={{ $json.sitemap_url }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (compatible; SEO-Agent/4.8)"
+              },
+              {
+                "name": "Accept",
+                "value": "application/xml,text/xml,*/*"
+              }
+            ]
+          },
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 5,
+                "batchInterval": 200
+              }
+            },
+            "timeout": 30000,
+            "redirect": {
+              "redirect": {
+                "followRedirects": true,
+                "maxRedirects": 5
+              }
+            },
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "9188042d-f543-592c-aac1-b925c26f4bac",
+        "name": "Fetch Sitemap (Detect)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          3080,
+          -660
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Publish detection, step 2: when a site's /sitemap.xml is a sitemap index (Yoast, Rank Math, WordPress core, Shopify, ...), the 5 most recently\n// changed child sitemaps are read next — new pages land in the newest one; tag / category / author / image / video sitemaps come last. The\n// parsing follows the audit's (Sitemap Children (Audit)); the HTTP node returns text bodies under `data`.\nconst CONFIG = { max_children: 5, max_body_chars: 5000000 };\nconst sites = $('Publish Candidates').all().map(i => i.json);\nconst res = $input.all().map(i => i.json || {});\nconst bodyOf = (r) => { const b = r && (r.body != null ? r.body : r.data); return typeof b === 'string' ? b : (b ? JSON.stringify(b) : ''); };\nconst tagOf = (blk, t) => { const m = blk.match(new RegExp('<' + t + '>\\\\s*(?:<!\\\\[CDATA\\\\[)?\\\\s*([^<\\\\]\\\\s]+)', 'i')); return m ? m[1].replace(/&amp;/g, '&').trim() : ''; };\nconst lowValue = (u) => /tag|categor|author|image|video|attachment|archive|format/i.test(String(u).split('?')[0].split('/').pop());\nconst out = [];\nsites.forEach((s, i) => {\n  if (s.skip) return;\n  const r = res[i] || {}; const status = Number(r.statusCode) || (r.error ? 0 : 200); const body = bodyOf(r).slice(0, CONFIG.max_body_chars);\n  if (status !== 200 || !/<sitemapindex/i.test(body)) return;\n  const kids = [...body.matchAll(/<sitemap\\b[^>]*>([\\s\\S]*?)<\\/sitemap>/gi)].map(m => ({ loc: tagOf(m[1], 'loc'), lastmod: tagOf(m[1], 'lastmod') })).filter(k => /^https?:\\/\\//i.test(k.loc));\n  kids.sort((a, b) => (lowValue(a.loc) - lowValue(b.loc)) || String(b.lastmod).localeCompare(String(a.lastmod)));\n  kids.slice(0, CONFIG.max_children).forEach(k => out.push({ json: { site_idx: s.site_idx, site_id: s.site_id, url: k.loc, lastmod: k.lastmod, total_children: kids.length } }));\n});\nreturn out.length ? out : [{ json: { skip: true, reason: 'no sitemap index to follow' } }];\n"
+        },
+        "id": "cb48f632-c1b0-586e-8f48-3e4327a958b0",
+        "name": "Sitemap Children (Detect)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3300,
+          -660
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "61cecbc5-0289-5637-8563-cfbd4b735494",
+                "leftValue": "={{ !$json.skip && !$json.error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "97193117-c7fb-5268-9a56-7d74d98a3a32",
+        "name": "Any Child Sitemaps?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3520,
+          -660
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "={{ $json.url }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (compatible; SEO-Agent/4.8)"
+              },
+              {
+                "name": "Accept",
+                "value": "application/xml,text/xml,*/*"
+              }
+            ]
+          },
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 5,
+                "batchInterval": 200
+              }
+            },
+            "timeout": 30000,
+            "redirect": {
+              "redirect": {
+                "followRedirects": true,
+                "maxRedirects": 5
+              }
+            },
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "5b3ad015-2486-52bb-a0e4-8e530da476ae",
+        "name": "Fetch Child Sitemaps (Detect)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          3740,
+          -880
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 3000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Publish detection, step 3: every URL of the site's sitemap (index children included) against the written pages. URLs compare host-agnostically\n// (www. or not, http or https), without query / fragment, case or trailing slash; only the site's own host and its subdomains count.\n//   (a) slug: the URL's path equals the planned path of the ladder row, or its last segment equals the planned slug or the keyword's slug\n//       (\"e invoicing in uae\" -> e-invoicing-in-uae). Score: planned path 100, planned slug 95, keyword slug 90, one point less per folder.\n//       A page that improves an EXISTING URL matches that URL only when its sitemap lastmod is on or after the day the page was written.\n//   (b) title, for at most 10 candidates still unmatched (newest first, 2+ significant words): the URLs whose slug holds >= 60% of the keyword's\n//       significant words (the web app's word rules, _reach.js: stop words out, light stem; words of 5+ letters also match by prefix) are\n//       fetched next — at most 5 per candidate, 15 per site, 100 per run — and Detect Published accepts a <title> or first <h1> holding >= 80%.\n//   Never claimed: URLs of other pages of the site (published, or existing before), URLs last changed before the page was written (lastmod;\n//   one day of slack for time zones). One URL per candidate and one candidate per URL, best score first.\nconst CONFIG = { max_urls_per_site: 20000, max_body_chars: 5000000, title_candidates: 10, options_per_candidate: 5, max_fetches_per_site: 15, max_fetches_per_run: 100, slug_share: 0.6 };\n// rule R1 \"one search, one page\" — the same words as the web app (app/shared/src/ladders.ts): lower case, one-letter and stop words out, a light\n// stem, place names kept; two keywords are the same search when their word sets are equal or 75%+ the same (Jaccard)\nconst OVERLAP_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);\nconst overlapTokens = (s) => { const out = []; for (const t of String(s || '').toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 1 || OVERLAP_STOP.has(t)) continue;\n  const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '').replace(/[^a-z0-9]/g, ''); if (w && !out.includes(w)) out.push(w); } return out; };\nconst overlapScore = (a, b) => { if (!a.length || !b.length) return 0; const sb = new Set(b); const common = a.filter(t => sb.has(t)).length; return common / (a.length + b.length - common); };\nconst keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b)) >= 0.75;\nconst sites = $('Publish Candidates').all().map(i => i.json).filter(s => s && !s.skip);\nconst grab = (name) => { try { return $(name).all().map(i => i.json || {}); } catch (e) { return []; } };\nconst mainRes = grab('Fetch Sitemap (Detect)');\nconst kidReq = grab('Sitemap Children (Detect)').filter(k => !k.skip), kidRes = grab('Fetch Child Sitemaps (Detect)');\nconst bodyOf = (r) => { const b = r && (r.body != null ? r.body : r.data); return typeof b === 'string' ? b : (b ? JSON.stringify(b) : ''); };   // text responses come under `data`\nconst statusOf = (r) => Number(r.statusCode) || (r.error ? 0 : 200);\nconst errOf = (r) => r.error ? String(r.error.message || r.error.description || r.error).slice(0, 160) : '';\nconst tagOf = (blk, t) => { const m = blk.match(new RegExp('<' + t + '>\\\\s*(?:<!\\\\[CDATA\\\\[)?\\\\s*([^<\\\\]\\\\s]+)', 'i')); return m ? m[1].replace(/&amp;/g, '&').trim() : ''; };\nconst parseU = (u) => { const m = String(u || '').trim().match(/^https?:\\/\\/(?:[^@\\/?#]*@)?([^\\/?#:]+)(?::\\d+)?([^?#]*)/i); if (!m) return null; let p = m[2] || ''; try { p = decodeURIComponent(p); } catch (e) {}\n  return { host: m[1].toLowerCase().replace(/^www\\./, ''), path: p.toLowerCase().replace(/\\/{2,}/g, '/').replace(/^\\/+|\\/+$/g, '') }; };   // no URL constructor in the n8n Code sandbox\nconst keyOf = (u) => { const x = parseU(u); return x ? x.host + '/' + x.path : ''; };\nconst lastSeg = (p) => String(p || '').split('/').pop().replace(/\\.(html?|php|aspx?)$/i, '');\nconst slugOf = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');\nconst day = (s) => String(s || '').slice(0, 10);\nconst dayBefore = (s) => { const t = Date.parse(day(s)); return isNaN(t) ? '' : new Date(t - 864e5).toISOString().slice(0, 10); };\nconst tokHit = (t, set) => set.some(x => x === t || (t.length >= 5 && x.length >= 5 && (x.startsWith(t) || t.startsWith(x))));\nconst shareOf = (kwT, other) => kwT.length ? kwT.filter(t => tokHit(t, other)).length / kwT.length : 0;\nlet runFetches = 0;\nconst state = sites.map((s, i) => {\n  const d = s.domain;\n  // ---- the sitemap: /sitemap.xml, or the children of its index ----\n  const files = [{ url: s.sitemap_url, r: mainRes[i] || {} }, ...kidReq.map((k, j) => ({ k, r: kidRes[j] || {} })).filter(x => x.k.site_idx === s.site_idx).map(x => ({ url: x.k.url, r: x.r }))];\n  const urls = new Map(); let read = 0, index = false; const errors = [];\n  for (const f of files) {\n    const st = statusOf(f.r), body = bodyOf(f.r).slice(0, CONFIG.max_body_chars);\n    if (st !== 200) { errors.push(f.url + ': ' + (errOf(f.r) || 'HTTP ' + st)); continue; }\n    if (/<sitemapindex/i.test(body)) { index = true; continue; }\n    if (!/<urlset/i.test(body)) { errors.push(f.url + ': not an XML sitemap'); continue; }\n    read++;\n    for (const m of body.matchAll(/<url\\b[^>]*>([\\s\\S]*?)<\\/url>/gi)) {\n      if (urls.size >= CONFIG.max_urls_per_site) break;\n      const loc = tagOf(m[1], 'loc'); const x = parseU(loc); if (!x || !(x.host === d || x.host.endsWith('.' + d))) continue;\n      const k = x.host + '/' + x.path; if (!urls.has(k)) urls.set(k, { url: loc, key: k, path: x.path, last: lastSeg(x.path), lastmod: tagOf(m[1], 'lastmod') });\n    }\n  }\n  const sitemap = { ok: read > 0, index, files_read: read, urls: urls.size, error: read ? '' : (errors[0] || (index ? 'the sitemap index lists no readable sitemap' : 'empty sitemap')) };\n  // ---- (a) slug ----\n  const known = new Set((s.known || []).map(keyOf).filter(Boolean));\n  const list = [...urls.values()]; const byPath = new Map(), byLast = new Map();\n  for (const u of list) { if (!byPath.has(u.path)) byPath.set(u.path, []); byPath.get(u.path).push(u); if (!byLast.has(u.last)) byLast.set(u.last, []); byLast.get(u.last).push(u); }\n  const fresh = (u, c) => !u.lastmod || !c.written_at || day(u.lastmod) >= dayBefore(c.written_at);\n  const pairs = [], notes = {};\n  for (const c of s.candidates || []) {\n    if (c.existing_url) {\n      const u = urls.get(keyOf(c.existing_url));\n      if (u && u.lastmod && c.written_at && day(u.lastmod) >= day(c.written_at)) pairs.push({ key: c.key, url: u.url, ukey: u.key, score: 100, matched_by: 'slug', updated: true });\n      else notes[c.key] = !u ? 'the existing page is not in the sitemap' : !u.lastmod ? 'existing page: the sitemap gives no change date' : 'the existing page has not changed since the new version was written';\n      continue;\n    }\n    const pl = c.planned_url ? parseU(c.planned_url) : null; const pPath = pl ? pl.path : '', pLast = pl ? lastSeg(pl.path) : '', kSlug = slugOf(c.keyword);\n    const seen = new Set();\n    const consider = (u, score) => { if (seen.has(u.key) || known.has(u.key) || !fresh(u, c)) return; seen.add(u.key); pairs.push({ key: c.key, url: u.url, ukey: u.key, score: score - (u.path.split('/').length - 1), matched_by: 'slug' }); };\n    if (pPath) for (const u of byPath.get(pPath) || []) consider(u, 100);\n    if (pLast) for (const u of byLast.get(pLast) || []) consider(u, 95);\n    if (kSlug) for (const u of byLast.get(kSlug) || []) consider(u, 90);\n  }\n  pairs.sort((a, b) => b.score - a.score);\n  const matched = new Map(), claimed = new Set();\n  for (const p of pairs) if (!matched.has(p.key) && !claimed.has(p.ukey)) { matched.set(p.key, p); claimed.add(p.ukey); }\n  // ---- (b) the pages to read for the title check ----\n  const slugTok = new Map(); const tokOf = (u) => { if (!slugTok.has(u.key)) slugTok.set(u.key, overlapTokens(u.last.replace(/[-_]+/g, ' '))); return slugTok.get(u.key); };\n  const title_checks = (s.candidates || []).filter(c => !c.existing_url && !matched.has(c.key)).map(c => ({ c, kwT: overlapTokens(c.keyword) })).filter(x => x.kwT.length >= 2).slice(0, CONFIG.title_candidates).map(({ c, kwT }) => {\n    const opts = list.filter(u => !claimed.has(u.key) && !known.has(u.key) && fresh(u, c)).map(u => ({ u, sh: shareOf(kwT, tokOf(u)), j: overlapScore(kwT, tokOf(u)) }))\n      .filter(o => o.sh >= CONFIG.slug_share).sort((a, b) => (b.sh - a.sh) || (b.j - a.j) || (a.u.path.length - b.u.path.length)).slice(0, CONFIG.options_per_candidate);\n    return { key: c.key, keyword: c.keyword, tokens: kwT, options: opts.map(o => ({ url: o.u.url, ukey: o.u.key, slug_share: Math.round(o.sh * 100) / 100 })) };\n  });\n  const fetches = [], fset = new Set();   // round robin: every candidate gets its best page read before any gets a second one\n  for (let round = 0; round < CONFIG.options_per_candidate; round++) for (const ch of title_checks) {\n    const o = ch.options[round]; if (!o || fset.has(o.ukey)) continue;\n    if (fetches.length >= CONFIG.max_fetches_per_site || runFetches >= CONFIG.max_fetches_per_run) break;\n    fset.add(o.ukey); fetches.push(o.url); runFetches++;\n  }\n  return { site_idx: s.site_idx, site_id: s.site_id, domain: d, candidates: s.candidates || [], sitemap, slug_matches: [...matched.values()], title_checks, fetches, notes };\n});\nconst items = state.flatMap(st => st.fetches.map(url => ({ fetch: true, site_idx: st.site_idx, site_id: st.site_id, url })));\n// the per-site state rides on the first item for Detect Published (the HTTP node only reads `url`)\nreturn items.length ? items.map((it, i) => ({ json: i === 0 ? { ...it, sites: state } : it })) : [{ json: { skip: true, sites: state } }];\n"
+        },
+        "id": "2fb929cb-8275-5ab3-831b-c721a3926856",
+        "name": "Match Slugs (Detect)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3960,
+          -660
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "77a05d29-818b-5ff6-b944-4e9efb31872b",
+                "leftValue": "={{ !!$json.fetch }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "59fffa8a-b29d-58c6-b9d2-e5d4ecb2ba89",
+        "name": "Any Page Fetches?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          4180,
+          -660
+        ]
+      },
+      {
+        "parameters": {
+          "method": "GET",
+          "url": "={{ $json.url }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (compatible; SEO-Agent/4.8)"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml"
+              }
+            ]
+          },
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 5,
+                "batchInterval": 200
+              }
+            },
+            "timeout": 20000,
+            "redirect": {
+              "redirect": {
+                "followRedirects": true,
+                "maxRedirects": 5
+              }
+            },
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "ee499c3b-dec2-5384-a2f9-fe442bd05632",
+        "name": "Fetch Pages (Detect)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          4400,
+          -880
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Publish detection, step 4: the title check on the pages read (a <title> or first <h1> holding >= 80% of the keyword's significant words), then\n// one URL per candidate and one candidate per URL (slug matches first, then the best title match), and the rows to store — built by the same\n// code as \"I published a page\" (Publish Check), so a detected page is stored exactly like a reported one. The live publish check itself is not\n// run here; the Site Tracker inspects the page in Search Console (index status) in this same run and tracks its keyword from now on.\n// ---- the rows a published page leaves (v4.8, PIPELINE_FEATURE_SPEC §6.5). ONE copy, inlined by the build into Publish Check (\"I published a\n// page\", main workflow) and Detect Published (Site Tracker, publish detection), so a reported page and a detected page are stored identically.\n//   log_row    seo_content_log, upsert by site_id + keyword, exactly the table columns: the written page's row (source, page type, rung, ladder,\n//              request id and start date kept) with status published, the live URL and now; without a written row, a new one (source ladder / manual)\n//   ladder_row seo_ladders, update by ladder_id + keyword: status published, target_url = the live URL, page_exists true (null when no ladder row)\n// o: { site_id, domain, keyword, url, log (content-log row or null), ladder (ladder row or null), request_id, now (ISO) }\nfunction publishedRows(o) {\n  const log = o.log || null, ladder = o.ladder || null, now = o.now;\n  const log_row = { site_id: o.site_id, domain: o.domain, keyword: o.keyword, source: (log || {}).source || (ladder ? 'ladder' : 'manual'), page_type: (log || {}).page_type || (ladder ? (ladder.page_type || '') : ''), existing_page_url: (log || {}).existing_page_url || '', rung: Number((log || ladder || {}).rung) || 0,\n    ladder_id: (log || ladder || {}).ladder_id || '', request_id: (log || {}).request_id || o.request_id || '', started_at: (log || {}).started_at || now, status: 'published', published_url: o.url, published_at: now, week: now.slice(0, 10) };\n  const ladder_row = ladder ? { ladder_id: ladder.ladder_id, keyword: ladder.keyword, status: 'published', target_url: o.url, page_exists: true } : null;\n  return { log_row, ladder_row };\n}\n// rule R1 \"one search, one page\" — the same words as the web app (app/shared/src/ladders.ts): lower case, one-letter and stop words out, a light\n// stem, place names kept; two keywords are the same search when their word sets are equal or 75%+ the same (Jaccard)\nconst OVERLAP_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);\nconst overlapTokens = (s) => { const out = []; for (const t of String(s || '').toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 1 || OVERLAP_STOP.has(t)) continue;\n  const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '').replace(/[^a-z0-9]/g, ''); if (w && !out.includes(w)) out.push(w); } return out; };\nconst overlapScore = (a, b) => { if (!a.length || !b.length) return 0; const sb = new Set(b); const common = a.filter(t => sb.has(t)).length; return common / (a.length + b.length - common); };\nconst keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b)) >= 0.75;\nconst CONFIG = { title_share: 0.8, max_html_chars: 300000 };\nconst ms = $('Match Slugs (Detect)').all().map(i => i.json || {});\nconst state = (ms[0] && ms[0].sites) || [];\nconst fetchReq = ms.filter(x => x.fetch && x.url);\nlet fetchRes = []; if (fetchReq.length) { try { fetchRes = $('Fetch Pages (Detect)').all().map(i => i.json || {}); } catch (e) { fetchRes = []; } }\nconst bodyOf = (r) => { const b = r && (r.body != null ? r.body : r.data); return typeof b === 'string' ? b : (b ? JSON.stringify(b) : ''); };   // text responses come under `data`\nconst clean = (s) => String(s || '').replace(/<[^>]+>/g, ' ').replace(/&[a-z0-9#]+;/gi, ' ').replace(/\\s+/g, ' ').trim();\nconst pick1 = (b, re) => { const x = b.match(re); return x ? clean(x[1]) : ''; };\nconst tokHit = (t, set) => set.some(x => x === t || (t.length >= 5 && x.length >= 5 && (x.startsWith(t) || t.startsWith(x))));\nconst shareOf = (kwT, other) => kwT.length ? kwT.filter(t => tokHit(t, other)).length / kwT.length : 0;\nconst pages = new Map();\nfetchReq.forEach((q, i) => { const r = fetchRes[i] || {}; const st = Number(r.statusCode) || (r.error ? 0 : (fetchRes[i] ? 200 : 0)); const b = st === 200 ? bodyOf(r).slice(0, CONFIG.max_html_chars) : '';\n  pages.set(q.url, { ok: st === 200 && !r.error && !!b, status: st, title: pick1(b, /<title[^>]*>([\\s\\S]*?)<\\/title>/i), h1: pick1(b, /<h1[^>]*>([\\s\\S]*?)<\\/h1>/i) }); });\nconst now = new Date().toISOString();\nconst out = state.map(st => {\n  const matched = new Map((st.slug_matches || []).map(p => [p.key, p])), claimed = new Set((st.slug_matches || []).map(p => p.ukey));\n  const pairs = [];\n  for (const ch of st.title_checks || []) {\n    if (matched.has(ch.key)) continue;\n    for (const o of ch.options || []) {\n      const pg = pages.get(o.url); if (!pg || !pg.ok) continue;\n      const best = Math.max(shareOf(ch.tokens, overlapTokens(pg.title)), shareOf(ch.tokens, overlapTokens(pg.h1)));\n      if (best >= CONFIG.title_share) pairs.push({ key: ch.key, url: o.url, ukey: o.ukey, score: 50 + 20 * best + 10 * (Number(o.slug_share) || 0), matched_by: 'title' });\n    }\n  }\n  pairs.sort((a, b) => b.score - a.score);\n  for (const p of pairs) if (!matched.has(p.key) && !claimed.has(p.ukey)) { matched.set(p.key, p); claimed.add(p.ukey); }\n  const detected = [], log_rows = [], ladder_rows = [], case_rows = [];\n  for (const c of st.candidates || []) {\n    const p = matched.get(c.key); if (!p) continue;\n    const keyword = (c.log || c.ladder || {}).keyword || c.keyword;\n    // the content-log row keeps its own site_id: the upsert (site_id + keyword) must hit the row the Content Cadence wrote\n    const { log_row, ladder_row } = publishedRows({ site_id: (c.log && c.log.site_id) || st.site_id, domain: st.domain, keyword, url: p.url, log: c.log, ladder: c.ladder, request_id: '', now });\n    log_rows.push(log_row); if (ladder_row) ladder_rows.push(ladder_row);\n    if (log_row.source === 'case_study' || /case stud/i.test(log_row.page_type)) case_rows.push({ site_id: log_row.site_id, keyword: log_row.keyword, page_url: p.url });\n    detected.push({ keyword, url: p.url, ladder_id: log_row.ladder_id || (c.ladder ? c.ladder.ladder_id : ''), matched_by: p.matched_by, source: c.source });\n  }\n  const unmatched = (st.candidates || []).filter(c => !matched.has(c.key)).map(c => ({ keyword: c.keyword, note: (st.notes || {})[c.key] || '' }));\n  return { json: { site_idx: st.site_idx, site_id: st.site_id, domain: st.domain, candidates: (st.candidates || []).length, sitemap: st.sitemap, pages_fetched: (st.fetches || []).length, detected, log_rows, ladder_rows, case_rows, unmatched } };\n});\nreturn out.length ? out : [{ json: { skip: true, reason: 'nothing to match' } }];   // the chain must reach the Search Console part in every case\n"
+        },
+        "id": "e9a79a71-ce08-569b-acfe-1db3ec64a8db",
+        "name": "Detect Published",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4620,
+          -660
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// The seo_content_log rows of the pages found live (upsert by site_id + keyword; exactly the table columns, as \"I published a page\" writes them).\nconst rows = $('Detect Published').all().flatMap(i => (i.json && Array.isArray(i.json.log_rows)) ? i.json.log_rows : []);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "9e7d2275-7678-53ca-9146-fa3865d180ba",
+        "name": "Detected Log Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          4840,
+          -660
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "a446d85f-1067-5df3-9ead-9f173e4e09bf",
+                "leftValue": "={{ !$json.skip && !$json.error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "8c5e315d-7e4b-530f-a9ff-ede1556a79f1",
+        "name": "Any Detected?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          5060,
+          -660
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_content_log"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              },
+              {
+                "keyName": "keyword",
+                "condition": "eq",
+                "keyValue": "={{ $json.keyword }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_type",
+                "displayName": "page_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "existing_page_url",
+                "displayName": "existing_page_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rung",
+                "displayName": "rung",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ladder_id",
+                "displayName": "ladder_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "started_at",
+                "displayName": "started_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "published_url",
+                "displayName": "published_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "published_at",
+                "displayName": "published_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "week",
+                "displayName": "week",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "dc644ecf-4572-57dd-9c5b-d67b9692372e",
+        "name": "Save Detected (Log)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          5280,
+          -880
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// A case-study page found live becomes linkable proof, as when it is reported (seo_case_studies: status published + page URL; no row = no change).\nconst rows = $('Detect Published').all().flatMap(i => (i.json && Array.isArray(i.json.case_rows)) ? i.json.case_rows : []);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "02a9880a-2cfe-571d-80ee-5b7d7bd40f87",
+        "name": "Detected Case Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          5500,
+          -880
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "5056b821-8782-5bd9-8580-8126f6c8c0df",
+                "leftValue": "={{ !$json.skip && !$json.error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "a276def7-3bb8-5a77-a17f-a43236e0398c",
+        "name": "Any Case Studies Detected?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          5720,
+          -880
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_case_studies"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              },
+              {
+                "keyName": "keyword",
+                "condition": "eq",
+                "keyValue": "={{ $json.keyword }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "published",
+              "page_url": "={{ $json.page_url }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "case_id",
+                "displayName": "case_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "title",
+                "displayName": "title",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "client_name",
+                "displayName": "client_name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "client_public",
+                "displayName": "client_public",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "industry",
+                "displayName": "industry",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "location",
+                "displayName": "location",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "service",
+                "displayName": "service",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "challenge",
+                "displayName": "challenge",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "solution",
+                "displayName": "solution",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "timeline",
+                "displayName": "timeline",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "results",
+                "displayName": "results",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "quote",
+                "displayName": "quote",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "quote_by",
+                "displayName": "quote_by",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_url",
+                "displayName": "page_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "33a98eb4-7222-53a3-972b-880be86ac600",
+        "name": "Mark Case Study Published (Detect)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          5940,
+          -1100
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// The ladder rows of the pages found live (seo_ladders, update by ladder_id + keyword: status published, target_url = the live URL, page_exists true).\nconst rows = $('Detect Published').all().flatMap(i => (i.json && Array.isArray(i.json.ladder_rows)) ? i.json.ladder_rows : []);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
+        },
+        "id": "d6b1e570-3338-5886-bcee-b49c1a3fab84",
+        "name": "Detected Ladder Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          6160,
+          -880
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "c895e939-ecbe-5ee6-91c0-07ca12a152a9",
+                "leftValue": "={{ !$json.skip && !$json.error }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "ee94776e-0d13-5aa3-9b64-9e8fdd522fd5",
+        "name": "Any Ladder Detected?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          6380,
+          -880
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ladders"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "ladder_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.ladder_id }}"
+              },
+              {
+                "keyName": "keyword",
+                "condition": "eq",
+                "keyValue": "={{ $json.keyword }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "={{ $json.status }}",
+              "target_url": "={{ $json.target_url }}",
+              "page_exists": "={{ $json.page_exists }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "ladder_id",
+                "displayName": "ladder_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "head_keyword",
+                "displayName": "head_keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rung",
+                "displayName": "rung",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_no",
+                "displayName": "page_no",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "supporting",
+                "displayName": "supporting",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_type",
+                "displayName": "page_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "target_url",
+                "displayName": "target_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_exists",
+                "displayName": "page_exists",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "months",
+                "displayName": "months",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "start_date",
+                "displayName": "start_date",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "country",
+                "displayName": "country",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "location_code",
+                "displayName": "location_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "language_code",
+                "displayName": "language_code",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "email",
+                "displayName": "email",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "callback_url",
+                "displayName": "callback_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "44fb54f7-cae8-5fe8-8c7c-41a5e7bfe3cc",
+        "name": "Mark Ladder Published (Detect)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          6600,
+          -1100
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "content": "## Publish detection (v4.8)\nBefore the Google part, per site with pages **written but not published** (`seo_content_log` status started, no URL, last 120 days; `seo_ladders` status writing): `/sitemap.xml` is read (an index: its 5 newest child sitemaps) and every URL compared host-agnostically — **slug** (planned path / planned slug / keyword slug) first, then for up to 10 unmatched pages the **title / first H1** of up to 15 pages per site whose slug holds 60%+ of the keyword's words (80%+ needed in the title or H1). A page improving an existing URL counts when its sitemap `lastmod` is after it was written. Found pages are stored like \"I published a page\" (content log + ladder row + case study), inspected in Search Console in this run, and listed in the report and the callback (`detected_published`). Plain HTTP, no paid call; no waiting page = no request.",
+          "height": 260,
+          "width": 1500,
+          "color": 4
+        },
+        "id": "570ca6be-b28a-56d4-b4b8-05d5a4f1d582",
+        "name": "Note Detection",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          2600,
+          -1540
+        ]
+      },
+      {
+        "parameters": {
           "method": "GET",
           "url": "https://www.googleapis.com/webmasters/v3/sites",
           "authentication": "predefinedCredentialType",
@@ -1354,7 +2536,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Matches each site to a Search Console property the service account can read: \"sc-domain:\" (domain property) first,\n// then a URL-prefix property for the host (https preferred), or the property named at registration.\nconst plan = $('Site Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do);\nconst res = ($input.first() || {}).json || {};\nconst gErr = (r) => { if (!r) return 'no response'; const e = r.error; if (!e) return null; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return String((inner && inner.message) || (ctx.error_description ? String(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };   // Google errors: the useful text sits in context.data (invalid_grant: account not found) or in error.message (PERMISSION_DENIED)\nconst err = res.error ? gErr(res) : (Array.isArray(res.siteEntry) ? null : 'no answer from the Search Console API (credential missing or no access)');\nconst entries = Array.isArray(res.siteEntry) ? res.siteEntry : [];\nconst hostOf = (u) => { const m = String(u || '').trim().match(/^https?:\\/\\/(?:[^@\\/?#]*@)?([^\\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\\./, '') : ''; };   // no URL constructor in the n8n Code sandbox (live finding 2026-10-02)\nreturn plan.map(p => {\n  const d = p.domain;\n  const ok = entries.filter(e => e.siteUrl && e.permissionLevel !== 'siteUnverifiedUser');\n  const hinted = p.gsc_property_hint ? ok.find(e => e.siteUrl === p.gsc_property_hint) : null;\n  const dom = ok.find(e => e.siteUrl === 'sc-domain:' + d);\n  const pref = ok.filter(e => /^https?:\\/\\//.test(e.siteUrl) && (hostOf(e.siteUrl) === d || hostOf(e.siteUrl).endsWith('.' + d))).sort((a, b) => (a.siteUrl.startsWith('https') ? 0 : 1) - (b.siteUrl.startsWith('https') ? 0 : 1))[0];\n  const pick = hinted || dom || pref || null;\n  return { json: { ...p, gsc_property: pick ? pick.siteUrl : '', gsc_connected: !!pick, gsc_permission: pick ? pick.permissionLevel : '',\n    gsc_error: pick ? null : (err || ('the service account has no access to a Search Console property for ' + d + (entries.length ? ' (it can see: ' + entries.map(e => e.siteUrl).slice(0, 5).join(', ') + ')' : ' (it sees no property at all)'))) } };\n});\n"
+          "jsCode": "// Matches each site to a Search Console property the service account can read: \"sc-domain:\" (domain property) first,\n// then a URL-prefix property for the host (https preferred), or the property named at registration.\nconst plan = $('Site Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do);\nconst res = ($input.first() || {}).json || {};\nconst gErr = (r) => { if (!r) return 'no response'; const e = r.error; if (!e) return null; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return String((inner && inner.message) || (ctx.error_description ? String(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };   // Google errors: the useful text sits in context.data (invalid_grant: account not found) or in error.message (PERMISSION_DENIED)\nconst err = res.error ? gErr(res) : (Array.isArray(res.siteEntry) ? null : 'no answer from the Search Console API (credential missing or no access)');\nconst entries = Array.isArray(res.siteEntry) ? res.siteEntry : [];\nconst hostOf = (u) => { const m = String(u || '').trim().match(/^https?:\\/\\/(?:[^@\\/?#]*@)?([^\\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\\./, '') : ''; };   // no URL constructor in the n8n Code sandbox (live finding 2026-10-02)\nreturn plan.map(p => {\n  const d = p.domain;\n  const ok = entries.filter(e => e.siteUrl && e.permissionLevel !== 'siteUnverifiedUser');\n  const hinted = p.gsc_property_hint ? ok.find(e => e.siteUrl === p.gsc_property_hint) : null;\n  const dom = ok.find(e => e.siteUrl === 'sc-domain:' + d);\n  const pref = ok.filter(e => /^https?:\\/\\//.test(e.siteUrl) && (hostOf(e.siteUrl) === d || hostOf(e.siteUrl).endsWith('.' + d))).sort((a, b) => (a.siteUrl.startsWith('https') ? 0 : 1) - (b.siteUrl.startsWith('https') ? 0 : 1))[0];\n  const pick = hinted || dom || pref || null;\n  return { json: { ...p, gsc_property: pick ? pick.siteUrl : '', gsc_connected: !!pick, gsc_permission: pick ? pick.permissionLevel : '',\n    gsc_error: pick ? null : (err || ('the service account has no access to a Search Console property for ' + d + (entries.length ? '' : ' (it sees no property at all)')   /* other customers' properties are never named: this text reaches reports (2026-10-03) */)) } };\n});\n"
         },
         "id": "23241b27-292d-57bd-88ad-50beeb560965",
         "name": "Resolve Properties",
@@ -1739,7 +2921,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// URL Inspection (Search Console) for the ladder pages: is each planned/written page indexed? Only on connected properties, max 20 per site.\nconst sites = $('Resolve Properties').all().map(i => i.json);\nconst out = [];\nsites.forEach((s, idx) => { if (!s.gsc_connected) return;\n  // only pages that exist on the site (published, or existing before the ladder); planned and written-but-unpublished pages are not live yet (live finding 2026-10-02)\n  (s.ladder_pages || []).filter(p => p.page_exists || p.status === 'published').slice(0, (s.config || {}).max_inspections || 20).forEach(p => out.push({ json: { site_idx: idx, site_id: s.site_id, keyword: p.keyword, rung: p.rung, status: p.status, inspect_url: p.url, body: { inspectionUrl: p.url, siteUrl: s.gsc_property, languageCode: 'en-US' } } })); });\nreturn out.length ? out : [{ json: { skip: true, reason: 'no ladder pages to inspect on a connected property' } }];\n"
+          "jsCode": "// URL Inspection (Search Console) for the ladder pages: is each planned/written page indexed? Only on connected properties, max 20 per site.\n// v4.8: pages found live this week by the publish detection (Detect Published) are inspected in the same run.\nconst sites = $('Resolve Properties').all().map(i => i.json);\nlet found = []; try { found = $('Detect Published').all().map(i => i.json).filter(x => x && x.site_id && Array.isArray(x.detected)); } catch (e) { found = []; }\nconst ukey = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[?#].*$/, '').replace(/\\/$/, '');   // host-agnostic\nconst out = [];\nsites.forEach((s, idx) => { if (!s.gsc_connected) return;\n  // only pages that exist on the site (published, or existing before the ladder); planned and written-but-unpublished pages are not live yet (live finding 2026-10-02)\n  const live = (s.ladder_pages || []).filter(p => p.page_exists || p.status === 'published');\n  for (const f of ((found.find(x => x.site_id === s.site_id) || {}).detected || [])) if (!live.some(p => ukey(p.url) === ukey(f.url))) live.push({ url: f.url, keyword: f.keyword, rung: 0, status: 'published' });\n  live.slice(0, (s.config || {}).max_inspections || 20).forEach(p => out.push({ json: { site_idx: idx, site_id: s.site_id, keyword: p.keyword, rung: p.rung, status: p.status, inspect_url: p.url, body: { inspectionUrl: p.url, siteUrl: s.gsc_property, languageCode: 'en-US' } } })); });\nreturn out.length ? out : [{ json: { skip: true, reason: 'no ladder pages to inspect on a connected property' } }];\n"
         },
         "id": "a154f166-109b-5b39-a130-76fba32ec377",
         "name": "Inspect Requests",
@@ -1843,7 +3025,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Google Trends (through DataForSEO) for the head terms: ladder heads first, then the site's own keywords; one keyword per request,\n// past 12 months, interest graph + related queries (top / rising). Max 4 per site; $0.011 per request (measured 2026-10-02).\nconst sites = $('Resolve Properties').all().map(i => i.json);\nconst out = [];\nsites.forEach((s, idx) => {\n  const cfg = s.config || {};\n  const kws = [...new Set([...(s.ladder_heads || []), ...(s.keywords || [])].map(k => String(k).toLowerCase().trim()).filter(Boolean))].slice(0, cfg.max_trend_keywords || 4);\n  for (const kw of kws) out.push({ json: { site_idx: idx, site_id: s.site_id, keyword: kw, endpoint: 'https://api.dataforseo.com/v3/keywords_data/google_trends/explore/live',\n    body: [{ keywords: [kw], ...(Number(s.location_code) > 0 ? { location_code: Number(s.location_code) } : {}), type: 'web', time_range: 'past_12_months', item_types: ['google_trends_graph', 'google_trends_queries_list'] }] } });\n});\nreturn out.length ? out : [{ json: { skip: true, reason: 'no keywords for a trend check' } }];\n"
+          "jsCode": "// Google Trends (through DataForSEO) for the head terms: ladder heads first, then the site's own keywords; one keyword per request,\n// past 12 months, interest graph + related queries (top / rising). Max 4 per site; $0.011 per request (measured 2026-10-02).\n// v4.6: a 12-month curve hardly moves in a week; a keyword fetched in the last 25 days is taken from seo_trends (the report and the Content\n// Cadence still see it) instead of being bought again.\nconst sites = $('Resolve Properties').all().map(i => i.json);\nconst stored = (() => { try { return $('Load Trends (Site)').all().map(i => i.json).filter(r => r && r.keyword && r.site_id && !r.error); } catch (e) { return []; } })();\nconst fresh = (sid, kw) => stored.filter(r => r.site_id === sid && String(r.keyword).toLowerCase() === kw && (Date.now() - new Date(r.checked_at).getTime()) / 864e5 < 25).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0];\nconst out = []; const cached = [];\nsites.forEach((s, idx) => {\n  const cfg = s.config || {};\n  const kws = [...new Set([...(s.ladder_heads || []), ...(s.keywords || [])].map(k => String(k).toLowerCase().trim()).filter(Boolean))].slice(0, cfg.max_trend_keywords || 4);\n  for (const kw of kws) { const f = fresh(s.site_id, kw); if (f) { cached.push({ site_idx: idx, site_id: s.site_id, keyword: kw, row: f }); continue; } out.push({ json: { site_idx: idx, site_id: s.site_id, keyword: kw, endpoint: 'https://api.dataforseo.com/v3/keywords_data/google_trends/explore/live',\n    body: [{ keywords: [kw], ...(Number(s.location_code) > 0 ? { location_code: Number(s.location_code) } : {}), type: 'web', time_range: 'past_12_months', item_types: ['google_trends_graph', 'google_trends_queries_list'] }] } }); }\n});\nif (out.length) out[0].json.cached_trends = cached;\nreturn out.length ? out : [{ json: { skip: true, reason: cached.length ? 'all trends fetched in the last 25 days (taken from seo_trends)' : 'no keywords for a trend check', cached_trends: cached } }];\n"
         },
         "id": "cdece98d-b363-53a4-85d5-b892242981c3",
         "name": "Trends Requests",
@@ -1929,7 +3111,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Trend per keyword: direction (last 4 weeks vs the 12-month average), latest and peak, related rising / top searches, DataForSEO cost.\nconst reqs = $('Trends Requests').all().map(i => i.json);\nconst res = $input.all().map(i => i.json);\nreturn reqs.filter(q => !q.skip).map((q, i) => {\n  const r = res[i] || {}; const task = ((r.tasks || [])[0]) || {}; const result = ((task.result || [])[0]) || {}; const items = result.items || [];\n  const err = r.error ? String(r.error.message || r.error).slice(0, 200) : (task.status_code && task.status_code >= 40000 ? 'DataForSEO ' + task.status_code + ' ' + (task.status_message || '') : (items.length ? null : 'no trend data'));\n  const graph = items.find(x => x.type === 'google_trends_graph'); const ql = items.find(x => x.type === 'google_trends_queries_list');\n  const pts = graph ? (graph.data || []).filter(d => !d.missing_data && Array.isArray(d.values)).map(d => ({ date: d.date_from, value: Number(d.values[0]) || 0 })) : [];\n  const avg = pts.length ? pts.reduce((a, p) => a + p.value, 0) / pts.length : 0;\n  const last4 = pts.slice(-4); const recent = last4.length ? last4.reduce((a, p) => a + p.value, 0) / last4.length : 0;\n  const change = avg > 0 ? Math.round((recent - avg) / avg * 100) : null;\n  const peak = pts.length ? pts.reduce((m, p) => p.value > m.value ? p : m, pts[0]) : null;\n  // sparse series (mostly zeros, a few spikes: low-volume terms) produce +1000% artefacts (seen live) -> report them as 'sparse', never as rising/falling\n  const sparse = pts.length > 0 && (avg < 5 || pts.filter(p => p.value > 0).length < pts.length / 2);\n  const direction = change == null ? 'unknown' : sparse ? 'sparse' : change >= 20 ? 'rising' : change <= -20 ? 'falling' : 'stable';\n  const list = (arr) => (arr || []).slice(0, 5).map(x => ({ query: x.query, value: String(x.value) }));\n  return { json: { site_idx: q.site_idx, site_id: q.site_id, keyword: q.keyword, error: err, direction, change_pct: change, latest: pts.length ? pts[pts.length - 1].value : null, average: Math.round(avg), peak_date: peak ? peak.date : '', peak_value: peak ? peak.value : null,\n    points: pts.length, rising: ql ? list((ql.data || {}).rising) : [], top: ql ? list((ql.data || {}).top) : [], cost: Number(task.cost) || 0 } };\n});\n"
+          "jsCode": "// Trend per keyword: direction (last 4 weeks vs the 12-month average), latest and peak, related rising / top searches, DataForSEO cost.\nconst reqs = $('Trends Requests').all().map(i => i.json);\nconst res = $input.all().map(i => i.json);\n// stored trends (fetched in the last 25 days) come back in the same shape, marked cached; Trend Rows does not store them again\nconst listOf = (s) => String(s || '').split(/,\\s*/).filter(Boolean).map(x => { const m = x.match(/^(.*?)\\s*\\(([^)]*)\\)$/); return m ? { query: m[1], value: m[2] } : { query: x, value: '' }; });\nconst cachedOut = ((reqs[0] || {}).cached_trends || []).map(c => ({ json: { site_idx: c.site_idx, site_id: c.site_id, keyword: c.keyword, error: null, direction: c.row.direction || 'unknown', change_pct: c.row.change_pct == null || c.row.change_pct === '' ? null : Number(c.row.change_pct), latest: Number(c.row.latest) || 0, average: Number(c.row.average) || 0, peak_date: c.row.peak_date || '', points: null, rising: listOf(c.row.rising), top: listOf(c.row.top), cost: 0, cached: true, checked_at: c.row.checked_at } }));\nreturn cachedOut.concat(reqs.filter(q => !q.skip).map((q, i) => {\n  const r = res[i] || {}; const task = ((r.tasks || [])[0]) || {}; const result = ((task.result || [])[0]) || {}; const items = result.items || [];\n  const err = r.error ? String(r.error.message || r.error).slice(0, 200) : (task.status_code && task.status_code >= 40000 ? 'DataForSEO ' + task.status_code + ' ' + (task.status_message || '') : (items.length ? null : 'no trend data'));\n  const graph = items.find(x => x.type === 'google_trends_graph'); const ql = items.find(x => x.type === 'google_trends_queries_list');\n  const pts = graph ? (graph.data || []).filter(d => !d.missing_data && Array.isArray(d.values)).map(d => ({ date: d.date_from, value: Number(d.values[0]) || 0 })) : [];\n  const avg = pts.length ? pts.reduce((a, p) => a + p.value, 0) / pts.length : 0;\n  const last4 = pts.slice(-4); const recent = last4.length ? last4.reduce((a, p) => a + p.value, 0) / last4.length : 0;\n  const change = avg > 0 ? Math.round((recent - avg) / avg * 100) : null;\n  const peak = pts.length ? pts.reduce((m, p) => p.value > m.value ? p : m, pts[0]) : null;\n  // sparse series (mostly zeros, a few spikes: low-volume terms) produce +1000% artefacts (seen live) -> report them as 'sparse', never as rising/falling\n  const sparse = pts.length > 0 && (avg < 5 || pts.filter(p => p.value > 0).length < pts.length / 2);\n  const direction = change == null ? 'unknown' : sparse ? 'sparse' : change >= 20 ? 'rising' : change <= -20 ? 'falling' : 'stable';\n  const list = (arr) => (arr || []).slice(0, 5).map(x => ({ query: x.query, value: String(x.value) }));\n  return { json: { site_idx: q.site_idx, site_id: q.site_id, keyword: q.keyword, error: err, direction, change_pct: change, latest: pts.length ? pts[pts.length - 1].value : null, average: Math.round(avg), peak_date: peak ? peak.date : '', peak_value: peak ? peak.value : null,\n    points: pts.length, rising: ql ? list((ql.data || {}).rising) : [], top: ql ? list((ql.data || {}).top) : [], cost: Number(task.cost) || 0 } };\n}));\n"
         },
         "id": "664c05f0-432f-50b0-a9cc-4f36c5719802",
         "name": "Parse Trends",
@@ -1942,7 +3124,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Live Google check (DataForSEO SERP, top 50, ~$0.015 each) for the site's own tracked keywords. Ladder keywords are checked by the\n// Rank Tracker workflow and only read here; keywords without a market (location) are skipped. Max 20 per site.\nconst sites = $('Resolve Properties').all().map(i => i.json);\nconst out = [];\nsites.forEach((s, idx) => {\n  if (!(Number(s.location_code) > 0)) return;\n  (s.tracked || []).filter(t => t.source === 'site').slice(0, (s.config || {}).max_serp_checks || 20).forEach(t => out.push({ json: { site_idx: idx, site_id: s.site_id, domain: s.domain, keyword: t.keyword,\n    endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: [{ keyword: t.keyword, location_code: Number(s.location_code), language_code: s.language_code || 'en', depth: 50 }] } }));\n});\nreturn out.length ? out : [{ json: { skip: true, reason: 'no site keywords to check live' } }];\n"
+          "jsCode": "// Live Google check (DataForSEO SERP, top 50, ~$0.015 each) for the site's own tracked keywords. Ladder keywords are checked by the\n// Rank Tracker workflow and only read here; keywords without a market (location) are skipped. Max 20 per site.\n// v4.6: a keyword Search Console already reports (position with impressions this period) is not bought again every week; it gets one live\n// cross-check a month (SERP features, live vs average). Keywords without Search Console data are checked every week as before.\nconst gscAll = (() => { try { return $('Parse GSC').all().map(i => i.json).filter(g => g && !g.skip); } catch (e) { return []; } })();\nconst daysSince = (iso) => iso ? (Date.now() - new Date(iso).getTime()) / 864e5 : 1e9;\nconst sites = $('Resolve Properties').all().map(i => i.json);\nconst out = [];\nsites.forEach((s, idx) => {\n  if (!(Number(s.location_code) > 0)) return;\n  const g = gscAll.find(x => x.site_idx === idx || x.site_id === s.site_id); const gscPos = new Map(((g && g.tracked) || []).filter(k => Number(k.position) > 0).map(k => [k.keyword, k.position]));\n  (s.tracked || []).filter(t => t.source === 'site').filter(t => !gscPos.has(t.keyword) || daysSince(((s.serp_positions || {})[t.keyword] || {}).checked_at) >= 28).slice(0, (s.config || {}).max_serp_checks || 20).forEach(t => out.push({ json: { site_idx: idx, site_id: s.site_id, domain: s.domain, keyword: t.keyword,\n    endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: [{ keyword: t.keyword, location_code: Number(s.location_code), language_code: s.language_code || 'en', depth: 50 }] } }));\n});\nreturn out.length ? out : [{ json: { skip: true, reason: 'no site keywords to check live' } }];\n"
         },
         "id": "f80305cf-a4b3-5bc0-a536-cae99c08d865",
         "name": "Site SERP Requests",
@@ -2151,7 +3333,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Joins everything per site: Search Console, GA4, index status, trends and the live SERP checks -> KPIs, alerts, ranked actions (with\n// ready-to-send API bodies), and the exact rows for the Data Tables seo_site_metrics / seo_query_history / seo_sites.\nconst FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';\nconst sites = $('Resolve Properties').all().map(i => i.json);\nconst grab = (name) => { try { return $(name).all().map(i => i.json).filter(j => j && !j.skip && !j.error); } catch (e) { return []; } };\nconst gscAll = grab('Parse GSC'), ga4All = grab('Parse GA4'), inspAll = grab('Parse Inspection'), trendAll = grab('Parse Trends'), serpAll = grab('Parse Site SERP');\nlet ga4Reason = ''; try { const r = ($('GA4 Requests').first() || {}).json; if (r && r.skip) ga4Reason = r.reason || ''; } catch (e) {}\nconst gErr = (r) => { if (!r) return 'no response'; const e = r.error; if (!e) return null; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return String((inner && inner.message) || (ctx.error_description ? String(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };   // Google errors: the useful text sits in context.data (invalid_grant: account not found) or in error.message (PERMISSION_DENIED)\nlet acctErr = ''; try { const a = ($('GA4 Accounts').first() || {}).json || {}; if (a.error) acctErr = gErr(a); } catch (e) {}\nconst metricsHist = (() => { try { return $('Load Site Metrics').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();\nconst queryHist = (() => { try { return $('Load Query History').all().map(i => i.json).filter(r => r && r.site_id && r.tracked && !r.error); } catch (e) { return []; } })();\nconst now = new Date().toISOString();\nconst pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? null : 0);\nconst r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;\nconst normD = (x) => String(x || '').toLowerCase().replace(/^www\\./, '');\nreturn sites.map((s, idx) => {\n  const cfg = s.config || {}; const R = s.ranges;\n  const gsc = gscAll.find(g => g.site_idx === idx) || null;\n  const ga4 = ga4All.find(g => g.site_idx === idx) || null;\n  const insp = inspAll.filter(x => x.site_idx === idx);\n  const trends = trendAll.filter(x => x.site_idx === idx);\n  const serpRows = serpAll.filter(x => normD(x.domain) === s.domain);\n  const serpNow = { ...(s.serp_positions || {}) }; for (const r of serpRows) serpNow[r.keyword] = { position: Number(r.position), url: r.url, checked_at: r.checked_at };\n  const gscKw = new Map(((gsc && gsc.tracked) || []).map(t => [t.keyword, t]));\n  const tracked = (s.tracked || []).map(t => { const g = gscKw.get(t.keyword); const sp = serpNow[t.keyword];\n    const hist = queryHist.filter(h => h.site_id === s.site_id && h.query === t.keyword).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).map(h => r1(h.position)).slice(-12);\n    return { ...t, gsc_position: g ? g.position : null, gsc_prev_position: g ? g.prev_position : null, clicks: g ? g.clicks : 0, impressions: g ? g.impressions : 0, prev_clicks: g ? g.prev_clicks : 0, page: g ? g.page : '',\n      serp_position: sp ? sp.position : null, serp_url: sp ? sp.url : '', serp_checked_at: sp ? sp.checked_at : '', history: hist }; });\n  const pages = (s.ladder_pages || []).map(p => { const i = insp.find(x => x.url === p.url); return { ...p, inspected: !!i && !i.error, indexed: (i && !i.error) ? !!i.indexed : null, verdict: i ? i.verdict : '', coverage: i ? i.coverage : '', last_crawl: i ? i.last_crawl : '', canonical_ok: i ? i.canonical_ok : null, inspect_error: i ? i.error : (s.gsc_connected ? 'not inspected' : 'Search Console not connected') }; });\n  // pages not live yet are reported as such, never as 'not indexed'\n  for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = p.status === 'writing' ? 'written, not published yet' : 'planned, not written yet'; p.indexed = null; }\n  // ---- alerts ----\n  const alerts = []; const drop = cfg.alert_drop_pct || 30;\n  if (!s.gsc_connected) alerts.push({ level: 'setup', text: 'Search Console is not connected: ' + (s.gsc_error || 'no property found') });\n  if (gsc && gsc.errors.length) alerts.push({ level: 'medium', text: 'Some Search Console requests failed: ' + gsc.errors.slice(0, 3).join('; ') });\n  if (gsc && gsc.deltas.clicks_pct != null && gsc.deltas.clicks_pct <= -drop && gsc.totals.prev.clicks >= 20) alerts.push({ level: 'high', text: 'Search clicks fell ' + Math.abs(gsc.deltas.clicks_pct) + '% (' + gsc.totals.prev.clicks + ' → ' + gsc.totals.cur.clicks + ' in 28 days)' });\n  if (gsc && gsc.deltas.impressions_pct != null && gsc.deltas.impressions_pct <= -drop && gsc.totals.prev.impressions >= 200) alerts.push({ level: 'medium', text: 'Impressions fell ' + Math.abs(gsc.deltas.impressions_pct) + '% (' + gsc.totals.prev.impressions + ' → ' + gsc.totals.cur.impressions + ')' });\n  if (ga4 && ga4.organic.prev.sessions >= 20 && pct(ga4.organic.cur.sessions, ga4.organic.prev.sessions) <= -drop) alerts.push({ level: 'high', text: 'Organic sessions fell ' + Math.abs(pct(ga4.organic.cur.sessions, ga4.organic.prev.sessions)) + '% (' + ga4.organic.prev.sessions + ' → ' + ga4.organic.cur.sessions + ')' });\n  if (ga4 && ga4.errors.length) alerts.push({ level: 'medium', text: 'Some GA4 requests failed: ' + ga4.errors.slice(0, 3).join('; ') });\n  for (const p of pages) if (p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')) alerts.push({ level: 'high', text: 'Page not indexed: ' + p.url + ' (' + (p.coverage || p.verdict || 'not indexed') + ')' });\n  for (const p of pages) if (p.inspected && p.indexed && p.canonical_ok === false) alerts.push({ level: 'medium', text: 'Google picked another canonical for ' + p.url });\n  for (const t of tracked) if (t.gsc_position && t.gsc_prev_position && t.gsc_prev_position <= 10 && t.gsc_position - t.gsc_prev_position >= 5) alerts.push({ level: 'medium', text: '\"' + t.keyword + '\" slipped from #' + r1(t.gsc_prev_position) + ' to #' + r1(t.gsc_position) + ' (Search Console average)' });\n  for (const t of tracked) if (t.serp_position > 0 && t.gsc_position && Math.abs(t.serp_position - t.gsc_position) >= 10) alerts.push({ level: 'info', text: '\"' + t.keyword + '\": live check #' + t.serp_position + ' vs Search Console average #' + r1(t.gsc_position) + ' — positions vary by location and device' });\n  if (!ga4) alerts.push({ level: 'setup', text: 'Google Analytics 4 is not connected: ' + (acctErr || ga4Reason || 'no property id given or detected') });\n  const notices = s.console_alerts || []; const ck = s.last_checkin || null;\n  for (const n of notices) alerts.push({ level: n.severity === 'critical' ? 'high' : n.severity === 'high' ? 'high' : 'medium', text: 'Search Console notice (' + String(n.received_at).slice(0, 10) + '): ' + n.subject });\n  if (ck && ck.manual_action && !notices.some(n => n.kind === 'manual_action')) alerts.push({ level: 'high', text: 'Manual action reported in the ' + ck.month + ' check-in' });\n  if (ck && ck.security_issue && !notices.some(n => n.kind === 'security')) alerts.push({ level: 'high', text: 'Security issue reported in the ' + ck.month + ' check-in' });\n  // ---- actions (deterministic; the AI brief words them for the owner) ----\n  const actions = []; const apiBase = { country: s.country || '', domain: s.domain, email: s.email || '' };\n  const pageBody = (keyword, url, page_type) => ({ mode: 'keyword', keyword, page_type: page_type || 'Service Page', ...apiBase, existing_page_url: url || '', receive: ['Keyword Report', 'Page Content'] });\n  const sa = cfg.service_account_email || '(the service-account e-mail: ask your administrator)';\n  for (const n of notices.filter(n => n.kind === 'manual_action' || n.kind === 'security').slice(0, 2)) actions.push({ priority: 1, type: n.kind, action: (n.kind === 'manual_action' ? 'Resolve the manual action: open Search Console → Security & Manual Actions → Manual actions, fix every page it names, then request a review.' : 'Resolve the security issue: clean the site, update CMS and plugins, change passwords, then request a review under Search Console → Security issues.'), why: n.subject + ' (' + String(n.received_at).slice(0, 10) + ').', keyword: '', url: '' });\n  for (const n of notices.filter(n => n.kind === 'coverage' || n.kind === 'cwv' || n.kind === 'rich_results' || n.kind === 'sitemap' || n.kind === 'crawl').slice(0, 2)) actions.push({ priority: 2, type: 'console_' + n.kind, action: 'Open the Search Console report named in \"' + n.subject + '\" and fix the listed pages, then click Validate fix.', why: 'Google sent this notice on ' + String(n.received_at).slice(0, 10) + '.', keyword: '', url: '' });\n  if (ck && ck.csv_kind === 'reasons' && (ck.coverage.reasons || []).length) actions.push({ priority: 2, type: 'coverage_report', action: 'Work through the Pages report from your ' + ck.month + ' check-in: ' + ck.coverage.reasons.slice(0, 3).map(r => r.reason + ' (' + r.pages + ' pages)').join(', ') + '.', why: ck.not_indexed_total + ' pages are not indexed site-wide according to Search Console.', keyword: '', url: '' });\n  if (s.checkin_due) actions.push({ priority: 3, type: 'checkin', action: 'Monthly Search Console check-in: open the form, answer two questions (manual action? security issue?) and upload the Pages report export.', why: 'Google offers no API for manual actions, security issues and the site-wide Pages report; the check-in covers them' + (cfg.console_mail_watcher ? ' alongside the notification watcher' : '') + '.', keyword: '', url: '' });\n  if (!s.gsc_connected) actions.push({ priority: 1, type: 'connect_gsc', action: 'Add ' + sa + ' as a user (Full) of ' + s.domain + ' in Search Console → Settings → Users and permissions.', why: 'Without it the report has no real query, click or index data.', keyword: '', url: '' });\n  for (const p of pages.filter(p => p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')).slice(0, 3)) actions.push({ priority: 1, type: 'index', action: 'Request indexing for ' + p.url + ' in Search Console (URL inspection → Request indexing) and link to it from 2-3 existing pages.', why: (p.rung ? 'Ladder rung ' + p.rung + ' for \"' + p.keyword + '\"' : 'The page for \"' + p.keyword + '\"') + ' cannot rank until Google indexes it (' + (p.coverage || p.verdict || 'not indexed') + ').', keyword: p.keyword, url: p.url });\n  for (const p of pages.filter(p => p.status === 'writing' && !p.page_exists).slice(0, 3)) actions.push({ priority: 1, type: 'publish', action: 'Publish the written page for \"' + p.keyword + '\" (planned URL ' + p.url + ') and report the link with \"I published a page\".', why: 'It is written but not live yet; nothing can be indexed or ranked before it is published.', keyword: p.keyword, url: p.url });\n  for (const q of ((gsc && gsc.striking) || []).slice(0, 3)) actions.push({ priority: 2, type: 'striking', action: 'Push \"' + q.query + '\" from #' + r1(q.position) + ' into the top 3: expand ' + (q.page || 'the ranking page') + ' with the missing sub-topics, add an FAQ and 2-3 internal links to it.', why: q.impressions + ' impressions in 28 days at position ' + r1(q.position) + ' (' + q.clicks + ' clicks); a top-3 spot typically triples the clicks.', keyword: q.query, url: q.page || '', api_body: pageBody(q.query, q.page, 'Service Page') });\n  for (const q of ((gsc && gsc.ctr_gaps) || []).slice(0, 2)) actions.push({ priority: 2, type: 'ctr', action: 'Rewrite the title and meta description of ' + (q.page || 'the ranking page') + ' for \"' + q.query + '\" (lead with the outcome and a number).', why: 'Position ' + r1(q.position) + ' with ' + q.impressions + ' impressions but CTR ' + (q.ctr * 100).toFixed(1) + '% vs about ' + Math.round(q.expected_ctr * 100) + '% expected.', keyword: q.query, url: q.page || '' });\n  for (const p of ((gsc && gsc.decaying_pages) || []).slice(0, 2)) actions.push({ priority: 3, type: 'decay', action: 'Refresh ' + p.page + ': update facts and dates, add what the top results cover now, re-promote it.', why: 'Clicks fell from ' + p.prev_clicks + ' to ' + p.clicks + ' in 28 days.', keyword: '', url: p.page });\n  for (const t of trends.filter(t => t.direction === 'rising' && (t.rising || []).length).slice(0, 1)) actions.push({ priority: 3, type: 'trend', action: 'Interest in \"' + t.keyword + '\" is rising (' + (t.change_pct > 0 ? '+' : '') + t.change_pct + '% vs the 12-month average); cover the rising searches: ' + t.rising.slice(0, 3).map(r => r.query).join(', ') + '.', why: 'Google Trends, past 12 months.', keyword: t.rising[0].query, url: '', api_body: { mode: 'verdict', keyword: t.rising[0].query, ...apiBase } });\n  for (const t of trends.filter(t => t.direction === 'falling').slice(0, 1)) actions.push({ priority: 4, type: 'trend', action: 'Interest in \"' + t.keyword + '\" is falling (' + t.change_pct + '% vs the 12-month average)' + (t.peak_date ? '; it peaked around ' + String(t.peak_date).slice(0, 7) : '') + '. Keep the page current but do not over-invest; watch the related rising searches.', why: 'Google Trends, past 12 months.', keyword: t.keyword, url: '' });\n  if (!ga4) actions.push({ priority: 4, type: 'connect_ga4', action: 'Add the same service account as a Viewer of the GA4 property (Admin → Property access management), or register the site with its GA4 property ID.', why: 'Connects search visibility to visits and key events (conversions).', keyword: '', url: '' });\n  actions.sort((a, b) => a.priority - b.priority); const acts = actions.slice(0, 12);   // the brief picks the top 5-6; the full list stays in the callback\n  // ---- rows for the Data Tables ----\n  const T = gsc ? gsc.totals : null; const G = ga4;\n  const prevRuns = metricsHist.filter(m => m.site_id === s.site_id).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).slice(-12).map(m => ({ period_end: m.period_end, clicks: Number(m.clicks) || 0, impressions: Number(m.impressions) || 0, position: r1(m.position), sessions: Number(m.sessions) || 0 }));\n  const metrics_row = { site_id: s.site_id, domain: s.domain, period_start: R.current.start, period_end: R.current.end, checked_at: now, gsc_connected: !!gsc, ga4_connected: !!ga4,\n    clicks: T ? T.cur.clicks : 0, impressions: T ? T.cur.impressions : 0, ctr: T ? T.cur.ctr : 0, position: T ? T.cur.position : 0, prev_clicks: T ? T.prev.clicks : 0, prev_impressions: T ? T.prev.impressions : 0, prev_ctr: T ? T.prev.ctr : 0, prev_position: T ? T.prev.position : 0,\n    yoy_clicks: T && T.yoy ? T.yoy.clicks : 0, yoy_impressions: T && T.yoy ? T.yoy.impressions : 0, sessions: G ? G.organic.cur.sessions : 0, engaged_sessions: G ? G.organic.cur.engaged : 0, key_events: G ? G.organic.cur.key_events : 0,\n    prev_sessions: G ? G.organic.prev.sessions : 0, prev_engaged_sessions: G ? G.organic.prev.engaged : 0, prev_key_events: G ? G.organic.prev.key_events : 0, organic_share: G ? G.organic_share : 0, queries: gsc ? gsc.query_count : 0, striking: gsc ? gsc.striking.length : 0,\n    alerts: alerts.filter(a => a.level === 'high' || a.level === 'medium').map(a => a.text).join(' | ').slice(0, 500) };\n  const qrow = (q, trackedFlag, serpPos) => ({ site_id: s.site_id, domain: s.domain, period_end: R.current.end, checked_at: now, query: q.query, clicks: q.clicks || 0, impressions: q.impressions || 0, ctr: r1((q.ctr || 0) * 1000) / 1000, position: r1(q.position), prev_clicks: q.prev_clicks || 0, prev_impressions: q.prev_impressions || 0, prev_position: r1(q.prev_position), page: q.page || '', tracked: trackedFlag, serp_position: (serpPos == null) ? -1 : Number(serpPos) });\n  const trackedSet = new Set(tracked.map(t => t.keyword));\n  const query_rows = [...tracked.map(t => qrow({ query: t.keyword, clicks: t.clicks, impressions: t.impressions, ctr: t.impressions ? t.clicks / t.impressions : 0, position: t.gsc_position || 0, prev_clicks: t.prev_clicks, prev_position: t.gsc_prev_position || 0, page: t.page }, true, t.serp_position)),\n    ...((gsc && gsc.queries) || []).filter(q => !trackedSet.has(q.query)).slice(0, 100).map(q => qrow(q, false, null))];\n  const site_row = { site_id: s.site_id, domain: s.domain, gsc_property: s.gsc_property || s.gsc_property_hint || '', ga4_property_id: ga4 ? String(ga4.ga4_property_id) : (s.ga4_property_id || ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '',\n    keywords: (s.keywords || []).join(', '), status: s.status || 'active', source: s.source || 'form', created_at: s.created_at || now, last_run_at: now, last_status: (gsc ? 'gsc:ok' : 'gsc:off') + ' ' + (ga4 ? 'ga4:ok' : 'ga4:off') + (alerts.some(a => a.level === 'high') ? ' alerts' : ''), request_id: s.request_id || '' };\n  return { json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', period: R, checked_at: now, first_run: !!s.first_run, on_demand: !!s.on_demand, source: s.source, country: s.country || '',\n    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, rising_pages: gsc.rising_pages, errors: gsc.errors } : {}) },\n    ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },\n    console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },\n    tracked, ladder_pages: pages, pending_publish: s.pending_publish || [], ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,\n    metrics_row, query_rows, site_row } };\n});\n"
+          "jsCode": "// Joins everything per site: Search Console, GA4, index status, trends and the live SERP checks -> KPIs, alerts, ranked actions (with\n// ready-to-send API bodies), and the exact rows for the Data Tables seo_site_metrics / seo_query_history / seo_sites.\n// v4.8: pages the publish detection found live this week (`detected_published`, `publish_detection`) count as published pages here.\nconst FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';\nconst sites = $('Resolve Properties').all().map(i => i.json);\nconst grab = (name) => { try { return $(name).all().map(i => i.json).filter(j => j && !j.skip && !j.error); } catch (e) { return []; } };\nconst gscAll = grab('Parse GSC'), ga4All = grab('Parse GA4'), inspAll = grab('Parse Inspection'), trendAll = grab('Parse Trends'), serpAll = grab('Parse Site SERP');\nlet ga4Reason = ''; try { const r = ($('GA4 Requests').first() || {}).json; if (r && r.skip) ga4Reason = r.reason || ''; } catch (e) {}\nconst gErr = (r) => { if (!r) return 'no response'; const e = r.error; if (!e) return null; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return String((inner && inner.message) || (ctx.error_description ? String(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };   // Google errors: the useful text sits in context.data (invalid_grant: account not found) or in error.message (PERMISSION_DENIED)\nlet acctErr = ''; try { const a = ($('GA4 Accounts').first() || {}).json || {}; if (a.error) acctErr = gErr(a); } catch (e) {}\nconst metricsHist = (() => { try { return $('Load Site Metrics').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();\nconst queryHist = (() => { try { return $('Load Query History').all().map(i => i.json).filter(r => r && r.site_id && r.tracked && !r.error); } catch (e) { return []; } })();\nconst now = new Date().toISOString();\nconst pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? null : 0);\nconst r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;\nconst normD = (x) => String(x || '').toLowerCase().replace(/^www\\./, '');\n// v4.8 publish detection (Detect Published): pages found live this week, and whether storing them worked (onError nodes: read their output)\nconst detAll = (() => { try { return $('Detect Published').all().map(i => i.json).filter(x => x && x.site_id && Array.isArray(x.detected)); } catch (e) { return []; } })();\nconst detErrors = (() => { const out = []; for (const nm of ['Save Detected (Log)', 'Mark Case Study Published (Detect)', 'Mark Ladder Published (Detect)']) { try { for (const i of $(nm).all()) if (i.json && i.json.error) out.push(nm + ': ' + gErr(i.json)); } catch (e) {} } return out; })();\nconst detFail = (() => { for (const nm of ['Publish Candidates', 'Sitemap Children (Detect)', 'Match Slugs (Detect)', 'Detect Published']) { try { const e = $(nm).all().find(i => i.json && i.json.error); if (e) return nm + ': ' + gErr(e.json); } catch (x) {} } return ''; })();   // a failed detection step never stops the report\nconst ukey = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[?#].*$/, '').replace(/\\/$/, '');   // host-agnostic\nconst kwKey = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nreturn sites.map((s, idx) => {\n  const cfg = s.config || {}; const R = s.ranges;\n  const gsc = gscAll.find(g => g.site_idx === idx) || null;\n  const ga4 = ga4All.find(g => g.site_idx === idx) || null;\n  const insp = inspAll.filter(x => x.site_idx === idx);\n  const trends = trendAll.filter(x => x.site_idx === idx);\n  const serpRows = serpAll.filter(x => normD(x.domain) === s.domain);\n  const serpNow = { ...(s.serp_positions || {}) }; for (const r of serpRows) serpNow[r.keyword] = { position: Number(r.position), url: r.url, checked_at: r.checked_at };\n  const gscKw = new Map(((gsc && gsc.tracked) || []).map(t => [t.keyword, t]));\n  const tracked = (s.tracked || []).map(t => { const g = gscKw.get(t.keyword); const sp = serpNow[t.keyword];\n    const hist = queryHist.filter(h => h.site_id === s.site_id && h.query === t.keyword).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).map(h => r1(h.position)).slice(-12);\n    return { ...t, gsc_position: g ? g.position : null, gsc_prev_position: g ? g.prev_position : null, clicks: g ? g.clicks : 0, impressions: g ? g.impressions : 0, prev_clicks: g ? g.prev_clicks : 0, page: g ? g.page : '',\n      serp_position: sp ? sp.position : null, serp_url: sp ? sp.url : '', serp_checked_at: sp ? sp.checked_at : '', history: hist }; });\n  // pages found live this week replace their planned entry (live URL, published) or are added; they were inspected in this run\n  const det = detAll.find(x => x.site_id === s.site_id) || null; const found = det ? det.detected : [];\n  const basePages = (s.ladder_pages || []).map(p => { const f = found.find(f => kwKey(f.keyword) === kwKey(p.keyword) && (!f.ladder_id || !p.ladder_id || f.ladder_id === p.ladder_id)); return f ? { ...p, url: f.url, status: 'published', page_exists: true, detected: true } : p; });\n  for (const f of found) if (!basePages.some(p => ukey(p.url) === ukey(f.url))) basePages.push({ url: f.url, keyword: f.keyword, rung: 0, status: 'published', ladder_id: f.ladder_id || '', page_exists: true, detected: true });\n  const pages = basePages.map(p => { const i = insp.find(x => x.url === p.url); return { ...p, inspected: !!i && !i.error, indexed: (i && !i.error) ? !!i.indexed : null, verdict: i ? i.verdict : '', coverage: i ? i.coverage : '', last_crawl: i ? i.last_crawl : '', canonical_ok: i ? i.canonical_ok : null, inspect_error: i ? i.error : (s.gsc_connected ? 'not inspected' : 'Search Console not connected') }; });\n  // pages not live yet are reported as such, never as 'not indexed'\n  for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = p.status === 'writing' ? 'written, not published yet' : 'planned, not written yet'; p.indexed = null; }\n  // ---- alerts ----\n  const alerts = []; const drop = cfg.alert_drop_pct || 30;\n  if (!s.gsc_connected) alerts.push({ level: 'setup', text: 'Search Console is not connected: ' + (s.gsc_error || 'no property found') });\n  if (gsc && gsc.errors.length) alerts.push({ level: 'medium', text: 'Some Search Console requests failed: ' + gsc.errors.slice(0, 3).join('; ') });\n  if (gsc && gsc.deltas.clicks_pct != null && gsc.deltas.clicks_pct <= -drop && gsc.totals.prev.clicks >= 20) alerts.push({ level: 'high', text: 'Search clicks fell ' + Math.abs(gsc.deltas.clicks_pct) + '% (' + gsc.totals.prev.clicks + ' → ' + gsc.totals.cur.clicks + ' in 28 days)' });\n  if (gsc && gsc.deltas.impressions_pct != null && gsc.deltas.impressions_pct <= -drop && gsc.totals.prev.impressions >= 200) alerts.push({ level: 'medium', text: 'Impressions fell ' + Math.abs(gsc.deltas.impressions_pct) + '% (' + gsc.totals.prev.impressions + ' → ' + gsc.totals.cur.impressions + ')' });\n  if (ga4 && ga4.organic.prev.sessions >= 20 && pct(ga4.organic.cur.sessions, ga4.organic.prev.sessions) <= -drop) alerts.push({ level: 'high', text: 'Organic sessions fell ' + Math.abs(pct(ga4.organic.cur.sessions, ga4.organic.prev.sessions)) + '% (' + ga4.organic.prev.sessions + ' → ' + ga4.organic.cur.sessions + ')' });\n  if (ga4 && ga4.errors.length) alerts.push({ level: 'medium', text: 'Some GA4 requests failed: ' + ga4.errors.slice(0, 3).join('; ') });\n  for (const p of pages) if (p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')) alerts.push({ level: p.detected ? 'info' : 'high', text: 'Page not indexed: ' + p.url + ' (' + (p.coverage || p.verdict || 'not indexed') + ')' + (p.detected ? ' — found live this week; request indexing to speed it up' : '') });   // a page that just went live is not alarming yet\n  for (const p of pages) if (p.inspected && p.indexed && p.canonical_ok === false) alerts.push({ level: 'medium', text: 'Google picked another canonical for ' + p.url });\n  for (const t of tracked) if (t.gsc_position && t.gsc_prev_position && t.gsc_prev_position <= 10 && t.gsc_position - t.gsc_prev_position >= 5) alerts.push({ level: 'medium', text: '\"' + t.keyword + '\" slipped from #' + r1(t.gsc_prev_position) + ' to #' + r1(t.gsc_position) + ' (Search Console average)' });\n  for (const t of tracked) if (t.serp_position > 0 && t.gsc_position && Math.abs(t.serp_position - t.gsc_position) >= 10) alerts.push({ level: 'info', text: '\"' + t.keyword + '\": live check #' + t.serp_position + ' vs Search Console average #' + r1(t.gsc_position) + ' — positions vary by location and device' });\n  if (!ga4) alerts.push({ level: 'setup', text: 'Google Analytics 4 is not connected: ' + (acctErr || ga4Reason || 'no property id given or detected') });\n  const notices = s.console_alerts || []; const ck = s.last_checkin || null;\n  for (const n of notices) alerts.push({ level: n.severity === 'critical' ? 'high' : n.severity === 'high' ? 'high' : 'medium', text: 'Search Console notice (' + String(n.received_at).slice(0, 10) + '): ' + n.subject });\n  if (ck && ck.manual_action && !notices.some(n => n.kind === 'manual_action')) alerts.push({ level: 'high', text: 'Manual action reported in the ' + ck.month + ' check-in' });\n  if (ck && ck.security_issue && !notices.some(n => n.kind === 'security')) alerts.push({ level: 'high', text: 'Security issue reported in the ' + ck.month + ' check-in' });\n  if (found.length && detErrors.length) alerts.push({ level: 'medium', text: 'Pages found live on the site could not be recorded (' + detErrors[0] + '); report them with \"I published a page\"' });\n  if (detFail) alerts.push({ level: 'info', text: 'Publish detection failed this week (' + detFail.slice(0, 160) + '); report published pages with \"I published a page\"' });\n  if (det && !(det.sitemap || {}).ok) alerts.push({ level: 'info', text: 'Publish detection could not read the sitemap (' + ((det.sitemap || {}).error || 'no sitemap') + '); report published pages with \"I published a page\"' });\n  // ---- actions (deterministic; the AI brief words them for the owner) ----\n  const actions = []; const apiBase = { country: s.country || '', domain: s.domain, email: s.email || '' };\n  const pageBody = (keyword, url, page_type) => ({ mode: 'keyword', keyword, page_type: page_type || 'Service Page', ...apiBase, existing_page_url: url || '', receive: ['Keyword Report', 'Page Content'] });\n  const sa = cfg.service_account_email || '(the service-account e-mail: ask your administrator)';\n  for (const n of notices.filter(n => n.kind === 'manual_action' || n.kind === 'security').slice(0, 2)) actions.push({ priority: 1, type: n.kind, action: (n.kind === 'manual_action' ? 'Resolve the manual action: open Search Console → Security & Manual Actions → Manual actions, fix every page it names, then request a review.' : 'Resolve the security issue: clean the site, update CMS and plugins, change passwords, then request a review under Search Console → Security issues.'), why: n.subject + ' (' + String(n.received_at).slice(0, 10) + ').', keyword: '', url: '' });\n  for (const n of notices.filter(n => n.kind === 'coverage' || n.kind === 'cwv' || n.kind === 'rich_results' || n.kind === 'sitemap' || n.kind === 'crawl').slice(0, 2)) actions.push({ priority: 2, type: 'console_' + n.kind, action: 'Open the Search Console report named in \"' + n.subject + '\" and fix the listed pages, then click Validate fix.', why: 'Google sent this notice on ' + String(n.received_at).slice(0, 10) + '.', keyword: '', url: '' });\n  if (ck && ck.csv_kind === 'reasons' && (ck.coverage.reasons || []).length) actions.push({ priority: 2, type: 'coverage_report', action: 'Work through the Pages report from your ' + ck.month + ' check-in: ' + ck.coverage.reasons.slice(0, 3).map(r => r.reason + ' (' + r.pages + ' pages)').join(', ') + '.', why: ck.not_indexed_total + ' pages are not indexed site-wide according to Search Console.', keyword: '', url: '' });\n  if (s.checkin_due) actions.push({ priority: 3, type: 'checkin', action: 'Monthly Search Console check-in: open the form, answer two questions (manual action? security issue?) and upload the Pages report export.', why: 'Google offers no API for manual actions, security issues and the site-wide Pages report; the check-in covers them' + (cfg.console_mail_watcher ? ' alongside the notification watcher' : '') + '.', keyword: '', url: '' });\n  if (!s.gsc_connected) actions.push({ priority: 1, type: 'connect_gsc', action: 'Add ' + sa + ' as a user (Full) of ' + s.domain + ' in Search Console → Settings → Users and permissions.', why: 'Without it the report has no real query, click or index data.', keyword: '', url: '' });\n  for (const p of pages.filter(p => p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')).slice(0, 3)) actions.push({ priority: 1, type: 'index', action: 'Request indexing for ' + p.url + ' in Search Console (URL inspection → Request indexing) and link to it from 2-3 existing pages.', why: (p.rung ? 'Ladder rung ' + p.rung + ' for \"' + p.keyword + '\"' : 'The page for \"' + p.keyword + '\"') + ' cannot rank until Google indexes it (' + (p.coverage || p.verdict || 'not indexed') + ').', keyword: p.keyword, url: p.url });\n  for (const p of pages.filter(p => p.status === 'writing' && !p.page_exists).slice(0, 3)) actions.push({ priority: 1, type: 'publish', action: 'Publish the written page for \"' + p.keyword + '\" (planned URL ' + p.url + ') and report the link with \"I published a page\".', why: 'It is written but not live yet; nothing can be indexed or ranked before it is published.', keyword: p.keyword, url: p.url });\n  for (const q of ((gsc && gsc.striking) || []).slice(0, 3)) actions.push({ priority: 2, type: 'striking', action: 'Push \"' + q.query + '\" from #' + r1(q.position) + ' into the top 3: expand ' + (q.page || 'the ranking page') + ' with the missing sub-topics, add an FAQ and 2-3 internal links to it.', why: q.impressions + ' impressions in 28 days at position ' + r1(q.position) + ' (' + q.clicks + ' clicks); a top-3 spot typically triples the clicks.', keyword: q.query, url: q.page || '', api_body: pageBody(q.query, q.page, 'Service Page') });\n  for (const q of ((gsc && gsc.ctr_gaps) || []).slice(0, 2)) actions.push({ priority: 2, type: 'ctr', action: 'Rewrite the title and meta description of ' + (q.page || 'the ranking page') + ' for \"' + q.query + '\" (lead with the outcome and a number).', why: 'Position ' + r1(q.position) + ' with ' + q.impressions + ' impressions but CTR ' + (q.ctr * 100).toFixed(1) + '% vs about ' + Math.round(q.expected_ctr * 100) + '% expected.', keyword: q.query, url: q.page || '' });\n  for (const p of ((gsc && gsc.decaying_pages) || []).slice(0, 2)) actions.push({ priority: 3, type: 'decay', action: 'Refresh ' + p.page + ': update facts and dates, add what the top results cover now, re-promote it.', why: 'Clicks fell from ' + p.prev_clicks + ' to ' + p.clicks + ' in 28 days.', keyword: '', url: p.page });\n  for (const t of trends.filter(t => t.direction === 'rising' && (t.rising || []).length).slice(0, 1)) actions.push({ priority: 3, type: 'trend', action: 'Interest in \"' + t.keyword + '\" is rising (' + (t.change_pct > 0 ? '+' : '') + t.change_pct + '% vs the 12-month average); cover the rising searches: ' + t.rising.slice(0, 3).map(r => r.query).join(', ') + '.', why: 'Google Trends, past 12 months.', keyword: t.rising[0].query, url: '', api_body: { mode: 'verdict', keyword: t.rising[0].query, ...apiBase } });\n  for (const t of trends.filter(t => t.direction === 'falling').slice(0, 1)) actions.push({ priority: 4, type: 'trend', action: 'Interest in \"' + t.keyword + '\" is falling (' + t.change_pct + '% vs the 12-month average)' + (t.peak_date ? '; it peaked around ' + String(t.peak_date).slice(0, 7) : '') + '. Keep the page current but do not over-invest; watch the related rising searches.', why: 'Google Trends, past 12 months.', keyword: t.keyword, url: '' });\n  if (!ga4) actions.push({ priority: 4, type: 'connect_ga4', action: 'Add the same service account as a Viewer of the GA4 property (Admin → Property access management), or register the site with its GA4 property ID.', why: 'Connects search visibility to visits and key events (conversions).', keyword: '', url: '' });\n  actions.sort((a, b) => a.priority - b.priority); const acts = actions.slice(0, 12);   // the brief picks the top 5-6; the full list stays in the callback\n  // ---- rows for the Data Tables ----\n  const T = gsc ? gsc.totals : null; const G = ga4;\n  const prevRuns = metricsHist.filter(m => m.site_id === s.site_id).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).slice(-12).map(m => ({ period_end: m.period_end, clicks: Number(m.clicks) || 0, impressions: Number(m.impressions) || 0, position: r1(m.position), sessions: Number(m.sessions) || 0 }));\n  const metrics_row = { site_id: s.site_id, domain: s.domain, period_start: R.current.start, period_end: R.current.end, checked_at: now, gsc_connected: !!gsc, ga4_connected: !!ga4,\n    clicks: T ? T.cur.clicks : 0, impressions: T ? T.cur.impressions : 0, ctr: T ? T.cur.ctr : 0, position: T ? T.cur.position : 0, prev_clicks: T ? T.prev.clicks : 0, prev_impressions: T ? T.prev.impressions : 0, prev_ctr: T ? T.prev.ctr : 0, prev_position: T ? T.prev.position : 0,\n    yoy_clicks: T && T.yoy ? T.yoy.clicks : 0, yoy_impressions: T && T.yoy ? T.yoy.impressions : 0, sessions: G ? G.organic.cur.sessions : 0, engaged_sessions: G ? G.organic.cur.engaged : 0, key_events: G ? G.organic.cur.key_events : 0,\n    prev_sessions: G ? G.organic.prev.sessions : 0, prev_engaged_sessions: G ? G.organic.prev.engaged : 0, prev_key_events: G ? G.organic.prev.key_events : 0, organic_share: G ? G.organic_share : 0, queries: gsc ? gsc.query_count : 0, striking: gsc ? gsc.striking.length : 0,\n    alerts: alerts.filter(a => a.level === 'high' || a.level === 'medium').map(a => a.text).join(' | ').slice(0, 500) };\n  const qrow = (q, trackedFlag, serpPos) => ({ site_id: s.site_id, domain: s.domain, period_end: R.current.end, checked_at: now, query: q.query, clicks: q.clicks || 0, impressions: q.impressions || 0, ctr: r1((q.ctr || 0) * 1000) / 1000, position: r1(q.position), prev_clicks: q.prev_clicks || 0, prev_impressions: q.prev_impressions || 0, prev_position: r1(q.prev_position), page: q.page || '', tracked: trackedFlag, serp_position: (serpPos == null) ? -1 : Number(serpPos) });\n  const trackedSet = new Set(tracked.map(t => t.keyword));\n  const query_rows = [...tracked.map(t => qrow({ query: t.keyword, clicks: t.clicks, impressions: t.impressions, ctr: t.impressions ? t.clicks / t.impressions : 0, position: t.gsc_position || 0, prev_clicks: t.prev_clicks, prev_position: t.gsc_prev_position || 0, page: t.page }, true, t.serp_position)),\n    ...((gsc && gsc.queries) || []).filter(q => !trackedSet.has(q.query)).slice(0, 100).map(q => qrow(q, false, null))];\n  const site_row = { site_id: s.site_id, domain: s.domain, gsc_property: s.gsc_property || s.gsc_property_hint || '', ga4_property_id: ga4 ? String(ga4.ga4_property_id) : (s.ga4_property_id || ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '',\n    keywords: (s.keywords || []).join(', '), status: s.status || 'active', source: s.source || 'form', created_at: s.created_at || now, last_run_at: now, last_status: (gsc ? 'gsc:ok' : 'gsc:off') + ' ' + (ga4 ? 'ga4:ok' : 'ga4:off') + (alerts.some(a => a.level === 'high') ? ' alerts' : ''), request_id: s.request_id || '' };\n  return { json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', period: R, checked_at: now, first_run: !!s.first_run, on_demand: !!s.on_demand, source: s.source, country: s.country || '',\n    gsc: { connected: !!gsc, property: s.gsc_property || '', permission: s.gsc_permission || '', error: s.gsc_error || null, ...(gsc ? { totals: gsc.totals, deltas: gsc.deltas, daily: gsc.daily, query_count: gsc.query_count, winners: gsc.winners, losers: gsc.losers, new_queries: gsc.new_queries, lost_queries: gsc.lost_queries, striking: gsc.striking, ctr_gaps: gsc.ctr_gaps, top_pages: gsc.pages.slice(0, 10), decaying_pages: gsc.decaying_pages, rising_pages: gsc.rising_pages, errors: gsc.errors } : {}) },\n    ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },\n    console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },\n    tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,\n    detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),\n    publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,\n      still_waiting: (det.unmatched || []).length, recorded: found.length ? !detErrors.length : null, error: found.length && detErrors.length ? detErrors.slice(0, 3).join('; ').slice(0, 300) : '' } : { checked: false, candidates: 0, found: 0, reason: detFail ? 'detection failed: ' + detFail.slice(0, 200) : 'no written page waiting for publication' },\n    metrics_row, query_rows, site_row } };\n});\n"
         },
         "id": "4f5bfb06-e0fa-52c8-a5c9-721d4c1deab4",
         "name": "Site Metrics",
@@ -2160,6 +3342,19 @@
         "position": [
           3740,
           880
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// The insert gets exactly the table's columns: the Site Metrics item carries the whole report (live finding 2026-10-03: every insert failed on the nested `period` and continueRegularOutput hid it, so seo_site_metrics stayed empty).\nreturn $input.all().map(i => ({ json: i.json.metrics_row }));"
+        },
+        "id": "1bc05eb6-54d9-55f4-93fc-574664bf8013",
+        "name": "Metrics Rows",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3740,
+          1100
         ]
       },
       {
@@ -2692,7 +3887,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Rows for the Data Table \"seo_trends\" (the Content Cadence reads the rising related searches from here).\nlet t = []; try { t = $('Parse Trends').all().map(i => i.json).filter(x => x && !x.skip && !x.error && x.keyword); } catch (e) {}\nconst sites = $('Resolve Properties').all().map(i => i.json);\nconst rows = t.map(x => { const s = sites[x.site_idx] || {}; return { json: { site_id: x.site_id, domain: s.domain || '', keyword: x.keyword, checked_at: s.checked_at || new Date().toISOString(), period_end: ((s.ranges || {}).current || {}).end || '', direction: x.direction || 'unknown', change_pct: x.change_pct == null ? 0 : Number(x.change_pct), peak_date: x.peak_date || '', latest: Number(x.latest) || 0, average: Number(x.average) || 0,\n  rising: (x.rising || []).map(r => r.query + ' (' + r.value + ')').join(', '), top: (x.top || []).map(r => r.query).join(', ') } }; });\nreturn rows.length ? rows : [{ json: { skip: true } }];\n"
+          "jsCode": "// Rows for the Data Table \"seo_trends\" (the Content Cadence reads the rising related searches from here).\nlet t = []; try { t = $('Parse Trends').all().map(i => i.json).filter(x => x && !x.skip && !x.error && x.keyword && !x.cached); } catch (e) {}   // stored trends (cached) are not stored again\nconst sites = $('Resolve Properties').all().map(i => i.json);\nconst rows = t.map(x => { const s = sites[x.site_idx] || {}; return { json: { site_id: x.site_id, domain: s.domain || '', keyword: x.keyword, checked_at: s.checked_at || new Date().toISOString(), period_end: ((s.ranges || {}).current || {}).end || '', direction: x.direction || 'unknown', change_pct: x.change_pct == null ? 0 : Number(x.change_pct), peak_date: x.peak_date || '', latest: Number(x.latest) || 0, average: Number(x.average) || 0,\n  rising: (x.rising || []).map(r => r.query + ' (' + r.value + ')').join(', '), top: (x.top || []).map(r => r.query).join(', ') } }; });\nreturn rows.length ? rows : [{ json: { skip: true } }];\n"
         },
         "id": "3db2486f-678a-50a4-afa3-2cf693478fff",
         "name": "Trend Rows",
@@ -3103,7 +4298,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Compact facts for the AI brief (one item per site): totals, movers, opportunities, tracked keywords, pages, traffic, trends, alerts, actions.\nconst r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;\nreturn $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A = m.ga4;\n  const facts = { domain: m.domain, period: m.period.current, previous_period: m.period.previous, weeks_tracked: m.weeks_tracked,\n    search_console: G.connected ? { totals: G.totals, deltas: G.deltas, queries_with_impressions: G.query_count, winners: G.winners.slice(0, 5), losers: G.losers.slice(0, 5), new_queries: G.new_queries.slice(0, 5), lost_queries: G.lost_queries.slice(0, 5),\n      striking_distance: G.striking.slice(0, 8).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, clicks: q.clicks, page: q.page })), ctr_gaps: G.ctr_gaps.slice(0, 5).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, ctr: r1(q.ctr * 1000) / 10, expected_ctr: Math.round(q.expected_ctr * 100), page: q.page })),\n      top_pages: G.top_pages.slice(0, 8), decaying_pages: G.decaying_pages.slice(0, 5), rising_pages: G.rising_pages.slice(0, 5) } : { connected: false, error: G.error },\n    analytics: A.connected ? { organic: A.organic, all_channels: A.total, organic_share_pct: A.organic_share, channels: A.channels.slice(0, 6), organic_landing_pages: A.landing.slice(0, 8) } : { connected: false, error: A.error },\n    tracked_keywords: m.tracked.map(t => ({ keyword: t.keyword, source: t.source + (t.rung ? ' rung ' + t.rung : ''), search_console_position: G.connected ? (t.gsc_position ? r1(t.gsc_position) : 'no impressions in the period') : 'Search Console not connected', previous_position: G.connected && t.gsc_prev_position ? r1(t.gsc_prev_position) : null, impressions: G.connected ? t.impressions : null, clicks: G.connected ? t.clicks : null,\n      live_google_position: t.serp_position == null ? 'not checked' : t.serp_position > 0 ? t.serp_position : t.serp_position === 0 ? 'not in the top 50' : 'check failed', live_check_date: t.serp_checked_at ? String(t.serp_checked_at).slice(0, 10) : null, page: t.page || t.serp_url || null })),\n    ladder_pages: m.ladder_pages.map(p => ({ url: p.url, keyword: p.keyword, rung: p.rung, status: p.status, live: !!(p.page_exists || p.status === 'published'), indexed: (p.page_exists || p.status === 'published') ? p.indexed : 'not live yet', coverage: p.coverage || p.inspect_error || '' })),\n    trends: m.trends.map(t => ({ keyword: t.keyword, direction: t.direction, change_pct: t.change_pct, peak: t.peak_date, rising_searches: (t.rising || []).slice(0, 5).map(r => r.query) })),\n    pages_waiting_for_publish_link: (m.pending_publish || []).map(p => p.keyword + ' (' + p.days + ' days)'),\n    search_console_notices: ((m.console || {}).notices || []).map(x => x.severity + ': ' + x.kind + ' — ' + x.subject + ' (' + String(x.received_at).slice(0, 10) + ')'),\n    monthly_checkin: (m.console || {}).last_checkin ? { month: m.console.last_checkin.month, manual_action: m.console.last_checkin.manual_action, security_issue: m.console.last_checkin.security_issue, pages_not_indexed_sitewide: m.console.last_checkin.not_indexed_total >= 0 ? m.console.last_checkin.not_indexed_total : null, top_reasons: ((m.console.last_checkin.coverage || {}).reasons || []).slice(0, 3) } : (m.console && m.console.checkin_due ? 'due (not submitted this month)' : null),\n    growth_monitors: (() => { const L = (nm) => { try { return $(nm).all().map(x => x.json).filter(r => r && r.site_id === m.site_id && !r.error).sort((x, y) => String(y.checked_at || y.audited_at).localeCompare(String(x.checked_at || x.audited_at)))[0] || null; } catch (e) { return null; } }; const av = L('Load AI Visibility (Site)'), bl = L('Load Backlink Snapshots (Site)'), au = L('Load Audits (Site)');\n      return { ai_answers: av ? { mention_rate_pct: Number(av.mention_rate), citation_rate_pct: Number(av.citation_rate), share_of_voice_pct: Number(av.share_of_voice), alerts: av.alerts || '' } : 'not measured yet', backlinks: bl ? { referring_domains: Number(bl.referring_domains), new: Number(bl.new_links), lost: Number(bl.lost_links), important_lost: Number(bl.important_lost), spam_score: Number(bl.spam_score) } : 'not measured yet', technical: au ? { health: Number(au.health_score), critical: Number(au.critical), high: Number(au.high), audited: String(au.audited_at).slice(0, 10) } : 'not audited yet' }; })(),\n    alerts: m.alerts.map(a => a.level + ': ' + a.text), computed_actions: m.actions.map(a => ({ priority: a.priority, action: a.action, why: a.why })) };\n  return { json: { site_id: m.site_id, domain: m.domain, facts: JSON.stringify(facts) } }; });\n"
+          "jsCode": "// Compact facts for the AI brief (one item per site): totals, movers, opportunities, tracked keywords, pages, traffic, trends, alerts, actions.\nconst r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;\nreturn $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A = m.ga4;\n  const facts = { domain: m.domain, period: m.period.current, previous_period: m.period.previous, weeks_tracked: m.weeks_tracked,\n    search_console: G.connected ? { totals: G.totals, deltas: G.deltas, queries_with_impressions: G.query_count, winners: G.winners.slice(0, 5), losers: G.losers.slice(0, 5), new_queries: G.new_queries.slice(0, 5), lost_queries: G.lost_queries.slice(0, 5),\n      striking_distance: G.striking.slice(0, 8).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, clicks: q.clicks, page: q.page })), ctr_gaps: G.ctr_gaps.slice(0, 5).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, ctr: r1(q.ctr * 1000) / 10, expected_ctr: Math.round(q.expected_ctr * 100), page: q.page })),\n      top_pages: G.top_pages.slice(0, 8), decaying_pages: G.decaying_pages.slice(0, 5), rising_pages: G.rising_pages.slice(0, 5) } : { connected: false, error: G.error },\n    analytics: A.connected ? { organic: A.organic, all_channels: A.total, organic_share_pct: A.organic_share, channels: A.channels.slice(0, 6), organic_landing_pages: A.landing.slice(0, 8) } : { connected: false, error: A.error },\n    tracked_keywords: m.tracked.map(t => ({ keyword: t.keyword, source: t.source + (t.rung ? ' rung ' + t.rung : ''), search_console_position: G.connected ? (t.gsc_position ? r1(t.gsc_position) : 'no impressions in the period') : 'Search Console not connected', previous_position: G.connected && t.gsc_prev_position ? r1(t.gsc_prev_position) : null, impressions: G.connected ? t.impressions : null, clicks: G.connected ? t.clicks : null,\n      live_google_position: t.serp_position == null ? 'not checked' : t.serp_position > 0 ? t.serp_position : t.serp_position === 0 ? 'not in the top 50' : 'check failed', live_check_date: t.serp_checked_at ? String(t.serp_checked_at).slice(0, 10) : null, page: t.page || t.serp_url || null })),\n    ladder_pages: m.ladder_pages.map(p => ({ url: p.url, keyword: p.keyword, rung: p.rung, status: p.status, live: !!(p.page_exists || p.status === 'published'), indexed: (p.page_exists || p.status === 'published') ? p.indexed : 'not live yet', coverage: p.coverage || p.inspect_error || '' })),\n    trends: m.trends.map(t => ({ keyword: t.keyword, direction: t.direction, change_pct: t.change_pct, peak: t.peak_date, rising_searches: (t.rising || []).slice(0, 5).map(r => r.query) })),\n    pages_waiting_for_publish_link: (m.pending_publish || []).map(p => p.keyword + ' (' + p.days + ' days)'),\n    ...((m.detected_published || []).length ? { pages_found_live_this_week: m.detected_published.map(f => f.keyword + ' -> ' + f.url + ' (tracking started)') } : {}),   // v4.8 publish detection\n    search_console_notices: ((m.console || {}).notices || []).map(x => x.severity + ': ' + x.kind + ' — ' + x.subject + ' (' + String(x.received_at).slice(0, 10) + ')'),\n    monthly_checkin: (m.console || {}).last_checkin ? { month: m.console.last_checkin.month, manual_action: m.console.last_checkin.manual_action, security_issue: m.console.last_checkin.security_issue, pages_not_indexed_sitewide: m.console.last_checkin.not_indexed_total >= 0 ? m.console.last_checkin.not_indexed_total : null, top_reasons: ((m.console.last_checkin.coverage || {}).reasons || []).slice(0, 3) } : (m.console && m.console.checkin_due ? 'due (not submitted this month)' : null),\n    growth_monitors: (() => { const L = (nm) => { try { return $(nm).all().map(x => x.json).filter(r => r && r.site_id === m.site_id && !r.error).sort((x, y) => String(y.checked_at || y.audited_at).localeCompare(String(x.checked_at || x.audited_at)))[0] || null; } catch (e) { return null; } }; const av = L('Load AI Visibility (Site)'), bl = L('Load Backlink Snapshots (Site)'), au = L('Load Audits (Site)');\n      return { ai_answers: av ? { mention_rate_pct: Number(av.mention_rate), citation_rate_pct: Number(av.citation_rate), share_of_voice_pct: Number(av.share_of_voice), alerts: av.alerts || '' } : 'not measured yet', backlinks: bl ? { referring_domains: Number(bl.referring_domains), new: Number(bl.new_links), lost: Number(bl.lost_links), important_lost: Number(bl.important_lost), spam_score: Number(bl.spam_score) } : 'not measured yet', technical: au ? { health: Number(au.health_score), critical: Number(au.critical), high: Number(au.high), audited: String(au.audited_at).slice(0, 10) } : 'not audited yet' }; })(),\n    alerts: m.alerts.map(a => a.level + ': ' + a.text), computed_actions: m.actions.map(a => ({ priority: a.priority, action: a.action, why: a.why })) };\n  return { json: { site_id: m.site_id, domain: m.domain, facts: JSON.stringify(facts) } }; });\n"
         },
         "id": "a21bcbe0-4253-570a-a5ba-f7f6123bce8e",
         "name": "Brief Input",
@@ -3180,7 +4375,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Weekly performance report per site: e-mail HTML (KPI tiles, actions, tracked keywords, ladder pages, movers, opportunities, traffic, trends),\n// the same document as a file for the PDF renderer, and the fields for the callback. Uses the AI brief when present, the facts otherwise.\nconst metrics = $('Site Metrics').all().map(i => i.json);\nlet briefs = []; try { briefs = $('Site Brief').all().map(i => (i.json && i.json.output && typeof i.json.output === 'object') ? i.json.output : null); } catch (e) { briefs = []; }\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst n = (v) => (Number(v) || 0).toLocaleString('en-GB');\nconst r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;\nconst pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? null : 0);\nconst pctS = (v) => v == null ? 'new' : (v > 0 ? '▲ ' : v < 0 ? '▼ ' : '') + Math.abs(v) + '%';\nconst posS = (v) => !v ? '—' : '#' + r1(v);\nconst dcol = (v, invert) => v == null ? '#475569' : ((invert ? -v : v) > 0 ? '#15803d' : (invert ? -v : v) < 0 ? '#b91c1c' : '#475569');\nconst td = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;font-size:13px;vertical-align:top\"', th = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:12px\"';\nconst table = (headers, rows, empty) => rows.length ? '<table style=\"border-collapse:collapse;margin:6px 0;max-width:100%\">' + '<tr>' + headers.map(h => '<th ' + th + '>' + esc(h) + '</th>').join('') + '</tr>' + rows.map(r => '<tr>' + r.map(c => '<td ' + td + '>' + c + '</td>').join('') + '</tr>').join('') + '</table>' : '<p style=\"color:#64748b;font-size:13px\">' + esc(empty || 'nothing to show') + '</p>';\nconst tile = (label, value, delta, color) => '<td style=\"padding:8px 12px;border:1px solid #e2e8f0;min-width:110px;vertical-align:top\"><div style=\"font-size:11px;color:#64748b;text-transform:uppercase\">' + esc(label) + '</div><div style=\"font-size:20px;font-weight:700\">' + value + '</div><div style=\"font-size:12px;color:' + (color || '#475569') + '\">' + delta + '</div></td>';\nconst h3 = (t) => '<h3 style=\"margin:18px 0 4px;font-size:15px;color:#0f172a\">' + esc(t) + '</h3>';\nconst path = (u) => { const p = String(u || '').replace(/^https?:\\/\\/[^\\/]+/i, ''); return p || '/'; };\nconst link = (u) => u ? '<a href=\"' + esc(u) + '\" style=\"color:#1d4ed8\">' + esc(path(u)) + '</a>' : '—';\nconst deltaS = (cur, prev) => { const d = cur - prev; return (d > 0 ? '<span style=\"color:#15803d\">+' + n(d) + '</span>' : d < 0 ? '<span style=\"color:#b91c1c\">' + n(d) + '</span>' : '0'); };\nreturn metrics.map((m, i) => {\n  const b = briefs[i] || null; const G = m.gsc, A = m.ga4;\n  const period = m.period.current.start + ' to ' + m.period.current.end;\n  const sa = m.service_account_email || '<i>(service-account e-mail: ask your administrator)</i>';\n  let html = '<div style=\"font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:860px\">';\n  html += '<h2 style=\"margin:0 0 2px;font-size:20px\">SEO performance: ' + esc(m.domain) + '</h2><p style=\"margin:0 0 10px;color:#64748b;font-size:13px\">Last 28 days (' + esc(period) + ') vs the 28 days before · week ' + m.weeks_tracked + ' of tracking' + (m.on_demand ? ' · on-demand run' : '') + '</p>';\n  if (b) { html += '<div style=\"background:#f8fafc;border-left:4px solid #1d4ed8;padding:10px 12px;margin:8px 0\"><div style=\"font-weight:700;font-size:15px\">' + esc(b.headline) + '</div><p style=\"margin:6px 0 0;font-size:14px\">' + esc(b.summary) + '</p>' + ((b.highlights || []).length ? '<ul style=\"margin:6px 0 0;padding-left:18px;font-size:13px\">' + b.highlights.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + '</div>'; }\n  const hard = m.alerts.filter(a => a.level === 'high' || a.level === 'medium');\n  if (hard.length) html += '<div style=\"background:#fef2f2;border-left:4px solid #b91c1c;padding:8px 12px;margin:8px 0;font-size:13px\"><b>Alerts</b><ul style=\"margin:4px 0 0;padding-left:18px\">' + hard.map(a => '<li>' + esc(a.text) + '</li>').join('') + '</ul></div>';\n  if (!G.connected || !A.connected) html += '<div style=\"background:#fffbeb;border-left:4px solid #d97706;padding:8px 12px;margin:8px 0;font-size:13px\"><b>Connect Google to get real data</b><ol style=\"margin:4px 0 0;padding-left:18px\">' +\n    (!G.connected ? '<li><b>Search Console:</b> open <a href=\"https://search.google.com/search-console/users\">Settings → Users and permissions</a> for ' + esc(m.domain) + ' and add <b>' + sa + '</b> with <i>Full</i> permission. ' + (G.error ? '<span style=\"color:#64748b\">(' + esc(G.error) + ')</span>' : '') + '</li>' : '') +\n    (!A.connected ? '<li><b>Google Analytics 4:</b> Admin → Property access management → add the same e-mail as <i>Viewer</i>. The property is detected automatically from its web stream URL; or register the site again with its GA4 property ID. ' + (A.error ? '<span style=\"color:#64748b\">(' + esc(A.error) + ')</span>' : '') + '</li>' : '') +\n    '</ol><p style=\"margin:4px 0 0\">The next weekly report (or an on-demand run) picks the access up automatically.</p></div>';\n  let tiles = '';\n  if (G.connected) tiles += tile('Clicks', n(G.totals.cur.clicks), pctS(G.deltas.clicks_pct) + (G.deltas.yoy_clicks_pct != null ? ' · ' + pctS(G.deltas.yoy_clicks_pct) + ' YoY' : ''), dcol(G.deltas.clicks_pct)) + tile('Impressions', n(G.totals.cur.impressions), pctS(G.deltas.impressions_pct), dcol(G.deltas.impressions_pct)) + tile('CTR', (G.totals.cur.ctr * 100).toFixed(1) + '%', (G.deltas.ctr_pts > 0 ? '+' : '') + G.deltas.ctr_pts + ' pts', dcol(G.deltas.ctr_pts)) + tile('Avg position', posS(G.totals.cur.position), G.deltas.position == null ? '—' : (G.deltas.position > 0 ? '▲ ' : G.deltas.position < 0 ? '▼ ' : '') + Math.abs(G.deltas.position) + ' places', dcol(G.deltas.position));\n  if (A.connected) { const ps = pct(A.organic.cur.sessions, A.organic.prev.sessions), pk = pct(A.organic.cur.key_events, A.organic.prev.key_events); tiles += tile('Organic sessions', n(A.organic.cur.sessions), pctS(ps) + ' · ' + A.organic_share + '% of all sessions', dcol(ps)) + tile('Key events (organic)', n(A.organic.cur.key_events), pctS(pk) + ' · ' + n(A.organic.cur.engaged) + ' engaged sessions', dcol(pk)); }\n  if (tiles) html += '<table cellspacing=\"6\" style=\"border-collapse:separate;margin:8px 0\"><tr>' + tiles + '</tr></table>';\n  const acts = (b && Array.isArray(b.actions) && b.actions.length) ? b.actions.slice(0, 6).map(a => ({ action: a.action, why: a.why, keyword: a.keyword, url: a.url })) : m.actions.slice(0, 6);\n  const withBody = m.actions.filter(a => a.api_body);\n  html += h3('Do this week') + (acts.length ? '<ol style=\"margin:4px 0;padding-left:20px;font-size:14px\">' + acts.map(a => '<li style=\"margin:4px 0\"><b>' + esc(a.action) + '</b>' + (a.why ? '<br><span style=\"color:#475569;font-size:13px\">' + esc(a.why) + '</span>' : '') + '</li>').join('') + '</ol>' : '<p style=\"font-size:13px;color:#64748b\">Nothing urgent this week.</p>');\n  if (withBody.length) html += '<p style=\"font-size:13px\">Start the work with one click: open the <a href=\"' + esc(m.form_url) + '\">SEO Assistant form</a> (\"I know my keyword\") or send one of these to the API (' + esc(m.api_url) + '):</p>' + withBody.slice(0, 3).map(a => '<pre style=\"background:#f1f5f9;padding:8px;font-size:11px;white-space:pre-wrap\">' + esc(JSON.stringify(a.api_body)) + '</pre>').join('');\n  // v4.5: the growth monitors' latest results (AI Visibility Tracker Mon 07:00, Backlink Monitor Mon 07:30, Audit Scheduler monthly)\n  const latest2 = (name) => { try { return $(name).all().map(x => x.json).filter(r => r && r.site_id === m.site_id && !r.error).sort((x, y) => String(y.checked_at || y.audited_at).localeCompare(String(x.checked_at || x.audited_at))).slice(0, 2); } catch (e) { return []; } };\n  const [av, av0] = latest2('Load AI Visibility (Site)'), [bl, bl0] = latest2('Load Backlink Snapshots (Site)'), [au, au0] = latest2('Load Audits (Site)');\n  if (av || bl || au) {\n    const dp = (cur, prev) => prev == null ? '' : (cur - prev > 0 ? ' <span style=\"color:#15803d\">▲' + r1(cur - prev) + '</span>' : cur - prev < 0 ? ' <span style=\"color:#b91c1c\">▼' + r1(prev - cur) + '</span>' : '');\n    const rows = [];\n    if (av) { let comp = []; try { comp = JSON.parse(av.competitors_json || '[]'); } catch (e) {} rows.push(['<b>AI answers</b> (' + esc(String(av.checked_at).slice(0, 10)) + ')', 'named in ' + r1(av.mention_rate) + '%' + dp(Number(av.mention_rate), av0 ? Number(av0.mention_rate) : null) + ' · pages cited in ' + r1(av.citation_rate) + '% · share of voice ' + r1(av.share_of_voice) + '%' + (comp[0] ? ' (leader: ' + esc(comp[0].domain) + ' ' + comp[0].share + '%)' : '') + (av.alerts ? '<br><span style=\"color:#b91c1c\">' + esc(av.alerts) + '</span>' : '')]); }\n    if (bl) rows.push(['<b>Backlinks</b> (' + esc(String(bl.checked_at).slice(0, 10)) + ', ' + esc(bl.mode) + ')', n(bl.referring_domains) + ' referring domains' + dp(Number(bl.referring_domains), bl0 ? Number(bl0.referring_domains) : null) + ' · ' + n(bl.new_links) + ' new / ' + n(bl.lost_links) + ' lost' + (Number(bl.important_lost) ? ' · <b style=\"color:#b91c1c\">' + bl.important_lost + ' important lost</b>' : '') + (Number(bl.spammy_new) ? ' · ' + bl.spammy_new + ' spammy' : '') + ' · spam score ' + n(bl.spam_score)]);\n    if (au) rows.push(['<b>Technical audit</b> (' + esc(String(au.audited_at).slice(0, 10)) + ')', 'health ' + n(au.health_score) + '/100' + dp(Number(au.health_score), au0 ? Number(au0.health_score) : null) + ' (' + esc(au.grade) + ') · ' + n(au.critical) + ' critical, ' + n(au.high) + ' high, ' + n(au.medium) + ' medium · ' + n(au.pages_crawled) + ' pages crawled']);\n    html += h3('AI search, backlinks and technical health') + table(['Monitor', 'Latest'], rows) + '<p style=\"font-size:12px;color:#64748b\">Details in the AI-visibility, backlink and audit reports (separate e-mails).</p>';\n  }\n  if (m.tracked.length) html += h3('Tracked keywords') + table(['Keyword', 'Source', 'Search Console avg', 'Before', 'Live Google check', 'Clicks', 'Impr.', 'Ranking page'], m.tracked.map(t => [esc(t.keyword), esc(t.source === 'ladder' ? (t.rung === 4 ? 'ladder top' : 'ladder rung ' + t.rung) : t.source === 'blog' ? 'blog page' : 'your list'),\n    G.connected ? posS(t.gsc_position) : '<span style=\"color:#94a3b8\">connect GSC</span>', G.connected ? posS(t.gsc_prev_position) : '—', t.serp_position == null ? '—' : (t.serp_position > 0 ? '#' + t.serp_position : t.serp_position === 0 ? 'not in top 50' : 'check failed') + (t.serp_checked_at ? '<br><span style=\"color:#94a3b8;font-size:11px\">' + esc(String(t.serp_checked_at).slice(0, 10)) + '</span>' : ''), n(t.clicks), n(t.impressions), link(t.page || t.serp_url)]));\n  const C = m.console || { notices: [], last_checkin: null, checkin_due: false };\n  if (C.notices.length || C.last_checkin || C.checkin_due) {\n    html += h3('Search Console notices and monthly check-in');\n    if (C.notices.length) html += table(['Received', 'Kind', 'Notice'], C.notices.slice(0, 8).map(n => [esc(String(n.received_at).slice(0, 10)), esc(n.kind.replace(/_/g, ' ')) + (n.severity === 'critical' ? ' <b style=\"color:#b91c1c\">urgent</b>' : ''), esc(n.subject)]));\n    else html += '<p style=\"font-size:13px;color:#64748b\">No Search Console notification in the last 35 days' + (m.service_account_email ? '' : '') + '.</p>';\n    if (C.last_checkin) { const ck = C.last_checkin; html += '<p style=\"font-size:13px\"><b>Last check-in (' + esc(ck.month) + '):</b> manual action ' + (ck.manual_action ? '<b style=\"color:#b91c1c\">yes</b>' : 'no') + ', security issue ' + (ck.security_issue ? '<b style=\"color:#b91c1c\">yes</b>' : 'no') + (ck.csv_kind === 'reasons' ? '; Pages report: ' + n(ck.not_indexed_total) + ' pages not indexed' + ((ck.coverage.reasons || []).length ? ' (' + ck.coverage.reasons.slice(0, 3).map(r => esc(r.reason) + ' ' + n(r.pages)).join(', ') + ')' : '') : ck.csv_kind === 'chart' ? '; Pages chart: ' + n(ck.coverage.indexed_total) + ' indexed, ' + n(ck.not_indexed_total) + ' not indexed' : '') + (ck.notes ? '; notes: ' + esc(ck.notes.slice(0, 160)) : '') + '</p>'; }\n    if (C.checkin_due) html += '<p style=\"font-size:13px;color:#b45309\"><b>Monthly check-in due:</b> open the <a href=\"' + esc(m.form_url) + '\">form</a> (\"Search Console check-in\"), answer two questions and upload the Pages report export (Search Console → Pages → Export). It covers what the API cannot see: manual actions, security issues and the site-wide index coverage.</p>';\n  }\n  if ((m.pending_publish || []).length) html += '<p style=\"font-size:13px;color:#b45309\"><b>Written, waiting for your publish link:</b> ' + m.pending_publish.map(p => esc(p.keyword) + ' (' + p.days + ' days ago)').join(', ') + ' — report it through the <a href=\"' + esc(m.form_url) + '\">form</a> (\"I published a page\") so indexing and positions are tracked.</p>';\n  if (m.ladder_pages.length) html += h3('Your pages: index status') + table(['Page', 'Rung', 'Status', 'Indexed', 'Coverage', 'Last crawl'], m.ladder_pages.map(p => [link(p.url), p.rung === 4 ? 'top' : p.rung ? String(p.rung) : 'blog', esc(p.status), p.indexed == null ? '<span style=\"color:#94a3b8\">' + esc(p.inspect_error || 'unknown') + '</span>' : (p.indexed ? '<span style=\"color:#15803d\">yes</span>' : '<span style=\"color:#b91c1c\">no</span>'), esc(p.coverage || '—'), esc(p.last_crawl ? String(p.last_crawl).slice(0, 10) : '—')]));\n  if (G.connected) {\n    html += h3('Quick wins: striking distance (positions 4-20)') + table(['Query', 'Position', 'Before', 'Impressions', 'Clicks', 'Page'], G.striking.slice(0, 10).map(q => [esc(q.query), posS(q.position), posS(q.prev_position), n(q.impressions), n(q.clicks), link(q.page)]), 'no query between positions 4 and 20 with enough impressions yet');\n    if (G.ctr_gaps.length) html += h3('Low click-through for the position (rewrite titles)') + table(['Query', 'Position', 'Impressions', 'CTR', 'Expected', 'Page'], G.ctr_gaps.slice(0, 6).map(q => [esc(q.query), posS(q.position), n(q.impressions), (q.ctr * 100).toFixed(1) + '%', Math.round(q.expected_ctr * 100) + '%', link(q.page)]));\n    html += h3('Query movers') + '<table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"vertical-align:top;padding-right:8px;width:50%\"><b style=\"font-size:13px;color:#15803d\">Winners</b>' + table(['Query', 'Clicks', 'Position'], G.winners.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style=\"color:#94a3b8\">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear winners') + '</td><td style=\"vertical-align:top;width:50%\"><b style=\"font-size:13px;color:#b91c1c\">Losers</b>' + table(['Query', 'Clicks', 'Position'], G.losers.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style=\"color:#94a3b8\">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear losers') + '</td></tr></table>';\n    if (G.new_queries.length || G.lost_queries.length) html += '<p style=\"font-size:13px\"><b>New queries:</b> ' + (G.new_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.impressions) + ' impr.)').join(', ') || 'none') + '<br><b>Lost queries:</b> ' + (G.lost_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.prev_clicks) + ' clicks before)').join(', ') || 'none') + '</p>';\n    html += h3('Pages') + table(['Page', 'Clicks', 'Change', 'Impressions', 'Position'], G.top_pages.slice(0, 8).map(p => [link(p.page), n(p.clicks), deltaS(p.clicks, p.prev_clicks), n(p.impressions), posS(p.position)]));\n    if (G.decaying_pages.length) html += '<p style=\"font-size:13px\"><b style=\"color:#b91c1c\">Decaying pages:</b> ' + G.decaying_pages.slice(0, 5).map(p => esc(path(p.page)) + ' (' + n(p.prev_clicks) + ' → ' + n(p.clicks) + ' clicks)').join('; ') + '</p>';\n  }\n  if (A.connected) html += h3('Traffic (GA4, organic search)') + '<p style=\"font-size:13px\">Organic: <b>' + n(A.organic.cur.sessions) + '</b> sessions (' + pctS(pct(A.organic.cur.sessions, A.organic.prev.sessions)) + '), ' + n(A.organic.cur.engaged) + ' engaged, ' + n(A.organic.cur.key_events) + ' key events, ' + n(A.organic.cur.users) + ' users · all channels: ' + n(A.total.cur.sessions) + ' sessions' + (A.channels.length ? ' (' + A.channels.slice(0, 4).map(c => esc(c.channel) + ' ' + n(c.sessions)).join(', ') + ')' : '') + (A.detected ? ' · property ' + esc(A.property_id) + ' detected automatically' : '') + '</p>' + table(['Landing page', 'Organic sessions', 'Change', 'Engaged', 'Key events'], A.landing.slice(0, 8).map(l => [link(l.page), n(l.sessions), deltaS(l.sessions, l.prev_sessions), n(l.engaged), n(l.key_events)]));\n  if (m.trends.length) html += h3('Search interest (Google Trends, 12 months)') + table(['Keyword', 'Direction', 'Last 4 weeks vs average', 'Peak', 'Rising related searches'], m.trends.map(t => [esc(t.keyword), t.error ? '<span style=\"color:#94a3b8\">' + esc(t.error) + '</span>' : t.direction === 'sparse' ? '<span style=\"color:#94a3b8\">too little search volume for a trend</span>' : esc(t.direction), (t.change_pct == null || t.direction === 'sparse') ? '—' : (t.change_pct > 0 ? '+' : '') + t.change_pct + '%', esc(t.peak_date ? String(t.peak_date).slice(0, 7) : '—'), esc((t.rising || []).slice(0, 4).map(r => r.query + ' (' + r.value + ')').join(', ') || '—')]));\n  if (b && (b.watch || []).length) html += h3('Watch') + '<ul style=\"font-size:13px;margin:4px 0;padding-left:18px\">' + b.watch.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';\n  html += '<p style=\"color:#64748b;font-size:12px;margin-top:16px\">Search Console figures are final up to 3 days ago and are averages across devices and locations; the live Google check is one SERP sample from DataForSEO. Trends are a relative index (100 = peak of the year). Reports run every Monday' + (m.tracked.some(t => t.source === 'ladder') ? '; the keyword ladder gets its own progress e-mail' : '') + '. Reply to this e-mail to pause tracking.</p></div>';\n  const hi = m.alerts.filter(a => a.level === 'high').length; const parts = [];\n  if (G.connected) parts.push(n(G.totals.cur.clicks) + ' clicks ' + pctS(G.deltas.clicks_pct)); if (hi) parts.push(hi + ' alert' + (hi > 1 ? 's' : '')); if (G.connected && G.striking.length) parts.push(G.striking.length + ' quick win' + (G.striking.length > 1 ? 's' : ''));\n  const subject = (G.connected ? '[SEO weekly] ' : '[SEO tracking] ') + m.domain + ' — ' + (parts.length ? parts.join(' · ') : 'connect Google Search Console to see real data');\n  const file_name = 'seo-performance-' + m.domain.replace(/[^a-z0-9.]+/g, '-') + '-' + m.period.current.end + '.html';\n  const doc = '<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>' + esc(subject) + '</title></head><body style=\"margin:24px\">' + html + '</body></html>';\n  return { json: { ...m, brief: b, subject, html, file_name, status: 'progress', stage: 'site_tracker' }, binary: { data: { data: Buffer.from(doc, 'utf8').toString('base64'), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };\n});\n"
+          "jsCode": "// Weekly performance report per site: e-mail HTML (KPI tiles, actions, tracked keywords, ladder pages, movers, opportunities, traffic, trends),\n// the same document as a file for the PDF renderer, and the fields for the callback. Uses the AI brief when present, the facts otherwise.\nconst metrics = $('Site Metrics').all().map(i => i.json);\nlet briefs = []; try { briefs = $('Site Brief').all().map(i => (i.json && i.json.output && typeof i.json.output === 'object') ? i.json.output : null); } catch (e) { briefs = []; }\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst n = (v) => (Number(v) || 0).toLocaleString('en-GB');\nconst r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;\nconst pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? null : 0);\nconst pctS = (v) => v == null ? 'new' : (v > 0 ? '▲ ' : v < 0 ? '▼ ' : '') + Math.abs(v) + '%';\nconst posS = (v) => !v ? '—' : '#' + r1(v);\nconst dcol = (v, invert) => v == null ? '#475569' : ((invert ? -v : v) > 0 ? '#15803d' : (invert ? -v : v) < 0 ? '#b91c1c' : '#475569');\nconst td = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;font-size:13px;vertical-align:top\"', th = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:12px\"';\nconst table = (headers, rows, empty) => rows.length ? '<table style=\"border-collapse:collapse;margin:6px 0;max-width:100%\">' + '<tr>' + headers.map(h => '<th ' + th + '>' + esc(h) + '</th>').join('') + '</tr>' + rows.map(r => '<tr>' + r.map(c => '<td ' + td + '>' + c + '</td>').join('') + '</tr>').join('') + '</table>' : '<p style=\"color:#64748b;font-size:13px\">' + esc(empty || 'nothing to show') + '</p>';\nconst tile = (label, value, delta, color) => '<td style=\"padding:8px 12px;border:1px solid #e2e8f0;min-width:110px;vertical-align:top\"><div style=\"font-size:11px;color:#64748b;text-transform:uppercase\">' + esc(label) + '</div><div style=\"font-size:20px;font-weight:700\">' + value + '</div><div style=\"font-size:12px;color:' + (color || '#475569') + '\">' + delta + '</div></td>';\nconst h3 = (t) => '<h3 style=\"margin:18px 0 4px;font-size:15px;color:#0f172a\">' + esc(t) + '</h3>';\nconst path = (u) => { const p = String(u || '').replace(/^https?:\\/\\/[^\\/]+/i, ''); return p || '/'; };\nconst link = (u) => u ? '<a href=\"' + esc(u) + '\" style=\"color:#1d4ed8\">' + esc(path(u)) + '</a>' : '—';\nconst deltaS = (cur, prev) => { const d = cur - prev; return (d > 0 ? '<span style=\"color:#15803d\">+' + n(d) + '</span>' : d < 0 ? '<span style=\"color:#b91c1c\">' + n(d) + '</span>' : '0'); };\nreturn metrics.map((m, i) => {\n  const b = briefs[i] || null; const G = m.gsc, A = m.ga4;\n  const period = m.period.current.start + ' to ' + m.period.current.end;\n  const sa = m.service_account_email || '<i>(service-account e-mail: ask your administrator)</i>';\n  let html = '<div style=\"font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:860px\">';\n  html += '<h2 style=\"margin:0 0 2px;font-size:20px\">SEO performance: ' + esc(m.domain) + '</h2><p style=\"margin:0 0 10px;color:#64748b;font-size:13px\">Last 28 days (' + esc(period) + ') vs the 28 days before · week ' + m.weeks_tracked + ' of tracking' + (m.on_demand ? ' · on-demand run' : '') + '</p>';\n  if (b) { html += '<div style=\"background:#f8fafc;border-left:4px solid #1d4ed8;padding:10px 12px;margin:8px 0\"><div style=\"font-weight:700;font-size:15px\">' + esc(b.headline) + '</div><p style=\"margin:6px 0 0;font-size:14px\">' + esc(b.summary) + '</p>' + ((b.highlights || []).length ? '<ul style=\"margin:6px 0 0;padding-left:18px;font-size:13px\">' + b.highlights.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>' : '') + '</div>'; }\n  const hard = m.alerts.filter(a => a.level === 'high' || a.level === 'medium');\n  if (hard.length) html += '<div style=\"background:#fef2f2;border-left:4px solid #b91c1c;padding:8px 12px;margin:8px 0;font-size:13px\"><b>Alerts</b><ul style=\"margin:4px 0 0;padding-left:18px\">' + hard.map(a => '<li>' + esc(a.text) + '</li>').join('') + '</ul></div>';\n  if (!G.connected || !A.connected) html += '<div style=\"background:#fffbeb;border-left:4px solid #d97706;padding:8px 12px;margin:8px 0;font-size:13px\"><b>Connect Google to get real data</b><ol style=\"margin:4px 0 0;padding-left:18px\">' +\n    (!G.connected ? '<li><b>Search Console:</b> open <a href=\"https://search.google.com/search-console/users\">Settings → Users and permissions</a> for ' + esc(m.domain) + ' and add <b>' + sa + '</b> with <i>Full</i> permission. ' + (G.error ? '<span style=\"color:#64748b\">(' + esc(G.error) + ')</span>' : '') + '</li>' : '') +\n    (!A.connected ? '<li><b>Google Analytics 4:</b> Admin → Property access management → add the same e-mail as <i>Viewer</i>. The property is detected automatically from its web stream URL; or register the site again with its GA4 property ID. ' + (A.error ? '<span style=\"color:#64748b\">(' + esc(A.error) + ')</span>' : '') + '</li>' : '') +\n    '</ol><p style=\"margin:4px 0 0\">The next weekly report (or an on-demand run) picks the access up automatically.</p></div>';\n  let tiles = '';\n  if (G.connected) tiles += tile('Clicks', n(G.totals.cur.clicks), pctS(G.deltas.clicks_pct) + (G.deltas.yoy_clicks_pct != null ? ' · ' + pctS(G.deltas.yoy_clicks_pct) + ' YoY' : ''), dcol(G.deltas.clicks_pct)) + tile('Impressions', n(G.totals.cur.impressions), pctS(G.deltas.impressions_pct), dcol(G.deltas.impressions_pct)) + tile('CTR', (G.totals.cur.ctr * 100).toFixed(1) + '%', (G.deltas.ctr_pts > 0 ? '+' : '') + G.deltas.ctr_pts + ' pts', dcol(G.deltas.ctr_pts)) + tile('Avg position', posS(G.totals.cur.position), G.deltas.position == null ? '—' : (G.deltas.position > 0 ? '▲ ' : G.deltas.position < 0 ? '▼ ' : '') + Math.abs(G.deltas.position) + ' places', dcol(G.deltas.position));\n  if (A.connected) { const ps = pct(A.organic.cur.sessions, A.organic.prev.sessions), pk = pct(A.organic.cur.key_events, A.organic.prev.key_events); tiles += tile('Organic sessions', n(A.organic.cur.sessions), pctS(ps) + ' · ' + A.organic_share + '% of all sessions', dcol(ps)) + tile('Key events (organic)', n(A.organic.cur.key_events), pctS(pk) + ' · ' + n(A.organic.cur.engaged) + ' engaged sessions', dcol(pk)); }\n  if (tiles) html += '<table cellspacing=\"6\" style=\"border-collapse:separate;margin:8px 0\"><tr>' + tiles + '</tr></table>';\n  const acts = (b && Array.isArray(b.actions) && b.actions.length) ? b.actions.slice(0, 6).map(a => ({ action: a.action, why: a.why, keyword: a.keyword, url: a.url })) : m.actions.slice(0, 6);\n  const withBody = m.actions.filter(a => a.api_body);\n  html += h3('Do this week') + (acts.length ? '<ol style=\"margin:4px 0;padding-left:20px;font-size:14px\">' + acts.map(a => '<li style=\"margin:4px 0\"><b>' + esc(a.action) + '</b>' + (a.why ? '<br><span style=\"color:#475569;font-size:13px\">' + esc(a.why) + '</span>' : '') + '</li>').join('') + '</ol>' : '<p style=\"font-size:13px;color:#64748b\">Nothing urgent this week.</p>');\n  if (withBody.length) html += '<p style=\"font-size:13px\">Start the work with one click: open the <a href=\"' + esc(m.form_url) + '\">SEO Assistant form</a> (\"I know my keyword\") or send one of these to the API (' + esc(m.api_url) + '):</p>' + withBody.slice(0, 3).map(a => '<pre style=\"background:#f1f5f9;padding:8px;font-size:11px;white-space:pre-wrap\">' + esc(JSON.stringify(a.api_body)) + '</pre>').join('');\n  // v4.5: the growth monitors' latest results (AI Visibility Tracker Mon 07:00, Backlink Monitor Mon 07:30, Audit Scheduler monthly)\n  const latest2 = (name) => { try { return $(name).all().map(x => x.json).filter(r => r && r.site_id === m.site_id && !r.error).sort((x, y) => String(y.checked_at || y.audited_at).localeCompare(String(x.checked_at || x.audited_at))).slice(0, 2); } catch (e) { return []; } };\n  const [av, av0] = latest2('Load AI Visibility (Site)'), [bl, bl0] = latest2('Load Backlink Snapshots (Site)'), [au, au0] = latest2('Load Audits (Site)');\n  if (av || bl || au) {\n    const dp = (cur, prev) => prev == null ? '' : (cur - prev > 0 ? ' <span style=\"color:#15803d\">▲' + r1(cur - prev) + '</span>' : cur - prev < 0 ? ' <span style=\"color:#b91c1c\">▼' + r1(prev - cur) + '</span>' : '');\n    const rows = [];\n    if (av) { let comp = []; try { comp = JSON.parse(av.competitors_json || '[]'); } catch (e) {} rows.push(['<b>AI answers</b> (' + esc(String(av.checked_at).slice(0, 10)) + ')', 'named in ' + r1(av.mention_rate) + '%' + dp(Number(av.mention_rate), av0 ? Number(av0.mention_rate) : null) + ' · pages cited in ' + r1(av.citation_rate) + '% · share of voice ' + r1(av.share_of_voice) + '%' + (comp[0] ? ' (leader: ' + esc(comp[0].domain) + ' ' + comp[0].share + '%)' : '') + (av.alerts ? '<br><span style=\"color:#b91c1c\">' + esc(av.alerts) + '</span>' : '')]); }\n    if (bl) rows.push(['<b>Backlinks</b> (' + esc(String(bl.checked_at).slice(0, 10)) + ', ' + esc(bl.mode) + ')', n(bl.referring_domains) + ' referring domains' + dp(Number(bl.referring_domains), bl0 ? Number(bl0.referring_domains) : null) + ' · ' + n(bl.new_links) + ' new / ' + n(bl.lost_links) + ' lost' + (Number(bl.important_lost) ? ' · <b style=\"color:#b91c1c\">' + bl.important_lost + ' important lost</b>' : '') + (Number(bl.spammy_new) ? ' · ' + bl.spammy_new + ' spammy' : '') + ' · spam score ' + n(bl.spam_score)]);\n    if (au) rows.push(['<b>Technical audit</b> (' + esc(String(au.audited_at).slice(0, 10)) + ')', 'health ' + n(au.health_score) + '/100' + dp(Number(au.health_score), au0 ? Number(au0.health_score) : null) + ' (' + esc(au.grade) + ') · ' + n(au.critical) + ' critical, ' + n(au.high) + ' high, ' + n(au.medium) + ' medium · ' + n(au.pages_crawled) + ' pages crawled']);\n    html += h3('AI search, backlinks and technical health') + table(['Monitor', 'Latest'], rows) + '<p style=\"font-size:12px;color:#64748b\">Details in the AI-visibility, backlink and audit reports (separate e-mails).</p>';\n  }\n  if (m.tracked.length) html += h3('Tracked keywords') + table(['Keyword', 'Source', 'Search Console avg', 'Before', 'Live Google check', 'Clicks', 'Impr.', 'Ranking page'], m.tracked.map(t => [esc(t.keyword), esc(t.source === 'ladder' ? (t.rung === 4 ? 'ladder top' : 'ladder rung ' + t.rung) : t.source === 'blog' ? 'blog page' : 'your list'),\n    G.connected ? posS(t.gsc_position) : '<span style=\"color:#94a3b8\">connect GSC</span>', G.connected ? posS(t.gsc_prev_position) : '—', t.serp_position == null ? '—' : (t.serp_position > 0 ? '#' + t.serp_position : t.serp_position === 0 ? 'not in top 50' : 'check failed') + (t.serp_checked_at ? '<br><span style=\"color:#94a3b8;font-size:11px\">' + esc(String(t.serp_checked_at).slice(0, 10)) + '</span>' : ''), n(t.clicks), n(t.impressions), link(t.page || t.serp_url)]));\n  const C = m.console || { notices: [], last_checkin: null, checkin_due: false };\n  if (C.notices.length || C.last_checkin || C.checkin_due) {\n    html += h3('Search Console notices and monthly check-in');\n    if (C.notices.length) html += table(['Received', 'Kind', 'Notice'], C.notices.slice(0, 8).map(n => [esc(String(n.received_at).slice(0, 10)), esc(n.kind.replace(/_/g, ' ')) + (n.severity === 'critical' ? ' <b style=\"color:#b91c1c\">urgent</b>' : ''), esc(n.subject)]));\n    else html += '<p style=\"font-size:13px;color:#64748b\">No Search Console notification in the last 35 days' + (m.service_account_email ? '' : '') + '.</p>';\n    if (C.last_checkin) { const ck = C.last_checkin; html += '<p style=\"font-size:13px\"><b>Last check-in (' + esc(ck.month) + '):</b> manual action ' + (ck.manual_action ? '<b style=\"color:#b91c1c\">yes</b>' : 'no') + ', security issue ' + (ck.security_issue ? '<b style=\"color:#b91c1c\">yes</b>' : 'no') + (ck.csv_kind === 'reasons' ? '; Pages report: ' + n(ck.not_indexed_total) + ' pages not indexed' + ((ck.coverage.reasons || []).length ? ' (' + ck.coverage.reasons.slice(0, 3).map(r => esc(r.reason) + ' ' + n(r.pages)).join(', ') + ')' : '') : ck.csv_kind === 'chart' ? '; Pages chart: ' + n(ck.coverage.indexed_total) + ' indexed, ' + n(ck.not_indexed_total) + ' not indexed' : '') + (ck.notes ? '; notes: ' + esc(ck.notes.slice(0, 160)) : '') + '</p>'; }\n    if (C.checkin_due) html += '<p style=\"font-size:13px;color:#b45309\"><b>Monthly check-in due:</b> open the <a href=\"' + esc(m.form_url) + '\">form</a> (\"Search Console check-in\"), answer two questions and upload the Pages report export (Search Console → Pages → Export). It covers what the API cannot see: manual actions, security issues and the site-wide index coverage.</p>';\n  }\n  // v4.8 publish detection: written pages found live on the site this week (sitemap: planned slug, else title / H1) — shown only when there are some\n  const found = m.detected_published || [];\n  if (found.length) html += '<div style=\"background:#f0fdf4;border-left:4px solid #15803d;padding:8px 12px;margin:8px 0;font-size:13px\"><b>We found these pages live on your site:</b><ul style=\"margin:4px 0 0;padding-left:18px\">' + found.map(f => '<li><b>' + esc(f.keyword) + '</b> → <a href=\"' + esc(f.url) + '\" style=\"color:#1d4ed8\">' + esc(f.url) + '</a>' + (f.ladder_id ? ' <span style=\"color:#64748b\">(keyword ladder)</span>' : '') + '</li>').join('') + '</ul><p style=\"margin:4px 0 0\">— tracking has started: Google indexing and positions are followed from now on. Not the right page? Report the correct link with \"I published a page\".</p></div>';\n  if ((m.pending_publish || []).length) html += '<p style=\"font-size:13px;color:#b45309\"><b>Written, waiting for your publish link:</b> ' + m.pending_publish.map(p => esc(p.keyword) + ' (' + p.days + ' days ago)').join(', ') + ' — report it through the <a href=\"' + esc(m.form_url) + '\">form</a> (\"I published a page\") so indexing and positions are tracked.</p>';\n  if (m.ladder_pages.length) html += h3('Your pages: index status') + table(['Page', 'Rung', 'Status', 'Indexed', 'Coverage', 'Last crawl'], m.ladder_pages.map(p => [link(p.url), p.rung === 4 ? 'top' : p.rung ? String(p.rung) : 'blog', esc(p.status) + (p.detected ? ' <span style=\"color:#15803d\">(found live this week)</span>' : ''), p.indexed == null ? '<span style=\"color:#94a3b8\">' + esc(p.inspect_error || 'unknown') + '</span>' : (p.indexed ? '<span style=\"color:#15803d\">yes</span>' : '<span style=\"color:#b91c1c\">no</span>'), esc(p.coverage || '—'), esc(p.last_crawl ? String(p.last_crawl).slice(0, 10) : '—')]));\n  if (G.connected) {\n    html += h3('Quick wins: striking distance (positions 4-20)') + table(['Query', 'Position', 'Before', 'Impressions', 'Clicks', 'Page'], G.striking.slice(0, 10).map(q => [esc(q.query), posS(q.position), posS(q.prev_position), n(q.impressions), n(q.clicks), link(q.page)]), 'no query between positions 4 and 20 with enough impressions yet');\n    if (G.ctr_gaps.length) html += h3('Low click-through for the position (rewrite titles)') + table(['Query', 'Position', 'Impressions', 'CTR', 'Expected', 'Page'], G.ctr_gaps.slice(0, 6).map(q => [esc(q.query), posS(q.position), n(q.impressions), (q.ctr * 100).toFixed(1) + '%', Math.round(q.expected_ctr * 100) + '%', link(q.page)]));\n    html += h3('Query movers') + '<table style=\"border-collapse:collapse;width:100%\"><tr><td style=\"vertical-align:top;padding-right:8px;width:50%\"><b style=\"font-size:13px;color:#15803d\">Winners</b>' + table(['Query', 'Clicks', 'Position'], G.winners.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style=\"color:#94a3b8\">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear winners') + '</td><td style=\"vertical-align:top;width:50%\"><b style=\"font-size:13px;color:#b91c1c\">Losers</b>' + table(['Query', 'Clicks', 'Position'], G.losers.slice(0, 6).map(q => [esc(q.query), n(q.clicks) + ' (' + deltaS(q.clicks, q.prev_clicks) + ')', posS(q.position) + (q.prev_position ? ' <span style=\"color:#94a3b8\">was ' + posS(q.prev_position) + '</span>' : '')]), 'no clear losers') + '</td></tr></table>';\n    if (G.new_queries.length || G.lost_queries.length) html += '<p style=\"font-size:13px\"><b>New queries:</b> ' + (G.new_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.impressions) + ' impr.)').join(', ') || 'none') + '<br><b>Lost queries:</b> ' + (G.lost_queries.slice(0, 8).map(q => esc(q.query) + ' (' + n(q.prev_clicks) + ' clicks before)').join(', ') || 'none') + '</p>';\n    html += h3('Pages') + table(['Page', 'Clicks', 'Change', 'Impressions', 'Position'], G.top_pages.slice(0, 8).map(p => [link(p.page), n(p.clicks), deltaS(p.clicks, p.prev_clicks), n(p.impressions), posS(p.position)]));\n    if (G.decaying_pages.length) html += '<p style=\"font-size:13px\"><b style=\"color:#b91c1c\">Decaying pages:</b> ' + G.decaying_pages.slice(0, 5).map(p => esc(path(p.page)) + ' (' + n(p.prev_clicks) + ' → ' + n(p.clicks) + ' clicks)').join('; ') + '</p>';\n  }\n  if (A.connected) html += h3('Traffic (GA4, organic search)') + '<p style=\"font-size:13px\">Organic: <b>' + n(A.organic.cur.sessions) + '</b> sessions (' + pctS(pct(A.organic.cur.sessions, A.organic.prev.sessions)) + '), ' + n(A.organic.cur.engaged) + ' engaged, ' + n(A.organic.cur.key_events) + ' key events, ' + n(A.organic.cur.users) + ' users · all channels: ' + n(A.total.cur.sessions) + ' sessions' + (A.channels.length ? ' (' + A.channels.slice(0, 4).map(c => esc(c.channel) + ' ' + n(c.sessions)).join(', ') + ')' : '') + (A.detected ? ' · property ' + esc(A.property_id) + ' detected automatically' : '') + '</p>' + table(['Landing page', 'Organic sessions', 'Change', 'Engaged', 'Key events'], A.landing.slice(0, 8).map(l => [link(l.page), n(l.sessions), deltaS(l.sessions, l.prev_sessions), n(l.engaged), n(l.key_events)]));\n  if (m.trends.length) html += h3('Search interest (Google Trends, 12 months)') + table(['Keyword', 'Direction', 'Last 4 weeks vs average', 'Peak', 'Rising related searches'], m.trends.map(t => [esc(t.keyword), t.error ? '<span style=\"color:#94a3b8\">' + esc(t.error) + '</span>' : t.direction === 'sparse' ? '<span style=\"color:#94a3b8\">too little search volume for a trend</span>' : esc(t.direction), (t.change_pct == null || t.direction === 'sparse') ? '—' : (t.change_pct > 0 ? '+' : '') + t.change_pct + '%', esc(t.peak_date ? String(t.peak_date).slice(0, 7) : '—'), esc((t.rising || []).slice(0, 4).map(r => r.query + ' (' + r.value + ')').join(', ') || '—')]));\n  if (b && (b.watch || []).length) html += h3('Watch') + '<ul style=\"font-size:13px;margin:4px 0;padding-left:18px\">' + b.watch.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';\n  html += '<p style=\"color:#64748b;font-size:12px;margin-top:16px\">Search Console figures are final up to 3 days ago and are averages across devices and locations; the live Google check is one SERP sample from DataForSEO. Trends are a relative index (100 = peak of the year). Reports run every Monday' + (m.tracked.some(t => t.source === 'ladder') ? '; the keyword ladder gets its own progress e-mail' : '') + '. Reply to this e-mail to pause tracking.</p></div>';\n  const hi = m.alerts.filter(a => a.level === 'high').length; const parts = [];\n  if (G.connected) parts.push(n(G.totals.cur.clicks) + ' clicks ' + pctS(G.deltas.clicks_pct)); if (hi) parts.push(hi + ' alert' + (hi > 1 ? 's' : '')); if (found.length) parts.push(found.length + ' page' + (found.length > 1 ? 's' : '') + ' found live'); if (G.connected && G.striking.length) parts.push(G.striking.length + ' quick win' + (G.striking.length > 1 ? 's' : ''));\n  const subject = (G.connected ? '[SEO weekly] ' : '[SEO tracking] ') + m.domain + ' — ' + (parts.length ? parts.join(' · ') : 'connect Google Search Console to see real data');\n  const file_name = 'seo-performance-' + m.domain.replace(/[^a-z0-9.]+/g, '-') + '-' + m.period.current.end + '.html';\n  const doc = '<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>' + esc(subject) + '</title></head><body style=\"margin:24px\">' + html + '</body></html>';\n  return { json: { ...m, brief: b, subject, html, file_name, status: 'progress', stage: 'site_tracker' }, binary: { data: { data: Buffer.from(doc, 'utf8').toString('base64'), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };\n});\n"
         },
         "id": "fd86f393-dc04-5ce9-a103-8c99fce603be",
         "name": "Site Report",
@@ -3417,7 +4612,7 @@
       },
       {
         "parameters": {
-          "content": "## SEO Agent — Site Tracker (v4.3)\nRuns **every Monday 09:00** (after the Rank Tracker) and on demand through *Manual Run* (`{ site_id | domain, on_demand: true }`; the main workflow calls it right after \"Track my site\"). Sites come from the Data Table `seo_sites` plus every domain with a keyword ladder (tracked automatically). All tables are created on first use.\n**Google (free, service account):** `GSC Sites` finds the Search Console property the service account can read (sc-domain first) → Search Analytics for the last 28 complete days vs the 28 before and the same period a year ago (totals by day, top queries with page, pages, each tracked keyword as an exact query) → **URL Inspection** of the ladder pages (indexed?). GA4: property id from the registration or **detected** from the web stream URL (`GA4 Accounts` → `GA4 Streams`) → organic channel totals, organic landing pages, organic sessions by day.\n**Paid (DataForSEO):** Google Trends for up to 4 head terms per site ($0.011 each, measured) and a live top-50 check for the site's own keywords (~$0.015 each, max 20; ladder keywords are read from the Rank Tracker's history).\n**Site Metrics** computes deltas, winners/losers/new/lost queries, striking-distance queries (4-20), CTR gaps, decaying pages, index status, alerts and ranked actions with API bodies; rows go to `seo_site_metrics` (one row per site per run), `seo_query_history` (tracked keywords + top 100 queries), `seo_trends` (for the Content Cadence) and back into `seo_sites`. Pages written by the Content Cadence (`seo_content_log`) are tracked as \"blog\" keywords; published ones are inspected; pages without a publish link are listed as waiting. Search Console **notices** (`seo_console_alerts`, from the Console Alerts mail watcher and the monthly check-in) and the latest **check-in** (`seo_console_checkins`) appear as alerts, actions and a report section; a missing check-in for the month is reminded every Monday. **Site Brief** (Claude Sonnet 5.5, ~$0.03 per site) words the week for the owner; **Site Report** builds the e-mail (KPI tiles, actions, tracked keywords, ladder index status, movers, opportunities, traffic, trends) + PDF; delivery by e-mail and/or callback (`stage: site_tracker`).\nCredential **Google Service Account (SEO Agent)** (`googleApi`, \"Set up for use in HTTP Request node\" on, scopes `https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/analytics.readonly`). The owner adds the service-account e-mail to Search Console (Full) and GA4 (Viewer); put that e-mail into `CONFIG.service_account_email` in *Site Plan* so the connect instructions name it. Not connected = the report still runs (trends, live checks) and explains the two steps.\nForm: http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d · API: http://localhost:5678/webhook/seo-keyword-check (`mode: track`)",
+          "content": "## SEO Agent — Site Tracker (v4.3)\nRuns **every Monday 09:00** (after the Rank Tracker) and on demand through *Manual Run* (`{ site_id | domain, on_demand: true }`; the main workflow calls it right after \"Track my site\"). Sites come from the Data Table `seo_sites` plus every domain with a keyword ladder (tracked automatically). All tables are created on first use.\n**Google (free, service account):** `GSC Sites` finds the Search Console property the service account can read (sc-domain first) → Search Analytics for the last 28 complete days vs the 28 before and the same period a year ago (totals by day, top queries with page, pages, each tracked keyword as an exact query) → **URL Inspection** of the ladder pages (indexed?). GA4: property id from the registration or **detected** from the web stream URL (`GA4 Accounts` → `GA4 Streams`) → organic channel totals, organic landing pages, organic sessions by day.\n**Paid (DataForSEO):** Google Trends for up to 4 head terms per site ($0.011 each, measured) and a live top-50 check for the site's own keywords (~$0.015 each, max 20; ladder keywords are read from the Rank Tracker's history).\n**Site Metrics** computes deltas, winners/losers/new/lost queries, striking-distance queries (4-20), CTR gaps, decaying pages, index status, alerts and ranked actions with API bodies; rows go to `seo_site_metrics` (one row per site per run), `seo_query_history` (tracked keywords + top 100 queries), `seo_trends` (for the Content Cadence) and back into `seo_sites`. Pages written by the Content Cadence (`seo_content_log`) are tracked as \"blog\" keywords; published ones are inspected; pages without a publish link are listed as waiting — or, since v4.8, found live through the sitemap and recorded automatically (*Publish detection*, the nodes above). Search Console **notices** (`seo_console_alerts`, from the Console Alerts mail watcher and the monthly check-in) and the latest **check-in** (`seo_console_checkins`) appear as alerts, actions and a report section; a missing check-in for the month is reminded every Monday. **Site Brief** (Claude Sonnet 5.5, ~$0.03 per site) words the week for the owner; **Site Report** builds the e-mail (KPI tiles, actions, tracked keywords, ladder index status, movers, opportunities, traffic, trends) + PDF; delivery by e-mail and/or callback (`stage: site_tracker`).\nCredential **Google Service Account (SEO Agent)** (`googleApi`, \"Set up for use in HTTP Request node\" on, scopes `https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/analytics.readonly`). The owner adds the service-account e-mail to Search Console (Full) and GA4 (Viewer); put that e-mail into `CONFIG.service_account_email` in *Site Plan* so the connect instructions name it. Not connected = the report still runs (trends, live checks) and explains the two steps.\nForm: http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d · API: http://localhost:5678/webhook/seo-keyword-check (`mode: track`)",
           "height": 500,
           "width": 1180,
           "color": 5
@@ -3712,6 +4907,17 @@
         "main": [
           [
             {
+              "node": "Load Trends (Site)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Trends (Site)": {
+        "main": [
+          [
+            {
               "node": "Site Plan",
               "type": "main",
               "index": 0
@@ -3965,6 +5171,17 @@
         "main": [
           [
             {
+              "node": "Metrics Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Metrics Rows": {
+        "main": [
+          [
+            {
               "node": "Save Site Metrics",
               "type": "main",
               "index": 0
@@ -4135,7 +5352,7 @@
         "main": [
           [
             {
-              "node": "GSC Sites",
+              "node": "Publish Candidates",
               "type": "main",
               "index": 0
             }
@@ -4143,6 +5360,257 @@
           [
             {
               "node": "Nothing To Track (Site)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Publish Candidates": {
+        "main": [
+          [
+            {
+              "node": "Any Detect Candidates?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Detect Candidates?": {
+        "main": [
+          [
+            {
+              "node": "Fetch Sitemap (Detect)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "GSC Sites",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Sitemap (Detect)": {
+        "main": [
+          [
+            {
+              "node": "Sitemap Children (Detect)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Sitemap Children (Detect)": {
+        "main": [
+          [
+            {
+              "node": "Any Child Sitemaps?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Child Sitemaps?": {
+        "main": [
+          [
+            {
+              "node": "Fetch Child Sitemaps (Detect)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Match Slugs (Detect)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Child Sitemaps (Detect)": {
+        "main": [
+          [
+            {
+              "node": "Match Slugs (Detect)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Match Slugs (Detect)": {
+        "main": [
+          [
+            {
+              "node": "Any Page Fetches?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Page Fetches?": {
+        "main": [
+          [
+            {
+              "node": "Fetch Pages (Detect)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Detect Published",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Pages (Detect)": {
+        "main": [
+          [
+            {
+              "node": "Detect Published",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Detect Published": {
+        "main": [
+          [
+            {
+              "node": "Detected Log Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Detected Log Rows": {
+        "main": [
+          [
+            {
+              "node": "Any Detected?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Detected?": {
+        "main": [
+          [
+            {
+              "node": "Save Detected (Log)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "GSC Sites",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Detected (Log)": {
+        "main": [
+          [
+            {
+              "node": "Detected Case Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Detected Case Rows": {
+        "main": [
+          [
+            {
+              "node": "Any Case Studies Detected?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Case Studies Detected?": {
+        "main": [
+          [
+            {
+              "node": "Mark Case Study Published (Detect)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Detected Ladder Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Case Study Published (Detect)": {
+        "main": [
+          [
+            {
+              "node": "Detected Ladder Rows",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Detected Ladder Rows": {
+        "main": [
+          [
+            {
+              "node": "Any Ladder Detected?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Ladder Detected?": {
+        "main": [
+          [
+            {
+              "node": "Mark Ladder Published (Detect)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "GSC Sites",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Ladder Published (Detect)": {
+        "main": [
+          [
+            {
+              "node": "GSC Sites",
               "type": "main",
               "index": 0
             }
@@ -4250,7 +5718,7 @@
           ],
           [
             {
-              "node": "Site SERP Requests",
+              "node": "Parse Trends",
               "type": "main",
               "index": 0
             }
