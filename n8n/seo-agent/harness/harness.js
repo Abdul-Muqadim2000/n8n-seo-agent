@@ -18,7 +18,8 @@ const wrap = (arr) => ({
 const $ = (name) => { if (!store[name]) throw new Error(`Referenced node "${name}" has no data in this run`); return wrap(store[name]); };
 
 function loadCode(node) {
-  const file = path.join(CODE_DIR, node.replace(/[^A-Za-z0-9_.-]+/g, '_') + '.js');
+  // 'legacy:<name>' runs a frozen reference copy from harness/legacy/ (old behaviour to compare against)
+  const file = node.startsWith('legacy:') ? path.join(__dirname, 'legacy', node.slice(7) + '.js') : path.join(CODE_DIR, node.replace(/[^A-Za-z0-9_.-]+/g, '_') + '.js');
   return fs.readFileSync(file, 'utf8');
 }
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;

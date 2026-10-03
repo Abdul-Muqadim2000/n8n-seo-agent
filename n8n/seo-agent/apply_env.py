@@ -8,8 +8,8 @@ Usage: python3 apply_env.py [--no-build] [--no-restart]"""
 import json, os, subprocess, sys, time, urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__)); N8N_DIR = os.path.join(HERE, '..'); CONTAINER, PROJECT = 'n8n-n8n-1', 'wo1WpMiHjdduGvfl'
 sys.path.insert(0, HERE); from env_settings import load_env
-WORKFLOWS = ['SEO_Agent_v4.json', 'SEO_Agent_API.json', 'SEO_Agent_Error_Handler.json', 'SEO_Agent_Rank_Tracker.json', 'SEO_Agent_Site_Tracker.json', 'SEO_Agent_Site_Admin.json', 'SEO_Agent_Content_Cadence.json', 'SEO_Agent_Console_Alerts.json', 'SEO_Agent_Publish_WordPress.json', 'SEO_Agent_AI_Visibility.json', 'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Audit_Scheduler.json']
-PUBLISH = ['SEOagentV4Full01', 'SEOagentAPIentry', 'SEOagentErrHandl', 'SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentSiteAdm1', 'SEOagentCadence1', 'SEOagentAIVisib1', 'SEOagentBacklnk1', 'SEOagentAuditSc1']
+WORKFLOWS = ['SEO_Agent_v4.json', 'SEO_Agent_API.json', 'SEO_Agent_Error_Handler.json', 'SEO_Agent_Rank_Tracker.json', 'SEO_Agent_Site_Tracker.json', 'SEO_Agent_Site_Admin.json', 'SEO_Agent_Content_Cadence.json', 'SEO_Agent_Console_Alerts.json', 'SEO_Agent_Publish_WordPress.json', 'SEO_Agent_AI_Visibility.json', 'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Audit_Scheduler.json', 'SEO_Agent_Admin_API.json', 'SEO_Agent_Keyword_Check.json']
+PUBLISH = ['SEOagentV4Full01', 'SEOagentAPIentry', 'SEOagentErrHandl', 'SEOagentTracker1', 'SEOagentSiteTrk1', 'SEOagentSiteAdm1', 'SEOagentCadence1', 'SEOagentAIVisib1', 'SEOagentBacklnk1', 'SEOagentAuditSc1', 'SEOagentAdminAPI', 'SEOagentAssess']
 def sh(cmd, **kw): return subprocess.run(cmd, check=True, text=True, capture_output=True, **kw)
 args = sys.argv[1:]
 if '--no-build' not in args:

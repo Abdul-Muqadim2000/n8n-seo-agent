@@ -112,3 +112,24 @@ AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id',
 # keys: 'age:<domain>' (registration date, 365 days), 'desc:<domain>' (site description, 30 days), 'sitemap:<site_id>' (sitemap fingerprint)
 CACHE_TABLE = 'seo_cache'
 CACHE_COLS = [('key', 'string'), ('kind', 'string'), ('site_id', 'string'), ('value', 'string'), ('updated_at', 'string')]
+
+# ---- pipeline (v4.8, PIPELINE_FEATURE_SPEC §9.1): per-ladder Auto / Manual, priority and status, written by the web app through the n8n public API ----
+# One row per ladder (ladder_id = seo_ladders.ladder_id) plus one row per site with ladder_id '_site' holding the website defaults (mode for new ladders,
+# opportunities, auto_start, max_active, max_waiting). A ladder without a row = the site's default mode (else auto), active, priority by start date.
+LADDER_SETTINGS_TABLE = 'seo_ladder_settings'
+LADDER_SETTINGS_COLS = [('ladder_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('mode', 'string'), ('priority', 'number'), ('status', 'string'),
+                        ('plan_type', 'string'), ('reach', 'number'), ('source', 'string'), ('opportunities', 'string'), ('auto_start', 'boolean'), ('max_active', 'number'), ('max_waiting', 'number'),
+                        ('created_at', 'string'), ('updated_at', 'string')]
+
+def dt_get_recent_params(table, key, condition, value, limit, order_col='createdAt', direction='DESC'):
+    """Get at most `limit` rows matching one condition, newest first (bounded load for tables that only grow, e.g. the rank history)."""
+    p = dt_get_where_params(table, key, condition, value)
+    p.update({'returnAll': False, 'limit': limit, 'orderBy': True, 'orderByColumn': order_col, 'orderByDirection': direction})
+    return p
+
+def dt_get_any_params(table, conditions):
+    """Get every row matching ANY of the (column, expression) equality conditions (e.g. a domain with and without www., or two cache keys)."""
+    return {'resource': 'row', 'operation': 'get', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'returnAll': True, 'matchType': 'anyCondition',
+            'filters': {'conditions': [{'keyName': k, 'condition': 'eq', 'keyValue': v} for k, v in conditions]}, 'options': {}}
+
+# keys of seo_cache since v4.8: 'reach:<site_id>' (the keyword difficulty the site can already win, 30 days; v5/code/_reach.js)

@@ -145,6 +145,8 @@ Severity reflects customer impact. "Fixed" means changed in v4 and covered by th
 
 **Blog posts per week.** "Track my site" has a *Blog posts per week* field (0-3; API `blogs_per_week`), stored in the Data Table `seo_cadence` (upsert by site id); Site Admin `cadence` changes it later. **SEO Agent — Content Cadence** (`SEOagentCadence1`, Monday 10:00, plus *Manual Run* `{ site_id | domain, pages?, dry_run? }`) picks each site's topics in this order: the keyword ladder's next *planned* pages (rung order, with the ladder's up/sideways/down links), striking-distance queries from `seo_query_history` (positions 4-20 with impressions: the page that already ranks is strengthened, `existing_page_url` set), rising related searches from `seo_trends` (written by the Site Tracker). It skips keywords written in the last 90 days, written/published ladder pages, brand queries and paused sites, starts one content run per pick (`force_content`, internal rate-limit key `cadence:<site>`), logs it in `seo_content_log` (status *started*), marks ladder rows *writing*, and sends one note per site (`stage: content_cadence`): this week's pages and why, the next four topics, pages still waiting for a publish link. `dry_run` only plans. Cost about $1.20 of AI per page.
 
+**Pipeline rules (v4.8, 2026-10-03, `PIPELINE_FEATURE_SPEC.md` phase 2; built + harness-verified, not deployed yet).** The cadence also reads `seo_ladder_settings` (new Data Table, created on first use; written by the web app: one row per ladder with `mode` auto/manual, `priority`, `status` active/queued/paused/won/stuck/archived, `plan_type`; one `_site` row per website with the defaults `mode`, `opportunities`, `auto_start`, `max_active`, `max_waiting`) and the main keywords' rank checks (`seo_rank_history` rung-4 rows, newest 5,000). Per site: only **Auto** ladders with status active (or queued) are written, at most `max_active` (default 2) of those that still have planned pages, in **priority** order (no row = the site's default mode, else Auto; active; oldest start date first) — ladder 1's pages before ladder 2's, then opportunity posts; plan type *direct* writes the main page first. The **main page waits for support**: it is written once half of the supporting pages are published (ladder row or content-log publish link) or the main keyword's latest check is #1-30. **Won** (main keyword top 3 in the last 4 checks, failed checks skipped) → no more pages. **Pile-up guard**: `max_waiting` (default 3) pages written but not published in the last 120 days → nothing written for the site (`paused_reason: pileup`; an on-demand run bypasses it only with `force: true`). Opportunity posts only when `opportunities` is Auto, otherwise listed as `suggestions`; **Manual** ladders are never written, their next page goes to `awaiting_approval`. The note / callback (`stage: content_cadence`) gains `paused_reason`, `waiting_publish`, `max_waiting`, `awaiting_approval`, `suggestions`, `queued_ladders`, `won_ladders`, `waiting_for_support`; a site with no page but with one of those gets a *Cadence Status* note (`pages: []`). On by default for sites without settings rows: the main-page gate, Won, the pile-up guard, max 2 active ladders and the priority order (the oldest ladder first instead of all ladders interleaved by rung; links now stay inside each ladder). The Rank Tracker callback adds display-only `won` and `stuck` per ladder (stuck: pages published, the first 8+ weeks ago, none improved in 8 weeks; publish dates from `seo_content_log`). Harness S24.
+
 **"I published a page"** (form option / API `mode: published` with `domain`, `published_url`, `keyword` or `content_request_id`; free, never rate-limited). *Fetch Published Page* reads the live URL; *Publish Check* verifies HTTP 200, no noindex, title with the keyword, meta description 50-160 characters, one H1, canonical, JSON-LD, content length; it resolves the page to the content-log row (by request id or keyword) and the ladder row, upserts the log row with the URL (status *published*), marks the ladder row *published* with the real URL (`page_exists` true), and suggests pages to link from (pages with impressions whose path shares a word with the keyword, plus the other ladder pages). The form ends on "Recorded: <keyword>" with the plain-text check; API callers get `stage: published`. From the next Monday the Site Tracker tracks the keyword (source *blog*), inspects the URL and lists pages still waiting for a publish link; Site Admin `unpublish` reverts a mistake.
 
 **Rate limit.** Internal spawns (ladder page runs, cadence runs) are keyed by their marker (`ladder:` / `cadence:`), not the owner's e-mail, so they never consume the owner's six public runs a day (they remain under the AI budget guard and their own weekly caps).
@@ -230,6 +232,74 @@ Severity reflects customer impact. "Fixed" means changed in v4 and covered by th
 **New store.** `seo_cache` (`key`, `kind`, `site_id`, `value`, `updated_at`; created on first use): `sitemap:<site>`, `age:<domain>`, `desc:<domain>`. Columns in `ladder_common.py`.
 
 **Testing.** Harness: S1 (editor gate never skips a draft that misses SEO checks), S5 (domain ages: cache, RDAP, WHOIS only for the gap; second report looks nothing up), S8 (unpublished pages monthly, failed checks weekly, report keeps every page), S10 (trend cache, Search Console-known keywords not re-checked live), S19 (weekly run asks the core engines only, carried Gemini / Claude / brand, no repeated brand alert), S20 (quarterly gap reuse, incremental history), S21 (scheduler decisions: never audited, 5 / 10 / 40 / 65 days, unchanged, changed, 404, undated index, on demand; fingerprint kept on skips). **514 node runs, 0 failed.** Live runs: §5c.
+
+## 3k. The right keyword and the right plan (v4.8, 2026-10-03, pipeline phase 3 — built, harness-verified, not deployed)
+
+**Why.** Rule R4 of `PIPELINE_FEATURE_SPEC.md`: difficulty is personal. The fixed limits (rungs 25 / 45 / 60, "winnable" ≤ 55) made a strong site
+climb months for a keyword it could win now, and promised a new site keywords it could not win. Rule R1: one search, one page — a ladder must not
+plan keywords another ladder of the site already covers.
+
+- **Reach** (`v5/code/_reach.js`, one copy inlined by the build wherever it is used): the 75th-percentile difficulty of the keywords the site ranks
+  top 10 for (≥ 5 of them), else by size (0-4 top-10 keywords → 10, 5-49 → 20, 50-499 → 35, 500+ → 50), the larger of the two. Stored 30 days per
+  site and market in `seo_cache` (`reach:<site_id>`), shared by the ladder, discovery and the keyword check; read in the same cache load as the
+  homepage description (*Load Site Cache* now asks for both keys).
+- **Difficulty for your site** and **plan type**: easy (≤ reach + 5 or already top 20) → direct, reachable (≤ + 20) → short, hard (≤ + 40) → full,
+  very hard → full (stretch), not realistic → none. Ladder: rungs relative to reach, direct writes the main page first, a refused ladder (not
+  realistic / duplicate main keyword) stores nothing and spawns no page; the plan report explains it in "Why this plan". Every new ladder writes
+  its `seo_ladder_settings` row. Details: `PIPELINE_FEATURE_SPEC.md` §5.3-5.5, §9.1 items 3-4.
+- **Discovery** with a website: the reach (stored, else two Labs calls, ~$0.03) labels every keyword and sets Now = easy or reachable; without a
+  website nothing changes (the harness compares with a frozen v4.7 copy).
+- **Keyword check** (`SEOagentAssess`, `POST /webhook/seo-keyword-assess`, synchronous): Labs overview + position (+ reach when not stored) in
+  parallel and one Claude Haiku call for topic fit / navigational / alternatives; 200 / 400 / 429 / 502. ~$0.02-0.05 per check.
+- **Rank Tracker**: a won ladder is checked monthly (main keyword + published pages) instead of being dropped; failed checks no longer break "won".
+
+**Behaviour changes for existing paths.** Ladder runs: rungs and plan type depend on reach (a new site with reach 10 gets fewer rung-1 pages; a
+strong site may get a direct plan with the main page written first); an AVOID / navigational head term now yields no pages (before: a full ladder
+with alternatives); keywords of the site's other ladders are left out; the main page's months come from the plan (full 9-15 instead of the rung
+sum); difficulty labels in the plan report are relative to reach; `Ladder Requests` / `Build Ladder Report` read their context by node name
+(nodes now run in between). Discovery with a website: Now / Next / Later and the pipeline keyword follow reach instead of kd ≤ 55. Rank Tracker:
+won ladders keep a monthly check; its e-mail text says so.
+
+**Testing.** Harness S25: reach (percentile, all size tiers, the larger of the two, failed calls, cache hit / stale / other market, no domain),
+classification boundaries at reach 35, plan types at reach 10 / 35 / 55 (full / short / direct) with relative rungs, write-now order, strong-site
+months, very hard = stretch, not realistic and duplicate refusals through report / rows / delivery / page runs / callback, cross-ladder exclusion
+(variants, supporting keywords, archived, `www.` rows), the settings row (exact columns, `_site` mode, priority after existing ladders, the
+app's own row kept, no row without stored ladder rows), discovery labels / tiers with and without a website (v4.7 equality), the keyword check
+(validation 400s, 429, success with and without a stored reach, alternatives filtering, Claude failure, own brand, 502s, unknown keyword) and
+the monthly check of won ladders. **1160 node runs and assertions, 0 failed** (774 before; S7's band log now uses relative rungs).
+
+## 3l. Publish detection (v4.8, 2026-10-03, pipeline phase 4 — n8n part built, harness-verified, not deployed)
+
+**Why.** Pages are written every week but only count once they are live; owners publish in any CMS and rarely report the link, so the
+pile-up guard (3 waiting pages) pauses their cadence and nothing gets tracked. WordPress publishing is not wanted, so the Site Tracker now
+finds the pages itself.
+
+- **Where**: Site Tracker, between *Any Sites?* and *GSC Sites* (19 nodes; 101 in the workflow). Candidates per site: content-log rows
+  "started" without a link (≤ 120 days) + ladder rows "writing". No candidate = no request.
+- **How** (`PIPELINE_FEATURE_SPEC.md` §6.5): `/sitemap.xml` (index → 5 newest child sitemaps), URLs compared host-agnostically; **slug**
+  first (planned path / planned slug / keyword slug), then **title / first H1** for ≤ 10 unmatched pages, reading ≤ 15 slug-similar pages per
+  site (≥ 60% of the keyword's words in the slug to be read, ≥ 80% in the title or H1 to match; the app's word rules from `_reach.js`).
+  Other pages' URLs and URLs last changed before the page was written are never taken; a rewrite of an existing URL needs a `lastmod` after the
+  rewrite. One URL per page, one page per URL.
+- **Stored like "I published a page"**: one row builder (`v5/code/_publish_rows.js`) now serves both *Publish Check* and *Detect Published*
+  (content log upsert by site_id + keyword with exactly the table columns, ladder row published + live URL, case study URL). The page is
+  inspected in Search Console in the same run; a page found this week that is not indexed yet is an info note, not a high alert.
+- **Output**: report box "We found these pages live on your site: … — tracking has started" (only when non-empty; subject "N pages found
+  live"), brief facts, callback `detected_published: [{ keyword, url, ladder_id, matched_by, source }]` + `publish_detection` (counts,
+  sitemap status, errors). The waiting list and the ladder-page table use the live URL at once.
+- **Safety**: every detection step is `onError: continueRegularOutput` and its output is read: a failed step or write is an info / medium
+  alert, never a stopped report. Cost $0 (plain HTTP).
+
+**Behaviour changes for existing paths.** Site Tracker callback: two more keys (`detected_published`, `publish_detection`; S10's key count
+29 → 31). *Publish Check* builds its rows through the shared builder (identical output; S13 unchanged). *Inspect Requests* also inspects the
+pages found this week.
+
+**Testing.** Harness S26: sitemap index (child order, 404 child, CDATA, other hosts, `?query` / http / bare-host duplicates), slug match on
+the www host in a folder without the trailing slash, planned path beating an `/ar/` copy, keyword slug, title match, the false-match pair
+("e invoicing uae penalties" vs a "UAE e-invoicing: FTA rules" page), one candidate per URL, known and old URLs never claimed, existing pages
+by `lastmod`, the 15-fetch cap with round robin, no candidates = no request, rows with exactly the table columns and identical to Publish
+Check's, inspection, metrics, report section (and its absence), callback field, failed write, failed step. **1227 node runs and assertions,
+0 failed** (1160 before). Live check pending: a Site Tracker run on techand.ai after deployment (free).
 
 ## 4. What changed in v4 (summary)
 

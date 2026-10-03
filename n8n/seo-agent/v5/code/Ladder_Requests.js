@@ -3,7 +3,7 @@
 //  related     - "searches related to" the head term, depth 2
 //  ideas       - keyword ideas for the head term + the site's main services (topic neighbours)
 //  ranked      - keywords the client's domain already ranks for (current positions for the rungs)
-const d = $input.first().json;
+const d = $('Parse Verdict').first().json;   // v4.8: the Data Table loads (other ladders of the site, their settings) run in between
 const head = String(d.keyword || '').trim().toLowerCase();
 if (!head) throw new Error('No destination keyword for the ladder.');
 const loc = d.location_code, lang = d.language_code || 'en';

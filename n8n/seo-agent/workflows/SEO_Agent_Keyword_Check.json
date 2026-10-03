@@ -1,0 +1,801 @@
+[
+  {
+    "id": "SEOagentAssess",
+    "name": "SEO Agent — Keyword Check",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 45
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "seo-keyword-assess",
+          "authentication": "headerAuth",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "295109eb-8098-5aba-a9dc-6983625ca11b",
+        "name": "Assess Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "9b4e2f61-3c8a-4d7e-a5b2-7f1c0e6d9a24",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "SEOcredApiHeader",
+            "name": "SEO API Key"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// ---- reach (v4.8, PIPELINE_FEATURE_SPEC §5.3-5.5): the keyword difficulty this website can already win. ONE copy, inlined by the build into\n// Ladder Plan, Reach (Discovery), Rank Keywords, Build Keyword Strategy and the Keyword Check workflow (SEOagentAssess), so they all agree.\n//   reach      = the 75th-percentile difficulty of the keywords the site ranks top 10 for (at least 5 of them; linear interpolation), else by\n//                size (keywords in the top 10: 0-4 -> 10, 5-49 -> 20, 50-499 -> 35, 500+ -> 50); the larger of the two when both exist.\n//   difficulty = easy (kd <= reach + 5, or the site already ranks 1-20 for the keyword) · reachable (<= reach + 20) · hard (<= reach + 40) ·\n//   for you      very hard (above) · not realistic (navigational / another company's brand / verdict AVOID); an unknown kd counts as reach + 10.\n//   plan       = easy -> direct (2-4 months) · reachable -> short (4-8) · hard -> full (9-15) · very hard -> full, stretch · not realistic -> none;\n//                strong sites (100+ top-10 keywords, 1,000+ ranking keywords, or already top 20 for it): direct 2-3, short 3-6, full 6-12.\n//   cache      = seo_cache 'reach:<site_id>' for 30 days and the same market (value: reach, method, p75, size_reach, sample, top10,\n//                organic_keywords, location_code); a reach that could not be measured (both calls failed) is never stored.\nconst REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100 };\nconst REACH_MONTHS = { direct: [2, 4], short: [4, 8], full: [9, 15] }, REACH_MONTHS_STRONG = { direct: [2, 3], short: [3, 6], full: [6, 12] };\nconst REACH_DIFF_LABEL = { easy: 'Easy for your site', reachable: 'Reachable for your site', hard: 'Hard for your site', very_hard: 'Very hard for your site', not_realistic: 'Not realistic for your site' };\nconst REACH_PLAN_LABEL = { direct: 'Direct plan', short: 'Short ladder', full: 'Full ladder', none: 'No ladder' };\nconst reachDomain = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\nconst reachSiteId = (d) => 'site_' + reachDomain(d).replace(/[^a-z0-9]+/g, '-');\nconst reachKey = (d) => 'reach:' + reachSiteId(d);\nconst reachNum = (v) => (v === '' || v == null || typeof v === 'boolean' || !Number.isFinite(Number(v))) ? null : Number(v);\nconst reachSizeTier = (top10) => { const n = Number(top10) || 0; return n >= 500 ? 50 : n >= 50 ? 35 : n >= 5 ? 20 : 10; };\n// ranked: [{ kd, position }] for the site (null = the call failed; only positions 1-10 count); authority: { top10, organic_keywords } (null = unknown)\nfunction reachFrom(ranked, authority) {\n  const top = (ranked || []).filter(r => { const p = reachNum(r && r.position); return p != null && p >= 1 && p <= 10; });\n  const kds = top.map(r => reachNum(r.kd)).filter(v => v != null).sort((a, b) => a - b);\n  let p75 = null;\n  if (kds.length >= REACH_CFG.min_top10) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }\n  const known = !!(authority && reachNum(authority.top10) != null);\n  const top10 = known ? reachNum(authority.top10) : top.length;\n  const size_reach = reachSizeTier(top10);\n  const reach = p75 != null ? Math.max(p75, size_reach) : size_reach;\n  const method = (!ranked && !known) ? 'default' : (p75 != null && p75 >= size_reach) ? 'percentile' : 'size';\n  return { reach, method, p75, size_reach, sample: kds.length, top10, organic_keywords: authority && reachNum(authority.organic_keywords) != null ? reachNum(authority.organic_keywords) : null, cached: false };\n}\n// the stored reach of this site for this market, when it is younger than 30 days (null otherwise)\nfunction reachCached(rows, domain, location_code) {\n  const key = reachKey(domain);\n  const row = (rows || []).filter(r => r && !r.error && r.key === key).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];\n  if (!row) return null;\n  let v = null; try { v = JSON.parse(row.value); } catch (e) { return null; }\n  if (!v || reachNum(v.reach) == null) return null;\n  if (reachNum(location_code) && reachNum(v.location_code) && Number(v.location_code) !== Number(location_code)) return null;\n  const days = (Date.now() - new Date(row.updated_at).getTime()) / 864e5;\n  if (!(days >= 0 && days < REACH_CFG.ttl_days)) return null;\n  return { ...v, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at) };\n}\n// the seo_cache row (exact columns) for a freshly measured reach\nconst reachCacheRow = (domain, info, location_code) => ({ key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),\n  value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code) }),\n  updated_at: new Date().toISOString() });\n// o: { position (the site's rank for the keyword), navigational, other_brand, verdict }\nfunction difficultyForYou(kd, reach, o) {\n  o = o || {};\n  if (o.navigational || o.other_brand || String(o.verdict || '').toUpperCase() === 'AVOID') return 'not_realistic';\n  const pos = reachNum(o.position);\n  if (pos != null && pos >= 1 && pos <= REACH_CFG.easy_position) return 'easy';\n  const r = reachNum(reach) == null ? reachSizeTier(0) : Number(reach);\n  const k = reachNum(kd) == null ? r + REACH_CFG.unknown_kd : Number(kd);\n  return k <= r + REACH_CFG.easy ? 'easy' : k <= r + REACH_CFG.reachable ? 'reachable' : k <= r + REACH_CFG.hard ? 'hard' : 'very_hard';\n}\nconst reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };\nfunction reachPlan(difficulty, strong) {\n  const plan_type = { easy: 'direct', reachable: 'short', hard: 'full', very_hard: 'full', not_realistic: 'none' }[difficulty] || 'full';\n  const m = plan_type === 'none' ? null : (strong ? REACH_MONTHS_STRONG : REACH_MONTHS)[plan_type];\n  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard' };\n}\nconst reachLabel = (difficulty, plan) => [REACH_DIFF_LABEL[difficulty] || '', plan ? REACH_PLAN_LABEL[plan.plan_type] + (plan.stretch ? ' (stretch)' : '') : '', plan && plan.months ? plan.months + ' months' : ''].filter(Boolean).join(' · ');\n// DataForSEO Labs calls that measure reach on a cache miss (~$0.03): the site's top-10 keywords with their difficulty, and its size\nconst reachRequests = (domain, location_code, language_code) => {\n  const L = 'https://api.dataforseo.com/v3/dataforseo_labs/google/', t = reachDomain(domain), lang = language_code || 'en';\n  return [{ kind: 'reach_ranked', label: 'top-10 keywords of ' + t, endpoint: L + 'ranked_keywords/live',\n      body: [{ target: t, location_code, language_code: lang, limit: REACH_CFG.sample, order_by: ['keyword_data.keyword_info.search_volume,desc'], filters: [['ranked_serp_element.serp_item.rank_group', '<=', 10]] }] },\n    { kind: 'reach_overview', label: 'size of ' + t, endpoint: L + 'domain_rank_overview/live', body: [{ target: t, location_code, language_code: lang }] }];\n};\nconst reachTaskOk = (x) => !!(x && !x.error && (((x.tasks || [])[0] || {}).status_code || 0) < 40000 && ((x.tasks || [])[0] || {}).status_code);\nconst reachError = (x) => { if (!x) return 'no response'; const e = x.error; if (e) return String((typeof e === 'object' ? (e.message || e.description || JSON.stringify(e)) : e)).slice(0, 200);\n  const t = (x.tasks || [])[0] || {}; return String(t.status_message || x.status_message || 'no data').slice(0, 200) + (t.status_code ? ' (' + t.status_code + ')' : ''); };\n// parses the answers of reachRequests (in any order: matched by kind) -> { ranked: [{ keyword, kd, position }] | null, authority | null, errors }\nfunction reachParse(reqs, res) {\n  let ranked = null, authority = null; const errors = [];\n  (reqs || []).forEach((r, i) => {\n    const x = (res || [])[i];\n    if (!reachTaskOk(x)) { errors.push(r.label + ': ' + reachError(x)); return; }\n    const r0 = ((x.tasks[0].result || [])[0]) || {};\n    if (r.kind === 'reach_ranked') ranked = (r0.items || []).map(it => { const kd0 = it.keyword_data || {}; const se = (it.ranked_serp_element || {}).serp_item || {};\n      return { keyword: String(kd0.keyword || '').toLowerCase(), kd: (kd0.keyword_properties || {}).keyword_difficulty ?? null, position: se.rank_group ?? null }; });\n    if (r.kind === 'reach_overview') { const m = (((r0.items || [])[0] || {}).metrics || {}).organic; authority = m ? { organic_keywords: m.count ?? 0, top3: (m.pos_1 || 0) + (m.pos_2_3 || 0), top10: (m.pos_1 || 0) + (m.pos_2_3 || 0) + (m.pos_4_10 || 0) } : { organic_keywords: 0, top3: 0, top10: 0 }; }\n  });\n  return { ranked, authority, errors };\n}\n// rule R1 \"one search, one page\" — the same words as the web app (app/shared/src/ladders.ts): lower case, one-letter and stop words out, a light\n// stem, place names kept; two keywords are the same search when their word sets are equal or 75%+ the same (Jaccard)\nconst OVERLAP_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);\nconst overlapTokens = (s) => { const out = []; for (const t of String(s || '').toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 1 || OVERLAP_STOP.has(t)) continue;\n  const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '').replace(/[^a-z0-9]/g, ''); if (w && !out.includes(w)) out.push(w); } return out; };\nconst overlapScore = (a, b) => { if (!a.length || !b.length) return 0; const sb = new Set(b); const common = a.filter(t => sb.has(t)).length; return common / (a.length + b.length - common); };\nconst keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b)) >= 0.75;\n// ---- countries: copied from the main workflow's Normalize Input by build_api.py (DataForSEO location code = 2000 + ISO numeric) ----\nconst COUNTRIES = {\n  'United States':        { code: 2840, iso: 'US', lang: 'en', language: 'English', spelling: 'American English',   currency: 'USD' },\n  'United Kingdom':       { code: 2826, iso: 'GB', lang: 'en', language: 'English', spelling: 'British English',    currency: 'GBP' },\n  'Canada':               { code: 2124, iso: 'CA', lang: 'en', language: 'English', spelling: 'Canadian English',   currency: 'CAD' },\n  'Australia':            { code: 2036, iso: 'AU', lang: 'en', language: 'English', spelling: 'Australian English', currency: 'AUD' },\n  'New Zealand':          { code: 2554, iso: 'NZ', lang: 'en', language: 'English', spelling: 'British English',    currency: 'NZD' },\n  'Ireland':              { code: 2372, iso: 'IE', lang: 'en', language: 'English', spelling: 'British English',    currency: 'EUR' },\n  'Pakistan':             { code: 2586, iso: 'PK', lang: 'en', language: 'English', spelling: 'British English',    currency: 'PKR' },\n  'India':                { code: 2356, iso: 'IN', lang: 'en', language: 'English', spelling: 'British English',    currency: 'INR' },\n  'United Arab Emirates': { code: 2784, iso: 'AE', lang: 'en', language: 'English', spelling: 'British English',    currency: 'AED' },\n  'Saudi Arabia':         { code: 2682, iso: 'SA', lang: 'en', language: 'English', spelling: 'British English',    currency: 'SAR' },\n  'Singapore':            { code: 2702, iso: 'SG', lang: 'en', language: 'English', spelling: 'British English',    currency: 'SGD' },\n  'South Africa':         { code: 2710, iso: 'ZA', lang: 'en', language: 'English', spelling: 'British English',    currency: 'ZAR' },\n  'Germany':              { code: 2276, iso: 'DE', lang: 'de', language: 'German',  spelling: 'German',             currency: 'EUR' },\n  'France':               { code: 2250, iso: 'FR', lang: 'fr', language: 'French',  spelling: 'French',             currency: 'EUR' },\n  'Spain':                { code: 2724, iso: 'ES', lang: 'es', language: 'Spanish', spelling: 'European Spanish',   currency: 'EUR' },\n  'Italy':                { code: 2380, iso: 'IT', lang: 'it', language: 'Italian', spelling: 'Italian',            currency: 'EUR' },\n  'Netherlands':          { code: 2528, iso: 'NL', lang: 'nl', language: 'Dutch',   spelling: 'Dutch',              currency: 'EUR' },\n  'Brazil':               { code: 2076, iso: 'BR', lang: 'pt', language: 'Portuguese', spelling: 'Brazilian Portuguese', currency: 'BRL' },\n  'Mexico':               { code: 2484, iso: 'MX', lang: 'es', language: 'Spanish', spelling: 'Mexican Spanish',    currency: 'MXN' }\n};\n// ---- domain rules: copied from Normalize Input (public hostnames only) ----\nfunction cleanDomain(v) {\n  return String(v || '').trim().toLowerCase()\n    .replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\n}\nconst domainOk = (d) => {\n  if (!d || d.length > 253) return false;\n  if (/^(\\d{1,3}\\.){3}\\d{1,3}$/.test(d)) return false;\n  if (/^\\[?[0-9a-f:]+\\]?$/.test(d) && d.includes(':')) return false;\n  if (/(^|\\.)(localhost|local|internal|localdomain|home|lan|corp|intranet|test|example|invalid)$/.test(d)) return false;\n  return /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+(xn--[a-z0-9-]+|[a-z]{2,24})$/.test(d);\n};\n// Keyword Check (v4.8, PIPELINE_FEATURE_SPEC §5.2): validates POST /webhook/seo-keyword-assess { keyword, country, domain, business?, services?,\n// existing_keywords? } with the main workflow's own country list and domain rules (copied in by build_api.py). Invalid -> 400 with one message per\n// field; a daily limit per caller (the web app sends X-Forwarded-For app:<company>, 40 a day each; 400 a day in total) -> 429.\nconst raw = $input.first().json || {};\nconst b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};\nconst hdr = raw.headers || {};\nconst LIMITS = { per_key_per_day: 40, global_per_day: 400 };\nconst errors = {};\nconst keyword = String(b.keyword == null ? '' : b.keyword).toLowerCase().replace(/\\s+/g, ' ').trim();\nif (typeof b.keyword !== 'string' || keyword.length < 2 || keyword.length > 100) errors.keyword = 'keyword must be 2-100 characters';\nconst domain = cleanDomain(typeof b.domain === 'string' ? b.domain : '');\nif (!domain || !domainOk(domain)) errors.domain = 'domain must be a public website address like example.com';\nconst countryRaw = String(typeof b.country === 'string' ? b.country : '').trim();\nconst countryName = Object.keys(COUNTRIES).find(n => n.toLowerCase() === countryRaw.toLowerCase()) || Object.keys(COUNTRIES).find(n => COUNTRIES[n].iso === countryRaw.toUpperCase()) || '';\nif (!countryName) errors.country = 'country must be one of ' + Object.keys(COUNTRIES).join(', ') + ' (name or ISO-2 code)';\nif (b.business != null && typeof b.business !== 'string') errors.business = 'business must be a string';\nif (b.services != null && !Array.isArray(b.services) && typeof b.services !== 'string') errors.services = 'services must be an array of strings or a comma-separated string';\nif (b.existing_keywords != null && !Array.isArray(b.existing_keywords)) errors.existing_keywords = 'existing_keywords must be an array of strings';\nconst listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\\n,;]+/) : [])).map(x => String(x == null ? '' : x).trim()).filter(Boolean);\nconst bad = Object.keys(errors).length > 0;\n// daily limit (counted only for valid requests; static data persists for production webhook runs)\nconst client = String(hdr['x-forwarded-for'] || hdr['x-real-ip'] || '').split(',')[0].trim().toLowerCase();\nconst key = /^app:[a-z0-9-]{6,64}$/.test(client) ? client : (client || 'anon');\nlet limited = '';\nif (!bad) {\n  const store = $getWorkflowStaticData('global'); const today = new Date().toISOString().slice(0, 10);\n  if (!store.assess || store.assess.day !== today) store.assess = { day: today, total: 0, keys: {} };\n  const used = store.assess.keys[key] || 0;\n  if (used >= LIMITS.per_key_per_day) limited = 'The daily limit of ' + LIMITS.per_key_per_day + ' keyword checks is reached. Please try again tomorrow.';\n  else if (store.assess.total >= LIMITS.global_per_day) limited = 'The daily limit of ' + LIMITS.global_per_day + ' keyword checks for all callers is reached. Please try again tomorrow.';\n  else { store.assess.keys[key] = used + 1; store.assess.total += 1; }\n}\nconst c = COUNTRIES[countryName] || {};\nreturn [{ json: { ok: !bad && !limited, status: bad ? 400 : limited ? 429 : 200, errors, error: bad ? Object.values(errors).join('; ') : limited,\n  keyword, domain, site_id: domain ? reachSiteId(domain) : '', country: countryName, country_iso: c.iso || '', location_code: c.code || null, language_code: c.lang || 'en',\n  business: typeof b.business === 'string' ? b.business.trim().slice(0, 1500) : '', services: listOf(b.services).slice(0, 20).map(s => s.slice(0, 120)),\n  existing_keywords: listOf(b.existing_keywords).slice(0, 300).map(s => s.toLowerCase().slice(0, 120)), caller: key, request_id: String(b.request_id || ('assess-' + $execution.id)) } }];\n"
+        },
+        "id": "27f9e153-c00e-5c80-afca-a0d5d19228c0",
+        "name": "Assess Validate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          220,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "7785e283-c7dd-555d-a0a2-f8c2db775a18",
+                "leftValue": "={{ $json.ok }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "23f5dd66-9824-5ddf-b7c2-74b87db9ad06",
+        "name": "Assess Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          440,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "0aa66650-bc7c-56ec-b5cf-d71e4f265add",
+                "leftValue": "={{ $json.status === 429 }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "44d425de-06fc-5247-b4a4-f0889219df8f",
+        "name": "Assess Limited?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          660,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error }) }}",
+          "options": {
+            "responseCode": 429
+          }
+        },
+        "id": "38940365-40a5-5f78-bbff-f5e6e0f21d2d",
+        "name": "Respond Assess Limited",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          160
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "1bf6a104-a4c1-5557-b71e-483a26b2b096",
+        "name": "Respond Assess Bad Request",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          320
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_cache",
+          "columns": {
+            "column": [
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "value",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "7a53e787-c2c7-5701-bdb0-e4d603aa1c7b",
+        "name": "Ensure Cache Table (Assess)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          -100
+        ],
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "returnAll": true,
+          "matchType": "anyCondition",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ 'reach:' + $('Assess Validate').first().json.site_id }}"
+              },
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ 'desc:' + $('Assess Validate').first().json.domain }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "fed6bb11-ec21-53b8-ac94-ba60a9cdb289",
+        "name": "Load Assess Cache",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          880,
+          -100
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// ---- reach (v4.8, PIPELINE_FEATURE_SPEC §5.3-5.5): the keyword difficulty this website can already win. ONE copy, inlined by the build into\n// Ladder Plan, Reach (Discovery), Rank Keywords, Build Keyword Strategy and the Keyword Check workflow (SEOagentAssess), so they all agree.\n//   reach      = the 75th-percentile difficulty of the keywords the site ranks top 10 for (at least 5 of them; linear interpolation), else by\n//                size (keywords in the top 10: 0-4 -> 10, 5-49 -> 20, 50-499 -> 35, 500+ -> 50); the larger of the two when both exist.\n//   difficulty = easy (kd <= reach + 5, or the site already ranks 1-20 for the keyword) · reachable (<= reach + 20) · hard (<= reach + 40) ·\n//   for you      very hard (above) · not realistic (navigational / another company's brand / verdict AVOID); an unknown kd counts as reach + 10.\n//   plan       = easy -> direct (2-4 months) · reachable -> short (4-8) · hard -> full (9-15) · very hard -> full, stretch · not realistic -> none;\n//                strong sites (100+ top-10 keywords, 1,000+ ranking keywords, or already top 20 for it): direct 2-3, short 3-6, full 6-12.\n//   cache      = seo_cache 'reach:<site_id>' for 30 days and the same market (value: reach, method, p75, size_reach, sample, top10,\n//                organic_keywords, location_code); a reach that could not be measured (both calls failed) is never stored.\nconst REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100 };\nconst REACH_MONTHS = { direct: [2, 4], short: [4, 8], full: [9, 15] }, REACH_MONTHS_STRONG = { direct: [2, 3], short: [3, 6], full: [6, 12] };\nconst REACH_DIFF_LABEL = { easy: 'Easy for your site', reachable: 'Reachable for your site', hard: 'Hard for your site', very_hard: 'Very hard for your site', not_realistic: 'Not realistic for your site' };\nconst REACH_PLAN_LABEL = { direct: 'Direct plan', short: 'Short ladder', full: 'Full ladder', none: 'No ladder' };\nconst reachDomain = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\nconst reachSiteId = (d) => 'site_' + reachDomain(d).replace(/[^a-z0-9]+/g, '-');\nconst reachKey = (d) => 'reach:' + reachSiteId(d);\nconst reachNum = (v) => (v === '' || v == null || typeof v === 'boolean' || !Number.isFinite(Number(v))) ? null : Number(v);\nconst reachSizeTier = (top10) => { const n = Number(top10) || 0; return n >= 500 ? 50 : n >= 50 ? 35 : n >= 5 ? 20 : 10; };\n// ranked: [{ kd, position }] for the site (null = the call failed; only positions 1-10 count); authority: { top10, organic_keywords } (null = unknown)\nfunction reachFrom(ranked, authority) {\n  const top = (ranked || []).filter(r => { const p = reachNum(r && r.position); return p != null && p >= 1 && p <= 10; });\n  const kds = top.map(r => reachNum(r.kd)).filter(v => v != null).sort((a, b) => a - b);\n  let p75 = null;\n  if (kds.length >= REACH_CFG.min_top10) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }\n  const known = !!(authority && reachNum(authority.top10) != null);\n  const top10 = known ? reachNum(authority.top10) : top.length;\n  const size_reach = reachSizeTier(top10);\n  const reach = p75 != null ? Math.max(p75, size_reach) : size_reach;\n  const method = (!ranked && !known) ? 'default' : (p75 != null && p75 >= size_reach) ? 'percentile' : 'size';\n  return { reach, method, p75, size_reach, sample: kds.length, top10, organic_keywords: authority && reachNum(authority.organic_keywords) != null ? reachNum(authority.organic_keywords) : null, cached: false };\n}\n// the stored reach of this site for this market, when it is younger than 30 days (null otherwise)\nfunction reachCached(rows, domain, location_code) {\n  const key = reachKey(domain);\n  const row = (rows || []).filter(r => r && !r.error && r.key === key).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];\n  if (!row) return null;\n  let v = null; try { v = JSON.parse(row.value); } catch (e) { return null; }\n  if (!v || reachNum(v.reach) == null) return null;\n  if (reachNum(location_code) && reachNum(v.location_code) && Number(v.location_code) !== Number(location_code)) return null;\n  const days = (Date.now() - new Date(row.updated_at).getTime()) / 864e5;\n  if (!(days >= 0 && days < REACH_CFG.ttl_days)) return null;\n  return { ...v, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at) };\n}\n// the seo_cache row (exact columns) for a freshly measured reach\nconst reachCacheRow = (domain, info, location_code) => ({ key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),\n  value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code) }),\n  updated_at: new Date().toISOString() });\n// o: { position (the site's rank for the keyword), navigational, other_brand, verdict }\nfunction difficultyForYou(kd, reach, o) {\n  o = o || {};\n  if (o.navigational || o.other_brand || String(o.verdict || '').toUpperCase() === 'AVOID') return 'not_realistic';\n  const pos = reachNum(o.position);\n  if (pos != null && pos >= 1 && pos <= REACH_CFG.easy_position) return 'easy';\n  const r = reachNum(reach) == null ? reachSizeTier(0) : Number(reach);\n  const k = reachNum(kd) == null ? r + REACH_CFG.unknown_kd : Number(kd);\n  return k <= r + REACH_CFG.easy ? 'easy' : k <= r + REACH_CFG.reachable ? 'reachable' : k <= r + REACH_CFG.hard ? 'hard' : 'very_hard';\n}\nconst reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };\nfunction reachPlan(difficulty, strong) {\n  const plan_type = { easy: 'direct', reachable: 'short', hard: 'full', very_hard: 'full', not_realistic: 'none' }[difficulty] || 'full';\n  const m = plan_type === 'none' ? null : (strong ? REACH_MONTHS_STRONG : REACH_MONTHS)[plan_type];\n  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard' };\n}\nconst reachLabel = (difficulty, plan) => [REACH_DIFF_LABEL[difficulty] || '', plan ? REACH_PLAN_LABEL[plan.plan_type] + (plan.stretch ? ' (stretch)' : '') : '', plan && plan.months ? plan.months + ' months' : ''].filter(Boolean).join(' · ');\n// DataForSEO Labs calls that measure reach on a cache miss (~$0.03): the site's top-10 keywords with their difficulty, and its size\nconst reachRequests = (domain, location_code, language_code) => {\n  const L = 'https://api.dataforseo.com/v3/dataforseo_labs/google/', t = reachDomain(domain), lang = language_code || 'en';\n  return [{ kind: 'reach_ranked', label: 'top-10 keywords of ' + t, endpoint: L + 'ranked_keywords/live',\n      body: [{ target: t, location_code, language_code: lang, limit: REACH_CFG.sample, order_by: ['keyword_data.keyword_info.search_volume,desc'], filters: [['ranked_serp_element.serp_item.rank_group', '<=', 10]] }] },\n    { kind: 'reach_overview', label: 'size of ' + t, endpoint: L + 'domain_rank_overview/live', body: [{ target: t, location_code, language_code: lang }] }];\n};\nconst reachTaskOk = (x) => !!(x && !x.error && (((x.tasks || [])[0] || {}).status_code || 0) < 40000 && ((x.tasks || [])[0] || {}).status_code);\nconst reachError = (x) => { if (!x) return 'no response'; const e = x.error; if (e) return String((typeof e === 'object' ? (e.message || e.description || JSON.stringify(e)) : e)).slice(0, 200);\n  const t = (x.tasks || [])[0] || {}; return String(t.status_message || x.status_message || 'no data').slice(0, 200) + (t.status_code ? ' (' + t.status_code + ')' : ''); };\n// parses the answers of reachRequests (in any order: matched by kind) -> { ranked: [{ keyword, kd, position }] | null, authority | null, errors }\nfunction reachParse(reqs, res) {\n  let ranked = null, authority = null; const errors = [];\n  (reqs || []).forEach((r, i) => {\n    const x = (res || [])[i];\n    if (!reachTaskOk(x)) { errors.push(r.label + ': ' + reachError(x)); return; }\n    const r0 = ((x.tasks[0].result || [])[0]) || {};\n    if (r.kind === 'reach_ranked') ranked = (r0.items || []).map(it => { const kd0 = it.keyword_data || {}; const se = (it.ranked_serp_element || {}).serp_item || {};\n      return { keyword: String(kd0.keyword || '').toLowerCase(), kd: (kd0.keyword_properties || {}).keyword_difficulty ?? null, position: se.rank_group ?? null }; });\n    if (r.kind === 'reach_overview') { const m = (((r0.items || [])[0] || {}).metrics || {}).organic; authority = m ? { organic_keywords: m.count ?? 0, top3: (m.pos_1 || 0) + (m.pos_2_3 || 0), top10: (m.pos_1 || 0) + (m.pos_2_3 || 0) + (m.pos_4_10 || 0) } : { organic_keywords: 0, top3: 0, top10: 0 }; }\n  });\n  return { ranked, authority, errors };\n}\n// rule R1 \"one search, one page\" — the same words as the web app (app/shared/src/ladders.ts): lower case, one-letter and stop words out, a light\n// stem, place names kept; two keywords are the same search when their word sets are equal or 75%+ the same (Jaccard)\nconst OVERLAP_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);\nconst overlapTokens = (s) => { const out = []; for (const t of String(s || '').toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 1 || OVERLAP_STOP.has(t)) continue;\n  const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '').replace(/[^a-z0-9]/g, ''); if (w && !out.includes(w)) out.push(w); } return out; };\nconst overlapScore = (a, b) => { if (!a.length || !b.length) return 0; const sb = new Set(b); const common = a.filter(t => sb.has(t)).length; return common / (a.length + b.length - common); };\nconst keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b)) >= 0.75;\n// Keyword Check: the DataForSEO Labs calls, sent in parallel (one HTTP node, no batching): the keyword overview (volume, difficulty, intent, CPC),\n// the site's position for this exact keyword (ranked_keywords filtered on it), and — only when no reach is stored for this site and market\n// (30 days) — the two calls that measure the site's reach.\nconst v = $('Assess Validate').first().json;\nlet rows = []; try { rows = $('Load Assess Cache').all().map(i => i.json).filter(r => r && !r.error); } catch (e) { rows = []; }\nconst L = 'https://api.dataforseo.com/v3/dataforseo_labs/google/';\nconst reqs = [\n  { kind: 'overview', label: 'keyword overview', endpoint: L + 'keyword_overview/live', body: [{ keywords: [v.keyword], location_code: v.location_code, language_code: v.language_code }] },\n  { kind: 'position', label: 'position of ' + v.domain, endpoint: L + 'ranked_keywords/live', body: [{ target: v.domain, location_code: v.location_code, language_code: v.language_code, limit: 10, filters: [['keyword_data.keyword', '=', v.keyword]] }] }\n];\nif (!reachCached(rows, v.domain, v.location_code)) reqs.push(...reachRequests(v.domain, v.location_code, v.language_code));\nreturn reqs.map(r => ({ json: r }));\n"
+        },
+        "id": "d3442153-ccb3-546d-8ec7-11c5b1a9535d",
+        "name": "Assess Requests",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1100,
+          -100
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.endpoint }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpBasicAuth",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.body) }}",
+          "options": {
+            "timeout": 15000
+          }
+        },
+        "id": "bd4d47b3-d068-55be-8b85-3a1172f482b9",
+        "name": "Run Assess Requests",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1320,
+          -100
+        ],
+        "credentials": {
+          "httpBasicAuth": {
+            "id": "SEOcredDataForSE",
+            "name": "DataForSEO"
+          }
+        },
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// ---- reach (v4.8, PIPELINE_FEATURE_SPEC §5.3-5.5): the keyword difficulty this website can already win. ONE copy, inlined by the build into\n// Ladder Plan, Reach (Discovery), Rank Keywords, Build Keyword Strategy and the Keyword Check workflow (SEOagentAssess), so they all agree.\n//   reach      = the 75th-percentile difficulty of the keywords the site ranks top 10 for (at least 5 of them; linear interpolation), else by\n//                size (keywords in the top 10: 0-4 -> 10, 5-49 -> 20, 50-499 -> 35, 500+ -> 50); the larger of the two when both exist.\n//   difficulty = easy (kd <= reach + 5, or the site already ranks 1-20 for the keyword) · reachable (<= reach + 20) · hard (<= reach + 40) ·\n//   for you      very hard (above) · not realistic (navigational / another company's brand / verdict AVOID); an unknown kd counts as reach + 10.\n//   plan       = easy -> direct (2-4 months) · reachable -> short (4-8) · hard -> full (9-15) · very hard -> full, stretch · not realistic -> none;\n//                strong sites (100+ top-10 keywords, 1,000+ ranking keywords, or already top 20 for it): direct 2-3, short 3-6, full 6-12.\n//   cache      = seo_cache 'reach:<site_id>' for 30 days and the same market (value: reach, method, p75, size_reach, sample, top10,\n//                organic_keywords, location_code); a reach that could not be measured (both calls failed) is never stored.\nconst REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100 };\nconst REACH_MONTHS = { direct: [2, 4], short: [4, 8], full: [9, 15] }, REACH_MONTHS_STRONG = { direct: [2, 3], short: [3, 6], full: [6, 12] };\nconst REACH_DIFF_LABEL = { easy: 'Easy for your site', reachable: 'Reachable for your site', hard: 'Hard for your site', very_hard: 'Very hard for your site', not_realistic: 'Not realistic for your site' };\nconst REACH_PLAN_LABEL = { direct: 'Direct plan', short: 'Short ladder', full: 'Full ladder', none: 'No ladder' };\nconst reachDomain = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\nconst reachSiteId = (d) => 'site_' + reachDomain(d).replace(/[^a-z0-9]+/g, '-');\nconst reachKey = (d) => 'reach:' + reachSiteId(d);\nconst reachNum = (v) => (v === '' || v == null || typeof v === 'boolean' || !Number.isFinite(Number(v))) ? null : Number(v);\nconst reachSizeTier = (top10) => { const n = Number(top10) || 0; return n >= 500 ? 50 : n >= 50 ? 35 : n >= 5 ? 20 : 10; };\n// ranked: [{ kd, position }] for the site (null = the call failed; only positions 1-10 count); authority: { top10, organic_keywords } (null = unknown)\nfunction reachFrom(ranked, authority) {\n  const top = (ranked || []).filter(r => { const p = reachNum(r && r.position); return p != null && p >= 1 && p <= 10; });\n  const kds = top.map(r => reachNum(r.kd)).filter(v => v != null).sort((a, b) => a - b);\n  let p75 = null;\n  if (kds.length >= REACH_CFG.min_top10) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }\n  const known = !!(authority && reachNum(authority.top10) != null);\n  const top10 = known ? reachNum(authority.top10) : top.length;\n  const size_reach = reachSizeTier(top10);\n  const reach = p75 != null ? Math.max(p75, size_reach) : size_reach;\n  const method = (!ranked && !known) ? 'default' : (p75 != null && p75 >= size_reach) ? 'percentile' : 'size';\n  return { reach, method, p75, size_reach, sample: kds.length, top10, organic_keywords: authority && reachNum(authority.organic_keywords) != null ? reachNum(authority.organic_keywords) : null, cached: false };\n}\n// the stored reach of this site for this market, when it is younger than 30 days (null otherwise)\nfunction reachCached(rows, domain, location_code) {\n  const key = reachKey(domain);\n  const row = (rows || []).filter(r => r && !r.error && r.key === key).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];\n  if (!row) return null;\n  let v = null; try { v = JSON.parse(row.value); } catch (e) { return null; }\n  if (!v || reachNum(v.reach) == null) return null;\n  if (reachNum(location_code) && reachNum(v.location_code) && Number(v.location_code) !== Number(location_code)) return null;\n  const days = (Date.now() - new Date(row.updated_at).getTime()) / 864e5;\n  if (!(days >= 0 && days < REACH_CFG.ttl_days)) return null;\n  return { ...v, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at) };\n}\n// the seo_cache row (exact columns) for a freshly measured reach\nconst reachCacheRow = (domain, info, location_code) => ({ key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),\n  value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code) }),\n  updated_at: new Date().toISOString() });\n// o: { position (the site's rank for the keyword), navigational, other_brand, verdict }\nfunction difficultyForYou(kd, reach, o) {\n  o = o || {};\n  if (o.navigational || o.other_brand || String(o.verdict || '').toUpperCase() === 'AVOID') return 'not_realistic';\n  const pos = reachNum(o.position);\n  if (pos != null && pos >= 1 && pos <= REACH_CFG.easy_position) return 'easy';\n  const r = reachNum(reach) == null ? reachSizeTier(0) : Number(reach);\n  const k = reachNum(kd) == null ? r + REACH_CFG.unknown_kd : Number(kd);\n  return k <= r + REACH_CFG.easy ? 'easy' : k <= r + REACH_CFG.reachable ? 'reachable' : k <= r + REACH_CFG.hard ? 'hard' : 'very_hard';\n}\nconst reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };\nfunction reachPlan(difficulty, strong) {\n  const plan_type = { easy: 'direct', reachable: 'short', hard: 'full', very_hard: 'full', not_realistic: 'none' }[difficulty] || 'full';\n  const m = plan_type === 'none' ? null : (strong ? REACH_MONTHS_STRONG : REACH_MONTHS)[plan_type];\n  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard' };\n}\nconst reachLabel = (difficulty, plan) => [REACH_DIFF_LABEL[difficulty] || '', plan ? REACH_PLAN_LABEL[plan.plan_type] + (plan.stretch ? ' (stretch)' : '') : '', plan && plan.months ? plan.months + ' months' : ''].filter(Boolean).join(' · ');\n// DataForSEO Labs calls that measure reach on a cache miss (~$0.03): the site's top-10 keywords with their difficulty, and its size\nconst reachRequests = (domain, location_code, language_code) => {\n  const L = 'https://api.dataforseo.com/v3/dataforseo_labs/google/', t = reachDomain(domain), lang = language_code || 'en';\n  return [{ kind: 'reach_ranked', label: 'top-10 keywords of ' + t, endpoint: L + 'ranked_keywords/live',\n      body: [{ target: t, location_code, language_code: lang, limit: REACH_CFG.sample, order_by: ['keyword_data.keyword_info.search_volume,desc'], filters: [['ranked_serp_element.serp_item.rank_group', '<=', 10]] }] },\n    { kind: 'reach_overview', label: 'size of ' + t, endpoint: L + 'domain_rank_overview/live', body: [{ target: t, location_code, language_code: lang }] }];\n};\nconst reachTaskOk = (x) => !!(x && !x.error && (((x.tasks || [])[0] || {}).status_code || 0) < 40000 && ((x.tasks || [])[0] || {}).status_code);\nconst reachError = (x) => { if (!x) return 'no response'; const e = x.error; if (e) return String((typeof e === 'object' ? (e.message || e.description || JSON.stringify(e)) : e)).slice(0, 200);\n  const t = (x.tasks || [])[0] || {}; return String(t.status_message || x.status_message || 'no data').slice(0, 200) + (t.status_code ? ' (' + t.status_code + ')' : ''); };\n// parses the answers of reachRequests (in any order: matched by kind) -> { ranked: [{ keyword, kd, position }] | null, authority | null, errors }\nfunction reachParse(reqs, res) {\n  let ranked = null, authority = null; const errors = [];\n  (reqs || []).forEach((r, i) => {\n    const x = (res || [])[i];\n    if (!reachTaskOk(x)) { errors.push(r.label + ': ' + reachError(x)); return; }\n    const r0 = ((x.tasks[0].result || [])[0]) || {};\n    if (r.kind === 'reach_ranked') ranked = (r0.items || []).map(it => { const kd0 = it.keyword_data || {}; const se = (it.ranked_serp_element || {}).serp_item || {};\n      return { keyword: String(kd0.keyword || '').toLowerCase(), kd: (kd0.keyword_properties || {}).keyword_difficulty ?? null, position: se.rank_group ?? null }; });\n    if (r.kind === 'reach_overview') { const m = (((r0.items || [])[0] || {}).metrics || {}).organic; authority = m ? { organic_keywords: m.count ?? 0, top3: (m.pos_1 || 0) + (m.pos_2_3 || 0), top10: (m.pos_1 || 0) + (m.pos_2_3 || 0) + (m.pos_4_10 || 0) } : { organic_keywords: 0, top3: 0, top10: 0 }; }\n  });\n  return { ranked, authority, errors };\n}\n// rule R1 \"one search, one page\" — the same words as the web app (app/shared/src/ladders.ts): lower case, one-letter and stop words out, a light\n// stem, place names kept; two keywords are the same search when their word sets are equal or 75%+ the same (Jaccard)\nconst OVERLAP_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);\nconst overlapTokens = (s) => { const out = []; for (const t of String(s || '').toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 1 || OVERLAP_STOP.has(t)) continue;\n  const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '').replace(/[^a-z0-9]/g, ''); if (w && !out.includes(w)) out.push(w); } return out; };\nconst overlapScore = (a, b) => { if (!a.length || !b.length) return 0; const sb = new Set(b); const common = a.filter(t => sb.has(t)).length; return common / (a.length + b.length - common); };\nconst keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b)) >= 0.75;\n// Keyword Check: reads the DataForSEO answers. The keyword overview is required (no answer -> 502); the position and the reach degrade gracefully\n// (position unknown -> null; reach calls failed -> the stored or default reach, not stored). Business context for the topic check: the request,\n// else the stored homepage description (seo_cache 'desc:<domain>', 30 days).\nconst v = $('Assess Validate').first().json;\nconst reqs = $('Assess Requests').all().map(i => i.json);\nconst res = $input.all().map(i => i.json);\nconst answer = (kind) => { const i = reqs.findIndex(r => r.kind === kind); return i >= 0 ? res[i] : undefined; };\nconst dfs_cost = +res.reduce((s, x) => s + (x && Array.isArray(x.tasks) ? x.tasks.reduce((a, t) => a + (Number(t && t.cost) || 0), 0) : 0), 0).toFixed(4);\nconst ov = answer('overview');\nif (!reachTaskOk(ov)) return [{ json: { ok: false, error: 'DataForSEO keyword overview failed: ' + reachError(ov), dfs_cost } }];\nconst it = ((((ov.tasks[0].result || [])[0]) || {}).items || [])[0] || null;\nconst info = (it && it.keyword_info) || {}, props = (it && it.keyword_properties) || {};\nconst pr = answer('position');\nlet position = null, position_url = null;\nif (reachTaskOk(pr)) { const best = ((((pr.tasks[0].result || [])[0]) || {}).items || []).map(x => ((x || {}).ranked_serp_element || {}).serp_item || {}).filter(x => x.rank_group).sort((a, b) => a.rank_group - b.rank_group)[0]; if (best) { position = best.rank_group; position_url = best.url || null; } }\nlet rows = []; try { rows = $('Load Assess Cache').all().map(i => i.json).filter(r => r && !r.error); } catch (e) { rows = []; }\nlet reach_info = reachCached(rows, v.domain, v.location_code), cache_row = null, reach_errors = [];\nif (!reach_info) {\n  const rq = reqs.filter(r => String(r.kind).startsWith('reach_'));\n  const parsed = reachParse(rq, rq.map(r => answer(r.kind)));\n  reach_info = reachFrom(parsed.ranked, parsed.authority); reach_errors = parsed.errors;\n  if (reach_info.method !== 'default') cache_row = reachCacheRow(v.domain, reach_info, v.location_code);\n}\nlet desc = null; const drow = rows.find(r => r.key === 'desc:' + v.domain);\ntry { desc = drow && (Date.now() - new Date(drow.updated_at).getTime()) < 30 * 864e5 ? (JSON.parse(drow.value).description || null) : null; } catch (e) { desc = null; }\nconst business = v.business || (desc && desc.business_description) || '';\nconst services = v.services.length ? v.services : ((desc && desc.products_or_services) || []).map(String).slice(0, 12);\nreturn [{ json: { ok: true, keyword: v.keyword, domain: v.domain, country: v.country, location_code: v.location_code, language_code: v.language_code,\n  volume: info.search_volume ?? null, kd: props.keyword_difficulty ?? null, cpc: info.cpc ?? null, intent: (it && (it.search_intent_info || {}).main_intent) || null, known: !!it,\n  position, position_url, reach_info, reach_errors, cache_row, dfs_cost, business, services, existing_keywords: v.existing_keywords,\n  business_source: v.business ? 'request' : (desc ? 'stored description' : 'none') } }];\n"
+        },
+        "id": "a13c8b19-0b76-5629-b070-6d3e45b10415",
+        "name": "Assess Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1540,
+          -100
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "b7327e1a-806e-5be1-af59-583bb6ae74ac",
+                "leftValue": "={{ $json.ok }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "d108160a-0218-597e-a51b-f0034d2db187",
+        "name": "DataForSEO OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1760,
+          -100
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error }) }}",
+          "options": {
+            "responseCode": 502
+          }
+        },
+        "id": "ceedb1b0-e69e-55aa-98bf-75e736215034",
+        "name": "Respond Assess Upstream Error",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1980,
+          60
+        ]
+      },
+      {
+        "parameters": {
+          "promptType": "define",
+          "text": "=You check one keyword for a website before an SEO plan is made. Answer with JSON only.\n\nWebsite: {{ $('Assess Result').first().json.domain }}\nWhat the business does: {{ $('Assess Result').first().json.business || 'unknown (judge from the domain name only and be cautious)' }}\nIts services: {{ ($('Assess Result').first().json.services || []).join(', ') || 'unknown' }}\nMarket: {{ $('Assess Result').first().json.country }}\nKeyword: \"{{ $('Assess Result').first().json.keyword }}\"\nSearch intent from keyword data: {{ $('Assess Result').first().json.intent || 'unknown' }}\nKeywords the website already targets (never suggest these or close variants): {{ ($('Assess Result').first().json.existing_keywords || []).slice(0, 30).join('; ') || 'none' }}\n\nDecide three things:\n1. fit — 2 when the keyword is about what this business sells or does (core); 1 when it is a neighbouring topic its buyers also search (related); 0 when it is off-topic for this business.\n2. navigational — true when people searching this keyword want one particular website, product, login page or ANOTHER company's brand (for example \"xero login\", \"cleartax\", \"microsoft\"), not a type of product or service. The website's own brand is not another company: searches for it are false.\n3. alternatives — only when fit is 0 or navigational is true: up to 3 realistic keywords this business could rank for instead (real search phrases of 2-6 words, specific to its services, local to the market when that helps). Otherwise an empty list.\n\nReturn exactly: {\"fit\": 0 | 1 | 2, \"navigational\": true | false, \"alternatives\": [\"...\"]}\n",
+          "hasOutputParser": true,
+          "options": {}
+        },
+        "id": "f4e1622c-a32b-5582-89df-16627e75b214",
+        "name": "Keyword Fit",
+        "type": "@n8n/n8n-nodes-langchain.agent",
+        "typeVersion": 3.1,
+        "position": [
+          1980,
+          -200
+        ],
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 1000,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "model": {
+            "__rl": true,
+            "mode": "list",
+            "value": "claude-haiku-4-5-20251001",
+            "cachedResultName": "Claude Haiku 4.5"
+          },
+          "options": {
+            "maxTokensToSample": 400
+          }
+        },
+        "id": "7c578376-fe9b-5473-823e-3dd17cc71854",
+        "name": "Claude — Keyword Fit",
+        "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+        "typeVersion": 1.6,
+        "position": [
+          1900,
+          0
+        ],
+        "credentials": {
+          "anthropicApi": {
+            "id": "SEOcredAnthropic",
+            "name": "Anthropic (SEO Agent)"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "schemaType": "manual",
+          "inputSchema": "{\"type\": \"object\", \"properties\": {\"fit\": {\"type\": \"number\"}, \"navigational\": {\"type\": \"boolean\"}, \"alternatives\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}}}, \"required\": [\"fit\", \"navigational\"]}"
+        },
+        "id": "948615e5-3313-59ee-9012-d8e5cbb9d097",
+        "name": "Parser — Keyword Fit",
+        "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+        "typeVersion": 1.3,
+        "position": [
+          2100,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// ---- reach (v4.8, PIPELINE_FEATURE_SPEC §5.3-5.5): the keyword difficulty this website can already win. ONE copy, inlined by the build into\n// Ladder Plan, Reach (Discovery), Rank Keywords, Build Keyword Strategy and the Keyword Check workflow (SEOagentAssess), so they all agree.\n//   reach      = the 75th-percentile difficulty of the keywords the site ranks top 10 for (at least 5 of them; linear interpolation), else by\n//                size (keywords in the top 10: 0-4 -> 10, 5-49 -> 20, 50-499 -> 35, 500+ -> 50); the larger of the two when both exist.\n//   difficulty = easy (kd <= reach + 5, or the site already ranks 1-20 for the keyword) · reachable (<= reach + 20) · hard (<= reach + 40) ·\n//   for you      very hard (above) · not realistic (navigational / another company's brand / verdict AVOID); an unknown kd counts as reach + 10.\n//   plan       = easy -> direct (2-4 months) · reachable -> short (4-8) · hard -> full (9-15) · very hard -> full, stretch · not realistic -> none;\n//                strong sites (100+ top-10 keywords, 1,000+ ranking keywords, or already top 20 for it): direct 2-3, short 3-6, full 6-12.\n//   cache      = seo_cache 'reach:<site_id>' for 30 days and the same market (value: reach, method, p75, size_reach, sample, top10,\n//                organic_keywords, location_code); a reach that could not be measured (both calls failed) is never stored.\nconst REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10, easy: 5, reachable: 20, hard: 40, easy_position: 20, sample: 100 };\nconst REACH_MONTHS = { direct: [2, 4], short: [4, 8], full: [9, 15] }, REACH_MONTHS_STRONG = { direct: [2, 3], short: [3, 6], full: [6, 12] };\nconst REACH_DIFF_LABEL = { easy: 'Easy for your site', reachable: 'Reachable for your site', hard: 'Hard for your site', very_hard: 'Very hard for your site', not_realistic: 'Not realistic for your site' };\nconst REACH_PLAN_LABEL = { direct: 'Direct plan', short: 'Short ladder', full: 'Full ladder', none: 'No ladder' };\nconst reachDomain = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\nconst reachSiteId = (d) => 'site_' + reachDomain(d).replace(/[^a-z0-9]+/g, '-');\nconst reachKey = (d) => 'reach:' + reachSiteId(d);\nconst reachNum = (v) => (v === '' || v == null || typeof v === 'boolean' || !Number.isFinite(Number(v))) ? null : Number(v);\nconst reachSizeTier = (top10) => { const n = Number(top10) || 0; return n >= 500 ? 50 : n >= 50 ? 35 : n >= 5 ? 20 : 10; };\n// ranked: [{ kd, position }] for the site (null = the call failed; only positions 1-10 count); authority: { top10, organic_keywords } (null = unknown)\nfunction reachFrom(ranked, authority) {\n  const top = (ranked || []).filter(r => { const p = reachNum(r && r.position); return p != null && p >= 1 && p <= 10; });\n  const kds = top.map(r => reachNum(r.kd)).filter(v => v != null).sort((a, b) => a - b);\n  let p75 = null;\n  if (kds.length >= REACH_CFG.min_top10) { const i = REACH_CFG.percentile * (kds.length - 1), lo = Math.floor(i), hi = Math.ceil(i); p75 = Math.round(kds[lo] + (kds[hi] - kds[lo]) * (i - lo)); }\n  const known = !!(authority && reachNum(authority.top10) != null);\n  const top10 = known ? reachNum(authority.top10) : top.length;\n  const size_reach = reachSizeTier(top10);\n  const reach = p75 != null ? Math.max(p75, size_reach) : size_reach;\n  const method = (!ranked && !known) ? 'default' : (p75 != null && p75 >= size_reach) ? 'percentile' : 'size';\n  return { reach, method, p75, size_reach, sample: kds.length, top10, organic_keywords: authority && reachNum(authority.organic_keywords) != null ? reachNum(authority.organic_keywords) : null, cached: false };\n}\n// the stored reach of this site for this market, when it is younger than 30 days (null otherwise)\nfunction reachCached(rows, domain, location_code) {\n  const key = reachKey(domain);\n  const row = (rows || []).filter(r => r && !r.error && r.key === key).sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];\n  if (!row) return null;\n  let v = null; try { v = JSON.parse(row.value); } catch (e) { return null; }\n  if (!v || reachNum(v.reach) == null) return null;\n  if (reachNum(location_code) && reachNum(v.location_code) && Number(v.location_code) !== Number(location_code)) return null;\n  const days = (Date.now() - new Date(row.updated_at).getTime()) / 864e5;\n  if (!(days >= 0 && days < REACH_CFG.ttl_days)) return null;\n  return { ...v, reach: Number(v.reach), cached: true, cached_at: String(row.updated_at) };\n}\n// the seo_cache row (exact columns) for a freshly measured reach\nconst reachCacheRow = (domain, info, location_code) => ({ key: reachKey(domain), kind: 'reach', site_id: reachSiteId(domain),\n  value: JSON.stringify({ reach: info.reach, method: info.method, p75: info.p75, size_reach: info.size_reach, sample: info.sample, top10: info.top10, organic_keywords: info.organic_keywords, location_code: reachNum(location_code) }),\n  updated_at: new Date().toISOString() });\n// o: { position (the site's rank for the keyword), navigational, other_brand, verdict }\nfunction difficultyForYou(kd, reach, o) {\n  o = o || {};\n  if (o.navigational || o.other_brand || String(o.verdict || '').toUpperCase() === 'AVOID') return 'not_realistic';\n  const pos = reachNum(o.position);\n  if (pos != null && pos >= 1 && pos <= REACH_CFG.easy_position) return 'easy';\n  const r = reachNum(reach) == null ? reachSizeTier(0) : Number(reach);\n  const k = reachNum(kd) == null ? r + REACH_CFG.unknown_kd : Number(kd);\n  return k <= r + REACH_CFG.easy ? 'easy' : k <= r + REACH_CFG.reachable ? 'reachable' : k <= r + REACH_CFG.hard ? 'hard' : 'very_hard';\n}\nconst reachStrong = (authority, position) => { const p = reachNum(position); return !!(authority && ((Number(authority.top10) || 0) >= 100 || (Number(authority.organic_keywords) || 0) >= 1000)) || (p != null && p >= 1 && p <= REACH_CFG.easy_position); };\nfunction reachPlan(difficulty, strong) {\n  const plan_type = { easy: 'direct', reachable: 'short', hard: 'full', very_hard: 'full', not_realistic: 'none' }[difficulty] || 'full';\n  const m = plan_type === 'none' ? null : (strong ? REACH_MONTHS_STRONG : REACH_MONTHS)[plan_type];\n  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard' };\n}\nconst reachLabel = (difficulty, plan) => [REACH_DIFF_LABEL[difficulty] || '', plan ? REACH_PLAN_LABEL[plan.plan_type] + (plan.stretch ? ' (stretch)' : '') : '', plan && plan.months ? plan.months + ' months' : ''].filter(Boolean).join(' · ');\n// DataForSEO Labs calls that measure reach on a cache miss (~$0.03): the site's top-10 keywords with their difficulty, and its size\nconst reachRequests = (domain, location_code, language_code) => {\n  const L = 'https://api.dataforseo.com/v3/dataforseo_labs/google/', t = reachDomain(domain), lang = language_code || 'en';\n  return [{ kind: 'reach_ranked', label: 'top-10 keywords of ' + t, endpoint: L + 'ranked_keywords/live',\n      body: [{ target: t, location_code, language_code: lang, limit: REACH_CFG.sample, order_by: ['keyword_data.keyword_info.search_volume,desc'], filters: [['ranked_serp_element.serp_item.rank_group', '<=', 10]] }] },\n    { kind: 'reach_overview', label: 'size of ' + t, endpoint: L + 'domain_rank_overview/live', body: [{ target: t, location_code, language_code: lang }] }];\n};\nconst reachTaskOk = (x) => !!(x && !x.error && (((x.tasks || [])[0] || {}).status_code || 0) < 40000 && ((x.tasks || [])[0] || {}).status_code);\nconst reachError = (x) => { if (!x) return 'no response'; const e = x.error; if (e) return String((typeof e === 'object' ? (e.message || e.description || JSON.stringify(e)) : e)).slice(0, 200);\n  const t = (x.tasks || [])[0] || {}; return String(t.status_message || x.status_message || 'no data').slice(0, 200) + (t.status_code ? ' (' + t.status_code + ')' : ''); };\n// parses the answers of reachRequests (in any order: matched by kind) -> { ranked: [{ keyword, kd, position }] | null, authority | null, errors }\nfunction reachParse(reqs, res) {\n  let ranked = null, authority = null; const errors = [];\n  (reqs || []).forEach((r, i) => {\n    const x = (res || [])[i];\n    if (!reachTaskOk(x)) { errors.push(r.label + ': ' + reachError(x)); return; }\n    const r0 = ((x.tasks[0].result || [])[0]) || {};\n    if (r.kind === 'reach_ranked') ranked = (r0.items || []).map(it => { const kd0 = it.keyword_data || {}; const se = (it.ranked_serp_element || {}).serp_item || {};\n      return { keyword: String(kd0.keyword || '').toLowerCase(), kd: (kd0.keyword_properties || {}).keyword_difficulty ?? null, position: se.rank_group ?? null }; });\n    if (r.kind === 'reach_overview') { const m = (((r0.items || [])[0] || {}).metrics || {}).organic; authority = m ? { organic_keywords: m.count ?? 0, top3: (m.pos_1 || 0) + (m.pos_2_3 || 0), top10: (m.pos_1 || 0) + (m.pos_2_3 || 0) + (m.pos_4_10 || 0) } : { organic_keywords: 0, top3: 0, top10: 0 }; }\n  });\n  return { ranked, authority, errors };\n}\n// rule R1 \"one search, one page\" — the same words as the web app (app/shared/src/ladders.ts): lower case, one-letter and stop words out, a light\n// stem, place names kept; two keywords are the same search when their word sets are equal or 75%+ the same (Jaccard)\nconst OVERLAP_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);\nconst overlapTokens = (s) => { const out = []; for (const t of String(s || '').toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 1 || OVERLAP_STOP.has(t)) continue;\n  const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '').replace(/[^a-z0-9]/g, ''); if (w && !out.includes(w)) out.push(w); } return out; };\nconst overlapScore = (a, b) => { if (!a.length || !b.length) return 0; const sb = new Set(b); const common = a.filter(t => sb.has(t)).length; return common / (a.length + b.length - common); };\nconst keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b)) >= 0.75;\n// Keyword Check: the answer. Difficulty for this site and plan from the shared reach rules; topic fit, navigational / other brand and the\n// alternatives from the small Claude call (if it failed: fit null, navigational from DataForSEO's intent unless the keyword names the site itself).\n// Alternatives only when the keyword is not realistic or off-topic, never the keyword itself or one the site already targets.\nconst CONFIG = { ai_cost_usd: 0.002 };   // Claude Haiku 4.5, ~900 input + ~80 output tokens ($1 / $5 per million)\nconst a = $('Assess Result').first().json;\nconst out = $input.first().json || {};\nlet o = out.output;\nif (o && typeof o !== 'object') { try { o = JSON.parse(String(o).replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/i, '')); } catch (e) { o = null; } }\nconst aiOk = !!(o && typeof o === 'object' && o.fit != null && Number.isFinite(Number(o.fit)));\nconst fit = aiOk ? Math.max(0, Math.min(2, Math.round(Number(o.fit)))) : null;\nconst brand = String(a.domain || '').split('.')[0].replace(/[^a-z0-9]/g, '');\nconst ownBrand = brand.length >= 4 && String(a.keyword).replace(/[^a-z0-9]/g, '').includes(brand);\nconst navigational = aiOk ? (o.navigational === true || String(o.navigational).toLowerCase() === 'true') : (String(a.intent || '') === 'navigational' && !ownBrand);\nconst reach = a.reach_info.reach;\nconst difficulty_for_you = difficultyForYou(a.kd, reach, { navigational, position: a.position });\nconst plan = reachPlan(difficulty_for_you, reachStrong(a.reach_info, a.position));\nconst listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/[\"“”]/g, '').replace(/\\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);\nconst need = difficulty_for_you === 'not_realistic' || fit === 0;\nconst alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(x => !keywordsOverlap(x, a.keyword) && !(a.existing_keywords || []).some(e => keywordsOverlap(e, x))).slice(0, 3) : [];\nconst warnings = [];\nif (!aiOk) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160));\nif ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));\nif (!a.known) warnings.push('DataForSEO has no data for this keyword in ' + a.country + ' (volume and difficulty unknown)');\nconst body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volume, kd: a.kd, intent: a.intent, cpc: a.cpc, position: a.position, reach,\n  difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives,\n  cost_usd: +(Number(a.dfs_cost || 0) + (aiOk ? CONFIG.ai_cost_usd : 0)).toFixed(4),\n  label: reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you], stretch: plan.stretch, position_url: a.position_url,\n  reach_info: { method: a.reach_info.method, p75: a.reach_info.p75 ?? null, size_reach: a.reach_info.size_reach ?? null, sample: a.reach_info.sample ?? null, top10: a.reach_info.top10 ?? null, cached: !!a.reach_info.cached, cached_at: a.reach_info.cached_at || null },\n  business_source: a.business_source, warnings };\nreturn [{ json: { status: 200, body } }];\n"
+        },
+        "id": "86af852f-f8ca-5473-b487-a54af5a4c391",
+        "name": "Assess Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2300,
+          -200
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify($json.body) }}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "id": "2be5f23e-aef2-52cc-a4e9-c93b288e7151",
+        "name": "Respond Assess",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          2520,
+          -200
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// After the answer: a newly measured reach goes to seo_cache ('reach:<site_id>', 30 days) for the ladder and discovery (exact columns).\nconst r = $('Assess Result').first().json.cache_row;\nreturn [{ json: r || { skip: true } }];"
+        },
+        "id": "8bd6311c-16db-5b5f-932c-0510c3e70f2c",
+        "name": "Reach Row (Assess)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2740,
+          -200
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "aa1cc4ef-a518-5017-b69c-2c6c10e73c58",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "372583d5-ace5-53ea-81c4-c5d6f78e988a",
+        "name": "New Reach (Assess)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2960,
+          -200
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ $json.key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "value",
+                "displayName": "value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "b4f36fd9-b16f-5c24-98c4-b9a7b5ea91e6",
+        "name": "Save Reach (Assess)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          3180,
+          -200
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Keyword Check (v4.8)\n`POST /webhook/seo-keyword-assess` (header auth: credential **SEO API Key**, header `X-API-Key`), synchronous (~5-15 s). The web app's keyword flow (PIPELINE_FEATURE_SPEC §5.2) checks one keyword before a ladder starts.\n\nBody: `{ keyword (2-100 chars), country (name or ISO-2), domain, business?, services? (array), existing_keywords? (array) }`.\n\nDataForSEO Labs in parallel: keyword overview (volume, difficulty, intent, CPC), the site's position for the keyword, and the site's **reach** (stored 30 days in `seo_cache` as `reach:<site_id>`, shared with the ladder and discovery; else measured: top-10 keywords + size). One **Claude Haiku** call: topic fit 0/1/2, navigational / other brand, up to 3 alternatives. Business context: the request, else the stored homepage description.\n\n**200** `{ keyword, country, volume, kd, intent, cpc, position, reach, difficulty_for_you, plan_type, months, fit, navigational, alternatives, cost_usd, label, stretch, position_url, reach_info, business_source, warnings }` · **400** `{ ok:false, error, errors: {field: message} }` · **429** daily limit (40 per caller — the app's `X-Forwarded-For: app:<company>` — and 400 in total) · **502** DataForSEO failed.\nCost: ~$0.02 with a stored reach, ~$0.05 without.",
+          "height": 400,
+          "width": 760,
+          "color": 4
+        },
+        "id": "6d9cb90e-7d03-576c-b838-6ae870f2c95a",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -520
+        ]
+      }
+    ],
+    "connections": {
+      "Assess Webhook": {
+        "main": [
+          [
+            {
+              "node": "Assess Validate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Assess Validate": {
+        "main": [
+          [
+            {
+              "node": "Assess Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Cache Table (Assess)": {
+        "main": [
+          [
+            {
+              "node": "Load Assess Cache",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Assess Cache": {
+        "main": [
+          [
+            {
+              "node": "Assess Requests",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Assess Requests": {
+        "main": [
+          [
+            {
+              "node": "Run Assess Requests",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run Assess Requests": {
+        "main": [
+          [
+            {
+              "node": "Assess Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Assess Result": {
+        "main": [
+          [
+            {
+              "node": "DataForSEO OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Keyword Fit": {
+        "main": [
+          [
+            {
+              "node": "Assess Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Assess Response": {
+        "main": [
+          [
+            {
+              "node": "Respond Assess",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Respond Assess": {
+        "main": [
+          [
+            {
+              "node": "Reach Row (Assess)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Reach Row (Assess)": {
+        "main": [
+          [
+            {
+              "node": "New Reach (Assess)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Assess Valid?": {
+        "main": [
+          [
+            {
+              "node": "Ensure Cache Table (Assess)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Assess Limited?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Assess Limited?": {
+        "main": [
+          [
+            {
+              "node": "Respond Assess Limited",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Assess Bad Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "DataForSEO OK?": {
+        "main": [
+          [
+            {
+              "node": "Keyword Fit",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Assess Upstream Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "New Reach (Assess)?": {
+        "main": [
+          [
+            {
+              "node": "Save Reach (Assess)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Claude — Keyword Fit": {
+        "ai_languageModel": [
+          [
+            {
+              "node": "Keyword Fit",
+              "type": "ai_languageModel",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parser — Keyword Fit": {
+        "ai_outputParser": [
+          [
+            {
+              "node": "Keyword Fit",
+              "type": "ai_outputParser",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

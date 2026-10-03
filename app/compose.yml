@@ -1,0 +1,46 @@
+# SEO platform (web app + API + Postgres). Runs next to the n8n stack in ../n8n and talks to it over host.docker.internal.
+#   cp .env.example .env   (then fill it in)
+#   docker compose up -d --build        → http://localhost:4000
+# Secrets the n8n stack already has (SEO_API_KEY, N8N_API_KEY, SMTP, Google service account) are read from ../n8n/.env.
+name: seo-platform
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: seo
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:-seo-local-only}
+      POSTGRES_DB: seo
+    volumes:
+      - app-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U seo -d seo']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # internal only: the app reaches it as db:5432
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - path: ../n8n/.env
+        required: false
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://seo:${APP_DB_PASSWORD:-seo-local-only}@db:5432/seo
+      APP_URL: ${APP_URL:-http://localhost:4000}
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://host.docker.internal:5678}
+      CALLBACK_BASE_URL: ${CALLBACK_BASE_URL:-http://host.docker.internal:4000}
+    ports:
+      - '4000:4000'
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+volumes:
+  app-db:

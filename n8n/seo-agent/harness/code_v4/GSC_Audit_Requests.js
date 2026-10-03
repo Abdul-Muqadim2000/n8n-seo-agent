@@ -8,7 +8,7 @@ const d = plan.domain;
 const entries = Array.isArray(res.siteEntry) ? res.siteEntry.filter(e => e.siteUrl && e.permissionLevel !== 'siteUnverifiedUser') : [];
 const pick = entries.find(e => e.siteUrl === 'sc-domain:' + d) || entries.filter(e => /^https?:\/\//.test(e.siteUrl) && (hostOf(e.siteUrl) === d || hostOf(e.siteUrl).endsWith('.' + d))).sort((a, b) => (a.siteUrl.startsWith('https') ? 0 : 1) - (b.siteUrl.startsWith('https') ? 0 : 1))[0] || null;
 const error = res.error ? gErr(res) : (Array.isArray(res.siteEntry) ? null : 'no answer from the Search Console API');
-if (!pick) return [{ json: { skip: true, connected: false, property: '', permission: '', error: error || ('the service account has no access to a Search Console property for ' + d + (entries.length ? ' (it can see: ' + entries.map(e => e.siteUrl).slice(0, 5).join(', ') + ')' : '')) } }];
+if (!pick) return [{ json: { skip: true, connected: false, property: '', permission: '', error: error || ('the service account has no access to a Search Console property for ' + d + (entries.length ? '' : ' (it sees no property at all)')   /* other customers' properties are never named: this text reaches reports (2026-10-03) */) } }];
 const property = pick.siteUrl; const base = 'https://www.googleapis.com/webmasters/v3/sites/' + encodeURIComponent(property);
 const R = plan.range; const out = [];
 const req = (kind, url, body, extra) => out.push({ json: { kind, url, body, property, permission: pick.permissionLevel, sitemaps_url: base + '/sitemaps', connected: true, ...(extra || {}) } });

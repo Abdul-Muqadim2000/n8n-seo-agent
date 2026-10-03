@@ -1,6 +1,7 @@
 // One row per ladder page for the "seo_ladders" Data Table (the rank tracker reads these every week).
 const d = $('Attach PDF Ladder').first().json;
 const L = d.ladder || {};
+if (L.planned === false) return [{ json: { skip: true, reason: (L.refusal || {}).reason || 'no pages planned' } }];   // v4.8: a refused ladder (duplicate / not realistic) stores nothing
 const pages = [...(L.rungs || []).flatMap(r => (r.pages || []).map(p => ({ ...p, months: r.months }))), L.top].filter(Boolean);
 const now = new Date().toISOString();
 const writing = new Set((L.write_now || []).map(w => w.keyword));

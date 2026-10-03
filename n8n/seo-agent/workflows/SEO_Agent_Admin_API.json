@@ -1,0 +1,260 @@
+[
+  {
+    "id": "SEOagentAdminAPI",
+    "name": "SEO Agent — Admin API",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "seo-site-admin",
+          "authentication": "headerAuth",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "dd64642d-d1fb-45a4-b085-fa0007f17e69",
+        "name": "Admin Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          0
+        ],
+        "webhookId": "3f1d7c52-8a64-4e0b-9b7a-5c2e61d4a8f3",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "SEOcredApiHeader",
+            "name": "SEO API Key"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Same rules as Admin Action (Site Admin), answered as a 400 instead of a failed execution.\nconst raw = $input.first().json || {};\nconst b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};\nconst action = String(b.action || '').toLowerCase();\nconst errors = [];\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts'].includes(action)) errors.push('action must be delete, pause, resume, cadence, unpublish, monitors, prospect or ai_prompts');\nif (!b.site_id && !b.domain) errors.push('site_id or domain is required');\nif (action === 'cadence' && b.pages_per_week == null && b.blogs_per_week == null) errors.push('pages_per_week (0-3) is required for action cadence');\nif (action === 'unpublish' && !b.keyword) errors.push('keyword is required for action unpublish');\nif (action === 'prospect' && !b.prospect_domain) errors.push('prospect_domain is required for action prospect');\nif (action === 'prospect' && b.status && !['new', 'contacted', 'won', 'rejected', 'ignored'].includes(String(b.status).toLowerCase())) errors.push('status must be new, contacted, won, rejected or ignored');\nif (action === 'ai_prompts' && !(Array.isArray(b.add) && b.add.length) && !(Array.isArray(b.remove) && b.remove.length)) errors.push('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');\nreturn [{ json: { ok: errors.length === 0, error: errors.join('; '), action, forward: { ...b, action, request_id: String(b.request_id || ('admin-' + $execution.id)) } } }];"
+        },
+        "id": "a322ee2d-1b2b-4839-8e58-015775c4caba",
+        "name": "Admin Validate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          240,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "0953ffc0-9542-4a31-8998-16242789a990",
+                "leftValue": "={{ $json.ok }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "f6e00fe0-2fee-4e53-ba33-be58190e6ae4",
+        "name": "Admin Valid?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          480,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "return [{ json: $input.first().json.forward }];"
+        },
+        "id": "6beebda9-4ca9-4a93-b211-9e360f392550",
+        "name": "Admin Payload",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          720,
+          -100
+        ]
+      },
+      {
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "SEOagentSiteAdm1"
+          },
+          "mode": "once",
+          "options": {
+            "waitForSubWorkflow": true
+          }
+        },
+        "id": "0440f5ea-3b38-4613-a2a8-720502d1114e",
+        "name": "Run Site Admin",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          960,
+          -100
+        ],
+        "onError": "continueErrorOutput"
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: !$json.error, action: $json.action, site_id: $json.site_id, domain: $json.domain, affected: Number($json.affected) || 0, error: $json.error || null }) }}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "id": "5660878f-bf34-4583-af93-a26eda7b7d02",
+        "name": "Respond Admin Result",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1200,
+          -180
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: false, action: $('Admin Validate').first().json.action, affected: 0, error: String(($json.error && ($json.error.message || $json.error)) || 'Site Admin failed').slice(0, 300) }) }}",
+          "options": {
+            "responseCode": 500
+          }
+        },
+        "id": "ec5bfeb4-2195-4105-aded-11f13162cda9",
+        "name": "Respond Admin Failed",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          1200,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: false, action: $json.action, affected: 0, error: $json.error }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "2a1b2082-2c66-4b3e-ab0c-a3886afc3d02",
+        "name": "Respond Admin Bad Request",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          720,
+          120
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Admin API (v4.7)\n`POST /webhook/seo-site-admin` (header auth: credential **SEO API Key**, header `X-API-Key`). The web app (`app/`) manages tracked sites through it.\n\nBody: `{ action, site_id | domain, ... }` exactly as Site Admin takes it: `pause` / `resume` / `delete`, `cadence` + `pages_per_week`, `unpublish` + `keyword`, `monitors` (+ the monitor fields and `competitors`), `prospect` + `prospect_domain` + `status` / `note`, `ai_prompts` + `add` / `remove`.\n\nRuns Site Admin and **waits** (it takes about a second), then answers `200 { ok, action, site_id, affected, error }`; invalid bodies get **400**, a failing Site Admin **500**.",
+          "height": 300,
+          "width": 640,
+          "color": 4
+        },
+        "id": "34a5192e-4c17-440e-af9e-5bcde0a5b838",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -420
+        ]
+      }
+    ],
+    "connections": {
+      "Admin Webhook": {
+        "main": [
+          [
+            {
+              "node": "Admin Validate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Admin Validate": {
+        "main": [
+          [
+            {
+              "node": "Admin Valid?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Admin Valid?": {
+        "main": [
+          [
+            {
+              "node": "Admin Payload",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Admin Bad Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Admin Payload": {
+        "main": [
+          [
+            {
+              "node": "Run Site Admin",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run Site Admin": {
+        "main": [
+          [
+            {
+              "node": "Respond Admin Result",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond Admin Failed",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

@@ -1,13 +1,15 @@
 // Simple abuse guard: limits runs per requester and per day (state lives in workflow static data;
 // it persists only for active/production executions, not manual test runs).
-const LIMITS = { per_key_per_day: 6, global_per_day: 150 };
+const LIMITS = { per_key_per_day: 6, global_per_day: 150, per_app_company_per_day: 40 };   // app: requests from the web app, keyed per company (v4.7)
 
 const d = $input.first().json;
 if (d.validation_error) return [{ json: d }];          // pass validation errors straight through
 const today = new Date().toISOString().slice(0, 10);
 // Internal spawns (ladder page runs, content cadence) are keyed by their marker, not the owner's e-mail: they are capped by the AI budget guard and their own weekly limits.
 const internal = /^(ladder|cadence|tracker|casestudy|audit):/.test(String(d.client_ip || ''));
-const key = (internal ? d.client_ip : (d.email || d.client_ip || d.domain || d.keyword || 'anon')).toLowerCase();
+const fromApp = /^app:[a-z0-9-]{6,64}$/i.test(String(d.client_ip || ''));   // the web app: one key per company, whoever's e-mail gets the copy
+const key = ((internal || fromApp) ? d.client_ip : (d.email || d.client_ip || d.domain || d.keyword || 'anon')).toLowerCase();
+const perKey = fromApp ? LIMITS.per_app_company_per_day : LIMITS.per_key_per_day;
 
 let store;
 try { store = $getWorkflowStaticData('global'); } catch (e) { store = {}; }
@@ -17,8 +19,8 @@ const used = store.rate.keys[key] || 0;
 if (store.rate.total >= LIMITS.global_per_day) {
   return [{ json: { ...d, validation_error: 'This service has reached its daily capacity. Please try again tomorrow.' } }];
 }
-if (used >= LIMITS.per_key_per_day && !['published', 'checkin', 'profile'].includes(d.mode)) {   // reporting a published page or a check-in costs nothing and is never blocked
-  return [{ json: { ...d, validation_error: 'You have reached the daily limit of ' + LIMITS.per_key_per_day + ' runs. Please try again tomorrow.' } }];
+if (used >= perKey && !['published', 'checkin', 'profile'].includes(d.mode)) {   // reporting a published page or a check-in costs nothing and is never blocked
+  return [{ json: { ...d, validation_error: 'You have reached the daily limit of ' + perKey + ' runs. Please try again tomorrow.' } }];
 }
 if (!['published', 'checkin', 'profile'].includes(d.mode)) store.rate.keys[key] = used + 1;
 store.rate.total += 1;

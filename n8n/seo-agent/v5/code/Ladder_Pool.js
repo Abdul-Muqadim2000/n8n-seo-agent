@@ -34,7 +34,7 @@ const addItem = (raw, source) => {
   const kw = String(kd0.keyword || '').toLowerCase().replace(/\s+/g, ' ').trim();
   if (!kw) return;
   const info = kd0.keyword_info || {}; const vol = info.search_volume ?? 0;
-  if (source === 'ranked') { const se = (raw.ranked_serp_element || {}).serp_item || {}; if (se.rank_group) rankings[kw] = { position: se.rank_group, url: se.url || null, volume: vol }; }
+  if (source === 'ranked') { const se = (raw.ranked_serp_element || {}).serp_item || {}; if (se.rank_group) rankings[kw] = { position: se.rank_group, url: se.url || null, volume: vol, kd: (kd0.keyword_properties || {}).keyword_difficulty ?? null }; }   // kd: the site's reach (v4.8)
   if (vol < 10) return;
   if ((source === 'ideas' || source === 'ranked') && !sharesTopic(kw)) return;
   const props = kd0.keyword_properties || {}, serp = kd0.serp_info || {}, bl = kd0.avg_backlinks_info || {}, trend = info.search_volume_trend || {};
@@ -79,11 +79,15 @@ const failures = reqs.map((r, i) => [r, res[i]]).filter(([r, x]) => !x || x.erro
 if (failures.length === reqs.length) throw new Error('Keyword ladder: every research pull failed (' + failures.join('; ') + '). Check the DataForSEO credential on "Run Ladder Research" and the account balance.');
 if (!all.length) throw new Error('Keyword ladder: no keywords with search volume were found around "' + head + '" in ' + (base.country || 'this market') + '. Try a broader destination keyword.');
 const headRank = rankings[head] || null;
+// v4.8: did the "keywords the site ranks for" pull answer? (reach falls back to the site's size when it did not)
+const rankedIdx = reqs.findIndex(r => r.kind === 'ranked');
+const rankedOk = rankedIdx >= 0 && !!res[rankedIdx] && !res[rankedIdx].error && ((((res[rankedIdx].tasks || [])[0] || {}).status_code) || 0) > 0 && (((res[rankedIdx].tasks || [])[0] || {}).status_code) < 40000;
 const sd = base.site_description || {};
 // Context for the AI relevance screen: anchor "relevance" on the head term, not just on the business
 const business = (base.business || sd.business_description || 'unknown') + '. KEYWORD LADDER: this research is for a ladder of pages that climb towards the head keyword "' + head +
   '". A keyword is core (2) only when a page about it would naturally link up to a page about "' + head + '"; neighbouring topics are adjacent (1); jobs, courses, unrelated definitions and other brands are 0.';
 return [{ json: { ...base, business, services: (sd.products_or_services || []).slice(0, 8),
   research: { pool_size: all.length, candidates, by_source: bySource, failures, requests: reqs.length },
-  site_rankings: { count: Object.keys(rankings).length, head: headRank, keywords: Object.fromEntries(Object.entries(rankings).slice(0, 400)) },
+  site_rankings: { count: Object.keys(rankings).length, head: headRank, keywords: Object.fromEntries(Object.entries(rankings).slice(0, 400)), available: rankedOk,
+    top10: Object.entries(rankings).filter(([k, r]) => r.position >= 1 && r.position <= 10).map(([k, r]) => ({ keyword: k, kd: r.kd, position: r.position })) },
   head_tokens: headTok, head_geo: headGeo } }];

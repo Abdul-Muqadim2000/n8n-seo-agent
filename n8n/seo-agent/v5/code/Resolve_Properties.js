@@ -14,5 +14,5 @@ return plan.map(p => {
   const pref = ok.filter(e => /^https?:\/\//.test(e.siteUrl) && (hostOf(e.siteUrl) === d || hostOf(e.siteUrl).endsWith('.' + d))).sort((a, b) => (a.siteUrl.startsWith('https') ? 0 : 1) - (b.siteUrl.startsWith('https') ? 0 : 1))[0];
   const pick = hinted || dom || pref || null;
   return { json: { ...p, gsc_property: pick ? pick.siteUrl : '', gsc_connected: !!pick, gsc_permission: pick ? pick.permissionLevel : '',
-    gsc_error: pick ? null : (err || ('the service account has no access to a Search Console property for ' + d + (entries.length ? ' (it can see: ' + entries.map(e => e.siteUrl).slice(0, 5).join(', ') + ')' : ' (it sees no property at all)'))) } };
+    gsc_error: pick ? null : (err || ('the service account has no access to a Search Console property for ' + d + (entries.length ? '' : ' (it sees no property at all)')   /* other customers' properties are never named: this text reaches reports (2026-10-03) */)) } };
 });

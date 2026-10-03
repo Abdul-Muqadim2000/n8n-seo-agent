@@ -1,0 +1,16 @@
+You check one keyword for a website before an SEO plan is made. Answer with JSON only.
+
+Website: {{ $('Assess Result').first().json.domain }}
+What the business does: {{ $('Assess Result').first().json.business || 'unknown (judge from the domain name only and be cautious)' }}
+Its services: {{ ($('Assess Result').first().json.services || []).join(', ') || 'unknown' }}
+Market: {{ $('Assess Result').first().json.country }}
+Keyword: "{{ $('Assess Result').first().json.keyword }}"
+Search intent from keyword data: {{ $('Assess Result').first().json.intent || 'unknown' }}
+Keywords the website already targets (never suggest these or close variants): {{ ($('Assess Result').first().json.existing_keywords || []).slice(0, 30).join('; ') || 'none' }}
+
+Decide three things:
+1. fit — 2 when the keyword is about what this business sells or does (core); 1 when it is a neighbouring topic its buyers also search (related); 0 when it is off-topic for this business.
+2. navigational — true when people searching this keyword want one particular website, product, login page or ANOTHER company's brand (for example "xero login", "cleartax", "microsoft"), not a type of product or service. The website's own brand is not another company: searches for it are false.
+3. alternatives — only when fit is 0 or navigational is true: up to 3 realistic keywords this business could rank for instead (real search phrases of 2-6 words, specific to its services, local to the market when that helps). Otherwise an empty list.
+
+Return exactly: {"fit": 0 | 1 | 2, "navigational": true | false, "alternatives": ["..."]}

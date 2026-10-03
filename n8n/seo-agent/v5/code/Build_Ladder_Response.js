@@ -9,8 +9,12 @@ return [{ json: {
   status: 'completed', stage: 'ladder_plan', request_id: d.request_id || null, execution_id: $execution.id, ladder_id: L.ladder_id || d.ladder_id || null,
   keyword: d.keyword, domain: d.domain, country: d.country, goal: L.goal, head: L.head || null, feasibility: L.feasibility || null,
   rungs: (L.rungs || []).map(r => ({ rung: r.rung, label: r.label, months: r.months, available_keywords: r.available, pages: (r.pages || []).map(page) })),
-  top_page: L.top ? page(L.top) : null, link_map: L.link_map || [], timeline: L.timeline || [], write_now: L.write_now || [], pages_started: (L.write_now || []).slice(0, Number(d.pages_now) || 1).map(w => w.keyword),
+  top_page: (L.top && L.planned !== false) ? page(L.top) : null, link_map: L.link_map || [], timeline: L.timeline || [], write_now: L.write_now || [], pages_started: (L.write_now || []).slice(0, Number(d.pages_now) || 1).map(w => w.keyword),
   later: L.later || [], requirements: L.requirements || [], stats: L.stats || null, notes: L.notes || [], tracker: L.tracker || null,
+  // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): the plan for this site
+  plan_type: L.plan_type || null, difficulty_for_you: L.difficulty_for_you || null, reach: L.reach ?? null, months: L.months || '', months_range: L.months_range || null, stretch: !!L.stretch,
+  label: L.label || '', order: L.order || '', planned: L.planned !== false, refusal: L.refusal || null, reach_info: L.reach_info || null, excluded_keywords: L.excluded_keywords || [],
+  settings_registered: !!d.settings_registered, settings_error: d.settings_error || null,
   tracking_registered: !!d.tracking_registered, stored_rows: d.stored_rows || 0, store_error: d.store_error || null, run_ledger: d.run_ledger || null, emailed_to: d.email || null,
   pdf: pdfData ? { data: pdfData, fileName: bin.pdf.fileName || d.pdf_file_name, mimeType: 'application/pdf' } : null,
   file: docData ? { data: docData, fileName: bin.data.fileName || d.file_name, mimeType: 'application/msword' } : null,

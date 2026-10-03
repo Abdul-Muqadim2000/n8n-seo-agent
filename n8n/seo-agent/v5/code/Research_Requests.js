@@ -3,7 +3,7 @@
 //  suggestions  - keyword_suggestions (long-tail phrases that contain the seed) for the 3 main seeds
 //  related      - related_keywords ("searches related to", depth 2) for the 2 main seeds
 //  serp         - live SERP for the primary seed -> who ranks (competitor keywords are pulled next)
-const d = $input.first().json;
+const d = $('Seed List').first().json;   // v4.8: the reach steps run in between
 const seeds = (d.seeds || []).slice(0, 30);
 const primary = d.primary_seed || seeds[0];
 if (!primary) throw new Error('No seed keywords could be built from the business description or website.');
