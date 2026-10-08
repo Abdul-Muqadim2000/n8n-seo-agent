@@ -121,7 +121,7 @@ export default function ReportsPage() {
           {groups.map((g) => (
             <section key={g.day} aria-label={dayLabel(g.items[0].receivedAt)}>
               <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-3">{dayLabel(g.items[0].receivedAt)}</h2>
-              <Card className="divide-y divide-line">
+              <Card className="divide-y divide-line overflow-hidden">
                 {g.items.map((r) => (
                   <ReportRow key={r.id} report={r} />
                 ))}
@@ -147,12 +147,13 @@ function ReportRow({ report }: { report: Report }) {
   const { org } = useOrgCtx();
   const to = paths.report(org.id, report.id);
   return (
-    <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-start">
+    // the title link covers the row; the run link and the file links sit above it
+    <div className="group relative flex flex-col gap-3 px-4 py-3.5 transition-colors duration-150 ease-brand hover:bg-surface-2/60 sm:flex-row sm:items-start">
       <div className="flex min-w-0 flex-1 gap-3">
         <StageGlyph stage={report.stage} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <Link to={to} className="truncate font-medium text-ink hover:underline">
+            <Link to={to} className="truncate font-medium text-ink transition-colors duration-150 ease-brand after:absolute after:inset-0 group-hover:text-accent-text">
               {report.title || stageLabel(report.stage)}
             </Link>
             {report.scheduled && (
@@ -168,7 +169,7 @@ function ReportRow({ report }: { report: Report }) {
             {report.runId && (
               <>
                 {' · '}
-                <Link to={paths.run(org.id, report.runId)} className="text-accent-text hover:underline">
+                <Link to={paths.run(org.id, report.runId)} className="relative z-[1] text-accent-text hover:underline transition-colors duration-150 ease-brand">
                   run
                 </Link>
               </>
@@ -178,7 +179,7 @@ function ReportRow({ report }: { report: Report }) {
         </div>
       </div>
       {report.files.length > 0 && (
-        <div className="pl-12 sm:max-w-[45%] sm:pl-0">
+        <div className="relative z-[1] pl-12 sm:max-w-[45%] sm:pl-0">
           <FileChips files={report.files.filter((f) => !f.field.startsWith('fix_pack.files['))} compact max={4} />
         </div>
       )}

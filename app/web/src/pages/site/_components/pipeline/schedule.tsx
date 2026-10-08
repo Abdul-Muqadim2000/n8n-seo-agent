@@ -60,7 +60,7 @@ export function RecentActivity({ data }: { data: PipelineData }) {
       key: r.id,
       node: (
         <>
-          <Link to={paths.report(org.id, r.id)} className="min-w-0 text-sm font-medium text-ink hover:text-accent-text">
+          <Link to={paths.report(org.id, r.id)} className="min-w-0 text-sm font-medium text-ink hover:text-accent-text transition-colors duration-150 ease-brand">
             {r.title}
           </Link>
           <span className="text-xs text-ink-3">{fmtAgo(r.receivedAt)}</span>
@@ -76,7 +76,7 @@ export function RecentActivity({ data }: { data: PipelineData }) {
             <ScanSearch className="mt-0.5 size-4 shrink-0 text-good-text" aria-hidden />
             <span className="min-w-0 break-words">
               We found your page live at{' '}
-              <a href={d.url} target="_blank" rel="noopener noreferrer" className="font-medium text-accent-text hover:underline">
+              <a href={d.url} target="_blank" rel="noopener noreferrer" className="font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
                 {d.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '')}
               </a>
               <span className="text-ink-3">
@@ -84,7 +84,7 @@ export function RecentActivity({ data }: { data: PipelineData }) {
                 (“{d.keyword}”{d.ladderId ? (
                   <>
                     ,{' '}
-                    <Link to={paths.ladder(org.id, site.id, d.ladderId)} className="hover:text-accent-text">
+                    <Link to={paths.ladder(org.id, site.id, d.ladderId)} className="hover:text-accent-text transition-colors duration-150 ease-brand">
                       {d.head ? `ladder “${d.head}”` : 'its ladder'}
                     </Link>
                   </>

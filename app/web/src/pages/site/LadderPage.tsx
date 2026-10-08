@@ -26,6 +26,7 @@ import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useLadder } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate, fmtDay } from '@/lib/utils';
+import { StageGlyph } from '@/components/reports/meta';
 import { plural, sortByDate } from './_components/format';
 import { PositionHistoryCard, type HistoryLine } from './_components/history';
 import { ranked } from './_components/positions';
@@ -44,8 +45,8 @@ export default function LadderPage() {
   const { site } = useSiteCtx();
   const q = useLadder(org.id, site.id, ladderId);
   const back = (
-    <Link to={paths.site(org.id, site.id, 'pipeline')} className="inline-flex items-center gap-1 hover:text-accent-text">
-      <ArrowLeft className="size-3.5" aria-hidden />
+    <Link to={paths.site(org.id, site.id, 'pipeline')} className="group inline-flex items-center gap-1 transition-colors duration-150 ease-brand hover:text-accent-text">
+      <ArrowLeft className="size-3.5 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden />
       Pipeline
     </Link>
   );
@@ -115,13 +116,13 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
         }
         actions={
           admin && (
-            <div className="flex flex-col items-start gap-1.5 sm:items-end">
+            <div className="flex flex-col items-start gap-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <LadderModeSwitch ladder={l} size="md" />
                 <LadderPauseButton ladder={l} />
                 <DeleteLadderButton ladder={l} />
               </div>
-              <p className="text-xs text-ink-3 sm:text-right">
+              <p className="text-xs text-ink-3">
                 {MODE_HELP[l.mode]} Priority {l.priority}: change it on the Pipeline page.
               </p>
             </div>
@@ -330,10 +331,14 @@ function Reports({ ladder: l }: { ladder: LadderDetail }) {
         ) : (
           <ul className="divide-y divide-line">
             {reports.map((r) => (
-              <li key={r.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 py-2.5">
-                <Link to={paths.report(org.id, r.id)} className="min-w-0 text-sm font-medium text-ink hover:text-accent-text hover:underline">
-                  {r.title}
-                </Link>
+              // the title link covers the row
+              <li key={r.id} className="group relative -mx-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-lg px-2 py-2.5 transition-colors duration-150 ease-brand hover:bg-surface-2/60">
+                <span className="flex min-w-0 items-center gap-3">
+                  <StageGlyph stage={r.stage} size="sm" />
+                  <Link to={paths.report(org.id, r.id)} className="min-w-0 text-sm font-medium text-ink transition-colors duration-150 ease-brand after:absolute after:inset-0 after:rounded-lg group-hover:text-accent-text">
+                    {r.title}
+                  </Link>
+                </span>
                 <span className="text-xs text-ink-3">
                   {r.scheduled ? 'automatic · ' : ''}
                   {fmtDate(r.receivedAt)}

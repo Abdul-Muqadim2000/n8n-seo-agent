@@ -65,7 +65,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
                 </Badge>
               )}
             </div>
-            <h2 className="mt-3 text-xl font-semibold tracking-tight text-ink">{keyword || 'Keyword'}</h2>
+            <h2 className="mt-3 font-display text-xl font-semibold tracking-[-0.01em] text-ink">{keyword || 'Keyword'}</h2>
             <KeyValue
               className="mt-3"
               items={[

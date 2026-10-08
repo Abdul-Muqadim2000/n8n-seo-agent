@@ -2,7 +2,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { Bot, ChevronDown, CircleCheck, CircleMinus, CircleX, FileSearch, Gauge, Link2, ListChecks, PenSquare, Search, TrendingUp, Wrench } from 'lucide-react';
+import { ArrowRight, Bot, ChevronDown, CircleCheck, CircleMinus, CircleX, FileSearch, Gauge, Link2, ListChecks, PenSquare, Search, TrendingUp, Wrench } from 'lucide-react';
 import { MODES, type ModeId, type Priority } from '@seo/shared';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -64,7 +64,9 @@ export function KpiGrid({ children, cols = 4, dense, className }: { children: Re
         dense && 'grid-cols-2',
         cols === 3 && 'lg:grid-cols-3',
         cols === 4 && 'xl:grid-cols-4',
-        cols === 5 && 'lg:grid-cols-3 2xl:grid-cols-5',
+        // five tiles: three on the first row, two wider ones on the second (no hole), one row of five on very wide screens
+        cols === 5 &&
+          'sm:[&>*:last-child]:col-span-2 lg:grid-cols-6 lg:[&>*]:col-span-2 lg:[&>*:nth-child(n+4)]:col-span-3 2xl:grid-cols-5 2xl:[&>*]:col-span-1 2xl:[&>*:nth-child(n+4)]:col-span-1',
         className,
       )}
     >
@@ -127,12 +129,12 @@ export function SrOnly({ children }: { children: ReactNode }) {
 /** A titled block of a dashboard page. */
 export function SectionHeading({ title, description, actions, id }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; id?: string }) {
   return (
-    <div className="mb-3 flex flex-wrap items-end justify-between gap-3" id={id}>
-      <div className="min-w-0">
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
+    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" id={id}>
+      <div className="min-w-0 max-w-4xl">
+        <h2 className="font-display text-base font-semibold tracking-[-0.01em] text-ink">{title}</h2>
         {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -151,8 +153,8 @@ export function FilterChips<T extends string>({ value, onChange, options, label,
             aria-checked={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              'inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition-colors',
-              active ? 'border-accent bg-accent-soft text-accent-text' : 'border-line bg-surface text-ink-2 hover:bg-surface-2 hover:text-ink',
+              'inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition-[color,background-color,border-color] duration-150 ease-brand',
+              active ? 'border-accent bg-accent-soft text-accent-text' : 'border-line bg-surface text-ink-2 hover:border-line-strong hover:bg-surface-2 hover:text-ink',
             )}
           >
             {o.icon}
@@ -210,7 +212,7 @@ export function MiniStat({ label, value, hint, className }: { label: ReactNode; 
   return (
     <div className={cn('min-w-0', className)}>
       <div className="text-xs font-medium text-ink-3">{label}</div>
-      <div className="mt-0.5 text-lg font-semibold tracking-tight text-ink">{value}</div>
+      <div className="mt-0.5 font-display text-lg font-semibold tracking-[-0.01em] text-ink">{value}</div>
       {hint && <div className="mt-0.5 text-xs leading-snug text-ink-3">{hint}</div>}
     </div>
   );
@@ -239,7 +241,7 @@ export function Panel({ title, description, actions, children, footer, className
         <div className="flex min-w-0 items-start gap-2.5">
           {icon && <span className="mt-0.5 text-ink-3">{icon}</span>}
           <div className="min-w-0">
-            <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
+            <h3 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
             {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
           </div>
         </div>
@@ -254,8 +256,9 @@ export function Panel({ title, description, actions, children, footer, className
 /** "View all →" style link for card footers. */
 export function MoreLink({ to, children }: { to: string; children: ReactNode }) {
   return (
-    <Link to={to} className="text-[13px] font-medium text-accent-text underline-offset-4 hover:underline">
-      {children} →
+    <Link to={to} className="group/more inline-flex items-center gap-1 text-[13px] font-medium text-accent-text decoration-accent-text/40 underline-offset-4 hover:underline transition-colors duration-150 ease-brand">
+      {children}
+      <ArrowRight className="size-3.5 shrink-0 transition-transform duration-200 ease-brand group-hover/more:translate-x-0.5" aria-hidden />
     </Link>
   );
 }

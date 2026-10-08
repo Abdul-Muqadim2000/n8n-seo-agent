@@ -242,11 +242,11 @@ function LatestCheckin({ c }: { c: Checkin }) {
         </div>
         <div>
           <dt className="text-xs text-ink-3">Indexed pages</dt>
-          <dd className="mt-1 text-lg font-semibold text-ink">{c.indexedTotal != null ? c.indexedTotal.toLocaleString('en-US') : '–'}</dd>
+          <dd className="mt-1 font-display text-lg font-semibold text-ink">{c.indexedTotal != null ? c.indexedTotal.toLocaleString('en-US') : '–'}</dd>
         </div>
         <div>
           <dt className="text-xs text-ink-3">Not indexed</dt>
-          <dd className="mt-1 text-lg font-semibold text-ink">
+          <dd className="mt-1 font-display text-lg font-semibold text-ink">
             {c.notIndexedTotal.toLocaleString('en-US')}
             {share != null && <span className="ml-1.5 text-xs font-normal text-ink-3">{share}% of known pages indexed</span>}
           </dd>

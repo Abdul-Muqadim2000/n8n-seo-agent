@@ -13,7 +13,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { EngineActionList } from './_components/actions';
 import { AnswersExplorer, QuestionGrid, QuestionManager, engineLabel } from './_components/ai';
 import { AccessPanel, AiTrafficPanel, DiscoveryPanel, GroupsPanel, IndexPanel, PerceptionPanel } from './_components/ai-insights';
-import { Chips, DataGate, KpiGrid, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, YesNo, useSitePage } from './_components/kit';
+import { Chips, DataGate, FillHeight, KpiGrid, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, YesNo, useSitePage } from './_components/kit';
 import { diff, lastTwo, pct, sortByDate, timeAxisFormat, urlPath } from './_components/format';
 
 export default function AiVisibilityPage() {
@@ -199,7 +199,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
                 <ul className="space-y-2">
                   {d.latest.pages.map((p) => (
                     <li key={p.url} className="flex items-start justify-between gap-3 text-sm">
-                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate text-accent-text hover:underline" title={p.url}>
+                      <a href={p.url} target="_blank" rel="noopener noreferrer" className="min-w-0 truncate text-accent-text hover:underline transition-colors duration-150 ease-brand" title={p.url}>
                         {urlPath(p.url)}
                       </a>
                       <span className="shrink-0 text-right text-xs text-ink-3">
@@ -277,7 +277,9 @@ function RunsTrend({ runs, daily, loading, className }: { runs: AiRun[]; daily: 
       }}
     >
       {data.length ? (
-        <TimeSeriesChart data={data} xKey="checkedAt" xFormat={timeAxisFormat(data.map((r) => r.checkedAt))} series={series} height={250} yFormat={(v) => (m === 'score' ? `${v}` : `${v}%`)} yDomain={[0, m === 'score' ? 100 : 'auto']} />
+        <FillHeight min={250}>
+          {(h) => <TimeSeriesChart data={data} xKey="checkedAt" xFormat={timeAxisFormat(data.map((r) => r.checkedAt))} series={series} height={h} yFormat={(v) => (m === 'score' ? `${v}` : `${v}%`)} yDomain={[0, m === 'score' ? 100 : 'auto']} />}
+        </FillHeight>
       ) : (
         <EmptyState className="py-10" title="No runs stored yet" />
       )}
@@ -396,7 +398,7 @@ function SourcesTable({ sources }: { sources: Source[] }) {
       header: 'Domain',
       sortValue: (s) => s.domain,
       cell: (s) => (
-        <a href={`https://${s.domain}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-ink hover:text-accent-text">
+        <a href={`https://${s.domain}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-ink hover:text-accent-text transition-colors duration-150 ease-brand">
           <Globe className="size-3.5 text-ink-3" aria-hidden />
           {s.domain}
           <ExternalIcon className="size-3 text-ink-3" aria-hidden />

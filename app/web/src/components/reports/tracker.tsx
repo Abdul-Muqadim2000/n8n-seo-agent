@@ -155,7 +155,7 @@ export function SiteTrackerReport({ report }: { report: ReportDetail }) {
       {objs(p.ladder_pages).length > 0 && <LadderPages rows={objs(p.ladder_pages)} />}
 
       {ga4.connected !== false && (objs(ga4.channels).length > 0 || objs(ga4.landing).length > 0) && (
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
           {objs(ga4.channels).length > 0 && (
             <Block title="Where visitors come from" description="Sessions by channel (GA4)" icon={<Users className="size-4" />}>
               <ShareBars items={objs(ga4.channels).map((c) => ({ label: str(c.channel), value: num(c.sessions) ?? 0 }))} valueFormat={(v) => n(v)} highlight="Organic Search" />
@@ -242,7 +242,7 @@ function FoundLive({ rows, siteId }: { rows: P[]; siteId: string | null }) {
               {siteId && str(r.ladder_id) && (
                 <>
                   {' · '}
-                  <Link to={paths.ladder(org.id, siteId, str(r.ladder_id))} className="text-accent-text hover:underline">
+                  <Link to={paths.ladder(org.id, siteId, str(r.ladder_id))} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
                     its keyword ladder
                   </Link>
                 </>

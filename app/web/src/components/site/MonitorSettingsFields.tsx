@@ -208,7 +208,7 @@ export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors
     <div className={cn('rounded-xl border border-line bg-surface', className)}>
       <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4">
         <h4 className="text-sm font-semibold text-ink">Estimated monthly cost</h4>
-        <p className="text-2xl font-semibold tracking-tight text-ink" aria-live="polite">
+        <p className="font-display text-2xl font-semibold tracking-[-0.01em] text-ink" aria-live="polite">
           {formatUsd(total)}
           <span className="ml-1 text-sm font-normal text-ink-3">/ month</span>
         </p>

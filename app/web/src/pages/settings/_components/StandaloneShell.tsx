@@ -33,8 +33,8 @@ export function StandaloneShell({
         </div>
       </header>
       <main className={cn('mx-auto w-full px-4 pb-16 pt-6 sm:px-6 lg:pt-10', wide ? 'max-w-6xl' : 'max-w-3xl')}>
-        <button type="button" onClick={back} className="mb-4 inline-flex items-center gap-1.5 rounded-md text-[13px] font-medium text-ink-3 hover:text-ink">
-          <ArrowLeft className="size-4" aria-hidden />
+        <button type="button" onClick={back} className="group mb-4 inline-flex items-center gap-1.5 rounded-md text-[13px] font-medium text-ink-3 transition-colors duration-150 ease-brand hover:text-ink">
+          <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden />
           Back
         </button>
         <PageHeader title={title} description={description} actions={actions} />

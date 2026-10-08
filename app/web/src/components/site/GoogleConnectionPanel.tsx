@@ -184,7 +184,7 @@ function Ga4Picker({ orgId, site, conn, canEdit }: { orgId: string; site: Site; 
         {visibleOthers.map(card)}
       </div>
       {others.length > visibleOthers.length && (
-        <button type="button" onClick={() => setShowOthers(true)} className="inline-flex items-center gap-1 text-[13px] font-medium text-accent-text hover:underline">
+        <button type="button" onClick={() => setShowOthers(true)} className="inline-flex items-center gap-1 text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
           <ChevronDown className="size-3.5" aria-hidden />
           Show {others.length - visibleOthers.length} other {others.length - visibleOthers.length === 1 ? 'property' : 'properties'}
         </button>
@@ -205,7 +205,7 @@ function ManualGa4({ orgId, site, canEdit, compact }: { orgId: string; site: Sit
   if (!canEdit) return site.ga4PropertyId ? <p className="text-[13px] text-ink-3">Saved property ID: {site.ga4PropertyId}</p> : null;
   if (!open)
     return (
-      <button type="button" onClick={() => setOpen(true)} className="text-[13px] font-medium text-accent-text hover:underline">
+      <button type="button" onClick={() => setOpen(true)} className="text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
         Enter a property ID instead
       </button>
     );

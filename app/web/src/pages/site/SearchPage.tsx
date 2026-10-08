@@ -357,7 +357,7 @@ function LandingTable({ rows }: { rows: Landing[] }) {
       header: 'Page',
       sortValue: (r) => r.page,
       cell: (r) => (
-        <a href={r.page.startsWith('/') ? `https://${site.domain}${r.page}` : r.page} target="_blank" rel="noopener noreferrer" className="block max-w-[18rem] truncate text-[13px] text-accent-text hover:underline" title={r.page}>
+        <a href={r.page.startsWith('/') ? `https://${site.domain}${r.page}` : r.page} target="_blank" rel="noopener noreferrer" className="block max-w-[18rem] truncate text-[13px] text-accent-text hover:underline transition-colors duration-150 ease-brand" title={r.page}>
           {urlPath(r.page) || r.page}
         </a>
       ),
@@ -409,11 +409,11 @@ function TrendsSection({ trends }: { trends: TrendPoint[] }) {
                 <div className="mt-3 flex items-end gap-4">
                   <div>
                     <div className="text-xs text-ink-3">Change</div>
-                    <div className="text-xl font-semibold text-ink">{t.changePct != null && Number.isFinite(t.changePct) ? `${t.changePct > 0 ? '+' : ''}${Math.round(t.changePct)}%` : '–'}</div>
+                    <div className="font-display text-xl font-semibold text-ink">{t.changePct != null && Number.isFinite(t.changePct) ? `${t.changePct > 0 ? '+' : ''}${Math.round(t.changePct)}%` : '–'}</div>
                   </div>
                   <div>
                     <div className="text-xs text-ink-3">Interest now / avg.</div>
-                    <div className="text-xl font-semibold text-ink">
+                    <div className="font-display text-xl font-semibold text-ink">
                       {t.latest}
                       <span className="text-sm font-normal text-ink-3"> / {t.average}</span>
                     </div>
@@ -428,7 +428,7 @@ function TrendsSection({ trends }: { trends: TrendPoint[] }) {
                     <div className="flex flex-wrap gap-1">
                       {t.rising.slice(0, 6).map((r) =>
                         can('member') ? (
-                          <Link key={r} to={tool('verdict', { keyword: r })} className="inline-flex h-6 items-center gap-1 rounded-md bg-accent-soft px-2 text-xs text-accent-text hover:underline" title="Check this keyword">
+                          <Link key={r} to={tool('verdict', { keyword: r })} className="inline-flex h-6 items-center gap-1 rounded-md bg-accent-soft px-2 text-xs text-accent-text hover:underline transition-colors duration-150 ease-brand" title="Check this keyword">
                             <TrendingUp className="size-3" aria-hidden />
                             {r}
                           </Link>

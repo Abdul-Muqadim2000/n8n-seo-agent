@@ -1,7 +1,7 @@
 // Pipeline home: one card per keyword ladder, in priority order (the order the weekly posts go to them).
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { Activity, CheckCircle2, Hand, Hourglass, Inbox, Loader2, PenSquare, Plus, TrendingUp } from 'lucide-react';
+import { Activity, ArrowRight, CheckCircle2, Hand, Hourglass, Inbox, Loader2, PenSquare, Plus, TrendingUp } from 'lucide-react';
 import { formatUsd, normKeyword, type LadderCard, type PipelineData, type SiteAutomation } from '@seo/shared';
 import { ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -132,7 +132,7 @@ function LadderCardView({ card: c, rank, controls }: { card: LadderCard; rank: n
   const series = sparkRows(c.headSeries);
   const meta = [c.country, c.planType ? PLAN_LABEL[c.planType] : '', monthsText(c.months) ? `about ${monthsText(c.months)}` : ''].filter(Boolean).join(' · ');
   return (
-    <Card className="relative flex h-full flex-col transition-colors hover:border-line-strong hover:bg-surface-2/40">
+    <Card interactive className="group relative flex h-full flex-col">
       <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-5 pt-4">
         <div className="flex min-w-0 items-start gap-3">
           <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold tabular text-ink-2" title={`Priority ${c.priority || rank}: gets the weekly posts ${rank === 1 ? 'first' : 'after the ladders above'}`}>
@@ -140,8 +140,9 @@ function LadderCardView({ card: c, rank, controls }: { card: LadderCard; rank: n
           </span>
           <div className="min-w-0">
             <h3 className="text-base font-semibold leading-snug text-ink">
-              <Link to={paths.ladder(org.id, site.id, c.id)} className="after:absolute after:inset-0 after:rounded-xl hover:text-accent-text focus-visible:outline-none">
+              <Link to={paths.ladder(org.id, site.id, c.id)} className="inline-flex items-center gap-1.5 transition-colors duration-150 ease-brand after:absolute after:inset-0 after:rounded-xl group-hover:text-accent-text focus-visible:outline-none">
                 {c.head}
+                <ArrowRight className="size-4 shrink-0 text-ink-3 transition-[color,transform] duration-200 ease-brand group-hover:translate-x-0.5 group-hover:text-accent-text" aria-hidden />
               </Link>
             </h3>
             {meta && <p className="mt-0.5 text-[13px] text-ink-3">{meta}</p>}

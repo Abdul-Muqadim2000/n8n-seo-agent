@@ -179,7 +179,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
               <p className="flex items-center gap-1.5 text-[13px] font-medium text-accent-text">
                 <Flag className="size-4" aria-hidden /> Start with
               </p>
-              <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">{str(start.keyword)}</h2>
+              <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.01em] text-ink">{str(start.keyword)}</h2>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <ForYou k={start} />
                 {str(start.page_type) && <Badge tone="accent">{str(start.page_type)}</Badge>}

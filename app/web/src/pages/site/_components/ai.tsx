@@ -252,7 +252,7 @@ function AnswerCard({ a, engineName }: { a: Answer; engineName: string }) {
         <div className="mt-2">
           <p className={cn('whitespace-pre-line rounded-lg bg-surface-2 px-3 py-2 text-[13px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]', !open && long && 'line-clamp-4')}>{a.excerpt}</p>
           {long && (
-            <button type="button" onClick={() => setOpen((o) => !o)} className="mt-1 text-xs font-medium text-accent-text hover:underline">
+            <button type="button" onClick={() => setOpen((o) => !o)} className="mt-1 text-xs font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
               {open ? 'Show less' : 'Show the whole excerpt'}
             </button>
           )}
@@ -289,7 +289,7 @@ function AnswerCard({ a, engineName }: { a: Answer; engineName: string }) {
           <div className="sm:col-span-2">
             Your pages:{' '}
             {a.ourUrls.map((u) => (
-              <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="mr-2 text-accent-text hover:underline">
+              <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="mr-2 text-accent-text hover:underline transition-colors duration-150 ease-brand">
                 {urlPath(u)}
               </a>
             ))}

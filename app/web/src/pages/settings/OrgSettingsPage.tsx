@@ -226,8 +226,9 @@ function DeleteCompanyCard() {
   };
 
   return (
-    <Card className="border-critical/40">
-      <CardHeader title="Danger zone" icon={<Trash2 className="size-4" />} description="Only the owner sees this." />
+    // the danger zone sits apart from the everyday settings
+    <Card className="mt-5 border-critical/40">
+      <CardHeader title="Danger zone" icon={<Trash2 className="size-4 text-critical-text" />} description="Only the owner sees this." />
       <CardBody className="space-y-2 text-sm leading-relaxed text-ink-2">
         <p>
           Deleting <strong className="font-medium text-ink">{org.name}</strong> stops the weekly tracking, monitors and blog posts of its{' '}
@@ -235,7 +236,7 @@ function DeleteCompanyCard() {
           own history of the websites stays.
         </p>
       </CardBody>
-      <CardFooter>
+      <CardFooter className="rounded-b-xl border-critical/25 bg-critical-soft/40">
         <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setOpen(true)}>
           Delete company…
         </Button>
@@ -318,6 +319,26 @@ function TeamTab() {
     );
   };
 
+  // the role control (a select for admins, a badge otherwise); its own column from md up, under the e-mail on phones
+  const roleCell = (m: Member) =>
+    admin && m.role !== 'owner' && m.userId !== me.user.id ? (
+      <Select
+        aria-label={`Role of ${m.name}`}
+        value={m.role}
+        disabled={pendingRole === m.userId}
+        onChange={(e) => changeRole(m, e.target.value as Role)}
+        className="h-8 w-32 text-[13px]"
+      >
+        {(['admin', 'member', 'viewer'] as const).map((r) => (
+          <option key={r} value={r}>
+            {ROLE_LABELS[r]}
+          </option>
+        ))}
+      </Select>
+    ) : (
+      <Badge tone={m.role === 'owner' ? 'accent' : 'neutral'}>{ROLE_LABELS[m.role]}</Badge>
+    );
+
   const columns: Column<Member>[] = [
     {
       key: 'name',
@@ -332,6 +353,7 @@ function TeamTab() {
               {m.userId === me.user.id && <Badge tone="accent">You</Badge>}
             </span>
             <span className="block truncate text-xs text-ink-3">{m.email}</span>
+            <span className="mt-1.5 block md:hidden">{roleCell(m)}</span>
           </span>
         </span>
       ),
@@ -339,25 +361,9 @@ function TeamTab() {
     {
       key: 'role',
       header: 'Role',
+      hideOnMobile: true,
       sortValue: (m) => ['owner', 'admin', 'member', 'viewer'].indexOf(m.role),
-      cell: (m) =>
-        admin && m.role !== 'owner' && m.userId !== me.user.id ? (
-          <Select
-            aria-label={`Role of ${m.name}`}
-            value={m.role}
-            disabled={pendingRole === m.userId}
-            onChange={(e) => changeRole(m, e.target.value as Role)}
-            className="h-8 w-32 text-[13px]"
-          >
-            {(['admin', 'member', 'viewer'] as const).map((r) => (
-              <option key={r} value={r}>
-                {ROLE_LABELS[r]}
-              </option>
-            ))}
-          </Select>
-        ) : (
-          <Badge tone={m.role === 'owner' ? 'accent' : 'neutral'}>{ROLE_LABELS[m.role]}</Badge>
-        ),
+      cell: roleCell,
     },
     { key: 'joinedAt', header: 'Joined', hideOnMobile: true, sortValue: (m) => m.joinedAt, cell: (m) => <span className="text-ink-2">{fmtDate(m.joinedAt)}</span> },
     {

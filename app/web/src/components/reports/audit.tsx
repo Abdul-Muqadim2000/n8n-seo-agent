@@ -48,7 +48,7 @@ export function AuditReport({ report }: { report: ReportDetail }) {
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
               {SEVERITIES.map((s) => (
                 <div key={s} className="rounded-lg border border-line px-3 py-2">
-                  <p className="text-2xl font-semibold text-ink">{num(counts[s]) ?? 0}</p>
+                  <p className="font-display text-2xl font-semibold text-ink">{num(counts[s]) ?? 0}</p>
                   <StatusBadge tone={sevTone(s)} className="mt-1">
                     {s}
                   </StatusBadge>

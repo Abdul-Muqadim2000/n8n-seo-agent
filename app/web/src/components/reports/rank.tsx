@@ -80,7 +80,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
               </ul>
             )}
             {run && can('member') && (
-              <ButtonLink to={paths.tool(org.id, run.mode, { siteId: report.siteId, prefill: run.prefill })} className="mt-4" icon={<ArrowRight className="size-4" />}>
+              <ButtonLink to={paths.tool(org.id, run.mode, { siteId: report.siteId, prefill: run.prefill })} className="mt-4 h-auto min-h-9 max-w-full whitespace-normal py-2 text-left" icon={<ArrowRight className="size-4" />}>
                 {run.mode === 'keyword' && run.prefill.keyword ? `Write “${String(run.prefill.keyword)}”` : modeTitle(run.mode)}
               </ButtonLink>
             )}
@@ -104,7 +104,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
                   <span className="text-[13px] font-medium text-ink-3">Rung {num(r.rung)}</span>
                   {r.reached === true ? <StatusBadge tone="good">Reached</StatusBadge> : <Badge>in progress</Badge>}
                 </div>
-                <p className="mt-2 text-2xl font-semibold text-ink">
+                <p className="mt-2 font-display text-2xl font-semibold text-ink">
                   {top10}
                   <span className="text-sm font-normal text-ink-3"> / {pages} in top 10</span>
                 </p>

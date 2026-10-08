@@ -78,8 +78,8 @@ export default function ToolFormPage() {
 
   return (
     <div>
-      <Link to={paths.tools(org.id)} className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-ink">
-        <ArrowLeft className="size-4" aria-hidden /> All tools
+      <Link to={paths.tools(org.id)} className="group mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 transition-colors duration-150 ease-brand hover:text-ink">
+        <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden /> All tools
       </Link>
       <PageHeader
         title={

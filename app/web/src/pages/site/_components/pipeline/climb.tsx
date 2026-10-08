@@ -162,7 +162,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
             </Button>
           )}
           {p.state === 'published' && p.publishedUrl && (
-            <a href={p.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] font-medium text-accent-text hover:underline">
+            <a href={p.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
               View the live page
               <ExternalIcon className="size-3.5" aria-hidden />
             </a>

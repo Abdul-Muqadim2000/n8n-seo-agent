@@ -306,7 +306,7 @@ export function PipelineNotices({ notices, acked, onToggle, onUsePlan, siteId }:
                   </Button>
                 )}
                 {to && n.link && (
-                  <Link to={to} className="text-[13px] font-medium text-accent-text hover:underline">
+                  <Link to={to} className="text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
                     {n.link.label}
                   </Link>
                 )}
@@ -354,7 +354,7 @@ export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSub
           ))}
         </SummaryRow>
         <SummaryRow icon={<Coins className="size-4" />} label="Estimated cost">
-          <span className="text-lg font-semibold text-ink">{costLabel(cost)}</span>
+          <span className="font-display text-lg font-semibold text-ink">{costLabel(cost)}</span>
           {cost > 0 && <span className="block text-xs text-ink-3">Counted against your company's monthly budget</span>}
         </SummaryRow>
         <SummaryRow icon={<Clock className="size-4" />} label="Time">
@@ -438,7 +438,7 @@ export function SiteField({ value, onChange, optional, error }: { value: string 
       <>
         No website yet.{' '}
         {can('admin') ? (
-          <Link to={paths.newSite(org.id)} className="text-accent-text hover:underline">
+          <Link to={paths.newSite(org.id)} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
             Add your website
           </Link>
         ) : (
@@ -450,7 +450,7 @@ export function SiteField({ value, onChange, optional, error }: { value: string 
     hint = (
       <>
         None of your websites is verified yet.{' '}
-        <Link to={paths.site(org.id, sites[0].id, 'settings/verification')} className="text-accent-text hover:underline">
+        <Link to={paths.site(org.id, sites[0].id, 'settings/verification')} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
           Verify {sites[0].domain}
         </Link>{' '}
         to run checks against it.
@@ -554,6 +554,17 @@ export function EmailCopyField({ reg }: { reg: UseFormRegisterReturn }) {
   // e-mail delivery is switched off on the platform (ENGINE_EMAILS): every result is here only
   if (!providers.data?.engineEmails) return null;
   return <Checkbox {...reg} label="Also e-mail me a copy" description={`The results and files are always kept here; a copy goes to ${me.user.email}.`} />;
+}
+
+/** The "Delivery" card with the e-mail copy box; hidden when e-mail delivery is off (the same condition as the box, so it is never an empty card). */
+export function DeliveryCard({ reg }: { reg: UseFormRegisterReturn }) {
+  const providers = useProviders();
+  if (!providers.data?.engineEmails) return null;
+  return (
+    <FormCard title="Delivery">
+      <EmailCopyField reg={reg} />
+    </FormCard>
+  );
 }
 
 /** Competitor domains: cleaned and validated as they are typed (same rules as the SEO engine). */

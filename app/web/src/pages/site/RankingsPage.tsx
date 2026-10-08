@@ -311,15 +311,15 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
         <div className="min-w-0">
           <div className="text-xs font-medium text-ink-3">Ladder · {ladder.country}</div>
-          <h3 className="mt-0.5 text-lg font-semibold text-ink">
-            <Link to={detail} className="hover:text-accent-text hover:underline">
+          <h3 className="mt-0.5 font-display text-lg font-semibold text-ink">
+            <Link to={detail} className="hover:text-accent-text hover:underline transition-colors duration-150 ease-brand">
               {ladder.headKeyword}
             </Link>
           </h3>
           <p className="mt-0.5 text-[13px] text-ink-3">
             Started {fmtDate(ladder.startDate)} · {plural(pages, 'page')} on {plural(groups.length, 'rung')} · {inTop10} in the top 10
           </p>
-          <Link to={detail} className="mt-1.5 inline-flex items-center gap-1 text-[13px] font-medium text-accent-text hover:underline">
+          <Link to={detail} className="mt-1.5 inline-flex items-center gap-1 text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
             Open the ladder in the Pipeline
             <ArrowRight className="size-3.5" aria-hidden />
           </Link>
@@ -387,7 +387,7 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
                           </div>
                         )}
                         {r.targetUrl && (
-                          <a href={r.targetUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex max-w-full items-center gap-1 truncate text-xs text-ink-3 hover:text-accent-text">
+                          <a href={r.targetUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex max-w-full items-center gap-1 truncate text-xs text-ink-3 hover:text-accent-text transition-colors duration-150 ease-brand">
                             {urlPath(r.targetUrl)}
                             {!r.pageExists && r.status !== 'published' && <span>(planned URL)</span>}
                             <ExternalIcon className="size-3 shrink-0" aria-hidden />
@@ -435,7 +435,7 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
 function RungAction({ r, can, tool }: { r: LadderRung; can: boolean; tool: ReturnType<typeof useSitePage>['tool'] }) {
   if (r.status === 'published') {
     return r.targetUrl ? (
-      <a href={r.targetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-accent-text hover:underline">
+      <a href={r.targetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg px-2 text-[13px] text-accent-text hover:underline transition-colors duration-150 ease-brand">
         View
         <ExternalIcon className="size-3.5" aria-hidden />
       </a>

@@ -555,7 +555,7 @@ function DangerTab() {
 
   return (
     <Card className="max-w-3xl border-critical/40">
-      <CardHeader title="Delete this website" icon={<Trash2 className="size-4" />} />
+      <CardHeader title="Delete this website" icon={<Trash2 className="size-4 text-critical-text" />} />
       <CardBody className="space-y-3 text-sm leading-relaxed text-ink-2">
         <p>
           This removes <strong className="font-medium text-ink">{site.domain}</strong> from {org.name} and stops its weekly tracking, monitors and blog posts in the SEO
@@ -565,7 +565,7 @@ function DangerTab() {
           Only want a break? <ButtonLink to={paths.site(org.id, site.id, 'settings/tracking')} variant="link">Pause tracking instead</ButtonLink>.
         </Note>
       </CardBody>
-      <CardFooter>
+      <CardFooter className="rounded-b-xl border-critical/25 bg-critical-soft/40">
         <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setOpen(true)}>
           Delete website…
         </Button>

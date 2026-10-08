@@ -77,7 +77,7 @@ export function BriefCard({ brief }: { brief: P }) {
   return (
     <div className="rounded-xl border border-line bg-surface p-5 shadow-card">
       <p className="mb-1 text-xs font-medium uppercase tracking-wide text-ink-3">This week in brief</p>
-      {str(brief.headline) && <h2 className="text-lg font-semibold leading-snug tracking-tight text-ink">{str(brief.headline)}</h2>}
+      {str(brief.headline) && <h2 className="font-display text-lg font-semibold leading-snug tracking-[-0.01em] text-ink">{str(brief.headline)}</h2>}
       {str(brief.summary) && <p className="mt-2 text-sm leading-relaxed text-ink-2">{str(brief.summary)}</p>}
       {recs.length > 0 && (
         <div className="mt-4">

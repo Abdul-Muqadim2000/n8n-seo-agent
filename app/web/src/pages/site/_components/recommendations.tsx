@@ -24,23 +24,27 @@ export function sortRecommendations(recs: readonly Recommendation[]): Recommenda
   return [...recs].sort((a, b) => (PRIO_RANK[a.priority] ?? 3) - (PRIO_RANK[b.priority] ?? 3) || CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
 }
 
+const NUDGE = 'size-3.5 transition-transform duration-200 ease-brand group-hover/rec:translate-x-0.5';
+/** Priority stripe on the card's left edge (the priority badge carries the word and icon). */
+const STRIPE: Record<Priority, string> = { high: 'bg-serious', medium: 'bg-warning', low: 'bg-line-strong' };
+
 /** The button that carries a recommendation out: a pre-filled tool, a page of the site, or an external link. */
 export function RecommendationButton({ action, size = 'sm', variant = 'secondary' }: { action: RecommendationAction; size?: 'sm' | 'md'; variant?: 'primary' | 'secondary' }) {
   const { can, tool, page } = useSitePage();
   if (action.mode) {
     if (!can('member')) return null;
     return (
-      <ButtonLink to={tool(action.mode, action.prefill)} size={size} variant={variant} title={MODES[action.mode]?.summary}>
+      <ButtonLink to={tool(action.mode, action.prefill)} size={size} variant={variant} title={MODES[action.mode]?.summary} className="group/rec">
         {action.label}
-        <ArrowRight className="size-3.5" aria-hidden />
+        <ArrowRight className={NUDGE} aria-hidden />
       </ButtonLink>
     );
   }
   if (action.page) {
     return (
-      <ButtonLink to={page(action.page.replace(/^\/+/, ''))} size={size} variant={variant}>
+      <ButtonLink to={page(action.page.replace(/^\/+/, ''))} size={size} variant={variant} className="group/rec">
         {action.label}
-        <ArrowRight className="size-3.5" aria-hidden />
+        <ArrowRight className={NUDGE} aria-hidden />
       </ButtonLink>
     );
   }
@@ -68,7 +72,8 @@ function CategoryIcon({ category, className }: { category: RecommendationCategor
 export function RecommendationCard({ rec }: { rec: Recommendation }) {
   const meta = CATEGORY_META[rec.category] ?? CATEGORY_META.setup;
   return (
-    <Card className="flex h-full flex-col p-4">
+    <Card className="relative flex h-full flex-col p-4 pl-5">
+      <span className={cn('absolute inset-y-4 left-0 w-[3px] rounded-r-full', STRIPE[rec.priority] ?? STRIPE.low)} aria-hidden />
       <div className="flex items-start gap-3">
         <CategoryIcon category={rec.category} />
         <div className="min-w-0 flex-1">

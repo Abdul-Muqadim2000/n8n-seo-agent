@@ -1,7 +1,7 @@
 // Delivered reports and their files (PDF, Word, HTML, Markdown, meta.json, fix pack, CSV, disavow list).
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { CalendarClock, ChevronDown, Download, ExternalLink as ExternalIcon, Files, FileText } from 'lucide-react';
+import { CalendarClock, ChevronDown, Download, ExternalLink as ExternalIcon, Files } from 'lucide-react';
 import { STAGE_LABELS, compactNumber, type Report, type ReportFile } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { paths } from '@/lib/paths';
@@ -9,6 +9,7 @@ import { cn, fmtAgo, fmtBytes, fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge, verdictTone } from '@/components/ui/badge';
 import { Popover, Tooltip } from '@/components/ui/overlay';
 import { scoreTone } from '@/components/ui/misc';
+import { StageGlyph } from '@/components/reports/meta';
 import { pct } from './format';
 
 const PRIMARY_KINDS: ReportFile['kind'][] = ['pdf', 'docx', 'doc', 'html', 'md', 'zip'];
@@ -148,13 +149,14 @@ export function ReportList({ orgId, reports, limit, empty }: { orgId: string; re
   return (
     <ul className="divide-y divide-line">
       {rows.map((r) => (
-        <li key={r.id} className="flex flex-col gap-2 px-5 py-3 md:flex-row md:items-center md:gap-4">
+        // the title link covers the row; the file links sit above it
+        <li key={r.id} className="group relative flex flex-col gap-2 px-5 py-3 transition-colors duration-150 ease-brand hover:bg-surface-2/60 md:flex-row md:items-center md:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
-            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-ink-3" aria-hidden>
-              <FileText className="size-4" />
+            <span className="mt-0.5" aria-hidden>
+              <StageGlyph stage={r.stage} size="sm" />
             </span>
             <div className="min-w-0">
-              <Link to={paths.report(orgId, r.id)} className="block truncate text-sm font-medium text-ink hover:text-accent-text">
+              <Link to={paths.report(orgId, r.id)} className="block truncate text-sm font-medium text-ink transition-colors duration-150 ease-brand after:absolute after:inset-0 group-hover:text-accent-text">
                 {r.title}
               </Link>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-3">
@@ -170,7 +172,7 @@ export function ReportList({ orgId, reports, limit, empty }: { orgId: string; re
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 pl-10 md:pl-0">
+          <div className="relative z-[1] flex flex-wrap items-center gap-2 pl-10 md:pl-0">
             <ReportHighlights report={r} />
             <FileLinks orgId={orgId} files={r.files} />
           </div>

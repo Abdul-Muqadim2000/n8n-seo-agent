@@ -126,7 +126,7 @@ function SignInSection({ me }: { me: Me }) {
           {me.user.googleLinked ? (
             <StatusBadge tone="good">Linked</StatusBadge>
           ) : providers.data?.google ? (
-            <a href="/api/auth/google" className="text-[13px] font-medium text-accent-text hover:underline">
+            <a href="/api/auth/google" className="text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
               Link Google account
             </a>
           ) : (
@@ -213,13 +213,13 @@ function CompaniesSection({ me }: { me: Me }) {
       {me.orgs.length ? (
         <ul className="divide-y divide-line rounded-xl border border-line">
           {me.orgs.map((o) => (
-            <li key={o.id}>
-              <Link to={paths.org(o.id)} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
+            <li key={o.id} className="first:*:rounded-t-[13px] last:*:rounded-b-[13px]">
+              <Link to={paths.org(o.id)} className="group flex items-center gap-3 px-4 py-3 transition-colors duration-150 ease-brand hover:bg-surface-2">
                 <Building2 className="size-4 shrink-0 text-ink-3" aria-hidden />
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{o.name}</span>
                 {!o.onboardedAt && <Badge tone="warning">Setup not finished</Badge>}
                 <Badge>{ROLE_LABELS[o.role]}</Badge>
-                <ChevronRight className="size-4 shrink-0 text-ink-3" aria-hidden />
+                <ChevronRight className="size-4 shrink-0 text-ink-3 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
               </Link>
             </li>
           ))}

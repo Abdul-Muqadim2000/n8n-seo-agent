@@ -87,7 +87,7 @@ export function EngineActionList({ actions, limit, showSource }: { actions: read
                 <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
                   {a.keyword && <span>Keyword: <span className="text-ink-2">{a.keyword}</span></span>}
                   {a.url && (
-                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent-text hover:underline">
+                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent-text hover:underline transition-colors duration-150 ease-brand">
                       {urlPath(a.url)}
                       <ExternalIcon className="size-3" aria-hidden />
                     </a>

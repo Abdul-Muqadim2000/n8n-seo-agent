@@ -11,7 +11,7 @@ import { ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Callout, EmptyState } from '@/components/ui/feedback';
 import { Delta, Meter, PageHeader, StatTile } from '@/components/ui/misc';
-import { DataGate, KpiGrid, MetricSwitch, MiniStat, MoreLink, Panel, RunAnalysisMenu, ToolButton, useSitePage } from './_components/kit';
+import { DataGate, FillHeight, KpiGrid, MetricSwitch, MiniStat, MoreLink, Panel, RunAnalysisMenu, ToolButton, useSitePage } from './_components/kit';
 import { diff, fmtMonthShort, fmtRange, lastTwo, pct, pctChange, plural, sortByDate, timeAxisFormat } from './_components/format';
 import { plotAvgPos, PositionMove, posText } from './_components/positions';
 import { RecommendationRows, sortRecommendations } from './_components/recommendations';
@@ -132,7 +132,8 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
         />
       </KpiGrid>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start">
+      {/* the chart card stretches with the recommendations next to it and the chart grows into the space */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <SearchTrend series={search} kind={d.search.seriesKind} loading={refetching} className="lg:col-span-2" />
         <Panel
           title="Top recommendations"
@@ -267,7 +268,7 @@ function SetupState({ d }: { d: OverviewData }) {
         <Card className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-[15px] font-semibold text-ink">Complete the picture</h2>
+              <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">Complete the picture</h2>
               <p className="mt-0.5 text-[13px] text-ink-3">
                 {done} of {steps.length} done. Each step fills a part of this dashboard.
               </p>
@@ -327,7 +328,9 @@ function SearchTrend({ series, kind, loading, className }: { series: OverviewDat
       footer={<MoreLink to={page('search')}>Daily data, queries and landing pages</MoreLink>}
     >
       {series.length ? (
-        <TimeSeriesChart data={rows} xKey="periodEnd" series={[m.series]} area={metric !== 'position'} invertY={metric === 'position'} height={300} yFormat={metric === 'position' ? (v) => String(Math.round(v)) : undefined} />
+        <FillHeight min={300}>
+          {(h) => <TimeSeriesChart data={rows} xKey="periodEnd" series={[m.series]} area={metric !== 'position'} invertY={metric === 'position'} height={h} yFormat={metric === 'position' ? (v) => String(Math.round(v)) : undefined} />}
+        </FillHeight>
       ) : (
         <EmptyState
           icon={<TrendingUp className="size-5" />}
@@ -448,7 +451,7 @@ function AlertsCard({ d }: { d: OverviewData }) {
   return (
     <Panel title="Alerts & check-ins" icon={<BellRing className="size-4" />} footer={<MoreLink to={page('alerts')}>Alerts & check-ins</MoreLink>}>
       <div className="flex items-center gap-3">
-        <span className="text-3xl font-semibold tracking-tight text-ink">{a.open}</span>
+        <span className="font-display text-3xl font-semibold tracking-[-0.01em] text-ink">{a.open}</span>
         {a.open > 0 ? <StatusBadge tone="warning">Open Search Console {a.open === 1 ? 'alert' : 'alerts'}</StatusBadge> : <StatusBadge tone="good">No open alerts</StatusBadge>}
       </div>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-3">Search Console notification mails (manual actions, security issues, indexing) are read and raised here automatically.</p>

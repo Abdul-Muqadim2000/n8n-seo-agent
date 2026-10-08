@@ -70,7 +70,7 @@ export function LadderReport({ report }: { report: ReportDetail }) {
             <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink-3">
               <Mountain className="size-4" aria-hidden /> Main keyword
             </p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">{headKw}</h2>
+            <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.01em] text-ink">{headKw}</h2>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <DifficultyBadge difficulty={difficulty} />
               <PlanBadge plan={planType} months={str(p.months)} stretch={p.stretch === true} />
@@ -299,7 +299,7 @@ function Excluded({ items, siteId }: { items: P[]; siteId: string | null }) {
             <span className="min-w-0 break-words text-ink">“{str(x.keyword)}”</span>
             <span className="text-[13px] text-ink-3">
               {siteId && str(x.ladder_id) ? (
-                <Link to={paths.ladder(org.id, siteId, str(x.ladder_id))} className="text-accent-text hover:underline">
+                <Link to={paths.ladder(org.id, siteId, str(x.ladder_id))} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
                   ladder “{str(x.head) || str(x.ladder_id)}”
                 </Link>
               ) : (

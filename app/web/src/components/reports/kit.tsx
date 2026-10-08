@@ -117,7 +117,7 @@ export function Chips({ items, max = 30, className }: { items: string[]; max?: n
         </span>
       ))}
       {items.length > max && (
-        <button type="button" onClick={() => setAll(!all)} className="text-[13px] font-medium text-accent-text hover:underline">
+        <button type="button" onClick={() => setAll(!all)} className="text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
           {all ? 'Show fewer' : `+${items.length - max} more`}
         </button>
       )}
@@ -133,7 +133,7 @@ export function ScoreMeter({ score, label = 'Score', size = 'md' }: { score: num
     <div>
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[13px] font-medium text-ink-3">{label}</span>
-        <span className={cn('font-semibold tracking-tight text-ink', size === 'lg' ? 'text-3xl' : 'text-xl')}>
+        <span className={cn('font-display font-semibold tracking-[-0.01em] text-ink', size === 'lg' ? 'text-3xl' : 'text-xl')}>
           {Math.round(score)}
           <span className="text-sm font-normal text-ink-3">/100</span>
         </span>
@@ -152,7 +152,7 @@ export function Facts({ items, className, cols = 'sm:grid-cols-3 lg:grid-cols-4'
       {shown.map((it, i) => (
         <div key={i} className="rounded-lg border border-line bg-surface-2/50 px-3 py-2.5">
           <dt className="text-xs text-ink-3">{it.label}</dt>
-          <dd className="mt-0.5 text-[15px] font-semibold text-ink">{it.value}</dd>
+          <dd className="mt-0.5 font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">{it.value}</dd>
           {it.hint && <dd className="mt-0.5 text-xs text-ink-3">{it.hint}</dd>}
         </div>
       ))}
@@ -165,7 +165,12 @@ export function Disclosure({ title, children, defaultOpen, className, meta }: { 
   const [open, setOpen] = useState(!!defaultOpen);
   return (
     <div className={cn('rounded-lg border border-line', className)}>
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink hover:bg-surface-2">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className={cn('flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-ink transition-colors duration-150 ease-brand hover:bg-surface-2', open ? 'rounded-t-[9px]' : 'rounded-[9px]')}
+      >
         {open ? <ChevronDown className="size-4 shrink-0 text-ink-3" /> : <ChevronRight className="size-4 shrink-0 text-ink-3" />}
         <span className="min-w-0 flex-1">{title}</span>
         {meta && <span className="shrink-0 text-xs font-normal text-ink-3">{meta}</span>}
@@ -185,7 +190,7 @@ export function CodeBlock({ text, fileName, maxHeight = 'max-h-[420px]', mime }:
           <button
             type="button"
             onClick={() => downloadText(fileName, text, mime)}
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2 text-xs font-medium text-ink-2 hover:bg-surface-2"
+            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2 text-xs font-medium text-ink-2 shadow-card transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink"
           >
             Download
           </button>

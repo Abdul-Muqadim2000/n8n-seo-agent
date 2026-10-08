@@ -105,7 +105,7 @@ export function ThisWeek({ data }: { data: PipelineData }) {
             {active.map((r) => (
               <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-accent-soft px-3 py-2 text-[13px]">
                 <RunningBadge />
-                <Link to={paths.run(org.id, r.id)} className="min-w-0 font-medium text-ink hover:text-accent-text hover:underline">
+                <Link to={paths.run(org.id, r.id)} className="min-w-0 font-medium text-ink hover:text-accent-text hover:underline transition-colors duration-150 ease-brand">
                   {MODES[r.mode]?.title ?? r.mode}
                   {r.keyword ? `: “${r.keyword}”` : ''}
                 </Link>
@@ -281,12 +281,12 @@ export function HowItWorks({ data, cards }: { data: PipelineData; cards: LadderC
   ];
   return (
     <details className="group rounded-xl border border-line bg-surface shadow-card">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl px-5 py-4 transition-colors duration-150 ease-brand hover:bg-surface-2/60 group-open:rounded-b-none [&::-webkit-details-marker]:hidden">
         <span className="min-w-0">
-          <span className="block text-[15px] font-semibold text-ink">How a keyword ladder works</span>
+          <span className="block font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">How a keyword ladder works</span>
           <span className="mt-0.5 block text-[13px] leading-snug text-ink-3">Six steps, with {site.domain}’s own numbers. It takes months, not weeks.</span>
         </span>
-        <ChevronDown className="size-4 shrink-0 text-ink-3 transition-transform group-open:rotate-180" aria-hidden />
+        <ChevronDown className="size-4 shrink-0 text-ink-3 transition-transform duration-200 ease-brand group-open:rotate-180" aria-hidden />
       </summary>
       <div className="border-t border-line px-5 py-4">
         <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">

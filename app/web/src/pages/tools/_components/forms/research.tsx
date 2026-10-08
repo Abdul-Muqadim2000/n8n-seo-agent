@@ -8,7 +8,7 @@ import { PAGE_TYPES, RUN_SCHEMAS, urlOnDomain } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { Checkbox, ChoiceCard } from '@/components/ui/field';
 import { estimateCost, estimateEta } from '../estimate';
-import { CountryField, EmailCopyField, errMsg, FormCard, GoalField, PageTypeField, setPristine, siteDefaults, SiteField, ToneField, ToolShell, useRunSubmit, useSiteChange, useSyncSiteParam } from '../kit';
+import { CountryField, DeliveryCard, EmailCopyField, errMsg, FormCard, GoalField, PageTypeField, setPristine, siteDefaults, SiteField, ToneField, ToolShell, useRunSubmit, useSiteChange, useSyncSiteParam } from '../kit';
 import { TextAreaField, TextField, withChecks, withPrefill, type ToolFormProps } from '../form-utils';
 
 const isVideoUrl = (u: string) => /youtube\.com|youtu\.be|vimeo\.com/i.test(u);
@@ -245,9 +245,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
         </div>
       )}
 
-      <FormCard title="Delivery">
-        <EmailCopyField reg={form.register('emailCopy')} />
-      </FormCard>
+      <DeliveryCard reg={form.register('emailCopy')} />
     </ToolShell>
   );
 }
@@ -351,9 +349,7 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
         </div>
       </FormCard>
 
-      <FormCard title="Delivery">
-        <EmailCopyField reg={form.register('emailCopy')} />
-      </FormCard>
+      <DeliveryCard reg={form.register('emailCopy')} />
     </ToolShell>
   );
 }

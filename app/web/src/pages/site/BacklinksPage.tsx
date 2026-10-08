@@ -386,7 +386,7 @@ function RefTable({ rows, empty, search, sortKey = 'seo' }: { rows: BacklinkRef[
       sortValue: (x) => x.refDomain,
       cell: (x) => (
         <div className="min-w-[12rem] max-w-[22rem]">
-          <a href={x.fromUrl || `https://${x.refDomain}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-ink hover:text-accent-text">
+          <a href={x.fromUrl || `https://${x.refDomain}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-ink hover:text-accent-text transition-colors duration-150 ease-brand">
             {x.refDomain}
             <ExternalIcon className="size-3 text-ink-3" aria-hidden />
           </a>
@@ -676,7 +676,7 @@ function LinkTable({ rows, empty }: { rows: BacklinkLink[]; empty: string }) {
       sortValue: (l) => l.fromDomain,
       cell: (l) => (
         <div className="min-w-[12rem] max-w-[20rem]">
-          <a href={l.fromUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-ink hover:text-accent-text">
+          <a href={l.fromUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-medium text-ink hover:text-accent-text transition-colors duration-150 ease-brand">
             {l.fromDomain}
             <ExternalIcon className="size-3 text-ink-3" aria-hidden />
           </a>
@@ -718,7 +718,7 @@ function CompetitorList({ rows, graph }: { rows: NonNullable<BacklinksData['late
         const bl = num(c.backlinks);
         return (
           <li key={c.domain} className="text-sm">
-            <a href={`https://${c.domain}`} target="_blank" rel="noopener noreferrer" className="block truncate font-medium text-ink hover:text-accent-text">
+            <a href={`https://${c.domain}`} target="_blank" rel="noopener noreferrer" className="block truncate font-medium text-ink hover:text-accent-text transition-colors duration-150 ease-brand">
               {c.domain}
             </a>
             <span className="text-xs text-ink-3">

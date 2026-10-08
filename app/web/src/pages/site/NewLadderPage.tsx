@@ -78,10 +78,9 @@ export default function NewLadderPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        className="mb-0"
         eyebrow={
-          <Link to={paths.site(org.id, site.id, 'pipeline')} className="inline-flex items-center gap-1 hover:text-accent-text">
-            <ArrowLeft className="size-3.5" aria-hidden />
+          <Link to={paths.site(org.id, site.id, 'pipeline')} className="group inline-flex items-center gap-1 transition-colors duration-150 ease-brand hover:text-accent-text">
+            <ArrowLeft className="size-3.5 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden />
             Pipeline
           </Link>
         }
@@ -512,7 +511,7 @@ function ReviewStep({
         <Section title="The plan" description={chosen.how === 'chosen' ? 'Chosen for you: the easiest suggestion for your website that no ladder covers yet.' : undefined}>
           <div>
             <p className="text-xs font-medium text-ink-3">Main keyword</p>
-            <p className="mt-0.5 break-words text-xl font-semibold tracking-tight text-ink">{chosen.keyword}</p>
+            <p className="mt-0.5 break-words font-display text-xl font-semibold tracking-[-0.01em] text-ink">{chosen.keyword}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <DifficultyBadge difficulty={chosen.difficultyForYou} />
               <PlanBadge plan={chosen.planType} months={chosen.months} stretch={chosen.stretch} />
@@ -643,7 +642,7 @@ function ReviewStep({
             ]}
           />
           {admin && (
-            <Link to={paths.site(org.id, site.id, 'settings/business')} className="inline-block text-[13px] font-medium text-accent-text hover:underline">
+            <Link to={paths.site(org.id, site.id, 'settings/business')} className="inline-block text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
               Edit them in Website settings
             </Link>
           )}
@@ -764,7 +763,7 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
         <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-line pt-4">
           <div>
             <p className="text-xs text-ink-3">Cost now</p>
-            <p className="text-lg font-semibold text-ink">about {formatUsd(cost)}</p>
+            <p className="font-display text-lg font-semibold text-ink">about {formatUsd(cost)}</p>
             <p className="text-xs text-ink-3">Counted in your company’s monthly budget</p>
           </div>
           <div className="flex flex-wrap gap-2">

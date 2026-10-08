@@ -99,7 +99,7 @@ function Recommendations({ recs, refetching }: { recs: Recommendation[]; refetch
         <StatTile label="Low" value={byPrio.low ?? 0} hint="Polish and longer-term growth" onClick={() => setPrio('low')} />
       </KpiGrid>
 
-      <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
+      <div className="space-y-3 rounded-xl border border-line bg-surface p-4 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <FilterChips
             label="Priority"

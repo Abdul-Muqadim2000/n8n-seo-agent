@@ -155,7 +155,7 @@ function LongText({ text }: { text: string }) {
   return (
     <>
       <span className={cn('whitespace-pre-wrap', !open && 'line-clamp-3')}>{text}</span>
-      <button type="button" onClick={() => setOpen(!open)} className="mt-0.5 block text-xs font-medium text-accent-text hover:underline">
+      <button type="button" onClick={() => setOpen(!open)} className="mt-0.5 block text-xs font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
         {open ? 'Show less' : 'Show all'}
       </button>
     </>

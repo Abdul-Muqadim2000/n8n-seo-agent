@@ -177,7 +177,7 @@ function ScoreCard({ title, score, items }: { title: string; score: number | nul
       <CardBody>
         <div className="flex items-baseline justify-between">
           <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
-          <span className="text-2xl font-semibold text-ink">{score != null ? `${score}%` : '–'}</span>
+          <span className="font-display text-2xl font-semibold text-ink">{score != null ? `${score}%` : '–'}</span>
         </div>
         {score != null && <Meter value={score} tone={scoreTone(score)} label={`${title} completeness`} className="mt-2" />}
         {items.length > 0 && (
@@ -377,7 +377,7 @@ export function DescriptionReport({ report }: { report: ReportDetail }) {
           <div className="flex items-center gap-2 text-[13px] text-ink-3">
             <ScanText className="size-4" aria-hidden /> {str(d.industry)}
           </div>
-          <h2 className="mt-1 text-xl font-semibold tracking-tight text-ink">{str(d.business_name) || str(p.domain)}</h2>
+          <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.01em] text-ink">{str(d.business_name) || str(p.domain)}</h2>
           {str(d.one_line_summary) && <p className="mt-1 text-[15px] text-ink-2">{str(d.one_line_summary)}</p>}
           {str(d.business_description) && <p className="mt-4 text-sm leading-relaxed text-ink-2">{str(d.business_description)}</p>}
         </CardBody>

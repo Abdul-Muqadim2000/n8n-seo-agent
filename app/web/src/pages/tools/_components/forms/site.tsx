@@ -12,7 +12,7 @@ import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard } from '@/components/ui/field';
 import { SwitchRow } from '@/components/ui/tabs';
 import { estimateCost, estimateEta } from '../estimate';
-import { CountryField, DomainTagsField, EmailCopyField, errMsg, FormCard, setPristine, siteDefaults, SiteField, ToolShell, useRunSubmit, useSiteChange, useSyncSiteParam } from '../kit';
+import { CountryField, DeliveryCard, DomainTagsField, EmailCopyField, errMsg, FormCard, setPristine, siteDefaults, SiteField, ToolShell, useRunSubmit, useSiteChange, useSyncSiteParam } from '../kit';
 import { TextAreaField, TextField, withChecks, withPrefill, type ToolFormProps } from '../form-utils';
 
 const noVerified = (sites: Site[]) => (sites.some((s) => s.verifiedAt) ? undefined : 'Verify a website first: this check runs against your own site.');
@@ -155,9 +155,7 @@ export function AuditForm({ initialSiteId, prefill }: ToolFormProps) {
         </FormCard>
       )}
 
-      <FormCard title="Delivery">
-        <EmailCopyField reg={form.register('emailCopy')} />
-      </FormCard>
+      <DeliveryCard reg={form.register('emailCopy')} />
     </ToolShell>
   );
 }

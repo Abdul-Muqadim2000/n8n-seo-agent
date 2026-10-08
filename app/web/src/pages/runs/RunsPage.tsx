@@ -118,7 +118,7 @@ function RunList({ filters, filtered }: { filters: RunFilters; filtered: boolean
               <th scope="col" className="hidden border-b border-line px-3 py-2.5 font-medium md:table-cell">
                 Website
               </th>
-              <th scope="col" className="border-b border-line px-3 py-2.5 font-medium">
+              <th scope="col" className="hidden border-b border-line px-3 py-2.5 font-medium sm:table-cell">
                 Status
               </th>
               <th scope="col" className="hidden border-b border-line px-3 py-2.5 font-medium lg:table-cell">
@@ -227,12 +227,13 @@ function RunRow({ run, now }: { run: Run; now: number }) {
   const active = isActive(run.status);
   const elapsed = minutesBetween(run.acceptedAt ?? run.createdAt, active ? now : run.completedAt);
   return (
-    <tr className="cursor-pointer border-b border-line align-middle last:border-0 hover:bg-surface-2" onClick={() => navigate(to)}>
-      <td className="px-4 py-3">
-        <div className="flex min-w-[200px] items-center gap-3">
+    <tr className="group cursor-pointer border-b border-line align-middle transition-colors duration-150 ease-brand last:border-0 hover:bg-surface-2" onClick={() => navigate(to)}>
+      {/* phones: the run takes the free width (its text truncates) and shows its status under the title */}
+      <td className="px-4 py-3 max-sm:w-full max-sm:max-w-0">
+        <div className="flex items-center gap-3 sm:min-w-[200px]">
           <ModeGlyph mode={run.mode} size="sm" />
           <div className="min-w-0">
-            <Link to={to} className="block truncate font-medium text-ink hover:underline" onClick={(e) => e.stopPropagation()}>
+            <Link to={to} className="block truncate font-medium text-ink transition-colors duration-150 ease-brand decoration-accent-text/40 underline-offset-2 group-hover:text-accent-text hover:underline" onClick={(e) => e.stopPropagation()}>
               {run.title}
             </Link>
             <p className="truncate text-xs text-ink-3">
@@ -240,11 +241,15 @@ function RunRow({ run, now }: { run: Run; now: number }) {
               <span className="md:hidden">{run.siteDomain ? ` · ${run.siteDomain}` : ''}</span>
               <span className="sm:hidden"> · {fmtAgo(run.createdAt)}</span>
             </p>
+            <div className="mt-1.5 sm:hidden">
+              <RunStatusBadge status={run.status} />
+              {run.status === 'failed' && run.error && <p className="mt-1 truncate text-xs text-critical-text" title={run.error}>{run.error}</p>}
+            </div>
           </div>
         </div>
       </td>
       <td className="hidden px-3 py-3 text-ink-2 md:table-cell">{run.siteDomain ?? <span className="text-ink-3">–</span>}</td>
-      <td className="px-3 py-3">
+      <td className="hidden px-3 py-3 sm:table-cell">
         <RunStatusBadge status={run.status} />
         {run.status === 'failed' && run.error && <p className="mt-1 max-w-[220px] truncate text-xs text-critical-text" title={run.error}>{run.error}</p>}
       </td>

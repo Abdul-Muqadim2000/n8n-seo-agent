@@ -21,6 +21,11 @@ const COST_TEXT: Partial<Record<ModeId, string>> = {
 };
 const SETTINGS_TAB: Partial<Record<ModeId, string>> = { profile: 'settings/profile', track: 'settings/tracking' };
 const CATEGORY_ORDER = Object.keys(MODE_CATEGORIES) as ModeCategory[];
+/**
+ * The card's action link covers the whole card (one link, one tab stop). No press nudge on it: a transform would make the
+ * link the containing block of its ::after, which would then shrink to the button mid-click and lose the click.
+ */
+const STRETCH = 'after:absolute after:inset-0 after:rounded-xl active:translate-none';
 
 export default function ToolsPage() {
   const { org, sites, can } = useOrgCtx();
@@ -75,7 +80,7 @@ export default function ToolsPage() {
                 <span className="flex flex-wrap items-center gap-2">
                   <StatusBadge tone="warning">Not verified</StatusBadge>
                   {can('admin') ? (
-                    <Link to={paths.site(org.id, site.id, 'settings/verification')} className="text-[13px] font-medium text-accent-text hover:underline">
+                    <Link to={paths.site(org.id, site.id, 'settings/verification')} className="text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
                       Verify ownership to unlock site tools
                     </Link>
                   ) : (
@@ -132,9 +137,11 @@ function ToolCard({ info, site }: { info: ModeInfo; site: Site | null }) {
   const cost = COST_TEXT[info.id] ?? (info.costUsd > 0 ? `about ${formatUsd(info.costUsd)}` : 'Free');
 
   let action;
+  let opens = false; // the action is a link (styling only: hover lift, glyph highlight)
   if (tab) {
+    opens = !!site;
     action = site ? (
-      <ButtonLink to={paths.site(org.id, site.id, tab)} variant="secondary" size="sm" icon={<Settings className="size-4" />}>
+      <ButtonLink to={paths.site(org.id, site.id, tab)} variant="secondary" size="sm" icon={<Settings className="size-4" />} className={STRETCH}>
         Open in website settings
       </ButtonLink>
     ) : (
@@ -149,48 +156,57 @@ function ToolCard({ info, site }: { info: ModeInfo; site: Site | null }) {
   } else if (info.siteBound && !site) {
     action = <span className="text-[13px] text-ink-3">Needs your website</span>;
   } else if (info.siteBound && !verified && site) {
+    opens = can('admin');
     action = can('admin') ? (
-      <ButtonLink to={paths.site(org.id, site.id, 'settings/verification')} variant="secondary" size="sm" icon={<Lock className="size-3.5" />}>
+      <ButtonLink to={paths.site(org.id, site.id, 'settings/verification')} variant="secondary" size="sm" icon={<Lock className="size-3.5" />} className={STRETCH}>
         Verify {site.domain} first
       </ButtonLink>
     ) : (
       <span className="text-[13px] text-ink-3">Needs a verified website</span>
     );
   } else {
+    opens = true;
     action = (
-      <ButtonLink to={paths.tool(org.id, info.id, { siteId: verified ? site?.id : undefined })} size="sm" icon={<ArrowRight className="size-4" />}>
+      <ButtonLink to={paths.tool(org.id, info.id, { siteId: verified ? site?.id : undefined })} size="sm" className={STRETCH} aria-label={`Start: ${info.title}`}>
         Start
+        <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
       </ButtonLink>
     );
   }
 
+  // a launcher tile: icon, name, what it does and delivers, cost and time; the whole tile opens its action when that is a link
   return (
-    <Card className="flex flex-col p-5">
-      <div className="flex items-start gap-3">
-        <ModeGlyph mode={info.id} />
-        <div className="min-w-0">
-          <h3 className="text-[15px] font-semibold text-ink">{info.title}</h3>
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {info.siteBound ? <Badge>{tab ? 'Website setting' : 'Your website'}</Badge> : <Badge tone="accent">Website optional</Badge>}
-          </div>
-        </div>
+    <Card interactive={opens} className="group relative flex flex-col p-5">
+      <div className="flex items-start justify-between gap-3">
+        <ModeGlyph
+          mode={info.id}
+          size="lg"
+          className={opens ? 'transition-colors duration-200 ease-brand group-hover:bg-accent group-hover:text-accent-ink' : undefined}
+        />
+        {info.siteBound ? <Badge>{tab ? 'Website setting' : 'Your website'}</Badge> : <Badge tone="accent">Website optional</Badge>}
       </div>
-      <p className="mt-3 text-[13px] leading-relaxed text-ink-2">{info.summary}</p>
-      <p className="mt-3 flex gap-2 text-[13px] leading-snug text-ink-3">
-        <PackageCheck className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <h3 className="mt-4 font-display text-base font-semibold tracking-[-0.01em] text-ink">{info.title}</h3>
+      <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{info.summary}</p>
+      <p className="mt-3 flex gap-2 text-xs leading-snug text-ink-3">
+        <PackageCheck className="mt-px size-3.5 shrink-0" aria-hidden />
         <span>{info.delivers}</span>
       </p>
-      <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-4">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
-          <span className="inline-flex items-center gap-1">
-            <Coins className="size-3.5" aria-hidden />
-            {cost}
+      <div className="mt-auto pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
+          <span className="inline-flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md bg-surface-2 px-2 py-1 text-xs text-ink-2">
+            <span className="inline-flex items-center gap-1">
+              <Coins className="size-3.5 text-ink-3" aria-hidden />
+              {cost}
+            </span>
+            <span className="text-ink-3" aria-hidden>
+              ·
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Clock className="size-3.5 text-ink-3" aria-hidden />~{info.etaMinutes} min
+            </span>
           </span>
-          <span className="inline-flex items-center gap-1">
-            <Clock className="size-3.5" aria-hidden />~{info.etaMinutes} min
-          </span>
+          <span className="ml-auto">{action}</span>
         </div>
-        {action}
       </div>
     </Card>
   );

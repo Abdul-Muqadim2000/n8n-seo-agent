@@ -31,8 +31,8 @@ export default function ReportPage() {
   const r = q.data;
   return (
     <div>
-      <Link to={paths.reports(org.id)} className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-ink">
-        <ArrowLeft className="size-4" aria-hidden /> All reports
+      <Link to={paths.reports(org.id)} className="group mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 transition-colors duration-150 ease-brand hover:text-ink">
+        <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden /> All reports
       </Link>
       <PageHeader
         eyebrow={stageLabel(r.stage)}
@@ -47,7 +47,7 @@ export default function ReportPage() {
             {r.siteDomain && (
               <>
                 {r.siteId ? (
-                  <Link to={paths.site(org.id, r.siteId)} className="text-accent-text hover:underline">
+                  <Link to={paths.site(org.id, r.siteId)} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
                     {r.siteDomain}
                   </Link>
                 ) : (

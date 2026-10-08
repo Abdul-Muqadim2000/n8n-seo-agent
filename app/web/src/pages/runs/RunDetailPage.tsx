@@ -91,8 +91,8 @@ export default function RunDetailPage() {
 
   return (
     <div>
-      <Link to={paths.runs(org.id)} className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-ink">
-        <ArrowLeft className="size-4" aria-hidden /> All runs
+      <Link to={paths.runs(org.id)} className="group mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 transition-colors duration-150 ease-brand hover:text-ink">
+        <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden /> All runs
       </Link>
       <PageHeader
         eyebrow={
@@ -153,7 +153,7 @@ export default function RunDetailPage() {
           <Card>
             <CardHeader title="Timeline" description={reports.length ? `${reports.length} report${reports.length === 1 ? '' : 's'} received; select one to read it below` : 'Reports appear here as the SEO engine sends them'} />
             <CardBody>
-              <ol className="relative space-y-1 before:absolute before:bottom-3 before:left-[13px] before:top-3 before:w-px before:bg-line">
+              <ol className="relative space-y-1 before:absolute before:bottom-5 before:left-[14.5px] before:top-5 before:w-px before:bg-line-strong">
                 <TimelineEvent icon={<CircleDot className="size-3.5 text-ink-3" aria-hidden />} title="Started" time={run.createdAt} sub={run.userName ? `by ${run.userName}` : undefined} />
                 {run.acceptedAt && <TimelineEvent icon={<CircleDot className="size-3.5 text-accent-text" aria-hidden />} title="Accepted by the SEO engine" time={run.acceptedAt} />}
                 {reports.map((r) => (
@@ -162,7 +162,10 @@ export default function RunDetailPage() {
                       type="button"
                       onClick={() => select(r.id)}
                       aria-current={r.id === selectedId ? 'true' : undefined}
-                      className={cn('flex w-full items-start gap-3 rounded-lg px-0 py-2 pr-2 text-left transition-colors hover:bg-surface-2', r.id === selectedId && 'bg-accent-soft hover:bg-accent-soft')}
+                      className={cn(
+                        'flex w-full cursor-pointer items-start gap-3 rounded-lg px-0 py-2 pr-2.5 text-left transition-colors duration-150 ease-brand hover:bg-surface-2',
+                        r.id === selectedId && 'bg-accent-soft ring-1 ring-accent-text/20 hover:bg-accent-soft',
+                      )}
                     >
                       <span className="relative z-10 ml-px">
                         <StageGlyph stage={r.stage} size="sm" />
@@ -193,7 +196,7 @@ export default function RunDetailPage() {
                   {
                     label: 'Website',
                     value: run.siteId && run.siteDomain ? (
-                      <Link to={paths.site(org.id, run.siteId)} className="text-accent-text hover:underline">
+                      <Link to={paths.site(org.id, run.siteId)} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
                         {run.siteDomain}
                       </Link>
                     ) : (
@@ -220,7 +223,7 @@ export default function RunDetailPage() {
               <div className="flex min-w-0 items-center gap-3">
                 <StageGlyph stage={selected.stage} />
                 <div className="min-w-0">
-                  <h2 className="truncate text-lg font-semibold tracking-tight text-ink">{selected.title || stageLabel(selected.stage)}</h2>
+                  <h2 className="truncate font-display text-lg font-semibold tracking-[-0.01em] text-ink">{selected.title || stageLabel(selected.stage)}</h2>
                   <p className="text-[13px] text-ink-3">
                     {stageLabel(selected.stage)} · {fmtDateTime(selected.receivedAt)}
                   </p>
@@ -251,7 +254,7 @@ export default function RunDetailPage() {
 function TimelineEvent({ icon, title, time, sub }: { icon: ReactNode; title: string; time?: string | null; sub?: string }) {
   return (
     <li className="relative flex items-start gap-3 py-2">
-      <span className="relative z-10 ml-px flex size-7 shrink-0 items-center justify-center rounded-md bg-surface">{icon}</span>
+      <span className="relative z-10 ml-px flex size-7 shrink-0 items-center justify-center rounded-full border border-line bg-surface">{icon}</span>
       <span className="min-w-0 flex-1 pt-1">
         <span className="flex flex-wrap items-baseline justify-between gap-x-2">
           <span className="text-sm text-ink-2">{title}</span>

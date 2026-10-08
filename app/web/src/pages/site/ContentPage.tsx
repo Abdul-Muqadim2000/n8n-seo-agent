@@ -235,7 +235,7 @@ function PipelineCard({ item, report, onUnpublish }: { item: ContentItem; report
         <p>Started {fmtDate(item.startedAt)}{liveNow && item.publishedAt ? ` · published ${fmtDate(item.publishedAt)}` : ''}</p>
         {item.existingPageUrl && !liveNow && <p className="truncate">Improves {urlPath(item.existingPageUrl)}</p>}
         {item.publishedUrl && (
-          <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 truncate text-accent-text hover:underline">
+          <a href={item.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 truncate text-accent-text hover:underline transition-colors duration-150 ease-brand">
             {urlPath(item.publishedUrl)}
             <ExternalIcon className="size-3 shrink-0" aria-hidden />
           </a>
@@ -244,7 +244,7 @@ function PipelineCard({ item, report, onUnpublish }: { item: ContentItem; report
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         {report ? (
           <span className="inline-flex flex-wrap items-center gap-1.5">
-            <Link to={paths.report(org.id, report.id)} className="text-xs font-medium text-accent-text hover:underline">
+            <Link to={paths.report(org.id, report.id)} className="text-xs font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
               Report
             </Link>
             <FileLinks orgId={org.id} files={report.files} />
@@ -290,7 +290,7 @@ function PipelineTable({ rows, reports, onUnpublish }: { rows: ContentItem[]; re
       sortValue: (r) => r.publishedUrl,
       cell: (r) =>
         r.publishedUrl ? (
-          <a href={r.publishedUrl} target="_blank" rel="noopener noreferrer" className="block max-w-[14rem] truncate text-[13px] text-accent-text hover:underline">
+          <a href={r.publishedUrl} target="_blank" rel="noopener noreferrer" className="block max-w-[14rem] truncate text-[13px] text-accent-text hover:underline transition-colors duration-150 ease-brand">
             {urlPath(r.publishedUrl)}
           </a>
         ) : (
@@ -389,7 +389,7 @@ function CadenceCard({ cadence, on }: { cadence: ContentData['cadence']; on: boo
       }
     >
       <div className="flex items-baseline gap-2">
-        <span className="text-3xl font-semibold tracking-tight text-ink">{on ? cadence!.pagesPerWeek : 0}</span>
+        <span className="font-display text-3xl font-semibold tracking-[-0.01em] text-ink">{on ? cadence!.pagesPerWeek : 0}</span>
         <span className="text-sm text-ink-2">{on ? (cadence!.pagesPerWeek === 1 ? 'post per week' : 'posts per week') : 'posts per week — off'}</span>
         {cadence?.status === 'paused' && <StatusBadge tone="warning">Paused</StatusBadge>}
       </div>
@@ -421,7 +421,7 @@ function ProfileCard({ d }: { d: ContentData }) {
       }
     >
       <div className="flex items-center gap-3">
-        <span className="text-3xl font-semibold tracking-tight text-ink">{score}%</span>
+        <span className="font-display text-3xl font-semibold tracking-[-0.01em] text-ink">{score}%</span>
         <Meter value={score} tone={tone} className="flex-1" label="Profile readiness" />
       </div>
       {p && (p.author.name || p.reviewer.name || p.businessName) && (
@@ -506,7 +506,7 @@ function CaseStudies({ items }: { items: CaseStudy[] }) {
                   {c.service && <Kind>{c.service}</Kind>}
                   {c.keyword && <Kind>{c.keyword}</Kind>}
                   {c.pageUrl && (
-                    <a href={c.pageUrl} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex items-center gap-1 text-xs text-accent-text hover:underline">
+                    <a href={c.pageUrl} target="_blank" rel="noopener noreferrer" className="ml-auto inline-flex items-center gap-1 text-xs text-accent-text hover:underline transition-colors duration-150 ease-brand">
                       View page
                       <ExternalIcon className="size-3" aria-hidden />
                     </a>
@@ -539,7 +539,7 @@ function GeneratedTable({ reports, orgId }: { reports: Report[]; orgId: string }
       header: 'Page',
       sortValue: (r) => r.title,
       cell: (r) => (
-        <Link to={paths.report(orgId, r.id)} className="font-medium text-ink hover:text-accent-text">
+        <Link to={paths.report(orgId, r.id)} className="font-medium text-ink hover:text-accent-text transition-colors duration-150 ease-brand">
           {s(r.summary.keyword) || r.title}
         </Link>
       ),
