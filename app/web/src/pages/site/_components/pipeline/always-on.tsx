@@ -1,20 +1,21 @@
 // Pipeline home: the always-on part (opportunity posts and monitoring) and the weekly capacity the ladders share.
 import type { ReactNode } from 'react';
-import { AlertTriangle, CalendarClock, ChevronRight, Circle, FileText, Lightbulb, PenSquare, Play, Settings } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ChevronRight, Circle, FileText, Flame, History, Lightbulb, PenSquare, Play, RefreshCw, Settings, Target, TrendingUp } from 'lucide-react';
 import { AUTOMATIONS, formatUsd, MODES, type AutomationStatus, type LadderCard, type PipelineData, type QueueItem } from '@seo/shared';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
-import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { Callout } from '@/components/ui/feedback';
+import { IconTile } from '@/components/insight';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { cn, fmtAgo } from '@/lib/utils';
-import { SectionHeading } from '../kit';
+import { Panel, SectionHeading } from '../kit';
 import { asPageType, AUTO_ICON, fmtWhen, inDays, ModeChip, validDate } from './common';
 import type { WriteNowItem } from './WriteNowDialog';
 
 const SOURCE_LABEL: Record<QueueItem['source'], string> = { ladder: 'Keyword ladder', striking: 'Close to page one', trend: 'Rising search' };
 const SOURCE_TONE: Record<QueueItem['source'], Tone> = { ladder: 'accent', striking: 'neutral', trend: 'neutral' };
+const SOURCE_ICON: Record<QueueItem['source'], ReactNode> = { ladder: <TrendingUp />, striking: <Target />, trend: <Flame /> };
 
 function automationState(a: AutomationStatus): ReactNode {
   if (a.state === 'on') return <StatusBadge tone="good">On</StatusBadge>;
@@ -30,7 +31,12 @@ const writingLadders = (cards: LadderCard[]) =>
 export function AlwaysOn({ data, cards, onWrite }: { data: PipelineData; cards: LadderCard[]; onWrite: (i: WriteNowItem) => void }) {
   return (
     <section aria-labelledby="always-on-heading" className="space-y-4">
-      <SectionHeading id="always-on-heading" title="Always on" description="Runs next to your ladders: posts for new chances in Search Console and Google Trends, and the weekly checks of your site." />
+      <SectionHeading
+        id="always-on-heading"
+        icon={<RefreshCw />}
+        title="Always on"
+        description="Runs next to your ladders: posts for new chances in Search Console and Google Trends, and the weekly checks of your site."
+      />
       <Capacity data={data} cards={cards} />
       <OpportunityPosts data={data} onWrite={onWrite} />
       <Monitoring data={data} />
@@ -48,36 +54,40 @@ function Capacity({ data, cards }: { data: PipelineData; cards: LadderCard[] }) 
   const cadence = data.automations.find((a) => a.id === 'content_cadence');
   const users = [...ladders.map((l) => `“${l.head}”`), ...(opportunities ? ['opportunity posts'] : [])];
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface px-4 py-3 shadow-card sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex min-w-0 items-start gap-2.5 text-[13px]">
-        <PenSquare className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
+    <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-4 shadow-card sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex min-w-0 items-start gap-3.5 text-[13px]">
+        <IconTile tone={perWeek > 0 ? 'solid' : 'neutral'} size="lg">
+          <PenSquare />
+        </IconTile>
         <div className="min-w-0">
           {perWeek > 0 ? (
-            <p className="text-ink">
-              <span className="font-semibold">{perWeek === 1 ? '1 post a week' : `${perWeek} posts a week`}</span>
+            <>
+              <p className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-display text-xl leading-tight font-semibold tracking-[-0.01em] text-ink">{perWeek === 1 ? '1 post a week' : `${perWeek} posts a week`}</span>
+                {users.length > 0 && <span className="text-ink-3">used by:</span>}
+              </p>
               {users.length > 0 && (
-                <>
-                  <span className="text-ink-3"> · used by: </span>
+                <p className="mt-1.5 flex flex-wrap items-center gap-1">
                   {users.map((u, i) => (
-                    <span key={u}>
-                      {i > 0 && <ChevronRight className="mx-0.5 inline size-3.5 text-ink-3" aria-label="then" />}
-                      {u}
+                    <span key={u} className="inline-flex items-center gap-1">
+                      {i > 0 && <ChevronRight className="size-3.5 text-ink-3" aria-label="then" />}
+                      <span className={cn('inline-flex h-6 items-center rounded-full px-2.5 text-xs font-medium', i === 0 ? 'bg-accent-soft text-accent-text' : 'bg-surface-2 text-ink-2')}>{u}</span>
                     </span>
                   ))}
-                </>
+                </p>
               )}
-            </p>
+            </>
           ) : (
             <p className="text-ink">
-              <span className="font-semibold">Weekly posts are off.</span> <span className="text-ink-2">Nothing is written on its own; use Write now on a ladder page or an opportunity.</span>
+              <span className="font-display text-base font-semibold">Weekly posts are off.</span> <span className="text-ink-2">Nothing is written on its own; use Write now on a ladder page or an opportunity.</span>
             </p>
           )}
-          <p className="mt-0.5 text-xs text-ink-3">
+          <p className="mt-1.5 text-xs leading-snug text-ink-3">
             Shared by the ladders in their order, at most {maxActive === 1 ? '1 ladder' : `${maxActive} ladders`} at a time: the first gets the posts until it has nothing to write, then the next one.
             {perWeek > 0 && cadence && validDate(cadence.nextRunAt) ? ` Next writing: ${fmtWhen(cadence.nextRunAt)}.` : ''}
           </p>
           {perWeek > 0 && data.queue?.paused && (
-            <p className="mt-1 flex items-start gap-1.5 text-xs font-medium text-warning-text">
+            <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-warning-text">
               <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
               Next Monday writes nothing: {data.queue.paused.waiting} pages wait to be published (your limit is {data.queue.paused.max}).
             </p>
@@ -96,15 +106,25 @@ function Capacity({ data, cards }: { data: PipelineData; cards: LadderCard[] }) 
 function QueueRow({ item, onWrite, highlight }: { item: QueueItem; onWrite?: (i: QueueItem) => void; highlight?: boolean }) {
   const { can } = useOrgCtx();
   return (
-    <li className={cn('flex flex-wrap items-start justify-between gap-3 rounded-xl border px-4 py-3', highlight ? 'border-accent/40 bg-accent-soft' : 'border-line bg-surface')}>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-ink">{item.keyword}</span>
-          <Badge tone={SOURCE_TONE[item.source]}>{SOURCE_LABEL[item.source] ?? item.source}</Badge>
-          <span className="text-xs text-ink-3">{asPageType(item.pageType)}</span>
+    <li
+      className={cn(
+        'flex flex-wrap items-start justify-between gap-3 rounded-xl border px-4 py-3 transition-[border-color,box-shadow] duration-200 ease-brand',
+        highlight ? 'border-accent/40 bg-accent-soft/60' : 'border-line bg-surface hover:border-line-strong hover:shadow-card',
+      )}
+    >
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <IconTile size="sm" tone={highlight ? 'solid' : 'blue'} className="mt-0.5">
+          {SOURCE_ICON[item.source] ?? <Lightbulb />}
+        </IconTile>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-semibold text-ink">{item.keyword}</span>
+            <Badge tone={SOURCE_TONE[item.source]}>{SOURCE_LABEL[item.source] ?? item.source}</Badge>
+            <span className="text-xs text-ink-3">{asPageType(item.pageType)}</span>
+          </div>
+          <p className="mt-1 text-[13px] leading-snug text-ink-3">{item.why}</p>
+          {item.existingPageUrl && <p className="mt-0.5 truncate text-xs text-ink-3">Improves {item.existingPageUrl.replace(/^https?:\/\/(www\.)?/, '')}</p>}
         </div>
-        <p className="mt-1 text-[13px] leading-snug text-ink-3">{item.why}</p>
-        {item.existingPageUrl && <p className="mt-0.5 truncate text-xs text-ink-3">Improves {item.existingPageUrl.replace(/^https?:\/\/(www\.)?/, '')}</p>}
       </div>
       {onWrite && can('member') && (
         <Button size="sm" variant={highlight ? 'primary' : 'secondary'} icon={<PenSquare className="size-4" />} onClick={() => onWrite(item)}>
@@ -112,6 +132,17 @@ function QueueRow({ item, onWrite, highlight }: { item: QueueItem; onWrite?: (i:
         </Button>
       )}
     </li>
+  );
+}
+
+function GroupTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <h4 className="mb-2 flex items-center gap-1.5 text-[13px] font-semibold text-ink">
+      <span className="text-accent-text [&_svg]:size-3.5" aria-hidden>
+        {icon}
+      </span>
+      {children}
+    </h4>
   );
 }
 
@@ -123,24 +154,28 @@ function OpportunityPosts({ data, onWrite }: { data: PipelineData; onWrite: (i: 
   const later = manual ? (data.queue?.suggestions ?? []) : (data.queue?.later ?? []).filter((i) => i.source !== 'ladder');
   const perWeek = data.queue?.pagesPerWeek ?? 0;
   return (
-    <Card>
-      <CardHeader
-        icon={<Lightbulb className="size-4" />}
-        title={
-          <span className="inline-flex flex-wrap items-center gap-2">
-            Opportunity posts
-            <ModeChip mode={mode} />
-          </span>
-        }
-        description={
-          mode === 'auto'
-            ? 'Searches you already appear for close to page one, and rising searches. They fill the weekly posts the ladders leave free.'
-            : 'Searches close to page one and rising searches, shown as suggestions: nothing is written until you click Write now.'
-        }
-      />
-      <CardBody className="space-y-4">
+    <Panel
+      icon={<Lightbulb />}
+      title={
+        <span className="inline-flex flex-wrap items-center gap-2">
+          Opportunity posts
+          <ModeChip mode={mode} />
+        </span>
+      }
+      description={
+        mode === 'auto'
+          ? 'Searches you already appear for close to page one, and rising searches. They fill the weekly posts the ladders leave free.'
+          : 'Searches close to page one and rising searches, shown as suggestions: nothing is written until you click Write now.'
+      }
+    >
+      <div className="space-y-4">
         {!next.length && !later.length ? (
-          <p className="text-sm text-ink-3">No opportunities right now. They come from the weekly site report: searches where you show up on page two, and searches that are rising on Google.</p>
+          <div className="flex items-start gap-3 rounded-lg bg-surface-2/60 px-4 py-3">
+            <IconTile size="sm" tone="neutral">
+              <Target />
+            </IconTile>
+            <p className="text-sm text-ink-3">No opportunities right now. They come from the weekly site report: searches where you show up on page two, and searches that are rising on Google.</p>
+          </div>
         ) : (
           <>
             {!perWeek && !manual && (
@@ -150,7 +185,7 @@ function OpportunityPosts({ data, onWrite }: { data: PipelineData; onWrite: (i: 
             )}
             {next.length > 0 && (
               <div>
-                <h4 className="mb-2 text-[13px] font-semibold text-ink">Next Monday</h4>
+                <GroupTitle icon={<CalendarClock />}>Next Monday</GroupTitle>
                 <ul className="space-y-2">
                   {next.map((i) => (
                     <QueueRow key={i.keyword} item={i} onWrite={onWrite} highlight />
@@ -160,9 +195,7 @@ function OpportunityPosts({ data, onWrite }: { data: PipelineData; onWrite: (i: 
             )}
             {later.length > 0 && (
               <div>
-                <h4 className="mb-2 text-[13px] font-semibold text-ink">
-                  {manual ? 'Suggested posts: write the ones you want' : next.length ? 'Then, when a weekly post is free' : 'In line, when a weekly post is free'}
-                </h4>
+                <GroupTitle icon={<Lightbulb />}>{manual ? 'Suggested posts: write the ones you want' : next.length ? 'Then, when a weekly post is free' : 'In line, when a weekly post is free'}</GroupTitle>
                 <ul className="space-y-2">
                   {later.map((i) => (
                     <QueueRow key={i.keyword} item={i} onWrite={onWrite} />
@@ -172,8 +205,8 @@ function OpportunityPosts({ data, onWrite }: { data: PipelineData; onWrite: (i: 
             )}
           </>
         )}
-      </CardBody>
-    </Card>
+      </div>
+    </Panel>
   );
 }
 
@@ -182,73 +215,90 @@ function Monitoring({ data }: { data: PipelineData }) {
   const { site } = useSiteCtx();
   const list = data.automations.filter((a) => a.id !== 'content_cadence');
   return (
-    <Card>
-      <CardHeader
-        icon={<CalendarClock className="size-4" />}
-        title="Monitoring"
-        description={`Checks that run on their own. Times are in your time zone (the engine runs on ${data.timezone}).`}
-        actions={
-          can('admin') && (
-            <ButtonLink to={paths.site(org.id, site.id, 'settings/tracking')} variant="secondary" size="sm" icon={<Settings className="size-4" />}>
-              Settings
-            </ButtonLink>
-          )
-        }
-      />
-      <ul className="divide-y divide-line px-5 pb-2 pt-2">
+    <Panel
+      icon={<CalendarClock />}
+      title="Monitoring"
+      description={`Checks that run on their own. Times are in your time zone (the engine runs on ${data.timezone}).`}
+      actions={
+        can('admin') && (
+          <ButtonLink to={paths.site(org.id, site.id, 'settings/tracking')} variant="secondary" size="sm" icon={<Settings className="size-4" />}>
+            Settings
+          </ButtonLink>
+        )
+      }
+    >
+      <ul className="grid gap-3 lg:grid-cols-2">
         {list.map((a) => {
           const info = AUTOMATIONS.find((x) => x.id === a.id);
           if (!info) return null;
           const runNow = info.runNowMode && a.state !== 'needs_setup' && can('member');
           return (
-            <li key={a.id} className="grid gap-3 py-4 md:grid-cols-[minmax(0,1fr)_auto]">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-ink-3">{AUTO_ICON[a.id]}</span>
-                  <span className="text-sm font-semibold text-ink">{info.title}</span>
-                  {automationState(a)}
-                  {a.monthlyCostUsd > 0 && a.state === 'on' && <span className="text-xs text-ink-3">≈ {formatUsd(a.monthlyCostUsd)}/month</span>}
+            <li
+              key={a.id}
+              className={cn(
+                'flex min-w-0 flex-col rounded-xl border p-4 transition-[border-color,box-shadow] duration-200 ease-brand hover:border-line-strong hover:shadow-card',
+                a.state === 'on' ? 'border-line bg-surface' : 'border-line bg-surface-2/50',
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <IconTile size="md" tone={a.state === 'on' ? 'blue' : 'neutral'}>
+                  {AUTO_ICON[a.id]}
+                </IconTile>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-ink">{info.title}</span>
+                    {automationState(a)}
+                  </div>
+                  <p className="mt-0.5 text-xs text-ink-3">
+                    {info.cadence}
+                    {a.monthlyCostUsd > 0 && a.state === 'on' && <span className="text-ink-2"> · ≈ {formatUsd(a.monthlyCostUsd)}/month</span>}
+                  </p>
                 </div>
-                <p className="mt-1 text-[13px] leading-snug text-ink-2">{info.summary}</p>
-                <p className="mt-1 text-xs text-ink-3">
-                  {info.cadence}
-                  {a.detail ? ` · ${a.detail}` : ''}
-                </p>
-                <dl className="mt-2 grid gap-1 text-[13px]">
-                  <div className="flex gap-1.5">
-                    <dt className="w-9 shrink-0 text-ink-3">Next</dt>
-                    <dd className="min-w-0 text-ink">{validDate(a.nextRunAt) ? `${fmtWhen(a.nextRunAt)} · ${inDays(a.nextRunAt)}` : (a.reason ?? '–')}</dd>
-                  </div>
-                  <div className="flex gap-1.5">
-                    <dt className="w-9 shrink-0 text-ink-3">Last</dt>
-                    <dd className="min-w-0 break-words text-ink">
-                      {a.lastRunAt ? fmtAgo(a.lastRunAt) : 'not yet'}
-                      {a.lastResult ? ` · ${a.lastResult}` : ''}
-                    </dd>
-                  </div>
-                </dl>
               </div>
-              <div className="flex flex-wrap items-start gap-2 md:justify-end">
-                {a.lastReportId && (
-                  <ButtonLink to={paths.report(org.id, a.lastReportId)} variant="ghost" size="sm" icon={<FileText className="size-4" />}>
-                    Last report
-                  </ButtonLink>
-                )}
-                {runNow && info.runNowMode && (
-                  <ButtonLink
-                    to={info.runNowMode === 'track' ? paths.site(org.id, site.id, 'settings/tracking') : paths.tool(org.id, info.runNowMode, { siteId: site.id })}
-                    variant="secondary"
-                    size="sm"
-                    icon={<Play className="size-4" />}
-                  >
-                    Run now
-                  </ButtonLink>
-                )}
-              </div>
+              <p className="mt-2.5 text-[13px] leading-snug text-ink-2">{info.summary}</p>
+              {a.detail && <p className="mt-1 text-xs leading-snug text-ink-3">{a.detail}</p>}
+              <dl className="mt-3 grid gap-1.5 rounded-lg bg-surface-2/60 px-3 py-2.5 text-[13px]">
+                <div className="flex items-start gap-2">
+                  <dt className="flex w-12 shrink-0 items-center gap-1 text-ink-3">
+                    <CalendarClock className="size-3.5" aria-hidden />
+                    Next
+                  </dt>
+                  <dd className="min-w-0 text-ink">{validDate(a.nextRunAt) ? `${fmtWhen(a.nextRunAt)} · ${inDays(a.nextRunAt)}` : (a.reason ?? '–')}</dd>
+                </div>
+                <div className="flex items-start gap-2">
+                  <dt className="flex w-12 shrink-0 items-center gap-1 text-ink-3">
+                    <History className="size-3.5" aria-hidden />
+                    Last
+                  </dt>
+                  <dd className="min-w-0 break-words text-ink">
+                    {a.lastRunAt ? fmtAgo(a.lastRunAt) : 'not yet'}
+                    {a.lastResult ? ` · ${a.lastResult}` : ''}
+                  </dd>
+                </div>
+              </dl>
+              {(a.lastReportId || runNow) && (
+                <div className="mt-auto flex flex-wrap items-center justify-end gap-2 pt-3">
+                  {a.lastReportId && (
+                    <ButtonLink to={paths.report(org.id, a.lastReportId)} variant="ghost" size="sm" icon={<FileText className="size-4" />}>
+                      Last report
+                    </ButtonLink>
+                  )}
+                  {runNow && info.runNowMode && (
+                    <ButtonLink
+                      to={info.runNowMode === 'track' ? paths.site(org.id, site.id, 'settings/tracking') : paths.tool(org.id, info.runNowMode, { siteId: site.id })}
+                      variant="secondary"
+                      size="sm"
+                      icon={<Play className="size-4" />}
+                    >
+                      Run now
+                    </ButtonLink>
+                  )}
+                </div>
+              )}
             </li>
           );
         })}
       </ul>
-    </Card>
+    </Panel>
   );
 }

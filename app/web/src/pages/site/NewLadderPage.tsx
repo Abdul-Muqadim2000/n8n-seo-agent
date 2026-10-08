@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
-import { ArrowLeft, ArrowRight, CheckCircle2, Coins, Play, Search, SlidersHorizontal, Wand2 } from 'lucide-react';
+import { Activity, ArrowLeft, ArrowRight, Building2, CalendarClock, CheckCircle2, ClipboardList, Coins, Hand, ListOrdered, PenSquare, Play, Rocket, Route, Search, Settings2, ShieldCheck, SlidersHorizontal, Sparkles, TrendingUp, Wand2 } from 'lucide-react';
 import {
   chooseForMe,
   COUNTRIES,
@@ -35,6 +35,7 @@ import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useAssessKeyword, useRecommendedKeywords, useSiteData, useStartRun } from '@/lib/queries';
 import { fmtDate } from '@/lib/utils';
+import { IconTile } from '@/components/insight';
 import { PipelineNotices, SubmitError, usePipelineNotices, validGoal, validTone } from '@/pages/tools/_components/kit';
 import { MODE_HELP, MODE_OPTIONS } from './_components/pipeline/controls';
 import { WarnLine } from './_components/pipeline/home';
@@ -84,6 +85,7 @@ export default function NewLadderPage() {
             Pipeline
           </Link>
         }
+        icon={<TrendingUp />}
         title="New keyword ladder"
         description={`Pick the keyword you want ${site.domain} to rank for. We plan the pages from easy to hard for your website, write them and track them on Google.`}
         actions={
@@ -142,8 +144,14 @@ function ChooseStep({
   return (
     <Tabs value={tab} onValueChange={(v) => setPicked(v as 'recommended' | 'check')}>
       <TabList>
-        <Tab value="recommended">Recommended for you</Tab>
-        <Tab value="check">I have a keyword in mind</Tab>
+        <Tab value="recommended">
+          <Sparkles className="size-4" aria-hidden />
+          Recommended for you
+        </Tab>
+        <Tab value="check">
+          <Search className="size-4" aria-hidden />
+          I have a keyword in mind
+        </Tab>
       </TabList>
       <TabPanel value="recommended">
         <Recommended recommended={recommended} preset={preset?.keyword ?? null} onChoose={onChoose} onCheckOwn={() => setPicked('check')} />
@@ -220,12 +228,22 @@ function Recommended({ recommended, preset, onChoose, onCheckOwn }: { recommende
           They come from your keyword research of {fmtDate(r.receivedAt)}. Searches and your website have changed since; fresh research costs about $0.40.
         </Callout>
       )}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="min-w-0 max-w-2xl text-[13px] leading-snug text-ink-3">
-          From your keyword research of {fmtDate(r.receivedAt)}, the best for your website first.
-          {r.reach != null && ` Your website already wins searches up to difficulty ${r.reach}: anything near it is easy or reachable.`}
-        </p>
-        <Button icon={<Wand2 className="size-4" />} onClick={pickForMe} disabled={!can('member')}>
+      <div className="flex flex-col gap-3 rounded-xl border border-accent/30 bg-accent-soft/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <IconTile tone="solid" size="md">
+            <Wand2 />
+          </IconTile>
+          <p className="min-w-0 max-w-2xl text-[13px] leading-snug text-ink-2">
+            From your keyword research of <span className="font-medium text-ink">{fmtDate(r.receivedAt)}</span>, the best for your website first.
+            {r.reach != null && (
+              <>
+                {' '}
+                Your website already wins searches up to difficulty <span className="font-medium text-ink">{r.reach}</span>: anything near it is easy or reachable.
+              </>
+            )}
+          </p>
+        </div>
+        <Button icon={<Wand2 className="size-4" />} onClick={pickForMe} disabled={!can('member')} className="self-start sm:self-center">
           Choose for me
         </Button>
       </div>
@@ -297,6 +315,12 @@ function CheckPanel({ initialKeyword, initialCountry, ladders, onChoose }: { ini
   return (
     <div className="space-y-4">
       <Card className="p-5">
+        <div className="mb-4 flex items-center gap-3">
+          <IconTile size="sm">
+            <Search />
+          </IconTile>
+          <p className="text-[13px] leading-snug text-ink-2">Check how hard a keyword is for your website before you plan a ladder for it.</p>
+        </div>
         <form
           noValidate
           onSubmit={(e) => {
@@ -453,11 +477,20 @@ function CheckResult({ check, ladders, onChoose, onCheck }: { check: KeywordChec
 const PAGES_OF: Record<string, number> = { direct: 4, short: 6, full: 12 };
 const RANK_CHECK_USD = 0.015;
 
-function Section({ title, description, children }: { title: ReactNode; description?: ReactNode; children: ReactNode }) {
+function Section({ title, description, icon, children }: { title: ReactNode; description?: ReactNode; icon?: ReactNode; children: ReactNode }) {
   return (
     <Card className="p-5 sm:p-6">
-      <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
-      {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+      <div className={icon ? 'flex items-start gap-3' : undefined}>
+        {icon && (
+          <IconTile size="sm" className="mt-px">
+            {icon}
+          </IconTile>
+        )}
+        <div className="min-w-0">
+          <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
+          {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+        </div>
+      </div>
       <div className="mt-4 space-y-4">{children}</div>
     </Card>
   );
@@ -508,10 +541,10 @@ function ReviewStep({
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
       <div className="min-w-0 space-y-5">
-        <Section title="The plan" description={chosen.how === 'chosen' ? 'Chosen for you: the easiest suggestion for your website that no ladder covers yet.' : undefined}>
+        <Section icon={<Route />} title="The plan" description={chosen.how === 'chosen' ? 'Chosen for you: the easiest suggestion for your website that no ladder covers yet.' : undefined}>
           <div>
             <p className="text-xs font-medium text-ink-3">Main keyword</p>
-            <p className="mt-0.5 break-words font-display text-xl font-semibold tracking-[-0.01em] text-ink">{chosen.keyword}</p>
+            <p className="mt-0.5 break-words font-display text-2xl font-semibold tracking-[-0.01em] text-ink">{chosen.keyword}</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <DifficultyBadge difficulty={chosen.difficultyForYou} />
               <PlanBadge plan={chosen.planType} months={chosen.months} stretch={chosen.stretch} />
@@ -519,7 +552,7 @@ function ReviewStep({
             </div>
           </div>
           {plan ? (
-            <div className="rounded-lg bg-surface-2/60 p-4 text-sm leading-relaxed text-ink-2">
+            <div className="rounded-lg border border-accent/20 bg-accent-soft/40 p-4 text-sm leading-relaxed text-ink-2">
               <p>
                 <span className="font-medium text-ink">{PLAN_CHOICE_LABEL[plan]}:</span> {PLAN_ORDER_TEXT[plan]}
               </p>
@@ -539,7 +572,7 @@ function ReviewStep({
           {chosen.why && <p className="text-[13px] leading-snug text-ink-2">Why it fits: {chosen.why}</p>}
         </Section>
 
-        <Section title="Checks" description="What we looked at before this ladder starts.">
+        <Section icon={<ShieldCheck />} title="Checks" description="What we looked at before this ladder starts.">
           <PipelineNotices notices={notices.notices} acked={notices.acked} onToggle={notices.toggle} siteId={site.id} />
           {chosen.fit === 0 ? (
             <Callout tone="warning" title="This looks outside your business">
@@ -578,7 +611,7 @@ function ReviewStep({
           )}
         </Section>
 
-        <Section title="How it runs">
+        <Section icon={<Settings2 />} title="How it runs">
           {admin ? (
             <>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
@@ -611,7 +644,7 @@ function ReviewStep({
           )}
         </Section>
 
-        <Section title="Pages to write now" description="The plan costs about $0.60; each page written now adds about $1.20 and 10 minutes and arrives as its own report. The rest follow on Mondays.">
+        <Section icon={<PenSquare />} title="Pages to write now" description="The plan costs about $0.60; each page written now adds about $1.20 and 10 minutes and arrives as its own report. The rest follow on Mondays.">
           <div role="radiogroup" aria-label="Pages to write now" className="grid gap-2 sm:grid-cols-3">
             {([1, 2, 3] as const).map((n) => (
               <ChoiceCard
@@ -627,6 +660,7 @@ function ReviewStep({
         </Section>
 
         <Section
+          icon={<Building2 />}
           title="Your business details"
           description="The plan and the pages use these website settings."
         >
@@ -650,15 +684,20 @@ function ReviewStep({
         <div className="lg:hidden">{nav}</div>
       </div>
       <aside className="hidden lg:block">
-        <Card className="sticky top-6 space-y-4 p-5">
-          <h2 className="text-[15px] font-semibold text-ink">Summary</h2>
+        <Card className="sticky top-6 space-y-4 border-accent/30 p-5 shadow-raised">
+          <h2 className="flex items-center gap-2.5 font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">
+            <IconTile size="sm" tone="solid">
+              <ClipboardList />
+            </IconTile>
+            Summary
+          </h2>
           <KeyValue
             className="text-[13px]"
             items={[
               { label: 'Keyword', value: chosen.keyword },
               { label: 'Plan', value: plan ? `${PLAN_CHOICE_LABEL[plan]}${chosen.months ? `, ${chosen.months.replace('-', '–')} months` : ''}` : 'Chosen when planned' },
               { label: 'Writing', value: mode === 'manual' ? 'Manual' : 'Auto' },
-              { label: 'Now', value: <span className="font-semibold">{formatUsd(cost)}</span> },
+              { label: 'Now', value: <span className="font-display text-base font-semibold text-accent-text">{formatUsd(cost)}</span> },
             ]}
           />
           {blocked && <p className="text-xs text-ink-3">{blocked}</p>}
@@ -672,8 +711,10 @@ function ReviewStep({
 function CheckLine({ ok, title, children }: { ok: boolean; title: string; children: ReactNode }) {
   return (
     <div className="flex items-start gap-2.5 text-[13px] leading-snug">
-      <CheckCircle2 className={ok ? 'mt-0.5 size-4 shrink-0 text-good-text' : 'mt-0.5 size-4 shrink-0 text-warning-text'} aria-hidden />
-      <p className="min-w-0 text-ink-2">
+      <IconTile size="xs" tone={ok ? 'good' : 'warning'}>
+        <CheckCircle2 />
+      </IconTile>
+      <p className="min-w-0 pt-0.5 text-ink-2">
         <span className="font-medium text-ink">{title}: </span>
         {children}
       </p>
@@ -735,9 +776,14 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
     <div className="max-w-2xl space-y-5">
       <SubmitError error={error} siteId={site.id} />
       <Card className="p-5 sm:p-6">
-        <h2 className="text-[15px] font-semibold text-ink">Ready to start</h2>
+        <h2 className="flex items-center gap-3 font-display text-lg font-semibold tracking-[-0.01em] text-ink">
+          <IconTile tone="solid" size="md">
+            <Rocket />
+          </IconTile>
+          Ready to start
+        </h2>
         <KeyValue
-          className="mt-4"
+          className="mt-5"
           items={[
             { label: 'Main keyword', value: <span className="font-medium">{chosen.keyword}</span> },
             { label: 'Country', value: chosen.country },
@@ -747,23 +793,37 @@ function StartStep({ chosen, data, choices, onBack }: { chosen: ChosenKeyword; d
             ...(admin && (data?.ladderCards.length ?? 0) > 0 ? [{ label: 'Priority', value: choices.first ? 'Number 1 (written first)' : 'After your current ladders' }] : []),
           ]}
         />
-        <div className="mt-5 rounded-lg bg-surface-2/60 p-4">
+        <div className="mt-5 rounded-lg border border-line bg-surface-2/40 p-4">
           <p className="text-sm font-medium text-ink">What happens next</p>
-          <ol className="mt-2 list-decimal space-y-1 pl-5 text-[13px] leading-snug text-ink-2">
-            <li>The plan is made now, in about 5-8 minutes. Until then the ladder shows on your Pipeline as Planning.</li>
-            <li>
-              {choices.pagesNow === 1
-                ? 'The first page is written right away (about 10 minutes) and arrives as a report, ready to publish on your website.'
-                : `The first ${choices.pagesNow} pages are written right away (about 10 minutes each) and arrive as reports, ready to publish on your website.`}
-            </li>
-            <li>{mode === 'manual' ? 'Each next page waits for your OK under Needs you.' : 'Its next pages are written on Mondays, in priority order with your other ladders.'}</li>
-            <li>Every Monday the rank check follows its pages on Google.</li>
+          <ol className="relative mt-3 space-y-3 text-[13px] leading-snug text-ink-2 before:absolute before:top-3 before:bottom-3 before:left-[0.875rem] before:w-px before:bg-line">
+            {[
+              { icon: <ListOrdered />, text: 'The plan is made now, in about 5-8 minutes. Until then the ladder shows on your Pipeline as Planning.' },
+              {
+                icon: <PenSquare />,
+                text:
+                  choices.pagesNow === 1
+                    ? 'The first page is written right away (about 10 minutes) and arrives as a report, ready to publish on your website.'
+                    : `The first ${choices.pagesNow} pages are written right away (about 10 minutes each) and arrive as reports, ready to publish on your website.`,
+              },
+              { icon: mode === 'manual' ? <Hand /> : <CalendarClock />, text: mode === 'manual' ? 'Each next page waits for your OK under Needs you.' : 'Its next pages are written on Mondays, in priority order with your other ladders.' },
+              { icon: <Activity />, text: 'Every Monday the rank check follows its pages on Google.' },
+            ].map((x, i) => (
+              <li key={i} className="relative flex items-start gap-3">
+                <IconTile size="sm" className="relative z-[1] ring-4 ring-surface">
+                  {x.icon}
+                </IconTile>
+                <span className="min-w-0 pt-1">
+                  <span className="sr-only">{i + 1}. </span>
+                  {x.text}
+                </span>
+              </li>
+            ))}
           </ol>
         </div>
         <div className="mt-5 flex flex-wrap items-end justify-between gap-3 border-t border-line pt-4">
           <div>
             <p className="text-xs text-ink-3">Cost now</p>
-            <p className="font-display text-lg font-semibold text-ink">about {formatUsd(cost)}</p>
+            <p className="font-display text-2xl font-semibold tracking-[-0.01em] text-ink">about {formatUsd(cost)}</p>
             <p className="text-xs text-ink-3">Counted in your company’s monthly budget</p>
           </div>
           <div className="flex flex-wrap gap-2">

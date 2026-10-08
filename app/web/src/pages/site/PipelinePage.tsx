@@ -1,17 +1,18 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { MailX, PauseCircle, Play } from 'lucide-react';
+import { MailX, PauseCircle, Play, Workflow } from 'lucide-react';
 import { formatUsd } from '@seo/shared';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
+import { Stagger } from '@/components/insight';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useSiteAdmin, useSiteData } from '@/lib/queries';
 import { AlwaysOn } from './_components/pipeline/always-on';
-import { HowItWorks, NeedsYou, needsYouOf, SummaryRow, ThisWeek } from './_components/pipeline/home';
+import { HowItWorks, NeedsYou, needsYouOf, PipelineHero, ThisWeek } from './_components/pipeline/home';
 import { PipelineSettingsButton } from './_components/pipeline/controls';
 import { LadderCards } from './_components/pipeline/ladders';
 import { Calendar, RecentActivity } from './_components/pipeline/schedule';
@@ -31,16 +32,13 @@ export default function PipelinePage() {
   if (q.isPending)
     return (
       <div className="space-y-6" aria-busy="true" aria-label="Loading">
-        <Skeleton className="h-16" />
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          {Array.from({ length: 4 }, (_, i) => (
-            <Skeleton key={i} className="h-[104px] rounded-xl" />
-          ))}
-        </div>
+        <Skeleton className="h-20" />
+        <Skeleton className="h-[300px] rounded-xl" />
         <div className="grid gap-4 xl:grid-cols-2">
           <Skeleton className="h-64 rounded-xl" />
           <Skeleton className="h-64 rounded-xl" />
         </div>
+        <Skeleton className="h-72 rounded-xl" />
         <Skeleton className="h-72 rounded-xl" />
       </div>
     );
@@ -63,30 +61,31 @@ export default function PipelinePage() {
     );
 
   return (
-    <div className="space-y-8">
-      <div className="space-y-4">
-        <PageHeader
-          title="Pipeline"
-          description={`Everything that runs on its own for ${site.domain}: your keyword ladders, the always-on posts and checks, and what happens when. You publish the pages; the rest runs every week.`}
-          actions={
-            <>
-              {status === 'active' ? <StatusBadge tone="good">Autopilot on</StatusBadge> : status === 'paused' ? <StatusBadge tone="warning">Paused</StatusBadge> : <Badge>Not started</Badge>}
-              <span className="text-[13px] text-ink-3">about {formatUsd(d.monthlyCostUsd)} / month</span>
-              {can('admin') && d.tracking.verified && <PipelineSettingsButton automation={d.automation} autoStartEnabled={d.autoStartEnabled !== false} />}
-              {can('admin') && status === 'active' && (
-                <Button variant="secondary" size="sm" icon={<PauseCircle className="size-4" />} loading={admin.isPending} onClick={() => pauseResume('pause')}>
-                  Pause
-                </Button>
-              )}
-              {can('admin') && status === 'paused' && (
-                <Button size="sm" icon={<Play className="size-4" />} loading={admin.isPending} onClick={() => pauseResume('resume')}>
-                  Resume
-                </Button>
-              )}
-            </>
-          }
-        />
+    <div>
+      <PageHeader
+        icon={<Workflow />}
+        title="Pipeline"
+        description={`Everything that runs on its own for ${site.domain}: your keyword ladders, the always-on posts and checks, and what happens when. You publish the pages; the rest runs every week.`}
+        actions={
+          <>
+            {status === 'active' ? <StatusBadge tone="good">Autopilot on</StatusBadge> : status === 'paused' ? <StatusBadge tone="warning">Paused</StatusBadge> : <Badge>Not started</Badge>}
+            <span className="text-[13px] text-ink-3">about {formatUsd(d.monthlyCostUsd)} / month</span>
+            {can('admin') && d.tracking.verified && <PipelineSettingsButton automation={d.automation} autoStartEnabled={d.autoStartEnabled !== false} />}
+            {can('admin') && status === 'active' && (
+              <Button variant="secondary" size="sm" icon={<PauseCircle className="size-4" />} loading={admin.isPending} onClick={() => pauseResume('pause')}>
+                Pause
+              </Button>
+            )}
+            {can('admin') && status === 'paused' && (
+              <Button size="sm" icon={<Play className="size-4" />} loading={admin.isPending} onClick={() => pauseResume('resume')}>
+                Resume
+              </Button>
+            )}
+          </>
+        }
+      />
 
+      <Stagger className="space-y-6">
         {status === 'not_started' && (
           <Callout
             tone="info"
@@ -124,24 +123,24 @@ export default function PipelinePage() {
           </p>
         )}
 
-        <SummaryRow data={d} />
-      </div>
+        <PipelineHero data={d} needs={needs} cards={cards} onWrite={setWriting} />
 
-      <div className={needs.length ? 'grid gap-4 xl:grid-cols-2 xl:items-start' : ''}>
-        <ThisWeek data={d} />
-        <NeedsYou items={needs} onWrite={setWriting} />
-      </div>
+        <div className={needs.length ? 'grid gap-4 xl:grid-cols-2 xl:items-start' : ''}>
+          <NeedsYou items={needs} onWrite={setWriting} />
+          <ThisWeek data={d} />
+        </div>
 
-      <LadderCards cards={cards} automation={d.automation} planning={(d.activeRuns ?? []).filter((r) => r.mode === 'ladder')} />
+        <LadderCards cards={cards} automation={d.automation} planning={(d.activeRuns ?? []).filter((r) => r.mode === 'ladder')} />
 
-      <AlwaysOn data={d} cards={cards} onWrite={setWriting} />
+        <AlwaysOn data={d} cards={cards} onWrite={setWriting} />
 
-      <HowItWorks data={d} cards={cards} />
+        <HowItWorks data={d} cards={cards} />
 
-      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-        <Calendar data={d} />
-        <RecentActivity data={d} />
-      </div>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:items-start">
+          <Calendar data={d} />
+          <RecentActivity data={d} />
+        </div>
+      </Stagger>
 
       {writing && <WriteNowDialog item={writing} onClose={() => setWriting(null)} />}
     </div>

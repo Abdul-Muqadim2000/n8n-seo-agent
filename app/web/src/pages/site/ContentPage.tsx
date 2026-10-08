@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
-import { BadgeCheck, CalendarClock, CheckCircle2, ExternalLink as ExternalIcon, FileText, LayoutGrid, PenSquare, Rows3, Undo2, UserRound, XCircle } from 'lucide-react';
+import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Target, TrendingUp, Trophy, Undo2, UserRound, XCircle } from 'lucide-react';
 import { titleCase, type CaseStudy, type ContentData, type ContentItem, type Report } from '@seo/shared';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
@@ -10,12 +10,14 @@ import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge, verdictTone } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Callout, EmptyState } from '@/components/ui/feedback';
-import { Meter, PageHeader, StatTile, scoreTone } from '@/components/ui/misc';
+import { Callout, EmptyState, Skeleton } from '@/components/ui/feedback';
+import { PageHeader } from '@/components/ui/misc';
 import { Dialog, DialogClose } from '@/components/ui/overlay';
 import { Segmented } from '@/components/ui/tabs';
 import { DataTable, type Column } from '@/components/ui/table';
-import { DataGate, FilterChips, SrOnly, KpiGrid, Kind, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
+import { CountUp, DistributionBar, HeroNextStep, HeroStat, IconTile, ScoreRing, SEQ, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
+import { DataGate, FilterChips, SrOnly, Kind, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
+import { HeroMeter } from './_components/pipeline/home';
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
 import { verdictLabel } from '@/components/reports/kit';
@@ -26,6 +28,7 @@ export default function ContentPage() {
   return (
     <div>
       <PageHeader
+        icon={<PenSquare />}
         title="Content"
         description="Pages the engine has written for this website, what is live, the weekly blog cadence and the proof that makes pages trustworthy."
         actions={
@@ -40,7 +43,21 @@ export default function ContentPage() {
           </>
         }
       />
-      <DataGate q={q}>{(d) => <Content d={d} />}</DataGate>
+      <DataGate
+        q={q}
+        skeleton={
+          <div className="space-y-6" aria-busy="true" aria-label="Loading">
+            <Skeleton className="h-[300px] rounded-xl" />
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <Skeleton className="h-[320px] rounded-xl" />
+              <Skeleton className="h-[320px] rounded-xl" />
+            </div>
+            <Skeleton className="h-[260px] rounded-xl" />
+          </div>
+        }
+      >
+        {(d) => <Content d={d} />}
+      </DataGate>
     </div>
   );
 }
@@ -55,6 +72,15 @@ const SOURCE_LABEL: Record<string, string> = {
   published: 'Reported live',
 };
 const sourceLabel = (s: string) => SOURCE_LABEL[s] ?? (s ? titleCase(s) : 'On demand');
+const SOURCE_ICON: Record<string, ReactNode> = {
+  ladder: <TrendingUp />,
+  striking: <Target />,
+  trend: <Flame />,
+  case_study: <Trophy />,
+  cadence: <CalendarClock />,
+  manual: <PenSquare />,
+  published: <CheckCircle2 />,
+};
 const isLive = (i: ContentItem) => i.status === 'published' || !!i.publishedUrl;
 
 /** keyword → newest generated page report (to offer its files next to the pipeline item) */
@@ -68,7 +94,7 @@ function reportsByKeyword(reports: readonly Report[]) {
 }
 
 function Content({ d }: { d: ContentData }) {
-  const { org, page, can } = useSitePage();
+  const { org, page, can, tool } = useSitePage();
   const [view, setView] = useState<'board' | 'table'>('board');
   const [source, setSource] = useState('all');
   const [unpublish, setUnpublish] = useState<ContentItem | null>(null);
@@ -80,19 +106,56 @@ function Content({ d }: { d: ContentData }) {
   const shown = d.items.filter((i) => source === 'all' || (i.source || 'manual') === source);
   const cadenceOn = !!d.cadence && d.cadence.pagesPerWeek > 0 && d.cadence.status !== 'paused';
 
+  const fresh = waiting.length - stale.length;
+  // the page waiting longest: the hero's next step
+  const oldest = [...waiting].sort((a, b) => a.startedAt.localeCompare(b.startedAt))[0];
+  const oldestDays = oldest ? daysSince(oldest.startedAt) : null;
+
   return (
-    <div className="space-y-6">
-      <KpiGrid>
-        <StatTile label="Pages written" value={d.items.length} hint={`${plural(d.generated.length, 'page report')} delivered`} icon={<FileText className="size-4" />} />
-        <StatTile label="Live" value={live.length} hint={d.items.length ? `${Math.round((live.length / d.items.length) * 100)}% of written pages are published` : 'Report a page once it is published'} icon={<CheckCircle2 className="size-4" />} />
-        <StatTile label="Waiting to publish" value={waiting.length} hint={stale.length ? `${stale.length} for more than a week` : 'Nothing ranks before it is live'} />
-        <StatTile
-          label="Business profile (E-E-A-T)"
-          value={`${d.readiness.score}%`}
-          hint={d.readiness.missing.length ? `${plural(d.readiness.missing.length, 'item')} missing` : 'Complete: bylines and schema are filled in'}
-          trend={<div className="flex h-full items-center"><Meter value={d.readiness.score} tone={scoreTone(d.readiness.score)} label="Profile readiness" /></div>}
-        />
-      </KpiGrid>
+    <Stagger className="space-y-6">
+      <SummaryHero
+        tone="blue"
+        eyebrow={<span className="font-mono tracking-[0.02em] uppercase">Written pages</span>}
+        title={d.items.length ? `${live.length} of ${plural(d.items.length, 'written page')} ${live.length === 1 ? 'is' : 'are'} live` : 'No pages written yet'}
+        description={
+          waiting.length
+            ? `${plural(waiting.length, 'page is', 'pages are')} written but not live${stale.length ? `, ${stale.length} for more than a week` : ''}. Nothing ranks before it is published.`
+            : d.items.length
+              ? 'Every written page is live and tracked.'
+              : 'Pages appear here when you write one for a keyword, when a keyword ladder starts its pages, or when the weekly blog cadence writes its posts.'
+        }
+        aside={
+          oldest && can('member') ? (
+            <HeroNextStep
+              icon={<Inbox />}
+              eyebrow={`Next step · ${oldestDays != null ? `${oldestDays} ${oldestDays === 1 ? 'day' : 'days'} waiting` : 'waiting'}`}
+              title={`Publish “${oldest.keyword}”, then report its address`}
+              actions={
+                <ButtonLink to={tool('published', { keyword: oldest.keyword, ...(oldest.existingPageUrl ? { publishedUrl: oldest.existingPageUrl } : {}) })} size="sm" variant="secondary">
+                  Report published URL
+                </ButtonLink>
+              }
+            />
+          ) : undefined
+        }
+        stats={
+          <>
+            <HeroStat label="Pages written" value={<CountUp value={d.items.length} />} hint={`${plural(d.generated.length, 'page report')} delivered`} />
+            <HeroStat label="Live" value={<CountUp value={live.length} />} hint={d.items.length ? `${Math.round((live.length / d.items.length) * 100)}% of written pages are published` : 'Report a page once it is published'} />
+            <HeroStat label="Waiting to publish" value={<CountUp value={waiting.length} />} hint={stale.length ? `${stale.length} for more than a week` : 'Nothing ranks before it is live'} />
+            <HeroStat
+              label="Business profile (E-E-A-T)"
+              value={<CountUp value={d.readiness.score} format={(v) => `${Math.round(v)}%`} />}
+              hint={
+                <>
+                  <HeroMeter value={d.readiness.score} label="Profile readiness" />
+                  <span className="mt-1.5 block">{d.readiness.missing.length ? `${plural(d.readiness.missing.length, 'item')} missing` : 'Complete: bylines and schema are filled in'}</span>
+                </>
+              }
+            />
+          </>
+        }
+      />
 
       {stale.length > 0 && (
         <Callout tone="warning" title={`${plural(stale.length, 'page has', 'pages have')} been waiting more than a week`}>
@@ -106,6 +169,7 @@ function Content({ d }: { d: ContentData }) {
 
       <section>
         <SectionHeading
+          icon={<LayoutGrid />}
           title="Content pipeline"
           description="Every page started by a ladder, the weekly cadence or on demand"
           actions={
@@ -120,13 +184,24 @@ function Content({ d }: { d: ContentData }) {
             />
           }
         />
+        {d.items.length > 0 && (
+          <DistributionBar
+            className="mb-4 rounded-xl border border-line bg-surface p-4 shadow-card"
+            label="Written pages by status"
+            segments={[
+              { label: 'Live', value: live.length, color: SEQ[5] },
+              { label: 'Waiting, under a week', value: fresh, color: SEQ[2] },
+              { label: 'Waiting more than a week', value: stale.length, color: 'var(--warning)' },
+            ]}
+          />
+        )}
         {d.items.length > 0 && Object.keys(sources).length > 1 && (
           <FilterChips
             className="mb-3"
             label="Source"
             value={source}
             onChange={setSource}
-            options={[{ value: 'all', label: 'All sources', count: d.items.length }, ...Object.entries(sources).map(([k, n]) => ({ value: k, label: sourceLabel(k), count: n }))]}
+            options={[{ value: 'all', label: 'All sources', count: d.items.length }, ...Object.entries(sources).map(([k, n]) => ({ value: k, label: sourceLabel(k), count: n, icon: <span className="text-ink-3 [&_svg]:size-3.5">{SOURCE_ICON[k] ?? <PenSquare />}</span> }))]}
           />
         )}
         {!d.items.length ? (
@@ -151,7 +226,7 @@ function Content({ d }: { d: ContentData }) {
           </Card>
         ) : view === 'board' ? (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <BoardColumn title="Written — waiting to publish" count={shown.filter((i) => !isLive(i)).length}>
+            <BoardColumn title="Written — waiting to publish" icon={<Clock />} tone="warning" count={shown.filter((i) => !isLive(i)).length}>
               {shown
                 .filter((i) => !isLive(i))
                 .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
@@ -159,7 +234,7 @@ function Content({ d }: { d: ContentData }) {
                   <PipelineCard key={`${i.keyword}-${i.requestId}`} item={i} report={reports.get(i.keyword.toLowerCase())} onUnpublish={setUnpublish} />
                 ))}
             </BoardColumn>
-            <BoardColumn title="Published" count={shown.filter(isLive).length}>
+            <BoardColumn title="Published" icon={<CheckCircle2 />} tone="good" count={shown.filter(isLive).length}>
               {shown
                 .filter(isLive)
                 .sort((a, b) => (b.publishedAt || '').localeCompare(a.publishedAt || ''))
@@ -183,23 +258,25 @@ function Content({ d }: { d: ContentData }) {
       <CaseStudies items={d.caseStudies} />
 
       <section>
-        <SectionHeading title="Generated pages" description="Keyword reports and finished pages with their downloads (Word, PDF, HTML, Markdown and meta.json)" />
-        <Card className="p-4">
+        <Panel icon={<FileText />} title="Generated pages" description="Keyword reports and finished pages with their downloads (Word, PDF, HTML, Markdown and meta.json)">
           <GeneratedTable reports={d.generated} orgId={org.id} />
-        </Card>
+        </Panel>
       </section>
 
       {unpublish && <UnpublishDialog item={unpublish} onClose={() => setUnpublish(null)} />}
-    </div>
+    </Stagger>
   );
 }
 
-function BoardColumn({ title, count, children }: { title: string; count: number; children: ReactNode }) {
+function BoardColumn({ title, icon, tone, count, children }: { title: string; icon: ReactNode; tone: IconTileTone; count: number; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-line bg-surface-2 p-3">
-      <div className="mb-3 flex items-center justify-between px-1">
-        <h3 className="text-sm font-semibold text-ink">{title}</h3>
-        <span className="rounded-md bg-surface px-1.5 text-xs tabular text-ink-2">{count}</span>
+    <div className="rounded-xl border border-line bg-surface-2/70 p-3">
+      <div className="mb-3 flex items-center gap-2.5 px-1">
+        <IconTile size="sm" tone={count ? tone : 'neutral'}>
+          {icon}
+        </IconTile>
+        <h3 className="min-w-0 flex-1 font-display text-sm font-semibold tracking-[-0.01em] text-ink">{title}</h3>
+        <span className="rounded-full bg-surface px-2 text-xs font-semibold tabular text-ink-2 shadow-card">{count}</span>
       </div>
       <div className="space-y-2">{count ? children : <p className="px-1 py-6 text-center text-[13px] text-ink-3">Nothing here.</p>}</div>
     </div>
@@ -208,7 +285,10 @@ function BoardColumn({ title, count, children }: { title: string; count: number;
 
 function SourceLine({ item }: { item: ContentItem }) {
   return (
-    <span className="text-xs text-ink-3">
+    <span className="inline-flex items-center gap-1 text-xs text-ink-3">
+      <span className="text-accent-text [&_svg]:size-3.5" aria-hidden>
+        {SOURCE_ICON[item.source || 'manual'] ?? <PenSquare />}
+      </span>
       {sourceLabel(item.source)}
       {item.source === 'ladder' && item.rung ? ` · rung ${item.rung}` : ''}
       {item.week ? ` · week ${item.week}` : ''}
@@ -221,7 +301,7 @@ function PipelineCard({ item, report, onUnpublish }: { item: ContentItem; report
   const liveNow = isLive(item);
   const days = daysSince(item.startedAt);
   return (
-    <Card className="p-3.5">
+    <Card className="p-3.5 transition-[border-color,box-shadow,translate] duration-200 ease-brand hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-ink">{item.keyword}</p>
@@ -389,10 +469,17 @@ function CadenceCard({ cadence, on }: { cadence: ContentData['cadence']; on: boo
         ) : undefined
       }
     >
-      <div className="flex items-baseline gap-2">
-        <span className="font-display text-3xl font-semibold tracking-[-0.01em] text-ink">{on ? cadence!.pagesPerWeek : 0}</span>
-        <span className="text-sm text-ink-2">{on ? (cadence!.pagesPerWeek === 1 ? 'post per week' : 'posts per week') : 'posts per week — off'}</span>
-        {cadence?.status === 'paused' && <StatusBadge tone="warning">Paused</StatusBadge>}
+      <div className="flex items-center gap-4 rounded-lg bg-surface-2/60 p-3.5">
+        <IconTile size="lg" tone={on ? 'solid' : 'neutral'}>
+          <PenSquare />
+        </IconTile>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="font-display text-3xl leading-none font-semibold tracking-[-0.01em] text-ink">
+            <CountUp value={on ? cadence!.pagesPerWeek : 0} />
+          </span>
+          <span className="text-sm text-ink-2">{on ? (cadence!.pagesPerWeek === 1 ? 'post per week' : 'posts per week') : 'posts per week — off'}</span>
+          {cadence?.status === 'paused' && <StatusBadge tone="warning">Paused</StatusBadge>}
+        </div>
       </div>
       <p className="mt-3 text-[13px] leading-relaxed text-ink-2">
         {on
@@ -407,7 +494,6 @@ function ProfileCard({ d }: { d: ContentData }) {
   const { page, can } = useSitePage();
   const p = d.profile;
   const score = d.readiness.score;
-  const tone = scoreTone(score);
   return (
     <Panel
       title="Business profile (E-E-A-T)"
@@ -421,9 +507,12 @@ function ProfileCard({ d }: { d: ContentData }) {
         ) : undefined
       }
     >
-      <div className="flex items-center gap-3">
-        <span className="font-display text-3xl font-semibold tracking-[-0.01em] text-ink">{score}%</span>
-        <Meter value={score} tone={tone} className="flex-1" label="Profile readiness" />
+      <div className="flex items-center gap-4">
+        <ScoreRing label="Profile readiness" value={score} display={<CountUp value={score} format={(v) => `${Math.round(v)}%`} />} valueText={`${score}%`} size={72} />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-ink">{score >= 100 ? 'Complete' : score >= 60 ? 'Nearly there' : 'Needs work'}</p>
+          <p className="mt-0.5 text-[13px] text-ink-3">{d.readiness.missing.length ? `${plural(d.readiness.missing.length, 'item')} missing` : 'Every item is filled in'}</p>
+        </div>
       </div>
       {p && (p.author.name || p.reviewer.name || p.businessName) && (
         <dl className="mt-4 grid grid-cols-1 gap-2 text-[13px] sm:grid-cols-2">
@@ -465,7 +554,7 @@ function ProfileCard({ d }: { d: ContentData }) {
       {d.readiness.missing.length > 0 ? (
         <div className="mt-4">
           <p className="mb-1.5 text-xs font-medium text-ink-2">Missing</p>
-          <ul className="space-y-1">
+          <ul className="grid gap-x-4 gap-y-1 sm:grid-cols-2">
             {d.readiness.missing.map((m) => (
               <li key={m} className="flex items-start gap-2 text-[13px] text-ink-2">
                 <XCircle className="mt-0.5 size-3.5 shrink-0 text-ink-3" aria-hidden />
@@ -487,15 +576,20 @@ function ProfileCard({ d }: { d: ContentData }) {
 function CaseStudies({ items }: { items: CaseStudy[] }) {
   return (
     <section>
-      <SectionHeading title="Case studies" description="Proof library: results that later pages cite, each with its own page" actions={<ToolButton mode="case_study" size="sm">Write a case study</ToolButton>} />
+      <SectionHeading icon={<Briefcase />} title="Case studies" description="Proof library: results that later pages cite, each with its own page" actions={<ToolButton mode="case_study" size="sm">Write a case study</ToolButton>} />
       {items.length ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {items.map((c) => {
             const live = c.status === 'published' || !!c.pageUrl;
             return (
-              <Card key={c.caseId} className="flex flex-col p-4">
+              <Card key={c.caseId} className="flex flex-col p-4 transition-[border-color,box-shadow,translate] duration-200 ease-brand hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-semibold leading-snug text-ink">{c.title || c.service}</h3>
+                  <span className="flex min-w-0 items-start gap-3">
+                    <IconTile size="sm" tone={live ? 'good' : 'blue'}>
+                      <Trophy />
+                    </IconTile>
+                    <h3 className="min-w-0 pt-1 text-sm font-semibold leading-snug text-ink">{c.title || c.service}</h3>
+                  </span>
                   {live ? <StatusBadge tone="good">Published</StatusBadge> : <Badge tone="accent">{c.status ? titleCase(c.status) : 'Draft'}</Badge>}
                 </div>
                 <p className="mt-1 text-xs text-ink-3">
@@ -521,6 +615,7 @@ function CaseStudies({ items }: { items: CaseStudy[] }) {
         <Card>
           <EmptyState
             className="py-8"
+            icon={<Briefcase className="size-5" />}
             title="No case studies yet"
             description="A case study turns one client result into proof: its own page now, and evidence that every later page can cite — one of the strongest trust signals for Google and AI answers."
             action={<ToolButton mode="case_study" variant="primary">Write a case study</ToolButton>}

@@ -1,13 +1,19 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams } from 'react-router';
 import {
+  Activity,
   ArrowLeft,
   CalendarClock,
   CheckCircle2,
+  Eye,
   FileText,
+  Hand,
+  Hourglass,
+  Inbox,
   ListOrdered,
   MousePointerClick,
   PenLine,
+  PenSquare,
   ScanSearch,
   SearchX,
   TrendingDown,
@@ -18,9 +24,9 @@ import { compactNumber, formatUsd, type LadderDetail, type LadderPage, type Ladd
 import { ChartCard, Sparkline, TimeSeriesChart } from '@/components/charts';
 import { Badge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
-import { Card, CardBody, CardHeader } from '@/components/ui/card';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback';
-import { PageHeader, StatTile } from '@/components/ui/misc';
+import { PageHeader } from '@/components/ui/misc';
+import { CountUp, HeroNextStep, HeroStat, IconTile, Stagger, SummaryHero } from '@/components/insight';
 import { ApiRequestError } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -33,7 +39,8 @@ import { ranked } from './_components/positions';
 import { Climb } from './_components/pipeline/climb';
 import { LadderStatusBadge, ModeChip, monthsText, PLAN_HINT, PLAN_LABEL, PositionChange, positionWords, fmtShortDay, sparkRows, validDate } from './_components/pipeline/common';
 import { DeleteLadderButton, LadderModeSwitch, LadderPauseButton, MODE_HELP } from './_components/pipeline/controls';
-import { WarnLine } from './_components/pipeline/home';
+import { HeroMeter, WarnLine } from './_components/pipeline/home';
+import { Panel } from './_components/kit';
 import { WriteNowDialog, type WriteNowItem } from './_components/pipeline/WriteNowDialog';
 
 // One keyword ladder (PIPELINE_FEATURE_SPEC.md §4.2): the main keyword, the climb from easy pages to the main page, what happened and
@@ -76,11 +83,7 @@ export default function LadderPage() {
         <Skeleton className="h-8 w-72 max-w-full" />
         <Skeleton className="h-4 w-96 max-w-full" />
       </div>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        {Array.from({ length: 6 }, (_, i) => (
-          <Skeleton key={i} className="h-[104px] rounded-xl" />
-        ))}
-      </div>
+      <Skeleton className="h-[300px] rounded-xl" />
       <Skeleton className="h-80 rounded-xl" />
       <Skeleton className="h-64 rounded-xl" />
     </div>
@@ -92,6 +95,7 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
   const admin = can('admin');
   const [writing, setWriting] = useState<WriteNowItem | null>(null);
   const series = sparkRows(l.headSeries);
+  const liveHint = [l.counts.waiting ? `${l.counts.waiting} waiting for you to publish` : '', l.counts.writing ? `${l.counts.writing} being written` : '', l.counts.planned ? `${l.counts.planned} planned` : ''].filter(Boolean).join(' · ');
   const meta = [
     l.country,
     // a plan without supporting pages (narrow topic: no long-tail keywords in the data) is the main page only, written first
@@ -101,9 +105,10 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
   ].filter(Boolean);
 
   return (
-    <div className="space-y-6">
+    <div>
       <PageHeader
         eyebrow={back}
+        icon={<TrendingUp />}
         title={l.head}
         description={
           <>
@@ -111,7 +116,6 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
             <span className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1.5">
               <LadderStatusBadge status={l.status} />
               {!admin && <ModeChip mode={l.mode} />}
-              {l.statusText && <span className="min-w-0">{l.statusText}</span>}
             </span>
           </>
         }
@@ -130,51 +134,112 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
           )
         }
       />
-      {(l.overlaps ?? []).map((o) => (
-        <WarnLine key={o.ladderId}>
-          Overlap: shares {o.keywords.length === 1 ? 'a keyword' : `${o.keywords.length} keywords`} with the ladder “{o.head}” ({o.keywords.slice(0, 4).join(', ')}
-          {o.keywords.length > 4 ? ', …' : ''}). Two pages for one search compete with each other.
-        </WarnLine>
-      ))}
+      <Stagger className="space-y-6">
+        {(l.overlaps ?? []).length > 0 && (
+          <div className="space-y-1 rounded-xl border border-warning/40 bg-warning-soft/50 px-4 py-3">
+            {(l.overlaps ?? []).map((o) => (
+              <WarnLine key={o.ladderId}>
+                Overlap: shares {o.keywords.length === 1 ? 'a keyword' : `${o.keywords.length} keywords`} with the ladder “{o.head}” ({o.keywords.slice(0, 4).join(', ')}
+                {o.keywords.length > 4 ? ', …' : ''}). Two pages for one search compete with each other.
+              </WarnLine>
+            ))}
+          </div>
+        )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-        <StatTile
-          label="Main keyword on Google"
-          value={positionWords(l.headPosition)}
-          delta={<PositionChange change={l.headChange} />}
-          trend={series.length > 1 ? <Sparkline data={series} dataKey="p" invert /> : undefined}
-          hint={l.top3 > 0 ? `${plural(l.top3, 'page')} of this ladder in the top 3` : undefined}
+        <SummaryHero
+          tone="blue"
+          eyebrow={
+            <>
+              <span className="font-mono tracking-[0.02em] uppercase">Keyword ladder</span>
+              <span aria-hidden>·</span>
+              <span>Priority {l.priority}</span>
+            </>
+          }
+          title={ladderHeadline(l)}
+          description={
+            <>
+              {l.statusText && <span className="block">{l.statusText}</span>}
+              <span className={l.statusText ? 'mt-1 block' : 'block'}>
+                Cost so far {formatUsd(l.costSoFarUsd)} · about {formatUsd(l.monthlyCostUsd)} a month from now on
+                {l.expectedVisitsTop3 ? ` · about ${compactNumber(l.expectedVisitsTop3)} visits a month once the main keyword is in the top 3` : ''}
+              </span>
+            </>
+          }
+          aside={
+            <HeroNextStep
+              icon={NEXT_ICON[l.next?.kind ?? 'none'] ?? <CalendarClock />}
+              eyebrow={validDate(l.next?.at) ? `Next step · ${fmtShortDay(l.next.at)} · ${fmtAgo(l.next.at)}` : 'Next step'}
+              title={l.next?.text || 'Nothing planned'}
+            />
+          }
+          stats={
+            <>
+              <HeroStat
+                label="Main keyword on Google"
+                value={l.headPosition != null && l.headPosition > 0 ? positionWords(l.headPosition) : <span className="block text-lg leading-snug">{positionWords(l.headPosition)}</span>}
+                delta={
+                  l.headChange != null && Number.isFinite(l.headChange) ? (
+                    <span className="inline-flex rounded-md bg-surface px-1.5 py-0.5">
+                      <PositionChange change={l.headChange} />
+                    </span>
+                  ) : undefined
+                }
+                trend={series.length > 1 ? <Sparkline data={series} dataKey="p" invert /> : undefined}
+                hint={l.top3 > 0 ? `${plural(l.top3, 'page')} of this ladder in the top 3` : undefined}
+              />
+              <HeroStat
+                label="Pages live"
+                value={`${l.counts.published} of ${l.counts.total}`}
+                hint={
+                  <>
+                    <HeroMeter value={l.counts.total ? (l.counts.published / l.counts.total) * 100 : 0} label="Pages live" />
+                    {liveHint && <span className="mt-1.5 block">{liveHint}</span>}
+                  </>
+                }
+              />
+              <HeroStat label="Pages in the top 10" value={<CountUp value={l.top10} />} hint={`${l.top3} in the top 3`} />
+              <HeroStat
+                label="Clicks, last 28 days"
+                value={<CountUp value={l.traffic?.clicks28d ?? 0} format={compactNumber} />}
+                hint={`${compactNumber(l.traffic?.impressions28d ?? 0)} times shown on Google (impressions), from Search Console`}
+              />
+            </>
+          }
         />
-        <StatTile label="Pages live" value={`${l.counts.published} of ${l.counts.total}`} hint={[l.counts.waiting ? `${l.counts.waiting} waiting for you to publish` : '', l.counts.writing ? `${l.counts.writing} being written` : '', l.counts.planned ? `${l.counts.planned} planned` : ''].filter(Boolean).join(' · ') || undefined} />
-        <StatTile label="Pages in the top 10" value={l.top10} hint={`${l.top3} in the top 3`} />
-        <StatTile
-          label="Clicks, last 28 days"
-          value={compactNumber(l.traffic?.clicks28d ?? 0)}
-          hint={`${compactNumber(l.traffic?.impressions28d ?? 0)} times shown on Google (impressions), from Search Console`}
-        />
-        <StatTile
-          label="Next step"
-          value={<span className="block text-base font-semibold leading-snug">{l.next?.text || 'Nothing planned'}</span>}
-          hint={validDate(l.next?.at) ? `${fmtShortDay(l.next.at)} · ${fmtAgo(l.next.at)}` : undefined}
-        />
-        <StatTile label="Cost so far" value={formatUsd(l.costSoFarUsd)} hint={`about ${formatUsd(l.monthlyCostUsd)} a month from now on${l.expectedVisitsTop3 ? ` · about ${compactNumber(l.expectedVisitsTop3)} visits a month once the main keyword is in the top 3` : ''}`} />
-      </div>
 
-      <Climb ladder={l} onWrite={setWriting} />
+        <Climb ladder={l} onWrite={setWriting} />
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] xl:items-start">
-        <Timeline events={l.timeline ?? []} />
-        <div className="min-w-0 space-y-4">
-          <PositionResults ladder={l} />
-          <Traffic ladder={l} />
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)] xl:items-start">
+          <Timeline events={l.timeline ?? []} />
+          <div className="min-w-0 space-y-4">
+            <PositionResults ladder={l} />
+            <Traffic ladder={l} />
+          </div>
         </div>
-      </div>
 
-      <Reports ladder={l} />
+        <Reports ladder={l} />
+      </Stagger>
 
       {writing && <WriteNowDialog item={writing} onClose={() => setWriting(null)} />}
     </div>
   );
+}
+
+const NEXT_ICON: Record<LadderDetail['next']['kind'], ReactNode> = {
+  write: <PenSquare />,
+  publish: <Inbox />,
+  approve: <Hand />,
+  check: <Activity />,
+  wait: <Hourglass />,
+  none: <CheckCircle2 />,
+};
+
+/** The hero's headline: how many pages are live and where the main keyword stands. */
+function ladderHeadline(l: LadderDetail): string {
+  const p = l.headPosition;
+  const where = p == null ? 'not checked on Google yet' : p < 0 ? 'its last Google check failed' : p === 0 ? 'not in the top 50 yet' : `at ${positionWords(p)} on Google`;
+  if (!l.counts.total) return `The plan has no pages yet; the main keyword is ${where}`;
+  return `${l.counts.published} of ${plural(l.counts.total, 'page')} live; the main keyword is ${where}`;
 }
 
 // ---------- timeline ----------
@@ -202,8 +267,8 @@ function Timeline({ events }: { events: LadderTimelineEvent[] }) {
       <span className={cn('pt-0.5 text-xs tabular', e.future ? 'text-ink-3' : 'text-ink-2')}>{validDate(e.at) ? fmtDay(e.at) : '–'}</span>
       <span
         className={cn(
-          'relative z-[1] flex size-6 items-center justify-center rounded-full border',
-          e.future ? 'border-dashed border-line-strong bg-surface text-ink-3' : e.kind === 'drop' ? 'border-transparent bg-critical-soft text-critical-text' : e.kind === 'top3' || e.kind === 'top10' || e.kind === 'published' ? 'border-transparent bg-good-soft text-good-text' : 'border-transparent bg-surface-2 text-ink-2',
+          'relative z-[1] flex size-6 items-center justify-center rounded-full border ring-4 ring-surface',
+          e.future ? 'border-dashed border-line-strong bg-surface text-ink-3' : e.kind === 'drop' ? 'border-transparent bg-critical-soft text-critical-text' : e.kind === 'top3' || e.kind === 'top10' || e.kind === 'published' ? 'border-transparent bg-good-soft text-good-text' : 'border-transparent bg-accent-soft text-accent-text',
         )}
         aria-hidden
       >
@@ -220,23 +285,20 @@ function Timeline({ events }: { events: LadderTimelineEvent[] }) {
     </li>
   );
   return (
-    <Card>
-      <CardHeader icon={<CalendarClock className="size-4" />} title="Timeline" description="What happened so far and what comes next on the Mondays ahead." />
-      <CardBody>
-        {!events.length ? (
-          <p className="text-sm text-ink-3">Nothing yet: the plan, written pages, publishing and Google milestones show up here.</p>
-        ) : (
-          <ol className="relative before:absolute before:bottom-3 before:left-[calc(4.5rem+0.5rem+0.75rem)] before:top-3 before:w-px before:bg-line" aria-label="Timeline">
-            {past.map(row)}
-            <li className="relative my-1.5 grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-2" aria-label={`Today, ${fmtDate(new Date())}`}>
-              <span className="text-xs font-semibold text-accent-text">Today</span>
-              <span className="h-px bg-accent" aria-hidden />
-            </li>
-            {future.length ? future.map(row) : <li className="py-1.5 pl-[5rem] text-[13px] text-ink-3">Nothing scheduled for this ladder.</li>}
-          </ol>
-        )}
-      </CardBody>
-    </Card>
+    <Panel icon={<CalendarClock />} title="Timeline" description="What happened so far and what comes next on the Mondays ahead.">
+      {!events.length ? (
+        <p className="text-sm text-ink-3">Nothing yet: the plan, written pages, publishing and Google milestones show up here.</p>
+      ) : (
+        <ol className="relative before:absolute before:bottom-3 before:left-[calc(4.5rem+0.5rem+0.75rem)] before:top-3 before:w-px before:bg-line" aria-label="Timeline">
+          {past.map(row)}
+          <li className="relative my-2 grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-x-2" aria-label={`Today, ${fmtDate(new Date())}`}>
+            <span className="inline-flex h-5 w-fit items-center rounded-full bg-accent px-2 text-[11px] font-semibold text-accent-ink">Today</span>
+            <span className="h-0.5 rounded-full bg-accent" aria-hidden />
+          </li>
+          {future.length ? future.map(row) : <li className="py-1.5 pl-[5rem] text-[13px] text-ink-3">Nothing scheduled for this ladder.</li>}
+        </ol>
+      )}
+    </Panel>
   );
 }
 
@@ -262,10 +324,10 @@ function PositionResults({ ladder: l }: { ladder: LadderDetail }) {
   if (!lines.some((x) => x.history.some((h) => h.position > 0))) {
     const checks = [...new Set(lines.flatMap((x) => x.history.map((h) => String(h.checkedAt).slice(0, 10))))].sort();
     return (
-      <Card>
-        <CardHeader icon={<TrendingUp className="size-4" />} title="Position on Google over time" />
+      <Panel icon={<TrendingUp />} title="Position on Google over time" flush>
         <EmptyState
           className="py-8"
+          icon={<TrendingUp className="size-5" />}
           title={checks.length ? 'Not in the top 50 yet' : 'No Google checks yet'}
           description={
             checks.length
@@ -273,7 +335,7 @@ function PositionResults({ ladder: l }: { ladder: LadderDetail }) {
               : 'The rank check runs every Monday. Positions show up here once the ladder’s pages are checked.'
           }
         />
-      </Card>
+      </Panel>
     );
   }
   return (
@@ -290,14 +352,14 @@ function Traffic({ ladder: l }: { ladder: LadderDetail }) {
   const points = sortByDate(l.traffic?.points ?? [], (p) => p.periodEnd);
   if (!points.length)
     return (
-      <Card>
-        <CardHeader icon={<MousePointerClick className="size-4" />} title="Visits from Google" />
+      <Panel icon={<MousePointerClick />} title="Visits from Google" flush>
         <EmptyState
           className="py-8"
+          icon={<MousePointerClick className="size-5" />}
           title="No clicks yet"
           description="Clicks and impressions of the ladder’s live pages show up here once Search Console reports them, usually a few weeks after a page is published."
         />
-      </Card>
+      </Panel>
     );
   const rows = points.map((p) => ({ periodEnd: p.periodEnd, clicks: p.clicks, impressions: p.impressions }));
   const table = (key: 'clicks' | 'impressions', label: string) => ({
@@ -309,10 +371,10 @@ function Traffic({ ladder: l }: { ladder: LadderDetail }) {
   });
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <ChartCard title="Clicks from Google" description="Visits to the ladder’s pages, per period" table={table('clicks', 'Clicks')}>
+      <ChartCard title={<ChartTitle icon={<MousePointerClick />}>Clicks from Google</ChartTitle>} description="Visits to the ladder’s pages, per period" table={table('clicks', 'Clicks')}>
         <TimeSeriesChart data={rows} xKey="periodEnd" series={[{ key: 'clicks', label: 'Clicks' }]} height={180} area />
       </ChartCard>
-      <ChartCard title="Times shown on Google" description="Impressions of the ladder’s pages, per period" table={table('impressions', 'Impressions')}>
+      <ChartCard title={<ChartTitle icon={<Eye />}>Times shown on Google</ChartTitle>} description="Impressions of the ladder’s pages, per period" table={table('impressions', 'Impressions')}>
         <TimeSeriesChart data={rows} xKey="periodEnd" series={[{ key: 'impressions', label: 'Impressions', color: 'var(--series-1)' }]} height={180} area />
       </ChartCard>
     </div>
@@ -324,9 +386,7 @@ function Reports({ ladder: l }: { ladder: LadderDetail }) {
   const { org } = useOrgCtx();
   const reports = sortByDate(l.reports ?? [], (r) => r.receivedAt, 'desc');
   return (
-    <Card>
-      <CardHeader icon={<FileText className="size-4" />} title="Reports of this ladder" description="The ladder plan, the pages written for it and the weekly rank checks." />
-      <CardBody>
+    <Panel icon={<FileText />} title="Reports of this ladder" description="The ladder plan, the pages written for it and the weekly rank checks.">
         {!reports.length ? (
           <p className="text-sm text-ink-3">No reports yet for this ladder.</p>
         ) : (
@@ -348,7 +408,16 @@ function Reports({ ladder: l }: { ladder: LadderDetail }) {
             ))}
           </ul>
         )}
-      </CardBody>
-    </Card>
+    </Panel>
+  );
+}
+
+/** A chart card title with its icon tile. */
+function ChartTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <span className="flex items-center gap-3">
+      <IconTile size="sm">{icon}</IconTile>
+      <span className="min-w-0">{children}</span>
+    </span>
   );
 }
