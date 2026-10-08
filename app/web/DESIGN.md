@@ -76,6 +76,5 @@ metric rows). Give `DataGate` a `skeleton` shaped like this anatomy (see `Overvi
       InfoTip and toggle with a visible ring; no horizontal scroll at 375.
 
 ## Screenshots with data (read-only)
-`scratchpad/D0/run.sh shot.js <tag> <page|all> 1440,375 light,dark` (pages listed in `shot.js`; `VARIANT=rich|empty|paused|real`
-fills the Overview with a fuller / empty history; every non-GET API call is blocked; the session is cached in `D0/state.json`
-because login is rate limited). `ix.js` / `kbd.js` show hover, focus, tap and disclosure checks.
+Use the Playwright image on the dev network (see the root `CLAUDE.md`), serve recorded GET responses and block every non-GET
+request, so checking a design never starts a run or changes data. Check 1440 and 375, light and dark, hover / focus / tap.
