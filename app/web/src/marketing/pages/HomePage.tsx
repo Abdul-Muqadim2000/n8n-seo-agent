@@ -22,7 +22,7 @@ import {
   Section,
   SectionHeading,
 } from '../components';
-import { featureBySlug, features, type FaqItem, type Fact } from '../content/features';
+import { CapabilityCount, featureBySlug, features, type FaqItem, type Fact } from '../content/features';
 import { pricingTiers } from '../content/pricing';
 import { solutions } from '../content/solutions';
 import { useSeo } from '../useSeo';
@@ -216,7 +216,7 @@ function CapabilityGrid() {
   return (
     <Section tone="page" id="platform">
       <div className="flex flex-wrap items-end justify-between gap-6">
-        <SectionHeading eyebrow="Platform" title="Ten capabilities. One system." lead="Each one stands on its own. Together they run your SEO as one weekly loop, from the first keyword to the Monday report." />
+        <SectionHeading eyebrow="Platform" title={`${CapabilityCount} capabilities. One system.`} lead="Each one stands on its own. Together they run your SEO as one weekly loop, from the first keyword to the Monday report." />
         <Reveal>
           <ArrowLink to="/platform">Explore the platform</ArrowLink>
         </Reveal>

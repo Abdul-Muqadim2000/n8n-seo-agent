@@ -5,7 +5,7 @@ import { ButtonLink } from '@/components/ui/button';
 import { Container, CtaBand, Eyebrow, Faq, FeatureCard, IconTile, MarketingNotFound, Photo, Reveal, Section, SectionHeading } from '../components';
 import { CapabilityScreen } from '../components/platform/CapabilityScreen';
 import { ArrowLink, Breadcrumbs, CheckList, lowerFirst } from '../components/platform/kit';
-import { featureBySlug, type Feature } from '../content/features';
+import { capabilityCount, featureBySlug, type Feature } from '../content/features';
 import { solutionBySlug, solutions, type Solution } from '../content/solutions';
 import { useSeo } from '../useSeo';
 
@@ -91,7 +91,7 @@ function Helps({ solution: s }: { solution: Solution }) {
       <div className="flex flex-wrap items-end justify-between gap-6">
         <SectionHeading eyebrow="How Ascentra helps" title="The capabilities that carry the load." lead="Every team gets the whole platform. These are the parts that make the biggest difference for yours." />
         <Reveal>
-          <ArrowLink to="/platform">All ten capabilities</ArrowLink>
+          <ArrowLink to="/platform">All {capabilityCount} capabilities</ArrowLink>
         </Reveal>
       </div>
       <div className="mt-12 grid gap-4 sm:grid-cols-2">

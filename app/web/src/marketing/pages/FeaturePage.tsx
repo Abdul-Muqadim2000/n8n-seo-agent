@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { Container, CtaBand, Eyebrow, FactGrid, Faq, FeatureCard, FeatureVisual, IconTile, MarketingNotFound, Photo, Reveal, Section, SectionHeading } from '../components';
 import { CapabilityScreen, isWideScreen } from '../components/platform/CapabilityScreen';
 import { ArrowLink, Breadcrumbs, PrevNext, StepRail } from '../components/platform/kit';
-import { featureBySlug, features, relatedFeatures, type Fact, type Feature } from '../content/features';
+import { capabilityCount, featureBySlug, features, relatedFeatures, type Fact, type Feature } from '../content/features';
 import { useSeo } from '../useSeo';
 
 const factText = (f: Fact) => `${f.prefix ?? ''}${typeof f.value === 'number' ? f.value.toLocaleString('en-US') : f.value}${f.suffix ?? ''} ${f.label}`;
@@ -156,7 +156,7 @@ function Related({ feature: f }: { feature: Feature }) {
       <div className="flex flex-wrap items-end justify-between gap-6">
         <SectionHeading eyebrow="Related capabilities" title="Works well together." />
         <Reveal>
-          <ArrowLink to="/platform">All ten capabilities</ArrowLink>
+          <ArrowLink to="/platform">All {capabilityCount} capabilities</ArrowLink>
         </Reveal>
       </div>
       <div className="mt-12 grid gap-4 md:grid-cols-3">

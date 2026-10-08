@@ -6,10 +6,10 @@ import { Container, CtaBand, Eyebrow, GrowthLoopDiagram, IconTile, IntegrationMa
 import { CapabilityMap } from '../components/platform/CapabilityMap';
 import { CapabilityScreen, isWideScreen } from '../components/platform/CapabilityScreen';
 import { ArrowLink, jumpTo, lowerFirst, useScrollSpy } from '../components/platform/kit';
-import { featureBySlug, features, type Feature } from '../content/features';
+import { CapabilityCount, featureBySlug, features, type Feature } from '../content/features';
 import { useSeo } from '../useSeo';
 
-const HERO_FACTS = ['10 capabilities', 'Auto or Manual for every step', 'Cost shown before every run'];
+const HERO_FACTS = [`${features.length} capabilities`, 'Auto or Manual for every step', 'Cost shown before every run'];
 
 /** which capabilities carry each step of the weekly loop */
 const LOOP_MAP: Record<string, string[]> = {
@@ -71,7 +71,7 @@ function Hero() {
               className="mt-5 animate-fade-up font-display text-[2.6rem] font-semibold leading-[1.04] tracking-[-0.02em] text-balance text-ink sm:text-6xl lg:text-[4.25rem]"
               style={{ animationDelay: '70ms' }}
             >
-              Ten capabilities. One system.
+              {CapabilityCount} capabilities. One system.
             </h1>
             <p className="mt-6 max-w-xl animate-fade-up text-pretty text-lg leading-relaxed text-ink-2 sm:text-xl" style={{ animationDelay: '140ms' }}>
               Research, keyword ladders, content, audits, tracking, AI search visibility and backlinks — each strong on its own, and together one weekly loop your team can trust.
@@ -329,7 +329,7 @@ export default function PlatformPage() {
   useSeo({
     title: 'Platform',
     description:
-      'Ten capabilities that run your SEO as one weekly loop: keyword research, keyword ladders, content, technical audits, site tracking, AI search visibility, backlinks, reports and an enterprise platform.',
+      `${CapabilityCount} capabilities that run your SEO as one weekly loop: ${features.map((f) => (/^[A-Z]{2}/.test(f.shortName) ? f.shortName : f.shortName.charAt(0).toLowerCase() + f.shortName.slice(1))).join(', ')}.`,
     path: '/platform',
   });
   const active = useScrollSpy(features.map((f) => f.slug));

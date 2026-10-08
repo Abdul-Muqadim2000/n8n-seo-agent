@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { ArrowRight, Check } from 'lucide-react';
 import { CtaBand, IconTile, Photo, Reveal, Section, SectionHeading } from '../components';
 import { ArrowLink, lowerFirst } from '../components/platform/kit';
-import { featureBySlug, type Feature } from '../content/features';
+import { capabilityCount, featureBySlug, type Feature } from '../content/features';
 import { solutions } from '../content/solutions';
 import { useSeo } from '../useSeo';
 
@@ -55,7 +55,7 @@ function CapabilityMatrix() {
         <SectionHeading
           eyebrow="One platform"
           title="Four starting points, the same weekly loop."
-          lead="Every team gets all ten capabilities. These are the ones each team tends to lean on first."
+          lead={`Every team gets all ${capabilityCount} capabilities. These are the ones each team tends to lean on first.`}
         />
         <Reveal>
           <ArrowLink to="/platform">Explore the platform</ArrowLink>

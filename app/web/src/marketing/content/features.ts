@@ -553,6 +553,11 @@ export const features: Feature[] = [
   },
 ];
 
+const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty'];
+/** The capability count in words ("ten" / "Ten"), so copy follows the registry when a capability is added. */
+export const capabilityCount = NUMBER_WORDS[features.length] ?? String(features.length);
+export const CapabilityCount = capabilityCount.charAt(0).toUpperCase() + capabilityCount.slice(1);
+
 export const featureBySlug = (slug: string | undefined): Feature | undefined => features.find((f) => f.slug === slug);
 
 /** related features in registry order, skipping unknown slugs */
