@@ -6,8 +6,8 @@ export function PageHeader({ title, description, actions, eyebrow, className }: 
   return (
     <div className={cn('mb-6 flex flex-wrap items-end justify-between gap-4', className)}>
       <div className="min-w-0">
-        {eyebrow && <div className="mb-1 text-[13px] font-medium text-ink-3">{eyebrow}</div>}
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>
+        {eyebrow && <div className="mb-1.5 text-[13px] font-medium text-ink-3">{eyebrow}</div>}
+        <h1 className="font-display text-2xl leading-tight font-semibold tracking-[-0.02em] text-balance text-ink">{title}</h1>
         {description && <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-2">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -25,12 +25,14 @@ export function Delta({ value, suffix = '%', upIsGood = true, digits = 1, label,
   const good = flat ? null : value > 0 === upIsGood;
   const Icon = flat ? Minus : value > 0 ? ArrowUpRight : ArrowDownRight;
   return (
-    <span className={cn('inline-flex items-center gap-0.5 text-xs font-medium tabular', good == null ? 'text-ink-3' : good ? 'text-good-text' : 'text-critical-text', className)}>
-      <Icon className="size-3.5" aria-hidden />
-      {value > 0 ? '+' : ''}
-      {value.toFixed(digits)}
-      {suffix}
-      {label && <span className="ml-1 font-normal text-ink-3">{label}</span>}
+    <span className={cn('inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs font-medium tabular', good == null ? 'text-ink-3' : good ? 'text-good-text' : 'text-critical-text', className)}>
+      <span className={cn('inline-flex h-5 items-center gap-0.5 rounded-md pl-1 pr-1.5', good == null ? 'bg-surface-2' : good ? 'bg-good-soft' : 'bg-critical-soft')}>
+        <Icon className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
+        {value > 0 ? '+' : ''}
+        {value.toFixed(digits)}
+        {suffix}
+      </span>
+      {label && <span className="font-normal text-ink-3">{label}</span>}
     </span>
   );
 }
@@ -39,14 +41,21 @@ export function Delta({ value, suffix = '%', upIsGood = true, digits = 1, label,
 export function StatTile({ label, value, delta, hint, trend, icon, className, onClick }: { label: ReactNode; value: ReactNode; delta?: ReactNode; hint?: ReactNode; trend?: ReactNode; icon?: ReactNode; className?: string; onClick?: () => void }) {
   const Comp = onClick ? 'button' : 'div';
   return (
-    <Comp onClick={onClick} className={cn('flex flex-col rounded-xl border border-line bg-surface p-4 text-left shadow-card', onClick && 'transition-colors hover:bg-surface-2', className)}>
+    <Comp
+      onClick={onClick}
+      className={cn(
+        'flex flex-col rounded-xl border border-line bg-surface p-4 text-left shadow-card',
+        onClick && 'transition-[box-shadow,border-color,translate] duration-200 ease-brand hover:-translate-y-px hover:border-line-strong hover:shadow-raised active:translate-y-0 active:shadow-card',
+        className,
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
         <span className="text-[13px] font-medium text-ink-3">{label}</span>
         {icon && <span className="text-ink-3">{icon}</span>}
       </div>
       <div className="mt-2 flex items-end justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-2xl font-semibold tracking-tight text-ink">{value}</div>
+          <div className="font-display text-2xl leading-tight font-semibold tracking-[-0.01em] text-ink tabular">{value}</div>
           {delta && <div className="mt-1">{delta}</div>}
         </div>
         {trend && <div className="h-10 w-24 shrink-0">{trend}</div>}
@@ -63,7 +72,7 @@ export function Meter({ value, tone = 'accent', label, className }: { value: num
   const track = { accent: 'bg-accent-soft', good: 'bg-good-soft', warning: 'bg-warning-soft', critical: 'bg-critical-soft' }[tone];
   return (
     <div className={cn('h-2 w-full overflow-hidden rounded-full', track, className)} role="meter" aria-valuenow={v} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
-      <div className={cn('h-full rounded-full transition-[width]', fill)} style={{ width: `${v}%` }} />
+      <div className={cn('h-full rounded-full transition-[width] duration-500 ease-brand', fill)} style={{ width: `${v}%` }} />
     </div>
   );
 }
@@ -89,10 +98,14 @@ export function CopyButton({ text, label = 'Copy', className }: { text: string; 
           /* clipboard blocked: the text is visible next to the button */
         }
       }}
-      className={cn('inline-flex h-7 items-center gap-1.5 rounded-md border border-line-strong bg-surface px-2 text-xs font-medium text-ink-2 hover:bg-surface-2', className)}
+      className={cn(
+        'inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-xs font-medium shadow-card transition-[color,background-color,border-color,translate] duration-150 ease-brand active:translate-y-px',
+        done ? 'border-good-text/30 bg-good-soft text-good-text' : 'border-line-strong bg-surface text-ink-2 hover:bg-surface-2 hover:text-ink',
+        className,
+      )}
     >
-      {done ? <Check className="size-3.5 text-good-text" /> : <Copy className="size-3.5" />}
-      {done ? 'Copied' : label}
+      {done ? <Check key="done" className="size-3.5 animate-scale-in" aria-hidden /> : <Copy key="copy" className="size-3.5" aria-hidden />}
+      <span aria-live="polite">{done ? 'Copied' : label}</span>
     </button>
   );
 }
@@ -106,9 +119,13 @@ export function Avatar({ name, src, size = 28, className }: { name: string; src?
     .join('')
     .toUpperCase();
   return src ? (
-    <img src={src} alt="" width={size} height={size} referrerPolicy="no-referrer" className={cn('shrink-0 rounded-full object-cover', className)} style={{ width: size, height: size }} />
+    <img src={src} alt="" width={size} height={size} referrerPolicy="no-referrer" className={cn('shrink-0 rounded-full object-cover ring-1 ring-line', className)} style={{ width: size, height: size }} />
   ) : (
-    <span className={cn('inline-flex shrink-0 items-center justify-center rounded-full bg-accent-soft font-semibold text-accent-text', className)} style={{ width: size, height: size, fontSize: size * 0.4 }} aria-hidden>
+    <span
+      className={cn('inline-flex shrink-0 items-center justify-center rounded-full bg-accent-soft font-display font-semibold tracking-[0.02em] text-accent-text ring-1 ring-accent-text/15 select-none', className)}
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+      aria-hidden
+    >
       {initials || '?'}
     </span>
   );
@@ -130,7 +147,12 @@ export function KeyValue({ items, className }: { items: { label: ReactNode; valu
 
 export function ExternalLink({ href, children, className }: { href: string; children?: ReactNode; className?: string }) {
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={cn('break-all text-accent-text underline-offset-2 hover:underline', className)}>
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn('break-all text-accent-text decoration-accent-text/40 underline-offset-2 transition-colors duration-150 hover:underline hover:decoration-accent-text', className)}
+    >
       {children ?? href}
     </a>
   );

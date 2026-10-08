@@ -1,5 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
-import { X } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -63,14 +63,21 @@ export function TagInput({
     <div>
       <div
         className={cn(
-          'flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-lg border bg-surface px-2 py-1.5 transition-colors focus-within:border-accent focus-within:shadow-[var(--ring)]',
-          invalid || error ? 'border-critical' : 'border-line-strong hover:border-ink-3',
+          'flex min-h-9 w-full cursor-text flex-wrap items-center gap-1.5 rounded-lg border bg-surface px-2 py-1.5 transition-[border-color,box-shadow] duration-150 ease-brand',
+          invalid || error
+            ? 'border-critical focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--critical)_22%,transparent)]'
+            : 'border-line-strong hover:border-ink-3/60 focus-within:border-[color:var(--ring-color)] focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--ring-color)_22%,transparent)]',
         )}
       >
         {value.map((v) => (
-          <span key={v} className="inline-flex h-6 max-w-full items-center gap-1 rounded-md bg-surface-2 pl-2 pr-1 text-[13px] text-ink">
+          <span key={v} className="inline-flex h-6 max-w-full animate-scale-in items-center gap-1 rounded-md border border-line bg-surface-2 pl-2 pr-0.5 text-[13px] text-ink">
             <span className="truncate">{v}</span>
-            <button type="button" onClick={() => onChange(value.filter((x) => x !== v))} className="rounded p-0.5 text-ink-3 hover:bg-surface-3 hover:text-ink" aria-label={`Remove ${v}`}>
+            <button
+              type="button"
+              onClick={() => onChange(value.filter((x) => x !== v))}
+              className="rounded p-0.5 text-ink-3 transition-colors duration-150 hover:bg-critical-soft hover:text-critical-text focus-visible:shadow-[inset_0_0_0_1.5px_var(--ring-color)]!"
+              aria-label={`Remove ${v}`}
+            >
               <X className="size-3" />
             </button>
           </span>
@@ -95,12 +102,21 @@ export function TagInput({
             placeholder={value.length ? '' : placeholder}
             aria-invalid={invalid || !!error || undefined}
             aria-describedby={describedBy}
-            className="h-6 min-w-[8rem] flex-1 bg-transparent px-1 text-sm text-ink placeholder:text-ink-3 focus:outline-none"
+            className="h-6 min-w-[8rem] flex-1 bg-transparent px-1 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus-visible:shadow-none!"
           />
         )}
       </div>
-      {error && <p className="mt-1.5 text-[13px] text-critical-text">{error}</p>}
-      {max != null && <p className="mt-1 text-xs text-ink-3">{value.length} of {max}</p>}
+      {error && (
+        <p className="mt-1.5 flex items-start gap-1.5 text-[13px] leading-snug text-critical-text animate-fade-in">
+          <AlertCircle className="mt-px size-3.5 shrink-0" aria-hidden />
+          <span className="min-w-0">{error}</span>
+        </p>
+      )}
+      {max != null && (
+        <p className="mt-1 text-xs tabular text-ink-3">
+          {value.length} of {max}
+        </p>
+      )}
     </div>
   );
 }
