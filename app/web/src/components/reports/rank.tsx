@@ -1,16 +1,18 @@
 import type { ReactNode } from 'react';
-import { ArrowRight, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowRight, Footprints, GitFork, ListOrdered, TrendingDown, TrendingUp } from 'lucide-react';
 import { formatPosition, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { fmtDateTime } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
-import { Card, CardBody } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Delta, ExternalLink, Meter } from '@/components/ui/misc';
+import { CountUp, HeroStat, IconTile, Stagger } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
 import { Block, Empty, num, obj, objs, shortUrl, str, type P } from './kit';
 import { modeTitle, prefillFromApiBody } from './meta';
+import { PositionPill, ReportHero, ScoreMark } from './visuals';
 
 /** Improvement in places (positive = moved up); null when either check is missing. */
 export function movement(pos: number | null, prev: number | null): { kind: 'up' | 'down' | 'same' | 'new' | 'lost' | 'none'; value: number | null } {
@@ -54,18 +56,39 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
         const v = num(r.position);
         return v == null || v <= 0 ? 999 : v;
       },
-      cell: (r) => <span className={(num(r.position) ?? 0) > 0 && (num(r.position) ?? 99) <= 10 ? 'font-semibold text-good-text' : 'text-ink'}>{formatPosition(num(r.position))}</span>,
+      cell: (r) => <PositionPill value={num(r.position)} text={formatPosition(num(r.position))} />,
     },
     { key: 'previous', header: 'Previous', align: 'right', sortValue: (r) => num(r.previous), cell: (r) => <span className="text-ink-3">{formatPosition(num(r.previous))}</span>, hideOnMobile: true },
     { key: 'move', header: 'Change', align: 'right', cell: (r) => <MovementCell pos={num(r.position)} prev={num(r.previous)} /> },
     { key: 'url', header: 'Ranking URL', cell: (r) => (str(r.url) ? <ExternalLink href={str(r.url)} className="text-[13px]">{shortUrl(str(r.url))}</ExternalLink> : <span className="text-xs text-ink-3">–</span>), hideOnMobile: true },
   ];
 
+  const top10 = positions.filter((x) => (num(x.position) ?? 0) > 0 && (num(x.position) ?? 99) <= 10).length;
+
   return (
-    <div className="space-y-5">
+    <Stagger className="space-y-5">
+      <ReportHero
+        report={report}
+        eyebrow={str(p.head_keyword) ? <span className="normal-case">“{str(p.head_keyword)}”</span> : undefined}
+        title={p.done === true ? 'Ladder complete: tracking has stopped' : `${ranking} of ${positions.length} ${positions.length === 1 ? 'page' : 'pages'} in Google’s top 50`}
+        description={str(p.checked_at) ? `Checked ${fmtDateTime(str(p.checked_at))}. “>50” means not in the top 50 yet; a failed check is retried next week.` : '“>50” means not in the top 50 yet; a failed check is retried next week.'}
+        aside={positions.length ? <ScoreMark score={top10} max={positions.length} label="Pages in the top 10" ringTone="accent" display={`${top10}/${positions.length}`} suffix="" caption={`${ranking} in the top 50`} /> : undefined}
+        stats={
+          <>
+            <HeroStat label="Pages checked" value={<CountUp value={positions.length} />} />
+            <HeroStat label="In the top 10" value={<CountUp value={top10} />} />
+            <HeroStat label="Gains" value={<CountUp value={gains.length} />} hint="moved up since last week" />
+            <HeroStat label="Drops" value={<CountUp value={drops.length} />} hint="moved down since last week" />
+          </>
+        }
+      />
       {(str(next.text) || run) && (
         <Card className="border-accent/40">
-          <CardBody>
+          <div className="flex gap-3.5 p-5">
+            <IconTile tone="solid" size="md">
+              <Footprints />
+            </IconTile>
+            <div className="min-w-0 flex-1">
             <p className="text-[13px] font-medium text-accent-text">Next step</p>
             <p className="mt-1 text-[15px] leading-relaxed text-ink">{str(next.text)}</p>
             {objs(next.pages).length > 0 && (
@@ -89,7 +112,8 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
                 <StatusBadge tone="good">Ladder complete: tracking has stopped</StatusBadge>
               </p>
             )}
-          </CardBody>
+            </div>
+          </div>
         </Card>
       )}
 
@@ -99,9 +123,14 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
             const pages = num(r.pages) ?? 0;
             const top10 = num(r.top10) ?? 0;
             return (
-              <div key={num(r.rung)} className="rounded-xl border border-line bg-surface p-4 shadow-card">
-                <div className="flex items-center justify-between">
-                  <span className="text-[13px] font-medium text-ink-3">Rung {num(r.rung)}</span>
+              <div key={num(r.rung)} className="rounded-xl border border-line bg-surface p-4 shadow-card transition-[border-color,box-shadow] duration-200 ease-brand hover:border-line-strong hover:shadow-raised">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 text-[13px] font-medium text-ink-2">
+                    <IconTile size="sm" tone={r.reached === true ? 'good' : 'blue'}>
+                      <GitFork />
+                    </IconTile>
+                    Rung {num(r.rung)}
+                  </span>
                   {r.reached === true ? <StatusBadge tone="good">Reached</StatusBadge> : <Badge>in progress</Badge>}
                 </div>
                 <p className="mt-2 font-display text-2xl font-semibold text-ink">
@@ -118,6 +147,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
 
       <Block
         title="Positions"
+        icon={<ListOrdered />}
         description={
           <>
             {ranking} of {positions.length} pages in Google’s top 50
@@ -135,24 +165,24 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
 
       {(gains.length > 0 || drops.length > 0) && (
         <div className="grid gap-5 lg:grid-cols-2">
-          <MoverList title="Gains" items={gains} icon={<TrendingUp className="size-4 text-good-text" />} />
-          <MoverList title="Drops" items={drops} icon={<TrendingDown className="size-4 text-critical-text" />} />
+          <MoverList title="Gains" items={gains} icon={<TrendingUp />} tone="good" />
+          <MoverList title="Drops" items={drops} icon={<TrendingDown />} tone="critical" />
         </div>
       )}
-    </div>
+    </Stagger>
   );
 }
 
-function MoverList({ title, items, icon }: { title: string; items: P[]; icon: ReactNode }) {
+function MoverList({ title, items, icon, tone }: { title: string; items: P[]; icon: ReactNode; tone: 'good' | 'critical' }) {
   return (
-    <Block title={title} icon={icon}>
+    <Block title={title} icon={icon} iconTone={tone}>
       {items.length ? (
         <ul className="divide-y divide-line">
           {items.map((g, i) => (
             <li key={i} className="flex items-center justify-between gap-3 py-2 text-sm">
               <span className="text-ink">{str(g.keyword)}</span>
               <span className="flex items-center gap-2 tabular text-ink-2">
-                {formatPosition(num(g.previous))} → {formatPosition(num(g.position))}
+                {formatPosition(num(g.previous))} → <PositionPill value={num(g.position)} text={formatPosition(num(g.position))} />
                 <MovementCell pos={num(g.position)} prev={num(g.previous)} />
               </span>
             </li>

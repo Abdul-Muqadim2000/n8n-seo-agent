@@ -1,7 +1,7 @@
 // Delivered reports and their files (PDF, Word, HTML, Markdown, meta.json, fix pack, CSV, disavow list).
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { CalendarClock, ChevronDown, Download, ExternalLink as ExternalIcon, Files } from 'lucide-react';
+import { ArrowRight, CalendarClock, ChevronDown, Download, ExternalLink as ExternalIcon, Files } from 'lucide-react';
 import { compactNumber, type Report, type ReportFile } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { paths } from '@/lib/paths';
@@ -53,7 +53,7 @@ export function FileChip({ orgId, f, size = 'sm' }: { orgId: string; f: ReportFi
         rel={inline ? 'noopener noreferrer' : undefined}
         download={inline ? undefined : f.fileName}
         className={cn(
-          'inline-flex max-w-[14rem] items-center gap-1 rounded-md border border-line-strong bg-surface font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink',
+          'inline-flex max-w-[14rem] items-center gap-1 rounded-md border border-line-strong bg-surface font-medium text-ink-2 shadow-card transition-[color,background-color,border-color,translate] duration-150 ease-brand hover:-translate-y-px hover:border-accent hover:bg-accent-soft/40 hover:text-accent-text active:translate-y-0',
           size === 'sm' ? 'h-7 px-2 text-xs' : 'h-8 px-2.5 text-[13px]',
         )}
         aria-label={`${inline ? 'Open' : 'Download'} ${f.fileName}`}
@@ -154,12 +154,15 @@ export function ReportList({ orgId, reports, limit, empty }: { orgId: string; re
         <li key={r.id} className="group relative flex flex-col gap-2 px-5 py-3 transition-colors duration-150 ease-brand hover:bg-surface-2/60 md:flex-row md:items-center md:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <span className="mt-0.5" aria-hidden>
-              <StageGlyph stage={r.stage} size="sm" report={r} />
+              <StageGlyph stage={r.stage} size="md" report={r} />
             </span>
             <div className="min-w-0">
-              <Link to={paths.report(orgId, r.id)} className="block truncate text-sm font-medium text-ink transition-colors duration-150 ease-brand after:absolute after:inset-0 group-hover:text-accent-text">
-                {r.title}
-              </Link>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <Link to={paths.report(orgId, r.id)} className="block truncate text-sm font-medium text-ink transition-colors duration-150 ease-brand after:absolute after:inset-0 group-hover:text-accent-text">
+                  {r.title}
+                </Link>
+                <ArrowRight className="size-3.5 shrink-0 text-accent-text opacity-0 transition-[opacity,translate] duration-200 ease-brand group-hover:translate-x-0.5 group-hover:opacity-100" aria-hidden />
+              </span>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-3">
                 <span>{stageLabel(r.stage, r)}</span>
                 <span aria-hidden>·</span>
@@ -173,7 +176,7 @@ export function ReportList({ orgId, reports, limit, empty }: { orgId: string; re
               </div>
             </div>
           </div>
-          <div className="relative z-[1] flex flex-wrap items-center gap-2 pl-10 md:pl-0">
+          <div className="relative z-[1] flex flex-wrap items-center gap-2 pl-12 md:pl-0">
             <ReportHighlights report={r} />
             <FileLinks orgId={orgId} files={r.files} />
           </div>

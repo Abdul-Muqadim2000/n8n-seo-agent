@@ -1,21 +1,28 @@
 import { useState } from 'react';
-import { Building2, FolderTree, Link as LinkIcon, ListChecks, Package, Search } from 'lucide-react';
+import { BarChart3, Building2, CheckCircle2, Eye, FileCode, FileWarning, FolderTree, GitCompare, Layers, Link as LinkIcon, ListChecks, ListOrdered, MapPinned, MousePointerClick, Network, Package, Search, Sparkles, TriangleAlert } from 'lucide-react';
 import { urlOnDomain, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { fmtDate } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
-import { Card, CardBody } from '@/components/ui/card';
 import { Callout } from '@/components/ui/feedback';
-import { Delta, ExternalLink, KeyValue, Meter, scoreTone } from '@/components/ui/misc';
+import { Delta, ExternalLink, KeyValue, scoreTone } from '@/components/ui/misc';
+import { CountUp, DistributionBar, HeroStat, IconTile, InsightItem, Stagger, type IconTileTone } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
 import { Segmented } from '@/components/ui/tabs';
 import { BarsChart, ChartCard, ShareBars } from '@/components/charts';
 import { FileButton } from './files';
 import { Block, CodeBlock, Disclosure, Empty, Facts, has, LedgerCard, n, num, obj, objs, pctRatio, SectionTitle, sevTone, shortUrl, str, strs, type P } from './kit';
+import { ChartTitle, HeroFileButton, PositionPill, ReportHero, ScoreMark } from './visuals';
 
 const SEVERITIES = ['Critical', 'High', 'Medium', 'Low', 'Info'] as const;
+
+const SEV_COLOR: Record<(typeof SEVERITIES)[number], string> = { Critical: 'var(--critical)', High: 'var(--serious)', Medium: 'var(--warning)', Low: 'var(--seq-3)', Info: 'var(--surface-3)' };
+const sevTile = (sev: string): IconTileTone => {
+  const t = sevTone(sev);
+  return t === 'neutral' || t === 'accent' ? 'neutral' : t;
+};
 
 /** Technical audit and full SEO report (same payload family; the full report adds competitor data in its PDF). */
 export function AuditReport({ report }: { report: ReportDetail }) {
@@ -26,48 +33,78 @@ export function AuditReport({ report }: { report: ReportDetail }) {
   const top = strs(p.top_issues);
   const isFull = report.stage === 'full_report';
   const domain = str(p.domain);
+  const tone = scoreTone(score);
+  const c = (k: (typeof SEVERITIES)[number]) => num(counts[k]) ?? 0;
+  const urgent = c('Critical') + c('High');
+  const pdf = report.files.find((f) => f.kind === 'pdf');
+  const zip = report.files.find((f) => f.kind === 'zip');
+  const scoreDelta = num(diff.score_delta);
+  const healthLabel = isFull ? 'SEO health (full report)' : 'Technical health';
 
   return (
-    <div className="space-y-5">
-      <Card>
-        <CardBody className="grid gap-6 md:grid-cols-[minmax(0,260px)_1fr]">
-          <div>
-            <p className="text-[13px] font-medium text-ink-3">{isFull ? 'SEO health (full report)' : 'Technical health'}</p>
-            <div className="mt-1 flex items-end gap-3">
-              <span className="text-5xl font-semibold tracking-tight text-ink">{score ?? '–'}</span>
-              <span className="pb-1.5 text-sm text-ink-3">/100</span>
+    <Stagger className="space-y-5">
+      <ReportHero
+        report={report}
+        title={score != null ? `${isFull ? 'SEO health' : 'Technical health'} is ${score}/100${str(p.grade) ? ` · ${str(p.grade)}` : ''}` : healthLabel}
+        description={
+          urgent > 0
+            ? `${c('Critical')} critical and ${c('High')} high-severity ${urgent === 1 ? 'issue' : 'issues'} to fix first; the downloads hold every finding with the affected pages.`
+            : 'No critical or high-severity issues. The downloads hold every finding with the affected pages.'
+        }
+        aside={
+          <ScoreMark
+            score={score}
+            label={healthLabel}
+            status={str(p.grade) || undefined}
+            statusTone={str(p.grade) ? (tone === 'accent' ? 'neutral' : tone) : undefined}
+            caption={scoreDelta != null ? <Delta value={scoreDelta} suffix=" pts" digits={0} label="since last audit" /> : undefined}
+          />
+        }
+        actions={
+          pdf || zip ? (
+            <>
+              {pdf && <HeroFileButton file={pdf}>Open the PDF report</HeroFileButton>}
+              {zip && (
+                <HeroFileButton file={zip} variant="secondary">
+                  Fix pack (.zip)
+                </HeroFileButton>
+              )}
+            </>
+          ) : undefined
+        }
+        stats={
+          <>
+            <HeroStat label="Critical" value={<CountUp value={c('Critical')} />} />
+            <HeroStat label="High" value={<CountUp value={c('High')} />} />
+            <HeroStat label="Medium" value={<CountUp value={c('Medium')} />} />
+            <HeroStat label="Low" value={<CountUp value={c('Low')} />} hint={`Info ${c('Info')}`} />
+          </>
+        }
+      />
+
+      <Block title="Issues found" description={`${SEVERITIES.reduce((a, k) => a + c(k), 0)} findings by severity`} icon={<TriangleAlert />} iconTone={c('Critical') ? 'critical' : c('High') ? 'serious' : 'blue'}>
+        <DistributionBar label="Issues by severity" segments={SEVERITIES.map((k) => ({ label: k, value: c(k), color: SEV_COLOR[k] }))} />
+        <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {SEVERITIES.map((s) => (
+            <div key={s} className="rounded-lg border border-line px-3 py-2.5 transition-colors duration-150 ease-brand hover:border-line-strong">
+              <p className="font-display text-2xl font-semibold text-ink">{c(s)}</p>
+              <StatusBadge tone={sevTone(s)} className="mt-1">
+                {s}
+              </StatusBadge>
             </div>
-            {score != null && <Meter value={score} tone={scoreTone(score)} label="Health score" className="mt-3" />}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {str(p.grade) && <StatusBadge tone={scoreTone(score) === 'accent' ? 'neutral' : scoreTone(score)}>{str(p.grade)}</StatusBadge>}
-              {num(diff.score_delta) != null && <Delta value={num(diff.score_delta)} suffix=" pts" digits={0} label="since last audit" />}
-            </div>
-          </div>
-          <div className="min-w-0">
-            <SectionTitle>Issues found</SectionTitle>
-            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-              {SEVERITIES.map((s) => (
-                <div key={s} className="rounded-lg border border-line px-3 py-2">
-                  <p className="font-display text-2xl font-semibold text-ink">{num(counts[s]) ?? 0}</p>
-                  <StatusBadge tone={sevTone(s)} className="mt-1">
-                    {s}
-                  </StatusBadge>
-                </div>
-              ))}
-            </div>
-            {top.length > 0 && (
-              <>
-                <SectionTitle className="mt-4">Fix these first</SectionTitle>
-                <ol className="list-decimal space-y-1 pl-5 text-sm text-ink-2">
-                  {top.map((t) => (
-                    <li key={t}>{t}</li>
-                  ))}
-                </ol>
-              </>
-            )}
-          </div>
-        </CardBody>
-      </Card>
+          ))}
+        </div>
+      </Block>
+
+      {top.length > 0 && (
+        <Block title="Fix these first" description={`${top.length} most important ${top.length === 1 ? 'finding' : 'findings'}, in order`} icon={<ListOrdered />} flush>
+          <ol className="divide-y divide-line">
+            {top.map((t, i) => (
+              <InsightItem key={t} icon={<span className="font-display text-xs font-semibold">{i + 1}</span>} title={t} />
+            ))}
+          </ol>
+        </Block>
+      )}
 
       {has(diff) && <AuditDiff diff={diff} />}
       {has(p.fix_pack) && <FixPack fixPack={obj(p.fix_pack)} report={report} />}
@@ -79,7 +116,7 @@ export function AuditReport({ report }: { report: ReportDetail }) {
         <Callout tone="info">The PDF and Word reports hold every finding with the affected pages and how to fix them.</Callout>
       )}
       <LedgerCard ledger={p.run_ledger} />
-    </div>
+    </Stagger>
   );
 }
 
@@ -99,6 +136,7 @@ function AuditDiff({ diff }: { diff: P }) {
   return (
     <Block
       title="Since the last audit"
+      icon={<GitCompare />}
       description={
         <>
           {str(diff.summary)}
@@ -108,6 +146,7 @@ function AuditDiff({ diff }: { diff: P }) {
       actions={
         <Segmented
           size="sm"
+          label="Show"
           value={view}
           onChange={setView}
           options={[
@@ -117,33 +156,38 @@ function AuditDiff({ diff }: { diff: P }) {
           ]}
         />
       }
+      flush
     >
       {list.length ? (
         <ul className="divide-y divide-line">
           {list.map((f, i) => (
-            <li key={i} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
-              <div className="min-w-0">
-                <p className="text-sm text-ink">{str(f.title)}</p>
-                <p className="text-xs text-ink-3">
+            <InsightItem
+              key={i}
+              tone={view === 'fixed' ? 'good' : sevTile(str(f.severity))}
+              title={str(f.title)}
+              description={
+                <>
                   {str(f.category)}
                   {num(f.affected) != null && <> · {num(f.affected)} pages{num(f.affected_before) != null && <> (was {num(f.affected_before)})</>}</>}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                {view === 'fixed' ? (
+                </>
+              }
+              meta={
+                view === 'fixed' ? (
                   <StatusBadge tone="good">Fixed</StatusBadge>
                 ) : (
                   <>
-                    {str(f.was) && str(f.was) !== str(f.severity) && <span className="text-xs text-ink-3">was {str(f.was)}</span>}
                     <StatusBadge tone={sevTone(str(f.severity))}>{str(f.severity) || 'Issue'}</StatusBadge>
+                    {str(f.was) && str(f.was) !== str(f.severity) && <span className="text-xs text-ink-3">was {str(f.was)}</span>}
                   </>
-                )}
-              </div>
-            </li>
+                )
+              }
+            />
           ))}
         </ul>
       ) : (
-        <Empty>{view === 'new' ? 'No new issues since the last audit.' : view === 'fixed' ? 'Nothing was fixed since the last audit.' : 'No open issues.'}</Empty>
+        <div className="px-5 py-4">
+          <Empty>{view === 'new' ? 'No new issues since the last audit.' : view === 'fixed' ? 'Nothing was fixed since the last audit.' : 'No open issues.'}</Empty>
+        </div>
       )}
     </Block>
   );
@@ -157,7 +201,7 @@ function FixPack({ fixPack, report }: { fixPack: P; report: ReportDetail }) {
     <Block
       title="Fix pack"
       description={`Ready-made files that fix what the audit found${str(fixPack.generated_at) ? ` · ${str(fixPack.generated_at)}` : ''}. Review each one before deploying.`}
-      icon={<Package className="size-4" />}
+      icon={<Package />}
       actions={zip && <FileButton file={zip} label="Download all (.zip)" />}
     >
       <ul className="space-y-2">
@@ -168,9 +212,14 @@ function FixPack({ fixPack, report }: { fixPack: P; report: ReportDetail }) {
             <li key={i}>
               <Disclosure
                 title={
-                  <span className="flex flex-wrap items-center gap-2">
-                    <code className="text-[13px]">{str(f.name)}</code>
-                    <span className="text-xs font-normal text-ink-3">{str(f.purpose)}</span>
+                  <span className="flex items-center gap-2.5">
+                    <IconTile size="xs">
+                      <FileCode />
+                    </IconTile>
+                    <span className="flex min-w-0 flex-wrap items-center gap-x-2">
+                      <code className="text-[13px]">{str(f.name)}</code>
+                      <span className="text-xs font-normal text-ink-3">{str(f.purpose)}</span>
+                    </span>
                   </span>
                 }
                 meta={stored ? undefined : `${Math.max(1, Math.round(content.length / 1024))} KB`}
@@ -198,7 +247,7 @@ function InternalLinks({ links }: { links: P[] }) {
     { key: 'reason', header: 'Why', cell: (r) => <span className="text-[13px] text-ink-3">{str(r.reason)}</span>, hideOnMobile: true },
   ];
   return (
-    <Block title="Internal links to add" description="Pages that deserve more links from your own site (also in internal-links.csv)" icon={<LinkIcon className="size-4" />}>
+    <Block title="Internal links to add" description="Pages that deserve more links from your own site (also in internal-links.csv)" icon={<LinkIcon />}>
       <DataTable rows={links} columns={cols} rowKey={(r, i) => `${str(r.from_url)}-${i}`} pageSize={10} />
     </Block>
   );
@@ -229,7 +278,7 @@ function SearchConsole({ sc }: { sc: P }) {
     { key: 'clicks', header: 'Clicks', align: 'right', sortValue: (r) => num(r.clicks), cell: (r) => n(r.clicks) },
     { key: 'impressions', header: 'Impressions', align: 'right', sortValue: (r) => num(r.impressions), cell: (r) => n(r.impressions) },
     { key: 'ctr', header: 'CTR', align: 'right', sortValue: (r) => num(r.ctr), cell: (r) => pctRatio(r.ctr), hideOnMobile: true },
-    { key: 'position', header: 'Position', align: 'right', sortValue: (r) => num(r.position), cell: (r) => (num(r.position) == null ? '–' : num(r.position)!.toFixed(1)) },
+    { key: 'position', header: 'Position', align: 'right', sortValue: (r) => num(r.position), cell: (r) => <PositionPill value={num(r.position)} text={num(r.position) == null ? '–' : num(r.position)!.toFixed(1)} /> },
   ];
   return (
     <Block
@@ -245,34 +294,39 @@ function SearchConsole({ sc }: { sc: P }) {
           )}
         </>
       }
-      icon={<Search className="size-4" />}
+      icon={<Search />}
     >
       <Facts
         cols="sm:grid-cols-4"
         items={[
-          { label: 'Clicks', value: n(totals.clicks) },
-          { label: 'Impressions', value: n(totals.impressions) },
-          { label: 'Click-through rate', value: pctRatio(totals.ctr, 2) },
-          { label: 'Average position', value: num(totals.position)?.toFixed(1) ?? '–' },
+          { icon: <MousePointerClick />, label: 'Clicks', value: n(totals.clicks) },
+          { icon: <Eye />, label: 'Impressions', value: n(totals.impressions) },
+          { icon: <Sparkles />, label: 'Click-through rate', value: pctRatio(totals.ctr, 2) },
+          { icon: <BarChart3 />, label: 'Average position', value: num(totals.position)?.toFixed(1) ?? '–' },
         ]}
       />
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <div>
+        <div className="rounded-lg border border-line p-4">
           <SectionTitle>Pages not indexed, by reason</SectionTitle>
           {coverage.length ? <ShareBars items={coverage} valueFormat={(v) => String(v)} /> : <Empty>Google reports no indexing problems for the key pages.</Empty>}
         </div>
-        <div>
+        <div className="rounded-lg border border-line p-4">
           <SectionTitle>Sitemaps</SectionTitle>
           {sitemaps.length ? (
             <ul className="space-y-2 text-[13px]">
               {sitemaps.map((s, i) => (
-                <li key={i} className="rounded-lg border border-line p-2.5">
+                <li key={i} className="flex items-start gap-2.5 rounded-lg bg-surface-2/60 p-2.5">
+                  <IconTile size="xs" tone={(num(s.errors) ?? 0) > 0 ? 'critical' : 'blue'} className="mt-px">
+                    {(num(s.errors) ?? 0) > 0 ? <FileWarning /> : <MapPinned />}
+                  </IconTile>
+                  <div className="min-w-0">
                   <ExternalLink href={str(s.path)} />
                   <p className="mt-1 text-xs text-ink-3">
                     {n(s.urls)} URLs · {num(s.errors) ?? 0} errors · {num(s.warnings) ?? 0} warnings
                     {str(s.downloaded) && <> · read by Google {fmtDate(str(s.downloaded))}</>}
                     {s.pending === true && ' · pending'}
                   </p>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -329,14 +383,14 @@ function SiteStructure({ s }: { s: P }) {
   const sections = objs(s.sections).map((x) => ({ label: str(x.section), value: num(x.pages) ?? 0 }));
   const sm = obj(s.sitemap);
   return (
-    <Block title="Site structure" description={s.crawl_complete === false ? 'The crawl stopped at the page limit: raise it for a complete picture' : 'From the crawl'} icon={<FolderTree className="size-4" />}>
+    <Block title="Site structure" description={s.crawl_complete === false ? 'The crawl stopped at the page limit: raise it for a complete picture' : 'From the crawl'} icon={<FolderTree />}>
       <Facts
         cols="sm:grid-cols-4"
         items={[
-          { label: 'Pages crawled', value: n(s.crawled_pages) },
-          { label: 'Indexable pages', value: n(s.indexable_pages) },
-          { label: 'Within 3 clicks of home', value: num(s.within_3_clicks_pct) != null ? `${num(s.within_3_clicks_pct)}%` : '–' },
-          { label: 'URLs in the sitemap', value: n(sm.urls) },
+          { icon: <Layers />, label: 'Pages crawled', value: n(s.crawled_pages) },
+          { icon: <CheckCircle2 />, label: 'Indexable pages', value: n(s.indexable_pages) },
+          { icon: <Network />, label: 'Within 3 clicks of home', value: num(s.within_3_clicks_pct) != null ? `${num(s.within_3_clicks_pct)}%` : '–' },
+          { icon: <MapPinned />, label: 'URLs in the sitemap', value: n(sm.urls) },
           { label: 'Indexable, not in sitemap', value: n(s.indexable_not_in_sitemap) },
           { label: 'Only in the sitemap (orphans)', value: n(s.sitemap_only) },
           { label: 'Broken sitemap URLs', value: n(s.sitemap_broken) },
@@ -346,7 +400,7 @@ function SiteStructure({ s }: { s: P }) {
       <div className="mt-5 grid gap-5 lg:grid-cols-2">
         {depth.length > 0 && (
           <ChartCard
-            title="Click depth"
+            title={<ChartTitle icon={<Network />}>Click depth</ChartTitle>}
             description="Pages by clicks from the homepage"
             table={{ columns: [{ key: 'depth', label: 'Depth' }, { key: 'pages', label: 'Pages', align: 'right' }], rows: depth }}
           >
@@ -354,7 +408,7 @@ function SiteStructure({ s }: { s: P }) {
           </ChartCard>
         )}
         {sections.length > 0 && (
-          <div>
+          <div className="rounded-xl border border-line p-4">
             <SectionTitle>Largest sections</SectionTitle>
             <ShareBars items={sections} valueFormat={(v) => `${v} pages`} />
           </div>
@@ -372,7 +426,7 @@ function EntityCheck({ e, domain, siteId }: { e: P; domain: string; siteId: stri
   const gbpMatches = str(gbp.website) ? urlOnDomain(str(gbp.website), domain) : null;
   const address = [str(addr.streetAddress), str(addr.addressLocality), str(addr.addressRegion), str(addr.addressCountry)].filter(Boolean).join(', ');
   return (
-    <Block title="Brand and entity check" description="How consistently search engines and AI can identify your business" icon={<Building2 className="size-4" />}>
+    <Block title="Brand and entity check" description="How consistently search engines and AI can identify your business" icon={<Building2 />}>
       <div className="grid gap-5 lg:grid-cols-2">
         <div>
           <SectionTitle>On your homepage</SectionTitle>

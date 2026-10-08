@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { CheckCircle2, Circle, Loader2, Mail } from 'lucide-react';
+import { Check, Coins, Loader2, Mail } from 'lucide-react';
 import { formatUsd, GOALS, PAGE_TYPES, type ModeId, type Run } from '@seo/shared';
 import { cn, fmtBytes } from '@/lib/utils';
-import { Card, CardBody } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Meter } from '@/components/ui/misc';
+import { IconTile, ScoreRing } from '@/components/insight';
 
 /** Re-renders every `ms` (live elapsed times). */
 export function useNow(ms = 15_000): number {
@@ -61,43 +62,69 @@ export function RunProgress({ run, now }: { run: Run; now: number }) {
   const current = Math.min(steps.length - 1, Math.floor(Math.min(0.99, ratio) * steps.length));
   const late = ratio > 1.5;
   const emailCopy = (run.input as { emailCopy?: boolean }).emailCopy === true;
+  const status = run.status === 'running' ? 'Working on it' : run.status === 'submitting' ? 'Sending to the SEO engine' : 'Queued in the SEO engine';
   return (
-    <Card>
-      <CardBody>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-[15px] font-semibold text-ink">
-            <Loader2 className="size-4 animate-spin text-accent-text" aria-hidden />
-            {run.status === 'running' ? 'Working on it' : run.status === 'submitting' ? 'Sending to the SEO engine' : 'Queued in the SEO engine'}
-          </h2>
-          <span className="text-sm tabular text-ink-2">
-            {fmtMinutes(elapsed)} of about {eta} min
-          </span>
+    <Card className="overflow-hidden">
+      <div className="grid gap-6 p-5 md:grid-cols-[minmax(0,240px)_1fr] md:p-6">
+        <div className="flex items-center gap-4 md:flex-col md:items-start">
+          <ScoreRing
+            value={Math.min(97, ratio * 100)}
+            label="Estimated progress"
+            tone="accent"
+            size={104}
+            display={elapsed < 1 ? '<1' : String(Math.round(elapsed))}
+            suffix={`min of ~${eta}`}
+            valueText={`${fmtMinutes(elapsed)} of about ${eta} min`}
+          />
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 font-display text-base font-semibold tracking-[-0.01em] text-ink">
+              <Loader2 className="size-4 animate-spin text-accent-text" aria-hidden />
+              {status}
+            </h2>
+            <p className="mt-1 text-sm tabular text-ink-2">
+              {fmtMinutes(elapsed)} of about {eta} min
+            </p>
+            <Meter value={Math.min(97, ratio * 100)} label="Estimated progress" className="mt-2.5 h-1.5" />
+          </div>
         </div>
-        <Meter value={Math.min(97, ratio * 100)} label="Estimated progress" className="mt-3" />
-        {late && <p className="mt-2 text-[13px] text-warning-text">Taking longer than usual. Large sites and busy AI models slow some steps; the page updates by itself when results arrive.</p>}
-        {steps.length > 0 && (
-          <ol className="mt-4 space-y-2">
-            {steps.map((s, i) => (
-              <li key={s} className={cn('flex items-center gap-2.5 text-sm', i < current ? 'text-ink-2' : i === current ? 'font-medium text-ink' : 'text-ink-3')}>
-                {i < current ? (
-                  <CheckCircle2 className="size-4 shrink-0 text-good-text" aria-label="probably done" />
-                ) : i === current ? (
-                  <Loader2 className="size-4 shrink-0 animate-spin text-accent-text" aria-label="in progress" />
-                ) : (
-                  <Circle className="size-4 shrink-0" aria-label="to do" />
-                )}
-                {s}
-              </li>
-            ))}
-          </ol>
-        )}
-        <p className="mt-4 text-[13px] text-ink-3">Step progress is estimated from the usual run time. You can leave this page: the run keeps going and the results appear here.</p>
-        {emailCopy && (
-          <p className="mt-2 flex items-center gap-1.5 text-[13px] text-ink-2">
-            <Mail className="size-4 text-ink-3" aria-hidden /> The results also arrive by e-mail.
-          </p>
-        )}
-      </CardBody>
+        <div className="min-w-0">
+          {late && <p className="mb-3 rounded-lg bg-warning-soft px-3 py-2 text-[13px] text-warning-text">Taking longer than usual. Large sites and busy AI models slow some steps; the page updates by itself when results arrive.</p>}
+          {steps.length > 0 && (
+            <ol className="relative space-y-1">
+              {steps.map((s, i) => {
+                const done = i < current;
+                const now = i === current;
+                return (
+                  <li key={s} className={cn('relative flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors duration-300 ease-brand', now && 'bg-accent-soft/60', done ? 'text-ink-2' : now ? 'font-medium text-ink' : 'text-ink-3')}>
+                    {i < steps.length - 1 && <span className={cn('absolute top-[calc(50%+14px)] left-[21px] h-[calc(100%-20px)] w-0.5 rounded-full', done ? 'bg-good' : 'bg-line')} aria-hidden />}
+                    {done ? (
+                      <IconTile tone="good" size="xs" className="rounded-full">
+                        <Check strokeWidth={2.75} />
+                      </IconTile>
+                    ) : now ? (
+                      <IconTile tone="solid" size="xs" className="rounded-full">
+                        <Loader2 className="animate-spin" />
+                      </IconTile>
+                    ) : (
+                      <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-line-strong bg-surface text-[11px] font-semibold tabular text-ink-3" aria-hidden>
+                        {i + 1}
+                      </span>
+                    )}
+                    <span className="sr-only">{done ? 'probably done: ' : now ? 'in progress: ' : 'to do: '}</span>
+                    {s}
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+          <p className="mt-4 text-[13px] text-ink-3">Step progress is estimated from the usual run time. You can leave this page: the run keeps going and the results appear here.</p>
+          {emailCopy && (
+            <p className="mt-2 flex items-center gap-1.5 text-[13px] text-ink-2">
+              <Mail className="size-4 text-ink-3" aria-hidden /> The results also arrive by e-mail.
+            </p>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
@@ -196,9 +223,23 @@ export function retryPrefill(input: Record<string, unknown>): Record<string, unk
 
 export function CostLine({ run }: { run: Run }) {
   return (
-    <span className="tabular">
-      {formatUsd(run.estimatedCostUsd)}
+    <span className="inline-flex flex-col items-end gap-1 tabular">
+      <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-2" title="Estimated cost">
+        <Coins className="size-3 text-ink-3" aria-hidden />
+        {formatUsd(run.estimatedCostUsd)}
+      </span>
       {run.actualCostUsd != null && <span className="block text-xs text-ink-3">data {formatUsd(run.actualCostUsd, 3)}</span>}
     </span>
   );
 }
+
+/** A small chip with an icon (durations, counts) for run rows. */
+export function RunChip({ icon, children, title, tone = 'neutral' }: { icon?: ReactNode; children: ReactNode; title?: string; tone?: 'neutral' | 'accent' }) {
+  return (
+    <span title={title} className={cn('inline-flex h-6 items-center gap-1 rounded-full px-2 text-xs font-medium whitespace-nowrap tabular [&_svg]:size-3 [&_svg]:shrink-0', tone === 'accent' ? 'bg-accent-soft text-accent-text' : 'bg-surface-2 text-ink-2')}>
+      {icon}
+      {children}
+    </span>
+  );
+}
+

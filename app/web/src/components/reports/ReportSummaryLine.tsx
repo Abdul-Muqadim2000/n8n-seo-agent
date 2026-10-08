@@ -139,12 +139,20 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
           .map(([k, x]) => `${k}: ${x}`),
       );
   }
-  const text = parts.filter((x): x is string => typeof x === 'string' && !!x).join(' · ');
-  if (!badge && !text) return null;
+  const items = parts.filter((x): x is string => typeof x === 'string' && !!x);
+  if (!badge && !items.length) return null;
+  // short headline values become chips; a long sentence (a description, an error) stays a clamped line of text
+  const chips = items.filter((x) => x.length <= 44);
+  const text = items.filter((x) => x.length > 44).join(' · ');
   return (
-    <span className={cn('flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-2', className)}>
+    <span className={cn('flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-ink-2', className)}>
       {badge}
-      {text && <span className="min-w-0 line-clamp-2">{text}</span>}
+      {chips.map((c, i) => (
+        <span key={i} className="inline-flex h-6 max-w-full items-center rounded-full bg-surface-2 px-2 text-xs font-medium text-ink-2">
+          <span className="truncate">{c}</span>
+        </span>
+      ))}
+      {text && <span className="min-w-0 basis-full line-clamp-2">{text}</span>}
     </span>
   );
 }

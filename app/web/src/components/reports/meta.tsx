@@ -22,9 +22,9 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { COUNTRY_NAMES, MODE_IDS, MODES, PAGE_TYPE_VALUES, STAGE_LABELS, type CountryName, type ModeCategory, type ModeId, type PageType } from '@seo/shared';
-import { cn } from '@/lib/utils';
+import { IconTile } from '@/components/ui/icon-tile';
 
-const MODE_ICON: Record<ModeId, (cls: string) => ReactNode> = {
+const MODE_ICON: Record<ModeId, (cls?: string) => ReactNode> = {
   verdict: (c) => <Scale className={c} aria-hidden />,
   keyword: (c) => <PenLine className={c} aria-hidden />,
   discover: (c) => <Telescope className={c} aria-hidden />,
@@ -42,18 +42,16 @@ const MODE_ICON: Record<ModeId, (cls: string) => ReactNode> = {
 
 export const isModeId = (v: unknown): v is ModeId => typeof v === 'string' && (MODE_IDS as readonly string[]).includes(v);
 
-export function ModeIcon({ mode, className = 'size-4' }: { mode: ModeId | string; className?: string }) {
+export function ModeIcon({ mode, className }: { mode: ModeId | string; className?: string }) {
   return <>{isModeId(mode) ? MODE_ICON[mode](className) : <FileText className={className} aria-hidden />}</>;
 }
 
-/** The icon in a soft square, for list rows and cards. */
+/** The icon in a soft blue tile, for list rows and cards. */
 export function ModeGlyph({ mode, className, size = 'md' }: { mode: ModeId | string; className?: string; size?: 'sm' | 'md' | 'lg' }) {
-  const box = size === 'sm' ? 'size-7 rounded-md' : size === 'lg' ? 'size-11 rounded-xl' : 'size-9 rounded-lg';
-  const icon = size === 'sm' ? 'size-3.5' : size === 'lg' ? 'size-5' : 'size-4';
   return (
-    <span className={cn('inline-flex shrink-0 items-center justify-center bg-accent-soft text-accent-text', box, className)}>
-      <ModeIcon mode={mode} className={icon} />
-    </span>
+    <IconTile tone="blue" size={size} className={className}>
+      <ModeIcon mode={mode} />
+    </IconTile>
   );
 }
 
@@ -90,27 +88,21 @@ const STAGE_MODE: Record<string, ModeId> = {
 };
 
 export function StageGlyph({ stage, size = 'md', report }: { stage: string; size?: 'sm' | 'md'; /** tells a verdict-only content report apart */ report?: ReportLike }) {
-  const box = size === 'sm' ? 'size-7 rounded-md' : 'size-9 rounded-lg';
-  const icon = size === 'sm' ? 'size-3.5' : 'size-4';
-  if (stage === 'rejected')
-    return (
-      <span className={cn('inline-flex shrink-0 items-center justify-center bg-critical-soft text-critical-text', box)}>
-        <AlertOctagon className={icon} aria-hidden />
-      </span>
-    );
-  if (stage === 'console_alert')
-    return (
-      <span className={cn('inline-flex shrink-0 items-center justify-center bg-warning-soft text-warning-text', box)}>
-        <BellRing className={icon} aria-hidden />
-      </span>
-    );
-  if (stage === 'content_cadence')
-    return (
-      <span className={cn('inline-flex shrink-0 items-center justify-center bg-accent-soft text-accent-text', box)}>
-        <CalendarClock className={icon} aria-hidden />
-      </span>
-    );
-  return <ModeGlyph mode={report && isVerdictOnly(report) ? 'verdict' : (STAGE_MODE[stage] ?? 'describe')} size={size} />;
+  // status stages keep their status tile (rejected = critical, Search Console alert = warning); everything else is a blue category tile
+  const tone = stage === 'rejected' ? 'critical' : stage === 'console_alert' ? 'warning' : 'blue';
+  return (
+    <IconTile tone={tone} size={size}>
+      <StageIcon stage={stage} report={report} />
+    </IconTile>
+  );
+}
+
+/** The bare icon of a report stage (for eyebrows and chips). */
+export function StageIcon({ stage, report, className }: { stage: string; report?: ReportLike; className?: string }) {
+  if (stage === 'rejected') return <AlertOctagon className={className} aria-hidden />;
+  if (stage === 'console_alert') return <BellRing className={className} aria-hidden />;
+  if (stage === 'content_cadence') return <CalendarClock className={className} aria-hidden />;
+  return <ModeIcon mode={report && isVerdictOnly(report) ? 'verdict' : (STAGE_MODE[stage] ?? 'describe')} className={className} />;
 }
 
 type ReportLike = { stage: string; title?: string | null; summary?: Record<string, unknown> | null; files?: { fileName: string }[] };

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Download, Eye, FileCode, FileJson, FileText } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { AlertTriangle, Braces, Download, Eye, FileCode, FileJson, FileText, Heading, Image as ImageIcon, Link2, ListChecks, Quote, Share2, Tags } from 'lucide-react';
 import type { ReportFile } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
@@ -9,7 +10,8 @@ import { buttonClass } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { CopyButton, ExternalLink, KeyValue } from '@/components/ui/misc';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
-import { arr, Bullets, Chips, CodeBlock, Disclosure, Facts, has, JsonViewer, num, obj, objs, SectionTitle, str, strs, type P } from './kit';
+import { IconTile } from '@/components/insight';
+import { arr, Bullets, Chips, CodeBlock, Disclosure, Facts, has, JsonViewer, num, obj, objs, str, strs, type P } from './kit';
 
 // The generated article: a sandboxed preview (no scripts, no same-origin, no network except https images) with the raw HTML,
 // Markdown and meta.json next to it. Placeholders the writer could not fill ([Author Name], [Price]) are highlighted and counted.
@@ -312,11 +314,11 @@ export function MetaPanel({ meta }: { meta: P }) {
       />
       {checklist.length > 0 && (
         <div>
-          <SectionTitle>Publishing checklist</SectionTitle>
+          <MetaTitle icon={<ListChecks />}>Publishing checklist</MetaTitle>
           <ol className="space-y-1.5">
             {checklist.map((c, i) => (
               <li key={i} className="flex gap-2.5 text-sm text-ink-2">
-                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-medium tabular text-ink-2">{i + 1}</span>
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent-soft text-xs font-semibold tabular text-accent-text">{i + 1}</span>
                 <span>{c}</span>
               </li>
             ))}
@@ -325,7 +327,7 @@ export function MetaPanel({ meta }: { meta: P }) {
       )}
       {headings.length > 0 && (
         <div>
-          <SectionTitle>Outline</SectionTitle>
+          <MetaTitle icon={<Heading />}>Outline</MetaTitle>
           <ul className="space-y-1 text-sm">
             {headings.map((h, i) => (
               <li key={i} className="text-ink-2" style={{ paddingLeft: `${Math.max(0, (num(h.level) ?? 2) - 2) * 16}px` }}>
@@ -338,7 +340,7 @@ export function MetaPanel({ meta }: { meta: P }) {
       )}
       {internal.length > 0 && (
         <div>
-          <SectionTitle>Internal links in the article</SectionTitle>
+          <MetaTitle icon={<Link2 />}>Internal links in the article</MetaTitle>
           <ul className="space-y-1.5 text-sm">
             {internal.map((l, i) => (
               <li key={i} className="min-w-0">
@@ -350,10 +352,10 @@ export function MetaPanel({ meta }: { meta: P }) {
       )}
       {images.length > 0 && (
         <div>
-          <SectionTitle>Image plan</SectionTitle>
+          <MetaTitle icon={<ImageIcon />}>Image plan</MetaTitle>
           <div className="grid gap-3 md:grid-cols-3">
             {images.map((im, i) => (
-              <div key={i} className="rounded-lg border border-line p-3 text-[13px]">
+              <div key={i} className="rounded-lg border border-line p-3 text-[13px] transition-colors duration-150 ease-brand hover:border-line-strong">
                 <div className="mb-1.5 flex items-center gap-2">
                   <Badge tone="accent">{str(im.purpose) || `Image ${i + 1}`}</Badge>
                   {num(im.width) != null && (
@@ -374,13 +376,13 @@ export function MetaPanel({ meta }: { meta: P }) {
       )}
       {has(og) && (
         <div>
-          <SectionTitle>Social sharing (Open Graph)</SectionTitle>
+          <MetaTitle icon={<Share2 />}>Social sharing (Open Graph)</MetaTitle>
           <KeyValue items={Object.entries(og).map(([k, v]) => ({ label: <code className="text-xs">{k}</code>, value: str(v) }))} />
         </div>
       )}
       {schema.length > 0 && (
         <div>
-          <SectionTitle>Structured data (JSON-LD)</SectionTitle>
+          <MetaTitle icon={<Braces />}>Structured data (JSON-LD)</MetaTitle>
           <div className="space-y-2">
             {schema.map((s, i) => (
               <Disclosure key={i} title={str(s.type) || `Block ${i + 1}`} meta="paste into the page head">
@@ -391,7 +393,7 @@ export function MetaPanel({ meta }: { meta: P }) {
         </div>
       )}
       {external.length > 0 && (
-        <Disclosure title="Sources cited in the article" meta={`${external.length}`}>
+        <Disclosure title={<span className="flex items-center gap-2"><IconTile size="xs"><Quote /></IconTile>Sources cited in the article</span>} meta={`${external.length}`}>
           <ul className="space-y-1 text-[13px]">
             {external.map((l, i) => (
               <li key={i}>
@@ -403,7 +405,7 @@ export function MetaPanel({ meta }: { meta: P }) {
       )}
       {arr(meta.secondary_keywords).length > 0 && (
         <div>
-          <SectionTitle>Secondary keywords used</SectionTitle>
+          <MetaTitle icon={<Tags />}>Secondary keywords used</MetaTitle>
           <Chips items={strs(meta.secondary_keywords)} />
         </div>
       )}
@@ -418,3 +420,13 @@ export function MetaPanel({ meta }: { meta: P }) {
 }
 
 const placeholdersInMeta = (meta: P) => findPlaceholders(JSON.stringify(meta)).length > 0;
+
+/** A section heading of the meta panel: a small blue icon tile and the label. */
+function MetaTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <h4 className="mb-2.5 flex items-center gap-2 text-xs font-medium tracking-wide text-ink-3 uppercase">
+      <IconTile size="xs">{icon}</IconTile>
+      {children}
+    </h4>
+  );
+}

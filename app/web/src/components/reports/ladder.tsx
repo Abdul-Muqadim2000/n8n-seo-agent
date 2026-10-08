@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
-import { CalendarRange, CheckCircle2, Flag, GitFork, ListChecks, Mountain, PenLine, Route, Search } from 'lucide-react';
+import { Ban, BarChart3, CalendarRange, CheckCircle2, Flag, GitFork, Lightbulb, ListChecks, MousePointerClick, Network, PenLine, Route, Search, Target, TrendingUp, Wrench } from 'lucide-react';
 import {
   asDifficulty,
   asPlanChoice,
@@ -14,16 +14,17 @@ import {
 } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
-import { cn, fmtDate } from '@/lib/utils';
-import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
+import { fmtDate } from '@/lib/utils';
+import { Badge, type Tone } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
-import { Card, CardBody } from '@/components/ui/card';
 import { Callout } from '@/components/ui/feedback';
+import { CountUp, HeroStat, IconTile, InsightItem, Stagger } from '@/components/insight';
 import { DifficultyBadge, PlanBadge } from '@/components/site/keyword';
 import { ExternalLink } from '@/components/ui/misc';
 import { DataTable, type Column } from '@/components/ui/table';
-import { Block, Bullets, Facts, has, LedgerCard, n, num, obj, objs, ScoreMeter, SectionTitle, shortUrl, str, strs, usd, VerdictBadge, type P } from './kit';
+import { Block, Bullets, Facts, has, LedgerCard, n, num, obj, objs, SectionTitle, shortUrl, str, strs, usd, verdictLabel, type P } from './kit';
 import { isCountry, keywordPrefill } from './meta';
+import { PositionPill, ReportHero, ScoreMark, StatusMark, WordValue } from './visuals';
 
 const feasTone = (status: string): Tone => {
   const s = status.toLowerCase();
@@ -61,58 +62,75 @@ export function LadderReport({ report }: { report: ReportDetail }) {
   const difficulty = asDifficulty(p.difficulty_for_you);
   const excluded = objs(p.excluded_keywords);
 
+  const pagesTotal = num(stats.pages_total);
+  const duplicate = str(refusal.reason) === 'duplicate';
+
   return (
-    <div className="space-y-5">
-      {refused && <Refusal refusal={refusal} keyword={headKw} alternatives={strs(feas.alternatives)} country={country} siteId={report.siteId} />}
-      <Card>
-        <CardBody className={cn('grid gap-6', !refused && 'lg:grid-cols-[minmax(0,1fr)_300px]')}>
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[13px] font-medium text-ink-3">
-              <Mountain className="size-4" aria-hidden /> Main keyword
-            </p>
-            <h2 className="mt-1 font-display text-xl font-semibold tracking-[-0.01em] text-ink">{headKw}</h2>
-            <div className="mt-2 flex flex-wrap gap-1.5">
+    <Stagger className="space-y-5">
+      <ReportHero
+        report={report}
+        eyebrow={country || undefined}
+        title={
+          refused ? (
+            <>Not planned: “{headKw}”</>
+          ) : pagesTotal != null ? (
+            <>
+              A {pagesTotal}-page ladder to rank for “{headKw}”
+            </>
+          ) : (
+            <>Ladder plan for “{headKw}”</>
+          )
+        }
+        description={
+          refused
+            ? duplicate
+              ? 'You already have a ladder for this keyword: continue that one instead.'
+              : 'The check advised against a ladder for this keyword on your website.'
+            : `Win the easy pages first; each rung links up to the main page and builds the authority it needs.${p.tracking_registered === true ? ' Weekly rank tracking is on.' : ''}`
+        }
+        aside={
+          refused ? (
+            <StatusMark tone={duplicate ? 'warning' : 'critical'} icon={<Ban />} title="Not planned" caption={duplicate ? 'A ladder for this keyword exists' : 'Not realistic for this website'} />
+          ) : (
+            <FeasibilityMark feas={feas} />
+          )
+        }
+        actions={
+          difficulty || (planType && planType !== 'none') || feas.navigational === true ? (
+            <span className="flex flex-wrap gap-1.5">
               <DifficultyBadge difficulty={difficulty} />
               <PlanBadge plan={planType} months={str(p.months)} stretch={p.stretch === true} />
-              {/* a refused plan says why in its callout: the research's verdict would only confuse */}
-              {!refused && <VerdictBadge verdict={str(feas.verdict)} />}
-              {!refused && str(feas.status) && <StatusBadge tone={feasTone(str(feas.status))}>{str(feas.status).replace(/_/g, ' ')}</StatusBadge>}
+              {/* the verdict and the status sit in the feasibility mark next to this; a refused plan says why in its callout */}
               {feas.navigational === true && <Badge tone="warning">navigational search</Badge>}
-            </div>
-            <Facts
-              className="mt-4"
-              items={[
-                { label: 'Searches / month', value: n(head.volume) },
-                { label: 'Difficulty', value: num(head.kd) != null ? String(num(head.kd)) : '–' },
-                { label: 'Cost per click', value: num(head.cpc) != null ? usd(head.cpc) : '–' },
-                { label: 'Your position', value: num(head.your_position) ? `#${num(head.your_position)}` : 'Not ranking' },
-              ]}
-            />
-          </div>
-          {!refused && (
-          <div className="space-y-4 rounded-xl bg-surface-2/60 p-4">
-            <ScoreMeter score={num(feas.score)} label="Feasibility" size="lg" />
-            <Facts
-              cols="grid-cols-2"
-              items={[
-                { label: 'Visits / month at top 3', value: n(feas.expected_visits_top3) },
-                { label: 'Time to rank', value: num(feas.time_to_rank_months) != null ? `~${num(feas.time_to_rank_months)} months` : '–' },
-              ]}
-            />
-          </div>
-          )}
-        </CardBody>
-      </Card>
+            </span>
+          ) : undefined
+        }
+        stats={
+          <>
+            <HeroStat label="Searches / month" value={num(head.volume) != null ? <CountUp value={num(head.volume)!} format={(v) => n(Math.round(v))} /> : '–'} hint={num(head.cpc) != null ? `Cost per click ${usd(head.cpc)}` : 'Cost per click –'} />
+            <HeroStat label="Difficulty" value={num(head.kd) != null ? String(num(head.kd)) : '–'} hint="Keyword difficulty, 0-100" />
+            <HeroStat label="Your position" value={num(head.your_position) ? `#${num(head.your_position)}` : <WordValue>Not ranking</WordValue>} hint="Google, today" />
+            {!refused && (
+              <HeroStat
+                label="Time to rank"
+                value={num(feas.time_to_rank_months) != null ? <WordValue>~{num(feas.time_to_rank_months)} months</WordValue> : '–'}
+                hint={`Visits / month at top 3: ${n(feas.expected_visits_top3)}`}
+              />
+            )}
+          </>
+        }
+      />
+      {refused && <Refusal refusal={refusal} keyword={headKw} alternatives={strs(feas.alternatives)} country={country} siteId={report.siteId} />}
 
       {!refused && (strs(feas.reasons).length > 0 || strs(feas.what_must_change).length > 0) && (
         <div className="grid gap-5 lg:grid-cols-2">
           {strs(feas.reasons).length > 0 && (
-            <Block title="Why it can work" description="The evidence behind the verdict">
+            <Block title="Why it can work" description="The evidence behind the verdict" icon={<Lightbulb />}>
               <Bullets items={strs(feas.reasons)} tone="good" />
             </Block>
           )}
           {strs(feas.what_must_change).length > 0 && (
-            <Block title="What it takes" description="Without these the head term will not move">
+            <Block title="What it takes" description="Without these the head term will not move" icon={<Wrench />} iconTone="warning">
               <Bullets items={strs(feas.what_must_change)} tone="warning" />
             </Block>
           )}
@@ -131,20 +149,20 @@ export function LadderReport({ report }: { report: ReportDetail }) {
       {!refused && (
         <>
       <Facts
-        cols="sm:grid-cols-5"
+        cols="sm:grid-cols-3 lg:grid-cols-5"
         items={[
-          { label: 'Pages in the ladder', value: n(stats.pages_total) },
-          { label: 'Keywords covered', value: n(stats.keywords_covered) },
-          { label: 'Traffic potential', value: n(stats.traffic_potential_total), hint: 'visits / month when all rank' },
-          { label: 'Keywords researched', value: n(stats.pool_size) },
-          { label: 'Relevant after AI review', value: n(stats.relevant) },
+          { icon: <GitFork />, label: 'Pages in the ladder', value: n(stats.pages_total) },
+          { icon: <Target />, label: 'Keywords covered', value: n(stats.keywords_covered) },
+          { icon: <TrendingUp />, label: 'Traffic potential', value: n(stats.traffic_potential_total), hint: 'visits / month when all rank' },
+          { icon: <Search />, label: 'Keywords researched', value: n(stats.pool_size) },
+          { icon: <CheckCircle2 />, label: 'Relevant after AI review', value: n(stats.relevant) },
         ]}
       />
 
-      <Block title="The ladder" description="Win the easy pages first; each rung links up to the top page and builds the authority it needs" icon={<GitFork className="size-4" />}>
-        <ol className="relative space-y-4 before:absolute before:bottom-4 before:left-[15px] before:top-4 before:w-px before:bg-line">
+      <Block title="The ladder" description="Win the easy pages first; each rung links up to the top page and builds the authority it needs" icon={<GitFork />}>
+        <ol className="relative space-y-5 before:absolute before:top-4 before:bottom-4 before:left-[17px] before:w-0.5 before:rounded-full before:bg-accent-soft">
           {has(top) && (
-            <RungStep marker={<Flag className="size-4" aria-hidden />} title={planType === 'direct' ? 'Main page (written first)' : 'Main page'} sub={months(top.months)} highlight>
+            <RungStep marker={<Flag aria-hidden />} title={planType === 'direct' ? 'Main page (written first)' : 'Main page'} sub={months(top.months)} highlight>
               <PageRow page={top} country={country} siteId={report.siteId} writingNow={started.has(str(top.keyword).toLowerCase())} />
             </RungStep>
           )}
@@ -169,16 +187,10 @@ export function LadderReport({ report }: { report: ReportDetail }) {
       {timeline.length > 0 && <Timeline items={timeline} />}
 
       {requirements.length > 0 && (
-        <Block title="Requirements" description="What has to happen outside the pages" icon={<ListChecks className="size-4" />}>
-          <ul className="space-y-3">
+        <Block title="Requirements" description="What has to happen outside the pages" icon={<ListChecks />} flush>
+          <ul className="divide-y divide-line">
             {requirements.map((r, i) => (
-              <li key={i} className="flex gap-3">
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
-                <div>
-                  <p className="text-sm font-medium text-ink">{str(r.item)}</p>
-                  <p className="text-[13px] leading-relaxed text-ink-2">{str(r.detail)}</p>
-                </div>
-              </li>
+              <InsightItem key={i} icon={<CheckCircle2 />} title={str(r.item)} description={<span className="text-[13px] leading-relaxed text-ink-2">{str(r.detail)}</span>} />
             ))}
           </ul>
         </Block>
@@ -198,7 +210,24 @@ export function LadderReport({ report }: { report: ReportDetail }) {
       )}
 
       <LedgerCard ledger={p.run_ledger} />
-    </div>
+    </Stagger>
+  );
+}
+
+/** The hero's feasibility mark: the score ring in the verdict's colour, the verdict (GO / GO WITH CHANGES / AVOID) or the status as the word, the other one under it. */
+function FeasibilityMark({ feas }: { feas: P }) {
+  const verdict = str(feas.verdict);
+  const status = str(feas.status).replace(/_/g, ' ');
+  const goLike = /^(GO|AVOID)/i.test(verdict);
+  return (
+    <ScoreMark
+      score={num(feas.score)}
+      label="Feasibility"
+      verdict={goLike ? verdict : undefined}
+      status={goLike ? undefined : status || (verdict ? verdictLabel(verdict) : undefined)}
+      statusTone={goLike ? undefined : status ? feasTone(str(feas.status)) : 'neutral'}
+      caption={goLike ? status || undefined : status && verdict ? verdictLabel(verdict) : undefined}
+    />
   );
 }
 
@@ -214,7 +243,7 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
         ? `from the number of searches it ranks in the top 10 for (${n(info.top10)})`
         : 'a starting value: the website ranks for few searches yet';
   return (
-    <Block title="Why this plan" icon={<Route className="size-4" />}>
+    <Block title="Why this plan" icon={<Route />}>
       <ul className="space-y-2.5 text-sm leading-relaxed text-ink-2">
         {reach != null && (
           <li>
@@ -292,7 +321,7 @@ function Alternatives({ items, country, siteId }: { items: string[]; country: st
 function Excluded({ items, siteId }: { items: P[]; siteId: string | null }) {
   const { org } = useOrgCtx();
   return (
-    <Block title="Left out: other ladders cover them" description="One search needs one page, so these were not planned again here." icon={<GitFork className="size-4" />}>
+    <Block title="Left out: other ladders cover them" description="One search needs one page, so these were not planned again here." icon={<GitFork />}>
       <ul className="divide-y divide-line">
         {items.slice(0, 20).map((x, i) => (
           <li key={`${str(x.keyword)}-${i}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2 text-sm">
@@ -317,18 +346,13 @@ function Excluded({ items, siteId }: { items: P[]; siteId: string | null }) {
 
 function RungStep({ marker, title, sub, children, highlight }: { marker: ReactNode; title: ReactNode; sub?: string; children: ReactNode; highlight?: boolean }) {
   return (
-    <li className="relative pl-11">
-      <span
-        className={cn(
-          'absolute left-0 top-0 flex size-8 items-center justify-center rounded-full border-2 bg-surface',
-          highlight ? 'border-accent text-accent-text' : 'border-line-strong text-ink-2',
-        )}
-      >
+    <li className="relative pl-12">
+      <IconTile tone={highlight ? 'solid' : 'blue'} size="md" className="absolute top-0 left-0 ring-4 ring-surface">
         {marker}
-      </span>
-      <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
-        <h4 className="text-sm font-semibold text-ink">{title}</h4>
-        {sub && <span className="text-xs text-ink-3">{sub}</span>}
+      </IconTile>
+      <div className="mb-2 flex min-h-9 flex-wrap items-center gap-x-2">
+        <h4 className="font-display text-sm font-semibold tracking-[-0.01em] text-ink">{title}</h4>
+        {sub && <span className="rounded-md bg-surface-2 px-1.5 py-0.5 text-xs text-ink-3">{sub}</span>}
       </div>
       {children}
     </li>
@@ -341,16 +365,31 @@ function PageRow({ page, country, siteId, writingNow }: { page: P; country: stri
   const exists = page.exists === true;
   const target = str(page.target_url);
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-line p-3">
+    <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-line bg-surface p-3 transition-[border-color,box-shadow] duration-200 ease-brand hover:border-line-strong hover:shadow-card">
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <p className="font-medium text-ink">{str(page.keyword)}</p>
           {writingNow ? <Badge tone="accent">being written now</Badge> : status && <Badge tone={statusTone(status)}>{exists && status === 'new' ? 'exists' : status}</Badge>}
           {str(page.page_type) && <span className="text-xs text-ink-3">{str(page.page_type)}</span>}
         </div>
-        <p className="mt-1 text-xs text-ink-3">
-          {n(page.total_volume ?? page.volume)} searches · KD {num(page.kd) ?? '–'} · {n(page.traffic_potential)} potential visits
-          {num(page.your_position) ? ` · you rank #${num(page.your_position)}` : ''}
+        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-3">
+          <span className="inline-flex items-center gap-1">
+            <Search className="size-3.5" aria-hidden />
+            {n(page.total_volume ?? page.volume)} searches
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <BarChart3 className="size-3.5" aria-hidden />
+            KD {num(page.kd) ?? '–'}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <MousePointerClick className="size-3.5" aria-hidden />
+            {n(page.traffic_potential)} potential visits
+          </span>
+          {num(page.your_position) ? (
+            <span className="inline-flex items-center gap-1">
+              you rank <PositionPill value={num(page.your_position)} text={`#${num(page.your_position)}`} />
+            </span>
+          ) : null}
         </p>
         {target && (
           <p className="mt-1 text-xs">
@@ -376,7 +415,7 @@ function PageRow({ page, country, siteId, writingNow }: { page: P; country: stri
 function Timeline({ items }: { items: P[] }) {
   const max = Math.max(1, ...items.flatMap((t) => (Array.isArray(t.months) ? t.months.map(Number).filter(Number.isFinite) : [])));
   return (
-    <Block title="Timeline" description={`About ${max} months from the first page to the head term`} icon={<CalendarRange className="size-4" />}>
+    <Block title="Timeline" description={`About ${max} months from the first page to the head term`} icon={<CalendarRange />}>
       <div className="space-y-3">
         {items.map((t, i) => {
           const m = (Array.isArray(t.months) ? t.months : []).map(Number).filter(Number.isFinite);
@@ -425,7 +464,7 @@ function LinkMap({ links }: { links: P[] }) {
     { key: 'to', header: 'To', sortValue: (r) => str(r.to), cell: (r) => <span className="text-[13px]">{shortUrl(str(r.to))}</span> },
   ];
   return (
-    <Block title="Link map" description="Internal links to add as each page goes live: up to the top page, sideways to a sibling">
+    <Block title="Link map" description="Internal links to add as each page goes live: up to the top page, sideways to a sibling" icon={<Network />}>
       <SectionTitle className="sr-only">Links</SectionTitle>
       <DataTable rows={links} columns={cols} rowKey={(r, i) => `${str(r.from)}-${str(r.to)}-${i}`} pageSize={12} dense searchable searchPlaceholder="Filter by page…" searchText={(r) => `${str(r.from)} ${str(r.to)}`} />
     </Block>

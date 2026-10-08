@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
-import { CalendarClock, FileText, RotateCcw } from 'lucide-react';
+import { ArrowRight, CalendarClock, CalendarDays, FileText, Filter, RotateCcw } from 'lucide-react';
 import { STAGE_LABELS, type Report } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -62,8 +62,11 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <PageHeader title="Reports" description="Everything the SEO engine delivered: results of your runs and the scheduled weekly and monthly reports (rank tracking, site reports, AI visibility, backlinks, audits)." />
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      <PageHeader icon={<FileText />} title="Reports" description="Everything the SEO engine delivered: results of your runs and the scheduled weekly and monthly reports (rank tracking, site reports, AI visibility, backlinks, audits)." />
+      <div className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-4 shadow-card">
+        <span className="hidden size-9 shrink-0 items-center justify-center self-end rounded-lg bg-accent-soft text-accent-text sm:inline-flex" aria-hidden>
+          <Filter className="size-4" />
+        </span>
         <div className="w-full sm:w-56">
           <label htmlFor="reports-site" className="mb-1 block text-xs font-medium text-ink-3">
             Website
@@ -120,7 +123,13 @@ export default function ReportsPage() {
         <div className={q.isFetching ? 'space-y-6 opacity-80 transition-opacity' : 'space-y-6'}>
           {groups.map((g) => (
             <section key={g.day} aria-label={dayLabel(g.items[0].receivedAt)}>
-              <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-3">{dayLabel(g.items[0].receivedAt)}</h2>
+              <h2 className="mb-2.5 flex items-center gap-2 text-xs font-medium tracking-wide text-ink-3 uppercase">
+                <span className="inline-flex size-6 items-center justify-center rounded-md bg-accent-soft text-accent-text" aria-hidden>
+                  <CalendarDays className="size-3.5" />
+                </span>
+                {dayLabel(g.items[0].receivedAt)}
+                <span className="rounded-md bg-surface-2 px-1.5 font-normal tracking-normal normal-case tabular text-ink-2">{g.items.length}</span>
+              </h2>
               <Card className="divide-y divide-line overflow-hidden">
                 {g.items.map((r) => (
                   <ReportRow key={r.id} report={r} />
@@ -156,6 +165,7 @@ function ReportRow({ report }: { report: Report }) {
             <Link to={to} className="truncate font-medium text-ink transition-colors duration-150 ease-brand after:absolute after:inset-0 group-hover:text-accent-text">
               {report.title || stageLabel(report.stage, report)}
             </Link>
+            <ArrowRight className="size-3.5 shrink-0 text-ink-3 opacity-0 transition-[opacity,translate] duration-200 ease-brand group-hover:translate-x-0.5 group-hover:text-accent-text group-hover:opacity-100" aria-hidden />
             {report.scheduled && (
               <Badge icon={<CalendarClock className="size-3" aria-hidden />} tone="accent">
                 scheduled
@@ -175,7 +185,7 @@ function ReportRow({ report }: { report: Report }) {
               </>
             )}
           </p>
-          <ReportSummaryLine report={report} className="mt-1.5" />
+          <ReportSummaryLine report={report} className="mt-2" />
         </div>
       </div>
       {report.files.length > 0 && (

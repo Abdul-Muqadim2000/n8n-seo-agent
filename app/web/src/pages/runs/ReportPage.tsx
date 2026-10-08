@@ -8,7 +8,7 @@ import { Badge, StatusBadge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
 import { ErrorState, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
-import { StageGlyph, stageLabel } from '@/components/reports/meta';
+import { StageIcon, stageLabel } from '@/components/reports/meta';
 import { ReportView } from '@/components/reports/ReportView';
 
 export default function ReportPage() {
@@ -35,13 +35,9 @@ export default function ReportPage() {
         <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden /> All reports
       </Link>
       <PageHeader
+        icon={<StageIcon stage={r.stage} report={r} />}
         eyebrow={stageLabel(r.stage, r)}
-        title={
-          <span className="flex items-center gap-3">
-            <StageGlyph stage={r.stage} report={r} />
-            <span className="min-w-0">{r.title || stageLabel(r.stage, r)}</span>
-          </span>
-        }
+        title={r.title || stageLabel(r.stage, r)}
         description={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {r.siteDomain && (
