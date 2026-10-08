@@ -459,7 +459,7 @@ function PricingTeaser() {
           >
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-display text-lg font-semibold text-ink">{t.name}</h3>
-              {t.highlighted && <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[12px] font-medium text-accent-text">Most popular</span>}
+              {t.highlighted && <span className="rounded-full bg-accent-soft px-2.5 py-0.5 text-[12px] font-medium text-accent-text">Recommended</span>}
             </div>
             <p className="mt-4 flex items-baseline gap-1.5">
               <span className="font-display text-[2rem] font-semibold tracking-[-0.02em] text-ink">{t.price}</span>

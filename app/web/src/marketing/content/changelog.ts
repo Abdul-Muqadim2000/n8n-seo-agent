@@ -8,15 +8,23 @@ export interface ChangelogEntry {
   highlights: string[];
   /** feature slugs this release touched (links to /platform/<slug>) */
   features: string[];
+  /** extra categories for releases that are not about one capability (e.g. "Brand", "Website"); shown and filtered like features */
+  labels?: string[];
 }
 
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-08',
-    title: 'A new name: Ascentra',
-    summary: 'SEO Agent is now Ascentra — enterprise-grade autonomous SEO. Same product, a new look across the app and this site.',
-    highlights: ['New logo, colours and type across the app', 'A public website with every capability explained', 'Light and dark themes throughout'],
+    title: 'Business site and Ascentra brand',
+    summary: 'SEO Agent is now Ascentra — enterprise-grade autonomous SEO. Same product, a new look across the app, and a public website that explains every capability.',
+    highlights: [
+      'New name, logo, colours and type across the app',
+      'Clearer hover, focus and loading states, with motion that respects reduced-motion settings',
+      'A public website: the platform, every capability, solutions, pricing, security and this changelog',
+      'Light and dark themes throughout',
+    ],
     features: [],
+    labels: ['Brand', 'Website'],
   },
   {
     date: '2026-10-08',
@@ -130,5 +138,17 @@ export const changelog: ChangelogEntry[] = [
       'WordPress drafts for each page',
     ],
     features: ['keyword-ladders'],
+  },
+  {
+    date: '2026-09-30',
+    title: 'The core engine',
+    summary: 'Research, writing, audits and reports as one system, each step checked before it moves on.',
+    highlights: [
+      'Keyword research with a verdict per keyword',
+      'Long-form articles written, critiqued and edited by AI, then checked by SEO QA',
+      'Technical site audits with page speed and site structure',
+      'A full SEO report as PDF or Word',
+    ],
+    features: ['keyword-research', 'content', 'technical-audits', 'reports'],
   },
 ];
