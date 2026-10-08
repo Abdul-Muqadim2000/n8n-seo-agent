@@ -1,8 +1,8 @@
-import { createBrowserRouter, Navigate, type RouteObject } from 'react-router';
+import { createBrowserRouter, Navigate, type LoaderFunctionArgs, type RouteObject } from 'react-router';
 import { RouteError } from '@/components/layout/RouteError';
 import { PageLoader } from '@/components/ui/feedback';
 import { AuthLayout, PublicOnly, RequireAuth } from '@/components/layout/AuthGate';
-import { HomeRedirect } from '@/components/layout/HomeRedirect';
+import { RootRoute } from '@/marketing/RootRoute';
 import { OrgLayout, OrgIndex } from '@/components/layout/OrgLayout';
 import { SiteLayout } from '@/components/layout/SiteLayout';
 
@@ -25,6 +25,28 @@ const siteDataPages: RouteObject[] = [
   { path: 'alerts', lazy: page(() => import('@/pages/site/AlertsPage')) },
   { path: 'settings', element: <Navigate to="business" replace /> },
   { path: 'settings/:tab', lazy: page(() => import('@/pages/site/SiteSettingsPage')) },
+];
+
+// An unknown /platform/:slug or /solutions/:slug is a 404 (shown by RouteError), checked against the content registry first.
+const slugGuard = (exists: (slug: string | undefined) => Promise<boolean>) => async ({ params }: LoaderFunctionArgs) => {
+  if (!(await exists(params.slug))) throw new Response('Not found', { status: 404 });
+  return null;
+};
+
+// Public marketing pages (no sign-in), inside the marketing layout. Content lives in src/marketing/content.
+const marketingPages: RouteObject[] = [
+  { path: '/platform', lazy: page(() => import('@/marketing/pages/PlatformPage')) },
+  { path: '/platform/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/features')).featureBySlug(slug)), lazy: page(() => import('@/marketing/pages/FeaturePage')) },
+  { path: '/how-it-works', lazy: page(() => import('@/marketing/pages/HowItWorksPage')) },
+  { path: '/solutions', lazy: page(() => import('@/marketing/pages/SolutionsPage')) },
+  { path: '/solutions/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/solutions')).solutionBySlug(slug)), lazy: page(() => import('@/marketing/pages/SolutionPage')) },
+  { path: '/pricing', lazy: page(() => import('@/marketing/pages/PricingPage')) },
+  { path: '/security', lazy: page(() => import('@/marketing/pages/SecurityPage')) },
+  { path: '/about', lazy: page(() => import('@/marketing/pages/AboutPage')) },
+  { path: '/contact', lazy: page(() => import('@/marketing/pages/ContactPage')) },
+  { path: '/changelog', lazy: page(() => import('@/marketing/pages/ChangelogPage')) },
+  { path: '/privacy', lazy: page(() => import('@/marketing/pages/LegalPage')) },
+  { path: '/terms', lazy: page(() => import('@/marketing/pages/LegalPage')) },
 ];
 
 export const router = createBrowserRouter([
@@ -57,7 +79,6 @@ export const router = createBrowserRouter([
       {
         element: <RequireAuth />,
         children: [
-          { path: '/', element: <HomeRedirect /> },
           { path: '/onboarding', lazy: page(() => import('@/pages/onboarding/OnboardingPage')) },
           { path: '/onboarding/:orgId/:step?', lazy: page(() => import('@/pages/onboarding/OnboardingPage')) },
           { path: '/account', lazy: page(() => import('@/pages/settings/AccountPage')) },
@@ -81,6 +102,9 @@ export const router = createBrowserRouter([
           },
         ],
       },
+      // public website: "/" is the marketing home for visitors and the app (HomeRedirect) for signed-in users
+      { path: '/', element: <RootRoute /> },
+      { lazy: page(() => import('@/marketing/MarketingLayout')), children: marketingPages },
       { path: '*', lazy: page(() => import('@/pages/NotFoundPage')) },
     ],
   },
