@@ -164,6 +164,8 @@ await guard('keyword', async () => {
   save('blog-package-article.html', bhtml); save('blog-package-article.md', bmd); save('blog-package-meta.json', JSON.stringify(bm, null, 2)); scanHtml('blog package article', bhtml);
   const bp0 = await run('Blog Package', [{ json: { keyword: 'x', verdict: 'AVOID' }, binary: { data: { data: 'AA==', mimeType: 'text/html' } } }]); console.log('   no content passes through ->', !bp0[0].json.article_meta, Object.keys(bp0[0].binary).join(','));
   const wr = await run('Build Webhook Response', bp);
+  { const ok = wr[0].json.markdown === bmd && !/^(Title|Meta Description|Slug):/m.test(wr[0].json.markdown) && !/\[(Image|Video)\s*:/i.test(wr[0].json.markdown) && /^# /.test(wr[0].json.markdown);   // live P2 2026-10-09: the app saved the raw draft as <slug>.md
+    H.results.push({ scenario: 'S1 Keyword mode — callback markdown', node: 'assert callback markdown = the blog package article (no "Title:" lines, no [Image: …] markers)', ok, ms: 0, error: ok ? '' : String(wr[0].json.markdown).slice(0, 300), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + 'callback markdown = the blog package article'); }
   console.log('   webhook response keys ->', Object.keys(wr[0].json).join(','), '| file bytes (b64):', wr[0].json.file && wr[0].json.file.data.length, '| pdf:', wr[0].json.pdf && wr[0].json.pdf.fileName, '| markdown:', wr[0].json.markdown && wr[0].json.markdown.length, '| html:', wr[0].json.html && wr[0].json.html.length, '| meta title:', wr[0].json.meta && wr[0].json.meta.title);
 
   // Truncated copywriter output (max_tokens hit)
@@ -2361,6 +2363,94 @@ await guard('backlinks v4.10', async () => {
   mock('Load Link Prospects (Admin)', [{ json: { ...PRO('gulfbiz.ae', 'mention'), status: 'new', site_id: B.SITE } }]); const pa = await run('Prospect Rows (Admin)', store['Load Link Prospects (Admin)']);
   check('Site Admin prospect: contacted stamps contacted_at (follow-ups count from it), contact e-mail stored, exact columns', pa[0].json.status === 'contacted' && !!pa[0].json.contacted_at && pa[0].json.contact_email === 'editor@gulfbiz.ae' && pa[0].json.followup_step === 0 && same2(Object.keys(pa[0].json), PCOLS), JSON.stringify(pa[0].json));
   for (const f of ['BL_Plan__on.js', 'DR_Requests__on.js', 'BL_Plan__off.js', 'DR_Requests__off.js']) try { fs.unlinkSync(path.join(CD, f)); } catch (e) {}
+});
+
+// ===================================================================================
+await guard('serp outage', async () => {
+  reset(); const SN = 'S29 Search data outage (live T2 2026-10-09): retry gates, "unavailable" not "none", discovery live checks, CPC';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  // DataForSEO's answer to every SERP call of executions 251 / 255 and 5 of 8 of execution 253 (2026-10-08 19:45-19:47 UTC): HTTP 200
+  const OUT = { verion: '0.1.20261008', status_code: 50000, status_message: 'Internal Server Error.', time: '0 sec.', cost: 0, tasks_count: 0, tasks_error: 0, tasks: null };
+  const BAD_REQ = { ...F.serpTop, tasks: [{ ...F.serpTop.tasks[0], status_code: 40501, status_message: 'Invalid Field', result: null }] };
+  const g = await run('SERP Failed?', [OUT, F.serpTop, { error: { message: 'The connection timed out' } }, BAD_REQ, { ...F.serpTop, tasks: [{ ...F.serpTop.tasks[0], status_code: 50301, result: null }] }]);
+  check('retry gate: a 50000 answer inside HTTP 200, an HTTP error and a task-level 50xxx retry; a good answer and a 40xxx request error do not', eq(g.map(i => i.json.retry), [true, false, true, false, true]), JSON.stringify(g.map(i => i.json.retry)));
+  const gf = await run('Facts SERP Failed?', [OUT, V.factsSerp]);
+  check('facts gate: the same rule', eq(gf.map(i => i.json.retry), [true, false]), JSON.stringify(gf.map(i => i.json.retry)));
+
+  // ---- verdict without a website, both SERP calls fail (no retry answer either) ----
+  mock('Start Form', F.forms.startVerdict);
+  const n = await run('Normalize Input', F.forms.pageVerdict); mock('Route Mode', n);
+  await run('Prepare Keyword Run', n); mock('Fetch Sitemaps', []); await run('Collect Site URLs', []);
+  mock('SERP Top 10', OUT); delete store['SERP Top 10 (Retry)'];
+  const t0 = await run('Pick Top 6', store['SERP Top 10']);
+  mock('Read Competitor Pages', [{ error: { message: 'Invalid URL' } }]); delete store['Retry Blocked Pages']; delete store['Blocked Page Items'];
+  await run('Find Blocked Pages', store['Read Competitor Pages']);
+  const a0 = (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json;
+  check('outage: Pick Top 6 reports the provider error', t0[0].json.no_competitors && t0[0].json.serp_status === 'Internal Server Error.', JSON.stringify(t0[0].json));
+  check('outage: serp_features unavailable with the message; AI Overview unknown (null), not absent', a0.serp_features.unavailable === true && a0.serp_features.error === 'Internal Server Error.' && a0.serp_features.ai_overview.present === null, JSON.stringify(a0.serp_features));
+  check('outage: the digest for the analyst and the verdict says unavailable, never "none" / "not shown"', /unavailable/.test(a0.serp_digest) && /do not state or assume/.test(a0.serp_digest) && !/not shown|FEATURED SNIPPET: none|PEOPLE ALSO ASK: none/.test(a0.serp_digest), a0.serp_digest);
+  check('outage: Pick Top 6\'s "nothing to read" placeholder is not listed as a failed page', a0.failed_pages.length === 0, JSON.stringify(a0.failed_pages));
+  mock('Facts SERP', OUT); delete store['Facts SERP (Retry)'];
+  const cf = await run('Collect Facts', store['Facts SERP']);
+  check('facts search outage: no facts, the run goes on', cf[0].json.facts_found === 0 && Array.isArray(cf[0].json.facts), JSON.stringify(cf[0].json.facts_found));
+  mock('Competitor Analyzer', { output: F.competitorAnalysis }); await run('Parse Analysis', store['Competitor Analyzer']);
+  mock('Keyword Data', F.keywordOverview); await run('Merge Keyword Data', store['Keyword Data']);
+  mock('Verdict Agent', { output: F.verdictGo }); const pv = await run('Parse Verdict', store['Verdict Agent']);
+  const wf0 = await run('Build Word File', [{ json: { ...pv[0].json, include_seo_report: true } }]); const doc0 = decode(wf0);   // the results-page section is part of the keyword report (page runs); verdict-only reports leave it out
+  check('keyword report: "could not be read … unknown, not absent" instead of "None / Not shown for this query"', /could not be read for this run/.test(doc0) && /unknown, not absent/.test(doc0) && !/Not shown for this query/.test(doc0), (doc0.match(/What the Results Page Looks Like[\s\S]{0,400}/) || [''])[0]);
+  scanHtml('keyword report, SERP unavailable', doc0);
+
+  // ---- the retry answers: its data is used everywhere and counted in the ledger ----
+  mock('SERP Top 10 (Retry)', F.serpTop);
+  const t1 = await run('Pick Top 6', store['SERP Top 10 (Retry)']);
+  mock('Read Competitor Pages', t1.map((t, i) => ({ page_text: F.compPage(i, 300) })));
+  const fb1 = await run('Find Blocked Pages', store['Read Competitor Pages']);
+  const a1 = (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json;
+  check('retry answered: competitors read and the SERP features come from the retry', t1.length >= 3 && a1.competitors_read >= 3 && !a1.serp_features.unavailable && a1.serp_features.features_present.length > 0 && !/unavailable/.test(a1.serp_digest), JSON.stringify({ n: t1.length, read: a1.competitors_read, f: a1.serp_features.features_present, blocked: fb1[0].json.blocked_count }));
+  mock('Facts SERP (Retry)', V.factsSerp);
+  const cf1 = await run('Collect Facts', store['Facts SERP (Retry)']);
+  check('facts retry answered: facts collected from it', cf1[0].json.facts_found > 0, JSON.stringify(cf1[0].json.facts_found));
+  await run('Parse Analysis', store['Competitor Analyzer']); await run('Merge Keyword Data', store['Keyword Data']); const pv1 = await run('Parse Verdict', store['Verdict Agent']);
+  const wf1 = await run('Build Word File', [{ json: { ...pv1[0].json, include_seo_report: true } }]); const L = wf1[0].json.run_ledger;
+  check('ledger counts the retry calls and their cost (a failed first call costs 0)', L.by_node['SERP Top 10 (Retry)'] > 0 && L.by_node['Facts SERP (Retry)'] > 0 && !L.by_node['SERP Top 10'], JSON.stringify(L.by_node));
+  check('keyword report with the retry\'s data: the results page section is back', /What the Results Page Looks Like/.test(decode(wf1)) && !/could not be read for this run/.test(decode(wf1)), 'doc');
+  delete store['SERP Top 10 (Retry)']; delete store['Facts SERP (Retry)'];
+
+  // ---- discovery: 5 of 8 live checks fail like execution 253 ----
+  for (const k of ['Competitor Analyzer', 'Verdict Agent', 'Keyword Data', 'SERP Top 10', 'Facts SERP']) delete store[k];   // the verdict part's nodes did not run in a discovery
+  mock('Start Form', F.forms.startDiscover);
+  const nd = await run('Normalize Input', F.forms.pageDiscover); mock('Route Mode', nd);
+  mock('Keyword Seeds', { output: { primary_seed: 'erp implementation services', seed_groups: { services: ['erp implementation services', 'odoo implementation'], problems: ['inventory software for distributors'], comparisons: ['best erp for distributors'], locations: ['erp dubai'] } } });
+  const sl = await run('Seed List', store['Keyword Seeds']);
+  const rr = await run('Research Requests', sl); const rres = V.runResearch(rr.map(r => r.json));
+  rres[0] = { json: OUT };   // one research source answers the top-level server error
+  mock('Run Research', rres);
+  const ckr = await run('Competitor Keyword Requests', store['Run Research']); mock('Run Competitor Keywords', V.runCompetitorKeywords(ckr.map(r => r.json)));
+  const col = await run('Collect Research', store['Run Competitor Keywords']);
+  check('research: a top-level DataForSEO error (tasks: null) counts as a failure with its message', col[0].json.research.failures.some(f => /Internal Server Error/.test(f)), JSON.stringify(col[0].json.research.failures));
+  const ch = await run('Relevance Chunks', col); mock('Keyword Relevance', ch.map(c => V.relevance(c.json)));
+  const rk = await run('Rank Keywords', store['Keyword Relevance']);
+  mock('AI Demand', V.aiDemand(rk[0].json.keyword_strategy.keywords.map(k => k.keyword)));
+  const pk = await run('Priority Keywords', store['AI Demand']);
+  const FAIL = [0, 2, 3, 5, 6];
+  mock('Candidate SERP', pk.map((p, i) => FAIL.includes(i) ? OUT : F.aiSerp({ type: 'category', query: p.json.keyword })));
+  const ks = await run('Build Keyword Strategy', store['Candidate SERP']); const K = ks[0].json.keyword_strategy;
+  const failedKw = pk.filter((p, i) => FAIL.includes(i)).map(p => p.json.keyword), okKw = pk.filter((p, i) => !FAIL.includes(i)).map(p => p.json.keyword);
+  const byKw = (kw) => K.priority.find(k => k.keyword === kw);
+  check('discovery: a failed live check leaves the keyword unchecked (live: null), a good one keeps its live block', failedKw.every(kw => !byKw(kw) || byKw(kw).live === null) && okKw.every(kw => !byKw(kw) || (byKw(kw).live && Array.isArray(byKw(kw).live.top_domains))), JSON.stringify(K.priority.map(k => [k.keyword, k.live && k.live.top_domains.length])));
+  check('discovery: each failed live check is listed under research_failures (the app shows them)', failedKw.filter(kw => byKw(kw)).every(kw => K.research_failures.some(f => f.includes(kw) && /Internal Server Error/.test(f))), JSON.stringify(K.research_failures));
+  check('discovery report: "not checked" for the failed keywords and a note, never an empty "Who ranks now"', /live checks could not be made/.test(ks[0].json.result_html) && /Who ranks now:<\/b> not checked/.test(ks[0].json.result_html) && !/Who ranks now:<\/b> unknown/.test(ks[0].json.result_html), 'html');
+  const ir = await run('Build Ideas Response', ks);
+  check('keyword_strategy callback: live null for failed checks, research_failures carried', ir[0].json.priority.filter(k => failedKw.includes(k.keyword)).every(k => k.live === null) && ir[0].json.research_failures.length >= FAIL.length, JSON.stringify(ir[0].json.research_failures).slice(0, 300));
+  // CPC: DataForSEO sends float32 values
+  const rk2 = JSON.parse(JSON.stringify(store['Rank Keywords'])); rk2[0].json.keyword_strategy.priority[0].cpc = 13.65999984741211; mock('Rank Keywords', rk2);
+  const ks3 = (await run('Build Keyword Strategy', store['Candidate SERP']))[0].json;
+  check('CPC rounded in the "why" text and the report (was "CPC 13.65999984741211")', /CPC 13\.66\b/.test(ks3.keyword_strategy.priority[0].why || '') && !/13\.659999/.test(ks3.result_html), String(ks3.keyword_strategy.priority[0].why));
+  scanHtml('keyword strategy with failed live checks', ks3.result_html); save('keyword-strategy-serp-outage.html', ks3.result_html);
+  const kfl = (await run('Build Keyword File', ks))[0].json.run_ledger;
+  check('ledger: the discovery counts its relevance review (one Claude call per chunk) next to the seeds', kfl.ai_nodes.includes('Keyword Relevance') && kfl.ai_nodes.includes('Keyword Seeds') && kfl.ai_calls === 1 + ch.length, JSON.stringify(kfl));
 });
 
 H.report();

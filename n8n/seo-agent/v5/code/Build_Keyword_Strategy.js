@@ -30,7 +30,14 @@ ks.ai_demand = { available: aiAvailable, error: aiError, top: ks.keywords.filter
 // ---- live SERP check for the priority keywords ----
 const ours = String(base.domain || '').toLowerCase();
 const normD = (d) => String(d || '').toLowerCase().replace(/^www\./, '');
+// 2026-10-09: a failed check (DataForSEO 50000 "Internal Server Error." with HTTP 200, or an HTTP error) leaves the keyword
+// unchecked (live: null, "not checked") and is listed under research_failures; it used to read as "no AI Overview, nobody ranks".
+const serpErr = (s) => { s = s || {}; const t = (Array.isArray(s.tasks) ? s.tasks[0] : null) || {};
+  return (s.error || Number(s.status_code) >= 40000 || !Array.isArray(s.tasks) || Number(t.status_code) >= 40000) ? String((s.error && (s.error.message || s.error)) || t.status_message || s.status_message || 'no answer').slice(0, 120) : ''; };
+const liveFailures = [];
 prio.forEach((p, i) => {
+  const err = serpErr(serps[i]);
+  if (err) { const k0 = ks.priority.find(x => x.keyword === p.keyword); if (k0) { k0.live = null; liveFailures.push('Live Google check for "' + p.keyword + '": ' + err); } return; }
   const res = serps[i]?.tasks?.[0]?.result?.[0] || {};
   const items = res.items || [];
   const organic = items.filter(x => x.type === 'organic');
@@ -40,10 +47,12 @@ prio.forEach((p, i) => {
   k.live = { top_domains: organic.slice(0, 5).map(o => normD(o.domain)), your_position: mine ? mine.rank_group : null,
     features: [...new Set(items.map(x => x.type))].filter(t => t !== 'organic'), ai_overview: items.some(x => x.type === 'ai_overview'), paa: (items.find(x => x.type === 'people_also_ask') || { items: [] }).items.slice(0, 4).map(q => q.title || q.question).filter(Boolean) };
 });
+if (liveFailures.length) ks.research_failures = [...(ks.research_failures || []), ...liveFailures];
+const cpcTxt = (c) => String(Math.round(Number(c) * 100) / 100);   // DataForSEO CPCs are float32 (13.65999984741211)
 const why = (k) => {
   const bits = [];
   if (k.kd != null && k.kd < 30) bits.push('low competition');
-  if (k.cpc != null && k.cpc >= 5) bits.push('high commercial value (CPC ' + k.cpc + ')');
+  if (k.cpc != null && k.cpc >= 5) bits.push('high commercial value (CPC ' + cpcTxt(k.cpc) + ')');
   if (k.intent === 'transactional') bits.push('buyers ready to act');
   else if (k.intent === 'commercial') bits.push('buyers comparing providers');
   else bits.push('research-stage traffic that builds authority');
@@ -76,7 +85,7 @@ const trend = (k) => k.trend_yearly == null ? '—' : (k.trend_yearly > 0 ? '+' 
 const table = (list, cols) => list.length ? '<table class="t"><tr>' + cols.map(c => '<th>' + c[0] + '</th>').join('') + '</tr>' + list.map(k => '<tr>' + cols.map(c => '<td>' + c[1](k) + '</td>').join('') + '</tr>').join('') + '</table>' : '<p class="muted">Nothing with measurable demand in this group.</p>';
 const FY = { easy: 'Easy', reachable: 'Reachable', hard: 'Hard', very_hard: 'Very hard', not_realistic: 'Not realistic' };
 const forYouCell = (k) => k.difficulty_for_you ? esc(FY[k.difficulty_for_you] || k.difficulty_for_you) + (k.months ? '<br><span class="muted">' + esc(({ direct: 'direct', short: 'short ladder', full: 'full ladder' })[k.plan_type] || '') + ', ' + esc(k.months) + ' mo</span>' : '') : '—';
-const KW0 = [['Keyword', k => esc(k.keyword)], ['Searches/mo', k => num(k.volume)], ['Difficulty', k => kdLabel(k.kd)], ['CPC $', k => k.cpc == null ? '—' : k.cpc], ['Intent', k => cap(k.intent)], ['Trend', k => trend(k)], ['SERP features', k => feat(k)], ['Opportunity', k => num(k.opportunity)]];
+const KW0 = [['Keyword', k => esc(k.keyword)], ['Searches/mo', k => num(k.volume)], ['Difficulty', k => kdLabel(k.kd)], ['CPC $', k => k.cpc == null ? '—' : cpcTxt(k.cpc)], ['Intent', k => cap(k.intent)], ['Trend', k => trend(k)], ['SERP features', k => feat(k)], ['Opportunity', k => num(k.opportunity)]];
 const KW = RR ? [...KW0.slice(0, 3), ['For your site', forYouCell], ...KW0.slice(3)] : KW0;
 const reachLine = RR ? 'Your site\'s reach: difficulty ' + RR.reach + ' (' + (RR.method === 'percentile' ? '75% of the ' + RR.sample + ' keywords you rank top 10 for are at or below it' : 'from ' + num(RR.top10) + ' keyword(s) in the top 10') + (RR.cached ? ', measured ' + String(RR.cached_at || '').slice(0, 10) : '') + '). "For your site": easy up to reach + 5 or already top 20, reachable up to + 20, hard up to + 40.' : '';
 const goalText = { leads: 'enquiries and leads', sales: 'online sales', traffic: 'traffic and authority', brand: 'brand awareness' }[ks.goal] || ks.goal;
@@ -102,9 +111,10 @@ const html = `
   ${now.length ? '<br><b>Build first:</b> ' + now.map(c => esc(c.topic) + ' (' + esc(c.page_type) + ', ' + num(c.total_volume) + '/mo across ' + c.keyword_count + ' keywords)').join(' · ') : ''}</div>
 
   <h2>Priority keywords (${ks.priority.length}) — live-checked on Google</h2>
+  ${liveFailures.length ? '<p class="muted">' + liveFailures.length + ' of ' + prio.length + ' live checks could not be made (the search data provider failed): those keywords show the stored SERP features and "not checked".</p>' : ''}
   ${ks.priority.map((k, i) => `<div class="card">
     <div class="kw">${i + 1}. ${esc(k.keyword)}</div>
-    <p><span class="pill">${num(k.volume)} searches/mo</span><span class="pill">Difficulty ${kdLabel(k.kd)}</span>${k.for_you_label ? '<span class="pill ' + (['easy', 'reachable'].includes(k.difficulty_for_you) ? 'now' : 'later') + '">' + esc(k.for_you_label) + '</span>' : ''}<span class="pill">${cap(k.intent)}</span><span class="pill">${esc(k.page_type)}</span>${k.cpc != null ? '<span class="pill">CPC $' + k.cpc + '</span>' : ''}<span class="pill">Traffic potential ~${num(k.traffic_potential)}/mo</span>${k.ai_search_volume ? '<span class="pill ai">AI search volume ' + num(k.ai_search_volume) + '/mo</span>' : ''}</p>
+    <p><span class="pill">${num(k.volume)} searches/mo</span><span class="pill">Difficulty ${kdLabel(k.kd)}</span>${k.for_you_label ? '<span class="pill ' + (['easy', 'reachable'].includes(k.difficulty_for_you) ? 'now' : 'later') + '">' + esc(k.for_you_label) + '</span>' : ''}<span class="pill">${cap(k.intent)}</span><span class="pill">${esc(k.page_type)}</span>${k.cpc != null ? '<span class="pill">CPC $' + cpcTxt(k.cpc) + '</span>' : ''}<span class="pill">Traffic potential ~${num(k.traffic_potential)}/mo</span>${k.ai_search_volume ? '<span class="pill ai">AI search volume ' + num(k.ai_search_volume) + '/mo</span>' : ''}</p>
     <p>${esc(k.why)}</p>
     <p class="muted"><b>Topic:</b> ${esc(k.topic)} · <b>SERP features:</b> ${esc(k.live ? (k.live.features.join(', ') || 'none') : feat(k))} · <b>Who ranks now:</b> ${esc(k.live ? (k.live.top_domains.join(', ') || 'unknown') : 'not checked')}${base.domain ? ' · <b>Your position:</b> ' + (k.live && k.live.your_position ? '#' + k.live.your_position : 'not in top 20') : ''}${k.live && k.live.paa.length ? '<br><b>People also ask:</b> ' + esc(k.live.paa.join(' · ')) : ''}</p>
   </div>`).join('') || '<p class="muted">No priority keywords could be determined.</p>'}

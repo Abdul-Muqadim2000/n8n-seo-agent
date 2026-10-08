@@ -78,8 +78,8 @@ const candidates = all.filter(e => e.intent !== 'navigational').slice(0, 240);
 const bySource = {};
 for (const e of all) for (const s of e.sources) bySource[s] = (bySource[s] || 0) + 1;
 const pairs = [...reqA.map((r, i) => [r, resA[i]]), ...reqB.map((r, i) => [r, resB[i]])];
-const failures = pairs.filter(([r, res]) => !res || res.error || ((res.tasks || [])[0] || {}).status_code >= 40000)
-  .map(([r, res]) => r.label + ': ' + ((res && ((res.error && res.error.message) || ((res.tasks || [])[0] || {}).status_message)) || 'no response'));
+const failures = pairs.filter(([r, res]) => !res || res.error || Number(res.status_code) >= 40000 || ((res.tasks || [])[0] || {}).status_code >= 40000)   // + a top-level DataForSEO error (50000 with tasks: null, HTTP 200)
+  .map(([r, res]) => r.label + ': ' + ((res && ((res.error && res.error.message) || ((res.tasks || [])[0] || {}).status_message || res.status_message)) || 'no response'));
 return [{ json: { ...base, research: {
   pool_size: all.length, candidates, long_tail_pool: all.filter(e => e.words >= 4 && e.intent !== 'navigational').slice(0, 300),
   competitor_domains: [...new Set(reqB.filter(r => r.kind === 'competitor').map(r => r.domain))], by_source: bySource, failures, requests: pairs.length

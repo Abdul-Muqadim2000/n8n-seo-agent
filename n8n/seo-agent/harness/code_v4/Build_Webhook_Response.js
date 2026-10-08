@@ -27,7 +27,7 @@ return [{
     existing_page: d.existing_page || null,
     qa_summary: d.qa_summary || null,
     run_ledger: d.run_ledger || null,
-    markdown: d.page_markdown || null,
+    markdown: d.article_markdown || d.page_markdown || null,
     html: d.article_html || null,
     meta: d.article_meta || null,
     emailed_to: d.email || null,

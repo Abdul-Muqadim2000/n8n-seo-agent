@@ -28,6 +28,7 @@ pages.forEach((p, i) => {
   const j = p.json || {};
   const info = meta[i]?.json || {};
   const raw = String(j.page_text || j.data || j.body || '');
+  if (info.no_competitors && !info.url) return;   // Pick Top 6's "nothing to read" placeholder is not a failed page
   if (j.error || !raw || !info.url) { failed.push({ url: info.url, reason: j.error ? (j.error.message || JSON.stringify(j.error)).slice(0, 150) : 'Empty response' }); return; }
   const lines = raw.replace(/^(Title|URL Source|Markdown Content|Published Time):.*$/gm, '').split('\n');
   const headings = [...new Set(lines.filter(l => /^#{1,3}\s/.test(l.trim())).map(l => { const level = l.trim().match(/^#+/)[0].length; return 'H' + level + ': ' + stripMd(l.replace(/^#+\s*/, '')); }).filter(h => h.length > 5 && !junk.test(h)))].slice(0, 30);
@@ -93,8 +94,16 @@ for (const c of competitors) {
 }
 
 // ---------- SERP features (from the same SERP call) ----------
-let serpItems = []; let seCount = null;
-try { const res = $('SERP Top 10').first().json.tasks?.[0]?.result?.[0] || {}; serpItems = res.items || []; seCount = res.se_results_count ?? null; } catch (e) { serpItems = []; }
+// 2026-10-09: the answer of the retry when the first call failed; a failed call (DataForSEO 50000 "Internal Server Error." with
+// HTTP 200, or an HTTP error) is "unavailable", never "no featured snippet / no AI Overview" (the verdict used to claim that).
+let serpItems = []; let seCount = null; let serpError = '';
+try {
+  let sj; try { sj = $('SERP Top 10 (Retry)').first().json; } catch (e) { sj = $('SERP Top 10').first().json; }
+  sj = sj || {}; const t0 = (Array.isArray(sj.tasks) ? sj.tasks[0] : null) || {};
+  if (sj.error || Number(sj.status_code) >= 40000 || !Array.isArray(sj.tasks) || Number(t0.status_code) >= 40000)
+    serpError = String((sj.error && (sj.error.message || sj.error)) || t0.status_message || sj.status_message || 'no answer').slice(0, 120);
+  const res = (t0.result || [])[0] || {}; serpItems = res.items || []; seCount = res.se_results_count ?? null;
+} catch (e) { serpItems = []; serpError = 'no answer'; }
 const norm = (d) => String(d || '').toLowerCase().replace(/^www\./, '');
 const paa = [], related = [], forum = []; let featured = null, aio = null; const featureTypes = new Set();
 for (const it of serpItems) {
@@ -113,9 +122,10 @@ for (const it of serpItems) {
 const serp_features = { se_results_count: seCount, people_also_ask: paa.slice(0, 12), related_searches: related.slice(0, 10), forum_threads: forum.slice(0, 6),
   featured_snippet: featured, ai_overview: aio || { present: false, text: '', cited_domains: [] }, features_present: [...featureTypes].filter(t => t !== 'organic'),
   video_results: featureTypes.has('video'), shopping_results: featureTypes.has('shopping') || featureTypes.has('popular_products'), local_pack: featureTypes.has('local_pack') || featureTypes.has('map') };
+if (serpError) Object.assign(serp_features, { unavailable: true, error: serpError, ai_overview: { present: null, text: '', cited_domains: [] } });
 
 const digest = competitors.map(c => `\n=== COMPETITOR #${c.rank}: ${c.domain} ===\nURL: ${c.url}\nTitle: ${c.title}\nMeta Description: ${c.snippet}\nUseful Word Count: ${c.word_count} · Named author: ${c.has_author ? 'yes' : 'no'} · Dated: ${c.has_date ? 'yes' : 'no'} · Lists: ${c.lists} · Tables: ${c.tables}\nHeadings:\n${c.headings.join('\n')}\n\nContent Excerpt:\n${c.content}\n`).join('\n');
-const serpDigest = [
+const serpDigest = serpError ? 'LIVE GOOGLE RESULTS: unavailable for this run (the search data provider failed: ' + serpError + '). There is no information about the pages in the top 10, a featured snippet, People Also Ask or an AI Overview for this query: do not state or assume whether any of them appear, and say that the results page could not be checked.' : [
   featured ? `FEATURED SNIPPET (held by ${featured.domain}): "${featured.text}"` : 'FEATURED SNIPPET: none',
   serp_features.ai_overview.present ? `AI OVERVIEW: present, cites ${serp_features.ai_overview.cited_domains.join(', ') || 'unknown sources'}. Summary: ${serp_features.ai_overview.text.slice(0, 500)}` : 'AI OVERVIEW: not shown for this query',
   paa.length ? 'PEOPLE ALSO ASK:\n- ' + paa.slice(0, 12).join('\n- ') : 'PEOPLE ALSO ASK: none',

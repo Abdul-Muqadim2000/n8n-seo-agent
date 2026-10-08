@@ -2048,6 +2048,54 @@ patch('Rate Limit', "else if (d.mode === 'backlinks') est = EST.backlinks;", "el
 log('Backlinks from every source (v4.10): the on-demand backlink check (form / API mode backlinks) passes free_only to the Backlink Monitor (free sources + own link check only, $0); the monitor merges DataForSEO, Bing Webmaster Tools, the Search Console upload, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, GDELT news and web search, checks the linking pages itself (lost = two misses, with the reason) and scores every link (SEO / referral / brand)')
 
 # =============================================================================
+# 25. SEARCH DATA OUTAGES (2026-10-09, live test T2, REVIEW §5c K3 / D1 / P2): DataForSEO answered the live SERP endpoint with
+#     `status_code 50000 "Internal Server Error."` inside an HTTP 200 (tasks: null) for every verdict / page call and 5 of 8 discovery
+#     checks — n8n's retryOnFail never fires on an HTTP 200, so the run went on with no competitors, no facts and a results-page digest
+#     that said "FEATURED SNIPPET: none / AI OVERVIEW: not shown" (the verdict then claimed "no featured snippet, PAA or AI Overview
+#     appears"). Now: one retry of the keyword's SERP and of the facts search when the answer is such a server error (an IF in front of
+#     a copy of the node), a failed answer is "unavailable" in the digest, serp_features, the report and the discovery's live checks
+#     (Clean_Competitor_Pages.js, Build_Keyword_Strategy.js), and a top-level error counts as a research failure (Collect_Research.js).
+# =============================================================================
+SERP_FAILED = "{{ !!($json.error || Number($json.status_code) >= 50000 || Number((($json.tasks || [])[0] || {}).status_code) >= 50000) }}"
+for first, retry, gate, base_ref, dst in [('SERP Top 10', 'SERP Top 10 (Retry)', 'SERP Failed?', "$('Collect Site URLs').first().json", 'Pick Top 6'),
+                                          ('Facts SERP', 'Facts SERP (Retry)', 'Facts SERP Failed?', "$('Analyze Competitor Pages').first().json", 'Collect Facts')]:
+    assert [t['node'] for l in conns[first]['main'] for t in l] == [dst], first + ': unexpected outputs'
+    p0 = pos(first)
+    if_node(gate, SERP_FAILED, [p0[0] + 110, p0[1] + 200])
+    rn = copy.deepcopy(nodes[first]); rn['name'] = retry; rn['id'] = nid(retry); rn['position'] = [p0[0] + 330, p0[1] + 200]
+    body = rn['parameters']['jsonBody']
+    assert body.count('$json.') >= 3 and '$json.keyword' in body, retry + ': body anchors'
+    rn['parameters']['jsonBody'] = body.replace('$json.', base_ref + '.')   # the gate's item is the failed answer; read the request from upstream
+    rn['onError'] = 'continueRegularOutput'; rn['retryOnFail'] = True
+    assert rn.get('credentials'), retry + ': credential slot'
+    nodes[retry] = rn
+    disconnect(first, dst); connect(first, gate); connect(gate, retry, 0); connect(gate, dst, 1); connect(retry, dst)
+assert "$('Collect Site URLs').first().json.keyword" in nodes['SERP Top 10 (Retry)']['parameters']['jsonBody']
+assert "$('Analyze Competitor Pages').first().json.keyword" in nodes['Facts SERP (Retry)']['parameters']['jsonBody']
+os.makedirs(OUT_CODE, exist_ok=True)   # harness shims: the gates' exact condition, run per item like a Code node (S29)
+for _g in ('SERP Failed?', 'Facts SERP Failed?'):
+    open(os.path.join(OUT_CODE, re.sub(r'[^A-Za-z0-9_.-]+', '_', _g) + '.js'), 'w').write(
+        "// harness shim (written by build_v4.py section 25): the IF node's condition, true = take the retry branch\n"
+        "return $input.all().map(i => { const $json = i.json; return { json: { retry: " + SERP_FAILED[2:-2].strip() + " } }; });\n")
+# the cost ledger counts the retries (a failed call costs 0)
+_ln = [nm for nm in nodes if "const __LEDGER_NODES = ['SERP Top 10', " in nodes[nm]['parameters'].get('jsCode', '')]
+assert len(_ln) >= 4, _ln
+for nm in _ln: patch(nm, "const __LEDGER_NODES = ['SERP Top 10', ", "const __LEDGER_NODES = ['SERP Top 10', 'SERP Top 10 (Retry)', 'Facts SERP (Retry)', ")
+# the ledger's AI steps also count the discovery's relevance review and the page's critic (the app showed "AI steps 1" for a
+# discovery with 4 Claude calls, and no Critic on page runs; the ladder copy already had them)
+_AI0 = "const __AI_NODES = ['Site Describer', 'Keyword Seeds', 'Competitor Analyzer', 'Verdict Agent', 'Strategy Brief', 'Copywriter', 'Editor', 'Content Reviewer'];"
+_ai = [nm for nm in nodes if _AI0 in nodes[nm]['parameters'].get('jsCode', '')]
+assert {'Build Word File', 'Build Keyword File'} <= set(_ai), _ai
+for nm in _ai: patch(nm, _AI0, _AI0.replace("'Content Reviewer'];", "'Content Reviewer', 'Keyword Relevance', 'Critic'];"))
+# the keyword report says the results page could not be read instead of "None / Not shown for this query"
+patch('Build Word File', "  if (sf) {\n    const aio = sf.ai_overview || {};",
+      "  if (sf && sf.unavailable) {\n    parts.push(h2('What the Results Page Looks Like') + '<div class=\"note\">The live Google results could not be read for this run (search data provider: ' + esc(sf.error || 'no answer') + '). Featured snippet, People Also Ask, AI Overview and the competitor pages are unknown, not absent.</div>');\n  } else if (sf) {\n    const aio = sf.ai_overview || {};")
+# the callback's `markdown` is the clean article of the blog package (the web app saves it as <slug>.md); it was the raw draft with
+# the "Title: / Meta Description:" lines and the copywriter's [Image: …] markers (live P2, 2026-10-09)
+patch('Build Webhook Response', "    markdown: d.page_markdown || null,", "    markdown: d.article_markdown || d.page_markdown || null,")
+log('Search data outages (2026-10-09): one retry of the keyword SERP and the facts search when DataForSEO answers a server error (50000 inside HTTP 200); a failed SERP is "unavailable" (digest, serp_features, keyword report, discovery live checks + research_failures), never "no snippet / no AI Overview"; CPC rounded in the discovery and ladder reports')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
