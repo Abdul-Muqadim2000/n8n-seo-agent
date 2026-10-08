@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link, Navigate, useParams, useSearchParams } from 'react-router';
 import { ArrowLeft, History, Plus, Wand2 } from 'lucide-react';
-import { MODES, type ModeId } from '@seo/shared';
+import { MODE_CATEGORIES, MODES, type ModeId } from '@seo/shared';
 import { lastSite, useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useProviders } from '@/lib/queries';
@@ -9,7 +9,7 @@ import { decodePrefill } from '@/lib/utils';
 import { ButtonLink } from '@/components/ui/button';
 import { Callout, EmptyState } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
-import { isModeId, ModeGlyph } from '@/components/reports/meta';
+import { isModeId, ModeIcon } from '@/components/reports/meta';
 import type { ToolFormProps } from './_components/form-utils';
 import { DiscoverForm, KeywordForm, VerdictForm } from './_components/forms/research';
 import { AuditForm, CheckinForm, DescribeForm, PublishedForm } from './_components/forms/site';
@@ -83,12 +83,9 @@ export default function ToolFormPage() {
         <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden /> All tools
       </Link>
       <PageHeader
-        title={
-          <span className="flex items-center gap-3">
-            <ModeGlyph mode={mode} size="lg" />
-            {info.title}
-          </span>
-        }
+        icon={<ModeIcon mode={mode} />}
+        eyebrow={MODE_CATEGORIES[info.category]}
+        title={info.title}
         description={info.summary}
         actions={
           <ButtonLink to={`${paths.runs(org.id)}?mode=${mode}`} variant="secondary" size="sm" icon={<History className="size-4" />}>

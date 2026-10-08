@@ -3,20 +3,22 @@ import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
-import { Lock } from 'lucide-react';
+import { Building2, Globe, KeyRound, Lock, Play, Shield, Wallet } from 'lucide-react';
 import { compactNumber, formatUsd, orgBudgetSchema, type AdminOrg } from '@seo/shared';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Callout, EmptyState, ErrorState, PageLoader, Skeleton } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
-import { CopyButton, Meter, StatTile } from '@/components/ui/misc';
+import { CopyButton, Meter } from '@/components/ui/misc';
+import { CountUp, MetricCard, Stagger } from '@/components/insight';
 import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
 import { SwitchRow } from '@/components/ui/tabs';
 import { errorMessage } from '@/lib/api';
 import { useAdminOrgs, useAdminUpdateOrg, useMe, usePost } from '@/lib/queries';
-import { fmtDate } from '@/lib/utils';
+import { cn, fmtDate } from '@/lib/utils';
+import { SettingsCard } from './_components/SettingsCard';
 import { StandaloneShell } from './_components/StandaloneShell';
 
 const budgetForm = orgBudgetSchema.extend({
@@ -48,7 +50,7 @@ export default function PlatformAdminPage() {
   if (!me.data) return <PageLoader fullPage />;
   if (!isAdmin)
     return (
-      <StandaloneShell title="Platform admin">
+      <StandaloneShell icon={<Shield />} title="Platform admin">
         <Card>
           <EmptyState
             icon={<Lock className="size-5" />}
@@ -66,10 +68,27 @@ export default function PlatformAdminPage() {
       header: 'Company',
       sortValue: (o) => o.name.toLowerCase(),
       cell: (o) => (
-        <span className="block min-w-0">
-          <span className="block truncate font-medium text-ink">{o.name}</span>
-          <span className="block truncate text-xs text-ink-3">
-            {o.slug} · since {fmtDate(o.createdAt)}
+        <span className="flex min-w-0 items-center gap-3">
+          <span
+            className={cn(
+              'flex size-8 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold',
+              o.disabled ? 'bg-surface-2 text-ink-3' : 'bg-ink-surface text-on-ink dark:bg-surface-3 dark:text-ink',
+            )}
+            aria-hidden
+          >
+            {o.name
+              .split(/\s+/)
+              .map((p) => p[0])
+              .filter(Boolean)
+              .slice(0, 2)
+              .join('')
+              .toUpperCase() || '?'}
+          </span>
+          <span className="block min-w-0">
+            <span className="block truncate font-medium text-ink">{o.name}</span>
+            <span className="block truncate text-xs text-ink-3">
+              {o.slug} · since {fmtDate(o.createdAt)}
+            </span>
           </span>
         </span>
       ),
@@ -117,7 +136,7 @@ export default function PlatformAdminPage() {
   ];
 
   return (
-    <StandaloneShell wide title="Platform admin" description="Every company on this platform: team size, websites, this month’s analyses and spend against its budget.">
+    <StandaloneShell wide icon={<Shield />} title="Platform admin" description="Every company on this platform: team size, websites, this month’s analyses and spend against its budget.">
       {orgs.isPending ? (
         <div className="space-y-5" aria-busy>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -132,12 +151,22 @@ export default function PlatformAdminPage() {
           <ErrorState error={orgs.error} onRetry={() => orgs.refetch()} title="Could not load the companies" />
         </Card>
       ) : (
-        <div className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile label="Companies" value={compactNumber(totals.companies)} hint={totals.disabled ? `${totals.disabled} disabled` : 'All active'} />
-            <StatTile label="Websites" value={compactNumber(totals.sites)} />
-            <StatTile label="Analyses this month" value={compactNumber(totals.runs)} />
-            <StatTile label="Estimated spend this month" value={formatUsd(totals.spend)} hint="Runs started from the app; scheduled monitoring is not included." />
+        <Stagger className="space-y-5">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <MetricCard
+              label="Companies"
+              icon={<Building2 />}
+              value={<CountUp value={totals.companies} format={compactNumber} />}
+              meta={totals.disabled ? <StatusBadge tone="warning">{totals.disabled} disabled</StatusBadge> : <StatusBadge tone="good">All active</StatusBadge>}
+            />
+            <MetricCard label="Websites" icon={<Globe />} value={<CountUp value={totals.sites} format={compactNumber} />} />
+            <MetricCard label="Analyses this month" icon={<Play />} value={<CountUp value={totals.runs} format={compactNumber} />} />
+            <MetricCard
+              label="Estimated spend this month"
+              icon={<Wallet />}
+              value={<CountUp value={totals.spend} format={(v) => formatUsd(v)} />}
+              meta="Runs started from the app; scheduled monitoring is not included."
+            />
           </div>
           <DataTable
             rows={orgs.data}
@@ -149,7 +178,7 @@ export default function PlatformAdminPage() {
             searchText={(o) => `${o.name} ${o.slug}`}
             empty="No companies yet."
           />
-        </div>
+        </Stagger>
       )}
 
       <ResetLinkCard />
@@ -259,11 +288,12 @@ export function ResetLinkCard() {
   const [email, setEmail] = useState('');
   const create = usePost<{ email: string }, { url: string; expiresInHours: number; name: string }>('/api/admin/users/reset-link');
   return (
-    <Card className="mt-6">
-      <div className="px-5 pt-4">
-        <h3 className="text-[15px] font-semibold text-ink">Password reset link</h3>
-        <p className="mt-0.5 text-[13px] text-ink-3">The platform sends no e-mails. For a user who forgot their password, create a one-time link here and send it to them yourself (it works for 24 hours).</p>
-      </div>
+    <SettingsCard
+      className="mt-6"
+      icon={<KeyRound />}
+      title="Password reset link"
+      description="The platform sends no e-mails. For a user who forgot their password, create a one-time link here and send it to them yourself (it works for 24 hours)."
+    >
       <form
         className="flex flex-wrap items-end gap-3 px-5 py-4"
         onSubmit={(e) => {
@@ -292,6 +322,6 @@ export function ResetLinkCard() {
           </div>
         </div>
       )}
-    </Card>
+    </SettingsCard>
   );
 }

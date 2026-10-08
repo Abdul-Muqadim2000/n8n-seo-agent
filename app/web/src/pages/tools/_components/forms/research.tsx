@@ -7,9 +7,11 @@ import { ChevronDown, ChevronRight, Video } from 'lucide-react';
 import { PAGE_TYPES, RUN_SCHEMAS, urlOnDomain } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { Checkbox, ChoiceCard } from '@/components/ui/field';
+import { IconTile } from '@/components/insight';
+import { cn } from '@/lib/utils';
 import { estimateCost, estimateEta } from '../estimate';
 import { CountryField, DeliveryCard, EmailCopyField, errMsg, FormCard, GoalField, PageTypeField, setPristine, siteDefaults, SiteField, ToneField, ToolShell, useRunSubmit, useSiteChange, useSyncSiteParam } from '../kit';
-import { TextAreaField, TextField, withChecks, withPrefill, type ToolFormProps } from '../form-utils';
+import { OPTION_BOX, TextAreaField, TextField, withChecks, withPrefill, type ToolFormProps } from '../form-utils';
 
 const isVideoUrl = (u: string) => /youtube\.com|youtu\.be|vimeo\.com/i.test(u);
 
@@ -184,15 +186,21 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
           hint={site ? `Rewrites and strengthens this page instead of writing a new one. Must be on ${site.domain}.` : 'Available when a website is chosen.'}
         />
         {site && !v.existingPageUrl && (
-          <Checkbox {...form.register('checkPageExists')} label="Check whether I already have a page for this keyword" description={`Searches ${site.domain} first; if a matching page exists, the run improves it instead of creating a duplicate.`} />
+          <Checkbox
+            {...form.register('checkPageExists')}
+            className={OPTION_BOX}
+            label="Check whether I already have a page for this keyword"
+            description={`Searches ${site.domain} first; if a matching page exists, the run improves it instead of creating a duplicate.`}
+          />
         )}
       </FormCard>
 
       <FormCard title="What you get">
-        <div className="space-y-3">
-          <Checkbox {...form.register('receiveReport')} label="Keyword report" description="Competitor analysis, the verdict with reasons and risks, keyword data and secondary keywords (PDF and Word)." />
+        <div className="space-y-2.5">
+          <Checkbox {...form.register('receiveReport')} className={OPTION_BOX} label="Keyword report" description="Competitor analysis, the verdict with reasons and risks, keyword data and secondary keywords (PDF and Word)." />
           <Checkbox
             {...form.register('receiveContent')}
+            className={OPTION_BOX}
             label="The finished page"
             description="Copy written from the brief, edited and checked (title, meta, headings, links, schema, images plan): Word, PDF, HTML, Markdown and meta.json."
           />
@@ -230,17 +238,22 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
       )}
 
       {v.receiveContent && (
-        <div className="rounded-xl border border-line bg-surface shadow-card">
-          <button type="button" onClick={() => setVideoOpen(!videoOpen)} aria-expanded={videoOpen} className="flex w-full items-center gap-3 px-5 py-4 text-left sm:px-6">
-            <Video className="size-4 text-ink-3" aria-hidden />
+        <div className={cn('rounded-xl border bg-surface shadow-card transition-[border-color,box-shadow] duration-200 ease-brand', videoOpen ? 'border-line-strong' : 'border-line hover:border-line-strong hover:shadow-raised')}>
+          <button type="button" onClick={() => setVideoOpen(!videoOpen)} aria-expanded={videoOpen} className="group/video flex w-full items-center gap-3 rounded-xl px-5 py-4 text-left sm:px-6">
+            <IconTile size="sm" tone={videoOpen ? 'solid' : 'blue'} className="transition-colors duration-200 ease-brand">
+              <Video />
+            </IconTile>
             <span className="min-w-0 flex-1">
-              <span className="block text-[15px] font-semibold text-ink">Add a video</span>
+              <span className="flex flex-wrap items-center gap-x-2 font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">
+                Add a video
+                <span className="font-sans text-xs font-normal tracking-normal text-ink-3">optional</span>
+              </span>
               <span className="block text-[13px] text-ink-3">Embed a YouTube or Vimeo video with its transcript and key moments (VideoObject schema).</span>
             </span>
-            {videoOpen ? <ChevronDown className="size-4 text-ink-3" /> : <ChevronRight className="size-4 text-ink-3" />}
+            {videoOpen ? <ChevronDown className="size-4 text-ink-3" /> : <ChevronRight className="size-4 text-ink-3 transition-transform duration-200 ease-brand group-hover/video:translate-x-0.5" />}
           </button>
           {videoOpen && (
-            <div className="space-y-5 border-t border-line px-5 py-5 sm:px-6">
+            <div className="animate-fade-in space-y-5 border-t border-line px-5 py-5 sm:px-6">
               <TextField label="Video link" optional reg={form.register('videoUrl')} error={errMsg(e.videoUrl)} inputMode="url" placeholder="https://www.youtube.com/watch?v=…" hint="Title, duration and thumbnail are read from YouTube or Vimeo." />
               {!!v.videoUrl && (
                 <TextAreaField
@@ -322,7 +335,7 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
 
   return (
     <ToolShell mode="discover" site={site} cost={estimateCost('discover', v)} eta={estimateEta('discover', v)} emailCopy={!!v.emailCopy} extras={extras} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Find keywords">
-      <FormCard title="Your business" description="About 600 keywords from several sources are scored, reviewed by AI for relevance, grouped into topics and checked live on Google.">
+      <FormCard title="Your business" description="What you sell, to whom and where." info="About 600 keywords from several sources are scored, reviewed by AI for relevance, grouped into topics and checked live on Google.">
         <SiteField optional value={v.siteId} onChange={(id) => form.setValue('siteId', id, { shouldDirty: true, shouldValidate: form.formState.isSubmitted })} error={errMsg(e.siteId)} />
         <TextAreaField
           label="What you sell"
@@ -351,8 +364,10 @@ export function DiscoverForm({ initialSiteId, prefill }: ToolFormProps) {
       </FormCard>
 
       <FormCard title="Follow-ups" description="Optional extra reports, each delivered separately when ready.">
-        <Checkbox {...form.register('receiveReport')} label="Keyword report for the best keyword" description="Competitors, verdict and keyword data for the keyword the strategy says to start with." />
-        <Checkbox {...form.register('receiveContent')} label="Write the page for the best keyword (+$1.20)" description="The full page run for that keyword: brief, copy, edit and QA." />
+        <div className="space-y-2.5">
+          <Checkbox {...form.register('receiveReport')} className={OPTION_BOX} label="Keyword report for the best keyword" description="Competitors, verdict and keyword data for the keyword the strategy says to start with." />
+          <Checkbox {...form.register('receiveContent')} className={OPTION_BOX} label="Write the page for the best keyword (+$1.20)" description="The full page run for that keyword: brief, copy, edit and QA." />
+        </div>
         <div>
           <p className="mb-1.5 text-[13px] font-medium text-ink">Audit the website too</p>
           <div role="radiogroup" aria-label="Audit the website too" className="grid gap-2 sm:grid-cols-3">

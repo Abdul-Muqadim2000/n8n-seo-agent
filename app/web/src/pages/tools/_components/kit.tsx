@@ -3,11 +3,12 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import type { FieldValues, Path, UseFormRegisterReturn, UseFormReturn } from 'react-hook-form';
 import { format, isValid, parseISO } from 'date-fns';
-import { AlertTriangle, CheckCircle2, Clock, Coins, Globe, Mail, PackageCheck, Play, Repeat } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardList, Clock, Coins, Globe, Mail, PackageCheck, Play, Repeat } from 'lucide-react';
 import {
   cleanDomain,
   COUNTRIES,
   domainOk,
+  formatUsd,
   GOALS,
   MODES,
   NOTICE_MODES,
@@ -19,10 +20,11 @@ import {
   type NoticeInput,
   type PipelineNotice,
   type Site,
+  type Usage,
 } from '@seo/shared';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
-import { useProviders, useSiteData } from '@/lib/queries';
+import { useProviders, useSiteData, useUsage } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { useStartRun } from '@/lib/queries';
 import { cn, fmtAgo } from '@/lib/utils';
@@ -33,6 +35,7 @@ import { Callout } from '@/components/ui/feedback';
 import { Checkbox, ChoiceCard, Field, Select } from '@/components/ui/field';
 import { TagInput } from '@/components/ui/tag-input';
 import { isCountry } from '@/components/reports/meta';
+import { CountUp, IconTile, InfoTip, Stagger, SummaryHero } from '@/components/insight';
 import { costLabel, etaLabel } from './estimate';
 
 // ---------- errors ----------
@@ -221,13 +224,26 @@ export function SubmitError({ error, siteId }: { error: unknown; siteId?: string
 
 // ---------- layout ----------
 
-export function FormCard({ title, description, children, className, aside }: { title: ReactNode; description?: ReactNode; children: ReactNode; className?: string; aside?: ReactNode }) {
+/**
+ * One group of fields: a numbered tile (CSS counter set by ToolShell, so cards shown conditionally renumber themselves), the
+ * title, a short description and, for longer explanations, an info tip next to the title.
+ */
+export function FormCard({ title, description, info, children, className, aside }: { title: ReactNode; description?: ReactNode; info?: ReactNode; children: ReactNode; className?: string; aside?: ReactNode }) {
   return (
-    <Card className={cn('p-5 sm:p-6', className)}>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
-          {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+    <Card className={cn('p-5 [counter-increment:formcard] sm:p-6', className)}>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-3">
+          <span
+            className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent-soft font-display text-xs font-semibold text-accent-text before:content-[counter(formcard)]"
+            aria-hidden
+          />
+          <div className="min-w-0 pt-0.5">
+            <h2 className="flex items-center gap-1 font-display text-[15px] leading-snug font-semibold tracking-[-0.01em] text-ink">
+              {title}
+              {info && <InfoTip label={typeof title === 'string' ? `About ${title.toLowerCase()}` : 'What this means'}>{info}</InfoTip>}
+            </h2>
+            {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+          </div>
         </div>
         {aside}
       </div>
@@ -320,10 +336,124 @@ export function PipelineNotices({ notices, acked, onToggle, onUsePlan, siteId }:
   );
 }
 
+/** "about $1.20" / "Free"; counts between amounts (never through "Free") when the options change the estimate. */
+function CostValue({ usd }: { usd: number }) {
+  if (usd <= 0) return <>{costLabel(usd)}</>;
+  return <CountUp value={usd} format={(n) => costLabel(Math.max(0.01, n))} />;
+}
+
+/** The blue intro above the form: what the run delivers, the extras chosen below, the cost estimate and the time. */
+function ToolIntro({ mode, cost, eta, extras }: { mode: ModeId; cost: number; eta: number; extras: string[] }) {
+  const info = MODES[mode];
+  return (
+    <SummaryHero
+      tone="blue"
+      className="sm:p-5"
+      eyebrow={
+        <>
+          <span className="font-mono tracking-[0.02em] uppercase">What you get</span>
+          <span aria-hidden>·</span>
+          <span>{info.siteBound ? 'Runs on your verified website' : 'Website optional'}</span>
+        </>
+      }
+      title={info.delivers}
+      actions={
+        <ul className="flex flex-wrap items-center gap-2" aria-label="This run">
+          <li className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-on-ink px-3 text-accent shadow-card dark:text-ink-surface">
+            <Coins className="size-4 shrink-0" aria-hidden />
+            <span className="sr-only">Estimated cost: </span>
+            <span className="font-display text-[15px] font-semibold tracking-[-0.01em]">
+              <CostValue usd={cost} />
+            </span>
+          </li>
+          <li className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-on-ink/10 px-3 text-[13px] font-medium text-on-ink ring-1 ring-line-on-ink">
+            <Clock className="size-4 shrink-0" aria-hidden />
+            <span className="sr-only">Time: </span>
+            {etaLabel(eta)}
+          </li>
+          {extras.map((x) => (
+            <li key={x} className="inline-flex min-h-8 animate-fade-in items-center gap-1.5 rounded-lg bg-on-ink/10 px-3 py-1 text-[13px] leading-snug font-medium text-on-ink ring-1 ring-line-on-ink">
+              <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+              {x}
+            </li>
+          ))}
+        </ul>
+      }
+    />
+  );
+}
+
+/**
+ * This month's budget with this run on top: used (solid blue), this run (light blue), the rest; a warning line when the run
+ * would go over it (the server refuses such runs; this only says so in advance).
+ */
+function BudgetMeter({ usage, cost }: { usage: Usage | undefined; cost: number }) {
+  const { org, can } = useOrgCtx();
+  if (!usage || usage.budgetUsd <= 0) return null;
+  const budget = usage.budgetUsd;
+  const used = usage.estimatedUsd;
+  const usedPct = Math.min(100, (used / budget) * 100);
+  const runPct = Math.max(0, Math.min(100 - usedPct, (cost / budget) * 100));
+  const over = cost > 0 && used + cost > budget;
+  const left = Math.max(0, budget - used - cost);
+  return (
+    <div className="mt-5 rounded-lg border border-line bg-surface-2/40 p-3.5">
+      <div className="flex items-baseline justify-between gap-3 text-xs">
+        <span className="inline-flex items-center gap-0.5 font-medium text-ink-2">
+          Monthly budget
+          <InfoTip label="About the monthly budget">Runs that would go over the budget are refused. Weekly monitoring is counted separately.</InfoTip>
+        </span>
+        <span className="tabular text-ink-3">
+          {formatUsd(used)} of {formatUsd(budget)} used
+        </span>
+      </div>
+      <div
+        className="mt-2 flex h-2 w-full gap-0.5 overflow-hidden rounded-full bg-surface-3"
+        role="meter"
+        aria-label="Monthly budget used, with this run"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(usedPct + runPct)}
+        aria-valuetext={`${formatUsd(used)} used, this run ${costLabel(cost)}, of ${formatUsd(budget)}`}
+      >
+        {usedPct > 0 && <span className="h-full rounded-l-full bg-accent transition-[width] duration-500 ease-brand" style={{ width: `${usedPct}%` }} />}
+        {runPct > 0 && <span className={cn('h-full bg-accent/40 dark:bg-accent-text/55 transition-[width] duration-500 ease-brand', usedPct <= 0 && 'rounded-l-full')} style={{ width: `${runPct}%` }} />}
+      </div>
+      <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3" aria-hidden>
+        <li className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-[3px] bg-accent" />
+          Used
+        </li>
+        <li className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 rounded-[3px] bg-accent/40 dark:bg-accent-text/55" />
+          This run
+        </li>
+        <li className="ml-auto tabular">{over ? 'Over budget' : `${formatUsd(left)} left after it`}</li>
+      </ul>
+      {over && (
+        <p className="mt-2.5 flex items-start gap-1.5 text-xs leading-snug text-warning-text">
+          <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
+          <span>
+            This run would go over the monthly budget.{' '}
+            {can('owner') ? (
+              <Link to={paths.settings(org.id, 'usage')} className="font-medium underline underline-offset-2">
+                Raise the budget
+              </Link>
+            ) : (
+              'Ask a company owner to raise the budget.'
+            )}
+          </span>
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** The form with its sticky summary (right column on desktop, a bar at the bottom on phones). */
 export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSubmit, pending, error, submitLabel = 'Start the run', blocked: blockedBy, values = {}, onUsePlan, children }: ShellProps) {
-  const { can, me } = useOrgCtx();
+  const { org, can, me } = useOrgCtx();
   const providers = useProviders();
+  const usage = useUsage(org.id);
   const showEmail = emailCopy && !!providers.data?.engineEmails;
   const readOnly = !can('member');
   const pipe = usePipelineNotices(mode, site, values, cost);
@@ -331,79 +461,97 @@ export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSub
   const disabled = readOnly || !!blocked;
   const info = MODES[mode];
   const summary = (withButton: boolean) => (
-    <Card className="p-5">
-      <h2 className="text-[15px] font-semibold text-ink">Summary</h2>
-      <dl className="mt-4 space-y-4 text-sm">
-        <SummaryRow icon={<Globe className="size-4" />} label="Website">
-          {site ? (
-            <span className="flex flex-wrap items-center gap-1.5">
-              <span className="font-medium text-ink">{site.domain}</span>
-              {site.verifiedAt ? <StatusBadge tone="good">Verified</StatusBadge> : <StatusBadge tone="warning">Not verified</StatusBadge>}
-            </span>
-          ) : (
-            <span className="text-ink-2">{info.siteBound ? 'Choose a website' : 'None: research only'}</span>
-          )}
-        </SummaryRow>
-        <SummaryRow icon={<PackageCheck className="size-4" />} label="What you get">
-          <span className="text-ink-2">{info.delivers}</span>
-          {extras.map((x) => (
-            <span key={x} className="mt-1 flex items-start gap-1.5 text-ink-2">
-              <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-good-text" aria-hidden />
-              {x}
-            </span>
-          ))}
-        </SummaryRow>
-        <SummaryRow icon={<Coins className="size-4" />} label="Estimated cost">
-          <span className="font-display text-lg font-semibold text-ink">{costLabel(cost)}</span>
-          {cost > 0 && <span className="block text-xs text-ink-3">Counted against your company's monthly budget</span>}
-        </SummaryRow>
-        <SummaryRow icon={<Clock className="size-4" />} label="Time">
-          <span className="text-ink-2">{etaLabel(eta)}</span>
-          <span className="block text-xs text-ink-3">You can leave the page: the run keeps going</span>
-        </SummaryRow>
-        {pipe.notices.length > 0 && (
-          <SummaryRow icon={<Repeat className="size-4" />} label="Pipeline">
-            {pipe.notices.map((n) => (
-              <span key={n.id} className="flex items-start gap-1.5 text-ink-2">
-                {n.tone === 'warning' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning-text" aria-hidden /> : <Repeat className="mt-0.5 size-3.5 shrink-0 text-accent-text" aria-hidden />}
-                {n.short}
+    <Card className="overflow-hidden">
+      <div className="flex items-center gap-2.5 border-b border-line bg-surface-2/50 px-5 py-3.5">
+        <IconTile size="sm">
+          <ClipboardList />
+        </IconTile>
+        <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">Summary</h2>
+      </div>
+      <div className="p-5">
+        <dl className="space-y-4 text-sm">
+          <SummaryRow icon={<Globe />} label="Website">
+            {site ? (
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span className="font-medium text-ink">{site.domain}</span>
+                {site.verifiedAt ? <StatusBadge tone="good">Verified</StatusBadge> : <StatusBadge tone="warning">Not verified</StatusBadge>}
+              </span>
+            ) : (
+              <span className="text-ink-2">{info.siteBound ? 'Choose a website' : 'None: research only'}</span>
+            )}
+          </SummaryRow>
+          <SummaryRow icon={<PackageCheck />} label="What you get">
+            <span className="text-ink-2">{info.delivers}</span>
+            {extras.map((x) => (
+              <span key={x} className="mt-1 flex animate-fade-in items-start gap-1.5 text-ink-2">
+                <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-good-text" aria-hidden />
+                {x}
               </span>
             ))}
           </SummaryRow>
-        )}
-        {showEmail && (
-          <SummaryRow icon={<Mail className="size-4" />} label="E-mail copy">
-            <span className="break-all text-ink-2">{me.user.email}</span>
+          <SummaryRow icon={<Coins />} label="Estimated cost">
+            <span className="font-display text-xl font-semibold tracking-[-0.01em] text-ink">
+              <CostValue usd={cost} />
+            </span>
+            {cost > 0 && <span className="block text-xs text-ink-3">Counted against your company's monthly budget</span>}
           </SummaryRow>
+          <SummaryRow icon={<Clock />} label="Time">
+            <span className="text-ink-2">{etaLabel(eta)}</span>
+            <span className="block text-xs text-ink-3">You can leave the page: the run keeps going</span>
+          </SummaryRow>
+          {pipe.notices.length > 0 && (
+            <SummaryRow icon={<Repeat />} label="Pipeline">
+              {pipe.notices.map((n) => (
+                <span key={n.id} className="flex items-start gap-1.5 text-ink-2">
+                  {n.tone === 'warning' ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warning-text" aria-hidden /> : <Repeat className="mt-0.5 size-3.5 shrink-0 text-accent-text" aria-hidden />}
+                  {n.short}
+                </span>
+              ))}
+            </SummaryRow>
+          )}
+          {showEmail && (
+            <SummaryRow icon={<Mail />} label="E-mail copy">
+              <span className="break-all text-ink-2">{me.user.email}</span>
+            </SummaryRow>
+          )}
+        </dl>
+        <BudgetMeter usage={usage.data} cost={cost} />
+        {withButton && (
+          <Button type="submit" size="lg" className="mt-5 w-full" loading={pending} disabled={disabled} icon={<Play className="size-4" />}>
+            {submitLabel}
+          </Button>
         )}
-      </dl>
-      {withButton && (
-        <Button type="submit" size="lg" className="mt-5 w-full" loading={pending} disabled={disabled} icon={<Play className="size-4" />}>
-          {submitLabel}
-        </Button>
-      )}
-      {readOnly && <p className="mt-2 text-xs text-ink-3">View-only access: ask an admin for the member role to start runs.</p>}
-      {!readOnly && blocked && <div className="mt-2 text-xs text-ink-3">{blocked}</div>}
+        {readOnly && <p className="mt-2 text-xs text-ink-3">View-only access: ask an admin for the member role to start runs.</p>}
+        {!readOnly && blocked && <div className="mt-2 text-xs text-ink-3">{blocked}</div>}
+      </div>
     </Card>
   );
   return (
     <form onSubmit={onSubmit} noValidate className="pb-24 lg:pb-0">
       <fieldset disabled={readOnly} className="m-0 min-w-0 border-0 p-0">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-w-0 space-y-5">
+        <ToolIntro mode={mode} cost={cost} eta={eta} extras={extras} />
+        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <Stagger className="min-w-0 space-y-5 [counter-reset:formcard]">
             <SubmitError error={error} siteId={site?.id} />
             {site && <PipelineNotices notices={pipe.notices} acked={pipe.acked} onToggle={pipe.toggle} onUsePlan={onUsePlan} siteId={site.id} />}
             {children}
             <div className="lg:hidden">{summary(false)}</div>
-          </div>
+          </Stagger>
           <aside className="hidden lg:block">
             <div className="sticky top-6">{summary(true)}</div>
           </aside>
         </div>
-        <div className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur lg:hidden">
-          <div className="min-w-0 text-[13px]">
-            <p className="font-semibold text-ink">{costLabel(cost)}</p>
-            <p className="truncate text-ink-3">{etaLabel(eta)}</p>
+        <div className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-line bg-surface/95 px-4 py-3 shadow-overlay backdrop-blur lg:hidden">
+          <div className="flex min-w-0 items-center gap-2.5 text-[13px]">
+            <IconTile size="sm" className="max-[340px]:hidden">
+              <Coins />
+            </IconTile>
+            <div className="min-w-0">
+              <p className="font-display font-semibold text-ink">
+                <CostValue usd={cost} />
+              </p>
+              <p className="truncate text-ink-3">{etaLabel(eta)}</p>
+            </div>
           </div>
           <Button type="submit" loading={pending} disabled={disabled} icon={<Play className="size-4" />}>
             {submitLabel}
@@ -417,7 +565,9 @@ export function ToolShell({ mode, site, cost, eta, emailCopy, extras = [], onSub
 function SummaryRow({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
   return (
     <div className="flex gap-3">
-      <span className="mt-0.5 text-ink-3">{icon}</span>
+      <IconTile size="xs" tone="neutral" className="mt-0.5">
+        {icon}
+      </IconTile>
       <div className="min-w-0 flex-1">
         <dt className="text-xs font-medium text-ink-3">{label}</dt>
         <dd className="mt-0.5">{children}</dd>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Navigate, useNavigate, useParams } from 'react-router';
@@ -6,7 +6,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { toast } from 'sonner';
 import { eachDayOfInterval, endOfMonth, format, isValid, min as minDate, parseISO } from 'date-fns';
-import { Globe, Mail, Plus, Trash2, UserPlus, Wallet } from 'lucide-react';
+import { Activity, Building2, CalendarDays, ChartNoAxesColumn, Clock, Globe, Mail, PiggyBank, Play, Plus, Search, Settings, Trash2, UserPlus, Users, Wallet } from 'lucide-react';
 import {
   COMPANY_SIZES,
   compactNumber,
@@ -16,6 +16,7 @@ import {
   MODES,
   ROLE_LABELS,
   type Invitation,
+  type ModeId,
   type Member,
   type Role,
   type Usage,
@@ -24,10 +25,12 @@ import { BarsChart, ChartCard } from '@/components/charts';
 import { applyServerErrors } from '@/components/site/helpers';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
-import { Card, CardBody, CardFooter, CardHeader } from '@/components/ui/card';
+import { Card, CardBody, CardFooter } from '@/components/ui/card';
 import { Callout, EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select } from '@/components/ui/field';
-import { Avatar, CopyButton, Meter, PageHeader, StatTile } from '@/components/ui/misc';
+import { Avatar, CopyButton, Meter, PageHeader } from '@/components/ui/misc';
+import { CountUp, IconTile, MetricCard, ScoreRing, Stagger } from '@/components/insight';
+import { ModeGlyph } from '@/components/reports/meta';
 import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
 import { LinkTabs } from '@/components/ui/tabs';
@@ -36,6 +39,7 @@ import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { qk, useDeleteOrg, useMembers, useSetBudget, useTeamMutation, useUpdateOrg, useUsage } from '@/lib/queries';
 import { fmtAgo, fmtDate, fmtDay } from '@/lib/utils';
+import { RoleChip, ROLE_ICON, SettingsCard } from './_components/SettingsCard';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
@@ -59,7 +63,7 @@ export default function OrgSettingsPage() {
   if (!current) return <Navigate to={paths.settings(org.id, 'company')} replace />;
   return (
     <div>
-      <PageHeader title="Company settings" description={current.description} eyebrow={org.name} />
+      <PageHeader icon={<Building2 />} title="Company settings" description={current.description} eyebrow={org.name} />
       <LinkTabs className="mb-6" items={TABS.map((t) => ({ to: paths.settings(org.id, t.id), label: t.label }))} />
       {current.id === 'company' && <CompanyTab />}
       {current.id === 'team' && <TeamTab />}
@@ -100,7 +104,7 @@ function CompanyTab() {
   });
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <Stagger className="max-w-3xl space-y-5">
       {!org.onboardedAt && admin && (
         <Callout
           tone="info"
@@ -115,8 +119,7 @@ function CompanyTab() {
         </Callout>
       )}
 
-      <Card>
-        <CardHeader title="Company details" description={`Created ${fmtDate(org.createdAt)} · your role: ${ROLE_LABELS[org.role]}`} />
+      <SettingsCard icon={<Building2 />} title="Company details" description={`Created ${fmtDate(org.createdAt)} · your role: ${ROLE_LABELS[org.role]}`}>
         <form onSubmit={submit} noValidate>
           <CardBody>
             <fieldset disabled={!admin} className="space-y-5">
@@ -154,26 +157,28 @@ function CompanyTab() {
             </CardFooter>
           )}
         </form>
-      </Card>
+      </SettingsCard>
 
-      <Card>
-        <CardHeader
-          title="Websites"
-          description="Each website has its own dashboard, settings and tracking."
-          actions={
-            admin ? (
-              <ButtonLink to={paths.newSite(org.id)} size="sm" variant="secondary" icon={<Plus className="size-4" />}>
-                Add a website
-              </ButtonLink>
-            ) : undefined
-          }
-        />
+      <SettingsCard
+        icon={<Globe />}
+        title="Websites"
+        description="Each website has its own dashboard, settings and tracking."
+        actions={
+          admin ? (
+            <ButtonLink to={paths.newSite(org.id)} size="sm" variant="secondary" icon={<Plus className="size-4" />}>
+              Add a website
+            </ButtonLink>
+          ) : undefined
+        }
+      >
         <CardBody>
           {sites.length ? (
-            <ul className="divide-y divide-line rounded-xl border border-line">
+            <ul className="divide-y divide-line overflow-hidden rounded-xl border border-line">
               {sites.map((s) => (
-                <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
-                  <Globe className="size-4 shrink-0 text-ink-3" aria-hidden />
+                <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 transition-colors duration-150 ease-brand hover:bg-surface-2/50">
+                  <IconTile size="sm" tone={s.verifiedAt ? 'blue' : 'neutral'}>
+                    <Globe />
+                  </IconTile>
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{s.domain}</span>
                   {s.verifiedAt ? <StatusBadge tone="good">Verified</StatusBadge> : <StatusBadge tone="warning">Not verified</StatusBadge>}
                   {s.trackingStatus === 'active' ? (
@@ -183,7 +188,7 @@ function CompanyTab() {
                   ) : (
                     <Badge>Not tracked</Badge>
                   )}
-                  <ButtonLink to={paths.site(org.id, s.id, 'settings/business')} variant="ghost" size="sm">
+                  <ButtonLink to={paths.site(org.id, s.id, 'settings/business')} variant="ghost" size="sm" icon={<Settings className="size-3.5" />}>
                     Settings
                   </ButtonLink>
                 </li>
@@ -193,10 +198,10 @@ function CompanyTab() {
             <p className="text-sm text-ink-3">No websites yet.</p>
           )}
         </CardBody>
-      </Card>
+      </SettingsCard>
 
       {can('owner') && <DeleteCompanyCard />}
-    </div>
+    </Stagger>
   );
 }
 
@@ -227,8 +232,7 @@ function DeleteCompanyCard() {
 
   return (
     // the danger zone sits apart from the everyday settings
-    <Card className="mt-5 border-critical/40">
-      <CardHeader title="Danger zone" icon={<Trash2 className="size-4 text-critical-text" />} description="Only the owner sees this." />
+    <SettingsCard danger className="mt-5" icon={<Trash2 />} title="Danger zone" description="Only the owner sees this.">
       <CardBody className="space-y-2 text-sm leading-relaxed text-ink-2">
         <p>
           Deleting <strong className="font-medium text-ink">{org.name}</strong> stops the weekly tracking, monitors and blog posts of its{' '}
@@ -270,7 +274,7 @@ function DeleteCompanyCard() {
           {remove.isError && !fieldError && <Callout tone="critical">{errorMessage(remove.error)}</Callout>}
         </div>
       </Dialog>
-    </Card>
+    </SettingsCard>
   );
 }
 
@@ -322,21 +326,23 @@ function TeamTab() {
   // the role control (a select for admins, a badge otherwise); its own column from md up, under the e-mail on phones
   const roleCell = (m: Member) =>
     admin && m.role !== 'owner' && m.userId !== me.user.id ? (
-      <Select
-        aria-label={`Role of ${m.name}`}
-        value={m.role}
-        disabled={pendingRole === m.userId}
-        onChange={(e) => changeRole(m, e.target.value as Role)}
-        className="h-8 w-32 text-[13px]"
-      >
-        {(['admin', 'member', 'viewer'] as const).map((r) => (
-          <option key={r} value={r}>
-            {ROLE_LABELS[r]}
-          </option>
-        ))}
-      </Select>
+      <div className="w-32">
+        <Select
+          aria-label={`Role of ${m.name}`}
+          value={m.role}
+          disabled={pendingRole === m.userId}
+          onChange={(e) => changeRole(m, e.target.value as Role)}
+          className="h-8 text-[13px]"
+        >
+          {(['admin', 'member', 'viewer'] as const).map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABELS[r]}
+            </option>
+          ))}
+        </Select>
+      </div>
     ) : (
-      <Badge tone={m.role === 'owner' ? 'accent' : 'neutral'}>{ROLE_LABELS[m.role]}</Badge>
+      <RoleChip role={m.role} />
     );
 
   const columns: Column<Member>[] = [
@@ -346,7 +352,7 @@ function TeamTab() {
       sortValue: (m) => m.name.toLowerCase(),
       cell: (m) => (
         <span className="flex min-w-0 items-center gap-3">
-          <Avatar name={m.name} src={m.avatarUrl} size={32} />
+          <Avatar name={m.name} src={m.avatarUrl} size={36} />
           <span className="min-w-0">
             <span className="flex items-center gap-2 font-medium text-ink">
               <span className="truncate">{m.name}</span>
@@ -365,7 +371,18 @@ function TeamTab() {
       sortValue: (m) => ['owner', 'admin', 'member', 'viewer'].indexOf(m.role),
       cell: roleCell,
     },
-    { key: 'joinedAt', header: 'Joined', hideOnMobile: true, sortValue: (m) => m.joinedAt, cell: (m) => <span className="text-ink-2">{fmtDate(m.joinedAt)}</span> },
+    {
+      key: 'joinedAt',
+      header: 'Joined',
+      hideOnMobile: true,
+      sortValue: (m) => m.joinedAt,
+      cell: (m) => (
+        <span className="inline-flex items-center gap-1.5 text-ink-2">
+          <CalendarDays className="size-3.5 shrink-0 text-ink-3" aria-hidden />
+          {fmtDate(m.joinedAt)}
+        </span>
+      ),
+    },
     {
       key: 'actions',
       header: <span className="sr-only">Actions</span>,
@@ -378,31 +395,6 @@ function TeamTab() {
         ) : admin ? (
           <Button variant="ghost" size="sm" onClick={() => setConfirm(m)} aria-label={`Remove ${m.name}`}>
             Remove
-          </Button>
-        ) : null,
-    },
-  ];
-
-  const invColumns: Column<Invitation>[] = [
-    { key: 'email', header: 'E-mail', sortValue: (i) => i.email, cell: (i) => <span className="break-all">{i.email}</span> },
-    { key: 'role', header: 'Role', cell: (i) => <Badge>{ROLE_LABELS[i.role]}</Badge> },
-    { key: 'invitedBy', header: 'Invited by', hideOnMobile: true, cell: (i) => <span className="text-ink-2">{i.invitedBy ?? '–'}</span> },
-    { key: 'expiresAt', header: 'Expires', sortValue: (i) => i.expiresAt, cell: (i) => <span className="text-ink-2">{fmtAgo(i.expiresAt)}</span> },
-    {
-      key: 'actions',
-      header: <span className="sr-only">Actions</span>,
-      align: 'right',
-      cell: (i) =>
-        admin ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            loading={revoke.isPending && revoke.variables?.id === i.id}
-            onClick={() =>
-              revoke.mutate({ id: i.id }, { onSuccess: () => toast.success(`Invitation for ${i.email} withdrawn`), onError: (e) => toast.error(errorMessage(e)) })
-            }
-          >
-            Withdraw
           </Button>
         ) : null,
     },
@@ -424,38 +416,78 @@ function TeamTab() {
   const { members: list, invitations } = members.data;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader
-          title={`Members (${list.length})`}
-          description="Everyone here sees all websites of the company. What they can change depends on their role."
-          actions={
-            admin ? (
-              <Button size="sm" icon={<UserPlus className="size-4" />} onClick={() => setInviteOpen(true)}>
-                Invite people
-              </Button>
-            ) : undefined
-          }
-        />
+    <Stagger className="space-y-6">
+      <SettingsCard
+        icon={<Users />}
+        title={`Members (${list.length})`}
+        description="Everyone here sees all websites of the company. What they can change depends on their role."
+        actions={
+          admin ? (
+            <Button size="sm" icon={<UserPlus className="size-4" />} onClick={() => setInviteOpen(true)}>
+              Invite people
+            </Button>
+          ) : undefined
+        }
+      >
         <CardBody>
           <DataTable rows={list} columns={columns} rowKey={(m) => m.userId} initialSort={{ key: 'role', dir: 'asc' }} searchable={list.length > 8} searchPlaceholder="Search members…" />
-          <dl className="mt-4 grid gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-2">
+          <h3 className="mt-6 mb-2.5 text-xs font-medium text-ink-3">What each role can do</h3>
+          <dl className="grid gap-2.5 sm:grid-cols-2">
             {(['owner', 'admin', 'member', 'viewer'] as const).map((r) => (
-              <div key={r} className="flex gap-2">
-                <dt className="w-16 shrink-0 font-medium text-ink">{ROLE_LABELS[r]}</dt>
-                <dd className="text-ink-3">{ROLE_DESCRIPTIONS[r]}</dd>
+              <div key={r} className="flex items-start gap-3 rounded-lg border border-line p-3 transition-colors duration-150 ease-brand hover:border-line-strong">
+                <IconTile size="sm" tone={r === 'owner' ? 'blue' : 'neutral'}>
+                  {ROLE_ICON[r]}
+                </IconTile>
+                <div className="min-w-0">
+                  <dt className="text-[13px] font-medium text-ink">{ROLE_LABELS[r]}</dt>
+                  <dd className="mt-0.5 text-[13px] leading-snug text-ink-3">{ROLE_DESCRIPTIONS[r]}</dd>
+                </div>
               </div>
             ))}
           </dl>
         </CardBody>
-      </Card>
+      </SettingsCard>
 
       {admin && (
-        <Card>
-          <CardHeader title={`Open invitations (${invitations.length})`} description="Invitation links work for 7 days. A new invitation to the same address replaces the old link." />
+        <SettingsCard icon={<Mail />} title={`Open invitations (${invitations.length})`} description="Invitation links work for 7 days. A new invitation to the same address replaces the old link.">
           <CardBody>
             {invitations.length ? (
-              <DataTable rows={invitations} columns={invColumns} rowKey={(i) => i.id} pageSize={10} />
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {invitations.map((i) => (
+                  <li key={i.id} className="flex flex-col rounded-xl border border-line bg-surface p-4 shadow-card transition-[border-color,box-shadow] duration-200 ease-brand hover:border-line-strong hover:shadow-raised">
+                    <div className="flex items-start gap-3">
+                      <IconTile size="md">
+                        <Mail />
+                      </IconTile>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium break-all text-ink">{i.email}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                          <RoleChip role={i.role} />
+                          <span className="inline-flex h-6 items-center gap-1 rounded-md bg-surface-2 px-2 text-xs text-ink-2">
+                            <Clock className="size-3 shrink-0 text-ink-3" aria-hidden />
+                            Expires {fmtAgo(i.expiresAt)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+                      <span className="text-xs text-ink-3">Invited by {i.invitedBy ?? '–'}</span>
+                      {admin ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          loading={revoke.isPending && revoke.variables?.id === i.id}
+                          onClick={() =>
+                            revoke.mutate({ id: i.id }, { onSuccess: () => toast.success(`Invitation for ${i.email} withdrawn`), onError: (e) => toast.error(errorMessage(e)) })
+                          }
+                        >
+                          Withdraw
+                        </Button>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             ) : (
               <EmptyState
                 icon={<Mail className="size-5" />}
@@ -470,7 +502,7 @@ function TeamTab() {
               />
             )}
           </CardBody>
-        </Card>
+        </SettingsCard>
       )}
 
       {admin && <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />}
@@ -497,7 +529,7 @@ function TeamTab() {
       >
         {removeMember.isError && <Callout tone="critical">{errorMessage(removeMember.error)}</Callout>}
       </Dialog>
-    </div>
+    </Stagger>
   );
 }
 
@@ -591,7 +623,7 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
             </p>
             <div role="radiogroup" aria-labelledby="invite-role-label" className="space-y-2">
               {(['admin', 'member', 'viewer'] as const).map((r) => (
-                <ChoiceCard key={r} selected={role === r} onSelect={() => form.setValue('role', r)} title={ROLE_LABELS[r]} description={ROLE_DESCRIPTIONS[r]} />
+                <ChoiceCard key={r} selected={role === r} onSelect={() => form.setValue('role', r)} title={ROLE_LABELS[r]} description={ROLE_DESCRIPTIONS[r]} icon={<span className="[&_svg]:size-4">{ROLE_ICON[r]}</span>} />
               ))}
             </div>
           </div>
@@ -663,31 +695,53 @@ function UsageTab() {
   ].sort((a, b) => b.estimatedUsd - a.estimatedUsd);
 
   return (
-    <div className="space-y-5">
-      <p className="text-sm text-ink-2">{monthLabel(u.month)}</p>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatTile
+    <Stagger className="space-y-5">
+      <p className="inline-flex h-7 items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-[13px] font-medium text-ink-2 shadow-card">
+        <CalendarDays className="size-3.5 text-accent-text" aria-hidden />
+        {monthLabel(u.month)}
+      </p>
+      <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
           label="Spent this month"
-          value={formatUsd(u.estimatedUsd)}
-          hint={
-            <span className="block space-y-1.5">
-              <Meter value={pct} tone={tone} label="Share of the monthly budget used" />
-              <span className="block">
-                {pct}% of the {formatUsd(u.budgetUsd)} budget · measured so far {formatUsd(u.actualUsd)}
+          icon={<Wallet />}
+          tone={tone === 'accent' ? 'blue' : tone}
+          visual={
+            <span className="flex items-center gap-3">
+              <ScoreRing label="Share of the monthly budget used" value={Math.min(pct, 100)} tone={tone} display={`${pct}%`} valueText={`${pct}% of the budget used`} size={60} />
+              <span className="font-display text-[26px] leading-none font-semibold tracking-[-0.01em] text-ink">
+                <CountUp value={u.estimatedUsd} format={(v) => formatUsd(v)} />
               </span>
             </span>
           }
+          meta={
+            <>
+              {pct}% of the {formatUsd(u.budgetUsd)} budget · measured so far {formatUsd(u.actualUsd)}
+            </>
+          }
         />
-        <StatTile label="Left this month" value={formatUsd(u.remainingUsd)} hint="Runs that would go over the budget are refused." />
-        <StatTile
+        <MetricCard
+          label="Left this month"
+          icon={<PiggyBank />}
+          value={<CountUp value={u.remainingUsd} format={(v) => formatUsd(v)} />}
+          sparkline={
+            <span className="flex h-full items-center">
+              <Meter value={u.budgetUsd > 0 ? (u.remainingUsd / u.budgetUsd) * 100 : 0} tone={tone} label="Share of the monthly budget left" />
+            </span>
+          }
+          meta="Runs that would go over the budget are refused."
+        />
+        <MetricCard
           label="Analyses this month"
-          value={compactNumber(u.runs)}
-          hint={`Runs started from the app (failed runs are not counted)${checks.checks ? `, plus ${checks.checks} keyword check${checks.checks === 1 ? '' : 's'} (${formatUsd(checks.usd)})` : ''}.`}
+          icon={<Play />}
+          value={<CountUp value={u.runs} format={compactNumber} />}
+          meta={`Runs started from the app (failed runs are not counted)${checks.checks ? `, plus ${checks.checks} keyword check${checks.checks === 1 ? '' : 's'} (${formatUsd(checks.usd)})` : ''}.`}
+          to={paths.runs(org.id)}
         />
-        <StatTile
+        <MetricCard
           label="Monitoring per month"
-          value={formatUsd(u.monitoringMonthlyUsd)}
-          hint={`Estimate for weekly tracking and monitors of ${tracked} tracked ${tracked === 1 ? 'website' : 'websites'}; not counted in the budget.`}
+          icon={<Activity />}
+          value={<CountUp value={u.monitoringMonthlyUsd} format={(v) => formatUsd(v)} />}
+          meta={`Estimate for weekly tracking and monitors of ${tracked} tracked ${tracked === 1 ? 'website' : 'websites'}; not counted in the budget.`}
         />
       </div>
 
@@ -709,7 +763,7 @@ function UsageTab() {
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
           <ChartCard
-            title="Spend by analysis"
+            title={<ChartTitle icon={<ChartNoAxesColumn />}>Spend by analysis</ChartTitle>}
             description="Estimated cost this month"
             loading={usage.isFetching}
             table={{
@@ -721,18 +775,10 @@ function UsageTab() {
               rows: byMode,
             }}
           >
-            <BarsChart
-              data={byMode}
-              categoryKey="label"
-              series={[{ key: 'estimatedUsd', label: 'Estimated spend', format: (v) => formatUsd(v) }]}
-              horizontal
-              valueFormat={usdAxis}
-              categoryWidth={150}
-              height={Math.max(160, 48 + byMode.length * 36)}
-            />
+            <SpendBars rows={byMode} />
           </ChartCard>
           <ChartCard
-            title="Daily spend"
+            title={<ChartTitle icon={<CalendarDays />}>Daily spend</ChartTitle>}
             description="Estimated cost per day"
             loading={usage.isFetching}
             table={{
@@ -756,7 +802,57 @@ function UsageTab() {
       )}
 
       <BudgetCard usage={u} />
-    </div>
+    </Stagger>
+  );
+}
+
+/** A chart card title with its icon tile (as on the site dashboards). */
+function ChartTitle({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return (
+    <span className="flex items-center gap-3">
+      <IconTile size="sm">{icon}</IconTile>
+      <span className="min-w-0">{children}</span>
+    </span>
+  );
+}
+
+/** The mode a "spend by analysis" row is about (rows carry the tool's title), for its icon. */
+const modeByTitle = (label: string) => (Object.keys(MODES) as ModeId[]).find((id) => MODES[id].title === label);
+
+/** Spend by analysis as ranked bars: icon, name, runs, the amount and a bar against the biggest item. */
+function SpendBars({ rows }: { rows: { label: string; runs: number; estimatedUsd: number }[] }) {
+  const max = Math.max(0, ...rows.map((r) => r.estimatedUsd));
+  return (
+    <ul className="space-y-3.5 pt-1" aria-label="Estimated spend by analysis">
+      {rows.map((r) => {
+        const mode = modeByTitle(r.label);
+        const w = max > 0 ? Math.max(2, (r.estimatedUsd / max) * 100) : 0;
+        return (
+          <li key={r.label} className="flex items-center gap-3">
+            {mode ? <ModeGlyph mode={mode} size="sm" /> : (
+              <IconTile size="sm">
+                <Search />
+              </IconTile>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                <span className="min-w-0 truncate font-medium text-ink">{r.label}</span>
+                <span className="shrink-0 tabular text-ink-2">
+                  <span className="font-medium text-ink">{formatUsd(r.estimatedUsd)}</span>
+                  <span className="text-ink-3">
+                    {' '}
+                    · {r.runs} {r.runs === 1 ? 'run' : 'runs'}
+                  </span>
+                </span>
+              </div>
+              <div className="mt-1.5 h-2 w-full overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                <div className="h-full rounded-full bg-accent transition-[width] duration-700 ease-brand" style={{ width: `${w}%` }} />
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -781,11 +877,12 @@ function BudgetCard({ usage }: { usage: Usage }) {
   };
 
   return (
-    <Card className="max-w-3xl">
-      <CardHeader
-        title="Monthly budget"
-        description="Caps what analyses started from the app may cost each calendar month (estimates). Weekly monitoring is shown above as a separate estimate."
-      />
+    <SettingsCard
+      className="max-w-3xl"
+      icon={<Wallet />}
+      title="Monthly budget"
+      description="Caps what analyses started from the app may cost each calendar month (estimates). Weekly monitoring is shown above as a separate estimate."
+    >
       <CardBody>
         {owner ? (
           <Field label="Budget per month (USD)" hint={`Used this month: ${formatUsd(usage.estimatedUsd)}.`} error={err ?? undefined} className="max-w-sm">
@@ -809,6 +906,6 @@ function BudgetCard({ usage }: { usage: Usage }) {
           </p>
         )}
       </CardBody>
-    </Card>
+    </SettingsCard>
   );
 }

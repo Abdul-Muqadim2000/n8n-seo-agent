@@ -12,6 +12,7 @@ import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout, Skeleton } from '@/components/ui/feedback';
 import { Checkbox } from '@/components/ui/field';
+import { IconTile } from '@/components/insight';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { qk, useGoogleConnection, useOnboardingStep, useSiteData, useStartRun, useUsage } from '@/lib/queries';
@@ -221,7 +222,7 @@ export function LaunchStep() {
 
         <fieldset className="space-y-2.5">
           <legend className="mb-3 text-sm font-semibold text-ink">Also start right away</legend>
-          <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong">
+          <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong has-[:checked]:border-accent-text/50 has-[:checked]:bg-accent-soft/60">
             <Checkbox
               checked={auditNow}
               onChange={(e) => setAuditNow(e.target.checked)}
@@ -230,7 +231,7 @@ export function LaunchStep() {
               description={`About 20 minutes, about ${formatUsd(MODES.audit.costUsd)}. Health score, issues by priority and a fix pack, without waiting for the 1st of the month.`}
             />
           </div>
-          <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong">
+          <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong has-[:checked]:border-accent-text/50 has-[:checked]:bg-accent-soft/60">
             <Checkbox
               checked={aiNow}
               onChange={(e) => setAiNow(e.target.checked)}
@@ -243,13 +244,16 @@ export function LaunchStep() {
 
         {/* cost note */}
         <div className="flex items-start gap-3 rounded-lg border border-line bg-surface-2 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
-          <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-surface text-ink-3 shadow-card" aria-hidden>
-            <Receipt className="size-3.5" />
-          </span>
-          <p className="min-w-0 pt-0.5">
-            <span className="font-semibold text-ink">Starting now costs about {formatUsd(nowCost)}</span>
-            {usage.data && <> · {formatUsd(usage.data.remainingUsd)} left in this month’s budget of {formatUsd(usage.data.budgetUsd)}</>}.
-          </p>
+          <IconTile size="sm">
+            <Receipt />
+          </IconTile>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <p>
+              <span className="font-semibold text-ink">Starting now costs about {formatUsd(nowCost)}</span>
+              {usage.data && <> · {formatUsd(usage.data.remainingUsd)} left in this month’s budget of {formatUsd(usage.data.budgetUsd)}</>}.
+            </p>
+            {usage.data && usage.data.budgetUsd > 0 && <BudgetBar used={usage.data.estimatedUsd} add={nowCost} budget={usage.data.budgetUsd} />}
+          </div>
         </div>
         {overBudget && (
           <Callout tone="warning" title="This is more than this month’s remaining budget">
@@ -301,6 +305,25 @@ function Row({ label, step, go, children, highlight }: { label: string; step: St
           Edit
         </button>
       </dd>
+    </div>
+  );
+}
+
+/** This month's budget: spent so far (solid blue) and what starting now adds (light blue). */
+function BudgetBar({ used, add, budget }: { used: number; add: number; budget: number }) {
+  const usedPct = Math.min(100, (used / budget) * 100);
+  const addPct = Math.max(0, Math.min(100 - usedPct, (add / budget) * 100));
+  return (
+    <div
+      className="mt-2 flex h-2 w-full max-w-sm gap-0.5 overflow-hidden rounded-full bg-surface-3"
+      role="meter"
+      aria-label="Monthly budget used, with what starting now adds"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(usedPct + addPct)}
+    >
+      {usedPct > 0 && <span className="h-full rounded-l-full bg-accent" style={{ width: `${usedPct}%` }} />}
+      {addPct > 0 && <span className={cn('h-full bg-accent/40 dark:bg-accent-text/55', usedPct <= 0 && 'rounded-l-full')} style={{ width: `${addPct}%` }} />}
     </div>
   );
 }

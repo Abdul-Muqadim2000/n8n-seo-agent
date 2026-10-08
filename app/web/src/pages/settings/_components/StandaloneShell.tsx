@@ -14,7 +14,10 @@ export function StandaloneShell({
   actions,
   children,
   wide,
+  icon,
 }: {
+  /** the page's icon, in a solid blue tile before the title */
+  icon?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
@@ -39,7 +42,7 @@ export function StandaloneShell({
           <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden />
           Back
         </button>
-        <PageHeader title={title} description={description} actions={actions} />
+        <PageHeader icon={icon} title={title} description={description} actions={actions} />
         {children}
       </main>
     </div>
