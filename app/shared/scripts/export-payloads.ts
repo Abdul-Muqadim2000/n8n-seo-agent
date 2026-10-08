@@ -61,6 +61,14 @@ const cases: Case[] = [
     expect: { page_type: 'Local Page', local_area: 'Dubai Marina', goal: 'sales', cta: 'Call us today', include_content: true, include_seo_report: false, 'video.provider': 'youtube', 'video.id': 'dQw4w9WgXcQ' },
   },
   {
+    name: 'keyword without a website, what you sell typed',
+    mode: 'keyword',
+    input: { siteId: null, keyword: 'odoo partner dubai', country: 'United Arab Emirates', business: 'ERP consultancy for food distributors', businessFacts: '40 Odoo rollouts since 2014' },
+    site: null,
+    mail: false,
+    expect: { mode: 'keyword', domain: '', business: 'ERP consultancy for food distributors', business_facts: '40 Odoo rollouts since 2014', email: '', include_content: true, include_seo_report: true },
+  },
+  {
     name: 'keyword improve existing page',
     mode: 'keyword',
     input: { siteId: SITE_ID, keyword: 'erp implementation dubai', country: 'United Arab Emirates', existingPageUrl: 'https://www.northwind-erp.com/erp-implementation/' },

@@ -63,7 +63,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
     case 'keyword': {
       const receive = [input.receiveReport ? 'Keyword Report' : null, input.receiveContent ? 'Page Content' : null].filter(Boolean);
       return {
-        ...head('keyword', input.keyword, input.country, dom, d, s?.business ?? '', s?.customers ?? ''),
+        ...head('keyword', input.keyword, input.country, dom, d, input.business || s?.business || '', s?.customers ?? ''),
         page_type: pageTypeValue(input.pageType),
         existing_page_url: input.existingPageUrl,
         local_area: input.localArea,

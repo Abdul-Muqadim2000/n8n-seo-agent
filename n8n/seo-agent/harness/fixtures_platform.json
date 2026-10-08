@@ -133,6 +133,43 @@
     }
   },
   {
+    "name": "keyword without a website, what you sell typed",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "keyword",
+      "keyword": "odoo partner dubai",
+      "country": "United Arab Emirates",
+      "domain": "",
+      "email": "",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "ERP consultancy for food distributors",
+      "customers": "",
+      "page_type": "Service Page",
+      "existing_page_url": "",
+      "local_area": "",
+      "business_facts": "40 Odoo rollouts since 2014",
+      "cta": "",
+      "tone": "Professional and direct",
+      "goal": "Get leads and enquiries",
+      "features": [],
+      "receive": [
+        "Keyword Report",
+        "Page Content"
+      ]
+    },
+    "expect": {
+      "mode": "keyword",
+      "domain": "",
+      "business": "ERP consultancy for food distributors",
+      "business_facts": "40 Odoo rollouts since 2014",
+      "email": "",
+      "include_content": true,
+      "include_seo_report": true
+    }
+  },
+  {
     "name": "keyword improve existing page",
     "headers": {
       "x-forwarded-for": "app:7a1c2d3e-org"

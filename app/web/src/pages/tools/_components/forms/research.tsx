@@ -72,6 +72,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
       siteId: initialSiteId,
       keyword: '',
       country: sd.country,
+      business: '',
       pageType: 'Service Page',
       existingPageUrl: '',
       localArea: '',
@@ -89,6 +90,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
     },
     prefill,
   );
+  if (initialSiteId) defaults.business = ''; // the field is shown only without a website (a "Try again" prefill must not override the site's description unseen)
   const form = useForm<KIn, unknown, KOut>({
     resolver: withChecks(zodResolver(KS), (x) => {
       const s = sites.find((y) => y.id === x.siteId);
@@ -114,7 +116,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
     if (!s) {
       form.setValue('existingPageUrl', '');
       form.setValue('checkPageExists', false);
-    }
+    } else form.setValue('business', ''); // with a website the engine uses the site's description (the field is hidden)
   });
   const extras = [v.receiveReport && 'Keyword report: competitors, verdict, keyword data', v.receiveContent && 'The finished page, QA-checked'].filter((x): x is string => !!x);
 
@@ -146,6 +148,19 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
           </Callout>
         )}
         <CountryField reg={form.register('country')} error={errMsg(e.country)} />
+        {!site && (
+          <TextAreaField
+            label="What you sell"
+            optional
+            reg={form.register('business')}
+            error={errMsg(e.business)}
+            rows={3}
+            max={500}
+            value={v.business}
+            placeholder="e.g. Microsoft Dynamics 365 partner implementing ERP for mid-sized distributors in the UAE"
+            hint="Without a website, the verdict and the brief learn what you sell from this. A sentence or two is enough."
+          />
+        )}
       </FormCard>
 
       <FormCard title="Page" description="The page type sets the structure, the schema and the call to action.">

@@ -165,7 +165,8 @@ export function ContentReport({ report }: { report: ReportDetail }) {
               description="Last 12 months"
               table={{ columns: [{ key: 'month', label: 'Month', format: (v) => monthLabel(v) }, { key: 'searches', label: 'Searches', align: 'right', format: (v) => n(v) }], rows: trend }}
             >
-              <TimeSeriesChart data={trend} xKey="month" xFormat={monthLabel} series={[{ key: 'searches', label: 'Searches' }]} area height={220} />
+              {/* volumes start at 0: an axis from the lowest month made a quiet month sit on (or under) the x-axis */}
+              <TimeSeriesChart data={trend} xKey="month" xFormat={monthLabel} series={[{ key: 'searches', label: 'Searches' }]} area height={220} yDomain={[0, 'auto']} />
             </ChartCard>
           ) : (
             <Block title="Searches per month">

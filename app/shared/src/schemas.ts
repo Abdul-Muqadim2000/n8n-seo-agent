@@ -120,6 +120,8 @@ export const keywordInput = z
     siteId: optionalSiteId,
     keyword: keywordField,
     country,
+    /** "What you sell": the form asks for it without a website (with one, the site's description is used) */
+    business: opt(500),
     pageType: z.enum(PAGE_TYPE_VALUES).default('Service Page'),
     existingPageUrl: optUrl,
     localArea: opt(80),
