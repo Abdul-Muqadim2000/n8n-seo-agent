@@ -4,7 +4,7 @@ const V = require('./fixtures_v5');
 const { run, mock, begin, expectError, save, scanHtml, store } = H;
 (async () => {
 const decode = (items) => Buffer.from(items[0].binary.data.data, 'base64').toString('utf8');
-const guard = async (name, fn) => { try { await fn(); } catch (e) { console.log(`   !! scenario "${name}" aborted at: ${(e.message || e).split('\n')[0]}`); } };
+const guard = async (name, fn) => { try { await fn(); } catch (e) { const msg = (e.message || e).split('\n')[0]; console.log(`   !! scenario "${name}" aborted at: ${msg}`); H.results.push({ scenario: name, node: 'scenario aborted', ok: false, ms: 0, error: msg, items: [] }); } };   // an aborted scenario is a failure (it was silent before 2026-10-08)
 const reset = () => { for (const k of Object.keys(store)) delete store[k]; };
 let pvS1 = null;   // Parse Verdict output of S1, reused by S18 (page types)
 // Search Console + sitemap part of the audit (between the data collection and Build Site Issues); `mode`: 'ok' | 'denied' | 'nosm'
@@ -127,6 +127,17 @@ await guard('keyword', async () => {
   const pcqHi = pcq.map(x => ({ json: { ...x.json, critique: { ...x.json.critique, score: 90, problems: (x.json.critique.problems || []).map(pr => ({ ...pr, severity: 'medium' })) } } }));
   const qaHi = await run('Content QA', pcqHi, { runIndex: 0 }); console.log('   editor gate ->', JSON.stringify({ round1_editor_needed: qa1[0].json.content_qa.editor_needed, with_review_90: qaHi[0].json.content_qa.editor_needed, score: qaHi[0].json.content_qa.content_score }));
   if (qa1[0].json.content_qa.editor_needed !== true || qaHi[0].json.content_qa.editor_needed !== true) throw new Error('editor pass skipped on a draft that misses SEO checks');
+  // v4.9 amount safeguard (live 2026-10-08, "peppol uae"): amounts in the verified facts stay; unsourced thresholds / fines become [Confirm: …]; prices [Price]
+  {
+    const pbSaved = store['Parse Brief'];
+    store['Parse Brief'] = pbSaved.map(x => ({ json: { ...x.json, currency: 'AED', business: 'ERP partner in Dubai', business_facts: '', facts: [...(x.json.facts || []), { claim: 'Late registration fines of AED 5,000 per month apply from 2027.', url: 'https://mof.gov.ae/e-invoicing', source: 'mof.gov.ae' }] } }));
+    const extra = '\n\n## Amounts\n\nBusinesses with revenue of AED 50m and above go first.\n\n| Segment | Go-live |\n|---|---|\n| Revenue AED 50m and above | [Date] |\n\nLate registration carries fines of AED 5,000 per month. Penalties reach AED 100 per invoice. Our readiness assessment costs AED 15,000. Packages from AED 3,500 to AED 9,000.\n';
+    const qaA = await run('Content QA', [{ json: { output: V.draftV5() + extra, critique: V.critique } }], { runIndex: 0 });
+    const o = qaA[0].json.output, fx = qaA[0].json.content_qa.auto_fixes.join(' | ');
+    store['Parse Brief'] = pbSaved;
+    const check = (label, ok, detail) => { H.results.push({ scenario: 'S1 Keyword mode — Content QA amounts', node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label); };
+    check('amounts: verified fine kept, revenue threshold and unsourced penalty flagged [Confirm: …], own prices [Price], never "[Price]m"', /fines of AED 5,000 per month/.test(o) && /revenue of \[Confirm: AED 50m\] and above/.test(o) && /Revenue \[Confirm: AED 50m\] and above/.test(o) && /reach \[Confirm: AED 100\] per invoice/.test(o) && /assessment costs \[Price\]/.test(o) && /Packages from \[Price\]\./.test(o) && !/\[Price\]m/.test(o) && /Kept 1 amount/.test(fx) && /Marked 3 unsourced/.test(fx), fx + ' || ' + (o.match(/[^.\n]*(AED|\[Price\]|\[Confirm)[^.\n]*/g) || []).slice(-6).join(' / '));
+  }
   store['Content QA'] = qa1;
   // Editor returns a corrected draft -> QA round 2
   mock('Editor', { output: V.draftV5({ longTitle: true }) });
@@ -1020,76 +1031,134 @@ await guard('page types', async () => {
 
 // ===================================================================================
 await guard('ai visibility', async () => {
-  reset(); begin('S19 AI Visibility Tracker — plan, prompts, requests, real engine answers, metrics, rows, report, second week, ad hoc');
-  const M = require('./fixtures_monitors');
+  reset(); const SN = 'S19 AI Visibility Tracker (v4.9) — plan, discovery, panel, GA4 revenue, crawler access, real engine answers, Answer Analyst, metrics, rows, report, second week with pulse samples, ad hoc';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const M = require('./fixtures_monitors'); const A9 = require('./fixtures_ai49');
   const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
-  const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error'];
-  const VIS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompts', 'answers', 'mention_rate', 'citation_rate', 'share_of_voice', 'avg_rank', 'aio_presence', 'aio_citation_rate', 'engines_json', 'competitors_json', 'sources_json', 'pages_json', 'gaps_json', 'market_json', 'market_month', 'cost_usd', 'alerts'];
-  const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at'];
+  const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout'];
+  const VIS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompts', 'answers', 'mention_rate', 'citation_rate', 'share_of_voice', 'avg_rank', 'aio_presence', 'aio_citation_rate', 'engines_json', 'competitors_json', 'sources_json', 'pages_json', 'gaps_json', 'market_json', 'market_month', 'cost_usd', 'alerts',
+    'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json'];
+  const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at'];
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note'];
-  const loadAll = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors()); mock('Load Profiles', M.profiles()); mock('Load AI Prompts', o.prompts || [{ json: {} }]); mock('Load AI Visibility', o.vis || [{ json: {} }]); mock('Load Link Prospects', o.prospects || [{ json: {} }]); };
+  const CACHE = ['key', 'kind', 'site_id', 'value', 'updated_at'];
+  const sitesGa4 = () => M.sites().map(s => ({ json: { ...s.json, ga4_property_id: '543096312' } }));
+  const gsc = [{ json: { site_id: M.SITE, domain: M.DOMAIN, query: 'which e invoicing provider is best for distributors in the uae', impressions: 120, clicks: 3, position: 14, checked_at: new Date().toISOString() } }, { json: { site_id: M.SITE, domain: M.DOMAIN, query: 'odoo uae', impressions: 900, clicks: 40, position: 4, checked_at: new Date().toISOString() } }];
+  const loadAll = (o = {}) => { mock('Load Sites', o.sites || sitesGa4()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', M.profiles()); mock('Load AI Prompts', o.prompts || [{ json: {} }]); mock('Load AI Visibility', o.vis || [{ json: {} }]);
+    mock('Load Link Prospects', o.prospects || [{ json: {} }]); mock('Load AI Daily', o.daily || [{ json: {} }]); mock('Load Cache (AI)', o.cache || [{ json: {} }]); mock('Load Query History', o.queries || gsc); };
   loadAll();
-  const plan = await run('AI Plan', store['Load Link Prospects']); const P = plan[0].json;
-  console.log('   plan ->', JSON.stringify({ sites: plan.length, brand: P.brand_names, competitors: P.competitors, topics: P.topics, engines: P.engines, need_prompts: P.need_prompts, needed: P.prompts_needed, market_due: P.market_due, run_id: P.run_id }));
-  const stj = await run('Site Text Jobs', plan); console.log('   site text needed ->', JSON.stringify(stj[0].json));
-  const jobs = await run('Prompt Jobs', plan); console.log('   prompt jobs ->', jobs.length, JSON.stringify({ count: jobs[0].json.count, brand_prompt_needed: !jobs[0].json.has_brand_prompt }));
+  const plan = await run('AI Plan', store['Load Query History']); const P = plan[0].json;
+  console.log('   plan ->', JSON.stringify({ brand: P.brand_names, competitors: P.competitors, topics: P.topics, engines: P.engines, needed: P.prompts_needed, run_kind: P.run_kind, iso: P.country_iso, gsc: P.gsc_questions.map(q => q.query), key_paths: P.key_paths, ga4: P.ga4_property_id }));
+  check('first run is the full run: discovery, index, market due; Claude monthly; country code AE', P.run_kind === 'full' && P.discovery_due && P.index_due && P.market_due && JSON.stringify(P.monthly_engines) === '["claude"]' && P.country_iso === 'AE', JSON.stringify(P).slice(0, 300));
+  check('Search Console questions: long / question-shaped queries only', P.gsc_questions.length === 1 && /best for distributors/.test(P.gsc_questions[0].query), JSON.stringify(P.gsc_questions));
+  check('key pages for the crawler check come from the ladder', P.key_paths.includes('/e-invoicing-uae/') && P.key_paths.includes('/uae-e-invoicing-penalties/'), JSON.stringify(P.key_paths));
+  await run('Site Text Jobs', plan);
+  const dq = await run('Discovery Requests', plan); const DQ = dq.map(x => x.json);
+  check('discovery: the database searched for the 2 main topics (Google AI Overviews in the UAE; no ChatGPT data outside US-English), no volumes before a panel exists', DQ.length === 2 && DQ.every(q => q.kind === 'discover' && q.platform === 'google' && /search_mentions/.test(q.endpoint) && q.body[0].target[0].search_scope[0] === 'question'), JSON.stringify(DQ.map(q => q.kind + ':' + q.platform)));
+  mock('Run Discovery', DQ.map(A9.discoveryFor));
+  const jobs = await run('Prompt Jobs', store['Run Discovery']); const J = jobs[0].json;
+  check('the Prompt Writer gets real questions with their demand, short ones dropped, and the Search Console question', J.market_questions.length === 4 && /1300\/mo/.test(J.market_questions[0]) && !J.market_questions.some(q => /^tbms/.test(q)) && J.search_questions.length === 1 && J.count === 8, JSON.stringify(J).slice(0, 400));
   mock('Prompt Writer', [{ json: M.promptWriter }]);
   const pr = await run('Prompt Rows', store['Prompt Writer']);
-  console.log('   prompt rows ->', pr.length, '| cols exact', same2(Object.keys(pr[0].json), PRC), '| kinds', [...new Set(pr.map(r => r.json.kind))].join(','), '| duplicate dropped', pr.filter(r => /best ERP implementation partners/.test(r.json.prompt)).length === 1);
+  check('prompt rows: exact columns, stage from the kind, cluster from the topic, duplicate dropped', pr.length === 7 && pr.every(r => same2(Object.keys(r.json), PRC)) && pr.find(r => r.json.kind === 'recommend').json.stage === 'decision' && pr.find(r => r.json.kind === 'problem').json.stage === 'awareness' && pr.find(r => r.json.kind === 'brand').json.stage === 'brand' && pr.filter(r => /best ERP implementation partners/.test(r.json.prompt)).length === 1, JSON.stringify(pr.map(r => r.json.kind + ':' + r.json.stage + ':' + r.json.cluster)));
   mock('Save Prompts', pr);
-  const rq = await run('AI Requests', pr); const R = rq.map(r => r.json);
+  const tq = await run('Traffic Requests', pr); const TQ = tq.map(x => x.json);
+  check('GA4: four reports for the stored property, AI referrers or the ai-assistant medium', TQ.length === 4 && TQ.every(q => /properties\/543096312:runReport/.test(q.url)) && TQ[0].body.dimensionFilter.orGroup.expressions.length === 2, JSON.stringify(TQ.map(q => q.kind)));
+  mock('GA4 AI Report', TQ.map(q => ({ json: A9.ga4(q.kind) })));
+  const ar = await run('Access Requests', store['GA4 AI Report']); const AR = ar.map(x => x.json);
+  check('access: robots.txt, llms.txt and the homepage as a browser and 4 AI fetchers', AR.length === 7 && AR.filter(q => q.kind === 'home').length === 5, JSON.stringify(AR.map(q => q.kind + ':' + q.bot)));
+  mock('Fetch Access', AR.map(q => ({ json: A9.accessFor(q) })));
+  const ac = await run('AI Access', store['Fetch Access']); const AC = ac[0].json;
+  const bot = (b) => AC.bots.find(x => x.bot === b);
+  console.log('   access ->', JSON.stringify({ ok: AC.ok, answer_ok: AC.answer_bots_ok + '/' + AC.answer_bots, training_blocked: AC.training_blocked, issues: AC.issues.map(i => i.level + ': ' + i.text.slice(0, 70)) }));
+  check('robots.txt: GPTBot (training) blocked, OAI-SearchBot allowed by "*", PerplexityBot blocked from a ladder page only, admin-ajax allowed', !bot('GPTBot').allowed_root && bot('OAI-SearchBot').allowed_root && bot('OAI-SearchBot').group_used === '*' && bot('PerplexityBot').allowed_root && JSON.stringify(bot('PerplexityBot').blocked_paths) === '["/uae-e-invoicing-penalties/"]' && AC.training_blocked.includes('GPTBot'), JSON.stringify(AC.bots.slice(0, 3)));
+  check('CDN challenge for PerplexityBot found (browser 200), llms.txt missing, not ok', AC.fetch.tests.find(t => t.bot === 'PerplexityBot').blocked && AC.fetch.tests.find(t => t.bot === 'PerplexityBot').challenge && !AC.fetch.tests.find(t => t.bot === 'OAI-SearchBot').blocked && !AC.llms_txt.found && !AC.ok && AC.issues.some(i => i.level === 'high' && /firewall or CDN/.test(i.text)), JSON.stringify(AC.fetch));
+  const rq = await run('AI Requests', ac); const R = rq.map(r => r.json);
   const byE = R.reduce((m, r) => { m[r.engine] = (m[r.engine] || 0) + 1; return m; }, {});
-  console.log('   requests ->', R.length, JSON.stringify(byE), '| est $' + R.reduce((s, r) => s + r.est_cost, 0).toFixed(2), '| chatgpt via scraper', /llm_scraper/.test(R.find(r => r.engine === 'chatgpt').endpoint), '| aio keyword', R.find(r => r.engine === 'ai_overview').body[0].keyword, '| no AIO for brand', !R.some(r => r.engine === 'ai_overview' && r.kind === 'brand'));
-  // real answers; the client is named + cited by ChatGPT and Claude on the recommend questions, Gemini fails once
-  const us = (q) => q.kind === 'recommend' && (q.engine === 'chatgpt' || q.engine === 'claude');
-  mock('Run AI Requests', R.map((q, i) => M.answerFor(q, i, { us, fail: (q2, j) => q2.engine === 'gemini' && j === R.findIndex(x => x.engine === 'gemini') })));
-  const pa = await run('Parse AI Answers', store['Run AI Requests']); const A = pa.map(r => r.json);
-  console.log('   answers ->', A.length, '| cols exact', same2(Object.keys(A[0]), ANS), '| answered', A.filter(a => a.answered).length, '| named', A.filter(a => a.mentioned).length, '| cited', A.filter(a => a.cited).length, '| errors', A.filter(a => a.error).length, '| market not stored', !A.some(a => a.engine === 'market'));
-  const cg = A.find(a => a.engine === 'chatgpt' && a.mentioned); const cl = A.find(a => a.engine === 'claude' && a.mentioned);
-  console.log('   chatgpt answer ->', JSON.stringify({ rank: cg.rank, our_urls: cg.our_urls, competitors: cg.competitors.split(', ').slice(0, 5), sources: cg.sources.split(', ').slice(0, 4) }));
-  console.log('   claude answer ->', JSON.stringify({ rank: cl.rank, cited: cl.cited, our_urls: cl.our_urls, competitors: cl.competitors.split(', ').slice(0, 4) }), '| gemini sources from titles', A.find(a => a.engine === 'gemini' && a.answered).sources.split(', ').slice(0, 3));
-  console.log('   aio / ai mode ->', JSON.stringify({ aio: A.filter(a => a.engine === 'ai_overview').map(a => a.answered + ':' + a.sources.split(', ').slice(0, 2).join('+')), ai_mode_sources: A.find(a => a.engine === 'ai_mode').sources.split(', ').slice(0, 3) }));
-  mock('Save AI Answers', pa);
-  const mt = await run('AI Metrics', store['Save AI Answers']); const X = mt[0].json;
-  console.log('   metrics ->', JSON.stringify(X.metrics));
-  console.log('   engines ->', Object.values(X.engines).map(e => e.name + ' ' + e.mentioned + '/' + e.answered + (e.errors ? ' (' + e.errors + ' err)' : '')).join(' | '));
-  console.log('   competitors ->', X.competitors.map(c => c.domain + ' ' + c.mentions + ' ' + c.share + '%' + (c.auto ? ' auto' : '')).join(' | '));
-  console.log('   sources AI trusts ->', X.sources.slice(0, 6).map(s => s.domain + ' ' + s.citations + ' ' + s.kind).join(' | '), '| our pages', X.our_pages.map(x => x.url).join(' '));
-  console.log('   gaps ->', X.gaps.length, '| market ->', JSON.stringify({ top: (X.market.top || []).slice(0, 3).map(x => x.domain + ' ' + x.mentions), you: X.market.you, total: X.market.total_mentions }));
-  console.log('   actions ->', X.actions.map(a => '[' + a.type + '] ' + a.action).join(' | '), '| content action body', !!(X.actions.find(a => a.api_body) || {}).api_body);
-  console.log('   alerts ->', JSON.stringify(X.alerts.map(a => a.text)));
-  const vr = await run('AI Vis Rows', mt); console.log('   vis row ->', JSON.stringify({ cols_exact: same2(Object.keys(vr[0].json), VIS), mention: vr[0].json.mention_rate, sov: vr[0].json.share_of_voice, market_month: vr[0].json.market_month, cost: vr[0].json.cost_usd }));
-  const ap = await run('AI Prospect Rows', vr); console.log('   ai_source prospects ->', ap.length, '| cols exact', same2(Object.keys(ap[0].json), PROS), '| first', ap[0].json.prospect_domain, ap[0].json.status, '|', ap[0].json.detail);
-  const bi = await run('AI Brief Input', ap); console.log('   brief facts ->', bi[0].json.facts.length, 'chars');
-  mock('AI Brief', [{ json: { output: { headline: 'ChatGPT and Claude name Northwind ERP for 2 of 8 questions; Azentio leads', summary: 'You appear in ...', actions: [{ priority: 1, action: 'Get listed on mof.gov.ae', why: 'cited 9 times' }], watch: ['Gemini'] } } }]);
-  const rp = await run('AI Report', store['AI Brief']); const html = rp[0].json.html; save('ai-visibility-report.html', html); scanHtml('ai visibility report', html);
-  console.log('   report ->', JSON.stringify({ subject: rp[0].json.subject, grid_rows: (html.match(/<tr>/g) || []).length, has_market: /Market view/.test(html), has_sources: /Sources AI relies on/.test(html), api_bodies: (html.match(/POST http/g) || []).length, file: rp[0].binary.data.fileName }));
+  console.log('   requests ->', R.length, JSON.stringify(byE), '| est $' + R.reduce((s, r) => s + r.est_cost, 0).toFixed(2));
+  check('engines: Gemini through the real-interface scraper, Perplexity localised to AE (Claude\'s endpoint refuses the field), Claude on the full run, market view on the new endpoint, market-wide index (+ business name) and questions citing you', /gemini\/llm_scraper/.test(R.find(r => r.engine === 'gemini').endpoint) && R.find(r => r.engine === 'perplexity').body[0].web_search_country_iso_code === 'AE' && !('web_search_country_iso_code' in R.find(r => r.engine === 'claude').body[0]) && /top_mentioned_domains/.test(R.find(r => r.engine === 'market').endpoint) && R.find(r => r.engine === 'market').body[0].platform === 'google' && byE.index_sov === 1 && byE.index_you === 1 && R.find(r => r.engine === 'index_sov').body[0].targets.some(t => t.key === 'name:Northwind ERP') && !R.some(r => r.engine === 'ai_overview' && r.kind === 'brand') && R.every(r => r.run_kind === 'full'), JSON.stringify(byE));
+  // real answers; the client is named + cited by ChatGPT, Gemini and Claude on the recommend questions, Perplexity fails once
+  const us = (q) => q.kind === 'recommend' && ['chatgpt', 'claude', 'gemini'].includes(q.engine);
+  mock('Run AI Requests', R.map((q, i) => A9.answerFor(q, i, { us, fail: (q2, j) => q2.engine === 'perplexity' && j === R.findIndex(x => x.engine === 'perplexity') })));
+  const pa = await run('Parse AI Answers', store['Run AI Requests']); const AN = pa.map(r => r.json);
+  const cg = AN.find(a => a.engine === 'chatgpt' && a.mentioned); const gm = AN.find(a => a.engine === 'gemini' && a.mentioned);
+  console.log('   chatgpt answer ->', JSON.stringify({ rank: cg.rank, brands: cg.brands, competitors: cg.competitors.split(', ').slice(0, 5), fanout: cg.fanout }));
+  check('answers: table columns + the answer text for the analyst; database views not stored; one failed request kept as an error', AN.every(a => same2(Object.keys(a), [...ANS, '_text'])) && !AN.some(a => /^(market|index_)/.test(a.engine)) && AN.filter(a => a.error).length === 1 && AN.every(a => a.run_kind === 'full'), JSON.stringify(Object.keys(AN[0])));
+  check('ChatGPT: brand list read (Zoho Books named without a website counts as a business), fan-out searches kept', /Zoho Books/.test(cg.competitors) && /Northwind ERP/.test(cg.brands) && cg.fanout.length > 0, JSON.stringify(cg));
+  check('Gemini scraper: named, cited, sources from the real interface (ministry, competitor)', gm && gm.cited && /mof\.gov\.ae/.test(gm.sources) && /azentio\.com/.test(gm.competitors) && gm.rank === 3, JSON.stringify(gm));
+  const aj = await run('Analyst Jobs', pa); const AJ = aj.map(x => x.json);
+  check('Answer Analyst jobs: answers naming the business first, then recommendation answers; at most 12 per job; business facts given', AJ.length >= 2 && AJ.every(j => j.ids.length <= 12) && /City: Dubai/.test(AJ[0].facts) && /Phone: \+971/.test(AJ[0].facts) && /northwind/i.test(AJ[0].answers.slice(0, 2000)), JSON.stringify(AJ.map(j => j.ids.length)));
+  mock('Answer Analyst', AJ.map(j => ({ json: A9.analystFor(j) })));
+  const aa = await run('Apply Analysis', store['Answer Analyst']); const AA = aa.map(x => x.json);
+  const ca = AA.find(a => a.engine === 'chatgpt' && a.mentioned);
+  check('analysis applied: exact columns (no answer text), position from the brand list, sentiment, wrong claim, brands without a website kept', AA.every(a => same2(Object.keys(a), ANS)) && ca.rank === 2 && ca.sentiment === 'positive' && AA.some(a => /Abu Dhabi → Dubai/.test(a.issues)) && /Zoho Books/.test(ca.competitors) && /edicomgroup\.com/.test(ca.competitors) && AA.filter(a => !a.mentioned).every(a => !a.sentiment), JSON.stringify(ca));
+  mock('Save AI Answers', aa);
+  const mt = await run('AI Metrics', store['Save AI Answers']); const X = mt[0].json; const XM = X.metrics;
+  console.log('   metrics ->', JSON.stringify({ samples: XM.samples, mention: XM.mention_rate, ci: XM.mention_ci, vis: XM.visibility_score, sov: XM.share_of_voice, sent: XM.sentiment_score, issues: XM.accuracy_issues, index_sov: XM.index_sov }));
+  console.log('   engines ->', Object.values(X.engines).map(e => e.name + ' ' + e.mentioned + '/' + (e.samples != null ? e.samples : e.answered) + (e.ci ? ' [' + e.ci.join('-') + ']' : '')).join(' | '));
+  console.log('   competitors ->', X.competitors.map(c => c.domain + ' ' + c.mentions + ' ' + c.share + '%' + (c.named_only ? ' (name)' : '')).join(' | '));
+  console.log('   stages ->', X.clusters.stages.map(s => s.key + ' ' + s.mention_rate + '%').join(' | '), '| actions ->', X.actions.map(a => '[' + a.type + '] ' + a.action.slice(0, 50)).join(' | '));
+  console.log('   alerts ->', JSON.stringify(X.alerts.map(a => a.level + ': ' + a.text.slice(0, 80))));
+  check('7-day rate with a 95% range around it; visibility score between 0 and 100', XM.mention_ci[0] <= XM.mention_rate && XM.mention_rate <= XM.mention_ci[1] && XM.visibility_score > 0 && XM.visibility_score <= 100 && XM.samples === XM.answered, JSON.stringify(XM));
+  check('competitors include a business AI names without its website', X.competitors.some(c => c.domain === 'Zoho Books' && c.named_only), JSON.stringify(X.competitors));
+  check('stages: decision / consideration / awareness rows', ['decision', 'consideration', 'awareness'].every(k => X.clusters.stages.some(s => s.key === k)), JSON.stringify(X.clusters.stages));
+  check('perception: sentiment from the analyst, descriptors, a new wrong claim -> high alert + accuracy action', XM.sentiment_score === 100 && X.perception.descriptors.includes('odoo partner') && X.perception.issues.length === 1 && X.perception.issues[0].new && X.alerts.some(a => a.level === 'high' && /wrong about you/.test(a.text)) && X.actions.some(a => a.type === 'accuracy'), JSON.stringify(X.perception));
+  const T = X.traffic;
+  check('GA4: AI visits per assistant (Copilot found by the ai-assistant medium), change, conversion vs organic, landing pages marked when AI cites them, weekly series', T.connected && T.sessions === 163 && T.prev_sessions === 120 && T.change_pct === 36 && T.assistants[0].name === 'ChatGPT' && T.assistants.some(a => a.name === 'Copilot') && T.conv_rate === 7.4 && T.organic_conv_rate === 2.5 && T.landing.find(l => l.page === '/e-invoicing-uae/').cited_by_ai && T.weekly.length >= 11, JSON.stringify({ ...T, landing: T.landing.slice(0, 2), weekly: T.weekly.length }));
+  check('crawler access: the CDN block becomes a high alert and the first action', X.alerts.some(a => /firewall or CDN/.test(a.text)) && X.actions[0].type === 'access', JSON.stringify(X.actions[0]));
+  const XI = X.index;
+  check('market-wide index: share of citations vs the competitors, by-name mentions kept apart, answers citing you, real questions', XI && XI.sov === Math.round(1000 * 37 / (37 + 410 + 260)) / 10 && XI.brands.find(b => b.name === 'Northwind ERP').share === null && XI.answers_citing_you === 37 && XI.questions.length === 3 && XI.questions[0].volume === 260, JSON.stringify(XI).slice(0, 400));
+  check('market view on the new endpoint: domains, totals, your position', X.market.top[0].domain === 'mof.gov.ae' && X.market.total_mentions === 2210 && X.market.you === 5, JSON.stringify(X.market).slice(0, 300));
+  check('suggested questions: real database questions the panel does not track, with demand', X.suggestions.length === 4 && X.suggestions[0].volume === 1300 && X.suggestions.some(s => s.you_cited), JSON.stringify(X.suggestions));
+  check('fan-out searches collected', X.fanout.length > 0 && X.fanout[0].engines.length > 0, JSON.stringify(X.fanout.slice(0, 2)));
+  check('learned brand names for the next runs (with their website only)', X.cache_rows.length === 1 && same2(Object.keys(X.cache_rows[0]), CACHE) && JSON.parse(X.cache_rows[0].value)['Azentio Software'] === 'azentio.com' && !('Zoho Books' in JSON.parse(X.cache_rows[0].value)), JSON.stringify(X.cache_rows));
+  const vr = await run('AI Vis Rows', mt);
+  check('visibility row: exact columns, revenue fields, run kind', same2(Object.keys(vr[0].json), VIS) && vr[0].json.ai_sessions === 163 && vr[0].json.ai_conversions === 12 && vr[0].json.run_kind === 'full' && vr[0].json.mention_lo != null && vr[0].json.samples === XM.samples, JSON.stringify(Object.keys(vr[0].json).filter(k => !VIS.includes(k))));
+  const ap = await run('AI Prospect Rows', vr); check('ai_source prospects: exact columns', same2(Object.keys(ap[0].json), PROS), ap[0].json.prospect_domain);
+  const cr = await run('AI Cache Rows', ap); check('cache rows node', cr.length === 1 && cr[0].json.key === 'ai_brands:' + M.SITE, JSON.stringify(cr[0].json));
+  const bi = await run('AI Brief Input', cr); const facts = JSON.parse(bi[0].json.facts);
+  check('brief facts: range, significance note, revenue, access, index, perception', facts.numbers.range_95 && facts.ai_referral_traffic.last_28_days.visits === 163 && facts.crawler_access.issues.length && facts.market_wide_index.your_share_pct != null && facts.perception.wrong_claims.length === 1, bi[0].json.facts.slice(0, 300));
+  mock('AI Brief', [{ json: { output: { headline: 'ChatGPT, Gemini and Claude name Northwind ERP for the recommendation questions; PerplexityBot is blocked', summary: 'You appear in ...', actions: [{ priority: 1, action: 'Allow PerplexityBot in Cloudflare', why: 'challenge' }], watch: ['Gemini'] } } }]);
+  const rp = await run('AI Report', store['AI Brief']); const html = rp[0].json.html; save('ai-visibility-report.html', html); const defects = scanHtml('ai visibility report', html);
+  check('report: clean HTML with the new sections', !defects.length && ['What AI visits are worth', 'How AI describes you', 'What AI gets wrong', 'Can AI read your site?', 'By buyer stage', 'Market-wide', 'What AI searched', 'Questions worth tracking', '95% range'].every(t => html.includes(t)), defects.join(', '));
   mock('Render PDF AI', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
   await run('Prepare PDF AI', rp); const att = await run('Attach PDF AI', store['Render PDF AI']); const cb = await run('Build AI Callback', att);
-  console.log('   callback ->', JSON.stringify({ stage: cb[0].json.stage, keys: Object.keys(cb[0].json).length, pdf: !!cb[0].json.pdf, no_html: !cb[0].json.html, binaries_kept: Object.keys(att[0].binary).join(',') }));
-  // second week: same questions (none written), previous row, the client no longer named -> alert + deltas; market carried within the month
-  const savedPrompts = pr.map(r => r);
-  loadAll({ prompts: savedPrompts, vis: vr, prospects: ap });
-  const plan2 = await run('AI Plan', store['Load Link Prospects']); console.log('   week 2 plan ->', JSON.stringify({ need_prompts: plan2[0].json.need_prompts, prompts: plan2[0].json.prompts.length, market_due: plan2[0].json.market_due, previous: !!plan2[0].json.previous, auto_rivals: plan2[0].json.competitors }));
-  await run('Prompt Jobs', plan2); const pr2 = await run('Prompt Rows', [{ json: { skip: true } }]); console.log('   week 2 prompt rows ->', JSON.stringify(pr2[0].json));
-  const rq2 = await run('AI Requests', pr2); mock('Run AI Requests', rq2.map((q, i) => M.answerFor(q.json, i, { noAio: true })));
-  await run('Parse AI Answers', store['Run AI Requests']); const mt2 = await run('AI Metrics', store['Parse AI Answers']);
-  console.log('   week 2 ->', JSON.stringify({ mention: mt2[0].json.metrics.mention_rate, delta: mt2[0].json.metrics.delta, aio_presence: mt2[0].json.metrics.aio_presence, alerts: mt2[0].json.alerts.map(a => a.level), market_carried: !!(mt2[0].json.market || {}).carried, prospects_status_kept: mt2[0].json.prospect_rows[0].status, first_seen_kept: mt2[0].json.prospect_rows[0].first_seen === ap[0].json.first_seen }));
-  // v4.6: within the month only the core engines are asked; Gemini / Claude and the brand question are carried from the month's full run
-  const eng2 = rq2.reduce((m, q) => { m[q.json.engine] = (m[q.json.engine] || 0) + 1; return m; }, {});
-  console.log('   week 2 (core engines only) ->', JSON.stringify({ full_due: plan2[0].json.full_due, requests: eng2, brand_asked: rq2.some(q => q.json.kind === 'brand'), carried: Object.entries(mt2[0].json.engines).filter(([, v]) => v.carried).map(([k, v]) => k + ' ' + v.answered + '/' + v.asked + ' @' + String(v.checked_at).slice(0, 10)), brand: mt2[0].json.metrics.brand, asked: mt2[0].json.metrics.asked, grid_cell: Object.values(mt2[0].json.questions[0].engines).join(',') }));
-  if (plan2[0].json.full_due || eng2.gemini || eng2.claude || rq2.some(q => q.json.kind === 'brand') || !mt2[0].json.engines.gemini.carried || !mt2[0].json.metrics.brand.carried || mt2[0].json.metrics.brand_known !== false || mt2[0].json.alerts.some(x => /recognise/.test(x.text))) throw new Error('week 2 asked the monthly engines again or lost their numbers');
-  // ad hoc on-demand domain, prompt writer failure -> templates, nothing to do
+  check('callback: stage ai_visibility, PDF, no internal rows / samples / learned names', cb[0].json.stage === 'ai_visibility' && cb[0].json.pdf && !cb[0].json.html && !cb[0].json.cache_rows && !cb[0].json.pulse_rows && !cb[0].json.vis_row && cb[0].json.traffic && cb[0].json.access && cb[0].json.index, Object.keys(cb[0].json).join(','));
+  // ---- second week: same panel (with volumes), last week's row, 6 days of AI Pulse samples, the client no longer named this Monday ----
+  const before = new Date(Date.now() - 2 * 3600e3).toISOString();
+  const vis1 = [{ json: { ...vr[0].json, checked_at: before } }];
+  const daily = [1, 2, 3, 4, 5, 6].map(k => A9.dailyRow('2026-10-0' + k, { mentioned: 11, samples: 18 })).map((d, k) => ({ json: { ...d.json, checked_at: new Date(Date.now() - (90 - k * 10) * 60e3).toISOString() } }));
+  loadAll({ prompts: A9.promptRows(pr), vis: vis1, prospects: ap, cache: cr, daily });
+  const plan2 = await run('AI Plan', store['Load Query History']); const P2 = plan2[0].json;
+  check('week 2: weekly run, no top-up, pulse samples since last week joined, learned names loaded, no discovery / index / market', P2.run_kind === 'weekly' && !P2.need_prompts && P2.pulse_rows.length === 6 && P2.aliases['Azentio Software'] === 'azentio.com' && !P2.discovery_due && !P2.index_due && !P2.market_due && P2.volume_keywords.length === 0 && P2.previous.samples === XM.samples, JSON.stringify({ kind: P2.run_kind, pulse: P2.pulse_rows.length, need: P2.need_prompts, vk: P2.volume_keywords }));
+  await run('Site Text Jobs', plan2); const dq2 = await run('Discovery Requests', plan2); check('week 2: nothing to discover', dq2[0].json.skip === true, JSON.stringify(dq2[0].json));
+  await run('Prompt Jobs', dq2); const pr2 = await run('Prompt Rows', [{ json: { skip: true } }]); check('week 2: stored questions untouched (no rows to save)', pr2[0].json.skip === true, JSON.stringify(pr2.map(r => r.json.prompt_id)));
+  mock('GA4 AI Report', (await run('Traffic Requests', pr2)).map(() => ({ json: A9.ga4Denied() })));
+  const ar2 = await run('Access Requests', store['GA4 AI Report']); mock('Fetch Access', ar2.map(q => ({ json: A9.accessFor(q.json, { robots: A9.ROBOTS_BLOCK, llms: true, noCdnBlock: true }) }))); const ac2 = await run('AI Access', store['Fetch Access']);
+  check('week 2 access: OAI-SearchBot and ChatGPT-User blocked by robots.txt (own group), llms.txt found', !ac2[0].json.bots.find(b => b.bot === 'OAI-SearchBot').allowed_root && !ac2[0].json.bots.find(b => b.bot === 'ChatGPT-User').allowed_root && ac2[0].json.bots.find(b => b.bot === 'PerplexityBot').allowed_root && ac2[0].json.llms_txt.found && ac2[0].json.issues.filter(i => i.level === 'high').length === 2, JSON.stringify(ac2[0].json.issues));
+  const rq2 = await run('AI Requests', ac2); const eng2 = rq2.reduce((m, q) => { m[q.json.engine] = (m[q.json.engine] || 0) + 1; return m; }, {});
+  check('week 2 requests: the weekly engines incl. Gemini, no Claude, no brand question, no database views', eng2.chatgpt === 6 && eng2.gemini === 6 && !eng2.claude && !eng2.market && !eng2.index_sov && !rq2.some(q => q.json.kind === 'brand') && rq2.every(q => q.json.run_kind === 'weekly'), JSON.stringify(eng2));
+  mock('Run AI Requests', rq2.map((q, i) => A9.answerFor(q.json, i, { noAio: true })));
+  await run('Parse AI Answers', store['Run AI Requests']); const aj2 = await run('Analyst Jobs', store['Parse AI Answers']); mock('Answer Analyst', aj2.filter(j => !j.json.skip).map(j => ({ json: A9.analystFor(j.json) })));
+  await run('Apply Analysis', store['Answer Analyst']); const mt2 = await run('AI Metrics', store['Apply Analysis']); const Y = mt2[0].json; const YM = Y.metrics;
+  console.log('   week 2 ->', JSON.stringify({ samples: YM.samples, pulse: YM.pulse_samples, mention: YM.mention_rate, ci: YM.mention_ci, delta: YM.delta, alerts: Y.alerts.map(a => a.level + ': ' + a.text.slice(0, 60)) }));
+  check('week 2: pulse samples counted (6 x 18), rate = this week\'s answers + pulse, change tested for significance', YM.pulse_samples === 108 && YM.samples === YM.answered + 108 && typeof YM.delta.significant === 'boolean', JSON.stringify(YM.delta));
+  check('week 2: Claude, brand recognition and the market-wide index carried from the full run', Y.engines.claude.carried && YM.brand.carried && Y.index && Y.index.carried && Y.market.carried, JSON.stringify({ claude: Y.engines.claude, brand: YM.brand }));
+  check('week 2: GA4 permission error reported, not fatal; robots.txt block = high alert', Y.traffic && !Y.traffic.connected && /permissions/.test(Y.traffic.error) && Y.alerts.some(a => /robots\.txt blocks OAI-SearchBot/.test(a.text)), JSON.stringify(Y.traffic));
+  check('week 2: last week\'s wrong claim not repeated as new', !Y.alerts.some(a => /wrong about you/.test(a.text)), JSON.stringify(Y.alerts));
+  // ad hoc on-demand domain, prompt writer failure -> templates, nothing to do, switched off
   mock('Manual Run', { domain: 'https://www.newclient.ae/', email: 'x@newclient.ae', country: 'United Arab Emirates', location_code: 2784, competitors: ['rival.ae'] }); loadAll();
-  const p3 = await run('AI Plan', store['Load Link Prospects']); console.log('   ad hoc ->', JSON.stringify({ domain: p3[0].json.domain, adhoc: p3[0].json.adhoc, on_demand: p3[0].json.on_demand, email: p3[0].json.email, competitors: p3[0].json.competitors, topics: p3[0].json.topics, need_prompts: p3[0].json.need_prompts, need_site_text: p3[0].json.need_site_text }));
+  const p3 = await run('AI Plan', store['Load Query History']); console.log('   ad hoc ->', JSON.stringify({ domain: p3[0].json.domain, adhoc: p3[0].json.adhoc, on_demand: p3[0].json.on_demand, run_kind: p3[0].json.run_kind, competitors: p3[0].json.competitors, need_site_text: p3[0].json.need_site_text, ga4: p3[0].json.ga4_property_id }));
+  check('ad hoc: on-demand full run without GA4', p3[0].json.adhoc && p3[0].json.run_kind === 'on_demand' && p3[0].json.full_due && p3[0].json.need_site_text && !p3[0].json.ga4_property_id, JSON.stringify(p3[0].json).slice(0, 200));
   const st3 = await run('Site Text Jobs', p3); mock('Read Site (AI)', [{ json: { site_text: 'NewClient — VAT and e-invoicing advisory for UAE SMEs. Services: VAT registration, corporate tax filing, e-invoicing readiness.' } }]);
+  const tq3 = await run('Traffic Requests', p3); check('ad hoc: no GA4 request without a property', tq3[0].json.skip === true, JSON.stringify(tq3[0].json));
   const pj3 = await run('Prompt Jobs', store['Read Site (AI)']); console.log('   prompt job with site text ->', st3.length, JSON.stringify(st3[0].json), '|', (pj3[0].json.site_text || '').slice(0, 40));
-  mock('Manual Run', { domain: 'newclient.ae', email: 'x@newclient.ae', topics: ['vat registration uae'] }); const p3b = await run('AI Plan', store['Load Link Prospects']); console.log('   ad hoc with topics ->', JSON.stringify({ topics: p3b[0].json.topics, need_site_text: p3b[0].json.need_site_text }));
+  mock('Manual Run', { domain: 'newclient.ae', email: 'x@newclient.ae', topics: ['vat registration uae'] }); const p3b = await run('AI Plan', store['Load Query History']); console.log('   ad hoc with topics ->', JSON.stringify({ topics: p3b[0].json.topics, need_site_text: p3b[0].json.need_site_text }));
   mock('Prompt Writer', [{ json: { error: 'model failed' } }]); await run('Prompt Jobs', p3);
-  delete store['Manual Run']; mock('AI Plan', [{ json: { ...p3[0].json, topics: ['erp dubai'], need_prompts: true, prompts_needed: 4, business_name: 'New Client' } }]); mock('Prompt Jobs', [{ json: { site_id: p3[0].json.site_id } }]);
-  const pr3 = await run('Prompt Rows', store['Prompt Writer']); console.log('   template fallback ->', pr3.length, pr3.map(r => r.json.kind + ':' + r.json.source).join(','), '|', pr3[0].json.prompt);
-  mock('Load Sites', [{ json: {} }]); mock('Load Ladders', [{ json: {} }]); const p4 = await run('AI Plan', store['Load Link Prospects']); console.log('   nothing to do ->', JSON.stringify(p4[0].json));
-  mock('Load Monitors', M.monitors({ ai_visibility: false })); mock('Load Sites', M.sites()); const p5 = await run('AI Plan', store['Load Link Prospects']); console.log('   switched off ->', JSON.stringify(p5[0].json));
+  delete store['Manual Run']; delete store['Run Discovery']; mock('AI Plan', [{ json: { ...p3[0].json, topics: ['erp dubai'], need_prompts: true, prompts_needed: 4, business_name: 'New Client' } }]); mock('Prompt Jobs', [{ json: { site_id: p3[0].json.site_id } }]);
+  const pr3 = await run('Prompt Rows', store['Prompt Writer']); check('template fallback: 3 questions (brand + 2 per topic) with stage / cluster / origin', pr3.length === 3 && pr3.every(r => same2(Object.keys(r.json), PRC) && r.json.origin === 'template' && r.json.stage), pr3.map(r => r.json.kind + ':' + r.json.source).join(','));
+  mock('Load Sites', [{ json: {} }]); mock('Load Ladders', [{ json: {} }]); const p4 = await run('AI Plan', store['Load Query History']); check('nothing to do', p4[0].json.nothing_to_do, JSON.stringify(p4[0].json));
+  mock('Load Monitors', M.monitors({ ai_visibility: false })); mock('Load Sites', sitesGa4()); const p5 = await run('AI Plan', store['Load Query History']); check('switched off', p5[0].json.nothing_to_do && /switched off/.test(p5[0].json.reason), JSON.stringify(p5[0].json));
 });
 
 // ===================================================================================
@@ -1097,8 +1166,10 @@ await guard('backlinks', async () => {
   reset(); begin('S20 Backlink Monitor — full run (real backlink data), gap, mentions, reclaim, outreach, pipeline, won, light run');
   const M = require('./fixtures_monitors');
   const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
-  const SNAP = ['site_id', 'domain', 'checked_at', 'mode', 'rank', 'backlinks', 'referring_domains', 'referring_domains_nofollow', 'spam_score', 'broken_backlinks', 'new_links', 'lost_links', 'important_lost', 'spammy_new', 'lost_json', 'new_json', 'competitors_json', 'timeseries_json', 'cost_usd'];
-  const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note'];
+  const SNAP = ['site_id', 'domain', 'checked_at', 'mode', 'rank', 'backlinks', 'referring_domains', 'referring_domains_nofollow', 'spam_score', 'broken_backlinks', 'new_links', 'lost_links', 'important_lost', 'spammy_new', 'lost_json', 'new_json', 'competitors_json', 'timeseries_json', 'cost_usd',
+    'union_domains', 'best_links', 'verified_live', 'at_risk', 'confirmed_lost', 'referral_visits', 'referral_key_events', 'coverage_json', 'anchors_json', 'pages_json', 'values_json'];   // v4.10
+  const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
+    'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at'];   // v4.10
   const loadAll = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', M.profiles()); mock('Load Backlink Snapshots', o.snaps || [{ json: {} }]); mock('Load Link Prospects', o.prospects || [{ json: {} }]);
     mock('Load Content Log', [{ json: { site_id: M.SITE, domain: M.DOMAIN, keyword: 'erp for distributors', published_url: 'https://northwind-erp.com/erp-for-distributors/', status: 'published' } }]); mock('Load Case Studies', [{ json: { case_id: 'cs_1', site_id: M.SITE, title: 'Gulf Fresh Foods: Odoo', page_url: 'https://northwind-erp.com/case-studies/gulf-fresh/' } }]); };
   // an existing prospect that now links (won) and an AI-source prospect without a draft
@@ -1117,6 +1188,7 @@ await guard('backlinks', async () => {
   console.log('   gap ->', B.gap.length, B.gap.slice(0, 4).map(g => g.domain + ' r' + g.rank + ' ' + g.links_to.join('+')).join(' | '), '| mentions', B.mentions.map(m => m.domain).join(','), '| timeseries', B.timeseries.length);
   console.log('   alerts ->', JSON.stringify(B.alerts.map(a => a.level + ': ' + a.text.slice(0, 70))), '| deliver', B.deliver, '| disavow lines', (B.disavow_text.match(/^domain:/gm) || []).length, '| cost', B.cost_usd);
   const oj = await run('Outreach Jobs', pb); console.log('   outreach jobs ->', oj.length, JSON.stringify(oj[0].json.prospects.map(p => p.type + ':' + p.prospect_domain).slice(0, 8)));
+  await run('Contact Requests', oj); delete store['Fetch Contacts']; await run('Outreach Input', oj);   // v4.10: contacts (none fetched here) and the writer's input
   mock('Outreach Writer', [{ json: M.outreach }]);
   const prw = await run('Prospect Rows', store['Outreach Writer']); const PR = prw.map(r => r.json);
   console.log('   prospect rows ->', PR.length, '| cols exact', same2(Object.keys(PR[0]), PROS), '| types', JSON.stringify(PR.reduce((m, r) => { m[r.type] = (m[r.type] || 0) + 1; return m; }, {})));
@@ -1635,6 +1707,13 @@ await guard('pipeline phase 3', async () => {
   check('report: difficulty labels relative to reach ("easy for you")', /· easy for you/.test(dl.html) && /rung 2 up to reach \+ 15/.test(dl.html), 'html');
   await planWith({ reach: 55 }); dl = await deliver(); save('ladder-plan-direct.doc.html', dl.html); scanHtml('ladder plan (direct)', dl.html);
   check('report (direct): the main page is written first', /Write the main page first/.test(dl.html) && /written first — months 2-4/.test(dl.html), 'html');
+  // a narrow topic (live 2026-10-08, "peppol uae" in the UAE): the research found no supporting keyword -> the main page is the whole ladder, written now
+  mock('Ladder Pool', { ...lpool[0].json, research: { ...(lpool[0].json.research || {}), candidates: [] } });
+  const Lnar = (await planWith({ reach: 35 })).ladder;
+  dl = await deliver(); save('ladder-plan-main-only.doc.html', dl.html); scanHtml('ladder plan (main page only)', dl.html);
+  mock('Ladder Pool', lpool[0].json);
+  check('narrow topic (no supporting keyword in the data): short plan, the main page is page 1 and is written now', Lnar.planned && Lnar.plan_type === 'short' && pagesOf(Lnar).length === 0 && Lnar.top.page_no === 1 && Lnar.write_now.length === 1 && Lnar.write_now[0].rung === 4 && Lnar.write_now[0].keyword === Lnar.head.keyword && Lnar.notes.some(n => /No supporting keywords were found/.test(n)) && !Lnar.notes.some(n => /Only 0/.test(n)) && /main page only for now/.test(Lnar.order), JSON.stringify({ w: Lnar.write_now, n: Lnar.notes, o: Lnar.order }));
+  check('report (main page only): written first, never "write 0 supporting pages first"', /the main page is the whole ladder for now and is written first/.test(dl.html) && !/Write 0 supporting/.test(dl.html) && /written first — months 4-8/.test(dl.html), 'html');
 
   // ---------- D. not realistic, duplicate main keyword, other ladders' keywords ----------
   const Lav = (await planWith({ reach: 35, pv: { verdict: 'AVOID', verdict_reasons: ['Searchers want the government portal'] } })).ladder;
@@ -2029,6 +2108,259 @@ await guard('publish detection', async () => {
   const smN = await run('Site Metrics', store['Parse Inspection']); const mN = smN.find(x => x.json.site_id === SITE).json;
   check('no detection in the run: empty list, not checked, pages and waiting list as before', mN.detected_published.length === 0 && mN.publish_detection.checked === false && mN.pending_publish.some(p => p.keyword === 'wms implementation dubai') && mN.ladder_pages.find(p => p.keyword === 'e invoicing uae fta').status === 'writing', JSON.stringify(mN.publish_detection));
   if (savedDP) store['Detect Published'] = savedDP;
+});
+
+// ===================================================================================
+await guard('ai pulse', async () => {
+  reset(); const SN = 'S27 AI Pulse (v4.9) — daily panel on ChatGPT / Gemini / AI Mode, daily row, significance alerts, new competitor, lost top spot, quiet day, pulse off, Site Admin settings';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const M = require('./fixtures_monitors'); const A9 = require('./fixtures_ai49');
+  const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+  const ANS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout'];
+  const DAILY = ['site_id', 'domain', 'date', 'checked_at', 'run_id', 'samples', 'mentioned', 'cited', 'mention_rate', 'citation_rate', 'share_of_voice', 'visibility_score', 'engines_json', 'prompts_json', 'competitors_json', 'sources_json', 'alerts', 'cost_usd'];
+  const PN = { code: 'Pulse__AI_Plan' }, PR = { code: 'Pulse__AI_Requests' }, PP = { code: 'Pulse__Parse_AI_Answers' }, PM = { code: 'Pulse__Pulse_Metrics' };
+  const qs = [['Which companies help UAE businesses with e-invoicing before 2027?', 'recommend'], ['How much does e-invoicing cost for a UAE distributor?', 'cost'], ['What should I check before choosing an e-invoicing provider in the UAE?', 'choose'], ['Odoo or Business Central for UAE e-invoicing?', 'compare'],
+    ['What happens if my UAE company misses the e-invoicing deadline?', 'problem'], ['Who are the best ERP partners in Dubai for distributors?', 'recommend'], ['Which UAE firms connect an ERP to the Peppol network?', 'recommend'], ['What is Northwind ERP and what does it offer?', 'brand']];
+  const prompts = qs.map(([q, k], i) => ({ json: { prompt_id: 'p_' + i, site_id: M.SITE, domain: M.DOMAIN, prompt: q, kind: k, topic: 'e invoicing in uae', keyword: 'e invoicing uae ' + i, source: i === 6 ? 'custom' : 'auto', status: 'active', created_at: '2026-10-01', stage: 'decision', cluster: 'e invoicing', volume: 300 + i * 100, origin: 'writer', updated_at: '' } }));
+  const days = [7, 6, 5, 4, 3, 2, 1].map(k => new Date(Date.now() - k * 864e5).toISOString().slice(0, 10));   // the 7 days before today
+  const baseline = (o = {}) => days.map((d, k) => A9.dailyRow(d, { samples: 21, mentioned: 13, competitors: o.competitors || seenBefore, prompts: k >= 4 ? { p_0: { chatgpt: 'M', gemini: 'm', ai_mode: 'a' } } : { p_0: { chatgpt: 'm' } } }));
+  let seenBefore = { 'azentio.com': 9 };   // the businesses named over the past week (set from a normal day's answers below)
+  const loadAll = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', M.profiles()); mock('Load AI Prompts', prompts); mock('Load AI Visibility', [{ json: { site_id: M.SITE, checked_at: '2026-10-05T07:00:00.000Z', competitors_json: JSON.stringify([{ domain: 'cleartax.com', mentions: 3, auto: true }]) } }]);
+    mock('Load AI Daily', o.daily || baseline()); mock('Load Cache (AI)', [{ json: { key: 'ai_brands:' + M.SITE, kind: 'ai', site_id: M.SITE, value: JSON.stringify({ 'Zoho Books': 'zoho.com' }), updated_at: '2026-10-05' } }]); };
+  loadAll();
+  const plan = await run('AI Plan', store['Load Cache (AI)'], PN); const P = plan[0].json;
+  check('pulse plan: fast engines, the panel without the brand question, custom question first, baseline days, learned names, run kind pulse', JSON.stringify(P.pulse_engines) === '["chatgpt","gemini","ai_mode"]' && P.prompts.length === 7 && !P.prompts.some(q => q.kind === 'brand') && P.prompts[0].source === 'custom' && P.baseline.length === 7 && P.aliases['Zoho Books'] === 'zoho.com' && P.run_kind === 'pulse' && P.pulse_run && /^pulse_\d{8}_/.test(P.run_id), JSON.stringify({ e: P.pulse_engines, n: P.prompts.length, b: P.baseline.length }));
+  const rq = await run('AI Requests', plan, PR); const R = rq.map(r => r.json);
+  const byE = R.reduce((m, r) => { m[r.engine] = (m[r.engine] || 0) + 1; return m; }, {});
+  check('pulse requests: 7 questions x 3 fast engines, no database views, about $0.08', R.length === 21 && byE.chatgpt === 7 && byE.gemini === 7 && byE.ai_mode === 7 && R.every(r => r.run_kind === 'pulse') && Math.abs(R.reduce((s, r) => s + r.est_cost, 0) - 0.084) < 0.001, JSON.stringify(byE));
+  // a bad day: no answer names the client; ChatGPT names Zoho Books (learned name -> zoho.com) in every answer
+  mock('Run AI Requests', R.map((q, i) => A9.answerFor(q, i, {})));
+  const pa = await run('Parse AI Answers', store['Run AI Requests'], PP); const AN = pa.map(r => r.json);
+  // the past week named the same businesses as today except Zoho Books (zoho.com): rebuild the baseline from today's names, then plan again
+  seenBefore = {}; for (const a of AN) for (const d of String(a.competitors).split(/,\s*/).filter(Boolean)) if (d !== 'zoho.com') seenBefore[d] = 5;
+  mock('Load AI Daily', baseline()); await run('AI Plan', store['Load Cache (AI)'], PN);
+  check('pulse answers: run kind pulse, short excerpts, learned brand name mapped to its website', AN.every(a => a.run_kind === 'pulse' && a.excerpt.length <= 360) && AN.filter(a => a.engine === 'chatgpt').every(a => /zoho\.com/.test(a.competitors)), JSON.stringify(AN.find(a => a.engine === 'chatgpt')).slice(0, 300));
+  const pm = await run('Pulse Metrics', pa, PM); const X = pm[0].json;
+  console.log('   bad day ->', JSON.stringify({ samples: X.samples, mention: X.mention_rate, ci: X.mention_ci, alerts: X.alerts.map(a => a.level + ': ' + a.text.slice(0, 80)) }));
+  check('daily row: exact columns, counts per engine / question / competitor', same2(Object.keys(X.daily_row), DAILY) && X.daily_row.samples === X.samples && JSON.parse(X.daily_row.prompts_json).p_0.chatgpt === 'a' && JSON.parse(X.daily_row.engines_json).gemini.answered >= 1 && JSON.parse(X.daily_row.competitors_json)['zoho.com'] >= 3, X.daily_row.prompts_json.slice(0, 200));
+  check('answer rows: exact columns', X.answer_rows.length === 21 && X.answer_rows.every(r => same2(Object.keys(r), ANS)), Object.keys(X.answer_rows[0]).join(','));
+  check('alerts: real drop vs the past week (z-test), a new business in many answers, a lost first place', X.alerts.some(a => a.level === 'high' && /a real drop/.test(a.text)) && X.alerts.some(a => /zoho\.com appears in/.test(a.text)) && X.alerts.some(a => /no longer names you for "Which companies help UAE/.test(a.text)), JSON.stringify(X.alerts));
+  const ar = await run('Pulse Answer Rows', pm, { code: 'Pulse__Pulse_Answer_Rows' }); const dr = await run('AI Daily Rows', ar, { code: 'Pulse__AI_Daily_Rows' }); const al = await run('Pulse Alerts', dr, { code: 'Pulse__Pulse_Alerts' });
+  const html = al[0].json.html; save('ai-pulse-alert.html', html); const defects = scanHtml('ai pulse alert', html);
+  check('delivery: one alert e-mail / callback (stage ai_pulse) without the stored rows', ar.length === 21 && dr.length === 1 && al.length === 1 && al[0].json.stage === 'ai_pulse' && !al[0].json.daily_row && !al[0].json.answer_rows && al[0].json.email && !defects.length, JSON.stringify(Object.keys(al[0].json)));
+  // a quiet day: named as usual (about 60%), Zoho Books already seen, first place kept -> nothing sent
+  loadAll({ daily: baseline({ competitors: { ...seenBefore, 'zoho.com': 7 } }) });
+  const planQ = await run('AI Plan', store['Load Cache (AI)'], PN); const rqQ = await run('AI Requests', planQ, PR);
+  mock('Run AI Requests', rqQ.map((q, i) => A9.answerFor(q.json, i, { us: (r, j) => j % 3 !== 2 || r.prompt_id === 'p_0' })));
+  const paQ = await run('Parse AI Answers', store['Run AI Requests'], PP); const pmQ = await run('Pulse Metrics', paQ, PM);
+  console.log('   quiet day ->', JSON.stringify({ samples: pmQ[0].json.samples, mention: pmQ[0].json.mention_rate, alerts: pmQ[0].json.alerts.map(a => a.text.slice(0, 60)) }));
+  await run('Pulse Answer Rows', pmQ, { code: 'Pulse__Pulse_Answer_Rows' }); await run('AI Daily Rows', pmQ, { code: 'Pulse__AI_Daily_Rows' }); const alQ = await run('Pulse Alerts', pmQ, { code: 'Pulse__Pulse_Alerts' });
+  check('quiet day: no alert, nothing delivered, the daily row is still stored', pmQ[0].json.alerts.length === 0 && alQ[0].json.skip === true && store['AI Daily Rows'][0].json.samples === 21, JSON.stringify(pmQ[0].json.alerts));
+  // too few samples: no statistical alert from a handful of answers
+  mock('Load AI Prompts', prompts.slice(0, 2)); const planS = await run('AI Plan', store['Load Cache (AI)'], PN); const rqS = await run('AI Requests', planS, PR); mock('Run AI Requests', rqS.map((q, i) => A9.answerFor(q.json, i, {})));
+  const pmS = await run('Pulse Metrics', await run('Parse AI Answers', store['Run AI Requests'], PP), PM);
+  check('6 answers: no drop alert (needs 20+ samples)', pmS[0].json.samples === 6 && !pmS[0].json.alerts.some(a => /real drop/.test(a.text)), JSON.stringify(pmS[0].json.alerts));
+  // pulse off for the site -> nothing; an on-demand run still works; no panel yet -> nothing
+  loadAll({ monitors: M.monitors({ ai_pulse: false }) }); const pOff = await run('AI Plan', store['Load Cache (AI)'], PN);
+  check('pulse off: nothing to do', pOff[0].json.nothing_to_do && /pulse is off/.test(pOff[0].json.reason), JSON.stringify(pOff[0].json));
+  mock('Manual Run', { domain: M.DOMAIN, email: 'me@northwind-erp.com' }); const pOn = await run('AI Plan', store['Load Cache (AI)'], PN); delete store['Manual Run'];
+  check('pulse off but asked on demand: runs, delivers to the requester', !pOn[0].json.nothing_to_do && pOn[0].json.on_demand && pOn[0].json.email === 'me@northwind-erp.com', JSON.stringify(pOn[0].json).slice(0, 200));
+  mock('Load AI Prompts', [{ json: {} }]); mock('Load Monitors', M.monitors()); const pNone = await run('AI Plan', store['Load Cache (AI)'], PN);
+  check('no question panel yet: nothing to do (the weekly run writes it first)', pNone[0].json.nothing_to_do && /panel/.test(pNone[0].json.reason), JSON.stringify(pNone[0].json));
+  // monitor settings: pulse flag and up to 50 questions (Track my site / Site Admin)
+  const MC = ['site_id', 'domain', 'ai_visibility', 'ai_engines', 'ai_prompts_max', 'backlinks', 'audit_monthly', 'audit_pages', 'audit_js', 'competitors', 'brand_names', 'updated_at', 'request_id', 'ai_pulse'];
+  await run('Admin Action', { body: { action: 'monitors', domain: 'northwind-erp.com', ai_prompts_max: 80, ai_pulse: 'off' } });
+  mock('Load Monitors (Admin)', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', ai_engines: 'chatgpt', ai_prompts_max: 8 } }]);
+  const am = await run('Monitor Row (Admin)', store['Load Monitors (Admin)']);
+  check('Site Admin monitors: exact columns, 50 questions at most, pulse switched off', same2(Object.keys(am[0].json), MC) && am[0].json.ai_prompts_max === 50 && am[0].json.ai_pulse === false, JSON.stringify(am[0].json));
+  await run('Admin Action', { body: { action: 'monitors', domain: 'northwind-erp.com', competitors: 'rival.ae' } });
+  mock('Load Monitors (Admin)', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', ai_pulse: false, ai_prompts_max: 30 } }]); const am2 = await run('Monitor Row (Admin)', store['Load Monitors (Admin)']);
+  check('Site Admin monitors: stored pulse / questions kept when not given', am2[0].json.ai_pulse === false && am2[0].json.ai_prompts_max === 30, JSON.stringify(am2[0].json));
+  await run('Admin Action', { body: { action: 'ai_prompts', domain: 'northwind-erp.com', add: ['Which UAE firms help wholesalers connect their ERP to the Peppol network?'] } });
+  mock('Load AI Prompts (Admin)', [{ json: {} }]); const apr = await run('AI Prompt Rows (Admin)', store['Load AI Prompts (Admin)']);
+  check('custom question: origin custom, stage and the v4.9 columns present', apr[0].json.origin === 'custom' && apr[0].json.stage === 'consideration' && 'volume' in apr[0].json && 'updated_at' in apr[0].json, JSON.stringify(apr[0].json));
+});
+
+
+// ===================================================================================
+await guard('backlinks v4.10', async () => {
+  reset(); const SN = 'S28 Backlink Monitor v4.10 — every source merged (DataForSEO, Bing, Search Console upload, GA4, Common Crawl, Wikipedia, HN, news, web) + our own link check, two-miss loss, coverage, values, gap, lists, contacts, follow-ups, ledger';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const fs = require('fs'); const path = require('path'); const CD = process.env.CODE_DIR || path.join(__dirname, 'code');
+  const B = require('./fixtures_bl410');
+  const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+  // Bing and Ahrefs are baked in at build time from n8n/.env (on with their keys, off without): the scenario runs copies with each state
+  const variant = (node, off, on, want) => { const src = fs.readFileSync(path.join(CD, node + '.js'), 'utf8'); if (!src.includes(off) && !src.includes(on)) throw new Error(node + ': ' + off + ' not found'); fs.writeFileSync(path.join(CD, node + '__' + want + '.js'), want === 'on' ? src.replace(off, on) : src.replace(on, off)); return node + '__' + want; };
+  const PLAN = { code: variant('BL_Plan', 'bing: false', 'bing: true', 'on') }, DR = { code: variant('DR_Requests', 'const AHREFS = false;', 'const AHREFS = true;', 'on') };
+  const PLAN_OFF = { code: variant('BL_Plan', 'bing: false', 'bing: true', 'off') }, DR_OFF = { code: variant('DR_Requests', 'const AHREFS = false;', 'const AHREFS = true;', 'off') };
+  const loadAll = (o = {}) => { mock('Load Sites', B.sites()); mock('Load Ladders', B.ladders()); mock('Load Monitors', B.monitors()); mock('Load Profiles', B.profiles()); mock('Load Backlink Snapshots', o.snaps || [{ json: {} }]);
+    mock('Load Link Prospects', (o.prospects || B.prospectsPrev()).map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]); mock('Load Case Studies', [{ json: {} }]);
+    mock('Load Backlinks', (o.ledger || B.ledgerPrev()).map(j => ({ json: j }))); mock('Load Link Imports', B.imports().map(j => ({ json: j }))); mock('Load Link Graph', B.graph().map(j => ({ json: j }))); };
+  // ---------------- the full run ----------------
+  loadAll();
+  const plan = await run('BL Plan', store['Load Link Graph'], PLAN); const P = plan[0].json;
+  check('plan: full run, distinctive brand query, topics, GA4 property, Bing on, the Search Console upload seen', P.mode === 'full' && P.brand_query === 'Techand Systems' && P.topics.includes('e invoicing in uae') && P.ga4_property_id === '543096312' && P.bing === true && P.import_info.some(x => x.source === 'gsc_latest' && x.rows === 3) && P.ledger_size === 3 && P.country_iso === 'AE', JSON.stringify({ q: P.brand_query, t: P.topics, imp: P.import_info, iso: P.country_iso }));
+  const rq = await run('BL Requests', plan); const kinds = rq.map(r => r.json.kind);
+  check('DataForSEO full run: link details, anchors, most-linked pages, a new-links request per competitor', ['links', 'anchors', 'pages'].every(k => kinds.includes(k)) && kinds.filter(k => k === 'comp_new').length === 2 && rq.find(r => r.json.kind === 'comp_new').json.body[0].filters[2][0] === 'dofollow', kinds.join(','));
+  mock('Run BL Requests', rq.map(r => B.blFor(r.json)));
+  const gr = await run('Gap Requests', store['Run BL Requests']); mock('Run Gap Requests', [B.gapResp()]);
+  const sr = await run('Source Requests', store['Run Gap Requests']); const sk = sr.map(r => r.json.kind);
+  check('free sources: Wikipedia (articles, one query), Hacker News, brand + domain mention searches, two "best X" searches', sk.filter(k => k === 'wiki').length === 1 && sk.includes('hn') && sk.filter(k => k === 'searx_mention').length === 2 && sk.filter(k => k === 'searx_list').length === 2 && /best%20e%20invoicing%20in%20uae%20United%20Arab%20Emirates/.test(sr.find(r => r.json.kind === 'searx_list').json.url), sk.join(',') + ' ' + sr.find(r => r.json.kind === 'searx_list').json.url);
+  mock('Fetch Sources', sr.map(r => B.sourceFor(r.json)));
+  const nr = await run('News Requests', store['Fetch Sources']); check('GDELT: the business name, 3 months on a full run', /timespan=3months/.test(nr[0].json.url) && /%22Techand%20Systems%22/.test(nr[0].json.url), nr[0].json.url);
+  mock('Fetch News', [B.gdelt()]);
+  const bs = await run('Bing Sites', store['Fetch News']); mock('Fetch Bing Sites', [B.bingSites()]);
+  const br = await run('Bing Requests', store['Fetch Bing Sites']); check('Bing: the site URL from the account, two pages of link counts', br.length === 2 && br.every(r => /siteUrl=https%3A%2F%2Ftechand.ai%2F/.test(r.json.url)), JSON.stringify(br.map(r => r.json.url)));
+  mock('Fetch Bing Counts', br.map(r => B.bingCounts(/page=1/.test(r.json.url) ? 1 : 0)));
+  const bl = await run('Bing Link Requests', store['Fetch Bing Counts']); check('Bing: linking pages for the most-linked pages', bl.length === 2 && bl[0].json.link === 'https://techand.ai/', JSON.stringify(bl.map(r => r.json.link)));
+  mock('Fetch Bing', bl.map(r => B.bingLinks(r.json.link)));
+  const rr = await run('Referral Requests', store['Fetch Bing']); check('GA4: referral sources (year + 28 days) and referring pages without the site itself', rr.length === 2 && rr[1].json.body.dimensionFilter.andGroup.expressions[1].notExpression.filter.stringFilter.value === 'techand.ai', JSON.stringify(rr.map(r => r.json.kind)));
+  const g4 = B.ga4(); mock('GA4 Referrals', rr.map(r => g4[r.json.kind]));
+  const lm = await run('Link Merge', store['GA4 Referrals']); const M = lm[0].json; const E = (d) => M.entries.find(e => e.ref_domain === d) || {};
+  console.log('   merged ->', M.entries.length, 'referrers |', JSON.stringify(M.sources.counts), '| excluded', JSON.stringify(M.sources.ga4.excluded));
+  check('merge: peppol.org seen by DataForSEO (reported lost), Bing, the Search Console upload, GA4 (12 visits) and Common Crawl', same2(E('peppol.org').sources, ['dfs', 'bing', 'gsc', 'ga4', 'cc']) && E('peppol.org').visits === 12 && !!E('peppol.org').dfs_lost && E('peppol.org').cc_rank === 52000, JSON.stringify(E('peppol.org')).slice(0, 400));
+  check('merge: GA4 e-mail / chat hosts are not links (Teams); LinkedIn kept as social; the old upload and the old graph release ignored', !M.entries.some(e => /teams|microsoft/.test(e.ref_domain)) && M.sources.ga4.excluded.includes('teams.public.onecdn.static.microsoft') && E('linkedin.com').kind === 'social' && !M.entries.some(e => e.ref_domain === 'old-upload.com' || e.ref_domain === 'older-release.com'), JSON.stringify(M.entries.map(e => e.ref_domain)));
+  check('merge: Wikipedia article only (talk page dropped, nofollow), the HN story whose URL is on the site (not the look-alike host)', (E('wikipedia.org').sources || []).includes('wiki') && E('wikipedia.org').rel === 'nofollow' && M.sources.wiki.pages === 1 && M.sources.hn.stories === 1 && (E('ycombinator.com').sources || []).includes('hn'), JSON.stringify({ wiki: M.sources.wiki, hn: M.sources.hn, keys: M.entries.map(e => e.ref_domain) }));
+  check('merge: mention pages (web search + news + Content Analysis) and the "best X" list page; the site itself and social posts are not mentions', M.mention_pages.some(m => m.source === 'news') && M.mention_pages.some(m => m.domain === 'gulfbiz.ae') && M.mention_pages.some(m => m.source === 'dfs_mention') && !M.mention_pages.some(m => /linkedin|techand\.ai/.test(m.domain)) && M.list_pages.length === 1, JSON.stringify(M.mention_pages.map(m => m.domain + ':' + m.source)));
+  check('merge (live findings 2026-10-08): no PDF, no competitor\'s own page, no WHOIS page, list pages must look like lists (no FAQ page)', !M.mention_pages.some(m => /\.pdf$/.test(m.url) || /complyance|whois/.test(m.domain)) && M.list_pages.length === 1 && M.list_pages[0].domain === 'bestof-software.com', JSON.stringify({ mentions: M.mention_pages.map(m => m.url), lists: M.list_pages.map(l => l.url) }));
+  check('merge: the Common Crawl gap without sites that already link (peppol.org), without infrastructure (amazonaws.com, blogspot.com) or press-release wires (prnewswire.co.uk): live findings', M.cc_gap.length === 5 && M.cc_gap[0].domain === 'einvoicingnews.com' && !M.cc_gap.some(g => /amazonaws|blogspot|prnewswire/.test(g.domain)) && M.cc_gap[0].links_to.length === 2, JSON.stringify(M.cc_gap));
+  const lr = await run('Locate Requests', lm); check('locate: referrers known only by domain get a site: search (Common Crawl / Search Console sites table)', lr.some(r => r.json.ref_domain === 'ccpage.org') && lr.some(r => r.json.ref_domain === 'uaedirectory.biz') && !lr.some(r => r.json.ref_domain === 'peppol.org'), JSON.stringify(lr.map(r => r.json.ref_domain)));
+  mock('Fetch Locate', lr.map(r => B.locateFor(r.json.ref_domain)));
+  const vr = await run('Verify Requests', store['Fetch Locate']); const VR = vr.map(r => r.json); const VQ = (d) => VR.find(x => x.purpose === 'link' && x.ref_domain === d) || {};
+  console.log('   verify plan ->', JSON.stringify(VR.reduce((m, x) => { m[x.purpose] = (m[x.purpose] || 0) + 1; return m; }, {})), VR.filter(x => x.purpose === 'link').slice(0, 6).map(x => x.ref_domain + ':' + x.why).join(' '));
+  check('verify plan: the link missed once first, then the ones DataForSEO reports lost (peppol.org on its known page), new referrers; located page used', VR[0].why === 'missed_once' && VR[0].ref_domain === 'gonepartner.com' && VQ('peppol.org').why === 'reported_lost' && VQ('peppol.org').url === 'https://peppol.org/members/full-members-list/' && VQ('ccpage.org').url === 'https://ccpage.org/resources/einvoicing' && VQ('ccpage.org').located, JSON.stringify(VR.slice(0, 3)));
+  check('verify plan: Wikipedia / HN / social not fetched; mentions, the list page and the most-linked own pages are', !VR.some(x => /wikipedia|ycombinator|linkedin/.test(x.ref_domain)) && VR.filter(x => x.purpose === 'mention').length === 3 && VR.filter(x => x.purpose === 'list').length === 1 && VR.some(x => x.purpose === 'target' && /old-peppol-guide/.test(x.url)), JSON.stringify(VR.map(x => x.purpose + ':' + x.ref_domain)));
+  mock('Fetch Linking Pages', VR.map(x => B.pageFor(x.url)));
+  const rnd = await run('Render Requests', store['Fetch Linking Pages']); check('render: only the JavaScript-only / bot-blocked pages that matter (the new JS partner page; not the spam page behind a challenge)', rnd.length === 1 && /jsapp/.test(rnd[0].json.url), JSON.stringify(rnd.map(r => r.json.url)));
+  mock('Render Pages', [B.rendered()]);
+  const vl = await run('Verify Links', store['Render Pages']); const VL = vl.map(r => r.json); const V = (d, pur = 'link') => VL.find(x => x.ref_domain === d && x.purpose === pur) || {};
+  console.log('   checked ->', VL.filter(x => x.purpose === 'link').map(x => x.ref_domain + ':' + x.verify + (x.rel ? '/' + x.rel + '/' + x.placement : '')).join(' '));
+  check('check: peppol.org FOUND on the page (followed, in the content) although DataForSEO reports it lost', V('peppol.org').verify === 'found' && V('peppol.org').rel === 'follow' && V('peppol.org').placement === 'content', JSON.stringify(V('peppol.org')).slice(0, 300));
+  check('check: nofollow directory, sidebar widget, removed link, 404, domain gone, bot challenge, page now elsewhere, rendered JS page', V('partnerdir.ae').rel === 'ugc' && V('ccpage.org').placement === 'sidebar' && V('oldsite-erp.net').verify === 'missing' && V('gonepartner.com').verify === 'gone' && V('onvaxs.com').verify === 'gone' && V('betulcrime.com').verify === 'blocked' && V('thedocmag.com').verify === 'missing' && V('thedocmag.com').canonical_elsewhere && V('jsapp.io').verify === 'found' && V('jsapp.io').via === 'render', JSON.stringify(VL.filter(x => x.purpose === 'link').map(x => [x.ref_domain, x.verify, x.rel, x.placement, x.via])));
+  check('check: mentions — named without a link (gulfbiz, Content Analysis page), named with a link (the press release)', V('gulfbiz.ae', 'mention').named && V('gulfbiz.ae', 'mention').verify === 'missing' && V('zawya-press.com', 'mention').verify === 'found' && V('bizdaily.ae', 'mention').named, JSON.stringify(VL.filter(x => x.purpose === 'mention').map(x => [x.ref_domain, x.verify, x.named])));
+  check('check: the list page names both competitors (link and name), not the site; the linked guide page answers 404', JSON.stringify(V('bestof-software.com', 'list').competitors_named) === JSON.stringify(['complyance.io', 'cleartax.com']) && V('bestof-software.com', 'list').named === false && VL.some(x => x.purpose === 'target' && x.broken && /old-peppol-guide/.test(x.url)), JSON.stringify(VL.filter(x => x.purpose !== 'link' && x.purpose !== 'mention')));
+  const ar = await run('Authority Requests', vl); check('authority: one bulk_ranks + one bulk_spam_score for the domains no index scored (Bing / upload / GA4 / CC / mentions / lists / gap)', ar.length === 2 && ar[0].json.targets.includes('partnerdir.ae') && ar[0].json.targets.includes('einvoicingnews.com') && ar[0].json.targets.includes('gulfbiz.ae') && !ar[0].json.targets.includes('erpnews.ae'), JSON.stringify(ar.map(a => a.json.targets)));
+  mock('Run Authority', ar.map(a => a.json.kind === 'ranks' ? B.ranksFor(a.json.targets) : B.spamFor(a.json.targets)));
+  const dq = await run('DR Requests', store['Run Authority'], DR); check('Ahrefs DR (key set): one request with the referrers, prospects, competitors and the site', dq.length === 1 && dq[0].json.targets.includes('peppol.org') && dq[0].json.targets.includes('complyance.io') && dq[0].json.targets.includes('techand.ai'), JSON.stringify(dq[0].json.targets.slice(0, 12)));
+  const dqOff = await run('DR Requests', store['Run Authority'], DR_OFF); check('Ahrefs DR off without a key', dqOff[0].json.skip === true, JSON.stringify(dqOff[0].json)); store['DR Requests'] = dq;
+  mock('Fetch DR', [B.drFor(dq[0].json.targets)]);
+  const aj = await run('Link Analyst Jobs', store['Fetch DR']); check('Link Analyst: found links with title, placement, anchor and the text around the link; already-labelled unchanged links skipped', aj.length === 1 && aj[0].json.ids.includes('peppol.org') && aj[0].json.ids.includes('erpnews.ae') && !aj[0].json.ids.includes('stablevendors.org') && /\| content \| anchor: "https:\/\/techand.ai\/" \| text: /.test(aj[0].json.links), aj[0].json.links.slice(0, 500));
+  mock('Link Analyst', [B.analyst(aj[0].json)]);
+  const pb = await run('Parse Backlinks', store['Link Analyst']); const R = pb[0].json; const LR = (d) => R.ledger_rows.find(r => r.ref_domain === d) || {};
+  console.log('   coverage ->', JSON.stringify({ union: R.coverage.union, per: R.coverage.per_source, only: R.coverage.only_in, dfs_share: R.coverage.dfs_share, gsc: R.coverage.gsc_sample, dfs_sees_google: R.coverage.dfs_sees_google, all: R.coverage.all_see_google }));
+  console.log('   alerts ->', JSON.stringify(R.alerts.map(a => a.level + ': ' + a.text.slice(0, 90))));
+  check('no false alarm: peppol.org (authority 598) stays LIVE, not lost, no lost-link alert or "restore" draft for it', LR('peppol.org').status === 'live' && LR('peppol.org').verify === 'found' && !R.important_lost.some(l => l.from_domain === 'peppol.org') && !R.candidates.some(c => c.type === 'lost' && c.prospect_domain === 'peppol.org'), JSON.stringify(LR('peppol.org')).slice(0, 300));
+  check('two-miss rule: gonepartner (second miss, page gone) is LOST with the reason → high alert; oldsite (first miss) is at risk → low alert only', LR('gonepartner.com').status === 'lost' && LR('gonepartner.com').lost_reason === 'page_gone' && R.important_lost.some(l => l.from_domain === 'gonepartner.com') && R.alerts.some(a => a.level === 'high' && /gonepartner/.test(a.text) && /page gone/.test(a.text)) && LR('oldsite-erp.net').status === 'at_risk' && LR('oldsite-erp.net').miss_count === 1 && R.alerts.some(a => a.level === 'low' && /oldsite/.test(a.text)), JSON.stringify([LR('gonepartner.com'), LR('oldsite-erp.net')].map(r => [r.status, r.lost_reason, r.miss_count])));
+  check('DataForSEO-lost spam links on gone domains: one miss + the index says lost → confirmed lost, but not "important"', LR('robuta.com').status === 'lost' && LR('onvaxs.com').status === 'lost' ? true : (LR('onvaxs.com').status !== 'live'), JSON.stringify(['robuta.com', 'onvaxs.com', 'betulcrime.com'].map(d => [d, LR(d).status, LR(d).verify])));
+  check('a bot challenge is "not checked", never lost', LR('betulcrime.com').status !== 'lost' && LR('betulcrime.com').verify === 'blocked', JSON.stringify(LR('betulcrime.com')).slice(0, 200));
+  check('values: peppol.org has SEO, referral (12 visits) and brand value, Ahrefs DR and the CC rank; the nofollow directory scores lower', LR('peppol.org').seo_value >= 50 && LR('peppol.org').referral_value > 0 && LR('peppol.org').brand_value > 0 && LR('peppol.org').dr === 77 && LR('peppol.org').cc_rank === 52000 && LR('partnerdir.ae').seo_value < LR('peppol.org').seo_value / 2 && LR('peppol.org').link_type === 'partner', JSON.stringify(['peppol.org', 'partnerdir.ae', 'erpnews.ae', 'ccpage.org'].map(d => [d, LR(d).seo_value, LR(d).referral_value, LR(d).brand_value, LR(d).link_type, LR(d).rel])));
+  check('social profiles count as nofollow (live finding: LinkedIn had SEO value 54); their visits still count', LR('linkedin.com').seo_value < 30 && LR('linkedin.com').referral_value > 30, JSON.stringify([LR('linkedin.com').seo_value, LR('linkedin.com').referral_value]));
+  check('coverage: union of all sources, DataForSEO share, only-one-source counts and the share of Google\'s sample each source sees', R.coverage.union >= 10 && R.coverage.per_source.gsc === 4 && R.coverage.gsc_sample === 4 && R.coverage.dfs_sees_google !== null && R.coverage.dfs_share < 100 && R.coverage.only_in.cc >= 1, JSON.stringify(R.coverage).slice(0, 500));
+  check('the press release that links joins the ledger as a new referrer (source news) and a win', LR('zawya-press.com').status === 'live' && LR('zawya-press.com').sources.includes('news') && R.wins.some(w => w.ref_domain === 'zawya-press.com'), JSON.stringify(R.wins));
+  check('mentions: checked unlinked mention first, Content Analysis page too; the linked press release is not an unlinked mention', R.mentions[0].domain === 'gulfbiz.ae' && R.mentions[0].verified && R.mentions.some(m => m.domain === 'bizdaily.ae') && !R.mentions.some(m => m.domain === 'zawya-press.com'), JSON.stringify(R.mentions.map(m => [m.domain, m.verified])));
+  check('reclaim: the most-linked guide answers 404 → 301 suggestion with the referrers Bing reported', R.reclaim.some(r => /old-peppol-guide/.test(r.broken_url) && r.links >= 2), JSON.stringify(R.reclaim));
+  check('competitors: fintechnews just linked to complyance.io (spam farm and current referrers dropped); the list page and the CC gap become prospects', R.comp_new.length === 1 && R.comp_new[0].domain === 'fintechnews.ae' && R.candidates.some(c => c.type === 'list' && c.prospect_domain === 'bestof-software.com') && R.candidates.some(c => c.type === 'gap' && c.origin === 'cc' && c.prospect_domain === 'einvoicingnews.com') && R.candidates.some(c => c.type === 'comp_new'), JSON.stringify(R.candidates.map(c => c.type + ':' + c.prospect_domain + ':' + c.score)));
+  const sc = (t, d) => (R.candidates.find(c => c.type === t && c.prospect_domain === d) || {}).score || 0;
+  check('gap (live findings): a site linking to both competitors outranks a household name (stripe.com); the competitor\'s sister domain (cleartax.in) is not a prospect; a local .ae site outranks the same site elsewhere', sc('gap', 'einvoicingnews.com') > sc('gap', 'stripe.com') && sc('gap', 'taxhub.ae') > sc('gap', 'taxhub-global.com') && sc('gap', 'taxhub-global.com') > 0 && !R.candidates.some(c => c.prospect_domain === 'cleartax.in') && !R.gap.some(g => g.domain === 'cleartax.in'), JSON.stringify([sc('gap', 'einvoicingnews.com'), sc('gap', 'stripe.com')]));
+  check('scores: a checked unlinked mention outranks a cold gap site of similar authority', sc('mention', 'gulfbiz.ae') > sc('gap', 'einvoicingnews.com'), JSON.stringify([sc('mention', 'gulfbiz.ae'), sc('gap', 'einvoicingnews.com')]));
+  check('anchors: kinds over the live referrers, the money anchor from the anchor list flagged', R.anchors.kinds.brand >= 1 && R.anchors.top.some(a => a.anchor === 'best casino bonus' && a.kind === 'money'), JSON.stringify(R.anchors));
+  check('erpnews.ae (a contacted gap prospect) now links: the referrer set includes it', R.refdomains.includes('erpnews.ae'), JSON.stringify(R.refdomains.slice(0, 20)));
+  // outreach: jobs by score + follow-ups, contacts, writer, pipeline
+  const oj = await run('Outreach Jobs', pb); const OJ = oj[0].json.prospects;
+  check('outreach: first drafts by score (no reclaim), follow-up 1 for the prospect contacted 9 days ago, none for the one that now links', OJ.some(p => p.type === 'followup' && p.prospect_domain === 'peppolnews.com' && p.step === 1) && !OJ.some(p => p.prospect_domain === 'erpnews.ae') && !OJ.some(p => p.type === 'reclaim') && OJ.filter(p => p.type !== 'followup').every((p, i, a) => !i || (Number(a[i - 1].score) || 0) >= (Number(p.score) || 0)), JSON.stringify(OJ.map(p => p.type + ':' + p.prospect_domain + ':' + (p.score || p.step))));
+  const cr = await run('Contact Requests', oj); check('contacts: the mention page, /contact and /about of each new prospect (not for follow-ups or known contacts)', cr.some(r => r.json.url === 'https://gulfbiz.ae/contact') && cr.some(r => r.json.url === 'https://gulfbiz.ae/uae-einvoicing-providers') && !cr.some(r => /peppolnews/.test(r.json.url)), JSON.stringify(cr.map(r => r.json.url)));
+  mock('Fetch Contacts', cr.map(r => B.contactPage(r.json.url)));
+  const oi = await run('Outreach Input', store['Fetch Contacts']); const gp = oi[0].json.prospects.find(p => p.prospect_domain === 'gulfbiz.ae') || {};
+  check('contacts: the editor address on the site (noreply skipped)', gp.contact_email === 'editor@gulfbiz.ae', JSON.stringify(gp));
+  mock('Outreach Writer', [B.writer(oi[0].json)]);
+  const prw = await run('Prospect Rows', store['Outreach Writer']); const PR = prw.map(r => r.json); const PRO = (d, t) => PR.find(r => r.prospect_domain === d && (!t || r.type === t)) || {};
+  const PCOLS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note', 'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at'];
+  check('pipeline rows: exact columns; contact stored; follow-up 1 drafted for the contacted prospect; erpnews.ae won and verified on the page', same2(Object.keys(PR[0]), PCOLS) && PRO('gulfbiz.ae', 'mention').contact_email === 'editor@gulfbiz.ae' && PRO('peppolnews.com').followup_step === 1 && /^Re: /.test(PRO('peppolnews.com').followup_subject) && PRO('erpnews.ae').status === 'won' && !!PRO('erpnews.ae').verified_at && PRO('erpnews.ae').note === 'pitched the guide', JSON.stringify([PRO('peppolnews.com'), PRO('erpnews.ae')].map(r => [r.status, r.followup_step, r.verified_at, r.note])));
+  mock('Save Prospects', prw);
+  const LCOLS = ['site_id', 'domain', 'ref_domain', 'kind', 'from_url', 'to_url', 'anchor', 'anchor_kind', 'rel', 'placement', 'link_type', 'relevance', 'note', 'sources', 'source_count', 'first_seen', 'last_seen', 'status', 'lost_at', 'lost_reason', 'miss_count', 'verify', 'verified_at', 'noindex', 'canonical_elsewhere', 'outbound', 'page_title', 'context', 'authority', 'dr', 'cc_rank', 'page_keywords', 'spam_score', 'original', 'sitewide', 'links', 'visits', 'key_events', 'ai_cited', 'seo_value', 'referral_value', 'brand_value', 'updated_at'];
+  const ldr = await run('Ledger Rows', prw); const LDR = ldr.map(r => r.json);
+  check('ledger rows: exact columns, every referrer checked or changed this run written (peppol.org with its check)', same2(Object.keys(LDR[0]), LCOLS) && LDR.some(r => r.ref_domain === 'peppol.org' && r.verify === 'found') && LDR.every(r => r.site_id === B.SITE), JSON.stringify({ written: LDR.length, all: R.ledger_rows.length, stable: R.ledger_rows.find(r => r.ref_domain === 'stablevendors.org') }));
+  mock('Save Backlinks', ldr);
+  const snr = await run('BL Snapshot Rows', ldr); const SNAPC = ['site_id', 'domain', 'checked_at', 'mode', 'rank', 'backlinks', 'referring_domains', 'referring_domains_nofollow', 'spam_score', 'broken_backlinks', 'new_links', 'lost_links', 'important_lost', 'spammy_new', 'lost_json', 'new_json', 'competitors_json', 'timeseries_json', 'cost_usd', 'union_domains', 'best_links', 'verified_live', 'at_risk', 'confirmed_lost', 'referral_visits', 'referral_key_events', 'coverage_json', 'anchors_json', 'pages_json', 'values_json'];
+  check('snapshot: exact columns, union / best / verified / at risk / referral visits, coverage json', same2(Object.keys(snr[0].json), SNAPC) && snr[0].json.union_domains === R.coverage.union && snr[0].json.referral_visits >= 12 && JSON.parse(snr[0].json.coverage_json).per_source.dfs >= 1, JSON.stringify(snr[0].json).slice(0, 400));
+  mock('Save BL Snapshot', snr);
+  const rp = await run('BL Report', snr); const html = rp[0].json.html; save('backlink-report-v410.html', html); scanHtml('backlink report v4.10', html);
+  check('report: coverage table, best links, losses with the reason, list pages, competitors\' new links, CC gap, follow-ups, data credits (GDELT, Common Crawl, Ahrefs DR)', ['Where the links were found', 'Best links', 'Links lost (confirmed by two checks)', 'page gone', '"Best of" lists', 'Sites that just linked to a competitor', 'Common Crawl', 'Follow-ups due', 'GDELT Project', 'Domain Rating by Ahrefs', 'Links that send visits'].every(t => html.includes(t.replace(/"/g, '&quot;')) || html.includes(t)), ['Where the links were found', 'Best links', 'Links lost (confirmed by two checks)', 'page gone', 'Best of', 'Sites that just linked to a competitor', 'Common Crawl', 'Follow-ups due', 'GDELT Project', 'Domain Rating by Ahrefs', 'Links that send visits'].filter(t => !html.includes(t)).join(' | '));
+  check('report: contact shown on the draft, csv has the new columns', /to: editor@gulfbiz\.ae/.test(html) && /contact_email/.test(Buffer.from(rp[0].binary.prospects_csv.data, 'base64').toString()), '');
+  mock('Render PDF BL', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
+  await run('Prepare PDF BL', rp); const att = await run('Attach PDF BL', store['Render PDF BL']); const cb = await run('Build BL Callback', att); const CB = cb[0].json;
+  check('callback: coverage, best links, wins, lists, competitors\' new links, at risk; no ledger dump, no refdomains, no html', !!CB.coverage && CB.best.length > 0 && Array.isArray(CB.wins) && Array.isArray(CB.lists) && Array.isArray(CB.comp_new) && Array.isArray(CB.at_risk) && CB.ledger_rows === undefined && CB.refdomains === undefined && CB.html === undefined && CB.stage === 'backlinks', Object.keys(CB).join(','));
+  // ---------------- next Monday: the light watch ----------------
+  const ledger2 = R.ledger_rows.map(r => ({ ...r, updated_at: B.iso(7) }));
+  loadAll({ ledger: ledger2, prospects: PR, snaps: snr.map(r => ({ json: { ...r.json, checked_at: B.iso(7) } })) });
+  const p2 = await run('BL Plan', store['Load Link Graph'], PLAN); const rq2 = await run('BL Requests', p2);
+  mock('Run BL Requests', rq2.map(r => r.json.kind === 'lost' || r.json.kind === 'new' ? { tasks: [{ status_code: 20000, cost: 0.024, result: [{ items: [] }] }] } : B.blFor(r.json)));
+  await run('Gap Requests', store['Run BL Requests']); delete store['Run Gap Requests']; const sr2 = await run('Source Requests', store['Gap Requests']);
+  check('light run: 3 DataForSEO requests, no Wikipedia / HN / web search (monthly), GDELT for the past 8 days', p2[0].json.mode === 'light' && rq2.length === 3 && sr2[0].json.skip === true, JSON.stringify(rq2.map(r => r.json.kind)));
+  delete store['Fetch Sources']; const nr2 = await run('News Requests', sr2); mock('Fetch News', [{ articles: [] }]);
+  await run('Bing Sites', store['Fetch News']); mock('Fetch Bing Sites', [B.bingSites()]); const br2 = await run('Bing Requests', store['Fetch Bing Sites']); mock('Fetch Bing Counts', br2.map(r => B.bingCounts(/page=1/.test(r.json.url) ? 1 : 0)));
+  const bl2 = await run('Bing Link Requests', store['Fetch Bing Counts']); mock('Fetch Bing', bl2.map(r => B.bingLinks(r.json.link)));
+  const rr2 = await run('Referral Requests', store['Fetch Bing']); mock('GA4 Referrals', rr2.map(r => g4[r.json.kind]));
+  const lm2 = await run('Link Merge', store['GA4 Referrals']); const lr2 = await run('Locate Requests', lm2); mock('Fetch Locate', lr2.map(r => r.json.skip ? {} : B.locateFor(r.json.ref_domain)));
+  const vr2 = await run('Verify Requests', store['Fetch Locate']); const VR2 = vr2.map(r => r.json);
+  check('light run: only the links that matter are re-checked (missed once, valuable, won) — not the rotation, no mentions beyond news, no list / own pages', VR2.length < VR.length && VR2.some(x => x.ref_domain === 'oldsite-erp.net' && x.why === 'missed_once') && !VR2.some(x => x.purpose === 'list' || x.purpose === 'target') && VR2.filter(x => x.purpose === 'link').every(x => x.why !== 'rotation'), JSON.stringify(VR2.map(x => x.purpose + ':' + x.ref_domain + ':' + (x.why || ''))));
+  mock('Fetch Linking Pages', VR2.map(x => B.pageFor(x.url))); const rn2 = await run('Render Requests', store['Fetch Linking Pages']); if (!rn2[0].json.skip) mock('Render Pages', rn2.map(() => B.rendered())); else delete store['Render Pages'];
+  const vl2 = await run('Verify Links', store['Fetch Linking Pages']); const ar2 = await run('Authority Requests', vl2); if (!ar2[0].json.skip) mock('Run Authority', ar2.map(a => a.json.kind === 'ranks' ? B.ranksFor(a.json.targets) : B.spamFor(a.json.targets))); else delete store['Run Authority'];
+  await run('DR Requests', vl2, DR); delete store['Fetch DR']; const aj2 = await run('Link Analyst Jobs', vl2); delete store['Link Analyst'];
+  const pb2 = await run('Parse Backlinks', aj2); const R2 = pb2[0].json; const LR2 = (d) => R2.ledger_rows.find(r => r.ref_domain === d) || {};
+  check('second miss confirms the loss: oldsite is LOST (link removed) → high alert; DR / analyst labels kept from last week', LR2('oldsite-erp.net').status === 'lost' && LR2('oldsite-erp.net').lost_reason === 'link_removed' && R2.alerts.some(a => a.level === 'high' && /oldsite/.test(a.text)) && R2.deliver && LR2('peppol.org').dr === 77 && LR2('peppol.org').link_type === 'partner', JSON.stringify({ old: [LR2('oldsite-erp.net').status, LR2('oldsite-erp.net').lost_reason], alerts: R2.alerts.map(a => a.level), peppol: [LR2('peppol.org').dr, LR2('peppol.org').link_type] }));
+  console.log('   light run lost ->', JSON.stringify(R2.lost.map(l => [l.from_domain, l.reason, l.important, l.seo_value, l.domain_rank])));
+  const ldr2 = await run('Ledger Rows', pb2); check('light run ledger: an unchanged referrer that was not re-checked is not rewritten; the confirmed loss is', !ldr2.some(r => r.json.ref_domain === 'stablevendors.org') && ldr2.some(r => r.json.ref_domain === 'oldsite-erp.net' && r.json.status === 'lost') && ldr2.length < R2.ledger_rows.length, JSON.stringify({ written: ldr2.map(r => r.json.ref_domain), all: R2.ledger_rows.length }));
+  check('gonepartner stays lost without a new alert (lost last week)', LR2('gonepartner.com').status === 'lost' && !R2.alerts.some(a => /gonepartner/.test(a.text)), JSON.stringify(R2.alerts));
+  // ---------------- no free source configured: DataForSEO alone still works ----------------
+  loadAll({ ledger: [{}], prospects: [{}] }); mock('Load Link Imports', [{ json: {} }]); mock('Load Link Graph', [{ json: {} }]); mock('Load Sites', [{ json: { ...B.sites()[0].json, ga4_property_id: '' } }]);
+  const p3 = await run('BL Plan', store['Load Link Graph'], PLAN_OFF); const rq3 = await run('BL Requests', p3); mock('Run BL Requests', rq3.map(r => B.blFor(r.json)));
+  await run('Gap Requests', store['Run BL Requests']); mock('Run Gap Requests', [B.gapResp()]); const s3 = await run('Source Requests', store['Run Gap Requests']); mock('Fetch Sources', s3.map(() => ({ error: { message: 'connect ECONNREFUSED searxng' } })));
+  await run('News Requests', s3); mock('Fetch News', [{ error: { message: 'Please limit requests to one every 5 seconds' } }]);
+  const bs3 = await run('Bing Sites', store['Fetch News']); check('Bing off (no key): no Bing request at all', bs3[0].json.skip === true, JSON.stringify(bs3[0].json)); for (const k of ['Fetch Bing Sites', 'Fetch Bing Counts', 'Fetch Bing', 'GA4 Referrals']) delete store[k];
+  await run('Bing Requests', bs3); await run('Bing Link Requests', store['Bing Requests']); const rr3 = await run('Referral Requests', store['Bing Link Requests']); check('no GA4 property: no referral report', rr3[0].json.skip === true, JSON.stringify(rr3[0].json));
+  const lm3 = await run('Link Merge', rr3); const vr3 = await run('Verify Requests', await run('Locate Requests', lm3));
+  mock('Fetch Linking Pages', vr3.map(x => B.pageFor(x.json.url))); await run('Render Requests', store['Fetch Linking Pages']); delete store['Render Pages']; const vl3 = await run('Verify Links', store['Fetch Linking Pages']);
+  for (const k of ['Run Authority', 'Fetch DR', 'Link Analyst']) delete store[k]; await run('Authority Requests', vl3); await run('DR Requests', vl3, DR_OFF); await run('Link Analyst Jobs', vl3);
+  const pb3 = await run('Parse Backlinks', vl3); const R3 = pb3[0].json;
+  check('DataForSEO only (free sources down): the report still runs; peppol.org checked on its page and kept live; sources honest about what is missing', R3.ledger_rows.some(r => r.ref_domain === 'peppol.org' && r.status === 'live') && R3.coverage.status.ga4.connected === false && R3.coverage.status.bing.enabled === false && !R3.important_lost.some(l => l.from_domain === 'peppol.org'), JSON.stringify({ cov: R3.coverage.per_source, st: R3.coverage.status.bing }));
+  const rpt3 = await run('BL Report', await run('BL Snapshot Rows', [{ json: {} }])); check('report without the free sources: tells how to connect them', /SEO_BING_WEBMASTER_API_KEY/.test(rpt3[0].json.html) && /upload the Links export/.test(rpt3[0].json.html) && /connect GA4/.test(rpt3[0].json.html), '');
+  // ---------------- free sources only (API free_only): no DataForSEO, no Claude, $0; not the month's full run ----------------
+  loadAll(); mock('Manual Run', { body: { domain: 'techand.ai', free_only: true, callback_url: 'http://server:4000/api/hooks/n8n/tok' } });
+  const pf = await run('BL Plan', store['Load Link Graph'], PLAN); const rqf = await run('BL Requests', pf);
+  check('free only: on demand, full mode, no DataForSEO request, no Labs competitors', pf[0].json.free_only === true && pf[0].json.mode === 'full' && rqf[0].json.skip === true && pf[0].json.need_competitors === false, JSON.stringify({ free: pf[0].json.free_only, mode: pf[0].json.mode, rq: rqf.map(r => r.json.kind || 'skip') }));
+  delete store['Run BL Requests']; const gf = await run('Gap Requests', rqf); delete store['Run Gap Requests'];
+  const sf = await run('Source Requests', gf); mock('Fetch Sources', sf.map(r => B.sourceFor(r.json))); await run('News Requests', sf); mock('Fetch News', [B.gdelt()]);
+  await run('Bing Sites', store['Fetch News']); mock('Fetch Bing Sites', [B.bingSites()]); const brf = await run('Bing Requests', store['Fetch Bing Sites']); mock('Fetch Bing Counts', brf.map(r => B.bingCounts(/page=1/.test(r.json.url) ? 1 : 0)));
+  const blf = await run('Bing Link Requests', store['Fetch Bing Counts']); mock('Fetch Bing', blf.map(r => B.bingLinks(r.json.link))); const rrf = await run('Referral Requests', store['Fetch Bing']); mock('GA4 Referrals', rrf.map(r => g4[r.json.kind]));
+  const lmf = await run('Link Merge', store['GA4 Referrals']); const lrf = await run('Locate Requests', lmf); mock('Fetch Locate', lrf.map(r => r.json.skip ? {} : B.locateFor(r.json.ref_domain)));
+  const vrf = await run('Verify Requests', store['Fetch Locate']); mock('Fetch Linking Pages', vrf.map(x => B.pageFor(x.json.url))); const rnf = await run('Render Requests', store['Fetch Linking Pages']); if (!rnf[0].json.skip) mock('Render Pages', rnf.map(() => B.rendered())); else delete store['Render Pages'];
+  const vlf = await run('Verify Links', store['Fetch Linking Pages']); const arf = await run('Authority Requests', vlf); delete store['Run Authority']; delete store['Fetch DR']; delete store['Link Analyst'];
+  const drf = await run('DR Requests', vlf, DR); if (!drf[0].json.skip) mock('Fetch DR', [B.drFor(drf[0].json.targets)]); const ajf = await run('Link Analyst Jobs', vlf);   // Ahrefs DR is free: it runs in free-only mode too
+  check('free only: no DataForSEO authority request, no Link Analyst (Claude)', arf[0].json.skip === true && ajf[0].json.skip === true, JSON.stringify([arf[0].json, ajf[0].json]));
+  const pbf = await run('Parse Backlinks', ajf); const Rf = pbf[0].json; const ojf = await run('Outreach Jobs', pbf);
+  check('free only: the ledger still fills from the free sources and the check (peppol.org found), no outreach drafts', Rf.ledger_rows.some(r => r.ref_domain === 'peppol.org' && r.verify === 'found') && Rf.coverage.union >= 5 && Rf.cost_usd === 0 && ojf[0].json.skip === true, JSON.stringify({ union: Rf.coverage.union, cost: Rf.cost_usd, oj: ojf[0].json }));
+  await run('Contact Requests', ojf); delete store['Fetch Contacts']; await run('Outreach Input', ojf); delete store['Outreach Writer']; const prf = await run('Prospect Rows', store['Outreach Input']);
+  const snf = await run('BL Snapshot Rows', prf); const rpf = await run('BL Report', snf);
+  check('free only: Ahrefs DR still read (free); authority cells show "DR 77" alone, never "0 · DR" (live finding 2026-10-08)', drf[0].json.skip !== true && Rf.ledger_rows.find(r => r.ref_domain === 'peppol.org').dr === 77 && />DR 77</.test(rpf[0].json.html) && !/>0 · DR/.test(rpf[0].json.html), JSON.stringify({ dr: drf[0].json.skip, cells: (rpf[0].json.html.match(/>[^<]{0,12}DR \d+</g) || []).slice(0, 4) }));
+  check('free only: snapshot mode "free" (the next Monday run is still the month\'s full DataForSEO run), report says $0', snf[0].json.mode === 'free' && /Free sources only/.test(rpf[0].json.html) && /cost \$0/.test(rpf[0].json.html), JSON.stringify({ mode: snf[0].json.mode }));
+  loadAll({ snaps: snf }); delete store['Manual Run']; const pNext = await run('BL Plan', store['Load Link Graph'], PLAN);
+  check('after a free run, the scheduled Monday run is still the full DataForSEO run', pNext[0].json.mode === 'full' && !pNext[0].json.free_only, JSON.stringify({ mode: pNext[0].json.mode }));
+  { // a paid run 5 days ago, then a free check today (live finding 2026-10-08: "previous" and "changes since" took the free run)
+    const paidAt = new Date(Date.now() - 5 * 864e5).toISOString(), paid = { ...snf[0].json, checked_at: paidAt, mode: 'light', rank: 598, referring_domains: 13, spam_score: 8, union_domains: 15 };
+    loadAll({ snaps: [snf[0], { json: paid }] }); const pMon = await run('BL Plan', store['Load Link Graph'], PLAN);
+    mock('Manual Run', { body: { domain: 'techand.ai', free_only: true } }); const pFree = await run('BL Plan', store['Load Link Graph'], PLAN); delete store['Manual Run'];
+    const day = (x) => String(x || '').slice(0, 10);
+    check('a free check moves neither "changes since" (the next paid run still asks DataForSEO from the last paid run) nor the DataForSEO comparison; counts compare like with like', day(pMon[0].json.since) === day(paidAt) && pMon[0].json.previous.rank === 598 && pMon[0].json.previous.union_domains === 15 && pFree[0].json.free_only === true && pFree[0].json.previous.union_domains === Number(snf[0].json.union_domains) && pFree[0].json.previous.rank === 598, JSON.stringify({ since: pMon[0].json.since, prevMon: pMon[0].json.previous, prevFree: pFree[0].json.previous }));
+    const rpMix = await run('BL Report', snf); check('free report: no DataForSEO authority / spam tile values (shown as "—", from the monthly full run)', /DataForSEO: monthly full run/.test(rpMix[0].json.html) && !/Spam score/.test(rpMix[0].json.html.split('Where the links were found')[0]), '');
+  }
+  // ---------------- Site Admin: contacted stamps the date, contact e-mail ----------------
+  await run('Admin Action', { body: { action: 'prospect', domain: 'techand.ai', prospect_domain: 'gulfbiz.ae', type: 'mention', status: 'contacted', contact_email: 'Editor@GulfBiz.ae' } });
+  mock('Load Link Prospects (Admin)', [{ json: { ...PRO('gulfbiz.ae', 'mention'), status: 'new', site_id: B.SITE } }]); const pa = await run('Prospect Rows (Admin)', store['Load Link Prospects (Admin)']);
+  check('Site Admin prospect: contacted stamps contacted_at (follow-ups count from it), contact e-mail stored, exact columns', pa[0].json.status === 'contacted' && !!pa[0].json.contacted_at && pa[0].json.contact_email === 'editor@gulfbiz.ae' && pa[0].json.followup_step === 0 && same2(Object.keys(pa[0].json), PCOLS), JSON.stringify(pa[0].json));
+  for (const f of ['BL_Plan__on.js', 'DR_Requests__on.js', 'BL_Plan__off.js', 'DR_Requests__off.js']) try { fs.unlinkSync(path.join(CD, f)); } catch (e) {}
 });
 
 H.report();

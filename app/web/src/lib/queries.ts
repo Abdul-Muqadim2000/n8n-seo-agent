@@ -13,6 +13,7 @@ import type {
   KeywordCheck,
   LadderCard,
   LadderDetail,
+  LinkImportSummary,
   Me,
   Member,
   Org,
@@ -237,6 +238,17 @@ export function useSiteAdmin(orgId: string, siteId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.site(siteId) });
       qc.invalidateQueries({ queryKey: qk.sites(orgId) });
+    },
+  });
+}
+
+/** v4.10: upload a Search Console Links export (or another tool's backlink CSV) for the Backlink Monitor */
+export function useLinkImport(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { csv: string; fileName?: string }) => api<LinkImportSummary>(`/api/orgs/${orgId}/sites/${siteId}/backlinks/import`, { method: 'POST', body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'backlinks') });
     },
   });
 }

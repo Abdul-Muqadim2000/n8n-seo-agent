@@ -56,7 +56,11 @@ export function Climb({ ladder, onWrite }: { ladder: LadderDetail; onWrite: (i: 
     <Card>
       <CardHeader
         title="The climb"
-        description="Easy pages first, the main page last. Every page links to the main page and makes it stronger. Select a page for its details and what to do next."
+        description={
+          columns.length === 1 && columns[0].rung === 4
+            ? 'Only the main page for now: the search data has no supporting keywords for this topic yet. Select it for its details and what to do next.'
+            : 'Easy pages first, the main page last. Every page links to the main page and makes it stronger. Select a page for its details and what to do next.'
+        }
       />
       {!columns.length ? (
         <p className="px-5 py-6 text-sm text-ink-3">The plan has no pages yet. They appear here once the ladder plan arrives.</p>

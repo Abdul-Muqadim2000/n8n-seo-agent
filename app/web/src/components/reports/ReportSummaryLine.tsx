@@ -86,11 +86,16 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
         nm(s, 'citationRate') != null && `cited ${pctText(nm(s, 'citationRate'))}`,
         nm(s, 'shareOfVoice') != null && `share of voice ${pctText(nm(s, 'shareOfVoice'))}`,
         nm(s, 'questions') != null && `${nm(s, 'questions')} questions`,
+        nm(s, 'aiSessions') != null && `${compactNumber(nm(s, 'aiSessions'))} AI visits`,
+        nm(s, 'wrongClaims') ? `${nm(s, 'wrongClaims')} wrong claim(s)` : null,
       );
+      break;
+    case 'ai_pulse':
+      parts.push(nm(s, 'alerts') ? `${nm(s, 'alerts')} change(s) in today’s AI answers` : 'no change', nm(s, 'mentionRate') != null && `named in ${pctText(nm(s, 'mentionRate'))} of ${nm(s, 'samples') ?? 0} answers`);
       break;
     case 'backlinks':
       parts.push(
-        nm(s, 'referringDomains') != null && `${compactNumber(nm(s, 'referringDomains'))} referring domains`,
+        nm(s, 'referringDomains') != null && `${compactNumber(nm(s, 'referringDomains'))} referring sites`,
         nm(s, 'lost') != null && `${nm(s, 'lost')} lost${nm(s, 'importantLost') ? ` (${nm(s, 'importantLost')} important)` : ''}`,
         nm(s, 'spammy') ? `${nm(s, 'spammy')} spammy` : null,
         nm(s, 'prospects') ? `${nm(s, 'prospects')} prospects` : null,

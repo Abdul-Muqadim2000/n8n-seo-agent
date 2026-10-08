@@ -128,7 +128,7 @@ export function pipelineNotices(
       let effect = '';
       if (autoId === 'ai_visibility')
         effect = sameUtcMonth(next, now)
-          ? `This run asks every engine, Gemini and Claude included, so the automatic runs later in ${monthOf(now)} reuse those two answers instead of paying for them again.`
+          ? `This run is a full run (Claude, the brand question, new questions and the market-wide index included), so the automatic runs later in ${monthOf(now)} reuse those instead of paying for them again.`
           : `The next automatic run is the month’s full run as usual.`;
       else if (autoId === 'backlinks')
         effect = `${

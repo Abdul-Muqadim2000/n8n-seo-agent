@@ -29,14 +29,33 @@ const before1 = md;
 md = md.replace(/\s*\((placeholders?|placeholder for [^)]*)\)/gi, '').replace(/\b(indicative\s+)?price placeholders?\b/gi, 'prices').replace(/\bplaceholders?\b/gi, 'details');
 if (md !== before1) fixes.push('Removed the word "placeholder" from text');
 
-// 3. Prices become [Price] unless the user gave prices (business facts / description)
+// 3. Prices become [Price] unless the user gave prices (business facts / description). v4.9 (live 2026-10-02 and 2026-10-08): an amount the
+//    verified facts state stays as written (official fines and thresholds, with their source link); an unsourced amount that is not about the
+//    business's own prices (a revenue threshold, a fine, a market figure, or anything in millions) becomes [Confirm: AED 50m], so the reviewer
+//    sees the figure to check instead of a misleading "[Price]m"; every other amount is an invented price and becomes [Price].
 const userText = String(prev.business || '') + ' ' + String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '');   // case-study facts (v4.4) are the client's own numbers
 const userGavePrices = /\d/.test(userText) && /(\$|£|€|₹|\b(aed|sar|pkr|inr|usd|gbp|eur|zar|brl|mxn|rs)\b)/i.test(userText);
 if (!userGavePrices) {
   const sym = { GBP: '£', USD: '\\$', CAD: '\\$', AUD: '\\$', NZD: '\\$', SGD: '\\$', PKR: '(?:Rs\\.?|PKR)', INR: '(?:Rs\\.?|₹|INR)', AED: '(?:AED|Dh)', SAR: '(?:SAR|SR)', EUR: '€', ZAR: 'R', BRL: 'R\\$', MXN: '\\$' }[prev.currency] || '[£$€]';
-  const priceRe = new RegExp(sym + '\\s?\\d[\\d.,]*(\\s?(–|-|to)\\s?' + sym + '?\\s?\\d[\\d.,]*)?', 'g');
-  const count = (md.match(priceRe) || []).length;
-  if (count) { md = md.replace(priceRe, '[Price]'); fixes.push(`Replaced ${count} invented price(s) with [Price]`); }
+  const unit = '(?:\\s?(?:k|K|m|M|bn|BN|million|Million|billion|Billion|thousand))?\\b';
+  const priceRe = new RegExp(sym + '\\s?\\d[\\d.,]*' + unit + '(\\s?(–|-|to)\\s?' + sym + '?\\s?\\d[\\d.,]*' + unit + ')?', 'g');
+  const factsText = ((prev.facts || []).map(f => String((f && (f.claim || f.text)) || '')).join(' \n ') + ' ' + userText).replace(/(\d),(?=\d{3}\b)/g, '$1');
+  const numsOf = (amt) => (String(amt).replace(/(\d),(?=\d{3}\b)/g, '$1').match(/\d+(?:\.\d+)?/g) || []);
+  const verified = (amt) => { const n = numsOf(amt); return n.length > 0 && n.every(x => new RegExp(sym + '\\s?' + x.replace('.', '\\.') + '(?![\\d])', 'i').test(factsText)); };
+  const PRICE_WORDS = /\b(price[sd]?|pricing|cost[s]?|fees?|quotes?|packages?|plans?|investment|budget|starting|subscriptions?|rates?|charge[sd]?|pay|paid|per (user|seat|hour|day|project))\b/i;
+  const OTHER_WORDS = /\b(revenue|turnover|threshold|fines?|penalt(y|ies)|tax|vat|levy|duty|salary|salaries|wages?|market|funding|raised|valuation|gdp|economy|exports?|imports?|sales of)\b/i;
+  const sentenceAt = (text, at, len) => { let a = at, b = at + len; while (a > 0 && !/[.!?\n|]/.test(text[a - 1])) a--; while (b < text.length && !/[.!?\n|]/.test(text[b])) b++; return text.slice(a, b); };
+  let masked = 0, flagged = 0, kept = 0;
+  md = md.replace(priceRe, (amt, _r, _s, at, whole) => {
+    if (verified(amt)) { kept++; return amt; }
+    const sent = sentenceAt(whole, at, amt.length);
+    const big = /(m|M|bn|BN|million|Million|billion|Billion)\b\s*$/.test(amt);
+    if ((big || OTHER_WORDS.test(sent)) && !PRICE_WORDS.test(sent)) { flagged++; return '[Confirm: ' + amt.trim() + ']'; }   // a price sentence keeps the guard
+    masked++; return '[Price]';
+  });
+  if (masked) fixes.push(`Replaced ${masked} invented price(s) with [Price]`);
+  if (flagged) fixes.push(`Marked ${flagged} unsourced amount(s) (thresholds, fines, market figures) as [Confirm: …] for review`);
+  if (kept) fixes.push(`Kept ${kept} amount(s) stated in the verified facts`);
 }
 
 // 4. Meta lines — and nothing else may sit between them and the H1 (models sometimes add "production notes")

@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { Download } from 'lucide-react';
 import type { ReportDetail, ReportFile } from '@seo/shared';
 import { Callout } from '@/components/ui/feedback';
-import { AiVisibilityReport } from './ai';
+import { AiPulseReport, AiVisibilityReport } from './ai';
 import { AuditReport } from './audit';
 import { BacklinksReport } from './backlinks';
 import { ContentReport } from './content';
@@ -34,6 +34,7 @@ const RENDERERS: Record<string, (p: { report: ReportDetail }) => ReactNode> = {
   rank_tracker: RankTrackerReport,
   site_tracker: SiteTrackerReport,
   ai_visibility: AiVisibilityReport,
+  ai_pulse: AiPulseReport,
   backlinks: BacklinksReport,
   published: PublishedReport,
   profile: ProfileReport,

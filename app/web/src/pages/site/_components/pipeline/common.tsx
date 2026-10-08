@@ -20,6 +20,7 @@ import {
   PauseCircle,
   PenLine,
   PenSquare,
+  Radar,
   RotateCw,
   TrendingUp,
   Trophy,
@@ -33,6 +34,7 @@ import { OFF_CHART, plotPos } from '../positions';
 
 export const AUTO_ICON: Record<AutomationId, ReactNode> = {
   ai_visibility: <Bot className="size-4" />,
+  ai_pulse: <Radar className="size-4" />,
   backlinks: <Link2 className="size-4" />,
   rank_tracker: <Activity className="size-4" />,
   site_tracker: <TrendingUp className="size-4" />,

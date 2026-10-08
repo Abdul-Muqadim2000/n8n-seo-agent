@@ -225,15 +225,28 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       action: { label: 'See the answers', page: 'ai' },
     });
 
-  // ---------- backlinks ----------
-  const lastBl = x.backlinks.snapshots[x.backlinks.snapshots.length - 1];
-  for (const l of (x.backlinks.latest?.lost ?? []).filter((l) => l.domainRank >= 100).slice(0, 3))
-    add({ id: `bl:lost:${l.fromDomain}`, category: 'backlinks', priority: 'high', title: `Reclaim the lost link from ${l.fromDomain}`, detail: 'An authoritative link stopped pointing to you. The prospect pipeline has an outreach draft.', evidence: `authority ${l.domainRank} · last seen ${l.lastSeen}`, action: { label: 'Open backlinks', page: 'backlinks' } });
-  if (lastBl && lastBl.spammyNew > 0)
-    add({ id: 'bl:spam', category: 'backlinks', priority: 'medium', title: `Review ${lastBl.spammyNew} new spammy link(s)`, detail: 'Links from link farms or PBN pages. Google mostly ignores them; disavow only if there is a pattern or a manual action.', action: { label: 'Review links', page: 'backlinks' } });
-  const fresh = x.backlinks.prospects.filter((p) => p.status === 'new' && p.outreachBody);
+  // ---------- backlinks (v4.10: losses are confirmed by two checks on the page; reasons, reclaims, lists, follow-ups, Google's sample) ----------
+  const bl = x.backlinks;
+  const lastBl = bl.snapshots[bl.snapshots.length - 1];
+  const REASON: Record<string, string> = { link_removed: 'the link was removed from the page', page_gone: 'the linking page is gone', domain_gone: 'the linking site no longer exists', not_seen: 'no source has seen it for 4 months' };
+  const confirmed = (bl.latest?.lost ?? []).filter((l) => !l.pending && l.reason !== 'domain_gone' && (l.domainRank >= 100 || l.reason));
+  for (const l of confirmed.filter((l) => l.domainRank >= 100 || bl.refs.find((r) => r.refDomain === l.fromDomain && r.seoValue >= 35)).slice(0, 3))
+    add({ id: `bl:lost:${l.fromDomain}`, category: 'backlinks', priority: 'high', title: `Win back the link from ${l.fromDomain}`, detail: `Checked twice on the page: ${REASON[l.reason ?? ''] ?? 'the link is gone'}. The outreach pipeline has a draft asking to restore it.`, evidence: `authority ${l.domainRank}${l.lastSeen ? ` · last seen ${l.lastSeen}` : ''}`, action: { label: 'Open backlinks', page: 'backlinks' } });
+  for (const r of (bl.report?.reclaim ?? []).slice(0, 2))
+    add({ id: `bl:reclaim:${r.brokenUrl}`, category: 'backlinks', priority: 'medium', title: `Redirect ${r.brokenUrl.replace(/^https?:\/\/[^/]+/, '') || '/'} — ${r.links} link(s) point to a broken page`, detail: `A 301 redirect to ${r.redirectTo.replace(/^https?:\/\/[^/]+/, '') || '/'} keeps the value of those links.`, evidence: r.domains.slice(0, 3).join(', '), action: { label: 'Open backlinks', page: 'backlinks' } });
+  if (lastBl && lastBl.spammyNew > 2)
+    add({ id: 'bl:spam', category: 'backlinks', priority: 'low', title: `${lastBl.spammyNew} new spammy link(s) — nothing to do unless they keep coming`, detail: 'Google ignores most link spam on its own; disavow only after a manual action or for a paid-link pattern you did not create.', action: { label: 'Review links', page: 'backlinks' } });
+  const missingLists = (bl.latest?.lists ?? []).filter((l) => !l.named && l.competitors.length);
+  if (missingLists.length)
+    add({ id: 'bl:lists', category: 'backlinks', priority: 'medium', title: `Get onto ${missingLists.length} "best of" list(s) that name your competitors`, detail: 'Lists and comparisons are what AI answers and searchers read first. Each has an outreach draft with the facts the editor needs.', evidence: missingLists.slice(0, 2).map((l) => `${l.domain}: ${l.competitors.join(', ')}`).join(' · '), action: { label: 'Open the pipeline', page: 'backlinks' } });
+  const fresh = bl.prospects.filter((p) => p.status === 'new' && p.outreachBody).sort((a, c) => c.score - a.score);
   if (fresh.length)
-    add({ id: 'bl:outreach', category: 'backlinks', priority: 'medium', title: `Send outreach to ${fresh.length} link prospect(s)`, detail: 'Each prospect has a ready subject and message. Mark them contacted to track the pipeline.', evidence: fresh.slice(0, 3).map((p) => p.prospectDomain).join(', '), action: { label: 'Open the pipeline', page: 'backlinks' } });
+    add({ id: 'bl:outreach', category: 'backlinks', priority: 'medium', title: `Send outreach to ${fresh.length} link prospect(s)`, detail: 'Each has a ready subject and message (and a contact when one was found on their site). Start with the highest score; mark them contacted to get the follow-ups.', evidence: fresh.slice(0, 3).map((p) => p.prospectDomain).join(', '), action: { label: 'Open the pipeline', page: 'backlinks' } });
+  const followups = bl.prospects.filter((p) => p.status === 'contacted' && p.followupBody);
+  if (followups.length)
+    add({ id: 'bl:followup', category: 'backlinks', priority: 'medium', title: `${followups.length} follow-up e-mail(s) are due`, detail: 'No reply and no link yet. One short follow-up roughly doubles the replies; the second is the last.', evidence: followups.slice(0, 3).map((p) => p.prospectDomain).join(', '), action: { label: 'Open the pipeline', page: 'backlinks' } });
+  if (lastBl && lastBl.unionDomains != null && !bl.imports.some((i) => i.source.startsWith('gsc')))
+    add({ id: 'bl:gsc-import', category: 'backlinks', priority: 'low', title: "Add Google's own list of your links", detail: 'Search Console shows a sample of the links Google knows; its API cannot read them. Export "Latest links" (Links → Export external links) and upload the CSV: the monitor checks every page and shows how much of Google\'s view each source covers.', action: { label: 'Open backlinks', page: 'backlinks' } });
 
   // ---------- content ----------
   const now = Date.now();
@@ -312,7 +325,8 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
         }
       : null);
 
-  const lastBl = bl[bl.length - 1] ?? null;
+  // a free-sources-only check (v4.10, mode 'free') has no DataForSEO figures: the overview shows the latest check that used DataForSEO
+  const lastBl = [...bl].reverse().find((b) => b.mode !== 'free') ?? bl[bl.length - 1] ?? null;
   return {
     site: { domain: site.domain, trackingStatus: site.trackingStatus, verified: !!site.verifiedAt },
     search: { latest, series, seriesKind: m.length ? 'weekly' : 'daily' },

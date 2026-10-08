@@ -236,6 +236,17 @@ export interface AdminOrg {
   monthRuns: number;
 }
 
+/** v4.10: the result of a link upload (POST …/backlinks/import) */
+export interface LinkImportSummary {
+  source: string;
+  label: string;
+  rows: number;
+  domains: number;
+  total: number;
+  skipped: number;
+  importedAt: string;
+}
+
 export interface AdminResult {
   ok: boolean;
   action: string;

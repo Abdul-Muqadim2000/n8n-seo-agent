@@ -81,10 +81,29 @@ alert mail; saving a site's tracking also clears the e-mail stored on its n8n si
 platform admin page). Everything arrives in the app: Runs, Reports, the dashboards and the Pipeline page. n8n's own Error Handler
 still e-mails the operator (`SEO_OPS_EMAIL`) when a workflow fails; the app marks such a run failed after 3 hours.
 
+## AI visibility (v4.9)
+
+The AI visibility page (`pages/site/AiVisibilityPage.tsx`, panels in `_components/ai-insights.tsx`) shows, per website:
+- **Tiles:** named in answers with its 95% range, the visibility score, share of voice (and market-wide share), AI visits from GA4, and pages cited.
+- **Trend:** weekly runs, AI Pulse days, the score, or AI Overviews.
+- **Panels:** what AI visits are worth (assistants, landing pages, conversion vs organic); how AI describes you (sentiment, words, wrong claims); can AI read your site (robots.txt per crawler, llms.txt, firewall test); visibility by buyer stage and topic; the engine table over 7 days with ranges; the question grid with this week's win rate and demand; lost questions with demand and the searches AI ran; the market-wide index; and questions worth tracking (one-click Track through Site Admin `ai_prompts`).
+
+Monitor settings take 3–50 questions and the daily pulse, with a cost split from `estimateAiVisibilityCost` (`shared/src/constants.ts`, priced like n8n's `AI_Requests.js`). Engine side: `n8n/seo-agent/AI_VISIBILITY_SPEC.md`.
+
+## Backlinks (v4.10)
+
+The Backlinks page (`pages/site/BacklinksPage.tsx`) shows every referring site from every source the Backlink Monitor reads — DataForSEO, Bing Webmaster Tools, the Search Console export you upload, GA4 visits, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — with what our own crawler found on the linking page:
+- **Tiles:** referring sites (all sources; DataForSEO alone as the hint), best links, links checked on the page (+ at risk), visits from links, spam.
+- **Where your links come from:** referring sites per source and "only here", how much of Google's own sample DataForSEO sees, the status of each free source, and **Add Search Console links** (CSV upload, `POST …/backlinks/import`, members and up; any backlink CSV works, e.g. a free Ahrefs Webmaster Tools export).
+- **Links:** Best / All (source filter, search) / Lost (with the reason; "missed once" first) / New / Send visits / Spammy, each with its SEO · visits · brand value, link type, rel, placement, authority (+ Ahrefs DR with its credit) and the check.
+- Anchors and most-linked pages (broken ones with the 301 to add), opportunities (unlinked mentions checked on the page, "best of" lists, competitors' new links, the gap from DataForSEO and Common Crawl), and the outreach pipeline with scores, contacts and follow-up drafts.
+
+"Check my backlinks" has a Depth choice: the full check (~$0.50) or free sources only ($0). Engine side: `n8n/seo-agent/BACKLINKS_SPEC.md`.
+
 ## Pipeline (automation)
 
 Each website has a Pipeline page: this week's runs, Needs you, one card per keyword ladder (in priority order), the always-on part
-(opportunity posts, monitoring, the weekly capacity), every n8n schedule that runs for it (AI visibility Mon 07:00, backlinks 07:30,
+(opportunity posts, monitoring, the weekly capacity), every n8n schedule that runs for it (AI pulse daily 06:30 Tue–Sun — listed, not drawn in the calendar —, AI visibility Mon 07:00, backlinks 07:30,
 rank tracker 08:00, site report 09:00, blog posts 10:00, technical audit 1st of the month 06:00 — on n8n's clock, `GENERIC_TIMEZONE`,
 default America/New_York) with its next and last run, the posts the Content Cadence will write next (same rules as
 `v5/code/Cadence_Plan.js`), a 4-week calendar and the recent automatic runs; each ladder has its own page (the climb, timeline,

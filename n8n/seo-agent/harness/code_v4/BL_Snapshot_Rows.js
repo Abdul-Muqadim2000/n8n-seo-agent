@@ -1,5 +1,8 @@
-// One seo_backlink_snapshots row per site per run (exact columns); lists are kept short.
+// One seo_backlink_snapshots row per site per run (exact columns); lists are kept short. v4.10: all sources merged (union), best links,
+// verified / at risk / confirmed lost, referral visits, coverage per source, anchors, most-linked pages and the best links by value.
 return $('Parse Backlinks').all().map(i => { const s = i.json; const J = (o) => JSON.stringify(o);
-  return { json: { site_id: s.site_id, domain: s.domain, checked_at: s.checked_at, mode: s.mode, rank: s.summary.rank, backlinks: s.summary.backlinks, referring_domains: s.summary.referring_domains, referring_domains_nofollow: s.summary.referring_domains_nofollow,
-    spam_score: s.summary.spam_score, broken_backlinks: s.summary.broken_backlinks, new_links: s.new_links.length, lost_links: s.lost.length, important_lost: s.important_lost.length, spammy_new: s.spammy.length,
-    lost_json: J(s.important_lost.slice(0, 20)), new_json: J(s.new_links.filter(l => !l.spammy).slice(0, 20)), competitors_json: J(s.competitors.map(d => ({ domain: d }))), timeseries_json: J(s.timeseries), cost_usd: s.cost_usd } }; });
+  return { json: { site_id: s.site_id, domain: s.domain, checked_at: s.checked_at, mode: s.free_only ? 'free' : s.mode, /* a free-sources-only run never counts as the month's full run */ rank: s.summary.rank, backlinks: s.summary.backlinks, referring_domains: s.summary.referring_domains, referring_domains_nofollow: s.summary.referring_domains_nofollow,
+    spam_score: s.summary.spam_score, broken_backlinks: s.summary.broken_backlinks, new_links: s.new_links.length, lost_links: s.lost.filter(l => !l.pending).length, important_lost: s.important_lost.length, spammy_new: s.spammy.length,
+    lost_json: J(s.lost.slice(0, 25)), new_json: J(s.new_links.filter(l => !l.spammy).slice(0, 25)), competitors_json: J(s.competitors.map(d => ({ domain: d }))), timeseries_json: J(s.timeseries), cost_usd: s.cost_usd,
+    union_domains: s.coverage.union, best_links: s.best_links, verified_live: s.coverage.verified, at_risk: s.at_risk.length, confirmed_lost: s.lost.filter(l => !l.pending).length, referral_visits: s.referral.visits, referral_key_events: s.referral.key_events,
+    coverage_json: J(s.coverage), anchors_json: J(s.anchors), pages_json: J(s.pages), values_json: J({ ...s.values, wins: s.wins.slice(0, 15), rel_changed: s.rel_changed.slice(0, 10), comp_new: s.comp_new.slice(0, 10), lists: s.lists.slice(0, 10), referral: s.referral }) } }; });

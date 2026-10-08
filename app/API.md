@@ -53,6 +53,7 @@ Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site sett
 | POST | /api/orgs/:orgId/sites/:siteId/verify | `verifySiteSchema` (admin) | `VerifyResult` |
 | GET | /api/orgs/:orgId/sites/:siteId/google | | `GoogleConnection` |
 | POST | /api/orgs/:orgId/sites/:siteId/admin | `adminActionSchema` (admin, verified site) | `AdminResult` |
+| POST | /api/orgs/:orgId/sites/:siteId/backlinks/import | `linkImportSchema` `{ csv, fileName? }` (member, verified site; 16 MB, 20 an hour) — v4.10: a Search Console Links export (Latest links / More sample links / Top linking sites) or another tool's backlink CSV, parsed by `shared/src/link-import.ts` into `seo_link_imports` (the same kind replaces the previous upload); 400 with a plain message when the file holds no links to the site | `LinkImportSummary` |
 
 ## Dashboards (verified sites only; 403 otherwise)
 | Method | Path | Returns |
@@ -62,8 +63,8 @@ Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site sett
 | GET | …/data/rankings | `RankingsData` |
 | GET | …/data/content | `ContentData` |
 | GET | …/data/technical?auditId= | `TechnicalData` |
-| GET | …/data/ai | `AiData` |
-| GET | …/data/backlinks | `BacklinksData` |
+| GET | …/data/ai | `AiData` (v4.9: `daily` pulse days, `latest.traffic / access / perception / index / stages / clusters`, ranges and score per run) |
+| GET | …/data/backlinks | `BacklinksData` (v4.10: `refs` = the link ledger with sources, check status and SEO / referral / brand values; `latest.coverage` per source + Google-sample share; `latest.anchors`, `pages`, `wins`, `relChanged`, `compNew`, `lists`; `imports`; `linkGraph`; prospects with score, contact and follow-up drafts; `report.mentions`, `atRisk`, `reclaim`, `drEnabled`) |
 | GET | …/data/alerts | `AlertsData` |
 | GET | …/data/settings | `SiteSettingsData` |
 | GET | …/data/pipeline | `PipelineData` (automations with next/last run, the blog-topic queue, growth loop, 4-week calendar, recent automatic runs; for the tool-form notices: `running` schedule executions, this site's `activeRuns`, `written` pages, `ladders` with their planned pages) |

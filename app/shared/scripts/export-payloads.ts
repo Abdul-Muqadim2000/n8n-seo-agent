@@ -121,9 +121,9 @@ const cases: Case[] = [
   {
     name: 'track with monitors',
     mode: 'track',
-    input: { siteId: SITE_ID, country: 'United Arab Emirates', keywords: ['peppol uae', 'e invoicing software uae'], blogsPerWeek: 2, monitors: { aiEngines: ['chatgpt', 'perplexity'], aiPromptsMax: 10, auditPages: 500, backlinks: false } },
+    input: { siteId: SITE_ID, country: 'United Arab Emirates', keywords: ['peppol uae', 'e invoicing software uae'], blogsPerWeek: 2, monitors: { aiEngines: ['chatgpt', 'perplexity'], aiPromptsMax: 30, aiPulse: false, auditPages: 500, backlinks: false } },
     site,
-    expect: { mode: 'track', keyword: '', track_keywords: ['peppol uae', 'e invoicing software uae'], blogs_per_week: 2, ga4_property_id: '543096312', competitors: ['azentio.com', 'cleartax.com'], 'monitor_input.ai_engines': 'chatgpt, perplexity', 'monitor_input.ai_prompts_max': 10, 'monitor_input.audit_pages': 500, 'monitor_input.backlinks': false, 'monitor_input.ai_visibility': true, 'monitor_input.brand_names': 'Northwind, Northwind ERP' },
+    expect: { mode: 'track', keyword: '', track_keywords: ['peppol uae', 'e invoicing software uae'], blogs_per_week: 2, ga4_property_id: '543096312', competitors: ['azentio.com', 'cleartax.com'], 'monitor_input.ai_engines': 'chatgpt, perplexity', 'monitor_input.ai_prompts_max': 30, 'monitor_input.ai_pulse': false, 'monitor_input.audit_pages': 500, 'monitor_input.backlinks': false, 'monitor_input.ai_visibility': true, 'monitor_input.brand_names': 'Northwind, Northwind ERP' },
   },
   {
     name: 'published',
@@ -179,7 +179,14 @@ const cases: Case[] = [
     mode: 'backlinks',
     input: { siteId: SITE_ID, country: 'United Arab Emirates', competitors: ['rival.ae'] },
     site,
-    expect: { mode: 'backlinks', competitors: ['rival.ae'] },
+    expect: { mode: 'backlinks', competitors: ['rival.ae'], free_only: false },
+  },
+  {
+    name: 'backlinks, free sources only (v4.10)',
+    mode: 'backlinks',
+    input: { siteId: SITE_ID, country: 'United Arab Emirates', competitors: [], freeOnly: true },
+    site,
+    expect: { mode: 'backlinks', competitors: ['azentio.com', 'cleartax.com'], free_only: true },
   },
 ];
 

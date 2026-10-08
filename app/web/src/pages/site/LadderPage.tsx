@@ -92,7 +92,8 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
   const series = sparkRows(l.headSeries);
   const meta = [
     l.country,
-    l.planType ? `${PLAN_LABEL[l.planType]}: ${PLAN_HINT[l.planType]}` : '',
+    // a plan without supporting pages (narrow topic: no long-tail keywords in the data) is the main page only, written first
+    l.planType ? `${PLAN_LABEL[l.planType]}: ${l.pages.length > 0 && l.pages.every((p) => p.rung >= 4) ? 'the main page only for now (no supporting keywords in the data)' : PLAN_HINT[l.planType]}` : '',
     validDate(l.startDate) ? `started ${fmtDate(l.startDate)}` : '',
     monthsText(l.months) ? `expected ${monthsText(l.months)}` : '',
   ].filter(Boolean);

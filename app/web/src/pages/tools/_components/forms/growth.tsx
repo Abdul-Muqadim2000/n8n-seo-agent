@@ -1,7 +1,7 @@
 import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { AI_ENGINES, RUN_SCHEMAS } from '@seo/shared';
+import { AI_ENGINES, MODES, RUN_SCHEMAS } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { Badge } from '@/components/ui/badge';
 import { ChoiceCard } from '@/components/ui/field';
@@ -309,7 +309,7 @@ export function BacklinksForm({ initialSiteId, prefill }: ToolFormProps) {
   const form = useForm<BIn, unknown, BOut>({
     resolver: zodResolver(BS),
     mode: 'onTouched',
-    defaultValues: withPrefill<DefaultValues<BIn>>({ mode: 'backlinks', siteId: initialSiteId ?? '', country: sd.country, competitors: sd.competitors, emailCopy: true }, prefill),
+    defaultValues: withPrefill<DefaultValues<BIn>>({ mode: 'backlinks', siteId: initialSiteId ?? '', country: sd.country, competitors: sd.competitors, freeOnly: false, emailCopy: true }, prefill),
   });
   const { onSubmit, pending, error } = useRunSubmit(form);
   const v = form.watch();
@@ -324,9 +324,15 @@ export function BacklinksForm({ initialSiteId, prefill }: ToolFormProps) {
 
   return (
     <ToolShell mode="backlinks" site={site} cost={estimateCost('backlinks', v)} eta={estimateEta('backlinks', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check backlinks" blocked={blockedWithout(sites.some((s) => s.verifiedAt))}>
-      <FormCard title="Website" description="Links gained and lost, links to broken pages, spam, unlinked brand mentions, the sites that link to your competitors but not to you, and outreach drafts for each.">
+      <FormCard title="Website" description="Every link source merged — DataForSEO, Bing, your Search Console export, GA4 visits, the Common Crawl web graph, Wikipedia and the news — each important link checked on its page, lost links with the reason, the gap to your competitors, lists that name them, and outreach drafts.">
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         <CountryField reg={form.register('country')} error={errMsg(e.country)} hint="Used to find competitors when none are given and for the outreach drafts." />
+      </FormCard>
+      <FormCard title="Depth">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ChoiceCard selected={!v.freeOnly} onSelect={() => form.setValue('freeOnly', false, { shouldDirty: true })} title={`Full check (~$${MODES.backlinks.costUsd.toFixed(2)})`} description="Adds DataForSEO's index (link details, new and lost, competitors' new links, the gap), AI link labels and outreach drafts." />
+          <ChoiceCard selected={!!v.freeOnly} onSelect={() => form.setValue('freeOnly', true, { shouldDirty: true })} title="Free sources only ($0)" description="Bing, your Search Console export, GA4, Common Crawl, Wikipedia, news and web search, every important link checked on its page." />
+        </div>
       </FormCard>
       <FormCard title="Competitors" description="The link gap compares your links with theirs.">
         <DomainTagsField

@@ -415,7 +415,8 @@
       "monitors": {
         "ai_visibility": true,
         "ai_engines": "chatgpt, perplexity",
-        "ai_prompts_max": 10,
+        "ai_prompts_max": 30,
+        "ai_pulse": false,
         "backlinks": false,
         "audit_monthly": true,
         "audit_pages": 500,
@@ -437,7 +438,8 @@
         "cleartax.com"
       ],
       "monitor_input.ai_engines": "chatgpt, perplexity",
-      "monitor_input.ai_prompts_max": 10,
+      "monitor_input.ai_prompts_max": 30,
+      "monitor_input.ai_pulse": false,
       "monitor_input.audit_pages": 500,
       "monitor_input.backlinks": false,
       "monitor_input.ai_visibility": true,
@@ -650,7 +652,37 @@
       "mode": "backlinks",
       "competitors": [
         "rival.ae"
-      ]
+      ],
+      "free_only": false
+    }
+  },
+  {
+    "name": "backlinks, free sources only (v4.10)",
+    "headers": {
+      "x-forwarded-for": "app:7a1c2d3e-org"
+    },
+    "body": {
+      "mode": "backlinks",
+      "keyword": "",
+      "country": "United Arab Emirates",
+      "domain": "northwind-erp.com",
+      "email": "owner@northwind-erp.com",
+      "callback_url": "http://host.docker.internal:4000/api/hooks/n8n/tok_test_platform",
+      "business": "",
+      "customers": "",
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ],
+      "free_only": true
+    },
+    "expect": {
+      "mode": "backlinks",
+      "competitors": [
+        "azentio.com",
+        "cleartax.com"
+      ],
+      "free_only": true
     }
   }
 ]

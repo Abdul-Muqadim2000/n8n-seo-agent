@@ -43,7 +43,7 @@ export function LaunchStep() {
   }, [site, settings.data]);
 
   const m = plan.monitors;
-  const monthly = estimateMonitoringCost({ aiVisibility: m.aiVisibility, backlinks: m.backlinks, auditMonthly: m.auditMonthly, blogsPerWeek: plan.blogsPerWeek });
+  const monthly = estimateMonitoringCost({ aiVisibility: m.aiVisibility, backlinks: m.backlinks, auditMonthly: m.auditMonthly, blogsPerWeek: plan.blogsPerWeek, aiPrompts: m.aiPromptsMax, aiEngines: m.aiEngines, aiPulse: m.aiPulse });
   const nowCost =
     MODES.track.costUsd + (auditNow ? MODES.audit.costUsd : 0) + (aiNow ? MODES.ai_visibility.costUsd : 0);   // blog posts and monitors are spent weekly (see the monthly estimate)
   const overBudget = usage.data ? nowCost > usage.data.remainingUsd : false;
@@ -206,7 +206,7 @@ export function LaunchStep() {
             {plan.blogsPerWeek ? `${plan.blogsPerWeek} a week, delivered every Monday` : 'None'}
           </Row>
           <Row label="Monitors" step="tracking" go={go}>
-            <span className="block">AI visibility: {m.aiVisibility ? `on · ${m.aiPromptsMax} questions · ${engines.join(', ') || 'no engines'}` : 'off'}</span>
+            <span className="block">AI visibility: {m.aiVisibility ? `on · ${m.aiPromptsMax} questions · ${engines.join(', ') || 'no engines'}${m.aiPulse ? ' · daily pulse' : ''}` : 'off'}</span>
             <span className="block">Backlink monitor: {m.backlinks ? 'on' : 'off'}</span>
             <span className="block">
               Monthly audit: {m.auditMonthly ? `on · up to ${m.auditJs ? Math.min(m.auditPages, JS_MAX_PAGES) : m.auditPages} pages${m.auditJs ? ' with JavaScript' : ''}` : 'off'}

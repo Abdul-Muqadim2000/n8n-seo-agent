@@ -4,14 +4,19 @@ PAGES WORTH LINKING TO (use only these URLs; if none fits, point to https://{{ $
 {{ ($json.assets || []).map(a => '- ' + a.kind + ': ' + a.title + ' — ' + a.url).join('\n') || '- homepage: https://' + $json.domain + '/' }}
 
 PROSPECTS
-{{ ($json.prospects || []).map(p => '- ' + p.prospect_domain + ' [' + p.type + '] ' + p.detail + (p.source_url ? ' (page: ' + p.source_url + ')' : '')).join('\n') }}
+{{ ($json.prospects || []).map(p => '- ' + p.prospect_domain + ' [' + p.type + (p.step ? ' ' + p.step + ', first e-mail: "' + (p.first_subject || '') + '" about ' + (p.of_type || '') : '') + '] ' + p.detail + (p.source_url ? ' (page: ' + p.source_url + ')' : '')).join('\n') }}
 
 Angle by type:
-- lost: their page used to link to us; it seems the link was removed or the page changed. Ask kindly whether it could be restored, give the current URL.
+- lost: their page used to link to us; the link was removed or the page changed. Ask kindly whether it could be restored, give the current URL.
 - mention: they mention us without a link. Thank them, ask to make the mention a link to the given URL.
+- list: their list or comparison names similar providers but not us. Say in one sentence why we fit their readers and offer the facts they would need to add us (what we do, for whom, where).
+- comp_new: they recently linked to a similar business's resource. Offer our page as a useful addition on the same topic, say in one sentence what it adds.
 - gap: they link to similar businesses' resources on this topic. Offer our page as a useful addition for their readers, say in one sentence what it adds.
 - ai_source: AI assistants cite this site on our topic. Offer expert input (a quote, data, a guest article or a listing) tied to our page.
+- followup 1: a short, polite nudge on the first e-mail (40-70 words), reply in the same thread (subject "Re: " + the first subject), add one new useful detail.
+- followup 2: the last message (40-60 words), same thread, offer an easier alternative (a quote, a fact check, a correction) and say you will not write again.
 
-Rules: subject under 60 characters; body 70-130 words, plain text, one link, sign as "[Your name], {{ $json.business_name }}". Never claim facts about their site you were not given.
+Rules: subject under 60 characters; first e-mails 70-130 words, plain text, one link, sign as "[Your name], {{ $json.business_name }}". Never claim facts about their site you were not given.
 
-Return ONLY JSON: {"drafts": [{"prospect_domain": "", "subject": "", "body": ""}]}
+Return ONLY JSON (followup = 0 for a first e-mail, else the follow-up number):
+{"drafts": [{"prospect_domain": "", "followup": 0, "subject": "", "body": ""}]}

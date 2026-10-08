@@ -1,19 +1,26 @@
-You write the questions real buyers type into ChatGPT, Perplexity, Gemini and Google's AI Mode before they choose a provider. These questions are asked every week to measure whether the business below is recommended or cited by AI assistants, so they must be realistic, varied and stable.
+You write the questions real buyers type into ChatGPT, Perplexity, Gemini and Google's AI Mode before they choose a provider. These questions are asked every day and every week to measure whether the business below is recommended or cited by AI assistants, so they must be realistic, varied and stable.
 
 BUSINESS
 Name: {{ $json.business_name }} · Website: {{ $json.domain }} · Type: {{ $json.business_type || 'see the topics' }}
 Market: {{ $json.country || 'not given' }}{{ $json.city ? ' (' + $json.city + ')' : '' }}
 Topics it wants to be found for: {{ ($json.topics || []).join(' · ') || 'infer from the website name' }}
-{{ $json.site_text ? 'WEBSITE TEXT (the homepage, to understand what the business sells):\n' + $json.site_text + '\n' : '' }}Questions already tracked (do not repeat or rephrase them): {{ ($json.existing || []).join(' | ') || 'none' }}
+{{ $json.site_text ? 'WEBSITE TEXT (the homepage, to understand what the business sells):\n' + $json.site_text + '\n' : '' }}{{ ($json.market_questions || []).length ? 'REAL QUESTIONS PEOPLE ASK AI ABOUT THESE TOPICS (from a database of AI answers, with monthly AI search volume; prefer these, adapted to buyer wording, when they fit the business):\n- ' + $json.market_questions.join('\n- ') + '\n' : '' }}{{ ($json.search_questions || []).length ? 'SEARCHES THE WEBSITE ALREADY APPEARS FOR ON GOOGLE (long or question-shaped; good signals of what buyers ask):\n- ' + $json.search_questions.join('\n- ') + '\n' : '' }}Questions already tracked (do not repeat or rephrase them): {{ ($json.existing || []).join(' | ') || 'none' }}
 
-Write exactly {{ $json.count }} new questions. Mix these kinds across the topics, most valuable first:
-- recommend: "Which companies / who are the best … in <market>?" — the questions where AI lists providers
+Write exactly {{ $json.count }} new questions. Spread them over the buyer journey and the topics, most valuable first:
+- recommend: "Which companies / who are the best … in <market>?" — the questions where AI lists providers (about 40% of the questions)
 - choose: how to choose, what to look for, red flags
 - cost: price, cost, fees, budget
 - compare: X vs Y, alternatives, which option is better for a given situation
 - problem: the problem the buyer wants solved, in their words (deadline, regulation, failure, migration)
 {{ $json.has_brand_prompt ? '' : '- brand: exactly one question asking what ' + $json.business_name + ' (' + $json.domain + ') is and offers — this checks whether AI knows the brand' }}
 
-Rules: plain buyer language, 8-22 words, the market named where the buyer would name it, no other company names unless the topic itself is a product comparison, never the business name except in the single brand question. For each question also give a short Google search phrase (2-6 words) for the same intent, and the topic it belongs to.
+For each question give:
+- kind: recommend | choose | cost | compare | problem | brand
+- stage: awareness (learning about the problem) | consideration (comparing options) | decision (choosing a provider, price, "best", "near me") | brand
+- cluster: the topic group in 1-4 words (questions about the same service share one cluster name)
+- keyword: a short Google search phrase (2-6 words) for the same intent
+- origin: market (adapted from the real AI questions above) | search (from the Google searches above) | writer (your own)
 
-Return ONLY JSON: {"prompts": [{"prompt": "", "kind": "recommend | choose | cost | compare | problem | brand", "topic": "", "keyword": ""}]}
+Rules: plain buyer language, 8-22 words, the market named where the buyer would name it, no other company names unless the topic itself is a product comparison, never the business name except in the single brand question.
+
+Return ONLY JSON: {"prompts": [{"prompt": "", "kind": "", "stage": "", "cluster": "", "keyword": "", "origin": ""}]}

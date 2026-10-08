@@ -84,6 +84,7 @@ const STAGE_MODE: Record<string, ModeId> = {
   case_study_started: 'case_study',
   ai_visibility_started: 'ai_visibility',
   ai_visibility: 'ai_visibility',
+  ai_pulse: 'ai_visibility',
   backlinks_started: 'backlinks',
   backlinks: 'backlinks',
 };

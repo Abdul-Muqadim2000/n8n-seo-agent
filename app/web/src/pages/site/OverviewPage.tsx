@@ -115,12 +115,12 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
           onClick={() => navigate(page('ai'))}
         />
         <StatTile
-          label="Referring domains"
+          label={B?.unionDomains != null ? 'Referring sites' : 'Referring domains'}
           icon={<Link2 className="size-4" />}
-          value={B ? compactNumber(B.referringDomains) : '–'}
-          delta={B ? <Delta value={diff(B.referringDomains, prevLinks?.referringDomains)} suffix="" digits={0} /> : undefined}
+          value={B ? compactNumber(B.unionDomains ?? B.referringDomains) : '–'}
+          delta={B && B.unionDomains == null ? <Delta value={diff(B.referringDomains, prevLinks?.referringDomains)} suffix="" digits={0} /> : undefined}
           trend={<Sparkline data={links} dataKey="referringDomains" />}
-          hint={B ? `Change vs last month · ${compactNumber(B.backlinks)} backlinks · spam score ${B.spamScore}` : 'Sites that link to you'}
+          hint={B ? (B.unionDomains != null ? `All sources · DataForSEO ${compactNumber(B.referringDomains)} · ${B.bestLinks ?? 0} best links · spam ${B.spamScore}` : `Change vs last month · ${compactNumber(B.backlinks)} backlinks · spam score ${B.spamScore}`) : 'Sites that link to you'}
           onClick={() => navigate(page('backlinks'))}
         />
         <StatTile

@@ -852,6 +852,74 @@
               {
                 "name": "alerts",
                 "type": "string"
+              },
+              {
+                "name": "run_kind",
+                "type": "string"
+              },
+              {
+                "name": "samples",
+                "type": "number"
+              },
+              {
+                "name": "visibility_score",
+                "type": "number"
+              },
+              {
+                "name": "mention_lo",
+                "type": "number"
+              },
+              {
+                "name": "mention_hi",
+                "type": "number"
+              },
+              {
+                "name": "sentiment_score",
+                "type": "number"
+              },
+              {
+                "name": "accuracy_issues",
+                "type": "number"
+              },
+              {
+                "name": "ai_sessions",
+                "type": "number"
+              },
+              {
+                "name": "ai_conversions",
+                "type": "number"
+              },
+              {
+                "name": "ai_revenue",
+                "type": "number"
+              },
+              {
+                "name": "index_sov",
+                "type": "number"
+              },
+              {
+                "name": "ai_impressions",
+                "type": "number"
+              },
+              {
+                "name": "perception_json",
+                "type": "string"
+              },
+              {
+                "name": "traffic_json",
+                "type": "string"
+              },
+              {
+                "name": "access_json",
+                "type": "string"
+              },
+              {
+                "name": "index_json",
+                "type": "string"
+              },
+              {
+                "name": "clusters_json",
+                "type": "string"
               }
             ]
           },
@@ -951,6 +1019,50 @@
               {
                 "name": "cost_usd",
                 "type": "number"
+              },
+              {
+                "name": "union_domains",
+                "type": "number"
+              },
+              {
+                "name": "best_links",
+                "type": "number"
+              },
+              {
+                "name": "verified_live",
+                "type": "number"
+              },
+              {
+                "name": "at_risk",
+                "type": "number"
+              },
+              {
+                "name": "confirmed_lost",
+                "type": "number"
+              },
+              {
+                "name": "referral_visits",
+                "type": "number"
+              },
+              {
+                "name": "referral_key_events",
+                "type": "number"
+              },
+              {
+                "name": "coverage_json",
+                "type": "string"
+              },
+              {
+                "name": "anchors_json",
+                "type": "string"
+              },
+              {
+                "name": "pages_json",
+                "type": "string"
+              },
+              {
+                "name": "values_json",
+                "type": "string"
               }
             ]
           },

@@ -16,6 +16,9 @@ const monthLabel = (m: unknown) => {
   return isValid(d) ? format(d, 'MMM yy') : String(m ?? '');
 };
 
+const SRC: Record<string, string> = { dfs: 'DataForSEO', bing: 'Bing', gsc: 'Search Console', ga4: 'GA4 visits', cc: 'Common Crawl', wiki: 'Wikipedia', hn: 'Hacker News', news: 'News', web: 'Web search', import: 'Upload' };
+const REASON: Record<string, string> = { link_removed: 'link removed', page_gone: 'page gone', domain_gone: 'site gone', not_seen: 'not seen for 4 months', reported_lost: 'reported lost — checking' };
+
 export function BacklinksReport({ report }: { report: ReportDetail }) {
   const p = report.payload;
   const s = obj(p.summary);
@@ -65,9 +68,17 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
     { key: 'spam', header: 'Spam', align: 'right', sortValue: (r) => num(r.spam), cell: (r) => (num(r.spam) == null ? '–' : `${num(r.spam)}%`), hideOnMobile: true },
     { key: 'dofollow', header: 'Type', cell: (r) => <Badge>{r.dofollow === false ? 'nofollow' : 'dofollow'}</Badge>, hideOnMobile: true },
     { key: 'last_seen', header: 'Seen', sortValue: (r) => str(r.last_seen), cell: (r) => <span className="whitespace-nowrap text-xs text-ink-3">{str(r.first_seen)}{str(r.last_seen) && str(r.last_seen) !== str(r.first_seen) ? ` → ${str(r.last_seen)}` : ''}</span> },
+    { key: 'reason', header: 'Why', hideOnMobile: true, cell: (r) => (str(r.reason) ? <Badge tone={r.pending === true ? 'neutral' : 'warning'}>{REASON[str(r.reason)] ?? str(r.reason)}</Badge> : null) },
+  ];
+  const bestCols: Column<P>[] = [
+    { key: 'ref_domain', header: 'From', sortValue: (r) => str(r.ref_domain), cell: (r) => <span className="font-medium text-ink">{str(r.ref_domain)}</span> },
+    { key: 'seo_value', header: 'Value', align: 'right', sortValue: (r) => num(r.seo_value), cell: (r) => <span className="tabular">{n(r.seo_value)} · {n(r.referral_value)} · {n(r.brand_value)}</span> },
+    { key: 'link_type', header: 'Link', hideOnMobile: true, cell: (r) => <span className="text-[13px] text-ink-2">{[str(r.link_type), str(r.rel) !== 'follow' ? str(r.rel) : '', str(r.placement)].filter(Boolean).join(' · ') || '—'}</span> },
+    { key: 'authority', header: 'Authority', align: 'right', sortValue: (r) => num(r.authority), cell: (r) => <span className="tabular">{[num(r.authority) ? n(r.authority) : '', num(r.dr) ? `DR ${num(r.dr)}` : ''].filter(Boolean).join(' · ') || '—'}</span> },
+    { key: 'verify', header: 'Check', cell: (r) => <Badge tone={str(r.verify) === 'found' ? 'good' : 'neutral'}>{str(r.verify) === 'found' ? 'on the page' : str(r.verify) || 'not checked'}</Badge> },
   ];
   const linkTabs = [
-    { key: 'important', label: 'Important lost', rows: important, empty: 'No important link was lost.' },
+    { key: 'important', label: 'Important lost', rows: important, empty: 'No important link was lost (a loss counts after two checks on the page).' },
     { key: 'lost', label: 'Lost', rows: lost, empty: 'No links lost in this period.' },
     { key: 'new', label: 'New', rows: fresh, empty: 'No new links in this period.' },
     { key: 'spammy', label: 'Spammy', rows: spammy, empty: 'No spammy links found.' },
@@ -79,6 +90,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
     { key: 'backlinks', header: 'Links', align: 'right', sortValue: (r) => num(r.backlinks), cell: (r) => n(r.backlinks) },
     { key: 'rank', header: 'Authority', align: 'right', sortValue: (r) => num(r.rank), cell: (r) => n(r.rank) },
     { key: 'spam', header: 'Spam', align: 'right', sortValue: (r) => num(r.spam), cell: (r) => (num(r.spam) == null ? '–' : `${num(r.spam)}%`), hideOnMobile: true },
+    { key: 'source', header: 'Found by', hideOnMobile: true, cell: (r) => <Badge>{str(r.source) === 'cc' ? 'Common Crawl' : str(r.source) === 'both' ? 'both' : 'DataForSEO'}</Badge> },
   ];
 
   return (
@@ -98,6 +110,51 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
         <StatTile label="Spammy links" value={spammy.length} />
         <StatTile label="Broken backlinks" value={n(s.broken_backlinks)} hint={num(s.broken_pages) ? `${num(s.broken_pages)} broken pages receive links` : 'links pointing to missing pages'} />
       </div>
+
+      {has(p.coverage) && (
+        <Block title="Where the links were found" description={`${n(obj(p.coverage).union)} referring sites from all sources · DataForSEO finds ${n(obj(p.coverage).dfs_share)}%`} icon={<Link2 className="size-4" />}>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(obj(obj(p.coverage).per_source)).map(([k, v]) => (
+              <Badge key={k} tone="neutral">
+                {SRC[k] ?? k}: {String(v)}
+                {num(obj(obj(p.coverage).only_in)[k]) ? ` (${num(obj(obj(p.coverage).only_in)[k])} only here)` : ''}
+              </Badge>
+            ))}
+          </div>
+          {num(obj(p.coverage).gsc_sample) ? (
+            <p className="mt-3 text-[13px] text-ink-2">
+              Of the {n(obj(p.coverage).gsc_sample)} sites in Google’s own sample (your Search Console upload), DataForSEO sees {n(obj(p.coverage).dfs_sees_google)}%; another source confirms {n(obj(p.coverage).all_see_google)}%.
+            </p>
+          ) : null}
+          <p className="mt-2 text-xs text-ink-3">{n(obj(p.coverage).verified)} links checked on their page this month; lost means checked twice and gone.</p>
+        </Block>
+      )}
+
+      {objs(p.best).length > 0 && (
+        <Block title="Best links" description="Value 0–100: SEO / visits / brand">
+          <DataTable rows={objs(p.best)} columns={bestCols} rowKey={(r, i) => `${str(r.ref_domain)}-${i}`} pageSize={10} />
+          {p.dr_enabled === true && (
+            <p className="mt-2 text-xs text-ink-3">
+              DR: <a className="underline" href="https://ahrefs.com/" target="_blank" rel="noopener noreferrer">Domain Rating by Ahrefs</a>.
+            </p>
+          )}
+        </Block>
+      )}
+
+      {objs(p.wins).length > 0 && (
+        <Block title="Wins" description="New valuable links and links that came back">
+          <ul className="space-y-1.5 text-sm">
+            {objs(p.wins).map((w, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-ink">{str(w.ref_domain)}</span>
+                <Badge tone="good">{str(w.why) === 'restored' ? 'restored' : 'new'}</Badge>
+                {str(w.link_type) && <Badge>{str(w.link_type)}</Badge>}
+                {str(w.url) && <ExternalLink href={str(w.url)} className="text-xs">{shortUrl(str(w.url)).slice(0, 70)}</ExternalLink>}
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
 
       {series.length > 1 && (
         <ChartCard
@@ -151,10 +208,41 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
           <ul className="divide-y divide-line text-sm">
             {reclaim.map((r, i) => (
               <li key={i} className="py-2">
-                <p className="text-ink">{shortUrl(str(r.to_url) || str(r.url))}</p>
-                <p className="text-xs text-ink-3">
-                  {num(r.backlinks) != null ? `${num(r.backlinks)} links` : ''} {str(r.from_domain) && `from ${str(r.from_domain)}`} {str(r.status) && `· HTTP ${str(r.status)}`}
+                <p className="text-ink">
+                  {shortUrl(str(r.broken_url) || str(r.to_url) || str(r.url))} <span className="text-ink-3">→ 301 to</span> {shortUrl(str(r.redirect_to)) || '/'}
                 </p>
+                <p className="text-xs text-ink-3">
+                  {num(r.links) != null ? `${num(r.links)} links` : num(r.backlinks) != null ? `${num(r.backlinks)} links` : ''} {strs(r.domains).length ? `from ${strs(r.domains).join(', ')}` : str(r.from_domain) && `from ${str(r.from_domain)}`} {str(r.status) && `· HTTP ${str(r.status)}`}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+
+      {objs(p.lists).length > 0 && (
+        <Block title={'"Best of" lists'} description="List pages for your topics: which competitors they name, and whether they name you">
+          <ul className="space-y-1.5 text-sm">
+            {objs(p.lists).map((l, i) => (
+              <li key={i} className="flex flex-wrap items-center gap-2">
+                <ExternalLink href={str(l.url)}>{str(l.title) || str(l.domain)}</ExternalLink>
+                <span className="text-xs text-ink-3">{strs(l.competitors).join(', ')}</span>
+                <Badge tone={l.linked === true ? 'good' : l.named === true ? 'warning' : 'serious'}>{l.linked === true ? 'you: linked' : l.named === true ? 'you: named, no link' : 'you: missing'}</Badge>
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+
+      {objs(p.comp_new).length > 0 && (
+        <Block title="Sites that just linked to a competitor" description="Followed links since the last full check: the warmest prospects">
+          <ul className="space-y-1.5 text-sm">
+            {objs(p.comp_new).map((c, i) => (
+              <li key={i}>
+                <ExternalLink href={str(c.url) || `https://${str(c.domain)}`}>{str(c.domain)}</ExternalLink>
+                <span className="ml-1.5 text-xs text-ink-3">
+                  → {str(c.competitor)} · {str(c.first_seen)} · authority {n(c.domain_rank)}
+                </span>
               </li>
             ))}
           </ul>
@@ -175,6 +263,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
               <li key={i}>
                 <ExternalLink href={str(m.url)}>{str(m.title) || shortUrl(str(m.url))}</ExternalLink>
                 {str(m.domain) && <span className="ml-1.5 text-xs text-ink-3">{str(m.domain)}</span>}
+                {m.verified === true && <Badge tone="good" className="ml-1.5">checked on the page</Badge>}
               </li>
             ))}
           </ul>
@@ -199,9 +288,19 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
                       <Badge tone={str(x.status) === 'won' ? 'good' : 'neutral'}>{str(x.status) || 'new'}</Badge>
                     </span>
                   }
-                  meta={num(x.rank) ? `authority ${num(x.rank)}` : undefined}
+                  meta={[num(x.score) ? `score ${num(x.score)}` : '', num(x.rank) ? `authority ${num(x.rank)}` : ''].filter(Boolean).join(' · ') || undefined}
                 >
                   <p className="text-[13px] text-ink-2">{str(x.detail)}</p>
+                  {str(x.contact_email) && <p className="mt-1 text-xs text-ink-3">Contact: {str(x.contact_email)}</p>}
+                  {str(x.followup_body) && str(x.status) === 'contacted' && (
+                    <div className="mt-3 rounded-lg border border-line bg-surface-2/60 p-3">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[13px] font-medium text-ink">Follow-up {n(x.followup_step)}: {str(x.followup_subject)}</p>
+                        <CopyButton text={`Subject: ${str(x.followup_subject)}\n\n${str(x.followup_body)}`} label="Copy follow-up" />
+                      </div>
+                      <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-2">{str(x.followup_body)}</p>
+                    </div>
+                  )}
                   {str(x.outreach_body) && (
                     <div className="mt-3 rounded-lg border border-line bg-surface-2/60 p-3">
                       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -227,7 +326,7 @@ export function BacklinksReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
 
-      {!full && !has(p.gap) && <p className="text-xs text-ink-3">This was the weekly light check (lost, new and spammy links). The monthly full report adds the link gap, reclaim list and outreach prospects.</p>}
+      {!full && !has(p.gap) && <p className="text-xs text-ink-3">This was the weekly light check (lost, new and spammy links; the valuable links re-checked on their pages). The monthly full report adds every source, the link gap, lists, reclaims and outreach prospects.</p>}
     </div>
   );
 }

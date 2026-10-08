@@ -1743,9 +1743,9 @@ patch('Normalize Input', "else if (choice.includes('business profile')) mode = '
 patch('Normalize Input', "  else if (m === 'profile') mode = 'profile';", "  else if (m === 'profile') mode = 'profile';\n  else if (m === 'ai_visibility' || m === 'ai-visibility' || m === 'ai') mode = 'ai_visibility';\n  else if (m === 'backlinks' || m === 'links') mode = 'backlinks';")
 patch('Normalize Input', "const pagesRaw = parseInt(", r"""// ---- v4.5: monitor settings (Track my site / API `monitors`), audit crawl options, scheduled audits ----
 const MI = obj(p2.monitors);
-const monitor_input = {}; for (const k of ['ai_visibility', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));
+const monitor_input = {}; for (const k of ['ai_visibility', 'ai_pulse', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));
 if (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'].includes(e)).join(', ');
-if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(15, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 8));
+if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(50, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 20));   // v4.9: up to 50 questions
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
 const topics = asArray(p2.topics || lab('Main services or products (optional)')).map(x => String(x).trim().toLowerCase()).filter(x => x.length >= 3).slice(0, 6);
@@ -2037,6 +2037,15 @@ assert 'function publishedRows(' in code('Publish Check'), 'Publish Check: publi
 assert not any('/*__PUBLISH_ROWS__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'publish-rows placeholder left'
 log('Publish detection (v4.8, pipeline phase 4): the Site Tracker reads each site\'s sitemap (index + up to 5 child sitemaps) when pages are written but not published (content log "started" within 120 days, ladder rows "writing"), matches them by planned slug, then by <title> / first <h1> (at most 15 page fetches per site and week), and marks them published in seo_content_log / seo_ladders (and seo_case_studies) with the same row builder as "I published a page" (v5/code/_publish_rows.js); callback field detected_published and a report section')
 
+
+# =============================================================================
+# 24. BACKLINKS FROM EVERY SOURCE (v4.10, 2026-10-08, BACKLINKS_SPEC.md): the on-demand backlink check takes `free_only` (API) — the
+#     Backlink Monitor then reads only the free sources (Bing, the Search Console upload, GA4, Common Crawl, Wikipedia, HN, news, web
+#     search) and checks the pages itself: no DataForSEO, no Claude, $0. The monitor itself is built in build_monitors.py.
+# =============================================================================
+patch('Normalize Input', "    monitor_input,\n    topics,", "    monitor_input,\n    topics,\n    free_only: mode === 'backlinks' && /^(true|1|yes|on)$/i.test(String(p2.free_only ?? '')),")
+patch('Rate Limit', "else if (d.mode === 'backlinks') est = EST.backlinks;", "else if (d.mode === 'backlinks') est = d.free_only ? 0 : EST.backlinks;   // v4.10: free sources only = no paid call")
+log('Backlinks from every source (v4.10): the on-demand backlink check (form / API mode backlinks) passes free_only to the Backlink Monitor (free sources + own link check only, $0); the monitor merges DataForSEO, Bing Webmaster Tools, the Search Console upload, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, GDELT news and web search, checks the linking pages itself (lost = two misses, with the reason) and scores every link (SEO / referral / brand)')
 
 # =============================================================================
 # 9. WRITE
