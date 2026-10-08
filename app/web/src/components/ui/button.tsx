@@ -8,14 +8,14 @@ export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon';
 
 // Motion: colours / shadow ease in 150ms; a press nudges the button down 1px (reduced motion makes it instant).
 const base =
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium select-none transition-[color,background-color,border-color,box-shadow,opacity,translate,filter] duration-150 ease-brand active:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:shrink-0';
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg font-medium select-none transition-[color,background-color,border-color,box-shadow,opacity,translate,filter] duration-150 ease-brand disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&_svg]:shrink-0';
 const variants: Record<ButtonVariant, string> = {
   primary: 'bg-accent text-accent-ink shadow-card hover:bg-accent-hover hover:shadow-raised active:bg-accent-hover active:shadow-card',
   secondary: 'border border-line-strong bg-surface text-ink shadow-card hover:border-ink-3/40 hover:bg-surface-2 active:bg-surface-3 active:shadow-none',
   outline: 'border border-accent-text/70 bg-transparent text-accent-text hover:border-accent-text hover:bg-accent-soft active:bg-accent-soft',
   ghost: 'text-ink-2 hover:bg-surface-2 hover:text-ink active:bg-surface-3',
   danger: 'bg-critical text-white shadow-card hover:shadow-raised hover:brightness-[.92] active:brightness-[.85] active:shadow-card',
-  link: 'h-auto px-0 text-accent-text underline-offset-4 decoration-accent-text/40 hover:underline hover:decoration-accent-text active:translate-y-0',
+  link: 'h-auto px-0 text-accent-text underline-offset-4 decoration-accent-text/40 hover:underline hover:decoration-accent-text',
 };
 const sizes: Record<ButtonSize, string> = {
   sm: 'h-8 gap-1.5 px-3 text-[13px]',

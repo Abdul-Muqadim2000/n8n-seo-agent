@@ -25,7 +25,7 @@ const CATEGORY_ORDER = Object.keys(MODE_CATEGORIES) as ModeCategory[];
  * The card's action link covers the whole card (one link, one tab stop). No press nudge on it: a transform would make the
  * link the containing block of its ::after, which would then shrink to the button mid-click and lose the click.
  */
-const STRETCH = 'after:absolute after:inset-0 after:rounded-xl active:translate-none';
+const STRETCH = 'after:absolute after:inset-0 after:rounded-xl';
 
 export default function ToolsPage() {
   const { org, sites, can } = useOrgCtx();
