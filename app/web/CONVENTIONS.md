@@ -3,6 +3,8 @@
 React 19 + TypeScript + Vite, React Router 7 (data router, lazy pages), TanStack Query 5, react-hook-form + zod (schemas from
 `@seo/shared`), Tailwind CSS 4 with design tokens, Radix primitives, Recharts 3, lucide-react icons, sonner toasts.
 
+Logged-in pages follow **`DESIGN.md`** (insight kit `@/components/insight`, page anatomy, colour / motion rules, the local building blocks to reuse).
+
 ## Where things are
 - `src/lib/queries.ts` — one hook per API endpoint (`useSiteData(orgId, siteId, 'search')`, `useStartRun(orgId)`, `useSiteAdmin(...)`, …). Add hooks here, never `fetch` in a page.
 - `src/lib/api.ts` — `api()` fetch wrapper, `ApiRequestError` (`status`, `message`, `fields`), `errorMessage(e)`, `fileUrl(orgId, fileId, download?)`.

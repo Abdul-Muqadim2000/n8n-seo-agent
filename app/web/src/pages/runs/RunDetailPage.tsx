@@ -316,8 +316,8 @@ function RunStages({ run, reports, active, duration }: { run: Run; reports: numb
     {
       key: 'accepted',
       label: 'Accepted',
-      sub: run.acceptedAt ? fmtDateTime(run.acceptedAt) : failed ? 'not accepted' : 'waiting for the engine',
-      state: run.acceptedAt ? 'done' : failed ? 'failed' : 'now',
+      sub: run.acceptedAt ? fmtDateTime(run.acceptedAt) : failed ? 'not accepted' : done || reports ? 'accepted' : 'waiting for the engine',
+      state: run.acceptedAt || done || reports ? 'done' : failed ? 'failed' : 'now',
       icon: <CircleDot />,
     },
     {

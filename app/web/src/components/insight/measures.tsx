@@ -97,7 +97,7 @@ export function ScoreRing({
         <span className={cn('font-display font-semibold tracking-[-0.01em]', dark ? 'text-on-ink' : 'text-ink')} style={{ fontSize: Math.round(size * (suffix ? 0.27 : 0.25)) }}>
           {has ? (display ?? Math.round(value)) : '–'}
         </span>
-        {suffix && has && <span className={cn('mt-1 text-[10px] font-medium', dark ? 'text-on-ink-2' : 'text-ink-3')}>{suffix}</span>}
+        {suffix && has && <span className={cn('mt-1 text-[10px] font-medium', surface === 'blue' ? 'text-on-ink' : dark ? 'text-on-ink-2' : 'text-ink-3')}>{suffix}</span>}
       </span>
     </div>
   );
@@ -205,11 +205,12 @@ export function trendOf(values: readonly (number | null | undefined)[], upIsGood
 /** TrendChip: a word-level trend ("Rising", "Entered the top 10") with an arrow; green / red only when it is good / bad. */
 export function TrendChip({ direction, good = null, children, className }: { direction: 'up' | 'down' | 'flat'; good?: boolean | null; children: ReactNode; className?: string }) {
   const Icon = direction === 'up' ? TrendingUp : direction === 'down' ? TrendingDown : Minus;
+  const light = useSurface() === 'light';
   return (
     <span
       className={cn(
         'inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-full px-2 text-xs font-medium',
-        good == null ? 'bg-surface-2 text-ink-2' : good ? 'bg-good-soft text-good-text' : 'bg-critical-soft text-critical-text',
+        good == null ? (light ? 'bg-surface-2 text-ink-2' : 'bg-on-ink/10 text-on-ink') : good ? 'bg-good-soft text-good-text' : 'bg-critical-soft text-critical-text',
         className,
       )}
     >

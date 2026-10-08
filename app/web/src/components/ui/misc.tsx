@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Check, Copy, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useSurface } from '@/components/insight/surface';
 import { IconTile } from './icon-tile';
 
 /** Page title row: optional eyebrow, H1, one-line purpose and the page actions; `icon` adds a solid blue icon tile before the title. */
@@ -26,22 +27,26 @@ export function PageHeader({ title, description, actions, eyebrow, className, ic
 
 /**
  * Delta: signed change with an arrow; the colour follows direction x whether up is good (positions: down is good).
- * Never colour alone: arrow + sign + text.
+ * Never colour alone: arrow + sign + text. Inside a SummaryHero (ink / blue surface) the flat chip, the label and the "–" switch to
+ * on-dark colours by themselves; the good / bad chips keep their own soft backgrounds.
  */
 export function Delta({ value, suffix = '%', upIsGood = true, digits = 1, label, className }: { value: number | null | undefined; suffix?: string; upIsGood?: boolean; digits?: number; label?: string; className?: string }) {
-  if (value == null || !Number.isFinite(value)) return <span className={cn('text-xs text-ink-3', className)}>{label ? `– ${label}` : '–'}</span>;
+  const surface = useSurface();
+  // secondary text: ink-3 on light; white 72% on ink; full white on blue (72% falls under 4.5:1 on the lighter hero tiles)
+  const muted = surface === 'blue' ? 'text-on-ink' : surface === 'ink' ? 'text-on-ink-2' : 'text-ink-3';
+  if (value == null || !Number.isFinite(value)) return <span className={cn('text-xs', muted, className)}>{label ? `– ${label}` : '–'}</span>;
   const flat = Math.abs(value) < Math.pow(10, -digits) / 2;
   const good = flat ? null : value > 0 === upIsGood;
   const Icon = flat ? Minus : value > 0 ? ArrowUpRight : ArrowDownRight;
   return (
-    <span className={cn('inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs font-medium tabular', good == null ? 'text-ink-3' : good ? 'text-good-text' : 'text-critical-text', className)}>
-      <span className={cn('inline-flex h-5 items-center gap-0.5 rounded-md pl-1 pr-1.5', good == null ? 'bg-surface-2' : good ? 'bg-good-soft' : 'bg-critical-soft')}>
+    <span className={cn('inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs font-medium tabular', good == null ? muted : good ? 'text-good-text' : 'text-critical-text', className)}>
+      <span className={cn('inline-flex h-5 items-center gap-0.5 rounded-md pl-1 pr-1.5', good == null ? (surface === 'light' ? 'bg-surface-2' : 'bg-on-ink/10') : good ? 'bg-good-soft' : 'bg-critical-soft')}>
         <Icon className="size-3.5 shrink-0" strokeWidth={2.25} aria-hidden />
         {value > 0 ? '+' : ''}
         {value.toFixed(digits)}
         {suffix}
       </span>
-      {label && <span className="font-normal text-ink-3">{label}</span>}
+      {label && <span className={cn('font-normal', muted)}>{label}</span>}
     </span>
   );
 }

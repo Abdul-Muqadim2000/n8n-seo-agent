@@ -73,8 +73,6 @@ export function ReportHero({
         aside={aside}
         stats={stats}
         actions={actions}
-        // Delta labels and flat-change chips are drawn for light surfaces: switch them to the on-dark colours inside the hero
-        className="[&_.tabular_.bg-surface-2]:bg-on-ink/10 [&_.text-ink-3]:text-on-ink-2"
       />
       {files && <ReportDownloads files={files} />}
     </>

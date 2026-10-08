@@ -3,6 +3,7 @@
 import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react';
 import { formatPosition } from '@seo/shared';
 import { cn } from '@/lib/utils';
+import { useSurface } from '@/components/insight';
 
 export const OFF_CHART = 51;
 
@@ -66,47 +67,53 @@ export function moveOf(prev: number | null | undefined, cur: number | null | und
 /** Movement between two checks: arrow + text, green when the page moved up (never colour alone). */
 export function PositionMove({ prev, cur, digits = 0, className, showFirst }: { prev: number | null | undefined; cur: number | null | undefined; digits?: number; className?: string; showFirst?: boolean }) {
   const m = moveOf(prev, cur);
-  const base = cn('relative inline-flex items-center gap-0.5 whitespace-nowrap text-xs font-medium tabular', className);
+  // inside a SummaryHero (ink / blue): green / red text sits on its soft chip, neutral text turns on-dark
+  const surface = useSurface();
+  const dark = surface !== 'light';
+  const base = cn('relative inline-flex items-center gap-0.5 whitespace-nowrap text-xs font-medium tabular', dark && 'h-5 rounded-md pl-1 pr-1.5', className);
+  const goodCls = cn('text-good-text', dark && 'bg-good-soft');
+  const badCls = cn('text-critical-text', dark && 'bg-critical-soft');
+  const mutedCls = surface === 'blue' ? 'text-on-ink' : surface === 'ink' ? 'text-on-ink-2' : 'text-ink-3';
   switch (m.kind) {
     case 'up':
       return (
-        <span className={cn(base, 'text-good-text')} title={`Up ${m.places.toFixed(digits)} places`}>
+        <span className={cn(base, goodCls)} title={`Up ${m.places.toFixed(digits)} places`}>
           <ArrowUpRight className="size-3.5" aria-hidden />+{m.places.toFixed(digits)}
           <span className="sr-only"> places up</span>
         </span>
       );
     case 'down':
       return (
-        <span className={cn(base, 'text-critical-text')} title={`Down ${m.places.toFixed(digits)} places`}>
+        <span className={cn(base, badCls)} title={`Down ${m.places.toFixed(digits)} places`}>
           <ArrowDownRight className="size-3.5" aria-hidden />−{m.places.toFixed(digits)}
           <span className="sr-only"> places down</span>
         </span>
       );
     case 'entered':
       return prev == null && !showFirst ? (
-        <span className={cn(base, 'text-ink-3')}>first check</span>
+        <span className={cn(base, mutedCls)}>first check</span>
       ) : (
-        <span className={cn(base, 'text-good-text')}>
+        <span className={cn(base, goodCls)}>
           <ArrowUpRight className="size-3.5" aria-hidden />
           entered top 50
         </span>
       );
     case 'dropped':
       return (
-        <span className={cn(base, 'text-critical-text')}>
+        <span className={cn(base, badCls)}>
           <ArrowDownRight className="size-3.5" aria-hidden />
           left top 50
         </span>
       );
     case 'same':
       return (
-        <span className={cn(base, 'text-ink-3')}>
+        <span className={cn(base, mutedCls)}>
           <Minus className="size-3.5" aria-hidden />
           no change
         </span>
       );
     default:
-      return <span className={cn(base, 'text-ink-3')}>–</span>;
+      return <span className={cn(base, mutedCls)}>–</span>;
   }
 }
 
@@ -118,6 +125,7 @@ export function PositionPill({ p, text, avg, className }: { p: number | null | u
   const has = p != null && p > 0;
   const tier = p == null || p < 0 ? 'none' : !has ? 'deep' : p <= 3 ? 'top3' : p <= 10 ? 'top10' : p <= 50 ? 'ranked' : 'deep';
   const label = text ?? (has ? (avg ? p.toFixed(1) : posText(p)) : posText(p));
+  const light = useSurface() === 'light';
   return (
     <span
       className={cn(
@@ -126,7 +134,7 @@ export function PositionPill({ p, text, avg, className }: { p: number | null | u
         tier === 'top10' && 'bg-accent-soft text-accent-text ring-1 ring-accent/25',
         tier === 'ranked' && 'bg-surface-2 text-ink ring-1 ring-line',
         tier === 'deep' && 'bg-surface-2 text-ink-2',
-        tier === 'none' && 'text-ink-3 ring-1 ring-line ring-inset',
+        tier === 'none' && (light ? 'text-ink-3 ring-1 ring-line ring-inset' : 'text-on-ink-2 ring-1 ring-line-on-ink ring-inset'),
         className,
       )}
     >

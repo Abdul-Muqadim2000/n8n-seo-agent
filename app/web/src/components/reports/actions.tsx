@@ -54,7 +54,7 @@ export function ActionList({ actions, siteId, title = 'What to do next', descrip
   const sorted = sortActions(actions);
   return (
     <Block title={title} description={description ?? `${sorted.length} recommended actions, most important first`} icon={<Lightbulb />} flush>
-      <ol className="divide-y divide-line">
+      <ol role="list" className="divide-y divide-line">
         {sorted.map((a, i) => {
           const type = str(a.type);
           return (

@@ -52,7 +52,7 @@ export function runFromApiBody(body: Record<string, unknown> | null | undefined)
 }
 
 const TYPE_LABEL: Record<string, string> = { pr: 'Digital PR', seo: 'SEO', ctr: 'Click-through', content: 'Content', publish: 'Publish', technical: 'Technical', links: 'Links', backlinks: 'Links', outreach: 'Outreach', schema: 'Schema', entity: 'Brand entity', brand: 'Brand' };
-const typeLabel = (t: string) => TYPE_LABEL[t.toLowerCase()] ?? (t.length <= 3 ? t.toUpperCase() : titleCase(t));
+export const typeLabel = (t: string) => TYPE_LABEL[t.toLowerCase()] ?? (t.length <= 3 ? t.toUpperCase() : titleCase(t));
 /** the icon tile of an action, by its type (blue: a category, not a status) */
 const TYPE_ICON: Record<string, ReactNode> = {
   pr: <Megaphone />,
@@ -69,7 +69,7 @@ const TYPE_ICON: Record<string, ReactNode> = {
   brand: <BadgeCheck />,
 };
 
-const RUN_LABEL: Partial<Record<ModeId, string>> = {
+export const RUN_LABEL: Partial<Record<ModeId, string>> = {
   keyword: 'Write the page',
   verdict: 'Check the keyword',
   audit: 'Run the audit',

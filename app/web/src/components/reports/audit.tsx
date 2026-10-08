@@ -48,8 +48,8 @@ export function AuditReport({ report }: { report: ReportDetail }) {
         title={score != null ? `${isFull ? 'SEO health' : 'Technical health'} is ${score}/100${str(p.grade) ? ` · ${str(p.grade)}` : ''}` : healthLabel}
         description={
           urgent > 0
-            ? `${c('Critical')} critical and ${c('High')} high-severity ${urgent === 1 ? 'issue' : 'issues'} to fix first; the downloads hold every finding with the affected pages.`
-            : 'No critical or high-severity issues. The downloads hold every finding with the affected pages.'
+            ? `${c('Critical')} critical and ${c('High')} high-severity ${urgent === 1 ? 'issue' : 'issues'} to fix first${pdf ? '; the downloads hold every finding with the affected pages' : ''}.`
+            : `No critical or high-severity issues.${pdf ? ' The downloads hold every finding with the affected pages.' : ''}`
         }
         aside={
           <ScoreMark
@@ -98,7 +98,7 @@ export function AuditReport({ report }: { report: ReportDetail }) {
 
       {top.length > 0 && (
         <Block title="Fix these first" description={`${top.length} most important ${top.length === 1 ? 'finding' : 'findings'}, in order`} icon={<ListOrdered />} flush>
-          <ol className="divide-y divide-line">
+          <ol role="list" className="divide-y divide-line">
             {top.map((t, i) => (
               <InsightItem key={t} icon={<span className="font-display text-xs font-semibold">{i + 1}</span>} title={t} />
             ))}

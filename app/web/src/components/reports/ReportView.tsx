@@ -68,7 +68,10 @@ export function ReportView({ report, hideFiles }: { report: ReportDetail; hideFi
             <Callout tone="warning" title="This report could not be laid out">
               Part of the data has an unexpected shape ({e.message}). The downloads and the raw data are below.
             </Callout>
-            <GenericReport report={report} />
+            {/* the downloads must survive any crash: if even the generic view (its hero) fails, show them on their own */}
+            <RenderBoundary resetKey={report.id} fallback={() => (hideFiles ? null : <ReportDownloads files={report.files} />)}>
+              <GenericReport report={report} />
+            </RenderBoundary>
           </div>
         )}
       >

@@ -190,7 +190,7 @@ function Content({ d }: { d: ContentData }) {
             label="Written pages by status"
             segments={[
               { label: 'Live', value: live.length, color: SEQ[5] },
-              { label: 'Waiting, under a week', value: fresh, color: SEQ[2] },
+              { label: 'Waiting up to a week', value: fresh, color: SEQ[2] },
               { label: 'Waiting more than a week', value: stale.length, color: 'var(--warning)' },
             ]}
           />

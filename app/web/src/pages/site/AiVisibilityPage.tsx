@@ -11,7 +11,7 @@ import { Callout, EmptyState } from '@/components/ui/feedback';
 import { Delta, Meter, PageHeader } from '@/components/ui/misc';
 import { CountUp, HeroNextStep, HeroStat, IconTile, MetricCard, ScoreRing, Stagger, SummaryHero } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
-import { EngineActionList, runFromApiBody } from './_components/actions';
+import { EngineActionList, RUN_LABEL, runFromApiBody, typeLabel } from './_components/actions';
 import { AnswersExplorer, QuestionGrid, QuestionManager, engineLabel } from './_components/ai';
 import { AccessPanel, AiTrafficPanel, DiscoveryPanel, GroupsPanel, IndexPanel, PerceptionPanel } from './_components/ai-insights';
 import { Chips, DataGate, FillHeight, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, YesNo, useSitePage } from './_components/kit';
@@ -310,8 +310,6 @@ function aiHeadline(rate: number | null, delta: number | null, fallback?: string
   return `You’re named in ${pct(rate)} of AI answers${change}`;
 }
 
-const NEXT_LABEL: Partial<Record<string, string>> = { keyword: 'Write the page', verdict: 'Check the keyword', audit: 'Run the audit', ai_visibility: 'Run the check', backlinks: 'Run a backlink check', published: 'Report it published', case_study: 'Write the case study' };
-
 /** The engine's top action, as the hero's next step (same form and prefill as its button in "What to do next"). */
 function AiNextStep({ actions }: { actions: NonNullable<AiData['report']>['actions'] }) {
   const { can, tool } = useSitePage();
@@ -321,12 +319,12 @@ function AiNextStep({ actions }: { actions: NonNullable<AiData['report']>['actio
   return (
     <HeroNextStep
       icon={<Lightbulb />}
-      eyebrow={`Next step${a.type ? ` · ${titleCase(a.type)}` : ''}`}
+      eyebrow={`Next step${a.type ? ` · ${typeLabel(a.type)}` : ''}`}
       title={a.action}
       actions={
         run && can('member') ? (
           <ButtonLink to={tool(run.mode, run.prefill)} size="sm" variant="secondary">
-            {NEXT_LABEL[run.mode] ?? 'Start'}
+            {RUN_LABEL[run.mode] ?? 'Start'}
             <ArrowRight className="size-3.5" aria-hidden />
           </ButtonLink>
         ) : undefined

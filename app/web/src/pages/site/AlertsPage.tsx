@@ -97,7 +97,7 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
             <HeroStat
               label="Pages not indexed"
               value={last ? last.notIndexedTotal.toLocaleString('en-US') : '–'}
-              delta={last && prev ? <Delta value={diff(last.notIndexedTotal, prev.notIndexedTotal)} suffix="" digits={0} upIsGood={false} className="[&>span:last-child]:text-on-ink" label={`vs ${fmtMonth(prev.month)}`} /> : undefined}
+              delta={last && prev ? <Delta value={diff(last.notIndexedTotal, prev.notIndexedTotal)} suffix="" digits={0} upIsGood={false} label={`vs ${fmtMonth(prev.month)}`} /> : undefined}
               hint={last ? (last.indexedTotal != null ? `${last.indexedTotal.toLocaleString('en-US')} indexed · from the Pages report` : 'From the Pages report') : 'Recorded with the monthly check-in'}
             />
             <HeroStat

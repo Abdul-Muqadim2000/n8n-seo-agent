@@ -354,7 +354,7 @@ export function CadenceReport({ report }: { report: ReportDetail }) {
       </Block>
       {upcoming.length > 0 && (
         <Block title="Coming up next" description={`${num(p.candidates) ?? upcoming.length} candidates in the queue`} icon={<ListOrdered />} flush>
-          <ol className="divide-y divide-line">
+          <ol role="list" className="divide-y divide-line">
             {upcoming.map((x, i) => (
               <InsightItem key={i} icon={<span className="font-display text-xs font-semibold tabular">{i + 1}</span>} title={str(x.keyword)} description={str(x.why) || str(x.source)} />
             ))}
@@ -464,6 +464,7 @@ export function RejectedReport({ report }: { report: ReportDetail }) {
 }
 
 export function DescriptionReport({ report }: { report: ReportDetail }) {
+  const { can } = useOrgCtx();
   const p = report.payload;
   const d = obj(p.site_description);
   const list = (k: string) => strs(d[k]);
@@ -517,7 +518,7 @@ export function DescriptionReport({ report }: { report: ReportDetail }) {
         </Block>
       </div>
       {list('seed_keywords').length > 0 && (
-        <Block title="Keywords customers would search" description="Starting points for keyword discovery: open one to check it" icon={<KeyRound />}>
+        <Block title="Keywords customers would search" description={can('member') ? 'Starting points for keyword discovery: open one to check it' : 'Starting points for keyword discovery'} icon={<KeyRound />}>
           <div className="flex flex-wrap gap-1.5">
             {list('seed_keywords').map((k) => (
               <SeedKeyword key={k} keyword={k} siteId={report.siteId} />

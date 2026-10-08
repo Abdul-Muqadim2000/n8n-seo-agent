@@ -124,7 +124,8 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
   const ladderPages = d.ladders.reduce((a, l) => a + l.rungs.length, 0);
   const movers = all
     .map((k) => ({ k, m: moveOf(k.prev, k.latest) }))
-    .filter(({ m }) => m.kind === 'up' || m.kind === 'down' || m.kind === 'entered' || m.kind === 'dropped')
+    // a keyword checked for the first time is no move (moveOf calls it "entered"): only real changes since the previous check
+    .filter(({ k, m }) => m.kind === 'up' || m.kind === 'down' || m.kind === 'dropped' || (m.kind === 'entered' && k.prev != null && k.prev >= 0))
     .sort((a, b) => b.m.places - a.m.places);
 
   return (

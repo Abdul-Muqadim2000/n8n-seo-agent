@@ -117,7 +117,7 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
   const referring = union ?? D?.referringDomains ?? 0;
   const lostRefs = d.refs.filter((x) => x.status === 'lost').length;
   const atRiskRefs = d.refs.filter((x) => x.status === 'at_risk').length;
-  const openProspects = d.prospects.filter((p) => !p.status || p.status === 'new').length;
+  const openProspects = d.prospects.filter((p) => statusOf(p) === 'new').length;
   const perSource = d.latest?.coverage?.perSource ?? {};
 
   return (
@@ -198,9 +198,9 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
             tone={lostRefs ? 'serious' : 'blue'}
             info="Lost means checked twice on the page and gone, with the reason"
             value={<CountUp value={lostRefs} />}
-            meta={atRiskRefs ? `${atRiskRefs} more missed once — checked again next week` : 'every link checked twice is still there'}
+            meta={atRiskRefs ? `${atRiskRefs} more missed once — checked again next week` : lostRefs ? 'in the link ledger: each checked twice on its page and gone' : 'every link checked twice is still there'}
           />
-          <MetricCard label="New links" icon={<Sparkles />} value={<CountUp value={d.latest?.new.length ?? 0} />} meta="since the previous check" />
+          <MetricCard label="New links" icon={<Sparkles />} value={<CountUp value={d.latest?.new.length ?? 0} />} meta={L.newLinks > (d.latest?.new.length ?? 0) ? `listed in the New tab · ${compactNumber(L.newLinks)} new in all since the previous check` : 'since the previous check'} />
           <MetricCard label="Prospects to contact" icon={<Send />} info="Scored by value × likelihood; drafted outreach e-mails are in the pipeline below" value={<CountUp value={openProspects} />} meta={`${plural(d.prospects.length, 'prospect')} in the outreach pipeline`} />
         </div>
       )}

@@ -8,7 +8,7 @@ Also read `app/web/CONVENTIONS.md` (tokens, brand, a11y, mobile rules still appl
 | Primitive | Use it for |
 |---|---|
 | `PageHeader icon={<NavIcon/>}` (`@/components/ui/misc`) | Every page. `icon` = the page's sidebar icon (`OrgLayout.tsx` `SITE_NAV`), shown in a solid blue tile; `description` = one-line purpose; `actions` = the primary action. |
-| `SummaryHero tone="blue" \| "ink"` + `HeroStat` + `HeroNextStep` + `HeroLink` | One per page, top: `eyebrow` (scope · period), `title` = a headline sentence built from the data, `description` = one supporting line, `aside` = `HeroNextStep` (top action), `stats` = 2–4 `HeroStat`s. Blue for dashboards; ink for reports / runs / documents. Children switch to on-dark colours automatically (sparklines too). |
+| `SummaryHero tone="blue" \| "ink"` + `HeroStat` + `HeroNextStep` + `HeroLink` | One per page, top: `eyebrow` (scope · period), `title` = a headline sentence built from the data, `description` = one supporting line, `aside` = `HeroNextStep` (top action), `stats` = 2–4 `HeroStat`s. Blue for dashboards; ink for reports / runs / documents. Children switch to on-dark colours by themselves through `useSurface()` (sparklines, `Delta`, `TrendChip`, `PositionMove` / `PositionPill`, `ScoreRing`, `InfoTip`) — no per-page className patches. |
 | `MetricCard` | One number that matters: `icon`, `label`, `value` (wrap numbers in `CountUp`), `delta` (`Delta`), `deltaLabel` ("vs last month"), `sparkline` (`Sparkline`), `visual` (a `ScoreRing` instead of the big value), `info` (how it is measured), `meta` (facts behind it, chips allowed), `onClick`/`to` (whole card clickable, arrow nudges). Grid: `grid grid-cols-2 gap-3 xl:grid-cols-4` (2 per row on phones). |
 | `ScoreRing` | 0–100 scores (health, setup progress, a rate). `tone="auto"` = 80+ good / 60+ warning / else critical — always say the grade in words nearby. `display`/`suffix` for "12.5%", "3/5", "/100". |
 | `InsightItem` (in `<ul className="divide-y divide-line">`) | A finding / recommendation / alert row: `tone` tile (status tones get their own icon), `meta` chips (priority, category), `title` (`clampTitle` + `titleAttr`), `description` one line, `detail` behind "Details" (animated), `action`; `actionPosition="side"` in full-width lists. |
@@ -74,6 +74,36 @@ metric rows). Give `DataGate` a `skeleton` shaped like this anatomy (see `Overvi
 - [ ] Only markup and className changed in page files; `@seo/shared`, `lib/*`, `charts/index.tsx`, routes untouched.
 - [ ] `tsc` + `npm run build -w @seo/web` pass; screenshots 1440/375 × light/dark; keyboard: Tab reaches every card link,
       InfoTip and toggle with a visible ring; no horizontal scroll at 375.
+
+## Gotchas
+- A component that draws light-surface colours (`text-ink-3`, `bg-surface-2`, bare `text-good-text`) must read `useSurface()` and
+  switch to `text-on-ink` (blue) / `text-on-ink-2` (ink) / `bg-on-ink/10` inside a hero, like `Delta`.
+- Clickable cards: one stretched label (`::after` at `z-[1]`) covers the card, so the number, ring and sparkline are clickable too;
+  controls of their own (InfoTip, an action button) sit at `z-[2]`. Never put a link or button in `meta` / `hint` of a clickable card.
+- An `InfoTip` inside `<fieldset disabled>` (view-only forms) is a disabled button: show its text instead (`FormCard` does).
+- `Sparkline` is decorative and not focusable (`accessibilityLayer={false}`); real charts keep the Recharts keyboard layer.
+
+## Local building blocks (reuse before building)
+Page-level visuals built during the redesign; candidates for the kit when a second area needs them.
+- `pages/site/_components/visuals.tsx` — `ChartTitle` (tile + title + InfoTip for `ChartCard`), `HeroEyebrow` (mono tag + period),
+  `HeroChip` (status / source chip inside a hero, optional link), `RankedBars` (share bars with a "You" row), `FigureTile` (small
+  labelled figure), `DashSkeleton` (dashboard-shaped `DataGate` skeleton). `OverviewPage.tsx`: `OverviewSkeleton`, `MoversCard`.
+- `pages/site/_components/positions.tsx` — `PositionPill` (position on the blue ramp), `PositionMove` (places up / down, entered / left),
+  `BUCKETS` / `bucketOf` / `moveOf`. `pipeline/common.tsx` and `components/reports/visuals.tsx` each still have their own
+  `PositionPill` (merge when touched).
+- `pages/site/_components/pipeline/` — `home.tsx`: `PipelineHero`, `HeroMeter` (budget meter on a hero), `DayTile`, `HowItWorks`,
+  `WarnLine`; `common.tsx`: `LadderClimb`, `LadderProgress`, `ModeChip`, `LadderStatusBadge`, `PageStateBadge`, `PositionChange`;
+  `new-ladder.tsx`: `Stepper`, `DifficultyScale`, `KeywordCard`; `ladders.tsx`: ladder cards with a stretched link + `LadderControls`.
+- `pages/site/_components/ai-insights.tsx` (AI panels), `ai.tsx` (`QuestionGrid`, `GridCell` rate cells), `recommendations.tsx`
+  (`RecommendationItem` = `InsightItem` with category icon + priority).
+- `components/reports/visuals.tsx` — `ReportHero` (ink hero + download cards via `ReportFilesContext`), `ScoreMark` (ring + verdict
+  word for a hero aside), `StatusMark`, `BigStatus`, `WordValue`, `FileCard` / `ReportDownloads` / `HeroFileButton`, `VolumeBar`,
+  `KdMeter`, `TickGrid`, `ChartTitle`. `components/reports/meta.tsx`: `ModeGlyph`, `StageGlyph`, `StageIcon` (via `IconTile`).
+- `pages/tools/_components/kit.tsx` — `ToolShell` (intro, numbered `FormCard`s, sticky summary with `BudgetMeter`), `FormCard`
+  (numbered group with `info`). `ToolsPage.tsx`: `ToolsHero`, `ToolCard`, `HeroChip` (local copy — use the site one).
+- `pages/settings/_components/SettingsCard.tsx` — `SettingsCard` (icon-tile section card), `RoleChip`, `StepDot`;
+  `AddSitePage.tsx` `AddSiteStepper`; `OrgSettingsPage.tsx` `SpendBars`, `BudgetCard`; `LaunchStep.tsx` `BudgetBar`.
+- `pages/runs/RunDetailPage.tsx` — `RunStages` (sent → accepted → reports → done stepper), `TimelineEvent`.
 
 ## Screenshots with data (read-only)
 Use the Playwright image on the dev network (see the root `CLAUDE.md`), serve recorded GET responses and block every non-GET

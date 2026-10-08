@@ -10,9 +10,13 @@ import { SurfaceContext, useSurface } from './surface';
 
 type Go = { onClick?: () => void; to?: string };
 
-/** The label of a clickable card: a link / button whose ::after covers the card (the `relative` card is the hit area). */
+/**
+ * The label of a clickable card: a link / button whose ::after covers the card (the `relative` card is the hit area). The overlay sits
+ * at z-1 so positioned children painted later (CountUp, ScoreRing, a sparkline) do not punch holes in it; controls that must stay
+ * separately clickable (InfoTip, an ActionCard's action) sit above it at z-2.
+ */
 function StretchedLabel({ onClick, to, children, className, describedBy }: Go & { children: ReactNode; className?: string; describedBy?: string }) {
-  const cls = cn('min-w-0 text-left outline-none after:absolute after:inset-0 focus-visible:shadow-none!', className);
+  const cls = cn('min-w-0 text-left outline-none after:absolute after:inset-0 after:z-[1] focus-visible:shadow-none!', className);
   if (to)
     return (
       <Link to={to} className={cls} aria-describedby={describedBy}>
@@ -80,7 +84,7 @@ export function MetricCard({
             {label}
           </StretchedLabel>
           {info && (
-            <InfoTip label={`About ${label.toLowerCase()}`} className="z-[1]">
+            <InfoTip label={`About ${label.toLowerCase()}`} className="z-[2]">
               {info}
             </InfoTip>
           )}
@@ -175,7 +179,7 @@ export function HeroStat({ label, value, delta, trend, hint, info, onClick, to, 
           {label}
         </StretchedLabel>
         {info && (
-          <InfoTip label={`About ${label.toLowerCase()}`} className="z-[1]">
+          <InfoTip label={`About ${label.toLowerCase()}`} className="z-[2]">
             {info}
           </InfoTip>
         )}
@@ -331,7 +335,7 @@ export function ActionCard({ icon, tone = 'blue', title, description, meta, acti
           {title}
         </StretchedLabel>
         {description && <div className="mt-1 text-[13px] leading-snug text-ink-2">{description}</div>}
-        {action && <div className="relative z-[1] mt-3 flex flex-wrap items-center gap-2">{action}</div>}
+        {action && <div className="relative z-[2] mt-3 flex flex-wrap items-center gap-2">{action}</div>}
       </div>
       {clickable && <ArrowRight className="mt-0.5 size-4 shrink-0 text-ink-3 transition-[translate,color] duration-200 ease-brand group-hover/ac:translate-x-0.5 group-hover/ac:text-accent-text" aria-hidden />}
     </div>

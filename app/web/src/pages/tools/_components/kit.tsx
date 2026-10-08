@@ -229,6 +229,8 @@ export function SubmitError({ error, siteId }: { error: unknown; siteId?: string
  * title, a short description and, for longer explanations, an info tip next to the title.
  */
 export function FormCard({ title, description, info, children, className, aside }: { title: ReactNode; description?: ReactNode; info?: ReactNode; children: ReactNode; className?: string; aside?: ReactNode }) {
+  // view-only: the form's fieldset is disabled, which disables the info tip's button too, so the explanation is shown as text
+  const readOnly = !useOrgCtx().can('member');
   return (
     <Card className={cn('p-5 [counter-increment:formcard] sm:p-6', className)}>
       <div className="mb-5 flex flex-wrap items-start justify-between gap-2">
@@ -240,9 +242,10 @@ export function FormCard({ title, description, info, children, className, aside 
           <div className="min-w-0 pt-0.5">
             <h2 className="flex items-center gap-1 font-display text-[15px] leading-snug font-semibold tracking-[-0.01em] text-ink">
               {title}
-              {info && <InfoTip label={typeof title === 'string' ? `About ${title.toLowerCase()}` : 'What this means'}>{info}</InfoTip>}
+              {info && !readOnly && <InfoTip label={typeof title === 'string' ? `About ${title.toLowerCase()}` : 'What this means'}>{info}</InfoTip>}
             </h2>
             {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+            {info && readOnly && <p className="mt-1 text-[13px] leading-snug text-ink-3">{info}</p>}
           </div>
         </div>
         {aside}

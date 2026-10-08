@@ -148,7 +148,7 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
     <span className={cn('flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-ink-2', className)}>
       {badge}
       {chips.map((c, i) => (
-        <span key={i} className="inline-flex h-6 max-w-full items-center rounded-full bg-surface-2 px-2 text-xs font-medium text-ink-2">
+        <span key={i} title={c} className="inline-flex h-6 max-w-full items-center rounded-full bg-surface-2 px-2 text-xs font-medium text-ink-2">
           <span className="truncate">{c}</span>
         </span>
       ))}

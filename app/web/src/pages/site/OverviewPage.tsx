@@ -197,7 +197,7 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
       <Panel
         title="Top recommendations"
         icon={<Lightbulb />}
-        description={d.recommendations.length ? `${plural(d.recommendations.length, 'recommendation')}, most urgent first` : undefined}
+        description={d.recommendations.length ? `${d.recommendations.length >= OVERVIEW_RECS ? `${d.recommendations.length}+ recommendations` : plural(d.recommendations.length, 'recommendation')}, most urgent first` : undefined}
         flush
         footer={d.recommendations.length > 0 ? <MoreLink to={page('recommendations')}>All {d.recommendations.length} recommendations</MoreLink> : undefined}
       >
@@ -309,7 +309,7 @@ function keywordBuckets(r: OverviewData['rankings']) {
     { label: 'Top 3', value: r.top3, color: SEQ[5] },
     { label: '4–10', value: r.top10 - r.top3, color: SEQ[3] },
     { label: '11–50', value: r.top50 - r.top10, color: SEQ[1] },
-    { label: 'Not ranked yet', value: Math.max(0, r.keywords - r.top50), color: 'var(--surface-3)' },
+    { label: 'Not in the top 50', value: Math.max(0, r.keywords - r.top50), color: 'var(--surface-3)' },
   ];
 }
 
@@ -319,16 +319,22 @@ function searchHeadline(L: OverviewData['search']['latest']): string {
   const n = compactNumber(L.clicks);
   const ch = pctChange(L.clicks, L.prevClicks);
   if (ch == null) return `${n} ${L.clicks === 1 ? 'click' : 'clicks'} from Google in the last 28 days`;
-  if (ch >= 0.5) return `Clicks from Google are up ${ch.toFixed(1)}% to ${n}`;
-  if (ch <= -0.5) return `Clicks from Google are down ${Math.abs(ch).toFixed(1)}% to ${n}`;
+  // same threshold as the Delta chip under it (one decimal): "steady" only when that chip shows no change
+  if (ch >= 0.05) return `Clicks from Google are up ${ch.toFixed(1)}% to ${n}`;
+  if (ch <= -0.05) return `Clicks from Google are down ${Math.abs(ch).toFixed(1)}% to ${n}`;
   return `Clicks from Google are steady at ${n}`;
 }
+
+/** How many recommendations the overview endpoint sends (server/src/services/recommendations.ts: `.slice(0, 6)`). */
+const OVERVIEW_RECS = 6;
 
 /** The hero's second line: how much is waiting for you. */
 function recsLine(d: OverviewData): string {
   const n = d.recommendations.length;
   if (!n) return 'Nothing urgent. Recommendations appear as tracking, audits and monitors report in.';
   const high = d.recommendations.filter((x) => x.priority === 'high').length;
+  // the overview carries only the most urgent ones (server: OVERVIEW_RECS): at the cap there can be more
+  if (n >= OVERVIEW_RECS) return `${n}+ recommendations are open${high ? `, ${high === n ? `the top ${n} all` : `${high} of the top ${n}`} high priority` : ''}.`;
   return `${plural(n, 'recommendation is', 'recommendations are')} open${high ? `, ${high === n ? (n === 1 ? 'high priority' : 'all high priority') : `${high} of them high priority`}` : ''}.`;
 }
 
@@ -346,7 +352,7 @@ function NextStep({ d }: { d: OverviewData }) {
       actions={
         <>
           {rec.action && <RecommendationButton action={rec.action} variant="secondary" />}
-          <HeroLink to={page('recommendations')}>All {d.recommendations.length}</HeroLink>
+          <HeroLink to={page('recommendations')}>All {d.recommendations.length}{d.recommendations.length >= OVERVIEW_RECS ? '+' : ''}</HeroLink>
         </>
       }
     />

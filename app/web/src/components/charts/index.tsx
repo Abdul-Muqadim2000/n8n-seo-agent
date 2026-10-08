@@ -346,7 +346,8 @@ export function Sparkline({
   if (data.length < 2) return null;
   return (
     <ResponsiveContainer width={size?.width ?? '100%'} height={size?.height ?? '100%'}>
-      <LineChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
+      {/* decorative: no keyboard stop (Recharts 3 makes every chart focusable by default), so cards stay one Tab each */}
+      <LineChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 4 }} accessibilityLayer={false}>
         <YAxis hide reversed={invert} domain={['dataMin', 'dataMax']} />
         <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
       </LineChart>

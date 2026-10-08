@@ -152,7 +152,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         eyebrow={country || undefined}
-        title={startKw ? <>Start with “{startKw}”</> : `${n(summary.relevant)} keywords fit your business`}
+        title={startKw ? <>Start with “{startKw}”</> : num(summary.relevant) != null ? `${n(summary.relevant)} keywords fit your business` : 'Your keyword strategy'}
         description={`${n(summary.keywords_researched)} keywords researched, ${n(summary.relevant)} relevant to your business in ${n(summary.clusters)} topic clusters${priority.length ? `; ${priority.length} priority keywords and ${quick.length} quick wins below` : ''}.`}
         aside={
           startKw && can('member') ? (
