@@ -1,9 +1,9 @@
-# SEO Agent — web app (multi-company)
+# Ascentra — web app (multi-company)
 
-The web front end of the SEO Agent. Companies sign up (e-mail or Google), add their websites, prove ownership, connect Search
-Console and GA4, give the business and E-E-A-T details the engine needs, start weekly tracking, run every analysis from proper
-forms, and read the results in dashboards with recommendations. The SEO work itself stays in the n8n workflows
-(`../n8n/seo-agent`); this app is the product around them.
+The web front end of Ascentra (the SEO Agent engine in n8n) and its public business site. Companies sign up (e-mail or Google),
+add their websites, prove ownership, connect Search Console and GA4, give the business and E-E-A-T details the engine needs, start
+weekly tracking, run every analysis from proper forms, and read the results in dashboards with recommendations. The SEO work
+itself stays in the n8n workflows (`../n8n/seo-agent`); this app is the product around them.
 
 ```
  browser ──► app (Fastify + React, :4000) ──► n8n API front door  POST /webhook/seo-keyword-check   (start a run)
@@ -170,6 +170,32 @@ tool by hand; the form says what that means for the schedule, in terms of what n
   the app; a page already written or published for the keyword; a ladder for the same head term): a warning, and the run starts
   only after the person ticks "… anyway".
 
+## Brand and business site
+
+The product is called **Ascentra** ("Enterprise-grade autonomous SEO"); "SEO Agent" stays only as the internal name of the n8n
+engine and of this repository.
+
+- **Brand kit**: `web/brand/BRAND.md` (logo rules, colours, type, voice) and `web/brand/tokens.css` (the kit's raw values). The app's
+  tokens live in `web/src/index.css` (light + dark); components use them through Tailwind classes, never hex. Ascentra Blue is the
+  only accent, no gradients.
+- **Logos and icons**: the supplied SVGs in `web/public/brand/` (horizontal / stacked / header / mark / wordmark in ink, blue, white),
+  favicons, `site.webmanifest` and `og-image.png` in `web/public/`. Use the files as they are — never redraw, recolour or animate rays.
+- **Fonts are self-hosted** (`@fontsource-variable/sora`, `geist`, `geist-mono`, imported in `web/src/main.tsx` and bundled by Vite):
+  the production CSP (`server/src/app.ts`) allows fonts, scripts and styles only from the app's own origin, so a Google Fonts link
+  would be blocked. The same CSP is why the business site has no external scripts, embeds or iframes; remote `https:` images are
+  allowed (the marketing photos).
+- **Business site routes** (public, lazy chunks that signed-in app pages never load): `/` (visitors; signed-in users go straight into
+  the app), `/platform`, `/platform/<slug>` (one per capability), `/how-it-works`, `/solutions`, `/solutions/<slug>`, `/pricing`,
+  `/security`, `/about`, `/contact`, `/changelog`, `/privacy`, `/terms`. An unknown slug shows the 404 page.
+- **Content registries** in `web/src/marketing/content/`: `features.ts` (the capabilities: Home grid, Platform page, mega-menu,
+  footer and every `/platform/<slug>` page render from it), `solutions.ts`, `pricing.ts`, `changelog.ts` (add an entry with every
+  release), `site.ts` (name, e-mail addresses, navigation, integrations), `images.ts` (every photo). How to add a capability:
+  `web/CONVENTIONS.md` → "Business site".
+- **PLACEHOLDER — confirm before launch** (marked `// PLACEHOLDER` in the code): every price, plan limit, the annual discount and the
+  billing answers in `pricing.ts`; the `@ascentra.example` e-mail addresses in `site.ts` (the contact form opens a `mailto:`);
+  the Unsplash photos in `images.ts`; the privacy policy and terms in `marketing/components/company/legal.ts` (drafts for counsel).
+  Copy uses capability facts only — no invented customers, logos, ratings or results.
+
 ## Security model
 
 - **Companies are isolated**: every company route checks membership (404 for companies you do not belong to); roles
@@ -219,3 +245,4 @@ python3 scripts/smoke.py          # API integration test against the running dev
 | "Choose keywords for me" | `server/src/services/autoStart.ts` (decision + job), timer in `server/src/index.ts` (`AUTO_START_LADDERS`) |
 | A callback stage | `server/src/services/summaries.ts` (list summary), `web/src/components/reports/` (renderer), `shared/src/constants.ts` (`STAGE_LABELS`, `MODES[…].finalStages`) |
 | Database | `server/src/db/schema.ts`, then `npm run db:generate` (migrations run at start) |
+| Business site copy, a new capability, prices | `web/src/marketing/content/` (registries), pages in `web/src/marketing/pages/`; steps in `web/CONVENTIONS.md` → "Business site" |

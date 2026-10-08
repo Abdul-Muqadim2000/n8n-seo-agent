@@ -13,10 +13,13 @@ const QUESTIONS = [
 ];
 // c = named and cited, m = named, - = not named (sample)
 const GRID = ['cmc-mc', 'mc-cm-', '-mcm-c', 'c--mc-', 'mcc-m-', '-c-mcm'];
+// per engine column: hidden until the mockup's container is wide enough for it (full class names, so Tailwind sees them)
+const HEAD_CLS = ['', '', '', 'hidden @min-[24rem]:block', 'hidden @min-[26rem]:block', 'hidden @min-[30rem]:block'];
+const CELL_CLS = ['', '', '', 'hidden @min-[24rem]:flex', 'hidden @min-[26rem]:flex', 'hidden @min-[30rem]:flex'];
 
-function Cell({ v, i }: { v: string; i: number }) {
+function Cell({ v, i, className }: { v: string; i: number; className?: string }) {
   return (
-    <span className="flex h-8 items-center justify-center">
+    <span className={cn('flex h-8 w-[52px] shrink-0 items-center justify-center', className)}>
       <span
         className={cn(
           'mk-pop-dot block size-3 rounded-full',
@@ -68,25 +71,25 @@ export function AiVisibilityMockup({ className }: { className?: string }) {
           </div>
         ))}
       </div>
-      <div className="-mx-4 mt-5 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-        <div className="min-w-[520px]">
-          <div className="grid grid-cols-[minmax(0,1fr)_repeat(6,52px)] items-end gap-x-1 border-b border-line pb-2">
-            <span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-ink-3">Buyer question</span>
-            {ENGINES.map((e) => (
-              <span key={e} className="text-center text-[10px] font-medium leading-tight text-ink-3">
-                {e}
-              </span>
-            ))}
-          </div>
-          {QUESTIONS.map((q, r) => (
-            <div key={q} className="grid grid-cols-[minmax(0,1fr)_repeat(6,52px)] items-center gap-x-1 border-b border-line last:border-b-0">
-              <span className="truncate pr-2 text-[12px] text-ink-2">{q}</span>
-              {GRID[r].split('').map((v, c) => (
-                <Cell key={c} v={v} i={r * 6 + c} />
-              ))}
-            </div>
+      {/* the engine columns follow the card's own width (container query), so the grid never scrolls or clips:
+          3 engines in a phone-width card, 4 from 24rem, 5 from 26rem, all 6 from 30rem */}
+      <div className="@container mt-5">
+        <div className="flex items-end gap-x-1 border-b border-line pb-2">
+          <span className="min-w-0 flex-1 truncate text-[10.5px] font-medium uppercase tracking-[0.08em] text-ink-3">Buyer question</span>
+          {ENGINES.map((e, c) => (
+            <span key={e} className={cn('w-[52px] shrink-0 text-center text-[10px] font-medium leading-tight text-ink-3', HEAD_CLS[c])}>
+              {e}
+            </span>
           ))}
         </div>
+        {QUESTIONS.map((q, r) => (
+          <div key={q} className="flex items-center gap-x-1 border-b border-line last:border-b-0">
+            <span className="line-clamp-2 my-1 min-w-0 flex-1 pr-2 text-[12px] leading-snug text-ink-2 @min-[30rem]:line-clamp-1">{q}</span>
+            {GRID[r].split('').map((v, c) => (
+              <Cell key={c} v={v} i={r * 6 + c} className={CELL_CLS[c]} />
+            ))}
+          </div>
+        ))}
       </div>
       <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5 text-[11px] text-ink-3">
         <span className="flex items-center gap-1.5">
