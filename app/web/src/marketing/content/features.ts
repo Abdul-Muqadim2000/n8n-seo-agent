@@ -48,6 +48,16 @@ export interface Step {
   body: string;
 }
 
+/** product screens drawn only by the platform pages (see `marketing/components/platform/CapabilityScreen.tsx`) */
+export type ScreenKey = 'pipeline' | 'report';
+
+/** "why it matters": the short story told next to the photo or diagram on /platform/<slug> */
+export interface Story {
+  eyebrow?: string;
+  title: string;
+  body: string;
+}
+
 export interface Feature {
   slug: string;
   name: string;
@@ -71,6 +81,10 @@ export interface Feature {
   visual: VisualKey;
   /** optional second visual (diagram) */
   diagram?: VisualKey;
+  /** optional product screen that the platform pages show instead of `visual` (other pages keep `visual`) */
+  screen?: ScreenKey;
+  /** optional "why it matters" story for the feature page */
+  story?: Story;
 }
 
 export const features: Feature[] = [
@@ -113,6 +127,13 @@ export const features: Feature[] = [
     related: ['keyword-ladders', 'content', 'site-tracking'],
     image: 'teamPlanning',
     visual: 'growth-loop',
+    diagram: 'growth-loop',
+    screen: 'pipeline',
+    story: {
+      eyebrow: 'The weekly loop',
+      title: 'Every week starts from what the last one learned.',
+      body: 'Research, plan, write, publish, track and learn run in the same order for every website. Last week’s rankings and Search Console data decide which posts come next, and anything that needs a person waits in one queue instead of in someone’s inbox.',
+    },
   },
   {
     slug: 'keyword-research',
@@ -139,7 +160,7 @@ export const features: Feature[] = [
     facts: [
       { value: 3, label: 'plan types: Direct, Short and Full' },
       { value: 1, label: 'verdict per keyword, with its reasons' },
-      { value: 0, label: 'overlapping keywords between ladders' },
+      { value: 4, label: 'signals per keyword: reach, topic fit, intent and plan' },
     ],
     faqs: [
       {
@@ -156,6 +177,10 @@ export const features: Feature[] = [
     related: ['keyword-ladders', 'content', 'site-tracking'],
     image: 'notesLaptop',
     visual: 'keyword-verdict',
+    story: {
+      title: 'A call you can act on, not another list.',
+      body: 'Most keyword tools hand you thousands of rows and a generic difficulty score. Ascentra makes a call on each keyword, explains it and measures it against your own site, so the next decision is clear: write one page, build a ladder or leave it for later.',
+    },
   },
   {
     slug: 'keyword-ladders',
@@ -199,6 +224,10 @@ export const features: Feature[] = [
     related: ['keyword-research', 'autopilot', 'content'],
     image: 'growthChartPaper',
     visual: 'ladder',
+    story: {
+      title: 'Hard keywords are won with structure, not one page.',
+      body: 'Search engines trust sites that cover a topic in depth. A ladder builds that depth in a deliberate order — easier pages first, each linking up — so the page for your head term arrives with relevance and internal links already behind it.',
+    },
   },
   {
     slug: 'content',
@@ -239,6 +268,10 @@ export const features: Feature[] = [
     related: ['keyword-ladders', 'autopilot', 'technical-audits'],
     image: 'colleaguesReview',
     visual: 'content',
+    story: {
+      title: 'Pages that show real expertise.',
+      body: 'Readers and search engines look for experience, expertise and trust. Ascentra writes from your business profile, names a real author and reviewer, cites your own case studies and marks every figure it cannot verify for you to confirm.',
+    },
   },
   {
     slug: 'technical-audits',
@@ -279,6 +312,10 @@ export const features: Feature[] = [
     related: ['site-tracking', 'content', 'reports'],
     image: 'analyticsMonitor',
     visual: 'audit',
+    story: {
+      title: 'Findings your developers can apply the same day.',
+      body: 'An audit only helps once it is fixed. Next to the prioritised findings, every audit delivers the files developers need, and the next audit shows what changed — so progress is visible, not assumed.',
+    },
   },
   {
     slug: 'site-tracking',
@@ -314,10 +351,18 @@ export const features: Feature[] = [
         a: 'A keyword where your page already ranks just below the top results. Small improvements there tend to pay off fastest, so the pipeline picks them early.',
       },
       { q: 'How often is the data refreshed?', a: 'Every week, with live rank checks for keywords Search Console does not report.' },
+      {
+        q: 'How does Ascentra know I published a planned page?',
+        a: 'Each week it looks for the page in your sitemap by its slug and title. Once found, the page is checked live and its ranking is tracked from then on.',
+      },
     ],
     related: ['reports', 'keyword-ladders', 'technical-audits'],
     image: 'analyticsLaptop',
     visual: 'dashboard',
+    story: {
+      title: 'One weekly view instead of four dashboards.',
+      body: 'Search Console, GA4 and Google Trends each answer a different question. Ascentra reads them together every week, checks live rankings where Search Console is silent and points at the keywords closest to page one.',
+    },
   },
   {
     slug: 'ai-visibility',
@@ -362,6 +407,11 @@ export const features: Feature[] = [
     image: 'meetingGesture',
     visual: 'ai-visibility',
     diagram: 'ai-engines',
+    story: {
+      eyebrow: 'One panel, six engines',
+      title: 'The same questions, asked everywhere, on a schedule.',
+      body: 'Every engine gets the same buyer questions. Answers are read for who is named, who is cited and what is said about you, and every rate carries a 95% range — so a real change stands out from day-to-day noise.',
+    },
   },
   {
     slug: 'backlinks',
@@ -406,6 +456,11 @@ export const features: Feature[] = [
     image: 'teamTable',
     visual: 'backlinks',
     diagram: 'link-sources',
+    story: {
+      eyebrow: 'Nine sources, one ledger',
+      title: 'Every source sees part of the web. Together they see more.',
+      body: 'Ascentra merges nine sources into one row per referring site, then visits each linking page itself to confirm the link, where it sits on the page and whether search engines can follow it.',
+    },
   },
   {
     slug: 'reports',
@@ -427,20 +482,30 @@ export const features: Feature[] = [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
       { title: 'Explain', body: 'What changed, why it matters and how sure Ascentra is.' },
       { title: 'Recommend', body: 'A prioritised list of next steps, each one ready to run.' },
+      { title: 'Share', body: 'Export the full report as PDF or Word, or open any past run with its report and files.' },
     ],
     facts: [
       { value: 2, label: 'report formats: PDF and Word' },
       { value: 'Monday', label: 'report, every week' },
-      { value: 'Monthly', label: 'check-in for what the API cannot see' },
+      { value: 1, label: 'check-in a month for what Google’s API cannot see' },
     ],
     faqs: [
       { q: 'Can I share reports with clients?', a: 'Yes. Full reports export as PDF or Word, ready to send.' },
       { q: 'What does the Search Console alert watcher do?', a: 'It reads Google’s Search Console notification e-mails for your websites and turns them into alerts in Ascentra.' },
       { q: 'What is the monthly check-in?', a: 'A short checklist for what Google does not expose through its API, such as manual actions and security issues.' },
+      {
+        q: 'Are recommendations ranked?',
+        a: 'Yes. Recommendations are listed in priority order, and each one can be started as a run with its cost shown first.',
+      },
     ],
     related: ['site-tracking', 'technical-audits', 'enterprise'],
     image: 'meetingPresenter',
     visual: 'dashboard',
+    screen: 'report',
+    story: {
+      title: 'Reports people actually read.',
+      body: 'The Monday report puts rankings, traffic, AI visibility and links on one page, with what changed and what to do next. Full reports export as PDF or Word for everyone who was not in the room.',
+    },
   },
   {
     slug: 'enterprise',
@@ -481,6 +546,10 @@ export const features: Feature[] = [
     related: ['reports', 'autopilot', 'site-tracking'],
     image: 'brightOffice',
     visual: 'workspace',
+    story: {
+      title: 'Control for every company and website you run.',
+      body: 'Each company has its own websites, team, budget and data. Website data appears only after ownership is proven, and every run shows its cost before any paid work begins.',
+    },
   },
 ];
 

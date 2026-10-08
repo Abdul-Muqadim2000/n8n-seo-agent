@@ -20,6 +20,8 @@ export interface Solution {
   /** what the team can do with Ascentra (capabilities, not promised numbers) */
   outcomes: string[];
   faqs: FaqItem[];
+  /** optional "see it in Ascentra" band on /solutions/<slug>: the product visual of one capability (feature slug) with a short story */
+  showcase?: { feature: string; title: string; body: string };
 }
 
 export const solutions: Solution[] = [
@@ -54,6 +56,11 @@ export const solutions: Solution[] = [
       { q: 'How do I keep costs per client in check?', a: 'Every run shows its estimated cost first, and each company has its own budget and spend cap.' },
       { q: 'Do I need access to each client’s Search Console?', a: 'The client adds Ascentra’s service account as a user, and the website owner proves ownership once.' },
     ],
+    showcase: {
+      feature: 'enterprise',
+      title: 'Every client in a workspace of its own.',
+      body: 'Switch between client companies from one login. Each has its own verified websites, team, budget and reports, and clients can join as viewers to follow the work.',
+    },
   },
   {
     slug: 'in-house-teams',
@@ -86,6 +93,11 @@ export const solutions: Solution[] = [
       { q: 'Can our writers edit the pages?', a: 'Yes. Pages arrive as HTML, Markdown or a WordPress draft, so your team edits them before publishing.' },
       { q: 'Who on the team can start paid runs?', a: 'Members and above can start runs; viewers can only read. Owners set the budget.' },
     ],
+    showcase: {
+      feature: 'autopilot',
+      title: 'One page that says what happens next.',
+      body: 'This week’s posts, the decisions waiting for your team and every schedule with its next run, on one pipeline page per website.',
+    },
   },
   {
     slug: 'b2b-saas',
@@ -118,6 +130,11 @@ export const solutions: Solution[] = [
       { q: 'Can we track named competitors?', a: 'Yes. Add competitors to the website settings and Ascentra compares share of voice and links against them.' },
       { q: 'Does Ascentra write case studies?', a: 'Yes. Enter the facts of a customer project once; Ascentra writes the case study page and later pages can cite it.' },
     ],
+    showcase: {
+      feature: 'ai-visibility',
+      title: 'See the shortlist AI gives your buyers.',
+      body: 'Which brands ChatGPT, Gemini, Perplexity, Claude and Google’s AI name for your buyers’ questions, how often you are cited, and how that moves week by week.',
+    },
   },
   {
     slug: 'local-businesses',
@@ -150,6 +167,11 @@ export const solutions: Solution[] = [
       { q: 'Can I run several brands?', a: 'Yes. Each brand can be its own company in Ascentra with its own websites, team and budget.' },
       { q: 'Does Ascentra manage our Google Business Profile?', a: 'No. It checks that your profile and your website agree, as part of the brand and entity check.' },
     ],
+    showcase: {
+      feature: 'content',
+      title: 'Local pages with details you have verified.',
+      body: 'Each local page carries your verified name, address and phone, LocalBusiness schema and the areas you serve, and is checked again once it is live.',
+    },
   },
 ];
 

@@ -1,0 +1,212 @@
+/* Platform, feature, how-it-works and solutions pages: step rails, the week schedule, the Auto / Manual lanes.
+   Colours only through the tokens in src/index.css. Everything is static and visible under prefers-reduced-motion. */
+
+/* ---------- step rails: the connecting line draws in, the numbered nodes pop in one after another ---------- */
+.pf-line-x {
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 1200ms var(--brand-ease) 150ms;
+}
+.pf-line-y {
+  transform: scaleY(0);
+  transform-origin: center top;
+  transition: transform 1200ms var(--brand-ease) 150ms;
+}
+.is-on .pf-line-x,
+.is-on .pf-line-y {
+  transform: none;
+}
+.pf-node {
+  opacity: 0;
+  transform: scale(0.7);
+  transition:
+    opacity 420ms var(--brand-ease),
+    transform 420ms var(--brand-ease);
+  transition-delay: calc(100ms + var(--pf-i, 0) * 220ms);
+}
+.is-on .pf-node {
+  opacity: 1;
+  transform: none;
+}
+/* one segment of a vertical rail, from a node to the next (drawn after its node) */
+.pf-seg-y {
+  transform: scaleY(0);
+  transform-origin: center top;
+  transition: transform 560ms var(--brand-ease);
+  transition-delay: calc(260ms + var(--pf-i, 0) * 220ms);
+}
+.is-on .pf-seg-y {
+  transform: none;
+}
+/* text next to a node follows it in */
+.pf-follow {
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 520ms var(--brand-ease),
+    transform 520ms var(--brand-ease);
+  transition-delay: calc(180ms + var(--pf-i, 0) * 220ms);
+}
+.is-on .pf-follow {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- in-page capability nav ---------- */
+.pf-subnav {
+  scrollbar-width: none;
+}
+.pf-subnav::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- "A week with Ascentra": a time-of-day cursor sweeps 06:00 → 10:30, each run lights up as it passes ---------- */
+.pf-sweep {
+  opacity: 0;
+}
+.is-on .pf-sweep {
+  animation: pf-sweep 9s linear infinite;
+}
+@keyframes pf-sweep {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  92% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+.is-on .pf-hit {
+  animation: pf-hit 9s linear infinite;
+  animation-delay: var(--pf-d, 0s);
+}
+@keyframes pf-hit {
+  0%,
+  11% {
+    box-shadow:
+      0 0 0 1.5px var(--pf-ring, var(--accent)),
+      0 0 0 6px color-mix(in srgb, var(--pf-ring, var(--accent)) 22%, transparent);
+  }
+  18%,
+  100% {
+    box-shadow:
+      0 0 0 0 transparent,
+      0 0 0 0 transparent;
+  }
+}
+.pf-pop {
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+  transition:
+    opacity 460ms var(--brand-ease),
+    transform 460ms var(--brand-ease);
+  transition-delay: calc(120ms + var(--pf-i, 0) * 60ms);
+}
+.is-on .pf-pop {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- Auto / Manual lanes: a dot flows straight through on Auto and waits for approval on Manual ---------- */
+.pf-dot {
+  opacity: 0;
+  top: 10%;
+}
+.is-on .pf-dot-auto {
+  animation: pf-auto 7s linear infinite;
+}
+.is-on .pf-dot-manual {
+  animation: pf-manual 7s linear infinite;
+}
+@keyframes pf-auto {
+  0% {
+    top: 10%;
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  52% {
+    top: 90%;
+    opacity: 1;
+  }
+  58%,
+  100% {
+    top: 90%;
+    opacity: 0;
+  }
+}
+@keyframes pf-manual {
+  0% {
+    top: 10%;
+    opacity: 0;
+  }
+  4% {
+    opacity: 1;
+  }
+  14% {
+    top: 30%;
+  }
+  50% {
+    top: 30%;
+  }
+  86% {
+    top: 90%;
+    opacity: 1;
+  }
+  92%,
+  100% {
+    top: 90%;
+    opacity: 0;
+  }
+}
+/* the approval step glows while the dot waits on it */
+.is-on .pf-wait {
+  animation: pf-wait 7s linear infinite;
+}
+@keyframes pf-wait {
+  0%,
+  13% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  16%,
+  48% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 22%, transparent);
+  }
+  52%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* ---------- reduced motion: everything static and visible ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .pf-line-x,
+  .pf-line-y,
+  .pf-seg-y,
+  .pf-node,
+  .pf-follow,
+  .pf-pop {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .is-on .pf-sweep,
+  .is-on .pf-hit,
+  .is-on .pf-dot-auto,
+  .is-on .pf-dot-manual,
+  .is-on .pf-wait {
+    animation: none;
+  }
+  .pf-sweep,
+  .pf-dot {
+    display: none;
+  }
+}
