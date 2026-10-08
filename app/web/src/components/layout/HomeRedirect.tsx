@@ -15,7 +15,7 @@ export function rememberOrg(orgId: string) {
 /** "/": a company that is still onboarding resumes the wizard; otherwise the last company used. */
 export function HomeRedirect() {
   const me = useMe();
-  if (me.isPending || !me.data) return <PageLoader />;
+  if (me.isPending || !me.data) return <PageLoader fullPage />;
   const orgs = me.data.orgs;
   if (!orgs.length) return <Navigate to={paths.onboarding()} replace />;
   let last: string | null = null;

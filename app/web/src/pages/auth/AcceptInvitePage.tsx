@@ -21,7 +21,10 @@ export default function AcceptInvitePage() {
   if (inv.isError || !inv.data)
     return (
       <AuthCard title="Invitation not found">
-        <Callout tone="warning">{errorMessage(inv.error)}</Callout>
+        <Callout tone="warning">{errorMessage(inv.error)} Ask the person who invited you to send a new invitation.</Callout>
+        <ButtonLink to={me.data ? '/' : paths.login()} variant="secondary" size="lg" className="mt-5 w-full">
+          {me.data ? 'Go to your dashboard' : 'Go to sign in'}
+        </ButtonLink>
       </AuthCard>
     );
   const i = inv.data;

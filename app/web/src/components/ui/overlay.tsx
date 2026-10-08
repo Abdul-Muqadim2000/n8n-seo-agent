@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import * as D from '@radix-ui/react-dialog';
 import * as M from '@radix-ui/react-dropdown-menu';
 import * as T from '@radix-ui/react-tooltip';
@@ -26,12 +26,25 @@ export function Dialog({
   trigger?: ReactNode;
   wide?: boolean;
 }) {
+  // A dialog opened from state (no Trigger) has nothing for Radix to return focus to: remember what had focus when it opened (the
+  // button that opened it) and go back there on close, so keyboard users keep their place.
+  const opener = useRef<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    if (open && !trigger) opener.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+  }, [open, trigger]);
   return (
     <D.Root open={open} onOpenChange={onOpenChange}>
       {trigger && <D.Trigger asChild>{trigger}</D.Trigger>}
       <D.Portal>
         <D.Overlay className="fixed inset-0 z-50 bg-ink-surface/50 backdrop-blur-[2px] dark:bg-black/60 data-[state=open]:animate-fade-in" />
         <D.Content
+          onCloseAutoFocus={(e) => {
+            const el = opener.current;
+            if (!trigger && el?.isConnected) {
+              e.preventDefault();
+              el.focus({ preventScroll: true });
+            }
+          }}
           className={cn(
             'fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-line bg-surface shadow-overlay outline-none focus-visible:shadow-overlay! data-[state=open]:animate-scale-in',
             wide ? 'max-w-3xl' : 'max-w-lg',

@@ -49,6 +49,18 @@ export function findPlaceholders(html: string): { token: string; count: number }
   return [...m.entries()].map(([token, count]) => ({ token, count })).sort((a, b) => b.count - a.count);
 }
 
+/**
+ * The page's address as a full https URL: the engine suggests a path ("/vat-registration-uae/"), which only becomes an address with
+ * the website's domain. Empty when there is no domain to put in front (a run without a website).
+ */
+export function absolutePageUrl(url: string, domain: string): string {
+  const u = url.trim();
+  if (/^https?:\/\//i.test(u)) return u;
+  const host = domain.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  if (!u || !host || !u.startsWith('/')) return '';
+  return `https://${host}${u}`;
+}
+
 /** Parses the article inertly, drops anything executable, and wraps text placeholders in <mark>. */
 function prepareBody(html: string): string {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -56,14 +68,27 @@ function prepareBody(html: string): string {
   doc.querySelectorAll('*').forEach((el) => {
     for (const a of [...el.attributes]) if (/^on/i.test(a.name) || /^\s*javascript:/i.test(a.value)) el.removeAttribute(a.name);
   });
-  // images planned but not uploaded yet (relative paths): a labelled placeholder instead of a broken image
+  // images planned but not uploaded yet (relative paths): a labelled placeholder box instead of a broken image. Real text (not a scaled
+  // SVG) so the label stays readable on a phone; the box keeps the planned image's proportions.
   doc.querySelectorAll('img').forEach((img) => {
     const src = img.getAttribute('src') ?? '';
     if (/^(https:|data:)/i.test(src)) return;
-    const name = (src.split('/').pop() || 'image').replace(/[<>&"']/g, '');
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630"><rect width="100%" height="100%" fill="#8f8e88" fill-opacity="0.18"/><text x="50%" y="50%" fill="#8f8e88" font-family="system-ui,sans-serif" font-size="28" text-anchor="middle" dominant-baseline="middle">Image to upload: ${name}</text></svg>`;
-    img.setAttribute('src', 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
-    img.removeAttribute('srcset');
+    const name = src.split('/').pop() || 'image';
+    const w = Number(img.getAttribute('width')) || 1200;
+    const h = Number(img.getAttribute('height')) || 630;
+    const box = doc.createElement('span');
+    box.className = 'img-ph';
+    box.setAttribute('role', 'img');
+    box.setAttribute('aria-label', `Image to upload: ${name}`);
+    box.style.aspectRatio = `${w} / ${h}`;
+    const label = doc.createElement('span');
+    label.className = 'img-ph-label';
+    label.textContent = 'Image to upload';
+    const file = doc.createElement('span');
+    file.className = 'img-ph-name';
+    file.textContent = name;
+    box.append(label, file);
+    img.replaceWith(box);
   });
   const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
   const texts: Text[] = [];
@@ -106,6 +131,10 @@ ul,ol{padding-left:1.4em}
 li{margin:.3em 0}
 img{display:block;max-width:100%;height:auto;background:${t['surface-2']};border-radius:8px;color:${t['ink-3']};font-size:.85rem}
 figure{margin:1.6em 0}
+.img-ph{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.35em;width:100%;min-height:8rem;margin:1.2em 0;padding:1em;border:1px dashed ${t.line};border-radius:8px;background:${t['surface-2']};text-align:center}
+figure .img-ph{margin:0}
+.img-ph-label{font-size:.85rem;font-weight:600;color:${t['ink-2']}}
+.img-ph-name{max-width:100%;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:.8rem;color:${t['ink-3']};overflow-wrap:anywhere}
 figcaption{font-size:.85rem;color:${t['ink-3']};margin-top:.5em}
 table{border-collapse:collapse;width:100%;margin:1.2em 0;font-size:.92rem;display:block;overflow-x:auto}
 th,td{border:1px solid ${t.line};padding:.5em .7em;text-align:left;vertical-align:top}
@@ -257,7 +286,15 @@ export function MetaPanel({ meta }: { meta: P }) {
           { label: 'Main heading (H1)', value: str(meta.h1) || '–' },
           { label: 'Meta description', value: <>{str(meta.meta_description) || '–'} <span className="block text-xs">{lengthHint(num(meta.meta_description_length) ?? (str(meta.meta_description).length || null), 120, 160)}</span></> },
           { label: 'URL slug', value: <code className="text-[13px]">{str(meta.slug) || '–'}</code> },
-          ...(str(meta.suggested_url) ? [{ label: 'Suggested URL', value: <ExternalLink href={str(meta.suggested_url)} /> }] : []),
+          ...(str(meta.suggested_url)
+            ? [
+                {
+                  label: 'Suggested URL',
+                  // a path without the website's domain is shown as text, not as a link into this app
+                  value: absolutePageUrl(str(meta.suggested_url), str(meta.domain)) ? <ExternalLink href={absolutePageUrl(str(meta.suggested_url), str(meta.domain))} /> : <span className="font-mono text-[13px] [overflow-wrap:anywhere]">{str(meta.suggested_url)}</span>,
+                },
+              ]
+            : []),
           { label: 'Primary keyword', value: str(meta.primary_keyword) || '–' },
           { label: 'Page type', value: str(meta.page_type) || '–' },
           ...(str(author.name) ? [{ label: 'Author', value: <>{str(author.name)} {author.placeholder === true && <Badge tone="warning" className="ml-1">placeholder</Badge>}</> }] : []),

@@ -2,14 +2,15 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { CalendarClock, ChevronDown, Download, ExternalLink as ExternalIcon, Files } from 'lucide-react';
-import { STAGE_LABELS, compactNumber, type Report, type ReportFile } from '@seo/shared';
+import { compactNumber, type Report, type ReportFile } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { cn, fmtAgo, fmtBytes, fmtDate } from '@/lib/utils';
 import { Badge, StatusBadge, verdictTone } from '@/components/ui/badge';
 import { Popover, Tooltip } from '@/components/ui/overlay';
 import { scoreTone } from '@/components/ui/misc';
-import { StageGlyph } from '@/components/reports/meta';
+import { StageGlyph, stageLabel } from '@/components/reports/meta';
+import { verdictLabel } from '@/components/reports/kit';
 import { pct } from './format';
 
 const PRIMARY_KINDS: ReportFile['kind'][] = ['pdf', 'docx', 'doc', 'html', 'md', 'zip'];
@@ -122,7 +123,7 @@ export function ReportHighlights({ report }: { report: Report }) {
   const m = report.summary ?? {};
   const chips: ReactNode[] = [];
   const verdict = s(m.verdict);
-  if (verdict) chips.push(<StatusBadge key="v" tone={verdictTone(verdict)}>{verdict.replace(/_/g, ' ')}</StatusBadge>);
+  if (verdict) chips.push(<StatusBadge key="v" tone={verdictTone(verdict)}>{verdictLabel(verdict)}</StatusBadge>);
   if (n(m.score) != null) chips.push(<Badge key="s">Score {n(m.score)}</Badge>);
   if (n(m.healthScore) != null) {
     const hs = n(m.healthScore)!;
@@ -153,14 +154,14 @@ export function ReportList({ orgId, reports, limit, empty }: { orgId: string; re
         <li key={r.id} className="group relative flex flex-col gap-2 px-5 py-3 transition-colors duration-150 ease-brand hover:bg-surface-2/60 md:flex-row md:items-center md:gap-4">
           <div className="flex min-w-0 flex-1 items-start gap-3">
             <span className="mt-0.5" aria-hidden>
-              <StageGlyph stage={r.stage} size="sm" />
+              <StageGlyph stage={r.stage} size="sm" report={r} />
             </span>
             <div className="min-w-0">
               <Link to={paths.report(orgId, r.id)} className="block truncate text-sm font-medium text-ink transition-colors duration-150 ease-brand after:absolute after:inset-0 group-hover:text-accent-text">
                 {r.title}
               </Link>
               <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-3">
-                <span>{STAGE_LABELS[r.stage] ?? r.stage}</span>
+                <span>{stageLabel(r.stage, r)}</span>
                 <span aria-hidden>·</span>
                 <span title={fmtDate(r.receivedAt)}>{fmtAgo(r.receivedAt)}</span>
                 {r.scheduled && (

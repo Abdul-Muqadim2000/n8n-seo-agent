@@ -10,7 +10,7 @@ import { Card, CardBody } from '@/components/ui/card';
 import { Callout } from '@/components/ui/feedback';
 import { Delta, ExternalLink, KeyValue } from '@/components/ui/misc';
 import { ChartCard, TimeSeriesChart } from '@/components/charts';
-import { ArticleViewer } from './article';
+import { absolutePageUrl, ArticleViewer } from './article';
 import { Block, Bullets, Chips, Facts, has, LedgerCard, n, num, obj, objs, ScoreMeter, str, strs, usd, VerdictBadge, type P } from './kit';
 import { keywordPrefill } from './meta';
 
@@ -82,7 +82,11 @@ export function ContentReport({ report }: { report: ReportDetail }) {
             <div className="flex flex-col gap-2">
               {!can('member') ? null : html ? (
                 <ButtonLink
-                  to={paths.tool(org.id, 'published', { siteId: report.siteId, prefill: { keyword, publishedUrl: str(meta.suggested_url) } })}
+                  to={paths.tool(org.id, 'published', {
+                    siteId: report.siteId,
+                    // the form asks for a full https:// address: prefill only one built from the website's domain, never a bare path
+                    prefill: { keyword, publishedUrl: absolutePageUrl(str(meta.suggested_url), str(p.domain) || str(meta.domain) || report.siteDomain || '') },
+                  })}
                   variant="primary"
                   size="sm"
                   icon={<Rocket className="size-4" />}

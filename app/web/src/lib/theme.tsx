@@ -13,12 +13,24 @@ function read(): ThemeChoice {
   }
 }
 
+/** Browser UI colour (<meta name="theme-color">, index.html + public/theme-init.js): brand blue on light, the dark page colour on dark. */
+const THEME_COLOR = { light: '#2E4BFF', dark: '#0A0F1F' } as const;
+
+/** An explicit pick sets both media variants of theme-color; "system" puts each variant back to its own scheme. */
+function applyThemeColor(theme: ThemeChoice) {
+  document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]').forEach((m) => {
+    const scheme = theme !== 'system' ? theme : /dark/.test(m.media) ? 'dark' : 'light';
+    m.content = THEME_COLOR[scheme];
+  });
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, set] = useState<ThemeChoice>(read);
   useEffect(() => {
     const el = document.documentElement;
     if (theme === 'system') el.removeAttribute('data-theme');
     else el.setAttribute('data-theme', theme);
+    applyThemeColor(theme);
   }, [theme]);
   const setTheme = useCallback((t: ThemeChoice) => {
     set(t);

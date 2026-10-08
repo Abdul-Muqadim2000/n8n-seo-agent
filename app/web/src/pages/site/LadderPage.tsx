@@ -55,6 +55,7 @@ export default function LadderPage() {
   if (q.isError && q.error instanceof ApiRequestError && q.error.status === 404)
     return (
       <EmptyState
+        titleAs="h1"
         icon={<SearchX className="size-5" />}
         title="This keyword ladder was not found"
         description="It may have been deleted, or it belongs to another website."
@@ -65,7 +66,7 @@ export default function LadderPage() {
     return (
       <div>
         <div className="mb-4 text-[13px] font-medium text-ink-3">{back}</div>
-        <ErrorState error={q.error} onRetry={() => void q.refetch()} />
+        <ErrorState error={q.error} onRetry={() => void q.refetch()} titleAs="h1" />
       </div>
     );
   return (
@@ -334,7 +335,7 @@ function Reports({ ladder: l }: { ladder: LadderDetail }) {
               // the title link covers the row
               <li key={r.id} className="group relative -mx-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 rounded-lg px-2 py-2.5 transition-colors duration-150 ease-brand hover:bg-surface-2/60">
                 <span className="flex min-w-0 items-center gap-3">
-                  <StageGlyph stage={r.stage} size="sm" />
+                  <StageGlyph stage={r.stage} size="sm" report={r} />
                   <Link to={paths.report(org.id, r.id)} className="min-w-0 text-sm font-medium text-ink transition-colors duration-150 ease-brand after:absolute after:inset-0 after:rounded-lg group-hover:text-accent-text">
                     {r.title}
                   </Link>

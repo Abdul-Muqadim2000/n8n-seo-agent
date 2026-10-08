@@ -12,8 +12,12 @@ const control = cn(
   'disabled:cursor-not-allowed disabled:border-line disabled:bg-surface-2 disabled:text-ink-3 disabled:shadow-none',
 );
 
+// a file picker: the native "Choose file" button becomes a quiet segment at the left edge of the field
+const filePicker =
+  'cursor-pointer pl-0 text-ink-2 file:mr-3 file:h-full file:cursor-pointer file:border-0 file:border-r file:border-solid file:border-line-strong file:bg-surface-2 file:px-3 file:text-[13px] file:font-medium file:text-ink file:transition-colors file:duration-150 hover:file:bg-surface-3';
+
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(function Input({ className, ...rest }, ref) {
-  return <input ref={ref} className={cn(control, 'h-9', className)} {...rest} />;
+  return <input ref={ref} className={cn(control, 'h-9', rest.type === 'file' && filePicker, className)} {...rest} />;
 });
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(function Textarea({ className, rows = 4, ...rest }, ref) {
@@ -57,6 +61,7 @@ export function Field({
   error,
   optional,
   className,
+  labelAction,
   children,
 }: {
   label?: ReactNode;
@@ -64,6 +69,8 @@ export function Field({
   error?: string;
   optional?: boolean;
   className?: string;
+  /** a link or button on the label's line, outside the <label> (so it never becomes part of the control's name) */
+  labelAction?: ReactNode;
   children: (p: { id: string; 'aria-invalid'?: boolean; 'aria-describedby'?: string }) => ReactNode;
 }) {
   const id = useId();
@@ -71,11 +78,19 @@ export function Field({
   const errId = error ? `${id}-err` : undefined;
   return (
     <div className={className}>
-      {label && (
-        <Label htmlFor={id} optional={optional}>
-          {label}
-        </Label>
-      )}
+      {label &&
+        (labelAction ? (
+          <div className="mb-1.5 flex items-baseline justify-between gap-3">
+            <Label htmlFor={id} optional={optional} className="mb-0">
+              {label}
+            </Label>
+            {labelAction}
+          </div>
+        ) : (
+          <Label htmlFor={id} optional={optional}>
+            {label}
+          </Label>
+        ))}
       {children({ id, 'aria-invalid': error ? true : undefined, 'aria-describedby': [hintId, errId].filter(Boolean).join(' ') || undefined })}
       {hint && !error && (
         <p id={hintId} className="mt-1.5 text-[13px] leading-snug text-ink-3">

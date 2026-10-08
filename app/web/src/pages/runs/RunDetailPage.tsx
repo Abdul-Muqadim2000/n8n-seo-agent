@@ -72,7 +72,7 @@ export default function RunDetailPage() {
         <Skeleton className="h-96 w-full" />
       </div>
     );
-  if (q.isError || !run) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load this run" />;
+  if (q.isError || !run) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load this run" titleAs="h1" />;
 
   const info = MODES[run.mode];
   const active = isActive(run.status);
@@ -168,14 +168,14 @@ export default function RunDetailPage() {
                       )}
                     >
                       <span className="relative z-10 ml-px">
-                        <StageGlyph stage={r.stage} size="sm" />
+                        <StageGlyph stage={r.stage} size="sm" report={r} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-baseline justify-between gap-x-2">
-                          <span className="text-sm font-medium text-ink">{r.title || stageLabel(r.stage)}</span>
+                          <span className="text-sm font-medium text-ink">{r.title || stageLabel(r.stage, r)}</span>
                           <span className="text-xs tabular text-ink-3">{fmtDateTime(r.receivedAt)}</span>
                         </span>
-                        <span className="block text-xs text-ink-3">{stageLabel(r.stage)}</span>
+                        <span className="block text-xs text-ink-3">{stageLabel(r.stage, r)}</span>
                         <ReportSummaryLine report={r} className="mt-1" />
                       </span>
                     </button>
@@ -221,11 +221,11 @@ export default function RunDetailPage() {
           <section aria-label="Selected report" className="space-y-4 pt-2">
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6">
               <div className="flex min-w-0 items-center gap-3">
-                <StageGlyph stage={selected.stage} />
+                <StageGlyph stage={selected.stage} report={selected} />
                 <div className="min-w-0">
-                  <h2 className="truncate font-display text-lg font-semibold tracking-[-0.01em] text-ink">{selected.title || stageLabel(selected.stage)}</h2>
+                  <h2 className="truncate font-display text-lg font-semibold tracking-[-0.01em] text-ink">{selected.title || stageLabel(selected.stage, selected)}</h2>
                   <p className="text-[13px] text-ink-3">
-                    {stageLabel(selected.stage)} · {fmtDateTime(selected.receivedAt)}
+                    {stageLabel(selected.stage, selected)} · {fmtDateTime(selected.receivedAt)}
                   </p>
                 </div>
               </div>

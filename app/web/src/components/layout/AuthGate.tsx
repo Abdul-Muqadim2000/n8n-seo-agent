@@ -11,7 +11,7 @@ import { ThemeMenu } from './ThemeMenu';
 export function RequireAuth() {
   const me = useMe();
   const loc = useLocation();
-  if (me.isPending) return <PageLoader />;
+  if (me.isPending) return <PageLoader fullPage />;
   if (!me.data) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
   return <Outlet />;
 }
@@ -20,7 +20,7 @@ export function RequireAuth() {
 export function PublicOnly() {
   const me = useMe();
   const loc = useLocation();
-  if (me.isPending) return <PageLoader />;
+  if (me.isPending) return <PageLoader fullPage />;
   if (me.data) {
     return <Navigate to={safeNext(new URLSearchParams(loc.search).get('next')) ?? '/'} replace />;
   }

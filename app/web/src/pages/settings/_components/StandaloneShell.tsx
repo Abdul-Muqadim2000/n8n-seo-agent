@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { ArrowLeft } from 'lucide-react';
-import { Brand } from '@/components/layout/Brand';
+import { Brand, pageTitle } from '@/components/layout/Brand';
 import { ThemeMenu } from '@/components/layout/ThemeMenu';
+import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
 import { PageHeader } from '@/components/ui/misc';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +23,7 @@ export function StandaloneShell({
 }) {
   const navigate = useNavigate();
   const loc = useLocation();
+  useDocumentTitle(typeof title === 'string' ? pageTitle(title) : null);
   // the first page of the tab has the key "default": nothing to go back to inside the app
   const back = () => (loc.key !== 'default' ? navigate(-1) : navigate('/'));
   return (

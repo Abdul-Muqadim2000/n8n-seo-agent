@@ -43,6 +43,7 @@ export default function ToolFormPage() {
   if (!isModeId(mode))
     return (
       <EmptyState
+        titleAs="h1"
         icon={<Wand2 className="size-5" />}
         title="This tool does not exist"
         description="The link may be out of date."

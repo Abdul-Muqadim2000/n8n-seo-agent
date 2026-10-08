@@ -26,7 +26,7 @@ export default function ReportPage() {
         <Skeleton className="h-56 w-full" />
       </div>
     );
-  if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load this report" />;
+  if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load this report" titleAs="h1" />;
 
   const r = q.data;
   return (
@@ -35,11 +35,11 @@ export default function ReportPage() {
         <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden /> All reports
       </Link>
       <PageHeader
-        eyebrow={stageLabel(r.stage)}
+        eyebrow={stageLabel(r.stage, r)}
         title={
           <span className="flex items-center gap-3">
-            <StageGlyph stage={r.stage} />
-            <span className="min-w-0">{r.title || stageLabel(r.stage)}</span>
+            <StageGlyph stage={r.stage} report={r} />
+            <span className="min-w-0">{r.title || stageLabel(r.stage, r)}</span>
           </span>
         }
         description={

@@ -21,7 +21,7 @@ import { StandaloneShell } from './_components/StandaloneShell';
 
 export default function AccountPage() {
   const me = useMe();
-  if (!me.data) return <PageLoader />;
+  if (!me.data) return <PageLoader fullPage />;
   return (
     <StandaloneShell title="Your account" description="Your name, e-mail, sign-in methods and companies.">
       <Card className="px-5 sm:px-7">
@@ -216,9 +216,14 @@ function CompaniesSection({ me }: { me: Me }) {
             <li key={o.id} className="first:*:rounded-t-[13px] last:*:rounded-b-[13px]">
               <Link to={paths.org(o.id)} className="group flex items-center gap-3 px-4 py-3 transition-colors duration-150 ease-brand hover:bg-surface-2">
                 <Building2 className="size-4 shrink-0 text-ink-3" aria-hidden />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{o.name}</span>
-                {!o.onboardedAt && <Badge tone="warning">Setup not finished</Badge>}
-                <Badge>{ROLE_LABELS[o.role]}</Badge>
+                {/* the name keeps its room: the badges wrap under it in a narrow column instead of truncating it */}
+                <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <span className="min-w-0 max-w-full truncate text-sm font-medium text-ink">{o.name}</span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {!o.onboardedAt && <Badge tone="warning">Setup not finished</Badge>}
+                    <Badge>{ROLE_LABELS[o.role]}</Badge>
+                  </span>
+                </span>
                 <ChevronRight className="size-4 shrink-0 text-ink-3 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
               </Link>
             </li>

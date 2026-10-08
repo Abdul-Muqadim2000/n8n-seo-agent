@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { AlertOctagon, AlertTriangle, CheckCircle2, Info, Loader2, RefreshCw } from 'lucide-react';
 import { errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -13,11 +13,34 @@ export function Spinner({ className, label }: { className?: string; label?: stri
   );
 }
 
-/** Full-area loader: the Ascentra mark (blue on light, white on dark) breathing gently; fades in after 150ms so quick loads never flash. */
-export function PageLoader({ label = 'Loading…' }: { label?: string }) {
+// Start-up shows several loaders in a row (route chunk → sign-in check → company shell), each a new element. A loader that replaces
+// another within 400ms continues its fade and breathing instead of starting over, so the mark never blinks out and back in.
+const loaderChain = { start: 0, goneAt: -Infinity };
+const LOADER_DELAY = 150;
+
+/**
+ * Full-area loader: the Ascentra mark (blue on light, white on dark) breathing gently; fades in after 150ms so quick loads never flash.
+ * `fullPage` centres it in the whole window (app start, sign-in check, the company shell) instead of the content area.
+ */
+export function PageLoader({ label = 'Loading…', fullPage }: { label?: string; fullPage?: boolean }) {
+  const [elapsed] = useState(() => {
+    const now = performance.now();
+    if (now - loaderChain.goneAt > 400) loaderChain.start = now;
+    return Math.round(now - loaderChain.start);
+  });
+  useEffect(
+    () => () => {
+      loaderChain.goneAt = performance.now();
+    },
+    [],
+  );
   return (
-    <div className="flex min-h-[40vh] animate-fade-in flex-col items-center justify-center gap-4 [animation-delay:150ms]" role="status">
-      <span className="block w-12 animate-pulse" aria-hidden>
+    <div
+      className={cn('flex animate-fade-in flex-col items-center justify-center gap-4', fullPage ? 'min-h-dvh bg-page pb-[8vh]' : 'min-h-[40vh]')}
+      style={{ animationDelay: `${LOADER_DELAY - elapsed}ms` }}
+      role="status"
+    >
+      <span className="block w-12 animate-pulse" style={{ animationDelay: `${-elapsed}ms` }} aria-hidden>
         <img src="/brand/ascentra-mark-blue.svg" alt="" width={48} height={42} className="block h-auto w-full dark:hidden" />
         <img src="/brand/ascentra-mark-white.svg" alt="" width={48} height={42} className="hidden h-auto w-full dark:block" />
       </span>
@@ -43,6 +66,7 @@ export function EmptyState({
   action,
   className,
   tone = 'accent',
+  titleAs: Title = 'h3',
 }: {
   icon?: ReactNode;
   title: ReactNode;
@@ -51,11 +75,13 @@ export function EmptyState({
   className?: string;
   /** colour of the icon tile; `critical` for errors */
   tone?: keyof typeof emptyTone;
+  /** heading level; `h1` when the empty state is the whole page (not found, not verified yet) */
+  titleAs?: 'h1' | 'h2' | 'h3';
 }) {
   return (
     <div className={cn('flex animate-fade-in flex-col items-center justify-center px-6 py-12 text-center', className)}>
       {icon && <div className={cn('mb-4 flex size-11 items-center justify-center rounded-xl', emptyTone[tone])}>{icon}</div>}
-      <h3 className="font-display text-base font-semibold tracking-[-0.01em] text-ink">{title}</h3>
+      <Title className="font-display text-base font-semibold tracking-[-0.01em] text-ink">{title}</Title>
       {description && <p className="mt-1.5 max-w-md text-sm leading-relaxed text-ink-2">{description}</p>}
       {action && <div className="mt-5 flex flex-wrap justify-center gap-2">{action}</div>}
     </div>
@@ -86,9 +112,10 @@ export function Callout({ tone = 'info', title, children, action, className }: {
   );
 }
 
-export function ErrorState({ error, onRetry, title = 'Could not load this' }: { error: unknown; onRetry?: () => void; title?: string }) {
+export function ErrorState({ error, onRetry, title = 'Could not load this', titleAs }: { error: unknown; onRetry?: () => void; title?: string; titleAs?: 'h1' | 'h2' | 'h3' }) {
   return (
     <EmptyState
+      titleAs={titleAs}
       tone="critical"
       icon={<AlertTriangle className="size-5" />}
       title={title}

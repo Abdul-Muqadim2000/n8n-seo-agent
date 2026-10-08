@@ -329,10 +329,23 @@ export function BarsChart({
 }
 
 // ---------- sparkline (stat tiles) ----------
-export function Sparkline({ data, dataKey, invert, color = 'var(--series-1)' }: { data: Row[]; dataKey: string; invert?: boolean; color?: string }) {
+export function Sparkline({
+  data,
+  dataKey,
+  invert,
+  color = 'var(--series-1)',
+  size,
+}: {
+  data: Row[];
+  dataKey: string;
+  invert?: boolean;
+  color?: string;
+  /** fixed size in px, for spots that can be hidden (a table column hidden on phones measures 0 and Recharts warns) */
+  size?: { width: number; height: number };
+}) {
   if (data.length < 2) return null;
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ResponsiveContainer width={size?.width ?? '100%'} height={size?.height ?? '100%'}>
       <LineChart data={data} margin={{ top: 4, right: 4, bottom: 4, left: 4 }}>
         <YAxis hide reversed={invert} domain={['dataMin', 'dataMax']} />
         <Line type="monotone" dataKey={dataKey} stroke={color} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />

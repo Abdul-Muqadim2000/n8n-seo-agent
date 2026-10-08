@@ -89,7 +89,7 @@ const STAGE_MODE: Record<string, ModeId> = {
   backlinks: 'backlinks',
 };
 
-export function StageGlyph({ stage, size = 'md' }: { stage: string; size?: 'sm' | 'md' }) {
+export function StageGlyph({ stage, size = 'md', report }: { stage: string; size?: 'sm' | 'md'; /** tells a verdict-only content report apart */ report?: ReportLike }) {
   const box = size === 'sm' ? 'size-7 rounded-md' : 'size-9 rounded-lg';
   const icon = size === 'sm' ? 'size-3.5' : 'size-4';
   if (stage === 'rejected')
@@ -110,10 +110,24 @@ export function StageGlyph({ stage, size = 'md' }: { stage: string; size?: 'sm' 
         <CalendarClock className={icon} aria-hidden />
       </span>
     );
-  return <ModeGlyph mode={STAGE_MODE[stage] ?? 'describe'} size={size} />;
+  return <ModeGlyph mode={report && isVerdictOnly(report) ? 'verdict' : (STAGE_MODE[stage] ?? 'describe')} size={size} />;
 }
 
-export const stageLabel = (stage: string) => STAGE_LABELS[stage] ?? stage.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+type ReportLike = { stage: string; title?: string | null; summary?: Record<string, unknown> | null; files?: { fileName: string }[] };
+
+/** A content report from a verdict run: no page, its title and files say "verdict". */
+export function isVerdictOnly(r: ReportLike): boolean {
+  return r.stage === 'content' && r.summary?.hasPage === false && (/^verdict\b/i.test(r.title ?? '') || !!r.files?.some((f) => /keyword-verdict/i.test(f.fileName)));
+}
+
+/**
+ * What a report is ("Weekly site report", "Keyword verdict" …). Pass the report to tell content reports apart: "Page / keyword report"
+ * is only right when a page was written.
+ */
+export const stageLabel = (stage: string, report?: ReportLike) => {
+  if (report && stage === 'content' && report.summary?.hasPage === false) return isVerdictOnly(report) ? 'Keyword verdict' : 'Keyword report';
+  return STAGE_LABELS[stage] ?? stage.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+};
 export const modeTitle = (mode: string) => (isModeId(mode) ? MODES[mode].title : mode);
 
 /** Page types the engine writes in reports ("Location Page", "Comparison Page", "Guide-style Service Page (…)") mapped to the form's options. */

@@ -45,7 +45,7 @@ export default function PlatformAdminPage() {
     };
   }, [orgs.data]);
 
-  if (!me.data) return <PageLoader />;
+  if (!me.data) return <PageLoader fullPage />;
   if (!isAdmin)
     return (
       <StandaloneShell title="Platform admin">

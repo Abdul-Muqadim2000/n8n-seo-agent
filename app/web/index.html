@@ -13,7 +13,9 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#2E4BFF" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#2E4BFF" />
+    <!-- browser UI colour: brand blue on light, the dark page colour on dark; an explicit theme pick overrides both (theme-init.js, lib/theme.tsx) -->
+    <meta name="theme-color" content="#2E4BFF" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0A0F1F" media="(prefers-color-scheme: dark)" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Ascentra" />
     <meta property="og:title" content="Ascentra — Enterprise-grade autonomous SEO" />

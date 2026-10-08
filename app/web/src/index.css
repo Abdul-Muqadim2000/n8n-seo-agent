@@ -17,6 +17,10 @@
   }
 }
 
+/* `short:` desktop windows with little height (1280x720, laptops with browser chrome): the app sidebar gets denser so the whole
+   navigation fits without scrolling */
+@custom-variant short (@media (min-width: 64rem) and (max-height: 820px));
+
 :root {
   color-scheme: light;
   /* type */

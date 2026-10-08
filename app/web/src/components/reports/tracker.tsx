@@ -405,7 +405,7 @@ function TrackedKeywords({ rows }: { rows: P[] }) {
         const h = (Array.isArray(r.history) ? r.history : []).map((v, i) => ({ i, v: typeof v === 'number' && v > 0 ? v : null }));
         return h.some((x) => x.v != null) ? (
           <div className="h-7 w-20">
-            <Sparkline data={h} dataKey="v" invert />
+            <Sparkline data={h} dataKey="v" invert size={{ width: 80, height: 28 }} />
           </div>
         ) : (
           <span className="text-xs text-ink-3">not ranking</span>

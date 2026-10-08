@@ -151,7 +151,7 @@ export function ExternalLink({ href, children, className }: { href: string; chil
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className={cn('break-all text-accent-text decoration-accent-text/40 underline-offset-2 transition-colors duration-150 hover:underline hover:decoration-accent-text', className)}
+      className={cn('text-accent-text [overflow-wrap:anywhere] decoration-accent-text/40 underline-offset-2 transition-colors duration-150 hover:underline hover:decoration-accent-text', className)}
     >
       {children ?? href}
     </a>

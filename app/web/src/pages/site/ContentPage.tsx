@@ -18,6 +18,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { DataGate, FilterChips, SrOnly, KpiGrid, Kind, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { countBy, daysSince, plural, urlPath } from './_components/format';
 import { FileLinks } from './_components/reports';
+import { verdictLabel } from '@/components/reports/kit';
 
 export default function ContentPage() {
   const { org, site } = useSitePage();
@@ -539,14 +540,14 @@ function GeneratedTable({ reports, orgId }: { reports: Report[]; orgId: string }
       header: 'Page',
       sortValue: (r) => r.title,
       cell: (r) => (
-        <Link to={paths.report(orgId, r.id)} className="font-medium text-ink hover:text-accent-text transition-colors duration-150 ease-brand">
+        <Link to={paths.report(orgId, r.id)} className="block min-w-[9rem] font-medium text-ink transition-colors duration-150 ease-brand hover:text-accent-text">
           {s(r.summary.keyword) || r.title}
         </Link>
       ),
     },
-    { key: 'verdict', header: 'Verdict', sortValue: (r) => s(r.summary.verdict), cell: (r) => (s(r.summary.verdict) ? <StatusBadge tone={verdictTone(s(r.summary.verdict))}>{s(r.summary.verdict).replace(/_/g, ' ')}</StatusBadge> : '–') },
+    { key: 'verdict', header: 'Verdict', sortValue: (r) => s(r.summary.verdict), cell: (r) => (s(r.summary.verdict) ? <StatusBadge tone={verdictTone(s(r.summary.verdict))}>{verdictLabel(s(r.summary.verdict))}</StatusBadge> : '–') },
     { key: 'score', header: 'Score', align: 'right', sortValue: (r) => n(r.summary.score), cell: (r) => n(r.summary.score) ?? '–' },
-    { key: 'page', header: 'Page type', hideOnMobile: true, sortValue: (r) => s(r.summary.page), cell: (r) => (s(r.summary.page) ? <Kind>{s(r.summary.page)}</Kind> : '–') },
+    { key: 'page', header: 'Page type', hideOnMobile: true, sortValue: (r) => s(r.summary.page), cell: (r) => (s(r.summary.page) ? <Kind className="h-auto max-w-[18rem] whitespace-normal py-0.5 leading-snug">{s(r.summary.page)}</Kind> : '–') },
     { key: 'kind', header: 'Contains', hideOnMobile: true, cell: (r) => <span className="text-[13px] text-ink-2">{r.summary.hasPage ? 'Report + page' : 'Keyword report'}</span> },
     { key: 'receivedAt', header: 'Delivered', sortValue: (r) => r.receivedAt, cell: (r) => <span className="text-[13px] text-ink-3" title={fmtDate(r.receivedAt)}>{fmtAgo(r.receivedAt)}</span> },
     { key: 'files', header: 'Downloads', cell: (r) => <FileLinks orgId={orgId} files={r.files} /> },

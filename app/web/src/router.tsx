@@ -1,4 +1,6 @@
-import { createBrowserRouter, Navigate, type LoaderFunctionArgs, type RouteObject } from 'react-router';
+import { createBrowserRouter, isRouteErrorResponse, Navigate, useRouteError, type LoaderFunctionArgs, type RouteObject } from 'react-router';
+import { pageTitle } from '@/components/layout/Brand';
+import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
 import { RouteError } from '@/components/layout/RouteError';
 import { PageLoader } from '@/components/ui/feedback';
 import { AuthLayout, PublicOnly, RequireAuth } from '@/components/layout/AuthGate';
@@ -33,13 +35,27 @@ const slugGuard = (exists: (slug: string | undefined) => Promise<boolean>) => as
   return null;
 };
 
+// A slug page with its own error boundary, both loaded on demand (app pages never load marketing code): an unknown slug's 404 renders
+// inside the marketing layout (header and footer stay); any other error goes on to the app's error page.
+const slugPage = (load: () => Promise<{ default: React.ComponentType }>) => async () => {
+  const [{ default: Component }, { MarketingNotFound }] = await Promise.all([load(), import('@/marketing/components')]);
+  function ErrorBoundary() {
+    const err = useRouteError();
+    const notFound = isRouteErrorResponse(err) && err.status === 404;
+    useDocumentTitle(notFound ? pageTitle('Page not found') : null);
+    if (!notFound) throw err;
+    return <MarketingNotFound />;
+  }
+  return { Component, ErrorBoundary };
+};
+
 // Public marketing pages (no sign-in), inside the marketing layout. Content lives in src/marketing/content.
 const marketingPages: RouteObject[] = [
   { path: '/platform', lazy: page(() => import('@/marketing/pages/PlatformPage')) },
-  { path: '/platform/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/features')).featureBySlug(slug)), lazy: page(() => import('@/marketing/pages/FeaturePage')) },
+  { path: '/platform/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/features')).featureBySlug(slug)), lazy: slugPage(() => import('@/marketing/pages/FeaturePage')) },
   { path: '/how-it-works', lazy: page(() => import('@/marketing/pages/HowItWorksPage')) },
   { path: '/solutions', lazy: page(() => import('@/marketing/pages/SolutionsPage')) },
-  { path: '/solutions/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/solutions')).solutionBySlug(slug)), lazy: page(() => import('@/marketing/pages/SolutionPage')) },
+  { path: '/solutions/:slug', loader: slugGuard(async (slug) => !!(await import('@/marketing/content/solutions')).solutionBySlug(slug)), lazy: slugPage(() => import('@/marketing/pages/SolutionPage')) },
   { path: '/pricing', lazy: page(() => import('@/marketing/pages/PricingPage')) },
   { path: '/security', lazy: page(() => import('@/marketing/pages/SecurityPage')) },
   { path: '/about', lazy: page(() => import('@/marketing/pages/AboutPage')) },
@@ -53,7 +69,7 @@ export const router = createBrowserRouter([
   {
     errorElement: <RouteError />,
     // shown while the first lazy page module loads
-    hydrateFallbackElement: <PageLoader />,
+    hydrateFallbackElement: <PageLoader fullPage />,
     children: [
       {
         element: <PublicOnly />,

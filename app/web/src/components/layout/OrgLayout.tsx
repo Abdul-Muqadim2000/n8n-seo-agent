@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentType, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode, type RefObject } from 'react';
 import { Link, Navigate, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router';
 import {
   Activity,
@@ -43,7 +43,7 @@ import { useDocumentTitle, useScrolled } from './useDocumentTitle';
 type IconType = ComponentType<{ className?: string }>;
 
 /** The website pages in the sidebar (path segment under /o/:orgId/sites/:siteId/). */
-const SITE_NAV: { to: string; label: string; icon: IconType }[] = [
+export const SITE_NAV: { to: string; label: string; icon: IconType }[] = [
   { to: 'overview', label: 'Overview', icon: LayoutDashboard },
   { to: 'pipeline', label: 'Pipeline', icon: Workflow },
   { to: 'recommendations', label: 'Recommendations', icon: Lightbulb },
@@ -89,8 +89,34 @@ export function OrgLayout() {
   const loc = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const scrolled = useScrolled();
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLElement>(null);
 
   useEffect(() => setMobileOpen(false), [loc.pathname]);
+  // the drawer only exists below lg: widening the window closes it (the page behind would otherwise stay inert)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const onChange = () => mq.matches && setMobileOpen(false);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  // focus moves into the drawer when it opens (retried for a few frames: the drawer becomes visible with the next style update)
+  // and back to the menu button when it closes
+  useEffect(() => {
+    if (!mobileOpen) {
+      if (drawer.current?.contains(document.activeElement)) menuButton.current?.focus();
+      return;
+    }
+    let frame = 0;
+    let tries = 0;
+    const focusIn = () => {
+      const close = drawer.current?.querySelector<HTMLElement>('[data-drawer-close]');
+      close?.focus();
+      if (close && document.activeElement !== close && tries++ < 10) frame = requestAnimationFrame(focusIn);
+    };
+    focusIn();
+    return () => cancelAnimationFrame(frame);
+  }, [mobileOpen]);
   useEffect(() => {
     if (org.data) rememberOrg(org.data.id);
   }, [org.data]);
@@ -110,7 +136,7 @@ export function OrgLayout() {
   useDocumentTitle(ctx ? shellTitle(loc.pathname, ctx.org, ctx.sites) : null);
 
   if (org.isError) return <ErrorState error={org.error} title="Company not available" />;
-  if (!ctx) return <PageLoader />;
+  if (!ctx) return <PageLoader fullPage />;
 
   return (
     <OrgContext.Provider value={ctx}>
@@ -121,30 +147,39 @@ export function OrgLayout() {
             'sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b bg-surface/90 px-4 backdrop-blur-md transition-[border-color,box-shadow] duration-200 ease-brand sm:px-6 lg:hidden',
             scrolled ? 'border-line shadow-card' : 'border-transparent',
           )}
+          inert={mobileOpen || undefined}
         >
           <Brand to={paths.org(orgId)} />
-          <button
-            type="button"
-            onClick={() => setMobileOpen(true)}
-            className="inline-flex size-10 items-center justify-center rounded-lg text-ink-2 transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink"
-            aria-label="Open navigation"
-            aria-expanded={mobileOpen}
-          >
-            <MenuIcon className="size-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <ThemeMenu />
+            <button
+              ref={menuButton}
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="inline-flex size-10 items-center justify-center rounded-lg text-ink-2 transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink active:bg-surface-3"
+              aria-label="Open navigation"
+              aria-expanded={mobileOpen}
+              aria-controls="app-sidebar"
+            >
+              <MenuIcon className="size-5" />
+            </button>
+          </div>
         </div>
         {mobileOpen && <div className="fixed inset-0 z-40 animate-fade-in bg-black/45 lg:hidden" onClick={() => setMobileOpen(false)} aria-hidden />}
         <aside
+          ref={drawer}
+          id="app-sidebar"
           className={cn(
-            'fixed inset-y-0 left-0 z-50 flex w-[288px] max-w-[85vw] flex-col border-r border-line bg-surface shadow-overlay transition-[transform,visibility] duration-200 ease-brand',
+            'fixed inset-y-0 left-0 z-50 flex w-[288px] max-w-[85vw] flex-col border-r border-line bg-surface shadow-overlay transition-[translate,visibility] duration-200 ease-brand',
             'lg:visible lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:w-auto lg:max-w-none lg:translate-x-0 lg:shadow-none',
-            mobileOpen ? 'visible translate-x-0' : 'invisible -translate-x-full',
+            // opening: visible at once (focus moves in right away), then slides; closing: slides, then hides
+            mobileOpen ? 'visible translate-x-0 transition-[translate]' : 'invisible -translate-x-full',
           )}
           aria-label="Sidebar"
         >
           <Sidebar onClose={() => setMobileOpen(false)} />
         </aside>
-        <main className="min-w-0">
+        <main className="min-w-0" inert={mobileOpen || undefined}>
           <div className="mx-auto w-full max-w-[1280px] px-4 pb-12 pt-6 sm:px-6 lg:px-10 lg:pb-16 lg:pt-9">
             <Outlet />
           </div>
@@ -184,13 +219,15 @@ const initials = (name: string) =>
 
 /** A switcher row: small caption, the current value and the up/down chevron. */
 const switcherRow =
-  'group flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors duration-150 ease-brand hover:bg-surface-2 data-[state=open]:bg-surface-2';
+  'group flex w-full items-center gap-2.5 px-3 py-2.5 text-left short:py-2 transition-colors duration-150 ease-brand hover:bg-surface-2 data-[state=open]:bg-surface-2';
 
 function Sidebar({ onClose }: { onClose: () => void }) {
   const { me, org, sites, role, can } = useOrgCtx();
   const site = useCurrentSite(sites, org.id);
   const navigate = useNavigate();
   const logout = useLogout();
+  const nav = useRef<HTMLElement>(null);
+  const moreBelow = useMoreBelow(nav, site?.id);
 
   useEffect(() => {
     if (site) rememberSite(org.id, site.id);
@@ -198,10 +235,11 @@ function Sidebar({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-5">
+      <div className="flex h-16 shrink-0 items-center justify-between gap-2 px-5 short:h-12">
         <Brand to={paths.org(org.id)} />
         <button
           type="button"
+          data-drawer-close
           onClick={onClose}
           className="inline-flex size-9 items-center justify-center rounded-lg text-ink-3 transition-colors duration-150 ease-brand hover:bg-surface-2 hover:text-ink lg:hidden"
           aria-label="Close navigation"
@@ -211,7 +249,7 @@ function Sidebar({ onClose }: { onClose: () => void }) {
       </div>
 
       {/* where you are: company, then website */}
-      <div className="px-3 pb-3">
+      <div className="px-3 pb-3 short:pb-2">
         <div className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface shadow-card">
           <OrgSwitcher />
           <Menu
@@ -254,7 +292,15 @@ function Sidebar({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-3 pb-4 [scrollbar-width:thin]" aria-label="Main">
+      <nav
+        ref={nav}
+        className={cn(
+          'flex-1 overflow-y-auto px-3 pb-4 [scrollbar-width:thin] short:pb-3',
+          // more links below the fold: the last line fades out (a mask, not a colour) as the cue to scroll
+          moreBelow && '[mask-image:linear-gradient(to_bottom,black_calc(100%-24px),transparent)]',
+        )}
+        aria-label="Main"
+      >
         {site && (
           <NavGroup title="Website">
             {SITE_NAV.map((n) => (
@@ -284,10 +330,10 @@ function Sidebar({ onClose }: { onClose: () => void }) {
           )}
         </NavGroup>
         {can('member') && (
-          <div className="mt-4">
+          <div className="mt-4 short:mt-3">
             <Link
               to={paths.tool(org.id, 'keyword', { siteId: site?.id })}
-              className="group flex items-center gap-3 rounded-lg border border-dashed border-line-strong px-3 py-2.5 text-sm font-medium text-ink-2 transition-colors duration-150 ease-brand hover:border-accent hover:bg-accent-soft hover:text-accent-text"
+              className="group flex items-center gap-3 rounded-lg border border-dashed border-line-strong px-3 py-2.5 short:py-2 text-sm font-medium text-ink-2 transition-colors duration-150 ease-brand hover:border-accent hover:bg-accent-soft hover:text-accent-text"
             >
               <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent-text transition-colors duration-150 ease-brand group-hover:bg-accent group-hover:text-accent-ink">
                 <Sparkles className="size-3.5" />
@@ -298,14 +344,14 @@ function Sidebar({ onClose }: { onClose: () => void }) {
         )}
       </nav>
 
-      <div className="flex shrink-0 items-center gap-1 border-t border-line px-3 py-3">
+      <div className="flex shrink-0 items-center gap-1 border-t border-line px-3 py-3 short:py-2">
         <Menu
           align="start"
           className="w-[248px]"
           trigger={
             <button
               type="button"
-              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 ease-brand hover:bg-surface-2 data-[state=open]:bg-surface-2"
+              className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 text-left short:py-1 transition-colors duration-150 ease-brand hover:bg-surface-2 data-[state=open]:bg-surface-2"
               aria-label={`Account menu for ${me.user.name}`}
             >
               <Avatar name={me.user.name} src={me.user.avatarUrl} size={32} />
@@ -333,6 +379,26 @@ function Sidebar({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+/** True while a scroll container has content below its visible part (updates on scroll and on size changes). */
+function useMoreBelow(ref: RefObject<HTMLElement | null>, contentKey: unknown): boolean {
+  const [more, setMore] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const check = () => setMore(el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+    check();
+    el.addEventListener('scroll', check, { passive: true });
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
+    return () => {
+      el.removeEventListener('scroll', check);
+      ro.disconnect();
+    };
+  }, [ref, contentKey]);
+  return more;
 }
 
 function OrgSwitcher() {
@@ -372,8 +438,8 @@ function OrgSwitcher() {
 
 function NavGroup({ title, children }: { title?: string; children: ReactNode }) {
   return (
-    <div className="mt-4 first:mt-1">
-      {title && <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3">{title}</div>}
+    <div className="mt-4 first:mt-1 short:mt-3 short:first:mt-0.5">
+      {title && <div className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-3 short:pb-1">{title}</div>}
       <ul className="space-y-px">{children}</ul>
     </div>
   );
@@ -389,7 +455,7 @@ function NavItem({ to, icon: Icon, children, match }: { to: string; icon: IconTy
           const active = isActive || (match ? loc.pathname.startsWith(match) : false) || (to.endsWith('/settings') && loc.pathname.startsWith(to));
           return cn(
             // the 3px bar on the sidebar's edge marks the current page (with the tint and the colour, never colour alone)
-            'group relative flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-150 ease-brand',
+            'group relative flex items-center gap-3 rounded-md px-3 py-1.5 text-sm transition-colors duration-150 ease-brand short:py-[3px]',
             'before:absolute before:-left-3 before:inset-y-1.5 before:w-[3px] before:rounded-r-full before:bg-accent before:opacity-0 before:transition-opacity before:duration-150',
             active ? 'bg-accent-soft font-medium text-accent-text before:opacity-100' : 'text-ink-2 hover:bg-surface-2 hover:text-ink',
           );

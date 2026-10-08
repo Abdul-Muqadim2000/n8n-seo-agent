@@ -150,11 +150,11 @@ function ReportRow({ report }: { report: Report }) {
     // the title link covers the row; the run link and the file links sit above it
     <div className="group relative flex flex-col gap-3 px-4 py-3.5 transition-colors duration-150 ease-brand hover:bg-surface-2/60 sm:flex-row sm:items-start">
       <div className="flex min-w-0 flex-1 gap-3">
-        <StageGlyph stage={report.stage} />
+        <StageGlyph stage={report.stage} report={report} />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <Link to={to} className="truncate font-medium text-ink transition-colors duration-150 ease-brand after:absolute after:inset-0 group-hover:text-accent-text">
-              {report.title || stageLabel(report.stage)}
+              {report.title || stageLabel(report.stage, report)}
             </Link>
             {report.scheduled && (
               <Badge icon={<CalendarClock className="size-3" aria-hidden />} tone="accent">
@@ -163,7 +163,7 @@ function ReportRow({ report }: { report: Report }) {
             )}
           </div>
           <p className="mt-0.5 text-xs text-ink-3">
-            {stageLabel(report.stage)}
+            {stageLabel(report.stage, report)}
             {report.siteDomain && ` · ${report.siteDomain}`}
             <span title={fmtDateTime(report.receivedAt)}> · {fmtAgo(report.receivedAt)}</span>
             {report.runId && (
