@@ -1,14 +1,27 @@
-import { ButtonLink } from '@/components/ui/button';
+import { useNavigate } from 'react-router';
+import { ArrowLeft, Compass } from 'lucide-react';
+import { StatusScreen } from '@/components/layout/StatusScreen';
+import { Button, ButtonLink } from '@/components/ui/button';
 
 export default function NotFoundPage() {
+  const navigate = useNavigate();
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-page px-6 text-center">
-      <p className="text-sm font-medium text-accent-text">404</p>
-      <h1 className="text-2xl font-semibold text-ink">Page not found</h1>
-      <p className="max-w-md text-sm text-ink-3">The page you opened does not exist or was moved.</p>
-      <ButtonLink to="/" className="mt-3">
-        Go to the dashboard
-      </ButtonLink>
-    </div>
+    <StatusScreen
+      code="404"
+      icon={<Compass className="size-5" />}
+      title="Page not found"
+      actions={
+        <>
+          <ButtonLink to="/" size="lg">
+            Back to home
+          </ButtonLink>
+          <Button variant="secondary" size="lg" icon={<ArrowLeft className="size-4" />} onClick={() => navigate(-1)}>
+            Go back
+          </Button>
+        </>
+      }
+    >
+      <p>The page you opened does not exist or was moved. Check the address, or start again from the home page.</p>
+    </StatusScreen>
   );
 }

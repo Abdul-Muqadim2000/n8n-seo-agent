@@ -32,8 +32,10 @@ export default function AcceptInvitePage() {
       title={`Join ${i.orgName}`}
       subtitle={`${i.inviterName ?? 'A teammate'} invited ${i.email} to the company as ${ROLE_LABELS[i.role].toLowerCase()}.`}
     >
-      <div className="mb-6 flex items-center gap-3 rounded-xl bg-surface-2 p-4">
-        <Building2 className="size-5 text-ink-3" />
+      <div className="mb-6 flex items-center gap-3 rounded-lg border border-line bg-surface-2 p-4">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink-3 shadow-card" aria-hidden>
+          <Building2 className="size-5" />
+        </span>
         <div className="text-sm">
           <div className="font-medium text-ink">{i.orgName}</div>
           <div className="text-ink-3">Role: {ROLE_LABELS[i.role]}</div>
