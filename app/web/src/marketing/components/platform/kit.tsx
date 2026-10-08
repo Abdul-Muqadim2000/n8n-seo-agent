@@ -22,7 +22,7 @@ export function ArrowLink({ to, children, className }: { to: string; children: R
     <Link
       to={to}
       className={cn(
-        'group inline-flex items-center gap-1.5 text-[15px] font-medium transition-colors duration-150 ease-brand',
+        'mk-tap group inline-flex items-center gap-1.5 text-[15px] font-medium transition-colors duration-150 ease-brand',
         ink ? 'text-accent-on-ink hover:text-on-ink' : 'text-accent-text hover:text-accent-hover',
         className,
       )}
@@ -57,7 +57,7 @@ export function Breadcrumbs({ items, className }: { items: { label: string; to: 
     <nav aria-label="Breadcrumb" className={cn('animate-fade-up', className)}>
       <ol className="flex flex-wrap items-center gap-1.5 text-[13px] text-ink-3">
         <li>
-          <Link to="/" className="rounded-sm transition-colors duration-150 ease-brand hover:text-ink">
+          <Link to="/" className="mk-tap rounded-sm transition-colors duration-150 ease-brand hover:text-ink">
             Home
           </Link>
         </li>
@@ -71,7 +71,7 @@ export function Breadcrumbs({ items, className }: { items: { label: string; to: 
                   {it.label}
                 </span>
               ) : (
-                <Link to={it.to} className="rounded-sm transition-colors duration-150 ease-brand hover:text-ink">
+                <Link to={it.to} className="mk-tap rounded-sm transition-colors duration-150 ease-brand hover:text-ink">
                   {it.label}
                 </Link>
               )}

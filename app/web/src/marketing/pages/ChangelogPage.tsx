@@ -50,7 +50,7 @@ function CopyLink({ anchor, title }: { anchor: string; title: string }) {
         onClick={copy}
         aria-label={`Copy link to “${title}”`}
         className={cn(
-          'inline-flex size-7 items-center justify-center rounded-md text-ink-3 transition-[opacity,color,background-color] duration-150 ease-brand hover:bg-surface-2 hover:text-ink',
+          'mk-tap inline-flex size-7 items-center justify-center rounded-md text-ink-3 transition-[opacity,color,background-color] duration-150 ease-brand hover:bg-surface-2 hover:text-ink',
           'opacity-0 focus-visible:opacity-100 group-hover/entry:opacity-100 [@media(hover:none)]:opacity-100',
           done && 'text-good-text opacity-100',
         )}
@@ -77,7 +77,7 @@ function Chip({ active, onClick, children, count, size = 'md' }: { active: boole
       onClick={onClick}
       className={cn(
         'inline-flex shrink-0 items-center gap-1.5 rounded-full border font-medium transition-[background-color,border-color,color] duration-150 ease-brand',
-        size === 'sm' ? 'h-7 px-2.5 text-[12px]' : 'h-8 px-3.5 text-[13px]',
+        size === 'sm' ? 'mk-tap h-7 px-2.5 text-[12px]' : 'h-10 px-3.5 text-[13px] lg:h-8',
         active ? 'border-ink bg-ink text-page' : 'border-line bg-surface text-ink-2 hover:border-line-strong hover:text-ink',
       )}
     >

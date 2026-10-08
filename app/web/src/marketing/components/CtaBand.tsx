@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { ButtonLink } from '@/components/ui/button';
+import { useMe } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { Reveal } from './Reveal';
 import { Container } from './Section';
@@ -13,7 +14,7 @@ export function CtaBand({
   title = 'Put your SEO on a weekly loop.',
   lead = 'Connect a website in minutes. Ascentra shows the cost of every run before it starts, and nothing is published without your team.',
   primary = { label: 'Start free', to: '/signup' },
-  secondary = { label: 'Talk to sales', to: '/contact' },
+  secondary = { label: 'Talk to sales', to: '/contact?topic=sales' },
   className,
   children,
 }: {
@@ -24,6 +25,10 @@ export function CtaBand({
   className?: string;
   children?: ReactNode;
 }) {
+  // signed-in visitors (reading the site from the app) get "Open app" instead of a sign-up they do not need
+  const signedIn = !!useMe().data;
+  const main = signedIn && primary.to.startsWith('/signup') ? { label: 'Open app', to: '/' } : primary;
+  const second = signedIn && secondary?.to.startsWith('/signup') ? null : secondary;
   return (
     <section className={cn('bg-page pb-20 pt-4 sm:pb-28', className)}>
       <Container size="lg">
@@ -37,13 +42,13 @@ export function CtaBand({
             <h2 className="font-display text-[2rem] font-semibold leading-[1.1] tracking-[-0.01em] text-balance text-on-ink sm:text-[2.75rem]">{title}</h2>
             {lead && <p className="mt-5 max-w-xl text-base leading-relaxed text-on-ink-2 sm:text-lg">{lead}</p>}
             <div className="mt-9 flex flex-wrap gap-3">
-              <ButtonLink to={primary.to} size="lg" className="group">
-                {primary.label}
+              <ButtonLink to={main.to} size="lg" className="group">
+                {main.label}
                 <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
               </ButtonLink>
-              {secondary && (
-                <ButtonLink to={secondary.to} size="lg" variant="ghost" className={onInkOutline}>
-                  {secondary.label}
+              {second && (
+                <ButtonLink to={second.to} size="lg" variant="ghost" className={onInkOutline}>
+                  {second.label}
                 </ButtonLink>
               )}
             </div>

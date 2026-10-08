@@ -1,12 +1,14 @@
 import { Link } from 'react-router';
 import { ArrowRight } from 'lucide-react';
-import { ThemeMenu } from '@/components/layout/ThemeMenu';
+import { useMe } from '@/lib/queries';
 import { footerNav, site } from '../content/site';
 import { Logo } from './Logo';
 import { Container } from './Section';
+import { ThemeSegmented } from './ThemeSwitch';
 
 /** Big site footer: logo + descriptor, link columns (Platform / Solutions / Company / Legal), copyright and the theme switch. */
 export function SiteFooter() {
+  const signedIn = !!useMe().data;
   return (
     <footer className="border-t border-line bg-surface">
       <Container className="pb-10 pt-16 sm:pt-20">
@@ -19,8 +21,8 @@ export function SiteFooter() {
             <p className="mt-2 text-[14px] leading-relaxed text-ink-2">
               Research, content, technical audits, AI search visibility and backlinks — one weekly loop for every website you run.
             </p>
-            <Link to="/signup" className="group mt-6 inline-flex items-center gap-1.5 text-[14px] font-medium text-accent-text">
-              Start free
+            <Link to={signedIn ? '/' : '/signup'} className="group mt-6 inline-flex min-h-10 items-center gap-1.5 text-[14px] font-medium text-accent-text hover:text-accent-hover sm:min-h-0">
+              {signedIn ? 'Open app' : 'Start free'}
               <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
             </Link>
           </div>
@@ -28,10 +30,11 @@ export function SiteFooter() {
             {footerNav.map((col) => (
               <nav key={col.title} aria-label={col.title}>
                 <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">{col.title}</p>
-                <ul className="mt-4 space-y-2.5">
+                <ul className="mt-3 sm:mt-4 sm:space-y-2.5">
                   {col.links.map((l) => (
                     <li key={l.to}>
-                      <Link to={l.to} className="text-[14px] text-ink-2 transition-colors duration-150 ease-brand hover:text-ink">
+                      {/* 40px tall rows on phones (tap targets), the compact list from sm up */}
+                      <Link to={l.to} className="flex min-h-10 items-center text-[14px] text-ink-2 transition-colors duration-150 ease-brand hover:text-ink sm:inline sm:min-h-0">
                         {l.label}
                       </Link>
                     </li>
@@ -41,17 +44,18 @@ export function SiteFooter() {
             ))}
           </div>
         </div>
-        <div className="mt-16 flex flex-col-reverse items-start justify-between gap-4 border-t border-line pt-6 sm:flex-row sm:items-center">
-          <p className="text-[13px] text-ink-3">{site.copyright}</p>
-          <div className="flex items-center gap-4 text-[13px]">
-            <Link to="/login" className="text-ink-2 hover:text-ink">
-              Sign in
+        {/* phones: links on top, then copyright and the theme switch on one row; from sm: copyright left, links and switch right */}
+        <div className="mt-16 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-t border-line pt-6 sm:flex sm:gap-5">
+          <div className="col-span-2 flex flex-wrap items-center gap-x-5 text-[13px] sm:order-2 sm:ml-auto">
+            <Link to={signedIn ? '/' : '/login'} className="inline-flex min-h-10 items-center text-ink-2 transition-colors duration-150 ease-brand hover:text-ink sm:min-h-0">
+              {signedIn ? 'Open app' : 'Sign in'}
             </Link>
-            <a href={`mailto:${site.salesEmail}`} className="text-ink-2 hover:text-ink">
+            <a href={`mailto:${site.salesEmail}`} className="inline-flex min-h-10 items-center text-ink-2 transition-colors duration-150 ease-brand hover:text-ink sm:min-h-0">
               {site.salesEmail}
             </a>
-            <ThemeMenu />
           </div>
+          <p className="text-[13px] text-ink-3 sm:order-1">{site.copyright}</p>
+          <ThemeSegmented labels="never" className="justify-self-end sm:order-3" />
         </div>
       </Container>
     </footer>

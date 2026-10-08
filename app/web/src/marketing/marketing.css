@@ -1,6 +1,20 @@
 /* Marketing-site only (imported by MarketingLayout, so it stays out of the app bundle): reveal states, marquee, diagram motion.
    Colours come from the tokens in src/index.css. Everything is static under prefers-reduced-motion. */
 
+/* ---------- touch targets ---------- */
+/* Small text links and chips (arrow links, breadcrumbs, e-mail addresses, filter chips): a hit area at least 44px tall, centred on the
+   element, without changing the layout. Only for elements that do not use ::after themselves and are not positioned. */
+.mk-tap {
+  position: relative;
+}
+.mk-tap::after {
+  content: '';
+  position: absolute;
+  inset: 50% -4px auto;
+  height: max(100%, 44px);
+  transform: translateY(-50%);
+}
+
 /* ---------- reveal on scroll ---------- */
 .mk-reveal {
   opacity: 0;
@@ -209,6 +223,10 @@
     opacity: 1;
     transform: none;
     transition: none;
+  }
+  .mk-menu-panel,
+  .mk-sheet {
+    animation: none;
   }
   .mk-draw {
     stroke-dashoffset: 0;

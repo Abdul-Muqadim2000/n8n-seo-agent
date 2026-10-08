@@ -27,7 +27,8 @@ import { pricingTiers } from '../content/pricing';
 import { solutions } from '../content/solutions';
 import { useSeo } from '../useSeo';
 
-const HERO_FACTS = ['Search Console and GA4', '6 AI engines', '9 link sources', 'Cost shown before every run'];
+// next to the main CTA: what removes the risk of trying it (facts from pricing.ts and the product), then the reach
+const HERO_FACTS = ['Free to set up', 'Cost shown before every run', 'Nothing published without your team', 'Search Console, GA4 and 6 AI engines'];
 
 const PROBLEMS: { today: string; outcome: string }[] = [
   {
@@ -92,7 +93,7 @@ function ArrowLink({ to, children, onInk, className }: { to: string; children: R
     <Link
       to={to}
       className={cn(
-        'group inline-flex items-center gap-1.5 text-[15px] font-medium transition-colors duration-150 ease-brand',
+        'mk-tap group inline-flex items-center gap-1.5 text-[15px] font-medium transition-colors duration-150 ease-brand',
         onInk ? 'text-accent-on-ink hover:text-on-ink' : 'text-accent-text hover:text-accent-hover',
         className,
       )}
@@ -131,7 +132,7 @@ function Hero() {
           <div className="animate-fade-up" style={{ animationDelay: '0ms' }}>
             <Link
               to="/platform/ai-visibility"
-              className="group inline-flex max-w-full items-center gap-2.5 rounded-full border border-line bg-surface py-1 pl-1 pr-3.5 text-[13px] text-ink-2 shadow-card transition-[border-color,color] duration-200 ease-brand hover:border-accent hover:text-ink"
+              className="mk-tap group inline-flex max-w-full items-center gap-2.5 rounded-full border border-line bg-surface py-1 pl-1 pr-3.5 text-[13px] text-ink-2 shadow-card transition-[border-color,color] duration-200 ease-brand hover:border-accent hover:text-ink"
             >
               <span className="rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[11px] font-medium uppercase tracking-[0.08em] text-accent-text">New</span>
               <span className="truncate">AI Pulse: daily AI-answer checks that alert only on real changes</span>
@@ -373,6 +374,17 @@ function HowItWorks() {
           </Reveal>
         ))}
       </ol>
+      {/* the long home page gets a second "Start free" where the visitor has just seen how little it takes */}
+      <Reveal className="mt-10 flex flex-col items-start gap-4 rounded-xl border border-line bg-surface p-6 shadow-card sm:flex-row sm:items-center sm:justify-between sm:p-7">
+        <div>
+          <p className="font-display text-lg font-semibold tracking-[-0.01em] text-ink">Step one takes a few minutes.</p>
+          <p className="mt-1 text-[14px] leading-relaxed text-ink-2">Setting up the company and verifying websites is free; every run shows its cost before it starts.</p>
+        </div>
+        <ButtonLink to="/signup" size="lg" className="group w-full shrink-0 sm:w-auto">
+          Start free
+          <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
+        </ButtonLink>
+      </Reveal>
     </Section>
   );
 }
@@ -387,9 +399,12 @@ function EnterpriseBand() {
             title="Built for companies with more than one website."
             lead="Workspaces per company, roles for every person, verified ownership before any data is shown and a budget check before any paid work."
           >
-            <ButtonLink to="/security" variant="secondary" icon={<ShieldCheck className="size-4" aria-hidden />}>
+            <ButtonLink to="/security" variant="secondary" icon={<ShieldCheck className="size-4" aria-hidden />} className="max-sm:h-10">
               Security at Ascentra
             </ButtonLink>
+            <ArrowLink to="/contact?topic=sales" className="h-9">
+              Talk to sales
+            </ArrowLink>
           </SectionHeading>
         </div>
         <ul className="grid gap-px overflow-hidden rounded-xl border border-line bg-line sm:grid-cols-2">
@@ -466,7 +481,7 @@ function PricingTeaser() {
               {t.period && <span className="text-[13px] text-ink-3">{t.period}</span>}
             </p>
             <p className="mt-2 flex-1 text-[14px] leading-relaxed text-ink-2">{t.description}</p>
-            <ButtonLink to={t.cta.to} variant={t.highlighted ? 'primary' : 'secondary'} className="mt-6 w-full">
+            <ButtonLink to={t.cta.to} variant={t.highlighted ? 'primary' : 'secondary'} className="mt-6 w-full max-sm:h-10">
               {t.cta.label}
             </ButtonLink>
           </Reveal>
@@ -500,8 +515,7 @@ function FaqSection() {
 export default function HomePage() {
   useSeo({
     title: 'Enterprise-grade autonomous SEO',
-    description:
-      'Ascentra researches keywords, writes the pages, audits your site and tracks rankings, AI answers and backlinks — every week, with your team approving what matters.',
+    description: 'Ascentra researches keywords, writes pages, audits your site and tracks rankings, AI answers and backlinks every week, with your team approving what matters.',
     path: '/',
   });
   return (

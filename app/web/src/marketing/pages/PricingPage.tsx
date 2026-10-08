@@ -318,7 +318,7 @@ function Comparison({ billing }: { billing: Billing }) {
               <td className="sticky left-0 border-t border-line bg-surface md:static" />
               {pricingTiers.map((t, i) => (
                 <td key={t.id} className={cn('border-t border-line px-3 pb-4 pt-5', i === growth && cn(colTint(i), 'rounded-b-xl'))}>
-                  <ButtonLink to={t.cta.to} size="sm" variant={t.highlighted ? 'primary' : 'secondary'} className="w-full">
+                  <ButtonLink to={t.cta.to} size="sm" variant={t.highlighted ? 'primary' : 'secondary'} className="w-full max-sm:h-10">
                     {t.cta.label}
                   </ButtonLink>
                 </td>

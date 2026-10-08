@@ -144,7 +144,7 @@ function CapabilityNav({ active }: { active: string | null }) {
                     on ? 'text-ink' : 'text-ink-3 hover:text-ink',
                   )}
                 >
-                  <span className={cn('font-mono text-[10.5px] tabular transition-colors duration-150', on ? 'text-accent-text' : 'text-ink-3/70 group-hover:text-accent-text')}>
+                  <span className={cn('font-mono text-[10.5px] tabular transition-colors duration-150', on ? 'text-accent-text' : 'text-ink-3 group-hover:text-accent-text')}>
                     {String(i + 1).padStart(2, '0')}
                   </span>
                   {f.shortName}
@@ -271,7 +271,7 @@ function LoopSection() {
                           e.preventDefault();
                           jumpTo(slug);
                         }}
-                        className="inline-flex h-7 items-center rounded-full border border-line-on-ink px-3 text-[12.5px] text-on-ink-2 transition-colors duration-150 ease-brand hover:border-accent-on-ink hover:text-on-ink"
+                        className="mk-tap inline-flex h-7 items-center rounded-full border border-line-on-ink px-3 text-[12.5px] text-on-ink-2 transition-colors duration-150 ease-brand hover:border-accent-on-ink hover:text-on-ink"
                       >
                         {f.shortName}
                       </a>
@@ -328,8 +328,8 @@ function Integrations() {
 export default function PlatformPage() {
   useSeo({
     title: 'Platform',
-    description:
-      `${CapabilityCount} capabilities that run your SEO as one weekly loop: ${features.map((f) => (/^[A-Z]{2}/.test(f.shortName) ? f.shortName : f.shortName.charAt(0).toLowerCase() + f.shortName.slice(1))).join(', ')}.`,
+    // a summary (search results show ~160 characters); the count follows the registry
+    description: `${CapabilityCount} capabilities, one weekly SEO loop: research, keyword ladders, content, audits, tracking, AI search visibility and backlinks, with your team in control.`,
     path: '/platform',
   });
   const active = useScrollSpy(features.map((f) => f.slug));

@@ -100,7 +100,7 @@ function Toc({ doc, active, className }: { doc: LegalDoc; active: string; classN
               href={`#${s.id}`}
               aria-current={on ? 'location' : undefined}
               className={cn(
-                'relative flex gap-3 rounded-md py-1.5 pl-4 pr-2 text-[13.5px] leading-snug transition-colors duration-150 ease-brand',
+                'relative flex gap-3 rounded-md py-3 pl-4 pr-2 text-[13.5px] leading-snug transition-colors duration-150 ease-brand lg:py-1.5',
                 on ? 'font-medium text-ink' : 'text-ink-3 hover:text-ink',
               )}
             >
@@ -136,7 +136,7 @@ function LegalDocument({ doc }: { doc: LegalDoc }) {
                     to={d.path}
                     className={({ isActive }) =>
                       cn(
-                        'inline-flex h-8 items-center rounded-full px-4 text-[13px] font-medium transition-colors duration-200 ease-brand',
+                        'inline-flex h-10 items-center rounded-full px-4 text-[13px] font-medium transition-colors duration-200 ease-brand sm:h-8',
                         isActive ? 'bg-ink text-page' : 'text-ink-2 hover:text-ink',
                       )
                     }

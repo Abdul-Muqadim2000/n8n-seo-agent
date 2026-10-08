@@ -21,15 +21,32 @@ function setCanonical(href: string) {
   el.setAttribute('href', href);
 }
 
-/** Page title ("<title> — Ascentra"), meta description, Open Graph title / description / url and the canonical link. */
+/** Search results show about 155–160 characters: the whole sentences that fit (when they say enough), else the text cut at a word with "…". */
+export function metaDescription(text: string, max = 160): string {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (t.length <= max) return t;
+  // a sentence ends at "." or "?" followed by a space and a capital (so "4.5", "1,000" and "e.g. this" do not end one)
+  let end = 0;
+  for (const m of t.matchAll(/[.?](?=\s+[A-Z“"(]|$)/g)) {
+    if (m.index + 1 > max) break;
+    end = m.index + 1;
+  }
+  if (end >= 100) return t.slice(0, end);
+  const cut = t.slice(0, max - 1);
+  return `${cut.slice(0, cut.lastIndexOf(' ')).replace(/[\s,;:—–-]+$/, '')}…`;
+}
+
+/** Page title ("<title> — Ascentra"), meta description (clamped to what search results show), Open Graph title / description / url and the
+ *  canonical link. */
 export function useSeo({ title, description, path }: { title: string; description: string; path: string }) {
   useEffect(() => {
     const full = `${title} — ${site.name}`;
     const url = `${window.location.origin}${path}`;
+    const desc = metaDescription(description);
     document.title = full;
-    setMeta('name', 'description', description);
+    setMeta('name', 'description', desc);
     setMeta('property', 'og:title', full);
-    setMeta('property', 'og:description', description);
+    setMeta('property', 'og:description', desc);
     setMeta('property', 'og:url', url);
     setCanonical(url);
   }, [title, description, path]);

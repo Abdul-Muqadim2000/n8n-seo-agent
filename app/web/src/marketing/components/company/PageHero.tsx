@@ -85,7 +85,7 @@ export function PageHero({
 /** Text link with an arrow that nudges on hover (blue on light bands, light blue on ink). Internal paths use the router; mailto / http use <a>. */
 export function ArrowLink({ to, children, onInk, className }: { to: string; children: ReactNode; onInk?: boolean; className?: string }) {
   const cls = cn(
-    'group inline-flex items-center gap-1.5 text-[15px] font-medium transition-colors duration-150 ease-brand',
+    'mk-tap group inline-flex items-center gap-1.5 text-[15px] font-medium transition-colors duration-150 ease-brand',
     onInk ? 'text-accent-on-ink hover:text-on-ink' : 'text-accent-text hover:text-accent-hover',
     className,
   );

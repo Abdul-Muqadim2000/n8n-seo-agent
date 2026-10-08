@@ -48,7 +48,7 @@ function Hero({ feature: f }: { feature: Feature }) {
                 Start free
                 <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-0.5" aria-hidden />
               </ButtonLink>
-              <ButtonLink to="/contact" size="lg" variant="secondary">
+              <ButtonLink to="/contact?topic=sales" size="lg" variant="secondary">
                 Talk to sales
               </ButtonLink>
             </div>

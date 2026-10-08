@@ -222,15 +222,15 @@ export default function ContactPage() {
                     <h2 className="mt-5 font-display text-lg font-semibold tracking-[-0.01em] text-ink">{o.title}</h2>
                     <p className="mt-2 flex-1 text-[14px] leading-relaxed text-ink-2">{o.body}</p>
                     <div className="mt-5 flex min-w-0 items-center gap-2 rounded-lg border border-line bg-page py-1.5 pl-3 pr-1.5">
-                      <a href={`mailto:${email}`} className="min-w-0 flex-1 truncate font-mono text-[12.5px] text-ink-2 transition-colors duration-150 ease-brand hover:text-accent-text">
+                      <a href={`mailto:${email}`} className="mk-tap min-w-0 flex-1 truncate font-mono text-[12.5px] text-ink-2 transition-colors duration-150 ease-brand hover:text-accent-text">
                         {email}
                       </a>
-                      <CopyButton text={email} label="Copy" />
+                      <CopyButton text={email} label="Copy" className="max-sm:h-10 max-sm:px-3" />
                     </div>
                     <button
                       type="button"
                       onClick={() => pick(o.topic)}
-                      className="mt-5 inline-flex items-center gap-1.5 self-start text-[14px] font-medium text-accent-text transition-colors duration-150 ease-brand hover:text-accent-hover"
+                      className="mk-tap mt-5 inline-flex items-center gap-1.5 self-start text-[14px] font-medium text-accent-text transition-colors duration-150 ease-brand hover:text-accent-hover"
                     >
                       {o.cta}
                       <ArrowRight className="size-4 transition-transform duration-200 ease-brand group-hover:translate-x-1" aria-hidden />

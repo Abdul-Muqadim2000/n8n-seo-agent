@@ -12,6 +12,7 @@ import { LOOP_STEPS } from './diagrams/GrowthLoopDiagram';
 import { IconTile } from './FeatureCard';
 import { Logo } from './Logo';
 import { Container } from './Section';
+import { ThemeMenuButton, ThemeSegmented } from './ThemeSwitch';
 
 type MenuId = 'platform' | 'solutions';
 
@@ -94,10 +95,16 @@ export function SiteHeader() {
   }, [open]);
 
   const cancelClose = () => window.clearTimeout(closeTimer.current);
-  const scheduleClose = useCallback(() => {
-    window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(() => setOpen(null), 140);
-  }, []);
+  const scheduleClose = useCallback(
+    (id: MenuId, item: HTMLElement) => {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = window.setTimeout(() => {
+        // a late or stale leave (e.g. a panel closed by Escape under a resting pointer) must not close a menu the pointer is on
+        if (openRef.current === id && !item.matches(':hover')) setOpen(null);
+      }, 140);
+    },
+    [setOpen],
+  );
   useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   // hover opens on devices with a real pointer; click / Enter / Space toggles everywhere
@@ -108,9 +115,9 @@ export function SiteHeader() {
       if (openRef.current !== id) openedBy.current = 'hover';
       setOpen(id);
     },
-    onPointerLeave: (e: React.PointerEvent) => {
+    onPointerLeave: (e: React.PointerEvent<HTMLElement>) => {
       if (e.pointerType !== 'mouse') return;
-      scheduleClose();
+      scheduleClose(id, e.currentTarget);
     },
   });
   // leaving the menu by keyboard closes it
@@ -242,17 +249,23 @@ export function SiteHeader() {
           </ul>
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <ThemeMenuButton className="hidden lg:inline-flex" onOpen={() => setOpen(null)} />
+          <span aria-hidden className="mr-1 hidden h-5 w-px bg-line lg:block" />
           {signedIn ? (
-            <ButtonLink to="/" size="sm" className="hidden sm:inline-flex">
+            <ButtonLink to="/" size="sm" className="group h-10 px-4 text-[14px] lg:h-9">
               Open app
+              <ArrowRight className="hidden size-3.5 transition-transform duration-200 ease-brand group-hover:translate-x-0.5 sm:block" aria-hidden />
             </ButtonLink>
           ) : (
             <>
-              <Link to="/login" className={cn(navItem, 'hidden sm:inline-flex')}>
+              <Link to="/contact?topic=sales" className={cn(navItem, 'hidden xl:inline-flex')}>
+                Talk to sales
+              </Link>
+              <Link to="/login" className={cn(navItem, 'hidden h-10 sm:inline-flex lg:h-9')}>
                 Sign in
               </Link>
-              <ButtonLink to="/signup" size="sm" className="group">
+              <ButtonLink to="/signup" size="sm" className="group h-10 px-4 text-[14px] lg:h-9">
                 Start free
                 <ArrowRight className="hidden size-3.5 transition-transform duration-200 ease-brand group-hover:translate-x-0.5 sm:block" aria-hidden />
               </ButtonLink>
@@ -282,7 +295,7 @@ function MobileMenu({ open, onOpenChange, signedIn }: { open: boolean; onOpenCha
       <D.Trigger asChild>
         <button
           type="button"
-          className="inline-flex size-9 items-center justify-center rounded-md text-ink-2 transition-colors duration-150 hover:bg-surface-2 hover:text-ink lg:hidden"
+          className="-mr-1.5 inline-flex size-10 items-center justify-center rounded-md text-ink-2 transition-colors duration-150 hover:bg-surface-2 hover:text-ink active:bg-surface-3 lg:hidden"
           aria-label="Open menu"
         >
           <Menu className="size-5" aria-hidden />
@@ -297,7 +310,7 @@ function MobileMenu({ open, onOpenChange, signedIn }: { open: boolean; onOpenCha
             <Link to="/" onClick={close} className="-ml-1 rounded-md p-1" aria-label="Ascentra home">
               <Logo className="h-8" />
             </Link>
-            <D.Close className="inline-flex size-9 items-center justify-center rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink" aria-label="Close menu">
+            <D.Close className="-mr-1.5 inline-flex size-10 items-center justify-center rounded-md text-ink-2 transition-colors duration-150 hover:bg-surface-2 hover:text-ink active:bg-surface-3" aria-label="Close menu">
               <X className="size-5" aria-hidden />
             </D.Close>
           </div>
@@ -338,7 +351,13 @@ function MobileMenu({ open, onOpenChange, signedIn }: { open: boolean; onOpenCha
               </ul>
             </SheetGroup>
           </nav>
-          <div className="grid shrink-0 grid-cols-2 gap-2 border-t border-line p-4 sm:px-6">
+          <div className="grid shrink-0 grid-cols-2 gap-x-2 gap-y-3 border-t border-line p-4 sm:px-6">
+            <div className="col-span-2 flex items-center justify-between gap-3">
+              <p className="pl-1 font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3" aria-hidden>
+                Theme
+              </p>
+              <ThemeSegmented labels="wide" />
+            </div>
             {signedIn ? (
               <ButtonLink to="/" size="lg" onClick={close} className="col-span-2">
                 Open app

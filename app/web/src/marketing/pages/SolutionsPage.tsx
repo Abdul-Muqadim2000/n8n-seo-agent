@@ -66,7 +66,7 @@ function CapabilityMatrix() {
           const used = s.helps.map((h) => featureBySlug(h.feature)).filter((f): f is Feature => !!f);
           return (
             <Reveal as="li" key={s.slug} index={i} className="grid grid-cols-1 gap-4 py-6 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)] md:items-center md:gap-8">
-              <Link to={`/solutions/${s.slug}`} className="group flex items-center gap-3">
+              <Link to={`/solutions/${s.slug}`} className="mk-tap group flex items-center gap-3">
                 <IconTile icon={s.icon} size="sm" className="group-hover:bg-accent group-hover:text-accent-ink" />
                 <span className="text-[15px] font-medium text-ink transition-colors duration-150 ease-brand group-hover:text-accent-text">{s.shortName}</span>
               </Link>
@@ -75,7 +75,7 @@ function CapabilityMatrix() {
                   <li key={f.slug}>
                     <Link
                       to={`/platform/${f.slug}`}
-                      className="group inline-flex h-9 items-center gap-2 rounded-full border border-line bg-page pl-1.5 pr-3.5 text-[13px] font-medium text-ink-2 transition-[border-color,color,background-color] duration-150 ease-brand hover:border-accent hover:bg-surface hover:text-ink"
+                      className="group inline-flex h-10 items-center gap-2 rounded-full border border-line bg-page pl-1.5 pr-3.5 sm:h-9 text-[13px] font-medium text-ink-2 transition-[border-color,color,background-color] duration-150 ease-brand hover:border-accent hover:bg-surface hover:text-ink"
                     >
                       <IconTile icon={f.icon} size="sm" className="size-6 group-hover:bg-accent group-hover:text-accent-ink [&_svg]:size-3.5" />
                       {f.shortName}

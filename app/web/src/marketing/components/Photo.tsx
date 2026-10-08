@@ -1,7 +1,8 @@
 import { images, imageSrcSet, imageUrl, type ImageKey, type MarketingImage } from '../content/images';
 import { cn } from '@/lib/utils';
 
-/** Lazy-loaded photo from the image registry: fixed aspect ratio, rounded, hairline, slow subtle zoom on hover. */
+/** Lazy-loaded photo from the image registry: fixed aspect ratio, rounded, hairline, slow subtle zoom on hover; dimmed a little in dark mode so
+ *  bright office shots do not glare next to dark surfaces. */
 export function Photo({
   image,
   ratio = '4 / 3',
@@ -29,7 +30,7 @@ export function Photo({
         alt={img.alt}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
-        className={cn('size-full object-cover transition-transform duration-700 ease-brand group-hover/photo:scale-[1.03]', imgClassName)}
+        className={cn('size-full object-cover transition-transform duration-700 ease-brand group-hover/photo:scale-[1.03] dark:brightness-[.86] dark:contrast-[1.04]', imgClassName)}
       />
     </div>
   );

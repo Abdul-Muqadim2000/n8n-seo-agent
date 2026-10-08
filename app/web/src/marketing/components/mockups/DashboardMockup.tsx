@@ -68,8 +68,8 @@ export function DashboardMockup({ className, compact = false }: { className?: st
       {!compact && (
         <aside className="hidden w-[188px] shrink-0 flex-col border-r border-line bg-surface p-3 md:flex">
           <div className="px-2 pb-4 pt-1">
-            <img src="/brand/ascentra-logo-header-light.svg" alt="" className="h-[22px] w-auto dark:hidden" />
-            <img src="/brand/ascentra-logo-header-dark.svg" alt="" className="hidden h-[22px] w-auto dark:block" />
+            <img src="/brand/ascentra-logo-header-light.svg" alt="" width={103} height={22} className="h-[22px] w-auto dark:hidden" />
+            <img src="/brand/ascentra-logo-header-dark.svg" alt="" width={103} height={22} className="hidden h-[22px] w-auto dark:block" />
           </div>
           <div className="mb-3 rounded-md border border-line px-2.5 py-2">
             <span className="block text-[10px] text-ink-3">Website</span>

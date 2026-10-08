@@ -26,7 +26,8 @@ export const pricingTiers: PricingTier[] = [
     period: 'per month', // PLACEHOLDER — confirm
     monthly: 149, // PLACEHOLDER — confirm (keep equal to `price`)
     description: 'For one website that needs research, audits and a steady weekly rhythm.',
-    cta: { label: 'Start free', to: '/signup' },
+    // ?plan= is ignored by the sign-up page today; it records which plan the visitor came from
+    cta: { label: 'Start free', to: '/signup?plan=starter' },
     features: [
       '1 website', // PLACEHOLDER — confirm
       'Keyword research and verdicts',
@@ -44,7 +45,7 @@ export const pricingTiers: PricingTier[] = [
     period: 'per month', // PLACEHOLDER — confirm
     monthly: 449, // PLACEHOLDER — confirm (keep equal to `price`)
     description: 'For teams that want the full loop, AI search visibility and backlinks.',
-    cta: { label: 'Start free', to: '/signup' },
+    cta: { label: 'Start free', to: '/signup?plan=growth' },
     highlighted: true,
     includesPrevious: 'Everything in Starter, plus:',
     features: [
