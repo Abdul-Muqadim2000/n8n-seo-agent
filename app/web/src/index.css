@@ -374,6 +374,23 @@ body {
   color: var(--accent-text);
   text-decoration: underline;
 }
+/* Stagger (components/insight): direct children fade up one after another; the delay step is --stagger-step (default 60ms) */
+.asc-stagger > * {
+  --stagger-i: 0;
+  animation: asc-fade-up 520ms var(--brand-ease) both;
+  animation-delay: calc(var(--stagger-i, 0) * var(--stagger-step, 60ms));
+}
+.asc-stagger > :nth-child(2) { --stagger-i: 1; }
+.asc-stagger > :nth-child(3) { --stagger-i: 2; }
+.asc-stagger > :nth-child(4) { --stagger-i: 3; }
+.asc-stagger > :nth-child(5) { --stagger-i: 4; }
+.asc-stagger > :nth-child(6) { --stagger-i: 5; }
+.asc-stagger > :nth-child(7) { --stagger-i: 6; }
+.asc-stagger > :nth-child(8) { --stagger-i: 7; }
+.asc-stagger > :nth-child(9) { --stagger-i: 8; }
+.asc-stagger > :nth-child(10) { --stagger-i: 9; }
+.asc-stagger > :nth-child(11) { --stagger-i: 10; }
+.asc-stagger > :nth-child(n + 12) { --stagger-i: 11; }
 /* reduced motion: every animation and transition is instant, reveals land in their final state */
 @media (prefers-reduced-motion: reduce) {
   *,

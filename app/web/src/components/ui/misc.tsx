@@ -1,14 +1,23 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowDownRight, ArrowUpRight, Check, Copy, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { IconTile } from './icon-tile';
 
-export function PageHeader({ title, description, actions, eyebrow, className }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode; className?: string }) {
+/** Page title row: optional eyebrow, H1, one-line purpose and the page actions; `icon` adds a solid blue icon tile before the title. */
+export function PageHeader({ title, description, actions, eyebrow, className, icon }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode; className?: string; icon?: ReactNode }) {
   return (
     <div className={cn('mb-6 flex flex-wrap items-end justify-between gap-4', className)}>
-      <div className="min-w-0">
-        {eyebrow && <div className="mb-1.5 text-[13px] font-medium text-ink-3">{eyebrow}</div>}
-        <h1 className="font-display text-2xl leading-tight font-semibold tracking-[-0.02em] text-balance text-ink">{title}</h1>
-        {description && <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-2">{description}</p>}
+      <div className={cn('min-w-0', icon && 'flex items-start gap-3.5 sm:gap-4')}>
+        {icon && (
+          <IconTile tone="solid" size="lg" className="mt-0.5">
+            {icon}
+          </IconTile>
+        )}
+        <div className="min-w-0">
+          {eyebrow && <div className="mb-1.5 text-[13px] font-medium text-ink-3">{eyebrow}</div>}
+          <h1 className="font-display text-2xl leading-tight font-semibold tracking-[-0.02em] text-balance text-ink">{title}</h1>
+          {description && <p className="mt-1.5 max-w-3xl text-sm leading-relaxed text-ink-2">{description}</p>}
+        </div>
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>

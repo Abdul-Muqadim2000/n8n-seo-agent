@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { IconTile, type IconTileTone } from '@/components/ui/icon-tile';
+import { InfoTip } from '@/components/insight/disclosure';
 import { ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '@/components/ui/overlay';
 import { Segmented } from '@/components/ui/tabs';
@@ -126,13 +128,23 @@ export function SrOnly({ children }: { children: ReactNode }) {
   );
 }
 
-/** A titled block of a dashboard page. */
-export function SectionHeading({ title, description, actions, id }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; id?: string }) {
+/** A titled block of a dashboard page; optional `icon` (tinted tile) and `info` (InfoTip after the title). */
+export function SectionHeading({ title, description, actions, id, icon, info }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; id?: string; icon?: ReactNode; info?: ReactNode }) {
   return (
     <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" id={id}>
-      <div className="min-w-0 max-w-4xl">
-        <h2 className="font-display text-base font-semibold tracking-[-0.01em] text-ink">{title}</h2>
-        {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+      <div className={cn('min-w-0 max-w-4xl', icon && 'flex items-center gap-2.5')}>
+        {icon && (
+          <IconTile tone="blue" size="sm">
+            {icon}
+          </IconTile>
+        )}
+        <div className="min-w-0">
+          <h2 className={cn('font-display text-base font-semibold tracking-[-0.01em] text-ink', info && 'flex items-center gap-1')}>
+            {title}
+            {info && <InfoTip label={typeof title === 'string' ? `About ${title.toLowerCase()}` : 'What this means'}>{info}</InfoTip>}
+          </h2>
+          {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+        </div>
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
@@ -233,15 +245,47 @@ const titleOf = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Engine priorities are numbers (1 = do first). */
 export const priorityFromNumber = (n: number): Priority => (n <= 1 ? 'high' : n === 2 ? 'medium' : 'low');
 
-/** A card with a header row and a body; `flush` drops the body padding (tables, lists). */
-export function Panel({ title, description, actions, children, footer, className, flush, icon }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; children: ReactNode; footer?: ReactNode; className?: string; flush?: boolean; icon?: ReactNode }) {
+/**
+ * A card with a header row and a body; `flush` drops the body padding (tables, lists). `icon` sits in a tinted icon tile (`iconTone`,
+ * blue by default); `info` adds an InfoTip after the title for the explanation that used to be body text.
+ */
+export function Panel({
+  title,
+  description,
+  actions,
+  children,
+  footer,
+  className,
+  flush,
+  icon,
+  iconTone = 'blue',
+  info,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  className?: string;
+  flush?: boolean;
+  icon?: ReactNode;
+  iconTone?: IconTileTone;
+  info?: ReactNode;
+}) {
   return (
     <Card className={cn('flex flex-col', className)}>
       <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-4">
-        <div className="flex min-w-0 items-start gap-2.5">
-          {icon && <span className="mt-0.5 text-ink-3">{icon}</span>}
+        <div className={cn('flex min-w-0 gap-3', description ? 'items-start' : 'items-center')}>
+          {icon && (
+            <IconTile tone={iconTone} size="sm" className={description ? 'mt-px' : undefined}>
+              {icon}
+            </IconTile>
+          )}
           <div className="min-w-0">
-            <h3 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
+            <h3 className={cn('font-display text-[15px] font-semibold tracking-[-0.01em] text-ink', info && 'flex items-center gap-1')}>
+              {title}
+              {info && <InfoTip label={typeof title === 'string' ? `About ${title.toLowerCase()}` : 'What this means'}>{info}</InfoTip>}
+            </h3>
             {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
           </div>
         </div>
