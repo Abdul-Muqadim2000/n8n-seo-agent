@@ -33,22 +33,38 @@ const cellState = (v: string | undefined): CellState => {
   return 'unknown';
 };
 
+// the question x engine grid is a heat-map on the blue scale: cited (named + linked) is the strongest step, named the tint, answered
+// without you neutral; failed checks keep the warning colour because that is a status. Every cell keeps its icon and word.
 const CELL: Record<CellState, { label: string; icon: ReactNode; cls: string; help: string }> = {
-  cited: { label: 'Cited', icon: <Link2 className="size-3.5" aria-hidden />, cls: 'bg-good-soft text-good-text font-semibold', help: 'Named and linked to one of your pages' },
-  named: { label: 'Named', icon: <CheckCircle2 className="size-3.5" aria-hidden />, cls: 'bg-good-soft text-good-text', help: 'Your brand is named in the answer' },
-  absent: { label: 'Not named', icon: <CircleX className="size-3.5" aria-hidden />, cls: 'text-ink-2', help: 'Answered without you' },
-  none: { label: 'No answer', icon: <Minus className="size-3.5" aria-hidden />, cls: 'text-ink-3', help: 'The engine gave no answer (e.g. no AI Overview shown)' },
-  error: { label: 'Error', icon: <AlertTriangle className="size-3.5" aria-hidden />, cls: 'text-warning-text', help: 'The check failed; it is retried next run' },
-  monthly: { label: 'Monthly', icon: <CalendarClock className="size-3.5" aria-hidden />, cls: 'text-ink-3', help: 'Asked on the monthly full run; the last result is carried' },
+  cited: { label: 'Cited', icon: <Link2 className="size-3.5" aria-hidden />, cls: 'bg-accent text-accent-ink font-semibold', help: 'Named and linked to one of your pages' },
+  named: { label: 'Named', icon: <CheckCircle2 className="size-3.5" aria-hidden />, cls: 'bg-accent-soft text-accent-text font-medium ring-1 ring-accent/20 ring-inset', help: 'Your brand is named in the answer' },
+  absent: { label: 'Not named', icon: <CircleX className="size-3.5" aria-hidden />, cls: 'bg-surface-2 text-ink-2', help: 'Answered without you' },
+  none: { label: 'No answer', icon: <Minus className="size-3.5" aria-hidden />, cls: 'text-ink-3 ring-1 ring-line ring-inset', help: 'The engine gave no answer (e.g. no AI Overview shown)' },
+  error: { label: 'Error', icon: <AlertTriangle className="size-3.5" aria-hidden />, cls: 'bg-warning-soft text-warning-text', help: 'The check failed; it is retried next run' },
+  monthly: { label: 'Monthly', icon: <CalendarClock className="size-3.5" aria-hidden />, cls: 'text-ink-3 ring-1 ring-line ring-inset', help: 'Asked on the monthly full run; the last result is carried' },
   unknown: { label: '–', icon: null, cls: 'text-ink-3', help: 'Not asked' },
 };
 
-export function GridCell({ value }: { value: string | undefined }) {
+export function GridCell({ value, fill }: { value: string | undefined; /** stretch to the cell width (the grid) */ fill?: boolean }) {
   const c = CELL[cellState(value)];
   return (
-    <span className={cn('inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs', c.cls)} title={c.help}>
+    <span className={cn('inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs', fill && 'h-8 w-full min-w-[6rem] px-2', c.cls)} title={c.help}>
       {c.icon}
       {c.label}
+    </span>
+  );
+}
+
+/** "This week" share of answers that name you, as a heat chip on the same blue scale. */
+function RateCell({ rate, samples }: { rate: number; samples: number }) {
+  const r = Math.round(rate);
+  return (
+    <span
+      className={cn('inline-flex min-w-[3.25rem] flex-col items-end rounded-md px-2 py-1 tabular', r >= 50 ? 'bg-accent text-accent-ink' : r > 0 ? 'bg-accent-soft text-accent-text' : 'bg-surface-2 text-ink-2')}
+      title={`${samples} answers`}
+    >
+      <span className="text-[13px] font-semibold">{r}%</span>
+      <span className={cn('text-[11px]', r >= 50 ? 'text-accent-ink/80' : 'text-ink-3')}>{samples} answers</span>
     </span>
   );
 }
@@ -109,7 +125,7 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
           </thead>
           <tbody>
             {rows.map((q) => (
-              <tr key={q.promptId} className="border-b border-line bg-surface last:border-b-0">
+              <tr key={q.promptId} className="group/qr border-b border-line bg-surface transition-colors duration-150 ease-brand last:border-b-0 hover:bg-surface-2/40">
                 <th scope="row" className="sticky left-0 z-10 max-w-[19rem] bg-surface px-3 py-2.5 text-left align-top font-normal">
                   <p className="text-[13px] font-medium leading-snug text-ink">{q.prompt}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-3">
@@ -120,16 +136,14 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
                 </th>
                 <td className="px-2 py-2.5 text-right align-top">
                   {q.winRate != null && q.samples ? (
-                    <span className="text-[13px] tabular text-ink" title={`${q.samples} answers`}>
-                      {Math.round(q.winRate)}%<span className="block text-[11px] text-ink-3">{q.samples} answers</span>
-                    </span>
+                    <RateCell rate={q.winRate} samples={q.samples} />
                   ) : (
                     <span className="text-xs text-ink-3">–</span>
                   )}
                 </td>
                 {engines.map((e) => (
-                  <td key={e} className="px-2 py-2.5 align-top">
-                    <GridCell value={q.engines[e]} />
+                  <td key={e} className="px-1 py-2.5 align-top">
+                    <GridCell value={q.engines[e]} fill />
                   </td>
                 ))}
                 <td className="px-3 py-2.5 align-top">

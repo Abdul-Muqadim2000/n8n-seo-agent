@@ -1,4 +1,5 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
+import { Bot, Gauge, Link2, Wallet } from 'lucide-react';
 import {
   AI_ENGINES,
   AI_PROMPTS_MAX,
@@ -16,6 +17,7 @@ import { Checkbox, Field, Select } from '@/components/ui/field';
 import { Segmented, SwitchRow } from '@/components/ui/tabs';
 import { TagInput } from '@/components/ui/tag-input';
 import { cn } from '@/lib/utils';
+import { IconTile } from '@/components/ui/icon-tile';
 
 // The growth monitors of a website (seo_monitors): AI visibility, backlink monitor and the monthly technical audit, with a live
 // monthly cost estimate (MONITOR_COSTS, measured on live runs).
@@ -59,6 +61,7 @@ export function MonitorSettingsFields({
 
   return (
     <fieldset disabled={disabled} className="divide-y divide-line rounded-xl border border-line px-4">
+      <MonitorRow icon={<Bot />} on={value.aiVisibility}>
       <SwitchRow
         title="AI visibility"
         description="Your buyer questions asked on AI assistants and Google's AI answers: whether you are named or cited, who is named instead, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth (GA4). Full run every Monday."
@@ -117,7 +120,9 @@ export function MonitorSettingsFields({
           )
         }
       />
+      </MonitorRow>
 
+      <MonitorRow icon={<Link2 />} on={value.backlinks}>
       <SwitchRow
         title="Backlink monitor"
         description="A weekly watch for lost and spammy links. Once a month, a full report: link gap against competitors, broken links to reclaim, unlinked mentions and outreach drafts."
@@ -125,7 +130,9 @@ export function MonitorSettingsFields({
         onCheckedChange={(v) => set({ backlinks: v })}
         disabled={disabled}
       />
+      </MonitorRow>
 
+      <MonitorRow icon={<Gauge />} on={value.auditMonthly}>
       <SwitchRow
         title="Monthly technical audit"
         description="On the 1st of each month: a crawl, health score, what changed since the last audit and a fix pack. Skipped when your sitemap has not changed (at most 60 days)."
@@ -160,6 +167,7 @@ export function MonitorSettingsFields({
           )
         }
       />
+      </MonitorRow>
 
       {showBrandNames && (
         <div className="py-3">
@@ -186,6 +194,18 @@ export function MonitorSettingsFields({
   );
 }
 
+/** A monitor's switch row with its icon tile (brand tint while on, neutral while off). */
+function MonitorRow({ icon, on, children }: { icon: ReactNode; on: boolean; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <IconTile size="sm" tone={on ? 'blue' : 'neutral'} className="mt-3 transition-colors duration-200 ease-brand">
+        {icon}
+      </IconTile>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 /** Monthly cost estimate with its breakdown (MONITOR_COSTS) for the chosen monitors and blog posts per week. */
 export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors: MonitorSettings; blogsPerWeek: number; className?: string }) {
   const c = MONITOR_COSTS;
@@ -206,8 +226,13 @@ export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors
   ];
   return (
     <div className={cn('rounded-xl border border-line bg-surface', className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4">
-        <h4 className="text-sm font-semibold text-ink">Estimated monthly cost</h4>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
+        <h4 className="flex items-center gap-2.5 text-sm font-semibold text-ink">
+          <IconTile size="sm">
+            <Wallet />
+          </IconTile>
+          Estimated monthly cost
+        </h4>
         <p className="font-display text-2xl font-semibold tracking-[-0.01em] text-ink" aria-live="polite">
           {formatUsd(total)}
           <span className="ml-1 text-sm font-normal text-ink-3">/ month</span>
@@ -222,6 +247,11 @@ export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors
                 <td className="py-2 pr-3">
                   <span className={cn('block', r.on ? 'text-ink' : 'text-ink-3')}>{r.label}</span>
                   <span className="block text-xs text-ink-3">{r.detail}</span>
+                  {r.on && total > 0 && (
+                    <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                      <span className="block h-full rounded-full bg-accent transition-[width] duration-500 ease-brand" style={{ width: `${Math.max(2, Math.min(100, (r.usd / total) * 100))}%` }} />
+                    </span>
+                  )}
                 </td>
                 <td className={cn('whitespace-nowrap py-2 text-right tabular', r.on ? 'text-ink' : 'text-ink-3')}>{r.on ? formatUsd(r.usd) : 'Off'}</td>
               </tr>

@@ -4,12 +4,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { toast } from 'sonner';
-import { CheckCircle2, Circle } from 'lucide-react';
+import { BadgeCheck, Building2, CheckCircle2, Circle, MapPin, UserRound } from 'lucide-react';
 import { COUNTRIES, PROFILE_CHECKS, profileFields, type ProfileFields, type ProfileLike, type ProfileReadiness, type Run } from '@seo/shared';
 import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
-import { Meter } from '@/components/ui/misc';
+import { IconTile, ScoreRing } from '@/components/insight';
 import { TagInput } from '@/components/ui/tag-input';
 import { errorMessage } from '@/lib/api';
 import { qk, useStartRun } from '@/lib/queries';
@@ -74,15 +74,16 @@ export function ProfileReadinessCard({ values, saved, className }: { values: Pro
   const tone = score >= 70 ? 'good' : score >= 40 ? 'warning' : 'critical';
   return (
     <div className={cn('rounded-xl border border-line bg-surface p-4', className)}>
-      <div className="flex items-baseline justify-between gap-2">
-        <h4 className="text-sm font-semibold text-ink">Profile readiness</h4>
-        <span className="text-sm font-semibold text-ink tabular">{score}%</span>
+      <div className="flex items-center gap-3">
+        <ScoreRing label="Profile readiness" value={score} tone={tone} display={`${score}%`} size={56} />
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-ink">Profile readiness</h4>
+          <p className="mt-0.5 text-xs leading-snug text-ink-3">
+            {done} of {checks.length} trust signals filled in.
+            {saved && ` Saved profile: ${saved.score}%.`}
+          </p>
+        </div>
       </div>
-      <Meter value={score} tone={tone} label="Profile readiness" className="mt-2" />
-      <p className="mt-2 text-xs leading-snug text-ink-3">
-        {done} of {checks.length} trust signals filled in.
-        {saved && ` Saved profile: ${saved.score}%.`}
-      </p>
       <ul className="mt-3 space-y-1.5">
         {checks.map((c) => (
           <li key={c.label} className="flex items-start gap-2 text-[13px]">
@@ -115,13 +116,22 @@ export function useSaveProfile(orgId: string, siteId: string) {
   return { save, isPending: start.isPending };
 }
 
+const GROUP_ICON: Record<string, ReactNode> = { Author: <UserRound />, 'Expert reviewer': <BadgeCheck />, Business: <Building2 />, Address: <MapPin /> };
+
 function Group({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
   return (
     <fieldset className="space-y-4 border-t border-line pt-5 first:border-t-0 first:pt-0">
       <legend className="sr-only">{title}</legend>
-      <div>
-        <h4 className="text-sm font-semibold text-ink">{title}</h4>
-        {description && <p className="mt-0.5 text-[13px] leading-relaxed text-ink-3">{description}</p>}
+      <div className="flex items-start gap-3">
+        {GROUP_ICON[title] && (
+          <IconTile size="sm" className="mt-0.5">
+            {GROUP_ICON[title]}
+          </IconTile>
+        )}
+        <div className="min-w-0">
+          <h4 className="text-sm font-semibold text-ink">{title}</h4>
+          {description && <p className="mt-0.5 text-[13px] leading-relaxed text-ink-3">{description}</p>}
+        </div>
       </div>
       {children}
     </fieldset>

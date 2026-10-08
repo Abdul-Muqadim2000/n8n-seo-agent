@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
-import { Download, ExternalLink as ExternalIcon, FileUp, Link2, Mail, ShieldAlert } from 'lucide-react';
+import { ArrowUpDown, AtSign, BarChart3, BellRing, Bot, CalendarRange, CheckCircle2, Clock, Download, ExternalLink as ExternalIcon, FileText, FileUp, Globe, Link2, ListOrdered, Mail, Network, Plug, Quote, Send, ShieldAlert, Sparkles, Swords, Target, TriangleAlert, Trophy, Unlink, Wrench } from 'lucide-react';
 import { PROSPECT_STATUSES, compactNumber, titleCase, type BacklinkLink, type BacklinkRef, type BacklinksData, type Prospect, type ProspectStatus } from '@seo/shared';
 import { errorMessage, fileUrl } from '@/lib/api';
 import { useLinkImport, useSiteAdmin, useSiteData } from '@/lib/queries';
@@ -11,12 +11,14 @@ import { Button, ButtonLink, buttonClass } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Callout, EmptyState } from '@/components/ui/feedback';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
-import { CopyButton, Delta, ExternalLink, KeyValue, PageHeader, StatTile } from '@/components/ui/misc';
+import { CopyButton, Delta, ExternalLink, KeyValue, PageHeader } from '@/components/ui/misc';
+import { Collapsible, CountUp, DistributionBar, HeroStat, IconTile, InfoTip, InsightItem, MetricCard, ScoreRing, SEQ, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { Dialog } from '@/components/ui/overlay';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { DataTable, type Column } from '@/components/ui/table';
-import { Chips, DataGate, FilterChips, KpiGrid, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, useSitePage } from './_components/kit';
-import { countBy, diff, fmtMonthShort, lastTwo, sortByDate, timeAxisFormat, urlPath } from './_components/format';
+import { Chips, DataGate, FilterChips, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, useSitePage } from './_components/kit';
+import { countBy, diff, fmtMonthShort, lastTwo, plural, sortByDate, timeAxisFormat, urlPath } from './_components/format';
+import { ChartTitle, DashSkeleton, HeroChip, HeroEyebrow } from './_components/visuals';
 
 // v4.10 (n8n/seo-agent/BACKLINKS_SPEC.md): DataForSEO is one source among several — Bing Webmaster Tools, the Search Console export you
 // upload, GA4 referrals, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — and every important link is checked on
@@ -25,6 +27,8 @@ import { countBy, diff, fmtMonthShort, lastTwo, sortByDate, timeAxisFormat, urlP
 const SOURCE_LABEL: Record<string, string> = { dfs: 'DataForSEO', bing: 'Bing', gsc: 'Search Console', ga4: 'GA4 visits', cc: 'Common Crawl', wiki: 'Wikipedia', hn: 'Hacker News', news: 'News', web: 'Web search', import: 'Upload' };
 const sourceLabel = (s: string) => SOURCE_LABEL[s] ?? titleCase(s);
 const REASON_LABEL: Record<string, string> = { link_removed: 'Link removed', page_gone: 'Page gone', domain_gone: 'Site gone', not_seen: 'Not seen for 4 months', reported_lost: 'Reported lost — checking' };
+/** How bad a loss is: a removed link or a gone page is serious, a whole site gone critical, not seen for months a warning. */
+const REASON_TONE: Record<string, Tone> = { link_removed: 'serious', page_gone: 'serious', domain_gone: 'critical', not_seen: 'warning', reported_lost: 'neutral' };
 const VERIFY: Record<string, { tone: Tone; label: string }> = {
   found: { tone: 'good', label: 'On the page' },
   missing: { tone: 'warning', label: 'Not on the page' },
@@ -43,6 +47,7 @@ export default function BacklinksPage() {
   return (
     <div>
       <PageHeader
+        icon={<Link2 />}
         title="Backlinks"
         description={`Who links to ${site.domain} — from every source we can read, each important link checked on its page — what you lost and why, and the sites worth winning next.`}
         actions={
@@ -65,7 +70,9 @@ export default function BacklinksPage() {
           </>
         }
       />
-      <DataGate q={q}>{(d) => <Backlinks d={d} refetching={q.isFetching} />}</DataGate>
+      <DataGate q={q} skeleton={<DashSkeleton />}>
+        {(d) => <Backlinks d={d} refetching={q.isFetching} />}
+      </DataGate>
     </div>
   );
 }
@@ -106,56 +113,117 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
   const sparkUnion = (union != null ? unionSnaps.map((s) => ({ v: s.unionDomains })) : dfsSnaps.map((s) => ({ v: s.referringDomains })));
   const live = d.refs.filter((x) => x.status !== 'lost' && x.kind === 'web');
   const drShown = d.refs.some((x) => x.dr != null);
+  // presentation only: counts of what the tabs and the pipeline below already list
+  const referring = union ?? D?.referringDomains ?? 0;
+  const lostRefs = d.refs.filter((x) => x.status === 'lost').length;
+  const atRiskRefs = d.refs.filter((x) => x.status === 'at_risk').length;
+  const openProspects = d.prospects.filter((p) => !p.status || p.status === 'new').length;
+  const perSource = d.latest?.coverage?.perSource ?? {};
 
   return (
-    <div className="space-y-6">
+    <Stagger className="space-y-6">
+      {d.report && d.report.alerts.length > 0 && (
+        <Panel title="Alerts from the latest check" icon={<BellRing />} iconTone="warning" flush>
+          <ul className="divide-y divide-line border-t border-line">
+            {d.report.alerts.map((a, i) => (
+              <InsightItem key={i} tone={SEV_TONE[severityTone(a.level)]} meta={<StatusBadge tone={severityTone(a.level)}>{titleCase(a.level)}</StatusBadge>} title={a.text} />
+            ))}
+          </ul>
+        </Panel>
+      )}
+
       {L && (
-        <KpiGrid cols={5}>
-          <StatTile
-            label="Referring sites"
-            value={compactNumber(union ?? D?.referringDomains ?? 0)}
-            delta={<Delta value={union != null ? diff(union, prevUnion) : diff(D?.referringDomains, DP?.referringDomains)} suffix="" digits={0} />}
-            trend={<Sparkline data={sparkUnion} dataKey="v" />}
-            hint={union != null ? `all sources · DataForSEO: ${D ? compactNumber(D.referringDomains) : '–'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} nofollow only`}
-          />
-          <StatTile label="Best links" value={L.bestLinks ?? '–'} hint="SEO value 50+ (authority, relevance, placement, follow, checked live)" />
-          <StatTile label="Checked on the page" value={L.verifiedLive ?? '–'} hint={L.atRisk ? `${L.atRisk} missed once — checked again next week` : 'links our crawler found where they should be'} />
-          <StatTile label="Visits from links" value={L.referralVisits != null ? compactNumber(L.referralVisits) : '–'} hint="GA4 referrals, past year" />
-          <StatTile
+        <SummaryHero
+          tone="blue"
+          eyebrow={<HeroEyebrow tag="Backlinks">{L.mode === 'free' ? `Free-sources check of ${fmtDate(L.checkedAt)} (no DataForSEO, $0); changes ${since}.` : `${titleCase(L.mode || 'light')} check of ${fmtDate(L.checkedAt)}; changes ${since}.`}</HeroEyebrow>}
+          title={`${compactNumber(referring)} referring ${referring === 1 ? 'site' : 'sites'} — ${compactNumber(L.newLinks)} new, ${compactNumber(L.lostLinks)} lost since the last check`}
+          description={union != null ? `Merged from every source we can read, each important link checked on its page. DataForSEO alone sees ${D ? compactNumber(D.referringDomains) : '–'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}.` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} of them nofollow only.`}
+          actions={
+            Object.keys(perSource).length > 0 ? (
+              <>
+                {Object.entries(perSource)
+                  .filter(([, n]) => n > 0)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([k, n]) => (
+                    <HeroChip key={k} icon={<Link2 />}>
+                      {sourceLabel(k)} <span className="tabular opacity-90">· {n}</span>
+                    </HeroChip>
+                  ))}
+              </>
+            ) : undefined
+          }
+          stats={
+            <>
+              <HeroStat
+                label="Referring sites"
+                value={<CountUp value={referring} format={compactNumber} />}
+                delta={<Delta value={union != null ? diff(union, prevUnion) : diff(D?.referringDomains, DP?.referringDomains)} suffix="" digits={0} />}
+                trend={<Sparkline data={sparkUnion} dataKey="v" />}
+                hint={union != null ? `all sources · DataForSEO: ${D ? compactNumber(D.referringDomains) : '–'}${D && D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}` : `${compactNumber(D?.referringDomainsNofollow ?? 0)} nofollow only`}
+              />
+              <HeroStat label="Best links" info="SEO value 50+ (authority, relevance, placement, follow, checked live)" value={L.bestLinks != null ? <CountUp value={L.bestLinks} /> : '–'} hint="SEO value 50+ (authority, relevance, placement, follow, checked live)" />
+              <HeroStat label="Checked on the page" value={L.verifiedLive != null ? <CountUp value={L.verifiedLive} /> : '–'} hint={L.atRisk ? `${L.atRisk} missed once — checked again next week` : 'links our crawler found where they should be'} />
+              <HeroStat label="Visits from links" value={L.referralVisits != null ? <CountUp value={L.referralVisits} format={compactNumber} /> : '–'} hint="GA4 referrals, past year" />
+            </>
+          }
+        />
+      )}
+
+      {L && (
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <MetricCard
             label="Spam score"
-            value={
+            icon={<ShieldAlert />}
+            tone={D ? (D.spamScore >= 50 ? 'serious' : D.spamScore >= 30 ? 'warning' : 'good') : 'blue'}
+            info="DataForSEO’s spam score of your link profile, 0–100: lower is better"
+            visual={D ? <ScoreRing label="Spam score" value={D.spamScore} tone={D.spamScore >= 50 ? 'critical' : D.spamScore >= 30 ? 'warning' : 'good'} display={<CountUp value={D.spamScore} />} suffix="/100" size={68} /> : undefined}
+            value="–"
+            delta={<Delta value={diff(D?.spamScore, DP?.spamScore)} suffix="" digits={0} upIsGood={false} />}
+            meta={
               D ? (
-                <span className="inline-flex items-center gap-2">
-                  {D.spamScore}
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   {D.spamScore >= 50 ? <StatusBadge tone="serious">High</StatusBadge> : D.spamScore >= 30 ? <StatusBadge tone="warning">Elevated</StatusBadge> : <StatusBadge tone="good">Low</StatusBadge>}
+                  <span>
+                    {D.spammyNew} spammy new {D.spammyNew === 1 ? 'link' : 'links'} · DataForSEO, 0–100{D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}
+                  </span>
                 </span>
               ) : (
-                '–'
+                'measured by the full check (DataForSEO)'
               )
             }
-            delta={<Delta value={diff(D?.spamScore, DP?.spamScore)} suffix="" digits={0} upIsGood={false} />}
-            hint={D ? `${D.spammyNew} spammy new ${D.spammyNew === 1 ? 'link' : 'links'} · DataForSEO, 0–100${D !== L ? ` (check of ${fmtDate(D.checkedAt)})` : ''}` : 'measured by the full check (DataForSEO)'}
           />
-        </KpiGrid>
-      )}
-      {L && <p className="-mt-3 text-xs text-ink-3">{L.mode === 'free' ? `Free-sources check of ${fmtDate(L.checkedAt)} (no DataForSEO, $0); changes ${since}.` : `${titleCase(L.mode || 'light')} check of ${fmtDate(L.checkedAt)}; changes ${since}.`}</p>}
-
-      {d.report && d.report.alerts.length > 0 && (
-        <Card className="divide-y divide-line">
-          {d.report.alerts.map((a, i) => (
-            <div key={i} className="flex flex-wrap items-start gap-3 px-4 py-3">
-              <StatusBadge tone={severityTone(a.level)}>{titleCase(a.level)}</StatusBadge>
-              <p className="min-w-0 flex-1 text-sm text-ink">{a.text}</p>
-            </div>
-          ))}
-        </Card>
+          <MetricCard
+            label="Lost links"
+            icon={<Unlink />}
+            tone={lostRefs ? 'serious' : 'blue'}
+            info="Lost means checked twice on the page and gone, with the reason"
+            value={<CountUp value={lostRefs} />}
+            meta={atRiskRefs ? `${atRiskRefs} more missed once — checked again next week` : 'every link checked twice is still there'}
+          />
+          <MetricCard label="New links" icon={<Sparkles />} value={<CountUp value={d.latest?.new.length ?? 0} />} meta="since the previous check" />
+          <MetricCard label="Prospects to contact" icon={<Send />} info="Scored by value × likelihood; drafted outreach e-mails are in the pipeline below" value={<CountUp value={openProspects} />} meta={`${plural(d.prospects.length, 'prospect')} in the outreach pipeline`} />
+        </div>
       )}
 
       <Coverage d={d} />
 
       <section>
-        <SectionHeading title="Links" description="Every referring site with its three values — SEO (what it passes in search), visits (what it sends) and brand (earned media, sources AI cites) — and what our crawler found on the page" />
+        <SectionHeading
+          icon={<Link2 />}
+          title="Links"
+          description="Every referring site with its SEO, visits and brand value, and what our crawler found on the page"
+          info="SEO value is what a link passes in search, visits what it sends, brand the earned media and sources AI cites — each 0–100."
+        />
         <Card className="px-4 pb-4">
+          {live.length > 0 && (
+            <div className="border-b border-line px-1 pt-4 pb-4">
+              <div className="mb-2 flex items-center gap-1 text-xs font-medium text-ink-2">
+                SEO value of your live links
+                <InfoTip label="About link value">Every live link scored 0–100 for what it passes in search: authority, relevance, placement and follow, checked on the page.</InfoTip>
+              </div>
+              <DistributionBar label="Live links by SEO value" segments={valueSegments(live)} />
+            </div>
+          )}
           <LinkTabs d={d} live={live} />
           {drShown && (
             <p className="mt-3 text-xs text-ink-3">
@@ -180,13 +248,31 @@ function Backlinks({ d, refetching }: { d: BacklinksData; refetching: boolean })
       <Opportunities d={d} />
 
       <section>
-        <SectionHeading title="Outreach pipeline" description="Prospects scored by value × likelihood (an unlinked mention converts far more often than a cold site), with the contact found on their site and a drafted e-mail; contacted prospects get follow-up drafts after 7 and 14 days. Won is set when the link is found on the page." />
+        <SectionHeading
+          icon={<Send />}
+          title="Outreach pipeline"
+          description="Prospects scored by value × likelihood, with the contact found on their site and a drafted e-mail"
+          info="An unlinked mention converts far more often than a cold site. Contacted prospects get follow-up drafts after 7 and 14 days. Won is set when the link is found on the page."
+        />
         <Card className="px-4 pb-4">
           <Pipeline prospects={d.prospects} />
         </Card>
       </section>
-    </div>
+    </Stagger>
   );
+}
+
+const SEV_TONE: Record<Tone, IconTileTone> = { neutral: 'neutral', accent: 'blue', good: 'good', warning: 'warning', serious: 'serious', critical: 'critical' };
+
+/** Live links split by SEO value on the blue ramp (strongest = 75+). */
+function valueSegments(rows: BacklinkRef[]) {
+  const n = (lo: number, hi: number) => rows.filter((x) => x.seoValue >= lo && x.seoValue < hi).length;
+  return [
+    { label: '75+', value: n(75, 1000), color: SEQ[5] },
+    { label: '50–74', value: n(50, 75), color: SEQ[3] },
+    { label: '25–49', value: n(25, 50), color: SEQ[1] },
+    { label: 'Under 25', value: n(-1000, 25), color: 'var(--surface-3)' },
+  ];
 }
 
 // ---------------- where the links come from ----------------
@@ -209,6 +295,7 @@ function Coverage({ d }: { d: BacklinksData }) {
   return (
     <section>
       <SectionHeading
+        icon={<Network />}
         title="Where your links come from"
         description="No index sees every link. Merging the free sources with DataForSEO — and measuring against Google’s own sample — shows how complete the picture is."
         actions={
@@ -220,7 +307,7 @@ function Coverage({ d }: { d: BacklinksData }) {
         }
       />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3 xl:items-start">
-        <Panel title="Referring sites by source" description={c ? `${c.union} ${c.union === 1 ? 'site' : 'sites'} in all · DataForSEO finds ${c.dfsShare}%` : 'Fills after the next full check'} className="xl:col-span-2">
+        <Panel title="Referring sites by source" icon={<BarChart3 />} description={c ? `${c.union} ${c.union === 1 ? 'site' : 'sites'} in all · DataForSEO finds ${c.dfsShare}%` : 'Fills after the next full check'} className="xl:col-span-2">
           {c ? <ShareBars items={rows} valueFormat={(v: number) => String(v)} /> : <p className="text-[13px] text-ink-3">Run a backlink check to merge the sources.</p>}
           {c && c.gscSample > 0 && (
             <p className="mt-4 text-[13px] text-ink-2">
@@ -229,18 +316,23 @@ function Coverage({ d }: { d: BacklinksData }) {
           )}
           {c && <p className="mt-2 text-xs text-ink-3">{c.verified} {c.verified === 1 ? 'link' : 'links'} checked on their page{c.blocked ? ` · ${c.blocked} pages block bots (never counted as lost)` : ''}{c.social ? ` · ${c.social} social profiles (not counted)` : ''}</p>}
         </Panel>
-        <Panel title="Sources" description="Free sources the monitor reads">
-          <ul className="space-y-3">
+        <Panel title="Sources" icon={<Plug />} description="Free sources the monitor reads" flush>
+          <ul className="divide-y divide-line border-t border-line">
             {status.map((s) => (
-              <li key={s.name} className="text-sm">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-ink">{s.name}</span>
-                  {s.ok === true ? <StatusBadge tone="good">On</StatusBadge> : s.ok === false ? <StatusBadge tone="warning">Missing</StatusBadge> : <Badge>Waiting</Badge>}
+              <li key={s.name} className="flex items-start gap-3 px-5 py-3 text-sm transition-colors duration-150 ease-brand hover:bg-surface-2/50">
+                <IconTile size="sm" tone={s.ok === true ? 'good' : s.ok === false ? 'warning' : 'neutral'} className="mt-0.5">
+                  {s.ok === true ? <CheckCircle2 /> : s.ok === false ? <TriangleAlert /> : <Clock />}
+                </IconTile>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-ink">{s.name}</span>
+                    {s.ok === true ? <StatusBadge tone="good">On</StatusBadge> : s.ok === false ? <StatusBadge tone="warning">Missing</StatusBadge> : <Badge>Waiting</Badge>}
+                  </div>
+                  <p className="text-xs text-ink-3">{s.text}</p>
                 </div>
-                <p className="text-xs text-ink-3">{s.text}</p>
               </li>
             ))}
-            {other && <li className="text-xs text-ink-3">Other upload: {other.rows} rows, {fmtDate(other.importedAt)}</li>}
+            {other && <li className="px-5 py-3 text-xs text-ink-3">Other upload: {other.rows} rows, {fmtDate(other.importedAt)}</li>}
           </ul>
         </Panel>
       </div>
@@ -405,9 +497,9 @@ function RefTable({ rows, empty, search, sortKey = 'seo' }: { rows: BacklinkRef[
       align: 'right',
       sortValue: (x) => x.seoValue,
       cell: (x) => (
-        <span className="whitespace-nowrap tabular" title="SEO / visits / brand value, 0–100">
-          <b className="text-ink">{x.seoValue}</b>
-          <span className="text-ink-3"> · {x.referralValue} · {x.brandValue}</span>
+        <span className="inline-flex items-center gap-1.5 whitespace-nowrap tabular" title="SEO / visits / brand value, 0–100">
+          <span className={cn('inline-flex h-6 min-w-[2.25rem] items-center justify-center rounded-full px-1.5 text-xs font-semibold', x.seoValue >= 75 ? 'bg-accent text-accent-ink' : x.seoValue >= 50 ? 'bg-accent-soft text-accent-text ring-1 ring-accent/25' : 'bg-surface-2 text-ink')}>{x.seoValue}</span>
+          <span className="text-ink-3">· {x.referralValue} · {x.brandValue}</span>
         </span>
       ),
     },
@@ -444,7 +536,7 @@ function RefTable({ rows, empty, search, sortKey = 'seo' }: { rows: BacklinkRef[
 function LostTable({ rows }: { rows: BacklinkRef[] }) {
   const columns: Column<BacklinkRef>[] = [
     { key: 'from', header: 'From', sortValue: (x) => x.refDomain, cell: (x) => <ExternalLink href={x.fromUrl || `https://${x.refDomain}`} className="font-medium">{x.refDomain}</ExternalLink> },
-    { key: 'reason', header: 'Why', sortValue: (x) => x.lostReason, cell: (x) => <Kind>{REASON_LABEL[x.lostReason] ?? (x.lostReason || 'Lost')}</Kind> },
+    { key: 'reason', header: 'Why', sortValue: (x) => x.lostReason, cell: (x) => <StatusBadge tone={REASON_TONE[x.lostReason] ?? 'serious'}>{REASON_LABEL[x.lostReason] ?? (x.lostReason || 'Lost')}</StatusBadge> },
     { key: 'to', header: 'Pointed to', hideOnMobile: true, cell: (x) => <span className="text-[13px] text-ink-2">{urlPath(x.toUrl)}</span> },
     { key: 'authority', header: 'Authority', align: 'right', sortValue: (x) => x.authority, cell: (x) => x.authority || '–' },
     { key: 'when', header: 'Lost', sortValue: (x) => x.lostAt, cell: (x) => <span className="whitespace-nowrap text-xs text-ink-3">{fmtDate(x.lostAt)}</span> },
@@ -459,7 +551,7 @@ function AnchorsPanel({ anchors }: { anchors: NonNullable<BacklinksData['latest'
   const total = Object.values(kinds).reduce((a, b) => a + b, 0);
   const money = total ? (kinds.money ?? 0) / total : 0;
   return (
-    <Panel title="Anchor texts" description="How sites link to you: natural profiles are mostly your name and web address">
+    <Panel title="Anchor texts" icon={<Quote />} description="How sites link to you: natural profiles are mostly your name and web address">
       {total ? <ShareBars items={Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: ANCHOR_LABEL[k] ?? k, value: (100 * v) / total }))} /> : <p className="text-[13px] text-ink-3">Fills after the next full check.</p>}
       {money > 0.3 && total >= 10 && <Callout tone="warning" className="mt-3">Over 30% of linking sites use keyword anchors. Ask new links to use your name or the page title.</Callout>}
       {(anchors?.top.length ?? 0) > 0 && (
@@ -480,7 +572,7 @@ function AnchorsPanel({ anchors }: { anchors: NonNullable<BacklinksData['latest'
 
 function PagesPanel({ pages, reclaim }: { pages: NonNullable<BacklinksData['latest']>['pages']; reclaim: NonNullable<BacklinksData['report']>['reclaim'] }) {
   return (
-    <Panel title="Your most-linked pages" description="Where the links land; a linked page that no longer loads loses them">
+    <Panel title="Your most-linked pages" icon={<FileText />} description="Where the links land; a linked page that no longer loads loses them">
       {reclaim.length > 0 && (
         <Callout tone="warning" className="mb-3">
           {reclaim.map((r) => `${urlPath(r.brokenUrl)} (${r.links} links) → 301 to ${urlPath(r.redirectTo)}`).join(' · ')}
@@ -522,7 +614,7 @@ function Opportunities({ d }: { d: BacklinksData }) {
   ];
   return (
     <section>
-      <SectionHeading title="Opportunities" description="Sites that name you without a link, lists that name your competitors, sites that just linked to a competitor and the gap (DataForSEO and the Common Crawl graph)" />
+      <SectionHeading icon={<Target />} title="Opportunities" description="Sites that name you without a link, lists that name your competitors, sites that just linked to a competitor and the gap (DataForSEO and the Common Crawl graph)" />
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3 xl:items-start">
         <Card className="px-4 pb-4 xl:col-span-2">
           <Tabs defaultValue={tabs.find((t) => t.count)?.key ?? 'gap'}>
@@ -592,7 +684,7 @@ function Opportunities({ d }: { d: BacklinksData }) {
             </TabPanel>
           </Tabs>
         </Card>
-        <Panel title="Competitors compared" description="From the latest full report and the Common Crawl graph">
+        <Panel title="Competitors compared" icon={<Trophy />} description="From the latest full report and the Common Crawl graph">
           <CompetitorList rows={d.latest?.competitors ?? []} graph={d.linkGraph?.counts ?? {}} />
         </Panel>
       </div>
@@ -611,7 +703,7 @@ function HistoryChart({ rows, loading }: { rows: { month: string; backlinks: num
   const sorted = [...rows].sort((a, b) => a.month.localeCompare(b.month));
   return (
     <ChartCard
-      title="Monthly history"
+      title={<ChartTitle icon={<CalendarRange />}>Monthly history</ChartTitle>}
       description="End-of-month totals from the backlink index"
       loading={loading}
       actions={<MetricSwitch label="Metric" value={m} onChange={setM} options={[{ value: 'referringDomains', label: 'Domains' }, { value: 'backlinks', label: 'Links' }, { value: 'rank', label: 'Rank' }]} />}
@@ -628,7 +720,7 @@ function HistoryChart({ rows, loading }: { rows: { month: string; backlinks: num
       {sorted.length ? (
         <TimeSeriesChart data={sorted} xKey="month" series={[series[m]]} xFormat={fmtMonthShort} area height={230} />
       ) : (
-        <EmptyState className="py-10" title="No monthly history yet" description="The monthly full report adds the backlink history." />
+        <EmptyState className="py-10" icon={<CalendarRange className="size-5" />} title="No monthly history yet" description="The monthly full report adds the backlink history." />
       )}
     </ChartCard>
   );
@@ -642,7 +734,7 @@ function ChangesChart({ snaps, loading }: { snaps: BacklinksData['snapshots']; l
   const rows = snaps.map((s) => ({ checkedAt: s.checkedAt, newLinks: s.newLinks, lostLinks: s.lostLinks, importantLost: s.importantLost, spammyNew: s.spammyNew, mode: s.mode }));
   return (
     <ChartCard
-      title="Link changes per check"
+      title={<ChartTitle icon={<ArrowUpDown />}>Link changes per check</ChartTitle>}
       description="Weekly light watch and monthly full checks"
       series={series}
       legendShape="rect"
@@ -662,7 +754,7 @@ function ChangesChart({ snaps, loading }: { snaps: BacklinksData['snapshots']; l
       {rows.length ? (
         <BarsChart data={rows} categoryKey="checkedAt" series={series} categoryFormat={timeAxisFormat(rows.map((r) => r.checkedAt))} height={230} />
       ) : (
-        <EmptyState className="py-10" title="No checks stored yet" />
+        <EmptyState className="py-10" icon={<ArrowUpDown className="size-5" />} title="No checks stored yet" />
       )}
     </ChartCard>
   );
@@ -711,13 +803,17 @@ function CompetitorList({ rows, graph }: { rows: NonNullable<BacklinksData['late
   if (!rows.length) return <p className="text-[13px] text-ink-3">Add competitors in the monitor settings to compare links.</p>;
   const own = Object.entries(graph)[0];
   return (
-    <ul className="space-y-2.5">
+    <ol className="space-y-1">
       {rows.map((c) => {
         const rank = num(c.rank ?? c.domain_rank ?? c.domainRank);
         const rd = num(c.referring_domains ?? c.referringDomains);
         const bl = num(c.backlinks);
         return (
-          <li key={c.domain} className="text-sm">
+          <li key={c.domain} className="flex items-start gap-3 rounded-lg px-2 py-2 text-sm transition-colors duration-150 ease-brand hover:bg-surface-2/60">
+            <IconTile size="xs" tone="neutral" className="mt-0.5">
+              <Globe />
+            </IconTile>
+            <span className="min-w-0 flex-1">
             <a href={`https://${c.domain}`} target="_blank" rel="noopener noreferrer" className="block truncate font-medium text-ink hover:text-accent-text transition-colors duration-150 ease-brand">
               {c.domain}
             </a>
@@ -727,10 +823,11 @@ function CompetitorList({ rows, graph }: { rows: NonNullable<BacklinksData['late
               {rank != null && <span className="tabular"> · rank {rank}</span>}
               {graph[c.domain] != null && <span className="tabular"> · {compactNumber(graph[c.domain]!)} linking domains (Common Crawl{own ? `; you: ${compactNumber(own[1])}` : ''})</span>}
             </span>
+            </span>
           </li>
         );
       })}
-    </ul>
+    </ol>
   );
 }
 
@@ -738,6 +835,9 @@ const TYPE_LABEL: Record<string, string> = { lost: 'Lost link', reclaim: 'Broken
 const typeLabel = (t: string) => TYPE_LABEL[t] ?? (t ? titleCase(t) : 'Prospect');
 const STATUS_LABEL: Record<ProspectStatus, string> = { new: 'New', contacted: 'Contacted', won: 'Won', rejected: 'Rejected', ignored: 'Ignored' };
 const statusOf = (p: Prospect): ProspectStatus => ((PROSPECT_STATUSES as readonly string[]).includes(p.status) ? (p.status as ProspectStatus) : 'new');
+
+/** Prospect cards shown before "Show more" (the rest stay in the page, folded). */
+const PROSPECTS_SHOWN = 8;
 
 function Pipeline({ prospects }: { prospects: Prospect[] }) {
   const [type, setType] = useState('all');
@@ -766,11 +866,22 @@ function Pipeline({ prospects }: { prospects: Prospect[] }) {
           return (
             <TabPanel key={s} value={s}>
               {rows.length ? (
-                <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-                  {rows.map((p) => (
-                    <ProspectCard key={`${p.prospectDomain}-${p.type}`} p={p} onOpen={() => setOpen(p)} />
-                  ))}
-                </ul>
+                <>
+                  <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                    {rows.slice(0, PROSPECTS_SHOWN).map((p) => (
+                      <ProspectCard key={`${p.prospectDomain}-${p.type}`} p={p} onOpen={() => setOpen(p)} />
+                    ))}
+                  </ul>
+                  {rows.length > PROSPECTS_SHOWN && (
+                    <Collapsible className="mt-3" label={`Show ${rows.length - PROSPECTS_SHOWN} more ${STATUS_LABEL[s].toLowerCase()} prospects`} openLabel="Show fewer" contentClassName="pt-3">
+                      <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                        {rows.slice(PROSPECTS_SHOWN).map((p) => (
+                          <ProspectCard key={`${p.prospectDomain}-${p.type}`} p={p} onOpen={() => setOpen(p)} />
+                        ))}
+                      </ul>
+                    </Collapsible>
+                  )}
+                </>
               ) : (
                 <p className="py-8 text-center text-sm text-ink-3">No {STATUS_LABEL[s].toLowerCase()} prospects{type !== 'all' ? ' of this type' : ''}.</p>
               )}
@@ -783,25 +894,39 @@ function Pipeline({ prospects }: { prospects: Prospect[] }) {
   );
 }
 
+const TYPE_ICON: Record<string, ReactNode> = { lost: <Unlink />, reclaim: <Wrench />, mention: <AtSign />, gap: <Network />, list: <ListOrdered />, comp_new: <Swords />, ai_source: <Bot /> };
+
 function ProspectCard({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
   const st = statusOf(p);
   return (
-    <li className="flex flex-col rounded-xl border border-line bg-surface p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <ExternalLink href={`https://${p.prospectDomain}`} className="text-sm font-semibold text-ink">
-            {p.prospectDomain}
-          </ExternalLink>
+    <li className="flex flex-col rounded-xl border border-line bg-surface p-4 shadow-card transition-colors duration-150 ease-brand hover:border-line-strong">
+      <div className="flex items-start gap-3">
+        <IconTile size="md" tone={st === 'won' ? 'good' : 'blue'}>
+          {TYPE_ICON[p.type] ?? <Link2 />}
+        </IconTile>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <ExternalLink href={`https://${p.prospectDomain}`} className="text-sm font-semibold text-ink">
+              {p.prospectDomain}
+            </ExternalLink>
+            {st === 'won' ? <StatusBadge tone="good">Won{p.wonAt ? ` ${fmtDate(p.wonAt)}` : ''}</StatusBadge> : st !== 'new' ? <Badge>{STATUS_LABEL[st]}</Badge> : null}
+          </div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Kind>{typeLabel(p.type)}</Kind>
-            {p.score > 0 && <Badge tone="accent">score {p.score}</Badge>}
+            {p.score > 0 && (
+              <Badge tone="accent" className="gap-1.5">
+                score {p.score}
+                <span className="h-1.5 w-10 overflow-hidden rounded-full bg-accent/15" aria-hidden>
+                  <span className="block h-full rounded-full bg-accent" style={{ width: `${Math.min(100, p.score)}%` }} />
+                </span>
+              </Badge>
+            )}
             {p.rank > 0 && <span className="text-xs text-ink-3">authority {p.rank}</span>}
             {p.spamScore >= 50 && <StatusBadge tone="serious">spam {p.spamScore}</StatusBadge>}
           </div>
         </div>
-        {st === 'won' ? <StatusBadge tone="good">Won{p.wonAt ? ` ${fmtDate(p.wonAt)}` : ''}</StatusBadge> : st !== 'new' ? <Badge>{STATUS_LABEL[st]}</Badge> : null}
       </div>
-      {p.detail && <p className="mt-2 text-[13px] leading-relaxed text-ink-2">{p.detail}</p>}
+      {p.detail && <p className="mt-2.5 text-[13px] leading-relaxed text-ink-2">{p.detail}</p>}
       {p.contactEmail && <p className="mt-2 text-xs text-ink-3">Contact: {p.contactEmail}</p>}
       {st === 'contacted' && p.followupBody && <p className="mt-2 text-xs font-medium text-warning-text">Follow-up {p.followupStep} is drafted</p>}
       {p.note && <p className="mt-2 rounded-md bg-surface-2 px-2 py-1 text-xs text-ink-2">Note: {p.note}</p>}

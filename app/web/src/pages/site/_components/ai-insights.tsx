@@ -2,17 +2,17 @@
 // the market-wide index (the AI-answer database), what AI searched before answering, and real questions worth tracking.
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Bot, Plus, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { AtSign, Bot, Coins, Globe, Layers, Link2, MessageSquareQuote, PieChart, Plus, Scale, ShieldAlert, ShieldCheck, Target, Users } from 'lucide-react';
 import { compactNumber, formatPercent, titleCase, type AiAccess, type AiGroup, type AiIndex, type AiPerception, type AiTraffic } from '@seo/shared';
 import { errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
-import { ShareBars } from '@/components/charts';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { DataTable, type Column } from '@/components/ui/table';
-import { Chips, Kind, MiniStat, Panel, useSitePage } from './kit';
+import { Chips, Kind, Panel, useSitePage } from './kit';
+import { FigureTile, RankedBars } from './visuals';
 
 const pct0 = (v: number) => formatPercent(v, 0);
 
@@ -21,13 +21,13 @@ export function AiTrafficPanel({ traffic }: { traffic: AiTraffic | null }) {
   const { can, page } = useSitePage();
   if (!traffic)
     return (
-      <Panel title="What AI visits are worth" description="Visits, key events and revenue from ChatGPT, Perplexity, Gemini, Copilot, Claude and other assistants (GA4)">
+      <Panel title="What AI visits are worth" icon={<Coins />} description="Visits, key events and revenue from ChatGPT, Perplexity, Gemini, Copilot, Claude and other assistants (GA4)">
         <p className="text-[13px] text-ink-2">Shown from the next weekly AI visibility run (Monday 07:00), when GA4 is connected for this website.</p>
       </Panel>
     );
   if (!traffic.connected)
     return (
-      <Panel title="What AI visits are worth" description="Visits, key events and revenue from ChatGPT, Perplexity, Gemini, Copilot, Claude and other assistants (GA4)">
+      <Panel title="What AI visits are worth" icon={<Coins />} description="Visits, key events and revenue from ChatGPT, Perplexity, Gemini, Copilot, Claude and other assistants (GA4)">
         <Callout tone="info" title="GA4 is not connected for this website" action={can('admin') ? <ButtonLink to={page('settings/tracking')} size="sm" variant="secondary">Connect GA4</ButtonLink> : undefined}>
           {traffic.error && !/not connected/i.test(traffic.error) ? `${traffic.error}. ` : ''}Give the service account Viewer access to your GA4 property; the next weekly run shows what AI answers are worth.
         </Callout>
@@ -38,14 +38,15 @@ export function AiTrafficPanel({ traffic }: { traffic: AiTraffic | null }) {
   return (
     <Panel
       title="What AI visits are worth"
+      icon={<Coins />}
       description={`GA4, ${t.period ? `${fmtDate(t.period.start)} – ${fmtDate(t.period.end)}` : 'last 28 days'}. Google AI Overviews and AI Mode count as organic search in GA4.`}
       flush
     >
-      <div className="grid grid-cols-2 gap-4 px-4 pb-4 sm:grid-cols-4">
-        <MiniStat label="AI visits" value={compactNumber(t.sessions)} hint={t.changePct != null ? `${t.changePct >= 0 ? '+' : ''}${t.changePct}% vs the 28 days before` : 'no earlier period'} />
-        <MiniStat label="Key events" value={compactNumber(t.keyEvents)} hint={`${pct0(t.convRate)} of AI visits convert`} />
-        <MiniStat label="Revenue" value={t.revenue ? compactNumber(t.revenue) : '–'} hint={t.revenue ? 'in the property’s currency' : 'no purchases recorded'} />
-        <MiniStat label="vs organic search" value={better ? `${better.toFixed(1)}×` : '–'} hint={`organic converts at ${pct0(t.organicConvRate)} · AI is ${formatPercent(t.shareOfSessions, 1)} of all visits`} />
+      <div className="grid grid-cols-2 gap-2.5 px-4 pb-4 sm:grid-cols-4">
+        <FigureTile icon={<Users />} label="AI visits" value={compactNumber(t.sessions)} hint={t.changePct != null ? `${t.changePct >= 0 ? '+' : ''}${t.changePct}% vs the 28 days before` : 'no earlier period'} />
+        <FigureTile icon={<Target />} label="Key events" value={compactNumber(t.keyEvents)} hint={`${pct0(t.convRate)} of AI visits convert`} />
+        <FigureTile icon={<Coins />} label="Revenue" value={t.revenue ? compactNumber(t.revenue) : '–'} hint={t.revenue ? 'in the property’s currency' : 'no purchases recorded'} />
+        <FigureTile icon={<Scale />} label="vs organic search" value={better ? `${better.toFixed(1)}×` : '–'} hint={`organic converts at ${pct0(t.organicConvRate)} · AI is ${formatPercent(t.shareOfSessions, 1)} of all visits`} />
       </div>
       <div className="grid grid-cols-1 gap-4 border-t border-line p-4 lg:grid-cols-2">
         <DataTable
@@ -101,7 +102,7 @@ export function PerceptionPanel({ perception }: { perception: AiPerception | nul
   const total = p.positive + p.neutral + p.negative;
   const bar = (n: number, cls: string, label: string) => (n ? <span className={cn('h-full', cls)} style={{ width: `${(100 * n) / total}%` }} title={`${n} ${label}`} /> : null);
   return (
-    <Panel title="How AI describes you" description="The answers that name you, read for tone and checked against your business profile">
+    <Panel title="How AI describes you" icon={<MessageSquareQuote />} description="The answers that name you, read for tone and checked against your business profile">
       {total ? (
         <div className="space-y-4">
           <div>
@@ -194,6 +195,7 @@ export function AccessPanel({ access }: { access: AiAccess | null }) {
       title="Can AI read your site?"
       description={`An assistant can only cite a page its crawler may fetch · checked ${fmtDate(a.checkedAt)}`}
       icon={a.ok ? <ShieldCheck className="size-4" /> : <ShieldAlert className="size-4" />}
+      iconTone={a.ok ? 'good' : 'critical'}
       flush
     >
       <div className="flex flex-wrap gap-2 px-4 pb-3">
@@ -232,6 +234,7 @@ export function GroupsPanel({ stages, clusters }: { stages: AiGroup[]; clusters:
   return (
     <Panel
       title={view === 'stage' ? 'By buyer stage' : 'By topic'}
+      icon={<Layers />}
       description="Where in the buyer journey AI names you, the monthly AI searches behind the questions, and who AI names most instead"
       actions={
         <div className="flex gap-1">
@@ -273,17 +276,18 @@ export function IndexPanel({ index, domain }: { index: AiIndex | null; domain: s
   const byName = x.brands.find((b) => b.key.startsWith('name:'));
   return (
     <Panel
+      icon={<Globe />}
       title="Market-wide: every AI answer"
       description={`How often answers across the AI-answer database (Google AI Overviews${x.platforms.includes('chat_gpt') ? ' and ChatGPT' : ''}) cite each business — far more questions than your tracked ones · ${x.carried ? 'monthly, ' : ''}${fmtDate(x.checkedAt)}`}
     >
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-        <MiniStat label="Your share" value={x.sov != null ? formatPercent(x.sov, 1) : '–'} hint="of the answers citing you or a competitor" />
-        <MiniStat label="Answers citing you" value={compactNumber(x.answersCitingYou)} hint="real questions in the database" />
-        {byName && <MiniStat label="Named without a link" value={compactNumber(byName.mentions)} hint={`answers that say “${byName.label.replace(/^“|” by name$/g, '')}”`} />}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        <FigureTile icon={<PieChart />} label="Your share" value={x.sov != null ? formatPercent(x.sov, 1) : '–'} hint="of the answers citing you or a competitor" />
+        <FigureTile icon={<Link2 />} label="Answers citing you" value={compactNumber(x.answersCitingYou)} hint="real questions in the database" />
+        {byName && <FigureTile icon={<AtSign />} label="Named without a link" value={compactNumber(byName.mentions)} hint={`answers that say “${byName.label.replace(/^“|” by name$/g, '')}”`} />}
       </div>
       {shares.length > 1 && (
         <div className="mt-4">
-          <ShareBars items={shares.sort((a, b) => b.value - a.value)} highlight={domain} />
+          <RankedBars items={shares.sort((a, b) => b.value - a.value)} you={domain} />
         </div>
       )}
       {x.questions.length > 0 && (
@@ -341,7 +345,7 @@ export function DiscoveryPanel({ index, tracked }: { index: AiIndex | null; trac
         </Panel>
       )}
       {suggestions.length > 0 && (
-        <Panel title="Questions worth tracking" description="Real questions people ask AI about your topics (AI-answer database) that your panel does not track yet">
+        <Panel title="Questions worth tracking" icon={<Plus />} description="Real questions people ask AI about your topics (AI-answer database) that your panel does not track yet">
           <ul className="space-y-2">
             {suggestions.slice(0, 10).map((s) => (
               <li key={s.question} className="flex items-start justify-between gap-3 text-[13px]">

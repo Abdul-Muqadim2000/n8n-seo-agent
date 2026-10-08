@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { Activity, ArrowRight, Check, Circle, ExternalLink as ExternalIcon, Flag, History, LineChart, Loader, Plus, X } from 'lucide-react';
+import { Activity, ArrowDownRight, ArrowRight, ArrowUpDown, ArrowUpRight, BarChart3, Check, Circle, ExternalLink as ExternalIcon, Flag, History, Info, LineChart, ListOrdered, Loader, PenSquare, Plus, Send, TrendingUp, X } from 'lucide-react';
 import { PAGE_TYPE_VALUES, compactNumber, type Ladder, type LadderRung, type RankPoint, type RankingsData, type TrackedKeyword } from '@seo/shared';
 import { paths } from '@/lib/paths';
 import { useSiteData } from '@/lib/queries';
@@ -11,13 +11,15 @@ import { Button, ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/field';
-import { ExternalLink, KeyValue, Meter, PageHeader, StatTile } from '@/components/ui/misc';
+import { ExternalLink, KeyValue, PageHeader } from '@/components/ui/misc';
+import { CountUp, DistributionBar, HeroLink, HeroNextStep, HeroStat, IconTile, ScoreRing, SEQ, Stagger, SummaryHero } from '@/components/insight';
 import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
-import { Chips, DataGate, FillHeight, KpiGrid, Kind, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
+import { Chips, DataGate, FillHeight, Kind, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { plural, sortByDate, urlPath } from './_components/format';
-import { BUCKETS, bucketOf, moveOf, plotPos, posSort, posText, PositionMove, ranked, type Bucket } from './_components/positions';
+import { BUCKETS, bucketOf, moveOf, plotPos, posSort, posText, PositionMove, PositionPill, ranked, type Bucket } from './_components/positions';
 import { PositionHistoryCard, type HistoryLine } from './_components/history';
+import { ChartTitle, DashSkeleton, HeroEyebrow } from './_components/visuals';
 
 export default function RankingsPage() {
   const { org, site } = useSitePage();
@@ -25,6 +27,7 @@ export default function RankingsPage() {
   return (
     <div>
       <PageHeader
+        icon={<Activity />}
         title="Rankings"
         description="Live Google positions for your keyword ladders and tracked keywords, checked every Monday."
         actions={
@@ -36,7 +39,9 @@ export default function RankingsPage() {
           </>
         }
       />
-      <DataGate q={q}>{(d) => <Rankings d={d} refetching={q.isFetching} />}</DataGate>
+      <DataGate q={q} skeleton={<DashSkeleton cards={0} />}>
+        {(d) => <Rankings d={d} refetching={q.isFetching} />}
+      </DataGate>
     </div>
   );
 }
@@ -114,48 +119,99 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
   const down = moves.filter((m) => m === 'down' || m === 'dropped').length;
   const lastCheck = sortByDate(all.filter((k) => k.lastChecked), (k) => k.lastChecked, 'desc')[0]?.lastChecked ?? null;
 
+  const top10 = counts.top3 + counts.top10;
+  const top50 = top10 + counts.top20 + counts.top50;
+  const ladderPages = d.ladders.reduce((a, l) => a + l.rungs.length, 0);
+  const movers = all
+    .map((k) => ({ k, m: moveOf(k.prev, k.latest) }))
+    .filter(({ m }) => m.kind === 'up' || m.kind === 'down' || m.kind === 'entered' || m.kind === 'dropped')
+    .sort((a, b) => b.m.places - a.m.places);
+
   return (
-    <div className="space-y-6">
-      <KpiGrid dense>
-        <StatTile label="Keywords checked weekly" value={all.length} hint={`${plural(d.ladders.reduce((a, l) => a + l.rungs.length, 0), 'ladder page')} · ${plural(d.keywords.length, 'site keyword')}${lastCheck ? ` · last check ${fmtAgo(lastCheck)}` : ''}`} />
-        <StatTile label="In the top 10" value={counts.top3 + counts.top10} hint={`${counts.top3} in the top 3 — page 1 of Google`} />
-        <StatTile label="In the top 50" value={counts.top3 + counts.top10 + counts.top20 + counts.top50} hint={`${counts.top20} at 11–20, close to page 1`} />
-        <StatTile
-          label="Movement since the last check"
-          value={
-            <span className="inline-flex items-baseline gap-3">
-              <span className="text-good-text">▲ {up}</span>
-              <span className="text-critical-text">▼ {down}</span>
-            </span>
-          }
-          hint={`${up} moved up or entered the top 50, ${down} moved down or left it`}
-        />
-      </KpiGrid>
+    <Stagger className="space-y-6">
+      {/* where the keywords rank now and how they moved since the last weekly check */}
+      <SummaryHero
+        tone="blue"
+        eyebrow={<HeroEyebrow tag="Google rankings">{`${plural(all.length, 'keyword')} checked every Monday${lastCheck ? ` · last check ${fmtAgo(lastCheck)}` : ''}`}</HeroEyebrow>}
+        title={rankingsHeadline(all.length, top10, top50, up, down)}
+        description={`${up} moved up or entered the top 50, ${down} moved down or left it since the last check. Ladder pages climb rung by rung as they are written and published.`}
+        aside={<NextRung ladders={d.ladders} />}
+        stats={
+          <>
+            <HeroStat label="Keywords checked weekly" value={<CountUp value={all.length} />} hint={`${plural(ladderPages, 'ladder page')} · ${plural(d.keywords.length, 'site keyword')}${lastCheck ? ` · last check ${fmtAgo(lastCheck)}` : ''}`} />
+            <HeroStat label="In the top 10" value={<CountUp value={top10} />} hint={`${counts.top3} in the top 3 — page 1 of Google`} />
+            <HeroStat label="In the top 50" value={<CountUp value={top50} />} hint={`${counts.top20} at 11–20, close to page 1`} />
+            <HeroStat
+              label="Movement since the last check"
+              value={
+                <span className="inline-flex items-baseline gap-4">
+                  <span className="inline-flex items-center gap-1">
+                    <ArrowUpRight className="size-5 self-center" aria-hidden />
+                    {up}
+                    <span className="sr-only"> up</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <ArrowDownRight className="size-5 self-center" aria-hidden />
+                    {down}
+                    <span className="sr-only"> down</span>
+                  </span>
+                </span>
+              }
+              hint={`${up} moved up or entered the top 50, ${down} moved down or left it`}
+            />
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <ChartCard
-          title="Where your keywords rank"
+          title={<ChartTitle icon={<BarChart3 />}>Where your keywords rank</ChartTitle>}
           description="Latest Google position per keyword"
           loading={refetching}
           table={{ columns: [{ key: 'label', label: 'Position' }, { key: 'keywords', label: 'Keywords', align: 'right' }], rows: BUCKETS.map((b) => ({ label: b.label, keywords: counts[b.key] })) }}
         >
-          <FillHeight min={220}>
-            {(h) => (
-              <BarsChart
-                data={BUCKETS.filter((b) => b.key !== 'unknown' || counts.unknown > 0).map((b) => ({ label: b.label, keywords: counts[b.key] }))}
-                categoryKey="label"
-                series={[{ key: 'keywords', label: 'Keywords' }]}
-                height={h}
-              />
-            )}
-          </FillHeight>
+          <div className="flex h-full flex-col">
+            <DistributionBar label="Keywords by position" segments={bucketSegments(counts)} className="px-2 pb-3" />
+            <div className="min-h-0 flex-1">
+              <FillHeight min={220}>
+                {(h) => (
+                  <BarsChart
+                    data={BUCKETS.filter((b) => b.key !== 'unknown' || counts.unknown > 0).map((b) => ({ label: b.label, keywords: counts[b.key] }))}
+                    categoryKey="label"
+                    series={[{ key: 'keywords', label: 'Keywords' }]}
+                    height={h}
+                  />
+                )}
+              </FillHeight>
+            </div>
+          </div>
         </ChartCard>
         <HistoryExplorer all={all} loading={refetching} className="lg:col-span-2" />
       </div>
 
+      {movers.length > 0 && (
+        <Panel title="Biggest moves" icon={<ArrowUpDown />} description="Keywords that moved since the previous weekly check" flush>
+          <ul className="grid grid-cols-1 divide-y divide-line border-t border-line lg:grid-cols-2 lg:divide-y-0">
+            {movers.slice(0, 8).map(({ k }) => (
+              <li key={k.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-5 py-2.5 transition-colors duration-150 ease-brand hover:bg-surface-2/50 lg:border-b lg:border-line">
+                <span className="min-w-0 basis-full truncate text-sm text-ink sm:basis-0 sm:flex-1" title={k.keyword}>
+                  {k.keyword}
+                </span>
+                <span className="inline-flex shrink-0 items-center gap-1.5 text-xs text-ink-3">
+                  <PositionPill p={k.prev} />
+                  <ArrowRight className="size-3" aria-hidden />
+                  <PositionPill p={k.latest} />
+                </span>
+                <PositionMove prev={k.prev} cur={k.latest} className="ml-auto shrink-0 justify-end sm:ml-0 sm:w-28" />
+              </li>
+            ))}
+          </ul>
+        </Panel>
+      )}
+
       {d.ladders.length > 0 && (
         <section>
-          <SectionHeading title="Keyword ladders" description="Each ladder climbs from winnable long-tail pages (rung 1) to the head term at the top. Write and publish rung by rung; the rank tracker checks every page weekly." />
+          <SectionHeading icon={<TrendingUp />} title="Keyword ladders" description="Each ladder climbs from winnable long-tail pages (rung 1) to the head term at the top. Write and publish rung by rung; the rank tracker checks every page weekly." />
           <div className="space-y-4">
             {d.ladders.map((l) => (
               <LadderCard key={l.ladderId} ladder={l} onHistory={(r) => setDialog(all.find((k) => k.keyword === r.keyword) ?? null)} />
@@ -166,6 +222,7 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
 
       <section>
         <SectionHeading
+          icon={<ListOrdered />}
           title="Tracked site keywords"
           description="Keywords from weekly tracking, checked live on Google"
           actions={
@@ -204,7 +261,7 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
           <KeyValue
             className="mb-4"
             items={[
-              { label: 'Latest position', value: <span className="inline-flex items-center gap-2">{posText(dialog.latest)} <PositionMove prev={dialog.prev} cur={dialog.latest} /></span> },
+              { label: 'Latest position', value: <span className="inline-flex items-center gap-2"><PositionPill p={dialog.latest} /> <PositionMove prev={dialog.prev} cur={dialog.latest} /></span> },
               { label: 'Best position', value: posText(dialog.best) },
               { label: 'Ranking page', value: dialog.url ? <ExternalLink href={dialog.url}>{urlPath(dialog.url)}</ExternalLink> : '–' },
               { label: 'Last checked', value: dialog.lastChecked ? fmtDate(dialog.lastChecked) : 'not checked yet' },
@@ -217,7 +274,55 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
           )}
         </Dialog>
       )}
-    </div>
+    </Stagger>
+  );
+}
+
+/** The hero's headline: how many keywords reach page 1 (or the top 50) and how they moved. */
+function rankingsHeadline(n: number, top10: number, top50: number, up: number, down: number): string {
+  const moved = up || down ? ` — ${up} up, ${down} down` : '';
+  if (top10) return `${top10} of ${plural(n, 'keyword')} on page 1 of Google${moved}`;
+  if (top50) return `${top50} of ${plural(n, 'keyword')} in the top 50, none on page 1 yet${moved}`;
+  return `None of your ${plural(n, 'keyword')} is in the top 50 yet${moved}`;
+}
+
+/** Keyword counts per position bucket on the blue ramp (strongest = top 3); not ranked / not checked stay neutral. */
+function bucketSegments(counts: Record<Bucket, number>) {
+  const color: Record<Bucket, string> = { top3: SEQ[5], top10: SEQ[4], top20: SEQ[2], top50: SEQ[1], out: 'var(--surface-3)', unknown: 'var(--line-strong)' };
+  return BUCKETS.filter((b) => b.key !== 'unknown' || counts.unknown > 0).map((b) => ({ label: b.label, value: counts[b.key], color: color[b.key] }));
+}
+
+/** The hero's next step: the first ladder page waiting to be published, else the lowest planned rung to write. */
+function NextRung({ ladders }: { ladders: Ladder[] }) {
+  const { org, site, can, tool } = useSitePage();
+  if (!can('member')) return null;
+  const rungs = ladders.flatMap((l) => l.rungs.map((r) => ({ l, r })));
+  const written = rungs.find(({ r }) => r.status === 'writing' || r.status === 'started' || r.status === 'written');
+  const planned = rungs.filter(({ r }) => r.status !== 'published' && !(r.status === 'writing' || r.status === 'started' || r.status === 'written')).sort((a, b) => a.r.rung - b.r.rung || a.r.pageNo - b.r.pageNo)[0];
+  const pick = written ?? planned;
+  if (!pick) return null;
+  const { l, r } = pick;
+  const pageType = (PAGE_TYPE_VALUES as readonly string[]).includes(r.pageType) ? r.pageType : undefined;
+  return (
+    <HeroNextStep
+      icon={written ? <Send /> : <PenSquare />}
+      eyebrow={`Next step · ladder “${l.headKeyword}”, rung ${r.rung}`}
+      title={written ? `Publish “${r.keyword}” and report its URL` : `${r.pageExists ? 'Improve' : 'Write'} the page for “${r.keyword}”`}
+      actions={
+        <>
+          {written ? (
+            <ButtonLink to={tool('published', { keyword: r.keyword, ...(r.targetUrl ? { publishedUrl: r.targetUrl } : {}) })} size="sm" variant="secondary">
+              Report published URL
+            </ButtonLink>
+          ) : (
+            <ButtonLink to={tool('keyword', { keyword: r.keyword, ...(pageType ? { pageType } : {}), ...(r.pageExists && r.targetUrl ? { existingPageUrl: r.targetUrl } : {}) })} size="sm" variant="secondary">
+              {r.pageExists ? 'Improve page' : 'Write page'}
+            </ButtonLink>
+          )}
+          <HeroLink to={paths.ladder(org.id, site.id, l.ladderId)}>Open the ladder</HeroLink>
+        </>
+      }
+    />
   );
 }
 
@@ -309,29 +414,41 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-5 py-4">
-        <div className="min-w-0">
-          <div className="text-xs font-medium text-ink-3">Ladder · {ladder.country}</div>
-          <h3 className="mt-0.5 font-display text-lg font-semibold text-ink">
-            <Link to={detail} className="hover:text-accent-text hover:underline transition-colors duration-150 ease-brand">
-              {ladder.headKeyword}
+        <div className="flex min-w-0 items-start gap-3.5">
+          <IconTile tone="solid" size="md" className="mt-0.5">
+            <TrendingUp />
+          </IconTile>
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-ink-3">Ladder · {ladder.country}</div>
+            <h3 className="mt-0.5 font-display text-lg font-semibold text-ink">
+              <Link to={detail} className="hover:text-accent-text hover:underline transition-colors duration-150 ease-brand">
+                {ladder.headKeyword}
+              </Link>
+            </h3>
+            <p className="mt-0.5 text-[13px] text-ink-3">
+              Started {fmtDate(ladder.startDate)} · {plural(pages, 'page')} on {plural(groups.length, 'rung')} · {inTop10} in the top 10
+            </p>
+            <Link to={detail} className="group/ol mt-1.5 inline-flex items-center gap-1 text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
+              Open the ladder in the Pipeline
+              <ArrowRight className="size-3.5 transition-transform duration-200 ease-brand group-hover/ol:translate-x-0.5" aria-hidden />
             </Link>
-          </h3>
-          <p className="mt-0.5 text-[13px] text-ink-3">
-            Started {fmtDate(ladder.startDate)} · {plural(pages, 'page')} on {plural(groups.length, 'rung')} · {inTop10} in the top 10
-          </p>
-          <Link to={detail} className="mt-1.5 inline-flex items-center gap-1 text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
-            Open the ladder in the Pipeline
-            <ArrowRight className="size-3.5" aria-hidden />
-          </Link>
-        </div>
-        <div className="w-full max-w-[220px]">
-          <div className="flex items-baseline justify-between text-[13px]">
-            <span className="text-ink-2">Published</span>
-            <span className="font-medium tabular text-ink">
-              {published} / {pages}
-            </span>
           </div>
-          <Meter value={pages ? ((ladder.published || published) / pages) * 100 : 0} tone={published === pages && pages > 0 ? 'good' : 'accent'} className="mt-1.5" label="Pages published" />
+        </div>
+        <div className="flex w-full max-w-[240px] items-center gap-3 rounded-lg bg-surface-2/70 px-3 py-2.5">
+          <ScoreRing
+            label="Pages published"
+            value={pages ? ((ladder.published || published) / pages) * 100 : 0}
+            tone={published === pages && pages > 0 ? 'good' : 'accent'}
+            display={`${published}/${pages}`}
+            valueText={`${published} of ${pages} published`}
+            size={52}
+          />
+          <div className="min-w-0 text-[13px]">
+            <div className="font-medium text-ink">Published</div>
+            <div className="text-xs tabular text-ink-3">
+              {published} / {pages}
+            </div>
+          </div>
         </div>
       </div>
       <ol className="px-5 py-4">
@@ -400,8 +517,8 @@ function LadderCard({ ladder, onHistory }: { ladder: Ladder; onHistory: (r: Ladd
                         ) : (
                           <>
                         <div className="text-right">
-                          <div className="text-sm font-semibold tabular text-ink">{posText(r.latestPosition)}</div>
-                          <div className="flex items-center justify-end gap-2">
+                          <PositionPill p={r.latestPosition} />
+                          <div className="mt-1 flex items-center justify-end gap-2">
                             <PositionMove prev={r.previousPosition} cur={r.latestPosition} />
                           </div>
                         </div>
@@ -459,7 +576,7 @@ function RungAction({ r, can, tool }: { r: LadderRung; can: boolean; tool: Retur
 function KeywordTable({ rows, onOpen }: { rows: TrackedKeyword[]; onOpen: (k: TrackedKeyword) => void }) {
   const columns: Column<TrackedKeyword>[] = [
     { key: 'keyword', header: 'Keyword', sortValue: (r) => r.keyword, cell: (r) => <span className="block min-w-[12rem] font-medium text-ink">{r.keyword}</span> },
-    { key: 'latest', header: 'Position', align: 'right', sortValue: (r) => posSort(r.latestPosition), cell: (r) => <span className="font-semibold">{posText(r.latestPosition)}</span> },
+    { key: 'latest', header: 'Position', align: 'right', sortValue: (r) => posSort(r.latestPosition), cell: (r) => <PositionPill p={r.latestPosition} /> },
     { key: 'move', header: 'Change', align: 'right', sortValue: (r) => (ranked(r.latestPosition) && ranked(r.previousPosition) ? r.previousPosition - r.latestPosition : null), cell: (r) => <PositionMove prev={r.previousPosition} cur={r.latestPosition} /> },
     { key: 'best', header: 'Best', align: 'right', hideOnMobile: true, sortValue: (r) => posSort(r.bestPosition), cell: (r) => posText(r.bestPosition) },
     {
@@ -484,7 +601,8 @@ function KeywordTable({ rows, onOpen }: { rows: TrackedKeyword[]; onOpen: (k: Tr
   return (
     <>
       <DataTable rows={rows} columns={columns} rowKey={(r, i) => `${r.keyword}|${i}`} initialSort={{ key: 'latest', dir: 'asc' }} searchable searchPlaceholder="Search keywords" onRowClick={onOpen} dense />
-      <p className="mt-2 text-xs text-ink-3">
+      <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-3">
+        <Info className="mt-px size-3.5 shrink-0" aria-hidden />
         “&gt;50” means not in the top 50 results; “check failed” is retried next week. Select a row for its history. {compactNumber(rows.filter((r) => ranked(r.latestPosition)).length)} of {rows.length} rank in the top 50.
       </p>
     </>

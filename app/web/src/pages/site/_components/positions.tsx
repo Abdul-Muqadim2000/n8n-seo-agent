@@ -110,5 +110,30 @@ export function PositionMove({ prev, cur, digits = 0, className, showFirst }: { 
   }
 }
 
+/**
+ * A Google position as a small pill on the blue ramp: top 3 solid brand blue, 4–10 brand tint, 11–50 neutral, not ranked / not
+ * checked quiet. The text is always the position itself (colour only adds weight). `avg` shows one decimal (Search Console).
+ */
+export function PositionPill({ p, text, avg, className }: { p: number | null | undefined; text?: string; avg?: boolean; className?: string }) {
+  const has = p != null && p > 0;
+  const tier = p == null || p < 0 ? 'none' : !has ? 'deep' : p <= 3 ? 'top3' : p <= 10 ? 'top10' : p <= 50 ? 'ranked' : 'deep';
+  const label = text ?? (has ? (avg ? p.toFixed(1) : posText(p)) : posText(p));
+  return (
+    <span
+      className={cn(
+        'inline-flex h-6 min-w-[2.5rem] items-center justify-center rounded-full px-2 text-xs font-semibold whitespace-nowrap tabular',
+        tier === 'top3' && 'bg-accent text-accent-ink',
+        tier === 'top10' && 'bg-accent-soft text-accent-text ring-1 ring-accent/25',
+        tier === 'ranked' && 'bg-surface-2 text-ink ring-1 ring-line',
+        tier === 'deep' && 'bg-surface-2 text-ink-2',
+        tier === 'none' && 'text-ink-3 ring-1 ring-line ring-inset',
+        className,
+      )}
+    >
+      {label}
+    </span>
+  );
+}
+
 /** Sorting key for positions: unranked and unknown sink to the bottom. */
 export const posSort = (p: number | null | undefined): number => (p == null || p < 0 ? 999 : p === 0 ? 500 : p);

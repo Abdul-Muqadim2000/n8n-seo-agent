@@ -1,31 +1,35 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { BarChart3, CalendarRange, FileText, Minus, MousePointerClick, Search, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowUpDown, BarChart3, CalendarRange, CheckCircle2, FileText, Lightbulb, LineChart, Minus, MousePointerClick, PieChart, Search, Sparkles, Target, TrendingDown, TrendingUp, TriangleAlert, Users } from 'lucide-react';
 import { compactNumber, titleCase, type MetricsPoint, type SearchData, type TrendPoint } from '@seo/shared';
 import { useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import { ChartCard, ShareBars, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
-import { Badge, StatusBadge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Callout, EmptyState } from '@/components/ui/feedback';
-import { Delta, PageHeader, StatTile } from '@/components/ui/misc';
+import { Delta, Meter, PageHeader } from '@/components/ui/misc';
+import { CountUp, HeroLink, HeroStat, IconTile, MetricCard, ScoreRing, Stagger, SummaryHero } from '@/components/insight';
 import { Tab, TabList, TabPanel, Tabs } from '@/components/ui/tabs';
 import { DataTable, type Column } from '@/components/ui/table';
 import { EngineActionList } from './_components/actions';
-import { DataGate, KpiGrid, MetricSwitch, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
+import { DataGate, MetricSwitch, Panel, RunAnalysisMenu, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { diff, fmtRange, pct, pctChange, ratioPct, sortByDate, urlPath } from './_components/format';
 import { plotAvgPos } from './_components/positions';
 import { QueryChangeTable, QueryExplorer } from './_components/QueryExplorer';
+import { ChartTitle, DashSkeleton, HeroChip, HeroEyebrow } from './_components/visuals';
 
 export default function SearchPage() {
   const { org, site } = useSitePage();
   const q = useSiteData(org.id, site.id, 'search');
   return (
     <div>
-      <PageHeader title="Search & traffic" description={`Google Search Console and Analytics for ${site.domain}: clicks, queries, landing pages and demand trends.`} actions={<RunAnalysisMenu />} />
-      <DataGate q={q}>{(d) => <SearchBody d={d} refetching={q.isFetching} />}</DataGate>
+      <PageHeader icon={<TrendingUp />} title="Search & traffic" description={`Google Search Console and Analytics for ${site.domain}: clicks, queries, landing pages and demand trends.`} actions={<RunAnalysisMenu />} />
+      <DataGate q={q} skeleton={<DashSkeleton />}>
+        {(d) => <SearchBody d={d} refetching={q.isFetching} />}
+      </DataGate>
     </div>
   );
 }
@@ -81,48 +85,10 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
   const alerts = M?.alerts ?? [];
 
   return (
-    <div className="space-y-6">
-      {/* context bar: period, connections, latest report */}
-      <Card className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <span className="inline-flex items-center gap-1.5 font-medium text-ink">
-            <CalendarRange className="size-4 text-ink-3" aria-hidden />
-            {period ? `Last 28 days: ${fmtRange(period.current.start, period.current.end)}` : 'No period yet'}
-          </span>
-          {period?.previous && <span className="text-[13px] text-ink-3">compared with {fmtRange(period.previous.start, period.previous.end)}</span>}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {gscOn ? (
-            <StatusBadge tone="good">Search Console{S?.gsc.property || d.connection.gscProperty ? ` · ${S?.gsc.property ?? d.connection.gscProperty}` : ''}</StatusBadge>
-          ) : (
-            <Link to={page('settings/verification')} title={S?.gsc.error ?? undefined}>
-              <StatusBadge tone="warning">Search Console not connected — connect</StatusBadge>
-            </Link>
-          )}
-          {gaOn ? (
-            <StatusBadge tone="good">Analytics{S?.ga4.propertyId || d.connection.ga4PropertyId ? ` · ${S?.ga4.propertyId ?? d.connection.ga4PropertyId}` : ''}</StatusBadge>
-          ) : (
-            <Link to={page('settings/tracking')}>
-              <StatusBadge tone="warning">Analytics not connected — choose a property</StatusBadge>
-            </Link>
-          )}
-          {S && (
-            <ButtonLink to={paths.report(org.id, S.reportId)} variant="ghost" size="sm" icon={<FileText className="size-4" />}>
-              Weekly report · {fmtAgo(S.receivedAt)}
-            </ButtonLink>
-          )}
-        </div>
-      </Card>
-
+    <Stagger className="space-y-6">
       {!gscOn && S?.gsc.error && (
         <Callout tone="warning" title="Search Console is not connected yet" action={can('admin') ? <ButtonLink to={page('settings/verification')} size="sm" variant="secondary">Connect it</ButtonLink> : undefined}>
           Add the service account as a user of the Search Console property. Reported error: {S.gsc.error}
-        </Callout>
-      )}
-
-      {(S?.brief?.headline || S?.brief?.summary) && (
-        <Callout title={S.brief?.headline} tone="info">
-          {S.brief?.summary}
         </Callout>
       )}
       {alerts.length > 0 && (
@@ -135,59 +101,119 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
         </Callout>
       )}
 
-      <section>
-        <SectionHeading title="Google Search Console" description="Clicks and impressions from Google Search, last 28 days against the 28 days before" />
-        <KpiGrid>
-          <StatTile
-            label="Clicks"
-            icon={<MousePointerClick className="size-4" />}
-            value={cur ? compactNumber(cur.clicks) : '–'}
-            delta={<Delta value={S?.gsc.deltas.clicksPct ?? pctChange(cur?.clicks, prev?.clicks)} />}
-            trend={<Sparkline data={gDaily} dataKey="clicks" />}
-            hint={prev ? `Previously ${compactNumber(prev.clicks)}` : undefined}
-          />
-          <StatTile
-            label="Impressions"
-            value={cur ? compactNumber(cur.impressions) : '–'}
-            delta={<Delta value={S?.gsc.deltas.impressionsPct ?? pctChange(cur?.impressions, prev?.impressions)} />}
-            trend={<Sparkline data={gDaily} dataKey="impressions" />}
-            hint={prev ? `Previously ${compactNumber(prev.impressions)}` : undefined}
-          />
-          <StatTile
-            label="Click-through rate"
-            value={cur ? ratioPct(cur.ctr, 2) : '–'}
-            delta={<Delta value={S?.gsc.deltas.ctrPts ?? (cur && prev ? (cur.ctr - prev.ctr) * 100 : null)} suffix=" pts" digits={2} label={prev ? `from ${ratioPct(prev.ctr, 2)}` : undefined} />}
-            hint="Share of impressions that became a click"
-          />
-          <StatTile
-            label="Average position"
-            value={cur && cur.position > 0 ? cur.position.toFixed(1) : '–'}
-            delta={<Delta value={posDelta} suffix="" />}
-            trend={<Sparkline data={gDaily} dataKey="position" invert />}
-            hint={prev && prev.position > 0 ? `Previously ${prev.position.toFixed(1)} · a rise means you moved up` : 'A rise means you moved up'}
-          />
-        </KpiGrid>
-      </section>
+      {/* Search Console: how clicks moved over the last 28 days, the connections and the latest weekly report */}
+      <SummaryHero
+        tone="blue"
+        eyebrow={
+          <HeroEyebrow tag="Google Search Console">
+            {period ? `Last 28 days: ${fmtRange(period.current.start, period.current.end)}` : 'No period yet'}
+            {period?.previous ? `, compared with ${fmtRange(period.previous.start, period.previous.end)}` : ''}
+          </HeroEyebrow>
+        }
+        title={clicksHeadline(cur, S?.gsc.deltas.clicksPct ?? pctChange(cur?.clicks, prev?.clicks))}
+        description={S?.brief?.headline || 'Clicks and impressions from Google Search, last 28 days against the 28 days before.'}
+        actions={
+          <>
+            {gscOn ? (
+              <HeroChip icon={<CheckCircle2 />}>Search Console{S?.gsc.property || d.connection.gscProperty ? ` · ${S?.gsc.property ?? d.connection.gscProperty}` : ''}</HeroChip>
+            ) : (
+              <HeroChip icon={<TriangleAlert />} to={page('settings/verification')} title={S?.gsc.error ?? undefined}>
+                Search Console not connected — connect
+              </HeroChip>
+            )}
+            {gaOn ? (
+              <HeroChip icon={<CheckCircle2 />}>Analytics{S?.ga4.propertyId || d.connection.ga4PropertyId ? ` · ${S?.ga4.propertyId ?? d.connection.ga4PropertyId}` : ''}</HeroChip>
+            ) : (
+              <HeroChip icon={<TriangleAlert />} to={page('settings/tracking')}>
+                Analytics not connected — choose a property
+              </HeroChip>
+            )}
+            {S && (
+              <HeroLink to={paths.report(org.id, S.reportId)} className="ml-1">
+                <FileText className="size-3.5" aria-hidden />
+                Weekly report · {fmtAgo(S.receivedAt)}
+              </HeroLink>
+            )}
+          </>
+        }
+        stats={
+          <>
+            <HeroStat
+              label="Clicks"
+              value={cur ? <CountUp value={cur.clicks} format={compactNumber} /> : '–'}
+              delta={<Delta value={S?.gsc.deltas.clicksPct ?? pctChange(cur?.clicks, prev?.clicks)} />}
+              trend={<Sparkline data={gDaily} dataKey="clicks" />}
+              hint={prev ? `Previously ${compactNumber(prev.clicks)}` : undefined}
+            />
+            <HeroStat
+              label="Impressions"
+              value={cur ? <CountUp value={cur.impressions} format={compactNumber} /> : '–'}
+              delta={<Delta value={S?.gsc.deltas.impressionsPct ?? pctChange(cur?.impressions, prev?.impressions)} />}
+              trend={<Sparkline data={gDaily} dataKey="impressions" />}
+              hint={prev ? `Previously ${compactNumber(prev.impressions)}` : undefined}
+            />
+            <HeroStat
+              label="Click-through rate"
+              info="Share of impressions that became a click"
+              value={cur ? <CountUp value={cur.ctr} format={(v) => ratioPct(v, 2)} /> : '–'}
+              delta={<Delta value={S?.gsc.deltas.ctrPts ?? (cur && prev ? (cur.ctr - prev.ctr) * 100 : null)} suffix=" pts" digits={2} />}
+              hint={prev ? `from ${ratioPct(prev.ctr, 2)}` : 'Share of impressions that became a click'}
+            />
+            <HeroStat
+              label="Average position"
+              info="A rise means you moved up"
+              value={cur && cur.position > 0 ? <CountUp value={cur.position} format={(v) => v.toFixed(1)} /> : '–'}
+              delta={<Delta value={posDelta} suffix="" />}
+              trend={<Sparkline data={gDaily} dataKey="position" invert />}
+              hint={prev && prev.position > 0 ? `Previously ${prev.position.toFixed(1)} · a rise means you moved up` : 'A rise means you moved up'}
+            />
+          </>
+        }
+      />
+
+      {S?.brief?.summary && (
+        <Panel title="The week in brief" icon={<Sparkles />} description={`Weekly report of ${fmtDate(S.receivedAt)}`} info="Written by the engine from this week’s Search Console, Analytics, Trends and rank data">
+          <p className="max-w-4xl text-sm leading-relaxed text-ink-2">{S.brief.summary}</p>
+        </Panel>
+      )}
 
       <section>
-        <SectionHeading title="Google Analytics 4 — organic search" description="Visits that came from organic search, same 28 days" />
+        <SectionHeading icon={<BarChart3 />} title="Google Analytics 4 — organic search" description="Visits that came from organic search, same 28 days" />
         {gaOn && org1 ? (
-          <KpiGrid>
-            <StatTile label="Organic sessions" value={compactNumber(org1.sessions)} delta={<Delta value={pctChange(org1.sessions, org0?.sessions)} />} trend={<Sparkline data={aDaily} dataKey="sessions" />} hint={org0 ? `Previously ${compactNumber(org0.sessions)}` : undefined} />
-            <StatTile
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <MetricCard
+              label="Organic sessions"
+              icon={<Users />}
+              value={<CountUp value={org1.sessions} format={compactNumber} />}
+              delta={<Delta value={pctChange(org1.sessions, org0?.sessions)} />}
+              sparkline={<Sparkline data={aDaily} dataKey="sessions" />}
+              meta={org0 ? `Previously ${compactNumber(org0.sessions)}` : undefined}
+            />
+            <MetricCard
               label="Engaged sessions"
-              value={compactNumber(org1.engaged)}
+              icon={<MousePointerClick />}
+              value={<CountUp value={org1.engaged} format={compactNumber} />}
               delta={<Delta value={pctChange(org1.engaged, org0?.engaged)} />}
-              trend={<Sparkline data={aDaily} dataKey="engaged" />}
-              hint={`${org1.sessions ? `${pct((org1.engaged / org1.sessions) * 100, 0)} engagement rate` : 'No sessions'}${org0 ? ` · previously ${compactNumber(org0.engaged)}` : ''}`}
+              sparkline={<Sparkline data={aDaily} dataKey="engaged" />}
+              meta={`${org1.sessions ? `${pct((org1.engaged / org1.sessions) * 100, 0)} engagement rate` : 'No sessions'}${org0 ? ` · previously ${compactNumber(org0.engaged)}` : ''}`}
             />
-            <StatTile label="Key events" value={compactNumber(org1.keyEvents)} delta={<Delta value={pctChange(org1.keyEvents, org0?.keyEvents)} />} trend={<Sparkline data={aDaily} dataKey="keyEvents" />} hint={`Conversions from organic visits${org0 ? ` · previously ${compactNumber(org0.keyEvents)}` : ''}`} />
-            <StatTile
+            <MetricCard
+              label="Key events"
+              icon={<Target />}
+              info="Conversions from organic visits"
+              value={<CountUp value={org1.keyEvents} format={compactNumber} />}
+              delta={<Delta value={pctChange(org1.keyEvents, org0?.keyEvents)} />}
+              sparkline={<Sparkline data={aDaily} dataKey="keyEvents" />}
+              meta={`Conversions from organic visits${org0 ? ` · previously ${compactNumber(org0.keyEvents)}` : ''}`}
+            />
+            <MetricCard
               label="Organic share"
-              value={share != null ? pct(share, 0) : '–'}
-              hint={S?.ga4.total ? `of ${compactNumber(S.ga4.total.sessions)} sessions from all channels${S.ga4.totalPrev ? ` (previously ${compactNumber(S.ga4.totalPrev.sessions)})` : ''}` : 'of all sessions'}
+              icon={<PieChart />}
+              visual={share != null ? <ScoreRing label="Organic share" value={share} tone="accent" display={<CountUp value={share} format={(v) => pct(v, 0)} />} valueText={pct(share, 0)} size={68} /> : undefined}
+              value="–"
+              meta={S?.ga4.total ? `of ${compactNumber(S.ga4.total.sessions)} sessions from all channels${S.ga4.totalPrev ? ` (previously ${compactNumber(S.ga4.totalPrev.sessions)})` : ''}` : 'of all sessions'}
             />
-          </KpiGrid>
+          </div>
         ) : (
           <Card>
             <EmptyState
@@ -208,7 +234,7 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
 
       {S && gaOn && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-5 xl:items-start">
-          <Panel title="Traffic by channel" description="Sessions per channel, last 28 days" className="xl:col-span-2">
+          <Panel title="Traffic by channel" icon={<PieChart />} description="Sessions per channel, last 28 days" info="Share of all sessions; the number after each bar is sessions. Organic search is highlighted." className="xl:col-span-2">
             {S.ga4.channels.length ? (
               <ShareBars
                 highlight="Organic Search"
@@ -221,37 +247,45 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
             ) : (
               <p className="py-6 text-center text-sm text-ink-3">No channel data in this report.</p>
             )}
-            <p className="mt-3 text-xs text-ink-3">Share of all sessions; the number after each bar is sessions. Organic search is highlighted.</p>
           </Panel>
-          <Panel title="Organic landing pages" description="Where organic visitors land, with the change against the previous 28 days" className="xl:col-span-3" flush>
+          <Panel title="Organic landing pages" icon={<FileText />} description="Where organic visitors land, with the change against the previous 28 days" className="xl:col-span-3" flush>
             <LandingTable rows={S.ga4.landing} />
           </Panel>
         </div>
       )}
 
       <section>
-        <SectionHeading title="Queries" description="Every query Search Console reported in a weekly report, with its live Google position for tracked keywords" />
+        <SectionHeading
+          icon={<Search />}
+          title="Queries"
+          description="Every query Search Console reported in a weekly report, with its live Google position for tracked keywords"
+          info="Avg. position is Search Console’s average over 28 days; Live is this week’s live Google check for keywords you track."
+        />
         <Card className="p-4">
-          {d.queries.length ? <QueryExplorer queries={d.queries} periods={d.periods} /> : <EmptyState className="py-8" title="No query data yet" description="Queries arrive with the first weekly report once Search Console is connected." />}
+          {d.queries.length ? <QueryExplorer queries={d.queries} periods={d.periods} /> : <EmptyState className="py-8" icon={<Search className="size-5" />} title="No query data yet" description="Queries arrive with the first weekly report once Search Console is connected." />}
         </Card>
       </section>
 
       {S && (
         <section>
-          <SectionHeading title="What changed this week" description="Queries that gained or lost the most clicks, and queries that appeared or disappeared" />
+          <SectionHeading icon={<ArrowUpDown />} title="What changed this week" description="Queries that gained or lost the most clicks, and queries that appeared or disappeared" />
           <Card className="px-4 pb-4">
             <Tabs defaultValue="winners">
               <TabList>
                 <Tab value="winners" count={S.gsc.winners.length}>
+                  <TrendingUp className="size-4 text-good-text" aria-hidden />
                   Winners
                 </Tab>
                 <Tab value="losers" count={S.gsc.losers.length}>
+                  <TrendingDown className="size-4 text-critical-text" aria-hidden />
                   Losers
                 </Tab>
                 <Tab value="new" count={S.gsc.newQueries.length}>
+                  <Sparkles className="size-4 text-accent-text" aria-hidden />
                   New
                 </Tab>
                 <Tab value="lost" count={S.gsc.lostQueries.length}>
+                  <Minus className="size-4 text-ink-3" aria-hidden />
                   Lost
                 </Tab>
               </TabList>
@@ -273,7 +307,7 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
       )}
 
       {S && S.actions.length > 0 && (
-        <Panel title="What the engine recommends" description={`From the weekly report of ${fmtDate(S.receivedAt)}`} flush icon={<Sparkles className="size-4" />}>
+        <Panel title="What the engine recommends" description={`From the weekly report of ${fmtDate(S.receivedAt)}`} flush icon={<Lightbulb />}>
           <EngineActionList actions={S.actions} />
         </Panel>
       )}
@@ -281,8 +315,18 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
       <TrendsSection trends={d.trends} />
 
       {metrics.length > 0 && <WeeklyHistory metrics={metrics} loading={refetching} />}
-    </div>
+    </Stagger>
   );
+}
+
+/** The hero's headline: how clicks from Google moved over the last 28 days. */
+function clicksHeadline(cur: Totals | null, ch: number | null | undefined): string {
+  if (!cur) return 'Search data arrives with weekly tracking';
+  const n = compactNumber(cur.clicks);
+  if (ch == null || !Number.isFinite(ch)) return `${n} ${cur.clicks === 1 ? 'click' : 'clicks'} from Google in the last 28 days`;
+  if (ch >= 0.5) return `Clicks from Google are up ${Math.round(ch)}% to ${n}`;
+  if (ch <= -0.5) return `Clicks from Google are down ${Math.abs(Math.round(ch))}% to ${n}`;
+  return `Clicks from Google are steady at ${n}`;
 }
 
 type GMetric = 'clicks' | 'impressions' | 'position';
@@ -295,7 +339,7 @@ function GscDailyChart({ rows, range, loading }: { rows: { date: string; clicks:
   };
   return (
     <ChartCard
-      title="Search Console, daily"
+      title={<ChartTitle icon={<MousePointerClick />}>Search Console, daily</ChartTitle>}
       description={range ? `${range} — the previous and the current 28 days` : 'Daily values from the latest weekly report'}
       loading={loading}
       actions={<MetricSwitch label="Metric" value={m} onChange={setM} options={[{ value: 'clicks', label: 'Clicks' }, { value: 'impressions', label: 'Impressions' }, { value: 'position', label: 'Position' }]} />}
@@ -312,7 +356,7 @@ function GscDailyChart({ rows, range, loading }: { rows: { date: string; clicks:
       {rows.length ? (
         <TimeSeriesChart data={rows} xKey="date" series={[series[m]]} area={m !== 'position'} invertY={m === 'position'} height={240} yFormat={m === 'position' ? (v) => String(Math.round(v)) : undefined} />
       ) : (
-        <EmptyState className="py-10" title="No daily data yet" description="Daily clicks and impressions arrive with the weekly report once Search Console is connected." />
+        <EmptyState className="py-10" icon={<MousePointerClick className="size-5" />} title="No daily data yet" description="Daily clicks and impressions arrive with the weekly report once Search Console is connected." />
       )}
     </ChartCard>
   );
@@ -324,7 +368,7 @@ function GaDailyChart({ rows, connected, loading }: { rows: { date: string; sess
   const series: Series[] = m === 'sessions' ? [{ key: 'sessions', label: 'Organic sessions' }, { key: 'engaged', label: 'Engaged sessions' }] : [{ key: 'keyEvents', label: 'Key events' }];
   return (
     <ChartCard
-      title="Organic visits, daily"
+      title={<ChartTitle icon={<Users />}>Organic visits, daily</ChartTitle>}
       description="Google Analytics 4, organic search channel"
       series={series}
       loading={loading}
@@ -342,7 +386,7 @@ function GaDailyChart({ rows, connected, loading }: { rows: { date: string; sess
       {rows.length ? (
         <TimeSeriesChart data={rows} xKey="date" series={series} area={series.length === 1} height={240} />
       ) : (
-        <EmptyState className="py-10" title={connected ? 'No daily data in this report' : 'Analytics is not connected'} description="Daily organic sessions appear with the weekly report once a GA4 property is connected." />
+        <EmptyState className="py-10" icon={<Users className="size-5" />} title={connected ? 'No daily data in this report' : 'Analytics is not connected'} description="Daily organic sessions appear with the weekly report once a GA4 property is connected." />
       )}
     </ChartCard>
   );
@@ -393,15 +437,20 @@ function TrendsSection({ trends }: { trends: TrendPoint[] }) {
   }, [trends]);
   return (
     <section>
-      <SectionHeading title="Google Trends" description="Search interest for your tracked keywords: the last 4 weeks against the 12-month average (100 = peak interest)" />
+      <SectionHeading icon={<LineChart />} title="Google Trends" description="Search interest for your tracked keywords: the last 4 weeks against the 12-month average (100 = peak interest)" />
       {latest.length ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Stagger className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {latest.map((t) => {
             const dir = directionOf(t.direction);
             return (
               <Card key={t.keyword} className="flex flex-col p-4">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="min-w-0 text-sm font-semibold text-ink">{t.keyword}</h3>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <IconTile size="sm" tone={dir.tone === 'accent' ? 'solid' : 'blue'}>
+                      <LineChart />
+                    </IconTile>
+                    <h3 className="min-w-0 text-sm font-semibold text-ink">{t.keyword}</h3>
+                  </div>
                   <Badge tone={dir.tone} icon={dir.icon}>
                     {dir.label}
                   </Badge>
@@ -419,7 +468,8 @@ function TrendsSection({ trends }: { trends: TrendPoint[] }) {
                     </div>
                   </div>
                 </div>
-                <p className="mt-1 text-xs text-ink-3">
+                <Meter className="mt-2.5" value={t.latest} label={`Search interest now: ${t.latest} of 100`} />
+                <p className="mt-2 text-xs text-ink-3">
                   {t.peakDate ? `Peak ${fmtDate(t.peakDate)} · ` : ''}checked {fmtAgo(t.checkedAt)}
                 </p>
                 {t.rising.length > 0 && (
@@ -454,10 +504,10 @@ function TrendsSection({ trends }: { trends: TrendPoint[] }) {
               </Card>
             );
           })}
-        </div>
+        </Stagger>
       ) : (
         <Card>
-          <EmptyState className="py-8" title="No trend data yet" description="Google Trends is read for your tracked keywords with the weekly report (refreshed about every 25 days)." />
+          <EmptyState className="py-8" icon={<LineChart className="size-5" />} title="No trend data yet" description="Google Trends is read for your tracked keywords with the weekly report (refreshed about every 25 days)." />
         </Card>
       )}
     </section>
@@ -481,7 +531,7 @@ function WeeklyHistory({ metrics, loading }: { metrics: MetricsPoint[]; loading:
   const first = metrics[0];
   return (
     <ChartCard
-      title="Weekly history"
+      title={<ChartTitle icon={<CalendarRange />}>Weekly history</ChartTitle>}
       description={`${metrics.length} weekly ${metrics.length === 1 ? 'report' : 'reports'}, each a rolling 28-day total${metrics.length > 1 ? ` · clicks ${diff(last.clicks, first.clicks)! >= 0 ? 'up' : 'down'} ${compactNumber(Math.abs(diff(last.clicks, first.clicks) ?? 0))} since ${fmtDate(first.periodEnd)}` : ''}`}
       loading={loading}
       actions={<MetricSwitch label="Metric" value={m} onChange={setM} options={W_OPTIONS.map(({ value, label }) => ({ value, label }))} />}

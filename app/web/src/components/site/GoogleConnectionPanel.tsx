@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { BarChart3, ChevronDown, RefreshCw, Search } from 'lucide-react';
+import { BarChart3, ChevronDown, Plug, RefreshCw, Search } from 'lucide-react';
+import { IconTile } from '@/components/ui/icon-tile';
 import type { GoogleConnection, Site } from '@seo/shared';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -34,9 +35,14 @@ export function GoogleConnectionPanel({ orgId, site, canEdit, className }: { org
   return (
     <Card className={className}>
       <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-4">
-        <div className="min-w-0">
-          <h3 className="text-[15px] font-semibold text-ink">Google data</h3>
-          <p className="mt-0.5 text-[13px] leading-snug text-ink-3">Search Console and GA4 feed the weekly report, audits and recommendations.</p>
+        <div className="flex min-w-0 items-start gap-3">
+          <IconTile size="sm" className="mt-px">
+            <Plug />
+          </IconTile>
+          <div className="min-w-0">
+            <h3 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">Google data</h3>
+            <p className="mt-0.5 text-[13px] leading-snug text-ink-3">Search Console and GA4 feed the weekly report, audits and recommendations.</p>
+          </div>
         </div>
         <Button variant="secondary" size="sm" icon={<RefreshCw className={cn('size-3.5', conn.isFetching && 'animate-spin')} />} onClick={() => conn.refetch()} disabled={conn.isFetching}>
           Check again
@@ -71,7 +77,9 @@ function ConnectionBody({ orgId, site, conn, canEdit }: { orgId: string; site: S
     <div className="divide-y divide-line">
       <section className="pb-5">
         <div className="flex flex-wrap items-center gap-2">
-          <Search className="size-4 text-ink-3" aria-hidden />
+          <IconTile size="xs" tone={conn.gsc.connected ? 'good' : 'warning'}>
+            <Search />
+          </IconTile>
           <h4 className="text-sm font-semibold text-ink">Search Console</h4>
           {conn.gsc.connected ? <StatusBadge tone="good">Connected</StatusBadge> : <StatusBadge tone="warning">Not connected</StatusBadge>}
         </div>
@@ -101,7 +109,9 @@ function ConnectionBody({ orgId, site, conn, canEdit }: { orgId: string; site: S
 
       <section className="pt-5">
         <div className="flex flex-wrap items-center gap-2">
-          <BarChart3 className="size-4 text-ink-3" aria-hidden />
+          <IconTile size="xs" tone={conn.ga4.connected ? 'good' : 'warning'}>
+            <BarChart3 />
+          </IconTile>
           <h4 className="text-sm font-semibold text-ink">Google Analytics 4</h4>
           {conn.ga4.connected ? (
             <StatusBadge tone="good">Connected</StatusBadge>
