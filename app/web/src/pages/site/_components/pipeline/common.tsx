@@ -20,6 +20,7 @@ import {
   PauseCircle,
   PenLine,
   PenSquare,
+  Radar,
   RotateCw,
   TrendingUp,
   Trophy,
@@ -33,6 +34,7 @@ import { OFF_CHART, plotPos } from '../positions';
 
 export const AUTO_ICON: Record<AutomationId, ReactNode> = {
   ai_visibility: <Bot className="size-4" />,
+  ai_pulse: <Radar className="size-4" />,
   backlinks: <Link2 className="size-4" />,
   rank_tracker: <Activity className="size-4" />,
   site_tracker: <TrendingUp className="size-4" />,
@@ -178,12 +180,86 @@ const SEGMENTS: { key: 'published' | 'waiting' | 'writing' | 'planned'; label: s
   { key: 'planned', label: 'Planned', color: 'var(--surface-3)' },
 ];
 
-export function LadderProgress({ counts, className, legend = true }: { counts: LadderCard['counts']; className?: string; legend?: boolean }) {
+/** The page counts with the pages in no bucket (e.g. waiting for support) counted as planned, and the sentence screen readers hear. */
+function progressOf(counts: LadderCard['counts']) {
   const known = counts.published + counts.waiting + counts.writing + counts.planned;
   const total = Math.max(counts.total || 0, known);
-  // pages not in any bucket (e.g. waiting for support) count as planned
   const values = { ...counts, planned: counts.planned + Math.max(0, total - known) };
   const label = `${counts.published} of ${total} pages published, ${counts.waiting} written and waiting, ${counts.writing} being written, ${values.planned} planned`;
+  return { total, values, label };
+}
+
+function ProgressLegend({ values, className }: { values: Record<(typeof SEGMENTS)[number]['key'], number>; className?: string }) {
+  return (
+    <ul className={cn('flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2', className)} aria-hidden>
+      {SEGMENTS.map((s) => (
+        <li key={s.key} className="inline-flex items-center gap-1.5">
+          <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: s.color, boxShadow: s.key === 'planned' ? 'inset 0 0 0 1px var(--line-strong)' : undefined }} />
+          {s.label}
+          <span className="font-medium tabular text-ink">{values[s.key]}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The climb as a staircase: one step per page of the plan, rising from the first page to the last, filled in the order the pages
+ * move (published, written and waiting, being written, planned) with the same colours as the progress bar. Long plans (over 24
+ * pages) fall back to the bar. The counts are in the legend and in the label screen readers hear.
+ */
+export function LadderClimb({ counts, className, legend = true, height = 44 }: { counts: LadderCard['counts']; className?: string; legend?: boolean; height?: number }) {
+  const { total, values, label } = progressOf(counts);
+  if (total === 0 || total > 24) return <LadderProgress counts={counts} className={className} legend={legend} />;
+  const steps = SEGMENTS.flatMap((s) => Array.from({ length: values[s.key] }, () => s));
+  return (
+    <div className={className}>
+      <div className="flex items-end gap-[3px]" style={{ height }} role="img" aria-label={label}>
+        {steps.map((s, i) => (
+          <span
+            key={i}
+            className="min-w-1.5 max-w-7 flex-1 rounded-t-[3px] transition-[height] duration-500 ease-brand"
+            style={{ height: `${Math.round(((i + 1) / steps.length) * 72 + 28)}%`, background: s.color, boxShadow: s.key === 'planned' ? 'inset 0 0 0 1px var(--line-strong)' : undefined }}
+          />
+        ))}
+      </div>
+      {legend && <ProgressLegend values={values} className="mt-2.5" />}
+    </div>
+  );
+}
+
+/** The main keyword's Google position as a pill: green in the top 10, blue in the top 50, grey when not ranked or not checked. */
+export function PositionPill({ position, className }: { position: number | null | undefined; className?: string }) {
+  const ranked = position != null && position > 0;
+  const top10 = ranked && position <= 10;
+  return (
+    <span
+      className={cn(
+        'inline-flex h-7 items-center gap-1 whitespace-nowrap rounded-full px-2.5 text-[13px] font-semibold tabular',
+        top10 ? 'bg-good-soft text-good-text' : ranked ? 'bg-accent-soft text-accent-text' : 'bg-surface-2 text-ink-2',
+        className,
+      )}
+    >
+      {top10 ? <Trophy className="size-3.5 shrink-0" aria-hidden /> : ranked ? <TrendingUp className="size-3.5 shrink-0" aria-hidden /> : position == null ? <Clock className="size-3.5 shrink-0" aria-hidden /> : <Minus className="size-3.5 shrink-0" aria-hidden />}
+      {positionWords(position)}
+    </span>
+  );
+}
+
+/** The status colour of a ladder for the stripe on its card's edge (the status badge carries the word and the icon). */
+export const STATUS_STRIPE: Record<LadderStatus, string> = {
+  planning: 'bg-line-strong',
+  writing: 'bg-accent',
+  climbing: 'bg-accent',
+  won: 'bg-good',
+  paused: 'bg-line-strong',
+  queued: 'bg-line-strong',
+  stuck: 'bg-serious',
+  needs_you: 'bg-warning',
+};
+
+export function LadderProgress({ counts, className, legend = true }: { counts: LadderCard['counts']; className?: string; legend?: boolean }) {
+  const { total, values, label } = progressOf(counts);
   return (
     <div className={className}>
       <div className="flex h-2.5 w-full gap-[2px] overflow-hidden rounded-full" role="img" aria-label={label}>
@@ -193,17 +269,7 @@ export function LadderProgress({ counts, className, legend = true }: { counts: L
           SEGMENTS.filter((s) => values[s.key] > 0).map((s) => <span key={s.key} className="h-full first:rounded-l-full last:rounded-r-full" style={{ flexGrow: values[s.key], flexBasis: 0, background: s.color }} />)
         )}
       </div>
-      {legend && (
-        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2" aria-hidden>
-          {SEGMENTS.map((s) => (
-            <li key={s.key} className="inline-flex items-center gap-1.5">
-              <span className="size-2.5 shrink-0 rounded-[3px]" style={{ background: s.color, boxShadow: s.key === 'planned' ? 'inset 0 0 0 1px var(--line-strong)' : undefined }} />
-              {s.label}
-              <span className="font-medium tabular text-ink">{values[s.key]}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      {legend && <ProgressLegend values={values} className="mt-2" />}
     </div>
   );
 }

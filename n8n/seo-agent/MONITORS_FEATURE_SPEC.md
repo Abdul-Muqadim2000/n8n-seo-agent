@@ -1,5 +1,9 @@
 # Growth monitors (v4.5): AI search visibility, the backlink loop, scheduled technical audits
 
+> **v4.9 (2026-10-08):** the AI part was rebuilt to best-in-class level: a panel of up to 50 questions, the daily **AI Pulse**, GA4 revenue, the Answer Analyst, crawler access, the market-wide index and the Gemini scraper. See **`AI_VISIBILITY_SPEC.md`**, which supersedes the AI rows below where they differ (e.g. Gemini is now weekly, Claude monthly, default 20 questions).
+
+> **v4.10 (2026-10-08):** the backlink part was rebuilt: every free link source merged with DataForSEO (Bing Webmaster Tools, the Search Console export, GA4, the Common Crawl web graph, Wikipedia, Hacker News, GDELT, web search), our own link check (lost = two misses, with the reason), SEO / referral / brand values, lists, competitors' new links, contacts and follow-ups, and a free-only mode. See **`BACKLINKS_SPEC.md`**, which supersedes the backlink rows below where they differ.
+
 Built 2026-10-02 at the user's request ("implement it in the best way"): the three gaps found when reviewing whether the agent did "only simple SEO". The agent already *measured* AI search, technical SEO and backlinks once, inside the full report; nothing watched them over time or acted on them. These monitors close that loop.
 
 ## 1. What each monitor does

@@ -3,6 +3,9 @@ import {
   formatPercent,
   normKeyword,
   MONITOR_COSTS,
+  AI_PROMPTS_DEFAULT,
+  aiPulseQuestions,
+  estimateAiVisibilityCost,
   nextScheduledRun,
   type AutomationId,
   type AutomationStatus,
@@ -185,7 +188,7 @@ function thisWeekItems(
   now = Date.now(),
 ): ThisWeekItem[] {
   const dayOfMonth = (iso: string) => Number(new Intl.DateTimeFormat('en-US', { timeZone: p.tz, day: 'numeric' }).format(new Date(iso)));
-  // the monthly extras run on the month's first Monday (AI visibility: Gemini, Claude, the market view; backlinks: the full report)
+  // the monthly extras run on the month's first Monday (AI visibility: Claude, new questions, the market-wide index; backlinks: the full report)
   const firstRun = (iso: string) => dayOfMonth(iso) <= 7;
   const nextCadence = p.calendar.find((c) => c.automation === 'content_cadence')?.at;
   const pages = p.build.cards.reduce((t, c) => t + c.counts.total, 0);
@@ -194,7 +197,9 @@ function thisWeekItems(
     const a = p.automations.find((x) => x.id === id);
     switch (id) {
       case 'ai_visibility':
-        return `${a?.detail ?? 'Your buyer questions'}${firstRun(at) ? ' · Gemini, Claude and the market view (first run of the month)' : ''}`;
+        return `${a?.detail ?? 'Your buyer questions'}${firstRun(at) ? ' · Claude, new questions and the market-wide index (first run of the month)' : ''}`;
+      case 'ai_pulse':
+        return a?.detail ?? 'Your buyer questions on ChatGPT, Gemini and Google AI Mode';
       case 'backlinks':
         return firstRun(at) ? 'Full monthly report: lost links, unlinked mentions and outreach drafts' : 'Watches for lost and spammy links';
       case 'rank_tracker':
@@ -374,6 +379,10 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   };
 
   const aiReport = reportOf(['ai_visibility']);
+  // the pulse asks the stored panel without the brand question (asked monthly); before the first run: the setting minus that question
+  const panelMax = m?.aiPromptsMax ?? AI_PROMPTS_DEFAULT;
+  const storedPanel = x.ai.prompts.filter((p) => p.status !== 'off' && p.kind !== 'brand').length;
+  const pulseQuestions = storedPanel ? Math.min(storedPanel, panelMax) : aiPulseQuestions(panelMax);
   const blReport = reportOf(['backlinks']);
   const rtReport = reportOf(['rank_tracker']);
   const stReport = reportOf(['site_tracker']);
@@ -383,8 +392,15 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       lastRunAt: lastIso(lastAi?.checkedAt, aiReport?.receivedAt),
       lastResult: lastAi ? `Named in ${formatPercent(lastAi.mentionRate, 0)} of ${lastAi.answers} answers · share of voice ${formatPercent(lastAi.shareOfVoice, 0)}` : null,
       lastReportId: aiReport?.id ?? null,
-      monthlyCostUsd: m?.aiVisibility === false ? 0 : MONITOR_COSTS.aiVisibilityMonthly,
-      detail: m ? `${m.aiPromptsMax} questions · ${m.aiEngines.length} engines` : '8 questions · 6 engines (defaults)',
+      monthlyCostUsd: m?.aiVisibility === false ? 0 : (() => { const c = estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: m?.aiPulse }); return c.weekly + c.fullRun; })(),
+      detail: m ? `${m.aiPromptsMax} questions · ${m.aiEngines.length} engines` : `${AI_PROMPTS_DEFAULT} questions · 6 engines (defaults)`,
+    }),
+    base('ai_pulse', (m?.aiVisibility ?? true) && (m?.aiPulse ?? true), m?.aiVisibility === false ? 'AI visibility is switched off' : 'The daily pulse is switched off in the monitor settings', {
+      lastRunAt: x.ai.daily.length ? `${x.ai.daily[x.ai.daily.length - 1].date}T06:30:00.000Z` : null,
+      lastResult: x.ai.daily.length ? (() => { const dd = x.ai.daily[x.ai.daily.length - 1]; return `Named in ${formatPercent(dd.mentionRate, 0)} of ${dd.samples} answers${dd.alerts.length ? ` · ${dd.alerts.length} alert(s)` : ''}`; })() : null,
+      lastReportId: reportOf(['ai_pulse'])?.id ?? null,
+      monthlyCostUsd: m?.aiVisibility === false || m?.aiPulse === false ? 0 : estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: true }).pulse,
+      detail: `ChatGPT, Gemini and Google AI Mode · ${pulseQuestions} questions a day`,
     }),
     base('backlinks', m?.backlinks ?? true, 'Switched off in the monitor settings', {
       lastRunAt: lastIso(lastBl?.checkedAt, blReport?.receivedAt),
@@ -428,7 +444,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   // ---------- calendar: the next 4 weeks ----------
   const calendar: PipelineData['calendar'] = [];
   const horizon = now + 28 * 864e5;
-  for (const a of automations.filter((x) => x.state === 'on')) {
+  for (const a of automations.filter((x) => x.state === 'on' && x.id !== 'ai_pulse')) {   // the daily pulse would fill the calendar: it is listed with the automations
     const info = AUTOMATIONS.find((i) => i.id === a.id)!;
     let at = nextScheduledRun(info.schedule, tz);
     for (let i = 0; i < 6 && at.getTime() <= horizon; i++) {

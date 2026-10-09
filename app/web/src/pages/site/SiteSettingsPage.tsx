@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { PauseCircle, PlayCircle, ShieldAlert, Trash2 } from 'lucide-react';
+import { Building2, CalendarClock, KeyRound, PauseCircle, PenSquare, PlayCircle, Radar, Settings, ShieldAlert, Trash2 } from 'lucide-react';
 import { cleanDomain, formatUsd, type AdminResult, type MonitorSettings, type SiteSettingsData } from '@seo/shared';
 import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
 import { competitorValidator } from '@/components/site/helpers';
@@ -17,6 +17,7 @@ import { Card, CardBody, CardFooter, CardHeader } from '@/components/ui/card';
 import { Callout, EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Field, Input } from '@/components/ui/field';
 import { KeyValue, PageHeader } from '@/components/ui/misc';
+import { IconTile } from '@/components/insight';
 import { Dialog } from '@/components/ui/overlay';
 import { LinkTabs, Segmented } from '@/components/ui/tabs';
 import { TagInput } from '@/components/ui/tag-input';
@@ -48,7 +49,7 @@ export default function SiteSettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Website settings" description={current.description} />
+      <PageHeader icon={<Settings />} title="Website settings" description={current.description} />
       <LinkTabs className="mb-6" items={tabs.map((t) => ({ to: paths.site(org.id, site.id, `settings/${t.id}`), label: t.label }))} />
       {!admin && (
         <Callout tone="info" className="mb-6">
@@ -106,7 +107,11 @@ function BusinessTab({ admin }: { admin: boolean }) {
   const update = useUpdateSite(org.id, site.id);
   return (
     <Card className="max-w-3xl">
-      <CardHeader title="Business details" description="Only real facts: the engine never invents prices, numbers or claims, it uses what is written here." />
+      <CardHeader
+        icon={<HeaderTile icon={<Building2 />} />}
+        title="Business details"
+        description="Only real facts: the engine never invents prices, numbers or claims, it uses what is written here."
+      />
       <CardBody>
         <SiteBusinessForm
           key={site.id}
@@ -208,6 +213,7 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
         <EmailVerifyNotice me={me} action="Tracking" />
         <Card>
           <CardHeader
+            icon={<HeaderTile icon={<CalendarClock />} />}
             title="Start weekly tracking"
             description="Every Monday: Search Console, GA4, Google Trends and live rank checks, with a short list of what to do next. The first report arrives within minutes."
           />
@@ -264,6 +270,7 @@ function TrackingSettings({ data, admin }: { data: SiteSettingsData; admin: bool
 
       <Card>
         <CardHeader
+          icon={<HeaderTile icon={<KeyRound />} />}
           title="Keywords and Google Analytics"
           description={`Saving runs the tracker once with these settings and sends a fresh report (about ${formatUsd(0.1)}). Blog posts and monitors stay as set above.`}
         />
@@ -307,6 +314,7 @@ function TrackingStatusCard({ data, paused, admin }: { data: SiteSettingsData; p
   return (
     <Card className="flex flex-col">
       <CardHeader
+        icon={<HeaderTile icon={<CalendarClock />} />}
         title="Weekly tracking"
         description="Search Console, GA4, Trends and rank checks every Monday."
         actions={paused ? <StatusBadge tone="warning">Paused</StatusBadge> : <StatusBadge tone="good">Active</StatusBadge>}
@@ -360,6 +368,7 @@ function CadenceCard({ current, status, admin }: { current: number; status: stri
   return (
     <Card className="flex flex-col">
       <CardHeader
+        icon={<HeaderTile icon={<PenSquare />} />}
         title="Blog posts per week"
         description="Each post is a full, researched and quality-checked page, delivered every Monday as HTML and Markdown for you to publish."
         actions={status && status !== 'active' && current > 0 ? <Badge>{status}</Badge> : undefined}
@@ -431,6 +440,7 @@ function MonitorsCard({
   return (
     <Card>
       <CardHeader
+        icon={<HeaderTile icon={<Radar />} />}
         title="Growth monitors"
         description={`They run in the background and fill the AI visibility, Backlinks and Technical health pages.${updatedAt ? ` Last changed ${fmtAgo(updatedAt)}.` : ''}`}
       />
@@ -555,7 +565,7 @@ function DangerTab() {
 
   return (
     <Card className="max-w-3xl border-critical/40">
-      <CardHeader title="Delete this website" icon={<Trash2 className="size-4" />} />
+      <CardHeader title="Delete this website" icon={<HeaderTile icon={<Trash2 />} tone="critical" />} />
       <CardBody className="space-y-3 text-sm leading-relaxed text-ink-2">
         <p>
           This removes <strong className="font-medium text-ink">{site.domain}</strong> from {org.name} and stops its weekly tracking, monitors and blog posts in the SEO
@@ -565,7 +575,7 @@ function DangerTab() {
           Only want a break? <ButtonLink to={paths.site(org.id, site.id, 'settings/tracking')} variant="link">Pause tracking instead</ButtonLink>.
         </Note>
       </CardBody>
-      <CardFooter>
+      <CardFooter className="rounded-b-xl border-critical/25 bg-critical-soft/40">
         <Button variant="danger" icon={<Trash2 className="size-4" />} onClick={() => setOpen(true)}>
           Delete website…
         </Button>
@@ -597,6 +607,15 @@ function DangerTab() {
         </div>
       </Dialog>
     </Card>
+  );
+}
+
+/** The icon tile of a settings card header (blue; critical for the delete card). */
+function HeaderTile({ icon, tone = 'blue' }: { icon: ReactNode; tone?: 'blue' | 'critical' }) {
+  return (
+    <IconTile size="sm" tone={tone} className="-mt-0.5">
+      {icon}
+    </IconTile>
   );
 }
 

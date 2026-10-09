@@ -6,6 +6,10 @@ import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/overlay';
 import { ThemeProvider } from '@/lib/theme';
 import { router } from './router';
+// brand fonts, self-hosted (the CSP blocks Google Fonts); unicode-range means browsers fetch only the latin files
+import '@fontsource-variable/sora';
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
 import './index.css';
 
 const queryClient = new QueryClient({

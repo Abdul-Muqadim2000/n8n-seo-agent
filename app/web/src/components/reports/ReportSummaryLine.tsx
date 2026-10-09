@@ -86,11 +86,16 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
         nm(s, 'citationRate') != null && `cited ${pctText(nm(s, 'citationRate'))}`,
         nm(s, 'shareOfVoice') != null && `share of voice ${pctText(nm(s, 'shareOfVoice'))}`,
         nm(s, 'questions') != null && `${nm(s, 'questions')} questions`,
+        nm(s, 'aiSessions') != null && `${compactNumber(nm(s, 'aiSessions'))} AI visits`,
+        nm(s, 'wrongClaims') ? `${nm(s, 'wrongClaims')} wrong claim(s)` : null,
       );
+      break;
+    case 'ai_pulse':
+      parts.push(nm(s, 'alerts') ? `${nm(s, 'alerts')} change(s) in today’s AI answers` : 'no change', nm(s, 'mentionRate') != null && `named in ${pctText(nm(s, 'mentionRate'))} of ${nm(s, 'samples') ?? 0} answers`);
       break;
     case 'backlinks':
       parts.push(
-        nm(s, 'referringDomains') != null && `${compactNumber(nm(s, 'referringDomains'))} referring domains`,
+        nm(s, 'referringDomains') != null && `${compactNumber(nm(s, 'referringDomains'))} referring sites`,
         nm(s, 'lost') != null && `${nm(s, 'lost')} lost${nm(s, 'importantLost') ? ` (${nm(s, 'importantLost')} important)` : ''}`,
         nm(s, 'spammy') ? `${nm(s, 'spammy')} spammy` : null,
         nm(s, 'prospects') ? `${nm(s, 'prospects')} prospects` : null,
@@ -134,12 +139,20 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
           .map(([k, x]) => `${k}: ${x}`),
       );
   }
-  const text = parts.filter((x): x is string => typeof x === 'string' && !!x).join(' · ');
-  if (!badge && !text) return null;
+  const items = parts.filter((x): x is string => typeof x === 'string' && !!x);
+  if (!badge && !items.length) return null;
+  // short headline values become chips; a long sentence (a description, an error) stays a clamped line of text
+  const chips = items.filter((x) => x.length <= 44);
+  const text = items.filter((x) => x.length > 44).join(' · ');
   return (
-    <span className={cn('flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-ink-2', className)}>
+    <span className={cn('flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-ink-2', className)}>
       {badge}
-      {text && <span className="min-w-0 line-clamp-2">{text}</span>}
+      {chips.map((c, i) => (
+        <span key={i} title={c} className="inline-flex h-6 max-w-full items-center rounded-full bg-surface-2 px-2 text-xs font-medium text-ink-2">
+          <span className="truncate">{c}</span>
+        </span>
+      ))}
+      {text && <span className="min-w-0 basis-full line-clamp-2">{text}</span>}
     </span>
   );
 }

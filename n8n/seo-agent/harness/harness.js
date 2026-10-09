@@ -27,7 +27,7 @@ async function run(node, input, opts = {}) {
   const inputItems = toItems(input === undefined ? results.filter(r => r.ok && r.scenario === scenario).slice(-1)[0].items : input);
   const t0 = Date.now();
   try {
-    const src = loadCode(node);
+    const src = loadCode(opts.code || node);   // opts.code: run a node from another extracted file (e.g. 'Pulse__AI_Plan': the AI Pulse's node of the same name)
     // 'URL' is shadowed on purpose: the n8n Code sandbox has no URL constructor (live finding 2026-10-02), so any use must fail here too
     const fn = new AsyncFunction('$input', '$', '$runIndex', '$getWorkflowStaticData', '$now', '$execution', '$workflow', '$json', 'URL', src);
     const thisArg = { helpers: { getBinaryDataBuffer: async (i, prop) => { const b = inputItems[i] && inputItems[i].binary && inputItems[i].binary[prop]; if (!b || !b.data) throw new Error('no binary ' + prop); return Buffer.from(b.data, 'base64'); } } };

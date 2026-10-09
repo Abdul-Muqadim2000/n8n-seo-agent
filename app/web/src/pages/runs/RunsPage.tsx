@@ -1,11 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { FileText, ListChecks, Plus, RotateCcw } from 'lucide-react';
+import { Clock, FileText, Filter, ListChecks, Plus, RotateCcw } from 'lucide-react';
 import { MODE_IDS, MODES, type Run } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useRuns, type RunFilters } from '@/lib/queries';
-import { fmtAgo, fmtDateTime } from '@/lib/utils';
+import { cn, fmtAgo, fmtDateTime } from '@/lib/utils';
 import { RunStatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import { EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/field';
 import { Meter, PageHeader } from '@/components/ui/misc';
 import { ModeGlyph } from '@/components/reports/meta';
-import { CostLine, fmtMinutes, isActive, minutesBetween, useNow } from '@/components/reports/run';
+import { CostLine, fmtMinutes, isActive, minutesBetween, RunChip, useNow } from '@/components/reports/run';
 
 const PAGE_SIZE = 25;
 const STATUS_OPTIONS = [
@@ -44,6 +44,7 @@ export default function RunsPage() {
   return (
     <div>
       <PageHeader
+        icon={<ListChecks />}
         title="Runs"
         description="Every analysis started in your company, newest first. Open one for its progress, reports and files."
         actions={
@@ -52,7 +53,10 @@ export default function RunsPage() {
           </ButtonLink>
         }
       />
-      <div className="mb-4 flex flex-wrap items-end gap-3">
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-line bg-surface p-4 shadow-card">
+        <span className="hidden size-9 shrink-0 items-center justify-center self-end rounded-lg bg-accent-soft text-accent-text sm:inline-flex" aria-hidden>
+          <Filter className="size-4" />
+        </span>
         <FilterSelect label="Website" value={filters.siteId ?? ''} onChange={(v) => setFilter('site', v)}>
           <option value="">All websites</option>
           {sites.map((s) => (
@@ -118,11 +122,8 @@ function RunList({ filters, filtered }: { filters: RunFilters; filtered: boolean
               <th scope="col" className="hidden border-b border-line px-3 py-2.5 font-medium md:table-cell">
                 Website
               </th>
-              <th scope="col" className="border-b border-line px-3 py-2.5 font-medium">
+              <th scope="col" className="hidden border-b border-line px-3 py-2.5 font-medium sm:table-cell">
                 Status
-              </th>
-              <th scope="col" className="hidden border-b border-line px-3 py-2.5 font-medium lg:table-cell">
-                Started by
               </th>
               <th scope="col" className="hidden border-b border-line px-3 py-2.5 font-medium sm:table-cell">
                 Started
@@ -163,7 +164,7 @@ function RunChunk({ filters, cursor, first, last, now, filtered, onMore }: { fil
   const items = q.data?.items ?? [];
   const active = items.some((r) => isActive(r.status));
   useEffect(() => setPoll(active ? 15_000 : undefined), [active]);
-  const colSpan = 8;
+  const colSpan = 7;
 
   if (q.isLoading)
     return (
@@ -220,6 +221,14 @@ function RunChunk({ filters, cursor, first, last, now, filtered, onMore }: { fil
   );
 }
 
+const RAIL: Record<Run['status'], string> = {
+  submitting: 'bg-accent',
+  accepted: 'bg-accent',
+  running: 'bg-accent',
+  completed: 'bg-good',
+  failed: 'bg-critical',
+};
+
 function RunRow({ run, now }: { run: Run; now: number }) {
   const { org } = useOrgCtx();
   const navigate = useNavigate();
@@ -227,12 +236,18 @@ function RunRow({ run, now }: { run: Run; now: number }) {
   const active = isActive(run.status);
   const elapsed = minutesBetween(run.acceptedAt ?? run.createdAt, active ? now : run.completedAt);
   return (
-    <tr className="cursor-pointer border-b border-line align-middle last:border-0 hover:bg-surface-2" onClick={() => navigate(to)}>
-      <td className="px-4 py-3">
-        <div className="flex min-w-[200px] items-center gap-3">
-          <ModeGlyph mode={run.mode} size="sm" />
+    <tr
+      className={cn('group cursor-pointer border-b border-line align-middle transition-colors duration-150 ease-brand last:border-0 hover:bg-surface-2', active && 'bg-accent-soft/30', run.status === 'failed' && 'bg-critical-soft/25')}
+      onClick={() => navigate(to)}
+    >
+      {/* phones: the run takes the free width (its text truncates) and shows its status under the title */}
+      <td className="relative px-4 py-3 max-sm:w-full max-sm:max-w-0">
+        {/* status rail (the status badge carries the word) */}
+        <span className={cn('absolute inset-y-2 left-0 w-[3px] rounded-r-full', RAIL[run.status] ?? 'bg-line')} aria-hidden />
+        <div className="flex items-center gap-3 sm:min-w-[200px]">
+          <ModeGlyph mode={run.mode} size="md" className="transition-colors duration-200 ease-brand group-hover:bg-accent group-hover:text-accent-ink" />
           <div className="min-w-0">
-            <Link to={to} className="block truncate font-medium text-ink hover:underline" onClick={(e) => e.stopPropagation()}>
+            <Link to={to} className="block truncate font-medium text-ink transition-colors duration-150 ease-brand decoration-accent-text/40 underline-offset-2 group-hover:text-accent-text hover:underline" onClick={(e) => e.stopPropagation()}>
               {run.title}
             </Link>
             <p className="truncate text-xs text-ink-3">
@@ -240,17 +255,21 @@ function RunRow({ run, now }: { run: Run; now: number }) {
               <span className="md:hidden">{run.siteDomain ? ` · ${run.siteDomain}` : ''}</span>
               <span className="sm:hidden"> · {fmtAgo(run.createdAt)}</span>
             </p>
+            <div className="mt-1.5 sm:hidden">
+              <RunStatusBadge status={run.status} />
+              {run.status === 'failed' && run.error && <p className="mt-1 truncate text-xs text-critical-text" title={run.error}>{run.error}</p>}
+            </div>
           </div>
         </div>
       </td>
       <td className="hidden px-3 py-3 text-ink-2 md:table-cell">{run.siteDomain ?? <span className="text-ink-3">–</span>}</td>
-      <td className="px-3 py-3">
+      <td className="hidden px-3 py-3 sm:table-cell">
         <RunStatusBadge status={run.status} />
         {run.status === 'failed' && run.error && <p className="mt-1 max-w-[220px] truncate text-xs text-critical-text" title={run.error}>{run.error}</p>}
       </td>
-      <td className="hidden px-3 py-3 text-ink-2 lg:table-cell">{run.userName ?? <span className="text-ink-3">–</span>}</td>
       <td className="hidden whitespace-nowrap px-3 py-3 text-ink-2 sm:table-cell" title={fmtDateTime(run.createdAt)}>
         {fmtAgo(run.createdAt)}
+        <span className="hidden text-xs text-ink-3 lg:block">{run.userName ? `by ${run.userName}` : '–'}</span>
       </td>
       <td className="hidden px-3 py-3 md:table-cell">
         {active ? (
@@ -260,18 +279,19 @@ function RunRow({ run, now }: { run: Run; now: number }) {
             </p>
             <Meter value={Math.min(97, ((elapsed ?? 0) / Math.max(1, run.etaMinutes)) * 100)} label="Estimated progress" className="mt-1 h-1.5" />
           </div>
+        ) : run.completedAt ? (
+          <RunChip icon={<Clock />}>{fmtMinutes(elapsed)}</RunChip>
         ) : (
-          <span className="tabular text-ink-2">{run.completedAt ? fmtMinutes(elapsed) : '–'}</span>
+          <span className="tabular text-ink-2">–</span>
         )}
       </td>
       <td className="hidden px-3 py-3 text-right text-ink-2 lg:table-cell">
         <CostLine run={run} />
       </td>
       <td className="px-4 py-3 text-right">
-        <span className="inline-flex items-center gap-1 tabular text-ink-2">
-          <FileText className="size-3.5 text-ink-3" aria-hidden />
+        <RunChip icon={<FileText />} tone={run.reportCount > 0 ? 'accent' : 'neutral'} title={`${run.reportCount} report${run.reportCount === 1 ? '' : 's'}`}>
           {run.reportCount}
-        </span>
+        </RunChip>
       </td>
     </tr>
   );

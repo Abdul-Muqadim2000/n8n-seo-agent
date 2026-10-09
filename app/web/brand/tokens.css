@@ -1,0 +1,34 @@
+/* Ascentra brand tokens — v1.0
+   Fonts: <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Sora:wght@500;600;700&display=swap" rel="stylesheet"> */
+
+:root {
+  /* Core */
+  --asc-ink: #0A0F1F;          /* primary text, dark surfaces, mark (mono) */
+  --asc-blue: #2E4BFF;         /* Ascentra Blue: primary actions, links, app icon (white text 5.9:1) */
+  --asc-blue-deep: #2238D9;    /* hover / pressed */
+  --asc-blue-tint: #EEF1FF;    /* selected rows, chart area fill, badges */
+  --asc-blue-on-dark: #8FA2FF; /* links & accents on ink (8.0:1) */
+  --asc-white: #FFFFFF;
+
+  /* Neutrals */
+  --asc-paper: #F6F7FB;        /* page background */
+  --asc-line: #E3E7F0;         /* borders, dividers, grid lines */
+  --asc-slate: #4A5468;        /* secondary text (7.6:1 on white) */
+  --asc-mist: #5B6478;         /* captions, meta (5.9:1 on white) */
+
+  /* Signals (data deltas, alerts) */
+  --asc-success: #0B7A53;      /* positive deltas, verified (5.4:1) */
+  --asc-warning: #B54708;      /* high-severity tags (5.4:1) */
+  --asc-danger:  #C2321A;      /* errors, drops (5.6:1) */
+
+  /* Type */
+  --asc-font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --asc-font-ui: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --asc-font-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Shape */
+  --asc-radius-sm: 6px;
+  --asc-radius-md: 10px;
+  --asc-radius-lg: 14px;
+  --asc-shadow-card: 0 1px 2px rgba(10, 15, 31, 0.06), 0 0 0 1px var(--asc-line);
+}

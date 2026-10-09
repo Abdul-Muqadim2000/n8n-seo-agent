@@ -2,7 +2,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import type { UseQueryResult } from '@tanstack/react-query';
-import { Bot, ChevronDown, CircleCheck, CircleMinus, CircleX, FileSearch, Gauge, Link2, ListChecks, PenSquare, Search, TrendingUp, Wrench } from 'lucide-react';
+import { ArrowRight, Bot, ChevronDown, CircleCheck, CircleMinus, CircleX, FileSearch, Gauge, Link2, ListChecks, PenSquare, Search, TrendingUp, Wrench } from 'lucide-react';
 import { MODES, type ModeId, type Priority } from '@seo/shared';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -10,6 +10,8 @@ import { cn } from '@/lib/utils';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { IconTile, type IconTileTone } from '@/components/ui/icon-tile';
+import { InfoTip } from '@/components/insight/disclosure';
 import { ErrorState, Skeleton } from '@/components/ui/feedback';
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from '@/components/ui/overlay';
 import { Segmented } from '@/components/ui/tabs';
@@ -64,7 +66,9 @@ export function KpiGrid({ children, cols = 4, dense, className }: { children: Re
         dense && 'grid-cols-2',
         cols === 3 && 'lg:grid-cols-3',
         cols === 4 && 'xl:grid-cols-4',
-        cols === 5 && 'lg:grid-cols-3 2xl:grid-cols-5',
+        // five tiles: three on the first row, two wider ones on the second (no hole), one row of five on very wide screens
+        cols === 5 &&
+          'sm:[&>*:last-child]:col-span-2 lg:grid-cols-6 lg:[&>*]:col-span-2 lg:[&>*:nth-child(n+4)]:col-span-3 2xl:grid-cols-5 2xl:[&>*]:col-span-1 2xl:[&>*:nth-child(n+4)]:col-span-1',
         className,
       )}
     >
@@ -124,15 +128,25 @@ export function SrOnly({ children }: { children: ReactNode }) {
   );
 }
 
-/** A titled block of a dashboard page. */
-export function SectionHeading({ title, description, actions, id }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; id?: string }) {
+/** A titled block of a dashboard page; optional `icon` (tinted tile) and `info` (InfoTip after the title). */
+export function SectionHeading({ title, description, actions, id, icon, info }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; id?: string; icon?: ReactNode; info?: ReactNode }) {
   return (
-    <div className="mb-3 flex flex-wrap items-end justify-between gap-3" id={id}>
-      <div className="min-w-0">
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
-        {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+    <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" id={id}>
+      <div className={cn('min-w-0 max-w-4xl', icon && 'flex items-center gap-2.5')}>
+        {icon && (
+          <IconTile tone="blue" size="sm">
+            {icon}
+          </IconTile>
+        )}
+        <div className="min-w-0">
+          <h2 className={cn('font-display text-base font-semibold tracking-[-0.01em] text-ink', info && 'flex items-center gap-1')}>
+            {title}
+            {info && <InfoTip label={typeof title === 'string' ? `About ${title.toLowerCase()}` : 'What this means'}>{info}</InfoTip>}
+          </h2>
+          {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+        </div>
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -151,8 +165,8 @@ export function FilterChips<T extends string>({ value, onChange, options, label,
             aria-checked={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              'inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition-colors',
-              active ? 'border-accent bg-accent-soft text-accent-text' : 'border-line bg-surface text-ink-2 hover:bg-surface-2 hover:text-ink',
+              'inline-flex h-7 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium transition-[color,background-color,border-color] duration-150 ease-brand',
+              active ? 'border-accent bg-accent-soft text-accent-text' : 'border-line bg-surface text-ink-2 hover:border-line-strong hover:bg-surface-2 hover:text-ink',
             )}
           >
             {o.icon}
@@ -210,7 +224,7 @@ export function MiniStat({ label, value, hint, className }: { label: ReactNode; 
   return (
     <div className={cn('min-w-0', className)}>
       <div className="text-xs font-medium text-ink-3">{label}</div>
-      <div className="mt-0.5 text-lg font-semibold tracking-tight text-ink">{value}</div>
+      <div className="mt-0.5 font-display text-lg font-semibold tracking-[-0.01em] text-ink">{value}</div>
       {hint && <div className="mt-0.5 text-xs leading-snug text-ink-3">{hint}</div>}
     </div>
   );
@@ -231,15 +245,47 @@ const titleOf = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** Engine priorities are numbers (1 = do first). */
 export const priorityFromNumber = (n: number): Priority => (n <= 1 ? 'high' : n === 2 ? 'medium' : 'low');
 
-/** A card with a header row and a body; `flush` drops the body padding (tables, lists). */
-export function Panel({ title, description, actions, children, footer, className, flush, icon }: { title: ReactNode; description?: ReactNode; actions?: ReactNode; children: ReactNode; footer?: ReactNode; className?: string; flush?: boolean; icon?: ReactNode }) {
+/**
+ * A card with a header row and a body; `flush` drops the body padding (tables, lists). `icon` sits in a tinted icon tile (`iconTone`,
+ * blue by default); `info` adds an InfoTip after the title for the explanation that used to be body text.
+ */
+export function Panel({
+  title,
+  description,
+  actions,
+  children,
+  footer,
+  className,
+  flush,
+  icon,
+  iconTone = 'blue',
+  info,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+  className?: string;
+  flush?: boolean;
+  icon?: ReactNode;
+  iconTone?: IconTileTone;
+  info?: ReactNode;
+}) {
   return (
     <Card className={cn('flex flex-col', className)}>
       <div className="flex flex-wrap items-start justify-between gap-3 px-5 pt-4">
-        <div className="flex min-w-0 items-start gap-2.5">
-          {icon && <span className="mt-0.5 text-ink-3">{icon}</span>}
+        <div className={cn('flex min-w-0 gap-3', description ? 'items-start' : 'items-center')}>
+          {icon && (
+            <IconTile tone={iconTone} size="sm" className={description ? 'mt-px' : undefined}>
+              {icon}
+            </IconTile>
+          )}
           <div className="min-w-0">
-            <h3 className="text-[15px] font-semibold text-ink">{title}</h3>
+            <h3 className={cn('font-display text-[15px] font-semibold tracking-[-0.01em] text-ink', info && 'flex items-center gap-1')}>
+              {title}
+              {info && <InfoTip label={typeof title === 'string' ? `About ${title.toLowerCase()}` : 'What this means'}>{info}</InfoTip>}
+            </h3>
             {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
           </div>
         </div>
@@ -254,8 +300,9 @@ export function Panel({ title, description, actions, children, footer, className
 /** "View all →" style link for card footers. */
 export function MoreLink({ to, children }: { to: string; children: ReactNode }) {
   return (
-    <Link to={to} className="text-[13px] font-medium text-accent-text underline-offset-4 hover:underline">
-      {children} →
+    <Link to={to} className="group/more inline-flex items-center gap-1 text-[13px] font-medium text-accent-text decoration-accent-text/40 underline-offset-4 hover:underline transition-colors duration-150 ease-brand">
+      {children}
+      <ArrowRight className="size-3.5 shrink-0 transition-transform duration-200 ease-brand group-hover/more:translate-x-0.5" aria-hidden />
     </Link>
   );
 }

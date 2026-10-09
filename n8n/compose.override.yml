@@ -6,3 +6,19 @@ services:
     restart: unless-stopped
     command: ['gotenberg', '--api-timeout=120s', '--chromium-disable-javascript=true']
     # Never publish port 3000 to the host.
+
+  # SEO Agent v4.10: the Common Crawl web graph for the Backlink Monitor (seo-agent/linkgraph/cc_linkgraph.py; BACKLINKS_SPEC.md §3.4).
+  # Once per graph release (about monthly) it streams the domain-level graph (~11 GB, nothing stored) and writes each site's referring
+  # domains, the competitor gap and authority ranks to the n8n Data Table seo_link_graph. Free. Outbound only (data.commoncrawl.org);
+  # no port. Turn it off with SEO_LINKGRAPH=off in n8n/.env, then `docker compose up -d linkgraph`.
+  linkgraph:
+    image: python:3.12-alpine
+    restart: on-failure
+    command: ['python3', '-u', '/seo-agent/linkgraph/cc_linkgraph.py']
+    environment:
+      LINKGRAPH_ENABLED: ${SEO_LINKGRAPH:-on}
+      LINKGRAPH_HOUR: ${SEO_LINKGRAPH_HOUR:-2}
+      N8N_URL: http://n8n:5678
+      N8N_API_KEY: ${N8N_API_KEY:-}
+    volumes:
+      - ./seo-agent:/seo-agent:ro

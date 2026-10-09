@@ -1,6 +1,6 @@
 // Search Console queries of one period with filters, and a per-query trend across periods in a dialog.
 import { useMemo, useState } from 'react';
-import { ArrowRight, Star } from 'lucide-react';
+import { ArrowRight, Info, Star } from 'lucide-react';
 import { compactNumber, type QueryChange, type QueryPoint } from '@seo/shared';
 import { fmtDate } from '@/lib/utils';
 import { ChartCard, TimeSeriesChart } from '@/components/charts';
@@ -12,7 +12,7 @@ import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
 import { FilterChips, useSitePage } from './kit';
 import { ratioPct, sortByDate, urlPath } from './format';
-import { PositionMove, plotAvgPos } from './positions';
+import { PositionMove, PositionPill, plotAvgPos } from './positions';
 
 type QFilter = 'all' | 'striking' | 'top10' | 'new' | 'lost' | 'tracked';
 
@@ -30,8 +30,8 @@ export function GscMove({ prev, cur }: { prev: number; cur: number }) {
 
 /** Live Google position from the weekly check (0 = not in the top 50, -1 = not checked). */
 export function LivePos({ p }: { p: number }) {
-  if (p > 0) return <span className="font-medium">{p}</span>;
-  if (p === 0) return <span className="text-ink-3">&gt;50</span>;
+  if (p > 0) return <PositionPill p={p} />;
+  if (p === 0) return <PositionPill p={0} />;
   return (
     <span className="text-ink-3" title="Not checked live this week">
       –
@@ -85,7 +85,7 @@ export function QueryExplorer({ queries, periods }: { queries: readonly QueryPoi
     },
     { key: 'impressions', header: 'Impressions', align: 'right', sortValue: (r) => r.impressions, cell: (r) => compactNumber(r.impressions) },
     { key: 'ctr', header: 'CTR', align: 'right', sortValue: (r) => r.ctr, cell: (r) => ratioPct(r.ctr), hideOnMobile: true },
-    { key: 'position', header: 'Avg. position', align: 'right', sortValue: (r) => (r.position > 0 ? r.position : 999), cell: (r) => (r.position > 0 ? r.position.toFixed(1) : '–') },
+    { key: 'position', header: 'Avg. position', align: 'right', sortValue: (r) => (r.position > 0 ? r.position : 999), cell: (r) => (r.position > 0 ? <PositionPill p={r.position} avg /> : '–') },
     { key: 'change', header: 'Change', align: 'right', sortValue: (r) => (r.position > 0 && r.prevPosition > 0 ? r.prevPosition - r.position : null), cell: (r) => <GscMove prev={r.prevPosition} cur={r.position} /> },
     { key: 'serp', header: 'Live', align: 'right', sortValue: (r) => (r.serpPosition > 0 ? r.serpPosition : 999), cell: (r) => <LivePos p={r.serpPosition} /> },
     {
@@ -148,8 +148,11 @@ export function QueryExplorer({ queries, periods }: { queries: readonly QueryPoi
           </>
         }
       />
-      <p className="mt-2 text-xs text-ink-3">
-        Select a query to see its trend across weekly reports. “Live” is the position found by this week’s live Google check (tracked keywords). Star = a keyword you track.
+      <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-3">
+        <Info className="mt-px size-3.5 shrink-0" aria-hidden />
+        <span>
+          Select a query to see its trend across weekly reports. “Live” is the position found by this week’s live Google check (tracked keywords). Star = a keyword you track.
+        </span>
       </p>
       {open && <QueryDialog query={open} history={history} domain={site.domain} onClose={() => setOpen(null)} />}
     </>
@@ -233,7 +236,7 @@ export function QueryChangeTable({ rows, empty }: { rows: readonly QueryChange[]
       ),
     },
     { key: 'impressions', header: 'Impressions', align: 'right', sortValue: (r) => r.impressions, cell: (r) => `${compactNumber(r.impressions)}` },
-    { key: 'position', header: 'Avg. position', align: 'right', sortValue: (r) => (r.position > 0 ? r.position : 999), cell: (r) => (r.position > 0 ? r.position.toFixed(1) : '–') },
+    { key: 'position', header: 'Avg. position', align: 'right', sortValue: (r) => (r.position > 0 ? r.position : 999), cell: (r) => (r.position > 0 ? <PositionPill p={r.position} avg /> : '–') },
     { key: 'move', header: 'Change', align: 'right', sortValue: (r) => r.positionDelta, cell: (r) => <GscMove prev={r.prevPosition} cur={r.position} /> },
     {
       key: 'page',

@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ShieldAlert } from 'lucide-react';
+import { Receipt, ShieldAlert } from 'lucide-react';
 import { AI_ENGINES, estimateMonitoringCost, formatUsd, GOALS, MODES, type Run } from '@seo/shared';
 import { EmailVerifyNotice } from '@/components/site/EmailVerifyNotice';
 import { permissionLabel } from '@/components/site/GoogleConnectionPanel';
@@ -12,9 +12,11 @@ import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Callout, Skeleton } from '@/components/ui/feedback';
 import { Checkbox } from '@/components/ui/field';
+import { IconTile } from '@/components/insight';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { qk, useGoogleConnection, useOnboardingStep, useSiteData, useStartRun, useUsage } from '@/lib/queries';
+import { cn } from '@/lib/utils';
 import { sizeLabel } from './CompanyStep';
 import { StepFrame } from './WizardShell';
 import { clearTrackingDraft, readTrackingDraft, useWizardSite, type StepId } from './wizard';
@@ -43,7 +45,7 @@ export function LaunchStep() {
   }, [site, settings.data]);
 
   const m = plan.monitors;
-  const monthly = estimateMonitoringCost({ aiVisibility: m.aiVisibility, backlinks: m.backlinks, auditMonthly: m.auditMonthly, blogsPerWeek: plan.blogsPerWeek });
+  const monthly = estimateMonitoringCost({ aiVisibility: m.aiVisibility, backlinks: m.backlinks, auditMonthly: m.auditMonthly, blogsPerWeek: plan.blogsPerWeek, aiPrompts: m.aiPromptsMax, aiEngines: m.aiEngines, aiPulse: m.aiPulse });
   const nowCost =
     MODES.track.costUsd + (auditNow ? MODES.audit.costUsd : 0) + (aiNow ? MODES.ai_visibility.costUsd : 0);   // blog posts and monitors are spent weekly (see the monthly estimate)
   const overBudget = usage.data ? nowCost > usage.data.remainingUsd : false;
@@ -137,7 +139,7 @@ export function LaunchStep() {
       primary={{ label: 'Start tracking', onClick: launch, loading: busy === 'launch', disabled: !verified || !country || busy === 'finish' }}
     >
       <div className="space-y-6">
-        <dl className="divide-y divide-line rounded-xl border border-line">
+        <dl className="divide-y divide-line overflow-hidden rounded-xl border border-line bg-surface">
           <Row label="Company" step="company" go={go}>
             {org.name}
             {(org.industry || org.size) && <span className="text-ink-3"> · {[org.industry, org.size && sizeLabel(org.size)].filter(Boolean).join(' · ')}</span>}
@@ -206,40 +208,53 @@ export function LaunchStep() {
             {plan.blogsPerWeek ? `${plan.blogsPerWeek} a week, delivered every Monday` : 'None'}
           </Row>
           <Row label="Monitors" step="tracking" go={go}>
-            <span className="block">AI visibility: {m.aiVisibility ? `on · ${m.aiPromptsMax} questions · ${engines.join(', ') || 'no engines'}` : 'off'}</span>
+            <span className="block">AI visibility: {m.aiVisibility ? `on · ${m.aiPromptsMax} questions · ${engines.join(', ') || 'no engines'}${m.aiPulse ? ' · daily pulse' : ''}` : 'off'}</span>
             <span className="block">Backlink monitor: {m.backlinks ? 'on' : 'off'}</span>
             <span className="block">
               Monthly audit: {m.auditMonthly ? `on · up to ${m.auditJs ? Math.min(m.auditPages, JS_MAX_PAGES) : m.auditPages} pages${m.auditJs ? ' with JavaScript' : ''}` : 'off'}
             </span>
           </Row>
-          <Row label="Estimated cost" step="tracking" go={go}>
+          <Row label="Estimated cost" step="tracking" go={go} highlight>
             <span className="font-semibold">{formatUsd(monthly)} / month</span>
             <span className="text-ink-3"> for weekly tracking, monitors and blog posts</span>
           </Row>
         </dl>
 
-        <fieldset className="space-y-3">
-          <legend className="mb-1 text-sm font-semibold text-ink">Also start right away</legend>
-          <Checkbox
-            checked={auditNow}
-            onChange={(e) => setAuditNow(e.target.checked)}
-            disabled={!verified}
-            label="Run a technical audit now"
-            description={`About 20 minutes, about ${formatUsd(MODES.audit.costUsd)}. Health score, issues by priority and a fix pack, without waiting for the 1st of the month.`}
-          />
-          <Checkbox
-            checked={aiNow}
-            onChange={(e) => setAiNow(e.target.checked)}
-            disabled={!verified}
-            label="Take an AI visibility baseline now"
-            description={`About 10 minutes, about ${formatUsd(MODES.ai_visibility.costUsd)}. Where AI assistants name you today, so later changes can be measured against it.`}
-          />
+        <fieldset className="space-y-2.5">
+          <legend className="mb-3 text-sm font-semibold text-ink">Also start right away</legend>
+          <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong has-[:checked]:border-accent-text/50 has-[:checked]:bg-accent-soft/60">
+            <Checkbox
+              checked={auditNow}
+              onChange={(e) => setAuditNow(e.target.checked)}
+              disabled={!verified}
+              label="Run a technical audit now"
+              description={`About 20 minutes, about ${formatUsd(MODES.audit.costUsd)}. Health score, issues by priority and a fix pack, without waiting for the 1st of the month.`}
+            />
+          </div>
+          <div className="rounded-lg border border-line px-4 py-3 transition-colors duration-150 ease-brand hover:border-line-strong has-[:checked]:border-accent-text/50 has-[:checked]:bg-accent-soft/60">
+            <Checkbox
+              checked={aiNow}
+              onChange={(e) => setAiNow(e.target.checked)}
+              disabled={!verified}
+              label="Take an AI visibility baseline now"
+              description={`About 10 minutes, about ${formatUsd(MODES.ai_visibility.costUsd)}. Where AI assistants name you today, so later changes can be measured against it.`}
+            />
+          </div>
         </fieldset>
 
-        <p className="text-[13px] text-ink-3">
-          Starting now costs about {formatUsd(nowCost)}
-          {usage.data && <> · {formatUsd(usage.data.remainingUsd)} left in this month’s budget of {formatUsd(usage.data.budgetUsd)}</>}.
-        </p>
+        {/* cost note */}
+        <div className="flex items-start gap-3 rounded-lg border border-line bg-surface-2 px-4 py-3 text-[13px] leading-relaxed text-ink-2">
+          <IconTile size="sm">
+            <Receipt />
+          </IconTile>
+          <div className="min-w-0 flex-1 pt-0.5">
+            <p>
+              <span className="font-semibold text-ink">Starting now costs about {formatUsd(nowCost)}</span>
+              {usage.data && <> · {formatUsd(usage.data.remainingUsd)} left in this month’s budget of {formatUsd(usage.data.budgetUsd)}</>}.
+            </p>
+            {usage.data && usage.data.budgetUsd > 0 && <BudgetBar used={usage.data.estimatedUsd} add={nowCost} budget={usage.data.budgetUsd} />}
+          </div>
+        </div>
         {overBudget && (
           <Callout tone="warning" title="This is more than this month’s remaining budget">
             Runs that would go over the budget are refused. {org.role === 'owner' ? 'Raise it in Company settings → Usage' : 'Ask the owner of your company to raise it'}, or
@@ -280,16 +295,35 @@ export function LaunchStep() {
   );
 }
 
-function Row({ label, step, go, children }: { label: string; step: StepId; go: (s: StepId) => void; children: ReactNode }) {
+function Row({ label, step, go, children, highlight }: { label: string; step: StepId; go: (s: StepId) => void; children: ReactNode; highlight?: boolean }) {
   return (
-    <div className="grid gap-1 px-4 py-3 sm:grid-cols-[150px_minmax(0,1fr)_auto] sm:items-start sm:gap-4">
+    <div className={cn('grid gap-1 px-4 py-3.5 sm:grid-cols-[150px_minmax(0,1fr)_auto] sm:items-start sm:gap-4 sm:px-5', highlight && 'bg-accent-soft')}>
       <dt className="text-[13px] font-medium text-ink-3">{label}</dt>
       <dd className="min-w-0 text-sm text-ink">{children}</dd>
       <dd className="sm:text-right">
-        <button type="button" onClick={() => go(step)} className="text-[13px] font-medium text-accent-text hover:underline" aria-label={`Edit ${label.toLowerCase()}`}>
+        <button type="button" onClick={() => go(step)} className="rounded text-[13px] font-medium text-accent-text underline-offset-4 hover:underline" aria-label={`Edit ${label.toLowerCase()}`}>
           Edit
         </button>
       </dd>
+    </div>
+  );
+}
+
+/** This month's budget: spent so far (solid blue) and what starting now adds (light blue). */
+function BudgetBar({ used, add, budget }: { used: number; add: number; budget: number }) {
+  const usedPct = Math.min(100, (used / budget) * 100);
+  const addPct = Math.max(0, Math.min(100 - usedPct, (add / budget) * 100));
+  return (
+    <div
+      className="mt-2 flex h-2 w-full max-w-sm gap-0.5 overflow-hidden rounded-full bg-surface-3"
+      role="meter"
+      aria-label="Monthly budget used, with what starting now adds"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(usedPct + addPct)}
+    >
+      {usedPct > 0 && <span className="h-full rounded-l-full bg-accent" style={{ width: `${usedPct}%` }} />}
+      {addPct > 0 && <span className={cn('h-full bg-accent/40 dark:bg-accent-text/55', usedPct <= 0 && 'rounded-l-full')} style={{ width: `${addPct}%` }} />}
     </div>
   );
 }

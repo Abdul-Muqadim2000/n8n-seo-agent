@@ -12,18 +12,33 @@ export function Tabs({ value, onValueChange, defaultValue, children, className }
   );
 }
 
+// Tab rows: the baseline is an inset shadow (so the active bar paints over it inside the scroll box), the active bar grows in
+// from the centre, inactive tabs show a grey bar on hover. Focus uses an inset ring: an outer ring would be clipped by the scroll box.
+const tabRow = 'flex gap-1 overflow-x-auto shadow-[inset_0_-1px_0_var(--line)] [scrollbar-width:none]';
+const tabItem =
+  'group relative flex h-10 shrink-0 items-center gap-2 rounded-t-md px-3 text-sm font-medium transition-colors duration-150 ease-brand focus-visible:shadow-[inset_0_0_0_2px_var(--ring-color)]! ' +
+  'after:pointer-events-none after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:transition-[scale,background-color,opacity] after:duration-200 after:ease-brand';
+const tabActive = 'text-ink after:scale-x-100 after:bg-accent after:opacity-100';
+const tabInactive = 'text-ink-3 hover:text-ink after:scale-x-50 after:bg-line-strong after:opacity-0 hover:after:scale-x-100 hover:after:opacity-100';
+
 export function TabList({ children, className }: { children: ReactNode; className?: string }) {
-  return <R.List className={cn('flex gap-1 overflow-x-auto border-b border-line', className)}>{children}</R.List>;
+  return <R.List className={cn(tabRow, className)}>{children}</R.List>;
 }
 
 export function Tab({ value, children, count }: { value: string; children: ReactNode; count?: number }) {
   return (
     <R.Trigger
       value={value}
-      className="relative -mb-px flex h-10 shrink-0 items-center gap-2 border-b-2 border-transparent px-3 text-sm font-medium text-ink-3 transition-colors hover:text-ink data-[state=active]:border-accent data-[state=active]:text-ink"
+      className={cn(
+        tabItem,
+        'data-[state=active]:text-ink data-[state=active]:after:scale-x-100 data-[state=active]:after:bg-accent data-[state=active]:after:opacity-100',
+        'data-[state=inactive]:text-ink-3 data-[state=inactive]:hover:text-ink data-[state=inactive]:after:scale-x-50 data-[state=inactive]:after:bg-line-strong data-[state=inactive]:after:opacity-0 data-[state=inactive]:hover:after:scale-x-100 data-[state=inactive]:hover:after:opacity-100',
+      )}
     >
       {children}
-      {count != null && <span className="rounded-md bg-surface-2 px-1.5 text-xs tabular text-ink-2">{count}</span>}
+      {count != null && (
+        <span className="rounded-md bg-surface-2 px-1.5 text-xs tabular text-ink-2 transition-colors group-data-[state=active]:bg-accent-soft group-data-[state=active]:text-accent-text">{count}</span>
+      )}
     </R.Trigger>
   );
 }
@@ -37,16 +52,9 @@ export const TabPanel = ({ value, children, className }: { value: string; childr
 /** Route-based tabs (each tab is a URL). */
 export function LinkTabs({ items, className }: { items: { to: string; label: ReactNode; end?: boolean }[]; className?: string }) {
   return (
-    <nav className={cn('flex gap-1 overflow-x-auto border-b border-line', className)}>
+    <nav className={cn(tabRow, className)}>
       {items.map((it) => (
-        <NavLink
-          key={it.to}
-          to={it.to}
-          end={it.end}
-          className={({ isActive }) =>
-            cn('relative -mb-px flex h-10 shrink-0 items-center border-b-2 px-3 text-sm font-medium transition-colors', isActive ? 'border-accent text-ink' : 'border-transparent text-ink-3 hover:text-ink')
-          }
-        >
+        <NavLink key={it.to} to={it.to} end={it.end} className={({ isActive }) => cn(tabItem, isActive ? tabActive : tabInactive)}>
           {it.label}
         </NavLink>
       ))}
@@ -74,7 +82,7 @@ export function Segmented<T extends string>({
   disabled?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} className={cn('inline-flex rounded-lg border border-line bg-surface-2 p-0.5', disabled && 'opacity-60', className)}>
+    <div role="radiogroup" aria-label={label} aria-disabled={disabled || undefined} className={cn('inline-flex gap-0.5 rounded-lg border border-line bg-surface-2 p-0.5', disabled && 'opacity-60', className)}>
       {options.map((o) => (
         <button
           key={o.value}
@@ -84,9 +92,11 @@ export function Segmented<T extends string>({
           disabled={disabled}
           onClick={() => value !== o.value && onChange(o.value)}
           className={cn(
-            'inline-flex items-center gap-1 rounded-md px-2.5 font-medium transition-colors disabled:cursor-not-allowed',
+            'inline-flex items-center gap-1 rounded-md px-2.5 font-medium transition-[color,background-color,box-shadow] duration-150 ease-brand disabled:cursor-not-allowed',
             size === 'sm' ? 'h-6 text-xs' : 'h-7 text-[13px]',
-            value === o.value ? 'bg-surface text-ink shadow-sm' : 'text-ink-3 hover:text-ink',
+            value === o.value
+              ? 'bg-surface text-ink shadow-card ring-1 ring-line dark:bg-surface-3'
+              : 'text-ink-3 enabled:hover:bg-surface/60 enabled:hover:text-ink dark:enabled:hover:bg-surface-3/50',
           )}
         >
           {o.label}
@@ -104,9 +114,9 @@ export function Switch({ checked, onCheckedChange, disabled, id, label }: { chec
       onCheckedChange={onCheckedChange}
       disabled={disabled}
       aria-label={label}
-      className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-surface-3 transition-colors disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-accent"
+      className="group relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full bg-line-strong transition-colors duration-200 ease-brand enabled:hover:bg-ink-3/50 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-accent enabled:data-[state=checked]:hover:bg-accent-hover"
     >
-      <S.Thumb className="block size-4 translate-x-0.5 rounded-full bg-white shadow transition-transform data-[state=checked]:translate-x-[18px]" />
+      <S.Thumb className="block size-4 translate-x-0.5 rounded-full bg-white shadow-card ring-1 ring-black/5 transition-[translate,width] duration-200 ease-brand group-active:w-[18px] data-[state=checked]:translate-x-[18px] group-active:data-[state=checked]:translate-x-4" />
     </S.Root>
   );
 }

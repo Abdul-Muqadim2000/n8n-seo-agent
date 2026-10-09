@@ -174,8 +174,11 @@ if (V) extra.push('Keep the video embed and the transcript under it; ' + ((V.mis
 meta.publish_checklist.splice(meta.publish_checklist.length - 1, 0, ...extra);
 const b64 = (s) => Buffer.from(s, 'utf8').toString('base64');
 const doc = '<!DOCTYPE html>\n<html lang="' + esc(d.language_code || 'en') + '">\n<head>\n<meta charset="utf-8">\n<title>' + esc(title) + '</title>\n' + (description ? '<meta name="description" content="' + esc(description) + '">\n' : '') + (AU ? '<meta name="author" content="' + esc(AU.name) + '">\n' : '') + '</head>\n<body>\n' + html + '\n</body>\n</html>\n';
-return [{ json: { ...d, article_html: html, article_meta: meta, article_slug: slug, article_title: title },
+// 2026-10-09: the clean article Markdown also travels as text (article_markdown): the API callback's `markdown` used to be the raw
+// draft with its "Title: / Meta Description:" lines and [Image: …] markers, saved by the web app as <slug>.md
+const articleMd = '# ' + (h1 || title) + '\n\n' + (bylineMd ? bylineMd + '\n\n' : '') + (heroImg ? mdImg(heroImg) + '\n\n' : '') + (snapshotMd ? snapshotMd + '\n\n' : '') + mdOut + (authorBoxMd ? '\n\n' + authorBoxMd : '') + '\n';
+return [{ json: { ...d, article_html: html, article_meta: meta, article_slug: slug, article_title: title, article_markdown: articleMd },
   binary: { ...(item.binary || {}),
     article_html: { data: b64(doc), mimeType: 'text/html', fileName: slug + '.html', fileExtension: 'html' },
-    article_md: { data: b64('# ' + (h1 || title) + '\n\n' + (bylineMd ? bylineMd + '\n\n' : '') + (heroImg ? mdImg(heroImg) + '\n\n' : '') + (snapshotMd ? snapshotMd + '\n\n' : '') + mdOut + (authorBoxMd ? '\n\n' + authorBoxMd : '') + '\n'), mimeType: 'text/markdown', fileName: slug + '.md', fileExtension: 'md' },
+    article_md: { data: b64(articleMd), mimeType: 'text/markdown', fileName: slug + '.md', fileExtension: 'md' },
     meta_json: { data: b64(JSON.stringify(meta, null, 2)), mimeType: 'application/json', fileName: slug + '.meta.json', fileExtension: 'json' } } }];

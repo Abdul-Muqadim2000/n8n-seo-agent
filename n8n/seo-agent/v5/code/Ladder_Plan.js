@@ -153,10 +153,13 @@ for (const r of rungs) {
   r.pages = keep;
 }
 const rungPages = rungs.flatMap(r => r.pages);
+// no supporting page in the data (a narrow topic: the research found no long-tail keywords, live 2026-10-08 "peppol uae"): the main page is the
+// whole ladder for now, so it is written first whatever the plan type — the Content Cadence's gate opens too when a ladder has no supporting page
+const mainFirst = plan_type === 'direct' || (planned && !rungPages.length);
 let pageNo = 0;
-if (plan_type === 'direct') top.page_no = ++pageNo;   // direct: the main page is written first
+if (mainFirst) top.page_no = ++pageNo;   // direct: the main page is written first
 for (const p of rungPages) p.page_no = ++pageNo;
-if (plan_type !== 'direct') top.page_no = ++pageNo;
+if (!mainFirst) top.page_no = ++pageNo;
 
 // ---- internal link map: every rung page -> top page + one sibling; top page -> every rung page ----
 const link_map = [];
@@ -208,7 +211,7 @@ requirements.push({ item: 'Entity and trust pages', detail: 'Organization schema
 requirements.push({ item: 'Publish on schedule and interlink', detail: 'Each rung page links up to the top page and sideways to one sibling; the top page links down to every rung page. Ranking only starts once the pages are live.' });
 
 // ---- pages to write now, in the plan's order (direct: the main page first; otherwise the supporting pages, the main page waits for support) ----
-const order = !planned ? [] : plan_type === 'direct' ? [top, ...rungPages] : rungPages;
+const order = !planned ? [] : mainFirst ? [top, ...rungPages] : rungPages;
 const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to }));
 const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,
@@ -217,14 +220,15 @@ const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: re
   site_rankings_found: SR.count || 0, research_failures: (pool.research || {}).failures || [], excluded_keywords: excluded.length };
 const notes = [];
 if (refusal) notes.push(refusal.message);
-if (planned && plan_type === 'full' && pages_total < 8) notes.push('Only ' + pages_total + ' pages could be planned from the data: the topic is narrow in ' + base.country + '. The ladder is shorter but still valid.');
-if (planned && plan_type === 'full') for (const r of rungs) if (!r.pages.length) notes.push('No keywords fell into rung ' + r.rung + '; the ladder skips it.');
+if (planned && plan_type === 'full' && rungPages.length && pages_total < 8) notes.push('Only ' + pages_total + ' pages could be planned from the data: the topic is narrow in ' + base.country + '. The ladder is shorter but still valid.');
+if (planned && plan_type === 'full' && rungPages.length) for (const r of rungs) if (!r.pages.length) notes.push('No keywords fell into rung ' + r.rung + '; the ladder skips it.');
 if (planned && plan_type === 'direct' && rungPages.length < 2) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned around the main keyword; add more as the site grows.');
-if (planned && plan_type === 'short' && rungPages.length < 3) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned before the main page.');
+if (planned && plan_type !== 'direct' && !rungPages.length) notes.push('No supporting keywords were found for "' + head + '" in ' + base.country + ' (the topic is narrow in the search data), so the main page is the whole ladder for now and is written first. Supporting pages can be added as the site grows.');
+else if (planned && plan_type === 'short' && rungPages.length < 3) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned before the main page.');
 if (excluded.length) notes.push(excluded.length + ' keyword(s) already belong to other ladders of this site and were left out (one search, one page): ' + excluded.slice(0, 6).map(x => '"' + x.keyword + '" (ladder "' + x.head + '")').join(', ') + (excluded.length > 6 ? ' …' : '') + '.');
 if (headTakenAsPage) notes.push('The main keyword is also planned as a page of the ladder "' + headTakenAsPage.head + '" (' + headTakenAsPage.ladder_id + '): publish only one page for it.');
 if (plan.stretch && planned) notes.push('Very hard for this site today: consider one of the alternatives first (' + alternatives.join(', ') + ').');
-const order_text = !planned ? 'no pages' : plan_type === 'direct' ? 'main page first, then the supporting pages that link to it' : plan_type === 'short' ? 'supporting pages first, then the main page once half of them are live' : 'rung by rung from the easiest pages, the main page last';
+const order_text = !planned ? 'no pages' : plan_type === 'direct' ? 'main page first, then the supporting pages that link to it' : !rungPages.length ? 'the main page only for now (no supporting keywords in the data), written first' : plan_type === 'short' ? 'supporting pages first, then the main page once half of them are live' : 'rung by rung from the easiest pages, the main page last';
 const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume, kd: top.kd, cpc: top.cpc, intent: top.intent, your_position: top.your_position },
   domain, country: base.country, goal: base.goal || 'leads', feasibility, rungs, top, link_map, timeline, write_now, pages_now: pagesNow,
   later: later.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, ...(k.held_back ? { held_back: true } : {}) })), requirements, stats, notes,

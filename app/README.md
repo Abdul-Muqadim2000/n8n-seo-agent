@@ -1,9 +1,9 @@
-# SEO Agent — web app (multi-company)
+# Ascentra — web app (multi-company)
 
-The web front end of the SEO Agent. Companies sign up (e-mail or Google), add their websites, prove ownership, connect Search
-Console and GA4, give the business and E-E-A-T details the engine needs, start weekly tracking, run every analysis from proper
-forms, and read the results in dashboards with recommendations. The SEO work itself stays in the n8n workflows
-(`../n8n/seo-agent`); this app is the product around them.
+The web front end of Ascentra (the SEO Agent engine in n8n) and its public business site. Companies sign up (e-mail or Google),
+add their websites, prove ownership, connect Search Console and GA4, give the business and E-E-A-T details the engine needs, start
+weekly tracking, run every analysis from proper forms, and read the results in dashboards with recommendations. The SEO work
+itself stays in the n8n workflows (`../n8n/seo-agent`); this app is the product around them.
 
 ```
  browser ──► app (Fastify + React, :4000) ──► n8n API front door  POST /webhook/seo-keyword-check   (start a run)
@@ -81,10 +81,29 @@ alert mail; saving a site's tracking also clears the e-mail stored on its n8n si
 platform admin page). Everything arrives in the app: Runs, Reports, the dashboards and the Pipeline page. n8n's own Error Handler
 still e-mails the operator (`SEO_OPS_EMAIL`) when a workflow fails; the app marks such a run failed after 3 hours.
 
+## AI visibility (v4.9)
+
+The AI visibility page (`pages/site/AiVisibilityPage.tsx`, panels in `_components/ai-insights.tsx`) shows, per website:
+- **Tiles:** named in answers with its 95% range, the visibility score, share of voice (and market-wide share), AI visits from GA4, and pages cited.
+- **Trend:** weekly runs, AI Pulse days, the score, or AI Overviews.
+- **Panels:** what AI visits are worth (assistants, landing pages, conversion vs organic); how AI describes you (sentiment, words, wrong claims); can AI read your site (robots.txt per crawler, llms.txt, firewall test); visibility by buyer stage and topic; the engine table over 7 days with ranges; the question grid with this week's win rate and demand; lost questions with demand and the searches AI ran; the market-wide index; and questions worth tracking (one-click Track through Site Admin `ai_prompts`).
+
+Monitor settings take 3–50 questions and the daily pulse, with a cost split from `estimateAiVisibilityCost` (`shared/src/constants.ts`, priced like n8n's `AI_Requests.js`). Engine side: `n8n/seo-agent/AI_VISIBILITY_SPEC.md`.
+
+## Backlinks (v4.10)
+
+The Backlinks page (`pages/site/BacklinksPage.tsx`) shows every referring site from every source the Backlink Monitor reads — DataForSEO, Bing Webmaster Tools, the Search Console export you upload, GA4 visits, the Common Crawl web graph, Wikipedia, Hacker News, news and web search — with what our own crawler found on the linking page:
+- **Tiles:** referring sites (all sources; DataForSEO alone as the hint), best links, links checked on the page (+ at risk), visits from links, spam.
+- **Where your links come from:** referring sites per source and "only here", how much of Google's own sample DataForSEO sees, the status of each free source, and **Add Search Console links** (CSV upload, `POST …/backlinks/import`, members and up; any backlink CSV works, e.g. a free Ahrefs Webmaster Tools export).
+- **Links:** Best / All (source filter, search) / Lost (with the reason; "missed once" first) / New / Send visits / Spammy, each with its SEO · visits · brand value, link type, rel, placement, authority (+ Ahrefs DR with its credit) and the check.
+- Anchors and most-linked pages (broken ones with the 301 to add), opportunities (unlinked mentions checked on the page, "best of" lists, competitors' new links, the gap from DataForSEO and Common Crawl), and the outreach pipeline with scores, contacts and follow-up drafts.
+
+"Check my backlinks" has a Depth choice: the full check (~$0.50) or free sources only ($0). Engine side: `n8n/seo-agent/BACKLINKS_SPEC.md`.
+
 ## Pipeline (automation)
 
 Each website has a Pipeline page: this week's runs, Needs you, one card per keyword ladder (in priority order), the always-on part
-(opportunity posts, monitoring, the weekly capacity), every n8n schedule that runs for it (AI visibility Mon 07:00, backlinks 07:30,
+(opportunity posts, monitoring, the weekly capacity), every n8n schedule that runs for it (AI pulse daily 06:30 Tue–Sun — listed, not drawn in the calendar —, AI visibility Mon 07:00, backlinks 07:30,
 rank tracker 08:00, site report 09:00, blog posts 10:00, technical audit 1st of the month 06:00 — on n8n's clock, `GENERIC_TIMEZONE`,
 default America/New_York) with its next and last run, the posts the Content Cadence will write next (same rules as
 `v5/code/Cadence_Plan.js`), a 4-week calendar and the recent automatic runs; each ladder has its own page (the climb, timeline,
@@ -151,6 +170,32 @@ tool by hand; the form says what that means for the schedule, in terms of what n
   the app; a page already written or published for the keyword; a ladder for the same head term): a warning, and the run starts
   only after the person ticks "… anyway".
 
+## Brand and business site
+
+The product is called **Ascentra** ("Enterprise-grade autonomous SEO"); "SEO Agent" stays only as the internal name of the n8n
+engine and of this repository.
+
+- **Brand kit**: `web/brand/BRAND.md` (logo rules, colours, type, voice) and `web/brand/tokens.css` (the kit's raw values). The app's
+  tokens live in `web/src/index.css` (light + dark); components use them through Tailwind classes, never hex. Ascentra Blue is the
+  only accent, no gradients.
+- **Logos and icons**: the supplied SVGs in `web/public/brand/` (horizontal / stacked / header / mark / wordmark in ink, blue, white),
+  favicons, `site.webmanifest` and `og-image.png` in `web/public/`. Use the files as they are — never redraw, recolour or animate rays.
+- **Fonts are self-hosted** (`@fontsource-variable/sora`, `geist`, `geist-mono`, imported in `web/src/main.tsx` and bundled by Vite):
+  the production CSP (`server/src/app.ts`) allows fonts, scripts and styles only from the app's own origin, so a Google Fonts link
+  would be blocked. The same CSP is why the business site has no external scripts, embeds or iframes; remote `https:` images are
+  allowed (the marketing photos).
+- **Business site routes** (public, lazy chunks that signed-in app pages never load): `/` (visitors; signed-in users go straight into
+  the app), `/platform`, `/platform/<slug>` (one per capability), `/how-it-works`, `/solutions`, `/solutions/<slug>`, `/pricing`,
+  `/security`, `/about`, `/contact`, `/changelog`, `/privacy`, `/terms`. An unknown slug shows the 404 page.
+- **Content registries** in `web/src/marketing/content/`: `features.ts` (the capabilities: Home grid, Platform page, mega-menu,
+  footer and every `/platform/<slug>` page render from it), `solutions.ts`, `pricing.ts`, `changelog.ts` (add an entry with every
+  release), `site.ts` (name, e-mail addresses, navigation, integrations), `images.ts` (every photo). How to add a capability:
+  `web/CONVENTIONS.md` → "Business site".
+- **PLACEHOLDER — confirm before launch** (marked `// PLACEHOLDER` in the code): every price, plan limit, the annual discount and the
+  billing answers in `pricing.ts`; the `@ascentra.example` e-mail addresses in `site.ts` (the contact form opens a `mailto:`);
+  the Unsplash photos in `images.ts`; the privacy policy and terms in `marketing/components/company/legal.ts` (drafts for counsel).
+  Copy uses capability facts only — no invented customers, logos, ratings or results.
+
 ## Security model
 
 - **Companies are isolated**: every company route checks membership (404 for companies you do not belong to); roles
@@ -200,3 +245,4 @@ python3 scripts/smoke.py          # API integration test against the running dev
 | "Choose keywords for me" | `server/src/services/autoStart.ts` (decision + job), timer in `server/src/index.ts` (`AUTO_START_LADDERS`) |
 | A callback stage | `server/src/services/summaries.ts` (list summary), `web/src/components/reports/` (renderer), `shared/src/constants.ts` (`STAGE_LABELS`, `MODES[…].finalStages`) |
 | Database | `server/src/db/schema.ts`, then `npm run db:generate` (migrations run at start) |
+| Business site copy, a new capability, prices | `web/src/marketing/content/` (registries), pages in `web/src/marketing/pages/`; steps in `web/CONVENTIONS.md` → "Business site" |

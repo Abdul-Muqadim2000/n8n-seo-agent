@@ -32,7 +32,7 @@ const STEP_COMPONENTS: Record<StepId, () => ReactNode> = {
 export default function OnboardingPage() {
   const { orgId } = useParams();
   const me = useMe();
-  if (!me.data) return <PageLoader />;
+  if (!me.data) return <PageLoader fullPage />;
   return orgId ? <CompanyWizard me={me.data} orgId={orgId} /> : <NewCompanyWizard me={me.data} />;
 }
 

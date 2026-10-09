@@ -1,14 +1,17 @@
 import type { ReactNode } from 'react';
+import { pageTitle } from '@/components/layout/Brand';
+import { useDocumentTitle } from '@/components/layout/useDocumentTitle';
 import { Card } from '@/components/ui/card';
 import { useProviders } from '@/lib/queries';
 
 export function AuthCard({ title, subtitle, children, footer }: { title: ReactNode; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
+  useDocumentTitle(typeof title === 'string' ? pageTitle(title) : null);
   return (
-    <Card className="p-7 sm:p-8">
-      <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
-      {subtitle && <p className="mt-1.5 text-sm leading-relaxed text-ink-2">{subtitle}</p>}
-      <div className="mt-6">{children}</div>
-      {footer && <div className="mt-6 border-t border-line pt-5 text-center text-sm text-ink-2">{footer}</div>}
+    <Card className="animate-fade-up p-6 sm:p-9">
+      <h1 className="font-display text-2xl font-semibold leading-tight tracking-[-0.02em] text-ink">{title}</h1>
+      {subtitle && <p className="mt-2 text-[15px] leading-relaxed text-ink-2">{subtitle}</p>}
+      <div className="mt-7">{children}</div>
+      {footer && <div className="mt-7 border-t border-line pt-5 text-center text-sm text-ink-2">{footer}</div>}
     </Card>
   );
 }
@@ -31,11 +34,14 @@ export function GoogleButton({ next, label = 'Continue with Google' }: { next?: 
   const href = `/api/auth/google${next ? `?next=${encodeURIComponent(next)}` : ''}`;
   return (
     <>
-      <a href={href} className="flex h-11 w-full items-center justify-center gap-3 rounded-lg border border-line-strong bg-surface text-[15px] font-medium text-ink transition-colors hover:bg-surface-2">
+      <a
+        href={href}
+        className="flex h-11 w-full items-center justify-center gap-3 rounded-lg border border-line-strong bg-surface text-[15px] font-medium text-ink shadow-card transition-[background-color,border-color,box-shadow] duration-150 ease-brand hover:border-ink-3 hover:bg-surface-2 active:bg-surface-3"
+      >
         <GoogleIcon />
         {label}
       </a>
-      <div className="my-5 flex items-center gap-3 text-xs text-ink-3">
+      <div className="my-6 flex items-center gap-3 text-xs font-medium text-ink-3">
         <span className="h-px flex-1 bg-line" />
         or with e-mail
         <span className="h-px flex-1 bg-line" />

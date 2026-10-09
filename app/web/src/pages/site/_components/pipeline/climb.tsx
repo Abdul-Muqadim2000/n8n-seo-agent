@@ -1,15 +1,15 @@
 // Keyword-ladder page: "the climb" (rungs side by side, the main page last) and the panel of one page with its actions.
 import { Fragment, useMemo, useState } from 'react';
-import { ArrowDown, ArrowRight, ExternalLink as ExternalIcon, FileText, Flag, Inbox, PenSquare, Play } from 'lucide-react';
+import { ArrowDown, ArrowRight, ExternalLink as ExternalIcon, FileText, Flag, Inbox, Mountain, PenSquare, Play } from 'lucide-react';
 import { compactNumber, type LadderDetail, type LadderPage } from '@seo/shared';
 import { ButtonLink, Button } from '@/components/ui/button';
-import { Card, CardHeader } from '@/components/ui/card';
-import { ExternalLink, KeyValue } from '@/components/ui/misc';
+import { ExternalLink, KeyValue, Meter } from '@/components/ui/misc';
+import { IconTile } from '@/components/insight';
 import { Dialog } from '@/components/ui/overlay';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { cn, fmtDate } from '@/lib/utils';
-import { Chips } from '../kit';
+import { Chips, Panel } from '../kit';
 import { daysSince, sortByDate, urlPath } from '../format';
 import { PositionHistoryCard } from '../history';
 import { asPageType, PageStateBadge, PositionChange, positionWords, rungLabel } from './common';
@@ -53,36 +53,48 @@ export function Climb({ ladder, onWrite }: { ladder: LadderDetail; onWrite: (i: 
   }, [ladder.pages]);
 
   return (
-    <Card>
-      <CardHeader
-        title="The climb"
-        description="Easy pages first, the main page last. Every page links to the main page and makes it stronger. Select a page for its details and what to do next."
-      />
+    <Panel
+      icon={<Mountain />}
+      title="The climb"
+      description={
+        columns.length === 1 && columns[0].rung === 4
+          ? 'Only the main page for now: the search data has no supporting keywords for this topic yet. Select it for its details and what to do next.'
+          : 'Easy pages first, the main page last. Every page links to the main page and makes it stronger. Select a page for its details and what to do next.'
+      }
+      flush
+    >
       {!columns.length ? (
-        <p className="px-5 py-6 text-sm text-ink-3">The plan has no pages yet. They appear here once the ladder plan arrives.</p>
+        <p className="px-5 pb-6 pt-3 text-sm text-ink-3">The plan has no pages yet. They appear here once the ladder plan arrives.</p>
       ) : (
-        <div className="flex flex-col gap-2 px-5 pb-5 pt-4 lg:flex-row lg:items-stretch lg:gap-0">
+        <div className="flex flex-col gap-2 px-5 pb-5 pt-1 lg:flex-row lg:items-stretch lg:gap-0">
           {columns.map((col, i) => {
             const main = col.rung === 4;
             const live = col.pages.filter((p) => p.state === 'published').length;
             return (
               <Fragment key={col.rung}>
                 {i > 0 && (
-                  <div className="flex shrink-0 items-center justify-center text-ink-3 lg:w-8" aria-hidden>
-                    <ArrowDown className="size-4 lg:hidden" />
-                    <ArrowRight className="hidden size-4 lg:block" />
+                  <div className="flex shrink-0 items-center justify-center text-accent-text lg:w-9" aria-hidden>
+                    <span className="flex size-6 items-center justify-center rounded-full bg-accent-soft">
+                      <ArrowDown className="size-3.5 lg:hidden" />
+                      <ArrowRight className="hidden size-3.5 lg:block" />
+                    </span>
                   </div>
                 )}
                 <section aria-label={rungLabel(col.rung)} className={cn('min-w-0 flex-1 rounded-xl border p-3', main ? 'border-accent/40 bg-accent-soft/60' : 'border-line bg-surface-2/50')}>
-                  <header className="mb-2.5 flex items-baseline justify-between gap-2 px-0.5">
-                    <h4 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-                      {main && <Flag className="size-3.5 text-accent-text" aria-hidden />}
-                      {rungLabel(col.rung)}
-                      <span className="text-xs font-normal text-ink-3">· {RUNG_HINT[col.rung] ?? ''}</span>
-                    </h4>
-                    <span className="whitespace-nowrap text-xs tabular text-ink-3">
-                      {live} of {col.pages.length} live
-                    </span>
+                  <header className="mb-3 px-0.5">
+                    <div className="flex items-center gap-2.5">
+                      <IconTile size="sm" tone={main ? 'solid' : 'blue'}>
+                        {main ? <Flag /> : <span className="font-display text-xs font-semibold">{col.rung}</span>}
+                      </IconTile>
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-semibold leading-tight text-ink">{rungLabel(col.rung)}</h4>
+                        <p className="text-xs text-ink-3">{RUNG_HINT[col.rung] ?? ''}</p>
+                      </div>
+                      <span className="whitespace-nowrap text-xs tabular text-ink-3">
+                        <span className="font-semibold text-ink">{live}</span> of {col.pages.length} live
+                      </span>
+                    </div>
+                    <Meter value={col.pages.length ? (live / col.pages.length) * 100 : 0} tone={live > 0 && live === col.pages.length ? 'good' : 'accent'} label={`${rungLabel(col.rung)}: pages live`} className="mt-2.5 h-1.5" />
                   </header>
                   <ul className="space-y-2">
                     {col.pages.map((p) => (
@@ -90,10 +102,13 @@ export function Climb({ ladder, onWrite }: { ladder: LadderDetail; onWrite: (i: 
                         <button
                           type="button"
                           onClick={() => setOpen(p)}
-                          className="w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-left shadow-card transition-colors hover:border-line-strong hover:bg-surface-2"
+                          className="group/page w-full rounded-lg border border-line bg-surface px-3 py-2.5 text-left shadow-card transition-[border-color,box-shadow,translate] duration-200 ease-brand hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised active:translate-y-0"
                         >
                           <PageStateBadge state={p.state} />
-                          <span className="mt-1.5 block break-words text-sm font-medium leading-snug text-ink">{p.keyword}</span>
+                          <span className="mt-1.5 flex items-start justify-between gap-2">
+                            <span className="min-w-0 break-words text-sm font-medium leading-snug text-ink transition-colors duration-150 ease-brand group-hover/page:text-accent-text">{p.keyword}</span>
+                            <ArrowRight className="mt-0.5 size-3.5 shrink-0 text-ink-3 transition-[translate,color] duration-200 ease-brand group-hover/page:translate-x-0.5 group-hover/page:text-accent-text" aria-hidden />
+                          </span>
                           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-ink-3">
                             {pageLine(p)}
                             {p.state === 'published' && <PositionChange change={p.previousPosition != null && p.position != null && p.position > 0 && p.previousPosition > 0 ? p.previousPosition - p.position : null} />}
@@ -109,7 +124,7 @@ export function Climb({ ladder, onWrite }: { ladder: LadderDetail; onWrite: (i: 
         </div>
       )}
       {open && <PagePanel page={open} ladder={ladder} onClose={() => setOpen(null)} onWrite={onWrite} />}
-    </Card>
+    </Panel>
   );
 }
 
@@ -158,7 +173,7 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
             </Button>
           )}
           {p.state === 'published' && p.publishedUrl && (
-            <a href={p.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] font-medium text-accent-text hover:underline">
+            <a href={p.publishedUrl} target="_blank" rel="noopener noreferrer" className="inline-flex h-8 items-center gap-1 rounded-lg px-3 text-[13px] font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
               View the live page
               <ExternalIcon className="size-3.5" aria-hidden />
             </a>

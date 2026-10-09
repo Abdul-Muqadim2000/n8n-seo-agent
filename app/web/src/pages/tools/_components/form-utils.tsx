@@ -41,6 +41,10 @@ export function withChecks<TIn extends FieldValues, TOut>(base: Resolver<TIn, un
   };
 }
 
+/** Class for a checkbox option drawn as a box (the whole box is its label; it turns blue while ticked). */
+export const OPTION_BOX =
+  'rounded-xl border border-line p-3.5 transition-[border-color,background-color] duration-150 ease-brand hover:border-line-strong has-[:checked]:border-accent-text/50 has-[:checked]:bg-accent-soft/60';
+
 export function Counter({ value, max }: { value: string | undefined; max: number }) {
   const len = (value ?? '').length;
   return <span className={cn('tabular', len > max ? 'text-critical-text' : len > max * 0.9 ? 'text-warning-text' : 'text-ink-3')}>{`${len.toLocaleString()} / ${max.toLocaleString()}`}</span>;

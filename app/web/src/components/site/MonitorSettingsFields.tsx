@@ -1,7 +1,11 @@
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
+import { Bot, Gauge, Link2, Wallet } from 'lucide-react';
 import {
   AI_ENGINES,
+  AI_PROMPTS_MAX,
+  AI_PULSE_ENGINES,
   CRAWL_PAGE_OPTIONS,
+  estimateAiVisibilityCost,
   estimateMonitoringCost,
   formatUsd,
   MONITOR_COSTS,
@@ -13,6 +17,7 @@ import { Checkbox, Field, Select } from '@/components/ui/field';
 import { Segmented, SwitchRow } from '@/components/ui/tabs';
 import { TagInput } from '@/components/ui/tag-input';
 import { cn } from '@/lib/utils';
+import { IconTile } from '@/components/ui/icon-tile';
 
 // The growth monitors of a website (seo_monitors): AI visibility, backlink monitor and the monthly technical audit, with a live
 // monthly cost estimate (MONITOR_COSTS, measured on live runs).
@@ -25,7 +30,8 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
   return {
     aiVisibility: m?.aiVisibility ?? DEFAULT_MONITORS.aiVisibility,
     aiEngines: engines,
-    aiPromptsMax: Math.min(15, Math.max(3, m?.aiPromptsMax ?? DEFAULT_MONITORS.aiPromptsMax)),
+    aiPromptsMax: Math.min(AI_PROMPTS_MAX, Math.max(3, m?.aiPromptsMax ?? DEFAULT_MONITORS.aiPromptsMax)),
+    aiPulse: m?.aiPulse ?? DEFAULT_MONITORS.aiPulse,
     backlinks: m?.backlinks ?? DEFAULT_MONITORS.backlinks,
     auditMonthly: m?.auditMonthly ?? DEFAULT_MONITORS.auditMonthly,
     auditPages: m?.auditPages ?? DEFAULT_MONITORS.auditPages,
@@ -35,6 +41,7 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
 }
 
 const JS_MAX_PAGES = 500;
+const PROMPT_OPTIONS = [3, 5, 8, 10, 12, 15, 20, 25, 30, 40, 50];
 
 export function MonitorSettingsFields({
   value,
@@ -54,9 +61,10 @@ export function MonitorSettingsFields({
 
   return (
     <fieldset disabled={disabled} className="divide-y divide-line rounded-xl border border-line px-4">
+      <MonitorRow icon={<Bot />} on={value.aiVisibility}>
       <SwitchRow
         title="AI visibility"
-        description="Every Monday we ask buyer questions on AI assistants and Google's AI answers, and record whether you are named or cited, who is named instead and which sources the AI trusts."
+        description="Your buyer questions asked on AI assistants and Google's AI answers: whether you are named or cited, who is named instead, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth (GA4). Full run every Monday."
         checked={value.aiVisibility}
         onCheckedChange={(v) => set({ aiVisibility: v })}
         disabled={disabled}
@@ -87,13 +95,13 @@ export function MonitorSettingsFields({
                     {enginesError}
                   </p>
                 ) : (
-                  <p className="mt-1.5 text-[13px] text-ink-3">Gemini and Claude are asked once a month to keep the weekly run cheap.</p>
+                  <p className="mt-1.5 text-[13px] text-ink-3">Claude is asked once a month to keep the weekly run cheap.</p>
                 )}
               </fieldset>
-              <Field label="Questions per run" hint="More questions give a fuller picture of how AI answers about your market." className="max-w-xs">
+              <Field label="Questions tracked" hint="More questions give a fuller picture of your market; new ones come from real AI searches and your Search Console queries." className="max-w-xs">
                 {(p) => (
                   <Select {...p} value={value.aiPromptsMax} disabled={disabled} onChange={(e) => set({ aiPromptsMax: Number(e.target.value) })}>
-                    {Array.from({ length: 13 }, (_, i) => i + 3).map((n) => (
+                    {[...new Set([...PROMPT_OPTIONS, value.aiPromptsMax])].sort((x, y) => x - y).filter((n) => n <= AI_PROMPTS_MAX).map((n) => (
                       <option key={n} value={n}>
                         {n} questions
                       </option>
@@ -101,11 +109,20 @@ export function MonitorSettingsFields({
                   </Select>
                 )}
               </Field>
+              <Checkbox
+                label="Daily AI pulse"
+                description={`Asks every question on ${AI_PULSE_ENGINES.filter((e) => value.aiEngines.includes(e)).map((e) => AI_ENGINES.find((x) => x.value === e)!.label).join(', ') || 'the fast engines'} each day except Monday (about ${formatUsd(estimateAiVisibilityCost({ prompts: value.aiPromptsMax, engines: value.aiEngines, pulse: true }).pulse)} a month). AI answers change between asks: daily answers give steadier numbers and a same-day alert when something really changes.`}
+                checked={value.aiPulse}
+                disabled={disabled || !AI_PULSE_ENGINES.some((e) => value.aiEngines.includes(e))}
+                onChange={(e) => set({ aiPulse: e.target.checked })}
+              />
             </div>
           )
         }
       />
+      </MonitorRow>
 
+      <MonitorRow icon={<Link2 />} on={value.backlinks}>
       <SwitchRow
         title="Backlink monitor"
         description="A weekly watch for lost and spammy links. Once a month, a full report: link gap against competitors, broken links to reclaim, unlinked mentions and outreach drafts."
@@ -113,7 +130,9 @@ export function MonitorSettingsFields({
         onCheckedChange={(v) => set({ backlinks: v })}
         disabled={disabled}
       />
+      </MonitorRow>
 
+      <MonitorRow icon={<Gauge />} on={value.auditMonthly}>
       <SwitchRow
         title="Monthly technical audit"
         description="On the 1st of each month: a crawl, health score, what changed since the last audit and a fix pack. Skipped when your sitemap has not changed (at most 60 days)."
@@ -148,6 +167,7 @@ export function MonitorSettingsFields({
           )
         }
       />
+      </MonitorRow>
 
       {showBrandNames && (
         <div className="py-3">
@@ -174,13 +194,27 @@ export function MonitorSettingsFields({
   );
 }
 
+/** A monitor's switch row with its icon tile (brand tint while on, neutral while off). */
+function MonitorRow({ icon, on, children }: { icon: ReactNode; on: boolean; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-3">
+      <IconTile size="sm" tone={on ? 'blue' : 'neutral'} className="mt-3 transition-colors duration-200 ease-brand">
+        {icon}
+      </IconTile>
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 /** Monthly cost estimate with its breakdown (MONITOR_COSTS) for the chosen monitors and blog posts per week. */
 export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors: MonitorSettings; blogsPerWeek: number; className?: string }) {
   const c = MONITOR_COSTS;
-  const total = estimateMonitoringCost({ aiVisibility: monitors.aiVisibility, backlinks: monitors.backlinks, auditMonthly: monitors.auditMonthly, blogsPerWeek });
+  const total = estimateMonitoringCost({ aiVisibility: monitors.aiVisibility, backlinks: monitors.backlinks, auditMonthly: monitors.auditMonthly, blogsPerWeek, aiPrompts: monitors.aiPromptsMax, aiEngines: monitors.aiEngines, aiPulse: monitors.aiPulse });
+  const ai = estimateAiVisibilityCost({ prompts: monitors.aiPromptsMax, engines: monitors.aiEngines, pulse: monitors.aiPulse });
   const rows: { label: string; detail: string; on: boolean; usd: number }[] = [
     { label: 'Weekly site report', detail: 'Search Console, GA4, Google Trends, live rank checks', on: true, usd: c.siteTrackerMonthly },
-    { label: 'AI visibility', detail: 'weekly questions, monthly market view', on: monitors.aiVisibility, usd: c.aiVisibilityMonthly },
+    { label: 'AI visibility', detail: `${monitors.aiPromptsMax} questions weekly, Claude and the market-wide index monthly`, on: monitors.aiVisibility, usd: ai.weekly + ai.fullRun },
+    { label: 'Daily AI pulse', detail: `${monitors.aiPromptsMax} questions a day on the fast engines`, on: monitors.aiVisibility && monitors.aiPulse && ai.pulse > 0, usd: ai.pulse },
     { label: 'Backlink monitor', detail: 'weekly watch, monthly full report', on: monitors.backlinks, usd: c.backlinksMonthly },
     { label: 'Monthly technical audit', detail: `up to ${monitors.auditPages} pages`, on: monitors.auditMonthly, usd: c.auditMonthly },
     {
@@ -192,9 +226,14 @@ export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors
   ];
   return (
     <div className={cn('rounded-xl border border-line bg-surface', className)}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 px-4 pt-4">
-        <h4 className="text-sm font-semibold text-ink">Estimated monthly cost</h4>
-        <p className="text-2xl font-semibold tracking-tight text-ink" aria-live="polite">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 pt-4">
+        <h4 className="flex items-center gap-2.5 text-sm font-semibold text-ink">
+          <IconTile size="sm">
+            <Wallet />
+          </IconTile>
+          Estimated monthly cost
+        </h4>
+        <p className="font-display text-2xl font-semibold tracking-[-0.01em] text-ink" aria-live="polite">
           {formatUsd(total)}
           <span className="ml-1 text-sm font-normal text-ink-3">/ month</span>
         </p>
@@ -208,6 +247,11 @@ export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors
                 <td className="py-2 pr-3">
                   <span className={cn('block', r.on ? 'text-ink' : 'text-ink-3')}>{r.label}</span>
                   <span className="block text-xs text-ink-3">{r.detail}</span>
+                  {r.on && total > 0 && (
+                    <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                      <span className="block h-full rounded-full bg-accent transition-[width] duration-500 ease-brand" style={{ width: `${Math.max(2, Math.min(100, (r.usd / total) * 100))}%` }} />
+                    </span>
+                  )}
                 </td>
                 <td className={cn('whitespace-nowrap py-2 text-right tabular', r.on ? 'text-ink' : 'text-ink-3')}>{r.on ? formatUsd(r.usd) : 'Off'}</td>
               </tr>

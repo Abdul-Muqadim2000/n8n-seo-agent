@@ -39,6 +39,7 @@ export function monitorsBody(m: Partial<MonitorSettings>): Body {
   if (m.aiVisibility !== undefined) out.ai_visibility = m.aiVisibility;
   if (m.aiEngines !== undefined) out.ai_engines = m.aiEngines.join(', ');
   if (m.aiPromptsMax !== undefined) out.ai_prompts_max = m.aiPromptsMax;
+  if (m.aiPulse !== undefined) out.ai_pulse = m.aiPulse;
   if (m.backlinks !== undefined) out.backlinks = m.backlinks;
   if (m.auditMonthly !== undefined) out.audit_monthly = m.auditMonthly;
   if (m.auditPages !== undefined) out.audit_pages = m.auditPages;
@@ -62,7 +63,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
     case 'keyword': {
       const receive = [input.receiveReport ? 'Keyword Report' : null, input.receiveContent ? 'Page Content' : null].filter(Boolean);
       return {
-        ...head('keyword', input.keyword, input.country, dom, d, s?.business ?? '', s?.customers ?? ''),
+        ...head('keyword', input.keyword, input.country, dom, d, input.business || s?.business || '', s?.customers ?? ''),
         page_type: pageTypeValue(input.pageType),
         existing_page_url: input.existingPageUrl,
         local_area: input.localArea,
@@ -198,6 +199,7 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
       return {
         ...head('backlinks', '', input.country, dom, d),
         competitors: input.competitors.length ? input.competitors : (s?.competitors ?? []),
+        ...(input.freeOnly ? { free_only: true } : {}),
       };
   }
 }

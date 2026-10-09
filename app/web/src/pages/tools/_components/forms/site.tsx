@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { FileSpreadsheet, Upload, X } from 'lucide-react';
+import { CheckCircle2, FileSpreadsheet, Upload, X } from 'lucide-react';
 import { CRAWL_PAGE_OPTIONS, RUN_SCHEMAS, urlOnDomain, type Site } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { fmtBytes } from '@/lib/utils';
@@ -11,9 +11,24 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard } from '@/components/ui/field';
 import { SwitchRow } from '@/components/ui/tabs';
+import { IconTile } from '@/components/insight';
 import { estimateCost, estimateEta } from '../estimate';
-import { CountryField, DomainTagsField, EmailCopyField, errMsg, FormCard, setPristine, siteDefaults, SiteField, ToolShell, useRunSubmit, useSiteChange, useSyncSiteParam } from '../kit';
+import { CountryField, DeliveryCard, DomainTagsField, EmailCopyField, errMsg, FormCard, setPristine, siteDefaults, SiteField, ToolShell, useRunSubmit, useSiteChange, useSyncSiteParam } from '../kit';
 import { TextAreaField, TextField, withChecks, withPrefill, type ToolFormProps } from '../form-utils';
+
+/** What a run checks or returns, as a two-column list with check marks. */
+function CheckList({ items }: { items: string[] }) {
+  return (
+    <ul className="grid gap-2 text-[13px] text-ink-2 sm:grid-cols-2">
+      {items.map((x) => (
+        <li key={x} className="flex items-center gap-2 rounded-lg border border-line bg-surface-2/50 px-3 py-2">
+          <CheckCircle2 className="size-3.5 shrink-0 text-accent-text" aria-hidden />
+          {x}
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 const noVerified = (sites: Site[]) => (sites.some((s) => s.verifiedAt) ? undefined : 'Verify a website first: this check runs against your own site.');
 
@@ -37,13 +52,7 @@ export function DescribeForm({ initialSiteId, prefill }: ToolFormProps) {
     <ToolShell mode="describe" site={site} cost={estimateCost('describe', v)} eta={estimateEta('describe', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Describe my website" blocked={noVerified(sites)}>
       <FormCard title="Website" description="We read the homepage and return what the business does, for whom, its offers and proof, plus seed keywords. Keyword runs reuse it for 30 days.">
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(form.formState.errors.siteId)} />
-        <ul className="grid gap-2 text-[13px] text-ink-2 sm:grid-cols-2">
-          {['One-line summary and description', 'Products and services', 'Target audience', 'What sets you apart', 'Suggested title and meta description', '8-10 seed keywords'].map((x) => (
-            <li key={x} className="rounded-lg bg-surface-2 px-3 py-2">
-              {x}
-            </li>
-          ))}
-        </ul>
+        <CheckList items={['One-line summary and description', 'Products and services', 'Target audience', 'What sets you apart', 'Suggested title and meta description', '8-10 seed keywords']} />
         <EmailCopyField reg={form.register('emailCopy')} />
       </FormCard>
     </ToolShell>
@@ -155,9 +164,7 @@ export function AuditForm({ initialSiteId, prefill }: ToolFormProps) {
         </FormCard>
       )}
 
-      <FormCard title="Delivery">
-        <EmailCopyField reg={form.register('emailCopy')} />
-      </FormCard>
+      <DeliveryCard reg={form.register('emailCopy')} />
     </ToolShell>
   );
 }
@@ -188,13 +195,7 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         <TextField label="Page address" reg={form.register('publishedUrl')} error={errMsg(e.publishedUrl)} inputMode="url" placeholder={site ? `https://${site.domain}/…` : 'https://…'} hint={site ? `The live URL on ${site.domain}.` : 'The live URL.'} />
         <TextField label="Target keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. uae e invoicing penalties" hint="The keyword the page was written for (the one in its report)." />
-        <ul className="grid gap-2 text-[13px] text-ink-2 sm:grid-cols-2">
-          {['Live (HTTP 200) and indexable', 'Title and meta description', 'One H1, canonical', 'Structured data, author and date', 'Images and alt text', 'Internal links to and from it'].map((x) => (
-            <li key={x} className="rounded-lg bg-surface-2 px-3 py-2">
-              {x}
-            </li>
-          ))}
-        </ul>
+        <CheckList items={['Live (HTTP 200) and indexable', 'Title and meta description', 'One H1, canonical', 'Structured data, author and date', 'Images and alt text', 'Internal links to and from it']} />
         <EmailCopyField reg={form.register('emailCopy')} />
       </FormCard>
     </ToolShell>
@@ -273,15 +274,23 @@ export function CheckinForm({ initialSiteId, prefill }: ToolFormProps) {
       </FormCard>
 
       <FormCard title="Pages report" description="Optional, and the most useful part: why Google does not index some pages.">
-        <ol className="list-decimal space-y-1 pl-5 text-[13px] text-ink-2">
-          <li>Search Console → Indexing → Pages → Export (top right) → Download CSV.</li>
-          <li>Unzip the download and upload Table.csv. Chart.csv, or the URL list of one reason, also work.</li>
+        <ol className="space-y-2 text-[13px] leading-snug text-ink-2">
+          {['Search Console → Indexing → Pages → Export (top right) → Download CSV.', 'Unzip the download and upload Table.csv. Chart.csv, or the URL list of one reason, also work.'].map((x, i) => (
+            <li key={i} className="flex items-start gap-2.5">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-accent-soft font-display text-[11px] font-semibold text-accent-text" aria-hidden>
+                {i + 1}
+              </span>
+              <span className="pt-px">{x}</span>
+            </li>
+          ))}
         </ol>
-        <input ref={fileRef} type="file" accept=".csv,text/csv" className="sr-only" id="pages-csv" onChange={(ev) => void onFile(ev.target.files?.[0])} />
+        <input ref={fileRef} type="file" accept=".csv,text/csv" className="peer sr-only" id="pages-csv" onChange={(ev) => void onFile(ev.target.files?.[0])} />
         {file || v.pagesCsv ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line p-3">
             <div className="flex min-w-0 items-center gap-3">
-              <FileSpreadsheet className="size-5 shrink-0 text-ink-3" aria-hidden />
+              <IconTile size="md" tone="good">
+                <FileSpreadsheet />
+              </IconTile>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-ink">{file?.name ?? 'Pages export'}</p>
                 <p className="text-xs text-ink-3">
@@ -295,8 +304,13 @@ export function CheckinForm({ initialSiteId, prefill }: ToolFormProps) {
             </Button>
           </div>
         ) : (
-          <label htmlFor="pages-csv" className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-strong px-4 py-6 text-center hover:border-accent hover:bg-surface-2">
-            <Upload className="size-5 text-ink-3" aria-hidden />
+          <label
+            htmlFor="pages-csv"
+            className="group/drop flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-strong px-4 py-7 text-center transition-colors duration-150 ease-brand hover:border-accent hover:bg-accent-soft/40 peer-focus-visible:border-accent peer-focus-visible:shadow-[var(--ring)]"
+          >
+            <IconTile size="md" className="mb-1 transition-colors duration-200 ease-brand group-hover/drop:bg-accent group-hover/drop:text-accent-ink">
+              <Upload />
+            </IconTile>
             <span className="text-sm font-medium text-ink">Choose the CSV file</span>
             <span className="text-xs text-ink-3">Up to 400 KB · read in your browser</span>
           </label>

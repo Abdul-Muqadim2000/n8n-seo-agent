@@ -48,7 +48,17 @@ export default function ResetPasswordPage() {
         <Field label="New password" hint="At least 10 characters, with letters and numbers or symbols." error={form.formState.errors.password?.message}>
           {(p) => <Input {...p} type="password" autoComplete="new-password" autoFocus {...form.register('password')} />}
         </Field>
-        {reset.isError && <Callout tone="critical">{errorMessage(reset.error)}</Callout>}
+        {/* a link cut short in the mail app fails the token check before anything is sent: say so instead of doing nothing */}
+        {form.formState.errors.token && (
+          <Callout tone="warning" action={<ButtonLink to="/forgot-password" variant="secondary" size="sm">New link</ButtonLink>}>
+            This reset link is incomplete. Open it from the e-mail again, or request a new one.
+          </Callout>
+        )}
+        {reset.isError && (
+          <Callout tone="critical" action={<ButtonLink to="/forgot-password" variant="secondary" size="sm">New link</ButtonLink>}>
+            {errorMessage(reset.error)}
+          </Callout>
+        )}
         <Button type="submit" size="lg" className="w-full" loading={reset.isPending}>
           Set password
         </Button>

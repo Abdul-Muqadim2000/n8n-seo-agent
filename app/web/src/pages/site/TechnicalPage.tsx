@@ -1,21 +1,23 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
-import { CheckCircle2, Circle, FileArchive, Gauge, Sparkles } from 'lucide-react';
+import { BarChart3, CheckCircle2, Circle, FileArchive, FileSearch, FileText, Gauge, ListChecks, Siren, Sparkles, TrendingUp } from 'lucide-react';
 import { titleCase, type AuditPoint, type Finding, type FindingStatus, type TechnicalData } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { useSiteData } from '@/lib/queries';
-import { fmtDate } from '@/lib/utils';
+import { cn, fmtDate } from '@/lib/utils';
 import { BarsChart, ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
 import { Badge, StatusBadge, severityTone } from '@/components/ui/badge';
 import { ButtonLink, buttonClass } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Callout, EmptyState } from '@/components/ui/feedback';
+import { EmptyState } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/field';
-import { Delta, PageHeader, StatTile, scoreTone } from '@/components/ui/misc';
+import { Delta, PageHeader, scoreTone } from '@/components/ui/misc';
+import { CountUp, DistributionBar, HeroStat, IconTile, InfoTip, InsightItem, MetricCard, ScoreRing, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
-import { DataGate, FillHeight, FilterChips, KpiGrid, Panel, SectionHeading, ToolButton, useSitePage } from './_components/kit';
+import { DataGate, FillHeight, FilterChips, Panel, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { countBy, dateLabelFormat, diff, plural, sortByDate, timeAxisFormat } from './_components/format';
 import { FileChip, ReportList, isFixPackFile } from './_components/reports';
+import { ChartTitle, DashSkeleton, HeroEyebrow } from './_components/visuals';
 
 const SEVERITIES = ['critical', 'high', 'medium', 'low', 'info'] as const;
 type Sev = (typeof SEVERITIES)[number];
@@ -37,6 +39,7 @@ export default function TechnicalPage() {
   return (
     <div>
       <PageHeader
+        icon={<Gauge />}
         title="Technical health"
         description="Crawl results, health score and every issue the audits found — what is new, what is still open and what you fixed."
         actions={
@@ -67,7 +70,9 @@ export default function TechnicalPage() {
           </>
         }
       />
-      <DataGate q={q}>{(d) => <Technical d={d} refetching={q.isFetching} />}</DataGate>
+      <DataGate q={q} skeleton={<DashSkeleton />}>
+        {(d) => <Technical d={d} refetching={q.isFetching} />}
+      </DataGate>
     </div>
   );
 }
@@ -104,44 +109,82 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
   const fixReport = sortByDate(d.reports, (r) => r.receivedAt, 'desc').find((r) => r.files.some(isFixPackFile));
   const fixZip = fixReport?.files.find((f) => f.kind === 'zip' && isFixPackFile(f));
   const fixLoose = fixReport?.files.filter((f) => f.kind !== 'zip' && isFixPackFile(f)) ?? [];
+  const grade = sel.grade || (tone === 'good' ? 'Good' : tone === 'warning' ? 'Needs work' : 'Poor');
+  const scoreDelta = diff(sel.healthScore, prev?.healthScore);
 
   return (
-    <div className="space-y-6">
-      <KpiGrid>
-        <StatTile
+    <Stagger className="space-y-6">
+      {/* how healthy the site is, what changed since the last audit */}
+      <SummaryHero
+        tone="blue"
+        eyebrow={<HeroEyebrow tag={reportTypeLabel(sel.reportType)}>{`${fmtDate(sel.auditedAt)} · ${sel.pagesCrawled.toLocaleString('en-US')} pages crawled · ${sel.scheduled ? 'monthly schedule' : 'run on demand'}`}</HeroEyebrow>}
+        title={healthHeadline(sel)}
+        description={
+          prev
+            ? `Since the audit of ${fmtDate(prev.auditedAt)}: ${plural(st.fixed ?? 0, 'issue')} fixed, ${plural(st.new ?? 0, 'new issue')}, ${st.open ?? 0} still open. Health score ${sel.healthScore >= prev.healthScore ? 'up' : 'down'} from ${prev.healthScore} to ${sel.healthScore}.`
+            : 'The first audit of this website. The next one shows what you fixed.'
+        }
+        aside={
+          <div className="flex items-center gap-4 md:flex-col md:gap-2">
+            <ScoreRing label="Health score" value={sel.healthScore} display={<CountUp value={sel.healthScore} />} suffix="/100" size={112} />
+            <span className="text-sm font-medium text-on-ink">{grade}</span>
+          </div>
+        }
+        stats={
+          prev ? (
+            <>
+              <HeroStat label="Fixed since the last audit" value={<CountUp value={st.fixed ?? 0} />} hint={`audit of ${fmtDate(prev.auditedAt)}`} />
+              <HeroStat label="New issues" value={<CountUp value={st.new ?? 0} />} hint="found for the first time" />
+              <HeroStat label="Still open" value={<CountUp value={st.open ?? 0} />} hint="found by both audits" />
+              <HeroStat label="Health score change" value={scoreDelta != null ? `${scoreDelta > 0 ? '+' : ''}${scoreDelta} pts` : '–'} hint={`${prev.healthScore} → ${sel.healthScore} of 100`} />
+            </>
+          ) : undefined
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <MetricCard
           label="Health score"
-          icon={<Gauge className="size-4" />}
+          icon={<Gauge />}
+          tone={tone === 'accent' ? 'blue' : tone}
           value={
             <span>
-              {sel.healthScore}
+              <CountUp value={sel.healthScore} />
               <span className="text-base font-medium text-ink-3">/100</span>
             </span>
           }
-          delta={<Delta value={diff(sel.healthScore, prev?.healthScore)} suffix=" pts" digits={0} />}
-          trend={<Sparkline data={audits.map((a) => ({ healthScore: a.healthScore }))} dataKey="healthScore" />}
-          hint={
+          delta={<Delta value={scoreDelta} suffix=" pts" digits={0} />}
+          deltaLabel={prev ? `vs ${fmtDate(prev.auditedAt)}` : 'first audit'}
+          sparkline={<Sparkline data={audits.map((a) => ({ healthScore: a.healthScore }))} dataKey="healthScore" />}
+          info="80 and above is good, 60–79 needs work, below 60 is poor"
+          meta={
             <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <StatusBadge tone={tone === 'accent' ? 'neutral' : tone}>{sel.grade || (tone === 'good' ? 'Good' : tone === 'warning' ? 'Needs work' : 'Poor')}</StatusBadge>
+              <StatusBadge tone={tone === 'accent' ? 'neutral' : tone}>{grade}</StatusBadge>
               {prev ? `change vs ${fmtDate(prev.auditedAt)}` : 'first audit'}
             </span>
           }
         />
-        <StatTile label="Pages crawled" value={sel.pagesCrawled.toLocaleString('en-US')} hint={`${reportTypeLabel(sel.reportType)} · ${sel.scheduled ? 'monthly schedule' : 'run on demand'} · ${fmtDate(sel.auditedAt)}`} />
-        <StatTile
+        <MetricCard
           label="Issues found"
-          value={sel.findings}
-          delta={<Delta value={diff(sel.findings, prev?.findings)} suffix="" digits={0} upIsGood={false} label={prev ? 'vs previous audit' : undefined} />}
-          hint={prev ? `${st.new ?? 0} new · ${st.fixed ?? 0} fixed · ${st.open ?? 0} still open` : 'The next audit shows what you fixed'}
+          icon={<ListChecks />}
+          value={<CountUp value={sel.findings} />}
+          delta={<Delta value={diff(sel.findings, prev?.findings)} suffix="" digits={0} upIsGood={false} />}
+          deltaLabel={prev ? 'vs previous audit' : undefined}
+          sparkline={<Sparkline data={audits.map((a) => ({ findings: a.findings }))} dataKey="findings" invert />}
+          meta={prev ? `${st.new ?? 0} new · ${st.fixed ?? 0} fixed · ${st.open ?? 0} still open` : 'The next audit shows what you fixed'}
         />
-        <StatTile
-          label="By severity"
-          value={
-            <span>
-              {sel.critical + sel.high}
-              <span className="ml-1.5 text-sm font-normal text-ink-3">critical or high</span>
-            </span>
+        <MetricCard
+          label="Critical or high"
+          icon={<Siren />}
+          tone={sel.critical ? 'critical' : sel.high ? 'serious' : 'good'}
+          value={<CountUp value={sel.critical + sel.high} />}
+          info="Fix these first: they keep pages out of Google or cost the most rankings"
+          sparkline={
+            <div className="flex h-full items-center">
+              <DistributionBar label="Issues by severity" segments={severitySegments(sel)} legend={false} className="w-full" />
+            </div>
           }
-          hint={
+          meta={
             <span className="flex flex-wrap gap-1.5">
               <StatusBadge tone={sel.critical ? 'critical' : 'neutral'}>{sel.critical} critical</StatusBadge>
               <StatusBadge tone={sel.high ? 'serious' : 'neutral'}>{sel.high} high</StatusBadge>
@@ -150,40 +193,52 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
             </span>
           }
         />
-      </KpiGrid>
-
-      {prev && (
-        <Callout tone={(st.new ?? 0) > (st.fixed ?? 0) ? 'warning' : 'good'} title={`Since the audit of ${fmtDate(prev.auditedAt)}`}>
-          {plural(st.fixed ?? 0, 'issue')} fixed, {plural(st.new ?? 0, 'new issue')}, {st.open ?? 0} still open. Health score {sel.healthScore >= prev.healthScore ? 'up' : 'down'} from {prev.healthScore} to {sel.healthScore}.
-        </Callout>
-      )}
+        <MetricCard
+          label="Pages crawled"
+          icon={<FileSearch />}
+          value={<CountUp value={sel.pagesCrawled} />}
+          sparkline={audits.length > 1 ? <Sparkline data={audits.map((a) => ({ pagesCrawled: a.pagesCrawled }))} dataKey="pagesCrawled" /> : undefined}
+          meta={`${reportTypeLabel(sel.reportType)} · ${sel.scheduled ? 'monthly schedule' : 'run on demand'} · ${fmtDate(sel.auditedAt)}`}
+        />
+      </div>
 
       {fixReport && (
-        <Callout
-          title={`Fix pack ready · audit of ${fmtDate(fixReport.receivedAt)}`}
-          action={
-            fixZip ? (
-              <a href={fileUrl(org.id, fixZip.id, true)} download={fixZip.fileName} className={buttonClass('secondary', 'sm')}>
-                <FileArchive className="size-4" aria-hidden />
-                Download all (.zip)
-              </a>
-            ) : undefined
-          }
-        >
-          Ready-to-apply files: robots.txt, llms.txt, structured data (JSON-LD), redirects and an internal-links list, with a README on where each one goes.
-          {fixLoose.length > 0 && (
-            <span className="mt-2 flex flex-wrap gap-1.5">
-              {fixLoose.map((f) => (
-                <FileChip key={f.id} orgId={org.id} f={f} />
-              ))}
-            </span>
-          )}
-        </Callout>
+        <Card className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start">
+          <IconTile tone="solid" size="lg">
+            <FileArchive />
+          </IconTile>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="min-w-0">
+                <h2 className="flex items-center gap-1 font-display text-base font-semibold tracking-[-0.01em] text-ink">
+                  Fix pack ready · audit of {fmtDate(fixReport.receivedAt)}
+                  <InfoTip label="About the fix pack">Each file comes with a README that says where it goes on your site; apply them, then the next audit checks the result.</InfoTip>
+                </h2>
+                <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-2">Ready-to-apply files: robots.txt, llms.txt, structured data (JSON-LD), redirects and an internal-links list, with a README on where each one goes.</p>
+              </div>
+              {fixZip && (
+                <a href={fileUrl(org.id, fixZip.id, true)} download={fixZip.fileName} className={cn(buttonClass('primary', 'md'), 'shrink-0')}>
+                  <FileArchive className="size-4" aria-hidden />
+                  Download all (.zip)
+                </a>
+              )}
+            </div>
+            {fixLoose.length > 0 && (
+              <span className="mt-3 flex flex-wrap gap-1.5">
+                {fixLoose.map((f) => (
+                  <FileChip key={f.id} orgId={org.id} f={f} />
+                ))}
+              </span>
+            )}
+          </div>
+        </Card>
       )}
+
+      <FixFirst findings={d.findings} hasPrevious={!!prev} sel={sel} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
-          title="Health score over time"
+          title={<ChartTitle icon={<TrendingUp />}>Health score over time</ChartTitle>}
           description={`${plural(audits.length, 'audit')} · 80 and above is good`}
           loading={refetching}
           table={{
@@ -205,16 +260,95 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
       </div>
 
       <section>
-        <SectionHeading title="Findings" description={prev ? `Compared with the audit of ${fmtDate(prev.auditedAt)}: new since then, still open, or fixed` : 'Every issue of this audit'} />
+        <SectionHeading
+          icon={<ListChecks />}
+          title="Findings"
+          description={prev ? `Compared with the audit of ${fmtDate(prev.auditedAt)}: new since then, still open, or fixed` : 'Every issue of this audit'}
+          info="Filter by severity and status, search by issue or category; the affected count shows the change since the previous audit."
+        />
         <Card className="p-4">
           <FindingsTable findings={d.findings} hasPrevious={!!prev} />
         </Card>
       </section>
 
-      <Panel title="Audit reports" description="PDF report, the diff since the last audit and the fix pack (.zip)" flush>
+      <Panel title="Audit reports" icon={<FileText />} description="PDF report, the diff since the last audit and the fix pack (.zip)" flush>
         <ReportList orgId={org.id} reports={d.reports} empty={<p className="px-5 pb-6 pt-2 text-sm text-ink-3">Reports of audits run before the app was connected are not stored here.</p>} />
       </Panel>
-    </div>
+    </Stagger>
+  );
+}
+
+/** The hero's headline: the score and what needs fixing first. */
+function healthHeadline(a: AuditPoint): string {
+  const head = `Health ${a.healthScore}/100`;
+  if (a.critical) return `${head} — ${plural(a.critical, 'critical issue')}${a.high ? ` and ${a.high} high` : ''} to fix`;
+  if (a.high) return `${head} — ${plural(a.high, 'high-severity issue')} to fix`;
+  if (a.medium) return `${head} — no critical issues, ${plural(a.medium, 'medium issue')} left`;
+  return `${head} — no critical or high issues`;
+}
+
+/** Severities of one audit as status-coloured buckets (these colours are status: always with the words in the legend). */
+function severitySegments(a: AuditPoint) {
+  return [
+    { label: 'Critical', value: a.critical, color: 'var(--critical)' },
+    { label: 'High', value: a.high, color: 'var(--serious)' },
+    { label: 'Medium', value: a.medium, color: 'var(--warning)' },
+    { label: 'Low', value: a.low, color: 'var(--ink-3)' },
+  ];
+}
+
+const SEV_TILE: Record<Sev, IconTileTone> = { critical: 'critical', high: 'serious', medium: 'warning', low: 'neutral', info: 'neutral' };
+
+/** The open critical and high issues (or the medium ones when there are none) as a to-do list; the full table follows below. */
+function FixFirst({ findings, hasPrevious, sel }: { findings: Finding[]; hasPrevious: boolean; sel: AuditPoint }) {
+  const open = findings.filter((f) => f.status !== 'fixed');
+  const urgent = open.filter((f) => SEV_RANK[sevKey(f.severity)] <= 1);
+  const rows = (urgent.length ? urgent : open.filter((f) => sevKey(f.severity) === 'medium'))
+    .slice()
+    .sort((a, b) => SEV_RANK[sevKey(a.severity)] - SEV_RANK[sevKey(b.severity)] || b.affectedCount - a.affectedCount);
+  if (!rows.length) return null;
+  const shown = rows.slice(0, 6);
+  return (
+    <Panel
+      title={urgent.length ? 'Fix these first' : 'Worth fixing next'}
+      icon={<Siren />}
+      iconTone={urgent.length ? (urgent.some((f) => sevKey(f.severity) === 'critical') ? 'critical' : 'serious') : 'warning'}
+      description={urgent.length ? `${plural(urgent.length, 'critical or high issue')} still open, biggest first` : 'No critical or high issue is open: these medium ones come next'}
+      flush
+      footer={rows.length > shown.length ? `${rows.length - shown.length} more in the findings table below` : undefined}
+    >
+      <div className="px-5 pb-4">
+        <DistributionBar label="Issues of this audit by severity" segments={severitySegments(sel)} />
+      </div>
+      <ul className="divide-y divide-line border-t border-line">
+        {shown.map((f) => {
+          const sev = sevKey(f.severity);
+          return (
+            <InsightItem
+              key={`${f.key}-${f.status}`}
+              tone={SEV_TILE[sev]}
+              meta={
+                <>
+                  <StatusBadge tone={severityTone(f.severity)}>{titleCase(f.severity)}</StatusBadge>
+                  <span className="text-xs text-ink-3">{f.category}</span>
+                  {hasPrevious && STATUS_META[f.status]?.node}
+                </>
+              }
+              title={f.title}
+              description={
+                f.affectedCount > 0 ? (
+                  <span className="inline-flex flex-wrap items-center gap-1.5">
+                    {plural(f.affectedCount, 'page')} affected
+                    {f.previousCount != null && f.previousCount !== f.affectedCount && <Delta value={f.affectedCount - f.previousCount} suffix="" digits={0} upIsGood={false} label="vs previous audit" />}
+                  </span>
+                ) : undefined
+              }
+              actionPosition="side"
+            />
+          );
+        })}
+      </ul>
+    </Panel>
   );
 }
 
@@ -229,7 +363,7 @@ function CategoryChart({ rows, loading }: { rows: TechnicalData['byCategory']; l
   const sorted = [...rows].sort((a, b) => b.critical * 1000 + b.high * 100 + b.medium * 10 + b.low - (a.critical * 1000 + a.high * 100 + a.medium * 10 + a.low));
   return (
     <ChartCard
-      title="Issues by category"
+      title={<ChartTitle icon={<BarChart3 />}>Issues by category</ChartTitle>}
       description="Number of issues per area, by severity"
       series={SEV_SERIES}
       legendShape="rect"

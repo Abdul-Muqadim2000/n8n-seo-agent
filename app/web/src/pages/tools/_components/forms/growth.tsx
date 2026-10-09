@@ -1,7 +1,8 @@
 import { useForm, type DefaultValues } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { AI_ENGINES, RUN_SCHEMAS } from '@seo/shared';
+import { Bot } from 'lucide-react';
+import { AI_ENGINES, MODES, RUN_SCHEMAS } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { Badge } from '@/components/ui/badge';
 import { ChoiceCard } from '@/components/ui/field';
@@ -69,13 +70,17 @@ export function LadderForm({ initialSiteId, prefill }: ToolFormProps) {
       values={{ keyword: v.keyword }}
       blocked={blockedWithout(sites.some((s) => s.verifiedAt))}
     >
-      <FormCard title="The keyword to win" description="A head term you cannot rank for yet. The ladder starts with winnable long-tail pages and climbs to it, with a feasibility verdict, link map and timeline.">
+      <FormCard title="The keyword to win" description="A head term you cannot rank for yet." info="The ladder starts with winnable long-tail pages and climbs to it, with a feasibility verdict, link map and timeline.">
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         <TextField label="Head keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. e invoicing in uae" hint="The competitive term you ultimately want to rank for." />
         <CountryField reg={form.register('country')} error={errMsg(e.country)} />
       </FormCard>
 
-      <FormCard title="Pages to write now" description="The easiest rung-1 pages are written right away (each about $1.20 and 10 minutes, delivered as its own report). The rest follow from the plan or the weekly content cadence.">
+      <FormCard
+        title="Pages to write now"
+        description="The easiest rung-1 pages are written right away."
+        info="Each about $1.20 and 10 minutes, delivered as its own report. The rest follow from the plan or the weekly content cadence."
+      >
         <div role="radiogroup" aria-label="Pages to write now" className="grid gap-2 sm:grid-cols-3">
           {[1, 2, 3].map((n) => (
             <ChoiceCard
@@ -266,14 +271,22 @@ export function AiVisibilityForm({ initialSiteId, prefill }: ToolFormProps) {
 
   return (
     <ToolShell mode="ai_visibility" site={site} cost={estimateCost('ai_visibility', v)} eta={estimateEta('ai_visibility', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check AI visibility" blocked={blockedWithout(sites.some((s) => s.verifiedAt))}>
-      <FormCard title="Website and market" description="About 8 buyer questions are written for your market and asked to every assistant below; each answer is checked for your brand, your links and your competitors.">
+      <FormCard
+        title="Website and market"
+        description="Buyer questions for your market, asked to every assistant below."
+        info="About 8 buyer questions are written for your market and asked to every assistant below; each answer is checked for your brand, your links and your competitors."
+      >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         <CountryField reg={form.register('country')} error={errMsg(e.country)} />
-        <div className="flex flex-wrap gap-1.5">
+        <ul className="flex flex-wrap gap-1.5" aria-label="AI assistants asked">
           {AI_ENGINES.map((x) => (
-            <Badge key={x.value}>{x.label}</Badge>
+            <li key={x.value}>
+              <Badge tone="accent" icon={<Bot className="size-3" aria-hidden />}>
+                {x.label}
+              </Badge>
+            </li>
           ))}
-        </div>
+        </ul>
       </FormCard>
       <FormCard title="Topics and competitors">
         <TextTagsField
@@ -309,7 +322,7 @@ export function BacklinksForm({ initialSiteId, prefill }: ToolFormProps) {
   const form = useForm<BIn, unknown, BOut>({
     resolver: zodResolver(BS),
     mode: 'onTouched',
-    defaultValues: withPrefill<DefaultValues<BIn>>({ mode: 'backlinks', siteId: initialSiteId ?? '', country: sd.country, competitors: sd.competitors, emailCopy: true }, prefill),
+    defaultValues: withPrefill<DefaultValues<BIn>>({ mode: 'backlinks', siteId: initialSiteId ?? '', country: sd.country, competitors: sd.competitors, freeOnly: false, emailCopy: true }, prefill),
   });
   const { onSubmit, pending, error } = useRunSubmit(form);
   const v = form.watch();
@@ -324,9 +337,19 @@ export function BacklinksForm({ initialSiteId, prefill }: ToolFormProps) {
 
   return (
     <ToolShell mode="backlinks" site={site} cost={estimateCost('backlinks', v)} eta={estimateEta('backlinks', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check backlinks" blocked={blockedWithout(sites.some((s) => s.verifiedAt))}>
-      <FormCard title="Website" description="Links gained and lost, links to broken pages, spam, unlinked brand mentions, the sites that link to your competitors but not to you, and outreach drafts for each.">
+      <FormCard
+        title="Website"
+        description="Every link source merged, each important link checked on its page."
+        info="Every link source merged — DataForSEO, Bing, your Search Console export, GA4 visits, the Common Crawl web graph, Wikipedia and the news — each important link checked on its page, lost links with the reason, the gap to your competitors, lists that name them, and outreach drafts."
+      >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         <CountryField reg={form.register('country')} error={errMsg(e.country)} hint="Used to find competitors when none are given and for the outreach drafts." />
+      </FormCard>
+      <FormCard title="Depth">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ChoiceCard selected={!v.freeOnly} onSelect={() => form.setValue('freeOnly', false, { shouldDirty: true })} title={`Full check (~$${MODES.backlinks.costUsd.toFixed(2)})`} description="Adds DataForSEO's index (link details, new and lost, competitors' new links, the gap), AI link labels and outreach drafts." />
+          <ChoiceCard selected={!!v.freeOnly} onSelect={() => form.setValue('freeOnly', true, { shouldDirty: true })} title="Free sources only ($0)" description="Bing, your Search Console export, GA4, Common Crawl, Wikipedia, news and web search, every important link checked on its page." />
+        </div>
       </FormCard>
       <FormCard title="Competitors" description="The link gap compares your links with theirs.">
         <DomainTagsField

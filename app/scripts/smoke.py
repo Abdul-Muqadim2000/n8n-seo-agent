@@ -6,7 +6,7 @@ Covers sign-up / login / logout, password reset, e-mail verification gate, CSRF 
 admin), invitations, site rules (duplicate, unverified gate), the monthly budget guard (402), the callback token and the guards of the
 keyword-ladder controls and of the keyword check (no valid write or paid check reaches n8n). Test users are
 created with random e-mails under example.org and removed at the end (with their companies)."""
-import argparse, json, secrets, subprocess, sys, urllib.request
+import argparse, json, os, secrets, subprocess, sys, urllib.error, urllib.parse, urllib.request
 from api import Api
 
 p = argparse.ArgumentParser(); p.add_argument('--base', default='http://localhost:4000'); p.add_argument('--db', default='seo-platform-dev-db-1')
@@ -62,6 +62,13 @@ try:
     s, d = owner.post(f'/api/orgs/{O}/runs', {'mode': 'audit', 'siteId': S, 'country': 'Germany'})
     check('site runs need a verified site (403)', s == 403 and 'Verify that you own' in d.get('error', ''), d)
     sql(f"update sites set verified_at=now(), verification_method='dns' where id='{S}'")
+    # v4.10: link uploads (Search Console export -> n8n seo_link_imports; free, no run)
+    s, d = owner.post(f'/api/orgs/{O}/sites/{S}/backlinks/import', {'csv': 'Target page,Incoming links\nhttps://smoke-' + TAG + '.example-shop.com/,3\n'})
+    check('link upload: the "Top linked pages" table is refused with a plain message (400)', s == 400 and 'your own pages' in d.get('error', ''), d)
+    s, d = owner.post(f'/api/orgs/{O}/sites/{S}/backlinks/import', {'csv': 'Linking page,Last crawled\nhttps://blog.smoke-partner.example.net/post,2026-09-28\nhttps://news.smoke-press.example.org/a,Sep 21, 2026\n', 'fileName': 'latest.csv'})
+    check('link upload: Search Console "Latest links" stored (2 rows, 2 sites)', s == 200 and d.get('source') == 'gsc_latest' and d.get('rows') == 2 and d.get('domains') == 2, d)
+    s, d = owner.get(f'/api/orgs/{O}/sites/{S}/data/backlinks')
+    check('link upload: the backlinks dashboard lists the upload', s == 200 and any(i.get('source') == 'gsc_latest' and i.get('rows') == 2 for i in d.get('imports', [])), d.get('imports') if isinstance(d, dict) else d)
     sql(f"update organizations set monthly_budget_usd=0.5 where id='{O}'")
     s, d = owner.post(f'/api/orgs/{O}/runs', {'mode': 'keyword', 'siteId': S, 'keyword': 'smoke test keyword', 'country': 'Germany'})
     check('monthly budget guard (402)', s == 402 and d.get('code') == 'budget', d)
@@ -166,6 +173,8 @@ try:
     check('other company: keyword checks are 404', s == 404, d)
     s, d = stranger.get(f'/api/orgs/{O}/sites/{S}/keywords/recommended')
     check('other company: recommended keywords are 404', s == 404, d)
+    s, d = stranger.post(f'/api/orgs/{O}/sites/{S}/backlinks/import', {'csv': 'Linking page\nhttps://x.example.net/\n'})
+    check('other company: link uploads are 404', s == 404, d)
     s, org2 = stranger.post('/api/orgs', {'name': f'Rival {TAG}'})
     extra = [stranger.post('/api/orgs', {'name': f'Rival {TAG} {i}'})[0] for i in range(3)]
     check('companies per person are capped', extra[:2] == [200, 200] and extra[2] == 403, extra)
@@ -198,6 +207,16 @@ try:
     s, d = owner.post('/api/auth/login', {'email': owner_email, 'password': 'smoke-test-pass-1'})
     check('login again', s == 200, d)
 finally:
+    # the smoke upload's rows in n8n (seo_link_imports), through the n8n public API (key from n8n/.env, never printed)
+    try:
+        key = next((l.split('=', 1)[1].strip().strip('"').strip("'") for l in open(os.path.join(os.path.dirname(__file__), '..', '..', 'n8n', '.env')) if l.startswith('N8N_API_KEY=')), '')
+        n8n = os.environ.get('N8N_PUBLIC_URL', 'http://localhost:5678').rstrip('/') + '/api/v1'
+        req = lambda path, method='GET': json.load(urllib.request.urlopen(urllib.request.Request(n8n + path, method=method, headers={'X-N8N-API-KEY': key, 'Accept': 'application/json'}), timeout=20) or [])
+        if key:
+            tid = next((t['id'] for t in req('/data-tables?limit=100')['data'] if t['name'] == 'seo_link_imports'), None)
+            if tid: urllib.request.urlopen(urllib.request.Request(n8n + f'/data-tables/{tid}/rows/delete?filter=' + urllib.parse.quote(json.dumps({'type': 'and', 'filters': [{'columnName': 'domain', 'condition': 'eq', 'value': f'smoke-{TAG}.example-shop.com'}]}, separators=(',', ':')), safe=''), method='DELETE', headers={'X-N8N-API-KEY': key}), timeout=20)
+    except Exception as e:
+        print('note: could not remove the smoke upload rows from n8n:', str(e)[:120])
     sql(f"delete from organizations where name like '%{TAG}%'")
     sql(f"delete from users where email like '%-{TAG}@example.org'")
 

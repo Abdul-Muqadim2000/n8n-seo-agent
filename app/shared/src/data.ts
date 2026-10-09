@@ -289,6 +289,12 @@ export interface AiEngineStat {
   errors: number;
   knowsBrand: boolean | null;
   carried: boolean;
+  /** v4.9: answers counted over the past 7 days (this run + the daily pulse), of which from the pulse, and the 95% range of the mention rate */
+  samples: number;
+  pulseSamples: number;
+  ci: [number, number] | null;
+  /** -100..100 over the answers naming the business (null = none read) */
+  sentiment: number | null;
 }
 
 export interface AiRun {
@@ -304,6 +310,92 @@ export interface AiRun {
   aioCitationRate: number;
   costUsd: number;
   alerts: string[];
+  /** v4.9 (0 / null on runs before v4.9) */
+  runKind: string;
+  samples: number;
+  visibilityScore: number | null;
+  mentionLo: number | null;
+  mentionHi: number | null;
+  sentimentScore: number | null;
+  accuracyIssues: number;
+  aiSessions: number | null;
+  aiConversions: number | null;
+  aiRevenue: number | null;
+  indexSov: number | null;
+  aiImpressions: number | null;
+}
+
+/** v4.9: one AI Pulse day (ChatGPT, Gemini and Google AI Mode on the whole panel) */
+export interface AiDay {
+  date: string;
+  samples: number;
+  mentionRate: number;
+  citationRate: number;
+  shareOfVoice: number;
+  visibilityScore: number;
+  alerts: string[];
+}
+
+export interface AiTraffic {
+  connected: boolean;
+  error: string | null;
+  period: { start: string; end: string } | null;
+  sessions: number;
+  engaged: number;
+  keyEvents: number;
+  revenue: number;
+  prevSessions: number;
+  changePct: number | null;
+  shareOfSessions: number;
+  convRate: number;
+  organicConvRate: number;
+  assistants: { name: string; sessions: number; prevSessions: number; engaged: number; keyEvents: number; revenue: number }[];
+  landing: { page: string; sessions: number; keyEvents: number; revenue: number; citedByAi: boolean }[];
+  weekly: { week: string; sessions: number; keyEvents: number; revenue: number }[];
+}
+
+export interface AiAccess {
+  checkedAt: string;
+  ok: boolean;
+  robotsFound: boolean;
+  llmsTxt: boolean;
+  bots: { bot: string; owner: string; group: 'answer' | 'training'; allowed: boolean; rule: string; blockedPaths: string[]; fetchStatus: number | null; fetchBlocked: boolean }[];
+  issues: { level: string; bot: string; text: string; fix: string }[];
+}
+
+export interface AiPerception {
+  analysed: number;
+  positive: number;
+  neutral: number;
+  negative: number;
+  score: number | null;
+  descriptors: string[];
+  negatives: { engine: string; prompt: string; excerpt: string }[];
+  issues: { text: string; engines: string[]; questions: string[]; new: boolean }[];
+}
+
+/** v4.9: the AI-answer database (DataForSEO LLM Mentions, monthly) and what the panel does not cover */
+export interface AiIndex {
+  checkedAt: string;
+  carried: boolean;
+  platforms: string[];
+  sov: number | null;
+  answersCitingYou: number;
+  brands: { key: string; label: string; you: boolean; mentions: number; aiSearchVolume: number; share: number | null }[];
+  questions: { question: string; volume: number; platform: string }[];
+  suggestions: { question: string; volume: number; platform: string; youCited: boolean }[];
+  fanout: { query: string; count: number; engines: string[]; questions: string[] }[];
+  demand: { total: number; named: number; lost: number };
+}
+
+/** v4.9: a buyer stage or topic cluster of the panel */
+export interface AiGroup {
+  key: string;
+  questions: number;
+  volume: number;
+  samples: number;
+  mentionRate: number;
+  leader: string;
 }
 
 export interface AiData {
@@ -314,7 +406,13 @@ export interface AiData {
     competitors: { domain: string; mentions: number; share: number; auto: boolean }[];
     sources: { domain: string; citations: number; engines: string[]; topics: string[]; kind: string }[];
     pages: { url: string; citations: number; engines: string[] }[];
-    gaps: { prompt: string; competitors: string[]; sources: string[] }[];
+    gaps: { prompt: string; competitors: string[]; sources: string[]; volume: number | null; stage: string; cluster: string; fanout: string[] }[];
+    traffic: AiTraffic | null;
+    access: AiAccess | null;
+    perception: AiPerception | null;
+    index: AiIndex | null;
+    stages: AiGroup[];
+    clusters: AiGroup[];
     market: {
       keyword: string;
       checkedAt: string;
@@ -324,7 +422,9 @@ export interface AiData {
       you: { mentions: number; aiSearchVolume: number } | null;
     } | null;
   } | null;
-  prompts: { promptId: string; prompt: string; kind: string; topic: string; keyword: string; source: string; status: string; createdAt: string }[];
+  prompts: { promptId: string; prompt: string; kind: string; topic: string; keyword: string; source: string; status: string; createdAt: string; stage: string; cluster: string; volume: number | null; origin: string }[];
+  /** v4.9: the AI Pulse days (last 90) */
+  daily: AiDay[];
   answers: {
     promptId: string;
     prompt: string;
@@ -341,13 +441,18 @@ export interface AiData {
     excerpt: string;
     error: string;
     checkedAt: string;
+    runKind: string;
+    sentiment: string;
+    brands: string[];
+    issues: string[];
+    fanout: string[];
   }[];
   /** from the latest AI visibility report (when it was delivered to the app) */
   report: {
     receivedAt: string;
     brief: { headline?: string; summary?: string } | null;
     /** question x engine grid: engine key -> 'mentioned' | 'cited' | 'absent' | 'none' | 'error' | 'monthly' */
-    questions: { promptId: string; prompt: string; kind: string; topic: string; won: boolean; engines: Record<string, string>; competitors: string[]; sources: string[] }[];
+    questions: { promptId: string; prompt: string; kind: string; topic: string; won: boolean; engines: Record<string, string>; competitors: string[]; sources: string[]; stage: string; volume: number | null; winRate: number | null; samples: number }[];
     actions: EngineAction[];
   } | null;
 }
@@ -379,6 +484,93 @@ export interface BacklinkSnapshot {
   importantLost: number;
   spammyNew: number;
   costUsd: number;
+  /** v4.10: referring sites from every source (null before v4.10) */
+  unionDomains: number | null;
+  bestLinks: number | null;
+  verifiedLive: number | null;
+  atRisk: number | null;
+  confirmedLost: number | null;
+  referralVisits: number | null;
+}
+
+/** v4.10: one referring site in the link ledger (every source merged, checked on the linking page; n8n/seo-agent/BACKLINKS_SPEC.md) */
+export interface BacklinkRef {
+  refDomain: string;
+  /** web | social */
+  kind: string;
+  fromUrl: string;
+  toUrl: string;
+  anchor: string;
+  /** brand | url | generic | money | image_or_empty */
+  anchorKind: string;
+  /** follow | nofollow | ugc | sponsored | redirect ('' = not checked yet) */
+  rel: string;
+  /** content | body | sidebar | nav | footer | comment */
+  placement: string;
+  /** the Link Analyst's label: editorial, press, resource, listing, directory, profile, partner, forum, comment, guest_post, sponsored, scraper, spam, other */
+  linkType: string;
+  /** 0-1 (0-3 from the analyst / 3) */
+  relevance: number | null;
+  note: string;
+  /** dfs, bing, gsc, ga4, cc, wiki, hn, news, web, import — every source that ever reported it */
+  sources: string[];
+  firstSeen: string;
+  lastSeen: string;
+  /** live | at_risk (missed once) | lost (two misses, with the reason) */
+  status: string;
+  lostAt: string;
+  /** link_removed | page_gone | domain_gone | not_seen */
+  lostReason: string;
+  /** found | missing | gone | blocked | js | error | unchecked */
+  verify: string;
+  verifiedAt: string;
+  noindex: boolean;
+  pageTitle: string;
+  context: string;
+  authority: number;
+  /** Ahrefs Domain Rating (free API; shown with the "Domain Rating by Ahrefs" credit) */
+  dr: number | null;
+  /** Common Crawl harmonic-centrality position (1 = best) */
+  ccRank: number | null;
+  pageKeywords: number;
+  spamScore: number;
+  /** false = inserted into an existing page later (often paid) */
+  original: boolean;
+  visits: number;
+  keyEvents: number;
+  aiCited: boolean;
+  seoValue: number;
+  referralValue: number;
+  brandValue: number;
+}
+
+export interface BacklinkSourceStatus {
+  bing: { enabled: boolean; connected: boolean; inAccount: boolean | null; error: string; pages: number; links: number };
+  gsc: { rows: number; domains: number; uploadedAt: string };
+  ga4: { connected: boolean; error: string; property: string; sources: number; visits: number; excluded: string[] };
+  cc: { release: string; links: number; checkedAt: string };
+  wiki: { pages: number };
+  hn: { stories: number };
+}
+
+export interface BacklinkCoverage {
+  /** referring sites (web) live or at risk, all sources */
+  union: number;
+  social: number;
+  perSource: Record<string, number>;
+  /** sites only one source found */
+  onlyIn: Record<string, number>;
+  /** % of the union DataForSEO reports */
+  dfsShare: number;
+  /** sites in Google's own sample (the Search Console upload) */
+  gscSample: number;
+  /** % of Google's sample DataForSEO sees; null without an upload */
+  dfsSeesGoogle: number | null;
+  allSeeGoogle: number | null;
+  verified: number;
+  checkedNow: number;
+  blocked: number;
+  status: BacklinkSourceStatus | null;
 }
 
 export interface Prospect {
@@ -396,25 +588,54 @@ export interface Prospect {
   outreachSubject: string;
   outreachBody: string;
   note: string;
+  /** v4.10: value x likelihood, 0-100 */
+  score: number;
+  origin: string;
+  contactEmail: string;
+  contactUrl: string;
+  contactedAt: string;
+  followupStep: number;
+  followupSubject: string;
+  followupBody: string;
+  verifiedAt: string;
 }
 
 export interface BacklinksData {
   snapshots: BacklinkSnapshot[];
   latest: {
-    lost: BacklinkLink[];
+    lost: (BacklinkLink & { reason?: string; pending?: boolean })[];
     new: BacklinkLink[];
     competitors: { domain: string; [k: string]: unknown }[];
     timeseries: { month: string; backlinks: number; referringDomains: number; rank: number }[];
+    /** v4.10 (null before) */
+    coverage: BacklinkCoverage | null;
+    anchors: { kinds: Record<string, number>; top: { anchor: string; referringDomains: number; backlinks: number; kind: string }[] } | null;
+    pages: { url: string; referringDomains: number; backlinks: number; status: number | null }[];
+    wins: { refDomain: string; url: string; why: string; seo: number; linkType: string }[];
+    relChanged: { refDomain: string; url: string; rel: string; was: string }[];
+    compNew: { domain: string; competitor: string; url: string; firstSeen: string; domainRank: number; title: string }[];
+    lists: { domain: string; url: string; title: string; topic: string; competitors: string[]; named: boolean; linked: boolean }[];
   } | null;
+  /** v4.10: the link ledger (every referring site, every source, checked on the page) */
+  refs: BacklinkRef[];
+  /** v4.10: the uploads (latest per kind) */
+  imports: { source: string; rows: number; importedAt: string }[];
+  /** v4.10: the Common Crawl graph rows written for this site (monthly job) */
+  linkGraph: { release: string; checkedAt: string; counts: Record<string, number> } | null;
   prospects: Prospect[];
   /** from the latest backlink report delivered to the app */
   report: {
     receivedAt: string;
     alerts: { level: string; text: string }[];
-    gap: { domain: string; rank: number; spam: number; linksTo: string[]; backlinks: number }[];
+    gap: { domain: string; rank: number; spam: number; linksTo: string[]; backlinks: number; source: string; ccRank: number | null }[];
     spammy: BacklinkLink[];
     disavowFileId: string | null;
     prospectsCsvFileId: string | null;
+    /** v4.10 */
+    mentions: { domain: string; url: string; title: string; source: string; verified: boolean; context: string }[];
+    atRisk: { refDomain: string; url: string; verify: string }[];
+    reclaim: { brokenUrl: string; status: number | null; links: number; domains: string[]; redirectTo: string }[];
+    drEnabled: boolean;
   } | null;
 }
 

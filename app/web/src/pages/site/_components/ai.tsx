@@ -2,7 +2,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { AlertTriangle, CalendarClock, CheckCircle2, CircleX, Link2, Minus, Plus, Power } from 'lucide-react';
-import { AI_ENGINES, titleCase, type AiData } from '@seo/shared';
+import { AI_ENGINES, compactNumber, titleCase, type AiData } from '@seo/shared';
 import { errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
@@ -33,22 +33,38 @@ const cellState = (v: string | undefined): CellState => {
   return 'unknown';
 };
 
+// the question x engine grid is a heat-map on the blue scale: cited (named + linked) is the strongest step, named the tint, answered
+// without you neutral; failed checks keep the warning colour because that is a status. Every cell keeps its icon and word.
 const CELL: Record<CellState, { label: string; icon: ReactNode; cls: string; help: string }> = {
-  cited: { label: 'Cited', icon: <Link2 className="size-3.5" aria-hidden />, cls: 'bg-good-soft text-good-text font-semibold', help: 'Named and linked to one of your pages' },
-  named: { label: 'Named', icon: <CheckCircle2 className="size-3.5" aria-hidden />, cls: 'bg-good-soft text-good-text', help: 'Your brand is named in the answer' },
-  absent: { label: 'Not named', icon: <CircleX className="size-3.5" aria-hidden />, cls: 'text-ink-2', help: 'Answered without you' },
-  none: { label: 'No answer', icon: <Minus className="size-3.5" aria-hidden />, cls: 'text-ink-3', help: 'The engine gave no answer (e.g. no AI Overview shown)' },
-  error: { label: 'Error', icon: <AlertTriangle className="size-3.5" aria-hidden />, cls: 'text-warning-text', help: 'The check failed; it is retried next run' },
-  monthly: { label: 'Monthly', icon: <CalendarClock className="size-3.5" aria-hidden />, cls: 'text-ink-3', help: 'Asked on the monthly full run; the last result is carried' },
+  cited: { label: 'Cited', icon: <Link2 className="size-3.5" aria-hidden />, cls: 'bg-accent text-accent-ink font-semibold', help: 'Named and linked to one of your pages' },
+  named: { label: 'Named', icon: <CheckCircle2 className="size-3.5" aria-hidden />, cls: 'bg-accent-soft text-accent-text font-medium ring-1 ring-accent/20 ring-inset', help: 'Your brand is named in the answer' },
+  absent: { label: 'Not named', icon: <CircleX className="size-3.5" aria-hidden />, cls: 'bg-surface-2 text-ink-2', help: 'Answered without you' },
+  none: { label: 'No answer', icon: <Minus className="size-3.5" aria-hidden />, cls: 'text-ink-3 ring-1 ring-line ring-inset', help: 'The engine gave no answer (e.g. no AI Overview shown)' },
+  error: { label: 'Error', icon: <AlertTriangle className="size-3.5" aria-hidden />, cls: 'bg-warning-soft text-warning-text', help: 'The check failed; it is retried next run' },
+  monthly: { label: 'Monthly', icon: <CalendarClock className="size-3.5" aria-hidden />, cls: 'text-ink-3 ring-1 ring-line ring-inset', help: 'Asked on the monthly full run; the last result is carried' },
   unknown: { label: '–', icon: null, cls: 'text-ink-3', help: 'Not asked' },
 };
 
-export function GridCell({ value }: { value: string | undefined }) {
+export function GridCell({ value, fill }: { value: string | undefined; /** stretch to the cell width (the grid) */ fill?: boolean }) {
   const c = CELL[cellState(value)];
   return (
-    <span className={cn('inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs', c.cls)} title={c.help}>
+    <span className={cn('inline-flex h-6 items-center gap-1 whitespace-nowrap rounded-md px-1.5 text-xs', fill && 'h-8 w-full min-w-[6rem] px-2', c.cls)} title={c.help}>
       {c.icon}
       {c.label}
+    </span>
+  );
+}
+
+/** "This week" share of answers that name you, as a heat chip on the same blue scale. */
+function RateCell({ rate, samples }: { rate: number; samples: number }) {
+  const r = Math.round(rate);
+  return (
+    <span
+      className={cn('inline-flex min-w-[3.25rem] flex-col items-end rounded-md px-2 py-1 tabular', r >= 50 ? 'bg-accent text-accent-ink' : r > 0 ? 'bg-accent-soft text-accent-text' : 'bg-surface-2 text-ink-2')}
+      title={`${samples} answers`}
+    >
+      <span className="text-[13px] font-semibold">{r}%</span>
+      <span className={cn('text-[11px]', r >= 50 ? 'text-accent-ink/80' : 'text-ink-3')}>{samples} answers</span>
     </span>
   );
 }
@@ -94,6 +110,9 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
               <th scope="col" className="sticky left-0 z-10 min-w-[14rem] border-b border-line bg-surface-2 px-3 py-2 text-left text-xs font-medium text-ink-3">
                 Buyer question
               </th>
+              <th scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-right text-xs font-medium text-ink-3" title="Share of this week’s answers to the question that name you (Monday’s run and the daily pulse)">
+                This week
+              </th>
               {engines.map((e) => (
                 <th key={e} scope="col" className="whitespace-nowrap border-b border-line px-2 py-2 text-left text-xs font-medium text-ink-3" title={engineNames[e] ?? engineLabel(e)}>
                   {ENGINE_SHORT[e] ?? engineNames[e] ?? engineLabel(e)}
@@ -106,17 +125,25 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
           </thead>
           <tbody>
             {rows.map((q) => (
-              <tr key={q.promptId} className="border-b border-line bg-surface last:border-b-0">
+              <tr key={q.promptId} className="group/qr border-b border-line bg-surface transition-colors duration-150 ease-brand last:border-b-0 hover:bg-surface-2/40">
                 <th scope="row" className="sticky left-0 z-10 max-w-[19rem] bg-surface px-3 py-2.5 text-left align-top font-normal">
                   <p className="text-[13px] font-medium leading-snug text-ink">{q.prompt}</p>
                   <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-3">
                     {q.kind && <Kind>{titleCase(q.kind)}</Kind>}
-                    {q.topic && <span className="truncate">{q.topic}</span>}
+                    {q.stage && q.stage !== q.kind && <Kind>{titleCase(q.stage)}</Kind>}
+                    {q.volume ? <span>{compactNumber(q.volume)} AI searches / mo</span> : q.topic ? <span className="truncate">{q.topic}</span> : null}
                   </p>
                 </th>
+                <td className="px-2 py-2.5 text-right align-top">
+                  {q.winRate != null && q.samples ? (
+                    <RateCell rate={q.winRate} samples={q.samples} />
+                  ) : (
+                    <span className="text-xs text-ink-3">–</span>
+                  )}
+                </td>
                 {engines.map((e) => (
-                  <td key={e} className="px-2 py-2.5 align-top">
-                    <GridCell value={q.engines[e]} />
+                  <td key={e} className="px-1 py-2.5 align-top">
+                    <GridCell value={q.engines[e]} fill />
                   </td>
                 ))}
                 <td className="px-3 py-2.5 align-top">
@@ -126,7 +153,7 @@ export function QuestionGrid({ questions, engineNames }: { questions: readonly Q
             ))}
             {!rows.length && (
               <tr>
-                <td colSpan={engines.length + 2} className="px-3 py-8 text-center text-sm text-ink-3">
+                <td colSpan={engines.length + 3} className="px-3 py-8 text-center text-sm text-ink-3">
                   No question matches this filter.
                 </td>
               </tr>
@@ -228,6 +255,8 @@ function AnswerCard({ a, engineName }: { a: Answer; engineName: string }) {
         ) : (
           <Badge icon={<Minus className="size-3" aria-hidden />}>No answer</Badge>
         )}
+        {a.sentiment && <Badge tone={a.sentiment === 'positive' ? 'good' : a.sentiment === 'negative' ? 'critical' : 'neutral'}>{titleCase(a.sentiment)}</Badge>}
+        {a.runKind === 'pulse' && <Kind>daily pulse</Kind>}
         <span className="ml-auto text-xs text-ink-3" title={fmtDate(a.checkedAt)}>
           {fmtAgo(a.checkedAt)}
         </span>
@@ -235,15 +264,25 @@ function AnswerCard({ a, engineName }: { a: Answer; engineName: string }) {
       <p className="mt-1.5 text-[13px] font-medium text-ink-2">{a.prompt}</p>
       {a.excerpt && (
         <div className="mt-2">
-          <p className={cn('whitespace-pre-line rounded-lg bg-surface-2 px-3 py-2 text-[13px] leading-relaxed text-ink-2', !open && long && 'line-clamp-4')}>{a.excerpt}</p>
+          <p className={cn('whitespace-pre-line rounded-lg bg-surface-2 px-3 py-2 text-[13px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]', !open && long && 'line-clamp-4')}>{a.excerpt}</p>
           {long && (
-            <button type="button" onClick={() => setOpen((o) => !o)} className="mt-1 text-xs font-medium text-accent-text hover:underline">
+            <button type="button" onClick={() => setOpen((o) => !o)} className="mt-1 text-xs font-medium text-accent-text hover:underline transition-colors duration-150 ease-brand">
               {open ? 'Show less' : 'Show the whole excerpt'}
             </button>
           )}
         </div>
       )}
-      {a.error && <p className="mt-2 text-xs text-warning-text">Check failed: {a.error}</p>}
+      {a.error && <p className="mt-2 text-xs text-warning-text [overflow-wrap:anywhere]">Check failed: {a.error}</p>}
+      {a.issues.length > 0 && (
+        <ul className="mt-2 space-y-1 text-xs text-critical-text">
+          {a.issues.map((i) => (
+            <li key={i} className="flex items-start gap-1.5">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              Wrong about you: {i}
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="mt-2 grid grid-cols-1 gap-1.5 text-xs text-ink-3 sm:grid-cols-2">
         {a.competitors.length > 0 && (
           <div>
@@ -255,11 +294,16 @@ function AnswerCard({ a, engineName }: { a: Answer; engineName: string }) {
             Sources: <Chips items={a.sources} max={4} />
           </div>
         )}
+        {a.fanout.length > 0 && (
+          <div className="sm:col-span-2">
+            Searched for: <span className="text-ink-2">{a.fanout.slice(0, 3).join(' · ')}</span>
+          </div>
+        )}
         {a.ourUrls.length > 0 && (
           <div className="sm:col-span-2">
             Your pages:{' '}
             {a.ourUrls.map((u) => (
-              <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="mr-2 text-accent-text hover:underline">
+              <a key={u} href={u} target="_blank" rel="noopener noreferrer" className="mr-2 text-accent-text hover:underline transition-colors duration-150 ease-brand">
                 {urlPath(u)}
               </a>
             ))}
@@ -333,13 +377,15 @@ export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
       cell: (p) => (
         <div className={cn('min-w-[16rem]', !isActive(p) && 'opacity-60')}>
           <p className="text-[13px] font-medium leading-snug text-ink">{p.prompt}</p>
-          {p.topic && <p className="mt-0.5 text-xs text-ink-3">{p.topic}</p>}
+          {(p.cluster || p.topic) && <p className="mt-0.5 text-xs text-ink-3">{p.cluster || p.topic}</p>}
         </div>
       ),
     },
     { key: 'kind', header: 'Kind', hideOnMobile: true, sortValue: (p) => p.kind, cell: (p) => (p.kind ? <Kind>{titleCase(p.kind)}</Kind> : '–') },
-    { key: 'source', header: 'Added by', hideOnMobile: true, sortValue: (p) => p.source, cell: (p) => <span className="text-[13px] text-ink-2">{/auto|ai|engine|generated/i.test(p.source) ? 'Engine' : p.source ? titleCase(p.source) : '–'}</span> },
-    { key: 'status', header: 'Status', sortValue: (p) => (isActive(p) ? 0 : 1), cell: (p) => (isActive(p) ? <StatusBadge tone="good">Asked weekly</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>{titleCase(p.status)}</Badge>) },
+    { key: 'stage', header: 'Stage', hideOnMobile: true, sortValue: (p) => p.stage, cell: (p) => <span className="text-[13px] text-ink-2">{p.stage ? titleCase(p.stage) : '–'}</span> },
+    { key: 'volume', header: 'AI searches / mo', align: 'right', hideOnMobile: true, sortValue: (p) => p.volume ?? -1, cell: (p) => <span className="tabular text-[13px]">{p.volume != null ? compactNumber(p.volume) : '–'}</span> },
+    { key: 'source', header: 'Added by', hideOnMobile: true, sortValue: (p) => p.source, cell: (p) => <span className="text-[13px] text-ink-2">{p.origin === 'market' ? 'Real AI question' : p.origin === 'search' ? 'Your Google searches' : p.source === 'custom' || p.origin === 'custom' ? 'You' : /auto|ai|engine|generated|template/i.test(p.source) ? 'Engine' : p.source ? titleCase(p.source) : '–'}</span> },
+    { key: 'status', header: 'Status', sortValue: (p) => (isActive(p) ? 0 : 1), cell: (p) => (isActive(p) ? <StatusBadge tone="good">Tracked</StatusBadge> : <Badge icon={<Power className="size-3" aria-hidden />}>{titleCase(p.status)}</Badge>) },
     ...(isAdmin
       ? [
           {
@@ -371,7 +417,7 @@ export function QuestionManager({ prompts }: { prompts: readonly Prompt[] }) {
   return (
     <div className="space-y-4">
       <DataTable rows={[...prompts]} columns={columns} rowKey={(p) => p.promptId} initialSort={{ key: 'status', dir: 'asc' }} dense pageSize={15} empty="No questions yet: the first run writes them from your keywords and business." />
-      <p className="text-xs text-ink-3">{active} active {active === 1 ? 'question is' : 'questions are'} asked on every engine each Monday at 07:00.</p>
+      <p className="text-xs text-ink-3">{active} active {active === 1 ? 'question is' : 'questions are'} asked on every engine each Monday at 07:00, and on ChatGPT, Gemini and Google AI Mode every other day when the daily pulse is on. New ones come from real AI searches and your Search Console queries on the month’s first run.</p>
       {isAdmin && (
         <div className="rounded-xl border border-dashed border-line-strong p-4">
           <Field label="Add buyer questions" hint="One per line, the way a buyer would ask an assistant, e.g. “Which companies can help us get e-invoicing compliant in the UAE?”" error={error ?? undefined}>

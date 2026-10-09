@@ -1,6 +1,6 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
-import { ArrowLeft, CheckCircle2, CircleDot, ExternalLink as ExternalIcon, Loader2, Play, RotateCcw, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, CheckCircle2, CircleDot, ClipboardList, Clock, Coins, ExternalLink as ExternalIcon, FileText, Flag, GitCommitVertical, Inbox, Loader2, Play, RotateCcw, Send, XCircle } from 'lucide-react';
 import { formatUsd, MODES, type Report, type Run } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -8,13 +8,14 @@ import { useReport, useRun } from '@/lib/queries';
 import { cn, fmtDateTime } from '@/lib/utils';
 import { RunStatusBadge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
-import { Card, CardBody, CardHeader } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
+import { IconTile, Stagger, type IconTileTone } from '@/components/insight';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { KeyValue, PageHeader } from '@/components/ui/misc';
 import { ReportView } from '@/components/reports/ReportView';
 import { ReportSummaryLine } from '@/components/reports/ReportSummaryLine';
 import { ModeIcon, StageGlyph, stageLabel } from '@/components/reports/meta';
-import { fmtMinutes, inputRows, isActive, minutesBetween, retryPrefill, RunProgress, useNow } from '@/components/reports/run';
+import { fmtMinutes, inputRows, isActive, minutesBetween, retryPrefill, RunChip, RunProgress, useNow } from '@/components/reports/run';
 
 const NOTICE_STAGES = new Set(['case_study_started', 'ai_visibility_started', 'backlinks_started', 'site_tracker_setup']);
 
@@ -72,7 +73,7 @@ export default function RunDetailPage() {
         <Skeleton className="h-96 w-full" />
       </div>
     );
-  if (q.isError || !run) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load this run" />;
+  if (q.isError || !run) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load this run" titleAs="h1" />;
 
   const info = MODES[run.mode];
   const active = isActive(run.status);
@@ -91,10 +92,11 @@ export default function RunDetailPage() {
 
   return (
     <div>
-      <Link to={paths.runs(org.id)} className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-ink">
-        <ArrowLeft className="size-4" aria-hidden /> All runs
+      <Link to={paths.runs(org.id)} className="group mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 transition-colors duration-150 ease-brand hover:text-ink">
+        <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden /> All runs
       </Link>
       <PageHeader
+        icon={<ModeIcon mode={run.mode} />}
         eyebrow={
           <span className="inline-flex items-center gap-1.5">
             <ModeIcon mode={run.mode} className="size-3.5" />
@@ -123,7 +125,9 @@ export default function RunDetailPage() {
         }
       />
 
-      <div className="space-y-5">
+      <Stagger className="space-y-5">
+        <RunStages run={run} reports={reports.length} active={active} duration={duration} />
+
         {run.status === 'failed' && (
           <Callout
             tone="critical"
@@ -151,49 +155,61 @@ export default function RunDetailPage() {
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
           <Card>
-            <CardHeader title="Timeline" description={reports.length ? `${reports.length} report${reports.length === 1 ? '' : 's'} received; select one to read it below` : 'Reports appear here as the SEO engine sends them'} />
-            <CardBody>
-              <ol className="relative space-y-1 before:absolute before:bottom-3 before:left-[13px] before:top-3 before:w-px before:bg-line">
-                <TimelineEvent icon={<CircleDot className="size-3.5 text-ink-3" aria-hidden />} title="Started" time={run.createdAt} sub={run.userName ? `by ${run.userName}` : undefined} />
-                {run.acceptedAt && <TimelineEvent icon={<CircleDot className="size-3.5 text-accent-text" aria-hidden />} title="Accepted by the SEO engine" time={run.acceptedAt} />}
+            <CardTitle icon={<GitCommitVertical />} title="Timeline" description={reports.length ? `${reports.length} report${reports.length === 1 ? '' : 's'} received; select one to read it below` : 'Reports appear here as the SEO engine sends them'} />
+            <div className="px-5 pt-3 pb-5">
+              <ol className="relative space-y-1 before:absolute before:top-5 before:bottom-5 before:left-[17px] before:w-0.5 before:rounded-full before:bg-line">
+                <TimelineEvent tone="neutral" icon={<Send />} title="Started" time={run.createdAt} sub={run.userName ? `by ${run.userName}` : undefined} />
+                {run.acceptedAt && <TimelineEvent tone="blue" icon={<CircleDot />} title="Accepted by the SEO engine" time={run.acceptedAt} />}
                 {reports.map((r) => (
                   <li key={r.id} className="relative">
                     <button
                       type="button"
                       onClick={() => select(r.id)}
                       aria-current={r.id === selectedId ? 'true' : undefined}
-                      className={cn('flex w-full items-start gap-3 rounded-lg px-0 py-2 pr-2 text-left transition-colors hover:bg-surface-2', r.id === selectedId && 'bg-accent-soft hover:bg-accent-soft')}
+                      className={cn(
+                        'group/ev flex w-full cursor-pointer items-start gap-3 rounded-lg border border-transparent py-2 pr-2.5 pl-0.5 text-left transition-[background-color,border-color,box-shadow] duration-150 ease-brand hover:border-line hover:bg-surface-2/70',
+                        r.id === selectedId && 'border-accent-text/25 bg-accent-soft shadow-card hover:border-accent-text/25 hover:bg-accent-soft',
+                      )}
                     >
-                      <span className="relative z-10 ml-px">
-                        <StageGlyph stage={r.stage} size="sm" />
+                      <span className="relative z-10 rounded-[9px] ring-4 ring-surface">
+                        <StageGlyph stage={r.stage} report={r} />
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="flex flex-wrap items-baseline justify-between gap-x-2">
-                          <span className="text-sm font-medium text-ink">{r.title || stageLabel(r.stage)}</span>
+                          <span className="text-sm font-medium text-ink group-hover/ev:text-accent-text">{r.title || stageLabel(r.stage, r)}</span>
                           <span className="text-xs tabular text-ink-3">{fmtDateTime(r.receivedAt)}</span>
                         </span>
-                        <span className="block text-xs text-ink-3">{stageLabel(r.stage)}</span>
-                        <ReportSummaryLine report={r} className="mt-1" />
+                        <span className="block text-xs text-ink-3">{stageLabel(r.stage, r)}</span>
+                        <ReportSummaryLine report={r} className="mt-1.5" />
                       </span>
                     </button>
                   </li>
                 ))}
-                {active && <TimelineEvent icon={<Loader2 className="size-3.5 animate-spin text-accent-text" aria-hidden />} title="Waiting for results" sub="This page refreshes by itself" />}
-                {run.status === 'completed' && run.completedAt && <TimelineEvent icon={<CheckCircle2 className="size-3.5 text-good-text" aria-hidden />} title="Completed" time={run.completedAt} sub={duration != null ? `after ${fmtMinutes(duration)}` : undefined} />}
-                {run.status === 'failed' && <TimelineEvent icon={<XCircle className="size-3.5 text-critical-text" aria-hidden />} title="Failed" time={run.completedAt} />}
+                {active && <TimelineEvent tone="solid" icon={<Loader2 className="animate-spin" />} title="Waiting for results" sub="This page refreshes by itself" />}
+                {run.status === 'completed' && run.completedAt && <TimelineEvent tone="good" icon={<CheckCircle2 />} title="Completed" time={run.completedAt} sub={duration != null ? `after ${fmtMinutes(duration)}` : undefined} />}
+                {run.status === 'failed' && <TimelineEvent tone="critical" icon={<XCircle />} title="Failed" time={run.completedAt} />}
               </ol>
-            </CardBody>
+            </div>
           </Card>
 
           <Card>
-            <CardHeader title="Details" />
-            <CardBody className="space-y-5">
+            <CardTitle icon={<ClipboardList />} title="Details" />
+            <div className="space-y-5 px-5 pt-3 pb-5">
+              <div className="flex flex-wrap gap-1.5">
+                <RunChip icon={<Coins />} title="Estimated cost">
+                  {formatUsd(run.estimatedCostUsd)} estimated
+                </RunChip>
+                <RunChip icon={<Clock />}>{active ? `about ${run.etaMinutes} min` : fmtMinutes(duration)}</RunChip>
+                <RunChip icon={<FileText />} tone={reports.length ? 'accent' : 'neutral'}>
+                  {reports.length} report{reports.length === 1 ? '' : 's'}
+                </RunChip>
+              </div>
               <KeyValue
                 items={[
                   {
                     label: 'Website',
                     value: run.siteId && run.siteDomain ? (
-                      <Link to={paths.site(org.id, run.siteId)} className="text-accent-text hover:underline">
+                      <Link to={paths.site(org.id, run.siteId)} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
                         {run.siteDomain}
                       </Link>
                     ) : (
@@ -206,11 +222,16 @@ export default function RunDetailPage() {
                   ...(run.requestId ? [{ label: 'Reference', value: <code className="text-xs text-ink-3">{run.requestId}</code> }] : []),
                 ]}
               />
-              <div>
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-3">Submitted</h3>
+              <div className="border-t border-line pt-4">
+                <h3 className="mb-2 flex items-center gap-2 text-xs font-medium tracking-wide text-ink-3 uppercase">
+                  <IconTile size="xs">
+                    <Inbox />
+                  </IconTile>
+                  Submitted
+                </h3>
                 <KeyValue items={inputRows(run.input as Record<string, unknown>)} />
               </div>
-            </CardBody>
+            </div>
           </Card>
         </div>
 
@@ -218,11 +239,11 @@ export default function RunDetailPage() {
           <section aria-label="Selected report" className="space-y-4 pt-2">
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6">
               <div className="flex min-w-0 items-center gap-3">
-                <StageGlyph stage={selected.stage} />
+                <StageGlyph stage={selected.stage} report={selected} />
                 <div className="min-w-0">
-                  <h2 className="truncate text-lg font-semibold tracking-tight text-ink">{selected.title || stageLabel(selected.stage)}</h2>
+                  <h2 className="truncate font-display text-lg font-semibold tracking-[-0.01em] text-ink">{selected.title || stageLabel(selected.stage, selected)}</h2>
                   <p className="text-[13px] text-ink-3">
-                    {stageLabel(selected.stage)} · {fmtDateTime(selected.receivedAt)}
+                    {stageLabel(selected.stage, selected)} · {fmtDateTime(selected.receivedAt)}
                   </p>
                 </div>
               </div>
@@ -243,22 +264,103 @@ export default function RunDetailPage() {
             )}
           </section>
         )}
-      </div>
+      </Stagger>
     </div>
   );
 }
 
-function TimelineEvent({ icon, title, time, sub }: { icon: ReactNode; title: string; time?: string | null; sub?: string }) {
+function TimelineEvent({ icon, title, time, sub, tone }: { icon: ReactNode; title: string; time?: string | null; sub?: string; tone: IconTileTone }) {
   return (
-    <li className="relative flex items-start gap-3 py-2">
-      <span className="relative z-10 ml-px flex size-7 shrink-0 items-center justify-center rounded-md bg-surface">{icon}</span>
-      <span className="min-w-0 flex-1 pt-1">
+    <li className="relative flex items-start gap-3 py-2 pl-0.5">
+      <span className="relative z-10 rounded-[9px] ring-4 ring-surface">
+        <IconTile tone={tone} size="md">
+          {icon}
+        </IconTile>
+      </span>
+      <span className="min-w-0 flex-1 pt-2">
         <span className="flex flex-wrap items-baseline justify-between gap-x-2">
-          <span className="text-sm text-ink-2">{title}</span>
+          <span className={cn('text-sm', tone === 'good' || tone === 'critical' || tone === 'solid' ? 'font-medium text-ink' : 'text-ink-2')}>{title}</span>
           {time && <span className="text-xs tabular text-ink-3">{fmtDateTime(time)}</span>}
         </span>
         {sub && <span className="block text-xs text-ink-3">{sub}</span>}
       </span>
     </li>
+  );
+}
+
+/** A card header with an icon tile (the page's cards). */
+function CardTitle({ icon, title, description }: { icon: ReactNode; title: string; description?: string }) {
+  return (
+    <div className={cn('flex gap-3 px-5 pt-4', description ? 'items-start' : 'items-center')}>
+      <IconTile size="sm" className={description ? 'mt-px' : undefined}>
+        {icon}
+      </IconTile>
+      <div className="min-w-0">
+        <h2 className="font-display text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h2>
+        {description && <p className="mt-0.5 text-[13px] leading-snug text-ink-3">{description}</p>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The run's stages as a stepper: sent → accepted by the engine → reports → completed (or failed). Done stages turn green, the live one
+ * spins; read from the run's own timestamps and status.
+ */
+function RunStages({ run, reports, active, duration }: { run: Run; reports: number; active: boolean; duration: number | null }) {
+  const failed = run.status === 'failed';
+  const done = run.status === 'completed';
+  type S = { key: string; label: string; sub: string; state: 'done' | 'now' | 'todo' | 'failed'; icon: ReactNode };
+  const steps: S[] = [
+    { key: 'sent', label: 'Sent', sub: fmtDateTime(run.createdAt), state: 'done', icon: <Send /> },
+    {
+      key: 'accepted',
+      label: 'Accepted',
+      sub: run.acceptedAt ? fmtDateTime(run.acceptedAt) : failed ? 'not accepted' : done || reports ? 'accepted' : 'waiting for the engine',
+      state: run.acceptedAt || done || reports ? 'done' : failed ? 'failed' : 'now',
+      icon: <CircleDot />,
+    },
+    {
+      key: 'reports',
+      label: reports ? `${reports} report${reports === 1 ? '' : 's'}` : 'Reports',
+      sub: reports ? 'received' : active ? 'working on it' : failed ? 'none received' : 'none yet',
+      state: reports && !active ? 'done' : active && run.acceptedAt ? 'now' : failed && !reports ? 'failed' : reports ? 'now' : 'todo',
+      icon: <FileText />,
+    },
+    {
+      key: 'end',
+      label: failed ? 'Failed' : 'Completed',
+      sub: done || failed ? (run.completedAt ? fmtDateTime(run.completedAt) : '') + (done && duration != null ? ` · ${fmtMinutes(duration)}` : '') : `about ${run.etaMinutes} min in total`,
+      state: done ? 'done' : failed ? 'failed' : 'todo',
+      icon: failed ? <XCircle /> : <Flag />,
+    },
+  ];
+  const tile = (st: S['state']): IconTileTone => (st === 'done' ? 'good' : st === 'failed' ? 'critical' : st === 'now' ? 'solid' : 'neutral');
+  return (
+    <Card className="p-4 sm:p-5">
+      <ol className="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-4" aria-label="Run stages">
+        {steps.map((st, i) => (
+          <li key={st.key} className="relative flex min-w-0 items-start gap-2.5">
+            {i < steps.length - 1 && <span className={cn('absolute top-[17px] left-11 hidden h-0.5 w-[calc(100%-3.25rem)] rounded-full sm:block', st.state === 'done' ? 'bg-good' : 'bg-line')} aria-hidden />}
+            <IconTile tone={tile(st.state)} size="md" className="relative z-10 rounded-full">
+              {st.state === 'now' ? <Loader2 className="animate-spin" /> : st.state === 'done' && st.key !== 'reports' ? <Check strokeWidth={2.75} /> : st.icon}
+            </IconTile>
+            <span className="min-w-0 pt-0.5 sm:sr-only">
+              <span className="block text-sm font-medium text-ink">{st.label}</span>
+              <span className="block truncate text-xs text-ink-3">{st.sub}</span>
+            </span>
+            <span className="sr-only">{st.state === 'done' ? 'done' : st.state === 'now' ? 'in progress' : st.state === 'failed' ? 'failed' : 'to come'}</span>
+          </li>
+        ))}
+      </ol>
+      <ol className="mt-2.5 hidden grid-cols-4 gap-x-3 sm:grid" aria-hidden>
+        {steps.map((st) => (
+          <li key={st.key} className="min-w-0">
+            <span className={cn('block text-sm font-medium', st.state === 'todo' ? 'text-ink-3' : 'text-ink')}>{st.label}</span>
+            <span className="block truncate text-xs text-ink-3">{st.sub}</span>
+          </li>
+        ))}
+      </ol>
+    </Card>
   );
 }

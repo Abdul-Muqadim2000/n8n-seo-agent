@@ -92,24 +92,60 @@ PROSPECT_TABLE = 'seo_link_prospects'
 AUDITS_TABLE = 'seo_audits'
 AUDIT_FINDINGS_TABLE = 'seo_audit_findings'
 MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 'boolean'), ('ai_engines', 'string'), ('ai_prompts_max', 'number'), ('backlinks', 'boolean'), ('audit_monthly', 'boolean'),
-                 ('audit_pages', 'number'), ('audit_js', 'boolean'), ('competitors', 'string'), ('brand_names', 'string'), ('updated_at', 'string'), ('request_id', 'string')]
-AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string')]
+                 ('audit_pages', 'number'), ('audit_js', 'boolean'), ('competitors', 'string'), ('brand_names', 'string'), ('updated_at', 'string'), ('request_id', 'string'),
+                 ('ai_pulse', 'boolean')]   # v4.9: daily AI pulse (empty = on)
+AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
+                   ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string')]   # v4.9: buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
-                   ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string')]
+                   ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
+                   ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string')]   # v4.9: weekly / full / pulse / on_demand, how the answer speaks of you, brands in order, wrong claims, the searches the engine ran
 AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompts', 'number'), ('answers', 'number'), ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'),
                ('avg_rank', 'number'), ('aio_presence', 'number'), ('aio_citation_rate', 'number'), ('engines_json', 'string'), ('competitors_json', 'string'), ('sources_json', 'string'), ('pages_json', 'string'), ('gaps_json', 'string'),
-               ('market_json', 'string'), ('market_month', 'string'), ('cost_usd', 'number'), ('alerts', 'string')]
+               ('market_json', 'string'), ('market_month', 'string'), ('cost_usd', 'number'), ('alerts', 'string'),
+               ('run_kind', 'string'), ('samples', 'number'), ('visibility_score', 'number'), ('mention_lo', 'number'), ('mention_hi', 'number'), ('sentiment_score', 'number'), ('accuracy_issues', 'number'),
+               ('ai_sessions', 'number'), ('ai_conversions', 'number'), ('ai_revenue', 'number'), ('index_sov', 'number'), ('ai_impressions', 'number'),
+               ('perception_json', 'string'), ('traffic_json', 'string'), ('access_json', 'string'), ('index_json', 'string'), ('clusters_json', 'string')]   # v4.9 (AI_VISIBILITY_SPEC.md)
+# v4.9: one row per site per day from the AI Pulse (the panel on the fast engines; small aggregates, no answer text)
+AI_DAILY_TABLE = 'seo_ai_daily'
+AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),
+                 ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'), ('visibility_score', 'number'), ('engines_json', 'string'), ('prompts_json', 'string'),
+                 ('competitors_json', 'string'), ('sources_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number')]
 BL_SNAP_COLS = [('site_id', 'string'), ('domain', 'string'), ('checked_at', 'string'), ('mode', 'string'), ('rank', 'number'), ('backlinks', 'number'), ('referring_domains', 'number'), ('referring_domains_nofollow', 'number'),
                 ('spam_score', 'number'), ('broken_backlinks', 'number'), ('new_links', 'number'), ('lost_links', 'number'), ('important_lost', 'number'), ('spammy_new', 'number'), ('lost_json', 'string'), ('new_json', 'string'),
-                ('competitors_json', 'string'), ('timeseries_json', 'string'), ('cost_usd', 'number')]
+                ('competitors_json', 'string'), ('timeseries_json', 'string'), ('cost_usd', 'number'),
+                ('union_domains', 'number'), ('best_links', 'number'), ('verified_live', 'number'), ('at_risk', 'number'), ('confirmed_lost', 'number'), ('referral_visits', 'number'),
+                ('referral_key_events', 'number'), ('coverage_json', 'string'), ('anchors_json', 'string'), ('pages_json', 'string'), ('values_json', 'string')]   # v4.10 (BACKLINKS_SPEC.md): all sources merged + verified
 PROSPECT_COLS = [('site_id', 'string'), ('domain', 'string'), ('prospect_domain', 'string'), ('type', 'string'), ('rank', 'number'), ('spam_score', 'number'), ('detail', 'string'), ('source_url', 'string'), ('target_url', 'string'),
-                 ('status', 'string'), ('first_seen', 'string'), ('last_seen', 'string'), ('won_at', 'string'), ('outreach_subject', 'string'), ('outreach_body', 'string'), ('note', 'string')]
+                 ('status', 'string'), ('first_seen', 'string'), ('last_seen', 'string'), ('won_at', 'string'), ('outreach_subject', 'string'), ('outreach_body', 'string'), ('note', 'string'),
+                 ('score', 'number'), ('origin', 'string'), ('contact_email', 'string'), ('contact_url', 'string'), ('contacted_at', 'string'), ('followup_step', 'number'),
+                 ('followup_subject', 'string'), ('followup_body', 'string'), ('verified_at', 'string')]   # v4.10: value x likelihood score, where it came from, a contact found on the site, follow-up drafts (1 + 2), won only after the link is verified
+# v4.10: the link ledger — one row per site and referring domain, merged from every source (DataForSEO, Bing Webmaster Tools, the Search Console
+# links export, GA4 referrals, Wikipedia / Hacker News / news / web mentions) and verified by fetching the linking page (BACKLINKS_SPEC.md).
+LINKS_TABLE = 'seo_backlinks'
+LINKS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ref_domain', 'string'), ('kind', 'string'), ('from_url', 'string'), ('to_url', 'string'), ('anchor', 'string'), ('anchor_kind', 'string'),
+              ('rel', 'string'), ('placement', 'string'), ('link_type', 'string'), ('relevance', 'number'), ('note', 'string'), ('sources', 'string'), ('source_count', 'number'),
+              ('first_seen', 'string'), ('last_seen', 'string'), ('status', 'string'), ('lost_at', 'string'), ('lost_reason', 'string'), ('miss_count', 'number'),
+              ('verify', 'string'), ('verified_at', 'string'), ('noindex', 'boolean'), ('canonical_elsewhere', 'boolean'), ('outbound', 'number'), ('page_title', 'string'), ('context', 'string'),
+              ('authority', 'number'), ('dr', 'number'), ('cc_rank', 'number'), ('page_keywords', 'number'), ('spam_score', 'number'), ('original', 'boolean'), ('sitewide', 'number'), ('links', 'number'),
+              ('visits', 'number'), ('key_events', 'number'), ('ai_cited', 'boolean'), ('seo_value', 'number'), ('referral_value', 'number'), ('brand_value', 'number'), ('updated_at', 'string')]
+# v4.10: links the person uploads in the web app (Search Console Links report exports: "Latest links", "More sample links", "Top linking sites";
+# or any CSV of linking pages). Raw evidence; the Backlink Monitor merges the latest import per site and source into the ledger.
+# v4.10: the Common Crawl web graph per site, written by the linkgraph job (n8n/seo-agent/linkgraph/, once per graph release): the site's
+# referring domains (kind link), domains that link to a competitor and not to the site (gap, links_to = the competitors) and authority ranks
+# for the site's other referrers (rank). hc_pos / pr_pos = harmonic-centrality / PageRank position among ~133M domains (1 = best).
+LINK_GRAPH_TABLE = 'seo_link_graph'
+LINK_GRAPH_COLS = [('site_id', 'string'), ('domain', 'string'), ('release', 'string'), ('kind', 'string'), ('ref_domain', 'string'), ('hc_pos', 'number'), ('pr_pos', 'number'),
+                   ('n_hosts', 'number'), ('links_to', 'string'), ('checked_at', 'string')]
+LINK_IMPORTS_TABLE = 'seo_link_imports'
+LINK_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('import_id', 'string'), ('source', 'string'), ('ref_domain', 'string'), ('from_url', 'string'), ('to_url', 'string'),
+                     ('anchor', 'string'), ('links', 'number'), ('last_crawled', 'string'), ('imported_at', 'string')]
 AUDITS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('report_type', 'string'), ('health_score', 'number'), ('grade', 'string'), ('pages_crawled', 'number'),
                ('findings', 'number'), ('critical', 'number'), ('high', 'number'), ('medium', 'number'), ('low', 'number'), ('scheduled', 'boolean'), ('request_id', 'string')]
 AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number')]
 
 # ---- reuse instead of repeat (v4.6): one key/value cache for results that do not need to be fetched again ----
 # keys: 'age:<domain>' (registration date, 365 days), 'desc:<domain>' (site description, 30 days), 'sitemap:<site_id>' (sitemap fingerprint)
+# v4.9: 'ai_brands:<site_id>' (brand names AI uses for competitors -> their domain, learned by the Answer Analyst), 'ai_index:<site_id>' (the monthly AI-answer database view)
 CACHE_TABLE = 'seo_cache'
 CACHE_COLS = [('key', 'string'), ('kind', 'string'), ('site_id', 'string'), ('value', 'string'), ('updated_at', 'string')]
 
@@ -133,3 +169,12 @@ def dt_get_any_params(table, conditions):
             'filters': {'conditions': [{'keyName': k, 'condition': 'eq', 'keyValue': v} for k, v in conditions]}, 'options': {}}
 
 # keys of seo_cache since v4.8: 'reach:<site_id>' (the keyword difficulty the site can already win, 30 days; v5/code/_reach.js)
+
+def dt_get_all_where_params(table, conditions):
+    """Get every row matching ALL (column, condition, value) triples (e.g. site + date range; string columns compare as text, so ISO dates order correctly)."""
+    return {'resource': 'row', 'operation': 'get', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'returnAll': True, 'matchType': 'allConditions',
+            'filters': {'conditions': [{'keyName': k, 'condition': c, 'keyValue': v} for k, c, v in conditions]}, 'options': {}}
+def dt_delete_where_params(table, conditions):
+    """Delete the rows matching ALL (column, condition, value) triples (retention of tables that only grow)."""
+    return {'resource': 'row', 'operation': 'deleteRows', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'matchType': 'allConditions',
+            'filters': {'conditions': [{'keyName': k, 'condition': c, 'keyValue': v} for k, c, v in conditions]}, 'options': {}}

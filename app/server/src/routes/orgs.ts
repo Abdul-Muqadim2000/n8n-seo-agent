@@ -169,7 +169,7 @@ export async function orgRoutes(app: FastifyInstance) {
         .filter((s) => s.verifiedAt)
         .map(async (s) => {
           const m = monitorsFromRow((await siteRows<MonitorsRow>('monitors', s.domain, { max: 5 }).catch(() => []))[0]);
-          return estimateMonitoringCost({ aiVisibility: m?.aiVisibility ?? true, backlinks: m?.backlinks ?? true, auditMonthly: m?.auditMonthly ?? true, blogsPerWeek: s.blogsPerWeek });
+          return estimateMonitoringCost({ aiVisibility: m?.aiVisibility ?? true, backlinks: m?.backlinks ?? true, auditMonthly: m?.auditMonthly ?? true, blogsPerWeek: s.blogsPerWeek, aiPrompts: m?.aiPromptsMax, aiEngines: m?.aiEngines, aiPulse: m?.aiPulse });
         }),
     );
     const estimated = runs.reduce((t, r) => t + r.est, 0) + checksUsd;

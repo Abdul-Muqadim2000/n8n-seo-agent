@@ -17,6 +17,9 @@ export interface Column<T> {
   width?: string;
 }
 
+const pagerBtn =
+  'inline-flex size-8 items-center justify-center rounded-md border border-line-strong bg-surface text-ink-2 shadow-card transition-[color,background-color,translate] duration-150 ease-brand hover:bg-surface-2 hover:text-ink active:translate-y-px disabled:pointer-events-none disabled:opacity-40 disabled:shadow-none';
+
 /**
  * A sortable, searchable, paginated table for in-memory rows (dashboards load their rows once).
  * Numbers align right with tabular figures.
@@ -108,9 +111,9 @@ export function DataTable<T>({
           {toolbar}
         </div>
       )}
-      <div className="relative overflow-x-auto rounded-xl border border-line">
+      <div className="relative overflow-x-auto rounded-xl border border-line bg-surface">
         <table className="w-full border-collapse text-sm">
-          <thead className="bg-surface-2">
+          <thead className="bg-surface-2/70">
             <tr>
               {columns.map((c) => {
                 const sortable = c.sortValue != null || c.cell == null;
@@ -122,15 +125,30 @@ export function DataTable<T>({
                     style={c.width ? { width: c.width } : undefined}
                     aria-sort={active ? (sort!.dir === 'asc' ? 'ascending' : 'descending') : undefined}
                     className={cn(
-                      'whitespace-nowrap border-b border-line px-3 py-2 text-xs font-medium text-ink-3',
+                      'h-9 whitespace-nowrap border-b border-line px-3 py-2 text-xs font-medium text-ink-3',
                       c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left',
                       c.hideOnMobile && 'hidden md:table-cell',
                     )}
                   >
                     {sortable ? (
-                      <button type="button" onClick={() => toggle(c.key)} className={cn('inline-flex items-center gap-1 hover:text-ink', active && 'text-ink')}>
+                      <button
+                        type="button"
+                        onClick={() => toggle(c.key)}
+                        className={cn(
+                          'group -mx-1.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors duration-150 hover:bg-surface-3 hover:text-ink active:bg-line',
+                          active && 'text-ink',
+                        )}
+                      >
                         {c.header}
-                        {active ? sort!.dir === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" /> : <ArrowUpDown className="size-3 opacity-40" />}
+                        {active ? (
+                          sort!.dir === 'asc' ? (
+                            <ArrowUp className="size-3 text-accent-text" aria-hidden />
+                          ) : (
+                            <ArrowDown className="size-3 text-accent-text" aria-hidden />
+                          )
+                        ) : (
+                          <ArrowUpDown className="size-3 opacity-40 transition-opacity group-hover:opacity-80" aria-hidden />
+                        )}
                       </button>
                     ) : (
                       c.header
@@ -145,7 +163,7 @@ export function DataTable<T>({
               <tr
                 key={rowKey(r, i)}
                 onClick={onRowClick ? () => onRowClick(r) : undefined}
-                className={cn('border-b border-line bg-surface last:border-b-0', onRowClick && 'cursor-pointer hover:bg-surface-2')}
+                className={cn('border-b border-line transition-colors duration-100 last:border-b-0', onRowClick ? 'cursor-pointer hover:bg-accent-soft/60' : 'hover:bg-surface-2/50')}
               >
                 {columns.map((c) => (
                   <td
@@ -178,11 +196,14 @@ export function DataTable<T>({
           <span className="tabular">
             {current * pageSize + 1}–{Math.min(sorted.length, (current + 1) * pageSize)} of {sorted.length}
           </span>
-          <div className="flex gap-1">
-            <button type="button" className="rounded-md p-1.5 hover:bg-surface-2 disabled:opacity-40" disabled={current === 0} onClick={() => setPage(current - 1)} aria-label="Previous page">
+          <div className="flex items-center gap-1.5">
+            <span className="mr-1 hidden tabular sm:inline">
+              Page {current + 1} of {pages}
+            </span>
+            <button type="button" className={pagerBtn} disabled={current === 0} onClick={() => setPage(current - 1)} aria-label="Previous page">
               <ChevronLeft className="size-4" />
             </button>
-            <button type="button" className="rounded-md p-1.5 hover:bg-surface-2 disabled:opacity-40" disabled={current >= pages - 1} onClick={() => setPage(current + 1)} aria-label="Next page">
+            <button type="button" className={pagerBtn} disabled={current >= pages - 1} onClick={() => setPage(current + 1)} aria-label="Next page">
               <ChevronRight className="size-4" />
             </button>
           </div>

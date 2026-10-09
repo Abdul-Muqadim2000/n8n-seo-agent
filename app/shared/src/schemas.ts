@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   AI_ENGINE_VALUES,
+  AI_PROMPTS_DEFAULT,
+  AI_PROMPTS_MAX,
   COMPANY_SIZES,
   COUNTRY_NAMES,
   GOAL_VALUES,
@@ -73,7 +75,9 @@ export const orgBudgetSchema = z.object({ monthlyBudgetUsd: z.number().min(0).ma
 export const monitorSettingsSchema = z.object({
   aiVisibility: z.boolean().default(true),
   aiEngines: z.array(z.enum(AI_ENGINE_VALUES)).min(1, 'Choose at least one AI engine').default([...AI_ENGINE_VALUES]),
-  aiPromptsMax: z.number().int().min(3).max(15).default(8),
+  aiPromptsMax: z.number().int().min(3).max(AI_PROMPTS_MAX).default(AI_PROMPTS_DEFAULT),
+  /** v4.9: the daily AI Pulse (ChatGPT, Gemini and Google AI Mode on the whole panel, Tuesday to Sunday) */
+  aiPulse: z.boolean().default(true),
   backlinks: z.boolean().default(true),
   auditMonthly: z.boolean().default(true),
   auditPages: z.number().int().min(50).max(1000).default(200),
@@ -116,6 +120,8 @@ export const keywordInput = z
     siteId: optionalSiteId,
     keyword: keywordField,
     country,
+    /** "What you sell": the form asks for it without a website (with one, the site's description is used) */
+    business: opt(500),
     pageType: z.enum(PAGE_TYPE_VALUES).default('Service Page'),
     existingPageUrl: optUrl,
     localArea: opt(80),
@@ -310,6 +316,8 @@ export const backlinksInput = z.object({
   siteId,
   country,
   competitors: domainList(3),
+  /** v4.10: free sources and our own link check only — no DataForSEO, no AI drafts, $0 */
+  freeOnly: z.boolean().default(false),
   emailCopy,
 });
 
@@ -376,6 +384,8 @@ export const adminActionSchema = z.discriminatedUnion('action', [
     type: z.string().trim().max(40).default(''),
     status: z.enum(PROSPECT_STATUSES).optional(),
     note: z.string().trim().max(500).optional(),
+    /** v4.10: who to write to (found by the engine on the prospect's site, or typed by the person) */
+    contactEmail: z.string().trim().toLowerCase().email('Enter an e-mail address').max(200).optional().or(z.literal('')),
   }),
   z.object({
     action: z.literal('ai_prompts'),
@@ -459,3 +469,11 @@ export function fieldErrors(error: z.ZodError): Record<string, string> {
   }
   return out;
 }
+
+// ---------- link uploads (v4.10: Search Console Links exports, other tools' backlink CSVs; link-import.ts) ----------
+export const linkImportSchema = z.object({
+  /** the CSV text (Search Console: Links → Export external links → Latest links / More sample links, or Top linking sites → Download CSV) */
+  csv: z.string().min(10, 'The file is empty').max(15_000_000, 'The file is larger than 15 MB: export the "Latest links" table only'),
+  fileName: z.string().trim().max(200).optional(),
+});
+export type LinkImportInput = z.output<typeof linkImportSchema>;

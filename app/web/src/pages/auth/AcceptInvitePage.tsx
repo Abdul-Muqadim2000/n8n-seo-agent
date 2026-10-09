@@ -21,7 +21,10 @@ export default function AcceptInvitePage() {
   if (inv.isError || !inv.data)
     return (
       <AuthCard title="Invitation not found">
-        <Callout tone="warning">{errorMessage(inv.error)}</Callout>
+        <Callout tone="warning">{errorMessage(inv.error)} Ask the person who invited you to send a new invitation.</Callout>
+        <ButtonLink to={me.data ? '/' : paths.login()} variant="secondary" size="lg" className="mt-5 w-full">
+          {me.data ? 'Go to your dashboard' : 'Go to sign in'}
+        </ButtonLink>
       </AuthCard>
     );
   const i = inv.data;
@@ -32,8 +35,10 @@ export default function AcceptInvitePage() {
       title={`Join ${i.orgName}`}
       subtitle={`${i.inviterName ?? 'A teammate'} invited ${i.email} to the company as ${ROLE_LABELS[i.role].toLowerCase()}.`}
     >
-      <div className="mb-6 flex items-center gap-3 rounded-xl bg-surface-2 p-4">
-        <Building2 className="size-5 text-ink-3" />
+      <div className="mb-6 flex items-center gap-3 rounded-lg border border-line bg-surface-2 p-4">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink-3 shadow-card" aria-hidden>
+          <Building2 className="size-5" />
+        </span>
         <div className="text-sm">
           <div className="font-medium text-ink">{i.orgName}</div>
           <div className="text-ink-3">Role: {ROLE_LABELS[i.role]}</div>

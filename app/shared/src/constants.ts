@@ -270,10 +270,10 @@ export const MODES: Record<ModeId, ModeInfo> = {
   backlinks: {
     id: 'backlinks',
     title: 'Backlink check',
-    summary: 'Lost and spammy links, broken-link reclaim, link gap against competitors, unlinked mentions and outreach drafts.',
+    summary: 'Every link source merged (DataForSEO, Bing, your Search Console export, GA4, Common Crawl, Wikipedia, news), links checked on their pages, lost links with the reason, the gap and lists, outreach drafts.',
     delivers: 'Backlink report (PDF), prospects.csv, disavow list when needed',
     category: 'growth',
-    costUsd: 0.25,
+    costUsd: 0.5,
     etaMinutes: 5,
     siteBound: true,
     finalStages: ['backlinks'],
@@ -291,7 +291,7 @@ export const MODE_CATEGORIES: Record<ModeCategory, string> = {
 };
 
 /** Callback stages sent by scheduled workflows (no run started them from the app). */
-export const SCHEDULED_STAGES = ['site_tracker', 'rank_tracker', 'content_cadence', 'console_alert', 'ai_visibility', 'backlinks', 'site_audit'] as const;
+export const SCHEDULED_STAGES = ['site_tracker', 'rank_tracker', 'content_cadence', 'console_alert', 'ai_visibility', 'ai_pulse', 'backlinks', 'site_audit'] as const;
 
 export const STAGE_LABELS: Record<string, string> = {
   site_description: 'Site description',
@@ -311,25 +311,60 @@ export const STAGE_LABELS: Record<string, string> = {
   case_study_started: 'Case study started',
   ai_visibility_started: 'AI visibility started',
   ai_visibility: 'AI visibility report',
+  ai_pulse: 'AI pulse alert',
   backlinks_started: 'Backlink check started',
   backlinks: 'Backlink report',
   rejected: 'Rejected',
 };
 
-/** Monthly cost of the background monitors per site (HANDOVER.md §1, v4.6 reuse rules). */
+/** Monthly cost of the background monitors per site (HANDOVER.md §1, v4.6 reuse rules; AI visibility: estimateAiVisibilityCost, v4.9). */
 export const MONITOR_COSTS = {
-  aiVisibilityMonthly: 0.87 + 3 * 0.12,
-  backlinksMonthly: 0.2 + 3 * 0.05,
+  /** the defaults (20 questions, all six engines, daily pulse on) — see estimateAiVisibilityCost */
+  aiVisibilityMonthly: 0,
+  /** v4.10 (BACKLINKS_SPEC.md §6): the monthly full run $0.51 (DataForSEO incl. link details, anchors, pages, competitors' new links,
+   *  bulk authority; Link Analyst; outreach) + 3.33 light weeks at $0.09; the free sources and the link check cost nothing */
+  backlinksMonthly: 0.51 + 3.33 * 0.09,
   siteTrackerMonthly: 4 * 0.03,
   auditMonthly: 0.1,
   blogPostEach: 1.2,
   weeksPerMonth: 4.33,
 };
 
-export function estimateMonitoringCost(opts: { aiVisibility: boolean; backlinks: boolean; auditMonthly: boolean; blogsPerWeek: number }): number {
+/** DataForSEO price per question on each AI engine (n8n AI_Requests.js CONFIG.cost, measured 2026-10-02 / priced 2026-10-08). */
+export const AI_ENGINE_COST: Record<AiEngine, number> = { chatgpt: 0.004, gemini: 0.004, perplexity: 0.006, claude: 0.025, ai_overview: 0.002, ai_mode: 0.004 };
+/** The engines the daily AI Pulse asks (n8n Pulse_Plan.js CONFIG.pulse_engines), Tuesday to Sunday. */
+export const AI_PULSE_ENGINES: readonly AiEngine[] = ['chatgpt', 'gemini', 'ai_mode'];
+export const AI_PROMPTS_DEFAULT = 20;
+export const AI_PROMPTS_MAX = 50;
+
+/** Questions the weekly run and the daily pulse ask: the panel without its brand question ("What is <site>?", asked once a month). */
+export function aiPulseQuestions(panel: number): number {
+  return Math.max(1, Math.min(AI_PROMPTS_MAX, panel) - 1);
+}
+
+/**
+ * Monthly cost of AI visibility for one site (v4.9, n8n/seo-agent/AI_VISIBILITY_SPEC.md §5): the weekly run (every engine but Claude, plus
+ * the Answer Analyst and the brief), the month's full run (Claude, the AI-answer database index and question discovery) and the daily pulse.
+ */
+export function estimateAiVisibilityCost(o: { prompts?: number; engines?: readonly AiEngine[]; pulse?: boolean } = {}): { weekly: number; fullRun: number; pulse: number; total: number } {
+  const weeks = MONITOR_COSTS.weeksPerMonth;
+  const q = Math.min(AI_PROMPTS_MAX, Math.max(3, o.prompts ?? AI_PROMPTS_DEFAULT));
+  const engines = o.engines && o.engines.length ? o.engines : AI_ENGINE_VALUES;
+  const sum = (list: readonly AiEngine[]) => list.reduce((t, e) => t + AI_ENGINE_COST[e], 0);
+  const asked = aiPulseQuestions(q);   // the brand question is asked on the month's full run only (n8n AI_Requests.js)
+  const nonClaude = sum(engines.filter((e) => e !== 'claude'));
+  const weekly = weeks * (asked * nonClaude + 0.13);
+  const fullRun = (engines.includes('claude') ? q * AI_ENGINE_COST.claude : 0) + nonClaude + 0.45 + 0.3;
+  const pulse = o.pulse === false ? 0 : weeks * 6 * asked * sum(AI_PULSE_ENGINES.filter((e) => engines.includes(e)));
+  const r = (x: number) => Math.round(x * 100) / 100;
+  return { weekly: r(weekly), fullRun: r(fullRun), pulse: r(pulse), total: r(weekly + fullRun + pulse) };
+}
+MONITOR_COSTS.aiVisibilityMonthly = estimateAiVisibilityCost().total;
+
+export function estimateMonitoringCost(opts: { aiVisibility: boolean; backlinks: boolean; auditMonthly: boolean; blogsPerWeek: number; aiPrompts?: number; aiEngines?: readonly AiEngine[]; aiPulse?: boolean }): number {
   const c = MONITOR_COSTS;
   let total = c.siteTrackerMonthly;
-  if (opts.aiVisibility) total += c.aiVisibilityMonthly;
+  if (opts.aiVisibility) total += estimateAiVisibilityCost({ prompts: opts.aiPrompts, engines: opts.aiEngines, pulse: opts.aiPulse }).total;
   if (opts.backlinks) total += c.backlinksMonthly;
   if (opts.auditMonthly) total += c.auditMonthly;
   total += opts.blogsPerWeek * c.weeksPerMonth * c.blogPostEach;
@@ -340,7 +375,7 @@ export const VERIFICATION_META_NAME = 'seo-agent-verification';
 export const VERIFICATION_TXT_PREFIX = 'seo-agent-verification=';
 
 // ---------- automations (the n8n schedules, build_*.py; times are in n8n's timezone, GENERIC_TIMEZONE, default America/New_York) ----------
-export type AutomationId = 'ai_visibility' | 'backlinks' | 'rank_tracker' | 'site_tracker' | 'content_cadence' | 'audit';
+export type AutomationId = 'ai_visibility' | 'ai_pulse' | 'backlinks' | 'rank_tracker' | 'site_tracker' | 'content_cadence' | 'audit';
 export interface AutomationInfo {
   id: AutomationId;
   title: string;
@@ -348,7 +383,7 @@ export interface AutomationInfo {
   summary: string;
   /** how often, in words */
   cadence: string;
-  schedule: { kind: 'weekly'; weekday: number; hour: number; minute: number } | { kind: 'monthly'; day: number; hour: number; minute: number };
+  schedule: { kind: 'weekly'; weekday: number; hour: number; minute: number } | { kind: 'monthly'; day: number; hour: number; minute: number } | { kind: 'daily'; weekdays: number[]; hour: number; minute: number };
   /** n8n workflow id */
   workflow: string;
   /** the report stage it delivers */
@@ -363,12 +398,22 @@ export const AUTOMATIONS: AutomationInfo[] = [
   {
     id: 'ai_visibility',
     title: 'AI visibility check',
-    summary: 'Asks your buyer questions on ChatGPT, Perplexity and Google AI (Gemini and Claude once a month): mentions, citations, share of voice, sources AI trusts.',
-    cadence: 'Every Monday · Gemini, Claude and the market view on the month’s first run',
+    summary: 'Asks your buyer questions on ChatGPT, Gemini, Perplexity and Google AI (Claude once a month): mentions with their 95% range, citations, share of voice, how AI describes you, AI visits and revenue (GA4), AI crawler access.',
+    cadence: 'Every Monday · Claude, new questions and the market-wide index on the month’s first run',
     schedule: { kind: 'weekly', weekday: 1, hour: 7, minute: 0 },
     workflow: 'SEOagentAIVisib1',
     stage: 'ai_visibility',
     runNowMode: 'ai_visibility',
+    settingsTab: 'tracking',
+  },
+  {
+    id: 'ai_pulse',
+    title: 'AI pulse',
+    summary: 'Asks every tracked question on ChatGPT, Gemini and Google AI Mode each day; the Monday report counts these answers, and you hear about a real drop the same day.',
+    cadence: 'Every day except Monday · alerts only when something really changed',
+    schedule: { kind: 'daily', weekdays: [0, 2, 3, 4, 5, 6], hour: 6, minute: 30 },
+    workflow: 'SEOagentAIPulse1',
+    stage: 'ai_pulse',
     settingsTab: 'tracking',
   },
   {
@@ -446,7 +491,7 @@ export function nextScheduledRun(s: AutomationInfo['schedule'], tz: string, from
   for (let i = 0; i < 70; i++) {
     const day = new Date(Date.UTC(today.y, today.m - 1, today.d + i));
     const y = day.getUTCFullYear(), m = day.getUTCMonth() + 1, d = day.getUTCDate(), wd = day.getUTCDay();
-    const match = s.kind === 'weekly' ? wd === s.weekday : d === s.day;
+    const match = s.kind === 'weekly' ? wd === s.weekday : s.kind === 'daily' ? s.weekdays.includes(wd) : d === s.day;
     if (!match) continue;
     const at = wallToUtc(y, m, d, s.hour, s.minute);
     if (at.getTime() > from.getTime()) return at;

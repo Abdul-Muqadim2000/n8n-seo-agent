@@ -18,6 +18,8 @@ export function estimateRunCost(mode: ModeId, v: V): number {
     case 'discover':
       // strategy + the follow-ups it starts: keyword report on the best keyword (~$0.30), a page, an audit
       return 0.4 + (v.receiveReport !== false ? 0.3 : 0) + (v.receiveContent === true ? 1.2 : 0) + (v.fullReport === true ? 0.9 : v.siteAudit === true ? 0.1 : 0);
+    case 'backlinks':
+      return v.freeOnly === true ? 0 : MODES.backlinks.costUsd;   // v4.10: free sources only
     case 'track':
       // the first report only: blog posts and monitors run weekly inside n8n (Usage shows their monthly estimate)
       return MODES.track.costUsd;

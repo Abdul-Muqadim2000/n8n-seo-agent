@@ -1,7 +1,7 @@
 
 // ---- run ledger: DataForSEO spend, AI calls, duration (internal; appears on the final item and in the API callback) ----
-const __LEDGER_NODES = ['SERP Top 10', 'Keyword Data', 'Candidate SERP', 'Discover Ideas', 'Start Crawl', 'Get Crawl Summary', 'Get Crawled Pages', 'Run Crawl Extras', 'Find Competitors', 'Fallback SERP', 'Domain Overview', 'DataForSEO Whois', 'Ranked Keywords', 'Keyword Ideas', 'Backlink Summary', 'Backlink Gap', 'AI SERP', 'Ask LLMs', 'Facts SERP', 'Site Authority', 'Run Research', 'Run Competitor Keywords', 'AI Demand'];
-const __AI_NODES = ['Site Describer', 'Keyword Seeds', 'Competitor Analyzer', 'Verdict Agent', 'Strategy Brief', 'Copywriter', 'Editor', 'Content Reviewer'];
+const __LEDGER_NODES = ['SERP Top 10', 'SERP Top 10 (Retry)', 'Facts SERP (Retry)', 'Keyword Data', 'Candidate SERP', 'Discover Ideas', 'Start Crawl', 'Get Crawl Summary', 'Get Crawled Pages', 'Run Crawl Extras', 'Find Competitors', 'Fallback SERP', 'Domain Overview', 'DataForSEO Whois', 'Ranked Keywords', 'Keyword Ideas', 'Backlink Summary', 'Backlink Gap', 'AI SERP', 'Ask LLMs', 'Facts SERP', 'Site Authority', 'Run Research', 'Run Competitor Keywords', 'AI Demand'];
+const __AI_NODES = ['Site Describer', 'Keyword Seeds', 'Competitor Analyzer', 'Verdict Agent', 'Strategy Brief', 'Copywriter', 'Editor', 'Content Reviewer', 'Keyword Relevance', 'Critic'];
 const run_ledger = { dataforseo_usd: 0, dataforseo_calls: 0, by_node: {}, ai_calls: 0, ai_nodes: [], started_at: null, finished_at: new Date().toISOString(), duration_min: null };
 for (const n of __LEDGER_NODES) {
   let items = []; try { items = $(n).all(); } catch (e) { continue; }
@@ -143,7 +143,9 @@ if (wantSeo) {
   if (d.existing_page && d.existing_page.url) {
     parts.push('<div class="note"><b>Existing page found:</b> ' + esc(d.existing_page.url) + (d.existing_page.source === 'sitemap' ? ' (matched from the sitemap)' : '') + '. The content below is written to improve that page rather than create a duplicate.</div>');
   }
-  if (sf) {
+  if (sf && sf.unavailable) {
+    parts.push(h2('What the Results Page Looks Like') + '<div class="note">The live Google results could not be read for this run (search data provider: ' + esc(sf.error || 'no answer') + '). Featured snippet, People Also Ask, AI Overview and the competitor pages are unknown, not absent.</div>');
+  } else if (sf) {
     const aio = sf.ai_overview || {};
     parts.push(h2('What the Results Page Looks Like') + kv([
       ['Featured snippet', sf.featured_snippet ? esc(sf.featured_snippet.domain) + ' — "' + esc(String(sf.featured_snippet.text).slice(0, 160)) + '"' : 'None'],

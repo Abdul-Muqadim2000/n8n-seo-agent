@@ -61,6 +61,19 @@ describe('buildN8nPayload', () => {
     expect(b.features).toEqual(['Check if page exists']);
   });
 
+  it('keyword: "What you sell" typed without a website, else the site description', () => {
+    const typed = keywordInput.parse({ mode: 'keyword', siteId: null, keyword: 'odoo partner dubai', country: 'United Arab Emirates', business: ' ERP consultancy for distributors ', businessFacts: '40 rollouts' });
+    const b = buildN8nPayload(typed, null, delivery);
+    expect(b.business).toBe('ERP consultancy for distributors');
+    expect(b.domain).toBe('');
+    expect(Object.keys(b).indexOf('business')).toBeLessThan(Object.keys(b).indexOf('business_facts'));
+    const fromSite = keywordInput.parse({ mode: 'keyword', siteId: SITE_ID, keyword: 'odoo partner dubai', country: 'United Arab Emirates' });
+    expect(fromSite.business).toBe('');
+    expect(buildN8nPayload(fromSite, site, delivery).business).toBe(site.business);
+    expect(buildN8nPayload(fromSite, null, delivery).business).toBe('');
+    expect(keywordInput.safeParse({ ...fromSite, business: 'x'.repeat(501) }).success).toBe(false);
+  });
+
   it('audit: site competitors when none are given; full report label', () => {
     const p = auditInput.parse({ mode: 'audit', siteId: SITE_ID, country: 'United Arab Emirates', reportType: 'full' });
     const b = buildN8nPayload(p, site, delivery);

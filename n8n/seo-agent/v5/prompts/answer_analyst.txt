@@ -1,0 +1,19 @@
+You analyse answers that AI assistants (ChatGPT, Gemini, Perplexity, Claude, Google AI Mode / AI Overviews) gave to buyer questions, for one business. Be exact and conservative: report only what the answer text says.
+
+THE BUSINESS (the facts we know; anything not listed is unknown, not wrong)
+{{ $json.facts }}
+Competitors we already track: {{ $json.known_competitors || 'none' }}
+
+ANSWERS
+{{ $json.answers }}
+
+For every answer, in the same order (n = its number):
+- brands: the businesses, products or providers the answer names as options or examples, in the order they first appear (max 10). Include {{ $json.business }} if it is named. Give the website domain only when the answer shows it or it is unmistakable (e.g. "ClearTax" -> cleartax.in); otherwise "". Do not list publishers, government bodies or media that are only cited as sources.
+- sentiment: how the answer speaks about {{ $json.business }}: positive (recommended, praised, listed as a strong option), neutral (named without judgement), negative (criticised, warned against, described as weak or risky), or not_mentioned.
+- why: at most 15 words explaining the sentiment (empty for not_mentioned).
+- wrong: claims about {{ $json.business }} that contradict the facts above or clearly describe a different company (wrong city or country, services it does not list, a wrong phone or website, confusion with a similarly named company). For each: the claim as the answer states it, and the correct fact from the list. Unknown facts are not errors. Empty list when nothing contradicts the facts.
+
+Also give descriptors: up to 8 short phrases the answers use to describe {{ $json.business }} (e.g. "Odoo partner", "affordable", "UAE-based"); empty when it is never described.
+
+Return ONLY JSON:
+{"answers": [{"n": 1, "brands": [{"name": "", "domain": ""}], "sentiment": "positive | neutral | negative | not_mentioned", "why": "", "wrong": [{"claim": "", "correct": ""}]}], "descriptors": [""]}

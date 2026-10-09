@@ -9,6 +9,7 @@ const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFi
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v.slice(0, 200) : null);
 const obj = (v: unknown): P => (v && typeof v === 'object' && !Array.isArray(v) ? (v as P) : {});
 const len = (v: unknown): number | null => (Array.isArray(v) ? v.length : null);
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 
 /** The stage of a callback; very early callbacks (verdict before v4.2) had none. */
 export function stageOf(p: P): string {
@@ -96,13 +97,22 @@ export function summarize(stage: string, p: P): Summary {
       put('shareOfVoice', num(m.share_of_voice));
       put('questions', len(p.questions));
       put('subject', str(p.subject));
+      put('visibilityScore', num(m.visibility_score));
+      put('aiSessions', num(obj(p.traffic).connected === true ? obj(p.traffic).sessions : null));
+      put('wrongClaims', num(m.accuracy_issues) || null);
       break;
     }
+    case 'ai_pulse':
+      put('mentionRate', num(p.mention_rate));
+      put('samples', num(p.samples));
+      put('alerts', len(p.alerts));
+      put('subject', str(p.subject));
+      break;
     case 'backlinks': {
       const m = obj(p.summary);
-      put('referringDomains', num(m.referring_domains));
+      put('referringDomains', num(obj(p.coverage).union) ?? num(m.referring_domains));   // v4.10: all sources merged
       put('backlinks', num(m.backlinks));
-      put('lost', len(p.lost));
+      put('lost', arr(p.lost).filter((l) => !obj(l).pending).length);   // confirmed losses; "reported lost — checking" is not yet lost
       put('importantLost', len(p.important_lost));
       put('spammy', len(p.spammy));
       put('prospects', len(p.prospects));

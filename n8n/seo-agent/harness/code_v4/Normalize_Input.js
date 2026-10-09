@@ -198,9 +198,9 @@ const video = video_url ? { url: video_url, provider: ytm ? 'youtube' : vim ? 'v
   transcript: String(VI.transcript || p2.video_transcript || lab('Video transcript (optional)') || '').trim().slice(0, 60000), upload_date: s0(VI.upload_date || p2.video_upload_date, 40), duration: s0(VI.duration || p2.video_duration, 20), placement: s0(VI.placement, 160) } : null;
 // ---- v4.5: monitor settings (Track my site / API `monitors`), audit crawl options, scheduled audits ----
 const MI = obj(p2.monitors);
-const monitor_input = {}; for (const k of ['ai_visibility', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));
+const monitor_input = {}; for (const k of ['ai_visibility', 'ai_pulse', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));
 if (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'].includes(e)).join(', ');
-if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(15, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 8));
+if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(50, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 20));   // v4.9: up to 50 questions
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
 const topics = asArray(p2.topics || lab('Main services or products (optional)')).map(x => String(x).trim().toLowerCase()).filter(x => x.length >= 3).slice(0, 6);
@@ -342,6 +342,7 @@ return [{
     scheduled: !!p2.scheduled,
     monitor_input,
     topics,
+    free_only: mode === 'backlinks' && /^(true|1|yes|on)$/i.test(String(p2.free_only ?? '')),
     qa_max_rounds: CONFIG.qa_max_rounds,
     ai_budget_usd: CONFIG.ai_budget_usd,
     ai_budget_period: CONFIG.ai_budget_period,

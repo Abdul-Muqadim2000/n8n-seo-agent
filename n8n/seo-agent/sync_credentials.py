@@ -31,8 +31,11 @@ CREDS = [
     ('SEOcredImapGmail', 'Gmail IMAP (SEO Agent)', 'imap', {'user': 'SEO_IMAP_USER', 'password': 'SEO_IMAP_PASSWORD', 'host': 'SEO_IMAP_HOST'}, {'port': 993, 'secure': True, 'allowUnauthorizedCerts': False}),
     ('SEOcredGoogleSvc', 'Google Service Account (SEO Agent)', 'googleApi', {'email': 'SEO_GOOGLE_SA_EMAIL', 'privateKey': 'SEO_GOOGLE_SA_PRIVATE_KEY'}, {'region': 'global', 'inpersonate': False, 'delegatedEmail': '', 'httpNode': True, 'scopes': SCOPES}),
     ('SEOcredWordPress', 'WordPress (SEO Agent)', 'wordpressApi', {'url': 'SEO_WORDPRESS_URL', 'username': 'SEO_WORDPRESS_USER', 'password': 'SEO_WORDPRESS_APP_PASSWORD'}, {}),
+    # v4.10 (BACKLINKS_SPEC.md): optional free link sources; without the key the Backlink Monitor is built with the source switched off
+    ('SEOcredBingWebm', 'Bing Webmaster API', 'httpQueryAuth', {'value': 'SEO_BING_WEBMASTER_API_KEY'}, {'name': 'apikey'}),
+    ('SEOcredAhrefsDR', 'Ahrefs (free Domain Rating)', 'httpHeaderAuth', {'value': 'SEO_AHREFS_API_KEY'}, {'name': 'Authorization'}),
 ]
-PREFIX = {('SEOcredJinaReade', 'value'): 'Bearer '}   # header value = 'Bearer ' + key
+PREFIX = {('SEOcredJinaReade', 'value'): 'Bearer ', ('SEOcredAhrefsDR', 'value'): 'Bearer '}   # header value = 'Bearer ' + key
 # Trigger authentication (webhook header auth, form basic auth) is checked outside an execution context, where n8n does not resolve
 # {{ $env }} expressions (live finding 2026-10-02: 'No authentication data defined on node'). These are always written as literal values.
 TRIGGER_IDS = {'SEOcredApiHeader', 'SEOcredApiTest01', 'SEOcredFormLogin'}

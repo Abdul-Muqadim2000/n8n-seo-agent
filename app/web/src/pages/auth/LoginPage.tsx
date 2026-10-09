@@ -53,13 +53,11 @@ export default function LoginPage() {
           {(p) => <Input {...p} type="email" autoComplete="email" placeholder="you@company.com" {...form.register('email')} />}
         </Field>
         <Field
-          label={
-            <span className="flex w-full items-center justify-between">
-              Password
-              <Link to="/forgot-password" className="text-xs font-normal text-accent-text hover:underline">
-                Forgot password?
-              </Link>
-            </span>
+          label="Password"
+          labelAction={
+            <Link to="/forgot-password" className="rounded-sm text-xs font-medium text-accent-text underline-offset-4 hover:underline">
+              Forgot password?
+            </Link>
           }
           error={form.formState.errors.password?.message}
         >

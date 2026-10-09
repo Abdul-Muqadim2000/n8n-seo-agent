@@ -3,7 +3,10 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   adminActionSchema,
   createSiteSchema,
+  LINK_IMPORT_COLUMNS,
+  linkImportSchema,
   monitorsBody,
+  parseLinkImport,
   n8nSiteId,
   updateSiteSchema,
   VERIFICATION_META_NAME,
@@ -11,6 +14,7 @@ import {
   verifySiteSchema,
   type AdminResult,
   type GoogleConnection,
+  type LinkImportSummary,
   type Site,
   type SiteVerificationInfo,
   type VerificationMethod,
@@ -23,7 +27,7 @@ import { db, schema } from '../db';
 import type { SiteRow } from '../db/schema';
 import { randomToken } from '../lib/crypto';
 import { badRequest, conflict, HttpError, notFound, parse } from '../lib/errors';
-import { deleteRows, invalidateSite, siteAdmin } from '../n8n/client';
+import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin } from '../n8n/client';
 import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties } from '../services/google';
 import { routeSiteToApp } from '../services/runs';
 import { verify } from '../services/verify';
@@ -246,6 +250,35 @@ export async function siteRoutes(app: FastifyInstance) {
     return out;
   });
 
+  // ---------- link uploads (v4.10): Search Console Links exports and other tools' backlink CSVs -> seo_link_imports ----------
+  // The Search Console API has no links: the export is the only way to bring Google's own sample in. The latest upload of each kind
+  // replaces the previous one; the Backlink Monitor merges it into its ledger on the next run and checks the pages itself.
+  app.post('/api/orgs/:orgId/sites/:siteId/backlinks/import', { bodyLimit: 16 * 1024 * 1024, config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req): Promise<LinkImportSummary> => {
+    const p = req.params as P;
+    const { site } = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(site);
+    const input = parse(linkImportSchema, req.body);
+    let parsed;
+    try {
+      parsed = parseLinkImport(input.csv, site.domain);
+    } catch (err) {
+      throw badRequest((err as Error).message);
+    }
+    const now = new Date().toISOString();
+    const importId = `imp_${Date.now().toString(36)}`;
+    const siteId = n8nSiteId(site.domain);
+    await ensureTable('linkImports', LINK_IMPORT_COLUMNS);
+    await deleteRows('linkImports', [
+      { columnName: 'site_id', condition: 'eq', value: siteId },
+      { columnName: 'source', condition: 'eq', value: parsed.source },
+    ]);
+    for (let i = 0; i < parsed.rows.length; i += 500)
+      await insertRows('linkImports', parsed.rows.slice(i, i + 500).map((r) => ({ site_id: siteId, domain: site.domain, import_id: importId, source: parsed.source, ...r, imported_at: now })));
+    invalidateSite(site.domain);
+    req.log.info({ site: site.domain, source: parsed.source, rows: parsed.rows.length }, 'link import');
+    return { source: parsed.source, label: parsed.label, rows: parsed.rows.length, domains: parsed.domains, total: parsed.total, skipped: parsed.skipped, importedAt: now };
+  });
+
   // ---------- Site Admin (n8n) ----------
   app.post('/api/orgs/:orgId/sites/:siteId/admin', async (req): Promise<AdminResult> => {
     const p = req.params as P;
@@ -273,7 +306,7 @@ export async function siteRoutes(app: FastifyInstance) {
         break;
       }
       case 'prospect':
-        body = { ...base, action: 'prospect', prospect_domain: a.prospectDomain, type: a.type, ...(a.status ? { status: a.status } : {}), ...(a.note !== undefined ? { note: a.note } : {}) };
+        body = { ...base, action: 'prospect', prospect_domain: a.prospectDomain, type: a.type, ...(a.status ? { status: a.status } : {}), ...(a.note !== undefined ? { note: a.note } : {}), ...(a.contactEmail ? { contact_email: a.contactEmail } : {}) };
         break;
       case 'ai_prompts':
         body = { ...base, action: 'ai_prompts', add: a.add, remove: a.remove };

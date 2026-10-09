@@ -13,6 +13,7 @@ import type {
   KeywordCheck,
   LadderCard,
   LadderDetail,
+  LinkImportSummary,
   Me,
   Member,
   Org,
@@ -228,7 +229,7 @@ export function useVerifySite(orgId: string, siteId: string) {
 }
 
 export const useGoogleConnection = (orgId: string, siteId: string, enabled = true) =>
-  useQuery({ queryKey: [...qk.site(siteId), 'google'], queryFn: () => api<GoogleConnection>(`/api/orgs/${orgId}/sites/${siteId}/google`), enabled, staleTime: 30_000 });
+  useQuery({ queryKey: [...qk.site(siteId), 'google'], queryFn: () => api<GoogleConnection>(`/api/orgs/${orgId}/sites/${siteId}/google`), enabled, staleTime: 30_000, retry: noRetryOn4xx });
 
 export function useSiteAdmin(orgId: string, siteId: string) {
   const qc = useQueryClient();
@@ -237,6 +238,17 @@ export function useSiteAdmin(orgId: string, siteId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.site(siteId) });
       qc.invalidateQueries({ queryKey: qk.sites(orgId) });
+    },
+  });
+}
+
+/** v4.10: upload a Search Console Links export (or another tool's backlink CSV) for the Backlink Monitor */
+export function useLinkImport(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { csv: string; fileName?: string }) => api<LinkImportSummary>(`/api/orgs/${orgId}/sites/${siteId}/backlinks/import`, { method: 'POST', body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.siteData(siteId, 'backlinks') });
     },
   });
 }
@@ -396,8 +408,10 @@ export function useRun(orgId: string, runId: string) {
   return useQuery({
     queryKey: qk.run(orgId, runId),
     queryFn: () => api<{ run: Run; reports: Report[] }>(`/api/orgs/${orgId}/runs/${runId}`),
-    // keep polling while n8n is working on it
+    retry: noRetryOn4xx,
+    // keep polling while n8n is working on it (a run that does not exist or is not yours is not polled)
     refetchInterval: (q) => {
+      if (!q.state.data && q.state.error instanceof ApiRequestError && q.state.error.status >= 400 && q.state.error.status < 500) return false;
       const s = q.state.data?.run.status;
       return s === 'completed' || s === 'failed' ? false : 10_000;
     },
@@ -428,7 +442,7 @@ export function useReports(orgId: string, filters: { siteId?: string; stage?: st
 }
 
 export const useReport = (orgId: string, reportId: string | undefined) =>
-  useQuery({ queryKey: qk.report(orgId, reportId ?? ''), queryFn: () => api<ReportDetail>(`/api/orgs/${orgId}/reports/${reportId}`), enabled: !!reportId, staleTime: Infinity });
+  useQuery({ queryKey: qk.report(orgId, reportId ?? ''), queryFn: () => api<ReportDetail>(`/api/orgs/${orgId}/reports/${reportId}`), enabled: !!reportId, staleTime: Infinity, retry: noRetryOn4xx });
 
 // ---------- platform admin ----------
 export const useAdminOrgs = (enabled: boolean) => useQuery({ queryKey: ['admin', 'orgs'], queryFn: () => api<AdminOrg[]>('/api/admin/orgs'), enabled });

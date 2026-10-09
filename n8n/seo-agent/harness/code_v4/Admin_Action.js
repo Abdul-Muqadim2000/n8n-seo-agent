@@ -1,5 +1,5 @@
 // Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)
-// | prospect (prospect_domain + status contacted / won / rejected / ignored / new, note) | ai_prompts (add custom questions, switch some off) — by site_id or domain.
+// | prospect (prospect_domain + status contacted / won / rejected / ignored / new, note, contact_email) | ai_prompts (add custom questions, switch some off) — by site_id or domain.
 // The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).
 let t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }
 if (t.body && typeof t.body === 'object') t = { ...t, ...t.body };
@@ -21,4 +21,4 @@ const add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? 
 const off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean);
 if (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length) throw new Error('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');
 const monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});
-return [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, monitors, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];
+return [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, monitors, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];

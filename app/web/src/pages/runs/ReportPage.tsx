@@ -8,7 +8,7 @@ import { Badge, StatusBadge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
 import { ErrorState, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
-import { StageGlyph, stageLabel } from '@/components/reports/meta';
+import { StageIcon, stageLabel } from '@/components/reports/meta';
 import { ReportView } from '@/components/reports/ReportView';
 
 export default function ReportPage() {
@@ -26,28 +26,24 @@ export default function ReportPage() {
         <Skeleton className="h-56 w-full" />
       </div>
     );
-  if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load this report" />;
+  if (q.isError || !q.data) return <ErrorState error={q.error} onRetry={() => q.refetch()} title="Could not load this report" titleAs="h1" />;
 
   const r = q.data;
   return (
     <div>
-      <Link to={paths.reports(org.id)} className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 hover:text-ink">
-        <ArrowLeft className="size-4" aria-hidden /> All reports
+      <Link to={paths.reports(org.id)} className="group mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-ink-3 transition-colors duration-150 ease-brand hover:text-ink">
+        <ArrowLeft className="size-4 transition-transform duration-200 ease-brand group-hover:-translate-x-0.5" aria-hidden /> All reports
       </Link>
       <PageHeader
-        eyebrow={stageLabel(r.stage)}
-        title={
-          <span className="flex items-center gap-3">
-            <StageGlyph stage={r.stage} />
-            <span className="min-w-0">{r.title || stageLabel(r.stage)}</span>
-          </span>
-        }
+        icon={<StageIcon stage={r.stage} report={r} />}
+        eyebrow={stageLabel(r.stage, r)}
+        title={r.title || stageLabel(r.stage, r)}
         description={
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {r.siteDomain && (
               <>
                 {r.siteId ? (
-                  <Link to={paths.site(org.id, r.siteId)} className="text-accent-text hover:underline">
+                  <Link to={paths.site(org.id, r.siteId)} className="text-accent-text hover:underline transition-colors duration-150 ease-brand">
                     {r.siteDomain}
                   </Link>
                 ) : (

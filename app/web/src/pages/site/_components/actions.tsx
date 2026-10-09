@@ -1,5 +1,6 @@
 // Actions the SEO engine recommends in its weekly reports, each with a ready-made run when it has one.
-import { ArrowRight, ExternalLink as ExternalIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { ArrowRight, BadgeCheck, Code2, ExternalLink as ExternalIcon, Link2, Mail, Megaphone, MousePointerClick, PenSquare, Search, Sparkles, Upload, Wrench } from 'lucide-react';
 import {
   COUNTRY_NAMES,
   GOAL_VALUES,
@@ -13,6 +14,7 @@ import {
   type ModeId,
 } from '@seo/shared';
 import { ButtonLink } from '@/components/ui/button';
+import { InsightItem } from '@/components/insight';
 import { fmtAgo } from '@/lib/utils';
 import { Kind, PriorityBadge, priorityFromNumber, useSitePage } from './kit';
 import { urlPath } from './format';
@@ -50,9 +52,24 @@ export function runFromApiBody(body: Record<string, unknown> | null | undefined)
 }
 
 const TYPE_LABEL: Record<string, string> = { pr: 'Digital PR', seo: 'SEO', ctr: 'Click-through', content: 'Content', publish: 'Publish', technical: 'Technical', links: 'Links', backlinks: 'Links', outreach: 'Outreach', schema: 'Schema', entity: 'Brand entity', brand: 'Brand' };
-const typeLabel = (t: string) => TYPE_LABEL[t.toLowerCase()] ?? (t.length <= 3 ? t.toUpperCase() : titleCase(t));
+export const typeLabel = (t: string) => TYPE_LABEL[t.toLowerCase()] ?? (t.length <= 3 ? t.toUpperCase() : titleCase(t));
+/** the icon tile of an action, by its type (blue: a category, not a status) */
+const TYPE_ICON: Record<string, ReactNode> = {
+  pr: <Megaphone />,
+  seo: <Search />,
+  ctr: <MousePointerClick />,
+  content: <PenSquare />,
+  publish: <Upload />,
+  technical: <Wrench />,
+  links: <Link2 />,
+  backlinks: <Link2 />,
+  outreach: <Mail />,
+  schema: <Code2 />,
+  entity: <BadgeCheck />,
+  brand: <BadgeCheck />,
+};
 
-const RUN_LABEL: Partial<Record<ModeId, string>> = {
+export const RUN_LABEL: Partial<Record<ModeId, string>> = {
   keyword: 'Write the page',
   verdict: 'Check the keyword',
   audit: 'Run the audit',
@@ -74,36 +91,53 @@ export function EngineActionList({ actions, limit, showSource }: { actions: read
       {rows.map((a, i) => {
         const run = runFromApiBody(a.apiBody) ?? (a.type === 'publish' && a.keyword ? { mode: 'published' as ModeId, prefill: { keyword: a.keyword, ...(a.url ? { publishedUrl: a.url } : {}) } } : null);
         return (
-          <li key={`${a.type}-${i}`} className="flex flex-col gap-3 px-5 py-3.5 sm:flex-row sm:items-start">
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
+          <InsightItem
+            key={`${a.type}-${i}`}
+            icon={TYPE_ICON[String(a.type ?? '').toLowerCase()] ?? <Sparkles />}
+            meta={
+              <>
                 <PriorityBadge priority={priorityFromNumber(a.priority)} short />
                 {a.type && <Kind>{typeLabel(a.type)}</Kind>}
-                {showSource && <span className="text-xs text-ink-3">{titleCase(a.source)} · {fmtAgo(a.receivedAt)}</span>}
-              </div>
-              <p className="mt-1.5 text-sm font-medium leading-snug text-ink">{a.action}</p>
-              {a.why && <p className="mt-1 text-[13px] leading-relaxed text-ink-2">{a.why}</p>}
-              {(a.keyword || a.url) && (
-                <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-3">
-                  {a.keyword && <span>Keyword: <span className="text-ink-2">{a.keyword}</span></span>}
-                  {a.url && (
-                    <a href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent-text hover:underline">
-                      {urlPath(a.url)}
-                      <ExternalIcon className="size-3" aria-hidden />
-                    </a>
+                {showSource && (
+                  <span className="text-xs text-ink-3">
+                    {titleCase(a.source)} · {fmtAgo(a.receivedAt)}
+                  </span>
+                )}
+              </>
+            }
+            title={a.action}
+            description={
+              a.why || a.keyword || a.url ? (
+                <>
+                  {a.why && <span className="block text-[13px] leading-relaxed text-ink-2">{a.why}</span>}
+                  {(a.keyword || a.url) && (
+                    <span className={a.why ? 'mt-1.5 flex flex-wrap gap-x-3 gap-y-1' : 'flex flex-wrap gap-x-3 gap-y-1'}>
+                      {a.keyword && (
+                        <span>
+                          Keyword: <span className="text-ink-2">{a.keyword}</span>
+                        </span>
+                      )}
+                      {a.url && (
+                        <a href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-accent-text hover:underline transition-colors duration-150 ease-brand">
+                          {urlPath(a.url)}
+                          <ExternalIcon className="size-3" aria-hidden />
+                        </a>
+                      )}
+                    </span>
                   )}
-                </p>
-              )}
-            </div>
-            {run && can('member') && (
-              <div className="shrink-0">
-                <ButtonLink to={tool(run.mode, run.prefill)} size="sm" variant={i === 0 ? 'primary' : 'secondary'}>
+                </>
+              ) : undefined
+            }
+            action={
+              run && can('member') ? (
+                <ButtonLink to={tool(run.mode, run.prefill)} size="sm" variant={i === 0 ? 'primary' : 'secondary'} className="group/act">
                   {RUN_LABEL[run.mode] ?? 'Start'}
-                  <ArrowRight className="size-3.5" aria-hidden />
+                  <ArrowRight className="size-3.5 transition-transform duration-200 ease-brand group-hover/act:translate-x-0.5" aria-hidden />
                 </ButtonLink>
-              </div>
-            )}
-          </li>
+              ) : undefined
+            }
+            actionPosition="side"
+          />
         );
       })}
     </ol>

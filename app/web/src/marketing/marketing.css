@@ -1,0 +1,272 @@
+/* Marketing-site only (imported by MarketingLayout, so it stays out of the app bundle): reveal states, marquee, diagram motion.
+   Colours come from the tokens in src/index.css. Everything is static under prefers-reduced-motion. */
+
+/* ---------- touch targets ---------- */
+/* Small text links and chips (arrow links, breadcrumbs, e-mail addresses, filter chips): a hit area at least 44px tall, centred on the
+   element, without changing the layout. Only for elements that do not use ::after themselves and are not positioned. */
+.mk-tap {
+  position: relative;
+}
+.mk-tap::after {
+  content: '';
+  position: absolute;
+  inset: 50% -4px auto;
+  height: max(100%, 44px);
+  transform: translateY(-50%);
+}
+
+/* ---------- reveal on scroll ---------- */
+.mk-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 640ms var(--brand-ease),
+    transform 640ms var(--brand-ease);
+  transition-delay: calc(var(--mk-i, 0) * 70ms);
+}
+.mk-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- brand mark watermark: the supplied SVG as a mask over a faded on-ink fill ---------- */
+.mk-watermark {
+  -webkit-mask: url('/brand/ascentra-mark-white.svg') center / contain no-repeat;
+  mask: url('/brand/ascentra-mark-white.svg') center / contain no-repeat;
+}
+
+/* ---------- FAQ (details) ---------- */
+.mk-faq[open] .mk-faq-body {
+  animation: asc-fade-up 320ms var(--brand-ease) both;
+}
+
+/* ---------- integration marquee ---------- */
+.mk-marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+}
+.mk-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: mk-marquee 48s linear infinite;
+}
+.mk-marquee:hover .mk-marquee-track,
+.mk-marquee:focus-within .mk-marquee-track {
+  animation-play-state: paused;
+}
+.mk-marquee-group {
+  display: flex;
+  gap: 12px;
+  padding-right: 12px;
+}
+@keyframes mk-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ---------- line chart draw-in (DashboardMockup) ---------- */
+.mk-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 1600ms var(--brand-ease) 200ms;
+}
+.is-drawn .mk-draw {
+  stroke-dashoffset: 0;
+}
+.mk-fill {
+  opacity: 0;
+  transition: opacity 900ms var(--brand-ease) 900ms;
+}
+.is-drawn .mk-fill {
+  opacity: 1;
+}
+
+/* staggered pop-in for mockup parts (dots, rungs, rows): set --mk-i on the element */
+.mk-pop {
+  opacity: 0;
+  transform: translateY(6px) scale(0.98);
+  transition:
+    opacity 420ms var(--brand-ease),
+    transform 420ms var(--brand-ease);
+  transition-delay: calc(120ms + var(--mk-i, 0) * 45ms);
+}
+.is-drawn .mk-pop {
+  opacity: 1;
+  transform: none;
+}
+.mk-pop-dot {
+  transform: scale(0);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform 360ms var(--brand-ease);
+  transition-delay: calc(150ms + var(--mk-i, 0) * 28ms);
+}
+.is-drawn .mk-pop-dot {
+  transform: none;
+}
+/* bars growing from zero width/height */
+.mk-grow-x {
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 900ms var(--brand-ease);
+  transition-delay: calc(200ms + var(--mk-i, 0) * 80ms);
+}
+.mk-grow-y {
+  transform: scaleY(0);
+  transform-origin: center bottom;
+  transition: transform 900ms var(--brand-ease);
+  transition-delay: calc(200ms + var(--mk-i, 0) * 80ms);
+}
+.is-drawn .mk-grow-x,
+.is-drawn .mk-grow-y {
+  transform: none;
+}
+
+/* ---------- diagrams ---------- */
+/* dashes flowing along a connector (pathLength="100") */
+.mk-flow {
+  stroke-dasharray: 3 9;
+  animation: mk-flow 1.6s linear infinite;
+}
+.mk-flow-rev {
+  stroke-dasharray: 3 9;
+  animation: mk-flow 1.6s linear infinite reverse;
+}
+@keyframes mk-flow {
+  to {
+    stroke-dashoffset: -12;
+  }
+}
+/* a short bright segment travelling once round the growth loop (pathLength="100") */
+.mk-comet {
+  stroke-dasharray: 7 93;
+  animation: mk-comet 9s linear infinite;
+}
+@keyframes mk-comet {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+/* loop node lights up when the comet passes (delay set per node) */
+.mk-node-ring {
+  animation: mk-node 9s linear infinite;
+  animation-delay: calc(var(--mk-i, 0) * 1.5s);
+}
+@keyframes mk-node {
+  0%,
+  14% {
+    box-shadow:
+      0 0 0 1.5px var(--accent),
+      0 0 0 6px color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  22%,
+  100% {
+    box-shadow:
+      0 0 0 0 transparent,
+      0 0 0 0 transparent;
+  }
+}
+/* soft pulse for a live dot */
+.mk-pulse {
+  animation: mk-pulse 2.4s var(--brand-ease) infinite;
+}
+@keyframes mk-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+
+/* ---------- header ---------- */
+.mk-menu-panel {
+  animation: mk-menu-in 200ms var(--brand-ease) both;
+}
+@keyframes mk-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.mk-sheet {
+  animation: mk-sheet-in 260ms var(--brand-ease) both;
+}
+@keyframes mk-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---------- reduced motion: everything static and visible ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .mk-reveal,
+  .mk-pop {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .mk-menu-panel,
+  .mk-sheet {
+    animation: none;
+  }
+  .mk-draw {
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+  .mk-fill {
+    opacity: 1;
+    transition: none;
+  }
+  .mk-pop-dot,
+  .mk-grow-x,
+  .mk-grow-y {
+    transform: none;
+    transition: none;
+  }
+  .mk-marquee {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .mk-marquee-track {
+    animation: none;
+    width: auto;
+  }
+  .mk-marquee-group {
+    flex: 1;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 0 16px; /* full-bleed row: keep the chips off the screen edges, centred like the label above */
+  }
+  .mk-marquee-group + .mk-marquee-group {
+    display: none;
+  }
+  .mk-flow,
+  .mk-flow-rev,
+  .mk-comet,
+  .mk-node-ring,
+  .mk-pulse {
+    animation: none;
+  }
+  .mk-comet {
+    display: none;
+  }
+}

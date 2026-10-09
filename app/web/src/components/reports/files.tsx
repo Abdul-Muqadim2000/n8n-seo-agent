@@ -60,7 +60,7 @@ export function FileButton({ file, compact, label }: { file: ReportFile; compact
       download={inline ? undefined : file.fileName}
       title={`${file.fileName} · ${fmtBytes(file.size)}`}
       className={cn(
-        'inline-flex max-w-full items-center gap-1.5 rounded-lg border border-line-strong bg-surface font-medium text-ink-2 transition-colors hover:border-accent hover:text-accent-text',
+        'inline-flex max-w-full items-center gap-1.5 rounded-lg border border-line-strong bg-surface font-medium text-ink-2 shadow-card transition-[color,border-color,background-color,translate] duration-150 ease-brand hover:-translate-y-px hover:border-accent hover:bg-accent-soft/40 hover:text-accent-text active:translate-y-0',
         compact ? 'h-7 px-2 text-xs' : 'h-8 px-2.5 text-[13px]',
       )}
     >
