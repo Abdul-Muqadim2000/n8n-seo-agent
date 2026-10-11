@@ -30,6 +30,13 @@ const Env = z.object({
   N8N_ADMIN_PATH: str('/webhook/seo-site-admin'),
   /** the Keyword Check workflow (SEOagentAssess): one keyword, answered synchronously */
   N8N_ASSESS_PATH: str('/webhook/seo-keyword-assess'),
+  /** v4.13 Link Builder: start a run on demand, and read one reply (synchronous) */
+  N8N_LINK_BUILDER_PATH: str('/webhook/seo-link-builder'),
+  N8N_REPLY_PATH: str('/webhook/seo-reply-read'),
+  /** v4.13: 32 bytes (64 hex or base64) that encrypt mailbox passwords; without it no mailbox can be connected */
+  MAILBOX_KEY: str(''),
+  /** v4.13: the sender and inbox jobs (off in tests or on a second server) */
+  LINK_BUILDER_JOBS: bool(true),
   /** the n8n project of the SEO Agent's Data Tables (the app creates seo_ladder_settings there when it is missing) */
   N8N_PROJECT_ID: str('wo1WpMiHjdduGvfl'),
   /** this server as seen from n8n (callbacks), e.g. http://host.docker.internal:4000; https in production */
@@ -95,6 +102,8 @@ export const config = {
     runPath: e.N8N_RUN_PATH,
     adminPath: e.N8N_ADMIN_PATH,
     assessPath: e.N8N_ASSESS_PATH,
+    linkBuilderPath: e.N8N_LINK_BUILDER_PATH,
+    replyPath: e.N8N_REPLY_PATH,
     projectId: e.N8N_PROJECT_ID,
   },
   callbackBaseUrl: e.CALLBACK_BASE_URL,
@@ -133,5 +142,7 @@ export const config = {
   platformAdmins: e.PLATFORM_ADMIN_EMAILS.split(/[\s,]+/).map((x) => x.trim().toLowerCase()).filter(Boolean),
   defaultBudgetUsd: e.DEFAULT_MONTHLY_BUDGET_USD,
   allowSignup: e.ALLOW_SIGNUP,
+  mailboxKey: e.MAILBOX_KEY,
+  linkBuilderJobs: e.LINK_BUILDER_JOBS,
 };
 export type Config = typeof config;

@@ -6,7 +6,7 @@
 // the fast engines only, no brand question, no database views). Costs measured live on 2026-10-02 / priced 2026-10-08.
 const CONFIG = { max_requests_per_run: 900, max_cost_per_run_usd: 15, max_cost_per_pulse_usd: 4,
   models: { perplexity: 'sonar', claude: 'claude-haiku-4-5' },
-  cost: { chatgpt: 0.004, gemini: 0.004, perplexity: 0.006, claude: 0.025, ai_overview: 0.002, ai_mode: 0.004, market: 0.115, index_sov: 0.11, index_you: 0.12 }, chat_gpt_location: 2840 };
+  cost: { chatgpt: 0.004, gemini: 0.004, perplexity: 0.006, claude: 0.025, ai_overview: 0.002, ai_mode: 0.004, copilot: 0.002, market: 0.115, index_sov: 0.11, index_you: 0.12 }, chat_gpt_location: 2840 };
 const API = 'https://api.dataforseo.com/v3/';
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let fresh = []; try { fresh = $('Prompt Rows').all().map(i => i.json).filter(r => !r.skip && r.prompt_id && r.status !== 'off'); } catch (e) {}   // new questions (stored ones are in the plan already)
@@ -22,6 +22,8 @@ for (const p of plans) {
   const qs = [...p.prompts, ...fresh.filter(r => r.site_id === p.site_id && !known.has(r.prompt_id)).map(r => ({ prompt_id: r.prompt_id, prompt: r.prompt, kind: r.kind, topic: r.topic, keyword: r.keyword, source: r.source }))].slice(0, p.prompts_max);
   const loc = { location_code: p.location_code, language_code: p.language_code };
   const iso = String(p.country_iso || '').toUpperCase(); const geo = /^[A-Z]{2}$/.test(iso) ? { web_search_country_iso_code: iso } : {};
+  // the countries Claude's web search accepts (DataForSEO docs, 2026-10); any other code is refused with 40501
+  const CLAUDE_GEO = new Set('AR AT AU BE BR CA CH CL CN DE DK ES FI FR GB HK ID IN IT JP KR MX MY NL NO NZ PH PL PT RU SA SE TR TW US ZA'.split(' '));
   const seenKw = new Set();
   for (const q of qs) {
     if (q.kind === 'brand' && (p.pulse_run || !p.full_due)) continue;   // brand recognition hardly changes week to week: once a month
@@ -29,8 +31,9 @@ for (const p of plans) {
     if (e.includes('chatgpt')) add(p, q, 'chatgpt', 'ai_optimization/chat_gpt/llm_scraper/live/advanced', [{ keyword: q.prompt, ...loc }]);
     if (e.includes('gemini')) add(p, q, 'gemini', 'ai_optimization/gemini/llm_scraper/live/advanced', [{ keyword: q.prompt, ...loc }]);
     if (e.includes('perplexity')) add(p, q, 'perplexity', 'ai_optimization/perplexity/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.perplexity, max_output_tokens: 1000, ...geo }]);
-    if (e.includes('claude')) add(p, q, 'claude', 'ai_optimization/claude/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.claude, web_search: true, max_output_tokens: 1200 }]);   // no geo: Claude's endpoint refuses web_search_country_iso_code (40501, live 2026-10-08); the questions name the country
+    if (e.includes('claude')) add(p, q, 'claude', 'ai_optimization/claude/llm_responses/live', [{ user_prompt: q.prompt, model_name: CONFIG.models.claude, web_search: true, max_output_tokens: 1200, ...(CLAUDE_GEO.has(iso) ? geo : {}) }]);   // Claude localises only to its listed countries (AE is not one: 40501 live 2026-10-08); elsewhere the questions name the country
     if (e.includes('ai_mode')) add(p, q, 'ai_mode', 'serp/google/ai_mode/live/advanced', [{ keyword: q.prompt, ...loc }]);
+    if (e.includes('copilot') && q.kind !== 'brand') add(p, q, 'copilot', 'serp/bing/organic/live/advanced', [{ keyword: q.prompt.slice(0, 700), ...loc, depth: 10 }]);   // v4.12: Copilot Search (Bing shows it for many questions, not all: no summary = no answer, like AI Overviews)
     const kw = String(q.keyword || '').trim().toLowerCase();
     if (e.includes('ai_overview') && kw && q.kind !== 'brand' && !seenKw.has(kw)) { seenKw.add(kw); add(p, q, 'ai_overview', 'serp/google/organic/live/advanced', [{ keyword: kw, ...loc, depth: 10, load_async_ai_overview: true }]); }
   }

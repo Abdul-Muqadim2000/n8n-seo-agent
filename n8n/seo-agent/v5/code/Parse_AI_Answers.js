@@ -2,7 +2,8 @@
 // it names, which competitors / businesses appeared, which sources it cited, the brands it named in order (ChatGPT's brand list, learned brand
 // names, domains) and the searches the engine ran to write it (fan-out queries: the content AI looks for). The database views (market, index) are
 // read by AI Metrics, not stored here. Engines: chatgpt / gemini (LLM scraper: the real chat interfaces), perplexity / claude (LLM Responses;
-// Gemini through LLM Responses before v4.9), ai_overview / ai_mode (SERP). Shared by the AI Visibility Tracker and the AI Pulse.
+// Gemini through LLM Responses before v4.9), ai_overview / ai_mode (SERP), copilot (v4.12: the Copilot Search summary in Bing's results). Shared by the AI
+// Visibility Tracker and the AI Pulse. v4.12: `cited_urls` keeps the exact third-party pages each answer cited (with their titles) — the earned-media targets.
 // Rows carry `_text` (the answer, for the Answer Analyst); the nodes that save them keep only the table columns.
 /*__AI_STATS__*/
 const reqs = $('AI Requests').all().map(i => i.json);
@@ -30,18 +31,18 @@ reqs.forEach((q, i) => {
     fanout = (res.fan_out_queries || []).map(String).filter(Boolean);
     if (q.engine === 'chatgpt' || (q.engine === 'gemini' && (res.markdown != null || (res.items || []).some(x => /^gemini_/.test(String(x && x.type)))))) {   // LLM scraper: the real chat interface
       text = String(res.markdown || (res.items || []).map(x => x.markdown || x.text || '').join('\n'));
-      cites = [...(res.sources || []), ...(res.items || []).flatMap(x => x.sources || [])].map(s => ({ url: s.url, host: hostOf(s.url) || String(s.domain || '').replace(/^www\./, '') }));
+      cites = [...(res.sources || []), ...(res.items || []).flatMap(x => x.sources || [])].map(s => ({ url: s.url, title: s.title || '', host: hostOf(s.url) || String(s.domain || '').replace(/^www\./, '') }));
       entities = [...(res.brand_entities || []), ...(res.items || []).flatMap(x => x.brand_entities || [])].map(b => String((b && (b.title || b.markdown)) || '').trim()).filter(Boolean);
       answered = !!text;
-    } else if (q.engine === 'ai_overview' || q.engine === 'ai_mode') {
+    } else if (q.engine === 'ai_overview' || q.engine === 'ai_mode' || q.engine === 'copilot') {   // Copilot Search: the ai_overview item of Bing's results
       const ao = (res.items || []).find(x => x && x.type === 'ai_overview');
       if (ao) { text = String(ao.markdown || (ao.items || []).map(x => x.markdown || x.text || '').join('\n'));
         const refs = [...(ao.references || []), ...(ao.items || []).flatMap(x => x.references || [])];
-        cites = refs.map(x => ({ url: x.url, host: hostOf(x.url) || String(x.domain || '').replace(/^www\./, '') })); answered = !!(text || cites.length); }
+        cites = refs.map(x => ({ url: x.url, title: x.title || x.source || '', host: hostOf(x.url) || String(x.domain || '').replace(/^www\./, '') })); answered = !!(text || cites.length); }
     } else {   // llm_responses: sections with text + annotations (Gemini annotations point to a Google redirect; their title is the source domain)
       const secs = (res.items || []).flatMap(it => it.sections || []);
       text = secs.map(s => s.text || '').join('');
-      cites = secs.flatMap(s => s.annotations || []).map(a => { const direct = a.direct_url || ''; let h = hostOf(direct || a.url); if (/vertexaisearch\.cloud\.google\.com/.test(h) && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(a.title || '').trim())) h = String(a.title).trim().toLowerCase().replace(/^www\./, ''); return { url: direct || (/vertexaisearch/.test(String(a.url)) ? '' : a.url), host: h }; });
+      cites = secs.flatMap(s => s.annotations || []).map(a => { const direct = a.direct_url || ''; let h = hostOf(direct || a.url); if (/vertexaisearch\.cloud\.google\.com/.test(h) && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(a.title || '').trim())) h = String(a.title).trim().toLowerCase().replace(/^www\./, ''); return { url: direct || (/vertexaisearch/.test(String(a.url)) ? '' : a.url), title: /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(a.title || '').trim()) ? '' : String(a.title || ''), host: h }; });
       answered = !!text;
     }
   }
@@ -66,6 +67,8 @@ reqs.forEach((q, i) => {
   const others = [...mergeBrands([...named.entries()], plan.aliases).entries()].map(([k, v]) => [k, Math.min(...v)]).sort((a, b) => a[1] - b[1]);   // a brand name and its website are one business
   const rank = ourAt >= 0 ? 1 + others.filter(([, at]) => at < ourAt).length : 0;   // position among the businesses the answer names; 0 = not named (a citation alone is not a recommendation)
   const sources = [...new Set(cites.map(c => c.host).filter(Boolean))];
+  // the exact third-party pages cited (not yours, not search engines): where to be named so the next answer names you
+  const seenU = new Set(); const cited_urls = cites.filter(c => c.url && c.host && !isOurs(c.host) && !/(^|\.)(google|bing|vertexaisearch\.cloud\.google)\.com$/.test(c.host)).map(c => ({ u: cleanUrl(c.url).slice(0, 300), t: String(c.title || '').replace(/\s+/g, ' ').trim().slice(0, 120) })).filter(c => !seenU.has(c.u) && seenU.add(c.u)).slice(0, 8);
   const at = ourAt >= 0 ? ourAt : 0;
   const short = q.run_kind === 'pulse';
   const excerpt = text ? text.slice(Math.max(0, at - 160), at + (short ? 200 : 340)).replace(/\s+/g, ' ').trim() : '';
@@ -73,7 +76,7 @@ reqs.forEach((q, i) => {
   rows.push({ site_id: q.site_id, domain: q.domain, run_id: q.run_id, checked_at: now, prompt_id: q.prompt_id, prompt: q.prompt, kind: q.kind, topic: q.topic || '', engine: q.engine,
     answered, mentioned: answered && mentioned, cited: answered && cited, rank: answered ? rank : 0, our_urls: ourUrls.join(' '), competitors: others.map(([d]) => d).slice(0, 12).join(', '),
     sources: sources.slice(0, 15).join(', '), excerpt: excerpt.slice(0, short ? 360 : 520), cost: Number(task.cost) || 0, error,
-    run_kind: q.run_kind || 'weekly', sentiment: '', brands: brands.slice(0, 12).join(', '), issues: '', fanout: fanout.slice(0, 6).join(' | ').slice(0, 600),
+    run_kind: q.run_kind || 'weekly', sentiment: '', brands: brands.slice(0, 12).join(', '), issues: '', fanout: fanout.slice(0, 6).join(' | ').slice(0, 600), cited_urls: cited_urls.length ? JSON.stringify(cited_urls) : '',
     _text: answered ? text.replace(/\s+/g, ' ').slice(0, 2400) : '' });
 });
 return rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];

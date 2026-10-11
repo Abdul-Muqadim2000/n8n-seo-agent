@@ -1,5 +1,7 @@
 # AI search visibility v4.9: from 6/10 to best in class
 
+> **v4.12 (2026-10-10):** the weekly loop that *acts* on these measurements — Bing / IndexNow, AI-readiness, questions to win, earned media — is in `AI_GROWTH_SPEC.md`.
+
 Built on 2026-10-08 at the user's request: "make it the best in this category". A comparison scored our AI visibility tracker **6/10** against 8–9/10 for Semrush Enterprise and Ahrefs Brand Radar. The reason it gave: "they track far more questions, more often, and tie them to revenue. We ask about 8 questions a week across 6 AI engines."
 
 This file covers the research, the design, how things are measured, the costs, the data, the tests and what is still open. The v4.5 monitor design is in `MONITORS_FEATURE_SPEC.md` §1–2; this file replaces its AI part where the two differ.

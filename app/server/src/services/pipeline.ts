@@ -4,11 +4,13 @@ import {
   normKeyword,
   MONITOR_COSTS,
   AI_PROMPTS_DEFAULT,
+  estimateAiGrowthCost,
   aiPulseQuestions,
   estimateAiVisibilityCost,
   nextScheduledRun,
   type AutomationId,
   type AutomationStatus,
+  type AiTargetRow,
   type ContentLogRow,
   type DetectedPage,
   type LadderCard,
@@ -200,8 +202,12 @@ function thisWeekItems(
         return `${a?.detail ?? 'Your buyer questions'}${firstRun(at) ? ' · Claude, new questions and the market-wide index (first run of the month)' : ''}`;
       case 'ai_pulse':
         return a?.detail ?? 'Your buyer questions on ChatGPT, Gemini and Google AI Mode';
+      case 'ai_growth':
+        return a?.detail ?? 'Bing / IndexNow submission, AI-readiness checks, earned-media drafts and the questions to win';
       case 'backlinks':
         return firstRun(at) ? 'Full monthly report: lost links, unlinked mentions and outreach drafts' : 'Watches for lost and spammy links';
+      case 'link_builder':
+        return a?.detail ?? 'New opportunities, contacts, your page and the link text, drafted sequences for your approval';
       case 'rank_tracker':
         return `${plural(p.build.cards.length, 'ladder')}, ${plural(pages, 'page')}`;
       case 'site_tracker':
@@ -321,7 +327,7 @@ export async function ladderDetailData(org: OrgRow, site: SiteRow, ladderId: str
 
 async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: PipelineData; ladders: LadderBuild }> {
   const d = site.domain;
-  const [x, ladders, queries, trends, logs, history, settingsRows, app, spent, cadenceReport, recentReports, running] = await Promise.all([
+  const [x, ladders, queries, trends, logs, history, settingsRows, app, spent, cadenceReport, recentReports, running, aiTargets] = await Promise.all([
     loadBundle(org, site),
     siteRows<LadderRow>('ladders', d, { max: 1000 }),
     siteRows<QueryRow>('queryHistory', d, { sortBy: 'period_end:desc', max: 4000 }),
@@ -336,6 +342,8 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     latestReport(org.id, site.id, ['content_cadence']),
     reportsList(org.id, { siteId: site.id, limit: 60 }),
     scheduledRunning(),
+    // v4.12: the AI growth loop's questions to win (the queued ones are the cadence's AI page of the week)
+    siteRows<AiTargetRow>('aiTargets', d, { max: 100 }).catch(() => [] as AiTargetRow[]),
   ]);
   const ownRuns = activeRuns(app.runs);
   const verified = !!site.verifiedAt;
@@ -402,6 +410,20 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
       monthlyCostUsd: m?.aiVisibility === false || m?.aiPulse === false ? 0 : estimateAiVisibilityCost({ prompts: m?.aiPromptsMax, engines: m?.aiEngines, pulse: true }).pulse,
       detail: `ChatGPT, Gemini and Google AI Mode · ${pulseQuestions} questions a day`,
     }),
+    base('ai_growth', (m?.aiVisibility ?? true) && (m?.aiGrowth ?? true), m?.aiVisibility === false ? 'AI visibility is switched off' : 'The AI growth loop is switched off in the monitor settings', {
+      lastRunAt: lastIso(x.ai.growth?.checkedAt, reportOf(['ai_growth'])?.receivedAt),
+      lastResult: x.ai.growth ? `${x.ai.growth.submitted.bing.submitted + x.ai.growth.submitted.indexnow.submitted} page(s) sent to Bing / IndexNow · ${x.ai.growth.pagesChecked} checked${x.ai.growth.avgScore != null ? ` (avg ${x.ai.growth.avgScore}/100)` : ''} · ${x.ai.growth.earned.length} pages AI cites without you` : null,
+      lastReportId: reportOf(['ai_growth'])?.id ?? null,
+      monthlyCostUsd: m?.aiVisibility === false || m?.aiGrowth === false ? 0 : estimateAiGrowthCost({ pages: m?.aiPagesPerMonth }).total,
+      detail: `${m?.aiPagesPerMonth ?? 2} AI answer page(s) a month · Bing / IndexNow · earned-media drafts`,
+    }),
+    base('link_builder', m?.linkBuilder ?? true, 'The Link Builder is switched off in the monitor settings', {
+      lastRunAt: reportOf(['link_builder'])?.receivedAt ?? null,
+      lastResult: (() => { const r = reportOf(['link_builder']); const sm = (r?.summary ?? {}) as Record<string, unknown>; return r ? `${Number(sm.drafted) || 0} pitch(es) drafted · ${Number(sm.press) || 0} journalist request(s) · ${Number(sm.listingsMissing) || 0} listing(s) missing` : null; })(),
+      lastReportId: reportOf(['link_builder'])?.id ?? null,
+      monthlyCostUsd: m?.linkBuilder === false ? 0 : MONITOR_COSTS.linkBuilderMonthly,
+      detail: 'Up to 10 drafted sequences a week · sent from your mailbox after approval',
+    }),
     base('backlinks', m?.backlinks ?? true, 'Switched off in the monitor settings', {
       lastRunAt: lastIso(lastBl?.checkedAt, blReport?.receivedAt),
       lastResult: lastBl ? `${lastBl.referringDomains} referring domains · ${lastBl.lostLinks} lost · ${lastBl.newLinks} new` : null,
@@ -457,10 +479,15 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   // ---------- the content queue: the cadence mirror, run by run (cadence.ts) ----------
   const on = (id: AutomationId) => automations.find((a) => a.id === id && a.state === 'on');
   const cadenceOn = !!on('content_cadence');
-  const cadenceRuns = cadenceOn ? calendar.filter((c) => c.automation === 'content_cadence').map((c) => c.at) : [];
-  const weeks = simulateCadence({ domain: d, pagesPerWeek: cadenceOn ? pagesPerWeek : 0, ladders, queries, trends, logs, settings: settingsRows, history }, cadenceRuns, now);
+  // v4.12: AI answer pages are written by the same Monday run, also for a website without weekly blog posts
+  const aiPagesPerMonth = on('ai_growth') ? m?.aiPagesPerMonth ?? 2 : 0;
+  const cadenceInfo = AUTOMATIONS.find((i) => i.id === 'content_cadence')!;
+  const aiOnlyRuns: string[] = [];
+  if (!cadenceOn && aiPagesPerMonth > 0) { let at = nextScheduledRun(cadenceInfo.schedule, tz); for (let i = 0; i < 6 && at.getTime() <= horizon; i++) { aiOnlyRuns.push(at.toISOString()); at = nextScheduledRun(cadenceInfo.schedule, tz, new Date(at.getTime() + 60_000)); } }
+  const cadenceRuns = cadenceOn ? calendar.filter((c) => c.automation === 'content_cadence').map((c) => c.at) : aiOnlyRuns;
+  const weeks = simulateCadence({ domain: d, pagesPerWeek: cadenceOn ? pagesPerWeek : 0, ladders, queries, trends, logs, settings: settingsRows, history, aiTargets, aiPagesPerMonth }, cadenceRuns, now);
   const week0 = weeks[0];
-  const nextPicks = cadenceOn ? week0.picks : [];
+  const nextPicks = cadenceOn || aiPagesPerMonth > 0 ? week0.picks : [];
   const queue = {
     next: nextPicks,
     later: week0.candidates.slice(nextPicks.length, nextPicks.length + CADENCE.later),

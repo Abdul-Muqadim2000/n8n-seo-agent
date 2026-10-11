@@ -10,10 +10,14 @@ import type {
   GoogleConnection,
   Invitation,
   InvitationPreview,
+  DnsCheck,
   KeywordCheck,
   LadderCard,
   LadderDetail,
+  LinkBuildingData,
   LinkImportSummary,
+  LinkSettings,
+  MailboxView,
   Me,
   Member,
   Org,
@@ -33,6 +37,7 @@ import type {
   SiteSettingsData,
   SiteVerificationInfo,
   TechnicalData,
+  OutreachStep,
   Usage,
   VerifyResult,
 } from '@seo/shared';
@@ -384,6 +389,166 @@ export const useRecommendations = (orgId: string, siteId: string) =>
     retry: noRetryOn4xx,
     staleTime: 60_000,
   });
+
+// ---------- link building (v4.13, n8n/seo-agent/LINK_BUILDER_SPEC.md) ----------
+/** A company opt-out (the address itself is not kept: `hint` is masked). */
+export interface Suppression {
+  id: string;
+  kind: 'email' | 'domain';
+  hint: string;
+  reason: string;
+  createdAt: string;
+}
+/** POST …/mailboxes/:id/test */
+export interface MailboxTestResult {
+  ok: boolean;
+  smtp: { ok: boolean; error: string | null };
+  imap: { ok: boolean; error: string | null };
+  dns: DnsCheck;
+}
+
+const mailboxesKey = (orgId: string) => [...qk.org(orgId), 'mailboxes'] as const;
+const suppressionsKey = (orgId: string) => [...qk.org(orgId), 'suppressions'] as const;
+/** under the site's data key: a run started for the website refreshes it too */
+const linkBuildingKey = (siteId: string) => qk.siteData(siteId, 'link-building');
+/** every website's link-building board (they list the company's mailboxes and the opt-out count) */
+const anyLinkBuilding = { predicate: (q: { queryKey: readonly unknown[] }) => q.queryKey[0] === 'site' && q.queryKey[2] === 'data' && q.queryKey[3] === 'link-building' };
+
+// Drafts marked "not a fit" in this session: the server reads the engine's prospect rows through a 60-second cache and lists a rejected
+// prospect's draft until then, so a refetch must not bring the card back.
+const dismissedDrafts = new Set<string>();
+const draftKey = (siteId: string, prospectDomain: string, type: string) => `${siteId}|${prospectDomain}|${type}`;
+
+/** A website's link building: drafts to approve, sequences, replies, listings, redirects, impact, settings, KPIs. */
+export const useLinkBuilding = (orgId: string, siteId: string) =>
+  useQuery({
+    queryKey: linkBuildingKey(siteId),
+    queryFn: () => api<LinkBuildingData>(`/api/orgs/${orgId}/sites/${siteId}/link-building`),
+    select: (d: LinkBuildingData) => (dismissedDrafts.size ? { ...d, drafts: d.drafts.filter((x) => !dismissedDrafts.has(draftKey(siteId, x.prospectDomain, x.type))) } : d),
+    placeholderData: keepPreviousData,
+    retry: noRetryOn4xx,
+    staleTime: 30_000,
+  });
+
+/** A mutation on the website's link building; the board refreshes after it (and after a failure: the state may have moved on). */
+function useLinkMutation<TBody, TRes = { ok: boolean }>(orgId: string, siteId: string, call: (b: TBody) => { method: 'POST' | 'PATCH'; path: string; body?: unknown }) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: TBody) => {
+      const c = call(b);
+      return api<TRes>(`/api/orgs/${orgId}/sites/${siteId}/link-building${c.path}`, { method: c.method, body: c.body ?? {} });
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: linkBuildingKey(siteId) }),
+  });
+}
+
+/** Approve each / automatic (owner only), the mailbox, the automatic daily limit (admins). */
+export function useUpdateLinkSettings(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<LinkSettings>) => api<LinkSettings>(`/api/orgs/${orgId}/sites/${siteId}/link-building/settings`, { method: 'PATCH', body }),
+    onSuccess: (settings) => {
+      qc.setQueryData<LinkBuildingData>(linkBuildingKey(siteId), (d) => (d ? { ...d, settings } : d));
+      return qc.invalidateQueries({ queryKey: linkBuildingKey(siteId) });
+    },
+  });
+}
+
+/** Approves a drafted sequence (edited text): it waits for the mailbox's sending window. 409 codes: no_mailbox, no_address, suppressed, consent_needed. */
+export const useApproveOutreach = (orgId: string, siteId: string) =>
+  useLinkMutation<{ prospectDomain: string; type: string; toEmail: string; steps: OutreachStep[]; consent: boolean; mailboxId?: string | null }, { ok: boolean; id: string }>(orgId, siteId, (body) => ({ method: 'POST', path: '/approve', body }));
+
+/** "Not a fit": the draft leaves the list at once (the engine's prospect becomes rejected). */
+export function useDismissOutreach(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { prospectDomain: string; type: string }) => api<{ ok: boolean }>(`/api/orgs/${orgId}/sites/${siteId}/link-building/dismiss`, { method: 'POST', body }),
+    onSuccess: (_r, b) => {
+      dismissedDrafts.add(draftKey(siteId, b.prospectDomain, b.type));
+      qc.setQueryData<LinkBuildingData>(linkBuildingKey(siteId), (d) => (d ? { ...d, drafts: d.drafts.filter((x) => !(x.prospectDomain === b.prospectDomain && x.type === b.type)) } : d));
+    },
+  });
+}
+
+/** Edits the unsent steps (or the address before the first e-mail) of a sequence. */
+export const useUpdateSequence = (orgId: string, siteId: string) =>
+  useLinkMutation<{ id: string; steps?: OutreachStep[]; toEmail?: string }>(orgId, siteId, ({ id, ...body }) => ({ method: 'PATCH', path: `/sequences/${id}`, body }));
+
+/** Pause / resume / stop a sequence. */
+export const useSequenceAction = (orgId: string, siteId: string) =>
+  useLinkMutation<{ id: string; action: 'pause' | 'resume' | 'cancel' }>(orgId, siteId, ({ id, action }) => ({ method: 'POST', path: `/sequences/${id}/${action}` }));
+
+/** Sends the person's answer now, in the same thread. */
+export const useSequenceReply = (orgId: string, siteId: string) =>
+  useLinkMutation<{ id: string; body: string }>(orgId, siteId, ({ id, body }) => ({ method: 'POST', path: `/sequences/${id}/reply`, body: { body } }));
+
+/** Won (the link check confirms it) or not a fit. */
+export const useSequenceOutcome = (orgId: string, siteId: string) =>
+  useLinkMutation<{ id: string; status: 'won' | 'rejected' }>(orgId, siteId, ({ id, status }) => ({ method: 'POST', path: `/sequences/${id}/outcome`, body: { status } }));
+
+/** A listing the person handles themselves: submitted / listed / not relevant / missing again. */
+export const useListingStatus = (orgId: string, siteId: string) =>
+  useLinkMutation<{ listingId: string; status: 'submitted' | 'listed' | 'ignored' | 'missing'; note?: string }>(orgId, siteId, ({ listingId, ...body }) => ({ method: 'POST', path: `/listings/${encodeURIComponent(listingId)}`, body }));
+
+/** "Find opportunities now" (admins): starts the Link Builder for this website; the report arrives by callback. */
+export function useRunLinkBuilder(orgId: string, siteId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { freeOnly: boolean }) => api<{ ok: boolean; requestId: string | null }>(`/api/orgs/${orgId}/sites/${siteId}/link-building/run`, { method: 'POST', body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org', orgId, 'runs'] });
+      qc.invalidateQueries({ queryKey: [...qk.org(orgId), 'usage'] });
+    },
+  });
+}
+
+// mailboxes (company settings: members read, admins change)
+export const useMailboxes = (orgId: string, enabled = true) =>
+  useQuery({ queryKey: mailboxesKey(orgId), queryFn: () => api<MailboxView[]>(`/api/orgs/${orgId}/mailboxes`), enabled, retry: noRetryOn4xx });
+
+function useMailboxMutation<TBody, TRes>(orgId: string, call: (b: TBody) => { method: 'POST' | 'PATCH' | 'DELETE'; path: string; body?: unknown }) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: TBody) => {
+      const c = call(b);
+      return api<TRes>(`/api/orgs/${orgId}/mailboxes${c.path}`, { method: c.method, body: c.body });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: mailboxesKey(orgId) });
+      qc.invalidateQueries(anyLinkBuilding);
+    },
+  });
+}
+
+/** Connects a mailbox: the server logs in to SMTP and IMAP first (400 mailbox_test_failed with the reason; 503 no_key). */
+export const useCreateMailbox = (orgId: string) => useMailboxMutation<Record<string, unknown>, MailboxView>(orgId, (body) => ({ method: 'POST', path: '', body }));
+/** Changes a mailbox; a new password (or host / port / username) is tested before it is saved. */
+export const useUpdateMailbox = (orgId: string) =>
+  useMailboxMutation<{ id: string } & Record<string, unknown>, MailboxView>(orgId, ({ id, ...body }) => ({ method: 'PATCH', path: `/${id}`, body }));
+export const useTestMailbox = (orgId: string) => useMailboxMutation<{ id: string }, MailboxTestResult>(orgId, ({ id }) => ({ method: 'POST', path: `/${id}/test`, body: {} }));
+export const useMailboxAction = (orgId: string) =>
+  useMailboxMutation<{ id: string; action: 'pause' | 'resume' }, { ok: boolean }>(orgId, ({ id, action }) => ({ method: 'POST', path: `/${id}/${action}`, body: {} }));
+export const useDeleteMailbox = (orgId: string) => useMailboxMutation<{ id: string }, { ok: boolean }>(orgId, ({ id }) => ({ method: 'DELETE', path: `/${id}` }));
+
+// the company's opt-out list
+export const useSuppressions = (orgId: string, enabled = true) =>
+  useQuery({ queryKey: suppressionsKey(orgId), queryFn: () => api<Suppression[]>(`/api/orgs/${orgId}/suppressions`), enabled, retry: noRetryOn4xx });
+
+function useSuppressionMutation<TBody>(orgId: string, call: (b: TBody) => { method: 'POST' | 'DELETE'; path: string; body?: unknown }) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (b: TBody) => {
+      const c = call(b);
+      return api<{ ok: boolean }>(`/api/orgs/${orgId}/suppressions${c.path}`, { method: c.method, body: c.body });
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: suppressionsKey(orgId) });
+      qc.invalidateQueries(anyLinkBuilding);
+    },
+  });
+}
+export const useAddSuppression = (orgId: string) => useSuppressionMutation<{ value: string; kind: 'email' | 'domain' }>(orgId, (body) => ({ method: 'POST', path: '', body }));
+export const useDeleteSuppression = (orgId: string) => useSuppressionMutation<{ id: string }>(orgId, ({ id }) => ({ method: 'DELETE', path: `/${id}` }));
 
 // ---------- runs & reports ----------
 export interface RunFilters {

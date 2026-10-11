@@ -2,6 +2,29 @@
 
 For whoever continues this work (a new Claude Code session or a developer). Read this first, then `CLAUDE.md` (working rules) and `REVIEW.md` (design per feature: §3c ladder, §3d tracking, §3e cadence + blog package, §3f Search Console in the audit, §3g notices + check-in, §3h E-E-A-T and page types, §3i growth monitors, **§3j no repeated work**, §3m AI visibility, **§3n backlinks from every source**; §5c live-test log; §6 roadmap). Feature specs: `LADDER_FEATURE_SPEC.md`, `TRACKING_FEATURE_SPEC.md`, `MONITORS_FEATURE_SPEC.md`, `AI_VISIBILITY_SPEC.md`, **`BACKLINKS_SPEC.md`**.
 
+## 00. Start here: the 2026-10-11 system review and fix plan
+Every feature was run for real on techand.ai and scored against the best tools: **5/10 overall** (≈ 7 reachable after Phases 1-4).
+Work through **`docs/system-review-2026-10-11/FIX_PLAN.md`** (80 items with evidence, where to fix, the fix and an acceptance test; 6 phases
+sized into sessions; the re-rating protocol). Its `README.md` gives the reading order; `RESULTS.md` has the live evidence, `SCORECARD.md`
+the scores, `CRITERIA_*.md` the benchmarks. Since that test the Link Builder is on for techand.ai and the Reply Reader is published.
+
+## 0c. Link Builder v4.13 (2026-10-11) — getting links, not only listing them
+Spec, research and rules: **`LINK_BUILDER_SPEC.md`**. What changed for the user: every Monday 11:00 the **Link Builder** finds link opportunities
+(journalist requests, dead links to replace, resource pages, lists that leave you out, competitors' lost links), qualifies each site, finds
+the right person on its own domain, picks the page of ours and the link text, and drafts a short sequence; the web app's **Link building**
+page shows them for approval and sends them **from the company's own mailbox** (company settings → Mailboxes), a few a day, reads the replies
+(out-of-office, bounces, opt-outs, a person: the sequence stops; a suggested answer to send in the same thread), keeps the **listings
+checklist** (where to list yourself; competitors there), redirects for old URLs and what each won link did.
+- **Run on demand:** `POST /webhook/seo-link-builder` `{ domain, free_only?, callback_url?, request_id? }` (header `X-API-Key`; 202), or the
+  page's "Find opportunities now" (+ free check). Free check = no Claude, no DataForSEO.
+- **Mailbox:** Gmail / Workspace need an App Password (2-Step Verification); Microsoft 365 SMTP with a password goes off by default end of
+  December 2026 (Graph OAuth is the next step); the postal address is required (CAN-SPAM). `MAILBOX_KEY` (app/.env) encrypts passwords.
+- **Paid parts (on since the 2026-10-11 whole-system test, at the owner's request):** the **Reply Reader** (`SEOagentReplyRd1`, ≈ $0.001 a
+  reply; idle until a mailbox is connected) and **the Link Builder for techand.ai** (one run ≈ $0.05-0.15).
+- **Tests:** harness S30 (1717 / 0), app 213 unit tests, `app/scripts/outreach_e2e.py` 31 / 31 (GreenMail), smoke 67 / 67, Playwright;
+  live free runs on techand.ai (REVIEW §5c 2026-10-11).
+- `apply_env.py --except=<workflow id>` imports everything but leaves that workflow unpublished.
+
 ## 0b. Backlinks from every source v4.10 (2026-10-08) — built, tested, deployed locally
 
 Asked for: "backlinks 6.5 — DataForSEO's backlink index is smaller than Ahrefs'; use free resources over the net as well, make it the best possible". Spec with the research, every source (used and rejected), the method, costs and open items: **`BACKLINKS_SPEC.md`**.
@@ -16,6 +39,10 @@ Asked for: "backlinks 6.5 — DataForSEO's backlink index is smaller than Ahrefs
 - **Costs:** ≈ $0.81 / site / month (was ≈ $0.35); free-only checks $0.
 - **Keys (2026-10-08):** the free Bing Webmaster and Ahrefs DR keys are in `n8n/.env` and applied (credentials `SEOcredBingWebm`, `SEOcredAhrefsDR`); techand.ai is verified in that Bing account, which reports no inbound links yet; DR works (REVIEW §5c K2, 4 defects fixed). The two keys were pasted in chat: rotate them when convenient (Bing: Settings → API access; Ahrefs: account → API keys).
 - **Next (the user):** upload techand.ai's Search Console "Latest links" export in the app; go-ahead for one paid full backlink check (≈ $0.50).
+
+## 0. AI growth v4.12 (2026-10-10) — the weekly loop that gets you named and cited
+
+Spec: **`AI_GROWTH_SPEC.md`**. New workflow **SEO Agent — AI Growth** (`SEOagentAIGrow1`, Monday 09:30): Bing / IndexNow submission, AI-readiness of key pages, questions to win (written by the Content Cadence as AI answer / refresh pages, or as the keyword-ladder page for the same search), earned media (the pages AI cites without you, with outreach drafts), Wikidata. Page writer: `ai_target`. App: AI growth section, settings (AI pages a month, default 2), Pipeline automation, report. Harness 1642 / 0; app 196 tests; smoke 67/67; live on techand.ai (REVIEW §5c 2026-10-10). Next for the owner: upload the IndexNow key file, fill the business profile, send the drafts.
 
 ## 0a. AI search visibility v4.9 (2026-10-08) — built, tested, deployed locally
 

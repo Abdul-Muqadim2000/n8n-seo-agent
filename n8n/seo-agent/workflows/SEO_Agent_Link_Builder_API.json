@@ -1,0 +1,238 @@
+[
+  {
+    "id": "SEOagentLinkBAPI",
+    "name": "SEO Agent — Link Builder API",
+    "active": false,
+    "settings": {
+      "executionOrder": "v1",
+      "errorWorkflow": "SEOagentErrHandl",
+      "executionTimeout": 120,
+      "saveDataErrorExecution": "all",
+      "saveDataSuccessExecution": "all"
+    },
+    "tags": [],
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "seo-link-builder",
+          "authentication": "headerAuth",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "id": "2e4d3018-9c74-5559-8afa-f41ddf465304",
+        "name": "Link Builder API",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          0,
+          880
+        ],
+        "webhookId": "ce200f13-060e-5f92-9275-c17b76f52022",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "SEOcredApiHeader",
+            "name": "SEO API Key"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Link Builder on demand (POST /webhook/seo-link-builder, header X-API-Key; the web app's \"Find opportunities now\"): { domain | site_id,\n// free_only?, callback_url?, request_id? } — answered at once (accepted), the run starts as its own execution through Manual Run.\nconst raw = $input.first().json || {}; const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(b.domain); const site_id = String(b.site_id || '').trim();\nconst errors = []; if (!domain && !site_id) errors.push('domain or site_id is required');\nif (b.callback_url && !/^https?:\\/\\//i.test(String(b.callback_url))) errors.push('callback_url must be an http(s) URL');\nreturn [{ json: { ok: !errors.length, error: errors.join('; '), domain, site_id, free_only: /^(true|1|yes|on)$/i.test(String(b.free_only ?? '')), callback_url: String(b.callback_url || ''), email: '', request_id: String(b.request_id || ('lb-' + $execution.id)) } }];\n"
+        },
+        "id": "90ca68f9-b301-57c3-ab1e-5c1706924fdd",
+        "name": "LB API Validate",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          220,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "92e7bc98-51fd-5b1a-b3ef-9c636303e577",
+                "leftValue": "={{ $json.ok }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "195dfea0-35a5-5c50-bb5d-fb797a80fa23",
+        "name": "LB API OK?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          440,
+          880
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: true, status: 'accepted', stage: 'link_builder_started', request_id: $json.request_id, domain: $json.domain }) }}",
+          "options": {
+            "responseCode": 202
+          }
+        },
+        "id": "a8e2313a-19ee-5350-8907-4facb58cb0fc",
+        "name": "Respond LB Accepted",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// The run's input (Manual Run of the Link Builder): only the fields it reads.\nconst v = $('LB API Validate').first().json;\nreturn [{ json: { domain: v.domain, site_id: v.site_id, free_only: v.free_only, callback_url: v.callback_url, email: '', request_id: v.request_id } }];"
+        },
+        "id": "928ffa99-7b5b-5b67-a43c-2b234ad06bc7",
+        "name": "LB Payload",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          880,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "SEOagentLinkBld1"
+          },
+          "mode": "once",
+          "options": {
+            "waitForSubWorkflow": false
+          }
+        },
+        "id": "4cdcb801-50c5-5d21-ab48-354b305f2e73",
+        "name": "Start Link Builder",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [
+          1100,
+          660
+        ]
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ JSON.stringify({ ok: false, error: $json.error }) }}",
+          "options": {
+            "responseCode": 400
+          }
+        },
+        "id": "7641e264-6919-5e88-94e5-8e9dc95fd25c",
+        "name": "Respond LB Bad Request",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [
+          660,
+          1100
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## SEO Agent — Link Builder API (v4.13)\n`POST /webhook/seo-link-builder` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, free_only?, callback_url?, request_id? }` → 202 at once; starts **SEO Agent — Link Builder** (`SEOagentLinkBld1`) through its Manual Run; the report arrives through the callback (stage `link_builder`).",
+          "height": 160,
+          "width": 700,
+          "color": 6
+        },
+        "id": "541efb59-9abd-5afc-a83e-2f12eadc831c",
+        "name": "Note",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -40,
+          -300
+        ]
+      }
+    ],
+    "connections": {
+      "Link Builder API": {
+        "main": [
+          [
+            {
+              "node": "LB API Validate",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "LB API Validate": {
+        "main": [
+          [
+            {
+              "node": "LB API OK?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "LB API OK?": {
+        "main": [
+          [
+            {
+              "node": "Respond LB Accepted",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Respond LB Bad Request",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Respond LB Accepted": {
+        "main": [
+          [
+            {
+              "node": "LB Payload",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "LB Payload": {
+        "main": [
+          [
+            {
+              "node": "Start Link Builder",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    }
+  }
+]

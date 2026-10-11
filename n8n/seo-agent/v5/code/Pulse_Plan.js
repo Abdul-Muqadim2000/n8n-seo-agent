@@ -5,7 +5,8 @@
 // Shared node names with the AI Visibility Tracker (AI Plan, AI Requests, Run AI Requests, Parse AI Answers) let both use the same request and parser code.
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
-const CONFIG = { pulse_engines: ['chatgpt', 'gemini', 'ai_mode'], max_sites_per_run: 15, baseline_days: 7 };
+const CONFIG = { pulse_engines: ['chatgpt', 'gemini', 'ai_mode', 'copilot'],   // v4.12: + Copilot ($0.002) when the site chose it
+  max_sites_per_run: 15, baseline_days: 7 };
 const { list, on_demand, want, total } = monitorSites('ai');
 const sites = on_demand ? list : list.filter(s => s.settings.pulse);
 if (!sites.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the daily AI pulse is off for every site (or AI visibility is off)' : 'no sites yet') } }];

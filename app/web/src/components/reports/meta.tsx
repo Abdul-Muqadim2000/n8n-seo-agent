@@ -83,8 +83,10 @@ const STAGE_MODE: Record<string, ModeId> = {
   ai_visibility_started: 'ai_visibility',
   ai_visibility: 'ai_visibility',
   ai_pulse: 'ai_visibility',
+  ai_growth: 'ai_visibility',
   backlinks_started: 'backlinks',
   backlinks: 'backlinks',
+  link_builder: 'backlinks',
 };
 
 export function StageGlyph({ stage, size = 'md', report }: { stage: string; size?: 'sm' | 'md'; /** tells a verdict-only content report apart */ report?: ReportLike }) {

@@ -10,7 +10,7 @@ function bundle(over: Partial<SiteBundle> = {}): SiteBundle {
     rankings: { ladders: [], keywords: [] },
     content: { items: [], cadence: { pagesPerWeek: 1, status: 'active' }, caseStudies: [], profile: null, readiness: { score: 100, missing: [] }, generated: [] },
     technical: { audits: [{ auditId: 'a1', auditedAt: new Date().toISOString(), reportType: 'site_audit', healthScore: 90, grade: 'Good', pagesCrawled: 10, findings: 0, critical: 0, high: 0, medium: 0, low: 0, scheduled: false }], selectedAuditId: 'a1', previousAuditId: null, findings: [], byCategory: [], reports: [] },
-    ai: { runs: [{ runId: 'r', checkedAt: '', prompts: 5, answers: 20, mentionRate: 50, citationRate: 10, shareOfVoice: 30, avgRank: 2, aioPresence: 0, aioCitationRate: 0, costUsd: 0, alerts: [], runKind: 'weekly', samples: 20, visibilityScore: 40, mentionLo: 30, mentionHi: 70, sentimentScore: null, accuracyIssues: 0, aiSessions: null, aiConversions: null, aiRevenue: null, indexSov: null, aiImpressions: null }], latest: null, daily: [], prompts: [], answers: [], report: null },
+    ai: { runs: [{ runId: 'r', checkedAt: '', prompts: 5, answers: 20, mentionRate: 50, citationRate: 10, shareOfVoice: 30, avgRank: 2, aioPresence: 0, aioCitationRate: 0, costUsd: 0, alerts: [], runKind: 'weekly', samples: 20, visibilityScore: 40, mentionLo: 30, mentionHi: 70, sentimentScore: null, accuracyIssues: 0, aiSessions: null, aiConversions: null, aiRevenue: null, indexSov: null, aiImpressions: null }], latest: null, daily: [], prompts: [], answers: [], growth: null, report: null },
     backlinks: { snapshots: [{ checkedAt: '', mode: 'full', rank: 1, backlinks: 1, referringDomains: 1, referringDomainsNofollow: 0, spamScore: 0, brokenBacklinks: 0, newLinks: 0, lostLinks: 0, importantLost: 0, spammyNew: 0, costUsd: 0, unionDomains: null, bestLinks: null, verifiedLive: null, atRisk: null, confirmedLost: null, referralVisits: null }], latest: null, refs: [], imports: [], linkGraph: null, prospects: [], report: null },
     alerts: { alerts: [], checkins: [], checkinDue: false },
     settings: { tracking: { tracked: true, status: 'active', gscProperty: 'x', ga4PropertyId: '1', lastRunAt: null, lastStatus: null, keywords: [], reportsToThisApp: true }, monitors: null, cadence: null, profile: null, readiness: { score: 100, missing: [] } },
@@ -68,6 +68,34 @@ describe('recommend', () => {
     const recs = recommend(site, bundle({ settings: { ...bundle().settings, readiness: { score: 20, missing: ['Author name'] } }, alerts: { alerts: [], checkins: [], checkinDue: true } }));
     const ranks = recs.map((r) => ({ high: 0, medium: 1, low: 2 })[r.priority]);
     expect([...ranks].sort()).toEqual(ranks);
+  });
+});
+
+describe('AI growth owner steps (v4.12)', () => {
+  const growth = (o: Record<string, unknown> = {}) => ({
+    checkedAt: '', pagesChecked: 0, avgScore: null, pages: [], targets: [], entity: null, actions: [], alerts: [], pagesPerMonth: 2, writtenThisMonth: 0,
+    submitted: { bing: { enabled: true, inAccount: true, submitted: 0, quota: null, error: '' }, indexnow: { keyUrl: 'https://northwind-erp.com/0123456789abcdef0123456789abcdef.txt', key: '0123456789abcdef0123456789abcdef', verified: false, submitted: 0, error: '' } },
+    earned: [
+      { url: 'https://gulfnews.com/x', title: 'Best providers', host: 'gulfnews.com', kind: 'list', citations: 3, engines: ['chatgpt'], questions: ['q'], mentionsUs: false, competitorsNamed: [], action: 'Ask', status: 'new', drafted: true, contactEmail: '', draft: { subject: 's', body: 'b' } },
+      { url: 'https://cleartax.com/x', title: '', host: 'cleartax.com', kind: 'competitor', citations: 2, engines: [], questions: [], mentionsUs: false, competitorsNamed: [], action: '', status: 'new', drafted: true, contactEmail: '', draft: null },
+      { url: 'https://reddit.com/x', title: '', host: 'reddit.com', kind: 'forum', citations: 1, engines: [], questions: [], mentionsUs: false, competitorsNamed: [], action: '', status: 'contacted', drafted: true, contactEmail: '', draft: null },
+    ],
+    ...o,
+  });
+  const withGrowth = (g: unknown) => { const b = bundle(); return bundle({ ai: { ...b.ai, growth: g as SiteBundle['ai']['growth'] } }); };
+  it('asks for the IndexNow key file and to send the drafts that wait (not competitors, not the ones sent)', () => {
+    const r = recommend(site, withGrowth(growth()));
+    const inx = r.find((x) => x.id === 'ai:indexnow')!, out = r.find((x) => x.id === 'ai:outreach')!;
+    expect(inx.detail).toContain('0123456789abcdef0123456789abcdef.txt');
+    expect(inx.action?.page).toBe('ai');
+    expect(out.title).toBe('1 outreach draft ready for pages AI cites');
+    expect(out.evidence).toBe('gulfnews.com');
+  });
+  it('says nothing once the file is in place and every draft is sent', () => {
+    const g = growth({ submitted: { bing: { enabled: true, inAccount: true, submitted: 0, quota: null, error: '' }, indexnow: { keyUrl: '', key: 'k', verified: true, submitted: 3, error: '' } } });
+    (g.earned as { status: string }[])[0].status = 'contacted';
+    const r = recommend(site, withGrowth(g));
+    expect(r.some((x) => x.id === 'ai:indexnow' || x.id === 'ai:outreach')).toBe(false);
   });
 });
 

@@ -44,6 +44,12 @@ export function runFromApiBody(body: Record<string, unknown> | null | undefined)
     let val: unknown = v;
     if (k === 'reportType') val = /full/i.test(String(v)) ? 'full' : 'site_audit';
     if (k === 'competitors' && typeof v === 'string') val = splitList(v);
+    // v4.12: the AI answer target (n8n writes it in snake case with { u, t } sources)
+    if (k === 'aiTarget' && v && typeof v === 'object') {
+      const t = v as Record<string, unknown>;
+      val = { question: t.question, kind: t.kind === 'refresh' ? 'refresh' : 'answer', targetId: t.target_id ?? t.targetId ?? '', fanout: Array.isArray(t.fanout) ? t.fanout : [], competitors: Array.isArray(t.competitors) ? t.competitors : [],
+        sources: (Array.isArray(t.sources) ? t.sources : []).map((x) => { const s = (x ?? {}) as Record<string, unknown>; return { url: String(s.u ?? s.url ?? ''), title: String(s.t ?? s.title ?? '') }; }).filter((x) => /^https?:\/\//.test(x.url)) };
+    }
     if (ENUMS[k] && !ENUMS[k].includes(String(v))) continue;
     if (allowed && !allowed.has(k)) continue;
     out[k] = val;

@@ -4,6 +4,7 @@ import { config } from './config';
 import { runMigrations, sqlClient } from './db';
 import { AUTO_START, runAutoStart } from './services/autoStart';
 import { checkEngineFailures } from './services/engineFailures';
+import { autoApproveTick, pollTick, senderTick } from './services/outreachJobs';
 import { expireStaleRuns } from './services/runs';
 
 async function main() {
@@ -37,7 +38,13 @@ async function main() {
   const autoStartFirst = config.autoStartLadders ? setTimeout(autoStart, AUTO_START.firstAfterMs) : null;
   const autoStartTimer = config.autoStartLadders ? setInterval(autoStart, AUTO_START.everyMs) : null;
   app.log.info({ autoStartLadders: config.autoStartLadders }, config.autoStartLadders ? 'automatic ladder starts on (every 6 hours)' : 'automatic ladder starts off (AUTO_START_LADDERS)');
+  // v4.13 Link Builder: the sender (every minute), the inbox (every 3 minutes) and automatic approval (every 10 minutes); LINK_BUILDER_JOBS=false stops them
+  const lbTimers = config.linkBuilderJobs
+    ? [setInterval(() => void senderTick(app.log), 60 * 1000), setInterval(() => void pollTick(app.log), 3 * 60 * 1000), setInterval(() => void autoApproveTick(app.log), 10 * 60 * 1000)]
+    : [];
+  app.log.info({ linkBuilderJobs: config.linkBuilderJobs }, config.linkBuilderJobs ? 'link-building sender and inbox jobs on' : 'link-building jobs off (LINK_BUILDER_JOBS)');
   const stop = async () => {
+    for (const t of lbTimers) clearInterval(t);
     if (autoStartFirst) clearTimeout(autoStartFirst);
     if (autoStartTimer) clearInterval(autoStartTimer);
     clearInterval(failureTimer);

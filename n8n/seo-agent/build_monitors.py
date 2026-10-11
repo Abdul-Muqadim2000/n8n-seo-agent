@@ -9,7 +9,9 @@ from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_para
                            MONITORS_TABLE, MONITORS_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS, AI_ANSWERS_TABLE, AI_ANSWERS_COLS, AI_VIS_TABLE, AI_VIS_COLS,
                            BL_SNAP_TABLE, BL_SNAP_COLS, PROSPECT_TABLE, PROSPECT_COLS, AUDITS_TABLE, AUDITS_COLS, CACHE_TABLE, CACHE_COLS, dt_get_where_params,
                            AI_DAILY_TABLE, AI_DAILY_COLS, QUERY_TABLE, dt_get_all_where_params, dt_delete_where_params,
-                           LINKS_TABLE, LINKS_COLS, LINK_IMPORTS_TABLE, LINK_IMPORTS_COLS, LINK_GRAPH_TABLE, LINK_GRAPH_COLS)
+                           LINKS_TABLE, LINKS_COLS, LINK_IMPORTS_TABLE, LINK_IMPORTS_COLS, LINK_GRAPH_TABLE, LINK_GRAPH_COLS,
+                           AI_PAGES_TABLE, AI_PAGES_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS, AI_GROWTH_TABLE, AI_GROWTH_COLS,
+                           LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS, LISTINGS_TABLE, LISTINGS_COLS, LINK_IMPACT_TABLE, LINK_IMPACT_COLS, HISTORY_TABLE, METRICS_TABLE)
 from env_settings import SENDER, ENV, BRAND, OPS_EMAIL
 BING_ON = bool((ENV.get('SEO_BING_WEBMASTER_API_KEY') or '').strip())   # v4.10: optional free sources, baked in at build time (apply_env.py rebuilds)
 AHREFS_ON = bool((ENV.get('SEO_AHREFS_API_KEY') or '').strip())
@@ -24,7 +26,7 @@ _COUNTRIES = re.search(r"\nconst COUNTRIES = \{.*?\n\};", _NI, re.S); assert _CO
 def src(p):   # a Code node source with the shared snippets inlined
     s = rd('code/' + p)
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
-    s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
+    s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
     return s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL)
@@ -51,9 +53,10 @@ class WF:
     def dfs_http(self, name, pos, batch=1, interval=300, timeout=90000):
         return self.node(name, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}',
             'options': {'batching': {'batch': {'batchSize': batch, 'batchInterval': interval}}, 'timeout': timeout}}, pos, credentials=DFS, **HTTP_X)
-    def agent(self, name, prompt, schema, pos, max_tokens=8192):
+    def agent(self, name, prompt, schema, pos, max_tokens=8192, model=('claude-sonnet-5-5', 'Claude Sonnet 5.5')):   # v4.13: a cheaper model (no extended thinking) for short classification
         self.node(name, '@n8n/n8n-nodes-langchain.agent', 3.1, {'promptType': 'define', 'text': '=' + rd('prompts/' + prompt), 'hasOutputParser': True, 'options': {}}, pos, retryOnFail=True, maxTries=2, waitBetweenTries=3000, onError='continueRegularOutput')
-        self.node('Claude — ' + name, '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, {'model': {'__rl': True, 'mode': 'list', 'value': 'claude-sonnet-5-5', 'cachedResultName': 'Claude Sonnet 5.5'}, 'options': {'maxTokensToSample': max_tokens, 'thinking': True, 'thinkingMode': 'adaptive', 'effort': 'low'}}, [pos[0] - 100, pos[1] + 200], credentials=ANTHROPIC)
+        opts = {'maxTokensToSample': max_tokens, 'thinking': True, 'thinkingMode': 'adaptive', 'effort': 'low'} if 'sonnet' in model[0] or 'opus' in model[0] else {'maxTokensToSample': max_tokens}
+        self.node('Claude — ' + name, '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, {'model': {'__rl': True, 'mode': 'list', 'value': model[0], 'cachedResultName': model[1]}, 'options': opts}, [pos[0] - 100, pos[1] + 200], credentials=ANTHROPIC)
         self.node('Parser — ' + name, '@n8n/n8n-nodes-langchain.outputParserStructured', 1.3, {'schemaType': 'manual', 'inputSchema': json.dumps(schema)}, [pos[0] + 120, pos[1] + 200])
         self.C['Claude — ' + name] = {'ai_languageModel': [[{'node': name, 'type': 'ai_languageModel', 'index': 0}]]}
         self.C['Parser — ' + name] = {'ai_outputParser': [[{'node': name, 'type': 'ai_outputParser', 'index': 0}]]}
@@ -328,3 +331,202 @@ S.chain('Audits To Start', 'Any Audits Due?'); S.link('Any Audits Due?', 'Start 
 S.sticky(f"""## SEO Agent — Audit Scheduler (v4.6: no repeated audits)
 **1st of every month, 06:00** (cron `0 6 1 * *`) and on demand (*Manual Run* `{{ domain | site_id }}` always audits). Per site with `audit_monthly` on (`{MONITORS_TABLE}`): the sitemap is read (free) and its fingerprint (URLs + lastmod dates, or the sitemap index entries) compared with the one stored at the last check (`{CACHE_TABLE}`, key `sitemap:<site>`). **Audit only when** the site changed, 60+ days passed since the last audit (safety net for theme / plugin / server changes a sitemap does not show), the site was never audited, or no sitemap (or an index without dates) is readable (then monthly as before). Unchanged sites are skipped — the weekly Site Tracker keeps watching indexing in Search Console. Started audits run as their own executions (internal key `audit:`), compare themselves with the previous audit and deliver the report with the **fix pack**.""", [-40, -420], 1150, 240)
 S.write('SEO_Agent_Audit_Scheduler.json')
+
+
+# =============================================================================
+# 4. AI GROWTH (v4.12, AI_GROWTH_SPEC.md): the weekly work that gets a site named and cited in AI answers — not only measured
+# =============================================================================
+G = WF('SEOagentAIGrow1', 'SEO Agent — AI Growth', 'aigrow', 2400)
+TRIGGER(G, 9, 30); G.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
+ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure AI Pages Table', AI_PAGES_TABLE, AI_PAGES_COLS), ('Ensure AI Targets Table', AI_TARGETS_TABLE, AI_TARGETS_COLS),
+       ('Ensure AI Growth Table', AI_GROWTH_TABLE, AI_GROWTH_COLS), ('Ensure Prospects Table', PROSPECT_TABLE, PROSPECT_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
+for i, (nm, t, c) in enumerate(ens): G.ensure(nm, t, c, at(1 + i, 0))
+loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load AI Visibility', AI_VIS_TABLE), ('Load AI Prompts', AI_PROMPTS_TABLE),
+         ('Load Content Log', LOG_TABLE), ('Load Query History', QUERY_TABLE), ('Load AI Pages', AI_PAGES_TABLE), ('Load AI Targets', AI_TARGETS_TABLE), ('Load AI Growth', AI_GROWTH_TABLE), ('Load Link Prospects (Growth)', PROSPECT_TABLE)]
+for i, (nm, t) in enumerate(loads): G.load(nm, t, at(1 + i, 1))
+G.node('Load AI Answers', DT_TYPE, DT_VERSION, dt_get_all_where_params(AI_ANSWERS_TABLE, [('checked_at', 'gte', SINCE(8))]), at(13, 1), **LOAD)
+G.node('Load Cache (Growth)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'ai'), at(14, 1), **LOAD)
+G.code('Growth Plan', 'Growth_Plan.js', at(15, 1)); G.iff('Any Sites (Growth)?', '{{ !$json.nothing_to_do }}', at(16, 1)); G.node('Nothing To Do (Growth)', 'n8n-nodes-base.noOp', 1, {}, at(17, 2))
+def g_http(name, pos, url='={{ $json.url }}', batch=1, interval=300, timeout=30000, headers=None, cred=None, text=False, method='GET', body=None):
+    params = {'method': method, 'url': url, 'options': {'batching': {'batch': {'batchSize': batch, 'batchInterval': interval}}, 'timeout': timeout, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 10}},
+        'response': {'response': ({'fullResponse': True, 'neverError': True, 'responseFormat': 'text'} if text else {'neverError': True})}}}
+    if headers: params.update({'sendHeaders': True, 'headerParameters': {'parameters': [{'name': k, 'value': v} for k, v in headers.items()]}})
+    if body: params.update({'sendBody': True, 'specifyBody': 'json', 'jsonBody': body})
+    extra = {}
+    if cred: kind, cid, cname = cred; params.update({'authentication': 'genericCredentialType', 'genericAuthType': kind}); extra['credentials'] = {kind: {'id': cid, 'name': cname}}
+    return G.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **extra)
+WIKI_UA = 'SEOAgentAIGrowth/4.12 (' + BRAND + '; entity check; mailto:' + OPS_EMAIL + ')'
+G.code('Page Requests (Growth)', 'Growth_Page_Requests.js', at(17, 0)); G.iff('Any Pages (Growth)?', '{{ !$json.skip }}', at(18, 0))
+g_http('Fetch Key Pages', at(19, -1), batch=4, interval=300, timeout=20000, text=True, headers={'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'})
+G.code('Earned Requests', 'Growth_Earned_Requests.js', at(20, 0)); G.iff('Any Earned?', '{{ !$json.skip }}', at(21, 0))
+g_http('Fetch Cited Pages', at(22, -1), batch=4, interval=300, timeout=20000, text=True, headers={'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'})
+G.code('Bing Sites (Growth)', 'Growth_Bing_Sites.js', at(23, 0)); G.iff('Any Bing (Growth)?', '{{ !$json.skip }}', at(24, 0)); g_http('Fetch Bing Sites (Growth)', at(25, -1), cred=BING)
+G.code('Bing Growth Requests', 'Growth_Bing_Requests.js', at(26, 0)); G.iff('Any Bing Requests (Growth)?', '{{ !$json.skip }}', at(27, 0)); g_http('Fetch Bing Growth', at(28, -1), interval=400, cred=BING)
+G.code('Bing Submit Requests', 'Growth_Bing_Submit.js', at(29, 0)); G.iff('Any Bing Submit?', '{{ !$json.skip }}', at(30, 0))
+g_http('Submit to Bing', at(31, -1), method='POST', body='={{ JSON.stringify($json.body) }}', interval=600, cred=BING)
+G.code('IndexNow Key Requests', 'Growth_IndexNow_Keys.js', at(32, 0)); G.iff('Any IndexNow Keys?', '{{ !$json.skip }}', at(33, 0)); g_http('Fetch IndexNow Key', at(34, -1), timeout=15000, text=True, headers={'User-Agent': BOT_UA})
+G.code('IndexNow Requests', 'Growth_IndexNow_Submit.js', at(35, 0)); G.iff('Any IndexNow?', '{{ !$json.skip }}', at(36, 0))
+g_http('Submit IndexNow', at(37, -1), method='POST', body='={{ JSON.stringify($json.body) }}', text=True, headers={'Content-Type': 'application/json; charset=utf-8'})
+G.code('Entity Requests', 'Growth_Entity_Requests.js', at(38, 0)); G.iff('Any Entity?', '{{ !$json.skip }}', at(39, 0)); g_http('Fetch Wikidata', at(40, -1), interval=1100, headers={'User-Agent': WIKI_UA, 'Accept': 'application/json'})
+G.code('AI Readiness', 'AI_Readiness.js', at(41, 0)); G.code('Earned Media', 'Earned_Media.js', at(42, 0))
+G.code('AI Outreach Input', 'AI_Outreach_Input.js', at(43, 0)); G.iff('Any AI Outreach?', '{{ !$json.skip }}', at(44, 0))
+G.agent('AI Outreach Writer', 'ai_outreach.txt', {'type': 'object', 'properties': {'drafts': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'subject': {'type': 'string'}, 'body': {'type': 'string'}}, 'required': ['n', 'body']}}}, 'required': ['drafts']}, at(45, -1), max_tokens=6000)
+G.code('Growth Metrics', 'Growth_Metrics.js', at(46, 0))
+def exact_rows(name, comment, key, cols, pos, single=False):
+    pick = "i.json." + key + " ? [i.json." + key + "] : []" if single else "i.json." + key + " || []"
+    G.code(name, '// ' + comment + ' (exact columns)\nconst COLS = ' + json.dumps([c for c, _ in cols]) + ';\nconst rows = $(\'Growth Metrics\').all().flatMap(i => ' + pick + ').map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];', pos)
+exact_rows('AI Page Rows', 'Key pages checked this week (seo_ai_pages, upsert by site + url)', 'page_rows', AI_PAGES_COLS, at(47, 0)); G.iff('Any AI Page Rows?', '{{ !$json.skip }}', at(48, 0))
+G.node('Save AI Pages', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_PAGES_TABLE, AI_PAGES_COLS, ['site_id', 'url']), at(49, -1), onError='continueRegularOutput')
+exact_rows('AI Target Rows', 'The questions to win (seo_ai_targets, upsert by target_id; the Content Cadence writes the queued ones)', 'target_rows', AI_TARGETS_COLS, at(50, 0)); G.iff('Any AI Target Rows?', '{{ !$json.skip }}', at(51, 0))
+G.node('Save AI Targets', DT_TYPE, DT_VERSION, dt_upsert_params_keys(AI_TARGETS_TABLE, AI_TARGETS_COLS, ['target_id']), at(52, -1), onError='continueRegularOutput')
+exact_rows('Growth Prospect Rows', 'Earned-media prospects (seo_link_prospects type ai_source, upsert by site + domain + type; statuses and contacts kept)', 'prospect_rows', PROSPECT_COLS, at(53, 0)); G.iff('Any Growth Prospects?', '{{ !$json.skip }}', at(54, 0))
+G.node('Save Growth Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPECT_TABLE, PROSPECT_COLS, ['site_id', 'prospect_domain', 'type']), at(55, -1), onError='continueRegularOutput')
+exact_rows('Growth Cache Rows', "The site's IndexNow key (seo_cache indexnow:<site_id>)", 'cache_rows', CACHE_COLS, at(56, 0)); G.iff('Any Growth Cache?', '{{ !$json.skip }}', at(57, 0))
+G.node('Save Growth Cache', DT_TYPE, DT_VERSION, dt_upsert_params_keys(CACHE_TABLE, CACHE_COLS, ['key']), at(58, -1), onError='continueRegularOutput')
+exact_rows('AI Growth Row', 'One seo_ai_growth row per site and run', 'growth_row', AI_GROWTH_COLS, at(59, 0), single=True); G.iff('Any Growth Row?', '{{ !$json.skip }}', at(60, 0))
+G.node('Save AI Growth', DT_TYPE, DT_VERSION, dt_insert_params(AI_GROWTH_TABLE, AI_GROWTH_COLS), at(61, -1), onError='continueRegularOutput')
+G.code('Growth Report', 'Growth_Report.js', at(62, 0))
+G.code('Build Growth Callback', "// Callback payload per site (stage ai_growth): the summary; the table rows stay in n8n.\nreturn $input.all().map(i => { const { html, page_rows, target_rows, prospect_rows, growth_row, cache_rows, ...rest } = i.json; return { json: rest }; });", at(63, 1))
+G.deliver('Growth', at(63, 0), None)
+G.chain('Weekly Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load AI Answers', 'Load Cache (Growth)', 'Growth Plan', 'Any Sites (Growth)?'); G.link('Manual Run', ens[0][0])
+G.link('Any Sites (Growth)?', 'Page Requests (Growth)', 0); G.link('Any Sites (Growth)?', 'Nothing To Do (Growth)', 1)
+def gstep(code, iff, http, nxt): G.link(code, iff); G.link(iff, http, 0); G.link(iff, nxt, 1); G.link(http, nxt)
+gstep('Page Requests (Growth)', 'Any Pages (Growth)?', 'Fetch Key Pages', 'Earned Requests')
+gstep('Earned Requests', 'Any Earned?', 'Fetch Cited Pages', 'Bing Sites (Growth)')
+gstep('Bing Sites (Growth)', 'Any Bing (Growth)?', 'Fetch Bing Sites (Growth)', 'Bing Growth Requests')
+gstep('Bing Growth Requests', 'Any Bing Requests (Growth)?', 'Fetch Bing Growth', 'Bing Submit Requests')
+gstep('Bing Submit Requests', 'Any Bing Submit?', 'Submit to Bing', 'IndexNow Key Requests')
+gstep('IndexNow Key Requests', 'Any IndexNow Keys?', 'Fetch IndexNow Key', 'IndexNow Requests')
+gstep('IndexNow Requests', 'Any IndexNow?', 'Submit IndexNow', 'Entity Requests')
+gstep('Entity Requests', 'Any Entity?', 'Fetch Wikidata', 'AI Readiness')
+G.chain('AI Readiness', 'Earned Media', 'AI Outreach Input')
+gstep('AI Outreach Input', 'Any AI Outreach?', 'AI Outreach Writer', 'Growth Metrics')
+G.link('Growth Metrics', 'AI Page Rows')
+gstep('AI Page Rows', 'Any AI Page Rows?', 'Save AI Pages', 'AI Target Rows')
+gstep('AI Target Rows', 'Any AI Target Rows?', 'Save AI Targets', 'Growth Prospect Rows')
+gstep('Growth Prospect Rows', 'Any Growth Prospects?', 'Save Growth Prospects', 'Growth Cache Rows')
+gstep('Growth Cache Rows', 'Any Growth Cache?', 'Save Growth Cache', 'AI Growth Row')
+gstep('AI Growth Row', 'Any Growth Row?', 'Save AI Growth', 'Growth Report')
+G.link('Growth Report', 'Has Email (Growth)?'); G.link('Growth Report', 'Build Growth Callback'); G.link('Build Growth Callback', 'Has Callback (Growth)?')
+G.sticky(f"""## SEO Agent — AI Growth (v4.12, AI_GROWTH_SPEC.md)
+**Every Monday 09:30** (after the AI Visibility Tracker 07:00 and the Site Tracker 09:00, before the Content Cadence 10:00) and on demand (*Manual Run* `{{{{ domain | site_id, email?, callback_url? }}}}`). Per site with AI visibility and `ai_growth` on (`{MONITORS_TABLE}`; default on): the work that gets the business **named and cited** in AI answers.
+**Indexing**: new / updated pages and key pages Bing has not crawled → **Bing Webmaster Tools SubmitUrlBatch** (ChatGPT search and Copilot draw on Bing; key SEO_BING_WEBMASTER_API_KEY: {'on' if BING_ON else 'off'}) and **IndexNow** once the site hosts its key file (`{CACHE_TABLE}` `indexnow:`). **AI readiness** of up to 12 key pages a week (`{AI_PAGES_TABLE}`): raw HTML without JavaScript, answer in the first ~200 characters, visible update date ≤ 90 days, question headings, sourced figures, lists, author, FAQ; Bing's crawl state (GetUrlInfo).
+**Questions to win** (`{AI_TARGETS_TABLE}`): every lost question of the latest AI visibility run → a new answer page or a refresh of the page the site has; the **Content Cadence** writes the queued ones (`ai_pages_month`, default 2) with the question, the AI's searches and its sources. **Earned media**: the exact third-party pages AI cited in answers that did not name the business, fetched (do they name you / your competitors?), one action per kind, drafts for the 3 most valuable (*AI Outreach Writer*), kept as prospects (`{PROSPECT_TABLE}` ai_source) for the Backlink Monitor's contacts and follow-ups. **Entity**: Wikidata monthly. Run row → `{AI_GROWTH_TABLE}`; report e-mail + callback `ai_growth`. Cost: Claude for the drafts (~$0.03 a site); everything else is free.""", [-40, -420], 1100, 300, 6)
+G.write('SEO_Agent_AI_Growth.json')
+
+# =============================================================================
+# 5. LINK BUILDER (v4.13, LINK_BUILDER_SPEC.md): getting links, not only listing them — new opportunities, qualification, contacts, our page
+#    and the link text, drafted sequences (the web app sends them from the customer's mailbox), the listings checklist, redirects, impact
+# =============================================================================
+def x_http(W, name, pos, url='={{ $json.url }}', batch=1, interval=300, timeout=30000, headers=None, cred=None, text=False, method='GET', body=None):
+    params = {'method': method, 'url': url, 'options': {'batching': {'batch': {'batchSize': batch, 'batchInterval': interval}}, 'timeout': timeout, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 10}},
+        'response': {'response': ({'fullResponse': True, 'neverError': True, 'responseFormat': 'text'} if text else {'neverError': True})}}}
+    if headers: params.update({'sendHeaders': True, 'headerParameters': {'parameters': [{'name': k, 'value': v} for k, v in headers.items()]}})
+    if body: params.update({'sendBody': True, 'specifyBody': 'json', 'jsonBody': body})
+    extra = {}
+    if cred: kind, cid, cname = cred; params.update({'authentication': 'genericCredentialType', 'genericAuthType': kind}); extra['credentials'] = {kind: {'id': cid, 'name': cname}}
+    return W.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **extra)
+LB_UA = 'SEOAgentLinkBuilder/4.13 (' + BRAND + '; link opportunities; mailto:' + OPS_EMAIL + ')'
+PAGE_H = {'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'}
+API_KEY_CRED = {'httpHeaderAuth': {'id': 'SEOcredApiHeader', 'name': 'SEO API Key'}}
+L = WF('SEOagentLinkBld1', 'SEO Agent — Link Builder', 'linkbld', 3600)
+TRIGGER(L, 11, 0); L.node('Manual Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1))
+ens = [('Ensure Monitors Table', MONITORS_TABLE, MONITORS_COLS), ('Ensure Prospects Table', PROSPECT_TABLE, PROSPECT_COLS), ('Ensure Link Outreach Table', LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS),
+       ('Ensure Listings Table', LISTINGS_TABLE, LISTINGS_COLS), ('Ensure Link Impact Table', LINK_IMPACT_TABLE, LINK_IMPACT_COLS), ('Ensure Cache Table', CACHE_TABLE, CACHE_COLS)]
+for i, (nm, t, c) in enumerate(ens): L.ensure(nm, t, c, at(1 + i, 0))
+loads = [('Load Sites', SITES_TABLE), ('Load Ladders', LADDER_TABLE), ('Load Monitors', MONITORS_TABLE), ('Load Profiles', PROFILE_TABLE), ('Load Link Prospects', PROSPECT_TABLE), ('Load Link Outreach', LINK_OUTREACH_TABLE),
+         ('Load Listings', LISTINGS_TABLE), ('Load Link Impact', LINK_IMPACT_TABLE), ('Load Backlinks', LINKS_TABLE), ('Load Backlink Snapshots', BL_SNAP_TABLE), ('Load Content Log', LOG_TABLE), ('Load AI Targets', AI_TARGETS_TABLE)]
+for i, (nm, t) in enumerate(loads): L.load(nm, t, at(1 + i, 1))
+L.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_TABLE, [('period_end', 'gte', SINCE(200))]), at(13, 1), **LOAD)
+L.node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_where_params(HISTORY_TABLE, [('checked_at', 'gte', SINCE(60))]), at(14, 1), **LOAD)
+L.node('Load Cache (Links)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'linkbld'), at(15, 1), **LOAD)
+L.code('LB Plan', 'LB_Plan.js', at(16, 1)); L.iff('Any Sites (LB)?', '{{ !$json.nothing_to_do }}', at(17, 1)); L.node('Nothing To Do (LB)', 'n8n-nodes-base.noOp', 1, {}, at(18, 2))
+L.code('LB Source Requests', 'LB_Source_Requests.js', at(18, 0)); x_http(L, 'Fetch LB Sources', at(19, 0), interval=1500, text=True, headers={'User-Agent': LB_UA, 'Accept': 'application/json'})
+L.code('LB DFS Requests', 'LB_DFS_Requests.js', at(20, 0)); L.iff('Any LB DFS?', '{{ !$json.skip }}', at(21, 0)); L.dfs_http('Run LB DFS', at(22, -1), timeout=120000)
+L.code('LB Page Requests', 'LB_Page_Requests.js', at(23, 0)); L.iff('Any LB Pages?', '{{ !$json.skip }}', at(24, 0)); x_http(L, 'Fetch LB Pages', at(25, -1), batch=4, interval=300, timeout=20000, text=True, headers=PAGE_H)
+L.code('LB Second Requests', 'LB_Second_Requests.js', at(26, 0)); L.iff('Any LB Second?', '{{ !$json.skip }}', at(27, 0)); x_http(L, 'Fetch LB Second', at(28, -1), batch=6, interval=200, timeout=12000, text=True, headers=PAGE_H)
+L.code('LB Assemble', 'LB_Assemble.js', at(29, 0))
+L.code('LB Writer Input', 'LB_Writer_Input.js', at(30, 0)); L.iff('Any LB Writing?', '{{ !$json.skip }}', at(31, 0))
+L.agent('Outreach Sequence Writer', 'link_outreach.txt', {'type': 'object', 'properties': {'sequences': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'steps': {'type': 'array', 'items': {'type': 'object', 'properties': {'step': {'type': 'number'}, 'subject': {'type': 'string'}, 'body': {'type': 'string'}}, 'required': ['step', 'body']}}}, 'required': ['n', 'steps']}},
+    'skip': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'reason': {'type': 'string'}}, 'required': ['n']}}}, 'required': ['sequences']}, at(32, -1), max_tokens=16000)
+L.code('LB Rows', 'LB_Rows.js', at(33, 0))
+def l_rows(name, comment, key, cols, pos):
+    L.code(name, '// ' + comment + ' (exact columns)\nconst COLS = ' + json.dumps([c for c, _ in cols]) + ";\nconst rows = $('LB Rows').all().flatMap(i => i.json." + key + " || []).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", pos)
+l_rows('Outreach Rows', 'Qualified prospects, contacts, our page, the link text and the drafted sequences (seo_link_outreach, upsert by site + prospect + type)', 'outreach_rows', LINK_OUTREACH_COLS, at(34, 0)); L.iff('Any Outreach Rows?', '{{ !$json.skip }}', at(35, 0))
+L.node('Save Link Outreach', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS, ['site_id', 'prospect_domain', 'type']), at(36, -1), onError='continueRegularOutput')
+l_rows('LB Prospect Rows', 'New prospects of the new kinds (journalist requests, resource pages, broken links; seo_link_prospects, upsert by site + domain + type)', 'prospect_rows', PROSPECT_COLS, at(37, 0)); L.iff('Any LB Prospects?', '{{ !$json.skip }}', at(38, 0))
+L.node('Save LB Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPECT_TABLE, PROSPECT_COLS, ['site_id', 'prospect_domain', 'type']), at(39, -1), onError='continueRegularOutput')
+l_rows('Listing Rows', 'The listings checklist (seo_listings, upsert by site + listing)', 'listing_rows', LISTINGS_COLS, at(40, 0)); L.iff('Any Listing Rows?', '{{ !$json.skip }}', at(41, 0))
+L.node('Save Listings', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LISTINGS_TABLE, LISTINGS_COLS, ['site_id', 'listing_id']), at(42, -1), onError='continueRegularOutput')
+l_rows('Impact Rows', 'What each won link did for its page (seo_link_impact, upsert by site + linking site + page)', 'impact_rows', LINK_IMPACT_COLS, at(43, 0)); L.iff('Any Impact Rows?', '{{ !$json.skip }}', at(44, 0))
+L.node('Save Link Impact', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LINK_IMPACT_TABLE, LINK_IMPACT_COLS, ['site_id', 'ref_domain', 'target_url']), at(45, -1), onError='continueRegularOutput')
+l_rows('LB Cache Rows', 'When the monthly searches last ran (seo_cache linkbld:<site>)', 'cache_rows', CACHE_COLS, at(46, 0)); L.iff('Any LB Cache?', '{{ !$json.skip }}', at(47, 0))
+L.node('Save LB Cache', DT_TYPE, DT_VERSION, dt_upsert_params_keys(CACHE_TABLE, CACHE_COLS, ['key']), at(48, -1), onError='continueRegularOutput')
+L.code('LB Report', 'LB_Report.js', at(49, 0))
+L.code('Build LB Callback', "// Callback payload per site (stage link_builder): the summary; the rows stay in n8n (the app reads them).\nreturn $input.all().map(i => { const { html, ...rest } = i.json; return { json: rest }; });", at(50, 1))
+L.deliver('LB', at(50, 0), None)
+L.chain('Weekly Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load Query History', 'Load Rank History', 'Load Cache (Links)', 'LB Plan', 'Any Sites (LB)?'); L.link('Manual Run', ens[0][0])
+L.link('Any Sites (LB)?', 'LB Source Requests', 0); L.link('Any Sites (LB)?', 'Nothing To Do (LB)', 1)
+L.chain('LB Source Requests', 'Fetch LB Sources', 'LB DFS Requests')
+def lstep(code, iff, http, nxt): L.link(code, iff); L.link(iff, http, 0); L.link(iff, nxt, 1); L.link(http, nxt)
+lstep('LB DFS Requests', 'Any LB DFS?', 'Run LB DFS', 'LB Page Requests')
+lstep('LB Page Requests', 'Any LB Pages?', 'Fetch LB Pages', 'LB Second Requests')
+lstep('LB Second Requests', 'Any LB Second?', 'Fetch LB Second', 'LB Assemble')
+L.chain('LB Assemble', 'LB Writer Input')
+lstep('LB Writer Input', 'Any LB Writing?', 'Outreach Sequence Writer', 'LB Rows')
+L.link('LB Rows', 'Outreach Rows')
+lstep('Outreach Rows', 'Any Outreach Rows?', 'Save Link Outreach', 'LB Prospect Rows')
+lstep('LB Prospect Rows', 'Any LB Prospects?', 'Save LB Prospects', 'Listing Rows')
+lstep('Listing Rows', 'Any Listing Rows?', 'Save Listings', 'Impact Rows')
+lstep('Impact Rows', 'Any Impact Rows?', 'Save Link Impact', 'LB Cache Rows')
+lstep('LB Cache Rows', 'Any LB Cache?', 'Save LB Cache', 'LB Report')
+L.link('LB Report', 'Has Email (LB)?'); L.link('LB Report', 'Build LB Callback'); L.link('Build LB Callback', 'Has Callback (LB)?')
+L.sticky(f"""## SEO Agent — Link Builder (v4.13, LINK_BUILDER_SPEC.md)
+**Every Monday 11:00** (after the Backlink Monitor 07:30 and AI Growth 09:30) and on demand (*Manual Run* `{{{{ domain | site_id, free_only?, callback_url?, request_id? }}}}`, started by **SEO Agent — Link Builder API** `POST /webhook/seo-link-builder`). Per site with `link_builder` on (`{MONITORS_TABLE}`, default on).
+**New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** (DataForSEO, ≈ $0.07). **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1). Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.
+Rows: `{LINK_OUTREACH_TABLE}`, `{PROSPECT_TABLE}` (new kinds), `{LISTINGS_TABLE}`, `{LINK_IMPACT_TABLE}` (what each won link did, vs the site's other pages), `{CACHE_TABLE}` linkbld:; report + callback `link_builder`.""", [-40, -420], 1100, 300, 6)
+L.write('SEO_Agent_Link_Builder.json')
+
+# =============================================================================
+# 5b. LINK BUILDER API (v4.13): the web app's "Find opportunities now" — answered at once (202), the Link Builder starts as its own
+#     execution through its Manual Run. A separate workflow: n8n starts a workflow that calls ITSELF from the inherited webhook trigger and
+#     runs nothing (live 2026-10-11, execution 293), so the door and the work are two workflows, like the Admin API and Site Admin.
+# =============================================================================
+LA = WF('SEOagentLinkBAPI', 'SEO Agent — Link Builder API', 'linkbapi', 120)
+LA.node('Link Builder API', 'n8n-nodes-base.webhook', 2, {'httpMethod': 'POST', 'path': 'seo-link-builder', 'authentication': 'headerAuth', 'responseMode': 'responseNode', 'options': {}}, at(0, 4), webhookId=str(uuid.uuid5(NS, 'linkbapi:webhook')), credentials=API_KEY_CRED)
+LA.code('LB API Validate', 'LB_API_Validate.js', at(1, 4)); LA.iff('LB API OK?', '{{ $json.ok }}', at(2, 4))
+LA.node('Respond LB Accepted', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': "={{ JSON.stringify({ ok: true, status: 'accepted', stage: 'link_builder_started', request_id: $json.request_id, domain: $json.domain }) }}", 'options': {'responseCode': 202}}, at(3, 3))
+LA.code('LB Payload', "// The run's input (Manual Run of the Link Builder): only the fields it reads.\nconst v = $('LB API Validate').first().json;\nreturn [{ json: { domain: v.domain, site_id: v.site_id, free_only: v.free_only, callback_url: v.callback_url, email: '', request_id: v.request_id } }];", at(4, 3))
+LA.node('Start Link Builder', 'n8n-nodes-base.executeWorkflow', 1.2, {'source': 'database', 'workflowId': {'__rl': True, 'mode': 'id', 'value': 'SEOagentLinkBld1'}, 'mode': 'once', 'options': {'waitForSubWorkflow': False}}, at(5, 3))
+LA.node('Respond LB Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify({ ok: false, error: $json.error }) }}', 'options': {'responseCode': 400}}, at(3, 5))
+# answer first, then start the run (the API entry's order): a sub-workflow started before the webhook answers ran no node (live 2026-10-11, executions 295 / 297)
+LA.chain('Link Builder API', 'LB API Validate', 'LB API OK?'); LA.link('LB API OK?', 'Respond LB Accepted', 0); LA.link('LB API OK?', 'Respond LB Bad Request', 1)
+LA.chain('Respond LB Accepted', 'LB Payload', 'Start Link Builder')
+LA.sticky("""## SEO Agent — Link Builder API (v4.13)
+`POST /webhook/seo-link-builder` (header X-API-Key, credential **SEO API Key**): `{ domain | site_id, free_only?, callback_url?, request_id? }` → 202 at once; starts **SEO Agent — Link Builder** (`SEOagentLinkBld1`) through its Manual Run; the report arrives through the callback (stage `link_builder`).""", [-40, -300], 700, 160, 6)
+LA.write('SEO_Agent_Link_Builder_API.json')
+
+# =============================================================================
+# 6. REPLY READER (v4.13): the web app sends one reply to a link-building e-mail; Claude Haiku classifies it and suggests the answer;
+#    pages named in the reply are checked for our link at once (synchronous; POST /webhook/seo-reply-read, header X-API-Key)
+# =============================================================================
+RR = WF('SEOagentReplyRd1', 'SEO Agent — Reply Reader', 'replyrd', 180)
+RR.node('Reply Webhook', 'n8n-nodes-base.webhook', 2, {'httpMethod': 'POST', 'path': 'seo-reply-read', 'authentication': 'headerAuth', 'responseMode': 'responseNode', 'options': {}}, at(0, 0), webhookId=str(uuid.uuid5(NS, 'replyrd:webhook')), credentials=API_KEY_CRED)
+RR.code('Reply Input', 'Reply_Input.js', at(1, 0)); RR.iff('Reply OK?', '{{ $json.ok }}', at(2, 0))
+RR.code('Reply Link Requests', 'Reply_Link_Requests.js', at(3, 0)); RR.iff('Any Reply Pages?', '{{ !$json.skip }}', at(4, 0)); x_http(RR, 'Fetch Reply Pages', at(5, -1), timeout=15000, text=True, headers=PAGE_H)
+RR.code('Reply Classify Input', 'Reply_Classify_Input.js', at(6, 0))
+RR.agent('Reply Reader', 'reply_reader.txt', {'type': 'object', 'properties': {'class': {'type': 'string'}, 'summary': {'type': 'string'}, 'return_date': {'type': 'string'}, 'referral_email': {'type': 'string'}, 'referral_name': {'type': 'string'}, 'needs_you': {'type': 'boolean'}, 'suggested_reply': {'type': 'string'}}, 'required': ['class', 'summary']},
+    at(7, -1), max_tokens=1500, model=('claude-haiku-4-5-20251001', 'Claude Haiku 4.5'))
+RR.code('Reply Result', 'Reply_Result.js', at(8, 0))
+RR.node('Respond Reply', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify($json) }}', 'options': {'responseCode': 200}}, at(9, 0))
+RR.node('Respond Reply Bad Request', 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': '={{ JSON.stringify({ ok: false, error: $json.error }) }}', 'options': {'responseCode': 400}}, at(3, 2))
+RR.chain('Reply Webhook', 'Reply Input', 'Reply OK?'); RR.link('Reply OK?', 'Reply Link Requests', 0); RR.link('Reply OK?', 'Respond Reply Bad Request', 1)
+RR.link('Reply Link Requests', 'Any Reply Pages?'); RR.link('Any Reply Pages?', 'Fetch Reply Pages', 0); RR.link('Any Reply Pages?', 'Reply Classify Input', 1); RR.link('Fetch Reply Pages', 'Reply Classify Input')
+RR.chain('Reply Classify Input', 'Reply Reader', 'Reply Result', 'Respond Reply')
+RR.sticky("""## SEO Agent — Reply Reader (v4.13, LINK_BUILDER_SPEC.md §2)
+`POST /webhook/seo-reply-read` (header X-API-Key, credential **SEO API Key**), synchronous. Body: `{ domain, prospect_domain, page_url?, business, signer, facts?, our_subject, our_body, reply_from, reply_subject, reply_text }`. The web app calls it for every reply a person wrote (bounces and automatic replies are sorted by headers in the app). Pages on the prospect's site named in the reply (and the page we pitched) are fetched and checked for our link at once. **Claude Haiku 4.5** (≈ $0.001): class (says_linked / interested / question / wants_payment / link_swap / not_now / declined / unsubscribe / wrong_person / out_of_office / other), one-line summary, return date, referred contact, suggested answer. An opt-out is never missed (rule fallback).""", [-40, -360], 900, 220, 6)
+RR.write('SEO_Agent_Reply_Reader.json')
+
+# the harness compares rows with the table columns defined here (v4.12): harness/table_cols.json
+json.dump({'AI_PAGES': [c for c, _ in AI_PAGES_COLS], 'AI_TARGETS': [c for c, _ in AI_TARGETS_COLS], 'AI_GROWTH': [c for c, _ in AI_GROWTH_COLS], 'PROSPECT': [c for c, _ in PROSPECT_COLS],
+           'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)

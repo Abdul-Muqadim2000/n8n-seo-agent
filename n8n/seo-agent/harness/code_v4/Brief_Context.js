@@ -36,7 +36,7 @@ const pt = s(d.page_type).toLowerCase();
 const isHub = Number(d.ladder_rung) === 4 || /pillar|hub/.test(pt);
 const cs = d.case_study && typeof d.case_study === 'object' ? d.case_study : null;
 const page_role = (cs || /case stud/.test(pt)) ? 'case_study' : /local/.test(pt) ? 'local' : isHub ? 'hub' : 'standard';
-const article_like = /blog|guide|article|pillar|hub|case stud/.test(pt);
+const article_like = /blog|guide|article|pillar|hub|case stud|comparison|faq/.test(pt) || !!(d.ai_target && d.ai_target.question);   // v4.12: these pages show the byline with a visible "Updated" date (AI cites fresh, dated pages)
 const STOP = new Set(['the', 'and', 'for', 'with', 'your', 'our', 'how', 'what', 'best', 'top', 'near', 'from', 'are', 'you', 'www', 'com', 'html', 'php', 'page', 'pages', 'blog', 'services', 'service']);
 const toks = (t) => s(t).toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter(x => x.length > 2 && !STOP.has(x));
 let hub_pages = [];

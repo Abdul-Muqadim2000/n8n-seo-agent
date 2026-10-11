@@ -1,5 +1,7 @@
 # Backlinks v4.10: every source merged, every important link checked
 
+> **v4.13 (2026-10-11):** getting links, not only listing them — the **Link Builder** (new opportunities, qualification, contacts, our page and the link text, drafted sequences sent from the customer's own mailbox after approval, replies, the listings checklist, impact). See **`LINK_BUILDER_SPEC.md`**.
+
 Built on 2026-10-08 at the user's request: "make it the best possible, use free resources over the net as well". A comparison rated the backlink monitor **6.5/10**: "good monitoring and outreach drafts, but DataForSEO's backlink index is smaller than Ahrefs'".
 
 This file covers the research, what v4.10 changed, every source (used and rejected), how links are checked and scored, the workflows, costs, data, the app, tests and what is still open. The v4.5 design is in `MONITORS_FEATURE_SPEC.md` §1–2; this file replaces its backlink part where the two differ.

@@ -398,6 +398,84 @@ export interface AiGroup {
   leader: string;
 }
 
+/** v4.12: one key page — can AI assistants read and quote it (0-100), Bing's crawl, when it was sent to Bing / IndexNow */
+export interface AiPageStat {
+  url: string;
+  kind: string;
+  checkedAt: string;
+  status: number;
+  score: number | null;
+  checks: { key: string; ok: boolean | 'partial'; label: string }[];
+  issues: string[];
+  wordsRaw: number;
+  title: string;
+  updatedOn: string;
+  bingCrawledAt: string;
+  submittedAt: string;
+  submittedVia: string;
+  citedBy: string[];
+}
+/** v4.12: a question to win in AI answers: a new answer page or a refresh of the page the site has */
+export interface AiTargetStat {
+  targetId: string;
+  question: string;
+  keyword: string;
+  kind: 'answer' | 'refresh';
+  pageUrl: string;
+  pageType: string;
+  fanout: string[];
+  sources: { url: string; title: string }[];
+  competitors: string[];
+  stage: string;
+  value: number;
+  status: string;
+  reason: string;
+  writtenAt: string;
+  wonAt: string;
+  updatedAt: string;
+}
+/** v4.12: a third-party page AI cites without naming the business (earned media) */
+export interface AiEarnedPage {
+  url: string;
+  title: string;
+  host: string;
+  kind: string;
+  citations: number;
+  engines: string[];
+  questions: string[];
+  mentionsUs: boolean | null;
+  competitorsNamed: string[];
+  action: string;
+  status: string;
+  drafted: boolean;
+  /** a contact found on the page or added on the Backlinks page */
+  contactEmail: string;
+  /** the outreach draft / forum reply (from seo_link_prospects) */
+  draft: { subject: string; body: string } | null;
+}
+/** v4.12: is the IndexNow key file on the site? (POST …/ai/indexnow/check) */
+export interface IndexNowCheck {
+  verified: boolean;
+  keyUrl: string;
+  status: number;
+  message: string;
+}
+export interface AiGrowth {
+  checkedAt: string;
+  submitted: { bing: { enabled: boolean; inAccount: boolean; submitted: number; quota: number | null; error: string }; indexnow: { keyUrl: string; key: string; verified: boolean; submitted: number; error: string } };
+  pagesChecked: number;
+  avgScore: number | null;
+  pages: AiPageStat[];
+  targets: AiTargetStat[];
+  earned: AiEarnedPage[];
+  entity: { checkedAt: string; found: boolean; qid: string; byName: { id: string; label: string; description: string }[] } | null;
+  actions: { priority: number; type: string; action: string; why: string }[];
+  alerts: { level: string; text: string }[];
+  /** AI answer / refresh pages a month (settings) and how many the content run wrote this month */
+  pagesPerMonth: number;
+  writtenThisMonth: number;
+}
+
 export interface AiData {
   runs: AiRun[];
   latest: {
@@ -446,7 +524,11 @@ export interface AiData {
     brands: string[];
     issues: string[];
     fanout: string[];
+    /** v4.12: the exact third-party pages the answer cited */
+    citedUrls: { url: string; title: string }[];
   }[];
+  /** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the weekly AI growth loop — null until its first run */
+  growth: AiGrowth | null;
   /** from the latest AI visibility report (when it was delivered to the app) */
   report: {
     receivedAt: string;
@@ -738,11 +820,14 @@ export interface AutomationStatus {
 
 export interface QueueItem {
   keyword: string;
-  source: 'ladder' | 'striking' | 'trend';
+  /** v4.12: ai_answer / ai_refresh = the AI page of the week (AI_GROWTH_SPEC.md) */
+  source: 'ladder' | 'striking' | 'trend' | 'ai_answer' | 'ai_refresh';
   why: string;
   pageType: string;
   existingPageUrl: string;
   ladder: { id: string; rung: number; head: string; pageNo: number } | null;
+  /** v4.12: the AI target the page is written for */
+  aiTarget?: { targetId: string; question: string; kind: 'answer' | 'refresh' } | null;
 }
 
 export interface PipelineStage {

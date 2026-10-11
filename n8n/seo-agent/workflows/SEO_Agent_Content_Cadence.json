@@ -542,7 +542,176 @@
       },
       {
         "parameters": {
-          "jsCode": "// Content cadence: picks this week's blog topics per site (pages per week from seo_cadence, max 3), in this order: the keyword ladders' next\n// planned pages (with each ladder's internal links), striking-distance queries from Search Console (positions 4-20 with impressions:\n// strengthen the page that already ranks), rising related searches from Google Trends. Skips keywords written in the last 90 days, pages already\n// written or published, brand queries, and paused sites. Each pick becomes a content run (mode keyword, force_content) that delivers the blog package.\n// v4.8 (Pipeline phase 2, PIPELINE_FEATURE_SPEC §6-7) — per ladder from seo_ladder_settings (no row = the site's default mode, else auto; active;\n// priority by start date), per site from its '_site' row (defaults: opportunities auto, max_active 2, max_waiting 3):\n//   * only Auto ladders with status active / queued are written; the max_active highest-priority ones that still have planned pages are active,\n//     the others wait (queued_ladders). Ladder 1's eligible pages come before ladder 2's; inside a ladder by rung, then page_no; plan_type\n//     'direct' writes the main page (rung 4) first.\n//   * main-page gate (not direct): the main page waits until half of the ladder's supporting pages are published (ladder row 'published' or a\n//     content-log row with a published_url), or the main keyword's latest rank check is 1-30 (waiting_for_support lists ladders where that\n//     main page is all that is left to write).\n//   * won: the main keyword in the top 3 in each of the last 4 rank checks (failed checks skipped) -> no more pages (won_ladders).\n//   * pile-up guard: max_waiting or more pages written but not published (content log 'started', no published_url, last 120 days) -> nothing\n//     is written for the site (paused_reason 'pileup'); an on-demand run may bypass it only with force: true.\n//   * opportunity posts (striking / trend) only when opportunities is auto; when manual they are listed as suggestions.\n//   * Manual ladders are never written: each one's next eligible page is listed in awaiting_approval.\n// Sites without a pick but with something to say (paused, awaiting approval, suggestions, a main page waiting for support) get one report_only item (nothing_to_do: true) for the\n// Cadence Status note; dry_run only plans.\nconst CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4,\n  max_active: 2, max_waiting: 3, waiting_days: 120, gate_head_position: 30, won_checks: 4, won_position: 3, suggestions: 5 };\nlet trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}\nif (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst lc = (v) => String(v == null ? '' : v).toLowerCase().trim();\nconst sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), cad = rowsOf('Load Cadence').filter(r => r.site_id), ladders = rowsOf('Load Ladders').filter(r => r.ladder_id && r.keyword), qh = rowsOf('Load Query History'), trends = rowsOf('Load Trends'), logs = rowsOf('Load Content Log').filter(r => r.keyword);\nconst settings = rowsOf('Load Ladder Settings').filter(r => r.ladder_id), headRanks = rowsOf('Load Main Keyword Ranks').filter(r => r.ladder_id && r.keyword);\nconst cadOf = new Map(cad.map(c => [c.site_id, c]));\nconst want = normD(trigger.domain) || String(trigger.site_id || '').trim(); const on_demand = !!want; const dry_run = !!trigger.dry_run;\nconst force = on_demand && (trigger.force === true || lc(trigger.force) === 'true');\nconst now = new Date(); const nowIso = now.toISOString(); const week = nowIso.slice(0, 10);\nconst byDomain = new Map(); for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d }); }\nfor (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }\nlet list = [...byDomain.values()];\nif (on_demand) list = list.filter(s => s.domain === want || s.site_id === want); else list = list.filter(s => String(s.status || 'active') !== 'paused');\nconst byRung = (a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0) || (Number(a.page_no) || 0) - (Number(b.page_no) || 0);\nconst isTop = (l) => Number(l.rung) === 4;\nconst posInt = (v, d, max) => { const n = Number(v); return (v !== '' && v != null && Number.isFinite(n) && n >= 1) ? Math.min(max, Math.floor(n)) : d; };\nconst settingOf = new Map(settings.filter(r => String(r.ladder_id) !== '_site').map(r => [String(r.ladder_id), r]));\nconst STATUSES = ['active', 'queued', 'paused', 'won', 'stuck', 'archived'];\nconst out = [];\nfor (const s of list) {\n  const c = cadOf.get(s.site_id);\n  let pages = (on_demand && trigger.pages != null && trigger.pages !== '') ? Number(trigger.pages) : (c ? (String(c.status || 'active') === 'off' ? 0 : Number(c.pages_per_week)) : (on_demand ? CONFIG.default_pages_per_week : 0));\n  pages = Math.min(CONFIG.max_pages_per_week, Math.max(0, pages || 0));\n  if (!pages) continue;\n  // website defaults ('_site' row)\n  const siteRow = settings.find(r => String(r.ladder_id) === '_site' && (r.site_id === s.site_id || normD(r.domain) === s.domain)) || {};\n  const cfg = { mode: lc(siteRow.mode) === 'manual' ? 'manual' : 'auto', opportunities: lc(siteRow.opportunities) === 'manual' ? 'manual' : 'auto', max_active: posInt(siteRow.max_active, CONFIG.max_active, 20), max_waiting: posInt(siteRow.max_waiting, CONFIG.max_waiting, 100) };\n  const slog = logs.filter(l => normD(l.domain) === s.domain);\n  const recent = new Set(slog.filter(l => l.status === 'published' || (now - new Date(l.started_at || 0)) < CONFIG.skip_recent_days * 864e5).map(l => norm(l.keyword)));\n  const publishedKw = new Set(slog.filter(l => l.published_url).map(l => norm(l.keyword)));\n  const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort(byRung);\n  const ladderKw = new Set(lrows.map(l => norm(l.keyword)));\n  for (const l of lrows) if (l.status === 'writing' || l.status === 'published') recent.add(norm(l.keyword));\n  const open = (l) => String(l.status || 'planned') === 'planned' && !recent.has(norm(l.keyword));\n  // one entry per ladder: settings, main-keyword ranks, gate, won, eligible pages in writing order\n  const groups = new Map(); for (const l of lrows) { if (!groups.has(l.ladder_id)) groups.set(l.ladder_id, []); groups.get(l.ladder_id).push(l); }\n  const info = [...groups.entries()].map(([id, rows]) => {\n    const st = settingOf.get(String(id)) || null;\n    const top = rows.find(isTop) || null;\n    const head = (top && top.keyword) || rows[0].head_keyword || '';\n    const mode = st && ['auto', 'manual'].includes(lc(st.mode)) ? lc(st.mode) : cfg.mode;\n    const status = st && STATUSES.includes(lc(st.status)) ? lc(st.status) : 'active';\n    const plan_type = st && ['direct', 'short', 'full'].includes(lc(st.plan_type)) ? lc(st.plan_type) : '';\n    const priority = st && Number(st.priority) >= 1 ? Number(st.priority) : Infinity;\n    const start = rows.map(r => String(r.start_date || '')).filter(Boolean).sort()[0] || String((st && st.created_at) || '');\n    const hist = headRanks.filter(h => String(h.ladder_id) === String(id) && norm(h.keyword) === norm(head) && String(h.position) !== '' && h.position != null && Number.isFinite(Number(h.position)) && Number(h.position) >= 0)\n      .sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));   // failed checks (-1) are \"check again\", not a position\n    const head_position = hist.length ? Number(hist[0].position) : null;\n    const lastN = hist.slice(0, CONFIG.won_checks);\n    const won = lastN.length >= CONFIG.won_checks && lastN.every(h => Number(h.position) >= 1 && Number(h.position) <= CONFIG.won_position);\n    const support = rows.filter(r => !isTop(r));\n    const published = support.filter(r => r.status === 'published' || publishedKw.has(norm(r.keyword))).length;\n    const gate_open = plan_type === 'direct' || !support.length || published * 2 >= support.length || (head_position != null && head_position >= 1 && head_position <= CONFIG.gate_head_position);\n    const ordered = plan_type === 'direct' ? [...rows.filter(isTop), ...rows.filter(r => !isTop(r))] : rows;\n    const remaining = ordered.filter(open);\n    const eligible = remaining.filter(r => !isTop(r) || gate_open);\n    const main_waiting = !gate_open && remaining.some(isTop) && !eligible.length;   // blocked on publishing: the gated main page is all that is left\n    return { id, rows, top, head, mode, status, plan_type, priority, start, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting, remaining, eligible };\n  }).sort((a, b) => a.priority - b.priority || String(a.start).localeCompare(String(b.start)) || String(a.id).localeCompare(String(b.id)));\n  const writable = info.filter(x => ['active', 'queued'].includes(x.status) && !x.won);\n  const autoL = writable.filter(x => x.mode === 'auto' && x.remaining.length);\n  const active = autoL.slice(0, cfg.max_active), queued = autoL.slice(cfg.max_active);\n  const manualL = writable.filter(x => x.mode === 'manual');\n  const ladderCand = (x, l) => {\n    const rows = x.rows, top = x.top; const links = [];\n    if (isTop(l)) { for (const r of rows.filter(r => !isTop(r) && r.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword }); }   // the top page is the hub: it lists the whole cluster (12, was 6; v4.4)\n    else { if (top && top.target_url && top.keyword !== l.keyword) links.push({ url: top.target_url, role: 'top', keyword: top.keyword }); const sib = rows.find(r => Number(r.rung) === Number(l.rung) && r.keyword !== l.keyword && r.target_url); if (sib) links.push({ url: sib.target_url, role: 'sibling', keyword: sib.keyword }); }\n    return { keyword: l.keyword, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '', source: 'ladder', ladder_id: l.ladder_id, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '', links, why: 'keyword ladder, rung ' + (isTop(l) ? 'top' : l.rung) + ' towards \"' + (l.head_keyword || '') + '\"' };\n  };\n  const cands = [];\n  for (const x of active) for (const l of x.eligible) cands.push(ladderCand(x, l));\n  const opps = [];\n  const sq = qh.filter(q => normD(q.domain) === s.domain && q.query); const latest = sq.reduce((m, q) => String(q.period_end) > m ? String(q.period_end) : m, '');\n  const brand = s.domain.split('.')[0].toLowerCase().replace(/[^a-z0-9]/g, '');\n  const strikes = sq.filter(q => String(q.period_end) === latest && Number(q.position) >= CONFIG.striking_min_position && Number(q.position) <= CONFIG.striking_max_position && Number(q.impressions) >= CONFIG.striking_min_impressions && !(brand.length >= 4 && norm(q.query).replace(/\\s/g, '').includes(brand)) && !recent.has(norm(q.query)) && !ladderKw.has(norm(q.query))).sort((a, b) => Number(b.impressions) - Number(a.impressions));\n  for (const q of strikes) opps.push({ keyword: q.query, page_type: (q.page && !/\\/(blog|news|insights|articles)\\//i.test(q.page)) ? 'Service Page' : 'Guide', existing_page_url: q.page || '', source: 'striking', why: 'ranks #' + Math.round(Number(q.position)) + ' with ' + q.impressions + ' impressions in 28 days (Search Console): one push from the top 3' });\n  const st = trends.filter(t => normD(t.domain) === s.domain && t.direction === 'rising' && t.rising); const latestT = st.reduce((m, t) => String(t.checked_at) > m ? String(t.checked_at) : m, '');\n  for (const t of st.filter(t => String(t.checked_at) === latestT)) for (const rq of String(t.rising).split(',').map(x => x.replace(/\\s*\\([^)]*\\)\\s*$/, '').trim().toLowerCase()).filter(Boolean)) {\n    if (recent.has(norm(rq)) || ladderKw.has(norm(rq)) || cands.some(x => norm(x.keyword) === norm(rq)) || opps.some(x => norm(x.keyword) === norm(rq))) continue;\n    opps.push({ keyword: rq, page_type: 'Guide', existing_page_url: '', source: 'trend', why: 'rising related search for \"' + t.keyword + '\" (Google Trends, ' + (t.change_pct > 0 ? '+' : '') + t.change_pct + '% vs the 12-month average)' }); }\n  let suggestions = [];\n  if (cfg.opportunities === 'auto') cands.push(...opps);\n  else { const sk = new Set(); suggestions = opps.filter(o => { const k = norm(o.keyword); if (!k || sk.has(k)) return false; sk.add(k); return true; }).slice(0, CONFIG.suggestions).map(o => ({ keyword: o.keyword, source: o.source, page_type: o.page_type, existing_page_url: o.existing_page_url || '', why: o.why })); }\n  const seen = new Set(); const uniq = cands.filter(x => { const k = norm(x.keyword); if (!k || seen.has(k)) return false; seen.add(k); return true; });\n  // pile-up guard: pages written but not published (each keyword once)\n  const waitingKw = new Set(slog.filter(l => l.status === 'started' && !l.published_url && (now - new Date(l.started_at || 0)) < CONFIG.waiting_days * 864e5).map(l => norm(l.keyword)));\n  const pileup = waitingKw.size >= cfg.max_waiting;\n  const paused_reason = pileup && !force ? 'pileup' : '';\n  const picks = paused_reason ? [] : uniq.slice(0, pages);\n  const upcoming = uniq.slice(picks.length, picks.length + CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));\n  const pending = slog.filter(l => l.status === 'started' && !l.published_url).map(l => ({ keyword: l.keyword, started_at: l.started_at, days: Math.round((now - new Date(l.started_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);\n  const awaiting_approval = manualL.filter(x => x.eligible.length).map(x => { const l = x.eligible[0]; return { ladder_id: x.id, head: x.head, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '' }; });\n  const facts = { paused_reason, waiting_publish: waitingKw.size, max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,\n    queued_ladders: queued.map(x => ({ ladder_id: x.id, head: x.head, priority: Number.isFinite(x.priority) ? x.priority : null, reason: 'max_active' })),\n    won_ladders: info.filter(x => x.won || x.status === 'won').map(x => ({ ladder_id: x.id, head: x.head, position: x.head_position, checks: x.won_checks })),\n    waiting_for_support: info.filter(x => x.main_waiting && ['active', 'queued'].includes(x.status) && !x.won).map(x => ({ ladder_id: x.id, head: x.head, published: x.published, supporting: x.support, needed: Math.ceil(x.support / 2), head_position: x.head_position })) };\n  picks.forEach((p, i) => { const request_id = 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_' + (i + 1);\n    out.push({ json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', source: p.source, keyword: p.keyword, page_type: p.page_type, existing_page_url: p.existing_page_url || '', ladder_id: p.ladder_id || '', rung: p.rung || 0, page_no: p.page_no || 0, why: p.why, request_id, pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, ...facts,\n      body: { mode: 'keyword', keyword: p.keyword, page_type: p.page_type, country: s.country || '', domain: s.domain, receive: ['Keyword Report', 'Page Content'], existing_page_url: p.existing_page_url || '', email: s.email || '', callback_url: s.callback_url || '', request_id, client_ip: 'cadence:' + s.site_id, force_content: true,\n        ...(p.source === 'ladder' ? { ladder_id: p.ladder_id, ladder_rung: p.rung, ladder_head: p.head, ladder_page_no: p.page_no, ladder_links: (p.links || []).map(l => ({ url: l.url, path: String(l.url).replace(/^https?:\\/\\/[^\\/]+/i, '') || '/', role: l.role, keyword: l.keyword, planned: true })) } : {}) } } }); });\n  if (!picks.length && (paused_reason || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length)) {\n    const reason = paused_reason ? waitingKw.size + ' pages written but not published (limit ' + cfg.max_waiting + '): publish them to continue' : 'nothing to write automatically this week';\n    out.push({ json: { nothing_to_do: true, report_only: true, reason, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', request_id: 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_0',\n      pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, ...facts } });\n  }\n}\nif (!out.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'nothing to write for \"' + want + '\" (no cadence set, nothing planned, or everything written recently)' : 'no site has a content cadence this week', sites: list.length, dry_run } }];\nreturn out;\n"
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_ai_targets",
+          "columns": {
+            "column": [
+              {
+                "name": "target_id",
+                "type": "string"
+              },
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "prompt_id",
+                "type": "string"
+              },
+              {
+                "name": "question",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "page_url",
+                "type": "string"
+              },
+              {
+                "name": "page_type",
+                "type": "string"
+              },
+              {
+                "name": "fanout",
+                "type": "string"
+              },
+              {
+                "name": "sources_json",
+                "type": "string"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "engines",
+                "type": "string"
+              },
+              {
+                "name": "stage",
+                "type": "string"
+              },
+              {
+                "name": "value",
+                "type": "number"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "reason",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "written_at",
+                "type": "string"
+              },
+              {
+                "name": "won_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "e897a0d4-fc04-551a-a77c-31af5e18ffa5",
+        "name": "Ensure AI Targets Table (Cadence)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1100,
+          440
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_targets"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "status",
+                "condition": "eq",
+                "keyValue": "queued"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "81f27eaf-e6ea-5bbc-b4bd-79c5ef3b2c69",
+        "name": "Load AI Targets (Cadence)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2420,
+          440
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_monitors"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "173a3438-e255-55d7-9bd6-f642916deb4c",
+        "name": "Load Monitors (Cadence)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2640,
+          440
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// Content cadence: picks this week's blog topics per site (pages per week from seo_cadence, max 3), in this order: the keyword ladders' next\n// planned pages (with each ladder's internal links), striking-distance queries from Search Console (positions 4-20 with impressions:\n// strengthen the page that already ranks), rising related searches from Google Trends. Skips keywords written in the last 90 days, pages already\n// written or published, brand queries, and paused sites. Each pick becomes a content run (mode keyword, force_content) that delivers the blog package.\n// v4.8 (Pipeline phase 2, PIPELINE_FEATURE_SPEC §6-7) — per ladder from seo_ladder_settings (no row = the site's default mode, else auto; active;\n// priority by start date), per site from its '_site' row (defaults: opportunities auto, max_active 2, max_waiting 3):\n//   * only Auto ladders with status active / queued are written; the max_active highest-priority ones that still have planned pages are active,\n//     the others wait (queued_ladders). Ladder 1's eligible pages come before ladder 2's; inside a ladder by rung, then page_no; plan_type\n//     'direct' writes the main page (rung 4) first.\n//   * main-page gate (not direct): the main page waits until half of the ladder's supporting pages are published (ladder row 'published' or a\n//     content-log row with a published_url), or the main keyword's latest rank check is 1-30 (waiting_for_support lists ladders where that\n//     main page is all that is left to write).\n//   * won: the main keyword in the top 3 in each of the last 4 rank checks (failed checks skipped) -> no more pages (won_ladders).\n//   * pile-up guard: max_waiting or more pages written but not published (content log 'started', no published_url, last 120 days) -> nothing\n//     is written for the site (paused_reason 'pileup'); an on-demand run may bypass it only with force: true.\n//   * opportunity posts (striking / trend) only when opportunities is auto; when manual they are listed as suggestions.\n//   * Manual ladders are never written: each one's next eligible page is listed in awaiting_approval.\n// Sites without a pick but with something to say (paused, awaiting approval, suggestions, a main page waiting for support) get one report_only item (nothing_to_do: true) for the\n// Cadence Status note; dry_run only plans.\nconst CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4,\n  max_active: 2, max_waiting: 3, waiting_days: 120, gate_head_position: 30, won_checks: 4, won_position: 3, suggestions: 5 };\nlet trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}\nif (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst lc = (v) => String(v == null ? '' : v).toLowerCase().trim();\nconst sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), cad = rowsOf('Load Cadence').filter(r => r.site_id), ladders = rowsOf('Load Ladders').filter(r => r.ladder_id && r.keyword), qh = rowsOf('Load Query History'), trends = rowsOf('Load Trends'), logs = rowsOf('Load Content Log').filter(r => r.keyword);\nconst settings = rowsOf('Load Ladder Settings').filter(r => r.ladder_id), headRanks = rowsOf('Load Main Keyword Ranks').filter(r => r.ladder_id && r.keyword);\n// v4.12 (AI_GROWTH_SPEC.md): the AI targets the AI Growth loop queued (questions AI answers without the business) and each site's AI pages a month\nconst aiTargets = rowsOf('Load AI Targets (Cadence)').filter(r => r.target_id && r.status === 'queued'), monitors = rowsOf('Load Monitors (Cadence)');\nconst aiQuotaOf = (siteId) => { const m = monitors.find(x => x.site_id === siteId) || {}; const on = (v) => !(v === false || /^(false|0|no|off)$/i.test(String(v == null ? '' : v))); if (!on(m.ai_visibility) || !on(m.ai_growth)) return 0; return m.ai_pages_month === '' || m.ai_pages_month == null || !Number.isFinite(Number(m.ai_pages_month)) ? 2 : Math.min(8, Math.max(0, Math.round(Number(m.ai_pages_month)))); };\nconst cadOf = new Map(cad.map(c => [c.site_id, c]));\nconst want = normD(trigger.domain) || String(trigger.site_id || '').trim(); const on_demand = !!want; const dry_run = !!trigger.dry_run;\nconst force = on_demand && (trigger.force === true || lc(trigger.force) === 'true');\nconst now = new Date(); const nowIso = now.toISOString(); const week = nowIso.slice(0, 10);\nconst byDomain = new Map(); for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d }); }\nfor (const s of byDomain.values()) { if (s.email && s.callback_url) continue; const l = ladders.find(l => normD(l.domain) === s.domain && (l.email || l.callback_url)); if (l) { s.email = s.email || l.email || ''; s.callback_url = s.callback_url || l.callback_url || ''; } }\nlet list = [...byDomain.values()];\nif (on_demand) list = list.filter(s => s.domain === want || s.site_id === want); else list = list.filter(s => String(s.status || 'active') !== 'paused');\nconst byRung = (a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0) || (Number(a.page_no) || 0) - (Number(b.page_no) || 0);\nconst isTop = (l) => Number(l.rung) === 4;\nconst posInt = (v, d, max) => { const n = Number(v); return (v !== '' && v != null && Number.isFinite(n) && n >= 1) ? Math.min(max, Math.floor(n)) : d; };\nconst settingOf = new Map(settings.filter(r => String(r.ladder_id) !== '_site').map(r => [String(r.ladder_id), r]));\nconst STATUSES = ['active', 'queued', 'paused', 'won', 'stuck', 'archived'];\nconst out = [];\nfor (const s of list) {\n  const c = cadOf.get(s.site_id);\n  let pages = (on_demand && trigger.pages != null && trigger.pages !== '') ? Number(trigger.pages) : (c ? (String(c.status || 'active') === 'off' ? 0 : Number(c.pages_per_week)) : (on_demand ? CONFIG.default_pages_per_week : 0));\n  pages = Math.min(CONFIG.max_pages_per_week, Math.max(0, pages || 0));\n  const aiQuota = aiQuotaOf(s.site_id);   // AI answer / refresh pages a month: on top of the blog posts, at most one a week\n  if (!pages && !aiQuota) continue;\n  // website defaults ('_site' row)\n  const siteRow = settings.find(r => String(r.ladder_id) === '_site' && (r.site_id === s.site_id || normD(r.domain) === s.domain)) || {};\n  const cfg = { mode: lc(siteRow.mode) === 'manual' ? 'manual' : 'auto', opportunities: lc(siteRow.opportunities) === 'manual' ? 'manual' : 'auto', max_active: posInt(siteRow.max_active, CONFIG.max_active, 20), max_waiting: posInt(siteRow.max_waiting, CONFIG.max_waiting, 100) };\n  const slog = logs.filter(l => normD(l.domain) === s.domain);\n  const recent = new Set(slog.filter(l => l.status === 'published' || (now - new Date(l.started_at || 0)) < CONFIG.skip_recent_days * 864e5).map(l => norm(l.keyword)));\n  const publishedKw = new Set(slog.filter(l => l.published_url).map(l => norm(l.keyword)));\n  const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort(byRung);\n  const ladderKw = new Set(lrows.map(l => norm(l.keyword)));\n  for (const l of lrows) if (l.status === 'writing' || l.status === 'published') recent.add(norm(l.keyword));\n  const open = (l) => String(l.status || 'planned') === 'planned' && !recent.has(norm(l.keyword));\n  // one entry per ladder: settings, main-keyword ranks, gate, won, eligible pages in writing order\n  const groups = new Map(); for (const l of lrows) { if (!groups.has(l.ladder_id)) groups.set(l.ladder_id, []); groups.get(l.ladder_id).push(l); }\n  const info = [...groups.entries()].map(([id, rows]) => {\n    const st = settingOf.get(String(id)) || null;\n    const top = rows.find(isTop) || null;\n    const head = (top && top.keyword) || rows[0].head_keyword || '';\n    const mode = st && ['auto', 'manual'].includes(lc(st.mode)) ? lc(st.mode) : cfg.mode;\n    const status = st && STATUSES.includes(lc(st.status)) ? lc(st.status) : 'active';\n    const plan_type = st && ['direct', 'short', 'full'].includes(lc(st.plan_type)) ? lc(st.plan_type) : '';\n    const priority = st && Number(st.priority) >= 1 ? Number(st.priority) : Infinity;\n    const start = rows.map(r => String(r.start_date || '')).filter(Boolean).sort()[0] || String((st && st.created_at) || '');\n    const hist = headRanks.filter(h => String(h.ladder_id) === String(id) && norm(h.keyword) === norm(head) && String(h.position) !== '' && h.position != null && Number.isFinite(Number(h.position)) && Number(h.position) >= 0)\n      .sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));   // failed checks (-1) are \"check again\", not a position\n    const head_position = hist.length ? Number(hist[0].position) : null;\n    const lastN = hist.slice(0, CONFIG.won_checks);\n    const won = lastN.length >= CONFIG.won_checks && lastN.every(h => Number(h.position) >= 1 && Number(h.position) <= CONFIG.won_position);\n    const support = rows.filter(r => !isTop(r));\n    const published = support.filter(r => r.status === 'published' || publishedKw.has(norm(r.keyword))).length;\n    const gate_open = plan_type === 'direct' || !support.length || published * 2 >= support.length || (head_position != null && head_position >= 1 && head_position <= CONFIG.gate_head_position);\n    const ordered = plan_type === 'direct' ? [...rows.filter(isTop), ...rows.filter(r => !isTop(r))] : rows;\n    const remaining = ordered.filter(open);\n    const eligible = remaining.filter(r => !isTop(r) || gate_open);\n    const main_waiting = !gate_open && remaining.some(isTop) && !eligible.length;   // blocked on publishing: the gated main page is all that is left\n    return { id, rows, top, head, mode, status, plan_type, priority, start, head_position, won, won_checks: lastN.length, support: support.length, published, gate_open, main_waiting, remaining, eligible };\n  }).sort((a, b) => a.priority - b.priority || String(a.start).localeCompare(String(b.start)) || String(a.id).localeCompare(String(b.id)));\n  const writable = info.filter(x => ['active', 'queued'].includes(x.status) && !x.won);\n  const autoL = writable.filter(x => x.mode === 'auto' && x.remaining.length);\n  const active = autoL.slice(0, cfg.max_active), queued = autoL.slice(cfg.max_active);\n  const manualL = writable.filter(x => x.mode === 'manual');\n  const ladderCand = (x, l) => {\n    const rows = x.rows, top = x.top; const links = [];\n    if (isTop(l)) { for (const r of rows.filter(r => !isTop(r) && r.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword }); }   // the top page is the hub: it lists the whole cluster (12, was 6; v4.4)\n    else { if (top && top.target_url && top.keyword !== l.keyword) links.push({ url: top.target_url, role: 'top', keyword: top.keyword }); const sib = rows.find(r => Number(r.rung) === Number(l.rung) && r.keyword !== l.keyword && r.target_url); if (sib) links.push({ url: sib.target_url, role: 'sibling', keyword: sib.keyword }); }\n    return { keyword: l.keyword, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '', source: 'ladder', ladder_id: l.ladder_id, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '', links, why: 'keyword ladder, rung ' + (isTop(l) ? 'top' : l.rung) + ' towards \"' + (l.head_keyword || '') + '\"' };\n  };\n  const cands = [];\n  for (const x of active) for (const l of x.eligible) cands.push(ladderCand(x, l));\n  const opps = [];\n  const sq = qh.filter(q => normD(q.domain) === s.domain && q.query); const latest = sq.reduce((m, q) => String(q.period_end) > m ? String(q.period_end) : m, '');\n  const brand = s.domain.split('.')[0].toLowerCase().replace(/[^a-z0-9]/g, '');\n  const strikes = sq.filter(q => String(q.period_end) === latest && Number(q.position) >= CONFIG.striking_min_position && Number(q.position) <= CONFIG.striking_max_position && Number(q.impressions) >= CONFIG.striking_min_impressions && !(brand.length >= 4 && norm(q.query).replace(/\\s/g, '').includes(brand)) && !recent.has(norm(q.query)) && !ladderKw.has(norm(q.query))).sort((a, b) => Number(b.impressions) - Number(a.impressions));\n  for (const q of strikes) opps.push({ keyword: q.query, page_type: (q.page && !/\\/(blog|news|insights|articles)\\//i.test(q.page)) ? 'Service Page' : 'Guide', existing_page_url: q.page || '', source: 'striking', why: 'ranks #' + Math.round(Number(q.position)) + ' with ' + q.impressions + ' impressions in 28 days (Search Console): one push from the top 3' });\n  const st = trends.filter(t => normD(t.domain) === s.domain && t.direction === 'rising' && t.rising); const latestT = st.reduce((m, t) => String(t.checked_at) > m ? String(t.checked_at) : m, '');\n  for (const t of st.filter(t => String(t.checked_at) === latestT)) for (const rq of String(t.rising).split(',').map(x => x.replace(/\\s*\\([^)]*\\)\\s*$/, '').trim().toLowerCase()).filter(Boolean)) {\n    if (recent.has(norm(rq)) || ladderKw.has(norm(rq)) || cands.some(x => norm(x.keyword) === norm(rq)) || opps.some(x => norm(x.keyword) === norm(rq))) continue;\n    opps.push({ keyword: rq, page_type: 'Guide', existing_page_url: '', source: 'trend', why: 'rising related search for \"' + t.keyword + '\" (Google Trends, ' + (t.change_pct > 0 ? '+' : '') + t.change_pct + '% vs the 12-month average)' }); }\n  let suggestions = [];\n  if (cfg.opportunities === 'auto') cands.push(...opps);\n  else { const sk = new Set(); suggestions = opps.filter(o => { const k = norm(o.keyword); if (!k || sk.has(k)) return false; sk.add(k); return true; }).slice(0, CONFIG.suggestions).map(o => ({ keyword: o.keyword, source: o.source, page_type: o.page_type, existing_page_url: o.existing_page_url || '', why: o.why })); }\n  const seen = new Set(); const uniq = cands.filter(x => { const k = norm(x.keyword); if (!k || seen.has(k)) return false; seen.add(k); return true; });\n  // pile-up guard: pages written but not published (each keyword once)\n  const waitingKw = new Set(slog.filter(l => l.status === 'started' && !l.published_url && (now - new Date(l.started_at || 0)) < CONFIG.waiting_days * 864e5).map(l => norm(l.keyword)));\n  const pileup = waitingKw.size >= cfg.max_waiting;\n  const paused_reason = pileup && !force ? 'pileup' : '';\n  const picks = paused_reason ? [] : uniq.slice(0, pages);\n  // v4.12: the AI page of the week — the most valuable queued AI target (a new answer page or a refresh of the page the site has), within the month's\n  // allowance, one a week, not while the pile-up guard holds; Manual opportunities make it a suggestion instead\n  const isAi = (l) => l.source === 'ai_answer' || l.source === 'ai_refresh';\n  const aiUsed = slog.filter(l => isAi(l) && String(l.started_at || '').slice(0, 7) === nowIso.slice(0, 7)).length;\n  const aiThisWeek = slog.some(l => isAi(l) && (now - new Date(l.started_at || 0)) < 6 * 864e5);\n  const keyOfU = (u) => String(u || '').toLowerCase().replace(/^https?:\\/\\/(www\\.)?/, '').replace(/[?#].*$/, '').replace(/\\/+$/, '');\n  const refreshedRecently = new Set(slog.filter(l => l.existing_page_url && (now - new Date(l.started_at || 0)) < 60 * 864e5).map(l => keyOfU(l.existing_page_url)));\n  // one search, one page: an AI question that a keyword-ladder page already targets is written AS that ladder page (with the AI target), never twice.\n  // Words of the site's ladder heads (\"e invoicing in uae\") appear everywhere and do not count.\n  const STOPW = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', 'top', 'list', 'guide']);\n  const headWords = new Set(lrows.flatMap(l => norm(l.head_keyword).split(' ')).filter(Boolean));\n  const kwTok = (k) => [...new Set(norm(k).replace(/\\b(e)\\b/g, ' ').split(' ').filter(w => w.length > 2 && !STOPW.has(w) && !headWords.has(w)))];\n  const sameSearch = (a, b) => { const A = kwTok(a), B = new Set(kwTok(b)); if (!A.length || !B.size) return false; return A.filter(w => B.has(w)).length / A.length >= 0.6; };\n  const ladderFor = (t) => lrows.find(l => sameSearch(t.keyword, l.keyword) || sameSearch(l.keyword, t.keyword)) || null;\n  const aiTargetOf = (t) => { const parseS = (v) => { try { const x = JSON.parse(v || '[]'); return Array.isArray(x) ? x : []; } catch (e) { return []; } }; return { question: t.question, kind: t.kind, target_id: t.target_id, fanout: String(t.fanout || '').split(' | ').filter(Boolean), sources: parseS(t.sources_json), competitors: String(t.competitors || '').split(', ').filter(Boolean) }; };\n  for (const p of picks) if (p.source === 'ladder' && !p.ai_target) { const t = aiTargets.find(x => x.site_id === s.site_id && x.status === 'queued' && x.kind !== 'refresh' && (sameSearch(x.keyword, p.keyword) || sameSearch(p.keyword, x.keyword))); if (t) { p.ai_target = aiTargetOf(t); p.target_id = t.target_id; p.why += ' — written to answer \"' + t.question + '\" in AI answers'; } }\n  const aiQueue = aiTargets.filter(t => t.site_id === s.site_id && t.keyword && !(t.kind !== 'refresh' && ladderFor(t)) && (t.kind === 'refresh' ? !!t.page_url && !refreshedRecently.has(keyOfU(t.page_url)) : !recent.has(norm(t.keyword)) && !ladderKw.has(norm(t.keyword))) && !picks.some(x => norm(x.keyword) === norm(t.keyword)))\n    .sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0));\n  const aiCand = aiQueue.length ? (() => { const t = aiQueue[0];\n    return { keyword: t.keyword, page_type: t.kind === 'refresh' ? 'Service Page' : (t.page_type || 'Guide'), existing_page_url: t.kind === 'refresh' ? t.page_url : '', source: t.kind === 'refresh' ? 'ai_refresh' : 'ai_answer', target_id: t.target_id,\n      why: 'AI answers \"' + t.question + '\" without you' + (t.competitors ? ' (it names ' + String(t.competitors).split(', ').slice(0, 3).join(', ') + ')' : '') + (t.kind === 'refresh' ? ': refresh ' + t.page_url : ': a new answer page'),\n      ai_target: aiTargetOf(t) }; })() : null;\n  const aiDue = !!aiCand && aiQuota > aiUsed && !aiThisWeek;\n  const aiPick = aiDue && !paused_reason && cfg.opportunities === 'auto' ? aiCand : null;\n  if (aiDue && !paused_reason && cfg.opportunities !== 'auto') suggestions = [{ keyword: aiCand.keyword, source: aiCand.source, page_type: aiCand.page_type, existing_page_url: aiCand.existing_page_url, why: aiCand.why, target_id: aiCand.target_id }, ...suggestions].slice(0, CONFIG.suggestions);\n  if (aiPick) picks.push(aiPick);\n  const fromUniq = paused_reason ? 0 : Math.min(pages, uniq.length);   // the AI page (v4.12) is not one of uniq\n  const upcoming = uniq.slice(fromUniq, fromUniq + CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));\n  const pending = slog.filter(l => l.status === 'started' && !l.published_url).map(l => ({ keyword: l.keyword, started_at: l.started_at, days: Math.round((now - new Date(l.started_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);\n  const awaiting_approval = manualL.filter(x => x.eligible.length).map(x => { const l = x.eligible[0]; return { ladder_id: x.id, head: x.head, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '' }; });\n  const facts = { paused_reason, waiting_publish: waitingKw.size, max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,\n    ai_pages: { per_month: aiQuota, used_this_month: aiUsed, this_week: !!aiPick, next: aiCand ? { keyword: aiCand.keyword, source: aiCand.source, target_id: aiCand.target_id, why: aiCand.why } : null, queued: aiQueue.length },\n    queued_ladders: queued.map(x => ({ ladder_id: x.id, head: x.head, priority: Number.isFinite(x.priority) ? x.priority : null, reason: 'max_active' })),\n    won_ladders: info.filter(x => x.won || x.status === 'won').map(x => ({ ladder_id: x.id, head: x.head, position: x.head_position, checks: x.won_checks })),\n    waiting_for_support: info.filter(x => x.main_waiting && ['active', 'queued'].includes(x.status) && !x.won).map(x => ({ ladder_id: x.id, head: x.head, published: x.published, supporting: x.support, needed: Math.ceil(x.support / 2), head_position: x.head_position })) };\n  picks.forEach((p, i) => { const request_id = 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_' + (i + 1);\n    out.push({ json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', source: p.source, keyword: p.keyword, page_type: p.page_type, existing_page_url: p.existing_page_url || '', ladder_id: p.ladder_id || '', rung: p.rung || 0, page_no: p.page_no || 0, target_id: p.target_id || '', why: p.why, request_id, pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, ...facts,\n      body: { mode: 'keyword', keyword: p.keyword, page_type: p.page_type, country: s.country || '', domain: s.domain, receive: ['Keyword Report', 'Page Content'], existing_page_url: p.existing_page_url || '', email: s.email || '', callback_url: s.callback_url || '', request_id, client_ip: 'cadence:' + s.site_id, force_content: true,\n        ...(p.ai_target ? { ai_target: p.ai_target } : {}),\n        ...(p.source === 'ladder' ? { ladder_id: p.ladder_id, ladder_rung: p.rung, ladder_head: p.head, ladder_page_no: p.page_no, ladder_links: (p.links || []).map(l => ({ url: l.url, path: String(l.url).replace(/^https?:\\/\\/[^\\/]+/i, '') || '/', role: l.role, keyword: l.keyword, planned: true })) } : {}) } } }); });\n  if (!picks.length && (paused_reason || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length)) {\n    const reason = paused_reason ? waitingKw.size + ' pages written but not published (limit ' + cfg.max_waiting + '): publish them to continue' : 'nothing to write automatically this week';\n    out.push({ json: { nothing_to_do: true, report_only: true, reason, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', request_id: 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_0',\n      pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, ...facts } });\n  }\n}\nif (!out.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'nothing to write for \"' + want + '\" (no cadence set, nothing planned, or everything written recently)' : 'no site has a content cadence this week', sites: list.length, dry_run } }];\nreturn out;\n"
         },
         "id": "dbde4df4-5076-5e2a-be04-bb8d29fa1565",
         "name": "Cadence Plan",
@@ -1187,6 +1356,320 @@
       },
       {
         "parameters": {
+          "jsCode": "// v4.12: the AI targets written this week -> status writing (the AI Growth loop marks them won once AI names the business for the question).\nconst now = new Date().toISOString();\nconst rows = $('Cadence Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && !p.dry_run && p.target_id).map(p => ({ json: { target_id: p.target_id, request_id: (p.body && p.body.request_id) || '', at: now } }));\nreturn rows.length ? rows : [{ json: { skip: true } }];"
+        },
+        "id": "589eff5e-2fdd-51c8-8e76-6844ea87c6ca",
+        "name": "AI Target Marks",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3960,
+          220
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "0fbf5d76-d3cf-560e-a0d6-f59c502cd7da",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "a44dfb37-da33-5f5d-a7c9-bc624f673d66",
+        "name": "Any AI Marks?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          3960,
+          440
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ai_targets"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "target_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.target_id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "writing",
+              "request_id": "={{ $json.request_id }}",
+              "written_at": "={{ $json.at }}",
+              "updated_at": "={{ $json.at }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "target_id",
+                "displayName": "target_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "prompt_id",
+                "displayName": "prompt_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "question",
+                "displayName": "question",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_url",
+                "displayName": "page_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_type",
+                "displayName": "page_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "fanout",
+                "displayName": "fanout",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "sources_json",
+                "displayName": "sources_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "competitors",
+                "displayName": "competitors",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "engines",
+                "displayName": "engines",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "stage",
+                "displayName": "stage",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "value",
+                "displayName": "value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "reason",
+                "displayName": "reason",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "written_at",
+                "displayName": "written_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "won_at",
+                "displayName": "won_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "4a1a00d0-fd32-5618-b826-62356a96fb24",
+        "name": "Mark AI Target Writing",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          3960,
+          660
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
           "jsCode": "// One note per site: this week's page(s) and why, what comes next, and pages still waiting for a publish link.\n// v4.8: plus the pipeline facts from the plan (Manual ladders' next pages, suggestions, queued / won ladders, main pages waiting for support).\nconst FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';\nconst plan = $('Cadence Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst path = (u) => String(u || '').replace(/^https?:\\/\\/[^\\/]+/, '') || '/';\nconst arr = (v) => Array.isArray(v) ? v : [];\nconst pipelineHtml = (s) => (arr(s.awaiting_approval).length ? '<p><b>Ready for your approval</b> (Manual ladders, about $1.20 each): ' + arr(s.awaiting_approval).map(a => esc(a.keyword) + ' (ladder \"' + esc(a.head) + '\", ' + (Number(a.rung) === 4 ? 'main page' : 'rung ' + esc(a.rung)) + ')').join(', ') + '. Start one through the <a href=\"' + esc(FORM_URL) + '\">form</a> or the app.</p>' : '') +\n  (arr(s.suggestions).length ? '<p><b>Suggested posts</b> (opportunity posts are set to Manual): ' + arr(s.suggestions).map(u => esc(u.keyword) + ' (' + esc(u.source) + ')').join(', ') + '</p>' : '') +\n  (arr(s.waiting_for_support).length ? '<p style=\"color:#64748b\"><b>Main pages waiting for support:</b> ' + arr(s.waiting_for_support).map(w => esc(w.head) + ' (' + w.published + ' of ' + w.supporting + ' supporting pages published, ' + w.needed + ' needed)').join(', ') + '</p>' : '') +\n  (arr(s.queued_ladders).length ? '<p style=\"color:#64748b\"><b>Queued ladders</b> (start when an active one is won, fully written or paused): ' + arr(s.queued_ladders).map(q => esc(q.head)).join(', ') + '</p>' : '') +\n  (arr(s.won_ladders).length ? '<p style=\"color:#15803d\"><b>Won</b> (main keyword in the top 3 for 4 checks, no more pages): ' + arr(s.won_ladders).map(w => esc(w.head)).join(', ') + '</p>' : '');\nconst facts = (s) => ({ paused_reason: s.paused_reason || '', waiting_publish: Number(s.waiting_publish) || 0, max_waiting: Number(s.max_waiting) || 0, awaiting_approval: arr(s.awaiting_approval), suggestions: arr(s.suggestions), queued_ladders: arr(s.queued_ladders), won_ladders: arr(s.won_ladders), waiting_for_support: arr(s.waiting_for_support) });\nconst bySite = new Map(); for (const p of plan) { if (!bySite.has(p.site_id)) bySite.set(p.site_id, []); bySite.get(p.site_id).push(p); }\nreturn [...bySite.values()].map(items => { const s = items[0];\n  const html = '<p>Hi,</p><p>This week\\'s content for <b>' + esc(s.domain) + '</b> (' + items.length + ' of ' + s.pages_per_week + ' per week):</p><ol>' + items.map(p => '<li><b>' + esc(p.keyword) + '</b> (' + esc(p.page_type) + ') — ' + esc(p.why) + (p.existing_page_url ? '; improves <a href=\"' + esc(p.existing_page_url) + '\">' + esc(path(p.existing_page_url)) + '</a>' : '') + '</li>').join('') + '</ol>' +\n    '<p>Each page arrives in its own e-mail within 10-15 minutes as HTML, Markdown and meta.json next to the PDF report. Publish it in your CMS, then report the link through the <a href=\"' + esc(FORM_URL) + '\">form</a> (\"I published a page\") or the API (' + esc(API_URL) + ', <code>mode: published</code>) so the trackers check indexing and positions.</p>' +\n    (s.upcoming.length ? '<p><b>Coming next:</b> ' + s.upcoming.map(u => esc(u.keyword) + ' (' + esc(u.source) + ')').join(', ') + '</p>' : '') +\n    (s.pending_publish.length ? '<p style=\"color:#b45309\"><b>Still waiting for your publish link:</b> ' + s.pending_publish.map(p => esc(p.keyword) + ' (written ' + p.days + ' days ago)').join(', ') + '</p>' : '') +\n    pipelineHtml(s) +\n    '<p style=\"color:#64748b;font-size:12px\">Change the posts per week through \"Track my site\" (form, or API field blogs_per_week) or the Site Admin workflow. About $1.20 of AI cost per page.</p>';\n  return { json: { site_id: s.site_id, domain: s.domain, email: s.email, callback_url: s.callback_url, request_id: s.request_id, subject: '[Content] ' + s.domain + ': ' + items.map(p => p.keyword).join(', '), html, status: 'progress', stage: 'content_cadence', week: s.week,\n    pages: items.map(p => ({ keyword: p.keyword, source: p.source, page_type: p.page_type, existing_page_url: p.existing_page_url, request_id: p.request_id, why: p.why })), upcoming: s.upcoming, pending_publish: s.pending_publish, candidates: s.candidates, ...facts(s) } }; });\n"
         },
         "id": "4c7ba2a3-1f56-5764-9459-5fb5c1756069",
@@ -1396,6 +1879,17 @@
         "main": [
           [
             {
+              "node": "Ensure AI Targets Table (Cadence)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure AI Targets Table (Cadence)": {
+        "main": [
+          [
+            {
               "node": "Load Sites",
               "type": "main",
               "index": 0
@@ -1484,6 +1978,28 @@
         "main": [
           [
             {
+              "node": "Load AI Targets (Cadence)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load AI Targets (Cadence)": {
+        "main": [
+          [
+            {
+              "node": "Load Monitors (Cadence)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Monitors (Cadence)": {
+        "main": [
+          [
+            {
               "node": "Cadence Plan",
               "type": "main",
               "index": 0
@@ -1547,6 +2063,28 @@
         ]
       },
       "Mark Ladder Writing": {
+        "main": [
+          [
+            {
+              "node": "AI Target Marks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Target Marks": {
+        "main": [
+          [
+            {
+              "node": "Any AI Marks?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark AI Target Writing": {
         "main": [
           [
             {
@@ -1648,6 +2186,24 @@
           [
             {
               "node": "Mark Ladder Writing",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "AI Target Marks",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any AI Marks?": {
+        "main": [
+          [
+            {
+              "node": "Mark AI Target Writing",
               "type": "main",
               "index": 0
             }

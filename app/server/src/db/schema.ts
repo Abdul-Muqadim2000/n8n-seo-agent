@@ -149,6 +149,8 @@ export const sites = pgTable(
     verificationMethod: text('verification_method'),
     trackingStatus: text('tracking_status').notNull().default('not_started'),
     trackingStartedAt: ts('tracking_started_at'),
+    /** v4.13 Link Builder: approve each sequence or send automatically (owner), which mailbox, how many a day */
+    linkSettings: jsonb('link_settings').$type<{ mode?: 'approve' | 'auto'; mailboxId?: string | null; autoDailyMax?: number }>().notNull().default({}),
     createdAt: created(),
     updatedAt: ts('updated_at').defaultNow().notNull(),
   },
@@ -256,6 +258,138 @@ export const keywordChecks = pgTable(
   (t) => [index('keyword_checks_org_created_idx').on(t.orgId, t.createdAt), index('keyword_checks_site_keyword_idx').on(t.siteId, t.keyword, t.country)],
 );
 
+// ---- v4.13 Link Builder (n8n/seo-agent/LINK_BUILDER_SPEC.md): the company's mailboxes, the sequences it sends, every message, opt-outs ----
+/** A mailbox the company sends link-building e-mails from (its own address; SMTP + IMAP with an app password). The secret is encrypted. */
+export const mailboxes = pgTable(
+  'mailboxes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+    label: text('label').notNull().default(''),
+    fromName: text('from_name').notNull(),
+    fromEmail: text('from_email').notNull(),
+    provider: text('provider').notNull().default('smtp'),
+    smtpHost: text('smtp_host').notNull(),
+    smtpPort: integer('smtp_port').notNull().default(465),
+    smtpSecure: boolean('smtp_secure').notNull().default(true),
+    imapHost: text('imap_host').notNull(),
+    imapPort: integer('imap_port').notNull().default(993),
+    imapSecure: boolean('imap_secure').notNull().default(true),
+    username: text('username').notNull(),
+    /** AES-256-GCM (lib/secretBox.ts, key MAILBOX_KEY); never sent to the browser */
+    secret: text('secret').notNull(),
+    /** active | paused | error */
+    status: text('status').notNull().default('active'),
+    statusReason: text('status_reason').notNull().default(''),
+    signatureName: text('signature_name').notNull().default(''),
+    signatureTitle: text('signature_title').notNull().default(''),
+    company: text('company').notNull().default(''),
+    postalAddress: text('postal_address').notNull().default(''),
+    timezone: text('timezone').notNull().default('UTC'),
+    windowStart: integer('window_start').notNull().default(8),
+    windowEnd: integer('window_end').notNull().default(17),
+    dailyFirstMax: integer('daily_first_max').notNull().default(20),
+    dailyMax: integer('daily_max').notNull().default(50),
+    sentFolder: text('sent_folder').notNull().default(''),
+    lastUid: integer('last_uid').notNull().default(0),
+    uidValidity: text('uid_validity').notNull().default(''),
+    dns: jsonb('dns').$type<Record<string, unknown> | null>(),
+    lastPollAt: ts('last_poll_at'),
+    lastSendAt: ts('last_send_at'),
+    lastError: text('last_error').notNull().default(''),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    /** when it started sending (the warm-up counts from here) */
+    startedAt: ts('started_at').defaultNow().notNull(),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [uniqueIndex('mailboxes_org_email_idx').on(t.orgId, t.fromEmail)],
+);
+
+/** One prospect's e-mail sequence (first e-mail + follow-ups in one thread), approved by a person or by the automatic mode. */
+export const outreachSequences = pgTable(
+  'outreach_sequences',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+    siteId: uuid('site_id').notNull().references(() => sites.id, { onDelete: 'cascade' }),
+    mailboxId: uuid('mailbox_id').references(() => mailboxes.id, { onDelete: 'set null' }),
+    prospectDomain: text('prospect_domain').notNull(),
+    prospectType: text('prospect_type').notNull(),
+    toEmail: text('to_email').notNull(),
+    contactUrl: text('contact_url').notNull().default(''),
+    pageUrl: text('page_url').notNull().default(''),
+    targetUrl: text('target_url').notNull().default(''),
+    country: text('country').notNull().default(''),
+    /** scheduled | active | paused | replied | bounced | stopped | won | finished | failed */
+    status: text('status').notNull().default('scheduled'),
+    /** the next step to send (0 = the first e-mail); steps.length = all sent */
+    step: integer('step').notNull().default(0),
+    steps: jsonb('steps').$type<{ step: number; waitDays: number; subject: string; body: string }[]>().notNull(),
+    nextAt: ts('next_at'),
+    consent: boolean('consent').notNull().default(false),
+    approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
+    approvedAt: ts('approved_at'),
+    startedAt: ts('started_at'),
+    lastSentAt: ts('last_sent_at'),
+    replyAt: ts('reply_at'),
+    replyClass: text('reply_class'),
+    replySummary: text('reply_summary').notNull().default(''),
+    suggestedReply: text('suggested_reply').notNull().default(''),
+    replyFrom: text('reply_from').notNull().default(''),
+    oooUntil: ts('ooo_until'),
+    wonAt: ts('won_at'),
+    error: text('error').notNull().default(''),
+    createdAt: created(),
+    updatedAt: ts('updated_at').defaultNow().notNull(),
+  },
+  (t) => [index('outreach_seq_site_idx').on(t.siteId, t.prospectDomain), index('outreach_seq_due_idx').on(t.status, t.nextAt), index('outreach_seq_org_to_idx').on(t.orgId, t.toEmail)],
+);
+
+/** Every e-mail sent and every reply received in a sequence (Message-IDs for threading and reply matching). */
+export const outreachMessages = pgTable(
+  'outreach_messages',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    sequenceId: uuid('sequence_id').notNull().references(() => outreachSequences.id, { onDelete: 'cascade' }),
+    orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+    mailboxId: uuid('mailbox_id').references(() => mailboxes.id, { onDelete: 'set null' }),
+    /** out | in */
+    direction: text('direction').notNull(),
+    step: integer('step').notNull().default(0),
+    /** step | manual (an answer written in the app) | reply | auto (out of office) | bounce */
+    kind: text('kind').notNull().default('step'),
+    subject: text('subject').notNull().default(''),
+    body: text('body').notNull().default(''),
+    messageId: text('message_id').notNull().default(''),
+    inReplyTo: text('in_reply_to').notNull().default(''),
+    fromEmail: text('from_email').notNull().default(''),
+    toEmail: text('to_email').notNull().default(''),
+    error: text('error'),
+    at: ts('at').defaultNow().notNull(),
+  },
+  (t) => [index('outreach_msg_seq_idx').on(t.sequenceId, t.at), index('outreach_msg_org_mid_idx').on(t.orgId, t.messageId), index('outreach_msg_mailbox_at_idx').on(t.mailboxId, t.direction, t.at)],
+);
+
+/** Addresses and domains the company must not write to again (opt-outs, hard bounces, added by hand). Stored as a hash plus a masked hint. */
+export const suppressions = pgTable(
+  'suppressions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id').notNull().references(() => organizations.id, { onDelete: 'cascade' }),
+    /** email | domain */
+    kind: text('kind').notNull(),
+    valueHash: text('value_hash').notNull(),
+    hint: text('hint').notNull().default(''),
+    reason: text('reason').notNull().default(''),
+    createdAt: created(),
+  },
+  (t) => [uniqueIndex('suppressions_org_kind_hash_idx').on(t.orgId, t.kind, t.valueHash)],
+);
+
+export type MailboxRow = typeof mailboxes.$inferSelect;
+export type OutreachSequenceRow = typeof outreachSequences.$inferSelect;
+export type OutreachMessageRow = typeof outreachMessages.$inferSelect;
 export type UserRow = typeof users.$inferSelect;
 export type OrgRow = typeof organizations.$inferSelect;
 export type SiteRow = typeof sites.$inferSelect;

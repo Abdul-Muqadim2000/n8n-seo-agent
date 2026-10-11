@@ -1,3 +1,4 @@
+import { linkSummary } from './linkBuilder';
 import {
   formatPercent,
   MODE_IDS,
@@ -39,10 +40,12 @@ export interface SiteBundle {
   rankNext: EngineAction | null;
   /** the engine tracks the site but its weekly reports go to another address (an older setup): they never reach this app */
   reportsElsewhere: boolean;
+  /** v4.13 Link Builder: pitches waiting, a mailbox, replies waiting, listings competitors have */
+  links?: { drafted: number; mailbox: boolean; repliesWaiting: number; listingsMissing: { name: string; competitors: string[] }[] };
 }
 
 export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle> {
-  const [search, rankings, content, technical, ai, backlinks, alerts, settings, rank] = await Promise.all([
+  const [search, rankings, content, technical, ai, backlinks, alerts, settings, rank, links] = await Promise.all([
     searchData(org, site),
     rankingsData(site),
     contentData(org, site),
@@ -52,6 +55,7 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
     alertsData(site),
     settingsData(org, site),
     latestReport(org.id, site.id, ['rank_tracker']),
+    linkSummary(org, site),
   ]);
   const reportsElsewhere = settings.tracking.tracked && settings.tracking.status === 'active' && !settings.tracking.reportsToThisApp;
   let rankNext: EngineAction | null = null;
@@ -69,7 +73,7 @@ export async function loadBundle(org: OrgRow, site: SiteRow): Promise<SiteBundle
       apiBody: (rank.payload.api_body as Record<string, unknown>) ?? null,
     };
   }
-  return { search, rankings, content, technical, ai, backlinks, alerts, settings, rankNext, reportsElsewhere };
+  return { search, rankings, content, technical, ai, backlinks, alerts, settings, rankNext, reportsElsewhere, links };
 }
 
 const PAGE_TYPES = new Set<string>(PAGE_TYPE_VALUES);
@@ -120,11 +124,29 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   if (tracked && snap && !snap.ga4.connected)
     add({ id: 'setup:ga4', category: 'setup', priority: 'medium', title: 'Connect Google Analytics 4', detail: 'GA4 adds organic sessions, engagement and key events (leads, sales) to the weekly report.', action: { label: 'Connect GA4', page: 'settings/verification' } });
   if (x.settings.readiness.score < 70)
-    add({ id: 'setup:profile', category: 'setup', priority: x.settings.readiness.score < 40 ? 'high' : 'medium', title: 'Complete the E-E-A-T profile', detail: 'Every page gets a byline, an author box, Person / LocalBusiness schema and an expert reviewer from it — strong trust signals for Google and AI answers.', evidence: `${x.settings.readiness.score}% complete · missing: ${x.settings.readiness.missing.slice(0, 4).join(', ')}`, action: { label: 'Complete the profile', page: 'settings/profile' } });
+    add({ id: 'setup:profile', category: 'setup', priority: x.settings.readiness.score < 40 ? 'high' : 'medium', title: 'Complete the E-E-A-T profile', detail: `Every page gets a byline, an author box, Person / LocalBusiness schema and an expert reviewer from it — strong trust signals for Google and AI answers.${x.ai.growth ? ' The AI outreach drafts and AI answer pages use it too: until it is complete they carry [brackets] for you to fill in.' : ''}`, evidence: `${x.settings.readiness.score}% complete · missing: ${x.settings.readiness.missing.slice(0, 4).join(', ')}`, action: { label: 'Complete the profile', page: 'settings/profile' } });
   if (!x.technical.audits.length)
     add({ id: 'setup:audit', category: 'technical', priority: 'high', title: 'Run the first technical audit', detail: 'Crawl, probes and scoring with a fix pack (robots.txt, llms.txt, redirects, schema, internal links). Later audits show what changed.', action: { label: 'Run audit', mode: 'audit', prefill: { reportType: 'site_audit' } } });
   if (!x.ai.runs.length)
     add({ id: 'setup:ai', category: 'ai', priority: 'medium', title: 'Take an AI-visibility baseline', detail: 'See whether ChatGPT, Perplexity, Gemini, Claude and Google AI name your company for the questions your buyers ask.', action: { label: 'Check AI visibility', mode: 'ai_visibility' } });
+  // v4.12 (AI_GROWTH_SPEC.md): the AI growth loop's two owner steps — the IndexNow key file, and the outreach drafts to send
+  const g = x.ai.growth;
+  if (g && !g.submitted.indexnow.verified && g.submitted.indexnow.key)
+    add({ id: 'ai:indexnow', category: 'ai', priority: 'medium', title: 'Add one small file so new pages reach Bing the same week', detail: `Put ${g.submitted.indexnow.key}.txt (it contains only that key) at the root of ${site.domain}. From then on the weekly AI growth run sends every new or updated page to Bing (ChatGPT search, Copilot), Yandex, Naver and the other IndexNow engines.`, evidence: g.submitted.indexnow.keyUrl, action: { label: 'Get the file', page: 'ai' } });
+  const ready = g ? g.earned.filter((e) => e.drafted && e.kind !== 'competitor' && e.mentionsUs !== true && (!e.status || e.status === 'new')) : [];
+  const readyHosts = [...new Set(ready.map((e) => e.host))];
+  if (readyHosts.length)
+    add({ id: 'ai:outreach', category: 'ai', priority: 'high', title: `${readyHosts.length} outreach draft${readyHosts.length === 1 ? '' : 's'} ready for pages AI cites`, detail: 'AI answers rely on these articles, lists and threads, and they do not name you yet — being named there is the strongest way into the answers. Each draft asks to be included (or answers the thread as you). Send it from your own mailbox, then mark it as sent.', evidence: readyHosts.slice(0, 4).join(', '), action: { label: 'Review the drafts', page: 'ai' } });
+  // v4.13 Link Builder: pitches to approve, the mailbox they need, replies to answer, listings competitors have
+  const L = x.links;
+  if (L && L.repliesWaiting)
+    add({ id: 'links:replies', category: 'backlinks', priority: 'high', title: `${L.repliesWaiting} link-building repl${L.repliesWaiting === 1 ? 'y' : 'ies'} waiting for your answer`, detail: 'Someone answered your pitch. A suggested answer is ready: edit it and send it in the same thread — a quick answer is what turns a reply into a link.', action: { label: 'Answer', page: 'links' } });
+  if (L && L.drafted && !L.mailbox)
+    add({ id: 'links:mailbox', category: 'backlinks', priority: 'high', title: 'Connect your mailbox to send the link pitches', detail: `${L.drafted} pitch${L.drafted === 1 ? ' is' : 'es are'} drafted. They go out from your own address (company settings → Mailboxes) after you approve them — never from ours.`, action: { label: 'See the pitches', page: 'links' } });
+  else if (L && L.drafted)
+    add({ id: 'links:approve', category: 'backlinks', priority: 'high', title: `${L.drafted} link-building pitch${L.drafted === 1 ? '' : 'es'} ready for your approval`, detail: 'Each one is written for one site — a dead link to replace, a list that leaves you out, a mention without a link — with the right page of yours and the right person. Read, edit and approve: they go out from your mailbox, a few a day.', action: { label: 'Review the pitches', page: 'links' } });
+  for (const l of (L?.listingsMissing ?? []).slice(0, 2))
+    add({ id: `links:listing:${l.name}`, category: 'backlinks', priority: 'medium', title: `Get listed on ${l.name}`, detail: `${l.competitors.join(' and ')} ${l.competitors.length === 1 ? 'is' : 'are'} there and you are not. You add this listing yourself — the submission page and a ready description are on the Link building page.`, action: { label: 'Open the checklist', page: 'links' } });
   if (!x.backlinks.snapshots.length)
     add({ id: 'setup:backlinks', category: 'backlinks', priority: 'low', title: 'Check your backlinks', detail: 'Lost and spammy links, a link gap against competitors and outreach drafts for the best prospects.', action: { label: 'Check backlinks', mode: 'backlinks' } });
   if (x.alerts.checkinDue)

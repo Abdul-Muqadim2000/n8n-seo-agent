@@ -83,8 +83,8 @@ export function RecommendationItem({ rec }: { rec: Recommendation }) {
         </>
       }
       title={<span className="text-[15px] leading-snug">{rec.title}</span>}
-      description={rec.evidence ? <span className="tabular">{rec.evidence}</span> : <span className="text-[13px] leading-relaxed text-ink-2">{rec.detail}</span>}
-      detail={rec.evidence ? <span className="text-[13px] leading-relaxed">{rec.detail}</span> : undefined}
+      description={rec.evidence ? <span className="tabular [overflow-wrap:anywhere]">{rec.evidence}</span> : <span className="text-[13px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]">{rec.detail}</span>}
+      detail={rec.evidence ? <span className="text-[13px] leading-relaxed [overflow-wrap:anywhere]">{rec.detail}</span> : undefined}
       detailLabel="Why it matters"
       action={rec.action ? <RecommendationButton action={rec.action} /> : undefined}
       actionPosition="side"

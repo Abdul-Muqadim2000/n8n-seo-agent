@@ -86,6 +86,7 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
       goal: sd.goal ?? 'leads',
       checkPageExists: false,
       ladder: undefined,
+      aiTarget: undefined,
       receiveReport: true,
       receiveContent: true,
       emailCopy: true,
@@ -147,6 +148,11 @@ export function KeywordForm({ initialSiteId, prefill }: ToolFormProps) {
         {v.ladder && (
           <Callout tone="info" title={`Part of the keyword ladder “${v.ladder.head || 'your ladder'}”`}>
             {v.ladder.rung === 4 ? 'The top page of the ladder' : `Rung ${v.ladder.rung}`}: the page links to the ladder’s top page and a sibling, and the ladder marks it as written so the weekly cadence moves on.
+          </Callout>
+        )}
+        {v.aiTarget && (
+          <Callout tone="info" title="Written to be the page AI cites">
+            For “{v.aiTarget.question}”: the answer comes first, each search the assistants run gets its own section{v.aiTarget.kind === 'refresh' ? ', and your existing page is refreshed with today’s facts and date' : ''}.
           </Callout>
         )}
         <CountryField reg={form.register('country')} error={errMsg(e.country)} />

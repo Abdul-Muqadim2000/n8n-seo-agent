@@ -1,5 +1,6 @@
 import {
   LADDER_SITE_ROW,
+  type AiTargetRow,
   normKeyword,
   type ContentLogRow,
   type LadderMode,
@@ -27,7 +28,9 @@ import {
 // - opportunity posts (Search Console striking distance, then rising Google Trends searches) only when opportunities is Auto;
 //   when Manual they are suggestions (the first 5);
 // - Manual ladders are never written: each one's next eligible page waits for approval;
-// - skips keywords written in the last 90 days (or published), ladder rows marked writing / published, brand queries.
+// - skips keywords written in the last 90 days (or published), ladder rows marked writing / published, brand queries;
+// - v4.12 (AI_GROWTH_SPEC.md): the AI page of the week — the most valuable queued AI target (seo_ai_targets) as a new answer page or a refresh,
+//   on top of the blog posts, at most one a week and ai_pages_month a month, not while the pile-up guard holds; Manual opportunities -> a suggestion.
 
 export const CADENCE = {
   maxPerWeek: 3,
@@ -75,6 +78,9 @@ export interface CadenceInput {
   settings: LadderSettingsRow[];
   /** the website's rank checks (the main keywords' rows are used) */
   history: RankHistoryRow[];
+  /** v4.12: the AI growth loop's targets (queued ones are written) and the AI pages a month (0 = none, or AI visibility / growth off) */
+  aiTargets?: AiTargetRow[];
+  aiPagesPerMonth?: number;
 }
 
 /** The website's defaults as n8n reads them from the '_site' row. */
@@ -275,6 +281,45 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
   const pausedReason = pages > 0 && waitingKw.size >= cfg.maxWaiting ? 'pileup' : '';
   const picks = pausedReason ? [] : candidates.slice(0, pages);
 
+  // ---- v4.12: the AI page of the week (Cadence_Plan.js) ----
+  const aiQuota = Math.max(0, Math.floor(Number(input.aiPagesPerMonth ?? 0)));
+  const isAi = (l: ContentLogRow) => l.source === 'ai_answer' || l.source === 'ai_refresh';
+  const monthKey = new Date(now).toISOString().slice(0, 7);
+  const aiUsed = logs.filter((l) => isAi(l) && String(l.started_at || '').slice(0, 7) === monthKey).length;
+  const aiThisWeek = logs.some((l) => isAi(l) && now - ms(l.started_at) < 6 * 864e5);
+  const keyOfU = (u: unknown) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const refreshedRecently = new Set(logs.filter((l) => l.existing_page_url && now - ms(l.started_at) < 60 * 864e5).map((l) => keyOfU(l.existing_page_url)));
+  // one search, one page (Cadence_Plan.js): an AI question a keyword-ladder page targets is written AS that page, with the AI target; the
+  // words of the site's ladder heads appear everywhere and do not count
+  const STOPW = new Set(['the', 'and', 'for', 'with', 'what', 'how', 'which', 'are', 'can', 'does', 'your', 'you', 'that', 'this', 'from', 'into', 'best', 'top', 'list', 'guide']);
+  const headWords = new Set(lrows.flatMap((l) => norm(l.head_keyword).split(' ')).filter(Boolean));
+  const kwTok = (k: string) => [...new Set(norm(k).replace(/\b(e)\b/g, ' ').split(' ').filter((w) => w.length > 2 && !STOPW.has(w) && !headWords.has(w)))];
+  const sameSearch = (x: string, y: string) => { const A = kwTok(x), B = new Set(kwTok(y)); return A.length > 0 && B.size > 0 && A.filter((w) => B.has(w)).length / A.length >= 0.6; };
+  for (let i = 0; i < picks.length; i++) {
+    const pk = picks[i];
+    if (pk.source !== 'ladder' || pk.aiTarget) continue;
+    const t = (input.aiTargets ?? []).find((x) => x.status === 'queued' && x.kind !== 'refresh' && (sameSearch(x.keyword, pk.keyword) || sameSearch(pk.keyword, x.keyword)));
+    if (t) picks[i] = { ...pk, why: `${pk.why} — written to answer “${t.question}” in AI answers`, aiTarget: { targetId: t.target_id, question: t.question, kind: 'answer' } };
+  }
+  const aiQueue = (input.aiTargets ?? [])
+    .filter((t) => t.status === 'queued' && t.keyword && !(t.kind !== 'refresh' && lrows.some((l) => sameSearch(t.keyword, l.keyword) || sameSearch(l.keyword, t.keyword))) && (t.kind === 'refresh' ? !!t.page_url && !refreshedRecently.has(keyOfU(t.page_url)) : !recent.has(norm(t.keyword)) && !ladderKw.has(norm(t.keyword))) && !picks.some((p) => norm(p.keyword) === norm(t.keyword)))
+    .sort((a, z) => num(z.value) - num(a.value));
+  const aiTop = aiQueue[0];
+  const aiItem: QueueItem | null = aiTop
+    ? {
+        keyword: aiTop.keyword,
+        source: aiTop.kind === 'refresh' ? 'ai_refresh' : 'ai_answer',
+        why: `AI answers “${aiTop.question}” without you${aiTop.competitors ? ` (it names ${String(aiTop.competitors).split(', ').slice(0, 3).join(', ')})` : ''}${aiTop.kind === 'refresh' ? `: refresh ${aiTop.page_url}` : ': a new answer page'}`,
+        pageType: aiTop.kind === 'refresh' ? 'Service Page' : aiTop.page_type || 'Guide',
+        existingPageUrl: aiTop.kind === 'refresh' ? aiTop.page_url : '',
+        ladder: null,
+        aiTarget: { targetId: aiTop.target_id, question: aiTop.question, kind: aiTop.kind === 'refresh' ? 'refresh' : 'answer' },
+      }
+    : null;
+  const aiDue = !!aiItem && aiQuota > aiUsed && !aiThisWeek && waitingKw.size < cfg.maxWaiting;
+  if (aiDue && aiItem && cfg.opportunities === 'auto') picks.push(aiItem);
+  else if (aiDue && aiItem) suggestions = [aiItem, ...suggestions].slice(0, CADENCE.suggestions);
+
   const activeIds = new Set(active.map((x) => x.id));
   const queuedIds = new Set(queued.map((x) => x.id));
   const ladders: CadenceLadder[] = info.map((x) => ({
@@ -338,6 +383,7 @@ export function simulateCadence(input: CadenceInput, runs: string[], now = Date.
         domain: input.domain,
         ladder_id: p.ladder?.id ?? '',
         source: p.source,
+        existing_page_url: p.existingPageUrl || '',
         request_id: 'cad_simulated',
       } as ContentLogRow);
   }

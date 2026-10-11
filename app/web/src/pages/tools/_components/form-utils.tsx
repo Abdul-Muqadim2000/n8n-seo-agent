@@ -22,6 +22,21 @@ export function withPrefill<T extends Record<string, unknown>>(defaults: T, pref
         out[k] = { id: l.id, rung: l.rung, head: typeof l.head === 'string' ? l.head : '', pageNo: typeof l.pageNo === 'number' ? l.pageNo : 0 };
       continue;
     }
+    // v4.12: an AI answer target (AI visibility "Write it now"): kept only with a real question
+    if (k === 'aiTarget') {
+      const t = v as { question?: unknown; kind?: unknown; targetId?: unknown; fanout?: unknown; sources?: unknown; competitors?: unknown };
+      const strs = (x: unknown) => (Array.isArray(x) ? x.filter((y): y is string => typeof y === 'string').slice(0, 8) : []);
+      if (t && typeof t === 'object' && typeof t.question === 'string' && t.question.trim().length >= 8)
+        out[k] = {
+          question: t.question.trim().slice(0, 300),
+          kind: t.kind === 'refresh' ? 'refresh' : 'answer',
+          targetId: typeof t.targetId === 'string' ? t.targetId.slice(0, 120) : '',
+          fanout: strs(t.fanout),
+          sources: (Array.isArray(t.sources) ? t.sources : []).filter((x): x is { url: string; title?: string } => !!x && typeof x === 'object' && typeof (x as { url?: unknown }).url === 'string').slice(0, 6).map((x) => ({ url: x.url, title: typeof x.title === 'string' ? x.title : '' })),
+          competitors: strs(t.competitors),
+        };
+      continue;
+    }
     const d = defaults[k];
     const same = Array.isArray(d) ? Array.isArray(v) && v.every((x) => typeof x === 'string') : d == null ? typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' : typeof d === typeof v;
     if (same) out[k] = v;

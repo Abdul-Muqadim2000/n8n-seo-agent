@@ -1,0 +1,2 @@
+// Callback payload per site (stage ai_growth): the summary; the table rows stay in n8n.
+return $input.all().map(i => { const { html, page_rows, target_rows, prospect_rows, growth_row, cache_rows, ...rest } = i.json; return { json: rest }; });

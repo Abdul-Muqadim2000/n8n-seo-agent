@@ -81,6 +81,26 @@ alert mail; saving a site's tracking also clears the e-mail stored on its n8n si
 platform admin page). Everything arrives in the app: Runs, Reports, the dashboards and the Pipeline page. n8n's own Error Handler
 still e-mails the operator (`SEO_OPS_EMAIL`) when a workflow fails; the app marks such a run failed after 3 hours.
 
+## Link building (v4.13)
+Page **Link building** (`/o/:org/sites/:site/links`) and company settings → **Mailboxes** (`n8n/seo-agent/LINK_BUILDER_SPEC.md`). The n8n Link
+Builder drafts; the app sends — from the company's own mailbox (SMTP + IMAP, app password, encrypted with `MAILBOX_KEY` in `app/.env`; without
+it no mailbox can be connected), after a person approves each sequence (or automatically, owner's choice, a few a day). Jobs in the server
+(`services/outreachJobs.ts`, `LINK_BUILDER_JOBS`): sender every minute (Mon-Fri window, warm-up 5 / 10 / limit, 4-9 minutes apart, footer +
+opt-out, threaded follow-ups), inbox every 3 minutes (reply / out-of-office / bounce / opt-out; the Reply Reader classifies and suggests an
+answer when it is published), automatic approval every 10 minutes. Tables: `mailboxes`, `outreach_sequences`, `outreach_messages`,
+`suppressions` (hash + masked hint), `sites.link_settings`. Test: `python3 app/scripts/outreach_e2e.py` (GreenMail, 31 checks; `--keep FILE`
+leaves the data for a browser check, `--cleanup FILE` removes it).
+
+## AI growth (v4.12)
+
+The AI visibility page has an **AI growth** section (`pages/site/_components/ai-growth.tsx`; data `growth` in `GET …/data/ai`, built in
+`server/src/services/data.ts` from n8n's `seo_ai_growth` / `seo_ai_pages` / `seo_ai_targets` and the ai_source prospects): what the weekly
+loop did (pages sent to Bing / IndexNow, key pages AI-ready, pages AI cites without you, AI pages this month), the IndexNow key file to
+upload, the earned-media list with outreach drafts (copy), the questions to win ("Write it now" passes the AI target to the page form;
+"Via the ladder" when a keyword-ladder page answers it) and the key pages' readiness with Bing's crawl. Settings: "AI growth (weekly)"
+and "AI answer pages a month" (0-8, default 2; cost from `estimateAiGrowthCost`). The Pipeline lists the automation and the AI page of the
+week (`services/cadence.ts`, same rules as n8n's `Cadence_Plan.js`); reports render `ai_growth`. Engine side: `n8n/seo-agent/AI_GROWTH_SPEC.md`.
+
 ## AI visibility (v4.9)
 
 The AI visibility page (`pages/site/AiVisibilityPage.tsx`, panels in `_components/ai-insights.tsx`) shows, per website:

@@ -24,6 +24,7 @@ const siteDataPages: RouteObject[] = [
   { path: 'technical', lazy: page(() => import('@/pages/site/TechnicalPage')) },
   { path: 'ai', lazy: page(() => import('@/pages/site/AiVisibilityPage')) },
   { path: 'backlinks', lazy: page(() => import('@/pages/site/BacklinksPage')) },
+  { path: 'links', lazy: page(() => import('@/pages/site/LinkBuildingPage')) },
   { path: 'alerts', lazy: page(() => import('@/pages/site/AlertsPage')) },
   { path: 'settings', element: <Navigate to="business" replace /> },
   { path: 'settings/:tab', lazy: page(() => import('@/pages/site/SiteSettingsPage')) },

@@ -7,7 +7,7 @@ import json, os, re, uuid, sys
 from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, HISTORY_COLS, SITES_TABLE, METRICS_TABLE, QUERY_TABLE, SITES_COLS, METRICS_COLS, QUERY_COLS,
                            LOG_TABLE, LOG_COLS, TRENDS_TABLE, TRENDS_COLS, CADENCE_TABLE, CADENCE_COLS, ALERTS_TABLE, ALERTS_COLS, CHECKIN_TABLE, CHECKIN_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_VIS_TABLE, AI_VIS_COLS, BL_SNAP_TABLE, BL_SNAP_COLS, AUDITS_TABLE, AUDITS_COLS, PROSPECT_TABLE, PROSPECT_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS,
-                           LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS, CASE_TABLE, CASE_COLS,
+                           LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS, CASE_TABLE, CASE_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS,
                            DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_get_where_params, dt_upsert_params_keys, dt_update_params, dt_get_recent_params)
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
@@ -303,6 +303,10 @@ N.append(node('Load Content Log', DT_TYPE, DT_VERSION, dt_get_all_params(LOG_TAB
 N.append(node('Ensure Ladder Settings Table', DT_TYPE, DT_VERSION, dt_create_params(LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS), at(4, 2), onError='continueRegularOutput'))
 N.append(node('Load Ladder Settings', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_SETTINGS_TABLE), at(9, 2), **LOAD))
 N.append(node('Load Main Keyword Ranks', DT_TYPE, DT_VERSION, dt_get_recent_params(HISTORY_TABLE, 'rung', 'eq', '4', 5000), at(10, 2), **LOAD))
+# v4.12 (AI_GROWTH_SPEC.md): the AI targets queued by the AI Growth loop and the sites' AI pages a month (seo_monitors ai_pages_month)
+N.append(node('Ensure AI Targets Table (Cadence)', DT_TYPE, DT_VERSION, dt_create_params(AI_TARGETS_TABLE, AI_TARGETS_COLS), at(5, 2), onError='continueRegularOutput'))
+N.append(node('Load AI Targets (Cadence)', DT_TYPE, DT_VERSION, dt_get_where_params(AI_TARGETS_TABLE, 'status', 'eq', 'queued'), at(11, 2), **LOAD))
+N.append(node('Load Monitors (Cadence)', DT_TYPE, DT_VERSION, dt_get_all_params(MONITORS_TABLE), at(12, 2), **LOAD))
 N.append(code('Cadence Plan', rd('code/Cadence_Plan.js'), at(10, 0)))
 N.append(iff('Any Pages?', '{{ !$json.nothing_to_do }}', at(11, 0)))
 N.append(iff('Site Notes?', '{{ !!$json.report_only && !$json.dry_run }}', at(12, 1)))
@@ -316,6 +320,9 @@ N.append(node('Save Content Log', DT_TYPE, DT_VERSION, dt_insert_params(LOG_TABL
 N.append(code('Ladder Marks', rd('code/Ladder_Marks.js'), at(16, 0)))
 N.append(iff('Any Ladder Marks?', '{{ !$json.skip }}', at(17, 0)))
 N.append(node('Mark Ladder Writing', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}'}), at(18, 0), alwaysOutputData=True, onError='continueRegularOutput'))
+N.append(code('AI Target Marks', "// v4.12: the AI targets written this week -> status writing (the AI Growth loop marks them won once AI names the business for the question).\nconst now = new Date().toISOString();\nconst rows = $('Cadence Plan').all().map(i => i.json).filter(p => !p.nothing_to_do && !p.dry_run && p.target_id).map(p => ({ json: { target_id: p.target_id, request_id: (p.body && p.body.request_id) || '', at: now } }));\nreturn rows.length ? rows : [{ json: { skip: true } }];", at(18, 1)))
+N.append(iff('Any AI Marks?', '{{ !$json.skip }}', at(18, 2)))
+N.append(node('Mark AI Target Writing', DT_TYPE, DT_VERSION, dt_update_params(AI_TARGETS_TABLE, AI_TARGETS_COLS, [('target_id', '={{ $json.target_id }}')], {'status': 'writing', 'request_id': '={{ $json.request_id }}', 'written_at': '={{ $json.at }}', 'updated_at': '={{ $json.at }}'}), at(18, 3), alwaysOutputData=True, onError='continueRegularOutput'))
 N.append(code('Cadence Note', urls(rd('code/Cadence_Note.js')), at(19, 0)))
 N.append(iff('Has Email (Cadence)?', '{{ !!$json.email }}', at(20, -1)))
 N.append(node('Send Cadence Note', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, at(21, -1), credentials=SMTP, onError='continueRegularOutput'))
@@ -327,13 +334,14 @@ Each pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`
 **Pipeline rules (v4.8)** from `{LADDER_SETTINGS_TABLE}` (written by the web app; one row per ladder + a `_site` row with the website defaults; no row = the site's default mode or Auto, active, priority by start date): only **Auto** ladders with status active / queued are written, at most `max_active` (default 2) at a time in **priority** order (ladder 1's pages before ladder 2's; plan type *direct* writes the main page first); the **main page waits** until half of the supporting pages are published or the main keyword ranks 1-30; a ladder whose main keyword held the **top 3 for 4 checks** gets no more pages; with `max_waiting` (default 3) pages written but not published the site is **paused** (`paused_reason: pileup`; on demand `force: true` bypasses it); opportunity posts only when `opportunities` is Auto (else listed as `suggestions`); **Manual** ladders' next pages are listed in `awaiting_approval`. Sites without a page but with news get a *Cadence Status* note (same callback stage).
 The owner publishes in any CMS and reports the URL ("I published a page" in the form, or API `mode: published`): the page is checked live, logged as published, the ladder row gets the real URL, and the Site Tracker inspects indexing and positions from the next Monday. `dry_run: true` only plans. Cost: about $1.20 of AI per page.
 Form: {FORM_URL} · API: {API_URL}""", [-40, -700], 1180, 560))
-for a, b in [('Weekly Schedule', 'Ensure Log Table'), ('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Cadence Plan'), ('Cadence Plan', 'Any Pages?'),
-             ('Start Content Runs', 'Log Rows'), ('Log Rows', 'Save Content Log'), ('Save Content Log', 'Ladder Marks'), ('Ladder Marks', 'Any Ladder Marks?'), ('Mark Ladder Writing', 'Cadence Note'), ('Cadence Note', 'Has Email (Cadence)?'), ('Cadence Note', 'Has Callback (Cadence)?')]: link(C, a, b)
+for a, b in [('Weekly Schedule', 'Ensure Log Table'), ('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Ensure AI Targets Table (Cadence)'), ('Ensure AI Targets Table (Cadence)', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Load AI Targets (Cadence)'), ('Load AI Targets (Cadence)', 'Load Monitors (Cadence)'), ('Load Monitors (Cadence)', 'Cadence Plan'), ('Cadence Plan', 'Any Pages?'),
+             ('Start Content Runs', 'Log Rows'), ('Log Rows', 'Save Content Log'), ('Save Content Log', 'Ladder Marks'), ('Ladder Marks', 'Any Ladder Marks?'), ('Mark Ladder Writing', 'AI Target Marks'), ('AI Target Marks', 'Any AI Marks?'), ('Mark AI Target Writing', 'Cadence Note'), ('Cadence Note', 'Has Email (Cadence)?'), ('Cadence Note', 'Has Callback (Cadence)?')]: link(C, a, b)
 link(C, 'Any Pages?', 'Dry Run?', 0); link(C, 'Any Pages?', 'Site Notes?', 1)
 link(C, 'Site Notes?', 'Cadence Status', 0); link(C, 'Site Notes?', 'Nothing To Write', 1)
 link(C, 'Cadence Status', 'Has Email (Cadence)?'); link(C, 'Cadence Status', 'Has Callback (Cadence)?')
 link(C, 'Dry Run?', 'Planned Only', 0); link(C, 'Dry Run?', 'Start Content Runs', 1)
-link(C, 'Any Ladder Marks?', 'Mark Ladder Writing', 0); link(C, 'Any Ladder Marks?', 'Cadence Note', 1)
+link(C, 'Any Ladder Marks?', 'Mark Ladder Writing', 0); link(C, 'Any Ladder Marks?', 'AI Target Marks', 1)
+link(C, 'Any AI Marks?', 'Mark AI Target Writing', 0); link(C, 'Any AI Marks?', 'Cadence Note', 1)
 link(C, 'Has Email (Cadence)?', 'Send Cadence Note', 0); link(C, 'Has Callback (Cadence)?', 'POST Cadence Note', 0)
 write(wf('SEOagentCadence1', 'SEO Agent — Content Cadence', N, C), 'SEO_Agent_Content_Cadence.json')
 

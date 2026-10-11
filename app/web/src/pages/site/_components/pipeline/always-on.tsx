@@ -1,6 +1,6 @@
 // Pipeline home: the always-on part (opportunity posts and monitoring) and the weekly capacity the ladders share.
 import type { ReactNode } from 'react';
-import { AlertTriangle, CalendarClock, ChevronRight, Circle, FileText, Flame, History, Lightbulb, PenSquare, Play, RefreshCw, Settings, Target, TrendingUp } from 'lucide-react';
+import { AlertTriangle, Bot, CalendarClock, ChevronRight, Circle, FileText, Flame, History, Lightbulb, PenSquare, Play, RefreshCw, Settings, Target, TrendingUp } from 'lucide-react';
 import { AUTOMATIONS, formatUsd, MODES, type AutomationStatus, type LadderCard, type PipelineData, type QueueItem } from '@seo/shared';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -13,9 +13,9 @@ import { Panel, SectionHeading } from '../kit';
 import { asPageType, AUTO_ICON, fmtWhen, inDays, ModeChip, validDate } from './common';
 import type { WriteNowItem } from './WriteNowDialog';
 
-const SOURCE_LABEL: Record<QueueItem['source'], string> = { ladder: 'Keyword ladder', striking: 'Close to page one', trend: 'Rising search' };
-const SOURCE_TONE: Record<QueueItem['source'], Tone> = { ladder: 'accent', striking: 'neutral', trend: 'neutral' };
-const SOURCE_ICON: Record<QueueItem['source'], ReactNode> = { ladder: <TrendingUp />, striking: <Target />, trend: <Flame /> };
+const SOURCE_LABEL: Record<QueueItem['source'], string> = { ladder: 'Keyword ladder', striking: 'Close to page one', trend: 'Rising search', ai_answer: 'AI answer page', ai_refresh: 'AI refresh' };
+const SOURCE_TONE: Record<QueueItem['source'], Tone> = { ladder: 'accent', striking: 'neutral', trend: 'neutral', ai_answer: 'accent', ai_refresh: 'accent' };
+const SOURCE_ICON: Record<QueueItem['source'], ReactNode> = { ladder: <TrendingUp />, striking: <Target />, trend: <Flame />, ai_answer: <Bot />, ai_refresh: <Bot /> };
 
 function automationState(a: AutomationStatus): ReactNode {
   if (a.state === 'on') return <StatusBadge tone="good">On</StatusBadge>;

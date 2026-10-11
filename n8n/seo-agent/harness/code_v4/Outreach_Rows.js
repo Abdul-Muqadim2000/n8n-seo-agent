@@ -1,0 +1,4 @@
+// Qualified prospects, contacts, our page, the link text and the drafted sequences (seo_link_outreach, upsert by site + prospect + type) (exact columns)
+const COLS = ["site_id", "domain", "prospect_domain", "type", "status", "score", "fit", "fit_reason", "checks_json", "page_url", "page_title", "evidence", "contacts_json", "contact_email", "contact_form_url", "country", "language", "target_url", "target_reason", "anchor_hint", "sequence_json", "deadline", "drafted_at", "checked_at", "request_id"];
+const rows = $('LB Rows').all().flatMap(i => i.json.outreach_rows || []).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));
+return rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];

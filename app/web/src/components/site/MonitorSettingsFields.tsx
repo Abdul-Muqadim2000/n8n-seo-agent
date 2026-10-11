@@ -1,10 +1,12 @@
 import { useId, type ReactNode } from 'react';
-import { Bot, Gauge, Link2, Wallet } from 'lucide-react';
+import { Bot, Gauge, Link2, Send, Wallet } from 'lucide-react';
 import {
   AI_ENGINES,
   AI_PROMPTS_MAX,
   AI_PULSE_ENGINES,
   CRAWL_PAGE_OPTIONS,
+  AI_PAGES_MAX,
+  estimateAiGrowthCost,
   estimateAiVisibilityCost,
   estimateMonitoringCost,
   formatUsd,
@@ -32,7 +34,10 @@ export function completeMonitors(m: Partial<MonitorSettings> | null | undefined)
     aiEngines: engines,
     aiPromptsMax: Math.min(AI_PROMPTS_MAX, Math.max(3, m?.aiPromptsMax ?? DEFAULT_MONITORS.aiPromptsMax)),
     aiPulse: m?.aiPulse ?? DEFAULT_MONITORS.aiPulse,
+    aiGrowth: m?.aiGrowth ?? DEFAULT_MONITORS.aiGrowth,
+    aiPagesPerMonth: Math.min(AI_PAGES_MAX, Math.max(0, m?.aiPagesPerMonth ?? DEFAULT_MONITORS.aiPagesPerMonth)),
     backlinks: m?.backlinks ?? DEFAULT_MONITORS.backlinks,
+    linkBuilder: m?.linkBuilder ?? DEFAULT_MONITORS.linkBuilder,
     auditMonthly: m?.auditMonthly ?? DEFAULT_MONITORS.auditMonthly,
     auditPages: m?.auditPages ?? DEFAULT_MONITORS.auditPages,
     auditJs: m?.auditJs ?? DEFAULT_MONITORS.auditJs,
@@ -116,6 +121,28 @@ export function MonitorSettingsFields({
                 disabled={disabled || !AI_PULSE_ENGINES.some((e) => value.aiEngines.includes(e))}
                 onChange={(e) => set({ aiPulse: e.target.checked })}
               />
+              <div className="space-y-3 rounded-lg border border-line p-3">
+                <Checkbox
+                  label="AI growth (weekly)"
+                  description="Every Monday: sends new and updated pages to Bing and IndexNow, checks your key pages can be read and quoted by AI, lists the pages AI cites without naming you (with outreach drafts) and queues the questions to win."
+                  checked={value.aiGrowth}
+                  disabled={disabled}
+                  onChange={(e) => set({ aiGrowth: e.target.checked })}
+                />
+                {value.aiGrowth && (
+                  <Field label="AI answer pages a month" hint="Written by the Monday content run for the questions AI answers without you — a new answer page or a refresh of your page. About $1.20 each, on top of the blog posts." className="max-w-xs">
+                    {(p) => (
+                      <Select {...p} value={value.aiPagesPerMonth} disabled={disabled} onChange={(e) => set({ aiPagesPerMonth: Number(e.target.value) })}>
+                        {[...new Set([0, 1, 2, 3, 4, 6, 8, value.aiPagesPerMonth])].sort((x, y) => x - y).filter((n) => n <= AI_PAGES_MAX).map((n) => (
+                          <option key={n} value={n}>
+                            {n === 0 ? 'None (only plan them)' : `${n} page${n === 1 ? '' : 's'} a month`}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                )}
+              </div>
             </div>
           )
         }
@@ -128,6 +155,16 @@ export function MonitorSettingsFields({
         description="A weekly watch for lost and spammy links. Once a month, a full report: link gap against competitors, broken links to reclaim, unlinked mentions and outreach drafts."
         checked={value.backlinks}
         onCheckedChange={(v) => set({ backlinks: v })}
+        disabled={disabled}
+      />
+      </MonitorRow>
+
+      <MonitorRow icon={<Send />} on={value.linkBuilder}>
+      <SwitchRow
+        title="Link builder"
+        description="Every Monday: new link opportunities (journalist requests, dead links to replace, resource pages, lists that leave you out), the right person and the right page of yours, and short e-mail sequences for you to approve. Nothing is sent without your approval, and only from your own mailbox."
+        checked={value.linkBuilder}
+        onCheckedChange={(v) => set({ linkBuilder: v })}
         disabled={disabled}
       />
       </MonitorRow>
@@ -209,13 +246,16 @@ function MonitorRow({ icon, on, children }: { icon: ReactNode; on: boolean; chil
 /** Monthly cost estimate with its breakdown (MONITOR_COSTS) for the chosen monitors and blog posts per week. */
 export function MonitoringCost({ monitors, blogsPerWeek, className }: { monitors: MonitorSettings; blogsPerWeek: number; className?: string }) {
   const c = MONITOR_COSTS;
-  const total = estimateMonitoringCost({ aiVisibility: monitors.aiVisibility, backlinks: monitors.backlinks, auditMonthly: monitors.auditMonthly, blogsPerWeek, aiPrompts: monitors.aiPromptsMax, aiEngines: monitors.aiEngines, aiPulse: monitors.aiPulse });
+  const total = estimateMonitoringCost({ aiVisibility: monitors.aiVisibility, backlinks: monitors.backlinks, auditMonthly: monitors.auditMonthly, blogsPerWeek, aiPrompts: monitors.aiPromptsMax, aiEngines: monitors.aiEngines, aiPulse: monitors.aiPulse, aiGrowth: monitors.aiGrowth, aiPages: monitors.aiPagesPerMonth, linkBuilder: monitors.linkBuilder });
+  const growth = estimateAiGrowthCost({ pages: monitors.aiPagesPerMonth, growth: monitors.aiGrowth });
   const ai = estimateAiVisibilityCost({ prompts: monitors.aiPromptsMax, engines: monitors.aiEngines, pulse: monitors.aiPulse });
   const rows: { label: string; detail: string; on: boolean; usd: number }[] = [
     { label: 'Weekly site report', detail: 'Search Console, GA4, Google Trends, live rank checks', on: true, usd: c.siteTrackerMonthly },
     { label: 'AI visibility', detail: `${monitors.aiPromptsMax} questions weekly, Claude and the market-wide index monthly`, on: monitors.aiVisibility, usd: ai.weekly + ai.fullRun },
     { label: 'Daily AI pulse', detail: `${monitors.aiPromptsMax} questions a day on the fast engines`, on: monitors.aiVisibility && monitors.aiPulse && ai.pulse > 0, usd: ai.pulse },
+    { label: 'AI growth', detail: `${monitors.aiPagesPerMonth} AI answer page${monitors.aiPagesPerMonth === 1 ? '' : 's'} a month, outreach drafts; Bing / IndexNow and page checks free`, on: monitors.aiVisibility && monitors.aiGrowth, usd: growth.total },
     { label: 'Backlink monitor', detail: 'weekly watch, monthly full report', on: monitors.backlinks, usd: c.backlinksMonthly },
+    { label: 'Link builder', detail: 'up to 10 drafted sequences a week; opportunity search, contacts and checks free', on: monitors.linkBuilder, usd: c.linkBuilderMonthly },
     { label: 'Monthly technical audit', detail: `up to ${monitors.auditPages} pages`, on: monitors.auditMonthly, usd: c.auditMonthly },
     {
       label: 'Blog posts',

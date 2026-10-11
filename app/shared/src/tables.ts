@@ -73,6 +73,10 @@ export interface MonitorsRow extends DtRow {
   request_id: string;
   /** v4.9: the daily AI Pulse (empty = on) */
   ai_pulse: boolean;
+  /** v4.12: the weekly AI growth loop (empty = on) and AI answer / refresh pages a month (empty = 2) */
+  ai_growth: boolean | null; ai_pages_month: number | null;
+  /** v4.13 (empty = on) */
+  link_builder: boolean | null;
 }
 export interface AiPromptRow extends DtRow {
   prompt_id: string; site_id: string; domain: string; prompt: string; kind: string; topic: string; keyword: string;
@@ -86,6 +90,8 @@ export interface AiAnswerRow extends DtRow {
   competitors: string; sources: string; excerpt: string; cost: number; error: string;
   /** v4.9: weekly | full | pulse | on_demand; sentiment toward the business; brands named in order; wrong claims ("claim → fact" | …); the searches the engine ran (" | ") */
   run_kind: string; sentiment: string; brands: string; issues: string; fanout: string;
+  /** v4.12: the exact third-party pages cited (JSON [{u, t}]) */
+  cited_urls: string;
 }
 export interface AiVisibilityRow extends DtRow {
   site_id: string; domain: string; run_id: string; checked_at: string; prompts: number; answers: number; mention_rate: number;
@@ -96,6 +102,22 @@ export interface AiVisibilityRow extends DtRow {
   run_kind: string; samples: number; visibility_score: number; mention_lo: number; mention_hi: number; sentiment_score: number | null;
   accuracy_issues: number; ai_sessions: number | null; ai_conversions: number | null; ai_revenue: number | null; index_sov: number | null;
   ai_impressions: number | null; perception_json: string; traffic_json: string; access_json: string; index_json: string; clusters_json: string;
+}
+/** v4.12 (n8n/seo-agent/AI_GROWTH_SPEC.md): the AI growth loop's key pages — can AI read and quote them, Bing's crawl, submission */
+export interface AiPageRow extends DtRow {
+  site_id: string; domain: string; url: string; kind: string; checked_at: string; status: number; score: number | null; checks_json: string; issues: string;
+  words_raw: number; title: string; updated_on: string; bing_crawled_at: string; bing_status: number; submitted_at: string; submitted_via: string; cited_by: string; questions: string;
+}
+/** v4.12: the questions to win in AI answers (a new answer page or a refresh), written by the content run; queued -> writing -> won (or skipped) */
+export interface AiTargetRow extends DtRow {
+  target_id: string; site_id: string; domain: string; prompt_id: string; question: string; keyword: string; kind: string; page_url: string; page_type: string;
+  fanout: string; sources_json: string; competitors: string; engines: string; stage: string; value: number; status: string; reason: string;
+  created_at: string; updated_at: string; request_id: string; written_at: string; won_at: string;
+}
+/** v4.12: one row per site and weekly AI growth run */
+export interface AiGrowthRow extends DtRow {
+  site_id: string; domain: string; run_id: string; checked_at: string; submitted: number; submitted_json: string; indexnow: string; pages_checked: number; avg_score: number | null;
+  pages_json: string; targets_json: string; earned_json: string; entity_json: string; actions_json: string; alerts: string; cost_usd: number;
 }
 /** v4.9: one row per site and day from the AI Pulse (counts only, no answer text) */
 export interface AiDailyRow extends DtRow {
@@ -213,6 +235,9 @@ export const TABLES = {
   aiAnswers: 'seo_ai_answers',
   aiVisibility: 'seo_ai_visibility',
   aiDaily: 'seo_ai_daily',
+  aiPages: 'seo_ai_pages',
+  aiTargets: 'seo_ai_targets',
+  aiGrowth: 'seo_ai_growth',
   backlinkSnapshots: 'seo_backlink_snapshots',
   prospects: 'seo_link_prospects',
   backlinks: 'seo_backlinks',
@@ -221,5 +246,9 @@ export const TABLES = {
   audits: 'seo_audits',
   auditFindings: 'seo_audit_findings',
   ladderSettings: 'seo_ladder_settings',
+  /** v4.13 Link Builder */
+  linkOutreach: 'seo_link_outreach',
+  listings: 'seo_listings',
+  linkImpact: 'seo_link_impact',
 } as const;
 export type TableKey = keyof typeof TABLES;

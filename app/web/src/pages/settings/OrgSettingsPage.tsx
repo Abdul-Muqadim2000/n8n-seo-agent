@@ -40,11 +40,13 @@ import { paths } from '@/lib/paths';
 import { qk, useDeleteOrg, useMembers, useSetBudget, useTeamMutation, useUpdateOrg, useUsage } from '@/lib/queries';
 import { fmtAgo, fmtDate, fmtDay } from '@/lib/utils';
 import { RoleChip, ROLE_ICON, SettingsCard } from './_components/SettingsCard';
+import { MailboxesTab } from './_components/MailboxesTab';
 
 const TABS = [
   { id: 'company', label: 'Company', description: 'Your company’s details, websites and setup.' },
   { id: 'team', label: 'Team', description: 'Who can see and change your company’s SEO work.' },
   { id: 'usage', label: 'Usage & budget', description: 'What this month’s analyses cost, and the monthly budget that caps them.' },
+  { id: 'mailboxes', label: 'Mailboxes', description: 'The mailboxes link-building pitches go out from, and your opt-out list.' },
 ] as const;
 
 const ROLE_DESCRIPTIONS: Record<Role, string> = {
@@ -68,6 +70,7 @@ export default function OrgSettingsPage() {
       {current.id === 'company' && <CompanyTab />}
       {current.id === 'team' && <TeamTab />}
       {current.id === 'usage' && <UsageTab />}
+      {current.id === 'mailboxes' && <MailboxesTab />}
     </div>
   );
 }

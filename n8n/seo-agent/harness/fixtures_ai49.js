@@ -35,7 +35,16 @@ const indexYou = () => { const d = ok(sb('llm_mentions/search_mentions/live'), 0
 const market = () => { const d = ok(sb('llm_mentions/top_mentioned_domains/live'), 0.115); const r = d.tasks[0].result[0]; const tpl = r.items[0];
   r.items = [['mof.gov.ae', 128, 80230], ['azentio.com', 64, 21000], ['cleartax.com', 40, 15000], ['www.youtube.com', 31, 9000], [DOMAIN, 6, 1200]].map(([dm, m, v]) => ({ ...tpl, domain: dm, total: { mentions: m, ai_search_volume: v }, location: [{ key: 2784, mentions: m, ai_search_volume: v }] }));
   r.aggregated_metrics.total = { mentions: 2210, ai_search_volume: 310000 }; return d; };
+// Copilot Search in Bing's results (DataForSEO serp/bing/organic: an ai_overview item with ai_overview_element texts and ai_overview_reference sources)
+const copilot = (withUs, o = {}) => ({ status_code: 20000, tasks: [{ status_code: 20000, status_message: 'Ok.', cost: 0.002, result: [{ keyword: 'q', type: 'organic', se_domain: 'bing.com', item_types: o.none ? ['organic'] : ['ai_overview', 'organic'], items: [
+  ...(o.none ? [] : [{ type: 'ai_overview', rank_group: 1, rank_absolute: 1, position: 'left', items: [{ type: 'ai_overview_element', rank_group: 1, rank_absolute: 1, position: 'left', title: null,
+    text: 'Businesses in the UAE usually compare Zoho Books, ClearTax and Cygnet for e-invoicing' + (withUs ? ', and Northwind ERP when they run Odoo' : '') + '. Pick an accredited service provider that connects to your ERP and supports PINT AE.', images: null, references: null }],
+    references: [{ type: 'ai_overview_reference', source: 'Gulf News', domain: 'gulfnews.com', url: 'https://gulfnews.com/business/best-e-invoicing-providers-uae-2026-1.501', title: 'Best e-invoicing providers in the UAE for 2026', text: 'Zoho Books, ClearTax and Cygnet lead the list.' },
+      { type: 'ai_overview_reference', source: 'ClearTax', domain: 'cleartax.com', url: 'https://cleartax.com/ae/e-invoicing-uae', title: 'UAE e-invoicing guide', text: 'ClearTax is an accredited provider.' },
+      ...(withUs ? [{ type: 'ai_overview_reference', source: 'Northwind ERP', domain: 'northwind-erp.com', url: 'https://northwind-erp.com/e-invoicing-uae/', title: 'E-invoicing in the UAE', text: 'Odoo e-invoicing.' }] : [])] }]),
+  { type: 'organic', rank_group: 1, rank_absolute: 2, domain: 'cleartax.com', url: 'https://cleartax.com/ae/e-invoicing-uae', title: 'UAE e-invoicing guide' }] }] }] });
 const answerFor = (req, i, o = {}) => { const e = req.engine; const us = !!(o.us && o.us(req, i));
+  if (e === 'copilot') return (o.fail && o.fail(req, i)) ? M.answerFor(req, i, { fail: () => true }) : copilot(us, { none: !!(o.noCopilot && o.noCopilot(req, i)) });
   if (o.fail && o.fail(req, i)) return M.answerFor(req, i, { fail: () => true });
   if (e === 'market') return market(); if (e === 'index_sov') return indexSov(req.body[0].targets); if (e === 'index_you') return indexYou();
   if (e === 'chatgpt') return chatgpt(us); if (e === 'gemini') return gemini(us);
@@ -73,4 +82,4 @@ const dailyRow = (date, o = {}) => ({ json: { site_id: SITE, domain: DOMAIN, dat
   mention_rate: Math.round(1000 * (o.mentioned != null ? o.mentioned : 11) / (o.samples || 18)) / 10, citation_rate: 22.2, share_of_voice: 30, visibility_score: o.vis || 41,
   engines_json: JSON.stringify(o.engines || { chatgpt: { answered: 6, mentioned: 4, cited: 2 }, gemini: { answered: 6, mentioned: 4, cited: 1 }, ai_mode: { answered: 6, mentioned: 3, cited: 1 } }),
   prompts_json: JSON.stringify(o.prompts || {}), competitors_json: JSON.stringify(o.competitors || { 'azentio.com': 9, 'cleartax.com': 5 }), sources_json: JSON.stringify({ 'mof.gov.ae': 10, 'zawya.com': 3 }), alerts: '', cost_usd: 0.072 } });
-module.exports = { answerFor, discoveryFor, ga4, ga4Denied, accessFor, analystFor, promptRows, dailyRow, ROBOTS, ROBOTS_BLOCK, chatgpt, gemini };
+module.exports = { copilot, answerFor, discoveryFor, ga4, ga4Denied, accessFor, analystFor, promptRows, dailyRow, ROBOTS, ROBOTS_BLOCK, chatgpt, gemini };

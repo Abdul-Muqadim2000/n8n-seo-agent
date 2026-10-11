@@ -379,7 +379,7 @@ export function AiPulseReport({ report }: { report: ReportDetail }) {
       <ReportHero
         report={report}
         title={alerts.length ? `${alerts.length} real ${alerts.length === 1 ? 'change' : 'changes'} in today’s AI answers` : 'No real change in today’s AI answers'}
-        description={`Named in ${pct(p.mention_rate)} of ${n(p.samples)} answers from ChatGPT, Gemini and Google AI Mode.`}
+        description={`Named in ${pct(p.mention_rate)} of ${n(p.samples)} answers from ChatGPT, Gemini and Google AI Mode (and Copilot when chosen).`}
         aside={num(p.visibility_score) != null ? <ScoreMark score={Math.round(num(p.visibility_score)!)} label="Visibility score" /> : undefined}
         stats={
           <>
@@ -413,6 +413,107 @@ export function AiPulseReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
       <p className="text-xs text-ink-3">The AI pulse asks your tracked questions every day except Monday; Monday's AI visibility report adds these answers to its figures. A message is sent only when a change is beyond normal answer-to-answer variation.</p>
+    </Stagger>
+  );
+}
+
+
+const EARNED_KIND: Record<string, string> = { list: '“Best of” list', article: 'Article', news: 'News', review: 'Review site', forum: 'Forum thread', video: 'Video', social: 'Social post', official: 'Official list', encyclopedia: 'Encyclopedia', competitor: 'Competitor page' };
+
+/** v4.12 (AI_GROWTH_SPEC.md): the weekly AI growth loop — done for you, what to do next, earned media, key pages, questions to win. */
+export function AiGrowthReport({ report }: { report: ReportDetail }) {
+  const p = report.payload;
+  const sub = obj(p.submitted), bing = obj(sub.bing), inx = obj(sub.indexnow);
+  const sent = (num(bing.submitted) ?? 0) + (num(inx.submitted) ?? 0);
+  const pages = objs(p.pages), earned = objs(p.earned).filter((e) => str(e.kind) !== 'competitor'), targets = objs(p.targets).filter((t) => ['queued', 'writing', 'won'].includes(str(t.status)));
+  const alerts = objs(p.alerts).filter((a) => str(a.level) !== 'good'), wins = objs(p.alerts).filter((a) => str(a.level) === 'good');
+  const actions = objs(p.actions);
+  return (
+    <Stagger className="space-y-5">
+      <ReportHero
+        report={report}
+        title={actions.filter((a) => num(a.priority) === 1).length ? `${actions.filter((a) => num(a.priority) === 1).length} high-value step(s) to get named in AI answers` : 'AI growth: done for you this week'}
+        description="Pages sent to Bing and IndexNow, key pages checked for AI readiness, the pages AI cites without naming you, and the questions queued for an AI answer page."
+        aside={num(p.avg_score) != null ? <ScoreMark score={Math.round(num(p.avg_score)!)} label="Key pages AI-ready" /> : undefined}
+        stats={
+          <>
+            <HeroStat label="Sent to Bing / IndexNow" value={sent} hint={str(inx.verified) === 'true' || inx.verified === true ? 'IndexNow ready' : 'IndexNow waits for its key file'} />
+            <HeroStat label="Key pages checked" value={pages.length} hint={num(p.avg_score) != null ? `average ${Math.round(num(p.avg_score)!)}/100` : undefined} />
+            <HeroStat label="Pages citing others" value={earned.filter((e) => e.mentions_us !== true).length} hint={`${earned.filter((e) => e.draft).length} draft(s)`} />
+            <HeroStat label="Questions queued" value={targets.filter((t) => str(t.status) === 'queued').length} />
+          </>
+        }
+      />
+      {wins.length > 0 && (
+        <Callout tone="good" title="Wins">
+          <ul className="space-y-1">{wins.map((a, i) => <li key={i}>{str(a.text)}</li>)}</ul>
+        </Callout>
+      )}
+      <AlertList alerts={alerts} />
+      {actions.length > 0 && (
+        <Block title="What to do next" icon={<BadgeCheck />}>
+          <ul className="divide-y divide-line text-[13px]">
+            {actions.map((a, i) => (
+              <li key={i} className="py-2">
+                <span className="font-medium text-ink [overflow-wrap:anywhere]">{str(a.action)}</span>
+                <span className="mt-0.5 block text-ink-2 [overflow-wrap:anywhere]">{str(a.why)}</span>
+                {has(a.draft) && (
+                  <span className="mt-1.5 block whitespace-pre-line rounded-lg bg-surface-2 p-2 text-ink-2 [overflow-wrap:anywhere]">
+                    {str(obj(a.draft).subject) ? str(obj(a.draft).subject) + '\n\n' : ''}
+                    {str(obj(a.draft).body)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+      {earned.length > 0 && (
+        <Block title="Pages AI cites without naming you" icon={<MessagesSquare />} description="Be named on these pages and the answers can name you">
+          <ul className="divide-y divide-line text-[13px]">
+            {earned.slice(0, 12).map((e, i) => (
+              <li key={i} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-start sm:justify-between">
+                <span className="min-w-0">
+                  <ExternalLink href={str(e.url)}>{str(e.title) || shortUrl(str(e.url))}</ExternalLink>
+                  <span className="block text-xs text-ink-3">{EARNED_KIND[str(e.kind)] ?? str(e.kind)} · cited {n(e.citations)}× · {strs(e.engines).map((k) => engineName(k, {})).join(', ')}</span>
+                  <span className="block text-ink-2">{str(e.action)}</span>
+                </span>
+                <span className="shrink-0 text-xs text-ink-2">{e.mentions_us === true ? <StatusBadge tone="good">Names you</StatusBadge> : strs(e.competitors_named).join(', ') || '—'}</span>
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+      {pages.length > 0 && (
+        <Block title="Key pages: can AI read and quote them?" icon={<ShieldCheck />}>
+          <ul className="divide-y divide-line text-[13px]">
+            {pages.slice().sort((a, b) => (num(a.score) ?? 0) - (num(b.score) ?? 0)).map((x, i) => (
+              <li key={i} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-start sm:justify-between">
+                <span className="min-w-0">
+                  <ExternalLink href={str(x.url)}>{shortUrl(str(x.url))}</ExternalLink>
+                  <span className="block text-ink-2">{strs(x.issues)[0] ?? 'Ready to be quoted'}</span>
+                </span>
+                <span className="shrink-0 tabular text-ink-2">{(num(x.status) ?? 0) >= 200 && (num(x.status) ?? 0) < 300 ? `${num(x.score) ?? 0}/100` : `HTTP ${num(x.status) ?? '–'}`}</span>
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+      {targets.length > 0 && (
+        <Block title="Questions to win" icon={<Search />} description="The Monday content run writes the most valuable one each week">
+          <ul className="divide-y divide-line text-[13px]">
+            {targets.slice(0, 10).map((t, i) => (
+              <li key={i} className="flex items-start justify-between gap-3 py-2">
+                <span className="min-w-0">
+                  <span className="font-medium text-ink">{str(t.question)}</span>
+                  <span className="block text-xs text-ink-3">{str(t.kind) === 'refresh' ? `Refresh ${shortUrl(str(t.page_url))}` : 'New answer page'}</span>
+                </span>
+                <Badge tone={str(t.status) === 'won' ? 'good' : 'accent'}>{str(t.status) === 'won' ? 'Won' : str(t.status) === 'writing' ? 'Being written' : 'Queued'}</Badge>
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
     </Stagger>
   );
 }

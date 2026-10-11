@@ -45,7 +45,7 @@ export function LaunchStep() {
   }, [site, settings.data]);
 
   const m = plan.monitors;
-  const monthly = estimateMonitoringCost({ aiVisibility: m.aiVisibility, backlinks: m.backlinks, auditMonthly: m.auditMonthly, blogsPerWeek: plan.blogsPerWeek, aiPrompts: m.aiPromptsMax, aiEngines: m.aiEngines, aiPulse: m.aiPulse });
+  const monthly = estimateMonitoringCost({ aiVisibility: m.aiVisibility, backlinks: m.backlinks, auditMonthly: m.auditMonthly, blogsPerWeek: plan.blogsPerWeek, aiPrompts: m.aiPromptsMax, aiEngines: m.aiEngines, aiPulse: m.aiPulse, aiGrowth: m.aiGrowth, aiPages: m.aiPagesPerMonth, linkBuilder: m.linkBuilder });
   const nowCost =
     MODES.track.costUsd + (auditNow ? MODES.audit.costUsd : 0) + (aiNow ? MODES.ai_visibility.costUsd : 0);   // blog posts and monitors are spent weekly (see the monthly estimate)
   const overBudget = usage.data ? nowCost > usage.data.remainingUsd : false;
