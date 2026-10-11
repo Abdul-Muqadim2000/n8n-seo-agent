@@ -4,3 +4,6 @@ __pycache__/
 
 # Local secrets (templates: n8n/.env.example, n8n/.env.seo.example)
 .env
+
+# Agent worktrees (Claude Code)
+.claude/worktrees/
