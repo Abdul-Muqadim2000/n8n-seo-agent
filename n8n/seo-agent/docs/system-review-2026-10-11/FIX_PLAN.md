@@ -59,13 +59,13 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 
 | ID | Title | Area | Type | Impact | Effort | Evidence | SC fix | Session | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| D1 | Spend and rate guards undercount under concurrency | OPS | wrong number | High | M | static data after runs 3–21 (execs 347, 352, 354, 356 …); §3 #1 | F1 | 1A | open |
-| D2 | Audit diff compares a technical audit with a full report | TECH | wrong number | High | S | exec 385 vs aud_mv40sm450bi (exec 370); §2.5 | F3 | 1B | open |
+| D1 | Spend and rate guards undercount under concurrency | OPS | wrong number | High | M | static data after runs 3–21 (execs 347, 352, 354, 356 …); §3 #1 | F1 | 1A | fixed 2026-10-11 (harness S31) — `seo_run_ledger` reservation before Rate Limit (main + Keyword Check), refused / settled rows; live check pending |
+| D2 | Audit diff compares a technical audit with a full report | TECH | wrong number | High | S | exec 385 vs aud_mv40sm450bi (exec 370); §2.5 | F3 | 1B | fixed 2026-10-11 (harness S32) — diff only against the latest audit of the same `report_type`, baseline otherwise, no "fixed" outside the type's categories; live check pending |
 | D3 | Backlinks ranks PBN link-farm pages as the best links | BL, LB | wrong advice | High | M | exec 368, 372; `files/backlinks-…pdf`, `disavow-candidates-…txt`; §2.7 | F2 | 1C | open |
 | D4 | Full report's keyword gap recommends government navigational queries | KW, TECH | wrong advice | High | S | exec 370; `files/full-seo-report-…`; §2.5 | F4 | 1D | open |
 | D5 | Pile-up guard undercounts unpublished pages | CAD | wrong number | High | S | exec 380; §2.9 | F5 | 2B | open |
-| D6 | "www and non-www not consolidated" (High) is false | TECH | wrong advice | High | S | exec 354, 370, 385; §2.5 | F7 | 1B | open |
-| D7 | RDAP never parsed, so WHOIS is always paid | OPS | quality | High | S | exec 370 ($0.36 WHOIS); §2.5 | F12 | 1A | open |
+| D6 | "www and non-www not consolidated" (High) is false | TECH | wrong advice | High | S | exec 354, 370, 385; §2.5 | F7 | 1B | fixed 2026-10-11 (harness S32) — finding only from the host probes (both 200, or redirect vs canonical disagree); fix worded after the canonical host; live check pending |
+| D7 | RDAP never parsed, so WHOIS is always paid | OPS | quality | High | S | exec 370 ($0.36 WHOIS); §2.5 | F12 | 1A | fixed 2026-10-11 (harness S31) — `_rdap.js` parses the text answer under `data`; only dateless domains go to WHOIS; live check pending |
 | D8 | Competitor brand ("facts erp") planned as a ladder rung | LAD, KW | wrong advice | Medium | S | exec 352, 365; `files/keyword-ladder-…`; §2.4 | F4 | 1D | open |
 | D9 | Hub page links to unwritten pages; lowercase keyword anchors | LAD, CON | quality | Medium | S | exec 365; `files/erp-software-uae.html`; §2.4 | — (K11) | 2C | open |
 | D10 | Generated page is not publishable (placeholders, NAP, length) | CON | quality | High | M | exec 365; `files/erp-software-uae.{md,html,meta.json}`; §2.4 | F6 | 2E | open |
@@ -75,14 +75,14 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 | D14 | Reply Reader's suggested answer invents a business fact | LB | wrong advice | Medium | S | execs 357–360; `files/reply-reader-tests-…txt`; §2.8 | F9 | 1C | open |
 | D15 | No shared canonical host (links to a 308 redirect) | CON, AIG, LB, TECH | quality | Medium | M (SC: S) | execs 365, 372, 376; audits 354 / 370 | F11 | 2B | open |
 | D16 | Rank Tracker's next step is wrong for main-page-only / Direct ladders | LAD, RANK | wrong advice | Medium | S | exec 378; §2.9 | F10 | 1D | open |
-| D17 | Fix-pack robots.txt drops /api/, /admin/, /private/ for AI bots | TECH | wrong advice | Medium | S | exec 370; `files/robots.txt` | F8 | 1B | open |
-| D18 | "Duplicate meta tags" on 45/47 pages is Next.js `theme-color` | TECH | wrong advice | Low | S | exec 354, 370, 385; §2.5 | F7 | 1B | open |
+| D17 | Fix-pack robots.txt drops /api/, /admin/, /private/ for AI bots | TECH | wrong advice | Medium | S | exec 370; `files/robots.txt` | F8 | 1B | fixed 2026-10-11 (harness S32) — robots.txt edited, AI-bot group only when blocked, `*` Disallows copied in, else "no change needed"; live check pending |
+| D18 | "Duplicate meta tags" on 45/47 pages is Next.js `theme-color` | TECH | wrong advice | Low | S | exec 354, 370, 385; §2.5 | F7 | 1B | fixed 2026-10-11 (harness S32) — duplicate metas verified on the homepage HTML (media-distinct ignored), tags named; live check pending |
 | D19 | AI visibility: 7 of 42 requests errored with no retry; heading counted as a brand; cited URLs not normalised | AIV | wrong number | Medium | S | exec 362 / 363; `files/ai-visibility-…pdf`; §2.6 | F13, F17 | 4A | open |
 | D20 | Discovery: ladder overlap unflagged, contradictory AI Overview text, duplicate domains, float CPCs | KW | quality | Low | S | exec 356, 364; `files/keyword-ideas-…`; §2.3 | F14 | 3A | open |
 | D21 | Sparse Trends % ("+1,200%") quoted in the Site Tracker brief | SITE | wrong number | Low | S | exec 382; §2.9 | F14 | 3A | open |
 | D22 | Site description reads only the homepage (fit 1 for Business Central; critic calls real stages "invented") | KW, CON | wrong number | Low | M | execs 344, 348–350, 365; §2.1, §2.4 | F4 | 2C | open |
 | D23 | Ahrefs DR not retried; sister / off-topic gap domains as prospects; `utm_source` kept | BL | quality | Low | S | exec 367 / 368; §2.7 | F17 | 4A | open |
-| D24 | Full report: duplicate author finding, false "capped at 85", scraper queries in top queries | REP, TECH | wrong number | Low | S | exec 370; `files/full-seo-report-…` | F14 | 1B | open |
+| D24 | Full report: duplicate author finding, false "capped at 85", scraper queries in top queries | REP, TECH | wrong number | Low | S | exec 370; `files/full-seo-report-…` | F14 | 1B | fixed 2026-10-11 (harness S32) — findings deduped by title / topic, cap text only when the cap lowered the score, operator queries counted as scraper queries; live check pending |
 | D25a | Scheduled runs missed (Mac-hosted n8n) | OPS | ops | High | L | no AI Pulse run 2026-10-10 / 10-11; exec 240, 261 late | F16 | 6B–6C | open |
 | D25b | Ops alerts have one channel, and it failed | OPS | ops | High | M | Error Handler e-mail ECONNREFUSED 2026-10-10 | F16 | 6A | open |
 | D25c | Test check-in row stands in for October's Search Console check-in | OPS | ops | Low | S | `seo_console_checkins` "October check-in (test)" | F16 | 6A | open |
