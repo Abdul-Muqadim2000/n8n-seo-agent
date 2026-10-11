@@ -46,3 +46,5 @@ RULES
 - Use AVOID only when the fit is clearly poor: unrealistic ranking odds, wrong intent, or dominant competitors with no content gap to exploit.
 - Use GO_WITH_CHANGES when the keyword is workable but the page type, angle, or targeting should change first.
 - reasons and risks must reference the actual numbers/data above, not generic SEO advice.
+- An AI Overview, a featured snippet or any other results-page feature is ONE observation at ONE time (the check time is in the SEARCH RESULTS PAGE FEATURES block). Write "an AI Overview was seen in the check at …" or "no AI Overview was seen in the check at …", never "there is no AI Overview" or "the AI Overview takes the clicks" as a fact; AI Overviews vary between searches, so the verdict and the score must not hinge on that one observation.
+- time_to_rank_months is a realistic MONTH count for a new page to reach the top 10, judged against the 2025 base rate (Ahrefs: only 1.74% of new pages reach the top 10 within a year, and 40.8% of those do so within a month) and the site's authority — weeks are never realistic for a page without existing rankings.

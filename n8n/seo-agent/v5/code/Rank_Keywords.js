@@ -1,8 +1,11 @@
 /*__REACH__*/
+/*__FIT_GATE__*/
 // Applies the AI relevance verdicts, computes the final opportunity score, builds topic clusters and the content plan,
 // and chooses the priority keywords (live SERP check next) and the keyword for the content pipeline.
 // v4.8: with a website, every keyword is labelled against the site's reach (difficulty_for_you, plan_type, months) and "Now" means easy or
 // reachable for THIS site (the pipeline keyword too); without a website the fixed difficulty limit (55) stays.
+// 2026-10-11 (FIX_PLAN D4): the shared fit gate drops government / portal / other-brand keywords before anything is recommended
+// (keyword_strategy.refused lists them with a reason); G3: every plan carries its estimated chance band.
 const base = $('Collect Research').first().json;
 const chunks = $('Relevance Chunks').all().map(i => i.json);
 const outs = $input.all().map(i => i.json);
@@ -24,14 +27,24 @@ const RELF = { 2: 1, 1: 0.45, 0: 0 };
 const ai_reviewed = rel.size;
 let R = null; try { const x = $('Reach (Discovery)').first().json; if (x && reachNum(x.reach) != null) R = x; } catch (e) { R = null; }
 const strongR = R ? reachStrong(R, null) : false;
-const forYou = (kd) => { if (!R) return {}; const diff = difficultyForYou(kd, R.reach, {}); const plan = reachPlan(diff, strongR); return { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan) }; };
+const forYou = (kd) => { if (!R) return {}; const diff = difficultyForYou(kd, R.reach, {}); const plan = reachPlan(diff, strongR); return { difficulty_for_you: diff, plan_type: plan.plan_type, months: plan.months, for_you_label: reachLabel(diff, plan), chance: plan.chance }; };
 const winnableFor = (diff, kd) => R ? (diff === 'easy' || diff === 'reachable') : (kd == null || kd <= 55);
+// the fit gate's context: the website, the declared competitors (strict), the auto-detected rivals (vendor-like), the brand names AI uses for
+// other companies (seo_cache ai_brands:, when the cache was read), and the seeds / services as protected words
+let cacheRows = []; try { cacheRows = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRows = []; }
+const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: ((base.research || {}).competitor_domains || []).filter(d => !(base.competitors || []).includes(d)),
+  brands: fitLearnedBrands(cacheRows), protect: [...(base.seeds || []), ...(base.services || []), String(base.business || '').slice(0, 400)] };
+const refused = [];
 const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
   return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, ...forYou(k.kd) };
-}).filter(k => k.relevance > 0 && k.intent !== 'navigational').sort((a, b) => b.opportunity - a.opportunity);
+}).filter(k => k.relevance > 0 && k.intent !== 'navigational').filter(k => {
+  const g = fitGate(k.keyword, { ...fitCtx, intent: k.intent });
+  if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail });
+  return g.ok;
+}).sort((a, b) => b.opportunity - a.opportunity);
 
 // ---- clusters (topic label from the AI pass) ----
 const cl = new Map();
@@ -79,6 +92,6 @@ const pipeline = kws.find(k => k.relevance === 2 && want.includes(k.intent) && w
 return [{ json: { ...base, keyword_strategy: {
   goal, pool_size: base.research.pool_size, ai_reviewed, total_relevant: kws.length, keywords: kws.slice(0, 200),
   clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline,
-  competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures,
+  competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
   reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR } : null
 } } }];

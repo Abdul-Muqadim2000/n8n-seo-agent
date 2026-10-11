@@ -729,7 +729,8 @@ log('Cosmetic: medians in evidence text are rounded (no 12.850000000000001 years
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = next(p for p in [os.path.join(HERE, 'v5'), os.path.join(HERE, '..', 'v5')] if os.path.isdir(p))
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
-rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n'))   # v4.8: the shared reach rules and published-page rows (one copy each) are inlined where a node asks for them
+FIT_GATE_SRC = _rd0('code/_fit_gate.js').rstrip('\n'); SERP_OBS_SRC = _rd0('code/_serp_obs.js').rstrip('\n')   # 2026-10-11: the keyword fit gate (D4 / D8) and the results-page observation rules (D26), one copy each
+rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC)   # v4.8: the shared reach rules and published-page rows (one copy each) are inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -2101,6 +2102,58 @@ patch('Build Word File', "  if (sf) {\n    const aio = sf.ai_overview || {};",
 # the "Title: / Meta Description:" lines and the copywriter's [Image: …] markers (live P2, 2026-10-09)
 patch('Build Webhook Response', "    markdown: d.page_markdown || null,", "    markdown: d.article_markdown || d.page_markdown || null,")
 log('Search data outages (2026-10-09): one retry of the keyword SERP and the facts search when DataForSEO answers a server error (50000 inside HTTP 200); a failed SERP is "unavailable" (digest, serp_features, keyword report, discovery live checks + research_failures), never "no snippet / no AI Overview"; CPC rounded in the discovery and ladder reports')
+
+# =============================================================================
+# 26. KEYWORD FIT, LADDER STATE AND HONEST OBSERVATIONS (2026-10-11, system review FIX_PLAN D4 / D8 / D16 / D26 / G3):
+#     D4  the full report recommended "fta login" (90,500/mo), "fta", "emaratax", "emirates id", "emirates id status" as keyword gaps (exec 370):
+#         Analyze Keywords (v3 code) filtered nothing on intent, brand or government terms. One shared fit gate (v5/code/_fit_gate.js, inlined
+#         through /*__FIT_GATE__*/ into Rank Keywords, Ladder Pool, Ladder Plan, Brief Context and patched into Analyze Keywords here) refuses
+#         navigational, government / portal and other-brand searches with a reason each; the gap, the easy wins and the opportunities use it,
+#         site_keywords.refused lists what was left out and the full report says so.
+#     D8  "facts erp" (FACTS ERP, facts.ae on the results page) became a rung-2 post (exec 352): the gate's "other brand" rule in Ladder Pool /
+#         Ladder Plan / Brief Context, and the relevance prompt is told the brands.
+#     D16 the Rank Tracker's next step follows the ladder's state (Tracker_Report.js, built by build_ladder_extras.py).
+#     D26 an AI Overview is one observation at one time (the plan said "none", the page run minutes later "cites 11 domains"): _serp_obs.js
+#         (/*__SERP_OBS__*/) in the digest, the keyword strategy and the ladder report; the keyword report's row is patched here.
+#     G3  the 2025 Ahrefs figures (1.74% / 40.8%) and an uncalibrated chance band per plan (_reach.js; app/shared/src/keywords.ts mirrors it).
+#     The learned AI brand names (seo_cache ai_brands:<site_id>) are read with the description and the reach (one cache read per run).
+# =============================================================================
+patch('Analyze Keywords', "const notWinning = ideas.filter(k => !k.your_position || k.your_position > 10);",
+      "// 2026-10-11 (FIX_PLAN D4): the shared fit gate — government / portal / navigational / other-brand searches are never recommended\n" + FIT_GATE_SRC + "\n"
+      "let cacheRowsAK = []; try { cacheRowsAK = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsAK = []; }\n"
+      "const fitCtxAK = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: comps.map(c => c.domain).filter(d => !(base.competitors || []).includes(d)), brands: fitLearnedBrands(cacheRowsAK), protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)] };\n"
+      "const refused = [];\n"
+      "const fitsAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return g.ok; };\n"
+      "const notWinning = ideas.filter(k => !k.your_position || k.your_position > 10);\n"
+      "const notWinningFit = notWinning.filter(fitsAK);")
+patch('Analyze Keywords', "  opportunities_by_intent[x] = notWinning.filter(k => k.intent === x)", "  opportunities_by_intent[x] = (x === 'navigational' ? notWinning : notWinningFit).filter(k => k.intent === x)")
+patch('Analyze Keywords', "const easy_wins = notWinning\n", "const easy_wins = notWinningFit\n")
+patch('Analyze Keywords', "const keyword_gap = notWinning.filter(k => k.competitors.length && (!k.your_position || k.your_position > 20))", "const keyword_gap = notWinningFit.filter(k => k.competitors.length && (!k.your_position || k.your_position > 20))")
+patch('Analyze Keywords', "      keyword_gap,\n      striking_distance\n    },", "      keyword_gap,\n      striking_distance,\n      refused: refused.slice(0, 40)\n    },")
+assert 'function fitGate(' in code('Analyze Keywords') and 'notWinningFit' in code('Analyze Keywords')
+# the full report says what the gap left out on purpose
+patch('Build Full Report', "    : '<p>No keyword gap found.</p>');",
+      "    : '<p>No keyword gap found.</p>');\n  if ((sk.refused || []).length) html += '<p class=\"small\">Left out of the gap on purpose: ' + sk.refused.length + ' searches for government portals, logins or other companies\\' brands (e.g. ' + sk.refused.slice(0, 5).map(r => esc(r.keyword) + ' — ' + esc(r.reason)).join(', ') + ').</p>';")
+# D26: the keyword report's results-page row says when the AI Overview was (not) seen; the observation rules are prefixed to the v3 node
+setcode('Build Word File', SERP_OBS_SRC + '\n' + code('Build Word File'))
+patch('Build Word File', "      ['AI Overview', aio.present ? 'Shown — cites ' + esc((aio.cited_domains || []).join(', ') || 'unknown sources') : 'Not shown for this query'],",
+      "      ['AI Overview', esc(aioObserved([{ seen: aio.present == null ? null : !!aio.present, at: aio.seen_at || sf.checked_at }]).text.replace(/^./, c => c.toUpperCase())) + (aio.present ? '. In that check it cited ' + esc((aio.cited_domains || []).join(', ') || 'unknown sources') + '.' : '')],")
+# the learned AI brand names come with the one cache read per run (desc: + reach: + ai_brands:)
+_lsc26 = nodes['Load Site Cache']['parameters']
+assert _lsc26['matchType'] == 'anyCondition' and len(_lsc26['filters']['conditions']) == 2
+_lsc26['filters']['conditions'].append({'keyName': 'key', 'condition': 'eq', 'keyValue': "={{ 'ai_brands:site_' + " + SITE_ID_EXPR + " }}"})
+# every node that asked for a kit got it, and no placeholder is left
+for _n in ('Rank Keywords', 'Ladder Pool', 'Ladder Plan', 'Brief Context', 'Analyze Keywords'): assert 'function fitGate(' in code(_n), _n + ': fit gate not inlined'
+for _n in [x for x in ('Analyze Competitor Pages', 'Clean Competitor Pages') if x in nodes] + ['Build Keyword Strategy', 'Build Ladder Report', 'Build Word File']: assert 'const aioObserved' in code(_n), _n + ': observation rules not inlined'
+assert 'reachChanceText(plan)' in code('Ladder Plan') and 'reachBaseRateText()' in code('Build Ladder Report') and 'reachBaseRateText()' in code('Build Keyword Strategy')
+assert not any('/*__FIT_GATE__*/' in n['parameters'].get('jsCode', '') or '/*__SERP_OBS__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'kit placeholder left'
+# harness shims (S34): the two kits as runnable scripts, one item per keyword / observation set
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_fit_gate.js'), 'w').write("// harness shim (written by build_v4.py section 26): the fit gate, run per item like a Code node — { keyword, intent, ctx } -> fitGate's answer\n" + FIT_GATE_SRC +
+    "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { keyword: j.keyword, ...fitGate(j.keyword, { ...(j.ctx || {}), intent: j.intent }), brands_text: fitBrandList(j.ctx || {}, (j.ctx || {}).protect) } }; });\n")
+open(os.path.join(OUT_CODE, '_serp_obs.js'), 'w').write("// harness shim (written by build_v4.py section 26): the results-page observation rules — { serp, at, obs } -> { seen_at, clock, count, seen, text }\n" + SERP_OBS_SRC +
+    "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { seen_at: j.serp ? serpSeenAt(j.serp) : null, clock: j.at ? obsClock(j.at) : null, ...aioObserved(j.obs || []) } }; });\n")
+log('System review fixes (2026-10-11, FIX_PLAN D4 / D8 / D16 / D26 / G3): one shared keyword fit gate (navigational, government / portal, other brands — competitor and results-page domain labels, learned AI brand names, SERP dominance; v5/code/_fit_gate.js) in Analyze Keywords, Rank Keywords, Ladder Pool, Ladder Plan and Brief Context with a reason per refusal (site_keywords.refused, keyword_strategy.refused, ladder refused_keywords); the relevance prompt is told the brands; the Rank Tracker\'s next step follows the ladder state (write / publish / rungs / improve); an AI Overview is a timed observation ("seen in the check at …", "seen in N of M checks"; v5/code/_serp_obs.js) in the digest, the verdict rules, the keyword report, the keyword strategy and the ladder report; the 2025 Ahrefs base rate (1.74% / 40.8%) with an uncalibrated chance band per plan (_reach.js, app mirror)')
 
 # =============================================================================
 # 9. WRITE

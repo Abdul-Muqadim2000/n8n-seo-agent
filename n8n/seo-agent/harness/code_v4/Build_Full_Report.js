@@ -217,6 +217,7 @@ if (sk) {
   html += `<h3>Keyword Gap: Competitors Rank, You Don't</h3>` + ((sk.keyword_gap || []).length
     ? `<table class="ct"><tr><th>Keyword</th><th>Searches/mo</th><th>Difficulty</th><th>Intent</th><th>Competitors ranking</th></tr>` + sk.keyword_gap.slice(0, 20).map(g => `<tr><td>${esc(g.keyword)}</td><td>${num(g.volume)}</td><td>${diffLabel(g.difficulty)}</td><td>${cap(g.intent)}</td><td class="small">${compCell(g.competitors)}</td></tr>`).join('') + `</table>`
     : '<p>No keyword gap found.</p>');
+  if ((sk.refused || []).length) html += '<p class="small">Left out of the gap on purpose: ' + sk.refused.length + ' searches for government portals, logins or other companies\' brands (e.g. ' + sk.refused.slice(0, 5).map(r => esc(r.keyword) + ' — ' + esc(r.reason)).join(', ') + ').</p>';
 
   if ((sk.striking_distance || []).length) {
     html += `<h3>Quick Wins: Keywords on Page 2</h3><table class="ct"><tr><th>Keyword</th><th>Position</th><th>Searches/mo</th><th>Ranking page</th></tr>` +

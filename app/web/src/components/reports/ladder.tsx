@@ -4,6 +4,7 @@ import { Ban, BarChart3, CalendarRange, CheckCircle2, Flag, GitFork, Lightbulb, 
 import {
   asDifficulty,
   asPlanChoice,
+  chanceText,
   DIFFICULTY_HINT,
   DIFFICULTY_LABEL,
   PLAN_CHOICE_LABEL,
@@ -265,6 +266,11 @@ function WhyThisPlan({ p, planType, difficulty }: { p: P; planType: PlanType; di
           {str(p.order) ? `${str(p.order).replace(/^\w/, (c) => c.toUpperCase())}.` : PLAN_ORDER_TEXT[planType]}
           {str(p.months) && ` Expected about ${str(p.months).replace('-', '–')} months until the main keyword ranks.`}
         </li>
+        {str(p.months) && (
+          <li>
+            <span className="font-medium text-ink">Estimated chance.</span> {str(p.chance_text) || chanceText(planType, str(p.months), p.stretch === true)}
+          </li>
+        )}
       </ul>
     </Block>
   );

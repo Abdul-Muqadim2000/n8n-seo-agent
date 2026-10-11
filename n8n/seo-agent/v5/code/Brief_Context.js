@@ -1,6 +1,9 @@
+/*__FIT_GATE__*/
 // Content runs (v4.4): what the brief, the copy, the schema and the blog package need beyond the keyword research —
 // the site's business profile (author, reviewer, address / NAP), proof from its case studies, the page role (hub, case study, local,
 // standard), the cluster pages a hub links down to, and the video details (YouTube page / Vimeo oEmbed, read by Fetch Video Details).
+// 2026-10-11 (FIX_PLAN D8): a cluster page that is another company's brand (or a government / portal search) never reaches the writer, even
+// when an older ladder row still carries it.
 const d = $('Parse Verdict').first().json;
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(x => x && typeof x === 'object' && !x.error && Object.keys(x).length); } catch (e) { return []; } };
 const s = (v) => String(v == null ? '' : v).trim();
@@ -51,6 +54,10 @@ if (page_role === 'hub') {
       .sort((a, b) => b.score - a.score).slice(0, 10)
       .map(x => ({ url: s(x.c.url), keyword: s(x.c.about || x.c.title) || s(x.c.path).replace(/[\/_-]+/g, ' ').trim(), role: 'cluster', planned: !!x.c.planned }));
   }
+  const sdB = d.site_description || {};
+  const fitCtxB = { own_domain: domain, competitors: (d.competitors || []).map(String), serp_domains: [...new Set((d.competitors_summary || []).map(c => String(c.domain || '')).filter(Boolean))],
+    brands: {}, protect: [kw, ...(sdB.products_or_services || []), ...(d.services || []), String(d.business || sdB.business_description || '').slice(0, 400)] };
+  hub_pages = hub_pages.filter(p => { if (!p.planned && !p.keyword) return true; const g = fitGate(p.keyword, fitCtxB); return g.ok || (g.reason === 'own brand' && !p.planned); });
 }
 
 // ---- video: details from the YouTube watch page or Vimeo oEmbed; transcript cleaned; chapters from "0:00 Title" lines ----
