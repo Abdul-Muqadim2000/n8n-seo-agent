@@ -2103,6 +2103,108 @@ patch('Build Webhook Response', "    markdown: d.page_markdown || null,", "    m
 log('Search data outages (2026-10-09): one retry of the keyword SERP and the facts search when DataForSEO answers a server error (50000 inside HTTP 200); a failed SERP is "unavailable" (digest, serp_features, keyword report, discovery live checks + research_failures), never "no snippet / no AI Overview"; CPC rounded in the discovery and ladder reports')
 
 # =============================================================================
+# 26. AUDIT CORRECTNESS (2026-10-11, system review FIX_PLAN.md D2 / D6 / D17 / D18 / D24): the live whole-system test found the audit
+#     giving wrong advice — a High "www and non-www not consolidated" on a site whose apex 308-redirects to www (DataForSEO's
+#     test_canonicalization taken at face value), "duplicate meta tags" on 45 of 47 pages (three Next.js theme-color tags that differ by
+#     `media`), the audit diff comparing a technical audit with a full report ("25 fixed", ranking and AI findings among them — fixed in
+#     v5/code/Audit_Diff.js), the fix pack's robots.txt opening /api/ and /admin/ to the AI search bots (v5/code/Fix_Pack.js), the author
+#     finding listed twice (HTML analysis + content review), "capped at 85" shown next to a score of 68, and scraper queries (site:, inurl:,
+#     quoted AND / OR) among the top Search Console queries (v5/code/GSC_Audit_Findings.js). Here: the v3 nodes Analyze Probes, Build Site
+#     Issues and the two report builders.
+# =============================================================================
+# ---- D6 + D18: Analyze Probes reads the homepage's canonical tag and counts its duplicate <meta> tags (tags that differ by `media` are distinct) ----
+patch('Analyze Probes', "const MAIN = 'home_content';   // the homepage as browsers get it (redirects followed)\n", r"""const MAIN = 'home_content';   // the homepage as browsers get it (redirects followed)
+// D18 (2026-10-11): DataForSEO's duplicate_meta_tags counts <meta> tags that differ only by `media` (Next.js theme-color light / dark) as duplicates;
+// the homepage HTML is counted here and Build Site Issues drops or qualifies the finding with it. Properties that may repeat (og:image, article:tag …) are skipped.
+const metaDuplicates = (html) => { const seen = {}; const REPEATABLE = /^(og:image|og:image:[a-z_]+|og:video|og:video:[a-z_]+|og:audio|og:audio:[a-z_]+|og:locale:alternate|article:tag|article:author|book:author|book:tag|video:tag|video:actor|music:[a-z:_]+)$/i;
+  for (const tag of (String(html || '').match(/<meta\b[^>]*>/gi) || [])) { const nm = (tag.match(/\b(?:name|property|http-equiv)\s*=\s*["']?([^"'\s>]+)/i) || [])[1]; if (!nm || REPEATABLE.test(nm)) continue; const media = (tag.match(/\bmedia\s*=\s*["']([^"']*)["']/i) || [])[1] || ''; const k = nm.toLowerCase() + '|' + media.toLowerCase().replace(/\s+/g, ''); seen[k] = (seen[k] || 0) + 1; }
+  return Object.entries(seen).filter(([, n]) => n > 1).map(([k, n]) => ({ tag: k.split('|')[0], count: n })); };
+const homeHtml18 = (R[MAIN] || {}).status === 200 ? String((R[MAIN] || {}).body || '') : '';
+const homepage_meta = { checked: /<meta\b/i.test(homeHtml18), duplicates: homeHtml18 ? metaDuplicates(homeHtml18) : [] };
+""")
+patch('Analyze Probes', """const canonical_host = apexToWww ? 'www.' + domain : domain;
+if (apexToWww) {
+  if (www.status === 200) works.push('One canonical host: https://' + domain + ' 301-redirects to https://www.' + domain);
+""", r"""const canonical_host = apexToWww ? 'www.' + domain : domain;
+// D6 (2026-10-11): the host finding is raised only when both hosts answer 200 with no redirect, or when a redirect's target and the homepage's own
+// canonical tag disagree — never from DataForSEO's test_canonicalization alone (false on techand.ai while its apex 308-redirects to www). The fix
+// is worded after the host the canonical tags name.
+const canonTag = (String((R[MAIN] || {}).body || '').match(/<link\b[^>]*>/gi) || []).find(t => /\brel\s*=\s*["']?canonical\b/i.test(t)) || '';
+const canonHref = (canonTag.match(/\bhref\s*=\s*["']([^"']+)["']/i) || [])[1] || '';
+const canonical_tag_host = String((canonHref.match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '').toLowerCase();
+const WWW = 'www.' + domain;
+const hostFix = (preferred) => preferred === WWW ? 'Keep one host: 301-redirect https://' + domain + '/ to https://' + WWW + '/ (the canonical tags already name www) and keep every canonical tag on the www URL.'
+  : preferred === domain ? 'Keep one host: 301-redirect https://' + WWW + '/ to https://' + domain + '/ (the canonical tags already name the bare domain) and keep every canonical tag on it.'
+  : 'Pick one host, make every canonical tag name it, and 301-redirect the other host to it.';
+const hostFinding = (evidence, preferred) => add('Crawlability & Indexing', 'High', 'www and non-www versions are not consolidated', evidence, 'Two hosts answering for the same pages split links and ranking signals between them, and Google may index the one you did not intend.', hostFix(preferred));
+let hosts_consolidated = null;
+if (apexToWww) {
+  if (www.status === 200) { if (canonical_tag_host && canonical_tag_host === domain) { hosts_consolidated = false; hostFinding('https://' + domain + '/ redirects (' + home.status + ') to https://' + WWW + '/, but the homepage canonical tag points to ' + canonHref, canonical_tag_host); } else { hosts_consolidated = true; works.push('One canonical host: https://' + domain + ' redirects (' + home.status + ') to https://' + WWW + (canonical_tag_host === WWW ? ', and the canonical tags agree' : '')); } }
+""")
+patch('Analyze Probes', """  } else if (www.status >= 300 && www.status < 400) {
+    const loc = h('www_https', 'location');
+    if (loc.includes('//' + domain)) works.push('www redirects to the main domain (' + www.status + ')');
+    else add('Crawlability & Indexing', 'Medium', 'www redirects somewhere unexpected', 'https://www.' + domain + ' → ' + loc, 'Signals may be split between hosts.', 'Redirect www directly to https://' + domain + '/ with a 301.');
+  } else if (www.status === 200) {
+    add('Crawlability & Indexing', 'High', 'www and non-www both serve the site (duplicate host)', 'https://www.' + domain + ' and https://' + domain + ' both return 200', 'Two copies of every page split links and ranking signals.', 'Add a 301 redirect from www to https://' + domain + '/ (or the reverse) so only one host answers with 200.');
+  }
+""", r"""  } else if (www.status >= 300 && www.status < 400) {
+    const loc = h('www_https', 'location');
+    if (loc.includes('//' + domain)) { if (canonical_tag_host === WWW) { hosts_consolidated = false; hostFinding('https://' + WWW + '/ redirects (' + www.status + ') to ' + loc + ', but the homepage canonical tag points to ' + canonHref, canonical_tag_host); } else { hosts_consolidated = true; works.push('www redirects to the main domain (' + www.status + ')' + (canonical_tag_host === domain ? ', and the canonical tags agree' : '')); } }
+    else add('Crawlability & Indexing', 'Medium', 'www redirects somewhere unexpected', 'https://www.' + domain + ' → ' + loc, 'Signals may be split between hosts.', 'Redirect www directly to https://' + domain + '/ with a 301.');
+  } else if (www.status === 200) {
+    hosts_consolidated = false;
+    hostFinding('https://' + WWW + '/ and https://' + domain + '/ both return 200 with no redirect' + (canonical_tag_host ? '; the homepage canonical tag names ' + canonical_tag_host : '; the homepage has no canonical tag'), canonical_tag_host);
+  }
+""")
+patch('Analyze Probes', "      measurements: {\n        canonical_host,\n", "      measurements: {\n        canonical_host,\n        hosts: { apex_status: home.status || 0, apex_location: homeLoc || '', www_status: www.status || 0, www_location: h('www_https', 'location') || '', canonical_tag_host, consolidated: hosts_consolidated },\n        homepage_meta,\n")
+# ---- D6: Build Site Issues no longer raises the host finding from DataForSEO's domain check ----
+patch('Build Site Issues', "addDomain(dc.test_canonicalization === false, 'Crawlability & Indexing', 'High', 'www and non-www versions are not consolidated', 'If both versions do not resolve to one canonical host, links and signals are split.', 'Make the www version redirect (301) to the main domain with a valid certificate for both hostnames.', 'Crawler canonicalization test failed');\n",
+      "// D6 (2026-10-11): the www / non-www finding comes from the host probes (Analyze Probes: both hosts 200, or a redirect that disagrees with the canonical tag), never from dc.test_canonicalization alone\n")
+# ---- D18: the duplicate-meta finding is verified on the homepage HTML ----
+patch('Build Site Issues', "// ===== 2. Strict custom checks =====\n", r"""// ===== 1b. D18 (2026-10-11): DataForSEO's "duplicate meta tags" verified on the homepage HTML (tags that differ by `media` are not duplicates) =====
+{ const hm = (probe.measurements || {}).homepage_meta; const i18 = findings.findIndex(f => f.title === 'Duplicate meta tags on the same page');
+  if (hm && hm.checked && i18 >= 0) { const homeFlagged = pages.some(p => p.checks && p.checks.duplicate_meta_tags === true && /^https?:\/\/[^\/]+\/?$/.test(String(p.url || '')));
+    if (hm.duplicates.length) { findings[i18].evidence += '; verified on the homepage: ' + hm.duplicates.map(d => '<meta ' + d.tag + '> ×' + d.count).join(', '); findings[i18].fix = 'Keep a single ' + hm.duplicates.map(d => '<meta ' + d.tag + '>').join(' / ') + ' tag per page in the template (tags that differ by a media attribute, such as theme-color for light and dark, are fine).'; }
+    else if (homeFlagged) { findings.splice(i18, 1); whatWorks.push('No duplicate meta tags on the homepage (the crawler counted tags that differ only by a media attribute, such as theme-color for light and dark)'); } } }
+
+// ===== 2. Strict custom checks =====
+""")
+# ---- D24: one finding per issue, and the cap message only when the cap lowered the score ----
+patch('Build Site Issues', "findings.push(...(input.extra_findings || []));\n", r"""findings.push(...(input.extra_findings || []));
+
+// ===== 4b. D24 (2026-10-11): one finding per issue — the HTML analysis and the AI content review both reported "no named author". The same
+// title (as written) always merges; the same title with numbers ignored, or the same topic, merges when one of the two is the content
+// review's (two measured findings that differ by a number or a word stay apart). The merged finding keeps the higher severity and the
+// measured side's evidence, sample pages and scoring. =====
+{ const asWritten = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const normT = (t) => asWritten(t).replace(/\d[\d,.%]*/g, '#').replace(/[^a-z#\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const TOPICS = [['author', /\b(authors?|bylines?|authored)\b/], ['sources', /\b(cites?|cited|citations?|sources?|references?)\b/], ['proof', /\b(case stud(?:y|ies)|testimonials?|proof)\b/], ['pricing', /\bpric(?:e|es|ing)\b/], ['freshness', /\b(fresh(?:ness)?|outdated|stale|last reviewed)\b/]];
+  const topicOf = (f) => { const t = normT(f.title); const hit = TOPICS.find(([, re]) => re.test(t)); return hit ? f.category + '|topic:' + hit[0] : null; };
+  const kept = []; const at = new Map();
+  for (const f of findings) { const exact = f.category + '|' + asWritten(f.title); const loose = f.category + '|~' + normT(f.title); const topic = topicOf(f);
+    let idx = at.has(exact) ? at.get(exact) : null;
+    for (const k of [loose, topic]) if (idx == null && k != null && at.has(k) && (f.source === 'ai_review' || kept[at.get(k)].source === 'ai_review')) idx = at.get(k);
+    if (idx == null) { at.set(exact, kept.length); for (const k of [loose, topic]) if (k != null && !at.has(k)) at.set(k, kept.length); kept.push(f); continue; }
+    const p = kept[idx]; const measured = (p.scoring === false && f.scoring !== false) ? f : p; const other = measured === p ? f : p;
+    const severity = SEV_ORDER[f.severity] < SEV_ORDER[p.severity] ? f.severity : p.severity;
+    kept[idx] = { ...measured, severity, evidence: [measured.evidence, other.evidence && other.evidence !== measured.evidence ? (other.source === 'ai_review' ? 'content review: ' : '') + other.evidence : ''].filter(Boolean).join('; '), sample_urls: [...new Set([...(measured.sample_urls || []), ...(other.sample_urls || [])])].slice(0, 10), merged_titles: [...(p.merged_titles || [p.title]), f.title] };
+    for (const k of [exact, loose, topic]) if (k != null) at.set(k, idx); }
+  findings.splice(0, findings.length, ...kept); }
+""")
+patch('Build Site Issues', "const health_score = Math.min(raw_score, cap);\n", "const health_score = Math.min(raw_score, cap);\nif (cap >= raw_score) cap_reason = '';   // D24 (2026-10-11): the cap is reported only when it lowered the score (\"capped at 85\" was shown next to a 68)\n")
+patch('Build Site Issues', "      score_cap: cap < 100 ? cap : null,\n", "      score_cap: cap < raw_score ? cap : null,\n")
+# ---- D24: the reports say how many scraper queries were left out of the top queries ----
+for _rn in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn, '    if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th>',
+          '    if ((sc.scraper_queries || {}).count) h += `<p class="small">${n2(sc.scraper_queries.count)} scraper ${sc.scraper_queries.count === 1 ? \'query\' : \'queries\'} (search operators such as site: or inurl:, ${n2(sc.scraper_queries.impressions)} impressions) left out of the top queries: they come from SEO tools and scrapers, not from customers.</p>`;\n'
+          '    if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th>')
+assert 'report_type || \'\') === curType' in code('Audit Diff'), 'Audit Diff: same-type comparison not inlined'
+assert "const freedList" in code('Fix Pack'), 'Fix Pack: robots.txt edit rules not inlined'
+assert 'scraper_queries' in code('GSC Audit Findings'), 'GSC Audit Findings: scraper queries not inlined'
+log('Audit correctness (2026-10-11, FIX_PLAN D2 / D6 / D17 / D18 / D24): the audit diff compares only audits of the same report type (a technical audit with only a full report stored is a baseline; findings outside the categories the type scores are never "fixed"); the www / non-www finding comes from the host probes only (both hosts 200, or a redirect that disagrees with the homepage canonical tag; the fix names the canonical host) — never from DataForSEO\'s test_canonicalization; "duplicate meta tags" is verified on the homepage HTML (tags that differ by media are distinct; the finding names the duplicated tags or is dropped); the fix pack edits the live robots.txt (an AI-search group only when those bots are blocked, with the * group\'s path rules copied in; otherwise the file comes back unchanged with a comment); one finding per issue (HTML analysis + content review merged, higher severity kept); the cap message only when the cap lowered the score; Search Console queries with search operators are counted apart as scraper queries and left out of the top queries')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
