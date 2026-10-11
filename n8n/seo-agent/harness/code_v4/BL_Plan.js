@@ -72,7 +72,7 @@ const COUNTRIES = {
   'Brazil':               { code: 2076, iso: 'BR', lang: 'pt', language: 'Portuguese', spelling: 'Brazilian Portuguese', currency: 'BRL' },
   'Mexico':               { code: 2484, iso: 'MX', lang: 'es', language: 'Spanish', spelling: 'Mexican Spanish',    currency: 'MXN' }
 };
-const CONFIG = { max_sites_per_run: 15, first_lookback_days: 30, gap_every_days: 85, bing: true };   // v4.6: the link gap changes slowly: refreshed quarterly; bing: set at build time when SEO_BING_WEBMASTER_API_KEY is in n8n/.env
+const CONFIG = { max_sites_per_run: 15, first_lookback_days: 30, gap_every_days: 85, bing: false };   // v4.6: the link gap changes slowly: refreshed quarterly; bing: set at build time when SEO_BING_WEBMASTER_API_KEY is in n8n/.env
 const { list, on_demand, want, total } = monitorSites('backlinks');   // `trigger` comes from the shared snippet
 if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the backlink monitor is switched off for every site' : 'no sites yet (register one through "Track my site" or plan a keyword ladder)') } }];
 const snaps = rowsOf('Load Backlink Snapshots'), prospects = rowsOf('Load Link Prospects'), ladders = rowsOf('Load Ladders'), logs = rowsOf('Load Content Log'), cases = rowsOf('Load Case Studies');

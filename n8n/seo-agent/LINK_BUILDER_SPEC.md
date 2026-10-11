@@ -84,6 +84,8 @@ Per site with `link_builder` on (Site Admin `monitors`; the app turns it on):
 7. Report + callback `link_builder` (new opportunities, drafts ready, listings missing, impact reads).
 
 The **Backlink Monitor** keeps discovery and "won"; for a site with the Link Builder on it no longer drafts e-mails (one writer).
+**Facts only (D14, 2026-10-11):** the prompt always carries the facts block ("none on file" when empty) with the rule that any claim the facts do not state goes to the owner as `[Owner: …]`; the app sends `business_facts` and the business profile (`profile`: business, author, reviewer, address, phone, e-mail, service areas; `app/server/src/services/replyFacts.ts`), merged by Reply Input; Reply Result then checks every sentence of the suggested answer against the facts with `_claims.js` (`CL.check`: accredited, certified, partner, ISO, licensed, registered, approved, award, member of, founded, since, based in, numbers of years / clients / %, prices) and wraps an unsupported one in `[Owner: confirm — …]`, sets `needs_you` and lists it in `unverified`. Live 2026-10-11 the answer invented an accreditation with empty facts (execs 357-360).
+
 **SEO Agent — Reply Reader** (`SEOagentReplyRd1`, `POST /webhook/seo-reply-read`, synchronous, Claude Haiku ≈ $0.001): reads one reply
 with our e-mail → class (interested / question / says linked / wants payment / link swap / not now / declined / unsubscribe / wrong person
 / out of office / other), a one-line summary, the out-of-office return date, a referred contact, and a suggested answer; when the reply

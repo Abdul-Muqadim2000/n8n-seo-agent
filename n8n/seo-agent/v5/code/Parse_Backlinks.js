@@ -11,6 +11,9 @@
 // - mentions checked on the page (named without a link = the warmest outreach), "best X" list pages that name competitors and not you,
 //   sites that just linked to a competitor (DataForSEO, since the last full run) and the Common Crawl gap;
 // - prospects scored value x likelihood (an unlinked mention converts far more often than a cold gap site).
+// D3 (2026-10-11): the footprint gate (LK.footprints) runs on the whole ledger before scoring — the same page path or keyword anchor on 3+
+// sites, link-selling / gambling anchors, gambling hosts — and makes its members "spam" whatever the index or the analyst said: value 0,
+// out of best links / wins / at-risk / important-lost / prospects, on the disavow candidates (review-only), listed as farms in the report.
 /*__LINK_KIT__*/
 const plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const all = (n) => { try { return $(n).all().map(i => i.json || {}); } catch (e) { return []; } };
@@ -21,7 +24,7 @@ const dreqs = all('DR Requests'), dresps = all('Fetch DR');
 const merged = all('Link Merge').filter(m => !m.skip);
 const ver = all('Verify Links').filter(v => !v.skip);
 const ljobs = all('Link Analyst Jobs').filter(j => !j.skip), louts = all('Link Analyst');
-const SPAM_WORDS = /\b(pbn|buy (?:cheap )?backlinks?|backlinks? (?:service|package)|link ?farm|casino|betting|slots?|porn|xxx|viagra|cialis|payday|escort|essay writing)\b/i;
+const SPAM_WORDS = LK.SPAM_RE;   // one list of link-selling words for new links, the ledger gate and the Link Builder (D3)
 const BIG = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|blogspot|wordpress|tumblr)\.[a-z.]+$/i;
 const result = (rs, i) => { const t = ((rs[i] || {}).tasks || [])[0] || {}; return { ok: t.status_code === 20000, res: (t.result || [])[0] || null, cost: Number(t.cost) || 0, error: t.status_code && t.status_code !== 20000 ? t.status_message : ((rs[i] || {}).error ? String((rs[i].error.message || rs[i].error)).slice(0, 160) : null) }; };
 const pathOf = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
@@ -105,11 +108,19 @@ return plans.map(p => {
       status, lost_at, lost_reason, miss_count: miss, verify, verified_at, noindex, canonical_elsewhere: canon, outbound, page_title: String(title).slice(0, 160), context: String(context).slice(0, 400),
       authority, dr, cc_rank, page_keywords: Number(e.page_keywords) || Number(pv.page_keywords) || 0, spam_score: spam, original: e.original === false ? false : (e.original === true ? true : (pv.original === false || pv.original === 'false' ? false : true)), sitewide: Number(e.sitewide) || Number(pv.sitewide) || 0, links: Number(e.links) || Number(pv.links) || 0,
       visits: Number(e.visits) || (e.sources.includes('ga4') ? 0 : Number(pv.visits) || 0), key_events: Number(e.key_events) || 0, ai_cited: !!e.ai_cited, updated_at: now };
-    const val = LK.values({ ...row, spam: row.spam_score, relevance: row.relevance === '' ? null : row.relevance });
-    row.seo_value = val.seo; row.referral_value = val.referral; row.brand_value = val.brand; row.visits_28d = e.visits_28d || 0; row._new = !e.prev; row._dfs_new = !!e.dfs_new; row._sources_now = e.sources;
+    row.visits_28d = e.visits_28d || 0; row._new = !e.prev; row._dfs_new = !!e.dfs_new; row._sources_now = e.sources; row._found_new = !!(v && v.verify === 'found' && !e.prev); row._url = v ? v.url : '';
     ledger.push(row);
-    if (v && v.verify === 'found' && !e.prev && (val.seo >= 50 || ['editorial', 'press', 'listing', 'resource'].includes(link_type))) wins.push({ ref_domain: e.ref_domain, url: v.url, why: 'new', seo: val.seo, link_type });
   }
+  // ---------------- the footprint gate (D3): link-farm clusters over the whole ledger, before scoring ----------------
+  const fp = LK.footprints(ledger, { domain: p.domain, brands, titles: (p.assets || []).map(a => a.title) });
+  for (const row of ledger) {
+    if (fp.has(row.ref_domain)) { row.link_type = 'spam'; row.note = ('link farm: ' + fp.get(row.ref_domain)).slice(0, 140); }
+    const val = LK.values({ ...row, spam: row.spam_score, relevance: row.relevance === '' ? null : row.relevance });
+    row.seo_value = val.seo; row.referral_value = val.referral; row.brand_value = val.brand;
+    if (row._found_new && row.link_type !== 'spam' && (val.seo >= 50 || ['editorial', 'press', 'listing', 'resource'].includes(row.link_type))) wins.push({ ref_domain: row.ref_domain, url: row._url, why: 'new', seo: val.seo, link_type: row.link_type });
+  }
+  const spamSet = new Set(ledger.filter(r => r.link_type === 'spam').map(r => r.ref_domain));
+  const farms = ledger.filter(r => spamSet.has(r.ref_domain)).map(r => ({ ref_domain: r.ref_domain, from_url: r.from_url, status: r.status, reason: fp.get(r.ref_domain) || 'labelled spam by the Link Analyst', authority: r.authority, spam: r.spam_score }));
   const liveRows = ledger.filter(r => r.status !== 'lost' && r.kind === 'web');
   const importantOf = (r) => Number(r.spam_score || r.spam) < 40 && !['spam', 'scraper'].includes(r.link_type) && (Number(r.seo_value) >= 35 || r.authority >= 150 || r.dr >= 40 || Number(r.visits) >= 5 || ['editorial', 'press'].includes(r.link_type));   // spam links are never "important", whatever their authority
   const lostRows = lostNow.map(({ e, v, reason }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; const pv = e.prev || {};
@@ -175,12 +186,14 @@ return plans.map(p => {
   if (prev && summary.available && prev.spam_score && summary.spam_score - prev.spam_score >= 15) alerts.push({ level: 'medium', text: 'Link spam score rose from ' + prev.spam_score + ' to ' + summary.spam_score + '.' });
   if (prev && prev.union_domains >= 10 && liveRows.length < prev.union_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring sites (all sources) fell from ' + prev.union_domains + ' to ' + liveRows.length + '.' });
   else if (prev && !prev.union_domains && summary.available && prev.referring_domains >= 10 && summary.referring_domains < prev.referring_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring domains fell from ' + prev.referring_domains + ' to ' + summary.referring_domains + '.' });
-  const riskImportant = atRisk.filter(({ e }) => importantOf(e.prev || { authority: e.authority, visits: e.visits, spam_score: e.spam }));
+  const atRiskOut = atRisk.filter(({ e }) => !spamSet.has(e.ref_domain));   // a link-farm page is never "at risk": there is nothing to win back (D3)
+  const riskImportant = atRiskOut.filter(({ e }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; return importantOf(e.prev ? { ...r, seo_value: Number(e.prev.seo_value) || r.seo_value } : r); });
   if (riskImportant.length) alerts.push({ level: 'low', text: riskImportant.length + ' valuable link(s) not found on their page this week (' + riskImportant.slice(0, 3).map(x => x.e.ref_domain).join(', ') + '); checked again next week before calling them lost.' });
   if (reclaim.length) alerts.push({ level: 'low', text: reclaim.reduce((s, r) => s + r.links, 0) + ' link(s) point to ' + reclaim.length + ' broken page(s): redirect them to keep the value.' });
+  if (farms.length >= 3) alerts.push({ level: 'low', text: farms.length + ' link(s) from link farms / PBN pages set aside (no value, on the disavow candidates for review): ' + farms.slice(0, 3).map(f => f.ref_domain).join(', ') + (farms.length > 3 ? ' …' : '') + '. Google ignores them unless you get a manual action.' });
   const deliver = p.mode === 'full' || p.on_demand || alerts.some(a => a.level === 'high' || a.level === 'medium');
   // disavow candidates (review only: Google ignores most spam; disavow only for a manual action or a paid-link pattern you did not create)
-  const disavow = [...new Set([...spammy.filter(x => x.spam >= 60 || SPAM_WORDS.test(x.anchor + ' ' + x.title)).map(x => x.from_domain), ...ledger.filter(r => r.link_type === 'spam' && r.status !== 'lost').map(r => r.ref_domain)])];
+  const disavow = [...new Set([...spammy.filter(x => x.spam >= 60 || SPAM_WORDS.test(x.anchor + ' ' + x.title)).map(x => LK.refKey(x.from_domain)), ...ledger.filter(r => r.link_type === 'spam').map(r => r.ref_domain)])];   // the whole cluster, live or gone (D3)
   const disavow_text = disavow.length ? '# Disavow candidates for ' + p.domain + ' (' + today + ')\n# Review before uploading at https://search.google.com/search-console/disavow-links — Google ignores most spam links on its own;\n# disavow only for a manual action or a clear paid-link pattern you did not create.\n' + disavow.map(d => 'domain:' + d).join('\n') + '\n' : '';
   // ---------------- prospects: value x likelihood ----------------
   const target0 = (p.assets[0] || {}).url || 'https://' + p.domain + '/';
@@ -192,11 +205,11 @@ return plans.map(p => {
     ...lists.filter(l => l.named && !l.linked).slice(0, 4).map(l => ({ prospect_domain: l.domain, type: 'mention', origin: 'web', rank: l.domain_rank, spam_score: 0, score: scoreOf('mention', { authority: l.domain_rank, dr: l.dr }), detail: 'Lists you without a link: ' + String(l.title).slice(0, 100), source_url: l.url, target_url: 'https://' + p.domain + '/' })),
     ...compNew.slice(0, 10).map(c => ({ prospect_domain: c.domain, type: 'comp_new', origin: 'dfs', rank: c.domain_rank, spam_score: 0, score: scoreOf('comp_new', { authority: c.domain_rank, dr: c.dr }, localOf(c.domain)), detail: 'Linked to ' + c.competitor + ' on ' + c.first_seen + (c.title ? ': ' + c.title : ''), source_url: c.url, target_url: target0 })),
     ...gap.filter(g => g.source !== 'cc' ? gi >= 0 : true).slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', origin: g.source, rank: g.rank, spam_score: g.spam, score: scoreOf('gap', { authority: g.rank, dr: drOf.get(g.domain) || 0, cc_rank: g.cc_rank }, (1 + 0.6 * (g.links_to.length - 1)) * localOf(g.domain)),   /* links to several competitors: the strongest intent signal; on the market's own domain ending: more relevant */ detail: 'Links to ' + g.links_to.join(', ') + (g.backlinks ? ' (' + g.backlinks + ' links)' : '') + ', not to you' + (g.source === 'cc' ? ' (Common Crawl)' : ''), source_url: '', target_url: target0 }))];
-  const ledger_rows = ledger.map(({ visits_28d, _new, _dfs_new, _sources_now, ...r }) => r);
+  const ledger_rows = ledger.map(({ visits_28d, _new, _dfs_new, _sources_now, _found_new, _url, ...r }) => r);
   const new_links = [...news.map(n => ({ ...n, verified: (vLink.get(LK.refKey(n.from_domain)) || {}).verify || '' })),
     ...ledger.filter(r => r._new && !r._dfs_new && r.kind === 'web' && r.status !== 'lost').map(r => ({ from_domain: r.ref_domain, from_url: r.from_url, to_url: r.to_url, anchor: r.anchor, dofollow: r.rel === 'follow', domain_rank: r.authority, dr: r.dr, page_rank: 0, spam: r.spam_score, first_seen: r.first_seen, last_seen: r.last_seen, title: r.page_title, spammy: r.link_type === 'spam', sources: r.sources, verified: r.verify }))]
     .filter((x, i, a) => a.findIndex(y => LK.refKey(y.from_domain) === LK.refKey(x.from_domain)) === i);
   return { json: { ...p, competitors, summary, lost, important_lost, new_links, spammy, reclaim, refdomains: [...linking].slice(0, 2000), timeseries: ts, mentions, gap, gap_stored: gi < 0 && gapBase.length > 0, gap_checked: gi < 0 ? ((p.stored_gap || [])[0] || {}).last_seen || '' : p.checked_at.slice(0, 10),
-    lists, comp_new: compNew.slice(0, 20), coverage, anchors, pages, values, best_links, referral, wins, at_risk: atRisk.map(({ e, v }) => ({ ref_domain: e.ref_domain, url: v.url, verify: v.verify })), rel_changed: relChanged, dr_enabled: drOf.size > 0, dr_error,
+    lists, comp_new: compNew.slice(0, 20), coverage, anchors, pages, values, best_links, referral, wins: wins.filter(w => !spamSet.has(w.ref_domain)), at_risk: atRiskOut.map(({ e, v }) => ({ ref_domain: e.ref_domain, url: v.url, verify: v.verify })), rel_changed: relChanged.filter(r => !spamSet.has(r.ref_domain)), farms, dr_enabled: drOf.size > 0, dr_error,
     ledger_rows, alerts, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
 });

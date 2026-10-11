@@ -1,10 +1,11 @@
 import { and, eq, inArray, lte, or, sql } from 'drizzle-orm';
-import { addWorkingDays, consentGate, emailDomain, inSendWindow, parseReturnDate, sendGap, warmupCap, type LinkOutreachRow, type ProspectRow } from '@seo/shared';
+import { addWorkingDays, consentGate, emailDomain, inSendWindow, parseReturnDate, sendGap, warmupCap, type LinkOutreachRow, type ProfileRow, type ProspectRow } from '@seo/shared';
 import { db, schema } from '../db';
 import type { MailboxRow, OutreachSequenceRow, SiteRow } from '../db/schema';
 import { replyRead, siteRows } from '../n8n/client';
 import { approve, isSuppressed, linkSettingsOf, sentCounts, setProspectStatus, suppress } from './linkBuilder';
 import { compose, connOf, imapClient, parseIncoming, rawMessage, savesSentCopy, smtpTransport, stripQuoted, type Incoming } from './mail';
+import { replyReadBody } from './replyFacts';
 
 // v4.13 Link Builder jobs (index.ts runs them on timers; LINK_BUILDER_JOBS=false switches them off):
 // - sender (every minute): per mailbox at most one e-mail per run, inside its sending window (Mon-Fri, its hours, its time zone), within the
@@ -138,8 +139,10 @@ async function handleIncoming(mb: MailboxRow, m: Incoming, log: Log): Promise<vo
     return;
   }
   const firstOut = await db.select().from(schema.outreachMessages).where(and(eq(schema.outreachMessages.sequenceId, q.id), eq(schema.outreachMessages.direction, 'out'))).orderBy(schema.outreachMessages.at).limit(1);
-  const reading = await replyRead({ domain: site.domain, prospect_domain: q.prospectDomain, page_url: q.pageUrl, business: site.business ? site.business.slice(0, 120) : site.domain, signer: [mb.signatureName || mb.fromName, mb.signatureTitle, mb.company].filter(Boolean).join(', '),
-    facts: site.businessFacts.slice(0, 1500), our_subject: firstOut[0]?.subject ?? q.steps[0]?.subject ?? '', our_body: firstOut[0]?.body ?? '', reply_from: m.from, reply_subject: m.subject, reply_text: m.kind === 'auto' ? m.text.slice(0, 3000) : text, received_at: now.toISOString() });
+  // D14: the business facts and the profile go with every reply, so the suggested answer states nothing the owner did not write
+  let profile: ProfileRow | null = null;
+  try { profile = (await siteRows<ProfileRow>('profiles', site.domain, { max: 5 }))[0] ?? null; } catch (e) { log.warn({ err: short(e) }, 'business profile not read for the reply'); }
+  const reading = await replyRead(replyReadBody({ site, profile, mailbox: mb, sequence: q, ourSubject: firstOut[0]?.subject ?? q.steps[0]?.subject ?? '', ourBody: firstOut[0]?.body ?? '', from: m.from, subject: m.subject, text: m.kind === 'auto' ? m.text.slice(0, 3000) : text, now }));
   const cls = m.kind === 'auto' ? 'out_of_office' : (reading?.class ?? (/^\s*(no|stop|unsubscribe|remove me)\b/i.test(text) || /^unsubscribe$/i.test(m.subject.trim()) ? 'unsubscribe' : 'other'));
   if (cls === 'out_of_office') {   // the conversation keeps its place: the next step waits until they are back
     const back = reading?.return_date ? new Date(reading.return_date + 'T09:00:00Z') : parseReturnDate(m.text, now);   // the app reads the date itself when the Reply Reader is off

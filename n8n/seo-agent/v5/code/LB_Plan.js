@@ -5,6 +5,7 @@
 // On demand with free_only: no DataForSEO, no Claude ($0).
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
+/*__LINK_KIT__*/
 const CONFIG = { max_sites_per_run: 15, sequences_per_week: 10, monthly_days: 25, qualify_per_week: 25 };
 const { list, on_demand, want, total } = monitorSites('links');   // `trigger` comes from the shared snippet
 if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the Link Builder is switched off for every site' : 'no sites yet') } }];
@@ -37,7 +38,9 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     imp.set(k, (imp.get(k) || 0) + i); posOf.set(k, (posOf.get(k) || 0) + p * Math.max(1, i)); }
   const posFor = (u, kw) => { const k = pathKey(u); if (imp.has(k)) return Math.round(10 * posOf.get(k) / Math.max(1, imp.get(k))) / 10;
     const r = ranks.filter(h => h.keyword === kw && Number(h.position) > 0).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0]; return r ? Number(r.position) : 0; };
-  const myLedger = ledger.filter(l => l.site_id === s.site_id && l.status !== 'lost' && l.kind !== 'social');
+  const myLedger0 = ledger.filter(l => l.site_id === s.site_id && l.status !== 'lost' && l.kind !== 'social');
+  const farms = LK.footprints(myLedger0, { domain: s.domain, brands: [brand, ...(s.settings.brand_names || [])].filter(Boolean) });   // link-farm pages count as no link (D3), whatever an older ledger row says
+  const myLedger = myLedger0.filter(l => l.link_type !== 'spam' && !farms.has(l.ref_domain));
   const rdsTo = (u) => { const k = pathKey(u); const set = new Set(); for (const l of myLedger) if (pathKey(l.to_url) === k) set.add(l.ref_domain + (l.rel === 'follow' ? '' : '~')); let n = 0; for (const x of set) n += x.endsWith('~') ? 0.5 : 1; return n; };
   const kwShare = (u) => { const k = pathKey(u); const mine = myLedger.filter(l => pathKey(l.to_url) === k && l.anchor_kind); return mine.length ? mine.filter(l => l.anchor_kind === 'money').length / mine.length : 0; };
   const month = iso.slice(0, 7);

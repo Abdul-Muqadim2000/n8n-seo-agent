@@ -26,7 +26,7 @@ _COUNTRIES = re.search(r"\nconst COUNTRIES = \{.*?\n\};", _NI, re.S); assert _CO
 def src(p):   # a Code node source with the shared snippets inlined
     s = rd('code/' + p)
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
-    s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
+    s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('/*__CLAIMS__*/', rd('code/_claims.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
     return s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL)
@@ -97,6 +97,7 @@ class WF:
         os.makedirs(CODE, exist_ok=True)
         for n in self.N:
             if n['type'] == 'n8n-nodes-base.code': open(os.path.join(CODE, self.code_prefix + re.sub(r'[^A-Za-z0-9_.-]+', '_', n['name']) + '.js'), 'w').write(n['parameters']['jsCode'])
+            if n['type'] == '@n8n/n8n-nodes-langchain.agent': open(os.path.join(CODE, self.code_prefix + re.sub(r'[^A-Za-z0-9_.-]+', '_', n['name']) + '.prompt.txt'), 'w').write(n['parameters']['text'])   # the harness checks what a prompt always carries (S33, D14)
         print('wrote', fname + ':', len(self.N), 'nodes')
 at = lambda c, r: [c * 220, r * 220]
 TRIGGER = lambda w, hour, minute: w.node('Weekly Schedule', 'n8n-nodes-base.scheduleTrigger', 1.2, {'rule': {'interval': [{'field': 'weeks', 'weeksInterval': 1, 'triggerAtDay': [1], 'triggerAtHour': hour, 'triggerAtMinute': minute}]}}, at(0, 0))

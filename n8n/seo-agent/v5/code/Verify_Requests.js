@@ -25,8 +25,8 @@ for (const m of merged) {
   const urlOf = (e) => (e.dfs_lost && e.dfs_lost.url) || (e.prev && e.prev.verify === 'found' && e.prev.from_url) || located.get(e.ref_domain) || e.from_url || (e.pages[0] || {}).url || '';
   const links = m.entries.filter(e => e.kind === 'web' && !e.sources.every(s => s === 'wiki' || s === 'hn') && !['en.wikipedia.org', 'news.ycombinator.com'].includes(e.ref_domain) && !/wikipedia\.org$/.test(e.ref_domain)).map(e => {
     const pv = e.prev || {}; const miss = Number(pv.miss_count) || 0; const val = Number(pv.seo_value) || 0;
-    const prio = miss > 0 ? 1000 : e.dfs_lost ? 900 : won.has(e.ref_domain) ? 800 : !e.prev ? 700 + Math.min(99, (e.authority || 0) / 10) : (val >= 40 || e.visits > 0) ? 500 + val : Math.min(400, days(pv.verified_at));
-    return { e, url: urlOf(e), prio, why: miss > 0 ? 'missed_once' : e.dfs_lost ? 'reported_lost' : won.has(e.ref_domain) ? 'won' : !e.prev ? 'new' : (val >= 40 || e.visits > 0) ? 'valuable' : 'rotation' };
+    const prio = e.footprint ? -1 : miss > 0 ? 1000 : e.dfs_lost ? 900 : won.has(e.ref_domain) ? 800 : !e.prev ? 700 + Math.min(99, (e.authority || 0) / 10) : (val >= 40 || e.visits > 0) ? 500 + val : Math.min(400, days(pv.verified_at));   // link-farm pages (D3): last, full runs only
+    return { e, url: urlOf(e), prio, why: e.footprint ? 'footprint' : miss > 0 ? 'missed_once' : e.dfs_lost ? 'reported_lost' : won.has(e.ref_domain) ? 'won' : !e.prev ? 'new' : (val >= 40 || e.visits > 0) ? 'valuable' : 'rotation' };
   }).filter(x => /^https?:\/\//i.test(x.url) && !DOC.test(x.url) && (full || x.prio >= 500)).sort((a, b) => b.prio - a.prio).slice(0, full ? 220 : 60);
   for (const x of links) add({ purpose: 'link', ref_domain: x.e.ref_domain, url: x.url, why: x.why, located: located.get(x.e.ref_domain) === x.url, authority: x.e.authority || 0, spam: x.e.spam || 0 });
   const fetched = new Set(links.map(x => x.url));
