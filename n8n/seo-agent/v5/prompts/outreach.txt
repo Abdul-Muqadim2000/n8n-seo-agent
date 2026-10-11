@@ -12,7 +12,7 @@ Angle by type:
 - list: their list or comparison names similar providers but not us. Say in one sentence why we fit their readers and offer the facts they would need to add us (what we do, for whom, where).
 - comp_new: they recently linked to a similar business's resource. Offer our page as a useful addition on the same topic, say in one sentence what it adds.
 - gap: they link to similar businesses' resources on this topic. Offer our page as a useful addition for their readers, say in one sentence what it adds.
-- ai_source: AI assistants cite this site on our topic. Offer expert input (a quote, data, a guest article or a listing) tied to our page.
+- ai_source: AI assistants cite this site on our topic (that is why we write — never mention AI, assistants, rankings or visibility to them). Offer expert input tied to the page they published (a quote, a data point, a correction, or to be included in their list), with one link to our page.
 - followup 1: a short, polite nudge on the first e-mail (40-70 words), reply in the same thread (subject "Re: " + the first subject), add one new useful detail.
 - followup 2: the last message (40-60 words), same thread, offer an easier alternative (a quote, a fact check, a correction) and say you will not write again.
 

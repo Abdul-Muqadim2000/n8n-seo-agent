@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import {
+  AI_DEFAULT_ENGINES,
   AI_ENGINE_VALUES,
+  AI_PAGES_DEFAULT,
+  AI_PAGES_MAX,
   AI_PROMPTS_DEFAULT,
   AI_PROMPTS_MAX,
   COMPANY_SIZES,
@@ -74,11 +77,17 @@ export const orgBudgetSchema = z.object({ monthlyBudgetUsd: z.number().min(0).ma
 // ---------- sites ----------
 export const monitorSettingsSchema = z.object({
   aiVisibility: z.boolean().default(true),
-  aiEngines: z.array(z.enum(AI_ENGINE_VALUES)).min(1, 'Choose at least one AI engine').default([...AI_ENGINE_VALUES]),
+  aiEngines: z.array(z.enum(AI_ENGINE_VALUES)).min(1, 'Choose at least one AI engine').default([...AI_DEFAULT_ENGINES]),
   aiPromptsMax: z.number().int().min(3).max(AI_PROMPTS_MAX).default(AI_PROMPTS_DEFAULT),
   /** v4.9: the daily AI Pulse (ChatGPT, Gemini and Google AI Mode on the whole panel, Tuesday to Sunday) */
   aiPulse: z.boolean().default(true),
+  /** v4.12: the weekly AI growth loop (Bing / IndexNow submission, AI-readiness checks, earned-media list + drafts, questions to win) */
+  aiGrowth: z.boolean().default(true),
+  /** v4.12: AI answer / refresh pages a month written by the Monday content run (0 = none; the loop still plans them) */
+  aiPagesPerMonth: z.number().int().min(0).max(AI_PAGES_MAX).default(AI_PAGES_DEFAULT),
   backlinks: z.boolean().default(true),
+  /** v4.13: the weekly Link Builder (new opportunities, qualification, contacts, drafted sequences the app sends after approval) */
+  linkBuilder: z.boolean().default(true),
   auditMonthly: z.boolean().default(true),
   auditPages: z.number().int().min(50).max(1000).default(200),
   auditJs: z.boolean().default(false),
@@ -137,6 +146,18 @@ export const keywordInput = z
     /** a page of a keyword ladder (pipeline "write now"): keeps the ladder row, its internal links and the rank tracking in step */
     ladder: z
       .object({ id: z.string().trim().min(3).max(64), rung: z.number().int().min(0).max(10), head: z.string().trim().max(120).default(''), pageNo: z.number().int().min(0).max(100).default(0) })
+      .optional(),
+    /** v4.12: an AI answer target (AI visibility "Write the page"): the question AI answers without you, the searches it runs first, the pages it
+     *  cites and the businesses it names — the page is written to be the one it cites */
+    aiTarget: z
+      .object({
+        question: z.string().trim().min(8).max(300),
+        kind: z.enum(['answer', 'refresh']).default('answer'),
+        targetId: z.string().trim().max(120).default(''),
+        fanout: z.array(z.string().trim().min(1).max(200)).max(8).default([]),
+        sources: z.array(z.object({ url: z.string().trim().url().max(300), title: z.string().trim().max(140).default('') })).max(6).default([]),
+        competitors: z.array(z.string().trim().min(1).max(80)).max(8).default([]),
+      })
       .optional(),
     emailCopy,
   })
@@ -477,3 +498,34 @@ export const linkImportSchema = z.object({
   fileName: z.string().trim().max(200).optional(),
 });
 export type LinkImportInput = z.output<typeof linkImportSchema>;
+
+// ---- v4.13 Link Builder ----
+const hostName = z.string().trim().min(3).max(200).regex(/^[a-z0-9.-]+$/i, 'A host name like smtp.gmail.com');
+const port = z.number().int().min(1).max(65535);
+export const mailboxSchema = z.object({
+  label: z.string().trim().max(60).default(''),
+  fromName: z.string().trim().min(1, 'Your name as recipients will see it').max(80),
+  fromEmail: z.string().trim().toLowerCase().email('A valid e-mail address').max(200),
+  smtpHost: hostName, smtpPort: port.default(465), smtpSecure: z.boolean().default(true),
+  imapHost: hostName, imapPort: port.default(993), imapSecure: z.boolean().default(true),
+  username: z.string().trim().min(1).max(200),
+  password: z.string().min(4, 'The app password').max(400),
+  signatureName: z.string().trim().max(80).default(''), signatureTitle: z.string().trim().max(80).default(''), company: z.string().trim().max(120).default(''),
+  postalAddress: z.string().trim().min(8, 'Every e-mail must carry your business postal address').max(240),
+  timezone: z.string().trim().max(60).default('UTC'),
+  windowStart: z.number().int().min(0).max(23).default(8), windowEnd: z.number().int().min(1).max(24).default(17),
+  dailyFirstMax: z.number().int().min(1).max(30).default(20), dailyMax: z.number().int().min(1).max(50).default(50),
+});
+export type MailboxInput = z.output<typeof mailboxSchema>;
+export const mailboxPatchSchema = mailboxSchema.partial().extend({ password: z.string().min(4).max(400).optional() });
+export const linkSettingsSchema = z.object({ mode: z.enum(['approve', 'auto']).optional(), mailboxId: z.string().uuid().nullable().optional(), autoDailyMax: z.number().int().min(1).max(30).optional() });
+const stepSchema = z.object({ step: z.number().int().min(0).max(2), waitDays: z.number().int().min(0).max(30), subject: z.string().max(140).default(''), body: z.string().min(1).max(6000) });
+export const approveSchema = z.object({ prospectDomain: z.string().trim().min(3).max(200), type: z.string().trim().min(2).max(30), toEmail: z.string().trim().toLowerCase().email().max(200),
+  steps: z.array(stepSchema).min(1).max(3), consent: z.boolean().default(false), mailboxId: z.string().uuid().nullable().optional() });
+export const sequencePatchSchema = z.object({ steps: z.array(stepSchema).min(1).max(3).optional(), toEmail: z.string().trim().toLowerCase().email().max(200).optional() });
+export const sequenceReplySchema = z.object({ body: z.string().trim().min(2).max(6000) });
+export const sequenceOutcomeSchema = z.object({ status: z.enum(['won', 'rejected']) });
+export const draftDismissSchema = z.object({ prospectDomain: z.string().trim().min(3).max(200), type: z.string().trim().min(2).max(30) });
+export const listingStatusSchema = z.object({ status: z.enum(['submitted', 'listed', 'ignored', 'missing']), note: z.string().trim().max(300).optional() });
+export const suppressionSchema = z.object({ value: z.string().trim().toLowerCase().min(3).max(200), kind: z.enum(['email', 'domain']).default('email') });
+export const linkBuilderRunSchema = z.object({ freeOnly: z.boolean().default(false) });

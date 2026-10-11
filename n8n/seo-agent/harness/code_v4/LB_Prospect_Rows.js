@@ -1,0 +1,4 @@
+// New prospects of the new kinds (journalist requests, resource pages, broken links; seo_link_prospects, upsert by site + domain + type) (exact columns)
+const COLS = ["site_id", "domain", "prospect_domain", "type", "rank", "spam_score", "detail", "source_url", "target_url", "status", "first_seen", "last_seen", "won_at", "outreach_subject", "outreach_body", "note", "score", "origin", "contact_email", "contact_url", "contacted_at", "followup_step", "followup_subject", "followup_body", "verified_at"];
+const rows = $('LB Rows').all().flatMap(i => i.json.prospect_rows || []).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));
+return rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];

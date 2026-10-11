@@ -10,6 +10,7 @@ import {
   FileText,
   Gauge,
   Globe,
+  Handshake,
   LayoutDashboard,
   Lightbulb,
   Link2,
@@ -53,6 +54,7 @@ export const SITE_NAV: { to: string; label: string; icon: IconType }[] = [
   { to: 'technical', label: 'Technical health', icon: Gauge },
   { to: 'ai', label: 'AI visibility', icon: Bot },
   { to: 'backlinks', label: 'Backlinks', icon: Link2 },
+  { to: 'links', label: 'Link building', icon: Handshake },
   { to: 'alerts', label: 'Alerts & check-ins', icon: BellRing },
   { to: 'settings', label: 'Website settings', icon: Settings },
 ];

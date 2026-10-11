@@ -198,9 +198,10 @@ const video = video_url ? { url: video_url, provider: ytm ? 'youtube' : vim ? 'v
   transcript: String(VI.transcript || p2.video_transcript || lab('Video transcript (optional)') || '').trim().slice(0, 60000), upload_date: s0(VI.upload_date || p2.video_upload_date, 40), duration: s0(VI.duration || p2.video_duration, 20), placement: s0(VI.placement, 160) } : null;
 // ---- v4.5: monitor settings (Track my site / API `monitors`), audit crawl options, scheduled audits ----
 const MI = obj(p2.monitors);
-const monitor_input = {}; for (const k of ['ai_visibility', 'ai_pulse', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));
-if (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'].includes(e)).join(', ');
+const monitor_input = {}; for (const k of ['ai_visibility', 'ai_pulse', 'ai_growth', 'link_builder', 'backlinks', 'audit_monthly', 'audit_js']) if (MI[k] !== undefined) monitor_input[k] = !!MI[k] && !/^(false|0|no|off)$/i.test(String(MI[k]));
+if (MI.ai_engines !== undefined) monitor_input.ai_engines = asArray(MI.ai_engines).map(e => String(e).toLowerCase().trim()).filter(e => ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot'].includes(e)).join(', ');
 if (MI.ai_prompts_max !== undefined) monitor_input.ai_prompts_max = Math.min(50, Math.max(3, parseInt(MI.ai_prompts_max, 10) || 20));   // v4.9: up to 50 questions
+if (MI.ai_pages_month !== undefined) monitor_input.ai_pages_month = Math.min(8, Math.max(0, parseInt(MI.ai_pages_month, 10) || 0));   // v4.12: AI answer / refresh pages a month
 if (MI.audit_pages !== undefined) monitor_input.audit_pages = Math.min(1000, Math.max(50, parseInt(MI.audit_pages, 10) || 200));
 if (MI.brand_names !== undefined) monitor_input.brand_names = asArray(MI.brand_names).join(', ');
 const topics = asArray(p2.topics || lab('Main services or products (optional)')).map(x => String(x).trim().toLowerCase()).filter(x => x.length >= 3).slice(0, 6);
@@ -212,6 +213,11 @@ const pagesRaw = parseInt(String(pick(p2, 'pages to write') || p2.pages_now || C
 const pages_now = Math.min(3, Math.max(1, isNaN(pagesRaw) ? CONFIG.ladder_pages_default : pagesRaw));
 const ladder_links = Array.isArray(p2.ladder_links) ? p2.ladder_links.filter(l => l && l.url).slice(0, 20) : [];
 const wordpress_url = String(p2.wordpress_url || '').trim();
+const AT = (p2.ai_target && typeof p2.ai_target === 'object' && !Array.isArray(p2.ai_target)) ? p2.ai_target : null;
+const atList = (v) => (Array.isArray(v) ? v : String(v || '').split(/\s*\|\s*|\n/)).map(x => String(x == null ? '' : x).trim()).filter(Boolean);
+const ai_target = AT && String(AT.question || '').trim().length >= 8 ? { question: String(AT.question).trim().slice(0, 300), kind: AT.kind === 'refresh' ? 'refresh' : 'answer', target_id: String(AT.target_id || '').slice(0, 120),
+  fanout: atList(AT.fanout).slice(0, 8).map(x => x.slice(0, 200)), competitors: atList(AT.competitors).slice(0, 8).map(x => x.slice(0, 80)),
+  sources: (Array.isArray(AT.sources) ? AT.sources : []).filter(x => x && (x.u || x.url)).slice(0, 6).map(x => ({ url: String(x.u || x.url).slice(0, 300), title: String(x.t || x.title || '').slice(0, 140) })) } : null;
 let existing_page_url = String(pick(p2, 'existing') || '').trim();
 if (existing_page_url && !/^https?:\/\//i.test(existing_page_url)) existing_page_url = 'https://' + existing_page_url.replace(/^\/+/, '');
 if (existing_page_url && domain && cleanDomain(existing_page_url) !== domain) throw new Error('The existing page URL must be on ' + domain);
@@ -330,6 +336,7 @@ return [{
     ladder_rung: (p2.ladder_rung != null && p2.ladder_rung !== '') ? Number(p2.ladder_rung) : null,
     ladder_head: String(p2.ladder_head || ''),
     ladder_links,
+    ai_target,
     force_content: !!p2.force_content,
     publish_wordpress: !!CONFIG.wordpress_publish && !!wordpress_url,
     wordpress_url,

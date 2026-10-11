@@ -16,7 +16,7 @@ import { urlPath } from './format';
 
 const ENGINE_LABEL: Record<string, string> = Object.fromEntries(AI_ENGINES.map((e) => [e.value, e.label]));
 /** Short engine names for narrow grid headers. */
-const ENGINE_SHORT: Record<string, string> = { ai_overview: 'AI Overview', ai_mode: 'AI Mode' };
+const ENGINE_SHORT: Record<string, string> = { ai_overview: 'AI Overview', ai_mode: 'AI Mode', copilot: 'Copilot' };
 export const engineLabel = (key: string, fallback?: string) => ENGINE_LABEL[key] ?? fallback ?? titleCase(key);
 const ENGINE_ORDER = AI_ENGINES.map((e) => e.value as string);
 export const sortEngines = (keys: Iterable<string>) => [...new Set(keys)].sort((a, b) => (ENGINE_ORDER.indexOf(a) + 1 || 99) - (ENGINE_ORDER.indexOf(b) + 1 || 99));

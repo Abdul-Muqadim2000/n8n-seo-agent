@@ -96,6 +96,31 @@ export async function siteAdmin(body: Record<string, unknown>): Promise<AdminCal
   return { ok: !!json.ok && res.ok, action: String(json.action ?? body.action ?? ''), affected: Number(json.affected) || 0, error: json.error ?? (res.ok ? null : `n8n answered ${res.status}`) };
 }
 
+/** v4.13 Link Builder on demand: answered at once (202), the run delivers its report through the callback. */
+export async function linkBuilderRun(body: Record<string, unknown>): Promise<{ ok: boolean; requestId: string | null; error: string | null }> {
+  let res: Response;
+  try {
+    res = await fetch(config.n8n.baseUrl + config.n8n.linkBuilderPath, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': config.n8n.webhookKey }, body: JSON.stringify(body), signal: AbortSignal.timeout(30000) });
+  } catch (err) {
+    throw new HttpError(502, 'The SEO engine is not reachable right now (' + String((err as Error).message || err) + ')');
+  }
+  if (res.status === 404) throw new HttpError(502, 'The Link Builder workflow is not active in n8n (SEOagentLinkBld1)');
+  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; request_id?: string; error?: string };
+  return { ok: res.ok && json.ok !== false, requestId: json.request_id ?? null, error: json.error ?? (res.ok ? null : `n8n answered ${res.status}`) };
+}
+
+export interface ReplyReading { ok: boolean; class: string; summary: string; return_date: string; referral_email: string; referral_name: string; needs_you: boolean; suggested_reply: string; link_found: boolean; link: { url: string; rel: string; anchor: string } | null; model_error?: string; error?: string }
+/** v4.13 Reply Reader (synchronous, Claude Haiku ≈ $0.001): what a reply means, a suggested answer, and our link checked on their page. */
+export async function replyRead(body: Record<string, unknown>): Promise<ReplyReading | null> {
+  try {
+    const res = await fetch(config.n8n.baseUrl + config.n8n.replyPath, { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': config.n8n.webhookKey }, body: JSON.stringify(body), signal: AbortSignal.timeout(90000) });
+    if (!res.ok) return null;
+    return (await res.json()) as ReplyReading;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------- Data Tables (n8n public API) ----------------
 
 type Filter = { columnName: string; condition: 'eq' | 'neq' | 'like' | 'ilike' | 'gt' | 'gte' | 'lt' | 'lte'; value: string | number | boolean };

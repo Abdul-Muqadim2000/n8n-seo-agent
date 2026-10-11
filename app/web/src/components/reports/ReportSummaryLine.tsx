@@ -93,12 +93,24 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
     case 'ai_pulse':
       parts.push(nm(s, 'alerts') ? `${nm(s, 'alerts')} change(s) in today’s AI answers` : 'no change', nm(s, 'mentionRate') != null && `named in ${pctText(nm(s, 'mentionRate'))} of ${nm(s, 'samples') ?? 0} answers`);
       break;
+    case 'ai_growth':
+      parts.push(nm(s, 'submitted') ? `${nm(s, 'submitted')} page(s) sent to Bing / IndexNow` : null, nm(s, 'avgScore') != null && `key pages ${nm(s, 'avgScore')}/100 AI-ready`, nm(s, 'earned') ? `${nm(s, 'earned')} page(s) AI cites without you` : null, nm(s, 'targets') ? `${nm(s, 'targets')} question(s) queued` : null);
+      break;
     case 'backlinks':
       parts.push(
         nm(s, 'referringDomains') != null && `${compactNumber(nm(s, 'referringDomains'))} referring sites`,
         nm(s, 'lost') != null && `${nm(s, 'lost')} lost${nm(s, 'importantLost') ? ` (${nm(s, 'importantLost')} important)` : ''}`,
         nm(s, 'spammy') ? `${nm(s, 'spammy')} spammy` : null,
         nm(s, 'prospects') ? `${nm(s, 'prospects')} prospects` : null,
+      );
+      break;
+    case 'link_builder':
+      parts.push(
+        nm(s, 'drafted') != null && `${nm(s, 'drafted')} pitch${nm(s, 'drafted') === 1 ? '' : 'es'} to approve`,
+        nm(s, 'press') ? `${nm(s, 'press')} journalist request(s)` : null,
+        nm(s, 'listingsMissing') ? `${nm(s, 'listingsMissing')} listing(s) to add` : null,
+        nm(s, 'redirects') ? `${nm(s, 'redirects')} redirect(s)` : null,
+        nm(s, 'impactReads') ? `${nm(s, 'impactReads')} impact read(s)` : null,
       );
       break;
     case 'published':

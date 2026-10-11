@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ContentLogRow, LadderRow, LadderSettingsRow, QueryRow, RankHistoryRow, TrendRow } from '@seo/shared';
+import type { AiTargetRow, ContentLogRow, LadderRow, LadderSettingsRow, QueryRow, RankHistoryRow, TrendRow } from '@seo/shared';
 import { planCadence, simulateCadence, type CadenceInput } from '../src/services/cadence';
 import { cadenceDetail, cadenceSchedule } from '../src/services/pipeline';
 
@@ -154,5 +154,41 @@ describe('cadence mirror: the coming Mondays', () => {
     expect([s.plan?.pileup, s.plan?.nextOf.get('lad_A')?.keyword]).toEqual([false, 'peppol uae cost']);
     // weekly posts off: nothing dated
     expect(cadenceSchedule(simulateCadence(input({ ladders: A(), pagesPerWeek: 0 }), [], NOW), false).dated).toEqual([]);
+  });
+});
+
+// v4.12 (AI_GROWTH_SPEC.md): the AI page of the week — the same rules as Cadence_Plan.js (harness S29 (g))
+describe('cadence mirror: the AI page of the week', () => {
+  const target = (o: Partial<AiTargetRow> & { tid: string }) =>
+    ({ target_id: 'ait_x_' + o.tid, site_id: 'site_northwind-erp-com', domain: D, prompt_id: '', question: o.question ?? 'Which companies help UAE businesses with e-invoicing?', keyword: o.keyword ?? 'e invoicing in uae', kind: o.kind ?? 'answer', page_url: o.page_url ?? '', page_type: 'Guide',
+      fanout: 'a | b', sources_json: '[]', competitors: 'zoho.com, cleartax.com', engines: '', stage: 'decision', value: o.value ?? 1, status: o.status ?? 'queued', reason: '', created_at: '', updated_at: '', request_id: '', written_at: '', won_at: '' }) as AiTargetRow;
+  const T = [target({ tid: '1', keyword: 'odoo vs business central uae', value: 2.1 }), target({ tid: '2', kind: 'refresh', page_url: slug('e invoicing uae'), value: 3.4 })];
+  it('the most valuable queued target is written next to the blog posts (a refresh of the page AI cited)', () => {
+    const p = planCadence(input({ pagesPerWeek: 1, ladders: A(), aiTargets: T, aiPagesPerMonth: 2 }), NOW);
+    expect(p.picks.map((x) => x.source)).toEqual(['ladder', 'ai_refresh']);
+    expect(p.picks[1].existingPageUrl).toBe(slug('e invoicing uae'));
+    expect(p.picks[1].aiTarget).toEqual({ targetId: 'ait_x_2', question: 'Which companies help UAE businesses with e-invoicing?', kind: 'refresh' });
+  });
+  it('one a week; none when the month is used up or AI pages are off; a website without blog posts still gets it', () => {
+    expect(kws({ aiTargets: T, aiPagesPerMonth: 2, logs: [logRow('odoo partner dubai', { source: 'ai_answer', started_at: daysAgo(2) })] })).not.toContain('e invoicing in uae');
+    expect(planCadence(input({ aiTargets: T, aiPagesPerMonth: 0 }), NOW).picks.some((x) => /^ai_/.test(x.source))).toBe(false);
+    expect(planCadence(input({ pagesPerWeek: 0, aiTargets: T, aiPagesPerMonth: 2 }), NOW).picks.map((x) => x.source)).toEqual(['ai_refresh']);
+  });
+  it('Manual opportunities make it a suggestion; the pile-up guard holds it too', () => {
+    const m = planCadence(input({ pagesPerWeek: 1, ladders: A(), aiTargets: T, aiPagesPerMonth: 2, settings: [siteSet({ opportunities: 'manual' })] }), NOW);
+    expect(m.picks.some((x) => /^ai_/.test(x.source))).toBe(false);
+    expect(m.suggestions[0].aiTarget?.targetId).toBe('ait_x_2');
+    const pile = planCadence(input({ pagesPerWeek: 1, aiTargets: T, aiPagesPerMonth: 2, logs: ['a', 'b', 'c'].map((k) => logRow('waiting ' + k, { started_at: daysAgo(5) })) }), NOW);
+    expect(pile.picks.some((x) => /^ai_/.test(x.source))).toBe(false);
+  });
+  it('one search, one page: a question the planned ladder page targets is written as that ladder page, with the AI target', () => {
+    const p = planCadence(input({ pagesPerWeek: 1, ladders: A(), aiTargets: [target({ tid: '9', question: 'How much does Peppol cost in the UAE?', keyword: 'peppol uae cost dubai', value: 5 })], aiPagesPerMonth: 2 }), NOW);
+    expect(p.picks.map((x) => x.source)).toEqual(['ladder']);
+    expect(p.picks[0].keyword).toBe('peppol uae cost');
+    expect(p.picks[0].aiTarget?.targetId).toBe('ait_x_9');
+  });
+  it('the simulated Mondays write the targets one after the other (a refresh is not repeated)', () => {
+    const weeks = simulateCadence(input({ pagesPerWeek: 0, aiTargets: T, aiPagesPerMonth: 4 }), ['2026-10-05T14:00:00.000Z', '2026-10-12T14:00:00.000Z', '2026-10-19T14:00:00.000Z']);
+    expect(weeks.map((w) => w.picks.map((x) => x.source + ':' + x.keyword))).toEqual([['ai_refresh:e invoicing in uae'], ['ai_answer:odoo vs business central uae'], []]);
   });
 });

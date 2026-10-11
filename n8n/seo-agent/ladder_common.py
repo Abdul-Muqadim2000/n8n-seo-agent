@@ -93,12 +93,15 @@ AUDITS_TABLE = 'seo_audits'
 AUDIT_FINDINGS_TABLE = 'seo_audit_findings'
 MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 'boolean'), ('ai_engines', 'string'), ('ai_prompts_max', 'number'), ('backlinks', 'boolean'), ('audit_monthly', 'boolean'),
                  ('audit_pages', 'number'), ('audit_js', 'boolean'), ('competitors', 'string'), ('brand_names', 'string'), ('updated_at', 'string'), ('request_id', 'string'),
-                 ('ai_pulse', 'boolean')]   # v4.9: daily AI pulse (empty = on)
+                 ('ai_pulse', 'boolean'),   # v4.9: daily AI pulse (empty = on)
+                 ('ai_growth', 'boolean'), ('ai_pages_month', 'number'),   # v4.12 (AI_GROWTH_SPEC.md): the weekly AI Growth loop (empty = on) and AI answer / refresh pages a month (empty = 2)
+                 ('link_builder', 'boolean')]   # v4.13 (LINK_BUILDER_SPEC.md): the weekly Link Builder (empty = on); on, the Backlink Monitor no longer drafts e-mails
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string')]   # v4.9: buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
                    ('answered', 'boolean'), ('mentioned', 'boolean'), ('cited', 'boolean'), ('rank', 'number'), ('our_urls', 'string'), ('competitors', 'string'), ('sources', 'string'), ('excerpt', 'string'), ('cost', 'number'), ('error', 'string'),
-                   ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string')]   # v4.9: weekly / full / pulse / on_demand, how the answer speaks of you, brands in order, wrong claims, the searches the engine ran
+                   ('run_kind', 'string'), ('sentiment', 'string'), ('brands', 'string'), ('issues', 'string'), ('fanout', 'string'),
+                   ('cited_urls', 'string')]   # v4.12: the exact third-party pages the answer cited (JSON [{u, t}], max 8) — the earned-media targets. v4.9: weekly / full / pulse / on_demand, how the answer speaks of you, brands in order, wrong claims, the searches the engine ran
 AI_VIS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompts', 'number'), ('answers', 'number'), ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'),
                ('avg_rank', 'number'), ('aio_presence', 'number'), ('aio_citation_rate', 'number'), ('engines_json', 'string'), ('competitors_json', 'string'), ('sources_json', 'string'), ('pages_json', 'string'), ('gaps_json', 'string'),
                ('market_json', 'string'), ('market_month', 'string'), ('cost_usd', 'number'), ('alerts', 'string'),
@@ -110,6 +113,24 @@ AI_DAILY_TABLE = 'seo_ai_daily'
 AI_DAILY_COLS = [('site_id', 'string'), ('domain', 'string'), ('date', 'string'), ('checked_at', 'string'), ('run_id', 'string'), ('samples', 'number'), ('mentioned', 'number'), ('cited', 'number'),
                  ('mention_rate', 'number'), ('citation_rate', 'number'), ('share_of_voice', 'number'), ('visibility_score', 'number'), ('engines_json', 'string'), ('prompts_json', 'string'),
                  ('competitors_json', 'string'), ('sources_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number')]
+# v4.12 (AI_GROWTH_SPEC.md): the weekly AI Growth loop — what it does so the site gets named and cited, not only measured.
+# seo_ai_pages: one row per site and key page: can an AI assistant read and quote it (raw HTML without JavaScript, answer in the first 200
+# characters, a visible update date, question headings, sourced figures, size), and is it in Bing's index (Bing Webmaster GetUrlInfo) / submitted.
+AI_PAGES_TABLE = 'seo_ai_pages'
+AI_PAGES_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string'), ('kind', 'string'), ('checked_at', 'string'), ('status', 'number'), ('score', 'number'), ('checks_json', 'string'),
+                 ('issues', 'string'), ('words_raw', 'number'), ('title', 'string'), ('updated_on', 'string'), ('bing_crawled_at', 'string'), ('bing_status', 'number'), ('submitted_at', 'string'),
+                 ('submitted_via', 'string'), ('cited_by', 'string'), ('questions', 'string')]
+# seo_ai_targets: the questions the site should win in AI answers and how — a new answer page (answer) or a refresh of the page it has (refresh);
+# written by AI Growth, consumed by the Content Cadence (ai_pages_month), status queued -> writing -> written -> won (or skipped).
+AI_TARGETS_TABLE = 'seo_ai_targets'
+AI_TARGETS_COLS = [('target_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt_id', 'string'), ('question', 'string'), ('keyword', 'string'), ('kind', 'string'), ('page_url', 'string'),
+                   ('page_type', 'string'), ('fanout', 'string'), ('sources_json', 'string'), ('competitors', 'string'), ('engines', 'string'), ('stage', 'string'), ('value', 'number'), ('status', 'string'),
+                   ('reason', 'string'), ('created_at', 'string'), ('updated_at', 'string'), ('request_id', 'string'), ('written_at', 'string'), ('won_at', 'string')]
+# seo_ai_growth: one row per site and weekly run (what was done automatically, the plan, the earned-media list, the entity check)
+AI_GROWTH_TABLE = 'seo_ai_growth'
+AI_GROWTH_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('submitted', 'number'), ('submitted_json', 'string'), ('indexnow', 'string'),
+                  ('pages_checked', 'number'), ('avg_score', 'number'), ('pages_json', 'string'), ('targets_json', 'string'), ('earned_json', 'string'), ('entity_json', 'string'),
+                  ('actions_json', 'string'), ('alerts', 'string'), ('cost_usd', 'number')]
 BL_SNAP_COLS = [('site_id', 'string'), ('domain', 'string'), ('checked_at', 'string'), ('mode', 'string'), ('rank', 'number'), ('backlinks', 'number'), ('referring_domains', 'number'), ('referring_domains_nofollow', 'number'),
                 ('spam_score', 'number'), ('broken_backlinks', 'number'), ('new_links', 'number'), ('lost_links', 'number'), ('important_lost', 'number'), ('spammy_new', 'number'), ('lost_json', 'string'), ('new_json', 'string'),
                 ('competitors_json', 'string'), ('timeseries_json', 'string'), ('cost_usd', 'number'),
@@ -133,6 +154,23 @@ LINKS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ref_domain', 'strin
 # v4.10: the Common Crawl web graph per site, written by the linkgraph job (n8n/seo-agent/linkgraph/, once per graph release): the site's
 # referring domains (kind link), domains that link to a competitor and not to the site (gap, links_to = the competitors) and authority ranks
 # for the site's other referrers (rank). hc_pos / pr_pos = harmonic-centrality / PageRank position among ~133M domains (1 = best).
+# v4.13 Link Builder (LINK_BUILDER_SPEC.md): one row per site x prospect domain x type with the qualification, contacts, our page, the link
+# text and the drafted sequence (the app sends it); the listings checklist; what each won link did for its page.
+LINK_OUTREACH_TABLE = 'seo_link_outreach'
+LINK_OUTREACH_COLS = [('site_id', 'string'), ('domain', 'string'), ('prospect_domain', 'string'), ('type', 'string'), ('status', 'string'), ('score', 'number'),
+                      ('fit', 'number'), ('fit_reason', 'string'), ('checks_json', 'string'), ('page_url', 'string'), ('page_title', 'string'), ('evidence', 'string'),
+                      ('contacts_json', 'string'), ('contact_email', 'string'), ('contact_form_url', 'string'), ('country', 'string'), ('language', 'string'),
+                      ('target_url', 'string'), ('target_reason', 'string'), ('anchor_hint', 'string'), ('sequence_json', 'string'), ('deadline', 'string'),
+                      ('drafted_at', 'string'), ('checked_at', 'string'), ('request_id', 'string')]
+LISTINGS_TABLE = 'seo_listings'
+LISTINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('listing_id', 'string'), ('name', 'string'), ('category', 'string'), ('status', 'string'),
+                 ('profile_url', 'string'), ('rel', 'string'), ('competitors', 'string'), ('submit_url', 'string'), ('priority', 'number'), ('why', 'string'),
+                 ('checked_at', 'string'), ('submitted_at', 'string'), ('note', 'string')]
+LINK_IMPACT_TABLE = 'seo_link_impact'
+LINK_IMPACT_COLS = [('site_id', 'string'), ('domain', 'string'), ('ref_domain', 'string'), ('from_url', 'string'), ('target_url', 'string'), ('t0', 'string'),
+                    ('weeks', 'number'), ('base_position', 'number'), ('base_clicks', 'number'), ('position', 'number'), ('clicks', 'number'),
+                    ('page_change', 'number'), ('control_change', 'number'), ('control_spread', 'number'), ('effect', 'number'), ('verdict', 'string'),
+                    ('note', 'string'), ('keyword', 'string'), ('updated_at', 'string')]
 LINK_GRAPH_TABLE = 'seo_link_graph'
 LINK_GRAPH_COLS = [('site_id', 'string'), ('domain', 'string'), ('release', 'string'), ('kind', 'string'), ('ref_domain', 'string'), ('hc_pos', 'number'), ('pr_pos', 'number'),
                    ('n_hosts', 'number'), ('links_to', 'string'), ('checked_at', 'string')]
@@ -146,6 +184,7 @@ AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id',
 # ---- reuse instead of repeat (v4.6): one key/value cache for results that do not need to be fetched again ----
 # keys: 'age:<domain>' (registration date, 365 days), 'desc:<domain>' (site description, 30 days), 'sitemap:<site_id>' (sitemap fingerprint)
 # v4.9: 'ai_brands:<site_id>' (brand names AI uses for competitors -> their domain, learned by the Answer Analyst), 'ai_index:<site_id>' (the monthly AI-answer database view)
+# v4.12: 'indexnow:<site_id>' (the site's IndexNow key; the owner hosts https://<domain>/<key>.txt)
 CACHE_TABLE = 'seo_cache'
 CACHE_COLS = [('key', 'string'), ('kind', 'string'), ('site_id', 'string'), ('value', 'string'), ('updated_at', 'string')]
 

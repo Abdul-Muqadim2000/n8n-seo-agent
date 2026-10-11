@@ -454,6 +454,8 @@
         "ai_engines": "chatgpt, perplexity",
         "ai_prompts_max": 30,
         "ai_pulse": false,
+        "ai_growth": true,
+        "ai_pages_month": 2,
         "backlinks": false,
         "audit_monthly": true,
         "audit_pages": 500,

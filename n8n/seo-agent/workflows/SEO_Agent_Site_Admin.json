@@ -300,6 +300,18 @@
               {
                 "name": "ai_pulse",
                 "type": "boolean"
+              },
+              {
+                "name": "ai_growth",
+                "type": "boolean"
+              },
+              {
+                "name": "ai_pages_month",
+                "type": "number"
+              },
+              {
+                "name": "link_builder",
+                "type": "boolean"
               }
             ]
           },
@@ -525,7 +537,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)\n// | prospect (prospect_domain + status contacted / won / rejected / ignored / new, note, contact_email) | ai_prompts (add custom questions, switch some off) — by site_id or domain.\n// The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).\nlet t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }\nif (t.body && typeof t.body === 'object') t = { ...t, ...t.body };\nconst action = String(t.action || '').toLowerCase();\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');\nconst site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect or ai_prompts');\nif (!site_id) throw new Error('site_id or domain is required');\nconst pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));\nif (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');\nconst keyword = String(t.keyword || '').trim().toLowerCase().replace(/\\s+/g, ' ');\nif (action === 'unpublish' && !keyword) throw new Error('keyword is required for action unpublish');\nconst prospect_domain = normD(t.prospect_domain);\nconst pstatus = String(t.status || '').toLowerCase();\nif (action === 'prospect' && !prospect_domain) throw new Error('prospect_domain is required for action prospect');\nif (action === 'prospect' && pstatus && !['new', 'contacted', 'won', 'rejected', 'ignored'].includes(pstatus)) throw new Error('status must be new, contacted, won, rejected or ignored');\nconst add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? t.prompts : [])).map(x => String(typeof x === 'object' ? x.prompt : x).trim()).filter(x => x.length >= 10).slice(0, 15);\nconst off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean);\nif (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length) throw new Error('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');\nconst monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});\nreturn [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, monitors, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];\n"
+          "jsCode": "// Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)\n// | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.\n// The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).\nlet t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }\nif (t.body && typeof t.body === 'object') t = { ...t, ...t.body };\nconst action = String(t.action || '').toLowerCase();\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');\nconst site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect or ai_prompts');\nif (!site_id) throw new Error('site_id or domain is required');\nconst pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));\nif (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');\nconst keyword = String(t.keyword || '').trim().toLowerCase().replace(/\\s+/g, ' ');\nif (action === 'unpublish' && !keyword) throw new Error('keyword is required for action unpublish');\nconst prospect_domain = normD(t.prospect_domain);\nconst pstatus = String(t.status || '').toLowerCase();\nif (action === 'prospect' && !prospect_domain) throw new Error('prospect_domain is required for action prospect');\nif (action === 'prospect' && pstatus && !['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'].includes(pstatus)) throw new Error('status must be new, contacted, replied, won, rejected or ignored');\nconst add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? t.prompts : [])).map(x => String(typeof x === 'object' ? x.prompt : x).trim()).filter(x => x.length >= 10).slice(0, 15);\nconst off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean);\nif (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length) throw new Error('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');\nconst monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});\nreturn [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, monitors, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];\n"
         },
         "id": "e044e561-ffd1-5e5e-8992-1e3228ee45b4",
         "name": "Admin Action",
@@ -572,7 +584,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Site Admin \"monitors\": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines\n// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode), ai_prompts_max (3-50), ai_pulse (daily AI Pulse, v4.9), backlinks, audit_monthly, audit_pages (50-1000), audit_js,\n// competitors (domains), brand_names.\nconst a = $('Admin Action').first().json; const m = a.monitors || {};\nlet old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}\nconst has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';\nconst b = (k, dflt) => has(k) ? !/^(false|0|no|off)$/i.test(String(m[k])) : (old[k] === undefined || old[k] === null || old[k] === '' ? dflt : !(old[k] === false || old[k] === 'false'));\nconst list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst ENG = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];\nconst __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_visibility: b('ai_visibility', true), ai_engines: has('ai_engines') ? list(m.ai_engines).map(e => e.toLowerCase()).filter(e => ENG.includes(e)).join(', ') : String(old.ai_engines || ''),\n  ai_prompts_max: has('ai_prompts_max') ? Math.min(50, Math.max(3, parseInt(m.ai_prompts_max, 10) || 20)) : (Number(old.ai_prompts_max) || 20), ai_pulse: b('ai_pulse', true), backlinks: b('backlinks', true), audit_monthly: b('audit_monthly', true),\n  audit_pages: has('audit_pages') ? Math.min(1000, Math.max(50, parseInt(m.audit_pages, 10) || 200)) : (Number(old.audit_pages) || 200), audit_js: b('audit_js', false),\n  competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),\n  updated_at: a.updated_at, request_id: a.request_id || '' };\nif (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit\nreturn [{ json: __row }];\n"
+          "jsCode": "// Site Admin \"monitors\": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines\n// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot), ai_prompts_max (3-50), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), backlinks, audit_monthly, audit_pages (50-1000), audit_js,\n// competitors (domains), brand_names.\nconst a = $('Admin Action').first().json; const m = a.monitors || {};\nlet old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}\nconst has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';\nconst b = (k, dflt) => has(k) ? !/^(false|0|no|off)$/i.test(String(m[k])) : (old[k] === undefined || old[k] === null || old[k] === '' ? dflt : !(old[k] === false || old[k] === 'false'));\nconst list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst ENG = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot'];\nconst __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_visibility: b('ai_visibility', true), ai_engines: has('ai_engines') ? list(m.ai_engines).map(e => e.toLowerCase()).filter(e => ENG.includes(e)).join(', ') : String(old.ai_engines || ''),\n  ai_prompts_max: has('ai_prompts_max') ? Math.min(50, Math.max(3, parseInt(m.ai_prompts_max, 10) || 20)) : (Number(old.ai_prompts_max) || 20), ai_pulse: b('ai_pulse', true), ai_growth: b('ai_growth', true),\n  ai_pages_month: has('ai_pages_month') ? Math.min(8, Math.max(0, parseInt(m.ai_pages_month, 10) || 0)) : (old.ai_pages_month === '' || old.ai_pages_month == null ? null : Number(old.ai_pages_month)), backlinks: b('backlinks', true), audit_monthly: b('audit_monthly', true), link_builder: b('link_builder', true),\n  audit_pages: has('audit_pages') ? Math.min(1000, Math.max(50, parseInt(m.audit_pages, 10) || 200)) : (Number(old.audit_pages) || 200), audit_js: b('audit_js', false),\n  competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),\n  updated_at: a.updated_at, request_id: a.request_id || '' };\nif (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit\nreturn [{ json: __row }];\n"
         },
         "id": "80266f01-ece0-5661-af44-14a2c6591616",
         "name": "Monitor Row (Admin)",
@@ -740,6 +752,36 @@
               {
                 "id": "ai_pulse",
                 "displayName": "ai_pulse",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_growth",
+                "displayName": "ai_growth",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_pages_month",
+                "displayName": "ai_pages_month",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "link_builder",
+                "displayName": "link_builder",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

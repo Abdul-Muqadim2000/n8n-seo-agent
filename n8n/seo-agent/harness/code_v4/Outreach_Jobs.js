@@ -9,6 +9,7 @@ const days = (d) => d ? (Date.now() - new Date(d).getTime()) / 864e5 : -1;
 const jobs = [];
 for (const s of sites) {
   if (s.free_only) continue;   // free sources only: no Claude drafts (the prospects are still listed)
+  if (s.link_builder) continue;   // v4.13: the Link Builder qualifies, picks our page and drafts the whole sequence (one writer)
   const mine = existing.filter(x => x.site_id === s.site_id);
   const aiSources = mine.filter(x => x.type === 'ai_source' && !x.outreach_body && (x.status || 'new') === 'new').map(x => ({ prospect_domain: x.prospect_domain, type: 'ai_source', rank: Number(x.rank) || 0, score: Number(x.score) || 20, detail: x.detail, source_url: '', target_url: '' }));
   const fresh = s.mode === 'full' ? [...s.candidates.filter(c => c.type !== 'reclaim'), ...aiSources]

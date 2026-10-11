@@ -1,0 +1,1 @@
+ALTER TABLE "mailboxes" ADD COLUMN "started_at" timestamp with time zone DEFAULT now() NOT NULL;

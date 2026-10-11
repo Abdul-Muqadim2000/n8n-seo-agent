@@ -2,7 +2,7 @@
 // and the business's place in the list is read, not guessed from text positions), the sentiment toward the business, and wrong claims about it.
 // Answers the analyst did not read keep the parser's values. Output: the seo_ai_answers rows with exact columns (the answer text is dropped).
 /*__AI_STATS__*/
-const COLS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout'];
+const COLS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
 let rows = []; try { rows = $('Parse AI Answers').all().map(i => i.json).filter(r => !r.skip && r.engine); } catch (e) {}
 if (!rows.length) return [{ json: { skip: true } }];
 let jobs = [], outs = []; try { jobs = $('Analyst Jobs').all().map(i => i.json).filter(j => !j.skip); outs = $('Answer Analyst').all().map(i => i.json || {}); } catch (e) {}

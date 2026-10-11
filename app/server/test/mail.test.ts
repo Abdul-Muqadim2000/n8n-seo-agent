@@ -1,0 +1,42 @@
+import { describe, expect, it } from 'vitest';
+import { compose, parseIncoming, stripQuoted } from '../src/services/mail';
+import type { MailboxRow } from '../src/db/schema';
+
+const mb = { fromName: 'Sara Khan', fromEmail: 'sara@techand.ai', signatureName: 'Sara Khan', signatureTitle: 'Head of Finance Systems', company: 'Techand Systems', postalAddress: 'Office 1204, Bay Square, Dubai, UAE' } as unknown as MailboxRow;
+
+describe('composing a sequence e-mail (v4.13)', () => {
+  it('first e-mail: plain text, the footer with the postal address and the opt-out, an unsubscribe header, our own Message-ID', () => {
+    const m = compose(mb, { sequenceId: '0f3c2a9b-1111-2222-3333-444455556666', step: 0, to: 'editor@erpdaily.ae', subject: 'A dead link in your guide', body: 'Hi Layla,\n\nThe link "UAE guide" is dead.', firstSubject: 'A dead link in your guide', country: 'AE', foundOn: 'https://erpdaily.ae/contact', previousIds: [] });
+    expect(m.subject).toBe('A dead link in your guide'); expect(m.text).toContain('Bay Square'); expect(m.text).toMatch(/reply "no"/); expect(m.text).not.toContain('I found your address');   // not an EU / UK recipient
+    expect(m.headers['List-Unsubscribe']).toBe('<mailto:sara@techand.ai?subject=unsubscribe>'); expect(m.messageId).toMatch(/^<lb\.0f3c2a9b\.0\.[\w-]+@techand\.ai>$/); expect(m.inReplyTo).toBeUndefined();
+  });
+  it('follow-up: same thread (Re:, In-Reply-To / References), no postal address again', () => {
+    const m = compose(mb, { sequenceId: '0f3c2a9b-1111-2222-3333-444455556666', step: 1, to: 'editor@erpdaily.ae', subject: '', body: 'One more detail.', firstSubject: 'A dead link in your guide', country: 'AE', foundOn: '', previousIds: ['<lb.0f3c2a9b.0.abc@techand.ai>'] });
+    expect(m.subject).toBe('Re: A dead link in your guide'); expect(m.inReplyTo).toBe('<lb.0f3c2a9b.0.abc@techand.ai>'); expect(m.references).toEqual(['<lb.0f3c2a9b.0.abc@techand.ai>']); expect(m.text).not.toContain('Bay Square');
+  });
+});
+
+describe('reading incoming mail (v4.13)', () => {
+  it('a person\'s reply: our Message-ID in In-Reply-To, the quoted e-mail stripped', async () => {
+    const src = ['From: Layla Haddad <layla.haddad@erpdaily.ae>', 'To: sara@techand.ai', 'Subject: Re: A dead link in your guide', 'Message-ID: <r1@erpdaily.ae>', 'In-Reply-To: <lb.0f3c2a9b.0.abc@techand.ai>', 'References: <lb.0f3c2a9b.0.abc@techand.ai>', 'Content-Type: text/plain; charset=utf-8', '', 'Thanks Sara, could you send a short description?', '', 'On Mon, 12 Oct 2026 at 10:00, Sara Khan <sara@techand.ai> wrote:', '> Hi Layla', ''].join('\r\n');
+    const m = await parseIncoming(src);
+    expect(m.kind).toBe('person'); expect(m.from).toBe('layla.haddad@erpdaily.ae'); expect(m.fromDomain).toBe('erpdaily.ae'); expect(m.inReplyTo).toBe('<lb.0f3c2a9b.0.abc@techand.ai>');
+    expect(stripQuoted(m.text)).toBe('Thanks Sara, could you send a short description?');
+  });
+  it('an out-of-office reply by its headers', async () => {
+    const src = ['From: editor@erpdaily.ae', 'To: sara@techand.ai', 'Subject: Automatic reply: A dead link in your guide', 'Auto-Submitted: auto-replied', 'Message-ID: <a1@erpdaily.ae>', 'Content-Type: text/plain', '', 'I am away until 20 October.'].join('\r\n');
+    expect((await parseIncoming(src)).kind).toBe('auto');
+  });
+  it('a hard bounce: the original Message-ID and recipient from the delivery report', async () => {
+    const src = ['From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>', 'To: sara@techand.ai', 'Subject: Delivery Status Notification (Failure)', 'Message-ID: <b1@google.com>', 'MIME-Version: 1.0', 'Content-Type: multipart/report; report-type=delivery-status; boundary="BB"', '',
+      '--BB', 'Content-Type: text/plain', '', 'Address not found', '', '--BB', 'Content-Type: message/delivery-status', '', 'Reporting-MTA: dns; googlemail.com', '', 'Final-Recipient: rfc822; nobody@erpdaily.ae', 'Action: failed', 'Status: 5.1.1', '',
+      '--BB', 'Content-Type: text/rfc822-headers', '', 'From: sara@techand.ai', 'To: nobody@erpdaily.ae', 'Subject: A dead link in your guide', 'Message-ID: <lb.0f3c2a9b.0.abc@techand.ai>', '', '--BB--', ''].join('\r\n');
+    const m = await parseIncoming(src);
+    expect(m.kind).toBe('bounce'); expect(m.hardBounce).toBe(true); expect(m.policyBlock).toBe(false);
+    expect(m.bounceIds).toContain('<lb.0f3c2a9b.0.abc@techand.ai>'); expect(m.bounceRecipients).toContain('nobody@erpdaily.ae');
+  });
+  it('a policy block (5.7.x) is told apart from an unknown address', async () => {
+    const src = ['From: postmaster@outlook.com', 'To: sara@techand.ai', 'Subject: Undeliverable: A dead link', 'Content-Type: multipart/report; report-type=delivery-status; boundary="CC"', '', '--CC', 'Content-Type: message/delivery-status', '', 'Final-Recipient: rfc822; editor@x.com', 'Action: failed', 'Status: 5.7.1', '', '--CC--', ''].join('\r\n');
+    const m = await parseIncoming(src); expect(m.kind).toBe('bounce'); expect(m.policyBlock).toBe(true);
+  });
+});

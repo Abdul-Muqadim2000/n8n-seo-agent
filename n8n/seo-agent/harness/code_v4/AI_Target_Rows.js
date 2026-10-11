@@ -1,0 +1,4 @@
+// The questions to win (seo_ai_targets, upsert by target_id; the Content Cadence writes the queued ones) (exact columns)
+const COLS = ["target_id", "site_id", "domain", "prompt_id", "question", "keyword", "kind", "page_url", "page_type", "fanout", "sources_json", "competitors", "engines", "stage", "value", "status", "reason", "created_at", "updated_at", "request_id", "written_at", "won_at"];
+const rows = $('Growth Metrics').all().flatMap(i => i.json.target_rows || []).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));
+return rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];

@@ -21,16 +21,9 @@ const LK = (() => {
   const normUrl = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/#.*$/, '').replace(/[?&](utm_[a-z]+|ref|fbclid|gclid)=[^&]*/g, '').replace(/\?$/, '').replace(/\/+$/, '');
   const decodeAll = (s) => { let x = String(s || ''); for (let i = 0; i < 3; i++) { try { const y = decodeURIComponent(x); if (y === x) break; x = y; } catch (e) { break; } } return x; };
   // where on the page an index sits: the innermost structural element decides (an "aside" inside "main" is a sidebar, a "header" inside "article" is nav)
-  function placementAt(html, idx) {
-    const re = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*)>/g; const stack = []; let m;
-    while ((m = re.exec(html)) && m.index < idx) {
-      const close = m[1] === '/', tag = m[2].toLowerCase(), attrs = m[3] || '';
-      if (!close && (tag === 'script' || tag === 'style' || tag === 'template')) { const end = html.toLowerCase().indexOf('</' + tag, re.lastIndex); if (end < 0 || end > idx) break; re.lastIndex = end; continue; }
-      if (VOID.has(tag) || /\/\s*$/.test(attrs)) continue;
-      if (close) { let at = -1; for (let i = stack.length - 1; i >= 0; i--) if (stack[i].tag === tag) { at = i; break; } if (at >= 0) stack.length = at; }
-      else stack.push({ tag, cls: ((attrs.match(/\b(?:class|id|role|itemprop)\s*=\s*["'][^"']*["']/gi) || []).join(' ')).toLowerCase() });
-    }
-    // whole class / id / role tokens, not substrings: page builders put "widget" or "header" in every wrapper (Elementor's "elementor-widget-container")
+  // the innermost structural element decides: an "aside" inside "main" is a sidebar, a "header" inside "article" is nav
+  // whole class / id / role tokens, not substrings: page builders put "widget" or "header" in every wrapper (Elementor's "elementor-widget-container")
+  function placeOf(stack) {
     const is = (toks, re) => toks.some(t => re.test(t));
     for (let i = stack.length - 1; i >= 0; i--) {
       const { tag } = stack[i]; const toks = stack[i].cls.split(/[\s"'=]+/).filter(t => t && !/^(class|id|role|itemprop)$/.test(t));
@@ -42,6 +35,24 @@ const LK = (() => {
     }
     return 'body';
   }
+  // one walk over the tags up to `upto` (or the whole page): calls onA(index, stack) at every <a>; scripts / styles skipped
+  function walkTags(html, upto, onA) {
+    const re = /<(\/?)([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*)>/g; const stack = []; let m; let low = null;
+    while ((m = re.exec(html)) && m.index < upto) {
+      const close = m[1] === '/', tag = m[2].toLowerCase(), attrs = m[3] || '';
+      if (!close && (tag === 'script' || tag === 'style' || tag === 'template')) { if (low === null) low = html.toLowerCase(); const end = low.indexOf('</' + tag, re.lastIndex); if (end < 0 || end > upto) break; re.lastIndex = end; continue; }
+      if (!close && tag === 'a' && onA) onA(m.index, stack);
+      if (VOID.has(tag) || /\/\s*$/.test(attrs)) continue;
+      if (close) { let at = -1; for (let i = stack.length - 1; i >= 0; i--) if (stack[i].tag === tag) { at = i; break; } if (at >= 0) stack.length = at; }
+      else stack.push({ tag, cls: ((attrs.match(/\b(?:class|id|role|itemprop)\s*=\s*["'][^"']*["']/gi) || []).join(' ')).toLowerCase() });
+    }
+    return stack;
+  }
+  // where on the page an index sits (one link: verify)
+  function placementAt(html, idx) { return placeOf(walkTags(html, idx, null)); }
+  // where every link of a page sits, in one walk (many links: the Link Builder's dead-link check; v4.13 — placementAt per link re-walked the
+  // page each time: 11 minutes on real list pages, live 2026-10-11)
+  function anchorPlacements(html) { const out = new Map(); walkTags(String(html || ''), Infinity, (i, stack) => out.set(i, placeOf(stack))); return out; }
   // every <a> on the page that points to the site (directly, or through a redirect / tracking URL that carries it)
   function linksTo(html, domain) {
     const out = []; const re = /<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi; let m;
@@ -164,7 +175,7 @@ const LK = (() => {
     if ((label.length >= 4 && a.replace(/[^a-z0-9]/g, '').includes(label)) || brands.some(b => b && a.includes(String(b).toLowerCase()))) return 'brand';
     if (/^(click here|here|this|read more|more|website|link|source|visit( site| website)?|learn more|this article|this post|view|official site|homepage)$/.test(a)) return 'generic';
     return 'money'; };
-  return { text, attr, hostOf, regDomain, refKey, sameSite, isInfra, isScraper, isWire, normUrl, placementAt, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind };
+  return { text, attr, hostOf, regDomain, refKey, sameSite, isInfra, isScraper, isWire, normUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind };
 })();
 
 const reqs = $('Verify Requests').all().map(i => i.json); let resps = []; try { resps = $('Fetch Linking Pages').all().map(i => i.json || {}); } catch (e) {}

@@ -1,12 +1,13 @@
 import type { ReactNode } from 'react';
 import type { ReportDetail, ReportFile } from '@seo/shared';
 import { Callout } from '@/components/ui/feedback';
-import { AiPulseReport, AiVisibilityReport } from './ai';
+import { AiGrowthReport, AiPulseReport, AiVisibilityReport } from './ai';
 import { AuditReport } from './audit';
 import { BacklinksReport } from './backlinks';
 import { ContentReport } from './content';
 import { RenderBoundary } from './kit';
 import { LadderReport } from './ladder';
+import { LinkBuilderReport } from './linkBuilder';
 import { RankTrackerReport } from './rank';
 import {
   CadenceReport,
@@ -34,7 +35,9 @@ const RENDERERS: Record<string, (p: { report: ReportDetail }) => ReactNode> = {
   site_tracker: SiteTrackerReport,
   ai_visibility: AiVisibilityReport,
   ai_pulse: AiPulseReport,
+  ai_growth: AiGrowthReport,
   backlinks: BacklinksReport,
+  link_builder: LinkBuilderReport,
   published: PublishedReport,
   profile: ProfileReport,
   console_checkin: CheckinReport,

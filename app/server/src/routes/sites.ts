@@ -8,11 +8,14 @@ import {
   monitorsBody,
   parseLinkImport,
   n8nSiteId,
+  safeJson,
   updateSiteSchema,
   VERIFICATION_META_NAME,
   VERIFICATION_TXT_PREFIX,
   verifySiteSchema,
   type AdminResult,
+  type AiGrowthRow,
+  type IndexNowCheck,
   type GoogleConnection,
   type LinkImportSummary,
   type Site,
@@ -27,10 +30,10 @@ import { db, schema } from '../db';
 import type { SiteRow } from '../db/schema';
 import { randomToken } from '../lib/crypto';
 import { badRequest, conflict, HttpError, notFound, parse } from '../lib/errors';
-import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin } from '../n8n/client';
+import { deleteRows, ensureTable, insertRows, invalidateSite, siteAdmin, siteRows } from '../n8n/client';
 import { assertGa4ForDomain, findGscProperty, gscOwnerCheck, listGa4Properties } from '../services/google';
 import { routeSiteToApp } from '../services/runs';
-import { verify } from '../services/verify';
+import { fetchPublicText, verify } from '../services/verify';
 
 export function toSite(s: SiteRow): Site {
   return {
@@ -206,6 +209,34 @@ export async function siteRoutes(app: FastifyInstance) {
     const r = await verify(method, site.domain, site.verificationToken);
     if (r.verified) await markVerified(site, method);
     return { verified: r.verified, method, message: r.message };
+  });
+
+  // v4.12 (AI_GROWTH_SPEC.md): is the IndexNow key file in place? The AI growth loop sends new pages through IndexNow once it is (it checks
+  // every Monday); this answers at once after the owner uploads the file. Only the site's own host, https, a few bytes.
+  app.post('/api/orgs/:orgId/sites/:siteId/ai/indexnow/check', { config: { rateLimit: { max: 20, timeWindow: '10 minutes' } } }, async (req): Promise<IndexNowCheck> => {
+    const p = req.params as P;
+    const { site } = await siteAccess(req, p.orgId, p.siteId);
+    requireVerified(site);
+    const g = (await siteRows<AiGrowthRow>('aiGrowth', site.domain, { sortBy: 'checked_at:desc', max: 1 }))[0];
+    const keyUrl = String(safeJson<Record<string, Record<string, unknown>>>(g?.submitted_json ?? '', {}).indexnow?.key_url ?? '');
+    const m = keyUrl.match(/^https:\/\/([^/]+)\/([a-f0-9]{32})\.txt$/);
+    if (!m) throw notFound('No IndexNow key yet: the first AI growth run (Mondays 09:30) makes it.');
+    const host = m[1].toLowerCase();
+    if (host !== site.domain && host !== `www.${site.domain}`) throw badRequest('The key file must be on your own website.');
+    const r = await fetchPublicText(keyUrl, 4096).catch(() => null);
+    const verified = !!r && r.status === 200 && r.text.trim() === m[2];
+    return {
+      verified,
+      keyUrl,
+      status: r?.status ?? 0,
+      message: verified
+        ? 'The file is in place: from the next AI growth run every new or updated page is sent through IndexNow too.'
+        : !r
+          ? 'The file could not be fetched (no answer from the website).'
+          : r.status === 200
+            ? 'The address answers, but the file does not contain only the key.'
+            : `The address answers ${r.status}: the file is not there yet.`,
+    };
   });
 
   // "Verify with Google": sign in with the Google account that owns the domain in Search Console (read-only scope)

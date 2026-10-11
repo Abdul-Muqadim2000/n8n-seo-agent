@@ -53,6 +53,7 @@ Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site sett
 | POST | /api/orgs/:orgId/sites/:siteId/verify | `verifySiteSchema` (admin) | `VerifyResult` |
 | GET | /api/orgs/:orgId/sites/:siteId/google | | `GoogleConnection` |
 | POST | /api/orgs/:orgId/sites/:siteId/admin | `adminActionSchema` (admin, verified site) | `AdminResult` |
+| POST | /api/orgs/:orgId/sites/:siteId/ai/indexnow/check | (member, verified site; 20 / 10 min) | `IndexNowCheck` — fetches the site's IndexNow key file (from the latest AI growth run; own host, https) and says whether it is in place |
 | POST | /api/orgs/:orgId/sites/:siteId/backlinks/import | `linkImportSchema` `{ csv, fileName? }` (member, verified site; 16 MB, 20 an hour) — v4.10: a Search Console Links export (Latest links / More sample links / Top linking sites) or another tool's backlink CSV, parsed by `shared/src/link-import.ts` into `seo_link_imports` (the same kind replaces the previous upload); 400 with a plain message when the file holds no links to the site | `LinkImportSummary` |
 
 ## Dashboards (verified sites only; 403 otherwise)
@@ -63,7 +64,7 @@ Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site sett
 | GET | …/data/rankings | `RankingsData` |
 | GET | …/data/content | `ContentData` |
 | GET | …/data/technical?auditId= | `TechnicalData` |
-| GET | …/data/ai | `AiData` (v4.9: `daily` pulse days, `latest.traffic / access / perception / index / stages / clusters`, ranges and score per run) |
+| GET | …/data/ai | `AiData` (v4.9: `daily` pulse days, `latest.traffic / access / perception / index / stages / clusters`, ranges and score per run; v4.12: `growth` — the AI growth loop's latest run: submissions, key pages, targets, earned media with drafts, entity, actions — and `answers[].citedUrls`) |
 | GET | …/data/backlinks | `BacklinksData` (v4.10: `refs` = the link ledger with sources, check status and SEO / referral / brand values; `latest.coverage` per source + Google-sample share; `latest.anchors`, `pages`, `wins`, `relChanged`, `compNew`, `lists`; `imports`; `linkGraph`; prospects with score, contact and follow-up drafts; `report.mentions`, `atRisk`, `reclaim`, `drEnabled`) |
 | GET | …/data/alerts | `AlertsData` |
 | GET | …/data/settings | `SiteSettingsData` |
@@ -117,6 +118,28 @@ missing); the Content Cadence reads them every Monday. A ladder that is not one 
   one was started automatically less than 7 days ago. The run: `createRun` as the company's owner (the same locked budget check: 402 →
   skipped), mode `ladder` with the website's business fields, 1 page now, no e-mail, title "Started automatically: …", `input.autoStart:
   true`; its reports count as automatic (`scheduled`).
+
+## Link building (v4.13, `n8n/seo-agent/LINK_BUILDER_SPEC.md`)
+Pitches go out from the company's own mailbox (SMTP + IMAP with an app password; the password is encrypted with `MAILBOX_KEY` and never returned), after a person approves them (or automatically, within a daily limit the owner sets). The server's jobs (`LINK_BUILDER_JOBS`) send inside each mailbox's window (Monday-Friday, its hours and time zone; warm-up 5 / 10 / then its limit; 4-9 minutes apart), read the inbox every 3 minutes (replies, out-of-office, bounces, opt-outs) and stop a sequence at the first reply. Errors: `{ error, code }`; 409 codes `no_mailbox`, `no_address`, `suppressed`, `consent_needed`; 503 `no_key`.
+
+| Method | Path | Body / notes | Returns |
+|---|---|---|---|
+| GET | /api/orgs/:orgId/mailboxes | member | `MailboxView[]` (today's counts, warm-up cap, DNS check) |
+| POST | /api/orgs/:orgId/mailboxes | `mailboxSchema` (admin; 10 an hour): both logins are tested before anything is stored; 400 `mailbox_test_failed` with the server's message | `MailboxView` |
+| PATCH | /api/orgs/:orgId/mailboxes/:id | `mailboxPatchSchema` (admin): a changed connection value or password re-tests the logins | `MailboxView` |
+| POST | /api/orgs/:orgId/mailboxes/:id/test · /pause · /resume | admin; resume refuses a mailbox in error | `MailboxTestResult` / `{ ok }` |
+| DELETE | /api/orgs/:orgId/mailboxes/:id | admin; its open sequences pause | `{ ok }` |
+| GET · POST · DELETE | /api/orgs/:orgId/suppressions(/:id) | the opt-out list (hash + masked hint); add: member `{ value, kind: email \| domain }`, remove: admin | `SuppressionView[]` / `{ ok }` |
+| GET | /api/orgs/:orgId/sites/:siteId/link-building | verified site: drafts (from `seo_link_outreach`), sequences with their messages, numbers, listings, redirects, impact, `canSend` | `LinkBuildingData` |
+| PATCH | …/link-building/settings | `linkSettingsSchema` (admin; `mode: auto` owner only) | `LinkSettings` |
+| POST | …/link-building/approve | `approveSchema` `{ prospectDomain, type, toEmail, steps, consent, mailboxId? }` (member): checks the mailbox, postal address, opt-out list, consent rule (recipient country + address), one conversation per site, 90 days' rest | `{ ok, id }` |
+| POST | …/link-building/dismiss | `{ prospectDomain, type }` (member): "not a fit" → the prospect is rejected in n8n | `{ ok }` |
+| PATCH | …/link-building/sequences/:id | `{ steps?, toEmail? }` (member): only unsent steps change; the address only before the first e-mail | `{ ok }` |
+| POST | …/link-building/sequences/:id/pause · /resume · /cancel | member | `{ ok }` |
+| POST | …/link-building/sequences/:id/reply | `{ body }` (member): sent now, in the same thread, from the sequence's mailbox | `{ ok }` |
+| POST | …/link-building/sequences/:id/outcome | `{ status: won \| rejected }` (member) | `{ ok }` |
+| POST | …/link-building/listings/:listingId | `{ status: submitted \| listed \| ignored \| missing, note? }` (member) → `seo_listings` | `{ ok }` |
+| POST | …/link-building/run | `{ freeOnly }` (admin; 6 an hour): "Find opportunities now" → n8n `POST /webhook/seo-link-builder`; the report arrives through the callback (stage `link_builder`) | `{ ok, requestId }` |
 
 ## Choosing the keyword of a new ladder (verified sites; PIPELINE_FEATURE_SPEC.md §5)
 | Method | Path | Body | Returns |

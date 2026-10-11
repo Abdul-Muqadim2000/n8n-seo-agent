@@ -108,6 +108,28 @@ export function summarize(stage: string, p: P): Summary {
       put('alerts', len(p.alerts));
       put('subject', str(p.subject));
       break;
+    case 'link_builder': {
+      // v4.13: the weekly Link Builder
+      const m = obj(p.summary);
+      put('drafted', num(m.drafted));
+      put('press', num(m.press));
+      put('listingsMissing', num(m.listings_missing));
+      put('redirects', num(m.redirects));
+      put('impactReads', num(m.impact_reads));
+      put('subject', str(p.subject));
+      break;
+    }
+    case 'ai_growth': {
+      // v4.12: the weekly AI growth loop
+      const sub = obj(p.submitted);
+      put('submitted', (num(obj(sub.bing).submitted) ?? 0) + (num(obj(sub.indexnow).submitted) ?? 0));
+      put('pagesChecked', Array.isArray(p.pages) ? p.pages.length : null);
+      put('avgScore', num(p.avg_score));
+      put('earned', len(p.earned));
+      put('targets', Array.isArray(p.targets) ? p.targets.filter((t) => obj(t).status === 'queued').length : null);
+      put('subject', str(p.subject));
+      break;
+    }
     case 'backlinks': {
       const m = obj(p.summary);
       put('referringDomains', num(obj(p.coverage).union) ?? num(m.referring_domains));   // v4.10: all sources merged

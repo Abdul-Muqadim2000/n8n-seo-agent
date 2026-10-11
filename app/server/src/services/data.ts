@@ -1,4 +1,7 @@
 import {
+  AI_DEFAULT_ENGINES,
+  AI_PAGES_DEFAULT,
+  AI_PAGES_MAX,
   COUNTRIES,
   profileReadiness,
   safeJson,
@@ -6,6 +9,10 @@ import {
   type AiAccess,
   type AiData,
   type AiDailyRow,
+  type AiGrowth,
+  type AiGrowthRow,
+  type AiPageRow,
+  type AiTargetRow,
   type AiEngineStat,
   type AiGroup,
   type AiIndex,
@@ -630,11 +637,18 @@ function toIndex(x: P | null): AiIndex | null {
 export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
   const d = site.domain;
   const since = new Date(Date.now() - 90 * 864e5).toISOString();
-  const [vis, prompts, report, days] = await Promise.all([
+  const [vis, prompts, report, days, growthRows, aiPages, aiTargets, aiProspects, logs, mons] = await Promise.all([
     siteRows<AiVisibilityRow>('aiVisibility', d, { sortBy: 'checked_at:asc', max: 300 }),
     siteRows<AiPromptRow>('aiPrompts', d, { max: 300 }),
     latestReport(org.id, site.id, ['ai_visibility']),
     siteRows<AiDailyRow>('aiDaily', d, { sortBy: 'date:asc', max: 120, extra: [{ columnName: 'checked_at', condition: 'gte', value: since }] }),
+    // v4.12: the AI growth loop (AI_GROWTH_SPEC.md)
+    siteRows<AiGrowthRow>('aiGrowth', d, { sortBy: 'checked_at:desc', max: 3 }),
+    siteRows<AiPageRow>('aiPages', d, { max: 200 }),
+    siteRows<AiTargetRow>('aiTargets', d, { max: 100 }),
+    siteRows<ProspectRow>('prospects', d, { max: 300, extra: [{ columnName: 'type', condition: 'eq', value: 'ai_source' }] }),
+    siteRows<ContentLogRow>('contentLog', d, { max: 500 }),
+    siteRows<MonitorsRow>('monitors', d, { max: 5 }),
   ]);
   const last = vis[vis.length - 1];
   // n8n's run id is per day (ai_YYYYMMDD_domain): a second run that day shares it, so only the answers of the latest run count
@@ -736,7 +750,9 @@ export async function aiData(org: OrgRow, site: SiteRow): Promise<AiData> {
       brands: splitList(a.brands),
       issues: s(a.issues).split(' | ').filter(Boolean),
       fanout: s(a.fanout).split(' | ').filter(Boolean),
+      citedUrls: arr(safeJson(s(a.cited_urls), [])).map((c) => ({ url: s(c.u), title: s(c.t) })).filter((c) => c.url),
     })),
+    growth: toGrowth(growthRows[0], aiPages, aiTargets, aiProspects, logs, monitorsFromRow(mons[0])),
     report: rp
       ? {
           receivedAt: report!.report.receivedAt,
@@ -983,6 +999,44 @@ export async function alertsData(site: SiteRow): Promise<AlertsData> {
   };
 }
 
+/** v4.12: the AI growth loop's latest run with the current page / target / prospect rows (the rows change between runs: a target written by the
+ *  Monday content run, a prospect marked contacted in the app). */
+function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTargetRow[], prospects: ProspectRow[], logs: ContentLogRow[], m: MonitorSettings | null): AiGrowth | null {
+  if (!g) return null;
+  const sub = safeJson<P>(g.submitted_json, {}); const bing = o(sub.bing); const inx = o(sub.indexnow);
+  const keyUrl = s(inx.key_url); const key = (keyUrl.match(/\/([a-f0-9]{32})\.txt$/) || [])[1] || '';
+  const earned = arr(safeJson(g.earned_json, [])).map((e) => {
+    const pr = prospects.find((x) => s(x.prospect_domain) === s(e.host)) ?? null;
+    return { url: s(e.url), title: s(e.title), host: s(e.host), kind: s(e.kind), citations: n(e.citations), engines: arr<string>(e.engines).map(String), questions: arr<string>(e.questions).map(String),
+      mentionsUs: e.mentions_us == null ? null : b(e.mentions_us), competitorsNamed: arr<string>(e.competitors_named).map(String), action: s(e.action), status: (s(pr?.status) || s(e.status)).replace(/^drafted$/, 'new'),
+      drafted: !!s(pr?.outreach_body), contactEmail: s(pr?.contact_email), draft: pr && s(pr.outreach_body) ? { subject: s(pr.outreach_subject), body: s(pr.outreach_body) } : null };
+  });
+  const ent = safeJson<P | null>(g.entity_json, null);
+  const month = new Date().toISOString().slice(0, 7);
+  return {
+    checkedAt: s(g.checked_at),
+    submitted: { bing: { enabled: b(bing.enabled), inAccount: b(bing.in_account), submitted: n(bing.submitted), quota: nn(bing.quota), error: s(bing.error) }, indexnow: { keyUrl, key, verified: b(inx.verified), submitted: n(inx.submitted), error: s(inx.error) } },
+    pagesChecked: n(g.pages_checked),
+    avgScore: nn(g.avg_score),
+    pages: pages.filter((p) => s(p.checked_at)).sort((a, z) => (nn(a.score) ?? 101) - (nn(z.score) ?? 101)).map((p) => ({
+      url: s(p.url), kind: s(p.kind), checkedAt: s(p.checked_at), status: n(p.status), score: nn(p.score),
+      checks: arr(safeJson(s(p.checks_json), [])).filter((c) => n(c.weight) > 0).map((c) => ({ key: s(c.key), ok: c.ok === 'partial' ? ('partial' as const) : b(c.ok), label: s(c.label) })),
+      issues: s(p.issues).split(' | ').filter(Boolean), wordsRaw: n(p.words_raw), title: s(p.title), updatedOn: s(p.updated_on), bingCrawledAt: s(p.bing_crawled_at), submittedAt: s(p.submitted_at), submittedVia: s(p.submitted_via), citedBy: splitList(p.cited_by),
+    })),
+    targets: targets.sort((a, z) => n(z.value) - n(a.value)).map((t) => ({
+      targetId: s(t.target_id), question: s(t.question), keyword: s(t.keyword), kind: s(t.kind) === 'refresh' ? ('refresh' as const) : ('answer' as const), pageUrl: s(t.page_url), pageType: s(t.page_type),
+      fanout: s(t.fanout).split(' | ').filter(Boolean), sources: arr(safeJson(s(t.sources_json), [])).map((x) => ({ url: s(x.u), title: s(x.t) })).filter((x) => x.url), competitors: splitList(t.competitors),
+      stage: s(t.stage), value: n(t.value), status: s(t.status), reason: s(t.reason), writtenAt: s(t.written_at), wonAt: s(t.won_at), updatedAt: s(t.updated_at),
+    })),
+    earned,
+    entity: ent ? { checkedAt: s(ent.checked_at), found: b(ent.found), qid: s(ent.qid), byName: arr(ent.by_name).map((x) => ({ id: s(x.id), label: s(x.label), description: s(x.description) })) } : null,
+    actions: arr(safeJson(g.actions_json, [])).map((a) => ({ priority: n(a.priority), type: s(a.type), action: s(a.action), why: s(a.why) })),
+    alerts: s(g.alerts).split(' | ').filter(Boolean).map((t) => { const i = t.indexOf(': '); return i > 0 ? { level: t.slice(0, i), text: t.slice(i + 2) } : { level: 'info', text: t }; }),
+    pagesPerMonth: m ? m.aiPagesPerMonth : AI_PAGES_DEFAULT,
+    writtenThisMonth: logs.filter((l) => /^ai_/.test(s(l.source)) && s(l.started_at).slice(0, 7) === month).length,
+  };
+}
+
 // ---------------- settings ----------------
 
 export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & { competitors: string[]; updatedAt: string }) | null {
@@ -990,10 +1044,13 @@ export function monitorsFromRow(r: MonitorsRow | undefined): (MonitorSettings & 
   const engines = splitList(r.ai_engines) as MonitorSettings['aiEngines'];
   return {
     aiVisibility: r.ai_visibility == null ? true : b(r.ai_visibility),
-    aiEngines: engines.length ? engines : ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'],
+    aiEngines: engines.length ? engines : [...AI_DEFAULT_ENGINES],   // Copilot is opt-in (v4.12)
     aiPromptsMax: n(r.ai_prompts_max) || 20,
     aiPulse: r.ai_pulse == null || (r.ai_pulse as unknown) === '' ? true : b(r.ai_pulse),
+    aiGrowth: r.ai_growth == null || (r.ai_growth as unknown) === '' ? true : b(r.ai_growth),
+    aiPagesPerMonth: r.ai_pages_month == null || (r.ai_pages_month as unknown) === '' ? AI_PAGES_DEFAULT : Math.min(AI_PAGES_MAX, Math.max(0, n(r.ai_pages_month))),
     backlinks: r.backlinks == null ? true : b(r.backlinks),
+    linkBuilder: r.link_builder == null || (r.link_builder as unknown) === '' ? true : b(r.link_builder),
     auditMonthly: r.audit_monthly == null ? true : b(r.audit_monthly),
     auditPages: n(r.audit_pages) || 200,
     auditJs: b(r.audit_js),

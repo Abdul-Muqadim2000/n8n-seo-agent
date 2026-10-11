@@ -833,7 +833,7 @@ function CompetitorList({ rows, graph }: { rows: NonNullable<BacklinksData['late
 
 const TYPE_LABEL: Record<string, string> = { lost: 'Lost link', reclaim: 'Broken-link reclaim', mention: 'Unlinked mention', gap: 'Link gap', list: '"Best of" list', comp_new: 'Linked a competitor', ai_source: 'Cited by AI' };
 const typeLabel = (t: string) => TYPE_LABEL[t] ?? (t ? titleCase(t) : 'Prospect');
-const STATUS_LABEL: Record<ProspectStatus, string> = { new: 'New', contacted: 'Contacted', won: 'Won', rejected: 'Rejected', ignored: 'Ignored' };
+const STATUS_LABEL: Record<ProspectStatus, string> = { new: 'New', contacted: 'Contacted', replied: 'Replied', won: 'Won', rejected: 'Rejected', ignored: 'Ignored' };
 const statusOf = (p: Prospect): ProspectStatus => ((PROSPECT_STATUSES as readonly string[]).includes(p.status) ? (p.status as ProspectStatus) : 'new');
 
 /** Prospect cards shown before "Show more" (the rest stay in the page, folded). */

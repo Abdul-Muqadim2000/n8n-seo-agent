@@ -8,6 +8,7 @@ import fastifyStatic from '@fastify/static';
 import { readSession } from './auth/session';
 import { config } from './config';
 import { HttpError } from './lib/errors';
+import { linkBuilderRoutes } from './routes/linkBuilder';
 import { adminRoutes } from './routes/admin';
 import { authRoutes } from './routes/auth';
 import { dataRoutes } from './routes/data';
@@ -108,6 +109,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(runRoutes);
   await app.register(hookRoutes);
   await app.register(adminRoutes);
+  await app.register(linkBuilderRoutes);
 
   // the built React app (production image): static files, and index.html for every client-side route
   const dist = config.webDist ? resolve(config.webDist) : '';

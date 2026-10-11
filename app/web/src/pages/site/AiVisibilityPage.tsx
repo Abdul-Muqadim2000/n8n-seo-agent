@@ -14,6 +14,7 @@ import { DataTable, type Column } from '@/components/ui/table';
 import { EngineActionList, RUN_LABEL, runFromApiBody, typeLabel } from './_components/actions';
 import { AnswersExplorer, QuestionGrid, QuestionManager, engineLabel } from './_components/ai';
 import { AccessPanel, AiTrafficPanel, DiscoveryPanel, GroupsPanel, IndexPanel, PerceptionPanel } from './_components/ai-insights';
+import { AiGrowthSection } from './_components/ai-growth';
 import { Chips, DataGate, FillHeight, MetricSwitch, Kind, Panel, SectionHeading, ToolButton, YesNo, useSitePage } from './_components/kit';
 import { diff, lastTwo, pct, sortByDate, timeAxisFormat, urlPath } from './_components/format';
 import { ChartTitle, DashSkeleton, FigureTile, HeroEyebrow, RankedBars } from './_components/visuals';
@@ -51,7 +52,7 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
       <EmptyState
         icon={<Bot className="size-5" />}
         title="No AI visibility check yet"
-        description={`The check asks your buyers’ questions on ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews, and shows who gets named, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth. About ${formatUsd(estimateAiVisibilityCost().fullRun + estimateAiVisibilityCost().weekly / 4.33)} for the first full check.`}
+        description={`The check asks your buyers’ questions on ChatGPT, Gemini, Perplexity, Claude, Google AI Mode and AI Overviews (Copilot optional), and shows who gets named, how AI describes you, which sources it trusts, whether AI crawlers can read your site and what AI visits are worth. About ${formatUsd(estimateAiVisibilityCost().fullRun + estimateAiVisibilityCost().weekly / 4.33)} for the first full check.`}
         action={
           <>
             <ToolButton mode="ai_visibility" variant="primary">
@@ -247,6 +248,8 @@ function AiBody({ d, refetching }: { d: AiData; refetching: boolean }) {
           <EngineActionList actions={d.report.actions} />
         </Panel>
       )}
+
+      <AiGrowthSection growth={d.growth} />
 
       {d.latest?.index && <IndexPanel index={d.latest.index} domain={site.domain} />}
       {d.latest?.index && <DiscoveryPanel index={d.latest.index} tracked={d.prompts.map((p) => p.prompt)} />}

@@ -14,7 +14,7 @@ const dfsDate = (daysAgo) => iso(daysAgo).replace('T', ' ').slice(0, 19) + ' +00
 // ---- plan inputs ----
 const sites = () => [{ json: { site_id: SITE, domain: DOMAIN, gsc_property: 'sc-domain:techand.ai', ga4_property_id: '543096312', country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'http://server:4000/api/hooks/n8n/tok', keywords: 'e invoicing uae, peppol uae', status: 'active', source: 'app' } }];
 const ladders = () => [{ json: { ladder_id: 'lad_t', domain: DOMAIN, head_keyword: 'e invoicing in uae', rung: 4, page_no: 5, keyword: 'e invoicing in uae', target_url: 'https://techand.ai/insights/e-invoicing-in-uae', page_exists: true, status: 'published' } }];
-const monitors = (o = {}) => [{ json: { site_id: SITE, domain: DOMAIN, ai_visibility: true, ai_engines: '', ai_prompts_max: 8, backlinks: true, audit_monthly: true, audit_pages: 200, audit_js: false, competitors: 'complyance.io, cleartax.com', brand_names: 'Techand Systems', updated_at: iso(5), request_id: '', ...o } }];
+const monitors = (o = {}) => [{ json: { site_id: SITE, domain: DOMAIN, ai_visibility: true, ai_engines: '', ai_prompts_max: 8, backlinks: true, link_builder: false, audit_monthly: true, audit_pages: 200, audit_js: false, competitors: 'complyance.io, cleartax.com', brand_names: 'Techand Systems', updated_at: iso(5), request_id: '', ...o } }];
 const profiles = () => [{ json: { site_id: SITE, domain: DOMAIN, business_name: 'Techand Systems', business_type: 'ERP and e-invoicing consultancy', city: 'Dubai', country_code: 'AE' } }];
 // ---- the ledger of the previous run (one valuable link that will be missed once, one missed once already that is now gone, one unchanged) ----
 const ledgerPrev = () => [

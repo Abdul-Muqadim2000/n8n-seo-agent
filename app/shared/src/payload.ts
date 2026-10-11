@@ -40,7 +40,10 @@ export function monitorsBody(m: Partial<MonitorSettings>): Body {
   if (m.aiEngines !== undefined) out.ai_engines = m.aiEngines.join(', ');
   if (m.aiPromptsMax !== undefined) out.ai_prompts_max = m.aiPromptsMax;
   if (m.aiPulse !== undefined) out.ai_pulse = m.aiPulse;
+  if (m.aiGrowth !== undefined) out.ai_growth = m.aiGrowth;
+  if (m.aiPagesPerMonth !== undefined) out.ai_pages_month = m.aiPagesPerMonth;
   if (m.backlinks !== undefined) out.backlinks = m.backlinks;
+  if (m.linkBuilder !== undefined) out.link_builder = m.linkBuilder;
   if (m.auditMonthly !== undefined) out.audit_monthly = m.auditMonthly;
   if (m.auditPages !== undefined) out.audit_pages = m.auditPages;
   if (m.auditJs !== undefined) out.audit_js = m.auditJs;
@@ -78,6 +81,10 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         // a ladder page: the run marks the ladder row, links to the ladder's top page and siblings (ladder_links are added by the server)
         ...(input.ladder && dom
           ? { ladder_id: input.ladder.id, ladder_rung: input.ladder.rung, ladder_head: input.ladder.head, ladder_page_no: input.ladder.pageNo, force_content: true }
+          : {}),
+        // v4.12: an AI answer target — the brief and the copywriter write the page AI should cite for the question
+        ...(input.aiTarget
+          ? { ai_target: { question: input.aiTarget.question, kind: input.aiTarget.kind, target_id: input.aiTarget.targetId, fanout: input.aiTarget.fanout, sources: input.aiTarget.sources.map((x) => ({ u: x.url, t: x.title })), competitors: input.aiTarget.competitors } }
           : {}),
       };
     }
