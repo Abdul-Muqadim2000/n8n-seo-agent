@@ -77,6 +77,12 @@ for (const c of CATALOG) {
   }
 }
 
+// ===== 1b. D18 (2026-10-11): DataForSEO's "duplicate meta tags" verified on the homepage HTML (tags that differ by `media` are not duplicates) =====
+{ const hm = (probe.measurements || {}).homepage_meta; const i18 = findings.findIndex(f => f.title === 'Duplicate meta tags on the same page');
+  if (hm && hm.checked && i18 >= 0) { const homeFlagged = pages.some(p => p.checks && p.checks.duplicate_meta_tags === true && /^https?:\/\/[^\/]+\/?$/.test(String(p.url || '')));
+    if (hm.duplicates.length) { findings[i18].evidence += '; verified on the homepage: ' + hm.duplicates.map(d => '<meta ' + d.tag + '> ×' + d.count).join(', '); findings[i18].fix = 'Keep a single ' + hm.duplicates.map(d => '<meta ' + d.tag + '>').join(' / ') + ' tag per page in the template (tags that differ by a media attribute, such as theme-color for light and dark, are fine).'; }
+    else if (homeFlagged) { findings.splice(i18, 1); whatWorks.push('No duplicate meta tags on the homepage (the crawler counted tags that differ only by a media attribute, such as theme-color for light and dark)'); } } }
+
 // ===== 2. Strict custom checks =====
 const isLegal = (u) => /privacy|cookie|terms|security|legal|disclaimer/i.test(u || '');
 const isArticle = (u) => /\/(insights|blog|news|articles?|guides?)\/./i.test(u || '');
@@ -190,7 +196,7 @@ const addDomain = (cond, cat, sev, title, why, fix, evidence) => {
 };
 addDomain(dc.ssl === false, 'Security', 'Critical', 'Invalid SSL certificate', 'Browsers show a security warning and users leave.', 'Install a valid SSL certificate for all hostnames.');
 addDomain(dc.test_https_redirect === false && !probe.findings.some(f => /HTTP version/i.test(f.title)), 'Security', 'High', 'HTTP does not redirect to HTTPS', 'Duplicate versions of the site can be indexed and users land on insecure pages.', 'Add a sitewide 301 redirect from HTTP to HTTPS.');
-addDomain(dc.test_canonicalization === false, 'Crawlability & Indexing', 'High', 'www and non-www versions are not consolidated', 'If both versions do not resolve to one canonical host, links and signals are split.', 'Make the www version redirect (301) to the main domain with a valid certificate for both hostnames.', 'Crawler canonicalization test failed');
+// D6 (2026-10-11): the www / non-www finding comes from the host probes (Analyze Probes: both hosts 200, or a redirect that disagrees with the canonical tag), never from dc.test_canonicalization alone
 addDomain(dc.sitemap === false, 'Crawlability & Indexing', 'High', 'No XML sitemap found', 'Search engines discover pages more slowly.', 'Create sitemap.xml and reference it in robots.txt and Search Console.');
 addDomain(dc.robots_txt === false, 'Crawlability & Indexing', 'Medium', 'No robots.txt file', 'Crawlers get no guidance and no sitemap reference.', 'Add a robots.txt file with a Sitemap line.');
 addDomain(dc.test_page_not_found === false, 'Crawlability & Indexing', 'Medium', 'Missing pages do not return a real 404', 'Soft 404s waste crawl budget and can get junk URLs indexed.', 'Return a proper 404 status for non-existent URLs.');
@@ -253,6 +259,25 @@ if (probe.findings.some(f => /server response/i.test(f.title))) {
 }
 findings.push(...probe.findings);
 findings.push(...(input.extra_findings || []));
+
+// ===== 4b. D24 (2026-10-11): one finding per issue — the HTML analysis and the AI content review both reported "no named author". The same
+// title (as written) always merges; the same title with numbers ignored, or the same topic, merges when one of the two is the content
+// review's (two measured findings that differ by a number or a word stay apart). The merged finding keeps the higher severity and the
+// measured side's evidence, sample pages and scoring. =====
+{ const asWritten = (t) => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const normT = (t) => asWritten(t).replace(/\d[\d,.%]*/g, '#').replace(/[^a-z#\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const TOPICS = [['author', /\b(authors?|bylines?|authored)\b/], ['sources', /\b(cites?|cited|citations?|sources?|references?)\b/], ['proof', /\b(case stud(?:y|ies)|testimonials?|proof)\b/], ['pricing', /\bpric(?:e|es|ing)\b/], ['freshness', /\b(fresh(?:ness)?|outdated|stale|last reviewed)\b/]];
+  const topicOf = (f) => { const t = normT(f.title); const hit = TOPICS.find(([, re]) => re.test(t)); return hit ? f.category + '|topic:' + hit[0] : null; };
+  const kept = []; const at = new Map();
+  for (const f of findings) { const exact = f.category + '|' + asWritten(f.title); const loose = f.category + '|~' + normT(f.title); const topic = topicOf(f);
+    let idx = at.has(exact) ? at.get(exact) : null;
+    for (const k of [loose, topic]) if (idx == null && k != null && at.has(k) && (f.source === 'ai_review' || kept[at.get(k)].source === 'ai_review')) idx = at.get(k);
+    if (idx == null) { at.set(exact, kept.length); for (const k of [loose, topic]) if (k != null && !at.has(k)) at.set(k, kept.length); kept.push(f); continue; }
+    const p = kept[idx]; const measured = (p.scoring === false && f.scoring !== false) ? f : p; const other = measured === p ? f : p;
+    const severity = SEV_ORDER[f.severity] < SEV_ORDER[p.severity] ? f.severity : p.severity;
+    kept[idx] = { ...measured, severity, evidence: [measured.evidence, other.evidence && other.evidence !== measured.evidence ? (other.source === 'ai_review' ? 'content review: ' : '') + other.evidence : ''].filter(Boolean).join('; '), sample_urls: [...new Set([...(measured.sample_urls || []), ...(other.sample_urls || [])])].slice(0, 10), merged_titles: [...(p.merged_titles || [p.title]), f.title] };
+    for (const k of [exact, loose, topic]) if (k != null) at.set(k, idx); }
+  findings.splice(0, findings.length, ...kept); }
 
 // ===== 5. What works =====
 const ok = (cond, text) => { if (cond) whatWorks.push(text); };
@@ -322,6 +347,7 @@ if (scored.Critical >= 2) { cap = 60; cap_reason = scored.Critical + ' critical 
 else if (scored.Critical === 1) { cap = 70; cap_reason = '1 critical issue found — score capped at 70 until fixed'; }
 else if (scored.High >= 5) { cap = 85; cap_reason = scored.High + ' high-priority issues found — score capped at 85 until fixed'; }
 const health_score = Math.min(raw_score, cap);
+if (cap >= raw_score) cap_reason = '';   // D24 (2026-10-11): the cap is reported only when it lowered the score ("capped at 85" was shown next to a 68)
 const grade = health_score >= 90 ? 'Excellent' : health_score >= 75 ? 'Good' : health_score >= 60 ? 'Needs Improvement' : 'Poor';
 
 // ===== 8. Kya naapa nahi gaya =====
@@ -347,7 +373,7 @@ return [{
       crawl_date: (di.crawl_end || '').slice(0, 10),
       server: di.server || null,
       health_score, raw_score,
-      score_cap: cap < 100 ? cap : null,
+      score_cap: cap < raw_score ? cap : null,
       score_cap_reason: cap_reason,
       grade, category_scores,
       weights: WEIGHTS,

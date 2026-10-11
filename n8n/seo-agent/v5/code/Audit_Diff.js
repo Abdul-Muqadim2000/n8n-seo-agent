@@ -1,12 +1,17 @@
-// Compares this audit with the site's previous one (seo_audits + seo_audit_findings): fixed, new and still-open findings (matched on category +
-// title with numbers ignored) and the score change; and suggests internal links from the crawl (pages with few links in, orphan pages, pages with
+// Compares this audit with the site's previous one OF THE SAME TYPE (seo_audits + seo_audit_findings, report_type technical / full): fixed, new and
+// still-open findings (matched on category + title with numbers ignored) and the score change; and suggests internal links from the crawl (pages with few links in, orphan pages, pages with
 // search impressions) from strong pages on the same topic. Adds audit_diff / internal_links to site_audit; audit_id identifies this audit.
 const d = $input.first().json; const a = d.site_audit || {};
 const base = $('Check Crawl').first().json; const domain = base.domain; const site_id = 'site_' + String(domain).toLowerCase().replace(/[^a-z0-9]+/g, '-');
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && r.site_id); } catch (e) { return []; } };
 const audits = rowsOf('Load Audit History').filter(r => r.site_id === site_id).sort((x, y) => String(y.audited_at).localeCompare(String(x.audited_at)));
-const prev = audits[0] || null;
-const prevF = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id) : [];
+// D2 (2026-10-11): only an audit of the same type is comparable — a technical audit never checks rankings, AI answers or the keyword gap, so
+// compared with a full report it "fixed" 25 findings. Rows without a report_type (none since v4.5) are not compared either.
+const curType = a.audit_level || 'site_audit'; const LABEL = { site_audit: 'technical audit', full: 'full SEO report' }; const labelOf = (t) => LABEL[t] || String(t || 'audit');
+const prev = audits.find(r => String(r.report_type || '') === curType) || null;
+const otherType = !prev ? (audits.find(r => r.report_type && r.report_type !== curType) || null) : null;
+const assessed = new Set(Object.keys(a.weights || {}));   // the categories this audit type scores: a finding outside them is "not checked", never "fixed"
+const prevF = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id).filter(r => !assessed.size || assessed.has(r.category)) : [];
 const keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\d[\d,.%]*/g, '#').replace(/["'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
 const cur = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info');
 const curKeys = new Map(cur.map(f => [keyOf(f), f])); const prevKeys = new Map(prevF.map(f => [f.finding_key, f]));
@@ -17,8 +22,9 @@ const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]
 const audit_id = 'aud_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const audited_at = new Date().toISOString();
 const days = prev ? Math.round((Date.now() - new Date(prev.audited_at).getTime()) / 864e5) : null;
-const audit_diff = prev ? { baseline: false, previous: { audit_id: prev.audit_id, audited_at: prev.audited_at, health_score: Number(prev.health_score), grade: prev.grade, findings: Number(prev.findings) || prevF.length }, days_since: days,
-  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' } : { baseline: true, summary: 'First audit stored: the next one shows what was fixed, what is new and what is still open.' };
+const audit_diff = prev ? { baseline: false, report_type: curType, previous: { audit_id: prev.audit_id, audited_at: prev.audited_at, report_type: prev.report_type, health_score: Number(prev.health_score), grade: prev.grade, findings: Number(prev.findings) || prevF.length }, days_since: days,
+  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')' }
+  : { baseline: true, report_type: curType, summary: 'First ' + labelOf(curType) + ' stored: the next one shows what was fixed, what is new and what is still open.' + (otherType ? ' The ' + labelOf(otherType.report_type) + ' of ' + String(otherType.audited_at).slice(0, 10) + ' is a different report type and is not compared.' : '') };
 // ---- internal links: targets that need links, sources on the same topic that already carry authority ----
 const pages = ($('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.status_code === 200 && p.resource_type === 'html' && !(p.checks || {}).is_redirect && !/(\?|\/(tag|category|author|page)\/|\/feed\/?$)/i.test(p.url));
 const norm = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');

@@ -11,25 +11,43 @@ const pathOf = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/i, '') || '/';
 const files = [];
 const add = (name, prop, mime, purpose, content) => files.push({ name, prop, mime, purpose, content });
 const today = new Date().toISOString().slice(0, 10);
-// ---- robots.txt ----
-const cur = String(m.robots_txt || '');
+// ---- robots.txt (D17, 2026-10-11: the live file is EDITED, never rebuilt around an "Allow: /" group — a crawler named in its own group ignores
+// the * group, so an allow-only group for the AI search bots opened /api/, /admin/ and /private/ to them) ----
+// Rules: a site-wide "Disallow: /" for * is removed; an AI search crawler that a group blocks gets its own group WITH the * group's path rules
+// copied in; a missing Sitemap line is added; anything else stays as it is. No change needed = the live file back, with a comment on top.
+const cur = String(m.robots_txt || '').replace(/\r/g, '');
 const AI_SEARCH = ['OAI-SearchBot', 'ChatGPT-User', 'PerplexityBot', 'Perplexity-User', 'Claude-SearchBot', 'Claude-User'];
 const TRAINING = ['GPTBot', 'ClaudeBot', 'Google-Extended', 'CCBot'];
-const blocks = cur ? cur.replace(/\r/g, '').split(/\n(?=\s*user-agent\s*:)/i) : [];
-const changes = []; const keep = [];
-for (const b of blocks) { const agents = (b.match(/user-agent\s*:\s*(.+)/gi) || []).map(x => x.split(':')[1].trim());
-  const all = /disallow\s*:\s*\/\s*($|\n)/i.test(b);
-  if (all && agents.some(x => x === '*')) { keep.push(b.replace(/^\s*disallow\s*:\s*\/\s*$/gim, '# Disallow: /   <- removed: it blocked every search engine').trim()); changes.push('removed "Disallow: /" for all crawlers'); continue; }
-  if (all && agents.some(x => AI_SEARCH.map(y => y.toLowerCase()).includes(x.toLowerCase()))) { changes.push('stopped blocking AI search crawler(s): ' + agents.join(', ')); continue; }
-  if (!/^\s*sitemap\s*:/im.test(b) || agents.length) keep.push(b.replace(/^\s*sitemap\s*:.*$/gim, '').trim()); }
-const sitemapLines = [...new Set([...(cur.match(/^\s*sitemap\s*:\s*(\S+)/gim) || []).map(x => x.split(/:\s*/).slice(1).join(':').trim()), home + 'sitemap.xml'])];
-if (!/sitemap\s*:/i.test(cur)) changes.push('added the Sitemap line');
-const hasAiGroup = AI_SEARCH.every(b => new RegExp('user-agent\\s*:\\s*' + b, 'i').test(cur));
-if (!hasAiGroup) changes.push('added an explicit allow group for AI search crawlers (they fetch pages to cite them in answers)');
-const robots = '# robots.txt for ' + host + ' — proposed by the SEO audit on ' + today + '\n# Changes: ' + (changes.length ? changes.join('; ') : 'none needed') + '\n\n' + (keep.length ? keep.join('\n\n') + '\n\n' : 'User-agent: *\nAllow: /\n\n') +
-  (hasAiGroup ? '' : '# AI search crawlers: they fetch a page when a user asks, so your pages can be cited in ChatGPT, Perplexity and Claude answers\n' + AI_SEARCH.map(b => 'User-agent: ' + b).join('\n') + '\nAllow: /\n\n') +
-  '# AI training crawlers (' + TRAINING.join(', ') + ') are left as they were. To opt out of model training, add:\n# User-agent: GPTBot\n# Disallow: /\n\n' + sitemapLines.map(s => 'Sitemap: ' + s).join('\n') + '\n';
-add('robots.txt', 'fix_robots', 'text/plain', 'Replace /robots.txt (' + (changes.length ? changes.length + ' change(s)' : 'no change needed, only comments') + ')', robots);
+const isAiSearch = (agent) => AI_SEARCH.some(b => b.toLowerCase() === String(agent).trim().toLowerCase());
+const isUA = (line) => /^\s*user-agent\s*:/i.test(line);
+const blocks = []; let grp = null, prevUA = false;   // a group = its consecutive User-agent lines + the rules until the next group (the old split cut multi-agent groups apart)
+for (const line of (cur ? cur.split('\n') : [])) { const ua = isUA(line); if (ua && !prevUA) { grp = []; blocks.push(grp); } if (!grp) { grp = []; blocks.push(grp); } grp.push(line); prevUA = ua || (prevUA && !line.trim()); }
+const agentsOf = (b) => b.filter(isUA).map(x => x.split(':').slice(1).join(':').trim());
+const rulesOf = (b) => b.filter(l => !isUA(l)).map(l => l.trim()).filter(l => l && !/^#/.test(l) && !/^\s*sitemap\s*:/i.test(l));
+const blocksAll = (b) => b.some(l => /^\s*disallow\s*:\s*\/\s*$/i.test(l));
+const star = blocks.find(b => agentsOf(b).includes('*'));
+const starRules = star ? rulesOf(star).filter(l => /^(dis)?allow\s*:/i.test(l) && !/^disallow\s*:\s*\/\s*$/i.test(l)) : [];   // the * group's path rules (crawl-delay, host etc. stay with *)
+const changes = []; const keep = []; const freed = [];
+for (const b of blocks) { const agents = agentsOf(b); const text = b.join('\n');
+  if (!agents.length) { if (!/^\s*sitemap\s*:/im.test(text) || b.some(l => l.trim() && !/^\s*(sitemap\s*:|#)/i.test(l))) keep.push(text.replace(/^\s*sitemap\s*:.*$/gim, '').trim()); continue; }   // lines before the first group (comments, Host); sitemap lines are re-added at the end
+  if (blocksAll(b) && agents.includes('*')) { keep.push(text.replace(/^\s*disallow\s*:\s*\/\s*$/gim, '# Disallow: /   <- removed: it blocked every search engine').trim()); changes.push('removed "Disallow: /" for all crawlers'); continue; }
+  const blockedAi = blocksAll(b) ? agents.filter(isAiSearch) : [];
+  if (!blockedAi.length) { keep.push(text.replace(/^\s*sitemap\s*:.*$/gim, '').trim()); continue; }
+  freed.push(...blockedAi);
+  const rest = agents.filter(x => !isAiSearch(x));
+  if (rest.length) keep.push(rest.map(x => 'User-agent: ' + x).join('\n') + '\n' + b.filter(l => !isUA(l)).join('\n').replace(/^\s*sitemap\s*:.*$/gim, '').trim());   // the other crawlers of that group keep their rules (training bots stay blocked)
+}
+const freedList = [...new Set(freed)];
+if (freedList.length) changes.push('AI search crawler(s) ' + freedList.join(', ') + ' were blocked: they now get the same rules as every other crawler (' + (starRules.length ? starRules.length + ' path rule(s) copied from User-agent: *' : 'no path restrictions') + ')');
+const sitemapLines = [...new Set((cur.match(/^\s*sitemap\s*:\s*(\S+)/gim) || []).map(x => x.split(/:\s*/).slice(1).join(':').trim()))];
+if (!cur) changes.push('created robots.txt (the site has none)');
+if (!sitemapLines.length) { sitemapLines.push(home + 'sitemap.xml'); if (cur) changes.push('added the Sitemap line'); }
+const header = '# robots.txt for ' + host + ' — reviewed by the SEO audit on ' + today + '\n# Changes: ' + (changes.length ? changes.join('; ') : 'none needed') + '\n\n';
+const aiGroup = freedList.length ? '# AI search crawlers: they fetch a page when a user asks, so your pages can be cited in ChatGPT, Perplexity and Claude answers.\n# They get the same path rules as User-agent: * (a crawler named in its own group ignores the * group).\n' + freedList.map(b => 'User-agent: ' + b).join('\n') + '\n' + (starRules.length ? starRules.join('\n') : 'Allow: /') + '\n\n' : '';
+const robots = changes.length
+  ? header + (keep.filter(Boolean).length ? keep.filter(Boolean).join('\n\n') + '\n\n' : 'User-agent: *\nAllow: /\n\n') + aiGroup + '# AI training crawlers (' + TRAINING.join(', ') + ') are left as they were. To opt out of model training, add:\n# User-agent: GPTBot\n# Disallow: /\n\n' + sitemapLines.map(s => 'Sitemap: ' + s).join('\n') + '\n'
+  : header + cur.trim() + '\n';
+add('robots.txt', 'fix_robots', 'text/plain', changes.length ? 'Replace /robots.txt (' + changes.length + ' change(s): ' + changes.join('; ') + ')' : 'Keep /robots.txt as it is (no change needed; this copy only adds a comment on top)', robots);
 // ---- llms.txt ----
 const titleOf = (p) => String(((p.meta || {}).htags || {}).h1?.[0] || (p.meta || {}).title || '').replace(/\s+[|–—-]\s+[^|–—]+$/, '').trim();
 const good = pages.filter(p => p.status_code === 200 && !(p.checks || {}).is_redirect && (p.meta || {}).canonical !== undefined && !/(\?|\/(tag|category|author|page|feed)\b|privacy|terms|cookie|login|cart|checkout)/i.test(p.url))
