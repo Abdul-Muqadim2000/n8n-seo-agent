@@ -217,3 +217,10 @@ def dt_delete_where_params(table, conditions):
     """Delete the rows matching ALL (column, condition, value) triples (retention of tables that only grow)."""
     return {'resource': 'row', 'operation': 'deleteRows', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'matchType': 'allConditions',
             'filters': {'conditions': [{'keyName': k, 'condition': c, 'keyValue': v} for k, c, v in conditions]}, 'options': {}}
+
+# ---- run ledger (v4.14, 2026-10-11, FIX_PLAN D1): one row per execution of the main workflow and per Keyword Check request, inserted BEFORE the
+# limits are checked, so parallel executions see each other (the static-data counters they used before overwrote one another: 8 runs counted as 5).
+# status: reserved -> done (settled_usd written at the end) | refused (the limit refused the run; never counted). Rate Limit / Assess Limit count
+# only rows with a lower id than their own, so row order decides ties. Keyword Check rows carry mode 'assess' and stay out of the main limits.
+RUN_LEDGER_TABLE = 'seo_run_ledger'
+RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), ('est_usd', 'number'), ('created_at', 'string'), ('status', 'string'), ('settled_usd', 'number')]

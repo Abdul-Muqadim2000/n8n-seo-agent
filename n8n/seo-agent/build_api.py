@@ -118,6 +118,7 @@ print('Admin API workflow written:', len(awf['nodes']), 'nodes')
 # =============================================================================
 import re
 from ladder_common import CACHE_TABLE, CACHE_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_get_any_params, dt_upsert_params
+from ladder_common import RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_insert_params, dt_get_all_where_params, dt_update_params   # v4.14 (D1): the run ledger
 _V5 = os.path.join(_here, 'v5')
 _rd5 = lambda p: open(os.path.join(_V5, p), encoding='utf-8').read()
 _NI = next(n for n in json.load(open(os.path.join(os.path.dirname(_out), 'SEO_Agent_v4.json')))[0]['nodes'] if n['name'] == 'Normalize Input')['parameters']['jsCode']
@@ -146,9 +147,18 @@ _AN = [
   _an('Assess Webhook', 'n8n-nodes-base.webhook', 2, _assess_hook, [0, 0], webhookId='9b4e2f61-3c8a-4d7e-a5b2-7f1c0e6d9a24', credentials={"httpHeaderAuth": {"id": "SEOcredApiHeader", "name": "SEO API Key"}}),
   _acode('Assess Validate', 'Assess_Validate.js', [220, 0]),
   _aif('Assess Valid?', '{{ $json.ok }}', [440, 0]),
-  _aif('Assess Limited?', '{{ $json.status === 429 }}', [660, 220]),
-  _arespond('Respond Assess Limited', "={{ JSON.stringify({ ok: false, error: $json.error }) }}", 429, [880, 160]),
-  _arespond('Respond Assess Bad Request', "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors }) }}", 400, [880, 320]),
+  # v4.14 (FIX_PLAN D1): the daily limits are counted from the run ledger (seo_run_ledger, mode 'assess'), not from static data that parallel
+  # requests overwrote: reserve a row, read today's rows once, count the rows with a lower id (Assess Limit), mark a refused row, settle at the end
+  _an('Ensure Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_create_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [660, -320], onError='continueRegularOutput', executeOnce=True),
+  _acode('Run Ledger Row (Assess)', 'Assess_Ledger_Row.js', [880, -320]),
+  _an('Reserve Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [1100, -320], onError='continueRegularOutput', alwaysOutputData=True),
+  _an('Load Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_get_all_where_params(RUN_LEDGER_TABLE, [('mode', 'eq', 'assess'), ('created_at', 'gte', "={{ String($('Run Ledger Row (Assess)').first().json.created_at).slice(0, 10) }}")]), [1320, -320], **_LOAD),
+  _acode('Assess Limit', 'Assess_Limit.js', [1540, -320]),
+  _aif('Assess Limited?', '{{ $json.status === 429 }}', [1760, -320]),
+  _arespond('Respond Assess Limited', "={{ JSON.stringify({ ok: false, error: $json.error }) }}", 429, [1980, -460]),
+  _an('Mark Run Refused (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')], {'status': 'refused'}), [2200, -460], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
+  _an('Settle Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')], {'status': 'done', 'settled_usd': "={{ Number($('Run Ledger Row (Assess)').first().json.est_usd) || 0 }}"}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
+  _arespond('Respond Assess Bad Request', "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors }) }}", 400, [660, 320]),
   _an('Ensure Cache Table (Assess)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [660, -100], onError='continueRegularOutput', executeOnce=True),
   _an('Load Assess Cache', DT_TYPE, DT_VERSION, dt_get_any_params(CACHE_TABLE, [('key', "={{ 'reach:' + $('Assess Validate').first().json.site_id }}"), ('key', "={{ 'desc:' + $('Assess Validate').first().json.domain }}")]), [880, -100], **_LOAD),
   _acode('Assess Requests', 'Assess_Requests.js', [1100, -100]),
@@ -164,7 +174,7 @@ _AN = [
   _acode('Reach Row (Assess)', "// After the answer: a newly measured reach goes to seo_cache ('reach:<site_id>', 30 days) for the ladder and discovery (exact columns).\nconst r = $('Assess Result').first().json.cache_row;\nreturn [{ json: r || { skip: true } }];", [2740, -200]),
   _aif('New Reach (Assess)?', '{{ !$json.skip }}', [2960, -200]),
   _an('Save Reach (Assess)', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [3180, -200], onError='continueRegularOutput'),
-  _an('Note', 'n8n-nodes-base.stickyNote', 1, {'content': "## SEO Agent — Keyword Check (v4.8)\n`POST /webhook/seo-keyword-assess` (header auth: credential **SEO API Key**, header `X-API-Key`), synchronous (~5-15 s). The web app's keyword flow (PIPELINE_FEATURE_SPEC §5.2) checks one keyword before a ladder starts.\n\nBody: `{ keyword (2-100 chars), country (name or ISO-2), domain, business?, services? (array), existing_keywords? (array) }`.\n\nDataForSEO Labs in parallel: keyword overview (volume, difficulty, intent, CPC), the site's position for the keyword, and the site's **reach** (stored 30 days in `seo_cache` as `reach:<site_id>`, shared with the ladder and discovery; else measured: top-10 keywords + size). One **Claude Haiku** call: topic fit 0/1/2, navigational / other brand, up to 3 alternatives. Business context: the request, else the stored homepage description.\n\n**200** `{ keyword, country, volume, kd, intent, cpc, position, reach, difficulty_for_you, plan_type, months, fit, navigational, alternatives, cost_usd, label, stretch, position_url, reach_info, business_source, warnings }` · **400** `{ ok:false, error, errors: {field: message} }` · **429** daily limit (40 per caller — the app's `X-Forwarded-For: app:<company>` — and 400 in total) · **502** DataForSEO failed.\nCost: ~$0.02 with a stored reach, ~$0.05 without.", 'height': 400, 'width': 760, 'color': 4}, [-40, -520]),
+  _an('Note', 'n8n-nodes-base.stickyNote', 1, {'content': "## SEO Agent — Keyword Check (v4.8)\n`POST /webhook/seo-keyword-assess` (header auth: credential **SEO API Key**, header `X-API-Key`), synchronous (~5-15 s). The web app's keyword flow (PIPELINE_FEATURE_SPEC §5.2) checks one keyword before a ladder starts.\n\nBody: `{ keyword (2-100 chars), country (name or ISO-2), domain, business?, services? (array), existing_keywords? (array) }`.\n\nDataForSEO Labs in parallel: keyword overview (volume, difficulty, intent, CPC), the site's position for the keyword, and the site's **reach** (stored 30 days in `seo_cache` as `reach:<site_id>`, shared with the ladder and discovery; else measured: top-10 keywords + size). One **Claude Haiku** call: topic fit 0/1/2, navigational / other brand, up to 3 alternatives. Business context: the request, else the stored homepage description.\n\n**200** `{ keyword, country, volume, kd, intent, cpc, position, reach, difficulty_for_you, plan_type, months, fit, navigational, alternatives, cost_usd, label, stretch, position_url, reach_info, business_source, warnings }` · **400** `{ ok:false, error, errors: {field: message} }` · **429** daily limit (40 per caller — the app's `X-Forwarded-For: app:<company>` — and 400 in total) · **502** DataForSEO failed.\nCost: ~$0.02 with a stored reach, ~$0.05 without.\n\n**v4.14 (D1):** the daily limits are counted from `seo_run_ledger` (one row reserved per request before the count; rows with a lower id count; refused rows marked, settled at the end), so parallel requests cannot slip past them.", 'height': 460, 'width': 760, 'color': 4}, [-40, -580]),
 ]
 _AC = {}
 def _alink(a, b, out=0):
@@ -172,10 +182,12 @@ def _alink(a, b, out=0):
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Assess Valid?'), ('Ensure Cache Table (Assess)', 'Load Assess Cache'), ('Load Assess Cache', 'Assess Requests'), ('Assess Requests', 'Run Assess Requests'),
-               ('Run Assess Requests', 'Assess Result'), ('Assess Result', 'DataForSEO OK?'), ('Keyword Fit', 'Assess Response'), ('Assess Response', 'Respond Assess'), ('Respond Assess', 'Reach Row (Assess)'), ('Reach Row (Assess)', 'New Reach (Assess)?')]:
+               ('Run Assess Requests', 'Assess Result'), ('Assess Result', 'DataForSEO OK?'), ('Keyword Fit', 'Assess Response'), ('Assess Response', 'Respond Assess'), ('Respond Assess', 'Reach Row (Assess)'), ('Reach Row (Assess)', 'New Reach (Assess)?'),
+               ('Ensure Run Ledger (Assess)', 'Run Ledger Row (Assess)'), ('Run Ledger Row (Assess)', 'Reserve Run Ledger (Assess)'), ('Reserve Run Ledger (Assess)', 'Load Run Ledger (Assess)'), ('Load Run Ledger (Assess)', 'Assess Limit'),
+               ('Assess Limit', 'Assess Limited?'), ('Respond Assess Limited', 'Mark Run Refused (Assess)'), ('Respond Assess', 'Settle Run Ledger (Assess)')]:
     _alink(_a, _b)
-_alink('Assess Valid?', 'Ensure Cache Table (Assess)', 0); _alink('Assess Valid?', 'Assess Limited?', 1)
-_alink('Assess Limited?', 'Respond Assess Limited', 0); _alink('Assess Limited?', 'Respond Assess Bad Request', 1)
+_alink('Assess Valid?', 'Ensure Run Ledger (Assess)', 0); _alink('Assess Valid?', 'Respond Assess Bad Request', 1)
+_alink('Assess Limited?', 'Respond Assess Limited', 0); _alink('Assess Limited?', 'Ensure Cache Table (Assess)', 1)
 _alink('DataForSEO OK?', 'Keyword Fit', 0); _alink('DataForSEO OK?', 'Respond Assess Upstream Error', 1)
 _alink('New Reach (Assess)?', 'Save Reach (Assess)', 0)
 _AC['Claude — Keyword Fit'] = {'ai_languageModel': [[{'node': 'Keyword Fit', 'type': 'ai_languageModel', 'index': 0}]]}

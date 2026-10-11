@@ -1,4 +1,13 @@
 {
+ "RUN_LEDGER": [
+  "run_id",
+  "key",
+  "mode",
+  "est_usd",
+  "created_at",
+  "status",
+  "settled_usd"
+ ],
  "AI_PAGES": [
   "site_id",
   "domain",
