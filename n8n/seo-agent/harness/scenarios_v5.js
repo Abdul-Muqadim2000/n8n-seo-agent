@@ -7,6 +7,36 @@ const decode = (items) => Buffer.from(items[0].binary.data.data, 'base64').toStr
 const guard = async (name, fn) => { try { await fn(); } catch (e) { const msg = (e.message || e).split('\n')[0]; console.log(`   !! scenario "${name}" aborted at: ${msg}`); if (e.stack) console.log('      ' + String(e.stack).split('\n').slice(1, 4).map(x => x.trim()).join(' | ')); H.results.push({ scenario: name, node: 'scenario aborted', ok: false, ms: 0, error: msg, items: [] }); } };   // an aborted scenario is a failure (it was silent before 2026-10-08)
 const reset = () => { for (const k of Object.keys(store)) delete store[k]; };
 let pvS1 = null;   // Parse Verdict output of S1, reused by S18 (page types)
+// v4.14 (FIX_PLAN D1): the run ledger (seo_run_ledger) replaced the static-data counters. `ledgerRun` plays one execution's intake as n8n runs
+// it: Run Ledger Row -> Reserve Run Ledger (the row gets the next id) -> Load Run Ledger (the period's rows, this one included) -> Rate Limit; a
+// refused run's row is marked refused (Mark Run Refused, a Data Table node). `assessRun` does the same for the Keyword Check (Assess Validate ->
+// Run Ledger Row (Assess) -> Reserve -> Load (mode assess) -> Assess Limit). `o.row` overrides the row (a lower id = a parallel run that reserved first).
+const LEDGER = { rows: [], seq: 0 };
+const ledgerReset = (rows = []) => { LEDGER.rows = rows.map((r, i) => ({ id: i + 1, run_id: 'fx-' + (i + 1), status: 'reserved', settled_usd: 0, ...r })); LEDGER.seq = LEDGER.rows.reduce((m, r) => Math.max(m, Number(r.id) || 0), 0); };
+const ledgerFixture = (key, n, mode = 'keyword', est = 0, when = new Date().toISOString()) => Array.from({ length: n }, () => ({ key, mode, est_usd: est, created_at: when }));
+const ledgerItems = (rows) => rows.length ? rows.map(r => ({ json: { ...r } })) : [{ json: {} }];   // alwaysOutputData: one empty item when the table is empty
+const ledgerKeys = (mode) => LEDGER.rows.filter(r => r.status !== 'refused' && (mode === 'assess' ? r.mode === 'assess' : (r.mode !== 'assess' && !['published', 'checkin', 'profile'].includes(r.mode)))).reduce((m, r) => { m[r.key] = (m[r.key] || 0) + 1; return m; }, {});
+const ledgerRun = async (input, o = {}) => {
+  const had = 'Normalize Input' in store, prev = store['Normalize Input'];
+  if (input !== undefined) mock('Normalize Input', input);
+  const row = (await run('Run Ledger Row', [{ json: { id: 'tbl', name: 'seo_run_ledger' } }]))[0].json;   // input = the Ensure node's table object, as live
+  const mine = { id: ++LEDGER.seq, ...row, ...(o.row || {}) }; LEDGER.rows.push(mine);
+  mock('Reserve Run Ledger', [{ json: { ...mine } }]); mock('Load Run Ledger', ledgerItems(LEDGER.rows));
+  const out = await run('Rate Limit', store['Load Run Ledger']);
+  if (out[0].json.validation_error) mine.status = 'refused';
+  if (input !== undefined) { if (had) store['Normalize Input'] = prev; else delete store['Normalize Input']; }
+  return out;
+};
+const assessRun = async (req, o = {}) => {
+  const v = (await run('Assess Validate', req))[0].json;
+  if (!v.ok) return v;
+  const row = (await run('Run Ledger Row (Assess)', [{ json: { id: 'tbl', name: 'seo_run_ledger' } }]))[0].json;
+  const mine = { id: ++LEDGER.seq, ...row, ...(o.row || {}) }; LEDGER.rows.push(mine);
+  mock('Reserve Run Ledger (Assess)', [{ json: { ...mine } }]); mock('Load Run Ledger (Assess)', ledgerItems(LEDGER.rows.filter(r => r.mode === 'assess')));
+  const out = (await run('Assess Limit', store['Load Run Ledger (Assess)']))[0].json;
+  if (out.status === 429) mine.status = 'refused';
+  return out;
+};
 // Search Console + sitemap part of the audit (between the data collection and Build Site Issues); `mode`: 'ok' | 'denied' | 'nosm'
 const runGscAudit = async (input, mode) => {
   const T = require('./fixtures_tracking');
@@ -38,7 +68,7 @@ await guard('validation', async () => {
   const v2 = await run('Normalize Input', F.forms.badDomain); console.log('   bad domain ->', JSON.stringify(v2[0].json.validation_error));
   mock('Start Form', F.forms.startDescribe);
   const v3 = await run('Normalize Input', F.forms.localhostDomain); console.log('   internal host ->', JSON.stringify(v3[0].json.validation_error));
-  const v4 = await run('Rate Limit', v3); console.log('   rate limit passthrough keeps error ->', !!v4[0].json.validation_error);
+  const v4 = await ledgerRun(v3); console.log('   rate limit passthrough keeps error ->', !!v4[0].json.validation_error);
   // webhook verdict (no Start Form)
   reset();
   const wv = await run('Normalize Input', F.forms.webhookVerdict);
@@ -46,9 +76,9 @@ await guard('validation', async () => {
   const wk = await run('Normalize Input', F.forms.webhookKeywordDefault);
   console.log('   webhook default ->', JSON.stringify({ mode: wk[0].json.mode, include_content: wk[0].json.include_content, include_seo_report: wk[0].json.include_seo_report, page_type: wk[0].json.page_type, run_page_check: wk[0].json.run_page_check }));
   // rate limit
-  H.staticData.rate = undefined;
-  for (let i = 0; i < 6; i++) await run('Rate Limit', wk);
-  const rl7 = await run('Rate Limit', wk); console.log('   7th run ->', JSON.stringify(rl7[0].json.validation_error));
+  ledgerReset();
+  for (let i = 0; i < 6; i++) await ledgerRun(wk);
+  const rl7 = await ledgerRun(wk); console.log('   7th run ->', JSON.stringify(rl7[0].json.validation_error));
   const wnc = await run('Normalize Input', { body: { keyword: 'x', country: 'US' } }); console.log('   API without callback/email ->', JSON.stringify(wnc[0].json.validation_error));
 });
 
@@ -59,7 +89,7 @@ await guard('keyword', async () => {
   const n = await run('Normalize Input', F.forms.pageKeyword);
   console.log('   new fields ->', JSON.stringify({ goal: n[0].json.goal, tone: n[0].json.tone, cta: n[0].json.cta, business_facts: n[0].json.business_facts }));
   console.log('   normalized ->', JSON.stringify({ keyword: n[0].json.keyword, domain: n[0].json.domain, email: n[0].json.email, include_content: n[0].json.include_content, include_seo_report: n[0].json.include_seo_report, run_page_check: n[0].json.run_page_check, need_site_description: n[0].json.need_site_description, language_code: n[0].json.language_code }));
-  await run('Rate Limit');
+  ledgerReset(); await ledgerRun();
   const nro = await run('Normalize Input', F.forms.pageKeywordReportOnly); console.log('   report-only request -> include_content', nro[0].json.include_content, '| include_seo_report', nro[0].json.include_seo_report);
   store['Normalize Input'] = n;
   mock('Read Website', { site_text: F.jinaSite });
@@ -226,7 +256,7 @@ await guard('describe', async () => {
   mock('Start Form', F.forms.startDescribe);
   const n = await run('Normalize Input', F.forms.pageDescribe);
   console.log('   ->', JSON.stringify({ mode: n[0].json.mode, country: n[0].json.country, need_site_description: n[0].json.need_site_description }));
-  await run('Rate Limit');
+  ledgerReset(); await ledgerRun();
   mock('Read Website', { error: { message: 'timeout of 30000ms exceeded' } });
   const cs = await run('Clean Site Text', store['Read Website']);
   console.log('   read failed -> read_ok', cs[0].json.read_ok, '| site_text len', cs[0].json.site_text.length, '(Site Describer would still be called with empty text)');
@@ -288,7 +318,7 @@ await guard('discover', async () => {
   delete store['Start Form'];
   const nsf = await run('Normalize Input', sfu[0]);
   console.log('   spawned keyword run ->', JSON.stringify({ mode: nsf[0].json.mode, via_webhook: nsf[0].json.via_webhook, keyword: nsf[0].json.keyword, include_content: nsf[0].json.include_content, include_seo_report: nsf[0].json.include_seo_report, pipeline_source: nsf[0].json.pipeline_source, reason: nsf[0].json.chosen_keyword_reason.slice(0, 40), err: nsf[0].json.validation_error }));
-  const rlsf = await run('Rate Limit', nsf); console.log('   spawned run estimate ->', rlsf[0].json.ai_spend_estimate_usd);
+  const rlsf = await ledgerRun(nsf); console.log('   spawned run estimate ->', rlsf[0].json.ai_spend_estimate_usd);
   const nsa = await run('Normalize Input', sfu[1]);
   console.log('   spawned audit run ->', JSON.stringify({ mode: nsa[0].json.mode, audit_level: nsa[0].json.audit_level, email: nsa[0].json.email, err: nsa[0].json.validation_error }));
   mock('Start Form', F.forms.startDiscover);
@@ -474,8 +504,8 @@ await guard('ladder', async () => {
   const n = await run('Normalize Input', F.forms.pageLadder);
   const j = n[0].json;
   console.log('   form ladder ->', JSON.stringify({ mode: j.mode, keyword: j.keyword, domain: j.domain, pages_now: j.pages_now, ladder_id: /^lad_/.test(j.ladder_id), include_content: j.include_content, need_site_description: j.need_site_description, run_page_check: j.run_page_check, business: j.business, email: j.email, tracker: j.tracker_cadence, wp: j.publish_wordpress }));
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined;
-  const rl = await run('Rate Limit', n); console.log('   rate limit est ->', rl[0].json.ai_spend_estimate_usd, '| error:', rl[0].json.validation_error || 'none');
+  ledgerReset();
+  const rl = await ledgerRun(n); console.log('   rate limit est ->', rl[0].json.ai_spend_estimate_usd, '| error:', rl[0].json.validation_error || 'none');
   delete store['Start Form'];
   const na = await run('Normalize Input', { body: { mode: 'ladder', keyword: 'E Invoicing in UAE', country: 'AE', domain: 'techand.ai', business: 'ERP partner', pages_now: 2, callback_url: 'https://hooks.example.com/x' } });
   console.log('   api ladder ->', JSON.stringify({ mode: na[0].json.mode, pages_now: na[0].json.pages_now, via_webhook: na[0].json.via_webhook, err: na[0].json.validation_error }));
@@ -614,8 +644,8 @@ await guard('site tracker', async () => {
   const n = await run('Normalize Input', { 'Website Domain': 'https://www.northwind-erp.com/', 'Target Country': 'United Arab Emirates', 'Search terms to track (optional)': 'ERP implementation Dubai\ne invoicing software uae, Northwind ERP login\n erp implementation dubai ', 'GA4 property ID (optional)': 'properties/222', 'Email me the weekly report': 'Owner@Example.com' });
   const j = n[0].json;
   console.log('   form track ->', JSON.stringify({ mode: j.mode, domain: j.domain, keyword: j.keyword, terms: j.track_keywords, ga4: j.ga4_property_id, email: j.email, need_desc: j.need_site_description, loc: j.location_code, err: j.validation_error }));
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined;
-  const rl = await run('Rate Limit', n); console.log('   rate limit est ->', rl[0].json.ai_spend_estimate_usd, '| error:', rl[0].json.validation_error || 'none');
+  ledgerReset();
+  const rl = await ledgerRun(n); console.log('   rate limit est ->', rl[0].json.ai_spend_estimate_usd, '| error:', rl[0].json.validation_error || 'none');
   delete store['Start Form'];
   const na = await run('Normalize Input', { body: { mode: 'track', domain: 'techand.ai', country: 'AE', keywords: ['E Invoicing UAE', 'erp dubai', 'e invoicing uae'], ga4_property_id: '333', callback_url: 'https://hooks.example.com/x', request_id: 'r-track' } });
   console.log('   api track ->', JSON.stringify({ mode: na[0].json.mode, via_webhook: na[0].json.via_webhook, terms: na[0].json.track_keywords, ga4: na[0].json.ga4_property_id, err: na[0].json.validation_error }));
@@ -767,9 +797,9 @@ await guard('content cadence', async () => {
   console.log('   upcoming ->', cp[0].json.upcoming.map(u => u.keyword + ' (' + u.source + ')').join(', '), '| pending:', JSON.stringify(cp[0].json.pending_publish), '| candidates:', cp[0].json.candidates);
   delete store['Start Form'];
   const nb = await run('Normalize Input', { body: b }); console.log('   content run normalised ->', JSON.stringify({ mode: nb[0].json.mode, keyword: nb[0].json.keyword, force_content: nb[0].json.force_content, ladder_id: !!nb[0].json.ladder_id, links: (nb[0].json.ladder_links || []).length, need_desc: nb[0].json.need_site_description, err: nb[0].json.validation_error }));
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined;
-  for (let i = 0; i < 7; i++) await run('Rate Limit', [{ json: { ...nb[0].json, email: 'owner@example.com', client_ip: 'public' } }]);
-  const rlInt = await run('Rate Limit', nb); console.log('   internal spawn not blocked by the owner limit ->', !rlInt[0].json.validation_error, '| key counted:', JSON.stringify(Object.keys(H.staticData.rate.keys)));
+  ledgerReset();
+  for (let i = 0; i < 7; i++) await ledgerRun([{ json: { ...nb[0].json, email: 'owner@example.com', client_ip: 'public' } }]);
+  const rlInt = await ledgerRun(nb); console.log('   internal spawn not blocked by the owner limit ->', !rlInt[0].json.validation_error, '| key counted:', JSON.stringify(Object.keys(ledgerKeys())));
   const lr = await run('Log Rows', cp); const LCOLS = ['site_id', 'domain', 'keyword', 'source', 'page_type', 'existing_page_url', 'rung', 'ladder_id', 'request_id', 'started_at', 'status', 'published_url', 'published_at', 'week'];
   console.log('   log rows ->', lr.length, '| cols exact?', lr.every(x => same(Object.keys(x.json), LCOLS)), '| status:', lr[0].json.status);
   const lm = await run('Ladder Marks', lr); console.log('   ladder marks ->', JSON.stringify(lm.map(x => x.json)));
@@ -799,8 +829,8 @@ await guard('published', async () => {
   const bad2 = await run('Normalize Input', { 'Website Domain': 'northwind-erp.com', 'Keyword of the page': 'wms uae', 'Published page URL': 'https://other.example/wms-uae/' }); console.log('   other domain ->', JSON.stringify(bad2[0].json.validation_error));
   const n = await run('Normalize Input', { 'Website Domain': 'https://www.northwind-erp.com', 'Keyword of the page': ' WMS UAE ', 'Published page URL': 'https://www.northwind-erp.com/blog/wms-uae/' });
   console.log('   form published ->', JSON.stringify({ mode: n[0].json.mode, domain: n[0].json.domain, keyword: n[0].json.keyword, url: n[0].json.published_url, err: n[0].json.validation_error }));
-  H.staticData.rate = { day: new Date().toISOString().slice(0, 10), total: 0, keys: { 'northwind-erp.com': 6 } }; H.staticData.ai_budget = undefined;
-  const rl = await run('Rate Limit', n); console.log('   published is never rate-limited ->', !rl[0].json.validation_error, '| est', rl[0].json.ai_spend_estimate_usd);
+  ledgerReset(ledgerFixture('northwind-erp.com', 6));
+  const rl = await ledgerRun(n); console.log('   published is never rate-limited ->', !rl[0].json.validation_error, '| est', rl[0].json.ai_spend_estimate_usd);
   delete store['Start Form'];
   const na = await run('Normalize Input', { body: { mode: 'published', domain: 'northwind-erp.com', content_request_id: 'cad_old', url: 'https://www.northwind-erp.com/blog/wms-uae/', callback_url: 'https://hooks.example.com/x', request_id: 'pub-1' } });
   console.log('   api published ->', JSON.stringify({ mode: na[0].json.mode, keyword: na[0].json.keyword, rid: na[0].json.content_request_id, url: na[0].json.published_url, err: na[0].json.validation_error }));
@@ -851,7 +881,7 @@ await guard('checkin', async () => {
   console.log('   intake ->', JSON.stringify({ file: intake[0].json.pages_csv_file, chars: intake[0].json.pages_csv_text.length }));
   const n = await run('Normalize Input', intake); const j = n[0].json;
   console.log('   normalised ->', JSON.stringify({ mode: j.mode, domain: j.domain, manual: j.checkin_manual_action, security: j.checkin_security_issue, notes: j.checkin_notes, csv: j.checkin_csv_text.length, err: j.validation_error }));
-  H.staticData.rate = { day: new Date().toISOString().slice(0, 10), total: 0, keys: { 'northwind-erp.com': 6 } }; const rl = await run('Rate Limit', n); console.log('   never rate-limited ->', !rl[0].json.validation_error);
+  ledgerReset(ledgerFixture('northwind-erp.com', 6)); const rl = await ledgerRun(n); console.log('   never rate-limited ->', !rl[0].json.validation_error);
   const pc = await run('Parse Check-in', n); const c = pc[0].json;
   console.log('   parsed ->', JSON.stringify({ kind: c.coverage.kind, reasons: c.coverage.reasons.map(r => r.reason + ':' + r.pages), total: c.coverage.not_indexed_total, month: c.checkin_month, lines: c.summary_lines.length }));
   const KCOLS = ['site_id', 'domain', 'month', 'manual_action', 'security_issue', 'notes', 'coverage_json', 'not_indexed_total', 'csv_kind', 'submitted_at', 'source', 'request_id'];
@@ -881,8 +911,8 @@ await guard('profile', async () => {
     'Phone': '+971 4 555 0100', 'Public e-mail on the website': 'hello@northwind-erp.com', 'Opening hours': 'Mo-Fr 09:00-18:00', 'Areas you serve': 'Dubai, Abu Dhabi, Sharjah', 'Google Maps link (optional)': 'https://maps.google.com/?cid=123', 'Logo URL (optional)': 'https://northwind-erp.com/logo.png', 'Email (optional)': '' };
   const n = await run('Normalize Input', form); const pi = n[0].json.profile_input || {};
   console.log('   form profile ->', JSON.stringify({ mode: n[0].json.mode, domain: n[0].json.domain, err: n[0].json.validation_error, keyword: n[0].json.keyword, business: n[0].json.business, author: pi.author_name, url: pi.author_url, same_as: pi.author_same_as, reviewer: [pi.reviewer_name, pi.reviewer_job_title, pi.reviewer_url], country: pi.country_code, city: pi.city, areas: pi.service_areas, need_site_description: n[0].json.need_site_description }));
-  H.staticData.rate = { day: new Date().toISOString().slice(0, 10), total: 0, keys: { 'northwind-erp.com': 6 } }; H.staticData.ai_budget = undefined;
-  const rl = await run('Rate Limit', n); console.log('   profile is never rate-limited ->', !rl[0].json.validation_error, '| est', rl[0].json.ai_spend_estimate_usd);
+  ledgerReset(ledgerFixture('northwind-erp.com', 6));
+  const rl = await ledgerRun(n); console.log('   profile is never rate-limited ->', !rl[0].json.validation_error, '| est', rl[0].json.ai_spend_estimate_usd);
   mock('Load Profile (Profile)', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', business_name: 'Northwind ERP LLC', author_bio: 'old bio', phone: '+971 4 000 0000', city: 'Dubai', price_range: '$$' } }]);
   const pr = await run('Profile Row', store['Load Profile (Profile)']);
   console.log('   profile row ->', JSON.stringify({ cols_exact: same(Object.keys(pr[0].json), PCOLS), site_id: pr[0].json.site_id, business: pr[0].json.business_name, phone: pr[0].json.phone, price_kept: pr[0].json.price_range, bio_replaced: pr[0].json.author_bio.slice(0, 20) }));
@@ -918,10 +948,10 @@ await guard('case study', async () => {
   const n = await run('Normalize Input', csForm); const j = n[0].json;
   console.log('   form intake ->', JSON.stringify({ mode: j.mode, keyword: j.keyword, page_type: j.page_type, case_id: /^cs_/.test(j.case_id), public: j.case_study.client_public, service: j.case_study.service, results: j.case_study.results.slice(0, 30), err: j.validation_error, include_content: j.include_content, need_site_description: j.need_site_description }));
   const today = new Date().toISOString().slice(0, 10);
-  H.staticData.rate = undefined; H.staticData.ai_budget = { period: today, spent_est: 9.5, runs: 4 };
-  const rlx = await run('Rate Limit', n); console.log('   no room for the page today ->', JSON.stringify(rlx[0].json.validation_error));
-  H.staticData.ai_budget = undefined; H.staticData.rate = undefined;
-  const rl = await run('Rate Limit', n); console.log('   intake ->', JSON.stringify({ err: rl[0].json.validation_error, est: rl[0].json.ai_spend_estimate_usd, owner_runs: H.staticData.rate.keys['owner@northwind-erp.com'] }));
+  ledgerReset(ledgerFixture('someone@else.com', 4, 'keyword', 2.375));   // $9.50 estimated today by other runs
+  const rlx = await ledgerRun(n); console.log('   no room for the page today ->', JSON.stringify(rlx[0].json.validation_error));
+  ledgerReset();
+  const rl = await ledgerRun(n); console.log('   intake ->', JSON.stringify({ err: rl[0].json.validation_error, est: rl[0].json.ai_spend_estimate_usd, owner_runs: ledgerKeys()['owner@northwind-erp.com'] }));
   mock('Ensure Case Table', [{ json: { id: 't1', name: 'seo_case_studies' } }]); mock('Ensure Log Table (Case)', [{ json: { id: 't2', name: 'seo_content_log' } }]);
   const cr = await run('Case Study Row', store['Ensure Log Table (Case)']);   // input = the table object, as live
   console.log('   case row ->', JSON.stringify({ cols_exact: same(Object.keys(cr[0].json), CCOLS), title: cr[0].json.title, public: cr[0].json.client_public, status: cr[0].json.status, rid: !!cr[0].json.request_id }));
@@ -933,7 +963,7 @@ await guard('case study', async () => {
   const saveN = n; delete store['Start Form'];
   const rn = await run('Normalize Input', { body }); const r = rn[0].json;
   console.log('   page run normalised ->', JSON.stringify({ err: r.validation_error, mode: r.mode, page_type: r.page_type, keyword: r.keyword, case_kept: !!(r.case_study && r.case_study.results), public: r.case_study && r.case_study.client_public, include_content: r.include_content, force: r.force_content, case_id: r.case_id === body.case_id }));
-  const rrl = await run('Rate Limit', rn); console.log('   page run rate limit ->', JSON.stringify({ err: rrl[0].json.validation_error, est: rrl[0].json.ai_spend_estimate_usd, internal_key: H.staticData.rate.keys['casestudy:site_northwind-erp-com'], owner_runs_unchanged: H.staticData.rate.keys['owner@northwind-erp.com'] }));
+  const rrl = await ledgerRun(rn); console.log('   page run rate limit ->', JSON.stringify({ err: rrl[0].json.validation_error, est: rrl[0].json.ai_spend_estimate_usd, internal_key: ledgerKeys()['casestudy:site_northwind-erp-com'], owner_runs_unchanged: ledgerKeys()['owner@northwind-erp.com'] }));
   store['Normalize Input'] = saveN; mock('Start Form', { 'What do you want?': 'Write a case study' });
   mock('Start Case Study Run', [{ json: {} }]); const dl = await run('Case Study Delivery', store['Start Case Study Run']);
   console.log('   delivery ->', JSON.stringify({ status: dl[0].json.status, stored: dl[0].json.stored, started: dl[0].json.started, hints: dl[0].json.hints.length }), '|', dl[0].json.plain.split('\n')[0].slice(0, 160));
@@ -1328,8 +1358,8 @@ await guard('audit upgrades', async () => {
   mock('Manual Run', { domain: M.DOMAIN }); const sp3 = await sched('on demand, audited 5 days ago', smA, 5, storedFp); delete store['Manual Run'];
   if (!sp3[0].json.run) throw new Error('on-demand audit was skipped');
   console.log('   scheduled body ->', JSON.stringify(sp[0].json.body));
-  delete store['Start Form']; const sn = await run('Normalize Input', { body: sp[0].json.body }); H.staticData.rate = undefined;
-  const srl = await run('Rate Limit', sn); console.log('   scheduled audit run ->', JSON.stringify({ mode: sn[0].json.mode, pages: sn[0].json.crawl_max_pages, js: sn[0].json.crawl_js, scheduled: sn[0].json.scheduled, err: sn[0].json.validation_error, internal_key: !!H.staticData.rate.keys['audit:' + M.SITE], est: srl[0].json.ai_spend_estimate_usd }));
+  delete store['Start Form']; const sn = await run('Normalize Input', { body: sp[0].json.body }); ledgerReset();
+  const srl = await ledgerRun(sn); console.log('   scheduled audit run ->', JSON.stringify({ mode: sn[0].json.mode, pages: sn[0].json.crawl_max_pages, js: sn[0].json.crawl_js, scheduled: sn[0].json.scheduled, err: sn[0].json.validation_error, internal_key: !!ledgerKeys()['audit:' + M.SITE], est: srl[0].json.ai_spend_estimate_usd }));
 });
 
 // ===================================================================================
@@ -1339,7 +1369,7 @@ await guard('monitor intake', async () => {
   mock('Start Form', { 'What do you want?': 'Check my AI visibility' });
   const n = await run('Normalize Input', { 'Website Domain': 'www.northwind-erp.com', 'Target Country': 'United Arab Emirates', 'Competitors (optional)': 'azentio.com, https://www.cleartax.com/ae', 'Email me the report': 'owner@northwind-erp.com' });
   console.log('   form ai visibility ->', JSON.stringify({ mode: n[0].json.mode, domain: n[0].json.domain, competitors: n[0].json.competitors, err: n[0].json.validation_error }));
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined; const rl = await run('Rate Limit', n); console.log('   rate limit ->', JSON.stringify({ err: rl[0].json.validation_error, est: rl[0].json.ai_spend_estimate_usd, counted: H.staticData.rate.keys['owner@northwind-erp.com'] }));
+  ledgerReset(); const rl = await ledgerRun(n); console.log('   rate limit ->', JSON.stringify({ err: rl[0].json.validation_error, est: rl[0].json.ai_spend_estimate_usd, counted: ledgerKeys()['owner@northwind-erp.com'] }));
   const ms = await run('Monitor Start', n); console.log('   monitor start body ->', JSON.stringify(ms[0].json));
   mock('Start AI Visibility', [{ json: {} }]); const st = await run('Monitor Started', store['Start AI Visibility']); console.log('   started ->', st[0].json.stage, st[0].json.status, '|', st[0].json.plain.split('\n')[0].slice(0, 120));
   delete store['Start Form'];
@@ -1387,16 +1417,16 @@ await guard('web app', async () => {
   const kw = P.find(f => f.body.mode === 'keyword');
   const qk = await run('Quick Validate', { headers: kw.headers, body: kw.body }); delete store['Start Form'];
   const nk = await run('Normalize Input', qk[0].json.forward);
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined;
+  ledgerReset();
   const big = [{ json: { ...nk[0].json, ai_budget_usd: 0 } }];
-  let last; for (let i = 0; i < 41; i++) last = await run('Rate Limit', big);
-  check('company key counted', H.staticData.rate.keys['app:7a1c2d3e-org'] === 40 && !H.staticData.rate.keys['owner@northwind-erp.com'], JSON.stringify(H.staticData.rate.keys));
+  let last; for (let i = 0; i < 41; i++) last = await ledgerRun(big);
+  check('company key counted', ledgerKeys()['app:7a1c2d3e-org'] === 40 && !ledgerKeys()['owner@northwind-erp.com'], JSON.stringify(ledgerKeys()));
   check('41st company run blocked', /daily limit of 40 runs/.test(last[0].json.validation_error || ''), last[0].json.validation_error);
   // a spoofed marker that is not app:<id> keeps the old e-mail key
-  H.staticData.rate = undefined;
-  await run('Rate Limit', [{ json: { ...nk[0].json, client_ip: 'app:', ai_budget_usd: 0 } }]);
-  check('malformed app marker falls back to e-mail', H.staticData.rate.keys['owner@northwind-erp.com'] === 1, JSON.stringify(H.staticData.rate.keys));
-  console.log('   rate limit ->', JSON.stringify(H.staticData.rate.keys));
+  ledgerReset();
+  await ledgerRun([{ json: { ...nk[0].json, client_ip: 'app:', ai_budget_usd: 0 } }]);
+  check('malformed app marker falls back to e-mail', ledgerKeys()['owner@northwind-erp.com'] === 1, JSON.stringify(ledgerKeys()));
+  console.log('   rate limit ->', JSON.stringify(ledgerKeys()));
   // Admin API validation (Site Admin's rules as a 400)
   const av1 = await run('Admin Validate', { body: { action: 'cadence', domain: 'northwind-erp.com', pages_per_week: 2 } });
   check('admin cadence valid', av1[0].json.ok && av1[0].json.forward.request_id.startsWith('admin-'), JSON.stringify(av1[0].json));
@@ -1857,8 +1887,8 @@ await guard('pipeline phase 3', async () => {
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
 
   // ---------- G. Keyword Check workflow (SEOagentAssess) ----------
-  const AV = async (body, ip) => { const r = await run('Assess Validate', { headers: { 'x-forwarded-for': ip || 'app:7a1c2d3e-org' }, body }); return r[0].json; };
-  H.staticData.assess = undefined;
+  const AV = (body, ip) => assessRun({ headers: { 'x-forwarded-for': ip || 'app:7a1c2d3e-org' }, body });   // v4.14: validate -> reserve a ledger row -> Assess Limit
+  ledgerReset();
   const okBody = { keyword: '  E Invoicing Software UAE ', country: 'AE', domain: 'https://www.Northwind-ERP.com/', business: 'ERP and e-invoicing implementation partner', services: ['ERP implementation', 'Peppol e-invoicing'], existing_keywords: ['e invoicing in uae', 'peppol uae'] };
   let v = await AV(okBody);
   check('assess: a valid body is normalised (keyword, domain, country, site id)', v.ok && v.status === 200 && v.keyword === 'e invoicing software uae' && v.domain === D && v.country === 'United Arab Emirates' && v.location_code === 2784 && v.language_code === 'en' && v.site_id === SITE && v.services.length === 2 && v.existing_keywords.length === 2, JSON.stringify(v));
@@ -1870,14 +1900,14 @@ await guard('pipeline phase 3', async () => {
   }
   v = await AV({});
   check('assess 400: an empty body -> keyword, domain and country errors at once', v.status === 400 && eq(Object.keys(v.errors).sort(), ['country', 'domain', 'keyword']) && v.error.split('; ').length === 3, JSON.stringify(v.errors));
-  check('assess: rejected requests are not counted', !H.staticData.assess || !H.staticData.assess.total || H.staticData.assess.total === 1, JSON.stringify(H.staticData.assess));
-  H.staticData.assess = undefined;
+  check('assess: rejected requests reserve no ledger row (the one valid request so far)', LEDGER.rows.filter(r => r.mode === 'assess').length === 1, JSON.stringify(LEDGER.rows));
+  ledgerReset();
   for (let i = 0; i < 40; i++) v = await AV(okBody);
   const v41 = await AV(okBody);
-  check('assess 429: the 41st check of one company in a day', v.ok && v41.status === 429 && !v41.ok && /daily limit of 40/.test(v41.error) && H.staticData.assess.keys['app:7a1c2d3e-org'] === 40, v41.error);
+  check('assess 429: the 41st check of one company in a day', v.ok && v41.status === 429 && !v41.ok && /daily limit of 40/.test(v41.error) && ledgerKeys('assess')['app:7a1c2d3e-org'] === 40, v41.error);
   const vOther = await AV(okBody, 'app:other-company-1');
   check('assess: another company has its own daily limit', vOther.ok, vOther.error);
-  H.staticData.assess = undefined;
+  ledgerReset();
   v = await AV(okBody); mock('Assess Validate', [{ json: v }]);
   mock('Load Assess Cache', EMPTY);
   const aq = await run('Assess Requests', EMPTY);
@@ -2510,7 +2540,10 @@ await guard('ai growth', async () => {
   check('IndexNow key made once (32 hex) and the monthly entity check due', /^[a-f0-9]{32}$/.test(G.indexnow_key) && G.indexnow_new === true && G.entity_due === true, G.indexnow_key);
   // ---- (c) requests: pages, cited pages, Bing (sites -> quota + crawl state -> submission), IndexNow, Wikidata ----
   const pr = await run('Page Requests (Growth)', gp); const er = await run('Earned Requests', gp);
-  const bs = await run('Bing Sites (Growth)', gp);
+  // the Bing key is baked in at build time (BING_ON): a build without n8n/.env has it off, so the node runs from a copy with it on (as S28 does)
+  const fsB = require('fs'), pathB = require('path'), CDB = process.env.CODE_DIR || pathB.join(__dirname, 'code'); const bsrc = fsB.readFileSync(pathB.join(CDB, 'Bing_Sites_Growth_.js'), 'utf8');
+  const bsOn = bsrc.includes('const BING = false;') ? (fsB.writeFileSync(pathB.join(CDB, 'Bing_Sites_Growth___on.js'), bsrc.replace('const BING = false;', 'const BING = true;')), 'Bing_Sites_Growth___on') : null;
+  const bs = await run('Bing Sites (Growth)', gp, bsOn ? { code: bsOn } : {}); if (bsOn) { try { fsB.unlinkSync(pathB.join(CDB, bsOn + '.js')); } catch (e) {} }
   check('requests: the pages to check and the cited pages to fetch; Bing sites asked once', pr.length === G.audit.length && er.length === G.earned_fetch.length && bs.length === 1 && /GetUserSites/.test(bs[0].json.url), JSON.stringify({ pr: pr.length, er: er.length, bs: bs[0].json }));
   mock('Fetch Bing Sites (Growth)', [{ json: { d: [{ Url: 'https://www.' + D + '/', IsVerified: true }, { Url: 'https://other.example.com/' }] } }]);
   const br = await run('Bing Growth Requests', store['Fetch Bing Sites (Growth)']); const BR = br.map(r => r.json);
@@ -2710,6 +2743,130 @@ await guard('link builder', async () => {
   // ---- (i) Site Admin accepts the new prospect status "replied" ----
   const aa = (await run('Admin Action', { body: { action: 'prospect', domain: 'techand.ai', prospect_domain: 'erpdaily.ae', status: 'replied' } }))[0].json;
   check('Site Admin: prospect status "replied" (v4.13)', aa.prospect_status === 'replied', JSON.stringify(aa));
+});
+
+// ===================================================================================
+await guard('S31 D1 D7', async () => {
+  const SN = 'S31 D1 D7 — run ledger: concurrency-safe rate / spend guards and the Keyword Check limit (seo_run_ledger); RDAP parsed before WHOIS';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const TC = require('./table_cols.json');
+  const now = new Date().toISOString(), today = now.slice(0, 10);
+  const err = (r) => r[0].json.validation_error || '';
+  delete store['Start Form'];
+  // ---------- A. the reservation row (Run Ledger Row) and a clean first run ----------
+  const n = await run('Normalize Input', F.forms.webhookVerdict);   // API verdict ($0.20)
+  const K = 'owner@northwind-erp.com';
+  const IN = (o = {}) => [{ json: { ...n[0].json, email: K, ai_budget_usd: 6, ai_budget_period: 'day', ...o } }];
+  mock('Normalize Input', IN());
+  const row = (await run('Run Ledger Row', [{ json: { id: 'tbl', name: 'seo_run_ledger' } }]))[0].json;   // input = the Ensure node's table object, as live
+  check('ledger row: exact seo_run_ledger columns', eq(Object.keys(row), TC.RUN_LEDGER), Object.keys(row).join(','));
+  check('ledger row: run id, key = the e-mail, mode, estimate, reserved, $0 settled', row.run_id === 'test-exec' && row.key === K && row.mode === 'keyword' && row.est_usd > 0 && row.status === 'reserved' && row.settled_usd === 0 && row.created_at.slice(0, 10) === today, JSON.stringify(row));
+  ledgerReset(); const r0 = await ledgerRun(IN());
+  check('empty ledger: the first run passes as run 1 with the same estimate as its row (one copy of the EST table)', !err(r0) && r0[0].json.run_number_today === 1 && r0[0].json.ai_spend_estimate_usd === row.est_usd && r0[0].json.ai_budget_used_est_usd === row.est_usd, JSON.stringify([err(r0), r0[0].json.run_number_today, r0[0].json.ai_spend_estimate_usd, row.est_usd]));
+  // ---------- B. N rows -> run N + 1 refused; row order (id) decides ties, not the timestamp ----------
+  ledgerReset(ledgerFixture(K, 5, 'keyword', 0, now)); const r6 = await ledgerRun(IN());
+  check('5 rows today for the e-mail: the 6th run passes (run number 6)', !err(r6) && r6[0].json.run_number_today === 6, err(r6));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, now)); const r7 = await ledgerRun(IN());
+  check('6 rows today for the e-mail: the 7th run is refused (daily limit of 6)', /daily limit of 6 runs/.test(err(r7)), err(r7));
+  check('the refused run marked its row refused', LEDGER.rows.length === 7 && LEDGER.rows[6].status === 'refused', JSON.stringify(LEDGER.rows.map(r => r.status)));
+  const r8 = await ledgerRun(IN());
+  check('refused rows never count: the next run still sees 6 and is refused (not 7)', /daily limit of 6 runs/.test(err(r8)) && LEDGER.rows.filter(r => r.status !== 'refused').length === 6, err(r8));
+  const par = [1, 2, 3, 5, 6, 7].map(id => ({ id, run_id: 'par-' + id, key: K, mode: 'keyword', est_usd: 0, created_at: now, status: 'reserved', settled_usd: 0 }));
+  ledgerReset(par); const rLow = await ledgerRun(IN(), { row: { id: 4, created_at: now } });
+  check('parallel rows with the same timestamp: the run that reserved row 4 counts rows 1-3 only and passes as run 4', !err(rLow) && rLow[0].json.run_number_today === 4, JSON.stringify([err(rLow), rLow[0].json.run_number_today]));
+  const rHigh = await ledgerRun(IN(), { row: { id: 9, created_at: now } });
+  check('the run that reserved row 9 sees seven earlier rows (1-7, same timestamp) and is refused', /daily limit of 6 runs/.test(err(rHigh)), err(rHigh));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, now)); const rNoId = await ledgerRun(IN(), { row: { id: undefined } });
+  check('no row id (the insert failed): every other row counts, so the run is still refused', /daily limit of 6 runs/.test(err(rNoId)), err(rNoId));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, new Date(Date.now() - 864e5).toISOString())); const rY = await ledgerRun(IN());
+  check('yesterday\'s rows do not count today', !err(rY) && rY[0].json.run_number_today === 1, err(rY));
+  // ---------- C. the AI budget from the ledger: reservations, settlements, refusals, the period ----------
+  const spentRows = (status, est, settled) => ledgerFixture('other@example.com', 3, 'keyword', est, now).map(r => ({ ...r, status, settled_usd: settled }));
+  ledgerReset(spentRows('reserved', 2, 0)); const rB1 = await ledgerRun(IN());
+  check('three reservations of $2.00 today: $6.00 of the $6 budget used -> refused with the estimate in the message', /used up \(estimated \$6\.00 of \$6;/.test(err(rB1)), err(rB1));
+  ledgerReset(spentRows('done', 2, 1)); const rB2 = await ledgerRun(IN());
+  check('the same runs settled at $1.00 each (status done, settled_usd): $3.00 used -> the run passes and reports the budget used', !err(rB2) && rB2[0].json.ai_budget_used_est_usd === +(3 + row.est_usd).toFixed(2), JSON.stringify([err(rB2), rB2[0].json.ai_budget_used_est_usd]));
+  ledgerReset(spentRows('refused', 2, 0)); const rB3 = await ledgerRun(IN());
+  check('refused reservations do not spend the budget', !err(rB3) && rB3[0].json.ai_budget_used_est_usd === row.est_usd, JSON.stringify([err(rB3), rB3[0].json.ai_budget_used_est_usd]));
+  const prior = Number(today.slice(8, 10)) > 1 ? today.slice(0, 8) + '01T00:00:00.000Z' : null;
+  if (prior) {
+    ledgerReset(ledgerFixture('other@example.com', 1, 'keyword', 6, prior)); const rM = await ledgerRun(IN({ ai_budget_period: 'month' })); const rD = await ledgerRun(IN({ ai_budget_period: 'day' }));
+    check('a $6 run earlier this month: refused with a monthly budget, ignored by a daily one', /used up/.test(err(rM)) && !err(rD), JSON.stringify([err(rM), err(rD)]));
+  } else console.log('   (1st of the month: the month-vs-day period check needs an earlier day; skipped)');
+  // ---------- D. the other keys and caps, unchanged ----------
+  const APP = 'app:7a1c2d3e-org';
+  ledgerReset(ledgerFixture(APP, 39, 'keyword', 0, now)); const rA1 = await ledgerRun(IN({ client_ip: APP, ai_budget_usd: 0 }));
+  ledgerReset(ledgerFixture(APP, 40, 'keyword', 0, now)); const rA2 = await ledgerRun(IN({ client_ip: APP, ai_budget_usd: 0 }));
+  check('the web app company key: 39 rows -> run 40 passes, 40 rows -> refused (daily limit of 40)', !err(rA1) && rA1[0].json.run_number_today === 40 && /daily limit of 40 runs/.test(err(rA2)), JSON.stringify([err(rA1), err(rA2)]));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, now)); const rI = await ledgerRun(IN({ client_ip: 'ladder:site_northwind-erp-com' }));
+  check('an internal spawn (ladder:) bypasses the owner\'s 6 / day and is keyed by its marker', !err(rI) && LEDGER.rows[6].key === 'ladder:site_northwind-erp-com' && rI[0].json.run_number_today === 1, JSON.stringify([err(rI), LEDGER.rows[6].key]));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, now)); const rP = await ledgerRun(IN({ mode: 'published' }));
+  check('a published-page report is never blocked by the per-key limit', !err(rP), err(rP));
+  ledgerReset(ledgerFixture(K, 6, 'published', 0, now)); const rF = await ledgerRun(IN());
+  check('free rows (published / check-in / profile) do not count against the e-mail\'s limit', !err(rF) && rF[0].json.run_number_today === 1, err(rF));
+  ledgerReset(ledgerFixture('someone@else.com', 150, 'keyword', 0, now)); const rG = await ledgerRun(IN());
+  ledgerReset(ledgerFixture('app:other-company-1', 150, 'assess', 0, now)); const rG2 = await ledgerRun(IN());
+  check('150 rows today from anyone: daily capacity; 150 Keyword Check rows (mode assess): not counted', /daily capacity/.test(err(rG)) && !err(rG2), JSON.stringify([err(rG), err(rG2)]));
+  // ---------- E. the refused path, the validation-error passthrough and a failed ledger ----------
+  ledgerReset(); const rv = await ledgerRun([{ json: { validation_error: 'Please enter a keyword.', via_webhook: true, mode: null, email: K } }]);
+  const vrow = LEDGER.rows.slice(-1)[0];
+  check('a validation error passes straight through Rate Limit; its row is reserved at $0 and marked refused', rv[0].json.validation_error === 'Please enter a keyword.' && vrow.est_usd === 0 && vrow.status === 'refused' && vrow.mode === '' && vrow.key === K, JSON.stringify(vrow));
+  mock('Rate Limit', r7); const ri = await run('Refused Input', [{ json: { id: 7, run_id: 'test-exec', status: 'refused' } }]);   // input = the Data Table node's row, as live
+  check('Refused Input restores the refused request after the ledger row is marked', eq(ri[0].json, r7[0].json), JSON.stringify(ri[0].json).slice(0, 200));
+  mock('Normalize Input', IN()); mock('Reserve Run Ledger', [{ json: { error: { message: 'no table' } } }]); mock('Load Run Ledger', [{ json: { error: { message: 'no table' } } }]);
+  const rE = await run('Rate Limit', store['Load Run Ledger']);
+  check('a failed ledger insert / read does not block the run (fail-open, as before; run number 1)', !err(rE) && rE[0].json.run_number_today === 1, err(rE));
+  const fs = require('fs'), path = require('path'), CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
+  check('no node counts in workflow static data any more (Rate Limit, Assess Validate)', !/getWorkflowStaticData/.test(fs.readFileSync(path.join(CD, 'Rate_Limit.js'), 'utf8')) && !/getWorkflowStaticData/.test(fs.readFileSync(path.join(CD, 'Assess_Validate.js'), 'utf8')), 'static data still used');
+  // ---------- F. the Keyword Check: the same ledger, mode assess, 40 / day per caller, 400 in total ----------
+  const D = 'northwind-erp.com';
+  const AQ = (ip, o = {}) => assessRun({ headers: { 'x-forwarded-for': ip || APP }, body: { keyword: 'e invoicing software uae', country: 'AE', domain: D } }, o);
+  ledgerReset(); const a1 = await AQ(); const arow = LEDGER.rows[0];
+  check('keyword check: a valid request reserves a row with the exact columns (mode assess, the caller as key) and passes as check 1', a1.ok && a1.status === 200 && a1.checks_today === 1 && eq(Object.keys(arow).filter(k => k !== 'id'), TC.RUN_LEDGER) && arow.mode === 'assess' && arow.key === APP && arow.status === 'reserved' && arow.est_usd > 0, JSON.stringify(arow));
+  const aBad = await assessRun({ headers: { 'x-forwarded-for': APP }, body: {} });
+  check('an invalid request (400) reserves no row', aBad.status === 400 && LEDGER.rows.length === 1, JSON.stringify([aBad.status, LEDGER.rows.length]));
+  ledgerReset(ledgerFixture(APP, 40, 'assess', 0.002, now)); const a41 = await AQ();
+  check('40 checks today for the company: the 41st is 429 and its row is marked refused', a41.status === 429 && !a41.ok && /daily limit of 40 keyword checks/.test(a41.error) && LEDGER.rows[40].status === 'refused', JSON.stringify([a41.status, a41.error, LEDGER.rows[40].status]));
+  const aO = await AQ('app:other-company-1');
+  check('another company still passes (its own count)', aO.ok && aO.checks_today === 1, JSON.stringify(aO).slice(0, 200));
+  const parA = Array.from({ length: 41 }, (_, i) => i + 1).filter(id => id !== 3).map(id => ({ id, run_id: 'par-' + id, key: APP, mode: 'assess', est_usd: 0.002, created_at: now, status: 'reserved', settled_usd: 0 }));
+  ledgerReset(parA); const aLow = await AQ(APP, { row: { id: 3, created_at: now } });
+  check('keyword check, same timestamp: the request that reserved row 3 counts rows 1-2 only and passes as check 3', aLow.ok && aLow.checks_today === 3, JSON.stringify([aLow.status, aLow.checks_today]));
+  const aHigh = await AQ(APP, { row: { id: 42, created_at: now } });
+  check('the request that reserved row 42 sees 41 earlier checks and is refused', aHigh.status === 429, JSON.stringify([aHigh.status, aHigh.error]));
+  ledgerReset(ledgerFixture('x', 400, 'assess', 0, now)); const aG = await AQ();
+  ledgerReset(ledgerFixture('x', 400, 'keyword', 0, now)); const aG2 = await AQ();
+  check('400 checks today in total: 429 for all callers; 400 main-workflow rows: not counted', aG.status === 429 && /for all callers/.test(aG.error) && aG2.ok, JSON.stringify([aG.error, aG2.ok]));
+  ledgerReset(ledgerFixture(APP, 40, 'assess', 0, new Date(Date.now() - 864e5).toISOString())); const aY = await AQ();
+  check('keyword check: yesterday\'s rows do not count', aY.ok && aY.checks_today === 1, JSON.stringify([aY.status, aY.checks_today]));
+  // ---------- G. D7: RDAP answers arrive as text; they are parsed, and WHOIS is paid only for the gaps ----------
+  const RD = (dom, date) => ({ objectClassName: 'domain', ldhName: dom, events: [{ eventAction: 'registration', eventDate: date + 'T00:00:00Z' }, { eventAction: 'expiration', eventDate: '2027-01-01T00:00:00Z' }] });
+  const DOMS = ['textdata.ae', 'textbody.com', 'object.com', 'htmlerr.ae', 'notfound.ae', 'failed.com', 'noevents.com'];
+  mock('Pick Competitors', DOMS.map(d => ({ domain: d, is_you: false }))); mock('Load Age Cache', [{ json: {} }]);
+  const alp = await run('Age Lookup Plan', store['Load Age Cache']);
+  check('seven domains to look up (nothing stored)', alp.length === 7 && eq(alp.map(x => x.json.domain), DOMS), JSON.stringify(alp.map(x => x.json.domain)));
+  mock('RDAP Lookup', [
+    { data: JSON.stringify(RD('textdata.ae', '2015-06-01')) },                       // the live shape (exec 370): rdap+json as text under data
+    { body: JSON.stringify(RD('textbody.com', '2009-02-10')), statusCode: 200 },    // a full response: the text under body
+    RD('object.com', '2001-11-30'),                                                  // an object (the only shape the code read before)
+    { data: '<html><body>404 Not Found</body></html>' },                             // an HTML error page
+    { data: JSON.stringify({ errorCode: 404, title: 'Not Found' }) },                // RDAP's own not-found answer
+    { error: { message: 'connect ETIMEDOUT' } },                                     // the request failed
+    { data: JSON.stringify({ objectClassName: 'domain', events: [{ eventAction: 'expiration', eventDate: '2027-01-01T00:00:00Z' }] }) }   // no registration event
+  ]);
+  const rr = await run('RDAP Results', store['RDAP Lookup']);
+  check('D7: the text answers under data / body and the object are read -> only the four gaps go to WHOIS', eq(rr.map(x => x.json.domain), ['htmlerr.ae', 'notfound.ae', 'failed.com', 'noevents.com']), JSON.stringify(rr.map(x => x.json)));
+  mock('DataForSEO Whois', rr.map(c => F.whois(c.json.domain)));
+  const da = await run('Domain Ages', store['DataForSEO Whois']); const A = da[0].json.ages;
+  check('Domain Ages: the RDAP dates from the text answers (source rdap), WHOIS only for the rest, exact cache rows', A['textdata.ae'].registered === '2015-06-01' && A['textdata.ae'].source === 'rdap' && A['textbody.com'].registered === '2009-02-10' && A['textbody.com'].source === 'rdap' && A['object.com'].registered === '2001-11-30' && A['object.com'].source === 'rdap' && A['htmlerr.ae'].source === 'whois' && A['noevents.com'].source === 'whois' && da[0].json.whois_requests === 4 && da[0].json.rows.length === 7 && da[0].json.rows.every(r => eq(Object.keys(r), TC.CACHE)), JSON.stringify(A));
+  mock('RDAP Lookup', alp.map(x => ({ data: JSON.stringify(RD(x.json.domain, '2010-01-01')) })));
+  const rrAll = await run('RDAP Results', store['RDAP Lookup']);
+  check('every domain answered by RDAP as text -> no WHOIS request at all', rrAll.length === 1 && rrAll[0].json.skip === true, JSON.stringify(rrAll.map(x => x.json)));
+  mock('RDAP Lookup', alp.map(() => ({ data: '' })));
+  const rrNone = await run('RDAP Results', store['RDAP Lookup']);
+  check('empty RDAP answers -> every domain goes to WHOIS', rrNone.length === 7 && eq(rrNone.map(x => x.json.domain), DOMS), JSON.stringify(rrNone.map(x => x.json.domain)));
 });
 
 H.report();

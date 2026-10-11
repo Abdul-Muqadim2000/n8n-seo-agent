@@ -3202,7 +3202,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Simple abuse guard: limits runs per requester and per day (state lives in workflow static data;\n// it persists only for active/production executions, not manual test runs).\nconst LIMITS = { per_key_per_day: 6, global_per_day: 150, per_app_company_per_day: 40 };   // app: requests from the web app, keyed per company (v4.7)\n\nconst d = $input.first().json;\nif (d.validation_error) return [{ json: d }];          // pass validation errors straight through\nconst today = new Date().toISOString().slice(0, 10);\n// Internal spawns (ladder page runs, content cadence) are keyed by their marker, not the owner's e-mail: they are capped by the AI budget guard and their own weekly limits.\nconst internal = /^(ladder|cadence|tracker|casestudy|audit):/.test(String(d.client_ip || ''));\nconst fromApp = /^app:[a-z0-9-]{6,64}$/i.test(String(d.client_ip || ''));   // the web app: one key per company, whoever's e-mail gets the copy\nconst key = ((internal || fromApp) ? d.client_ip : (d.email || d.client_ip || d.domain || d.keyword || 'anon')).toLowerCase();\nconst perKey = fromApp ? LIMITS.per_app_company_per_day : LIMITS.per_key_per_day;\n\nlet store;\ntry { store = $getWorkflowStaticData('global'); } catch (e) { store = {}; }\nif (!store.rate || store.rate.day !== today) store.rate = { day: today, total: 0, keys: {} };\n\nconst used = store.rate.keys[key] || 0;\nif (store.rate.total >= LIMITS.global_per_day) {\n  return [{ json: { ...d, validation_error: 'This service has reached its daily capacity. Please try again tomorrow.' } }];\n}\nif (used >= perKey && !['published', 'checkin', 'profile'].includes(d.mode)) {   // reporting a published page or a check-in costs nothing and is never blocked\n  return [{ json: { ...d, validation_error: 'You have reached the daily limit of ' + perKey + ' runs. Please try again tomorrow.' } }];\n}\nif (!['published', 'checkin', 'profile'].includes(d.mode)) store.rate.keys[key] = used + 1;\nstore.rate.total += 1;\n\n// ---- estimated Claude spend guard ----\n// Conservative per-run estimates (USD) for the AI steps only; DataForSEO spend is tracked separately in run_ledger.\nconst EST = { content: 1.2, discover: 0.35, verdict: 0.2, full: 0.25, site_audit: 0, describe: 0.03, ladder: 0.55, report: 0.3, track: 0, published: 0, checkin: 0, profile: 0, case_study: 0, ai_visibility: 0.06, backlinks: 0.04 };   // monitors: DataForSEO is the main cost (~$0.60 / ~$0.30 per check); Claude writes the questions, the brief and outreach drafts   // track: the Site Tracker's brief runs in its own execution (~$0.03 per site per week)   // ladder = verdict + relevance screen; its page runs are separate executions and are counted on their own\nlet est = 0;\nif (d.mode === 'site_description') est = EST.describe;\nelse if (d.mode === 'audit') est = d.include_full_report ? EST.full : EST.site_audit;\nelse if (d.mode === 'discover') est = EST.discover;   // report / content / audit follow-ups run as their own executions and are counted there\nelse if (d.mode === 'keyword') est = d.verdict_only ? EST.verdict : (d.include_content ? EST.content : EST.report);\nelse if (d.mode === 'ladder') est = EST.ladder;\nelse if (d.mode === 'track') est = EST.track;\nelse if (d.mode === 'published') est = EST.published;\nelse if (d.mode === 'checkin') est = EST.checkin;\nelse if (d.mode === 'profile') est = EST.profile;\nelse if (d.mode === 'case_study') est = EST.case_study;\nelse if (d.mode === 'ai_visibility') est = EST.ai_visibility;\nelse if (d.mode === 'backlinks') est = d.free_only ? 0 : EST.backlinks;   // v4.10: free sources only = no paid call   // the page itself runs as its own execution and is counted there\nif (d.need_site_description) est += EST.describe;\nconst period = (d.ai_budget_period === 'day') ? today : today.slice(0, 7);\nif (!store.ai_budget || store.ai_budget.period !== period) store.ai_budget = { period, spent_est: 0, runs: 0 };\nconst budget = Number(d.ai_budget_usd || 0);\nconst __room = d.mode === 'case_study' ? EST.content : 0;   // reject the intake at once when the case-study page could not run today\nif (budget > 0 && store.ai_budget.spent_est + est + __room > budget) {\n  return [{ json: { ...d, validation_error: 'The AI budget for this ' + (d.ai_budget_period || 'month') + ' is used up (estimated $' + store.ai_budget.spent_est.toFixed(2) + ' of $' + budget + '; this run would add about $' + (est + __room).toFixed(2) + '). Raise ai_budget_usd in Normalize Input when you are ready to continue.' } }];\n}\nstore.ai_budget.spent_est = +(store.ai_budget.spent_est + est).toFixed(2);\nstore.ai_budget.runs += 1;\nd.ai_spend_estimate_usd = est;\nd.ai_budget_used_est_usd = store.ai_budget.spent_est;\n\nreturn [{ json: { ...d, run_number_today: used + 1 } }];\n"
+          "jsCode": "// Abuse and spend guard: limits runs per requester and per day. v4.14 (D1): counted from the run ledger (seo_run_ledger, one appended row per\n// execution), so parallel executions cannot overwrite each other's counts (they did with workflow static data until 2026-10-11).\nconst LIMITS = { per_key_per_day: 6, global_per_day: 150, per_app_company_per_day: 40 };   // app: requests from the web app, keyed per company (v4.7)\n\nconst d = { ...$('Normalize Input').first().json };   // v4.14: the input is the run ledger (Load Run Ledger); the request comes from Normalize Input\nif (d.validation_error) return [{ json: d }];          // pass validation errors straight through\nconst today = new Date().toISOString().slice(0, 10);\n// Internal spawns (ladder page runs, content cadence) are keyed by their marker, not the owner's e-mail: they are capped by the AI budget guard and their own weekly limits.\nconst internal = /^(ladder|cadence|tracker|casestudy|audit):/.test(String(d.client_ip || ''));\nconst fromApp = /^app:[a-z0-9-]{6,64}$/i.test(String(d.client_ip || ''));   // the web app: one key per company, whoever's e-mail gets the copy\nconst key = ((internal || fromApp) ? d.client_ip : (d.email || d.client_ip || d.domain || d.keyword || 'anon')).toLowerCase();\nconst perKey = fromApp ? LIMITS.per_app_company_per_day : LIMITS.per_key_per_day;\n\n// v4.14 (D1): this execution reserved its ledger row before this check (Run Ledger Row -> Reserve Run Ledger); only the rows with a LOWER id\n// count, so row order decides ties and no run slips past while another is counting. Refused rows and the Keyword Check's rows never count.\nlet mine = {}; try { mine = $('Reserve Run Ledger').first().json || {}; } catch (e) {}\nlet ledger = []; try { ledger = $('Load Run Ledger').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) {}\nconst myId = Number(mine.id);\nconst earlier = ledger.filter(r => r.mode !== 'assess' && r.status !== 'refused' && (myId > 0 ? Number(r.id) < myId : String(r.run_id) !== String($execution.id)));\nconst todayRows = earlier.filter(r => String(r.created_at || '').slice(0, 10) === today);\nconst used = todayRows.filter(r => String(r.key || '').toLowerCase() === key && !['published', 'checkin', 'profile'].includes(r.mode)).length;\nif (todayRows.length >= LIMITS.global_per_day) {\n  return [{ json: { ...d, validation_error: 'This service has reached its daily capacity. Please try again tomorrow.' } }];\n}\nif (used >= perKey && !['published', 'checkin', 'profile'].includes(d.mode)) {   // reporting a published page or a check-in costs nothing and is never blocked\n  return [{ json: { ...d, validation_error: 'You have reached the daily limit of ' + perKey + ' runs. Please try again tomorrow.' } }];\n}\n\n// ---- estimated Claude spend guard ----\n// Conservative per-run estimates (USD) for the AI steps only; DataForSEO spend is tracked separately in run_ledger.\nconst EST = { content: 1.2, discover: 0.35, verdict: 0.2, full: 0.25, site_audit: 0, describe: 0.03, ladder: 0.55, report: 0.3, track: 0, published: 0, checkin: 0, profile: 0, case_study: 0, ai_visibility: 0.06, backlinks: 0.04 };   // monitors: DataForSEO is the main cost (~$0.60 / ~$0.30 per check); Claude writes the questions, the brief and outreach drafts   // track: the Site Tracker's brief runs in its own execution (~$0.03 per site per week)   // ladder = verdict + relevance screen; its page runs are separate executions and are counted on their own\nlet est = 0;\nif (d.mode === 'site_description') est = EST.describe;\nelse if (d.mode === 'audit') est = d.include_full_report ? EST.full : EST.site_audit;\nelse if (d.mode === 'discover') est = EST.discover;   // report / content / audit follow-ups run as their own executions and are counted there\nelse if (d.mode === 'keyword') est = d.verdict_only ? EST.verdict : (d.include_content ? EST.content : EST.report);\nelse if (d.mode === 'ladder') est = EST.ladder;\nelse if (d.mode === 'track') est = EST.track;\nelse if (d.mode === 'published') est = EST.published;\nelse if (d.mode === 'checkin') est = EST.checkin;\nelse if (d.mode === 'profile') est = EST.profile;\nelse if (d.mode === 'case_study') est = EST.case_study;\nelse if (d.mode === 'ai_visibility') est = EST.ai_visibility;\nelse if (d.mode === 'backlinks') est = d.free_only ? 0 : EST.backlinks;   // v4.10: free sources only = no paid call   // the page itself runs as its own execution and is counted there\nif (d.need_site_description) est += EST.describe;\nconst period = (d.ai_budget_period === 'day') ? today : today.slice(0, 7);\nconst spent_est = +earlier.filter(r => String(r.created_at || '').startsWith(period)).reduce((s, r) => s + (r.status === 'done' ? (Number(r.settled_usd) || 0) : (Number(r.est_usd) || 0)), 0).toFixed(2);   // a finished run counts what it settled, a running or crashed one its reservation\nconst budget = Number(d.ai_budget_usd || 0);\nconst __room = d.mode === 'case_study' ? EST.content : 0;   // reject the intake at once when the case-study page could not run today\nif (budget > 0 && spent_est + est + __room > budget) {\n  return [{ json: { ...d, validation_error: 'The AI budget for this ' + (d.ai_budget_period || 'month') + ' is used up (estimated $' + spent_est.toFixed(2) + ' of $' + budget + '; this run would add about $' + (est + __room).toFixed(2) + '). Raise ai_budget_usd in Normalize Input when you are ready to continue.' } }];\n}\nd.ai_spend_estimate_usd = est;\nd.ai_budget_used_est_usd = +(spent_est + est).toFixed(2);\n\nreturn [{ json: { ...d, run_number_today: used + 1 } }];\n"
         },
         "id": "1e6e13bf-4c70-4335-b8bd-f15566944c12",
         "name": "Rate Limit",
@@ -13044,7 +13044,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// What free RDAP answered; the domains it could not answer go to DataForSEO WHOIS (one request each).\nconst asked = $('Age Lookup Plan').all().map(i => i.json);\nconst rd = $input.all().map(i => i.json || {});\nconst regOf = (r) => { const e = ((r && r.events) || []).find(x => /registration/i.test(x.eventAction || '')); return e && e.eventDate ? String(e.eventDate).slice(0, 10) : null; };\nconst left = asked.filter((a, i) => a.domain && !regOf(rd[i]));\nreturn left.length ? left.map(a => ({ json: { domain: a.domain } })) : [{ json: { skip: true } }];\n"
+          "jsCode": "// What free RDAP answered; only the domains it could not answer go to DataForSEO WHOIS (one paid request each).\n// ---- RDAP answers (shared; inlined by build_v4.py where /*__RDAP__*/ stands) ----\n// The HTTP node hands application/rdap+json over as TEXT under `data` (or `body` with the full response), not as an object: seen in the\n// live full report of 2026-10-11 (D7), when every domain went to paid WHOIS although RDAP had its registration date. A real object is used as is.\nconst rdapOf = (r) => {\n  if (!r || typeof r !== 'object') return {};\n  if (Array.isArray(r.events)) return r;\n  const raw = r.body ?? r.data;\n  if (typeof raw === 'string') { try { const o = JSON.parse(raw); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; } catch (e) { return {}; } }\n  return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};\n};\nconst regOf = (r) => { const e = (rdapOf(r).events || []).find(x => x && /registration/i.test(x.eventAction || '')); return e && e.eventDate ? String(e.eventDate).slice(0, 10) : null; };\nconst asked = $('Age Lookup Plan').all().map(i => i.json);\nconst rd = $input.all().map(i => i.json || {});\nconst left = asked.filter((a, i) => a.domain && !regOf(rd[i]));\nreturn left.length ? left.map(a => ({ json: { domain: a.domain } })) : [{ json: { skip: true } }];\n"
         },
         "id": "13ffa625-7e31-5c13-81be-e63b9d2a7863",
         "name": "RDAP Results",
@@ -13092,7 +13092,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Registration dates for every benchmark domain: stored ones, RDAP answers, WHOIS answers. New answers are stored (seo_cache 'age:<domain>').\nconst CONFIG = { ttl_days: 365, unknown_ttl_days: 30 };\nconst list = $('Pick Competitors').all().map(i => i.json);\nlet cache = []; try { cache = $('Load Age Cache').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}\nlet asked = [], rdaps = [], wasked = [], whois = [];\ntry { asked = $('Age Lookup Plan').all().map(i => i.json).filter(a => !a.skip); rdaps = $('RDAP Lookup').all().map(i => i.json || {}); } catch (e) {}\ntry { wasked = $('RDAP Results').all().map(i => i.json).filter(a => !a.skip); whois = $('DataForSEO Whois').all().map(i => i.json || {}); } catch (e) {}\nconst ages = {}; const now = new Date().toISOString();\nfor (const r of cache) { let v = null; try { v = JSON.parse(r.value); } catch (e) {} if (!v) continue; const days = (Date.now() - new Date(r.updated_at).getTime()) / 864e5;\n  if (days < (v.registered ? CONFIG.ttl_days : CONFIG.unknown_ttl_days)) ages[String(r.key).slice(4)] = { registered: v.registered || null, source: (v.source || 'stored') + ', stored ' + String(r.updated_at).slice(0, 10) }; }\nasked.forEach((a, i) => { const e = ((rdaps[i] || {}).events || []).find(x => /registration/i.test(x.eventAction || '')); if (e && e.eventDate) ages[a.domain] = { registered: String(e.eventDate).slice(0, 10), source: 'rdap' }; });\nwasked.forEach((a, i) => { const w = ((((whois[i] || {}).tasks || [])[0] || {}).result || [])[0]; const it = ((w || {}).items || [])[0] || null; const reg = it && (it.created_datetime || it.created_date); if (reg) ages[a.domain] = { registered: String(reg).slice(0, 10), source: 'whois' }; });\nconst rows = [];\nfor (const a of asked) { if (!ages[a.domain]) ages[a.domain] = { registered: null, source: 'unknown' }; rows.push({ key: 'age:' + a.domain, kind: 'age', site_id: '', value: JSON.stringify({ registered: ages[a.domain].registered, source: ages[a.domain].source }), updated_at: now }); }\nfor (const c of list) { const d = String(c.domain || '').toLowerCase(); if (d && !ages[d]) ages[d] = { registered: null, source: 'unknown' }; }\nreturn [{ json: { ages, rows, looked_up: asked.length, whois_requests: wasked.length } }];\n"
+          "jsCode": "// Registration dates for every benchmark domain: stored ones, RDAP answers, WHOIS answers. New answers are stored (seo_cache 'age:<domain>').\nconst CONFIG = { ttl_days: 365, unknown_ttl_days: 30 };\n// ---- RDAP answers (shared; inlined by build_v4.py where /*__RDAP__*/ stands) ----\n// The HTTP node hands application/rdap+json over as TEXT under `data` (or `body` with the full response), not as an object: seen in the\n// live full report of 2026-10-11 (D7), when every domain went to paid WHOIS although RDAP had its registration date. A real object is used as is.\nconst rdapOf = (r) => {\n  if (!r || typeof r !== 'object') return {};\n  if (Array.isArray(r.events)) return r;\n  const raw = r.body ?? r.data;\n  if (typeof raw === 'string') { try { const o = JSON.parse(raw); return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; } catch (e) { return {}; } }\n  return (raw && typeof raw === 'object' && !Array.isArray(raw)) ? raw : {};\n};\nconst regOf = (r) => { const e = (rdapOf(r).events || []).find(x => x && /registration/i.test(x.eventAction || '')); return e && e.eventDate ? String(e.eventDate).slice(0, 10) : null; };\nconst list = $('Pick Competitors').all().map(i => i.json);\nlet cache = []; try { cache = $('Load Age Cache').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}\nlet asked = [], rdaps = [], wasked = [], whois = [];\ntry { asked = $('Age Lookup Plan').all().map(i => i.json).filter(a => !a.skip); rdaps = $('RDAP Lookup').all().map(i => i.json || {}); } catch (e) {}\ntry { wasked = $('RDAP Results').all().map(i => i.json).filter(a => !a.skip); whois = $('DataForSEO Whois').all().map(i => i.json || {}); } catch (e) {}\nconst ages = {}; const now = new Date().toISOString();\nfor (const r of cache) { let v = null; try { v = JSON.parse(r.value); } catch (e) {} if (!v) continue; const days = (Date.now() - new Date(r.updated_at).getTime()) / 864e5;\n  if (days < (v.registered ? CONFIG.ttl_days : CONFIG.unknown_ttl_days)) ages[String(r.key).slice(4)] = { registered: v.registered || null, source: (v.source || 'stored') + ', stored ' + String(r.updated_at).slice(0, 10) }; }\nasked.forEach((a, i) => { const reg = regOf(rdaps[i]); if (reg) ages[a.domain] = { registered: reg, source: 'rdap' }; });   // v4.14 (D7): the RDAP text answer is parsed, like in RDAP Results\nwasked.forEach((a, i) => { const w = ((((whois[i] || {}).tasks || [])[0] || {}).result || [])[0]; const it = ((w || {}).items || [])[0] || null; const reg = it && (it.created_datetime || it.created_date); if (reg) ages[a.domain] = { registered: String(reg).slice(0, 10), source: 'whois' }; });\nconst rows = [];\nfor (const a of asked) { if (!ages[a.domain]) ages[a.domain] = { registered: null, source: 'unknown' }; rows.push({ key: 'age:' + a.domain, kind: 'age', site_id: '', value: JSON.stringify({ registered: ages[a.domain].registered, source: ages[a.domain].source }), updated_at: now }); }\nfor (const c of list) { const d = String(c.domain || '').toLowerCase(); if (d && !ages[d]) ages[d] = { registered: null, source: 'unknown' }; }\nreturn [{ json: { ages, rows, looked_up: asked.length, whois_requests: wasked.length } }];\n"
         },
         "id": "d4715ee7-50ee-59f3-9b39-02de1e7e8a70",
         "name": "Domain Ages",
@@ -14533,6 +14533,464 @@
             "name": "DataForSEO"
           }
         }
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_run_ledger",
+          "columns": {
+            "column": [
+              {
+                "name": "run_id",
+                "type": "string"
+              },
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "mode",
+                "type": "string"
+              },
+              {
+                "name": "est_usd",
+                "type": "number"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "settled_usd",
+                "type": "number"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "abbedfa9-dd9e-59ab-8754-f26bbf951a81",
+        "name": "Ensure Run Ledger Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          -224,
+          464
+        ],
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// v4.14 (2026-10-11, FIX_PLAN D1): this execution's reservation in the run ledger (seo_run_ledger, exact columns), inserted BEFORE Rate Limit\n// counts. Parallel executions used to overwrite each other's static-data counters (8 app runs and 3 spawns counted as 5, $0.67 of ≈ $3.0);\n// with one appended row per run, Rate Limit counts every row with a lower id than this one. The key and the Claude estimate below are the\n// Rate Limit's own lines, copied in by build_v4.py at build time (one source: a mode added there reaches this node automatically).\nconst d = $('Normalize Input').first().json || {};\n// Internal spawns (ladder page runs, content cadence) are keyed by their marker, not the owner's e-mail: they are capped by the AI budget guard and their own weekly limits.\nconst internal = /^(ladder|cadence|tracker|casestudy|audit):/.test(String(d.client_ip || ''));\nconst fromApp = /^app:[a-z0-9-]{6,64}$/i.test(String(d.client_ip || ''));   // the web app: one key per company, whoever's e-mail gets the copy\nconst key = ((internal || fromApp) ? d.client_ip : (d.email || d.client_ip || d.domain || d.keyword || 'anon')).toLowerCase();\n// ---- estimated Claude spend guard ----\n// Conservative per-run estimates (USD) for the AI steps only; DataForSEO spend is tracked separately in run_ledger.\nconst EST = { content: 1.2, discover: 0.35, verdict: 0.2, full: 0.25, site_audit: 0, describe: 0.03, ladder: 0.55, report: 0.3, track: 0, published: 0, checkin: 0, profile: 0, case_study: 0, ai_visibility: 0.06, backlinks: 0.04 };   // monitors: DataForSEO is the main cost (~$0.60 / ~$0.30 per check); Claude writes the questions, the brief and outreach drafts   // track: the Site Tracker's brief runs in its own execution (~$0.03 per site per week)   // ladder = verdict + relevance screen; its page runs are separate executions and are counted on their own\nlet est = 0;\nif (d.mode === 'site_description') est = EST.describe;\nelse if (d.mode === 'audit') est = d.include_full_report ? EST.full : EST.site_audit;\nelse if (d.mode === 'discover') est = EST.discover;   // report / content / audit follow-ups run as their own executions and are counted there\nelse if (d.mode === 'keyword') est = d.verdict_only ? EST.verdict : (d.include_content ? EST.content : EST.report);\nelse if (d.mode === 'ladder') est = EST.ladder;\nelse if (d.mode === 'track') est = EST.track;\nelse if (d.mode === 'published') est = EST.published;\nelse if (d.mode === 'checkin') est = EST.checkin;\nelse if (d.mode === 'profile') est = EST.profile;\nelse if (d.mode === 'case_study') est = EST.case_study;\nelse if (d.mode === 'ai_visibility') est = EST.ai_visibility;\nelse if (d.mode === 'backlinks') est = d.free_only ? 0 : EST.backlinks;   // v4.10: free sources only = no paid call   // the page itself runs as its own execution and is counted there\nif (d.need_site_description) est += EST.describe;\nreturn [{ json: { run_id: String($execution.id), key, mode: String(d.mode || ''), est_usd: +Number(est || 0).toFixed(4), created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0 } }];\n"
+        },
+        "id": "d87ad74b-22a9-5dc8-8fae-92f2d3faa61c",
+        "name": "Run Ledger Row",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          -4,
+          464
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "insert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_run_ledger"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "run_id",
+                "displayName": "run_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mode",
+                "displayName": "mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "est_usd",
+                "displayName": "est_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "settled_usd",
+                "displayName": "settled_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "67944aea-e777-530e-8641-f00f7596db06",
+        "name": "Reserve Run Ledger",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          216,
+          464
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_run_ledger"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "created_at",
+                "condition": "gte",
+                "keyValue": "={{ String($('Run Ledger Row').first().json.created_at).slice(0, $('Normalize Input').first().json.ai_budget_period === 'day' ? 10 : 7) }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "d92a432d-590e-5671-94ac-0eae88c7ef73",
+        "name": "Load Run Ledger",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          436,
+          464
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_run_ledger"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "run_id",
+                "condition": "eq",
+                "keyValue": "={{ $execution.id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "refused"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "run_id",
+                "displayName": "run_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mode",
+                "displayName": "mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "est_usd",
+                "displayName": "est_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "settled_usd",
+                "displayName": "settled_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "b6c1ccc0-8bac-52b6-a7bb-eaafcb55c41e",
+        "name": "Mark Run Refused",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          766,
+          1016
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true,
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// v4.14 (D1): the ledger row is marked refused; the refused request (Rate Limit's item) continues to the error path — a Data Table node outputs the row, not its input.\nreturn [{ json: $('Rate Limit').first().json }];"
+        },
+        "id": "5d7bdfdf-a313-573d-b4fa-26a54f82660b",
+        "name": "Refused Input",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          986,
+          1016
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_run_ledger"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "run_id",
+                "condition": "eq",
+                "keyValue": "={{ $execution.id }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "done",
+              "settled_usd": "={{ Number($('Run Ledger Row').first().json.est_usd) || 0 }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "run_id",
+                "displayName": "run_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mode",
+                "displayName": "mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "est_usd",
+                "displayName": "est_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "settled_usd",
+                "displayName": "settled_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "115d934e-7042-575d-9e13-3131101aec95",
+        "name": "Settle Run Ledger",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          6284,
+          1628
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true,
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "content": "### Run ledger (v4.14, D1 — concurrency-safe guards)\nEvery execution appends one row to **seo_run_ledger** (run_id, key, mode, est_usd, created_at, status, settled_usd) *before* **Rate Limit** counts, so parallel executions no longer overwrite each other's counters (workflow static data did: 8 runs counted as 5). Rate Limit counts the period's rows with a lower id than its own (row order decides ties), skips refused rows and the Keyword Check's rows, and refuses over the same limits as before (6 / day per e-mail, 40 / day per app company, 150 / day in total, `ai_budget_usd` per period). A refused run marks its row (**Mark Run Refused**); the report nodes settle it (**Settle Run Ledger**: done, settled_usd). One insert + one filtered read per run; the table is created on first use.",
+          "height": 240,
+          "width": 940,
+          "color": 6
+        },
+        "id": "3fbd1e00-1ef9-5a1d-b3ce-10a623131147",
+        "name": "Note 17",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          -264,
+          164
+        ]
       }
     ],
     "connections": {
@@ -14697,7 +15155,7 @@
         "main": [
           [
             {
-              "node": "Rate Limit",
+              "node": "Ensure Run Ledger Table",
               "type": "main",
               "index": 0
             }
@@ -15007,6 +15465,11 @@
               "node": "Prepare PDF Report",
               "type": "main",
               "index": 0
+            },
+            {
+              "node": "Settle Run Ledger",
+              "type": "main",
+              "index": 0
             }
           ]
         ]
@@ -15133,6 +15596,11 @@
           [
             {
               "node": "Prepare PDF Audit",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Settle Run Ledger",
               "type": "main",
               "index": 0
             }
@@ -15523,6 +15991,11 @@
               "node": "Prepare PDF Audit",
               "type": "main",
               "index": 0
+            },
+            {
+              "node": "Settle Run Ledger",
+              "type": "main",
+              "index": 0
             }
           ]
         ]
@@ -15620,6 +16093,11 @@
           [
             {
               "node": "Prepare PDF Ideas",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Settle Run Ledger",
               "type": "main",
               "index": 0
             }
@@ -16028,7 +16506,7 @@
           ],
           [
             {
-              "node": "Error Via API?",
+              "node": "Mark Run Refused",
               "type": "main",
               "index": 0
             }
@@ -16832,6 +17310,11 @@
           [
             {
               "node": "Prepare PDF Ladder",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Settle Run Ledger",
               "type": "main",
               "index": 0
             }
@@ -18867,6 +19350,72 @@
           [
             {
               "node": "Collect Facts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Run Ledger Table": {
+        "main": [
+          [
+            {
+              "node": "Run Ledger Row",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run Ledger Row": {
+        "main": [
+          [
+            {
+              "node": "Reserve Run Ledger",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Reserve Run Ledger": {
+        "main": [
+          [
+            {
+              "node": "Load Run Ledger",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Run Ledger": {
+        "main": [
+          [
+            {
+              "node": "Rate Limit",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Mark Run Refused": {
+        "main": [
+          [
+            {
+              "node": "Refused Input",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Refused Input": {
+        "main": [
+          [
+            {
+              "node": "Error Via API?",
               "type": "main",
               "index": 0
             }

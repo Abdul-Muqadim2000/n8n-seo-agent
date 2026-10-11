@@ -729,7 +729,7 @@ log('Cosmetic: medians in evidence text are rounded (no 12.850000000000001 years
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = next(p for p in [os.path.join(HERE, 'v5'), os.path.join(HERE, '..', 'v5')] if os.path.isdir(p))
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
-rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n'))   # v4.8: the shared reach rules and published-page rows (one copy each) are inlined where a node asks for them
+rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n'))   # v4.8: the shared reach rules and published-page rows (one copy each) are inlined where a node asks for them; v4.14: the RDAP answer parser (D7)
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -2101,6 +2101,88 @@ patch('Build Word File', "  if (sf) {\n    const aio = sf.ai_overview || {};",
 # the "Title: / Meta Description:" lines and the copywriter's [Image: …] markers (live P2, 2026-10-09)
 patch('Build Webhook Response', "    markdown: d.page_markdown || null,", "    markdown: d.article_markdown || d.page_markdown || null,")
 log('Search data outages (2026-10-09): one retry of the keyword SERP and the facts search when DataForSEO answers a server error (50000 inside HTTP 200); a failed SERP is "unavailable" (digest, serp_features, keyword report, discovery live checks + research_failures), never "no snippet / no AI Overview"; CPC rounded in the discovery and ladder reports')
+
+# =============================================================================
+# 26. CONCURRENCY-SAFE GUARDS (v4.14, 2026-10-11, FIX_PLAN D1) + RDAP PARSED (D7). Rate Limit kept its counters in workflow static data: parallel
+#     executions read the same old value and the last one to finish overwrote the others (live: 8 app runs + 3 spawns counted as 5, $0.67 of
+#     ≈ $3.0 estimated). Now every execution appends ONE row to the new Data Table seo_run_ledger before the check (Run Ledger Row -> Reserve Run
+#     Ledger), Load Run Ledger reads the period's rows once, and Rate Limit counts the rows with a lower id than its own (row order decides ties;
+#     refused rows and the Keyword Check's rows never count; a finished run counts what it settled). A refused run marks its row (Mark Run
+#     Refused), the report nodes settle it at the end (Settle Run Ledger: status done, settled_usd). Limits and keys are unchanged (6 / day per
+#     e-mail, 40 / day per app company, 150 / day in total, ai_budget_usd per period, internal spawns keyed by their marker). The Keyword Check
+#     runs the same pattern (build_api.py: Run Ledger Row (Assess) -> Reserve -> Load -> Assess Limit). The table is created on first use
+#     (Ensure Run Ledger Table); sync_tables.py only adds columns to existing tables.
+#     D7: the RDAP answer (rdap+json as text under `data`) is parsed by v5/code/_rdap.js in RDAP Results and Domain Ages (the `rd` lambda inlines
+#     it), so paid WHOIS runs only for the domains RDAP cannot date.
+# =============================================================================
+from ladder_common import RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_get_all_where_params
+_rlc = code('Rate Limit')
+_m_key = re.search(r"(// Internal spawns[^\n]*\nconst internal = [^\n]*\nconst fromApp = [^\n]*\nconst key = [^\n]*\n)", _rlc)
+_m_est = re.search(r"(// ---- estimated Claude spend guard ----\n.*?\nif \(d\.need_site_description\) est \+= EST\.describe;\n)", _rlc, re.S)
+assert _m_key and _m_est, 'Rate Limit: the key / estimate blocks were not found'
+_lr = rd('code/Run_Ledger_Row.js').replace('/*__KEY__*/', _m_key.group(1).rstrip('\n')).replace('/*__EST__*/', _m_est.group(1).rstrip('\n'))
+assert '/*__' not in _lr and 'const key = ' in _lr and 'const EST = {' in _lr
+_ni = pos('Normalize Input'); LX26, LY26 = _ni[0] - 880, _ni[1] + 112
+add_node('Ensure Run Ledger Table', DT_TYPE, DT_VERSION, dt_create_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [LX26, LY26], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Run Ledger Row', 'n8n-nodes-base.code', 2, {'jsCode': _lr}, [LX26 + 220, LY26])
+add_node('Reserve Run Ledger', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [LX26 + 440, LY26], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+# the period's rows in one filtered read: today's for a daily budget, the month's for a monthly one (ISO strings compare as text)
+add_node('Load Run Ledger', DT_TYPE, DT_VERSION, dt_get_all_where_params(RUN_LEDGER_TABLE, [('created_at', 'gte', "={{ String($('Run Ledger Row').first().json.created_at).slice(0, $('Normalize Input').first().json.ai_budget_period === 'day' ? 10 : 7) }}")]), [LX26 + 660, LY26], dict(LOAD18))
+_rl_srcs = sorted({s for s, o in conns.items() for lists in o.values() for l in lists for t in l if t['node'] == 'Rate Limit'})
+assert _rl_srcs == ['Normalize Input'], _rl_srcs
+disconnect('Normalize Input', 'Rate Limit')
+for a, b in [('Normalize Input', 'Ensure Run Ledger Table'), ('Ensure Run Ledger Table', 'Run Ledger Row'), ('Run Ledger Row', 'Reserve Run Ledger'), ('Reserve Run Ledger', 'Load Run Ledger'), ('Load Run Ledger', 'Rate Limit')]:
+    connect(a, b)
+patch('Rate Limit', "// Simple abuse guard: limits runs per requester and per day (state lives in workflow static data;\n// it persists only for active/production executions, not manual test runs).\n",
+      "// Abuse and spend guard: limits runs per requester and per day. v4.14 (D1): counted from the run ledger (seo_run_ledger, one appended row per\n// execution), so parallel executions cannot overwrite each other's counts (they did with workflow static data until 2026-10-11).\n")
+patch('Rate Limit', "const d = $input.first().json;\n", "const d = { ...$('Normalize Input').first().json };   // v4.14: the input is the run ledger (Load Run Ledger); the request comes from Normalize Input\n")
+patch('Rate Limit', """let store;
+try { store = $getWorkflowStaticData('global'); } catch (e) { store = {}; }
+if (!store.rate || store.rate.day !== today) store.rate = { day: today, total: 0, keys: {} };
+
+const used = store.rate.keys[key] || 0;
+if (store.rate.total >= LIMITS.global_per_day) {""",
+      """// v4.14 (D1): this execution reserved its ledger row before this check (Run Ledger Row -> Reserve Run Ledger); only the rows with a LOWER id
+// count, so row order decides ties and no run slips past while another is counting. Refused rows and the Keyword Check's rows never count.
+let mine = {}; try { mine = $('Reserve Run Ledger').first().json || {}; } catch (e) {}
+let ledger = []; try { ledger = $('Load Run Ledger').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) {}
+const myId = Number(mine.id);
+const earlier = ledger.filter(r => r.mode !== 'assess' && r.status !== 'refused' && (myId > 0 ? Number(r.id) < myId : String(r.run_id) !== String($execution.id)));
+const todayRows = earlier.filter(r => String(r.created_at || '').slice(0, 10) === today);
+const used = todayRows.filter(r => String(r.key || '').toLowerCase() === key && !['published', 'checkin', 'profile'].includes(r.mode)).length;
+if (todayRows.length >= LIMITS.global_per_day) {""")
+patch('Rate Limit', "if (!['published', 'checkin', 'profile'].includes(d.mode)) store.rate.keys[key] = used + 1;\nstore.rate.total += 1;\n", "")
+patch('Rate Limit', """const period = (d.ai_budget_period === 'day') ? today : today.slice(0, 7);
+if (!store.ai_budget || store.ai_budget.period !== period) store.ai_budget = { period, spent_est: 0, runs: 0 };
+const budget = Number(d.ai_budget_usd || 0);""",
+      """const period = (d.ai_budget_period === 'day') ? today : today.slice(0, 7);
+const spent_est = +earlier.filter(r => String(r.created_at || '').startsWith(period)).reduce((s, r) => s + (r.status === 'done' ? (Number(r.settled_usd) || 0) : (Number(r.est_usd) || 0)), 0).toFixed(2);   // a finished run counts what it settled, a running or crashed one its reservation
+const budget = Number(d.ai_budget_usd || 0);""")
+patch('Rate Limit', "if (budget > 0 && store.ai_budget.spent_est + est + __room > budget) {", "if (budget > 0 && spent_est + est + __room > budget) {")
+patch('Rate Limit', "(estimated $' + store.ai_budget.spent_est.toFixed(2) + ' of $'", "(estimated $' + spent_est.toFixed(2) + ' of $'")
+patch('Rate Limit', """store.ai_budget.spent_est = +(store.ai_budget.spent_est + est).toFixed(2);
+store.ai_budget.runs += 1;
+d.ai_spend_estimate_usd = est;
+d.ai_budget_used_est_usd = store.ai_budget.spent_est;""", """d.ai_spend_estimate_usd = est;
+d.ai_budget_used_est_usd = +(spent_est + est).toFixed(2);""")
+assert '$getWorkflowStaticData' not in code('Rate Limit') and 'store.' not in code('Rate Limit'), 'Rate Limit still uses static data'
+# a refused run (validation error or limit) marks its row before the error path; the Data Table node outputs the row, so the request is restored after it
+assert [t['node'] for t in conns['Input OK?']['main'][1]] == ['Error Via API?'], conns['Input OK?']['main'][1]
+disconnect('Input OK?', 'Error Via API?')
+_io = pos('Input OK?')
+add_node('Mark Run Refused', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')], {'status': 'refused'}), [_io[0] - 110, _io[1] + 440], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+add_node('Refused Input', 'n8n-nodes-base.code', 2, {'jsCode': "// v4.14 (D1): the ledger row is marked refused; the refused request (Rate Limit's item) continues to the error path — a Data Table node outputs the row, not its input.\nreturn [{ json: $('Rate Limit').first().json }];"}, [_io[0] + 110, _io[1] + 440])
+connect('Input OK?', 'Mark Run Refused', 1); connect('Mark Run Refused', 'Refused Input'); connect('Refused Input', 'Error Via API?')
+# the report nodes (they already compute run_ledger) settle the row at the end: status done, settled_usd = the reserved Claude estimate
+_ends = sorted(nm for nm in nodes if 'const run_ledger = {' in nodes[nm]['parameters'].get('jsCode', ''))
+assert {'Build Word File', 'Build Full Report', 'Build Audit Report', 'Build Keyword File', 'Build Ladder Report'} <= set(_ends), _ends
+_bw = pos('Build Word File')
+add_node('Settle Run Ledger', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')], {'status': 'done', 'settled_usd': "={{ Number($('Run Ledger Row').first().json.est_usd) || 0 }}"}), [_bw[0] + 220, _bw[1] + 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+for nm in _ends: connect(nm, 'Settle Run Ledger')
+sticky("""### Run ledger (v4.14, D1 — concurrency-safe guards)
+Every execution appends one row to **seo_run_ledger** (run_id, key, mode, est_usd, created_at, status, settled_usd) *before* **Rate Limit** counts, so parallel executions no longer overwrite each other's counters (workflow static data did: 8 runs counted as 5). Rate Limit counts the period's rows with a lower id than its own (row order decides ties), skips refused rows and the Keyword Check's rows, and refuses over the same limits as before (6 / day per e-mail, 40 / day per app company, 150 / day in total, `ai_budget_usd` per period). A refused run marks its row (**Mark Run Refused**); the report nodes settle it (**Settle Run Ledger**: done, settled_usd). One insert + one filtered read per run; the table is created on first use.""", LX26 - 40, LY26 - 300, 940, 240, 6)
+log('Concurrency-safe guards (v4.14, D1): one seo_run_ledger row per execution reserved before Rate Limit; counts and the AI budget come from the ledger rows with a lower id (row order decides ties, refused rows skipped, finished runs count what they settled); the row is marked refused / settled; limits and keys unchanged; the Keyword Check counts the same way')
+log('RDAP parsed (D7): the rdap+json text answer under `data` is read (v5/code/_rdap.js) in RDAP Results and Domain Ages, so paid WHOIS runs only for the domains RDAP cannot date')
 
 # =============================================================================
 # 9. WRITE
