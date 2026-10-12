@@ -78,8 +78,8 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 | D17 | Fix-pack robots.txt drops /api/, /admin/, /private/ for AI bots | TECH | wrong advice | Medium | S | exec 370; `files/robots.txt` | F8 | 1B | verified live 2026-10-12 ("Changes: none needed") |
 | D18 | "Duplicate meta tags" on 45/47 pages is Next.js `theme-color` | TECH | wrong advice | Low | S | exec 354, 370, 385; §2.5 | F7 | 1B | verified live 2026-10-12 |
 | D19 | AI visibility: 7 of 42 requests errored with no retry; heading counted as a brand; cited URLs not normalised | AIV | wrong number | Medium | S | exec 362 / 363; `files/ai-visibility-…pdf`; §2.6 | F13, F17 | 4A | open |
-| D20 | Discovery: ladder overlap unflagged, contradictory AI Overview text, duplicate domains, float CPCs | KW | quality | Low | S | exec 356, 364; `files/keyword-ideas-…`; §2.3 | F14 | 3A | open |
-| D21 | Sparse Trends % ("+1,200%") quoted in the Site Tracker brief | SITE | wrong number | Low | S | exec 382; §2.9 | F14 | 3A | open |
+| D20 | Discovery: ladder overlap unflagged, contradictory AI Overview text, duplicate domains, float CPCs | KW | quality | Low | S | exec 356, 364; `files/keyword-ideas-…`; §2.3 | F14 | 3A | fixed 2026-10-12 (harness S43) — discovery loads the domain ladders (`ladder_covered`, never the pipeline keyword), the AI Overview comes from the dated live check (undated Labs = "historical"), domains deduped, CPCs 2 dp |
+| D21 | Sparse Trends % ("+1,200%") quoted in the Site Tracker brief | SITE | wrong number | Low | S | exec 382; §2.9 | F14 | 3A | fixed 2026-10-12 (harness S43) — `change_pct` null when the series is sparse (cached rows too); the brief says "too little search data" |
 | D22 | Site description reads only the homepage (fit 1 for Business Central; critic calls real stages "invented") | KW, CON | wrong number | Low | M | execs 344, 348–350, 365; §2.1, §2.4 | F4 | 2C | reopened 2026-10-12: harness passes but **fails live** — the nav list came from the wrong node and `services_json` is never stored (P2-1, P2-2); fit for "business central partner uae" still 1 |
 | D23 | Ahrefs DR not retried; sister / off-topic gap domains as prospects; `utm_source` kept | BL | quality | Low | S | exec 367 / 368; §2.7 | F17 | 4A | open |
 | D24 | Full report: duplicate author finding, false "capped at 85", scraper queries in top queries | REP, TECH | wrong number | Low | S | exec 370; `files/full-seo-report-…` | F14 | 1B | partly verified live 2026-10-12: author once, no cap text; scraper queries still shown → P1-3 |
@@ -95,7 +95,7 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 | G6 | Rank tracker depth: SERP features, AI Overview, competitors, mobile, SERP snapshot | RANK | missing feature | Medium | M | SC 2.2–2.6, 2.13 | F22 | 5 | open |
 | G7 | Core Web Vitals per template from CrUX (mobile + desktop) | TECH | missing feature | Medium | S | SC 1.5 = 3 | F23 | 3B | open |
 | G8 | Discovery inputs: Search Console gaps, SERP-overlap clusters, more live SERP checks, GSC calibration | KW | missing feature | Medium | M | SC K2, K4, K6, K7 | F24 | 5 | open |
-| G9 | Search Console depth: paged rows, anonymised share, brand split | SITE | quality | Low | S | SC 2.7 | F25 | 3A | open |
+| G9 | Search Console depth: paged rows, anonymised share, brand split | SITE | quality | Low | S | SC 2.7 | F25 | 3A | fixed 2026-10-12 (harness S43) — 25,000 rows per request with paging, anonymised share, brand / non-brand split, operator rule shared through `_gsc_queries.js` |
 | G10 | AI answers checked against a fact base | AIV | quality | Medium | S | SC 4A.5 | F26 | 4A | open |
 | G11 | Daily key-page watch and quick re-check of fixes | TECH | missing feature | Medium | M | SC 1.7, 1.10 | F27 | 5 | open |
 | G12 | Annotations and change tests (control group for page changes) | REP, SITE | missing feature | Medium | L | SC 3.4, 3.5, 2.12 | F28 | 5 | open |
@@ -110,11 +110,11 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 | G21 | Delivery rate measured (≥ 99%) | OPS | ops | Medium | M | SC 3.8 | "To reach 9" #5 | 6D | open |
 | G22 | AI Growth source titles cut at a hyphen ("E", "Best e") | AIG | quality | Low | S | exec 376; §2.6 | — | 4A | open |
 | G23 | Claude spend known only as $1.6–3.0 (streaming nodes report no usage) | OPS | wrong number | Medium | M | RESULTS spend table; SC 3.10 | — | 6E | open |
-| G24 | Crawl coverage figure (% of known URLs crawled) | TECH | quality | Low | S | SC 1.1 | — | 3A | open |
+| G24 | Crawl coverage figure (% of known URLs crawled) | TECH | quality | Low | S | SC 1.1 | — | 3A | fixed 2026-10-12 (harness S43) — `crawl_coverage` (sitemap ∪ GSC pages) with a finding under 90%, in both audit reports |
 | G25 | URL Inspection of every key page within quota | TECH, SITE | missing feature | Medium | M | SC 1.3, 2.9 | — | 5 | open |
 | G26 | Impact-weighted audit priority | TECH | quality | Medium | M | SC 1.6 | — | 3B | open |
 | G27 | Pre-release check (staging URL / CI) | TECH | missing feature | Low | L | SC 1.8 = 0 | — | 5 | open |
-| G28 | Statistical alert thresholds in site tracking | SITE | quality | Low | S | SC 2.11 | — | 3A | open |
+| G28 | Statistical alert thresholds in site tracking | SITE | quality | Low | S | SC 2.11 | — | 3A | fixed 2026-10-12 (harness S43) — `_site_stats.js` two-sample Poisson z-test with a 95% range; only statistically real drops alert, the rest are "Watch:" lines |
 | G29 | Lineage (source, date range, sample) on every number | REP | quality | Low | M | SC 3.11 | — | 5 | open |
 | G30 | Images produced, not only planned | CON | missing feature | Low | M | SC C13 | — | 5 | open |
 | G31 | Stored style guide, applied and checked | CAD, CON | missing feature | Low | M | SC C17 | — | 5 | open |
@@ -902,6 +902,8 @@ Evidence and texts: `LIVE_CHECK_phase2_2026-10-12.md` §3 (execution ids, artefa
 | P2-5 | `verdict` mode is blind to the page inventory | KW | `v5/code/Client_Page_Requests.js` / *Collect Client Pages* and `v5/prompts/verdict.txt` | set `existing_page` from `SM.matchPage`; a matched page means "improve this URL", never a new page | open |
 | P2-6 | The placeholder gate does not see the author box (11 brackets, QA reported 0) | CON | `v5/code/Content_QA.js` does not count the author / reviewer box `Blog_Package.js` attaches | count them, or report `profile_placeholders` that the gate and the app show | open |
 | P2-7 | A "Write now" / cadence page run has no verdict word-count target | CON, CAD | *Parse Analysis* does not run in a `force_content` run and `seo_ladders` has no word-count column | store the verdict's `recommended_word_count` on the ladder row (`ladder_common.py`), pass it from the app, clamp to it in *Parse Brief* | open |
+
+**Follow-up from G28 (2026-10-12):** on a small site (under ≈ 40 combined clicks) even a 50% drop is now only an info "Watch:" line and is not written to `seo_site_metrics.alerts`. Decide whether such sites should still get a medium alert with a "small numbers" caveat.
 
 **Also seen:** `settled_usd` in `seo_run_ledger` is the estimate, not a measured cost (G23 covers it); a pre-fix ladder row's free-text `page_type` still travels unchanged into the brief and the content log; Search Console reports techand.ai on the non-www host, so bare hosts inside `search_console.*` are Google's data, not ours.
 
