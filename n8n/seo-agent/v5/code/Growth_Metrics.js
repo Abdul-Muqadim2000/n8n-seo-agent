@@ -1,6 +1,7 @@
 // AI Growth per site (v4.12): what was done automatically this week (pages sent to Bing / IndexNow, key pages checked), the page readiness, the
 // questions queued for an answer page or a refresh (the Content Cadence writes them), the earned-media list with drafts, the entity check, the
 // actions ranked by value, alerts; plus the rows for seo_ai_pages, seo_ai_targets, seo_link_prospects, seo_ai_growth and seo_cache.
+/*__SITE_MODEL__*/
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const all = (n) => { try { return $(n).all().map(i => i.json); } catch (e) { return []; } };
 const ready = all('AI Readiness').filter(x => !x.skip), earnedAll = all('Earned Media').filter(x => !x.skip);
@@ -25,7 +26,7 @@ for (const p of plans) {
   const verified = Number(kr.statusCode) === 200 && String(kr.body ?? kr.data ?? '').trim() === p.indexnow_key;
   const ii = iReq.findIndex(x => x.site_id === p.site_id); const ir = ii >= 0 ? (iRes[ii] || {}) : null;
   const inStatus = ir ? (Number(ir.statusCode) || (ir.error ? 0 : 200)) : 0; const inOk = ir && [200, 202].includes(inStatus);
-  const indexnow = { key: p.indexnow_key, key_url: 'https://' + p.site_host + '/' + p.indexnow_key + '.txt', verified, submitted: inOk ? iReq[ii].urls.length : 0, status: inStatus || null, error: ir && !inOk ? 'IndexNow answered ' + (inStatus || 'nothing') : '' };
+  const indexnow = { key: p.indexnow_key, key_url: SM.siteUrl({ canonical_host: p.site_host, domain: p.domain }, '/' + p.indexnow_key + '.txt'), verified, submitted: inOk ? iReq[ii].urls.length : 0, status: inStatus || null, error: ir && !inOk ? 'IndexNow answered ' + (inStatus || 'nothing') : '' };
   const subVia = new Map(); for (const u of (bingOk ? bing.urls : [])) subVia.set(keyOf(u), 'bing'); if (inOk) for (const u of iReq[ii].urls) subVia.set(keyOf(u), subVia.has(keyOf(u)) ? 'bing+indexnow' : 'indexnow');
   // ---- pages ----
   const pages = ready.filter(r => r.site_id === p.site_id).map(r => ({ ...r, submitted_now: subVia.get(keyOf(r.url)) || '' }));

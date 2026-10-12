@@ -8,10 +8,11 @@ const UA = {
   'ChatGPT-User': 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko); compatible; ChatGPT-User/1.0; +https://openai.com/bot',
   PerplexityBot: 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; PerplexityBot/1.0; +https://perplexity.ai/perplexitybot)',
   'Claude-SearchBot': 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Claude-SearchBot/1.0; +https://www.anthropic.com/claude-searchbot)' };
+/*__SITE_MODEL__*/
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const out = [];
 for (const p of plans) {
-  const home = 'https://' + p.domain + '/';
+  const home = SM.siteUrl({ canonical_host: p.canonical_host, domain: p.domain }, '/');   // the host the site really serves (D15)
   out.push({ json: { site_id: p.site_id, kind: 'robots', bot: 'browser', url: home + 'robots.txt', ua: UA.browser } });
   out.push({ json: { site_id: p.site_id, kind: 'llms', bot: 'browser', url: home + 'llms.txt', ua: UA.browser } });
   for (const [bot, ua] of Object.entries(UA)) out.push({ json: { site_id: p.site_id, kind: 'home', bot, url: home, ua } });

@@ -7,7 +7,9 @@ const rows = (() => { try { return $('Load Sites').all().map(i => i.json).filter
 const out = [];
 for (const s of sites) {
   const row = rows.find(r => r.site_id === s.site_id) || {};
-  if (SM.isFresh(SM.stored(row))) continue;
-  out.push({ json: { site_id: s.site_id, domain: s.domain, url: 'https://' + s.domain + '/', fetch: true } });
+  const stored = SM.stored(row);
+  if (SM.isFresh(stored)) continue;
+  // the stored canonical host saves the redirect; with no model yet the bare domain is read, as before (D15)
+  out.push({ json: { site_id: s.site_id, domain: s.domain, url: SM.siteUrl(stored || { domain: s.domain }, '/'), fetch: true } });
 }
 return out.length ? out : [{ json: { skip: true, reason: 'every site model is younger than ' + SM.FRESH_DAYS + ' days' } }];

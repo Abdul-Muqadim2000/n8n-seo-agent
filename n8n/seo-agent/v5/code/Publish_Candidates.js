@@ -2,7 +2,11 @@
 // rows not yet published ("started" / "written", no publish link) from the last 120 days, plus seo_ladders rows "writing" (one candidate per keyword) — and the sitemap
 // to read. A site without such pages makes no request at all. A page that improves an EXISTING URL (striking-distance rewrite, ladder page
 // that already existed) cannot be told apart by its URL, so it is matched only when the sitemap says that URL changed after the page was written.
+/*__SITE_MODEL__*/
 const CONFIG = { max_age_days: 120, max_candidates_per_site: 40 };
+// D15: the sitemap is read on the site's canonical host (this run's models, *Site Model (Site)*); with no model the bare domain, as before.
+const siteModels = (() => { try { return $('Site Model (Site)').all().map(i => i.json).filter(x => x && x.model); } catch (e) { return []; } })();
+const modelFor = (site_id, dom) => (siteModels.find(x => x.site_id === site_id) || {}).model || { domain: dom };
 const plan = $('Site Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do && p.domain);
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };
 const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
@@ -39,6 +43,6 @@ plan.forEach((s, idx) => {
   }).sort((a, b) => String(b.written_at).localeCompare(String(a.written_at))).slice(0, CONFIG.max_candidates_per_site);
   // URLs that already belong to other pages of the site (published pages, pages that existed before) are never claimed by a new page
   const known = [...new Set([...L.flatMap(r => [r.published_url, r.existing_page_url]), ...LD.filter(l => l.status === 'published' || isTrue(l.page_exists)).map(l => l.target_url)].map(u => String(u || '').trim()).filter(u => /^https?:\/\//i.test(u)))];
-  out.push({ json: { site_idx: idx, site_id: s.site_id, domain: d, sitemap_url: 'https://' + d + '/sitemap.xml', candidates: list, known } });
+  out.push({ json: { site_idx: idx, site_id: s.site_id, domain: d, sitemap_url: SM.siteUrl(modelFor(s.site_id, d), '/sitemap.xml'), candidates: list, known } });
 });
 return out.length ? out : [{ json: { skip: true, reason: 'no written page is waiting for publication', sites: plan.length } }];

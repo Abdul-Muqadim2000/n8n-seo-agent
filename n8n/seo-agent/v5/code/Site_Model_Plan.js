@@ -13,4 +13,5 @@ const cached = (() => { const c = rowsOf('Load Site Cache').find(r => r.key === 
   try { const v = JSON.parse(c.value || 'null'); return (v && typeof v === 'object') ? { ...v, model_updated_at: c.updated_at || v.model_updated_at } : null; } catch (e) { return null; } })();   // the cache row's own timestamp decides the age, not the value's
 const stored = SM.stored(row) || SM.stored(cached || {});
 if (SM.isFresh(stored)) return [{ json: { skip: true, reason: 'site model is ' + Math.round(SM.ageDays(stored)) + ' days old', site_id, domain, reused: true } }];
-return [{ json: { skip: false, site_id, domain, url: 'https://' + domain + '/', reused: false } }];
+// D15: a stored (stale) model still knows the canonical host, so the homepage read does not start with a redirect
+return [{ json: { skip: false, site_id, domain, url: SM.siteUrl(stored || { domain }, '/'), reused: false } }];

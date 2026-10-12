@@ -4,6 +4,7 @@ Monday 07:30, full report on the first run of each month) and SEO Agent — Audi
 All three read the sites from seo_sites + seo_ladders and their settings from seo_monitors, run on demand through *Manual Run*
 ({ domain | site_id, email?, callback_url?, country?, location_code?, competitors? }) and write their Code nodes to harness/code_v4."""
 import json, os, re, uuid
+import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_upsert_params_keys,
                            SITES_TABLE, SITES_COLS, LADDER_TABLE, LADDER_COLS, LOG_TABLE, LOG_COLS, PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS, AI_ANSWERS_TABLE, AI_ANSWERS_COLS, AI_VIS_TABLE, AI_VIS_COLS,
@@ -26,6 +27,7 @@ _COUNTRIES = re.search(r"\nconst COUNTRIES = \{.*?\n\};", _NI, re.S); assert _CO
 def src(p):   # a Code node source with the shared snippets inlined
     s = rd('code/' + p)
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
+    s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
     s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('/*__CLAIMS__*/', rd('code/_claims.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
@@ -93,6 +95,7 @@ class WF:
             if n['type'] == '@n8n/n8n-nodes-langchain.lmChatAnthropic': assert n.get('credentials'), n['name']
             if n['type'] == 'n8n-nodes-base.httpRequest' and n['parameters'].get('authentication') == 'predefinedCredentialType': assert n.get('credentials'), n['name']
         w = {'id': self.wid, 'name': self.name, 'active': False, 'settings': {'executionOrder': 'v1', 'errorWorkflow': 'SEOagentErrHandl', 'executionTimeout': self.timeout, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all'}, 'tags': [], 'nodes': self.N, 'connections': self.C}
+        url_lint.check(w, self.name)   # D15: no node builds a site URL by hand (url_lint.py)
         json.dump([w], open(os.path.join(OUT, fname), 'w'), indent=2, ensure_ascii=False)
         os.makedirs(CODE, exist_ok=True)
         for n in self.N:
