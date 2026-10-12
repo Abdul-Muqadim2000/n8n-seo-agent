@@ -2513,6 +2513,16 @@
                 "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "target_words",
+                "displayName": "target_words",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,

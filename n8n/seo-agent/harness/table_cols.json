@@ -315,5 +315,27 @@
   "published_url",
   "published_at",
   "week"
+ ],
+ "LADDER": [
+  "ladder_id",
+  "domain",
+  "head_keyword",
+  "rung",
+  "page_no",
+  "keyword",
+  "supporting",
+  "page_type",
+  "target_url",
+  "page_exists",
+  "status",
+  "months",
+  "start_date",
+  "country",
+  "location_code",
+  "language_code",
+  "email",
+  "callback_url",
+  "request_id",
+  "target_words"
  ]
 }

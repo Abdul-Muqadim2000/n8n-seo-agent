@@ -13,6 +13,11 @@ const pages = reqs.map((r, i) => {
   return { url: r.url, kind: r.kind, words: text.split(/\s+/).length, text: text.slice(0, r.kind === 'existing' ? 9000 : 6000) };
 }).filter(Boolean);
 const existing = pages.find(p => p.kind === 'existing');
+// P2-5 (2026-10-12, Phase 2 live check §3): a page of the inventory that already answers this keyword (Client Page Requests -> SM.matchPage)
+// becomes this run's existing page, whether or not the fetch of it succeeded. The verdict, the brief, the schema and the report then improve
+// THAT URL — run 444 recommended a second page for "uae e invoicing penalties" although the site's own page had been live since August.
+const matchedReq = reqs.find(r => r && r.kind === 'existing' && r.existing_page && r.existing_page.url) || null;
+const inventoryPage = (!(ctx.existing_page && ctx.existing_page.url) && matchedReq) ? matchedReq.existing_page : null;
 const all = pages.map(p => p.text).join('\n');
 const uniq = (a) => [...new Set((a || []).map(s => s.trim()))];
 const client_signals = {
@@ -23,4 +28,5 @@ const client_signals = {
   numbers: uniq(all.match(/\b\d[\d,.]*\+?\s?(clients?|customers?|projects?|users?|countries|offices|employees|staff|locations|installations?|reviews?)\b/gi)).slice(0, 6),
   locations: uniq(all.match(/\b(Dubai|Abu Dhabi|Sharjah|Riyadh|Jeddah|London|Manchester|New York|Toronto|Sydney|Singapore|Karachi|Lahore|Islamabad|Mumbai|Delhi|Bangalore|Berlin|Paris|Madrid|Amsterdam)\b/g)).slice(0, 5)
 };
-return [{ json: { ...ctx, client_pages: pages, client_pages_read: pages.length, existing_page_text: existing ? existing.text : '', client_signals } }];
+return [{ json: { ...ctx, ...(inventoryPage ? { existing_page: inventoryPage, existing_page_url: ctx.existing_page_url || inventoryPage.url } : {}),
+  client_pages: pages, client_pages_read: pages.length, existing_page_text: existing ? existing.text : '', client_signals } }];

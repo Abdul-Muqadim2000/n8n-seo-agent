@@ -3,7 +3,8 @@ LADDER_TABLE = 'seo_ladders'
 HISTORY_TABLE = 'seo_rank_history'
 LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('rung', 'number'), ('page_no', 'number'), ('keyword', 'string'),
                ('supporting', 'string'), ('page_type', 'string'), ('target_url', 'string'), ('page_exists', 'boolean'), ('status', 'string'), ('months', 'string'),
-               ('start_date', 'string'), ('country', 'string'), ('location_code', 'number'), ('language_code', 'string'), ('email', 'string'), ('callback_url', 'string'), ('request_id', 'string')]
+               ('start_date', 'string'), ('country', 'string'), ('location_code', 'number'), ('language_code', 'string'), ('email', 'string'), ('callback_url', 'string'), ('request_id', 'string'),
+               ('target_words', 'number')]   # P2-7 (2026-10-12): the word target the verdict set for this page (0 = unknown); run sync_tables.py after deploying
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number')]
 DT_TYPE, DT_VERSION = 'n8n-nodes-base.dataTable', 1.1
 

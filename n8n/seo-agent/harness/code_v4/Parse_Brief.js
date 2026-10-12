@@ -26,12 +26,16 @@ const verdictWords = (() => {
   return 0;
 })();
 const askedWords = Number(brief.target_word_count) || 0;
-const baseWords = verdictWords || recWords || 0;
+// P2-7 (2026-10-12, Phase 2 live check §3): a `force_content` run (the app's "Write now", a page the Content Cadence or the ladder spawns)
+// never runs *Parse Analysis* and has no verdict of its own, so neither target above exists — run 442 wrote 3,864 words for a page the
+// ladder verdict had set at 2,100. The ladder row stores that number (seo_ladders.target_words) and the run carries it as `ladder_words`.
+const ladderWords = (() => { const n = Number(prev.ladder_words) || 0; return (n >= 300 && n <= 6000) ? n : 0; })();
+const baseWords = verdictWords || recWords || ladderWords || 0;
 if (baseWords) {
   const lo = Math.round(baseWords * 0.9), hi = Math.round(baseWords * 1.1);
   const clamped = Math.min(hi, Math.max(lo, askedWords || baseWords));
   if (clamped !== askedWords) {
-    adjustments.push('Target length ' + (askedWords || 'unset') + ' -> ' + clamped + ' words (' + (verdictWords ? 'the verdict asked for about ' + verdictWords : 'the competitor analysis recommends ' + recWords) + ', within 10%)');
+    adjustments.push('Target length ' + (askedWords || 'unset') + ' -> ' + clamped + ' words (' + (verdictWords ? 'the verdict asked for about ' + verdictWords : recWords ? 'the competitor analysis recommends ' + recWords : 'the keyword ladder\'s own target is ' + ladderWords) + ', within 10%)');
     brief.target_word_count = clamped;
     // the writer follows the outline, so the sections move with the target
     const sum = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);

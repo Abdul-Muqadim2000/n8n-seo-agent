@@ -2687,8 +2687,8 @@ log('A page someone can publish (2026-10-11 system review, FIX_PLAN D10): Conten
 #     flagged "links pointing to redirects". Every one of them now goes through SM.siteUrl(model, path) of the one site model, which knows
 #     the canonical host; API payloads (DataForSEO targets, Bing site names, Search Console properties) keep the bare domain through
 #     SM.apiTarget or their own property form. The v5 Code nodes carry the marker themselves; the nodes inherited from v3 get the kit and
-#     the helper here. Build-time lint: url_lint.py fails the build when a node still builds a host by hand (allow-list: the three probe
-#     nodes that *resolve* the host, and Blog Package, whose file belongs to D10).
+#     the helper here. Build-time lint: url_lint.py fails the build when a node still builds a host by hand (allow-list: only the three
+#     probe nodes that *resolve* the host; Blog Package was taken off it by P2-3, 2026-10-12).
 # =============================================================================
 import url_lint
 PRELUDE33 = ("// D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain\n"
@@ -2712,7 +2712,7 @@ patch('Analyze HTML', "if (c.startsWith('/')) c = 'https://' + domain + c;", "if
 patch('Parse Sitemap Index', "const base = 'https://' + ctx.domain;", "const base = siteUrlOf(ctx.domain, '/').replace(/[/]$/, '');")
 patch('Competitor Homes', "url: 'https://' + c.domain + '/'", "url: siteUrlOf(c.domain, '/')")   # a competitor's own home page: no model, same URL as before
 url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
-log("One canonical host for every URL we emit (2026-10-11, FIX_PLAN D15): the ladder's target_url, internal links, the page and home URLs in the schema, the client pages we read, the Search Console sitemap, audit candidates, the IndexNow key file, Bing submissions, Link Builder targets and the profile e-mail are built with SM.siteUrl(model, path) of the one site model (canonical host), while API payloads keep the bare domain; AI Growth no longer votes on site_host; build-time lint url_lint.py (allow-list: Build Probes / Content Probes / Analyze Probes, Blog Package)")
+log("One canonical host for every URL we emit (2026-10-11, FIX_PLAN D15): the ladder's target_url, internal links, the page and home URLs in the schema, the client pages we read, the Search Console sitemap, audit candidates, the IndexNow key file, Bing submissions, Link Builder targets and the profile e-mail are built with SM.siteUrl(model, path) of the one site model (canonical host), while API payloads keep the bare domain; AI Growth no longer votes on site_host; build-time lint url_lint.py (allow-list: Build Probes / Content Probes / Analyze Probes)")
 
 # =============================================================================
 # 34. BLIND TO EXISTING PAGES (2026-10-12, system review FIX_PLAN D11; SITE_MODEL_SPEC.md section 6): the agent recommended writing a page the
@@ -2825,6 +2825,73 @@ assert retry_lint.findings([{'type': 'n8n-nodes-base.httpRequest', 'name': 'Lint
 assert not retry_lint.findings([{'type': 'n8n-nodes-base.httpRequest', 'name': 'POST Callback'}], 'self test'), 'the retry lint ignores its allow-list'
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log('One retry rule for every external HTTP node (2026-10-12, FIX_PLAN G1): every httpRequest node that reads from outside retries 3 times, 5 s apart (%d nodes normalised in the main workflow, the HTTP helpers of every builder changed), the report callbacks and the WordPress draft are on the documented allow-list because they are not idempotent, the paid AI paths get a code-level retry gate for task errors inside an HTTP 200 (AI Retry Requests -> Wait Before AI Retry -> Run AI Retries -> Merge AI Answers, in the AI Visibility Tracker and the AI Pulse) next to the SERP gates of section 25, and the build fails when a new external HTTP node has no retry (retry_lint.py)' % len(_g1_changed))
+# 39. THE SEVEN DEFECTS OF THE PHASE 2 LIVE CHECK (P2-1 … P2-7, 2026-10-12; docs/system-review-2026-10-11/LIVE_CHECK_phase2_2026-10-12.md
+#     §3). Every one of them passed the harness and failed on techand.ai:
+#       P2-1 *Nav Pages Plan* read the menu from *Clean Site Text*'s markdown links (one /insights/ article on techand.ai, rightly skipped),
+#            so the describer read the homepage alone although the site model held the real 12-entry menu from the raw HTML. It takes the
+#            model's nav_pages first now, Clean Site Text's list behind it, fragments collapsed (/industries#bfsi = /industries).
+#       P2-2 the model is built BEFORE the describer runs and nothing wrote the services back, so services_json was "[]" everywhere: the kit
+#            reads the describer's own `products_or_services`, *Model Services Row* re-saves the model after *Parse Description* (below), and
+#            the Site Tracker reads the stored descriptions (*Load Descriptions (Site)*) into its weekly model.
+#       P2-3 the delivered meta.json still said "publish at https://techand.ai/…" (bare host, 308): Blog Package builds its URLs with
+#            SM.siteUrl, it is no longer on url_lint.py's allow-list, Site Metrics puts every URL it PROMISES on the canonical host, and
+#            fix_ladder_hosts.py rewrites the 17 stored rows once.
+#       P2-4 an inline // comment swallowed Site Plan's `.map(...)`, so the weekly report said "(undefined days ago)".
+#       P2-5 `verdict` was blind to the page inventory: *Client Page Requests* / *Collect Client Pages* set `existing_page` from
+#            SM.matchPage, verdict.txt forbids a new page for it, and *Parse Verdict* leads the changes with "improve that URL".
+#       P2-6 the author box Blog Package attaches carried 11 bracketed fields while QA reported 0 placeholders: Content QA counts them as
+#            `profile_placeholders`, the page does not pass with them, and the editor is not sent to fix what only the owner can.
+#       P2-7 a "Write now" run had no word target at all (no *Parse Analysis*, no verdict): the ladder row stores the verdict's own count
+#            (`seo_ladders.target_words`), the app and *Spawn Page Runs* pass it as `ladder_words` and *Parse Brief* clamps to it.
+# =============================================================================
+# P2-1: the menu comes from the site model
+assert "$('Site Model').first().json.site_model" in code('Nav Pages Plan') and 'navMerged' in code('Nav Pages Plan'), 'Nav Pages Plan does not read the model menu (P2-1)'
+# P2-2: the model is re-saved with the services the describer found (after the description's own cache row)
+_rd39 = pos('Restore Description')
+disconnect('Restore Description', 'Route Mode')
+add_node('Model Services Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Model_Services_Row.js')}, [_rd39[0] + 220, _rd39[1]])
+if_node('New Model Services?', "{{ !$json.skip }}", [_rd39[0] + 440, _rd39[1]])
+add_node('Save Model Services', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [_rd39[0] + 660, _rd39[1] - 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Restore Model Services', 'n8n-nodes-base.code', 2, {'jsCode': "// The run continues with the fresh description (a Data Table upsert outputs the stored row, not the run's item).\nreturn [{ json: $('Restore Description').first().json }];"}, [_rd39[0] + 880, _rd39[1]])
+for _a39, _b39 in [('Restore Description', 'Model Services Row'), ('Model Services Row', 'New Model Services?'), ('Save Model Services', 'Restore Model Services'), ('Restore Model Services', 'Route Mode')]:
+    connect(_a39, _b39)
+connect('New Model Services?', 'Save Model Services', 0); connect('New Model Services?', 'Restore Model Services', 1)
+assert conns['Restore Description']['main'][0][0]['node'] == 'Model Services Row' and conns['Restore Model Services']['main'][0][0]['node'] == 'Route Mode'
+assert 'const SM = (() => {' in code('Model Services Row'), 'Model Services Row: site model kit not inlined'
+assert 'products_or_services' in SITE_MODEL_SRC and 'products_or_services' in code('Site Model'), 'the model still ignores the describer services (P2-2)'
+# P2-3: every URL the package hands over is on the canonical host, and the lint watches it from now on
+assert 'const SM = (() => {' in code('Blog Package') and "siteUrlOf(dom, '/' + slug + '/')" in code('Blog Package'), 'Blog Package: suggested_url is not built with the model (P2-3)'
+assert 'Blog Package' not in url_lint.ALLOW, 'Blog Package must not be on the canonical-host allow-list any more (P2-3)'
+assert 'ownUrl(p.url)' in code('Blog Package') and 'ownUrlQA(p.url)' in code('Content QA'), 'the planned-page URLs are not on the canonical host (P2-3)'
+# P2-4: the comment sits at the end of the statement, so the .map() runs
+assert '.map(b => ({ keyword: b.keyword, started_at:' in rd('code/Site_Plan.js'), 'Site Plan: pending_publish has no days (P2-4)'
+# P2-5: the verdict improves a page the site already has
+patch('Parse Verdict', "const allowed = ['GO', 'GO_WITH_CHANGES', 'AVOID'];\nif (!allowed.includes(verdict.verdict)) verdict.verdict = 'GO_WITH_CHANGES';",
+      "const allowed = ['GO', 'GO_WITH_CHANGES', 'AVOID'];\nif (!allowed.includes(verdict.verdict)) verdict.verdict = 'GO_WITH_CHANGES';\n\n" + rd('code/_verdict_existing.js').rstrip('\n'))
+patch('Parse Verdict', "    verdict_changes: verdict.what_must_change || [],", "    verdict_changes,\n    existing_page_action,")
+assert 'existing_page_action' in code('Parse Verdict') and 'NEW_URL_RE' in code('Parse Verdict'), 'Parse Verdict: the existing page is not enforced (P2-5)'
+assert 'SM.matchPage' in code('Client Page Requests') and 'inventoryPage' in code('Collect Client Pages'), 'the verdict path still ignores the page inventory (P2-5)'
+assert 'THE SITE ALREADY HAS A PAGE FOR THIS SEARCH' in nodes['Verdict Agent']['parameters']['text'] and 'never recommend a new page' in nodes['Verdict Agent']['parameters']['text'].lower(), 'verdict.txt does not forbid a second page (P2-5)'
+# P2-6: the author box the package attaches is counted, and shown where the owner reads the verdict
+assert 'profile_placeholders' in code('Content QA') and 'passed_copy && profile_placeholders === 0' in code('Content QA'), 'Content QA does not count the author box (P2-6)'
+assert 'editor_needed = !passed_copy' in code('Content QA'), 'Content QA: the editor round must follow the copy, not the owner fields (P2-6)'
+patch('Build Word File', "qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed' : 'Quality check: ' + (qa.warnings || []).length + ' item(s) to review'),",
+      "qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed' : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),")
+patch('Build Word File', "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : '<span class=\"bad\">Needs review</span>'],",
+      "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : '<span class=\"bad\">Needs review</span>'],\n"
+      "    ...(qa.profile_placeholders ? [['Fields only you can fill', '<span class=\"bad\">' + num(qa.profile_placeholders) + ' bracketed field(s) in the byline / author box / Person schema \\u2014 set up the business profile</span>']] : []),")
+assert 'Fields only you can fill' in code('Build Word File'), 'the report does not show the author-box fields (P2-6)'
+# P2-7: the ladder's own word target travels with every page run
+patch('Normalize Input', "    ladder_links,\n    ai_target,", "    ladder_links,\n    ladder_words: Math.max(0, Math.round(Number(p2.ladder_words) || 0)),   // P2-7: the word count the ladder verdict set for this page\n    ai_target,")
+assert 'ladder_words' in code('Normalize Input') and 'ladderWords' in code('Parse Brief'), 'the ladder word target does not reach the brief (P2-7)'
+assert 'target_words' in code('Ladder Rows') and 'top.target_words' in code('Ladder Plan') and 'ladder_words' in code('Spawn Page Runs'), 'the ladder row has no word target (P2-7)'
+assert ('target_words', 'number') in LADDER_COLS, 'seo_ladders has no target_words column (P2-7; run sync_tables.py after deploying)'
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_mv39 = pos('Model Services Row')
+sticky("""### The Phase 2 live check (P2-1 … P2-7, 2026-10-12)
+Seven defects that passed the harness and failed live. The **menu** the describer reads comes from the site model's raw-HTML `nav_pages` (P2-1); the **services** the describer finds are written back into the model here (*Model Services Row*) and read by the Site Tracker from the stored description, so `services_json` is no longer `[]` (P2-2); every URL the **package** promises is on the canonical host and `url_lint.py` now watches Blog Package too (P2-3, stored rows: `fix_ladder_hosts.py`); the weekly report counts **days** again (P2-4); a `verdict` for a search one of the site's pages already answers **improves that URL** (P2-5); the **author box**'s bracketed fields are counted as `profile_placeholders` and keep the page from passing, without forcing an editor round (P2-6); and the **length** the ladder verdict set is stored on the row and clamps every later page run (P2-7).""",
+    _mv39[0] - 40, _mv39[1] + 200, 1100, 220, 7)
+log('Phase 2 live-check defects (2026-10-12, P2-1 … P2-7): the describer reads the menu from the site model\'s raw-HTML nav pages instead of the markdown links; the services the describer finds are saved back into the model (Model Services Row -> seo_cache model:) and the Site Tracker reads the stored descriptions, so seo_sites.services_json and the brief\'s facts.website.services are filled; the blog package\'s suggested_url and every planned-page URL use SM.siteUrl (Blog Package is no longer on the canonical-host allow-list) while Site Metrics puts the URLs it promises on the canonical host and fix_ladder_hosts.py rewrites the stored ladder rows once; the weekly site report prints the real day count again (the inline comment no longer swallows the map); a verdict for a keyword one of the site\'s pages already answers reads that page, improves it and may not recommend a second URL; Content QA counts the author / reviewer box the package attaches (profile_placeholders: the page does not pass with them, the editor is not sent to fix them); and the word count the ladder verdict set is stored on the ladder row (target_words), passed by the app, the cadence and Spawn Page Runs as ladder_words and clamped in Parse Brief')
 
 # =============================================================================
 # 9. WRITE

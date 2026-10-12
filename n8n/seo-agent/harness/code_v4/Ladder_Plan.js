@@ -342,7 +342,10 @@ const SM = (() => {
     const stored = jparse(row.nap_json, null);
     if (stored && !nap.street_address && !nap.phone) { Object.assign(nap, stored); nap.source = S(stored.source) || 'stored'; }
 
-    const services = uniq([...listOf(x.services), ...listOf((x.description || {}).services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    // P2-2 (2026-10-12): the Site Describer answers with `products_or_services` — reading only `services` left services_json empty on every
+    // site, so the brief's facts said `services: []` although the describer had found nine.
+    const desc0 = x.description || {};
+    const services = uniq([...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -577,6 +580,14 @@ const plan = reachPlan(difficulty_for_you, strongSite);
 const topType = PT.of(base.recommended_page || base.page_type, base.page_type);
 const top = { rung: 4, keyword: head, page_type: topType, page_notes: PT.notes(base.recommended_page || base.page_type, topType), intent: kd.google_intent || null, volume: kd.search_volume ?? null, kd: kd.keyword_difficulty ?? null, cpc: kd.cpc ?? null,
   supporting: (base.secondary_keywords || []).slice(0, 6), traffic_potential: kd.search_volume ? Math.round(kd.search_volume * 0.3) : null, your_position: headRank ? headRank.position : null };
+// P2-7 (2026-10-12, Phase 2 live check §3): the length the verdict asked for is stored with the main page, so a later page run still has a
+// target when *Parse Analysis* does not run (a `force_content` run: the app's "Write now", the Content Cadence). Run 442 wrote 3,864 words
+// for the page the ladder verdict had set at 2,100 — +84% — because nothing remembered that number.
+const verdictWords = (() => { for (const t of (base.verdict_changes || [])) {
+    const m = String(t || '').match(/\b(?:of|about|around|roughly|approximately|target|aim for|at least|up to)\s+(\d[\d,]{2,5})[\s-]*words?\b/i);
+    if (m) { const n = Number(String(m[1]).replace(/,/g, '')); if (n >= 300 && n <= 6000) return n; } } return 0; })();
+const analysisWords = Number((base.competitor_analysis || {}).recommended_word_count) || 0;
+top.target_words = verdictWords || analysisWords || 0;
 const headExisting = (base.existing_page && base.existing_page.url) ? { url: base.existing_page.url, source: base.existing_page.source || 'sitemap' } : findExisting(head, headRank && headRank.url);
 Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExisting.url : plannedUrl(head), existing_source: headExisting ? headExisting.source : null, status: headExisting ? 'improve' : 'new' });
 
@@ -662,7 +673,7 @@ requirements.push({ item: 'Publish on schedule and interlink', detail: 'Each run
 
 // ---- pages to write now, in the plan's order (direct: the main page first; otherwise the supporting pages, the main page waits for support) ----
 const order = !planned ? [] : mainFirst ? [top, ...rungPages] : rungPages;
-const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to }));
+const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to, target_words: Number(p.target_words) || 0 }));
 const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,
   keywords_covered: planned ? rungPages.reduce((s, p) => s + 1 + p.supporting.length, 0) + 1 + top.supporting.length : 0,

@@ -349,6 +349,21 @@ const org = { '@type': 'Organization', ...(domain ? { '@id': home + '#organizati
 const blocks = [];
 const pt = String(prev.page_type || '').toLowerCase();
 const articleLike = /blog|guide|article|pillar|hub|case stud/.test(pt);
+// P2-6 (2026-10-12, Phase 2 live check §3): the author box *Blog Package* attaches carries its own bracketed fields — the delivered page of
+// run 442 held 11 of them ([Author Name] x3, [Author Page URL] x2, [Job title] x2, [name], the bio, the credentials, [LinkedIn profile]) while
+// QA reported `placeholder_count: 0`, so a page nobody could publish as-is looked clean. They are counted here exactly as the package writes
+// them (same `article_like` rule) and reported as `profile_placeholders`: they are the owner's missing business profile, not a writing
+// problem, so they never force an editor round — but the page does not pass while they are there.
+const pkgArticleLike = prev.article_like != null ? !!prev.article_like : articleLike;
+const PROFILE_PH = [];
+if (pkgArticleLike) {
+  if (!AU) PROFILE_PH.push({ token: '[Author Name]', count: 3, where: 'byline, author box, author image alt' }, { token: '[Author Page URL]', count: 2, where: 'byline and author-box link' },
+    { token: '[Job title]', count: 2, where: 'byline, author box' }, { token: '[name]', count: 1, where: 'author image file name' },
+    { token: '[Two-sentence bio: what the author does and for whom]', count: 1, where: 'author box' }, { token: '[Credentials and years of experience]', count: 1, where: 'author box' },
+    { token: '[LinkedIn profile]', count: 1, where: 'author box' });
+  else if (!String(AU.bio || '').trim()) PROFILE_PH.push({ token: '[Two-sentence bio: what the author does and for whom]', count: 1, where: 'author box' });
+}
+const profile_placeholders = PROFILE_PH.reduce((n, x) => n + x.count, 0);
 const authorRef = AU ? { '@type': 'Person', ...(domain ? { '@id': home + '#author-' + slugId(AU.name) } : {}), name: AU.name, ...(AU.url ? { url: AU.url } : {}) } : { '@type': 'Person', name: '[Author Name]', url: '[Author Page URL]' };
 if (articleLike) {
   blocks.push({ type: 'Article', json: { '@context': 'https://schema.org', '@type': 'Article', headline: h1Text, description: plain(metaDesc), author: authorRef, publisher: org, datePublished: today, dateModified: today, mainEntityOfPage: { '@type': 'WebPage', '@id': pageUrl }, keywords: [prev.keyword, ...(brief.secondary_keywords || []).slice(0, 5)].filter(Boolean).join(', '), ...(role === 'case_study' ? { articleSection: 'Case study' } : {}) } });
@@ -382,7 +397,11 @@ if (V && V.url) {
 }
 // FIX_PLAN D9: only the cluster pages that are live are listed and linked; the planned ones go into the package as links to add later.
 const HPall = (prev.hub_pages || []).filter(p => p && p.url);
-const HP = HPall.filter(p => !p.planned); const HPplanned = HPall.filter(p => p.planned);
+const HP = HPall.filter(p => !p.planned);
+// P2-3 (2026-10-12): the links to add once a planned page is live are promised on the canonical host, like every other URL we emit (D15)
+const ownUrlQA = (u) => { const raw = String(u || '').trim(); const h = raw.match(/^https?:\/\/([^\/?#]+)/i); const host = h ? SM.helpers.bare(h[1]) : '';
+  return (raw && domain && host === SM.helpers.bare(domain)) ? siteUrlOf(domain, raw.replace(/^https?:\/\/[^\/?#]*/i, '') || '/') : raw; };
+const HPplanned = HPall.filter(p => p.planned).map(p => ({ ...p, url: ownUrlQA(p.url) }));
 if (role === 'hub' && HP.length) blocks.push({ type: 'ItemList', note: 'The cluster pages this hub links to (live pages only).', json: { '@context': 'https://schema.org', '@type': 'ItemList', name: h1Text + ': guides in this series', itemListElement: HP.map((p, i) => ({ '@type': 'ListItem', position: i + 1, name: anchorText(p), url: p.url })) } });
 blocks.push({ type: 'BreadcrumbList', json: { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: home }, { '@type': 'ListItem', position: 2, name: h1Text, item: pageUrl }] } });
 // FIX_PLAN G2: no FAQPage block any more — Google stopped showing FAQ rich results on 2026-05-07 and no other engine reads the markup.
@@ -391,7 +410,7 @@ const cleanUrls = (x) => Array.isArray(x) ? x.map(cleanUrls) : (x && typeof x ==
 blocks.forEach(b => { if (b && b.json) b.json = cleanUrls(b.json); });
 // E-E-A-T notes for the report (not QA warnings: they never trigger an editor round)
 const eeat_notes = [];
-if (articleLike && !AU) eeat_notes.push('No author on file: the byline, author box and Person schema carry [placeholders]. Set up the business profile once (author name, title, credentials, bio, profile links).');
+if (pkgArticleLike && profile_placeholders) eeat_notes.push(profile_placeholders + ' bracketed field(s) in the byline, the author box and the Person schema still need your details (' + PROFILE_PH.map(x => x.token).join(', ') + '): the page cannot be published as it is. Set up the business profile once (author name, title, credentials, bio, profile links) and every page carries them.');
 if (AU && !AU.has_author_page) eeat_notes.push('The author has no profile page URL: an author page on the site (bio, credentials, articles) strengthens attribution.');
 if (AU && !(AU.same_as || []).length) eeat_notes.push('Add the author\'s LinkedIn or other public profiles (sameAs) to the business profile.');
 const insightPrompts = (md.match(/\[Author insight:[^\]]*\]/gi) || []).length;
@@ -405,7 +424,10 @@ fixes.push('Generated ' + blocks.map(b => b.type).join(' + ') + ' schema');
 // itself clamped to the competitor analysis' recommendation, or to the verdict's own target, in Parse Brief).
 const too_many_placeholders = placeholder_count > PH_MAX;
 const too_long = mainWords > target * 1.25;
-const passed = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25 && !too_many_placeholders && !too_long;
+// P2-6: `passed_copy` judges the text and decides the editor round; `passed` judges the page the owner receives, so the author box's
+// bracketed fields keep it false — the honest answer to "can I publish this as it is?".
+const passed_copy = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25 && !too_many_placeholders && !too_long;
+const passed = passed_copy && profile_placeholders === 0;
 // v4.6: the editor pass (a full rewrite) runs only when it can still improve the page. It is skipped when the draft already scores 90+, the editorial
 // review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long
 // sentences, medium review remarks). Every SEO check (meta, H1 / keyword, quick answer, question headings, table, CTA, links, sources, figures, coverage,
@@ -413,12 +435,13 @@ const passed = warnings.length === 0 && content_score >= 80 && Math.abs(mainWord
 const STYLE_ONLY = /^(Passive voice in about|\d+ sentences longer than 28 words|Editor review: )/;
 const crit = critique || lastCritique || {};
 const highProblem = (crit.problems || []).some(p => /high|critical/i.test(p.severity || ''));
-const editor_needed = !passed && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && Math.abs(mainWords - target) <= target * 0.25 && warnings.every(w => STYLE_ONLY.test(w)));
-if (!passed && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (score ' + content_score + ', review ' + crit.score + '); the style notes below are left for a final read');
+const editor_needed = !passed_copy && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && Math.abs(mainWords - target) <= target * 0.25 && warnings.every(w => STYLE_ONLY.test(w)));
+if (!passed_copy && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (score ' + content_score + ', review ' + crit.score + '); the style notes below are left for a final read');
 const site_profile_out = (P && Object.keys(P).some(k => k === 'address' ? Object.values(P.address || {}).some(Boolean) : String(P[k] || '').trim())) ? P : (prev.site_profile || null);
 return [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null, site_profile: site_profile_out,
   content_qa: { ai_ready, round, passed, editor_needed, content_score, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, business_name: bizName, nap_source,
+    passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', url: p.url, anchor: anchorText(p) })),
     answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats, unverified_figures,
