@@ -95,6 +95,9 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
     rows: [
       { label: 'Keyword research and verdicts', hint: 'A verdict per keyword, with its topic fit', values: [true, true, true] },
       { label: 'Difficulty for your site', hint: 'Reach, with a Direct, Short or Full plan', values: [true, true, true] },
+      { label: 'Your own searches as the starting point', hint: 'Search Console searches with no page of yours, and the ones just off page one', values: [true, true, true] },
+      { label: 'Traffic estimates marked measured or modelled', hint: 'Calibrated against your own impressions and clicks where you rank', values: [true, true, true] },
+      { label: 'Searches grouped by shared results page', hint: 'One page for every search Google answers with the same results', values: [true, true, true] },
       { label: 'Keyword ladders', values: ['1 active', 'Several', 'Several'] }, // PLACEHOLDER — confirm
       { label: 'Weekly rank tracking', hint: 'Every rung and the head term, desktop and phone', values: [true, true, true] },
       { label: 'Search features per keyword', hint: 'AI Overview, snippet, People Also Ask, local pack, video', values: [true, true, true] },

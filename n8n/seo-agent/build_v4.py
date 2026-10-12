@@ -734,7 +734,8 @@ SITE_MODEL_SRC = _rd0('code/_site_model.js').rstrip('\n')   # 2026-10-12 (G19, S
 SOURCES_SRC = _rd0('code/_sources.js').rstrip('\n'); ANCHOR_SRC = _rd0('code/_anchor.js').rstrip('\n')   # 2026-10-11: source quality, figure lookup and link cleaning (G4) and the anchor words of a link to our own page (D9)
 PAGE_TYPE_SRC = _rd0('code/_page_type.js').rstrip('\n')   # 2026-10-12 (D10): the page type as one of the form's fixed options, with the verdict's free text kept as page_notes
 GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 / D24): the Search Console query rules (scraper queries, brand split, anonymised share)
-rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries), one copy each, inlined where a node asks for them
+KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
+rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -3354,6 +3355,69 @@ Two 200-page audits of the same site started two seconds apart; the n8n **JavaSc
 **Refused:** the reservation now carries `domain` and `heavy` (mode `audit` from `CONFIG.heavy_audit_pages` pages up), and a second heavy audit of the same site is refused while the first one is still reserved, with the reason and how long to wait.""",
     _rlp[0] - 40, _rlp[1] + 320, 940, 240, 6)
 log('Runs that never settle and concurrent heavy audits (2026-10-12, P34-5): CONFIG.run_stale_hours (2) releases a seo_run_ledger reservation nobody settled — Release Stale Runs marks it `stale` and Rate Limit leaves stale rows out of the day\'s count and of the AI budget (two cancelled 200-page audits held $0.77 for ever) — and the reservation carries the domain and whether it is a heavy crawl (mode audit from CONFIG.heavy_audit_pages pages up), so a second large audit of the same site while one is running is refused with the reason and the time to wait instead of stalling the task runner; release_stale_runs.py clears rows left from before the deploy (--dry-run by default)')
+
+# =============================================================================
+# 44. WHAT THE KEYWORD RESEARCH IS ALLOWED TO USE (2026-10-13, system review FIX_PLAN.md G8; criteria K2 / K4 / K6 / K7 in
+#     docs/system-review-2026-10-11/CRITERIA_keywords_content.md). Keyword research scored 5/10: the data sources were good but four
+#     things the leaders do were missing, and all four can be had from data the run already holds.
+#       * K6 first-party demand: Search Console was read by the weekly tracker and the content cadence only. Discovery started from
+#         what an AI model guessed the business sells, so the searches the site ALREADY gets impressions for never reached the paid
+#         pulls. *Load Query History (Discovery)* reads the stored rows (seo_query_history, newest 28-day period) and *Search Console
+#         Seeds (Discovery)* keeps two kinds -- a query no live page answers (the D11 page inventory decides, SM.matchPage; the page
+#         Search Console reports is the fallback while no inventory exists) and a striking-distance query (position 8-20) -- drops
+#         brand and scraper queries with the weekly report's own rules (GQ) and inserts them into the seed list behind the primary
+#         seed. They ride on the pulls the research makes anyway: no new call, no extra cost.
+#       * K2 traffic potential: "~270/mo" was volume x click loss x 0.3 everywhere -- a model on a provider estimate that is itself
+#         50-70% off for a single keyword, printed with no hint of that. KWI.calibrate now starts from the site's own measured
+#         impressions and clicks where Search Console has them, never reports less than the clicks the site already gets, and labels
+#         every number `calibrated` / `modelled` / `unknown` in the report, the callback and the app. Without Search Console data the
+#         number is bit-for-bit the old one.
+#       * K7 clustering: clusters came from the AI's topic label. KWI.serpClusters groups keywords that share at least 3 of the head
+#         keyword's top-10 URLs -- from the live checks' full top 10 plus the competitors' ranking URLs the run already fetched -- and
+#         names each group by its head keyword with the shared results pages, so one page can target the whole group.
+#       * K4 live SERP checks: fixed at 8, so the intent and page type of everything else came from the AI label alone. The limit is
+#         CONFIG.live_serp_checks (16 by default, hard cap 25, about $0.002 a check: ~$0.032 a run instead of ~$0.016), and the
+#         per-topic cap grows with it so a wider check cannot become one topic's list.
+# =============================================================================
+from ladder_common import QUERY_TABLE, QUERY_COLS
+# ---------- A. the live-check limit, configurable like every other limit ----------
+patch('Normalize Input', "  ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)",
+      "  // G8 / K4 (2026-10-13): how many keywords discovery checks live on Google for intent, page type and who ranks. One check is a\n"
+      "  // DataForSEO live-advanced SERP at depth 10 (about $0.002), so 16 costs ~$0.032 a run; KWI.liveChecks caps it at 25.\n"
+      "  live_serp_checks: 16,\n"
+      "  ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)")
+patch('Normalize Input', "    run_stale_hours: CONFIG.run_stale_hours,\n", "    run_stale_hours: CONFIG.run_stale_hours,\n    live_serp_checks: CONFIG.live_serp_checks,\n")
+assert 'live_serp_checks: CONFIG.live_serp_checks' in code('Normalize Input'), 'G8: the live-check limit does not reach the run'
+# ---------- B. the site's own Search Console queries, loaded in discovery and turned into seeds ----------
+_sdq = pos('Seed List'); QX44, QY44 = _sdq[0], _sdq[1] + 820
+DOMAIN_SEED44 = "={{ String($('Seed List').first().json.domain || '').toLowerCase() }}"
+_q_load = dt_get_any_params(QUERY_TABLE, [('domain', DOMAIN_SEED44), ('domain', "={{ 'www.' + String($('Seed List').first().json.domain || '').toLowerCase() }}")])
+# the table only grows (one row per site, query and week): the newest rows are enough, and Search Console Seeds keeps only the newest period
+_q_load.update({'returnAll': False, 'limit': 300, 'orderBy': True, 'orderByColumn': 'period_end', 'orderByDirection': 'DESC'})
+add_node('Ensure Query Table (Discovery)', DT_TYPE, DT_VERSION, dt_create_params(QUERY_TABLE, QUERY_COLS), [QX44, QY44], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Query History (Discovery)', DT_TYPE, DT_VERSION, _q_load, [QX44 + 220, QY44], LOAD18)
+add_node('Search Console Seeds (Discovery)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GSC_Seeds_Discovery.js')}, [QX44 + 440, QY44])
+disconnect('Load Ladder Settings (Discovery)', 'Reach Requests (Discovery)')
+for a, b in [('Load Ladder Settings (Discovery)', 'Ensure Query Table (Discovery)'), ('Ensure Query Table (Discovery)', 'Load Query History (Discovery)'),
+             ('Load Query History (Discovery)', 'Search Console Seeds (Discovery)'), ('Search Console Seeds (Discovery)', 'Reach Requests (Discovery)')]:
+    connect(a, b)
+for _n44 in ('Search Console Seeds (Discovery)', 'Collect Research', 'Rank Keywords', 'Build Keyword Strategy', 'Priority Keywords'):
+    assert 'const KWI = (() => {' in code(_n44), _n44 + ': the discovery-input kit is not inlined (G8)'
+assert not any('/*__KW_INPUTS__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'discovery-input kit placeholder left'
+assert 'const GQ = (() => {' in code('Search Console Seeds (Discovery)') and 'const SM = (() => {' in code('Search Console Seeds (Discovery)'), 'G8: the seeds node needs the Search Console query rules and the site model'
+assert "$('Search Console Seeds (Discovery)')" in code('Research Requests') and "$('Search Console Seeds (Discovery)')" in code('Collect Research'), 'G8: the research does not read the Search Console seeds'
+assert 'KWI.liveChecks(' in code('Priority Keywords') and 'KWI.liveChecks(' in code('Rank Keywords'), 'G8 / K4: the live-check limit is not applied in both places'
+assert 'KWI.calibrate(' in code('Collect Research') and "traffic_basis: cal.traffic_basis" in code('Collect Research'), 'G8 / K2: the traffic estimate is not calibrated or not labelled'
+assert 'KWI.serpClusters(' in code('Rank Keywords') and 'KWI.serpClusters(' in code('Build Keyword Strategy'), 'G8 / K7: the SERP-overlap clusters are not built'
+assert 'Searches that share a results page' in code('Build Keyword Strategy') and 'Searches your website already appears for' in code('Build Keyword Strategy'), 'G8: the report does not show the new inputs'
+assert 'search_console' in code('Build Ideas Response') and 'serp_clusters' in code('Build Ideas Response') and 'traffic_basis' in code('Build Ideas Response'), 'G8: the callback does not carry the new inputs'
+sticky("""### What the keyword research is allowed to use (G8, criteria K2 / K4 / K6 / K7)
+**Your own Search Console searches seed the research** (*Load Query History (Discovery)* → *Search Console Seeds (Discovery)*): the newest 28-day period, brand and SEO-tool queries dropped with the weekly report's own rules, keeping the searches **no page of yours answers** (page inventory, `SM.matchPage`) and the ones you rank **8-20** for. They go into the seed list behind the primary seed and ride on the pulls the research makes anyway — **no new call**.
+**Traffic potential says what it is:** `calibrated` where Search Console measured that exact search on your site (impressions and clicks over 28 days, never below the clicks you already get), `modelled` from the provider's volume everywhere else, `unknown` when there is neither. Without Search Console data the number is unchanged.
+**Clusters by shared results pages** (`KWI.serpClusters`): keywords that share **≥ 3** of the head keyword's top-10 URLs are one group named after that head keyword — one page can target them all.
+**Live results-page checks**: `CONFIG.live_serp_checks` (**16**, hard cap 25, ~$0.002 each → ~$0.032 a run) instead of a fixed 8, with the per-topic cap growing with it.""",
+    QX44 - 40, QY44 + 160, 1180, 260, 3)
+log('What the keyword research is allowed to use (2026-10-13, FIX_PLAN G8, criteria K2 / K4 / K6 / K7): the site\'s own Search Console queries seed discovery (Load Query History (Discovery) -> Search Console Seeds (Discovery): the newest period, brand and scraper queries dropped with the weekly report\'s rules, the searches no live page answers (SM.matchPage page inventory, the Search Console page as the fallback) and the striking-distance ones at position 8-20, inserted behind the primary seed with their measured impressions, clicks and position -- no new API call); traffic potential is calibrated against those measurements where they exist, never below the clicks the site already gets, and every number is labelled calibrated / modelled / unknown in the report, the callback and the app (v5/code/_kw_inputs.js KWI.calibrate); keywords that share at least 3 of a head keyword\'s top-10 URLs form one SERP-overlap cluster named after it, from the live checks plus the competitors\' ranking URLs the run already fetched (KWI.serpClusters), so one page can target the group; and the live intent / page-type check is CONFIG.live_serp_checks (16 by default, hard cap 25, about $0.002 a check) instead of a fixed 8, with the per-topic cap growing with the limit')
 
 # =============================================================================
 # 9. WRITE

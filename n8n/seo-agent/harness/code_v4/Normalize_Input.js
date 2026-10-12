@@ -16,6 +16,9 @@ const CONFIG = {
   // task runner held $0.77 of the day's estimate for ever), and the crawl size from which only one audit of a site may run at a time.
   run_stale_hours: 2,
   heavy_audit_pages: 100,
+  // G8 / K4 (2026-10-13): how many keywords discovery checks live on Google for intent, page type and who ranks. One check is a
+  // DataForSEO live-advanced SERP at depth 10 (about $0.002), so 16 costs ~$0.032 a run; KWI.liveChecks caps it at 25.
+  live_serp_checks: 16,
   ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)
   ladder_tracker_cadence: 'weekly', // the Rank Tracker workflow runs weekly; 'monthly' is documentation only until its schedule is changed
   ladder_auto_next_rung: false,     // false = the tracker recommends the next rung (one-click form link + API body); true is not wired
@@ -361,6 +364,7 @@ return [{
     ai_budget_usd: CONFIG.ai_budget_usd,
     ai_budget_period: CONFIG.ai_budget_period,
     run_stale_hours: CONFIG.run_stale_hours,
+    live_serp_checks: CONFIG.live_serp_checks,
     heavy_audit_pages: CONFIG.heavy_audit_pages,
     started_at: new Date().toISOString(),
     validation_error: ''
