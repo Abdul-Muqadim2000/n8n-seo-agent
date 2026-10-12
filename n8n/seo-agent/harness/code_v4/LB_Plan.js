@@ -495,10 +495,20 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const lad = ladders.filter(l => normD(l.domain) === s.domain);
   const topics = [...new Set([...lad.map(l => l.head_keyword || l.keyword), ...(s.keywords || []), pr.business_type].map(x => String(x || '').trim().toLowerCase()).filter(x => x && x.split(/\s+/).some(w => !STOP.test(w))))].slice(0, 4);
   const c = countryOf(s.location_code);
-  const bn = String(pr.business_name || '').trim(); const brand = bn && bn.toLowerCase() !== 'home' ? bn : s.domain.split('.')[0];
   // our pages: published ladder pages, AI answer pages, written pages, the top Search Console pages, the homepage
   const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };   // D15: our page links are on the canonical host
   const home = SM.siteUrl(site_model, '/');
+  // D13: the business name comes from the one site model (profile -> the homepage's og:site_name / Organization name -> what the app sent),
+  // never from the domain label — pitches signed "techand" went out for Tech& (live 2026-10-11). With no name on file the pitches carry a
+  // bracket for the owner instead of a guess.
+  const bn = String(pr.business_name || '').trim();
+  const modelName = SM.name(site_model);
+  const named = (bn && bn.toLowerCase() !== 'home') ? bn : (modelName && SM.helpers.bare(modelName) !== site_model.domain ? modelName : '');
+  const brand = named || s.domain; const brand_known = !!named;
+  const services = SM.services(site_model); const accreditation = SM.facts(site_model).accreditation;
+  // every URL of ours is served on the canonical host (D15): Search Console and the ladder rows mix www and the bare host
+  const ourUrl = (u) => { const h = String((String(u || '').match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '').toLowerCase().replace(/^www\./, '');
+    return h && h === s.domain ? SM.siteUrl(site_model, String(u).replace(/^https?:\/\/[^\/?#]*/i, '')) : u; };
   const myQ = queries.filter(q => q.site_id === s.site_id && q.page);
   const lastPeriod = myQ.map(q => String(q.period_end || '')).sort().pop() || '';
   const posOf = new Map(); const imp = new Map();
@@ -514,9 +524,9 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const month = iso.slice(0, 7);
   const pitched = (u) => outreach.filter(o => o.site_id === s.site_id && pathKey(o.target_url) === pathKey(u) && String(o.drafted_at || '').slice(0, 7) === month).length;
   const pages = [];
-  const addPage = (url, title, keyword, kind, page_type) => { if (!url || pages.some(p => pathKey(p.url) === pathKey(url))) return; pages.push({ url, title: String(title || '').slice(0, 140), keyword: String(keyword || '').slice(0, 100), kind, page_type: page_type || '',
+  const addPage = (url0, title, keyword, kind, page_type) => { const url = ourUrl(url0); if (!url || pages.some(p => pathKey(p.url) === pathKey(url))) return; pages.push({ url, title: String(title || '').slice(0, 140), keyword: String(keyword || '').slice(0, 100), kind, page_type: page_type || '',
     position: posFor(url, keyword), rds: rdsTo(url), kw_share: Math.round(100 * kwShare(url)) / 100, pitched: pitched(url) }); };
-  addPage(home, bn || s.domain, brand, 'home');
+  addPage(home, brand, brand, 'home');
   for (const l of lad.filter(l => l.target_url && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true')).sort((a, b) => (Number(b.rung) || 0) - (Number(a.rung) || 0)))
     addPage(l.target_url, l.keyword, l.keyword, Number(l.rung) === 4 ? 'hub' : /service|product|landing|pricing/i.test(l.page_type || '') ? 'money' : 'guide', l.page_type);
   for (const t of targets.filter(t => t.site_id === s.site_id && t.page_url && ['won', 'writing', 'written', 'done'].includes(String(t.status || '')))) addPage(t.page_url, t.question, t.keyword || t.question, 'answer');
@@ -525,7 +535,8 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const mineP = prospects.filter(p => p.site_id === s.site_id);
   const mineO = outreach.filter(o => o.site_id === s.site_id);
   return { json: { site_id: s.site_id, domain: s.domain, country: s.country || c.name || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en',
-    email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, free_only, competitors, topics, brand, brand_names: [...new Set([brand, ...s.settings.brand_names].filter(Boolean))],
+    email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, free_only, competitors, topics, brand, brand_known, services, accreditation,
+    brand_names: [...new Set([brand, named, ...s.settings.brand_names, s.domain.split('.')[0].length >= 5 ? s.domain.split('.')[0] : ''].filter(Boolean))],
     profile: { business_name: bn, business_type: pr.business_type || '', author_name: pr.author_name || '', author_job_title: pr.author_job_title || '', street_address: pr.street_address || '', city: pr.city || '', region: pr.region || '',
       postal_code: pr.postal_code || '', country_code: pr.country_code || c.iso || '', phone: pr.phone || '', public_email: pr.public_email || '', logo_url: pr.logo_url || '' },
     pages, home, canonical_host: site_model.canonical_host || s.domain, budget: CONFIG.sequences_per_week, qualify_max: CONFIG.qualify_per_week,

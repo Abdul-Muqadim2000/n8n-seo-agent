@@ -4,7 +4,7 @@ import { db, schema } from '../db';
 import type { MailboxRow, OutreachSequenceRow, SiteRow } from '../db/schema';
 import { replyRead, siteRows } from '../n8n/client';
 import { approve, isSuppressed, linkSettingsOf, sentCounts, setProspectStatus, suppress } from './linkBuilder';
-import { compose, connOf, imapClient, parseIncoming, rawMessage, savesSentCopy, smtpTransport, stripQuoted, type Incoming } from './mail';
+import { compose, connOf, imapClient, mxCheck, parseIncoming, rawMessage, savesSentCopy, smtpTransport, stripQuoted, type Incoming } from './mail';
 import { replyReadBody } from './replyFacts';
 
 // v4.13 Link Builder jobs (index.ts runs them on timers; LINK_BUILDER_JOBS=false switches them off):
@@ -85,6 +85,15 @@ export async function senderTick(log: Log, now = new Date()): Promise<number> {
         const site = await siteOf(q.siteId); if (!site) continue;
         const supp = await isSuppressed(q.orgId, q.toEmail);
         if (supp) { await db.update(schema.outreachSequences).set({ status: 'stopped', error: 'Not sent: ' + supp, nextAt: null, updatedAt: now }).where(eq(schema.outreachSequences.id, q.id)); continue; }
+        if (q.step === 0) {   // L1: the recipient's domain must accept mail at all — an address with no mail server is suppressed, never sent to
+          const mx = await mxCheck(q.toEmail);
+          if (!mx.ok) {
+            await suppress(q.orgId, 'email', q.toEmail, mx.via === 'none' ? 'no mail server for the domain (MX)' : 'not a valid address');
+            await db.update(schema.outreachSequences).set({ status: 'stopped', error: 'Not sent: ' + mx.reason, nextAt: null, updatedAt: now }).where(eq(schema.outreachSequences.id, q.id));
+            log.info({ sequence: q.id, domain: emailDomain(q.toEmail) }, 'outreach address suppressed: no mail server');
+            continue;
+          }
+        }
         if (q.step === 0) {   // at most 2 first e-mails to one site a week, never while another conversation with it is open
           const other = await db.select({ id: schema.outreachSequences.id, status: schema.outreachSequences.status, startedAt: schema.outreachSequences.startedAt }).from(schema.outreachSequences)
             .where(and(eq(schema.outreachSequences.orgId, q.orgId), eq(schema.outreachSequences.prospectDomain, q.prospectDomain), sql`${schema.outreachSequences.id} <> ${q.id}`));
@@ -207,6 +216,7 @@ export async function autoApproveTick(log: Log): Promise<number> {
       const taken = new Set((await db.select({ d: schema.outreachSequences.prospectDomain }).from(schema.outreachSequences).where(eq(schema.outreachSequences.orgId, site.orgId))).map((x) => x.d));
       for (const r of rows.sort((a, b) => Number(b.score) * (0.5 + Number(b.fit)) - Number(a.score) * (0.5 + Number(a.fit)))) {
         if (left <= 0) break; if (taken.has(String(r.prospect_domain)) || Number(r.fit) < 0.6 || r.type === 'press') continue;   // journalist answers always wait for a person
+        if (String(r.status) !== 'drafted') continue;   // L2: a draft the gate held ("needs_edit") waits for a person, never for the automatic mode
         const to = String(r.contact_email || ''); if (!to || consentGate(String(r.country), to).needed || (await isSuppressed(site.orgId, to))) continue;
         let steps; try { steps = (JSON.parse(String(r.sequence_json || '[]')) as { wait_days: number; subject: string; body: string }[]).map((x, i) => ({ step: i, waitDays: Number(x.wait_days) || 0, subject: x.subject || '', body: x.body || '' })); } catch { continue; }
         try { await approve(org, site, null, { prospectDomain: String(r.prospect_domain), type: String(r.type), toEmail: to, steps }); done++; left--; taken.add(String(r.prospect_domain)); } catch (e) { log.warn({ err: short(e), prospect: r.prospect_domain }, 'automatic approval skipped'); }

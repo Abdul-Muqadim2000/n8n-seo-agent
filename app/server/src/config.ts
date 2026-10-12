@@ -37,6 +37,8 @@ const Env = z.object({
   MAILBOX_KEY: str(''),
   /** v4.13: the sender and inbox jobs (off in tests or on a second server) */
   LINK_BUILDER_JOBS: bool(true),
+  /** L1: check the recipient's domain for a mail server before the first e-mail; false only for a local mail test with made-up domains */
+  OUTREACH_MX_CHECK: bool(true),
   /** the n8n project of the SEO Agent's Data Tables (the app creates seo_ladder_settings there when it is missing) */
   N8N_PROJECT_ID: str('wo1WpMiHjdduGvfl'),
   /** this server as seen from n8n (callbacks), e.g. http://host.docker.internal:4000; https in production */
@@ -144,5 +146,6 @@ export const config = {
   allowSignup: e.ALLOW_SIGNUP,
   mailboxKey: e.MAILBOX_KEY,
   linkBuilderJobs: e.LINK_BUILDER_JOBS,
+  outreachMxCheck: e.OUTREACH_MX_CHECK,
 };
 export type Config = typeof config;

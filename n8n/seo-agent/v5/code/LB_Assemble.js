@@ -37,6 +37,10 @@ for (const p of plans) {
   // IDF over our own pages: a site's topic words are everywhere; the rare shared words decide the topic match
   const df = new Map(); const docs = p.pages.map(x => [x.title, x.keyword].join(' ')); for (const d of docs) for (const w of new Set(OK.words(d).map(OK.stem))) df.set(w, (df.get(w) || 0) + 1);
   const topicText = [...p.topics, p.profile.business_type].join(' ');
+  // D13: what we sell (the site model's services, else the topics) and whether the facts say we hold an accreditation — the two things
+  // that decide whether a prospect is a competitor and whether an accredited-provider list may be asked to add us
+  const sellTerms = (p.services && p.services.length ? p.services : [...p.topics, p.profile.business_type]).filter(Boolean);
+  const weAreAccredited = OK.accredited(p.accreditation);
   const outreach_rows = [], prospect_rows = [], listing_rows = [], fixes = [];
   const base = (o) => ({ site_id: sid, domain: p.domain, prospect_domain: o.prospect_domain, type: o.type, status: o.status, score: o.score || 0, fit: o.fit || 0, fit_reason: o.fit_reason || '', checks_json: JSON.stringify(o.checks || {}),
     page_url: o.page_url || '', page_title: o.page_title || '', evidence: String(o.evidence || '').slice(0, 600), contacts_json: JSON.stringify(o.contacts || []), contact_email: (o.contacts || [])[0] ? o.contacts[0].email : '', contact_form_url: o.contact_form_url || '',
@@ -91,13 +95,21 @@ for (const p of plans) {
     o.fit = t ? OK.fit(o.page_title + ' ' + t.slice(0, 4000), topicText, df, docs.length) : (blocked ? 0.3 : 0);
     o.fit_reason = blocked ? 'their page blocks automated reading: check it yourself' : 'topic match ' + Math.round(o.fit * 100) + '%' + (facts.noindex ? ' · page is noindex (no search value)' : '');
     o.language = String(facts.lang || '').slice(0, 5);
+    // ---- D13: who is never pitched (live 2026-10-11: competitors, bare homepages, mailbox providers and contact databases were) ----
+    const bad = OK.badHost(r.prospect_domain); if (bad) reasons.push(bad);
+    const onlyHome = OK.homepageOnly(r.type, r.url); if (onlyHome) reasons.push(onlyHome);
+    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, title: o.page_title, text: t, terms: sellTerms });
+    if (competing) reasons.push(competing);
+    if (!weAreAccredited && OK.accreditedList(o.page_title + ' ' + r.url))   // the page IS such a list (its title / address says so); a page that merely names accredited providers is fine
+      reasons.push('a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one (asking to be added claims it)');
     // contacts: the page itself + author / contact / about pages
     const cands = [...(html && !blocked ? OK.contactsIn(html, r.prospect_domain, r.url) : []), ...(contactsBy.get(r.prospect_domain) || [])];
     if (stored.contact_email && !cands.some(c => c.email === stored.contact_email)) cands.push({ email: stored.contact_email, kind: OK.kindOf(stored.contact_email), own: LK.sameSite(stored.contact_email.split('@')[1], r.prospect_domain), w: 2, source_url: stored.contact_url || '' });
     o.contacts = OK.rankContacts(cands); o.contact_form_url = o.contacts.length ? '' : (formBy.get(r.prospect_domain) || '');
     // our page and the link text
     const lostRow = r.type === 'lost' ? myLedger.find(l => l.ref_domain === r.prospect_domain) : null;
-    const tg = OK.pickTarget({ type: r.type === 'ai_source' && /list|best|top/i.test(o.page_title) ? 'ai_list' : (o.checks.angle === 'broken' ? 'broken' : r.type), text: o.page_title + ' ' + evidence, topics: p.topics.slice(0, 2).join(' '), dead_text: o.checks.dead ? [o.checks.dead.anchor, String(o.checks.dead.url).replace(/[\/_.-]+/g, ' ')].join(' ') : '', to_url: lostRow ? lostRow.to_url : '' }, p.pages, df, docs.length, p.home);
+    const toCanon = (u) => { const hit = (p.pages || []).find(x => pathKey(x.url) === pathKey(u)); return hit ? hit.url : u; };   // D13 / D15: the page we ask them to link to is the one on our canonical host, not the host an old ledger row stored
+    const tg = OK.pickTarget({ type: r.type === 'ai_source' && /list|best|top/i.test(o.page_title) ? 'ai_list' : (o.checks.angle === 'broken' ? 'broken' : r.type), text: o.page_title + ' ' + evidence, topics: p.topics.slice(0, 2).join(' '), dead_text: o.checks.dead ? [o.checks.dead.anchor, String(o.checks.dead.url).replace(/[\/_.-]+/g, ' ')].join(' ') : '', to_url: lostRow ? toCanon(lostRow.to_url) : '' }, p.pages, df, docs.length, p.home);
     o.target_url = tg.url; o.target_reason = tg.reason; o.anchor_hint = tg.anchor;
     if (!blocked && t && ['gap', 'comp_new', 'resource', 'broken'].includes(r.type) && o.fit < (r.type === 'broken' ? 0.15 : OK.OFF_TOPIC)) reasons.push('off topic for you (' + Math.round(o.fit * 100) + '% match)');
     if (isNew) o.score = Math.round(100 * (LIKELY[r.type] || 0.3) * (0.4 + 0.6 * Math.min(1, o.fit + 0.2)) * (r.rank ? Math.min(1.2, 0.6 + Number(r.rank) / 600) : 1));
@@ -106,6 +118,18 @@ for (const p of plans) {
     if (o.status === 'not_fit') o.fit_reason = reasons.join('; ');
     outreach_rows.push(base(o));
     if (isNew && o.status !== 'not_fit') prospect_rows.push(newProspect({ ...o, rank: r.rank || 0, detail: r.type === 'broken' ? 'Links to ' + (r.competitor || 'a competitor') + "'s dead page " + r.dead_url : r.type === 'resource' ? 'Resource page on "' + (r.topic || p.topics[0] || '') + '": ' + o.page_title : o.page_title, origin: r.type === 'broken' ? 'dfs' : 'web' }));
+  }
+  // ---- 2b. prospects nobody can be written to, refused without reading their site (D13): a mailbox provider, a contact database, a CDN,
+  //      a statistics page, a government portal or a declared competitor. The Backlink Monitor and AI Growth keep finding them. ----
+  for (const x of myProspects.filter(x => (x.status || 'new') === 'new' && x.type !== 'reclaim'
+      && !outreach_rows.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type)
+      && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type && o.status === 'drafted'))) {
+    const why = OK.badHost(x.prospect_domain)
+      || (OK.isGov(x.prospect_domain) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '')
+      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors });
+    if (!why) continue;
+    outreach_rows.push(base({ prospect_domain: x.prospect_domain, type: x.type, status: 'not_fit', score: Number(x.score) || 0, fit: 0, fit_reason: why,
+      page_url: x.source_url || '', page_title: String(x.detail || '').slice(0, 140), evidence: String(x.detail || ''), country: OK.countryOf(x.prospect_domain), checks: { reasons: [why], read: false } }));
   }
   // ---- 3. our old URLs that now 404 (Wayback) → a redirect to the closest live page ----
   for (const { r, x } of pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'wayback_check')) {
@@ -135,10 +159,15 @@ for (const p of plans) {
         const asList = o.r.kind === 'listing_list' || o.r.kind === 'prospect';
         const v = LK.verify(o.x, p.domain, { url: o.r.url });
         if (v.verify === 'found') { status = 'linked'; profile_url = o.r.url; rel = v.rel; evidence = asList ? 'the list links to you' : 'the profile links to you'; }
-        else if (new RegExp('\\b' + String(p.brand).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(LK.text(h)) && status !== 'linked') { status = 'listed'; profile_url = o.r.url; evidence = asList ? 'the list names you without a link' : 'the profile names you'; }
+        else if (OK.namesUs(LK.text(h), [p.brand, ...(p.brand_names || []), p.domain]) && status !== 'linked') { status = 'listed'; profile_url = o.r.url; evidence = asList ? 'the list names you without a link' : 'the profile names you'; }   // D13: "Tech&" has no word boundary after the ampersand
         else if (status === 'unknown' && asList) { status = 'missing'; evidence = 'the list does not name you'; }
         if (asList) for (const c of p.competitors) if (h.toLowerCase().includes(c.toLowerCase()) && !comps.includes(c)) comps.push(c);
       }
+      // D13: a platform that blocks this week's check keeps the last definite answer with the date it was checked — never a fresh "unknown"
+      // (the Ministry of Finance list flipped from "missing" to "unknown" within one day, live 2026-10-11)
+      if (status === 'unknown' && ['linked', 'listed', 'missing'].includes(String(old.status || ''))) {
+        status = old.status; profile_url = profile_url || old.profile_url || '';
+        evidence = old.status + ' (checked ' + String(old.checked_at || '').slice(0, 10) + ') · the platform blocks checks now'; }
       if (['submitted', 'ignored'].includes(old.status) && !['linked', 'listed'].includes(status)) { status = old.status; }
       listing_rows.push({ site_id: sid, domain: p.domain, listing_id: l.id, name: l.name, category: l.cat, status, profile_url: profile_url || old.profile_url || '', rel: status === 'linked' ? rel : l.link, competitors: comps.join(', '), submit_url: l.submit || '',
         priority: l.prio + (comps.length ? -0.5 : 0), why: (evidence ? evidence + ' · ' : '') + l.why, checked_at: iso, submitted_at: old.submitted_at || '', note: old.note || '' });

@@ -18,14 +18,19 @@ Angle by kind:
 - press: a journalist's request. The first e-mail IS the answer: 120-200 words of expert input that answers exactly what they asked (practical, specific, [brackets] for any figure or claim the owner must confirm), who is answering (the signer) and why they know; the homepage once. Subject: "Re: " + their request in a few words.
 
 Rules for every e-mail:
-- First e-mail: 80-130 words (press 120-200), plain text, no markdown, no bullet lists unless giving facts for a list. Subject 36-50 characters, specific to their page (never "Quick question" or "Collaboration").
+- First e-mail: 80-120 words (press 120-200), plain text, no markdown, no bullet lists unless giving facts for a list. Subject 36-50 characters, specific to their page (never "Quick question" or "Collaboration").
 - The first sentence is about THEIR page — quote or name the evidence. No compliments you cannot back with the evidence, no fake familiarity ("I've been reading your blog for years"), no "I hope this finds you well".
 - Exactly one link: our page to offer. Never write "backlink", "link building", "dofollow", "SEO", "DA" or "DR"; never ask for specific link text or a keyword; never offer money, a link swap or a guest post; never mention AI assistants or rankings.
 - Do not add an unsubscribe line or an address: the app adds the sender's details and opt-out line to every e-mail.
-- Follow-up 1 (sent 4 working days later in the same thread, 40-70 words, no subject): one NEW useful detail — a specific section of our page that fits their page, or an offer that makes it easy (a short description, a logo, a correction). Not "just bumping this".
-- Follow-up 2 (8 working days after that, 30-60 words, no subject, the last one): ask whether someone else handles their page ("who would be the right person?") or offer the easiest alternative, and say plainly you will not write again.
+- Follow-up 1 (sent 4 working days later in the same thread, 40-60 words, no subject): one NEW useful detail — a specific section of our page that fits their page, or an offer that makes it easy (a short description, a logo, a correction). Not "just bumping this".
+- Follow-up 2 (8 working days after that, 30-55 words, no subject, the last one): ask whether someone else handles their page ("who would be the right person?") or offer the easiest alternative, and say plainly you will not write again.
 - press: only ONE follow-up (3 working days later, 30-50 words), and none if the deadline has passed by then.
-- If the evidence shows a prospect is not a fit (unrelated topic, a competitor's own site, a page that sells links), do not write — list it under "skip" with the reason.
+- Write the business name exactly as it stands in the facts above, every time (never the website address, never a lower-case version of it).
+- Say nothing about the business that the facts above do not carry: no accreditation, certification, licence, partnership, award, client count,
+  years, size or price unless it is in the facts. Where a figure or a proof point would help, write it as [Owner: confirm — …] so the owner fills it in.
+- One clear ask per e-mail (a single question), and nothing is asked of a list of accredited, approved or certified providers unless the facts
+  say the business holds that accreditation — those lists are joined by applying, not by a pitch.
+- If the evidence shows a prospect is not a fit (unrelated topic, a competitor's own site, their bare homepage, a page that sells links), do not write — list it under "skip" with the reason.
 
 Return ONLY JSON:
 {"sequences": [{"n": 1, "steps": [{"step": 0, "subject": "", "body": ""}, {"step": 1, "body": ""}, {"step": 2, "body": ""}]}], "skip": [{"n": 2, "reason": ""}]}

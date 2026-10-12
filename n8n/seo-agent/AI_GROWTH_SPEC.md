@@ -53,6 +53,12 @@ before the Content Cadence 10:00 — and on demand through *Manual Run*). Per si
    official: apply if you qualify, else cite it). Rows in `seo_link_prospects` (type `ai_source`, the exact page, v4.10 columns kept);
    **AI Outreach Writer** (Claude) drafts the 3 most valuable new ones a week; the Backlink Monitor finds contacts and writes follow-ups.
    A page that now names the business = **won** (alert).
+   **One writer** (D12, 2026-10-12): with `link_builder` on, nothing is drafted here — the prospect row (its `detail` names the question AI
+   cites them for) is the hand-over, and the Link Builder qualifies it, finds the contacts on their own domain and writes the sequence
+   through its draft gate. With `link_builder` off, the Link Builder's gates still decide (`v5/code/_outreach_kit.js`): no draft to a
+   government page, a competitor selling what we sell, a bare homepage, a mailbox provider, a contact database or an accredited-provider
+   list we do not qualify for. The name a draft signs with comes from the site model, never from the domain label, and the prompt no longer
+   tells the recipient they are cited in AI answers: it must quote their page instead.
 6. **Entity** (monthly): Wikidata by name and by official website (P856).
 7. Row `seo_ai_growth`; report e-mail + callback `ai_growth`; ranked actions; alerts (a key page down / noindex; a win).
 

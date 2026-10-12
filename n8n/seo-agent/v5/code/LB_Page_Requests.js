@@ -3,6 +3,7 @@
 // pages and the competitors' homepages: links and sameAs to the platforms; member lists like the UAE Ministry of Finance's; guessed profile
 // URLs on platforms that answer a plain fetch), and our old URLs from the Wayback Machine (does each still answer?).
 /*__LINK_KIT__*/
+/*__OUTREACH_KIT__*/
 /*__LISTINGS__*/
 const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const rows = (n) => { try { return $(n).all().map(i => i.json).filter(r => r && typeof r === 'object' && Object.keys(r).length && !r.error); } catch (e) { return []; } };
@@ -19,7 +20,7 @@ for (const p of plans) {
   const linking = new Set(ledger.filter(l => l.site_id === p.site_id && l.status !== 'lost').map(l => l.ref_domain));
   const known = new Set([...outreach.filter(o => o.site_id === p.site_id).map(o => o.prospect_domain + '|' + o.type)]);
   const comp = new Set(p.competitors.map(c => LK.regDomain(c)));
-  const skipD = (d) => !d || LK.sameSite(d, p.domain) || comp.has(LK.regDomain(d)) || BIG.test(d) || LK.isInfra(d) || LK.isScraper(d) || LK.isWire(d) || linking.has(LK.refKey(d));
+  const skipD = (d) => !d || LK.sameSite(d, p.domain) || comp.has(LK.regDomain(d)) || BIG.test(d) || LK.isWire(d) || !!OK.badHost(d) || linking.has(LK.refKey(d));   // D13: badHost covers infrastructure, statistics pages, mailbox providers and contact databases (outlook.com, zoominfo.com were read and pitched live)
   // 1. prospects to qualify: new, not yet qualified, best score first (reclaims are fixed on our own site)
   const todo = prospects.filter(x => x.site_id === p.site_id && (x.status || 'new') === 'new' && x.type !== 'reclaim' && !known.has(x.prospect_domain + '|' + x.type) && !skipD(x.prospect_domain))
     .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0)).slice(0, p.qualify_max);

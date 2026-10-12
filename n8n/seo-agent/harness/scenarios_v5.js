@@ -2556,7 +2556,7 @@ await guard('ai growth', async () => {
   const prompts = [{ json: { prompt_id: 'p_0', site_id: SITE, prompt: gaps[0].prompt, kind: 'recommend', keyword: 'e invoicing in uae', status: 'active' } }, { json: { prompt_id: 'p_3', site_id: SITE, prompt: gaps[1].prompt, kind: 'compare', keyword: 'odoo vs business central uae', status: 'active' } }];
   const qh = [['e invoicing in uae', WWW + '/e-invoicing-uae/', 1200, 8.4], ['uae e invoicing deadline', WWW + '/e-invoicing-uae/', 300, 12], ['erp partner dubai', WWW + '/erp-partner-dubai/', 500, 15], ['northwind erp', WWW + '/', 900, 1]]
     .map(([q, page, imp, pos]) => ({ json: { site_id: SITE, domain: D, period_end: '2026-10-04', query: q, page, impressions: imp, clicks: 10, position: pos } }));
-  const loadG = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', M.profiles()); mock('Load AI Visibility', [{ json: visRow }]); mock('Load AI Prompts', prompts);
+  const loadG = (o = {}) => { mock('Load Sites', o.sites || M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', o.profiles || M.profiles()); mock('Load AI Visibility', [{ json: visRow }]); mock('Load AI Prompts', prompts);
     mock('Load Content Log', [{ json: { site_id: SITE, domain: D, keyword: 'peppol uae', source: 'ladder', status: 'published', published_url: WWW + '/peppol-uae/', published_at: ago(2), started_at: ago(9) } }]); mock('Load Query History', qh);
     mock('Load AI Pages', o.pages || [{ json: { site_id: SITE, domain: D, url: WWW + '/e-invoicing-uae/', kind: 'cited', checked_at: ago(30), score: 55, updated_on: ago(200).slice(0, 10), submitted_at: '', bing_crawled_at: ago(40), bing_status: 200 } }]);
     mock('Load AI Targets', o.targets || [{ json: { target_id: 'ait_northwind-erp-com_p_9', site_id: SITE, domain: D, prompt_id: 'p_9', question: 'Who is the best Odoo partner in Dubai?', keyword: 'odoo partner dubai', kind: 'answer', status: 'writing', created_at: ago(20), written_at: ago(14) } }]);
@@ -2673,6 +2673,40 @@ await guard('ai growth', async () => {
   check('Normalize Input: the AI target is kept, sanitised (question, refresh, searches split, sources {url,title}, competitors), unknown fields dropped', AT && AT.kind === 'refresh' && AT.fanout.length === 2 && AT.sources.length === 1 && AT.sources[0].url === 'https://gulfnews.com/x' && AT.competitors[0] === 'zoho.com' && !('extra' in AT), JSON.stringify(AT));
   const nt2 = await run('Normalize Input', { body: { mode: 'keyword', keyword: 'x y', country: 'US', callback_url: 'https://hooks.example.com/x', ai_target: { question: 'short' } } });
   check('Normalize Input: no AI target unless it carries a real question', nt2[0].json.ai_target === null, JSON.stringify(nt2[0].json.ai_target));
+  // ---- (i) D12 (system review 2026-10-11, exec 376): one writer, and the Link Builder's gates on AI Growth's own drafts ----
+  // Live it drafted to mof.gov.ae / tax.gov.ae and to three competitors, opened with "your site is cited in AI answers", quoted nothing and
+  // signed "techand" / "techand.ai"; finline.ae was drafted by both writers.
+  const SVC = JSON.stringify(['ERP implementation', 'e-invoicing integration', 'Business Central support']);
+  const siteModel = (o = {}) => M.sites({ canonical_host: 'www.' + D, business_name: '', services_json: SVC, model_updated_at: ago(2), ...o });
+  const vendorRow = { json: { site_id: SITE, domain: D, run_id: 'ai_20261005', checked_at: ago(1), prompt_id: 'p_0', prompt: gaps[0].prompt, kind: 'recommend', engine: 'chatgpt', answered: true, mentioned: false, cited: false, our_urls: '',
+    cited_urls: JSON.stringify([cited('https://orksync.com/erp-implementation/', 'ERP Implementation Services in Dubai, UAE | E-Invoicing Ready'), cited('https://tax.gov.ae/en/content/uae.einvoicing.aspx', 'UAE e-invoicing')]) } };
+  const vendorHtml = '<html><head><title>ERP Implementation Services in Dubai, UAE | E-Invoicing Ready</title></head><body><h1>ERP implementation in Dubai</h1>'
+    + '<p>Our services: ERP implementation, Business Central support and e-invoicing integration for UAE businesses. Book a demo or request a quote.</p>'
+    + '<p>We provide ongoing support after go-live.</p></body></html>';
+  const pageFor = (u) => /gulfnews/.test(u) ? listHtml : /reddit/.test(u) ? reddit : /mof\.gov/.test(u) ? mof : /orksync/.test(u) ? vendorHtml : /tax\.gov/.test(u) ? '<html><head><title>UAE e-invoicing</title></head><body><p>Federal Tax Authority page on e-invoicing.</p></body></html>' : yt;
+  const growthPass = async (o = {}) => { loadG({ sites: siteModel(o.site || {}), profiles: o.profiles || M.profiles(), monitors: o.monitors || M.monitors() });
+    mock('Load AI Answers', [...ansRows, vendorRow]);
+    const g2 = await run('Growth Plan', store['Load Cache (Growth)']);
+    const er2 = await run('Earned Requests', g2);
+    mock('Fetch Cited Pages', er2.map(r => ({ json: { statusCode: 200, headers: {}, data: pageFor(r.json.url) } })));
+    const em2 = (await run('Earned Media', store['Fetch Cited Pages']))[0].json;
+    const oi2 = (await run('AI Outreach Input', store['Earned Media']))[0].json;
+    return { G: g2[0].json, em: em2, oi: oi2, row: (d) => em2.prospect_rows.find(r => r.prospect_domain === d) || {} }; };
+  const OFF = await growthPass();
+  check('D12: with the Link Builder off AI Growth still drafts, but never to a competitor selling what we sell (orksync.com) and never to a government page',
+    OFF.em.outreach_jobs.length >= 1 && !OFF.em.outreach_jobs.some(j => j.prospect_domain === 'orksync.com') && !OFF.em.outreach_jobs.some(j => /\.gov(\.|$)/.test(j.prospect_domain))
+    && /competing provider/.test(OFF.row('orksync.com').note), JSON.stringify({ jobs: OFF.em.outreach_jobs.map(j => j.prospect_domain), orksync: OFF.row('orksync.com').note }));
+  check('D12: the name comes from the site model, never the domain label — with no profile the drafts are for "Tech&", and the facts tell the writer nothing is accredited',
+    (await growthPass({ site: { business_name: 'Tech&' }, profiles: [] })).em.business === 'Tech&'
+    && /Business: Tech&/.test((await growthPass({ site: { business_name: 'Tech&' }, profiles: [] })).oi.facts) && !/Accreditation/.test(OFF.oi.facts), JSON.stringify(OFF.oi.facts).slice(0, 200));
+  const ON = await growthPass({ monitors: M.monitors({ link_builder: true }) });
+  check('D12: with the Link Builder on AI Growth writes nothing (one writer) and hands its earned-media prospects over for qualification, with the question AI cites them for as the evidence',
+    ON.em.outreach_jobs.length === 0 && ON.oi.skip === true && ON.em.prospect_rows.length >= 3 && ON.row('gulfnews.com').status === 'new' && /AI cites this list/.test(ON.row('gulfnews.com').detail)
+    && /Link Builder writes to them/.test(ON.row('gulfnews.com').note) && ON.row('gulfnews.com').origin === 'ai_growth', JSON.stringify(ON.em.prospect_rows.map(r => [r.prospect_domain, r.status, r.note.slice(0, 40)])));
+  check('D12: the prompt no longer tells them they are cited in AI answers, must quote their page and writes the name as the facts have it',
+    (() => { const fs2 = require('fs'); const path2 = require('path'); const CD2 = process.env.CODE_DIR || path2.join(__dirname, 'code');
+      const pr2 = fs2.readFileSync(path2.join(CD2, 'AI_Outreach_Writer.prompt.txt'), 'utf8');
+      return !/cite when buyers ask|is cited in AI answers/.test(pr2) && /no word about AI assistants/.test(pr2) && /quote something from the page itself/.test(pr2) && /exactly as it stands above/.test(pr2) && /\[Owner: confirm/.test(pr2); })(), 'ai_outreach.txt');
 });
 
 // ===================================================================================
@@ -2687,7 +2721,7 @@ await guard('link builder', async () => {
   const F = require('./fixtures_lb413'); const TC = require('./table_cols.json');
   const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
   const J = (x) => { try { return JSON.parse(x || ''); } catch (e) { return null; } };
-  const loadAll = (o = {}) => { mock('Load Sites', F.sites().map(x => x)); mock('Load Ladders', F.ladders()); mock('Load Monitors', o.monitors || F.monitors()); mock('Load Profiles', F.profiles());
+  const loadAll = (o = {}) => { mock('Load Sites', (o.sites || F.sites()).map(x => x)); mock('Load Ladders', F.ladders()); mock('Load Monitors', o.monitors || F.monitors()); mock('Load Profiles', o.profiles || F.profiles());
     mock('Load Link Prospects', F.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', (o.outreach || F.outreachPrev()).map(j => ({ json: j }))); mock('Load Listings', F.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', [{ json: {} }]);
     mock('Load Backlinks', F.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]); mock('Load AI Targets', F.targets().map(j => ({ json: j })));
     mock('Load Query History', F.queries().map(j => ({ json: j }))); mock('Load Rank History', F.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', (o.cache || F.cache()).map(j => ({ json: j }))); };
@@ -2739,6 +2773,9 @@ await guard('link builder', async () => {
   const WI = (await run('LB Writer Input', [{ json: {} }]))[0].json;
   check('writer input: the signer from the business profile, facts, each prospect with its angle, evidence, contact kind and our page', WI.signer === 'Sara Khan, Head of Finance Systems, Techand Systems' && WI.jobs.some(j => j.prospect_domain === 'erpinsights.ae' && j.angle === 'broken' && j.dead) && WI.jobs.some(j => j.prospect_domain === 'penieltech.com' && j.angle === 'list' && j.dead) && WI.jobs.some(j => j.type === 'press' && j.deadline === '20 Oct') && /Competitors/.test(WI.facts), JSON.stringify(WI.jobs.map(j => [j.n, j.prospect_domain, j.angle, j.contact])));
   mock('Outreach Sequence Writer', [F.writer(WI.jobs)]);
+  const QA = (await run('LB Draft QA', [{ json: {} }]))[0].json;
+  check('L2: every one of this week\'s drafts passes the gate (quote of their page, one link to the page we chose, a clear ask, the business name as the model has it, no claim outside the facts)',
+    QA.verdicts.length >= 4 && QA.held === 0 && QA.verdicts.every(v => v.ok && v.steps.length), JSON.stringify(QA.verdicts.map(v => [v.prospect_domain, v.ok, v.held])));
   const RW = (await run('LB Rows', [{ json: {} }]))[0].json; const RO = (d) => RW.outreach_rows.find(o => o.prospect_domain === d) || {};
   const seq = J(RO('azdan.com').sequence_json) || []; const pseq = J(RO('gulffinance.bsky.social/3mfinreq1').sequence_json) || [];
   check('rows: sequences merged (drafted; first e-mail + 2 follow-ups after 4 and 8 working days, subject only on the first), journalist requests 2 steps (3 days), the writer\'s refusal kept as the reason', RO('azdan.com').status === 'drafted' && seq.length === 3 && seq.map(x => x.wait_days).join() === '0,4,8' && seq[0].subject && !seq[1].subject && pseq.length === 2 && pseq[1].wait_days === 3 && RO('flick.network').status === 'not_fit' && /competing/.test(RO('flick.network').fit_reason) && RW.drafted >= 4, JSON.stringify([RO('azdan.com').status, seq.map(x => x.wait_days), pseq.length, RO('flick.network').fit_reason, RW.drafted]));
@@ -2778,6 +2815,45 @@ await guard('link builder', async () => {
   // ---- (i) Site Admin accepts the new prospect status "replied" ----
   const aa = (await run('Admin Action', { body: { action: 'prospect', domain: 'techand.ai', prospect_domain: 'erpdaily.ae', status: 'replied' } }))[0].json;
   check('Site Admin: prospect status "replied" (v4.13)', aa.prospect_status === 'replied', JSON.stringify(aa));
+  // ---- (j) D13 (system review 2026-10-11, exec 372): who is pitched, and as whom ----
+  const pass = async (o = {}) => { loadAll(o); delete store['Manual Run'];
+    const P2 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+    const SR2 = (await run('LB Source Requests', [{ json: P2 }])).map(r => r.json); mock('Fetch LB Sources', SR2.map(r => sourceFor(r)));
+    const DR2 = (await run('LB DFS Requests', [{ json: P2 }])).map(r => r.json); mock('Run LB DFS', DR2.map(() => F.dfsBroken()));
+    const PR2 = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json); mock('Fetch LB Pages', PR2.map(r => F.fetchPage(r.url)));
+    const S22 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json); mock('Fetch LB Second', S22.map(r => F.fetchPage(r.url)));
+    const AS2 = (await run('LB Assemble', [{ json: {} }]))[0].json;
+    const WI2 = (await run('LB Writer Input', [{ json: {} }]))[0].json;
+    return { P: P2, PR: PR2, AS: AS2, WI: WI2, O: (d, t) => AS2.outreach_rows.find(x => x.prospect_domain === d && (!t || x.type === t)) || {} }; };
+  const D13 = await pass();
+  check('D13: a competitor is never pitched — their own service page selling what we sell (bemea.com, sscoglobal.com, flick.network) is refused with the reason',
+    ['bemea.com', 'sscoglobal.com', 'flick.network'].every(d => D13.O(d).status === 'not_fit' && /competing provider/.test(D13.O(d).fit_reason)) && !D13.AS.jobs.some(j => ['bemea.com', 'sscoglobal.com', 'flick.network'].includes(j.prospect_domain)),
+    JSON.stringify(['bemea.com', 'sscoglobal.com', 'flick.network'].map(d => [d, D13.O(d).status, D13.O(d).fit_reason])));
+  check('D13: a list that leaves us out is still pitched although the publisher sells software too (azdan.com, penieltech.com): the competitor rule only refuses their own service pages',
+    D13.O('azdan.com').status === 'ready' && D13.O('penieltech.com').status === 'ready', JSON.stringify([D13.O('azdan.com').status, D13.O('azdan.com').fit_reason, D13.O('penieltech.com').status]));
+  check('D13: a bare homepage is refused (apideck.com) — a front page has no section for a link',
+    D13.O('apideck.com').status === 'not_fit' && /only their homepage/.test(D13.O('apideck.com').fit_reason), JSON.stringify(D13.O('apideck.com')));
+  check('D13: a mailbox provider and a contact database are refused without reading them (outlook.com, zoominfo.com)',
+    D13.O('outlook.com').status === 'not_fit' && /mailbox provider/.test(D13.O('outlook.com').fit_reason) && D13.O('zoominfo.com').status === 'not_fit' && /contact \/ company database/.test(D13.O('zoominfo.com').fit_reason)
+    && !D13.PR.some(r => /outlook\.com|zoominfo\.com/.test(r.url)), JSON.stringify([D13.O('outlook.com').fit_reason, D13.O('zoominfo.com').fit_reason]));
+  check('D13: an accredited-provider list is not asked to add us while the facts do not say we hold the accreditation (uae-asp.ae)',
+    D13.O('uae-asp.ae').status === 'not_fit' && /accredited \/ approved providers/.test(D13.O('uae-asp.ae').fit_reason), JSON.stringify(D13.O('uae-asp.ae')));
+  check('D13: every target is on the canonical host — the ladder page stored on www is emitted on the bare host, and no page of ours carries www',
+    D13.P.pages.some(x => x.url === F.SERVICE) && !D13.P.pages.some(x => /\/\/www\./.test(x.url)) && !D13.AS.outreach_rows.some(o => /\/\/www\.techand/.test(o.target_url)), JSON.stringify(D13.P.pages.map(x => x.url)));
+  const LS2 = (id) => D13.AS.listing_rows.find(l => l.listing_id === id) || {};
+  check('D13: a listing that was definitely missing keeps that answer with the date it was checked when the platform now blocks the check (never a fresh "unknown")',
+    LS2('trustradius').status === 'missing' && /missing \(checked \d{4}-\d{2}-\d{2}\)/.test(LS2('trustradius').why) && /blocks checks now/.test(LS2('trustradius').why), JSON.stringify(LS2('trustradius')));
+  // the business name: no profile row, the name from the site model (the homepage's og:site_name / Organization name, stored by the Site Tracker)
+  const D13b = await pass({ sites: F.sites({ business_name: 'Tech&' }), profiles: [] });
+  check('D13: with no business profile the pitches are signed with the name from the site model ("Tech&"), never the domain label ("techand")',
+    D13b.P.brand === 'Tech&' && D13b.P.brand_known === true && D13b.WI.business === 'Tech&' && D13b.WI.signer === '[Your name], Tech&' && !/Accreditation/.test(D13b.WI.facts), JSON.stringify([D13b.P.brand, D13b.WI.signer, D13b.WI.facts]));   // nothing on file: the word never appears in the facts, so the gate cannot be fooled into passing a claim
+  const D13c = await pass({ sites: F.sites({ business_name: '' }), profiles: [] });
+  check('D13: with no name anywhere the e-mails carry a bracket for the owner, never the website address as a name',
+    D13c.P.brand === 'techand.ai' && D13c.P.brand_known === false && D13c.WI.business === '[Confirm: the business name]' && /business name is not on file/.test(D13c.WI.facts), JSON.stringify([D13c.P.brand, D13c.WI.business]));
+  // the same accredited list, with the accreditation on file: now it may be asked
+  const D13d = await pass({ sites: F.sites({ accreditation: 'Accredited e-invoicing service provider (ASP), UAE Ministry of Finance, 2026' }) });
+  check('D13: with the accreditation on file the same list becomes a prospect again (the fact decides, not the page)',
+    ['ready', 'needs_contact'].includes(D13d.O('uae-asp.ae').status) && !/accredited \/ approved providers/.test(D13d.O('uae-asp.ae').fit_reason), JSON.stringify(D13d.O('uae-asp.ae')));
 });
 
 // ===================================================================================
@@ -4794,6 +4870,88 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   // ---------- G. D23: the tracking parameters are gone from the URLs we store ----------
   const ledger = (await run('Ledger Rows', [{ json: pb }])).map(x => x.json).filter(r => !r.skip);
   check('D23: no stored URL keeps utm_* or srsltid (they came in with GA4 referrals and AI citations and reached the report and the outreach)', !ledger.some(r => /utm_|srsltid|gclid/.test(String(r.from_url) + String(r.to_url))) && ledger.length > 0, JSON.stringify(ledger.map(r => r.from_url).slice(0, 5)));
+});
+
+// ===================================================================================
+// S45 L2 L1 (2026-10-11 system review, FIX_PLAN L2 / L1): the draft gate every outreach e-mail passes before the app may offer it for
+// approval — no claim the facts do not carry, nothing left in brackets, the address on the prospect's own domain, a real quote from their
+// page, one link to the page we chose on the canonical host, length and one clear ask, no SEO / AI jargon, the business name as the site
+// model has it. A draft that fails is held as `needs_edit` with its reasons (the app shows them, automatic mode skips it, nothing is sent).
+// L1 (the MX check before the first e-mail) lives where the sending lives — the app: app/server/test/draftGate.test.ts covers it.
+// ===================================================================================
+await guard('draft gate', async () => {
+  const SN = 'S45 L2 L1 — the draft gate: claims, brackets, the recipient\'s own domain, a quote from their page, one link to our page, length and one ask, jargon, the business name; held drafts become needs_edit (the MX check is in the app)';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const TC = require('./table_cols.json');
+  const SITE = 'site_techand-ai', D = 'techand.ai', H_ = 'https://techand.ai', GUIDE = H_ + '/insights/peppol-accredited-service-providers-uae';
+  const NOW = new Date().toISOString();
+  const FACTS = 'Business: Tech& (techand.ai), ERP and e-invoicing consultancy\nTopics: e invoicing in uae';   // nothing about an accreditation on file
+  const SIGNER = 'Sara Khan, Head of Finance Systems, Tech&';
+  const plan = { site_id: SITE, domain: D, canonical_host: D, brand: 'Tech&', brand_known: true, competitors: ['rival-erp.example', 'other-rival.example'], accreditation: '', home: H_ + '/', pages: [], topics: ['e invoicing in uae'], profile: {} };
+  // one job per case: the same prospect page, a different draft
+  const job = (n, name, o = {}) => { const dom = o.prospect_domain || name + '.example';
+    return { n, prospect_domain: dom, type: o.type || 'resource', angle: 'resource',
+      page_url: o.page_url === 'home' ? 'https://' + dom + '/' : 'https://www.' + dom + '/peppol-guide', page_title: 'A practical Peppol guide for UAE finance teams',
+      evidence: '"Finance teams in the UAE should check the list of accredited Peppol providers before choosing an e-invoicing partner."',
+      dead: null, competitors_named: [], contact: 'editorial on their site', to: o.to || 'editor@' + dom, deadline: '', target_url: o.target_url || GUIDE, target_title: 'Accredited Peppol service providers in the UAE', anchor_hint: 'title' }; };
+  const CLEAN = 'Hello, I read "A practical Peppol guide for UAE finance teams" this morning. Our own page on the same subject is here: ' + GUIDE + '. Would you like me to send a one-line description for it? ' + SIGNER;
+  const seq = (n, body, more = {}) => ({ n, steps: [{ step: 0, subject: more.subject || 'A note on your Peppol guide', body }, { step: 1, body: more.f1 || 'One more detail: the page names each provider with the standard it supports. Happy to send it as plain text.' }] });
+  const cases = [
+    ['clean', CLEAN, {}],
+    ['claim', CLEAN.replace('Our own page', 'We are an accredited service provider, and our page'), {}],
+    ['bracket', CLEAN.replace('Our own page', 'We work with [number] UAE finance teams, and our page'), {}],
+    ['recipient', CLEAN, { to: 'editor@someone-else.example' }],   // an address found on their page that belongs to another company
+    ['quote', 'Hello, we publish a list of providers in the UAE: ' + GUIDE + '. Would you like a one-line description? ' + SIGNER, {}],
+    ['competitor', CLEAN, { prospect_domain: 'rival-erp.example' }],
+    ['homepage', CLEAN, { page_url: 'home' }],
+    ['jargon', CLEAN + ' A dofollow backlink would help our SEO.', {}],
+    ['label', CLEAN.replace(SIGNER, 'Sara Khan, techand'), {}],
+    ['twolinks', CLEAN.replace('Would you', 'Our service page is at ' + H_ + '/services/e-invoicing too. Would you'), {}],
+    ['noask', CLEAN.replace('Would you like me to send a one-line description for it?', 'We thought your readers might find it useful.'), {}],
+  ];
+  const jobs = cases.map(([name, , o], i) => ({ ...job(i + 1, name, o), case: name }));
+  mock('LB Plan', [{ json: plan }]);
+  mock('LB Writer Input', [{ json: { site_id: SITE, domain: D, business: 'Tech&', facts: FACTS, signer: SIGNER, home: H_ + '/', jobs } }]);
+  mock('Outreach Sequence Writer', [{ json: { output: { sequences: cases.map(([, body], i) => seq(i + 1, body)), skip: [] } } }]);
+  const QA = (await run('LB Draft QA', [{ json: {} }]))[0].json;
+  const V = (name) => QA.verdicts[cases.findIndex(c => c[0] === name)] || {};
+  const why = (name) => (V(name).held || []).join(' | ');
+  console.log('   verdicts ->', JSON.stringify(QA.verdicts.map((v, i) => [cases[i][0], v.ok, (v.held || [])[0] || ''])));
+  check('a clean pitch passes every check', V('clean').ok === true && V('clean').steps.length === 2 && QA.checked === cases.length, why('clean'));
+  check('a claim the facts do not carry is held and wrapped for the owner', V('claim').ok === false && /needs your confirmation: "accredited"/.test(why('claim')) && /\[Owner: confirm — We are an accredited service provider/.test(V('claim').steps[0].body), why('claim'));
+  check('a placeholder nobody filled in is held', V('bracket').ok === false && /needs you: \[number\]/.test(why('bracket')), why('bracket'));
+  check('an address that is not on the prospect\'s own domain is held', V('recipient').ok === false && /is not on recipient\.example/.test(why('recipient')), why('recipient'));
+  check('a first e-mail that quotes nothing from their page is held', V('quote').ok === false && /quotes nothing that is on their page/.test(why('quote')), why('quote'));
+  check('a competitor as the recipient is held', V('competitor').ok === false && /competing site of yours/.test(why('competitor')), why('competitor'));
+  check('a bare homepage as the only page is held', V('homepage').ok === false && /only their homepage/.test(why('homepage')), why('homepage'));
+  check('SEO jargon is held', V('jargon').ok === false && /backlink/.test(why('jargon')), why('jargon'));
+  check('the domain label written as the business name is held', V('label').ok === false && /writes the business name as "techand"/.test(why('label')), why('label'));
+  check('a second link is held, and a link must be the page we chose on the canonical host', V('twolinks').ok === false && /carries 2 links/.test(why('twolinks')), why('twolinks'));
+  check('a first e-mail with no clear ask is held', V('noask').ok === false && /makes no clear ask/.test(why('noask')), why('noask'));
+  check('the gate counts what it held', QA.held === cases.length - 1, JSON.stringify([QA.checked, QA.held]));
+  // the held drafts reach the rows as needs_edit with their reasons; the clean one is drafted and may be approved
+  const rowOf = (j) => ({ site_id: SITE, domain: D, prospect_domain: j.prospect_domain, type: j.type, status: 'ready', score: 40, fit: 0.6, fit_reason: 'topic match 60%', checks_json: '{}', page_url: j.page_url, page_title: j.page_title,
+    evidence: j.evidence, contacts_json: JSON.stringify([{ email: j.to, kind: 'editorial', own: true, source_url: j.page_url }]), contact_email: j.to, contact_form_url: '', country: 'AE', language: 'en', target_url: j.target_url, target_reason: 'topic match', anchor_hint: 'title', sequence_json: '', deadline: '', drafted_at: '', checked_at: NOW, request_id: '' });
+  const rows = jobs.map(rowOf);
+  mock('LB Assemble', [{ json: { site_id: SITE, domain: D, email: '', callback_url: '', request_id: '', on_demand: false, free_only: false, checked_at: NOW,
+    outreach_rows: rows, prospect_rows: [], listing_rows: [], impact_rows: [], jobs: rows, fixes: [], cache_row: { key: 'linkbld:' + SITE, kind: 'linkbld', site_id: SITE, value: '{}', updated_at: NOW },
+    summary: { press: 0, qualified: rows.length, not_fit: 0, needs_contact: 0, ready: rows.length, to_draft: rows.length, redirects: 0, listings_missing: 0, listings_linked: 0, impact_reads: 0 } } }]);
+  const RW = (await run('LB Rows', [{ json: {} }]))[0].json; const R = (name) => RW.outreach_rows.find(r => r.prospect_domain === (name === 'competitor' ? 'rival-erp.example' : name + '.example')) || {};
+  check('rows: the clean draft is "drafted", every held one is "needs_edit" with its reasons, and all of them keep their text so a person can fix it',
+    RW.drafted === 1 && RW.held === cases.length - 1 && R('clean').status === 'drafted' && R('claim').status === 'needs_edit' && /^held for your edit: /.test(R('claim').fit_reason)
+    && JSON.parse(R('claim').sequence_json || '[]').length === 2 && JSON.parse(R('clean').sequence_json || '[]')[1].wait_days === 4, JSON.stringify(RW.outreach_rows.map(r => [r.prospect_domain, r.status])));
+  const OR = (await run('Outreach Rows', [{ json: {} }])).map(r => r.json);
+  check('the held rows still carry the exact seo_link_outreach columns', OR.length === rows.length && OR.every(r => Object.keys(r).length === TC.LINK_OUTREACH.length && TC.LINK_OUTREACH.every(c => c in r)), JSON.stringify(Object.keys(OR[0] || {})));
+  const RP = (await run('LB Report', [{ json: {} }]))[0].json; save('link-builder-held-report.html', RP.html); scanHtml('link builder report (held drafts)', RP.html);
+  check('report: the held pitches are listed with the reason, and the ready count says how many need an edit', /Pitches that need your edit before they go out/.test(RP.html) && /needs your confirmation/.test(RP.html) && /need your edit/.test(RP.html) && RP.summary.held === cases.length - 1, JSON.stringify(RP.summary));
+  // a writer that answers nothing usable, and the writer's own refusal
+  mock('Outreach Sequence Writer', [{ json: { output: { sequences: [{ n: 1, steps: [{ step: 0, subject: 'x', body: '' }] }], skip: [{ n: 2, reason: 'their page sells links' }] } } }]);
+  const QA3 = (await run('LB Draft QA', [{ json: {} }]))[0].json;
+  const RW3 = (await run('LB Rows', [{ json: {} }]))[0].json; const R3 = (name) => RW3.outreach_rows.find(r => r.prospect_domain === name + '.example') || {};
+  check('an empty e-mail is held, the writer\'s own refusal is kept as the reason, and nothing else is drafted',
+    QA3.verdicts[0].ok === false && /no e-mail was written/.test(QA3.verdicts[0].held.join(' ')) && QA3.writer_skip[0].prospect_domain === 'claim.example' && RW3.drafted === 0 && RW3.skipped === 1
+    && R3('claim').status === 'not_fit', JSON.stringify([QA3.verdicts[0], RW3.skipped]));
 });
 
 H.report();

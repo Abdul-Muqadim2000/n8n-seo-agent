@@ -29,7 +29,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = rd('code/' + p)
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
-    s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('/*__CLAIMS__*/', rd('code/_claims.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
+    s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('/*__CLAIMS__*/', rd('code/_claims.js')).replace('/*__DRAFT_QA__*/', rd('code/_draft_qa.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
     return s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL)
@@ -474,6 +474,7 @@ L.code('LB Assemble', 'LB_Assemble.js', at(29, 0))
 L.code('LB Writer Input', 'LB_Writer_Input.js', at(30, 0)); L.iff('Any LB Writing?', '{{ !$json.skip }}', at(31, 0))
 L.agent('Outreach Sequence Writer', 'link_outreach.txt', {'type': 'object', 'properties': {'sequences': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'steps': {'type': 'array', 'items': {'type': 'object', 'properties': {'step': {'type': 'number'}, 'subject': {'type': 'string'}, 'body': {'type': 'string'}}, 'required': ['step', 'body']}}}, 'required': ['n', 'steps']}},
     'skip': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'reason': {'type': 'string'}}, 'required': ['n']}}}, 'required': ['sequences']}, at(32, -1), max_tokens=16000)
+L.code('LB Draft QA', 'LB_Draft_QA.js', at(33, -1))   # L2 (system review 2026-10-11): the deterministic gate every drafted e-mail passes
 L.code('LB Rows', 'LB_Rows.js', at(33, 0))
 def l_rows(name, comment, key, cols, pos):
     L.code(name, '// ' + comment + ' (exact columns)\nconst COLS = ' + json.dumps([c for c, _ in cols]) + ";\nconst rows = $('LB Rows').all().flatMap(i => i.json." + key + " || []).map(r => Object.fromEntries(COLS.map(c => [c, r[c] === undefined ? null : r[c]])));\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", pos)
@@ -498,7 +499,8 @@ lstep('LB DFS Requests', 'Any LB DFS?', 'Run LB DFS', 'LB Page Requests')
 lstep('LB Page Requests', 'Any LB Pages?', 'Fetch LB Pages', 'LB Second Requests')
 lstep('LB Second Requests', 'Any LB Second?', 'Fetch LB Second', 'LB Assemble')
 L.chain('LB Assemble', 'LB Writer Input')
-lstep('LB Writer Input', 'Any LB Writing?', 'Outreach Sequence Writer', 'LB Rows')
+L.link('LB Writer Input', 'Any LB Writing?'); L.link('Any LB Writing?', 'Outreach Sequence Writer', 0); L.link('Any LB Writing?', 'LB Rows', 1)
+L.chain('Outreach Sequence Writer', 'LB Draft QA', 'LB Rows')   # L2: the writer's sequences are checked before they reach the rows
 L.link('LB Rows', 'Outreach Rows')
 lstep('Outreach Rows', 'Any Outreach Rows?', 'Save Link Outreach', 'LB Prospect Rows')
 lstep('LB Prospect Rows', 'Any LB Prospects?', 'Save LB Prospects', 'Listing Rows')
@@ -508,7 +510,7 @@ lstep('LB Cache Rows', 'Any LB Cache?', 'Save LB Cache', 'LB Report')
 L.link('LB Report', 'Has Email (LB)?'); L.link('LB Report', 'Build LB Callback'); L.link('Build LB Callback', 'Has Callback (LB)?')
 L.sticky(f"""## SEO Agent — Link Builder (v4.13, LINK_BUILDER_SPEC.md)
 **Every Monday 11:00** (after the Backlink Monitor 07:30 and AI Growth 09:30) and on demand (*Manual Run* `{{{{ domain | site_id, free_only?, callback_url?, request_id? }}}}`, started by **SEO Agent — Link Builder API** `POST /webhook/seo-link-builder`). Per site with `link_builder` on (`{MONITORS_TABLE}`, default on).
-**New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** (DataForSEO, ≈ $0.07). **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1). Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.
+**New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** (DataForSEO, ≈ $0.07). **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1), then the **draft gate** (*LB Draft QA*, L2): claims against the facts on file, no bracket left to fill, the address on their own domain, a real quote from their page, one link to the page we chose on the canonical host, length and one clear ask, the words we never use, the business name as the site model has it — a draft that fails is held as `needs_edit` with its reasons. Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.
 Rows: `{LINK_OUTREACH_TABLE}`, `{PROSPECT_TABLE}` (new kinds), `{LISTINGS_TABLE}`, `{LINK_IMPACT_TABLE}` (what each won link did, vs the site's other pages), `{CACHE_TABLE}` linkbld:; report + callback `link_builder`.""", [-40, -420], 1100, 300, 6)
 L.write('SEO_Agent_Link_Builder.json')
 

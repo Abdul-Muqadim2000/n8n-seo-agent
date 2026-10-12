@@ -93,6 +93,7 @@ export function ReadyToSend({ d, onRun }: { d: LinkBuildingData; onRun?: () => v
 
 function DraftStatus({ x }: { x: OutreachDraft }) {
   if (x.status === 'drafted' && x.steps.length) return <StatusBadge tone="accent">Pitch ready</StatusBadge>;
+  if (x.status === 'needs_edit') return <StatusBadge tone="warning">Needs your edit</StatusBadge>;
   if (x.status === 'needs_contact') return <StatusBadge tone="warning">No e-mail address</StatusBadge>;
   return <Badge>Pitch not written yet</Badge>;
 }
@@ -101,7 +102,7 @@ function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; on
   const { org, site, can } = useSitePage();
   const dismiss = useDismissOutreach(org.id, site.id);
   const member = can('member');
-  const pitch = x.status === 'drafted' && x.steps.length > 0;
+  const pitch = (x.status === 'drafted' || x.status === 'needs_edit') && x.steps.length > 0;   // a held pitch is shown so a person can fix it; it cannot be sent until every check passes
   const press = x.type === 'press';
   const noEmail = !x.contacts.length;
   const notFit = () =>
@@ -218,6 +219,7 @@ function DraftCard({ x, d, onOpen }: { x: OutreachDraft; d: LinkBuildingData; on
           </Button>
         )}
         {!pitch && x.status !== 'needs_contact' && <span className="text-xs text-ink-3">The pitch is written in a coming weekly run (up to 10 a week, best first).</span>}
+        {x.status === 'needs_edit' && <span className="text-xs text-warning-text">Every pitch is checked before it goes out: edit it and the checks run again on approval.</span>}
         {x.draftedAt && <span className="ml-auto text-xs text-ink-3">drafted {fmtDate(x.draftedAt)}</span>}
       </div>
       {!d.canSend.ok && pitch && member && <p className="mt-2 text-xs text-warning-text">{d.canSend.why}</p>}

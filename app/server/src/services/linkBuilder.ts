@@ -2,6 +2,7 @@ import { and, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 import {
   consentGate,
   DEFAULT_LINK_SETTINGS,
+  draftGate,
   emailDomain,
   n8nSiteId,
   warmupCap,
@@ -26,6 +27,7 @@ import type { MailboxRow, OrgRow, OutreachSequenceRow, SiteRow } from '../db/sch
 import { sha256 } from '../lib/crypto';
 import { badRequest, conflict, HttpError, notFound } from '../lib/errors';
 import { siteAdmin, siteRows } from '../n8n/client';
+import { mxCheck } from './mail';
 
 // v4.13 Link Builder (n8n/seo-agent/LINK_BUILDER_SPEC.md §2): what the page shows and what a person can do. The n8n workflow finds,
 // qualifies and drafts; this app sends from the company's own mailbox (outreachJobs.ts), reads the replies and keeps the sequences.
@@ -169,6 +171,17 @@ export async function approve(org: OrgRow, site: SiteRow, userId: string | null,
   if (gate.needed && !a.consent) throw new HttpError(409, gate.why + ' Tick "I have their consent or we already work together" to send.', 'consent_needed');
   const steps = a.steps.map((x, i) => ({ step: i, waitDays: Math.min(30, Math.max(i === 0 ? 0 : 2, Math.round(n(x.waitDays)))), subject: s(x.subject).trim().slice(0, 140), body: s(x.body).replace(/\r/g, '').trim().slice(0, 6000) })).filter((x) => x.body).slice(0, 3);
   if (!steps.length || !steps[0]!.subject) throw badRequest('The first e-mail needs a subject and a text.');
+  // L2: the same gate the engine ran when it drafted, on the text as it stands now (a person may have edited it in the dialog). The engine
+  // checked the claims against the business facts and left anything unproven in brackets, so here a leftover bracket is enough to hold it.
+  const ck2 = json<{ dead?: { url?: string; anchor?: string } }>(row.checks_json, {}) || {};
+  const qa = draftGate(
+    { type: a.type, steps: steps.map((x) => ({ subject: x.subject, body: x.body })), to, prospectDomain: a.prospectDomain, pageUrl: s(row.page_url), pageTitle: s(row.page_title), evidence: s(row.evidence), deadAnchor: s(ck2.dead?.anchor), deadUrl: s(ck2.dead?.url) },
+    { domain: site.domain, targetUrl: s(row.target_url) },
+  );
+  if (!qa.ok) throw new HttpError(409, `This pitch cannot go out yet: ${qa.held.join('; ')}.`, 'draft_held');
+  // L1: an address whose domain has no mail server would only bounce, and bounces cost the mailbox its reputation
+  const mx = await mxCheck(to);
+  if (!mx.ok) { await suppress(org.id, 'email', to, mx.via === 'none' ? 'no mail server for the domain (MX)' : 'not a valid address'); throw new HttpError(409, `Not sent: ${mx.reason}.`, 'no_mx'); }
   // one conversation per site at a time, and a rest after one that ended without a reply
   const others = await db.select().from(schema.outreachSequences).where(and(eq(schema.outreachSequences.orgId, org.id), eq(schema.outreachSequences.prospectDomain, a.prospectDomain)));
   if (others.some((q) => ['scheduled', 'active', 'paused', 'replied'].includes(q.status))) throw conflict(`A conversation with ${a.prospectDomain} is already going on.`);

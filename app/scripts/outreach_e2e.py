@@ -6,6 +6,8 @@ GreenMail (a throwaway SMTP + IMAP server, docker image greenmail/standalone) ru
 the app connects a mailbox to it, approves sequences, and the sender / inbox jobs are run at a weekday time (they never send at weekends).
 Replies, an out-of-office, a bounce and an opt-out are delivered into the mailbox as real messages and read by the inbox job.
 The n8n Link Builder rows of a throwaway test domain are written through the n8n API and removed at the end, with the test company.
+The dev server must run with OUTREACH_MX_CHECK=false: GreenMail's prospects live on made-up *.test domains, which have no mail server, and
+the sender (L1) would otherwise suppress them before sending.
 Run it before the Reply Reader workflow is active (or accept one Claude Haiku call per reply, ≈ $0.001): without it the app's own rules
 classify replies, which this test checks."""
 import argparse, email, imaplib, json, os, secrets, smtplib, subprocess, sys, time, urllib.parse, urllib.request
