@@ -67,7 +67,7 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 | D6 | "www and non-www not consolidated" (High) is false | TECH | wrong advice | High | S | exec 354, 370, 385; §2.5 | F7 | 1B | verified live 2026-10-12 |
 | D7 | RDAP never parsed, so WHOIS is always paid | OPS | quality | High | S | exec 370 ($0.36 WHOIS); §2.5 | F12 | 1A | fixed; live WHOIS $0 via the domain-age cache — RDAP path not exercised live |
 | D8 | Competitor brand ("facts erp") planned as a ladder rung | LAD, KW | wrong advice | Medium | S | exec 352, 365; `files/keyword-ladder-…`; §2.4 | F4 | 1D | verified live 2026-10-12 (ladder lad_mv4vxu3bq0kl, no brand rung) |
-| D9 | Hub page links to unwritten pages; lowercase keyword anchors | LAD, CON | quality | Medium | S | exec 365; `files/erp-software-uae.html`; §2.4 | — (K11) | 2C | open |
+| D9 | Hub page links to unwritten pages; lowercase keyword anchors | LAD, CON | quality | Medium | S | exec 365; `files/erp-software-uae.html`; §2.4 | — (K11) | 2C | fixed 2026-10-12 (harness S38) — links only to live pages, planned ones listed in meta.json + a tracker reminder, title-cased anchors keeping acronyms (`_anchor.js`) |
 | D10 | Generated page is not publishable (placeholders, NAP, length) | CON | quality | High | M | exec 365; `files/erp-software-uae.{md,html,meta.json}`; §2.4 | F6 | 2E | open |
 | D11 | System is blind to existing pages (advises a cannibalising page) | KW, LAD, CAD, SITE | wrong advice | Medium | M | exec 378, 382; 2026-10-01 ladder; §2.9 | F5 | 2D | open |
 | D12 | AI Growth drafts go to government sites and competitors; second writer | AIG | wrong advice | Medium | S | exec 376; `files/ai-growth-drafts-…txt`; §2.6 | F15 | 4B | open |
@@ -80,7 +80,7 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 | D19 | AI visibility: 7 of 42 requests errored with no retry; heading counted as a brand; cited URLs not normalised | AIV | wrong number | Medium | S | exec 362 / 363; `files/ai-visibility-…pdf`; §2.6 | F13, F17 | 4A | open |
 | D20 | Discovery: ladder overlap unflagged, contradictory AI Overview text, duplicate domains, float CPCs | KW | quality | Low | S | exec 356, 364; `files/keyword-ideas-…`; §2.3 | F14 | 3A | open |
 | D21 | Sparse Trends % ("+1,200%") quoted in the Site Tracker brief | SITE | wrong number | Low | S | exec 382; §2.9 | F14 | 3A | open |
-| D22 | Site description reads only the homepage (fit 1 for Business Central; critic calls real stages "invented") | KW, CON | wrong number | Low | M | execs 344, 348–350, 365; §2.1, §2.4 | F4 | 2C | open |
+| D22 | Site description reads only the homepage (fit 1 for Business Central; critic calls real stages "invented") | KW, CON | wrong number | Low | M | execs 344, 348–350, 365; §2.1, §2.4 | F4 | 2C | fixed 2026-10-12 (harness S42) — homepage + ≤ 5 nav / service pages read (Jina, ≈ $0), services and pages_read stored, the critic told what the site says (claims_on_site, "unverified" instead of "invented"); wiring services into the model columns is a follow-up |
 | D23 | Ahrefs DR not retried; sister / off-topic gap domains as prospects; `utm_source` kept | BL | quality | Low | S | exec 367 / 368; §2.7 | F17 | 4A | open |
 | D24 | Full report: duplicate author finding, false "capped at 85", scraper queries in top queries | REP, TECH | wrong number | Low | S | exec 370; `files/full-seo-report-…` | F14 | 1B | partly verified live 2026-10-12: author once, no cap text; scraper queries still shown → P1-3 |
 | D25a | Scheduled runs missed (Mac-hosted n8n) | OPS | ops | High | L | no AI Pulse run 2026-10-10 / 10-11; exec 240, 261 late | F16 | 6B–6C | open |
@@ -88,9 +88,9 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 | D25c | Test check-in row stands in for October's Search Console check-in | OPS | ops | Low | S | `seo_console_checkins` "October check-in (test)" | F16 | 6A | open |
 | D26 | Verdicts state a volatile AI Overview as fact | KW | wrong advice | Low | S | exec 347, 352, 365; §3 #25 | F14 | 1D | verified live 2026-10-12 ("seen in the check at 06:27 UTC") |
 | G1 | One retry rule for every external HTTP node (incl. errors inside HTTP 200) | OPS | quality | Medium | S | §2.6, §2.7; SC 3.8 | F17 | 4A | open |
-| G2 | Stop emitting and scoring FAQPage | CON | quality | Low | S | SC C11 | F18 | 2E | open |
+| G2 | Stop emitting and scoring FAQPage | CON | quality | Low | S | SC C11 | F18 | 2E | fixed 2026-10-12 (harness S38) — no FAQPage emitted or scored; question headings with 40-60-word answers kept |
 | G3 | Time-to-rank rule with 2025 data and a likelihood per plan | KW, LAD | wrong number | Medium | S | SC K10; criteria K10 | F19 | 1D | verified live 2026-10-12 (ladder report; the verdict shows months only) |
-| G4 | Claim checks: figures against source text, weak sources, tracking parameters | CON | quality | Medium | M | exec 365 (trangotech.com ×3, `?srsltid=`); SC C3 | F20 | 2F | open |
+| G4 | Claim checks: figures against source text, weak sources, tracking parameters | CON | quality | Medium | M | exec 365 (trangotech.com ×3, `?srsltid=`); SC C3 | F20 | 2F | fixed 2026-10-12 (harness S38) — `_sources.js`: figures looked up in the cited source (`[Confirm: …]` on a miss, ≤ 12 marks), source tiers with one weak citation per domain, tracking parameters stripped |
 | G5 | Originality / similarity check | CON | missing feature | Medium | M | SC C5 = 1 | F21 | 5 | open |
 | G6 | Rank tracker depth: SERP features, AI Overview, competitors, mobile, SERP snapshot | RANK | missing feature | Medium | M | SC 2.2–2.6, 2.13 | F22 | 5 | open |
 | G7 | Core Web Vitals per template from CrUX (mobile + desktop) | TECH | missing feature | Medium | S | SC 1.5 = 3 | F23 | 3B | open |
