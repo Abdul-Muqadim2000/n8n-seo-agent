@@ -104,7 +104,7 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 | G15 | Expiring share links | REP | missing feature | Low | M | SC 3.7 | F31 | 5 | open |
 | G16 | First approved live outreach send | LB | missing feature | Medium | S | SC 4C.5, 4C.6 (not live-verified) | F32 | 5 | open |
 | G17 | Calibration from 20+ live pages (timelines, reach, QA threshold) | KW, CON | missing feature | Medium | L | SC K1, K10, C9 | F33 | later | open |
-| G18 | Labelled accuracy set: ≥ 95% precision for audit findings and spam labels | TECH, BL | quality | Medium | M | spot-check 5 / 7 (§2.5); SC 1.14, 4B.5 | "To reach 9" #2 | 3C | open |
+| G18 | Labelled accuracy set: ≥ 95% precision for audit findings and spam labels | TECH, BL | quality | Medium | M | spot-check 5 / 7 (§2.5); SC 1.14, 4B.5 | "To reach 9" #2 | 3C | fixed 2026-10-12 (harness S49, `ACCURACY_SET.md`) — 53 audit cases over techand.ai / peppol.org / azdan.com and 34 spam cases (16 real farm referrers vs 18 genuine), every case labelled with a reason and source; the scorer fails under 95% precision, on an unlabelled finding, on recall loss or a shrinking set. **Measured: audit findings 100% precision / 100% recall, spam labels 100% / 100%** — with the honest second number **useful precision 75%** (10 of 40 true findings are not worth reporting) and best-link precision 50% (see G18-1). Thin: three healthy sites, so Critical findings are unmeasured |
 | G19 | One site model that every workflow reads | all | quality | High | M | SC §4 "Incoherence"; D5, D10, D11, D15, D22 | F5 / F11; "To reach 9" #3 | 2A | verified live 2026-10-12 (canonical_host www.techand.ai, business_name Tech&, nap_json, nav_pages_json 12 entries); `services_json` empty → P2-2 |
 | G20 | AI question panel of 100+ prompts | AIV | missing feature | Low | M | SC 4A.1 | "To reach 9" #4 | 5 | open |
 | G21 | Delivery rate measured (≥ 99%) | OPS | ops | Medium | M | SC 3.8 | "To reach 9" #5 | 6D | open |
@@ -906,6 +906,13 @@ Evidence and texts: `LIVE_CHECK_phase2_2026-10-12.md` §3 (execution ids, artefa
 **Follow-up from G28 (2026-10-12):** on a small site (under ≈ 40 combined clicks) even a 50% drop is now only an info "Watch:" line and is not written to `seo_site_metrics.alerts`. Decide whether such sites should still get a medium alert with a "small numbers" caveat.
 
 **Also seen:** `settled_usd` in `seo_run_ledger` is the estimate, not a measured cost (G23 covers it); a pre-fix ladder row's free-text `page_type` still travels unchanged into the brief and the content log; Search Console reports techand.ai on the non-www host, so bare hosts inside `search_console.*` are Google's data, not ours.
+
+### 3.9 Defects found by the accuracy set (G18, 2026-10-12)
+
+| ID | Title | Area | Where | Fix | Status |
+|---|---|---|---|---|---|
+| G18-1 | A search-results page is ranked the best link (SEO value 57 vs 35 for the genuine OpenPeppol link) | BL | `v5/code/Parse_Backlinks.js` beside the footprint gate: nothing marks a SERP page of an unknown host as `scraper`, so `LK.values`' cap of 5 never applies | mark a search / query page (`?q=`, `/search`, `?s=`) of a host with no topic match as `scraper` and cap it, as the known scrapers already are; evidence in `ACCURACY_SET.md` §6 | open |
+| G18-2 | Useful precision 75%: 10 of 40 true findings are not worth reporting (cosmetic) | TECH, REP | the audit's finding list; G26 ranks by impact but still shows everything | hide or fold cosmetic findings below a threshold into one "minor items" line, so the list a customer reads is all actionable | open |
 
 ### 3.6 Cross-check: nothing from the inputs is lost
 
