@@ -309,6 +309,7 @@ export const features: Feature[] = [
       'Search Console index coverage, submitted sitemaps and site structure',
       'Core Web Vitals from real Chrome visitors, per template, on phone and desktop',
       'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
+      'The smallest items folded into one “minor items” line, so the list you read is the list to act on',
       'A brand and entity check',
       'A fix pack: robots.txt, llms.txt, redirects, schema and an internal-links CSV',
       'Monthly scheduled audits with what changed since the last audit',
@@ -340,6 +341,10 @@ export const features: Feature[] = [
       {
         q: 'How is the fix list ordered?',
         a: 'By likely impact: the severity of the issue, the share of pages it affects, and the clicks and impressions those pages get in Search Console. Issues that stop Google indexing a page come first, cosmetic items are never at the top, and every item says why it sits where it does.',
+      },
+      {
+        q: 'What happens to the tiny issues?',
+        a: 'They are folded into one “minor items” line with the count — a title one character too long, the link count of a navigation page, a cosmetic tag. Nothing is removed: they still count in the score, they are stored with the audit, and they open with one click in the app and sit in that one line in the report.',
       },
     ],
     related: ['site-tracking', 'content', 'reports'],
@@ -385,6 +390,10 @@ export const features: Feature[] = [
         a: 'A keyword where your page already ranks just below the top results. Small improvements there tend to pay off fastest, so the pipeline picks them early.',
       },
       { q: 'How often is the data refreshed?', a: 'Every week, with live rank checks for keywords Search Console does not report.' },
+      {
+        q: 'When does a drop become an alert?',
+        a: 'When the change is real: a fall is only called a fall once it is beyond normal week-to-week variation. On a small site, where a big percentage can be chance, you still get the alert — worded as something to watch, with both weeks’ counts named so you can see how small the numbers are.',
+      },
       {
         q: 'How does Ascentra know I published a planned page?',
         a: 'Each week it looks for the page in your sitemap by its slug and title. Once found, the page is checked live and its ranking is tracked from then on.',
@@ -462,6 +471,7 @@ export const features: Feature[] = [
       'Every link checked by Ascentra: rel, placement, noindex and canonical',
       'Lost only after two misses, with the reason',
       'SEO, referral and brand value for every link',
+      'Link-farm pages and search-results pages are written off, so your best links are the ones that really help',
       'Scored prospects with contacts, outreach drafts and follow-ups after 7 and 14 days',
       'A competitor’s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
       'Competitors, government portals, bare homepages and mailbox or data-broker addresses are never pitched',
@@ -485,6 +495,10 @@ export const features: Feature[] = [
         a: 'Indexes refresh on their own schedule and can report a live, followed link as lost. Ascentra visits the page and confirms before it raises an alert.',
       },
       { q: 'Can I import links from other tools?', a: 'Yes. Upload the Search Console links export or a backlink CSV from another tool, and Ascentra merges it into the ledger.' },
+      {
+        q: 'Which links are called your best?',
+        a: 'Only links that really pass value. A page that sells links, a scraped directory and a search-results page that happens to list you are written off whatever their authority score says, so they never head the list — they stay in the ledger, with the reason, and they are never suggested for outreach or disavowal.',
+      },
       {
         q: 'What does the free-sources mode include?',
         a: 'Everything except the commercial index: Bing Webmaster Tools, Search Console and GA4 data, the Common Crawl graph, Wikipedia, Hacker News, news and web search.',

@@ -395,7 +395,7 @@
    "target": "techand.ai",
    "ref_domain": "robuta.com",
    "label": "genuine",
-   "reason": "a search-engine results page (robuta.com/?q=business+impact) that happens to list the site: worth nothing for SEO and classed as a scraper link, but it is not a link farm and must not be disavowed It carries no SEO value at all, so it must not be ranked as one of the site's best links (see ACCURACY_SET.md, G18-1).",
+   "reason": "a search-engine results page (robuta.com/?q=business+impact) that happens to list the site: worth nothing for SEO, so it must be capped as a scraper link (link_type 'scraper', SEO value at most 5, brand value 0) and must never be ranked among the site's best links. It is not a link farm: it stays genuine, out of the disavow list and out of the lost / reclaim lists. Fixed by G18-1 on 2026-10-12 (Parse_Backlinks.js marks a search / query URL on a host with no topic match); before that it was reported as techand.ai's best link at SEO value 57, above the OpenPeppol members list at 35.",
    "source": "fixtures_live/bl_lost.json (real DataForSEO response, 2026-10-02)",
    "entry": {
     "from_url": "https://robuta.com/?q=business+impact",

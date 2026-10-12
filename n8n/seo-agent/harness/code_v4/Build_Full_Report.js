@@ -124,6 +124,19 @@ const prioNote = (a) => {
   const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return a.priority_first ? `<p class="small"><b>Ordered by likely impact.</b> ${e2(a.priority_first)}</p>` : '';
 };
+// ---- the minor band folded into one line (G18-2, 2026-10-12) ----
+const minorOf = (list) => (list || []).filter(f => f && f.minor === true);
+const minorBlock = (list, where) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const m = minorOf(list);
+  if (!m.length) return '';
+  const row = (f) => `<tr><td><b>${e2(f.title)}</b></td><td class="small">${e2(f.category)} · ${e2(f.severity)}</td>`
+    + `<td class="small">${f.scope === 'site' ? 'Whole website' : e2((f.affected_count || 0) + ' page' + ((f.affected_count || 0) === 1 ? '' : 's'))}</td>`
+    + `<td class="small">${e2(f.fix || '')}${f.evidence ? '<br>' + e2(f.evidence) : ''}</td></tr>`;
+  return `<details open class="minorfold"><summary><b>Minor items (${m.length})</b> — true, and the lowest impact of this audit`
+    + `${where ? ' in ' + e2(where) : ''}: one line each instead of a section each, so the list above is the one to act on. Nothing is left out of the score or of the stored findings.</summary>`
+    + `<table class="ct"><tr><th>Item</th><th>Area</th><th>Pages</th><th>What to do</th></tr>${m.map(row).join('')}</table></details>`;
+};
 const findings = a.findings || [];
 const counts = a.issue_counts || {};
 const byCat = (cat) => findings.filter(f => f.category === cat);
@@ -140,8 +153,8 @@ function card(f) {
     ${urls.length ? '<p class="small"><b>Affected pages:</b><br>' + urls.map(esc).join('<br>') + (f.affected_count > urls.length ? '<br>…and ' + (f.affected_count - urls.length) + ' more' : '') + '</p>' : ''}
   </div>`;
 }
-const findingsBlock = (list) => list.length
-  ? SEV.map(s => list.filter(f => f.severity === s).map(card).join('')).join('')
+const findingsBlock = (list, where) => list.length
+  ? (SEV.map(s => list.filter(f => f.severity === s && f.minor !== true).map(card).join('')).join('') + minorBlock(list, where)) || '<p class="okline">Only minor items in this area.</p>'
   : '<p class="okline">No issues found in this area.</p>';
 
 // ---------- Merged benchmark ----------
@@ -428,6 +441,8 @@ return [{
     crux: a.crux || null,
     priority_method: a.priority_method || '',
     priority_first: a.priority_first || '',
+    minor_count: a.minor_count || 0,
+    minor_note: a.minor_note || '',
     site_structure: a.site_structure || null,
     grade: a.grade,
     issue_counts: counts,

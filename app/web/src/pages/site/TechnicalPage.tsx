@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
 import { BarChart3, CheckCircle2, Circle, FileArchive, FileSearch, FileText, Gauge, ListChecks, Siren, Sparkles, TrendingUp } from 'lucide-react';
-import { titleCase, type AuditPoint, type Finding, type FindingStatus, type TechnicalData } from '@seo/shared';
+import { foldMinor, minorFoldNote, titleCase, type AuditPoint, type Finding, type FindingStatus, type TechnicalData } from '@seo/shared';
 import { fileUrl } from '@/lib/api';
 import { useSiteData } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/field';
 import { Delta, PageHeader, scoreTone } from '@/components/ui/misc';
-import { CountUp, DistributionBar, HeroStat, IconTile, InfoTip, InsightItem, MetricCard, ScoreRing, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
+import { CountUp, DisclosureButton, DistributionBar, HeroStat, IconTile, InfoTip, InsightItem, MetricCard, ScoreRing, Stagger, SummaryHero, type IconTileTone } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
 import { DataGate, FillHeight, FilterChips, Panel, SectionHeading, ToolButton, useSitePage } from './_components/kit';
 import { countBy, dateLabelFormat, diff, plural, sortByDate, timeAxisFormat } from './_components/format';
@@ -414,10 +414,16 @@ const STATUS_META: Record<FindingStatus, { label: string; node: ReactNode }> = {
 type SevFilter = Sev | 'all';
 type StatusFilter = FindingStatus | 'all';
 
-function FindingsTable({ findings, hasPrevious }: { findings: Finding[]; hasPrevious: boolean }) {
+function FindingsTable({ findings: all, hasPrevious }: { findings: Finding[]; hasPrevious: boolean }) {
   const [sev, setSev] = useState<SevFilter>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [cat, setCat] = useState('all');
+  const [showMinor, setShowMinor] = useState(false);
+  // G18-2 (2026-10-12, FIX_PLAN §3.9): the minor band is folded into one line, exactly as the audit report folds it (the same rule, from
+  // the stored severity and impact). Nothing is removed — the folded rows open with one click, and the counts above include them.
+  const { main, minor } = useMemo(() => foldMinor(all), [all]);
+  const findings = showMinor ? all : main;
+  const minorId = 'minor-findings';
   const categories = [...new Set(findings.map((f) => f.category))].sort();
   const base = findings.filter((f) => (cat === 'all' || f.category === cat) && (status === 'all' || f.status === status));
   const sevCounts = countBy(base, (f) => sevKey(f.severity));
@@ -456,10 +462,24 @@ function FindingsTable({ findings, hasPrevious }: { findings: Finding[]; hasPrev
     ...(hasPrevious ? [{ key: 'status', header: 'Status', sortValue: (f: Finding) => ['new', 'open', 'fixed'].indexOf(f.status), cell: (f: Finding) => STATUS_META[f.status]?.node ?? f.status }] : []),
   ];
 
-  if (!findings.length) return <EmptyState className="py-8" title="No findings stored for this audit" description="Audits before v4.5 stored only their score; run a new audit for the full list." />;
+  if (!all.length) return <EmptyState className="py-8" title="No findings stored for this audit" description="Audits before v4.5 stored only their score; run a new audit for the full list." />;
 
   return (
     <div className="space-y-3">
+      {minor.length > 0 && (
+        <div className="rounded-lg border border-line bg-surface-2/60 px-3 py-2.5">
+          <DisclosureButton
+            open={showMinor}
+            onToggle={() => setShowMinor(!showMinor)}
+            controls={minorId}
+            variant="link"
+            label={`Minor items (${minor.length}) — show them in the table`}
+            openLabel={`Minor items (${minor.length}) — hide them again`}
+          />
+          <p className="mt-1 text-xs text-ink-3">{minorFoldNote(minor.length)}</p>
+        </div>
+      )}
+      {!findings.length && <EmptyState className="py-8" title="Only minor items in this audit" description="Nothing of real impact is open. Open the minor items above to see what is left." />}
       <div className="flex flex-wrap items-center gap-3">
         <FilterChips
           label="Severity"
@@ -481,7 +501,8 @@ function FindingsTable({ findings, hasPrevious }: { findings: Finding[]; hasPrev
           />
         )}
       </div>
-      <DataTable
+      <div id={minorId}>
+        <DataTable
         rows={rows}
         columns={columns}
         rowKey={(f) => `${f.key}-${f.status}`}
@@ -506,7 +527,8 @@ function FindingsTable({ findings, hasPrevious }: { findings: Finding[]; hasPrev
             </div>
           ) : undefined
         }
-      />
+        />
+      </div>
     </div>
   );
 }

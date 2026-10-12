@@ -63,7 +63,9 @@ async function auditSite(H, site) {
     const urls = (f.sample_urls || []).map(s => String(s).split(' — ')[0]).filter(u => /^https?:\/\//.test(u));
     if (urls.length) for (const u of urls) byKey.set(base + '@' + u, f); else byKey.set(base, f);
   }
-  return { audit: a, probe: ap[0].json, emitted: [...byKey.keys()], byKey };
+  return { audit: a, probe: ap[0].json, emitted: [...byKey.keys()], byKey,
+    // G18-2: the keys the customer reads first, and the ones folded into the report's "Minor items (N)" line (still shown, one line each)
+    folded: [...byKey.entries()].filter(([, f]) => f.minor === true).map(([k]) => k) };
 }
 
 // ---------- runner 2: the link ledger (the real Parse Backlinks node, D3 footprint gate included) ----------
@@ -98,12 +100,16 @@ async function linkLedger(H, target = 'techand.ai') {
 }
 
 // ---------- scoring ----------
-const blank = () => ({ tp: 0, fp: 0, fn: 0, tn: 0, cosmetic_emitted: 0, cosmetic_suppressed: 0, unlabelled: [], wrong: [] });
+const blank = () => ({ tp: 0, fp: 0, fn: 0, tn: 0, cosmetic_emitted: 0, cosmetic_suppressed: 0, folded: 0, folded_cosmetic: 0, main_tp: 0, main_fp: 0, main_cosmetic: 0, unlabelled: [], wrong: [] });
 const pct = (n, d) => (d === 0 ? null : Math.round((n / d) * 1000) / 10);
 // precision: of the claims the system makes, how many are true (the metric G18 gates at 95%, the one the 2026-10-11 spot-check
 // measured as 5 of 7). useful_precision also counts the claims that are true but not worth reporting (`cosmetic`) against the
 // system: it is reported, never gated, and it is the honest number for "how much of a report is worth reading".
-const finish = (s) => ({ ...s, cases: s.tp + s.fp + s.fn + s.tn + s.cosmetic_emitted + s.cosmetic_suppressed, precision: pct(s.tp, s.tp + s.fp), recall: pct(s.tp, s.tp + s.fn), useful_precision: pct(s.tp, s.tp + s.fp + s.cosmetic_emitted) });
+// G18-2 (2026-10-12): main_useful_precision is the same number over the list a customer actually reads — the findings left after the
+// minor band is folded into one "Minor items (N)" line. Nothing is removed from the audit, so precision and recall are unchanged; this
+// is what the fold bought.
+const finish = (s) => ({ ...s, cases: s.tp + s.fp + s.fn + s.tn + s.cosmetic_emitted + s.cosmetic_suppressed, precision: pct(s.tp, s.tp + s.fp), recall: pct(s.tp, s.tp + s.fn),
+  useful_precision: pct(s.tp, s.tp + s.fp + s.cosmetic_emitted), main_useful_precision: pct(s.main_tp, s.main_tp + s.main_fp + s.main_cosmetic) });
 
 async function scoreAudit(H, log) {
   const s = blank(); const perSite = {};
@@ -112,18 +118,21 @@ async function scoreAudit(H, log) {
     const r = await auditSite(H, site);
     const cases = FINDINGS.cases.filter(c => c.site === sf.site);
     const ss = blank();
+    const foldedSet = new Set(r.folded);
     for (const c of cases) {
       const emitted = r.byKey.has(c.finding);
-      if (c.label === 'cosmetic') { emitted ? ss.cosmetic_emitted++ : ss.cosmetic_suppressed++; continue; }
-      if (c.label === 'true_positive') { if (emitted) ss.tp++; else { ss.fn++; ss.wrong.push(c.id + ' missed: ' + c.finding); } }
-      else if (c.label === 'false_positive') { if (emitted) { ss.fp++; ss.wrong.push(c.id + ' wrongly raised: ' + c.finding + ' — ' + (r.byKey.get(c.finding) || {}).evidence); } else ss.tn++; }
+      const main = emitted && !foldedSet.has(c.finding);   // in the list the customer reads, not in the folded "Minor items" line
+      if (emitted && !main) ss.folded++;
+      if (c.label === 'cosmetic') { emitted ? ss.cosmetic_emitted++ : ss.cosmetic_suppressed++; if (main) ss.main_cosmetic++; if (emitted && !main) ss.folded_cosmetic++; continue; }
+      if (c.label === 'true_positive') { if (emitted) { ss.tp++; if (main) ss.main_tp++; } else { ss.fn++; ss.wrong.push(c.id + ' missed: ' + c.finding); } }
+      else if (c.label === 'false_positive') { if (emitted) { ss.fp++; if (main) ss.main_fp++; ss.wrong.push(c.id + ' wrongly raised: ' + c.finding + ' — ' + (r.byKey.get(c.finding) || {}).evidence); } else ss.tn++; }
       else throw new Error('case ' + c.id + ': unknown label "' + c.label + '"');
     }
     const known = new Set(cases.map(c => c.finding));
     for (const k of r.emitted) if (!known.has(k)) ss.unlabelled.push(sf.site + ': ' + k);
-    perSite[sf.site] = { ...finish(ss), emitted: r.emitted.length, findings: r.emitted, what_works: r.audit.what_works, health: r.audit.health_score };
+    perSite[sf.site] = { ...finish(ss), emitted: r.emitted.length, findings: r.emitted, folded_keys: r.folded, minor_count: r.audit.minor_count, what_works: r.audit.what_works, health: r.audit.health_score };
     for (const k of Object.keys(s)) Array.isArray(s[k]) ? s[k].push(...ss[k]) : (s[k] += ss[k]);
-    if (log) { log('   ' + sf.site + ': ' + r.emitted.length + ' findings, ' + cases.length + ' labelled (tp ' + ss.tp + ' fp ' + ss.fp + ' fn ' + ss.fn + ' tn ' + ss.tn + ' cosmetic ' + (ss.cosmetic_emitted + ss.cosmetic_suppressed) + ')' + (ss.unlabelled.length ? ' | UNLABELLED ' + ss.unlabelled.length : '')); }
+    if (log) { log('   ' + sf.site + ': ' + r.emitted.length + ' findings, ' + cases.length + ' labelled (tp ' + ss.tp + ' fp ' + ss.fp + ' fn ' + ss.fn + ' tn ' + ss.tn + ' cosmetic ' + (ss.cosmetic_emitted + ss.cosmetic_suppressed) + '), ' + r.folded.length + ' folded into "Minor items (' + r.audit.minor_count + ')"' + (ss.unlabelled.length ? ' | UNLABELLED ' + ss.unlabelled.length : '')); }
   }
   return { ...finish(s), per_site: perSite };
 }
@@ -142,11 +151,15 @@ async function scoreLinks(H, log) {
   // reported, never gated: of the links the report calls the site's "best", how many are both genuine and worth something.
   // A genuine link can still be worthless (`low_value`): a search-results page ranked above the one real editorial link is the
   // same mistake D3 fixed for link farms, one step further on. See ACCURACY_SET.md, G18-1.
-  const best = ((((ledgers.get('techand.ai') || {}).out || {}).values || {}).best_seo || []).map(x => x.ref_domain);
+  const techOut = ((ledgers.get('techand.ai') || {}).out) || {};
+  const best = ((techOut.values || {}).best_seo || []).map(x => x.ref_domain);
   const lowValue = new Set(LINKS.cases.filter(c => c.low_value).map(c => c.ref_domain));
   const spamLabelled = new Set(LINKS.cases.filter(c => c.label === 'spam').map(c => c.ref_domain));
   const badBest = best.filter(d => lowValue.has(d) || spamLabelled.has(d));
-  return { ...finish(s), farms, best_seo: best, best_link_precision: pct(best.length - badBest.length, best.length), best_link_wrong: badBest };
+  // the ledger rows themselves, so a scenario can check what a single link was labelled and what it is worth (G18-1)
+  const rows = {}; for (const [t, r] of ledgers) rows[t] = Object.fromEntries(r.byDomain);
+  return { ...finish(s), farms, rows, disavow: techOut.disavow || [], lost: (techOut.lost || []).map(l => l.from_domain),
+    best_seo: best, best_link_precision: pct(best.length - badBest.length, best.length), best_link_wrong: badBest };
 }
 
 async function scoreAll(H, log) {

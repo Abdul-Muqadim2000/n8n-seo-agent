@@ -114,6 +114,19 @@ const prioNote = (a) => {
   const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return a.priority_first ? `<p class="small"><b>Ordered by likely impact.</b> ${e2(a.priority_first)}</p>` : '';
 };
+// ---- the minor band folded into one line (G18-2, 2026-10-12) ----
+const minorOf = (list) => (list || []).filter(f => f && f.minor === true);
+const minorBlock = (list, where) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const m = minorOf(list);
+  if (!m.length) return '';
+  const row = (f) => `<tr><td><b>${e2(f.title)}</b></td><td class="small">${e2(f.category)} · ${e2(f.severity)}</td>`
+    + `<td class="small">${f.scope === 'site' ? 'Whole website' : e2((f.affected_count || 0) + ' page' + ((f.affected_count || 0) === 1 ? '' : 's'))}</td>`
+    + `<td class="small">${e2(f.fix || '')}${f.evidence ? '<br>' + e2(f.evidence) : ''}</td></tr>`;
+  return `<details open class="minorfold"><summary><b>Minor items (${m.length})</b> — true, and the lowest impact of this audit`
+    + `${where ? ' in ' + e2(where) : ''}: one line each instead of a section each, so the list above is the one to act on. Nothing is left out of the score or of the stored findings.</summary>`
+    + `<table class="ct"><tr><th>Item</th><th>Area</th><th>Pages</th><th>What to do</th></tr>${m.map(row).join('')}</table></details>`;
+};
 const findings = a.findings || [];
 const top = findings.filter(f => f.severity === 'Critical' || f.severity === 'High').slice(0, 6);
 
@@ -168,8 +181,10 @@ html += `<h2>3. What Works Well</h2><ul class="good">` +
 
 // ---------- 4. Findings ----------
 html += `<h2 class="pb">4. Issues Found</h2>`;
+const mainFindings = findings.filter(f => f.minor !== true);
+if (minorOf(findings).length) html += `<p class="small">${esc(a.minor_note || '')}</p>`;
 for (const sev of SEV) {
-  const list = findings.filter(f => f.severity === sev);
+  const list = mainFindings.filter(f => f.severity === sev);
   if (!list.length) continue;
   html += `<h3 style="color:${SEV_COLOR[sev]}">${sev} Priority (${list.length})</h3>`;
   for (const f of list) {
@@ -187,16 +202,19 @@ for (const sev of SEV) {
   }
 }
 
+html += minorBlock(findings);
+
 // ---------- 5. Action plan ----------
 const phase = (title, sevs, when) => {
-  const list = findings.filter(f => sevs.includes(f.severity));
+  const list = findings.filter(f => sevs.includes(f.severity) && f.minor !== true);
   if (!list.length) return '';
   return `<h3>${title} <span class="small">(${when})</span></h3><ul>` + list.map(f => `<li>${esc(f.title)}</li>`).join('') + `</ul>`;
 };
 html += `<h2 class="pb">5. Action Plan</h2>` +
   phase('Phase 1 — Urgent', ['Critical', 'High'], 'this week') +
   phase('Phase 2 — Important', ['Medium'], 'next 2-4 weeks') +
-  phase('Phase 3 — Polish', ['Low', 'Info'], 'when time allows');
+  phase('Phase 3 — Polish', ['Low', 'Info'], 'when time allows') +
+  (minorOf(findings).length ? `<p class="small">Plus ${minorOf(findings).length} minor item(s), folded into one line in section 4.</p>` : '');
 
 html += scSection(a, '5b');
 html += v45Section(a, '5c');
@@ -275,6 +293,8 @@ return [{
     crux: a.crux || null,
     priority_method: a.priority_method || '',
     priority_first: a.priority_first || '',
+    minor_count: a.minor_count || 0,
+    minor_note: a.minor_note || '',
     site_structure: a.site_structure || null,
     grade: a.grade,
     issue_counts: counts,

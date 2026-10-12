@@ -294,8 +294,11 @@ return sites.map((s, idx) => {
   for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = p.status === 'writing' ? 'written, not published yet' : 'planned, not written yet'; p.indexed = null; }
   // ---- alerts ----
   // G28: `drop` is no longer the test, it is the line between a medium and a high alert. The test is ST.change: enough events in the two
-  // periods together (min_events), a change beyond 95% sampling noise (|z| >= 1.96) and a size worth reporting (min_pct). A big move that is
-  // not significant becomes an 'info' alert worded as "watch", so a small site still hears about it without being told it fell.
+  // periods together (min_events), a change beyond 95% sampling noise (|z| >= 1.96) and a size worth reporting (min_pct).
+  // G28 follow-up (2026-10-12, FIX_PLAN section 3.8): a big move that is not significant is a **medium** alert worded as "Watch", with the
+  // counts of both periods named as "small numbers" — a site with 20 clicks a month still hears that it halved (and the line reaches
+  // seo_site_metrics.alerts and the app, which keep medium and high), while never being told as a fact that its traffic fell. It can never
+  // reach the high band, however large the percentage: only a statistically real fall does.
   const alerts = []; const drop = cfg.alert_drop_pct || 30; const minPct = cfg.alert_min_pct || 10;
   const upd = ST.updateNote(R.current);
   const stat = { clicks: null, impressions: null, sessions: null };
@@ -303,7 +306,7 @@ return sites.map((s, idx) => {
     const ch = ST.change(cur, prev, { min_events: minEvents, min_pct: minPct }); stat[key] = ch;
     if (ch.direction !== 'down' || !ch.big) return ch;
     if (ch.real) alerts.push({ level: Math.abs(ch.pct) >= drop ? 'high' : level, text: label + ' fell ' + Math.abs(ch.pct) + '% (' + prev + ' → ' + cur + ' in 28 days' + (ch.ci ? '; 95% range ' + ch.ci[0] + '% to ' + ch.ci[1] + '%' : '') + ', z ' + ch.z + ')' + upd, stat: key });   // no range when one period is zero (the log-ratio is undefined)
-    else if (ch.watch) alerts.push({ level: 'info', text: 'Watch: ' + label.toLowerCase() + ' are ' + Math.abs(ch.pct) + '% lower (' + prev + ' → ' + cur + '), but at this volume that is still within normal week-to-week variation (z ' + ch.z + ') — not a confirmed fall' + upd, stat: key });
+    else if (ch.watch) alerts.push({ level: 'medium', text: 'Watch: ' + label.toLowerCase() + ' are ' + Math.abs(ch.pct) + '% lower (' + prev + ' → ' + cur + ' in 28 days). Small numbers: ' + (prev + cur) + ' ' + label.toLowerCase() + ' over both periods together, so a swing this size happens by chance (z ' + ch.z + ') — worth a look, not a confirmed fall' + upd, stat: key, small_numbers: true });
     return ch;
   };
   if (!s.gsc_connected) alerts.push({ level: 'setup', text: 'Search Console is not connected: ' + (s.gsc_error || 'no property found') });
