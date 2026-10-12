@@ -208,7 +208,7 @@ const notWinning = ideas.filter(k => !k.your_position || k.your_position > 10);
 const notWinningFit = notWinning.filter(fitsAK);
 const opportunities_by_intent = {};
 INTENTS.forEach(x => {
-  opportunities_by_intent[x] = (x === 'navigational' ? notWinning : notWinningFit).filter(k => k.intent === x)
+  opportunities_by_intent[x] = notWinningFit.filter(k => k.intent === x)   // P1-4 (2026-10-12): the navigational bucket was ungated and recommended fta login / emaratax / other brands
     .sort((a, b) => (b.volume || 0) - (a.volume || 0)).slice(0, 10);
 });
 const easy_wins = notWinningFit
@@ -221,7 +221,10 @@ const keyword_gap = notWinningFit.filter(k => k.competitors.length && (!k.your_p
   .slice(0, 25);
 
 // ---------- Page 1 ke qareeb ----------
-const striking_distance = you.keywords.filter(k => k.position >= 11 && k.position <= 20)
+// P1-4: page-2 keywords are shown as "quick wins", so they run through the gate too — but a search for the site's OWN brand stays (ranking
+// 11-20 for your own name is a real problem to fix, not a keyword to drop)
+const fitsOwnAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return false; };
+const striking_distance = you.keywords.filter(k => k.position >= 11 && k.position <= 20).filter(fitsOwnAK)
   .sort((a, b) => (b.volume || 0) - (a.volume || 0)).slice(0, 10);
 
 // ---------- Findings ----------
@@ -239,7 +242,7 @@ if (keyword_gap.length) {
     'Each of these is proven demand in your market that is currently going to competitors.',
     'Create or improve a dedicated page for the highest-volume, lowest-difficulty gap keywords first.');
 }
-INTENTS.forEach(x => {
+INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4: "no rankings for navigational searches" counted other companies' brands — never a goal for this site
   const med = median(comps.map(c => c.by_intent[x]));
   if ((you.by_intent[x] || 0) === 0 && med != null && med >= 5) {
     F('Medium', 'No rankings for ' + x + ' searches',
@@ -276,7 +279,7 @@ return [{
       easy_wins,
       keyword_gap,
       striking_distance,
-      refused: refused.slice(0, 40)
+      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40)
     },
     extra_findings: [...(base.extra_findings || []), ...findings],
     extra_works: [...(base.extra_works || []), ...works]

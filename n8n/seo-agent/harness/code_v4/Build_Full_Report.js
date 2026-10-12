@@ -37,6 +37,7 @@ const scoreColor = (s) => s >= 90 ? '#15803D' : s >= 75 ? '#65A30D' : s >= 60 ? 
 const bar = (s) => `<table class="bar"><tr><td style="width:${s}%;background:${scoreColor(s)}">&nbsp;</td><td style="width:${100 - s}%;background:#E2E8F0">&nbsp;</td></tr></table>`;
 const yn = (v) => { const t = String(v || '').toLowerCase(); const c = t === 'yes' ? '#15803D' : t === 'no' ? '#B91C1C' : '#CA8A04'; return `<b style="color:${c}">${esc(v || 'unclear')}</b>`; };
 const youTag = (r) => r.is_you ? '<b>' + esc(r.domain) + ' (you)</b>' : esc(r.domain);
+const cpcTxt = (c) => (c == null || c === '' || isNaN(c)) ? 'N/A' : (Math.round(Number(c) * 100) / 100).toFixed(2);   // P1-5 (2026-10-12): DataForSEO CPCs are float32
 const diffLabel = (v) => v == null ? 'N/A' : v + (v < 30 ? ' (easy)' : v < 50 ? ' (medium)' : v < 70 ? ' (hard)' : ' (very hard)');
 
 // ---- Search Console & site structure section (v4.3) ----
@@ -206,7 +207,7 @@ if (sk) {
     const list = (sk.opportunities_by_intent || {})[i] || [];
     html += `<h3>${cap(i)} Keywords</h3><p class="small">${INT_DESC[i]}</p>` + (list.length
       ? `<table class="ct"><tr><th>Keyword</th><th>Searches/mo</th><th>Difficulty</th><th>CPC $</th><th>Your position</th><th>Competitors in top 10</th></tr>` +
-        list.map(k => `<tr><td>${esc(k.keyword)}</td><td>${num(k.volume)}</td><td>${diffLabel(k.difficulty)}</td><td>${k.cpc == null ? 'N/A' : k.cpc}</td><td>${k.your_position ? '#' + k.your_position : '—'}</td><td class="small">${compCell(k.competitors)}</td></tr>`).join('') + `</table>`
+        list.map(k => `<tr><td>${esc(k.keyword)}</td><td>${num(k.volume)}</td><td>${diffLabel(k.difficulty)}</td><td>${cpcTxt(k.cpc)}</td><td>${k.your_position ? '#' + k.your_position : '—'}</td><td class="small">${compCell(k.competitors)}</td></tr>`).join('') + `</table>`
       : '<p>No keywords with measurable search volume found for this intent.</p>');
   });
 

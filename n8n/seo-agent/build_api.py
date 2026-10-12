@@ -157,7 +157,9 @@ _AN = [
   _aif('Assess Limited?', '{{ $json.status === 429 }}', [1760, -320]),
   _arespond('Respond Assess Limited', "={{ JSON.stringify({ ok: false, error: $json.error }) }}", 429, [1980, -460]),
   _an('Mark Run Refused (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')], {'status': 'refused'}), [2200, -460], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
-  _an('Settle Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')], {'status': 'done', 'settled_usd': "={{ Number($('Run Ledger Row (Assess)').first().json.est_usd) || 0 }}"}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
+  # P1-1 (2026-10-12): the settle update matches `status = reserved`, so a row settles once and a refused one stays refused; a request that
+  # DataForSEO failed (502) settles too — it used to leave its row `reserved` at the estimate for ever
+  _an('Settle Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}'), ('status', 'reserved')], {'status': 'done', 'settled_usd': "={{ Number($('Run Ledger Row (Assess)').first().json.est_usd) || 0 }}"}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
   _arespond('Respond Assess Bad Request', "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors }) }}", 400, [660, 320]),
   _an('Ensure Cache Table (Assess)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [660, -100], onError='continueRegularOutput', executeOnce=True),
   _an('Load Assess Cache', DT_TYPE, DT_VERSION, dt_get_any_params(CACHE_TABLE, [('key', "={{ 'reach:' + $('Assess Validate').first().json.site_id }}"), ('key', "={{ 'desc:' + $('Assess Validate').first().json.domain }}")]), [880, -100], **_LOAD),
@@ -189,6 +191,7 @@ for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Asses
 _alink('Assess Valid?', 'Ensure Run Ledger (Assess)', 0); _alink('Assess Valid?', 'Respond Assess Bad Request', 1)
 _alink('Assess Limited?', 'Respond Assess Limited', 0); _alink('Assess Limited?', 'Ensure Cache Table (Assess)', 1)
 _alink('DataForSEO OK?', 'Keyword Fit', 0); _alink('DataForSEO OK?', 'Respond Assess Upstream Error', 1)
+_alink('Respond Assess Upstream Error', 'Settle Run Ledger (Assess)')   # P1-1: an upstream failure settles its row too (it stayed reserved)
 _alink('New Reach (Assess)?', 'Save Reach (Assess)', 0)
 _AC['Claude — Keyword Fit'] = {'ai_languageModel': [[{'node': 'Keyword Fit', 'type': 'ai_languageModel', 'index': 0}]]}
 _AC['Parser — Keyword Fit'] = {'ai_outputParser': [[{'node': 'Keyword Fit', 'type': 'ai_outputParser', 'index': 0}]]}
@@ -204,4 +207,16 @@ json.dump([kwf], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Keyword_Che
 if os.path.isdir(_code):
     for _n in _AN:
         if _n['type'] == 'n8n-nodes-base.code': open(os.path.join(_code, re.sub(r'[^A-Za-z0-9_.-]+', '_', _n['name']) + '.js'), 'w').write(_n['parameters']['jsCode'])
+# P1-1 (2026-10-12): the Keyword Check's half of harness/ledger_wiring.json (written by build_v4.py section 29, read by harness S36)
+_by_name = {n['name']: n for n in _AN}
+_assess_settle = sorted(s for s, o in _AC.items() for _l in (o.get('main') or []) for _t in (_l or []) if _t['node'] == 'Settle Run Ledger (Assess)')
+assert _assess_settle == ['Respond Assess', 'Respond Assess Upstream Error'], _assess_settle
+_lw_path = os.path.join(_here, 'harness', 'ledger_wiring.json')
+if os.path.isfile(_lw_path):
+    _lw = json.load(open(_lw_path))
+    _sa, _ra = _by_name['Settle Run Ledger (Assess)']['parameters'], _by_name['Mark Run Refused (Assess)']['parameters']
+    _lw['assess'] = {'settle_node': 'Settle Run Ledger (Assess)', 'settle_from': _assess_settle,
+                     'settle_conditions': [[c['keyName'], c['keyValue']] for c in _sa['filters']['conditions']], 'settle_values': _sa['columns']['value'],
+                     'refused_conditions': [[c['keyName'], c['keyValue']] for c in _ra['filters']['conditions']], 'refused_values': _ra['columns']['value']}
+    json.dump(_lw, open(_lw_path, 'w'), indent=1)
 print('Keyword Check workflow written:', len(_AN), 'nodes')

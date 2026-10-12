@@ -1,0 +1,113 @@
+{
+ "settle_node": "Settle Run Ledger",
+ "settle_from": [
+  "Build Audit Report",
+  "Build Description Page",
+  "Build Full Report",
+  "Build Keyword File",
+  "Build Ladder Report",
+  "Build Word File",
+  "Case Study Delivery",
+  "Check-in Delivery",
+  "Monitor Started",
+  "Profile Delivery",
+  "Published Delivery",
+  "Spawn Audit Run",
+  "Start Site Tracker"
+ ],
+ "settle_conditions": [
+  [
+   "run_id",
+   "={{ $execution.id }}"
+  ],
+  [
+   "status",
+   "reserved"
+  ]
+ ],
+ "settle_values": {
+  "status": "done",
+  "settled_usd": "={{ Number($('Run Ledger Row').first().json.est_usd) || 0 }}"
+ },
+ "refused_conditions": [
+  [
+   "run_id",
+   "={{ $execution.id }}"
+  ]
+ ],
+ "refused_values": {
+  "status": "refused"
+ },
+ "modes": {
+  "describe": [
+   "Build Description Page"
+  ],
+  "discover": [
+   "Build Keyword File"
+  ],
+  "keyword": [
+   "Build Ladder Report",
+   "Build Word File"
+  ],
+  "audit": [
+   "Build Audit Report",
+   "Build Full Report",
+   "Spawn Audit Run"
+  ],
+  "ladder": [
+   "Build Ladder Report",
+   "Build Word File"
+  ],
+  "track": [
+   "Start Site Tracker"
+  ],
+  "published": [
+   "Published Delivery"
+  ],
+  "checkin": [
+   "Check-in Delivery"
+  ],
+  "profile": [
+   "Profile Delivery"
+  ],
+  "case_study": [
+   "Case Study Delivery"
+  ],
+  "ai_visibility": [
+   "Monitor Started"
+  ],
+  "backlinks": [
+   "Monitor Started"
+  ]
+ },
+ "assess": {
+  "settle_node": "Settle Run Ledger (Assess)",
+  "settle_from": [
+   "Respond Assess",
+   "Respond Assess Upstream Error"
+  ],
+  "settle_conditions": [
+   [
+    "run_id",
+    "={{ $execution.id }}"
+   ],
+   [
+    "status",
+    "reserved"
+   ]
+  ],
+  "settle_values": {
+   "status": "done",
+   "settled_usd": "={{ Number($('Run Ledger Row (Assess)').first().json.est_usd) || 0 }}"
+  },
+  "refused_conditions": [
+   [
+    "run_id",
+    "={{ $execution.id }}"
+   ]
+  ],
+  "refused_values": {
+   "status": "refused"
+  }
+ }
+}

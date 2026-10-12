@@ -316,7 +316,7 @@ return plans.map(p => {
       status, lost_at, lost_reason, miss_count: miss, verify, verified_at, noindex, canonical_elsewhere: canon, outbound, page_title: String(title).slice(0, 160), context: String(context).slice(0, 400),
       authority, dr, cc_rank, page_keywords: Number(e.page_keywords) || Number(pv.page_keywords) || 0, spam_score: spam, original: e.original === false ? false : (e.original === true ? true : (pv.original === false || pv.original === 'false' ? false : true)), sitewide: Number(e.sitewide) || Number(pv.sitewide) || 0, links: Number(e.links) || Number(pv.links) || 0,
       visits: Number(e.visits) || (e.sources.includes('ga4') ? 0 : Number(pv.visits) || 0), key_events: Number(e.key_events) || 0, ai_cited: !!e.ai_cited, updated_at: now };
-    row.visits_28d = e.visits_28d || 0; row._new = !e.prev; row._dfs_new = !!e.dfs_new; row._sources_now = e.sources; row._found_new = !!(v && v.verify === 'found' && !e.prev); row._url = v ? v.url : '';
+    row.visits_28d = e.visits_28d || 0; row._prev_status = prevStatus; row._new = !e.prev; row._dfs_new = !!e.dfs_new; row._sources_now = e.sources; row._found_new = !!(v && v.verify === 'found' && !e.prev); row._url = v ? v.url : '';
     ledger.push(row);
   }
   // ---------------- the footprint gate (D3): link-farm clusters over the whole ledger, before scoring ----------------
@@ -331,17 +331,20 @@ return plans.map(p => {
   const farms = ledger.filter(r => spamSet.has(r.ref_domain)).map(r => ({ ref_domain: r.ref_domain, from_url: r.from_url, status: r.status, reason: fp.get(r.ref_domain) || 'labelled spam by the Link Analyst', authority: r.authority, spam: r.spam_score }));
   const liveRows = ledger.filter(r => r.status !== 'lost' && r.kind === 'web');
   const importantOf = (r) => Number(r.spam_score || r.spam) < 40 && !['spam', 'scraper'].includes(r.link_type) && (Number(r.seo_value) >= 35 || r.authority >= 150 || r.dr >= 40 || Number(r.visits) >= 5 || ['editorial', 'press'].includes(r.link_type));   // spam links are never "important", whatever their authority
-  const lostRows = lostNow.map(({ e, v, reason }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; const pv = e.prev || {};
+  // P1-2 (2026-10-12, Phase 1 live check): a link-farm page is never "lost" — the 13 cluster pages filled "Links lost" with "Ask the editor to
+  // restore it" and drove the "referring sites fell 17 -> 4" alert. The footprint gate (D3) has labelled them by now, so they are dropped here
+  // from the lost list, from the reclaim advice and from the referring-sites drop, exactly as they already were from best / wins / at-risk.
+  const lostRows = lostNow.filter(({ e }) => !spamSet.has(e.ref_domain)).map(({ e, v, reason }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; const pv = e.prev || {};
     return { from_domain: e.ref_domain, from_url: v.url || r.from_url, to_url: r.to_url, anchor: r.anchor, dofollow: (pv.rel || r.rel || 'follow') === 'follow', domain_rank: r.authority, dr: r.dr, spam: r.spam_score, last_seen: String(pv.last_seen || '').slice(0, 10) || (e.dfs_lost || {}).last_seen || '', reason: r.lost_reason || reason,
       seo_value: Number(pv.seo_value) || r.seo_value, visits: r.visits, title: pv.page_title || '', important: importantOf({ ...r, seo_value: Number(pv.seo_value) || r.seo_value }) }; });
   const important_lost = lostRows.filter(l => l.important);
   // the DataForSEO-reported losses still unconfirmed are listed as "reported lost — checking"
-  const lost = [...lostRows, ...dfsLost.filter(l => !lostRows.some(x => x.from_domain === LK.refKey(l.from_domain))).map(l => ({ ...l, reason: 'reported_lost', pending: true }))];
+  const lost = [...lostRows, ...dfsLost.filter(l => !spamSet.has(LK.refKey(l.from_domain)) && !lostRows.some(x => x.from_domain === LK.refKey(l.from_domain))).map(l => ({ ...l, reason: 'reported_lost', pending: true }))];
   // ---------------- reclaim: links pointing to own pages that no longer load (DataForSEO + our own status check of the most-linked pages) ----------------
   const reclaimMap = new Map();
-  for (const x of ((one('broken').res || {}).items || [])) { const b = { ...link(x), status: Number(x.url_to_status_code) || null }; const r = reclaimMap.get(b.to_url) || { broken_url: b.to_url, status: b.status, links: 0, domains: new Set(), redirect_to: suggest(b.to_url) }; r.links++; r.domains.add(b.from_domain); reclaimMap.set(b.to_url, r); }
-  for (const t of vTarget.filter(t => t.broken)) { const r = reclaimMap.get(t.url) || { broken_url: t.url, status: t.status || null, links: 0, domains: new Set(), redirect_to: suggest(t.url) }; r.links = Math.max(r.links, t.referring || 1); for (const l of ledger.filter(l => l.to_url === t.url)) r.domains.add(l.ref_domain); reclaimMap.set(t.url, r); }
-  const reclaim = [...reclaimMap.values()].map(r => ({ ...r, domains: [...r.domains].slice(0, 8) })).sort((a, b) => b.links - a.links).slice(0, 20);
+  for (const x of ((one('broken').res || {}).items || [])) { const b = { ...link(x), status: Number(x.url_to_status_code) || null }; if (spamSet.has(LK.refKey(b.from_domain))) continue; const r = reclaimMap.get(b.to_url) || { broken_url: b.to_url, status: b.status, links: 0, domains: new Set(), redirect_to: suggest(b.to_url) }; r.links++; r.domains.add(b.from_domain); reclaimMap.set(b.to_url, r); }   // a farm page linking to a dead page of ours is no reason to write to anyone (P1-2)
+  for (const t of vTarget.filter(t => t.broken)) { const r = reclaimMap.get(t.url) || { broken_url: t.url, status: t.status || null, links: 0, domains: new Set(), redirect_to: suggest(t.url) }; r.links = Math.max(r.links, t.referring || 1); for (const l of ledger.filter(l => l.to_url === t.url && !spamSet.has(l.ref_domain))) r.domains.add(l.ref_domain); reclaimMap.set(t.url, r); }
+  const reclaim = [...reclaimMap.values()].filter(r => r.links > 0).map(r => ({ ...r, domains: [...r.domains].slice(0, 8) })).sort((a, b) => b.links - a.links).slice(0, 20);
   // ---------------- mentions (checked on the page), list pages, competitor new links, the gap ----------------
   const linking = new Set(liveRows.map(r => r.ref_domain));
   const mentions = [];
@@ -392,7 +395,12 @@ return plans.map(p => {
   const newMoney = ledger.filter(r => r._new && r.anchor_kind === 'money' && (r.spam_score >= 30 || (r.relevance !== '' && r.relevance < 0.34)));
   if (newMoney.length >= 10) alerts.push({ level: 'medium', text: newMoney.length + ' new off-topic links with keyword anchors at once — a possible negative-SEO pattern. Keep watching; disavow only if a manual action follows.' });
   if (prev && summary.available && prev.spam_score && summary.spam_score - prev.spam_score >= 15) alerts.push({ level: 'medium', text: 'Link spam score rose from ' + prev.spam_score + ' to ' + summary.spam_score + '.' });
-  if (prev && prev.union_domains >= 10 && liveRows.length < prev.union_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring sites (all sources) fell from ' + prev.union_domains + ' to ' + liveRows.length + '.' });
+  // the drop alert counts real referring sites only: a link-farm cluster leaving is not a loss (P1-2). The stored union counted the farms, so
+  // the farm pages that were live at the last check are taken off it too; the alert says so when any were.
+  const farmLiveNow = ledger.filter(r => spamSet.has(r.ref_domain) && r.kind === 'web' && r.status !== 'lost').length;
+  const farmLivePrev = ledger.filter(r => spamSet.has(r.ref_domain) && r.kind === 'web' && !r._new && r._prev_status !== 'lost').length;
+  const cleanNow = liveRows.length - farmLiveNow, cleanPrev = Math.max(0, (prev ? Number(prev.union_domains) || 0 : 0) - farmLivePrev);
+  if (prev && cleanPrev >= 10 && cleanNow < cleanPrev * 0.9) alerts.push({ level: 'medium', text: 'Referring sites (all sources) fell from ' + cleanPrev + ' to ' + cleanNow + '.' + (farmLivePrev || farmLiveNow ? ' (Link-farm pages are not counted.)' : '') });
   else if (prev && !prev.union_domains && summary.available && prev.referring_domains >= 10 && summary.referring_domains < prev.referring_domains * 0.9) alerts.push({ level: 'medium', text: 'Referring domains fell from ' + prev.referring_domains + ' to ' + summary.referring_domains + '.' });
   const atRiskOut = atRisk.filter(({ e }) => !spamSet.has(e.ref_domain));   // a link-farm page is never "at risk": there is nothing to win back (D3)
   const riskImportant = atRiskOut.filter(({ e }) => { const r = ledger.find(x => x.ref_domain === e.ref_domain) || {}; return importantOf(e.prev ? { ...r, seo_value: Number(e.prev.seo_value) || r.seo_value } : r); });
@@ -413,7 +421,7 @@ return plans.map(p => {
     ...lists.filter(l => l.named && !l.linked).slice(0, 4).map(l => ({ prospect_domain: l.domain, type: 'mention', origin: 'web', rank: l.domain_rank, spam_score: 0, score: scoreOf('mention', { authority: l.domain_rank, dr: l.dr }), detail: 'Lists you without a link: ' + String(l.title).slice(0, 100), source_url: l.url, target_url: 'https://' + p.domain + '/' })),
     ...compNew.slice(0, 10).map(c => ({ prospect_domain: c.domain, type: 'comp_new', origin: 'dfs', rank: c.domain_rank, spam_score: 0, score: scoreOf('comp_new', { authority: c.domain_rank, dr: c.dr }, localOf(c.domain)), detail: 'Linked to ' + c.competitor + ' on ' + c.first_seen + (c.title ? ': ' + c.title : ''), source_url: c.url, target_url: target0 })),
     ...gap.filter(g => g.source !== 'cc' ? gi >= 0 : true).slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', origin: g.source, rank: g.rank, spam_score: g.spam, score: scoreOf('gap', { authority: g.rank, dr: drOf.get(g.domain) || 0, cc_rank: g.cc_rank }, (1 + 0.6 * (g.links_to.length - 1)) * localOf(g.domain)),   /* links to several competitors: the strongest intent signal; on the market's own domain ending: more relevant */ detail: 'Links to ' + g.links_to.join(', ') + (g.backlinks ? ' (' + g.backlinks + ' links)' : '') + ', not to you' + (g.source === 'cc' ? ' (Common Crawl)' : ''), source_url: '', target_url: target0 }))];
-  const ledger_rows = ledger.map(({ visits_28d, _new, _dfs_new, _sources_now, _found_new, _url, ...r }) => r);
+  const ledger_rows = ledger.map(({ visits_28d, _prev_status, _new, _dfs_new, _sources_now, _found_new, _url, ...r }) => r);
   const new_links = [...news.map(n => ({ ...n, verified: (vLink.get(LK.refKey(n.from_domain)) || {}).verify || '' })),
     ...ledger.filter(r => r._new && !r._dfs_new && r.kind === 'web' && r.status !== 'lost').map(r => ({ from_domain: r.ref_domain, from_url: r.from_url, to_url: r.to_url, anchor: r.anchor, dofollow: r.rel === 'follow', domain_rank: r.authority, dr: r.dr, page_rank: 0, spam: r.spam_score, first_seen: r.first_seen, last_seen: r.last_seen, title: r.page_title, spammy: r.link_type === 'spam', sources: r.sources, verified: r.verify }))]
     .filter((x, i, a) => a.findIndex(y => LK.refKey(y.from_domain) === LK.refKey(x.from_domain)) === i);
