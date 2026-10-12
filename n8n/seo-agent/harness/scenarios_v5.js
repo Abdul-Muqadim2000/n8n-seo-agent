@@ -5423,5 +5423,47 @@ await guard('S47 G6 rank tracker depth', async () => {
     Kbig.packed.length <= 300 && /"trimmed"/.test(Kbig.packed), Kbig.packed.slice(0, 120));
 });
 
+// ===================================================================================
+// S49 G18 (2026-10-12, system review FIX_PLAN G18) — the labelled accuracy set: real cases with a human label, run through the
+// real node code, scored for precision. `accuracy/findings.json` holds one case per audit decision a customer can check (a
+// site-wide finding, or a finding on one page) for techand.ai and two other public sites captured with free fetches
+// (`accuracy/sites/*.json`, `accuracy/capture.js`); `accuracy/links.json` holds the real referring sites of the 2026-10-12
+// backlink check and of a competitor, labelled spam / genuine. The scorer (`accuracy/score.js`) drives Build Probes / Content
+// Probes / Analyze Probes / Build Site Issues and the real Parse Backlinks node, and must reach 95% precision in both
+// categories. A finding with no case fails this scenario, so a new finding has to be labelled before it ships.
+// Doc: n8n/seo-agent/ACCURACY_SET.md.
+// ===================================================================================
+await guard('S49', async () => {
+  reset(); const SN = 'S49 G18 — a labelled accuracy set: 95% precision for audit findings and for backlink spam labels, measured over real cases with the real node code';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const ACC = require('./accuracy/score');
+  const r = await ACC.scoreAll(H, (m) => console.log(m));
+  const A = r.audit_findings, L = r.spam_labels;
+  const TARGET = 95;
+  console.log('   audit findings: ' + A.cases + ' cases over ' + ACC.FINDINGS.sites.length + ' sites — precision ' + A.precision + '% (tp ' + A.tp + ' fp ' + A.fp + '), recall ' + A.recall + '% (fn ' + A.fn + '), ' + A.tn + ' false positives correctly suppressed, ' + (A.cosmetic_emitted + A.cosmetic_suppressed) + ' cosmetic (' + A.cosmetic_emitted + ' shown), useful precision ' + A.useful_precision + '%');
+  for (const [site, v] of Object.entries(A.per_site)) console.log('     ' + site + ': health ' + v.health + ', ' + v.emitted + ' findings shown, precision ' + v.precision + '% (tp ' + v.tp + ' fp ' + v.fp + ' cosmetic ' + v.cosmetic_emitted + '), ' + v.tn + ' suppressed');
+  console.log('   spam labels: ' + L.cases + ' cases — precision ' + L.precision + '% (tp ' + L.tp + ' fp ' + L.fp + '), recall ' + L.recall + '% (fn ' + L.fn + '), ' + L.tn + ' genuine links left alone');
+  check('audit findings: precision >= 95% over the labelled set (every finding the audit shows for a labelled site is true)', A.precision !== null && A.precision >= TARGET, JSON.stringify({ precision: A.precision, tp: A.tp, fp: A.fp, wrong: A.wrong }));
+  check('audit findings: every finding shown is labelled (a new or renamed finding must be judged before it ships)', A.unlabelled.length === 0, JSON.stringify(A.unlabelled));
+  check('audit findings: nothing a human called true is missing (recall over the set)', A.fn === 0 && A.recall === 100, JSON.stringify({ recall: A.recall, missed: A.wrong }));
+  check('audit findings: the set is big enough to mean something (40+ cases over 3 sites, both verdicts represented)', A.cases >= 40 && A.tp >= 25 && (A.fp + A.tn) >= 10 && Object.keys(A.per_site).length === 3, JSON.stringify({ cases: A.cases, tp: A.tp, labelled_fp: A.fp + A.tn, sites: Object.keys(A.per_site) }));
+  check('spam labels: precision >= 95% (nothing genuine is called a link farm)', L.precision !== null && L.precision >= TARGET, JSON.stringify({ precision: L.precision, tp: L.tp, fp: L.fp, wrong: L.wrong }));
+  check('spam labels: every link farm is caught (recall over the set) and every case has a ledger row', L.fn === 0 && L.unlabelled.length === 0, JSON.stringify({ recall: L.recall, wrong: L.wrong, missing: L.unlabelled }));
+  check('spam labels: 30+ cases, 16 of them the real link-farm cluster, 18 genuine links from two targets', L.cases >= 30 && L.tp === 16 && L.tn === 18, JSON.stringify({ cases: L.cases, tp: L.tp, tn: L.tn }));
+  // the regressions the set exists to catch, named one by one
+  const tech = A.per_site['techand.ai'], pep = A.per_site['peppol.org'], azd = A.per_site['azdan.com'];
+  const shows = (site, re) => (A.per_site[site].findings || []).some(k => re.test(k));
+  check('D6 stays fixed: no "www and non-www" finding on any of the three sites (one 308 to www, one 301 to the apex, one 301 to www)', !['techand.ai', 'peppol.org', 'azdan.com'].some(s => shows(s, /www and non-www/)), JSON.stringify([tech.findings, pep.findings, azd.findings].map(f => f.filter(k => /www/.test(k)))));
+  check('D18 stays fixed: the three theme-color tags are not duplicates (techand.ai), while peppol.org\'s two real <meta generator> tags are still named', !shows('techand.ai', /Duplicate meta tags/) && tech.what_works.some(w => /No duplicate meta tags on the homepage/.test(w)) && shows('peppol.org', /Duplicate meta tags/), JSON.stringify({ techand: tech.findings.filter(k => /meta/i.test(k)), peppol: pep.findings.filter(k => /meta/i.test(k)) }));
+  check('the real problems are still reported: placeholder text and the doubled brand on techand.ai, a blocked crawler and missing H1s on peppol.org', shows('techand.ai', /Placeholder \(lorem ipsum\)/) && shows('techand.ai', /Brand name repeated in the title/) && shows('peppol.org', /crawlers are blocked/) && shows('peppol.org', /Missing H1 heading/), JSON.stringify([tech.findings, pep.findings]));
+  check('a site that is technically clean is not padded with findings: azdan.com keeps 7 (1 true, 6 cosmetic) and 8 "what works"', azd.emitted === 7 && azd.tp === 1 && azd.cosmetic_emitted === 6 && azd.what_works.length === 8, JSON.stringify({ findings: azd.findings, works: azd.what_works.length }));
+  check('D3 stays fixed: all 16 farm domains are "spam", none of them is among techand.ai\'s best links, and the one genuine editorial link is', L.farms.filter(f => /^techand\.ai/.test(f)).length === 16 && L.best_seo.includes('peppol.org') && !L.best_seo.some(d => /all\/2835|sahammurah|betulcrime|thedocmag|onvaxs|quotesblom|betwinnermirror|clifflisting|bestnz|cvillico|dupurgeniefr|kernelpanic|fashionclothing|uncledspizza|homesforsale|seonix|^us\.com$/.test(d)), JSON.stringify({ farms: L.farms.length, best: L.best_seo }));
+  // reported, not gated: G18-1, the defect this set found (ACCURACY_SET.md section 6) — a search-results page outranks the real link
+  console.log('   best links: precision ' + L.best_link_precision + '% (' + L.best_seo.join(', ') + ')' + (L.best_link_wrong.length ? ' | KNOWN GAP G18-1: worthless link(s) ranked best: ' + L.best_link_wrong.join(', ') : ''));
+  check('the competitor\'s own referring sites are untouched: no farm label among the 14 (a 24-28 index spam score, a listicle host and a .club are all left genuine)', !L.farms.some(f => /^cleartax\.com/.test(f)), JSON.stringify(L.farms));
+  save('accuracy-scores.json', { audit_findings: { cases: A.cases, precision: A.precision, useful_precision: A.useful_precision, recall: A.recall, tp: A.tp, fp: A.fp, fn: A.fn, suppressed: A.tn, cosmetic: A.cosmetic_emitted + A.cosmetic_suppressed, per_site: Object.fromEntries(Object.entries(A.per_site).map(([k, v]) => [k, { emitted: v.emitted, tp: v.tp, fp: v.fp, cosmetic: v.cosmetic_emitted, suppressed: v.tn, precision: v.precision }])) }, spam_labels: { cases: L.cases, precision: L.precision, recall: L.recall, tp: L.tp, fp: L.fp, fn: L.fn, genuine: L.tn, best_link_precision: L.best_link_precision, best_links: L.best_seo, best_link_wrong: L.best_link_wrong }, measured_at: r.generated_at });
+});
+
 H.report();
 })();
