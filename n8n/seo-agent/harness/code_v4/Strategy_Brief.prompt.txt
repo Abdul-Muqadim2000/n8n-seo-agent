@@ -2,7 +2,7 @@
 
 PAGE DETAILS
 Target Keyword: {{ $json.keyword }} · Country: {{ $json.country }} · Language: {{ $json.language_name || 'English' }} ({{ $json.spelling }} spelling) · Currency: {{ $json.currency }}
-Page Type: {{ $json.page_type }} · Business goal: {{ $json.goal || 'leads' }} · Tone requested: {{ $json.tone || 'professional and direct' }}
+Page Type: {{ $json.page_type }}{{ $json.page_notes ? ' (what the verdict asked for: ' + $json.page_notes + ')' : '' }} · Business goal: {{ $json.goal || 'leads' }} · Tone requested: {{ $json.tone || 'professional and direct' }}
 Verdict on this keyword: {{ $json.verdict }} ({{ $json.verdict_score }}/100). {{ ($json.verdict_reasons || []).join(' ') }} {{ $json.recommended_page && $json.recommended_page !== $json.page_type ? 'Recommended page type instead: ' + $json.recommended_page + '.' : '' }}
 Business: {{ $json.business || 'Not provided — write for a generic business of this type and use placeholders like [Your Business Name] and [Your City]' }}
 Customers: {{ $json.audience || 'Not provided' }}
@@ -15,6 +15,7 @@ Given by the client: {{ $json.business_facts || 'none' }}
 Site description: {{ JSON.stringify($json.site_description || {}) }}
 Signals found on their pages: {{ JSON.stringify($json.client_signals || {}) }}
 Their pages (excerpts): {{ ($json.client_pages || []).map(p => '[' + p.kind + '] ' + p.url + ': ' + p.text.slice(0, 1800)).join('\n\n') || 'none read' }}
+{{ $json.angle_rules || '' }}
 
 AUTHOR AND TRUST (E-E-A-T)
 {{ $json.eeat_context || 'No author profile on file: plan the experience notes as bracketed prompts for the author.' }}
@@ -78,7 +79,7 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) in th
   "proof_elements": ["proof to show: case study, certification, numbers, testimonials — as placeholders if the client gave none"],
   "gaps_to_cover": ["Competitor gaps this page must fill"],
   "entities_to_mention": [""],
-  "comparison_table": { "title": "", "columns": [""], "rows_hint": "what the rows compare; use [Price], [Timeline] for business-specific figures" },
+  "comparison_table": { "title": "", "columns": [""], "rows_hint": "what the rows compare — criteria the reader can check for themselves (compliance, modules, effort, who it suits). Never a column or row that only a price or a timeline could fill unless those facts are on file above" },
   "internal_link_suggestions": [{ "anchor": "", "url": "must be one of the REAL PAGES above" }],
   "image_suggestions": [{ "placement": "hero | the exact H2 text the image belongs under", "purpose": "hero | diagram | screenshot | photo | chart | table", "subject": "what the image must show, specific enough for a designer or a stock search (no faces of real people, no competitor logos)", "alt_text": "what the image shows, naturally including the topic, under 125 characters, no 'image of'", "caption": "one line that adds information, or empty", "filename": "kebab-case-with-the-topic.webp" }],   // exactly 3: one hero (also the featured / Open Graph image) + two in-body images at the sections where a visual explains more than text
   "faqs": ["6-8 follow-up questions — reuse the People Also Ask questions where relevant; each becomes its own question-style heading answered in 40-60 words inside the section it belongs to, never a separate FAQ block"],
@@ -88,7 +89,8 @@ Return ONLY a valid JSON object (no markdown, no backticks, no extra text) in th
 
 RULES
 - The structure must suit a {{ $json.page_type }}, not a blog post, unless the page type is Blog Post or Guide.
-- target_word_count = the recommended_word_count from the competitor analysis (already clamped: service/landing pages 900-2,400, guides 1,200-3,000). The outline has 6-9 H2 sections whose target_words add up to this number. Depth beats breadth: fewer sections, each complete.
+- target_word_count = the recommended_word_count from the competitor analysis (already clamped: service/landing pages 900-2,400, guides 1,200-3,000), or the number the verdict named above when it named one. Anything outside 10% of it is cut back to it, and the outline with it, so plan to the number. The outline has 6-9 H2 sections whose target_words add up to this number. Depth beats breadth: fewer sections, each complete.
+- Plan a page the writer can finish from the facts above: at most 5 bracketed placeholders in the whole page. A section that could only be written with figures nobody gave (prices, timelines, counts) is the wrong section — plan the qualitative answer instead.
 - Every item in content_gaps and information_gain_opportunities from the competitor analysis must be covered somewhere in the outline.
 - Use question-style H2s where the People Also Ask data shows questions; put those questions in snippet_targets with a direct answer.
 - terms_to_use: 12-20 terms from the shared-terms list that the page must use naturally, with a realistic minimum count.

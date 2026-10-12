@@ -29,7 +29,8 @@ HOW TO FIX
 - "The call to action should be the last section": move the CTA section to the end.
 - "Figures the cited source does not carry": keep the [Confirm: ...] marker, or replace the number with the one the linked source actually states.
 - "A source with no independent authority was cited more than once": cite an official, standards, research or major-press page for the repeats, or drop the claim.
-- "Comparison table missing": add a Markdown table with [Price]/[Timeline] placeholders in business-specific cells.
+- "Comparison table missing": add a Markdown table that compares what the reader can check (coverage, what each option suits, what it needs from them) — no price or timeline column unless the facts state the figures.
+- "Too many placeholders to publish": rewrite those passages so they do not need the missing figure (what drives the cost, which choices change the timeline, what to ask a vendor for, what the stages are), and delete any table column or row that exists only to hold one. Keep at most 5 bracketed placeholders in the whole page; keep the [Confirm: ...] and [Author insight: ...] markers, which do not count.
 - Remove any notes, layout instructions or commentary that are not page content; after the Secondary Keywords line the next line must be the H1.
 - Keep every bracketed [Author insight: ...] line and every link to a cluster page or case study: they are intentional.
 - Never write the word "placeholder". Never add schema, scripts or HTML.

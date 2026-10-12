@@ -3881,5 +3881,193 @@ await guard('site description from the whole site', async () => {
   check('D22: a claim that is nowhere on the site stays, and is called unverified, never invented; a figure the site never states is not excused by the words around it', pc.unsupported_claims.length === 2 && /400\+/.test(pc.unsupported_claims[0]) && /30%/.test(pc.unsupported_claims[1]) && /unverified number/.test(pc.problems[0].issue) && !/invent/i.test(pc.problems[0].issue) && !/invent/i.test(pc.revision_instructions) && /unverified/.test(pc.revision_instructions), JSON.stringify({ claims: pc.unsupported_claims, issue: pc.problems[0].issue, ri: pc.revision_instructions }));
 });
 
+// ===================================================================================
+// S41 D10 (2026-10-11 system review) — a page someone can publish, on the real page of execution 365
+// (`docs/system-review-2026-10-11/files/erp-software-uae.md`, kept here as `fixtures_live/page_erp_365.md`): it held 30 × [Price],
+// 20 × [Timeline], [Office address], [Phone number] and "[Your Business Name]" in its schema — although techand.ai's homepage states
+// Tech&, the DAFZA address and the phone number — ran 3,952 words against the 2,100 the verdict asked for, and Content QA passed it at 91.
+// ===================================================================================
+await guard('publishable page', async () => {
+  const SN = 'S41 D10 — a page someone can publish: the live page fails on placeholders and length, the schema carries the real name and NAP without a profile, the brief is clamped to the verdict\'s target, a cost angle needs price facts and the page type is one fixed option';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fs = require('fs'), path = require('path'), zlib = require('zlib');
+  const EMPTY = [{ json: {} }];
+  const D = 'techand.ai', SITE = 'site_techand-ai', LOC = 2784;
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const FREE_TEXT = 'Service Page (ERP implementation UAE) with built-in vendor-neutral comparison, cost and compliance sections';   // what the verdict wrote in execution 365
+
+  // ---------- (5) the page type: one of the form's fixed options, the sentence kept as page_notes ----------
+  const PTS = (await run('_page_type', [{ page_type: FREE_TEXT }, { page_type: 'Comparison Page' }, { page_type: 'Location Page' }, { page_type: 'Pillar / hub page' },
+    { page_type: 'Local page (city or area)' }, { page_type: 'FAQ Page' }, { page_type: 'Category Page' }, { page_type: 'a deep-dive guide comparing vendors' },
+    { page_type: 'Case Study' }, { page_type: '', default: 'Blog Post' }].map(j => ({ json: j })))).map(i => i.json);
+  console.log('   page types ->', PTS.map(x => x.page_type).join(' | '));
+  check('D10: every page type is one of the form\'s options — the free text of exec 365 is a Service Page (the word "comparison" later in the sentence does not decide it), the form\'s own labels map to their value, an unknown sentence falls back by its words',
+    eq(PTS.map(x => x.page_type), ['Service Page', 'Guide', 'Service Page', 'Pillar Page', 'Local Page', 'Guide', 'Service Page', 'Guide', 'Case Study', 'Blog Post'])
+    && PTS.every(x => x.types.includes(x.page_type)), JSON.stringify(PTS.map(x => x.page_type)));
+  check('D10: the free text is kept as page_notes, and a plain label (the form\'s own wording) adds nothing',
+    PTS[0].page_notes === FREE_TEXT && PTS[3].page_notes === '' && PTS[4].page_notes === '' && PTS[8].page_notes === '' && PTS[9].page_notes === '', JSON.stringify(PTS.map(x => x.page_notes)));
+
+  const PV = { keyword: 'erp software uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads', page_type: 'Service Page',
+    business: 'Enterprise digital transformation and Microsoft Dynamics 365 partner in the UAE', business_facts: '', services: ['ERP implementation'],
+    site_description: { business_description: 'Microsoft Dynamics 365 partner', products_or_services: ['ERP implementation'] }, competitors: [], competitors_summary: [],
+    keyword_data: { search_volume: 480, cpc: 13.98, keyword_difficulty: 3, google_intent: 'commercial' }, secondary_keywords: ['erp software dubai'],
+    verdict: 'GO_WITH_CHANGES', verdict_score: 70, verdict_reasons: ['The SERP mixes vendor pages with 1,785-4,327 word comparison guides.'],
+    verdict_changes: ['Build a service page of about 2,100 words with a 40-70 word answer block at the top.'], verdict_risks: [],
+    site_authority: { organic_keywords: 12, top3: 0, top10: 0 }, site_urls: ['https://' + D + '/'], pages_now: 1, ladder_id: 'lad_test410', request_id: 'r-365' };
+  mock('Merge Keyword Data', PV);
+  const pvOut = (await run('Parse Verdict', [{ json: { output: JSON.stringify({ verdict: 'GO_WITH_CHANGES', score: 70, recommended_page: FREE_TEXT, reasons: [], risks: [], secondary_keywords: ['erp software dubai'] }) } }]))[0].json;
+  check('D10: Parse Verdict stores the fixed option and passes the sentence on as page_notes (meta.json, the schema and the length band all read the page type)',
+    pvOut.recommended_page === 'Service Page' && pvOut.page_notes === FREE_TEXT, JSON.stringify({ rp: pvOut.recommended_page, notes: pvOut.page_notes }));
+  mock('Collect Facts', { ...PV, page_type: FREE_TEXT });
+  const paFree = (await run('Parse Analysis', [{ json: { output: JSON.stringify({ recommended_word_count: 3000, content_gaps: [] }) } }]))[0].json.competitor_analysis.recommended_word_count;
+  mock('Collect Facts', { ...PV, page_type: 'Guide' });
+  const paGuide = (await run('Parse Analysis', [{ json: { output: JSON.stringify({ recommended_word_count: 3000, content_gaps: [] }) } }]))[0].json.competitor_analysis.recommended_word_count;
+  check('D10: the length band comes from the fixed option — the free text is a service page (900-2,400), a guide keeps 1,200-3,000', paFree === 2400 && paGuide === 3000, JSON.stringify({ free: paFree, guide: paGuide }));
+
+  // ---------- (5b) the ladder stores the fixed type too (the page run reads the row) ----------
+  mock('Parse Verdict', { ...PV, recommended_page: FREE_TEXT });
+  mock('Ladder Requests', [{ kind: 'suggestions', label: 'suggestions', body: [{ keyword: 'erp software uae' }] }, { kind: 'ranked', label: 'ranked', domain: D, body: [{ target: D }] }]);
+  mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 10, method: 'size', p75: null, size_reach: 10, sample: 0, top10: 0, organic_keywords: 12, location_code: LOC }), updated_at: daysAgo(3) } }]);
+  mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+  const POOL = ['best erp software in dubai', 'erp software dubai', 'erp implementation cost uae', 'cloud erp software uae', 'erp software for small business uae'];
+  const lp = (await run('Ladder Pool', [V.task({ seed_keyword: 'erp software uae', items: POOL.map((k, i) => V.kwItem(k, i)) }), V.task({ target: D, items: [] })]))[0].json;
+  const lch = await run('Ladder Relevance Chunks', [{ json: lp }]);
+  mock('Ladder Keyword Relevance', lch.map(c => V.ladderRelevance(c.json)));
+  const L = (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json.ladder;
+  const rungTypes = L.rungs.flatMap(r => r.pages.map(p => p.page_type));
+  console.log('   ladder page types ->', L.top.page_type, '|', rungTypes.join(', '), '| notes:', JSON.stringify(L.top.page_notes));
+  check('D10: the ladder\'s main page is a Service Page (not the sentence), every rung page is a fixed option too, and the sentence survives as page_notes',
+    L.top.page_type === 'Service Page' && L.top.page_notes === FREE_TEXT && rungTypes.length > 0 && rungTypes.every(t => PTS[0].types.includes(t)), JSON.stringify({ top: L.top.page_type, rungs: rungTypes }));
+  mock('Attach PDF Ladder', { ladder: L, domain: D, keyword: 'erp software uae', country: 'United Arab Emirates', location_code: LOC, language_code: 'en', email: '', callback_url: '', request_id: 'r-365' });
+  const rows = (await run('Ladder Rows', EMPTY)).map(i => i.json);
+  check('D10: the stored seo_ladders rows carry the fixed page type and nothing else new (the next page run reads page_type from the row)',
+    rows.length > 1 && rows.every(r => PTS[0].types.includes(r.page_type)) && rows.every(r => !('page_notes' in r)) && rows.some(r => r.rung === 4 && r.page_type === 'Service Page'), JSON.stringify(rows.map(r => [r.rung, r.page_type])));
+
+  // ---------- (2) a cost or timeline angle needs price or timeline facts ----------
+  reset(); begin(SN);
+  mock('Parse Verdict', { ...PV, recommended_page: 'Service Page', page_notes: FREE_TEXT });
+  const bcNo = (await run('Brief Context', EMPTY))[0].json;
+  mock('Parse Verdict', { ...PV, recommended_page: 'Service Page', business_facts: 'Implementations start at AED 45,000 for a single entity and go live in 8 weeks.' });
+  const bcYes = (await run('Brief Context', EMPTY))[0].json;
+  console.log('   angle rules (no facts) ->', String(bcNo.angle_rules).slice(0, 180));
+  check('D10: without price or timeline facts the brief is told not to build the page on cost or duration, and to answer such questions qualitatively instead',
+    bcNo.pricing_facts === false && bcNo.timeline_facts === false && /^ANGLE LIMIT: this business has given no price or timeline facts/.test(bcNo.angle_rules)
+    && /never plan a row that can only be filled with \[Price\] or \[Timeline\]/.test(bcNo.angle_rules) && /may still be answered — qualitatively/.test(bcNo.angle_rules), bcNo.angle_rules);
+  check('D10: with the facts on file (a price and a go-live time) the angle is allowed, and every figure must come from them',
+    bcYes.pricing_facts === true && bcYes.timeline_facts === true && /^ANGLE: price and timeline facts are on file/.test(bcYes.angle_rules), bcYes.angle_rules);
+
+  // ---------- (2 + 3) Parse Brief: the length is clamped and a cost angle without facts is dropped ----------
+  const BRIEF = { target_word_count: 3100, unique_angle: 'The first UAE ERP guide with a full cost framework and an implementation timeline',
+    information_gain: ['A cost framework in AED for every module', 'A phased implementation timeline from discovery to go-live', 'A compliance scorecard for VAT, corporate tax, WPS and e-invoicing'],
+    comparison_table: { title: 'ERP options', columns: ['Option', 'Price', 'Implementation timeline', 'Who it suits'], rows_hint: 'what the rows compare; use [Price], [Timeline] for business-specific figures' },
+    gaps_to_cover: ['Free-zone multi-entity setups'], outline: [{ h2: 'What is ERP', target_words: 600 }, { h2: 'How to choose', target_words: 900 }, { h2: 'What it costs', target_words: 800 }, { h2: 'How long it takes', target_words: 500 }, { h2: 'Next step', target_words: 300 }] };
+  const briefRun = async (ctx, brief) => { mock('Brief Context', ctx); return (await run('Parse Brief', [{ json: { output: JSON.stringify(brief || BRIEF) } }]))[0].json; };
+  const b1 = await briefRun({ ...bcNo, competitor_analysis: { recommended_word_count: 2400 } });
+  console.log('   brief ->', b1.content_brief.target_word_count, 'words | sections', JSON.stringify(b1.content_brief.outline.map(o => o.target_words)), '| angle:', b1.content_brief.unique_angle);
+  check('D10: a brief asking for 3,100 words is clamped to the verdict\'s own target ("about 2,100 words") + 10% = 2,310, and the outline is scaled with it, so the writer is not sent to write 3,100',
+    b1.content_brief.target_word_count === 2310 && b1.brief_outline_words === 2310 && eq(b1.content_brief.outline.map(o => o.target_words), [450, 670, 600, 370, 220])
+    && b1.brief_adjustments.some(a => /Target length 3100 -> 2310 words \(the verdict asked for about 2100, within 10%\)/.test(a)), JSON.stringify({ t: b1.content_brief.target_word_count, o: b1.content_brief.outline.map(o => o.target_words), adj: b1.brief_adjustments }));
+  const b2 = await briefRun({ ...bcNo, verdict_changes: [], competitor_analysis: { recommended_word_count: 2100 } });
+  check('D10: with no target in the verdict the competitor analysis\' recommended count decides it (2,100 + 10%), and a brief already inside 10% is left alone',
+    b2.content_brief.target_word_count === 2310 && (await briefRun({ ...bcNo, verdict_changes: [], competitor_analysis: { recommended_word_count: 2000 } }, { ...BRIEF, target_word_count: 2050 })).content_brief.target_word_count === 2050, JSON.stringify(b2.brief_adjustments));
+  check('D10: the cost / timeline angle is refused when no such facts exist — the angle becomes the compliance one, the two promises nobody could keep are gone and the table loses the Price and Timeline columns',
+    b1.content_brief.unique_angle === 'A compliance scorecard for VAT, corporate tax, WPS and e-invoicing'
+    && eq(b1.content_brief.information_gain, ['A compliance scorecard for VAT, corporate tax, WPS and e-invoicing'])
+    && eq(b1.content_brief.comparison_table.columns, ['Option', 'Who it suits']) && !/\[Price\]|\[Timeline\]/.test(b1.content_brief.comparison_table.rows_hint)
+    && b1.brief_adjustments.some(a => /^Angle dropped \(no price or timeline facts on file\)/.test(a)), JSON.stringify({ a: b1.content_brief.unique_angle, g: b1.content_brief.information_gain, c: b1.content_brief.comparison_table }));
+  const b3 = await briefRun({ ...bcYes, competitor_analysis: { recommended_word_count: 2400 } });
+  check('D10: with price and timeline facts on file the same brief keeps its cost angle, its promises and its table columns',
+    b3.content_brief.unique_angle === BRIEF.unique_angle && b3.content_brief.information_gain.length === 3 && eq(b3.content_brief.comparison_table.columns, BRIEF.comparison_table.columns)
+    && !b3.brief_adjustments.some(a => /Angle dropped/.test(a)), JSON.stringify({ a: b3.content_brief.unique_angle, adj: b3.brief_adjustments }));
+
+  // ---------- (4) Content QA on the real page of execution 365 ----------
+  reset(); begin(SN);
+  const ERP = fs.readFileSync(path.join(__dirname, 'fixtures_live', 'page_erp_365.md'), 'utf8');
+  const META365 = ['Title: ERP Software UAE: Costs, Comparison & Implementation',
+    'Meta Description: Compare ERP software in the UAE (Odoo, NetSuite, SAP, Dynamics 365) by cost, timeline and FTA compliance. Then book an ERP scoping call.',
+    'Slug: erp-software-uae', ''].join('\n');
+  const PB = { keyword: 'erp software uae', domain: D, country: 'United Arab Emirates', currency: 'AED', page_type: 'Service Page', page_role: 'standard', article_like: false,
+    content_brief: { target_word_count: 2310, outline: [], terms_to_use: [{ term: 'data migration', min_count: 1 }], snippet_targets: [], secondary_keywords: ['erp software dubai'], evidence_plan: [] },
+    facts: [], business: 'Microsoft Dynamics 365 partner in the UAE', business_facts: '', site_profile: null, site_description: {}, internal_link_candidates: [], site_urls: [], hub_pages: [] };
+  const qaRun = async (md, over) => { mock('Parse Brief', { ...PB, ...(over || {}) }); return (await run('Content QA', [{ json: { output: md, critique: null } }], { runIndex: 0 }))[0].json; };
+  const q365 = await qaRun(META365 + ERP);
+  const QA = q365.content_qa;
+  console.log('   exec 365 ->', QA.placeholder_count, 'placeholders,', QA.main_content_words, 'words vs', QA.target_word_count, '| score', QA.content_score, '| passed', QA.passed);
+  console.log('   top placeholders ->', JSON.stringify(QA.placeholders.slice(0, 5)));
+  check('D10: the page of execution 365 does not pass any more — 50+ placeholders ([Price] × 30, [Timeline] × 20) and 4,046 main words against a 2,310 target, although it still scores 80+',
+    QA.passed === false && QA.content_score >= 80 && QA.placeholder_count > 50 && QA.placeholders[0].token === '[Price]' && QA.placeholders[0].count === 30
+    && QA.placeholders.some(p => p.token === '[Timeline]' && p.count === 20) && QA.main_content_words > QA.target_word_count * 1.25, JSON.stringify({ passed: QA.passed, ph: QA.placeholder_count, words: QA.main_content_words, score: QA.content_score }));
+  check('D10: both reasons are named for the editor, and the editor pass is forced (it is the round that has to cut them)',
+    QA.warnings.some(w => /^Too many placeholders to publish \(6\d, at most 5 allowed\): \[Price\] x30, \[Timeline\] x20/.test(w))
+    && QA.warnings.some(w => /^Main content is too long: 4046 words vs target 2310/.test(w)) && QA.editor_needed === true, JSON.stringify(QA.warnings.slice(0, 3)));
+
+  // a draft the owner can publish: five gaps and the length on target
+  const CLEAN = [
+    'Title: ERP Software UAE: The 2026 Buyer Guide',
+    'Meta Description: Choose ERP software in the UAE with a clear comparison, the compliance checklist and the questions to ask before you sign.',
+    'Slug: erp-software-uae', '', '# ERP software UAE: how to choose', '',
+    'Choosing ERP software UAE buyers can rely on starts with the rules you must meet, not with the vendor list, and this guide walks you through each step.', '',
+    '**Quick answer:** Pick ERP software UAE teams can run under VAT, corporate tax and the e-invoicing mandate, then judge it on data migration effort and the partner behind it. Shortlist three vendors, score them against your own processes and ask each one for a fixed-scope plan before you sign anything.', '',
+    '## What does the mandate change?', '',
+    'The mandate covers every VAT-registered business. You need software that can issue the required format and connect to an accredited provider, so ask for proof in writing.', '',
+    'For example, a distributor with three entities must map each one to a tax group first. Choose a product with native support if your team is small.', '',
+    '## How do you shortlist ERP software UAE vendors?', '',
+    'Start from the data migration effort and the people who will run it. Step 1: list your processes. Step 2: score each vendor against them. Step 3: ask for a fixed scope.', '',
+    '| Option | Suits |', '|---|---|', '| Business Central | Mid-market distributors |', '| Odoo | Lean operations teams |', '',
+    '## Which mistakes cost the most?', '',
+    'Teams skip the data clean-up and pay for it later. A rule of thumb: clean the master data before the build, not after, and name one owner per table.', '',
+    'Another mistake is buying modules nobody uses. Ask for a phased plan, in practice 4 stages, and keep the scope in writing.', '',
+    '## Talk to us', '',
+    'Book a scoping call and we will map your ERP software UAE shortlist against your own processes in one workshop.'].join('\n');
+  const qClean = await qaRun(CLEAN, { content_brief: { ...PB.content_brief, target_word_count: 260 } });
+  console.log('   clean draft ->', qClean.content_qa.placeholder_count, 'placeholders,', qClean.content_qa.main_content_words, 'words | passed', qClean.content_qa.passed);
+  check('D10: a draft with no placeholder and a length on target passes, as before',
+    qClean.content_qa.passed === true && qClean.content_qa.placeholder_count === 0 && qClean.content_qa.warnings.length === 0, JSON.stringify({ p: qClean.content_qa.passed, w: qClean.content_qa.warnings }));
+  const WITH_NOTES = CLEAN.replace('so ask for proof in writing.', 'so ask for proof in writing. Licence fees start at [Price] per user and the first phase needs [Number] data owners.')
+    .replace('name one owner per table.', 'name one owner per table. Adoption rose [Confirm: 23.5%] in the first wave, and the hardware budget is [Price].')
+    .replace('keep the scope in writing.', 'keep the scope in writing. [Author insight: the mistake you see most in a first rollout] [Owner: confirm — whether we are accredited with the Ministry of Finance]');
+  const qNotes = await qaRun(WITH_NOTES, { content_brief: { ...PB.content_brief, target_word_count: 300 } });
+  console.log('   five gaps ->', qNotes.content_qa.placeholder_count, 'placeholders,', qNotes.content_qa.review_notes, 'review notes | passed', qNotes.content_qa.passed);
+  check('D10: a note the owner has to read ([Confirm: …], [Owner: confirm — …], [Author insight: …]) is not a placeholder; three real gaps stay under the limit and the page still passes',
+    qNotes.content_qa.placeholder_count === 3 && qNotes.content_qa.review_notes === 3 && qNotes.content_qa.passed === true
+    && !qNotes.content_qa.warnings.some(w => /Too many placeholders/.test(w)), JSON.stringify({ ph: qNotes.content_qa.placeholders, notes: qNotes.content_qa.review_notes, w: qNotes.content_qa.warnings }));
+  const qSix = await qaRun(WITH_NOTES.replace('in one workshop.', 'in one workshop. Ask for [Price], [Timeline] and [Number] before you sign.'), { content_brief: { ...PB.content_brief, target_word_count: 300 } });
+  check('D10: one gap over the limit fails the page and forces the editor round',
+    qSix.content_qa.placeholder_count === 6 && qSix.content_qa.passed === false && qSix.content_qa.editor_needed === true
+    && qSix.content_qa.warnings.some(w => /^Too many placeholders to publish \(6, at most 5 allowed\)/.test(w)), JSON.stringify({ ph: qSix.content_qa.placeholder_count, w: qSix.content_qa.warnings }));
+
+  // ---------- (1) the name, logo and NAP come from the site model, with no business profile on file ----------
+  const HOME = zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', 'lb_page_techand_home.html.gz'))).toString('utf8');
+  const SMout = (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D }, extras: { html: HOME, final_url: 'https://www.techand.ai/' } } }]))[0].json;
+  mock('Site Model', { site_model: SMout.model });
+  const qNoProfile = await qaRun(CLEAN, { content_brief: { ...PB.content_brief, target_word_count: 260 }, site_profile: null });
+  const orgQ = (qNoProfile.schema_blocks.find(b => b.type === 'Service') || {}).json.provider;
+  console.log('   schema without a profile ->', JSON.stringify(orgQ));
+  check('D10: a site with no business profile still gets its real name and logo in the schema, read from the homepage Organization block — never "[Your Business Name]"',
+    qNoProfile.content_qa.business_name === 'Tech&' && qNoProfile.content_qa.nap_source === 'homepage_schema' && orgQ.name === 'Tech&' && orgQ.logo === 'https://www.techand.ai/logo1.png'
+    && !JSON.stringify(qNoProfile.schema_blocks).includes('[Your Business Name]'), JSON.stringify({ n: qNoProfile.content_qa.business_name, s: qNoProfile.content_qa.nap_source, org: orgQ }));
+  const qLocal = await qaRun(CLEAN, { content_brief: { ...PB.content_brief, target_word_count: 260 }, site_profile: null, page_role: 'local', page_type: 'Local Page', local_area: 'Dubai' });
+  const lb = qLocal.schema_blocks.find(b => /LocalBusiness/.test(b.type)).json;
+  console.log('   local business ->', JSON.stringify({ n: lb.name, a: lb.address.streetAddress.slice(0, 40), t: lb.telephone }));
+  check('D10: the local page\'s LocalBusiness schema carries the real address and phone from the homepage, not [Street address] / [Phone], and the local note no longer asks for a profile',
+    lb.name === 'Tech&' && /Dubai Airport Freezone Authority \(DAFZA\)/.test(lb.address.streetAddress) && lb.address.addressLocality === 'Dubai' && lb.telephone === '+971507020541'
+    && !/\[Street address\]|\[Phone\]|\[Country code\]/.test(JSON.stringify(lb)) && !qLocal.content_qa.eeat_notes.some(n => /Local page without a full address/.test(n)), JSON.stringify(lb).slice(0, 400));
+  const bpL = (await run('Blog Package', [{ json: { ...qLocal, page_markdown: qLocal.output, content_brief_slug: 'erp-software-uae', content_images: [] } }]))[0];
+  const bmdL = Buffer.from(bpL.binary.article_md.data, 'base64').toString('utf8');
+  const bhtmlL = Buffer.from(bpL.binary.article_html.data, 'base64').toString('utf8');
+  console.log('   NAP block ->', (bmdL.match(/\*\*Tech&[^\n]*\n[^\n]*/) || ['(none)'])[0].replace(/\n/g, ' / '));
+  check('D10: the package\'s NAP block uses the same values (the merged profile travels on from Content QA), so the published page shows the real name, address and phone',
+    /\*\*Tech& — serving Dubai\*\*/.test(bmdL) && /Dubai Airport Freezone Authority \(DAFZA\)/.test(bmdL) && /\+971507020541/.test(bmdL)
+    && /Dubai Airport Freezone Authority \(DAFZA\)/.test(bhtmlL) && !/\[Your Business Name\]|\[Street address, City\]/.test(bmdL + bhtmlL), (bmdL.match(/\*\*Tech&[\s\S]{0,200}/) || [''])[0]);
+  const qProf = await qaRun(CLEAN, { content_brief: { ...PB.content_brief, target_word_count: 260 },
+    site_profile: { business_name: 'Tech& FZCO', logo_url: 'https://techand.ai/brand.svg', phone: '+971 4 123 4567', address: { street: 'Office 12, DAFZA', city: 'Dubai', region: '', postal_code: '', country_code: 'AE' } }, page_role: 'local', page_type: 'Local Page', local_area: 'Dubai' });
+  const lbP = qProf.schema_blocks.find(b => /LocalBusiness/.test(b.type)).json;
+  check('D10: a stored business profile still wins over the homepage schema (the model only fills what the profile does not have: the e-mail here)',
+    lbP.name === 'Tech& FZCO' && lbP.telephone === '+971 4 123 4567' && lbP.address.streetAddress === 'Office 12, DAFZA' && lbP.email === 'contact@techand.ai'
+    && qProf.content_qa.nap_source === 'profile', JSON.stringify({ n: lbP.name, t: lbP.telephone, a: lbP.address.streetAddress, e: lbP.email, s: qProf.content_qa.nap_source }));
+});
+
 H.report();
 })();
