@@ -733,7 +733,8 @@ FIT_GATE_SRC = _rd0('code/_fit_gate.js').rstrip('\n'); SERP_OBS_SRC = _rd0('code
 SITE_MODEL_SRC = _rd0('code/_site_model.js').rstrip('\n')   # 2026-10-12 (G19, SITE_MODEL_SPEC.md): the one site model (canonical host, name, NAP, services, pages, facts)
 SOURCES_SRC = _rd0('code/_sources.js').rstrip('\n'); ANCHOR_SRC = _rd0('code/_anchor.js').rstrip('\n')   # 2026-10-11: source quality, figure lookup and link cleaning (G4) and the anchor words of a link to our own page (D9)
 PAGE_TYPE_SRC = _rd0('code/_page_type.js').rstrip('\n')   # 2026-10-12 (D10): the page type as one of the form's fixed options, with the verdict's free text kept as page_notes
-rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types), one copy each, inlined where a node asks for them
+GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 / D24): the Search Console query rules (scraper queries, brand split, anonymised share)
+rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -2742,6 +2743,56 @@ assert not any('/*__SITE_MODEL__*/' in n['parameters'].get('jsCode', '') for n i
 sticky("""### The pages the site already has (D11, v4.15)
 The Site Tracker writes a **page inventory** per website into `seo_pages` every Monday (the sitemap, the Search Console pages with the queries they get impressions for, AI Growth's key pages, the pages found live) and *Load Pages (Model)* brings it into this run's site model. **Ladder Plan**, **discovery**, the **Rank Tracker**, the **Site Tracker** and the **Content Cadence** all ask `SM.matchPage(model, keyword)` first: a page answers a search when 75% of the keyword's meaningful words are in its slug or title, or when it already gets impressions for that exact query. A hit means *refresh that page* \u2014 never a second page for the same search.""", _lpm[0] - 220, _lpm[1] + 320, 1100, 180, 4)
 log('Blind to existing pages fixed (2026-10-12, FIX_PLAN D11): the Site Tracker keeps the website\'s page inventory in seo_pages (sitemap read for every site + Search Console pages and their queries + AI Growth key pages + pages found live, only changed rows written), the site model carries it on demand (Load Pages (Model) -> SM.withPages) and Ladder Plan, discovery, the Rank Tracker, the Site Tracker brief and the Content Cadence ask SM.matchPage before recommending a page: a live page that already answers the search means improve / refresh that URL, never "publish it"')
+
+# =============================================================================
+# 36. WHAT THE NUMBERS ARE ALLOWED TO SAY (2026-10-12, system review FIX_PLAN.md D20 / D21 / G9 / G24 / G28). Five places where the agent said
+#     more than its data supported:
+#       * D20 discovery: the top pick "e invoicing" overlapped the running ladder head "e invoicing in uae" with no warning, a card claimed an
+#         "AI Overview present" that its own live check had not found, "who ranks now" repeated domains and the callback carried float32 CPCs.
+#         Discovery now loads the site's own ladders (Load Domain Ladders (Discovery), archived ones skipped) and marks every keyword a ladder
+#         head or rung covers; the AI Overview line comes from the LIVE check ("seen on <date>") while the undated Labs value is labelled
+#         historical; the top domains are deduplicated before the first five are taken; the callback rounds CPCs to 2 decimals.
+#       * D21: a sparse Google Trends series (zero most weeks) produced "+1,200%" in the weekly brief. Parse Trends now returns change_pct null
+#         for a sparse series (stored rows included), Brief Input leaves the percentage out and the prompt says "too little search data".
+#       * G9 Search Console depth: 500 query rows and 100 page rows were a sample. Every row is read now (25,000 per request, further pages
+#         through GSC More Requests / GSC Query (More), max_gsc_pages per kind), the queries Google withholds are reported as the anonymised
+#         share (period totals minus the sum of the rows), brand and non-brand are split with seo_monitors / the site model's brand names, and
+#         the operator-query rule the audit uses is now the shared kit v5/code/_gsc_queries.js (GQ) in both places.
+#       * G24: the audit reports crawl coverage — "crawled X of Y known URLs (sitemap union the Search Console pages)" — and flags under 90%,
+#         because every finding's share is otherwise a share of an unknown sample.
+#       * G28: a traffic alert fired on a fixed 30%. It now needs a statistically real change (two-sample Poisson z, 95%, v5/code/_site_stats.js
+#         ST.change, the same idea as the AI Pulse's _ai_stats.js), enough events in both periods together and a size worth reporting; a large
+#         move inside sampling noise becomes an "info" alert worded "Watch:" and Google's update dates are named as context.
+#     The Site Tracker nodes are wired in build_site_tracker.py; here: the discovery ladder load, the audit's coverage line in both reports.
+# =============================================================================
+# ---------- A. D20: the site's own keyword ladders, loaded in discovery as well (the ladder path has them since v4.8) ----------
+_sdd = pos('Seed List'); DX36, DY36 = _sdd[0], _sdd[1] + 560
+DOMAIN_SEED = "={{ String($('Seed List').first().json.domain || '').toLowerCase() }}"
+add_node('Ensure Ladder Table (Discovery)', DT_TYPE, DT_VERSION, dt_create_params(LADDER_TABLE, LADDER_COLS), [DX36, DY36], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Domain Ladders (Discovery)', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_TABLE, [('domain', DOMAIN_SEED), ('domain', "={{ 'www.' + String($('Seed List').first().json.domain || '').toLowerCase() }}")]), [DX36 + 220, DY36], LOAD18)
+add_node('Ensure Ladder Settings Table (Discovery)', DT_TYPE, DT_VERSION, dt_create_params(LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS), [DX36 + 440, DY36], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Ladder Settings (Discovery)', DT_TYPE, DT_VERSION, dt_get_any_params(LADDER_SETTINGS_TABLE, [('domain', DOMAIN_SEED), ('site_id', "={{ 'site_' + String($('Seed List').first().json.domain || '').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}")]), [DX36 + 660, DY36], LOAD18)
+disconnect('Seed List', 'Reach Requests (Discovery)')
+for a, b in [('Seed List', 'Ensure Ladder Table (Discovery)'), ('Ensure Ladder Table (Discovery)', 'Load Domain Ladders (Discovery)'), ('Load Domain Ladders (Discovery)', 'Ensure Ladder Settings Table (Discovery)'),
+             ('Ensure Ladder Settings Table (Discovery)', 'Load Ladder Settings (Discovery)'), ('Load Ladder Settings (Discovery)', 'Reach Requests (Discovery)')]:
+    connect(a, b)
+assert "'Load Domain Ladders (Discovery)'" in code('Rank Keywords') and "'Load Ladder Settings (Discovery)'" in code('Rank Keywords'), 'Rank Keywords does not read the discovery ladder load'
+assert 'ladder_covered' in code('Build Keyword Strategy') and 'ladder_covered' in code('Build Ideas Response'), 'the ladder overlap is not reported'
+assert "new Set(organic.map(o => normD(o.domain))" in code('Build Keyword Strategy'), 'the live top domains are not deduplicated before the first five'
+# ---------- B. G24: the crawl-coverage line in the technical audit and in the full report ----------
+_cov_old = ("`<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable"
+            "${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>`")
+_cov_new = _cov_old + " + (st.crawl_coverage && st.crawl_coverage.text ? `<p>${e2(st.crawl_coverage.text)}.${st.crawl_coverage.coverage_pct != null && st.crawl_coverage.coverage_pct < 90 ? ' Every share below is a share of the pages that were crawled, not of the whole site.' : ''}</p>` : '')"
+for _n36 in ('Build Audit Report', 'Build Full Report'):
+    patch(_n36, _cov_old, _cov_new)
+assert 'crawl_coverage' in code('GSC Audit Findings'), 'G24: the audit does not compute crawl coverage'
+assert 'const GQ = (() => {' in code('GSC Audit Findings'), 'G9: the shared Search Console query rules are not inlined into the audit'
+assert not any('/*__GSC_QUERIES__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'Search Console query kit placeholder left'
+sticky("""### What the numbers are allowed to say (D20 / D21 / G9 / G24 / G28, v4.15)
+**Discovery** loads the site's own **keyword ladders** (*Load Domain Ladders (Discovery)*): a keyword a ladder head or rung already covers is marked `ladder_covered` and is never the next thing to write — one search, one page. An **AI Overview** is claimed only from the *live* check, with the date it was seen; the undated stored value is labelled *historical*. Top domains are deduplicated before the first five, and callback CPCs are rounded to 2 decimals.
+**Audit:** *GSC Audit Findings* reports **crawl coverage** — crawled X of Y known URLs (sitemap ∪ the Search Console pages) — and flags under 90%, so nobody reads a finding's share as a share of the whole site.
+**Site Tracker** (built in `build_site_tracker.py`): every Search Console row is read (25,000 per request + further pages), the withheld queries are reported as the **anonymised share**, **brand / non-brand** is split with the known brand names, scraper queries are counted apart with the audit's own rule (`_gsc_queries.js`), a **sparse** Trends series carries no percentage, and a traffic alert needs a **statistically real** change (`_site_stats.js`, two-sample Poisson z, 95%) — a big move at low volume is a "Watch", not a fall.""", DX36 - 40, DY36 + 160, 1180, 260, 3)
+log('What the numbers are allowed to say (2026-10-12, FIX_PLAN D20 / D21 / G9 / G24 / G28): discovery loads the site\'s own ladders and marks every keyword a ladder head or rung covers (one search, one page), the AI Overview line comes from the live check with its date while the undated Labs value is labelled historical, the live top domains are deduplicated before the first five and callback CPCs are rounded to 2 decimals; a sparse Google Trends series carries no percentage anywhere (Parse Trends -> Brief Input -> prompt); Search Console is read in full (25,000 rows per request plus further pages) with the anonymised share, a brand / non-brand split and the audit\'s own scraper-query rule as the shared kit v5/code/_gsc_queries.js; the audit reports crawl coverage (sitemap union Search Console pages) and flags under 90%; site-tracking alerts fire on a two-sample Poisson z-test with minimum volumes and Google update dates as context (v5/code/_site_stats.js), a large move inside sampling noise is reported as "Watch"')
 
 # =============================================================================
 # 9. WRITE

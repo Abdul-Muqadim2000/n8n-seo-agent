@@ -15,7 +15,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 _rdt = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
 SITE_MODEL_SRC = _rdt('code/_site_model.js').rstrip('\n')   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
-rd = lambda p: _rdt(p).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC)
+SITE_STATS_SRC = _rdt('code/_site_stats.js').rstrip('\n')     # G28 (FIX_PLAN 2026-10-12): the statistical test behind every traffic alert
+GSC_QUERIES_SRC = _rdt('code/_gsc_queries.js').rstrip('\n')   # G9 / D24: scraper queries, the brand split and the anonymised share, shared with the audit
+rd = lambda p: _rdt(p).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]
@@ -152,6 +154,11 @@ N.append(code('Resolve Properties', rd('code/Resolve_Properties.js'), at(13, 0))
 N.append(code('GSC Requests', rd('code/GSC_Requests.js'), at(14, 0)))
 N.append(iff('Any GSC?', '{{ !$json.skip }}', at(15, 0)))
 N.append(node('GSC Query', 'n8n-nodes-base.httpRequest', 4.5, GOOGLE_POST('={{ $json.url }}'), at(16, 0), credentials=GOOGLE, **HTTP_X))
+# G9 (2026-10-12, FIX_PLAN): the query / page kinds are read in full — the first request asks for 25,000 rows, and any kind that came back full
+# gets its next pages here (startRow), up to CONFIG.max_gsc_pages. Free (Google quota); a kind that came back short costs no extra request.
+N.append(code('GSC More Requests', rd('code/GSC_More_Requests.js'), at(16, -1)))
+N.append(iff('Any More GSC?', '{{ !$json.skip }}', at(17, -1)))
+N.append(node('GSC Query (More)', 'n8n-nodes-base.httpRequest', 4.5, GOOGLE_POST('={{ $json.url }}'), at(18, -1), credentials=GOOGLE, **HTTP_X))
 N.append(code('Parse GSC', rd('code/Parse_GSC.js'), at(17, 0)))
 # ---- row 2: GA4 (detect property, reports) ----
 N.append(iff('Need GA4 Detect?', "{{ $('Resolve Properties').all().some(i => !i.json.ga4_property_id) }}", at(12, 2)))
@@ -232,7 +239,7 @@ Credential **Google Service Account (SEO Agent)** (`googleApi`, "Set up for use 
 Form: {FORM_URL} · API: {API_URL} (`mode: track`)""", [-40, -560], 1180, 500))
 for a, b in [('Weekly Schedule', 'Ensure Sites Table'), ('Manual Run', 'Ensure Sites Table'), ('Ensure Sites Table', 'Ensure Metrics Table'), ('Ensure Metrics Table', 'Ensure Query Table'), ('Ensure Query Table', 'Ensure History Table (Site)'), ('Ensure History Table (Site)', 'Ensure Trends Table'), ('Ensure Trends Table', 'Ensure Log Table (Site)'), ('Ensure Log Table (Site)', 'Ensure Alerts Table (Site)'), ('Ensure Alerts Table (Site)', 'Ensure Checkin Table (Site)'), ('Ensure Checkin Table (Site)', 'Ensure AI Visibility Table (Site)'), ('Ensure AI Visibility Table (Site)', 'Ensure Snapshots Table (Site)'), ('Ensure Snapshots Table (Site)', 'Ensure Audits Table (Site)'), ('Ensure Audits Table (Site)', 'Load Sites'),
              ('Load Sites', 'Load Ladders'), ('Load Ladders', 'Load Rank History'), ('Load Rank History', 'Load Site Metrics'), ('Load Site Metrics', 'Load Query History'), ('Load Query History', 'Load Content Log'), ('Load Content Log', 'Load Console Alerts'), ('Load Console Alerts', 'Load Check-ins'), ('Load Check-ins', 'Load AI Visibility (Site)'), ('Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)'), ('Load Backlink Snapshots (Site)', 'Load Audits (Site)'), ('Load Audits (Site)', 'Load Trends (Site)'), ('Load Trends (Site)', 'Ensure Profile Table (Site)'), ('Ensure Profile Table (Site)', 'Load Profiles (Site)'), ('Load Profiles (Site)', 'Ensure Monitors Table (Site)'), ('Ensure Monitors Table (Site)', 'Load Monitors (Site)'), ('Load Monitors (Site)', 'Ensure Pages Table (Site)'), ('Ensure Pages Table (Site)', 'Load Pages (Site)'), ('Load Pages (Site)', 'Ensure AI Pages Table (Site)'), ('Ensure AI Pages Table (Site)', 'Load AI Pages (Site)'), ('Load AI Pages (Site)', 'Site Plan'), ('Site Plan', 'Any Sites?'),
-             ('GSC Sites', 'Resolve Properties'), ('Resolve Properties', 'GSC Requests'), ('GSC Requests', 'Any GSC?'), ('GSC Query', 'Parse GSC'), ('Parse GSC', 'Need GA4 Detect?'),
+             ('GSC Sites', 'Resolve Properties'), ('Resolve Properties', 'GSC Requests'), ('GSC Requests', 'Any GSC?'), ('GSC Query', 'GSC More Requests'), ('GSC More Requests', 'Any More GSC?'), ('GSC Query (More)', 'Parse GSC'), ('Parse GSC', 'Need GA4 Detect?'),
              ('GA4 Accounts', 'Stream Requests'), ('Stream Requests', 'Any Streams?'), ('GA4 Streams', 'GA4 Requests'), ('GA4 Requests', 'Any GA4?'), ('GA4 Report', 'Parse GA4'), ('Parse GA4', 'Inspect Requests'),
              ('Inspect Requests', 'Any Inspections?'), ('Inspect URL', 'Parse Inspection'), ('Parse Inspection', 'Trends Requests'), ('Trends Requests', 'Any Trends?'), ('Google Trends', 'Parse Trends'), ('Parse Trends', 'Site SERP Requests'),
              ('Site SERP Requests', 'Any SERP?'), ('SERP Check (Site)', 'Parse Site SERP'), ('Parse Site SERP', 'Save Site Rank History'), ('Save Site Rank History', 'Page Inventory (Site)'),
@@ -254,6 +261,7 @@ link(C, 'Save Detected (Log)', 'Detected Case Rows'); link(C, 'Detected Case Row
 link(C, 'Mark Case Study Published (Detect)', 'Detected Ladder Rows'); link(C, 'Detected Ladder Rows', 'Any Ladder Detected?'); link(C, 'Any Ladder Detected?', 'Mark Ladder Published (Detect)', 0); link(C, 'Any Ladder Detected?', 'GSC Sites', 1)
 link(C, 'Mark Ladder Published (Detect)', 'GSC Sites')
 link(C, 'Any GSC?', 'GSC Query', 0); link(C, 'Any GSC?', 'Need GA4 Detect?', 1)
+link(C, 'Any More GSC?', 'GSC Query (More)', 0); link(C, 'Any More GSC?', 'Parse GSC', 1)   # G9: no kind came back full -> straight to Parse GSC
 link(C, 'Need GA4 Detect?', 'GA4 Accounts', 0); link(C, 'Need GA4 Detect?', 'GA4 Requests', 1)
 link(C, 'Any Streams?', 'GA4 Streams', 0); link(C, 'Any Streams?', 'GA4 Requests', 1)
 link(C, 'Any GA4?', 'GA4 Report', 0); link(C, 'Any GA4?', 'Inspect Requests', 1)
@@ -272,6 +280,14 @@ _code = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] ==
 for _n in ('Match Slugs (Detect)', 'Detect Published'): assert 'const overlapTokens' in _code[_n], _n + ': word rules not inlined'
 assert 'function publishedRows(' in _code['Detect Published'], 'Detect Published: published-page rows not inlined'
 assert not any(('/*__OVERLAP__*/' in c_) or ('/*__PUBLISH_ROWS__*/' in c_) for c_ in _code.values()), 'placeholder left in the Site Tracker'
+# FIX_PLAN 2026-10-12: G9 (every Search Console row, the anonymised share, brand vs non-brand, the audit's scraper rule), G28 (a traffic alert
+# fires on a two-sample Poisson z-test, not on a fixed percentage) and D21 (a sparse Trends series carries no percentage into the brief)
+for _n in ('Parse GSC',): assert 'const GQ = (() => {' in _code[_n], _n + ': the Search Console query rules are not inlined'
+for _n in ('Site Metrics', 'Brief Input'): assert 'const ST = (() => {' in _code[_n], _n + ': the site statistics are not inlined'
+assert 'startRow' in _code['GSC More Requests'] and "$('GSC Query (More)')" in _code['Parse GSC'], 'G9: the second page of Search Console rows is not read'
+assert 'ST.change(' in _code['Site Metrics'] and 'alert_min_click_events' in _code['Site Metrics'], 'G28: the alerts do not use the statistical test'
+assert 'too little search data' in _code['Brief Input'] and 'sparse ? null : change' in _code['Parse Trends'], 'D21: a sparse trend can still reach the brief as a percentage'
+assert not any(('/*__SITE_STATS__*/' in c_) or ('/*__GSC_QUERIES__*/' in c_) for c_ in _code.values()), 'statistics / query-rule placeholder left in the Site Tracker'
 write(wf(WF_ID, 'SEO Agent — Site Tracker', N, C), 'SEO_Agent_Site_Tracker.json')
 
 # =============================================================================

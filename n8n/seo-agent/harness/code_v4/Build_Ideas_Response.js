@@ -2,8 +2,10 @@
 // If content or an audit was also requested, those arrive later as separate callbacks (stage: content / site_audit).
 const item = $input.first(); const d = item.json; const ks = d.keyword_strategy || {}; const bin = item.binary || {};
 const b64 = async (prop, b) => { try { const buf = await this.helpers.getBinaryDataBuffer(0, prop); if (buf && buf.length) return buf.toString('base64'); } catch (e) {} return (b && b.data && String(b.data).length > 100) ? b.data : null; };
-const pick = (k) => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, cpc: k.cpc, intent: k.intent, page_type: k.page_type, topic: k.topic, traffic_potential: k.traffic_potential, opportunity: k.opportunity, ai_search_volume: k.ai_search_volume ?? null, serp_features: k.serp_types || [], why: k.why || null, live: k.live || null,
-  difficulty_for_you: k.difficulty_for_you || null, plan_type: k.plan_type || null, months: k.months || null, label: k.for_you_label || null, chance: k.chance || null });   // v4.8: for this site (null without a website); G3: the chance band
+const cpc2 = (v) => (v == null || isNaN(Number(v))) ? null : Math.round(Number(v) * 100) / 100;   // D20: DataForSEO CPCs are float32 (13.65999984741211)
+const pick = (k) => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, cpc: cpc2(k.cpc), intent: k.intent, page_type: k.page_type, topic: k.topic, traffic_potential: k.traffic_potential, opportunity: k.opportunity, ai_search_volume: k.ai_search_volume ?? null, serp_features: k.serp_types || [], why: k.why || null, live: k.live || null,
+  difficulty_for_you: k.difficulty_for_you || null, plan_type: k.plan_type || null, months: k.months || null, label: k.for_you_label || null, chance: k.chance || null,
+  covered_by: k.covered_by || null, ladder_covered: k.ladder_covered || null });   // D11 / D20: a live page or one of the site's ladders already covers this search   // v4.8: for this site (null without a website); G3: the chance band
 const pdfData = bin.pdf ? await b64('pdf', bin.pdf) : null;
 const docData = bin.data ? await b64('data', bin.data) : null;
 return [{ json: {
@@ -15,7 +17,7 @@ return [{ json: {
     primary_kd: c.primary_kd ?? null, difficulty_for_you: c.difficulty_for_you || null, plan_type: c.plan_type || null, months: c.months || null, label: c.for_you_label || null })),
   reach: ks.reach || null,
   quick_wins: (ks.quick_wins || []).map(pick), questions: (ks.questions || []).map(k => k.keyword), competitor_gaps: (ks.competitor_gaps || []).slice(0, 15).map(pick),
-  ai_demand: ks.ai_demand || null, research_failures: ks.research_failures || [], refused: ks.refused || [],   // D4 (2026-10-11): government / portal / other-brand keywords left out, with a reason
+  ai_demand: ks.ai_demand || null, research_failures: ks.research_failures || [], refused: ks.refused || [], covered: ks.covered || [], ladder_covered: ks.ladder_covered || [],   // D4 (2026-10-11): government / portal / other-brand keywords left out, with a reason
   follow_ups: { content: !!(d.include_content || d.include_seo_report), audit: !!d.include_audit },
   run_ledger: d.run_ledger || null,
   pdf: pdfData ? { data: pdfData, fileName: bin.pdf.fileName || d.pdf_file_name, mimeType: 'application/pdf' } : null,

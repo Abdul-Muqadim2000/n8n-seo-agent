@@ -1888,7 +1888,7 @@ await guard('pipeline phase 3', async () => {
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
   const N0 = await discover(false);
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory)
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
@@ -3211,7 +3211,10 @@ await guard('fix plan phase 1 — keywords and ladders', async () => {
   const ks = (await run('Build Keyword Strategy', [dated(V.serpFor(K.keyword, D, 0), '2026-10-11 16:03:00 +00:00', true)]))[0].json;
   const p0 = ks.keyword_strategy.priority[0];
   console.log('   strategy card why ->', p0.why);
-  check('D26: the card says "AI Overview seen in 1 of 2 checks" (stored results page vs the live check at 16:03 UTC), no contradiction', /AI Overview seen in 1 of 2 checks \(seen in the check at an unknown time \(stored results page\); not seen in the check at 16:03 UTC on 2026-10-11 \(live check\)\) \(it varies between searches\) — write a quotable answer block/.test(p0.why) && p0.live.checked_at === '2026-10-11T16:03:00.000Z' && p0.live.ai_overview === false && /seen in 1 of 2 checks/.test(ks.result_html) && /live check at 16:03 UTC on 2026-10-11/.test(ks.result_html), p0.why);
+  // 2026-10-12 (FIX_PLAN D20): D26 averaged the undated stored value and the live check into "seen in 1 of 2 checks", which still read as
+  // "there is an AI Overview" on a card whose own live check had found none. The live check now speaks alone, and the stored Labs value is
+  // only ever quoted as historical (S43 covers the three cases: live yes, live no, no live check).
+  check('D26 + D20: the live check at 16:03 UTC found no AI Overview, so the card claims none — and the undated stored value is quoted as historical', !/AI Overview was seen/.test(p0.why) && !/write a quotable answer block/.test(p0.why) && p0.live.checked_at === '2026-10-11T16:03:00.000Z' && p0.live.ai_overview === false && /not seen in the check at 16:03 UTC on 2026-10-11 \(live check\)/.test(ks.result_html) && /the stored results page showed one \(historical, undated\)/.test(ks.result_html) && !/seen in 1 of 2 checks/.test(ks.result_html), p0.why);
   check('D20 (in passing): the "Who ranks now" domains are deduplicated', eq(p0.live.top_domains, [...new Set(p0.live.top_domains)]), JSON.stringify(p0.live.top_domains));
   check('G3: the keyword strategy report shows the 2025 base rate and the chance band (uncalibrated) next to the months; the refused keywords are listed', /Base rate \(Ahrefs, 2025\): only 1\.74% of new pages/.test(ks.result_html) && /direct, 2-4 mo, good chance \(50-70%, uncalibrated\)/.test(ks.result_html) && /1 keyword\(s\) were left out as government, portal or other companies' brand searches \(e\.g\. "fta login" — navigational\)/.test(ks.result_html) && !/5\.7%/.test(ks.result_html), (ks.result_html.match(/Your site's reach[\s\S]{0,600}/) || [''])[0]);
   scanHtml('keyword strategy (observations, chance band)', ks.result_html);
@@ -4392,6 +4395,270 @@ await guard('d11-existing-pages', async () => {
   const M0 = await metricsWith([]);
   check('with no inventory the Site Tracker still asks for the written page to be published, exactly as before',
     (M0.sm.actions.find(a => a.keyword === KW) || {}).type === 'publish' && M0.brief.website.pages_known === 0, JSON.stringify(M0.sm.actions.map(a => a.type)));
+});
+
+// ===================================================================================
+// S43 D20 D21 G9 G24 G28 (2026-10-12, system review FIX_PLAN): five places where the agent said more than its data supported — a discovery
+// top pick ("e invoicing") that overlapped the running ladder head "e invoicing in uae" with no warning, a card claiming an AI Overview its
+// own live check had not found, "+1,200%" from a Google Trends series that is zero most weeks, 500 Search Console rows presented as "the"
+// queries, an audit that never said how much of the site it had crawled, and a traffic alert that fired on a fixed 30%.
+// ===================================================================================
+await guard('d20-d21-g9-g24-g28', async () => {
+  const SN = 'S43 D20 D21 G9 G24 G28 — a keyword one of the site\'s ladders already covers, an AI Overview only from the live check, no percentage for a sparse trend, every Search Console row with its anonymised share and brand split, crawl coverage in the audit, alerts on a statistical test';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T = require('./fixtures_tracking');
+  const D = T.D, SITE = 'site_northwind-erp-com', W = 'https://www.' + D, EMPTY = [{ json: {} }];
+
+  // ---- 1. D20: discovery loads the site's own keyword ladders (it never did) ----
+  const HEAD = 'e invoicing in uae';
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: 1, ladder_id: 'lad_D20', domain: D, head_keyword: HEAD, rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: W + '/' + keyword.replace(/\s+/g, '-') + '/', page_exists: false, status, months: '', start_date: '', country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: '', request_id: '' } });
+  const LADDER = [lrow(4, 3, HEAD, 'writing'), lrow(1, 1, 'uae e invoicing penalties', 'planned')];
+  const FLOAT_CPC = 13.65999984741211;   // DataForSEO sends CPCs as float32
+  const cand = (keyword, kd, volume, cpc) => ({ keyword, volume, kd, cpc: cpc == null ? 2.5 : cpc, intent: 'commercial', words: keyword.split(' ').length, pre_score: 60 + volume / 10, traffic_potential: volume, competitors: [], your_position: null, your_url: '' });
+  const CANDS = [cand('e invoicing', 22, 900, FLOAT_CPC), cand('wms implementation dubai', 18, 200), cand('uae e invoicing penalties', 14, 120)];
+  const discWith = async (ladderRows, settingsRows) => {
+    reset();
+    mock('Collect Research', [{ json: { domain: D, goal: 'leads', seeds: ['e invoicing'], services: ['ERP implementation'], business: 'ERP partner in Dubai', competitors: [], site_urls: [],
+      research: { candidates: CANDS, pool_size: 3, competitor_domains: [], by_source: {}, failures: [] } } }]);
+    mock('Relevance Chunks', [{ json: { keywords_chunk: CANDS.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', EMPTY); delete store['Reach (Discovery)']; delete store['Site Model'];
+    mock('Load Domain Ladders (Discovery)', ladderRows.length ? ladderRows : EMPTY);
+    mock('Load Ladder Settings (Discovery)', (settingsRows || []).length ? settingsRows : EMPTY);
+    const rel = [{ json: { output: { items: CANDS.map(c => ({ keyword: c.keyword, relevance: 2, intent: 'commercial', page_type: 'Guide', topic: c.keyword })) } } }];
+    return (await run('Rank Keywords', rel))[0].json.keyword_strategy;
+  };
+  const KS = await discWith(LADDER);
+  const kOver = KS.keywords.find(k => k.keyword === 'e invoicing');
+  console.log('   ladder overlap ->', JSON.stringify(KS.ladder_covered), '| pipeline:', KS.pipeline_keyword && KS.pipeline_keyword.keyword);
+  check('D20: "e invoicing" is flagged as covered by the running ladder "e invoicing in uae" (its main page), with the ladder named',
+    !!kOver.ladder_covered && kOver.ladder_covered.ladder_id === 'lad_D20' && kOver.ladder_covered.head_keyword === HEAD && kOver.ladder_covered.part === 'head' && kOver.ladder_covered.how === 'part of a broader page' && KS.ladders_known === 1, JSON.stringify(kOver.ladder_covered));
+  check('D20: a keyword that is a rung of that ladder is flagged too (the same search), and a keyword no ladder touches is free',
+    (KS.keywords.find(k => k.keyword === 'uae e invoicing penalties').ladder_covered || {}).how === 'the same search'
+    && (KS.keywords.find(k => k.keyword === 'uae e invoicing penalties').ladder_covered || {}).part === 'rung'
+    && KS.keywords.find(k => k.keyword === 'wms implementation dubai').ladder_covered === null && KS.ladder_covered.length === 2, JSON.stringify(KS.ladder_covered.map(c => [c.keyword, c.part, c.how])));
+  check('D20: the keyword the pipeline writes next is not one of the ladder\'s searches (one search, one page)',
+    KS.pipeline_keyword.keyword === 'wms implementation dubai' && !KS.pipeline_keyword.ladder_covered, JSON.stringify(KS.pipeline_keyword && KS.pipeline_keyword.keyword));
+  const KSarch = await discWith(LADDER, [{ json: { ladder_id: 'lad_D20', site_id: SITE, domain: D, status: 'archived', mode: 'auto', priority: 1 } }]);
+  check('D20: an archived ladder covers nothing — the keyword is recommended again, exactly as before this fix',
+    KSarch.keywords.every(k => k.ladder_covered === null) && KSarch.ladder_covered.length === 0 && KSarch.pipeline_keyword.keyword === 'e invoicing', JSON.stringify(KSarch.pipeline_keyword && KSarch.pipeline_keyword.keyword));
+  const KSnone = await discWith([]);
+  check('D20: with no ladder at all every keyword is free and the list is unchanged (back-compatible)',
+    KSnone.keywords.every(k => k.ladder_covered === null) && KSnone.ladders_known === 0 && KSnone.pipeline_keyword.keyword === 'e invoicing', JSON.stringify(KSnone.ladder_covered));
+
+  // the report and the callback name the ladder
+  const strategyFrom = async (ks, serps) => { mock('Rank Keywords', [{ json: { domain: D, country: 'United Arab Emirates', goal: 'leads', seeds: ['e invoicing'], research: { requests: 4 }, keyword_strategy: ks } }]);
+    mock('Priority Keywords', ks.priority.map(k => ({ keyword: k.keyword }))); delete store['AI Demand'];
+    return (await run('Build Keyword Strategy', serps))[0].json; };
+  const KSR = await strategyFrom(KS, KS.priority.map(() => ({ json: {} })));   // no live check in this run
+  check('D20: the keyword report names the ladder that already covers the search and says to let it finish',
+    /already covered by a keyword ladder of yours/.test(KSR.result_html) && KSR.result_html.includes(HEAD) && /two pages for one search split the signals/.test(KSR.result_html)
+    && /Already in your ladder/.test(KSR.result_html) && KSR.keyword_suggestions.ladder_covered.length === 2, (KSR.result_html.match(/already covered by a keyword ladder[\s\S]{0,260}/) || [''])[0]);
+
+  // ---- 2. D20: an AI Overview is claimed from the LIVE check only; the undated stored value is "historical" ----
+  const K2 = { keyword: 'e invoicing software uae', volume: 320, kd: 20, cpc: FLOAT_CPC, intent: 'commercial', page_type: 'Service Page', topic: 'e invoicing', opportunity: 50, traffic_potential: 90,
+    serp_types: ['organic', 'people_also_ask', 'ai_overview'], competitors: [], competitors_in_top20: 0, words: 4, relevance: 2, covered_by: null, ladder_covered: null };
+  const KS2 = { goal: 'leads', pool_size: 12, ai_reviewed: 12, total_relevant: 1, keywords: [K2], clusters: [], quick_wins: [K2], questions: [], long_tail: [], competitor_gaps: [], by_intent: {}, priority: [K2], pipeline_keyword: K2,
+    competitor_domains: [], by_source: { ideas: 12 }, research_failures: [], refused: [], covered: [], ladder_covered: [], pages_known: 0, ladders_known: 0, reach: null };
+  const DUP_DOMAINS = ['a.example', 'a.example', 'b.example', 'b.example', 'c.example', 'd.example', 'e.example'];
+  const serpWith = (aio, dt) => V.task({ keyword: K2.keyword, datetime: dt, items: [
+    ...DUP_DOMAINS.map((dom, i) => ({ type: 'organic', rank_group: i + 1, rank_absolute: i + 1, domain: dom, url: 'https://' + dom + '/p' + (i + 1) })),
+    { type: 'people_also_ask', items: [{ title: 'Who must issue e-invoices in the UAE?' }] },
+    ...(aio ? [{ type: 'ai_overview', items: [] }] : []) ] });
+  const noAio = await strategyFrom(KS2, [{ json: serpWith(false, '2026-10-11 16:03:00 +00:00') }]);
+  const p0 = noAio.keyword_strategy.priority[0];
+  console.log('   card why (live check, no AI Overview) ->', p0.why);
+  check('D20: the live check found no AI Overview, so the card never claims one — and the undated stored value is named as historical, not as today',
+    p0.live.ai_overview === false && !/AI Overview was seen/.test(p0.why) && !/write a quotable answer block/.test(p0.why)
+    && /not seen in the check at 16:03 UTC on 2026-10-11/.test(noAio.result_html) && /the stored results page showed one \(historical, undated\)/.test(noAio.result_html), p0.why);
+  check('D20: the "Who ranks now" domains are deduplicated BEFORE the first five are taken (duplicates used to eat the slots)',
+    eq(p0.live.top_domains, ['a.example', 'b.example', 'c.example', 'd.example', 'e.example']), JSON.stringify(p0.live.top_domains));
+  const withAio = await strategyFrom(KS2, [{ json: serpWith(true, '2026-10-11 16:03:00 +00:00') }]);
+  check('D20: when the live check DID see an AI Overview the card says so with the day it was seen',
+    /an AI Overview was seen on 2026-10-11 \(they vary between searches\) — write a quotable answer block/.test(withAio.keyword_strategy.priority[0].why), withAio.keyword_strategy.priority[0].why);
+  const failed = await strategyFrom(KS2, [{ json: { tasks: [{ status_code: 50000, status_message: 'Internal Server Error.' }] } }]);
+  const pf = failed.keyword_strategy.priority[0];
+  check('D20: with no live check the stored results page is quoted as historical and undated, never as a current feature',
+    pf.live === null && /the stored results page showed an AI Overview \(historical, undated — not checked live\)/.test(pf.why) && /historical, undated/.test(failed.result_html), pf.why);
+  const ir = (await run('Build Ideas Response', [{ json: noAio, binary: {} }]))[0].json;
+  check('D20: the callback rounds CPCs to 2 decimals (no float32 tail anywhere) and carries the ladder overlap field',
+    ir.priority[0].cpc === 13.66 && ir.start_with.cpc === 13.66 && ir.quick_wins.every(k => k.cpc === 13.66) && !/13\.6599/.test(JSON.stringify(ir)) && 'ladder_covered' in ir.priority[0] && eq(ir.ladder_covered, []), JSON.stringify({ cpc: ir.priority[0].cpc, start: ir.start_with.cpc }));
+
+  // ---- 3. D21: a sparse Google Trends series carries no percentage (the brief said "peppol uae up 1,200%") ----
+  const WEEK = (i) => new Date(Date.UTC(2025, 9, 5) + i * 7 * 864e5).toISOString().slice(0, 10);
+  const trendRes = (kw, kind) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', tasks: [{ id: 't', status_code: 20000, status_message: 'Ok.', cost: 0.0012, result: [{ keywords: [kw], items: [
+    { position: 1, type: 'google_trends_graph', title: 'Interest over time', data: Array.from({ length: 52 }, (_, i) => ({ date_from: WEEK(i), date_to: WEEK(i), missing_data: false, values: [kind === 'sparse' ? (i >= 49 ? 100 : 0) : (i >= 48 ? 90 : 40)] })) },
+    { position: 2, type: 'google_trends_queries_list', title: 'Related queries', data: { top: [{ query: kw + ' uae', value: '100' }], rising: [{ query: kw + ' 2026', value: 'Breakout' }] } }] }] }] });
+  reset();
+  mock('Trends Requests', [{ json: { site_idx: 0, site_id: SITE, keyword: 'peppol uae', endpoint: 'https://api.dataforseo.com/v3/keywords_data/google_trends/explore/live', body: [{ keywords: ['peppol uae'] }],
+    cached_trends: [{ site_idx: 0, site_id: SITE, keyword: 'peppol uae stored', row: { direction: 'sparse', change_pct: 1200, latest: 100, average: 6, peak_date: '2026-09-28', rising: 'peppol uae 2026 (Breakout)', top: 'peppol (100)', checked_at: '2026-10-05T06:00:00.000Z' } }] } },
+    { json: { site_idx: 0, site_id: SITE, keyword: 'e invoicing uae', endpoint: 'x', body: [{ keywords: ['e invoicing uae'] }] } }]);
+  const pt = await run('Parse Trends', [{ json: trendRes('peppol uae', 'sparse') }, { json: trendRes('e invoicing uae', 'rising') }]);
+  const tS = pt.find(x => x.json.keyword === 'peppol uae').json, tC = pt.find(x => x.json.keyword === 'peppol uae stored').json, tR = pt.find(x => x.json.keyword === 'e invoicing uae').json;
+  console.log('   trends ->', JSON.stringify(pt.map(x => [x.json.keyword, x.json.direction, x.json.change_pct])));
+  check('D21: a sparse series (zero most weeks, a spike at the end: the live "+1,200%") reports direction sparse and NO percentage',
+    tS.direction === 'sparse' && tS.change_pct === null && tS.sparse === true, JSON.stringify([tS.direction, tS.change_pct]));
+  check('D21: a stored sparse row loses its percentage too (it used to come back from seo_trends as 1,200%)',
+    tC.direction === 'sparse' && tC.change_pct === null && tC.sparse === true && tC.cached === true, JSON.stringify([tC.direction, tC.change_pct]));
+  check('D21: a real rising series keeps its percentage', tR.direction === 'rising' && tR.change_pct > 50 && tR.sparse === false, JSON.stringify([tR.direction, tR.change_pct]));
+  const TRENDS = pt.map(x => x.json);
+
+  // ---- 4. G9: every Search Console row, the anonymised share, brand vs non-brand, scraper queries apart ----
+  const RANGES = { current: { start: '2026-09-10', end: '2026-10-07' }, previous: { start: '2026-08-13', end: '2026-09-09' }, yoy: { start: '2025-09-10', end: '2025-10-07' } };
+  const CFG = { max_gsc_keyword_requests: 30, max_gsc_pages: 3, striking_min_impressions: 30, ctr_gap_min_impressions: 100, decay_drop_pct: 25, alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40, service_account_email: 'svc@example.com' };
+  const SITE_ROW = { site_id: SITE, domain: D, gsc_property: 'sc-domain:' + D, gsc_connected: true, gsc_permission: 'siteFullUser', gsc_error: null, country: 'United Arab Emirates', location_code: 2784, language_code: 'en',
+    email: '', callback_url: '', request_id: '', source: 'form', status: 'active', created_at: '2026-01-01T00:00:00.000Z', keywords: ['erp implementation dubai'], tracked: [{ keyword: 'erp implementation dubai', source: 'site', rung: 0, ladder_id: '', head_keyword: '' }],
+    ladder_pages: [], ladder_heads: [], serp_positions: {}, pending_publish: [], console_alerts: [], last_checkin: null, checkin_due: false, ranges: RANGES, on_demand: false, checked_at: new Date().toISOString(), config: CFG };
+  mock('Resolve Properties', [{ json: SITE_ROW }]);
+  const greq = await run('GSC Requests', store['Resolve Properties']);
+  const paged = greq.filter(q => q.json.paged);
+  console.log('   gsc requests ->', JSON.stringify(greq.map(q => q.json.kind + (q.json.paged ? ':' + q.json.body.rowLimit + '@' + q.json.body.startRow : ''))));
+  check('G9: the query and page kinds ask for Search Console\'s maximum of 25,000 rows from row 0 (it was a 500-row sample)',
+    paged.length === 4 && eq(paged.map(q => q.json.kind).sort(), ['pages_cur', 'pages_prev', 'queries_cur', 'queries_prev']) && paged.every(q => q.json.body.rowLimit === 25000 && q.json.body.startRow === 0 && q.json.page === 1 && q.json.max_pages === 3), JSON.stringify(paged.map(q => [q.json.kind, q.json.body.rowLimit, q.json.max_pages])));
+  // the paging itself, on a page size of 2 so the fixtures stay small
+  const PAGE_A = W + '/erp-implementation-dubai/', PAGE_B = W + '/', PAGE_C = W + '/e-invoicing-uae/', PAGE_D = W + '/contact/', PAGE_E = W + '/wms/';
+  const qrow = (keys, clicks, impressions, position) => ({ keys, clicks, impressions, ctr: impressions ? clicks / impressions : 0, position });
+  const req1 = (kind, dims) => ({ json: { site_idx: 0, site_id: SITE, kind, url: 'https://gsc/q', body: { type: 'web', dataState: 'final', rowLimit: 2, startRow: 0, dimensions: dims, startDate: RANGES.current.start, endDate: RANGES.current.end }, paged: true, page: 1, max_pages: 3, page_rows: 2 } });
+  const REQS1 = [
+    { json: { site_idx: 0, site_id: SITE, kind: 'by_date', url: 'https://gsc/q', body: { dimensions: ['date'], rowLimit: 100 }, paged: false, page: 1, max_pages: 3, page_rows: 25000 } },
+    req1('queries_cur', ['query', 'page']), req1('queries_prev', ['query']), req1('pages_cur', ['page']), req1('pages_prev', ['page'])
+  ];
+  const RES1 = [
+    { rows: [qrow([RANGES.current.start], 50, 400, 6), qrow([RANGES.current.end], 50, 400, 6), qrow([RANGES.previous.start], 40, 300, 7), qrow([RANGES.previous.end], 40, 300, 7)] },
+    { rows: [qrow(['erp implementation dubai', PAGE_A], 40, 300, 6), qrow(['northwind erp login', PAGE_B], 25, 120, 1.2)] },          // full page -> more rows wait
+    { rows: [qrow(['erp implementation dubai'], 30, 260, 7)] },                                                                        // short page -> finished
+    { rows: [qrow([PAGE_A], 40, 300, 6), qrow([PAGE_B], 25, 120, 1.2)] },                                                              // full page
+    { rows: [] }
+  ];
+  mock('GSC Requests', REQS1); mock('GSC Query', RES1.map(r => ({ json: r })));
+  const more = await run('GSC More Requests', store['GSC Query']);
+  console.log('   more requests ->', JSON.stringify(more.map(q => q.json.kind + '@' + q.json.body.startRow)));
+  check('G9: only the kinds that came back FULL ask for their next pages (startRow 2 and 4), up to max_gsc_pages; a short or failed page costs no request',
+    more.length === 4 && eq(more.map(q => q.json.kind + '@' + q.json.body.startRow + ':' + q.json.page), ['queries_cur@2:2', 'queries_cur@4:3', 'pages_cur@2:2', 'pages_cur@4:3']), JSON.stringify(more.map(q => q.json.kind)));
+  const RES2 = [
+    { rows: [qrow(['e invoicing software uae', PAGE_C], 5, 150, 12), qrow(['site:northwind-erp.com erp', PAGE_A], 2, 90, 1.1)] },      // page 2: still full
+    { rows: [qrow(['wms dubai', PAGE_E], 0, 40, 22)] },                                                                                 // page 3: the last rows
+    { rows: [qrow([PAGE_C], 5, 150, 12), qrow([PAGE_D], 2, 90, 1.1)] },
+    { rows: [qrow([PAGE_E], 0, 40, 22)] }
+  ];
+  mock('GSC Query (More)', RES2.map(r => ({ json: r })));
+  const MODEL = (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D, canonical_host: 'www.' + D, business_name: 'Northwind ERP', model_updated_at: new Date().toISOString() }, extras: { monitors: { brand_names: 'Northwind ERP' } } } }]))[0].json.model;
+  mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model: MODEL } }]);
+  mock('GSC Requests', REQS1); mock('GSC Query', RES1.map(r => ({ json: r }))); mock('GSC More Requests', more);
+  const PG = (await run('Parse GSC', store['GSC Query (More)']))[0].json;
+  console.log('   parse gsc ->', JSON.stringify({ rows: PG.rows_read, queries: PG.query_count, pages: PG.page_count, anon: PG.anonymised.current, brand: PG.brand_split.brand_clicks_pct, scraper: PG.scraper_queries }));
+  check('G9: the rows of every page are merged into one list (2 + 2 + 1 per kind), so a query from page 3 is in the report like any other',
+    PG.query_count === 4 && PG.page_count === 5 && PG.rows_read === 11 && PG.queries.some(q => q.query === 'wms dubai') && eq(PG.paging.find(p => p.kind === 'queries_cur'), { kind: 'queries_cur', pages: 3, rows: 5, truncated: false }), JSON.stringify({ q: PG.query_count, p: PG.page_count, rows: PG.rows_read, paging: PG.paging }));
+  check('G9: the queries Google withholds are reported, not silently dropped: the period totals minus the sum of the rows',
+    PG.totals.cur.clicks === 100 && PG.anonymised.current.clicks === 28 && PG.anonymised.current.impressions === 100 && PG.anonymised.current.impressions_pct === 12.5 && PG.anonymised.current.named_clicks === 72
+    && /withholds the queries of rare searches/.test(PG.anonymised.current.note), JSON.stringify(PG.anonymised.current));
+  check('G9: brand and non-brand are split with the business\'s own names (seo_monitors / the site model), not just the domain label',
+    eq(PG.brand_split.names, ['northwinderp']) && PG.brand_split.brand.queries === 1 && PG.brand_split.brand.clicks === 25 && PG.brand_split.non_brand.queries === 3 && PG.brand_split.non_brand.clicks === 45
+    && PG.brand_split.brand_clicks_pct === 25 && PG.brand_split.previous.non_brand.clicks === 30, JSON.stringify({ names: PG.brand_split.names, brand: PG.brand_split.brand.clicks, non: PG.brand_split.non_brand.clicks }));
+  check('G9 / D24: a query with a search operator is counted apart and never appears as a customer search (the audit\'s own rule, shared kit)',
+    PG.scraper_queries.count === 1 && PG.scraper_queries.clicks === 2 && PG.scraper_queries.impressions === 90 && !PG.queries.some(q => /site:/.test(q.query)) && !PG.striking.some(q => /site:/.test(q.query)), JSON.stringify(PG.scraper_queries));
+  // a kind still full on the last allowed page is reported as truncated, never as "all of it"
+  mock('GSC Query (More)', [{ json: { rows: [qrow(['e invoicing software uae', PAGE_C], 5, 150, 12), qrow(['site:northwind-erp.com erp', PAGE_A], 2, 90, 1.1)] } }, { json: { rows: [qrow(['wms dubai', PAGE_E], 0, 40, 22), qrow(['erp dubai cost', PAGE_C], 1, 50, 18)] } }, { json: { rows: [] } }, { json: { rows: [] } }]);
+  mock('GSC Requests', REQS1); mock('GSC Query', RES1.map(r => ({ json: r }))); mock('GSC More Requests', more);
+  const PGt = (await run('Parse GSC', store['GSC Query (More)']))[0].json;
+  check('G9: when the last allowed page is still full, the run says the rows were truncated instead of pretending to have them all',
+    eq(PGt.truncated, ['queries_cur']) && PGt.rows_read === 9, JSON.stringify({ truncated: PGt.truncated, rows: PGt.rows_read }));
+
+  // ---- 5. G28 + D21 + G9 in the weekly report: alerts on a statistical test, no percentage for a sparse trend ----
+  const GA4 = (cur, prev) => ({ site_idx: 0, ga4_property_id: '222', ga4_detected: false, ga4_property_name: 'Northwind', organic: { cur: { sessions: cur, engaged: Math.round(cur * 0.6), key_events: Math.round(cur / 30), users: cur }, prev: { sessions: prev, engaged: Math.round(prev * 0.6), key_events: Math.round(prev / 30), users: prev } },
+    total: { cur: { sessions: cur * 2 }, prev: { sessions: prev * 2 } }, organic_share: 50, channels: [], landing: [], daily: [], errors: [] });
+  const metricsWith = async (o) => {
+    reset();
+    mock('Resolve Properties', [{ json: SITE_ROW }]); mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model: MODEL } }]);
+    const cur = { ...PG.totals.cur, ...(o.cur || {}) }, prev = { ...PG.totals.prev, ...(o.prev || {}) };
+    const dl = (c, p) => p > 0 ? Math.round((c - p) / p * 100) : null;
+    mock('Parse GSC', [{ json: { ...PG, totals: { cur, prev, yoy: null }, deltas: { ...PG.deltas, clicks_pct: dl(cur.clicks, prev.clicks), impressions_pct: dl(cur.impressions, prev.impressions) } } }]);
+    if (o.ga4) mock('Parse GA4', [{ json: GA4(o.ga4[0], o.ga4[1]) }]);
+    if (o.trends) mock('Parse Trends', o.trends.map(t => ({ json: t })));
+    return (await run('Site Metrics', store['Resolve Properties']))[0].json;
+  };
+  const real = await metricsWith({ cur: { clicks: 1150, impressions: 9000 }, prev: { clicks: 1600, impressions: 9200 }, trends: TRENDS });   // 1,150 and not 1,200: the sparse-trend check below proves no "1200" reaches the brief
+  const aClicks = real.alerts.find(a => a.stat === 'clicks') || {};
+  console.log('   significant drop ->', JSON.stringify(real.significance.clicks), '|', aClicks.text);
+  check('G28: a 28% fall on 1,600 clicks is beyond sampling noise, so it alerts — with the 95% range, the z value and the Google update that ran in the period',
+    real.significance.clicks.significant === true && real.significance.clicks.real === true && aClicks.level === 'medium' && /Search clicks fell 28%/.test(aClicks.text) && /95% range/.test(aClicks.text) && /z -8/.test(aClicks.text)
+    && /September 2026 core update \(2026-09-15 to 2026-09-30\) ran inside this period/.test(aClicks.text) && /cannot be proven/.test(aClicks.text), JSON.stringify([aClicks.level, aClicks.text]));
+  check('G28: a 2% move in impressions on the same run is neither an alert nor called a change',
+    real.significance.impressions.big === false && !real.alerts.some(a => a.stat === 'impressions'), JSON.stringify(real.significance.impressions));
+  const noise = await metricsWith({ cur: { clicks: 12, impressions: 9000 }, prev: { clicks: 20, impressions: 9200 }, trends: TRENDS });
+  const aNoise = noise.alerts.find(a => a.stat === 'clicks') || {};
+  console.log('   noise ->', JSON.stringify(noise.significance.clicks), '|', aNoise.text);
+  check('G28: the same 40% fall on 20 clicks is NOT called a fall — it is an "info" line worded "Watch", because that is inside week-to-week variation',
+    noise.significance.clicks.significant === false && noise.significance.clicks.watch === true && aNoise.level === 'info' && /^Watch: search clicks are 40% lower/.test(aNoise.text) && /not a confirmed fall/.test(aNoise.text)
+    && !noise.alerts.some(a => ['high', 'medium'].includes(a.level) && /clicks fell/.test(a.text)), JSON.stringify([aNoise.level, aNoise.text]));
+  const noise2 = await metricsWith({ cur: { clicks: 18, impressions: 9000 }, prev: { clicks: 30, impressions: 9200 }, trends: TRENDS });
+  check('G28: 30 -> 18 clicks (enough events to measure, z -1.73) is still not significant: "Watch", never "fell"',
+    noise2.significance.clicks.measurable === true && noise2.significance.clicks.significant === false && (noise2.alerts.find(a => a.stat === 'clicks') || {}).level === 'info', JSON.stringify(noise2.significance.clicks));
+  const big = await metricsWith({ cur: { clicks: 900, impressions: 5000 }, prev: { clicks: 1600, impressions: 9200 }, ga4: [300, 500], trends: TRENDS });
+  check('G28: a real fall past alert_drop_pct is "high", and GA4 organic sessions go through the same test',
+    (big.alerts.find(a => a.stat === 'clicks') || {}).level === 'high' && (big.alerts.find(a => a.stat === 'impressions') || {}).level === 'high'
+    && (big.alerts.find(a => a.stat === 'sessions') || {}).level === 'high' && /Organic sessions fell 40%/.test((big.alerts.find(a => a.stat === 'sessions') || {}).text), JSON.stringify(big.alerts.filter(a => a.stat).map(a => [a.stat, a.level])));
+  const zero = await metricsWith({ cur: { clicks: 0, impressions: 0 }, prev: { clicks: 1600, impressions: 9200 }, trends: TRENDS });
+  const aZero = zero.alerts.find(a => a.stat === 'clicks') || {};
+  check('G28: a site that lost every click is still reported (no 95% range exists for a zero period, and nothing throws)',
+    aZero.level === 'high' && /Search clicks fell 100% \(1600 → 0 in 28 days, z -40\)/.test(aZero.text) && zero.significance.clicks.ci === null, JSON.stringify([aZero.level, aZero.text]));
+  // the brief and the report
+  const bi = await run('Brief Input', [{ json: real }]); const facts = JSON.parse(bi[0].json.facts);
+  console.log('   facts trends ->', JSON.stringify(facts.trends), '| anon:', JSON.stringify(facts.search_console.queries_google_does_not_name));
+  check('D21: the brief is given no percentage for a sparse trend — only "too little search data" (it quoted "up 1,200%" live)',
+    facts.trends.filter(t => t.direction === 'sparse').length === 2 && facts.trends.filter(t => t.direction === 'sparse').every(t => t.change === 'too little search data for a percentage' && !('change_pct' in t))
+    && !/1200|1,200/.test(bi[0].json.facts) && (facts.trends.find(t => t.direction === 'rising') || {}).change_pct > 50, JSON.stringify(facts.trends));
+  check('G9: the brief is told the anonymised share, brand vs non-brand and how many rows were read',
+    facts.search_console.queries_google_does_not_name.share_of_impressions_pct === 12.5 && facts.search_console.brand_vs_non_brand.non_brand.clicks === 45 && facts.search_console.brand_vs_non_brand.brand.clicks === 25
+    && facts.search_console.rows_read === 11 && facts.search_console.pages_with_impressions === 5 && facts.search_console.tool_and_scraper_queries.count === 1, JSON.stringify(facts.search_console.brand_vs_non_brand));
+  check('G28: the brief is told which changes are statistically real and which are only to watch, plus the Google updates in the period',
+    (facts.traffic_significance.find(x => x.metric === 'clicks') || {}).statistically_real === true && eq(facts.google_updates_in_period, ['September 2026 core update (2026-09-15 to 2026-09-30)']), JSON.stringify(facts.traffic_significance));
+  mock('Site Brief', [{ json: { error: 'no model in this test' } }]);
+  const rep = (await run('Site Report', bi))[0].json;
+  scanHtml('weekly report, G9 + G28', rep.html); save('site-report-g9-g28.html', rep.html);
+  check('D21: the weekly report shows "too little search volume for a trend" and a dash — never the percentage',
+    /too little search volume for a trend/.test(rep.html) && !/1200%|1,200%/.test(rep.html) && /\+105%|\+10\d%/.test(rep.html), (rep.html.match(/Search interest[\s\S]{0,600}/) || [''])[0].slice(0, 400));
+  check('G9: the report tells the owner what the figures cover — non-brand vs brand clicks and the queries Google does not name',
+    /Where the searches came from/.test(rep.html) && /Non-brand \(people who did not search your name\)/.test(rep.html) && /Queries Google does not name/.test(rep.html) && /12\.5% of all impressions/.test(rep.html)
+    && /came from SEO tools or scrapers/.test(rep.html), (rep.html.match(/Where the searches came from[\s\S]{0,700}/) || [''])[0].slice(0, 500));
+  check('G28: the report explains the test instead of leaving a 30% rule unexplained',
+    /only called a fall when it is beyond normal week-to-week variation \(two-sample Poisson test, 95%\)/.test(rep.html), (rep.html.match(/beyond normal week[\s\S]{0,200}/) || [''])[0]);
+
+  // ---- 6. G24: the audit says how much of the site it crawled ----
+  const SM_URLS = Array.from({ length: 12 }, (_, i) => W + '/p' + (i + 1) + '/');
+  const crawledPage = (u, i) => ({ url: u, status: 200, depth: i === 0 ? 0 : 1, inbound: 5, orphan: false, indexable: true });
+  const auditCoverage = async (crawledCount, gscPages) => {
+    reset();
+    const pages = SM_URLS.slice(0, crawledCount).map(crawledPage);
+    mock('GSC Audit Plan', [{ json: { base: { domain: D, audit_level: 'site_audit', extra_findings: [], extra_works: [] }, domain: D, crawl_pages: pages.length, crawl_indexable: pages.length, crawl_limit: 200, crawl_finished: true, pages_crawled: pages.length,
+      pages, sample: pages.slice(0, 2).map(p => p.url), sitemap_url: W + '/sitemap.xml', range: { start: RANGES.current.start, end: RANGES.current.end } } }]);
+    mock('Fetch Sitemap (Audit)', { statusCode: 200, headers: {}, data: '<?xml version="1.0"?><urlset>' + SM_URLS.map(u => '<url><loc>' + u + '</loc></url>').join('') + '</urlset>' });
+    delete store['Fetch Sitemap Children (Audit)'];
+    mock('GSC Audit Requests', [{ json: { kind: 'totals', connected: true, property: 'sc-domain:' + D, permission: 'siteFullUser' } }, { json: { kind: 'pages', connected: true, property: 'sc-domain:' + D } }, { json: { kind: 'queries', connected: true, property: 'sc-domain:' + D } }]);
+    mock('GSC Audit Query', [{ json: { rows: [{ keys: [], clicks: 100, impressions: 2000, ctr: 0.05, position: 12 }] } },
+      { json: { rows: gscPages.map(u => ({ keys: [u], clicks: 3, impressions: 90, ctr: 0.03, position: 14 })) } },
+      { json: { rows: [{ keys: ['erp implementation dubai'], clicks: 20, impressions: 400, ctr: 0.05, position: 6 }, { keys: ['site:' + D + ' erp'], clicks: 1, impressions: 80, ctr: 0.01, position: 1 }] } }]);
+    mock('GSC Sitemaps (Audit)', T.gscSitemaps());
+    return (await run('GSC Audit Findings', store['GSC Sitemaps (Audit)']))[0].json;
+  };
+  const low = await auditCoverage(8, [W + '/news/launch/', W + '/news/award/']);
+  const cov = low.site_structure.crawl_coverage;
+  console.log('   crawl coverage ->', JSON.stringify({ known: cov.known_urls, crawled: cov.crawled_known, pct: cov.coverage_pct, text: cov.text }));
+  check('G24: the audit reports crawl coverage against the sitemap UNION the pages Search Console reports impressions for',
+    cov.known_urls === 14 && cov.crawled_known === 8 && cov.coverage_pct === 57 && cov.not_crawled === 6 && eq(cov.sources, { sitemap: 12, search_console_pages: 2 }) && /^Crawled 8 of 14 known URLs \(57%; sitemap 12 \+ 2 pages with Search Console impressions\)$/.test(cov.text), JSON.stringify(cov));
+  check('G24: under 90% the audit says the crawl covered only part of the site, with the URLs it never reached',
+    low.extra_findings.some(f => f.title === 'The crawl covered only part of the site' && f.severity === 'Medium' && /Crawled 8 of 14 known URLs/.test(f.evidence) && f.sample_urls.length > 0 && f.affected_count === 6), JSON.stringify(low.extra_findings.map(f => f.title)));
+  const high = await auditCoverage(12, [SM_URLS[0], W + '/news/launch/']);
+  const cov2 = high.site_structure.crawl_coverage;
+  check('G24: a nearly complete crawl is a "what works" line, not a finding (13 known, 12 reached = 92%)',
+    cov2.known_urls === 13 && cov2.coverage_pct === 92 && !high.extra_findings.some(f => f.title === 'The crawl covered only part of the site') && high.extra_works.some(w => /Crawled 12 of 13 known URLs/.test(w)), JSON.stringify(cov2));
+  mock('Check Crawl', [{ json: { domain: D, audit_level: 'site_audit', pages_crawled: 8, crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+  mock('Get Crawled Pages', { tasks: [{ result: [{ items: [] }] }] }); mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+  const bsi = (await run('Build Site Issues', [{ json: low }]))[0].json;
+  const docA = decode(await run('Build Audit Report', [{ json: bsi }]));
+  check('G24: the audit report prints the coverage figure and warns that every share below is a share of the crawled pages',
+    /Crawled 8 of 14 known URLs \(57%/.test(docA) && /Every share below is a share of the pages that were crawled, not of the whole site/.test(docA), (docA.match(/Crawled 8 of 14[\s\S]{0,260}/) || [''])[0]);
 });
 
 H.report();
