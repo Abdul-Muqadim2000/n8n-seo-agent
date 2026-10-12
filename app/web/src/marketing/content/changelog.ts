@@ -15,6 +15,21 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-12',
+    title: 'A rank check now reports the whole results page',
+    summary:
+      'A position on its own does not say much when an AI Overview sits above it. Every weekly check now records what the results page showed, who else was on it and how much of the attention is yours — from the same check, at no extra cost — and your main keywords are checked on a phone as well.',
+    highlights: [
+      'AI Overview, featured snippet, People Also Ask, local pack and video recorded per keyword, with whether the AI Overview cited your site',
+      'The ten sites on page one with their positions, the competitors ranking above you and how many of your keywords they beat you for',
+      'A share-of-voice estimate per keyword and per ladder, always labelled as an estimate of the clicks page one offers rather than measured clicks',
+      'Your main keywords are checked on a phone as well as on a desktop, shown side by side',
+      'The top ten results are kept with every check as a record of what the page looked like',
+      'A check that could not be read says so and is retried — it never reports “no AI Overview” or a lost position',
+    ],
+    features: ['keyword-ladders', 'site-tracking', 'reports'],
+  },
+  {
+    date: '2026-10-12',
     title: 'Numbers you can trust when a data source has a bad minute',
     summary:
       'Every request Ascentra makes to an outside service is now retried, and a provider error that arrives disguised as a success is sent again by itself. What still fails is named in the report instead of quietly lowering a number.',

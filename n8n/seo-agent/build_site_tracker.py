@@ -18,7 +18,10 @@ _rdt = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
 SITE_MODEL_SRC = _rdt('code/_site_model.js').rstrip('\n')   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
 SITE_STATS_SRC = _rdt('code/_site_stats.js').rstrip('\n')     # G28 (FIX_PLAN 2026-10-12): the statistical test behind every traffic alert
 GSC_QUERIES_SRC = _rdt('code/_gsc_queries.js').rstrip('\n')   # G9 / D24: scraper queries, the brand split and the anonymised share, shared with the audit
-rd = lambda p: _rdt(p).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
+SERP_OBS_SRC = _rdt('code/_serp_obs.js').rstrip('\n')        # D26: a results-page feature is one observation at one moment, never a fact about the query
+RANK_SERP_SRC = _rdt('code/_rank_serp.js').rstrip('\n')      # G6 (FIX_PLAN 2026-10-12): the whole results page of one rank check (features, page 1, share of voice, snapshot)
+rd = lambda p: (_rdt(p).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
+                .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC))
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]

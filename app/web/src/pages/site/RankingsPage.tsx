@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { Activity, ArrowDownRight, ArrowRight, ArrowUpDown, ArrowUpRight, BarChart3, Check, Circle, ExternalLink as ExternalIcon, Flag, History, Info, LineChart, ListOrdered, Loader, PenSquare, Plus, Send, TrendingUp, X } from 'lucide-react';
-import { PAGE_TYPE_VALUES, compactNumber, type Ladder, type LadderRung, type RankPoint, type RankingsData, type TrackedKeyword } from '@seo/shared';
+import { PAGE_TYPE_VALUES, compactNumber, type Ladder, type LadderRung, type RankPoint, type RankingsData, type SerpReading, type TrackedKeyword } from '@seo/shared';
 import { paths } from '@/lib/paths';
 import { useSiteData } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
@@ -58,6 +58,8 @@ interface Kw {
   best: number | null;
   lastChecked: string | null;
   history: RankPoint[];
+  /** G6: the results page of the latest check — the features it showed, who is above us, the share of voice, the mobile reading */
+  serp?: SerpReading | null;
 }
 
 function collect(d: RankingsData): Kw[] {
@@ -76,12 +78,13 @@ function collect(d: RankingsData): Kw[] {
         best: r.bestPosition,
         lastChecked: r.lastChecked,
         history: r.history,
+        serp: r.serp ?? null,
       });
   for (const k of d.keywords) {
     const existing = out.get(k.keyword);
     // a keyword in a ladder and in site tracking: keep the more recent check
     if (existing && (existing.lastChecked ?? '') >= (k.lastChecked ?? '')) continue;
-    out.set(k.keyword, { id: `s:${k.keyword}`, keyword: k.keyword, source: 'site', url: k.url, latest: k.latestPosition, prev: k.previousPosition, best: k.bestPosition, lastChecked: k.lastChecked, history: k.history });
+    out.set(k.keyword, { id: `s:${k.keyword}`, keyword: k.keyword, source: 'site', url: k.url, latest: k.latestPosition, prev: k.previousPosition, best: k.bestPosition, lastChecked: k.lastChecked, history: k.history, serp: k.serp ?? null });
   }
   return [...out.values()];
 }
@@ -266,8 +269,11 @@ function Rankings({ d, refetching }: { d: RankingsData; refetching: boolean }) {
               { label: 'Best position', value: posText(dialog.best) },
               { label: 'Ranking page', value: dialog.url ? <ExternalLink href={dialog.url}>{urlPath(dialog.url)}</ExternalLink> : '–' },
               { label: 'Last checked', value: dialog.lastChecked ? fmtDate(dialog.lastChecked) : 'not checked yet' },
+              ...(dialog.serp?.mobile ? [{ label: 'On a phone', value: <span className="inline-flex items-center gap-2"><PositionPill p={dialog.serp.mobile.position} /> <span className="text-[13px] text-ink-3">checked {fmtDate(dialog.serp.mobile.checkedAt)}</span></span> }] : []),
+              ...(dialog.serp && dialog.serp.shareOfVoice != null ? [{ label: 'Share of voice', value: <span className="inline-flex items-center gap-2"><ShareOfVoice value={dialog.serp.shareOfVoice} /> <span className="text-[13px] text-ink-3">estimated, not measured clicks</span></span> }] : []),
             ]}
           />
+          <SerpPanel serp={dialog.serp ?? null} />
           {dialog.history.length ? (
             <PositionHistoryCard title="Position history" lines={[{ key: dialog.keyword, label: dialog.keyword, history: sortByDate(dialog.history, (h) => h.checkedAt) }]} height={220} />
           ) : (
@@ -574,6 +580,82 @@ function RungAction({ r, can, tool }: { r: LadderRung; can: boolean; tool: Retur
   );
 }
 
+/** G6: the labels of the latest reading; the stored item-type list of a check made before G6 is still shown */
+function featureChips(serp: SerpReading | null | undefined, fallback: string[]): string[] {
+  if (serp && !serp.features.unavailable && serp.features.labels.length) return serp.features.labels;
+  if (serp?.features.unavailable) return ['not read'];
+  return fallback.map((f) => f.replace(/_/g, ' '));
+}
+
+function ShareOfVoice({ value }: { value: number | null }) {
+  if (value == null) return <span className="text-[13px] text-ink-3">–</span>;
+  return <span className="tabular text-[13px] text-ink-2" title="An estimate of the clicks page 1 offers, weighted by position and by the features on the page. Not measured clicks.">{value}%</span>;
+}
+
+/**
+ * G6: the results page of the latest check. Nothing here is stated as a fact about the search: an AI Overview is what one check saw at
+ * one moment, a check that could not be read claims nothing, and sources Google did not load are "not known", never "no".
+ */
+function SerpPanel({ serp }: { serp: SerpReading | null }) {
+  if (!serp) return null;
+  const f = serp.features;
+  if (f.unavailable)
+    return (
+      <p className="mt-4 rounded-lg bg-surface-2 px-3 py-2 text-[13px] text-ink-2">
+        The results page could not be read in the last check, so nothing is claimed about it. It is checked again next Monday.
+      </p>
+    );
+  const seen = f.checkedAt ? fmtDate(f.checkedAt) : null;
+  return (
+    <div className="mt-4 space-y-3">
+      <div>
+        <p className="text-[13px] font-medium text-ink-2">What the results page showed{seen ? ` on ${seen}` : ''}</p>
+        <div className="mt-1.5">
+          <Chips items={f.labels.length ? f.labels : ['plain results, no features']} max={6} />
+        </div>
+        {f.aiOverview.shown === true && (
+          <p className="mt-1.5 text-xs text-ink-3">
+            {f.aiOverview.citesUs === true
+              ? 'The AI Overview cited your site in that check.'
+              : f.aiOverview.citesUs === null
+                ? 'Google loaded this AI Overview separately, so whether it cites you is not known from this check.'
+                : `The AI Overview did not cite your site in that check${f.aiOverview.citedDomains.length ? `; it cited ${f.aiOverview.citedDomains.slice(0, 4).join(', ')}` : ''}.`}{' '}
+            AI Overviews vary between searches, so this is one observation, not a fixed feature of the search.
+          </p>
+        )}
+      </div>
+      {serp.above.length > 0 && (
+        <div>
+          <p className="text-[13px] font-medium text-ink-2">Above you on page 1</p>
+          <ul className="mt-1.5 flex flex-wrap gap-1.5">
+            {serp.above.slice(0, 8).map((c) => (
+              <li key={c.domain} className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-surface-2 px-2 py-1 text-[13px] text-ink-2">
+                <span className="tabular text-ink-3">#{c.position}</span>
+                {c.domain}
+                {c.tracked && <Badge tone="accent">competitor</Badge>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {serp.snapshot.top.length > 0 && (
+        <details className="rounded-lg border border-line bg-surface-2 px-3 py-2">
+          <summary className="cursor-pointer text-[13px] text-ink-2">The top {serp.snapshot.top.length} we read{serp.snapshot.at ? ` on ${fmtDate(serp.snapshot.at)}` : ''} ({serp.snapshot.device})</summary>
+          <ol className="mt-2 space-y-1">
+            {serp.snapshot.top.map((t) => (
+              <li key={`${t.position}|${t.url}`} className="flex gap-2 text-[13px] text-ink-2">
+                <span className="tabular w-5 shrink-0 text-right text-ink-3">{t.position}</span>
+                <ExternalLink href={t.url} className="truncate">{t.title || urlPath(t.url)}</ExternalLink>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+      {serp.method && <p className="text-xs text-ink-3">Share of voice: {serp.method}</p>}
+    </div>
+  );
+}
+
 function KeywordTable({ rows, onOpen }: { rows: TrackedKeyword[]; onOpen: (k: TrackedKeyword) => void }) {
   const columns: Column<TrackedKeyword>[] = [
     { key: 'keyword', header: 'Keyword', sortValue: (r) => r.keyword, cell: (r) => <span className="block min-w-[12rem] font-medium text-ink">{r.keyword}</span> },
@@ -596,7 +678,9 @@ function KeywordTable({ rows, onOpen }: { rows: TrackedKeyword[]; onOpen: (k: Tr
       sortValue: (r) => r.url,
       cell: (r) => (r.url ? <span className="block max-w-[14rem] truncate text-[13px] text-ink-2" title={r.url}>{urlPath(r.url)}</span> : <span className="text-ink-3">–</span>),
     },
-    { key: 'serp', header: 'Search features', hideOnMobile: true, cell: (r) => <Chips items={r.serpFeatures.map((f) => f.replace(/_/g, ' '))} max={2} /> },
+    { key: 'serp', header: 'Search features', hideOnMobile: true, cell: (r) => <Chips items={featureChips(r.serp, r.serpFeatures)} max={2} /> },
+    { key: 'sov', header: 'Share of voice', align: 'right', hideOnMobile: true, sortValue: (r) => r.serp?.shareOfVoice ?? null, cell: (r) => <ShareOfVoice value={r.serp?.shareOfVoice ?? null} /> },
+    { key: 'mobile', header: 'Mobile', align: 'right', hideOnMobile: true, sortValue: (r) => posSort(r.serp?.mobile?.position ?? null), cell: (r) => (r.serp?.mobile ? <PositionPill p={r.serp.mobile.position} /> : <span className="text-[13px] text-ink-3">–</span>) },
     { key: 'checked', header: 'Checked', hideOnMobile: true, sortValue: (r) => r.lastChecked ?? '', cell: (r) => <span className="whitespace-nowrap text-[13px] text-ink-3">{r.lastChecked ? fmtAgo(r.lastChecked) : '–'}</span> },
   ];
   return (
@@ -604,7 +688,7 @@ function KeywordTable({ rows, onOpen }: { rows: TrackedKeyword[]; onOpen: (k: Tr
       <DataTable rows={rows} columns={columns} rowKey={(r, i) => `${r.keyword}|${i}`} initialSort={{ key: 'latest', dir: 'asc' }} searchable searchPlaceholder="Search keywords" onRowClick={onOpen} dense />
       <p className="mt-2 flex items-start gap-1.5 text-xs text-ink-3">
         <Info className="mt-px size-3.5 shrink-0" aria-hidden />
-        “&gt;50” means not in the top 50 results; “check failed” is retried next week. Select a row for its history. {compactNumber(rows.filter((r) => ranked(r.latestPosition)).length)} of {rows.length} rank in the top 50.
+        “&gt;50” means not in the top 50 results; “check failed” is retried next week. Select a row for its history. {compactNumber(rows.filter((r) => ranked(r.latestPosition)).length)} of {rows.length} rank in the top 50. Share of voice is an estimate of the clicks page 1 offers, not measured clicks; mobile is checked weekly for the main keywords of a ladder.
       </p>
     </>
   );

@@ -476,8 +476,9 @@ export const AUTOMATIONS: AutomationInfo[] = [
   {
     id: 'rank_tracker',
     title: 'Rank tracker',
-    summary: 'Checks the live Google position of every keyword-ladder page and the head term, and recommends the next rung.',
-    cadence: 'Every Monday · unpublished pages outside the top 50 once a month',
+    summary:
+      'Checks the live Google position of every keyword-ladder page and the head term, records what the results page showed (AI Overview, snippet, People Also Ask, local pack, video), who ranks above you and your share of voice, and recommends the next rung.',
+    cadence: 'Every Monday · main keywords also on a phone · unpublished pages outside the top 50 once a month',
     schedule: { kind: 'weekly', weekday: 1, hour: 8, minute: 0 },
     workflow: 'SEOagentTracker1',
     stage: 'rank_tracker',

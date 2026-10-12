@@ -196,6 +196,10 @@ export const features: Feature[] = [
       'A plan of supporting pages that climbs to your head term',
       'Pages written in order, each linking up the ladder — only to rungs that are already live',
       'Weekly rank tracking for every rung and for the head term, with a reminder the week a rung goes live and its link can be added',
+      'Every check records the whole results page: AI Overview (and whether it cites you), featured snippet, People Also Ask, local pack and video',
+      'The other sites on page one with their positions, the competitors ranking above you and a share-of-voice estimate per keyword',
+      'Your main keywords are checked on a phone as well as on a desktop, because the two rarely match',
+      'The top ten results are kept with every check, so you can see what the page looked like when the position was read',
       'Auto or Manual per ladder, with a priority order',
       'Two active ladders at a time by default, so effort is not spread thin',
       'No keyword overlap between ladders, so your own pages never compete',
@@ -210,6 +214,7 @@ export const features: Feature[] = [
     facts: [
       { value: 2, label: 'active ladders at a time by default' },
       { value: 'Weekly', label: 'rank checks for every rung' },
+      { value: 'Desktop + phone', label: 'checks for your main keywords' },
       { value: 0, label: 'keyword overlap between ladders' },
     ],
     faqs: [
@@ -223,6 +228,18 @@ export const features: Feature[] = [
       },
       { q: 'How many ladders can I run?', a: 'As many as you plan. By default two are written at once, in your priority order, and you can change the limit.' },
       { q: 'What does Auto or Manual change?', a: 'On Auto, rungs are written on schedule. On Manual, each rung waits for approval in “Needs you”.' },
+      {
+        q: 'Do you track AI Overviews?',
+        a: 'Yes. Every rank check records whether an AI Overview was on the page and whether it cited your site, with the time it was seen. AI Overviews vary between searches, so Ascentra reports what the check saw rather than claiming the search always looks that way.',
+      },
+      {
+        q: 'What is share of voice?',
+        a: 'An estimate of how much of the attention page one offers goes to your site, weighted by position and by the features on the page. It is a model built on published click-through rates, not measured clicks, and it is always labelled that way.',
+      },
+      {
+        q: 'Why check on a phone too?',
+        a: 'Mobile and desktop results differ for most searches, so a desktop-only position can be one your visitors never see. Ascentra checks your main keywords on both and shows the two side by side.',
+      },
     ],
     related: ['keyword-research', 'autopilot', 'content'],
     image: 'growthChartPaper',
@@ -333,7 +350,7 @@ export const features: Feature[] = [
     icon: ChartLine,
     benefits: [
       'Google Search Console and GA4, connected through a service account',
-      'Google Trends for your topics and live rank checks',
+      'Google Trends for your topics and live rank checks that also record the search features on the page and who ranks above you',
       'Striking-distance keywords: close to page one and worth a push',
       'A weekly report every Monday with the changes that matter',
       'Notices when you publish a page from the plan',

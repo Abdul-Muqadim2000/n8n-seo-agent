@@ -555,7 +555,7 @@ RR.sticky("""## SEO Agent — Reply Reader (v4.13, LINK_BUILDER_SPEC.md §2)
 RR.write('SEO_Agent_Reply_Reader.json')
 
 # the harness compares rows with the table columns defined here (v4.12): harness/table_cols.json
-from ladder_common import RUN_LEDGER_COLS, SITES_COLS, PAGES_COLS, LADDER_COLS   # v4.14 (D1); v4.15 (G19): the site model columns and the page inventory; P2-7: the ladder's word target
+from ladder_common import RUN_LEDGER_COLS, SITES_COLS, PAGES_COLS, LADDER_COLS, HISTORY_COLS   # v4.14 (D1); v4.15 (G19) site model + page inventory; P2-7 ladder word target; v4.16 (G6) rank history
 json.dump({'RUN_LEDGER': [c for c, _ in RUN_LEDGER_COLS], 'AI_PAGES': [c for c, _ in AI_PAGES_COLS], 'AI_TARGETS': [c for c, _ in AI_TARGETS_COLS], 'AI_GROWTH': [c for c, _ in AI_GROWTH_COLS], 'PROSPECT': [c for c, _ in PROSPECT_COLS],
            'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS], 'SITES': [c for c, _ in SITES_COLS], 'PAGES': [c for c, _ in PAGES_COLS],
-           'LOG': [c for c, _ in LOG_COLS], 'LADDER': [c for c, _ in LADDER_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write
+           'LOG': [c for c, _ in LOG_COLS], 'LADDER': [c for c, _ in LADDER_COLS], 'HISTORY': [c for c, _ in HISTORY_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write

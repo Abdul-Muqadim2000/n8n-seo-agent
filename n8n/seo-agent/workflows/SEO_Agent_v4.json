@@ -6136,6 +6136,26 @@
               {
                 "name": "rung",
                 "type": "number"
+              },
+              {
+                "name": "device",
+                "type": "string"
+              },
+              {
+                "name": "features_json",
+                "type": "string"
+              },
+              {
+                "name": "competitors_json",
+                "type": "string"
+              },
+              {
+                "name": "snapshot_json",
+                "type": "string"
+              },
+              {
+                "name": "share_of_voice",
+                "type": "number"
               }
             ]
           },
