@@ -155,6 +155,7 @@ const yes = (v) => /^(y|true|1)/i.test(String(v == null ? '' : v).trim());
 const checkin_manual_action = yes(pick(p2, 'manual action') || p2.manual_action);
 const checkin_security_issue = yes(pick(p2, 'security issue') || p2.security_issue);
 const checkin_notes = String(pick(p2, 'notes') || p2.notes || '').trim().slice(0, 1000);
+const checkin_is_test = yes(pick(p2, 'test submission') || p2.checkin_is_test || p2.is_test);   // D25c: a test check-in is recorded but never counts as the month's answer
 const checkin_csv_text = String(p2.pages_csv_text || p2.pages_csv || '').slice(0, 400000);
 // ---- v4.4: business profile (author, reviewer, address), case-study intake, local pages, video ----
 const lab = (label) => { const v = p2[label]; return v == null ? '' : String(v).trim(); };   // exact form labels: several new labels share words with older ones
@@ -324,6 +325,7 @@ return [{
     checkin_manual_action,
     checkin_security_issue,
     checkin_notes,
+    checkin_is_test,
     checkin_csv_text,
     profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name) ? profile_input : null,
     case_study,

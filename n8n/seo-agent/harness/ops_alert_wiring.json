@@ -1,0 +1,81 @@
+{
+ "checkin_alert_gate": "={{ !$('Parse Check-in').first().json.checkin_is_test && !!(($('Parse Check-in').first().json.checkin_row || {}).manual_action || ($('Parse Check-in').first().json.checkin_row || {}).security_issue) }}",
+ "connections": {
+  "Alert Channels": [
+   [
+    "Send Webhook?",
+    "Send Email?"
+   ]
+  ],
+  "Alert Record": [
+   [
+    "Save Ops Alert"
+   ]
+  ],
+  "Ensure Ops Alerts Table": [
+   [
+    "Load Ops Alerts"
+   ]
+  ],
+  "Error Trigger": [
+   [
+    "Format Alert"
+   ]
+  ],
+  "Format Alert": [
+   [
+    "Ensure Ops Alerts Table"
+   ]
+  ],
+  "Load Ops Alerts": [
+   [
+    "Alert Record"
+   ]
+  ],
+  "Save Ops Alert": [
+   [
+    "Alert Channels"
+   ]
+  ],
+  "Send Email?": [
+   [
+    "Email Ops"
+   ]
+  ],
+  "Send Webhook?": [
+   [
+    "Post Alert Webhook"
+   ]
+  ]
+ },
+ "email": {
+  "maxTries": 3,
+  "name": "Email Ops",
+  "onError": "continueRegularOutput",
+  "reads_alert_from": true,
+  "retryOnFail": true
+ },
+ "nodes": [
+  "Error Trigger",
+  "Format Alert",
+  "Email Ops",
+  "Ensure Ops Alerts Table",
+  "Load Ops Alerts",
+  "Alert Record",
+  "Save Ops Alert",
+  "Alert Channels",
+  "Send Webhook?",
+  "Post Alert Webhook",
+  "Send Email?"
+ ],
+ "table": "seo_ops_alerts",
+ "webhook": {
+  "maxTries": 3,
+  "name": "Post Alert Webhook",
+  "onError": "continueRegularOutput",
+  "retryOnFail": true,
+  "uses_smtp": false
+ },
+ "webhook_configured": false,
+ "webhook_setting": "SEO_ALERT_WEBHOOK_URL"
+}

@@ -30,6 +30,22 @@ export const changelog: ChangelogEntry[] = [
   },
   {
     date: '2026-10-12',
+    title: 'The speed your visitors feel, and a fix list in the right order',
+    summary:
+      'Technical audits now report Core Web Vitals from real Chrome visitors for each kind of page, on phone and desktop, and rank every finding by the traffic it puts at risk instead of by its label alone.',
+    highlights: [
+      'Core Web Vitals at the 75th percentile of real Chrome visitors — home page, a service page and a blog post, phone and desktop',
+      'A page with too few visitors to report on its own shows the whole-site figures, marked as such; speed carries a deliberately low weight in the score',
+      'When the speed data is unavailable the audit says so, with the step that turns it on — it never guesses',
+      'Findings are ranked by severity × pages affected × the clicks and impressions those pages get: index blockers first, cosmetic items never at the top',
+      'Every item says why it sits where it does, in the report and in the app, and the severity labels are unchanged',
+      'Failure alerts now reach a second channel that does not depend on e-mail, and every alert is recorded even when both channels are down',
+      'A check-in filed as a test can no longer pass as the month’s Search Console check-in — the reminder keeps asking',
+    ],
+    features: ['technical-audits', 'reports'],
+  },
+  {
+    date: '2026-10-12',
     title: 'Numbers you can trust when a data source has a bad minute',
     summary:
       'Every request Ascentra makes to an outside service is now retried, and a provider error that arrives disguised as a success is sent again by itself. What still fails is named in the report instead of quietly lowering a number.',

@@ -199,6 +199,10 @@ export interface AuditRow extends DtRow {
 export interface AuditFindingRow extends DtRow {
   site_id: string; domain: string; audit_id: string; audited_at: string; finding_key: string; category: string; severity: string;
   title: string; affected_count: number;
+  /** G26 (2026-10-12, FIX_PLAN): the impact weight the audit ordered its fix list by (severity x pages affected x the Search Console
+   * clicks and impressions of those pages x their place in the site) and the one line that explains it. Rows written before this
+   * change have neither, so every reader falls back to the severity order. */
+  impact?: number; impact_basis?: string;
 }
 
 /** v4.8 (PIPELINE_FEATURE_SPEC.md §9.1): one row per keyword ladder; the row with ladder_id '_site' holds the website's defaults

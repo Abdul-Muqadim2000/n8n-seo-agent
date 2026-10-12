@@ -21,6 +21,40 @@ function bundle(over: Partial<SiteBundle> = {}): SiteBundle {
 }
 
 describe('recommend', () => {
+  // G26 (2026-10-12, FIX_PLAN): the audit ranks its findings by likely impact and says why; the recommendation quotes that reason and keeps
+  // the audit's order, so the app never tells the owner to start somewhere else than the report does.
+  it('a technical recommendation keeps the audit order and quotes why the finding ranks there', () => {
+    const finding = (over: Record<string, unknown>) => ({ key: 'k', category: 'Crawlability & Indexing', severity: 'High', title: 't', affectedCount: 2, previousCount: null, status: 'open' as const, impact: null as number | null, impactBasis: '', ...over });
+    const recs = recommend(
+      site,
+      bundle({
+        technical: {
+          ...bundle().technical,
+          findings: [
+            finding({ key: 'noindex', title: 'Key pages are noindex', impact: 50.7, impactBasis: 'Google cannot index or follow these pages · 2 of 14 crawled pages · about 720 clicks and 15,400 impressions in the last 28 days · High severity' }),
+            finding({ key: 'title', category: 'On-Page', severity: 'Critical', title: 'Missing title tag', affectedCount: 1, impact: 12.3, impactBasis: '1 of 14 crawled pages · about 1 click and 40 impressions in the last 28 days · Critical severity' }),
+          ],
+        },
+      }),
+    ).filter((r) => r.id.startsWith('tech:'));
+    expect(recs.map((r) => r.id)).toEqual(['tech:noindex', 'tech:title']);
+    expect(recs[0].evidence).toContain('Google cannot index or follow these pages');
+    expect(recs[0].evidence).toContain('720 clicks');
+  });
+
+  it('a finding from an audit written before the impact weight existed still gets its page count as evidence', () => {
+    const recs = recommend(
+      site,
+      bundle({
+        technical: {
+          ...bundle().technical,
+          findings: [{ key: 'old', category: 'On-Page', severity: 'High', title: 'Missing meta description', affectedCount: 4, previousCount: null, status: 'open', impact: null, impactBasis: '' }],
+        },
+      }),
+    ).filter((r) => r.id.startsWith('tech:'));
+    expect(recs[0].evidence).toBe('4 page(s) affected');
+  });
+
   it('a healthy, fully set-up site gets no setup nagging', () => {
     expect(recommend(site, bundle()).filter((r) => r.category === 'setup')).toEqual([]);
   });

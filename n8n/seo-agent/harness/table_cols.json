@@ -352,5 +352,49 @@
   "competitors_json",
   "snapshot_json",
   "share_of_voice"
+ ],
+ "AUDIT_FINDINGS": [
+  "site_id",
+  "domain",
+  "audit_id",
+  "audited_at",
+  "finding_key",
+  "category",
+  "severity",
+  "title",
+  "affected_count",
+  "impact",
+  "impact_basis"
+ ],
+ "CHECKIN": [
+  "site_id",
+  "domain",
+  "month",
+  "manual_action",
+  "security_issue",
+  "notes",
+  "coverage_json",
+  "not_indexed_total",
+  "csv_kind",
+  "submitted_at",
+  "source",
+  "request_id",
+  "is_test"
+ ],
+ "OPS_ALERTS": [
+  "alert_key",
+  "workflow",
+  "node",
+  "message",
+  "execution_id",
+  "execution_url",
+  "mode",
+  "severity",
+  "first_seen_at",
+  "last_seen_at",
+  "count",
+  "channels",
+  "delivered",
+  "notes"
  ]
 }

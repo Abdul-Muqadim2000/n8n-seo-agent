@@ -5423,5 +5423,298 @@ await guard('S47 G6 rank tracker depth', async () => {
     Kbig.packed.length <= 300 && /"trimmed"/.test(Kbig.packed), Kbig.packed.slice(0, 120));
 });
 
+// ===================================================================================
+// S48 (2026-10-12, system review FIX_PLAN G7 / G26 / D25b / D25c) — the speed real visitors feel, the order of the fix list, an alert that
+// arrives when the mail server is down, and a test check-in that can never pass as the month's answer.
+await guard('crux, impact priority, alert channels and test check-ins', async () => {
+  reset(); const SN = 'S48 G7 G26 D25b D25c — Core Web Vitals per template from CrUX (phone + desktop, origin fallback, API off), the fix list ordered by likely impact, a second ops alert channel without SMTP, and a test check-in that never counts for the month';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const T = require('./fixtures_tracking'); const TC = require('./table_cols.json');
+  const OW = require('./ops_alert_wiring.json');
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  // ---------- the audit, from the crawl to the scored findings, with the CrUX chain where the workflow has it ----------
+  // (Entity Check hands its payload on unchanged, so the harness mocks it with the Search Console step's output, exactly as it arrives live)
+  const auditToCrux = async (extra) => {
+    mock('Start Form', F.forms.startAudit);
+    const n = await run('Normalize Input', F.forms.pageAuditTech); mock('Route Mode', n);
+    await run('Save Task ID', F.crawlTaskPost); await run('Check Crawl', F.summaryDone, { runIndex: 2 });
+    mock('Get Crawled Pages', F.crawledPagesRes);
+    await run('Crawl Extra Requests', store['Get Crawled Pages']); mock('Run Crawl Extras', F.extrasRes); await run('Collect Crawl Extras', store['Run Crawl Extras']);
+    await run('Build Probes'); await run('Content Probes', store['Collect Crawl Extras']);
+    const all = F.probeResults('apex');
+    mock('Run Probes', [all[0], all[2], all[3], all[4]]);
+    mock('Run Content Probes', [all[0], all[1], all[5], all[6], all[7], all[8], ...all.slice(9)]);
+    const ap = await run('Analyze Probes', store['Run Content Probes']);
+    const gf = await runGscAudit(ap, 'ok');
+    const item = extra ? [{ json: { ...gf[0].json, ...extra } }] : gf;
+    mock('Entity Check', item);
+    return await run('CrUX Targets', item);
+  };
+
+  // a Chrome UX Report answer: p75 values per metric with the 28-day collection period (CLS comes back as a string, as the API sends it)
+  const cruxOk = (lcp, inp, cls, o = {}) => ({ statusCode: 200, headers: {}, body: {
+    record: { key: { formFactor: o.ff || 'PHONE', ...(o.origin ? { origin: o.origin } : { url: o.url || '' }) },
+      metrics: {
+        largest_contentful_paint: { histogram: [{ start: 0, end: 2500, density: lcp <= 2500 ? 0.81 : 0.42 }, { start: 2500, end: 4000, density: 0.3 }, { start: 4000, density: 0.1 }], percentiles: { p75: lcp } },
+        interaction_to_next_paint: { histogram: [{ start: 0, end: 200, density: 0.93 }, { start: 200, end: 500, density: 0.05 }], percentiles: { p75: inp } },
+        cumulative_layout_shift: { histogram: [{ start: '0.00', end: '0.10', density: 0.96 }], percentiles: { p75: String(cls) } } },
+      collectionPeriod: { firstDate: { year: 2026, month: 9, day: 14 }, lastDate: { year: 2026, month: 10, day: 11 } } },
+    urlNormalizationDetails: o.url ? { originalUrl: o.url, normalizedUrl: o.url } : undefined } });
+  const cruxErr = (code, status, message) => ({ statusCode: code, headers: {}, body: { error: { code, message, status } } });
+  const NO_DATA = cruxErr(404, 'NOT_FOUND', 'chrome ux report data not found');
+  const API_OFF = cruxErr(403, 'PERMISSION_DENIED', 'Chrome UX Report API has not been used in project 12345 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/chromeuxreport.googleapis.com/overview');
+
+  // ---------- A. G7: a CrUX fixture gives per-template p75 values on both form factors ----------
+  const t1 = await auditToCrux();
+  const plan = t1[0].json.crux_plan;
+  console.log('   crux plan ->', JSON.stringify(plan));
+  check('G7: the audit asks the Chrome UX Report for three templates — the homepage, a service page and a blog post — on phone and desktop, plus the whole site as the fallback (8 requests, all free)',
+    t1.length === 8 && eq(plan.templates.map(x => x.template), ['homepage', 'service_page', 'blog_post'])
+    && plan.templates[0].url === 'https://northwind-erp.com/' && /\/services\//.test(plan.templates[1].url) && /\/blog\/[^/]+\//.test(plan.templates[2].url)
+    && t1.filter(x => x.json.form_factor === 'phone').length === 4 && t1.filter(x => x.json.form_factor === 'desktop').length === 4
+    && t1.filter(x => x.json.level === 'origin').length === 2 && t1.every(x => x.json.endpoint === 'https://chromeuxreport.googleapis.com/v1/records:queryRecord'),
+    JSON.stringify(t1.map(x => [x.json.template, x.json.form_factor, x.json.level, x.json.body.url || x.json.body.origin])));
+  check('G7: every request names the metrics Google judges page experience on, and the body uses `url` for a page and `origin` for the whole site',
+    t1.every(x => eq(x.json.body.metrics, ['largest_contentful_paint', 'interaction_to_next_paint', 'cumulative_layout_shift']) && (x.json.level === 'origin' ? !!x.json.body.origin && !x.json.body.url : !!x.json.body.url))
+    && t1.every(x => ['PHONE', 'DESKTOP'].includes(x.json.body.formFactor)), JSON.stringify(t1[0].json.body));
+
+  // the service page has too little traffic of its own (404 on both form factors) -> the whole-site figures stand in; the blog post fails LCP
+  const answer = (r) => {
+    const j = r.json;
+    if (j.level === 'origin') return cruxOk(j.form_factor === 'phone' ? 2800 : 1600, j.form_factor === 'phone' ? 160 : 90, 0.07, { ff: j.body.formFactor, origin: j.body.origin });
+    if (j.template === 'service_page') return NO_DATA;
+    if (j.template === 'homepage') return cruxOk(j.form_factor === 'phone' ? 2200 : 1400, 150, 0.05, { ff: j.body.formFactor, url: j.body.url });
+    return cruxOk(j.form_factor === 'phone' ? 4100 : 2300, j.form_factor === 'phone' ? 320 : 140, 0.04, { ff: j.body.formFactor, url: j.body.url });
+  };
+  mock('Fetch CrUX', t1.map(answer));
+  const ac = await run('Analyze CrUX', store['Fetch CrUX']);
+  const cx = ac[0].json.crux;
+  const dev = (tpl, ff) => (cx.templates.find(t => t.template === tpl) || { devices: {} }).devices[ff] || {};
+  console.log('   crux ->', JSON.stringify({ available: cx.available, source: cx.source, period: cx.collection_period, templates: cx.templates.map(t => [t.label, t.devices.phone && t.devices.phone.lcp_ms, t.devices.phone && t.devices.phone.level, t.devices.desktop && t.devices.desktop.lcp_ms]) }));
+  check('G7: both form factors carry the p75 of LCP, INP and CLS per template (the CLS string the API sends is read as a number), with the 28-day collection period and the source named',
+    cx.available === true && cx.source === 'crux_field' && cx.collection_period.first === '2026-09-14' && cx.collection_period.last === '2026-10-11'
+    && dev('homepage', 'phone').lcp_ms === 2200 && dev('homepage', 'phone').inp_ms === 150 && dev('homepage', 'phone').cls === 0.05
+    && dev('homepage', 'desktop').lcp_ms === 1400 && dev('blog_post', 'phone').lcp_ms === 4100 && dev('blog_post', 'desktop').lcp_ms === 2300
+    && dev('homepage', 'phone').verdict.pass === true && dev('blog_post', 'phone').verdict.pass === false && eq(dev('blog_post', 'phone').verdict.failed, ['lcp', 'inp']),
+    JSON.stringify(cx.templates));
+  check('G7: a page with too little field data of its own falls back to the whole-site figures, and the row says so instead of pretending the page was measured',
+    dev('service_page', 'phone').available === true && dev('service_page', 'phone').level === 'origin' && dev('service_page', 'phone').lcp_ms === 2800
+    && dev('service_page', 'desktop').level === 'origin' && dev('homepage', 'phone').level === 'page' && cx.origin_rows.phone.lcp_ms === 2800,
+    JSON.stringify({ service: dev('service_page', 'phone'), origin: cx.origin_rows }));
+  const cf = ac[0].json.extra_findings.filter(f => f.source === 'crux');
+  console.log('   crux findings ->', cf.map(f => '[' + f.severity + (f.scoring === false ? ', unscored' : '') + '] ' + f.title).join(' | '));
+  check('G7: a failing metric at the 75th percentile on phones becomes one finding per metric, in Performance, worded as field data with its date — never a lab guess',
+    cf.length === 2 && cf.every(f => f.category === 'Performance' && f.severity === 'Medium' && f.scope === 'site')
+    && cf.some(f => /Largest Contentful Paint fails for real users on phones/.test(f.title) && /4\.1 s/.test(f.evidence) && /2026-09-14 to 2026-10-11/.test(f.evidence))
+    && cf.some(f => /Interaction to Next Paint fails for real users on phones/.test(f.title) && /320 ms/.test(f.evidence)),
+    JSON.stringify(cf.map(f => [f.severity, f.title, f.evidence])));
+  check('G7: the templates that pass become a "what works" line, so a fast site is told so', ac[0].json.extra_works.some(w => /Core Web Vitals pass for real users on phones on homepage/.test(w)), JSON.stringify(ac[0].json.extra_works.slice(-2)));
+
+  // the audit scores it with a LOW weight: the same audit with and without the field data differs by at most 3 points
+  const bsiWith = await run('Build Site Issues', ac);
+  const aWith = bsiWith[0].json.site_audit;
+  const bsiWithout = await run('Build Site Issues', [{ json: { ...ac[0].json, crux: undefined, extra_findings: ac[0].json.extra_findings.filter(f => f.source !== 'crux') } }]);
+  const aWithout = bsiWithout[0].json.site_audit;
+  console.log('   score with crux ->', aWith.health_score, '/ raw', aWith.raw_score, '| without ->', aWithout.health_score, '/ raw', aWithout.raw_score, '| performance', aWith.category_scores.Performance, 'vs', aWithout.category_scores.Performance, '| crux in site_audit?', !!aWith.crux);
+  check('G7: the field data carries a LOW weight in the health score — two failing metrics at the 75th percentile cost at most 3 points of the overall score (they do move the Performance category) — and it travels inside the scored audit',
+    !!aWith.crux && aWith.crux.available === true && aWith.health_score > 0
+    && Math.abs(aWith.health_score - aWithout.health_score) <= 3 && (aWithout.raw_score - aWith.raw_score) <= 3
+    && aWith.category_scores.Performance < aWithout.category_scores.Performance,
+    JSON.stringify({ with: [aWith.health_score, aWith.raw_score, aWith.category_scores.Performance], without: [aWithout.health_score, aWithout.raw_score, aWithout.category_scores.Performance] }));
+
+  // ---------- B. G7: the API is not enabled in the key's project — "not available", never a failed audit ----------
+  const t2 = await auditToCrux();
+  mock('Fetch CrUX', t2.map(() => API_OFF));
+  const acOff = await run('Analyze CrUX', store['Fetch CrUX']);
+  const cxOff = acOff[0].json.crux;
+  const offF = acOff[0].json.extra_findings.filter(f => f.source === 'crux');
+  const bsiOff = await run('Build Site Issues', acOff);
+  const aOff = bsiOff[0].json.site_audit;
+  console.log('   api off ->', JSON.stringify({ available: cxOff.available, api_enabled: cxOff.api_enabled, reason: cxOff.not_available, fix: cxOff.not_available_fix.slice(0, 80), score: aOff.health_score }));
+  check('G7: with the Chrome UX Report API switched off in the PageSpeed key\'s project the audit reports "not available" with the one step that fixes it, scores as before and never fails',
+    cxOff.available === false && cxOff.api_enabled === false && /not enabled for the Google key/.test(cxOff.not_available) && /Chrome UX Report API/.test(cxOff.not_available_fix)
+    && offF.length === 1 && offF[0].severity === 'Info' && offF[0].scoring === false && aOff.health_score === aWithout.health_score,
+    JSON.stringify({ reason: cxOff.not_available, findings: offF.map(f => [f.severity, f.title, f.scoring]), score: aOff.health_score, base: aWithout.health_score }));
+  check('G7: the audit lists the field data under "not assessed" with the reason, and keeps the lab test as its own separate line (the two sources are never mixed up)',
+    aOff.not_assessed.some(x => /Chrome UX Report, 75th percentile/.test(x) && /not enabled/.test(x)) && aOff.not_assessed.some(x => /lab test \(Google PageSpeed \/ Lighthouse\)/.test(x)),
+    JSON.stringify(aOff.not_assessed));
+
+  // ---------- C. G26: the fix list ordered by likely impact, and the report says why the first item is first ----------
+  // three findings: a noindex that blocks the pages Search Console says earn the traffic, a Critical on one page nobody visits, a cosmetic Low
+  const SC_PAGES = { connected: true, property: 'sc-domain:northwind-erp.com', permission: 'siteOwner',
+    totals: { clicks: 980, impressions: 24000, ctr: 0.04, position: 18.2, period: { start: '2026-09-14', end: '2026-10-11' } },
+    pages_with_impressions: 12, queries_with_impressions: 300, sitemaps: [], coverage: {}, not_indexed: [], canonical_mismatch: [], rich_results: [],
+    top_queries: [], top_pages: [
+      { page: 'https://northwind-erp.com/services/erp-implementation/', clicks: 420, impressions: 9000, position: 7.1 },
+      { page: 'https://northwind-erp.com/services/data-migration/', clicks: 300, impressions: 6400, position: 9.4 },
+      { page: 'https://northwind-erp.com/careers/', clicks: 1, impressions: 40, position: 44 }] };
+  const INJECT = [
+    { category: 'Crawlability & Indexing', severity: 'High', title: 'Key pages are noindex', why: 'Google drops them.', fix: 'Remove the noindex tag.', evidence: '2 of 14 crawled pages', affected_count: 2, affected_pct: 14, scope: 'page', sample_urls: ['https://northwind-erp.com/services/erp-implementation/', 'https://northwind-erp.com/services/data-migration/'] },
+    { category: 'On-Page', severity: 'Critical', title: 'Missing title tag on the careers page', why: 'No title.', fix: 'Write a title.', evidence: '1 of 14 crawled pages', affected_count: 1, affected_pct: 7, scope: 'page', sample_urls: ['https://northwind-erp.com/careers/'] },
+    { category: 'Technical', severity: 'Low', title: 'Missing favicon', why: 'Favicons appear in results.', fix: 'Add a favicon.', evidence: '14 of 14 crawled pages', affected_count: 14, affected_pct: 100, scope: 'site', sample_urls: [] }
+  ];
+  const t3 = await auditToCrux({ search_console: SC_PAGES, extra_findings: [...INJECT] });
+  mock('Fetch CrUX', t3.map(answer));
+  const ac3 = await run('Analyze CrUX', store['Fetch CrUX']);
+  const bsi3 = await run('Build Site Issues', ac3);
+  const a3 = bsi3[0].json.site_audit;
+  const fOf = (re) => a3.findings.find(f => re.test(f.title)) || {};
+  const idxOf = (re) => a3.findings.findIndex(f => re.test(f.title));
+  console.log('   ordered ->', a3.findings.slice(0, 6).map(f => '[' + f.severity + ' ' + f.impact + '] ' + f.title).join(' | '));
+  console.log('   first reason ->', a3.priority_first);
+  check('G26: every finding carries an impact weight and the one line that explains it (pages affected, the clicks and impressions those pages get, severity)',
+    a3.findings.every(f => typeof f.impact === 'number' && f.impact >= 0 && typeof f.impact_basis === 'string' && f.impact_basis.length > 10)
+    && /2 of 14 crawled pages/.test(fOf(/noindex/).impact_basis) && /clicks and 15,400 impressions in the last 28 days/.test(fOf(/noindex/).impact_basis),
+    JSON.stringify(a3.findings.slice(0, 3).map(f => [f.title, f.impact, f.impact_basis])));
+  check('G26: the index blocker on the pages that earn the traffic is first — above a Critical on one page nobody visits (severity alone put it second)',
+    idxOf(/Key pages are noindex/) === 0 && fOf(/Key pages are noindex/).impact_blocker === true
+    && idxOf(/Missing title tag on the careers page/) > 0 && fOf(/Key pages are noindex/).impact > fOf(/Missing title tag on the careers/).impact,
+    JSON.stringify(a3.findings.slice(0, 4).map(f => [f.title, f.severity, f.impact])));
+  check('G26: a cosmetic item can never be at the top, whatever share of pages it touches (the favicon is on all 14), and nothing cosmetic is in the first ten',
+    fOf(/Missing favicon/).impact_cosmetic === true && fOf(/Missing favicon/).impact <= 0.9 && idxOf(/Missing favicon/) >= 10
+    && !a3.findings.slice(0, 10).some(f => f.impact_cosmetic) && a3.findings.slice(0, 3).every(f => f.impact_band >= 2),
+    JSON.stringify({ favicon: [fOf(/Missing favicon/).impact, idxOf(/Missing favicon/)], total: a3.findings.length, top: a3.findings.slice(0, 10).map(f => [f.title, f.impact_band]) }));
+  check('G26: the severity labels are untouched (the order changed, not the grading) and the notes about data that could not be collected stay last',
+    fOf(/Missing title tag on the careers page/).severity === 'Critical' && fOf(/Key pages are noindex/).severity === 'High' && fOf(/Missing favicon/).severity === 'Low'
+    && a3.findings.filter(f => f.severity === 'Info').every((f, i, arr) => idxOf(new RegExp(f.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))) >= a3.findings.length - arr.length),
+    JSON.stringify(a3.findings.map(f => [f.severity, f.impact])));
+  check('G26: the audit explains in one sentence why the first item is first, and states the method it used',
+    /Key pages are noindex/.test(a3.priority_first) && /Google cannot index/.test(a3.priority_first) && /impact score/.test(a3.priority_first)
+    && /severity .* the share of pages it affects .* clicks and impressions/.test(a3.priority_method.replace(/×/g, '.')),
+    JSON.stringify({ first: a3.priority_first, method: a3.priority_method.slice(0, 120) }));
+
+  // both reports: the table per template with its source, and the reason the first fix is first
+  const ah = decode(await run('Build Audit Report', bsi3));
+  save('s48-audit-report-crux-priority.doc.html', ah);
+  scanHtml('audit report (crux + priority)', ah);
+  check('G7: the technical audit report shows the field data per template and device, with its source, its 28-day period and the note that it carries a low weight',
+    /Core Web Vitals per template \(real Chrome users\)/.test(ah) && /Chrome UX Report field data/.test(ah) && /2026-10-11/.test(ah)
+    && /phone/.test(ah) && /desktop/.test(ah) && /whole site \(this page has too little traffic\)/.test(ah) && /low weight in the health score/.test(ah),
+    ah.slice(Math.max(0, ah.indexOf('Core Web Vitals per template')), ah.indexOf('Core Web Vitals per template') + 400));
+  check('G26: the report says the list is ordered by likely impact, names why the first item is first, and keeps the severity badge next to each fix',
+    /Ordered by likely impact/.test(ah) && /Key pages are noindex/.test(ah) && /Why here:/.test(ah) && /How the fix list is ordered/.test(ah),
+    ah.slice(Math.max(0, ah.indexOf('Fix These First')), ah.indexOf('Fix These First') + 500));
+  // the stored finding rows carry the weight, so the app's lists order the same way
+  mock('Audit Diff', [{ json: { ...bsi3[0].json, site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', audit_id: 'aud_s48', audited_at: '2026-10-12T06:00:00.000Z' } }]);
+  const frows = (await run('Finding Rows', store['Audit Diff'])).map(x => x.json).filter(r => !r.skip);
+  check('G26: every stored seo_audit_findings row carries the impact weight and its basis, with exactly the columns ladder_common.py defines',
+    frows.length > 0 && frows.every(r => eq(Object.keys(r), TC.AUDIT_FINDINGS)) && frows.some(r => /noindex/.test(r.title) && r.impact > 0 && /Google cannot index/.test(r.impact_basis)),
+    JSON.stringify({ cols: Object.keys(frows[0] || {}), expected: TC.AUDIT_FINDINGS, sample: frows[0] }));
+
+  // ---------- D. D25b: the alert is recorded first, then reaches a channel that needs no SMTP ----------
+  const ALERT = { subject: '[SEO Agent] Run failed at "Keyword Data" — SEO Agent v4', html: '<p>Workflow: SEO Agent v4</p>', node: 'Keyword Data',
+    workflow: 'SEO Agent v4', execution_id: '412', execution_url: 'http://localhost:5678/workflow/SEOagentV4Full01/executions/412',
+    message: 'DataForSEO returned 40100 after 30012ms', mode: 'trigger', when: '2026-10-12T07:00:00.000Z' };
+  mock('Format Alert', [{ json: ALERT }]);
+  mock('Load Ops Alerts', [{ json: {} }]);                     // alwaysOutputData: an empty table answers with one empty item
+  const row1 = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  mock('Save Ops Alert', [{ json: { ...row1, id: 1 } }]);
+  const ch1 = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels_Webhook' }))[0].json;
+  console.log('   alert ->', JSON.stringify({ key: row1.alert_key, count: row1.count, delivered: row1.delivered, channels: row1.channels, webhook: ch1.send_webhook, email: ch1.send_email }));
+  check('D25b: the alert is written to seo_ops_alerts before anything is sent, with exactly the columns ladder_common.py defines, so a failure is never lost',
+    eq(Object.keys(row1), TC.OPS_ALERTS) && row1.count === 1 && row1.delivered === 'pending' && row1.severity === 'high'
+    && row1.first_seen_at === row1.last_seen_at && row1.execution_id === '412' && /Keyword Data/.test(row1.alert_key),
+    JSON.stringify({ cols: Object.keys(row1), expected: TC.OPS_ALERTS, row: row1 }));
+  check('D25b: with SEO_ALERT_WEBHOOK_URL set the alert goes to a channel that needs no SMTP at all, and the body fits Slack, Teams and anything else that takes a POST',
+    ch1.send_webhook === true && /^https:\/\//.test(ch1.webhook_url) && /Run failed at/.test(ch1.webhook_body.text) && /Run failed at/.test(ch1.webhook_body.content)
+    && ch1.webhook_body.alert.execution_url === ALERT.execution_url && ch1.webhook_body.alert.severity === 'high' && ch1.webhook_body.alert.seen_count === 1
+    && ch1.channels.includes('webhook') && ch1.channels.includes('data_table'),
+    JSON.stringify({ send: ch1.send_webhook, url: ch1.webhook_url, body: ch1.webhook_body }));
+  check('D25b: the e-mail that failed on 2026-10-10 and 2026-10-12 cannot take the alert down with it — it is a parallel branch, it retries 3x 5 s apart, it reads the alert from Format Alert, and an error no longer fails the run',
+    OW.email.onError === 'continueRegularOutput' && OW.email.retryOnFail === true && OW.email.maxTries === 3 && OW.email.reads_alert_from === true
+    && eq(OW.connections['Alert Channels'][0], ['Send Webhook?', 'Send Email?']) && !(OW.connections['Email Ops'] || []).length
+    && OW.webhook.uses_smtp === false && OW.webhook.retryOnFail === true,
+    JSON.stringify(OW));
+  check('D25b: the row is written before either channel runs (Format Alert -> ensure -> load -> record -> save -> channels), so even both channels failing leaves the failure on record',
+    eq(OW.connections['Format Alert'][0], ['Ensure Ops Alerts Table']) && eq(OW.connections['Alert Record'][0], ['Save Ops Alert'])
+    && eq(OW.connections['Save Ops Alert'][0], ['Alert Channels']) && OW.table === 'seo_ops_alerts' && OW.webhook_setting === 'SEO_ALERT_WEBHOOK_URL',
+    JSON.stringify(OW.connections));
+  // the channel that is not configured is skipped, and nothing fails
+  const chUnset = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels' }))[0].json;   // the generated node: no webhook URL in this worktree's .env
+  check('D25b: an unset channel is simply skipped — the generated node has no webhook URL in this worktree, so no request is built, nothing throws, the other channel still goes out and the row is still written',
+    chUnset.send_webhook === false && chUnset.webhook_url === '' && !chUnset.channels.includes('webhook') && chUnset.channels.includes('data_table')
+    && chUnset.send_email === true && chUnset.recorded === true && chUnset.alert_key === row1.alert_key,
+    JSON.stringify({ send: chUnset.send_webhook, channels: chUnset.channels, note: chUnset.note }));
+  // the same failure again: counted on the row, not re-sent; the same failure after the window: sent again, first_seen_at kept
+  const mins = (n) => new Date(Date.now() - n * 60000).toISOString();
+  mock('Load Ops Alerts', [{ json: { ...row1, count: 1, first_seen_at: mins(90), last_seen_at: mins(4) } }]);
+  const row2 = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  mock('Save Ops Alert', [{ json: row2 }]);
+  const ch2 = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels_Webhook' }))[0].json;
+  mock('Load Ops Alerts', [{ json: { ...row1, count: 4, first_seen_at: mins(600), last_seen_at: mins(45) } }]);
+  const row3 = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  mock('Save Ops Alert', [{ json: row3 }]);
+  const ch3 = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels_Webhook' }))[0].json;
+  check('D25b: the same failure within 30 minutes is counted on its row and not re-sent (one broken credential cannot flood the channels), and after the window it is sent again with the first sighting kept',
+    row2.count === 2 && row2.delivered === 'deduped' && ch2.send_webhook === false && ch2.send_email === false && /repeat within 30 minutes/.test(row2.notes)
+    && row3.count === 5 && row3.delivered === 'pending' && ch3.send_webhook === true && row3.first_seen_at === row3.first_seen_at && new Date(row3.first_seen_at) < new Date(row3.last_seen_at),
+    JSON.stringify({ repeat: [row2.count, row2.delivered, ch2.send_webhook], later: [row3.count, row3.delivered, ch3.send_webhook] }));
+  mock('Format Alert', [{ json: { ...ALERT, message: 'DataForSEO returned 40100 after 31004ms', execution_id: '413' } }]);
+  mock('Load Ops Alerts', [{ json: {} }]);
+  const rowNum = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  mock('Format Alert', [{ json: { ...ALERT, node: 'Read Website' } }]);
+  const rowOther = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  check('D25b: two timeouts that differ only in their numbers are the same alert (so the dedupe works on real messages), while another node is its own alert',
+    rowNum.alert_key === row1.alert_key && rowOther.alert_key !== row1.alert_key && /Read Website/.test(rowOther.alert_key),
+    JSON.stringify([row1.alert_key, rowNum.alert_key, rowOther.alert_key]));
+  mock('Format Alert', [{ json: ALERT }]);
+
+  // ---------- E. D25c: a test check-in never satisfies the month, and the reminder keeps asking ----------
+  delete store['Start Form'];   // the check-in comes in through the API here, not the form
+  const checkinReq = (o) => ({ headers: {}, body: { mode: 'checkin', domain: 'northwind-erp.com', callback_url: 'https://hooks.example.com/seo', manual_action: 'No', security_issue: 'No', ...o } });
+  const parseCheckin = async (o) => { const n = await run('Normalize Input', checkinReq(o)); mock('Normalize Input', n); return (await run('Parse Check-in', n))[0].json; };
+  const real = await parseCheckin({ notes: 'Pages report exported, 4 pages excluded by noindex' });
+  const flagged = await parseCheckin({ is_test: true, notes: 'checking the form works' });
+  const noted = await parseCheckin({ notes: 'October check-in (test)' });
+  console.log('   check-ins ->', JSON.stringify([[real.checkin_row.is_test, real.checkin_row.month], [flagged.checkin_row.is_test, flagged.checkin_test_reason], [noted.checkin_row.is_test, noted.checkin_test_reason]]));
+  check('D25c: a check-in is marked as a test when the person says so, when a test caller sends it, or when its own note marks it — a real one is never mistaken for a test',
+    real.checkin_row.is_test === false && flagged.checkin_row.is_test === true && noted.checkin_row.is_test === true
+    && /marked as a test/.test(flagged.checkin_test_reason) && /note marks it/.test(noted.checkin_test_reason),
+    JSON.stringify({ real: real.checkin_row.is_test, flagged: flagged.checkin_test_reason, noted: noted.checkin_test_reason }));
+  check('D25c: the row keeps exactly the seo_console_checkins columns (is_test among them) and the answer tells the person a test does not count for the month',
+    eq(Object.keys(real.checkin_row), TC.CHECKIN) && eq(Object.keys(noted.checkin_row), TC.CHECKIN)
+    && noted.summary_lines.some(l => /does not count as the answer for/.test(l) && /keeps asking/.test(l))
+    && real.summary_lines.some(l => /the reminder stops for this month/.test(l)) && noted.checkin_is_test === true,
+    JSON.stringify({ cols: Object.keys(real.checkin_row), expected: TC.CHECKIN, lines: noted.summary_lines.slice(-1) }));
+  const resp = (await run('Build Check-in Response', [{ json: noted }]))[0].json;
+  check('D25c: the API answer says whether the check-in counts for the month, so the app can keep asking too',
+    resp.is_test === true && resp.counts_for_month === false && /note marks it/.test(resp.test_reason), JSON.stringify(resp).slice(0, 220));
+
+  // the Site Tracker's monthly check: a test row never satisfies it (the reminder in the Monday report reads checkin_due)
+  const month = new Date().toISOString().slice(0, 7);
+  const ckRow = (o) => ({ json: { id: 1, site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', month, manual_action: false, security_issue: false, notes: '', coverage_json: '{}', not_indexed_total: 4, csv_kind: 'reasons', submitted_at: month + '-02T09:00:00.000Z', source: 'form', is_test: false, ...o } });
+  const EMPTY48 = [{ json: {} }];
+  const planWith = async (rows) => {
+    mock('Manual Run', {}); mock('Load Sites', T.sitesRows()); mock('Load Ladders', EMPTY48); mock('Load Rank History', EMPTY48);
+    mock('Load Site Metrics', EMPTY48); mock('Load Query History', EMPTY48); mock('Load Content Log', EMPTY48); mock('Load Console Alerts', EMPTY48);
+    mock('Load Check-ins', rows);
+    return (await run('Site Plan', EMPTY48))[0].json;
+  };
+  const pTest = await planWith([ckRow({ is_test: true, notes: 'October check-in (test)' })]);
+  const pReal = await planWith([ckRow({ notes: 'Pages report uploaded' })]);
+  const pNoteOnly = await planWith([ckRow({ notes: 'October check-in (test)' })]);   // the live row: marked only in its note, written before the column existed
+  const pOld = await planWith([ckRow({ is_test: true }), ckRow({ id: 2, month: '2026-09', notes: 'September, real' })]);
+  console.log('   checkin_due ->', JSON.stringify({ test: pTest.checkin_due, real: pReal.checkin_due, note_only: pNoteOnly.checkin_due, test_plus_old_real: pOld.checkin_due }));
+  check('D25c: a test check-in does not satisfy the month — the Monday report keeps asking (checkin_due stays true) and the test row is never reported as the month\'s answer',
+    pTest.checkin_due === true && pTest.last_checkin === null && pNoteOnly.checkin_due === true && pOld.checkin_due === true
+    && pOld.last_checkin && pOld.last_checkin.month === '2026-09',
+    JSON.stringify({ test: [pTest.checkin_due, pTest.last_checkin], note_only: pNoteOnly.checkin_due, old: [pOld.checkin_due, pOld.last_checkin && pOld.last_checkin.month] }));
+  check('D25c: a real check-in still satisfies the month and still reaches the report, so the reminder stops when the owner has answered',
+    pReal.checkin_due === false && pReal.last_checkin && pReal.last_checkin.month === month && pReal.last_checkin.not_indexed_total === 4,
+    JSON.stringify({ due: pReal.checkin_due, last: pReal.last_checkin }));
+  // a test answer of "yes" must not raise a critical alert for a manual action that was never reported
+  const alertGate = /!\$\('Parse Check-in'\)\.first\(\)\.json\.checkin_is_test/.test(OW.checkin_alert_gate);
+  const testYes = await parseCheckin({ is_test: true, manual_action: 'Yes', notes: 'testing the alert path' });
+  const realYes = await parseCheckin({ manual_action: 'Yes', notes: 'Manual action: thin content on 3 pages' });
+  const realAlerts = await run('Alert From Checkin', [{ json: realYes }]);
+  check('D25c: a manual action reported in a TEST check-in raises no critical console alert (the gate reads checkin_is_test), while a real one still becomes one',
+    testYes.checkin_is_test === true && testYes.checkin_row.manual_action === true && realYes.checkin_is_test === false
+    && realAlerts.length === 1 && realAlerts[0].json.kind === 'manual_action' && realAlerts[0].json.severity === 'critical' && alertGate,
+    JSON.stringify({ test: testYes.checkin_is_test, real: realYes.checkin_is_test, gate: OW.checkin_alert_gate.slice(0, 80), alerts: realAlerts.length }));
+});
+
+
 H.report();
 })();

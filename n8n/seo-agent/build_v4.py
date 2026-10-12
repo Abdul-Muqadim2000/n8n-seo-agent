@@ -2793,6 +2793,235 @@ sticky("""### What the numbers are allowed to say (D20 / D21 / G9 / G24 / G28, v
 **Audit:** *GSC Audit Findings* reports **crawl coverage** — crawled X of Y known URLs (sitemap ∪ the Search Console pages) — and flags under 90%, so nobody reads a finding's share as a share of the whole site.
 **Site Tracker** (built in `build_site_tracker.py`): every Search Console row is read (25,000 per request + further pages), the withheld queries are reported as the **anonymised share**, **brand / non-brand** is split with the known brand names, scraper queries are counted apart with the audit's own rule (`_gsc_queries.js`), a **sparse** Trends series carries no percentage, and a traffic alert needs a **statistically real** change (`_site_stats.js`, two-sample Poisson z, 95%) — a big move at low volume is a "Watch", not a fall.""", DX36 - 40, DY36 + 160, 1180, 260, 3)
 log('What the numbers are allowed to say (2026-10-12, FIX_PLAN D20 / D21 / G9 / G24 / G28): discovery loads the site\'s own ladders and marks every keyword a ladder head or rung covers (one search, one page), the AI Overview line comes from the live check with its date while the undated Labs value is labelled historical, the live top domains are deduplicated before the first five and callback CPCs are rounded to 2 decimals; a sparse Google Trends series carries no percentage anywhere (Parse Trends -> Brief Input -> prompt); Search Console is read in full (25,000 rows per request plus further pages) with the anonymised share, a brand / non-brand split and the audit\'s own scraper-query rule as the shared kit v5/code/_gsc_queries.js; the audit reports crawl coverage (sitemap union Search Console pages) and flags under 90%; site-tracking alerts fire on a two-sample Poisson z-test with minimum volumes and Google update dates as context (v5/code/_site_stats.js), a large move inside sampling noise is reported as "Watch"')
+# =============================================================================
+# 41. WHAT SPEED THE VISITORS FEEL, WHAT TO FIX FIRST, AND AN ALERT THAT ARRIVES (2026-10-12, system review FIX_PLAN.md G7 / G26 / D25b / D25c)
+#     G7  Core Web Vitals came from one Lighthouse lab run of the homepage, in full reports only, while Google's page-experience signal uses
+#         the p75 of 28 days of real-user field data. The audit now reads the **Chrome UX Report** per template (homepage, a service page, a
+#         blog post) on phone and desktop, falls back to the whole-site (origin) figures for a page with too little traffic, carries a low
+#         weight in the score (unscored where the lab run already scores the same thing) and names its source and collection period in both
+#         audit reports. The CrUX API is free and uses the PageSpeed key, but it has to be *enabled* in that Google project: when it is not,
+#         the audit says "not available" with the one step that fixes it and never fails.
+#     G26 The fix list was ordered by severity label alone, so a Critical on one unvisited page outranked a High on every page that earns the
+#         traffic, and cosmetic items could sit at the top. Priority is now severity x the share of pages affected x the clicks and
+#         impressions those pages get in Search Console x their place in the site (v5/code/_impact.js), in bands: pages Google cannot index
+#         first, cosmetic items never first, notes about missing data last. Severities are unchanged and still shown; both reports say in one
+#         sentence why the first item is first, and the weight is stored on every finding row so the app orders the same way.
+#     D25b The Error Handler had one channel, *Email Ops*, and it failed with a connection error on 2026-10-10 and again on 2026-10-12. Every
+#         alert is now recorded in the new Data Table seo_ops_alerts *before* anything is sent (the record of last resort) and then goes to a
+#         webhook that needs no SMTP (SEO_ALERT_WEBHOOK_URL in n8n/.env: Slack / Teams / anything that takes a POST) as well as the e-mail.
+#         Repeats of the same failure within 30 minutes are counted on the row but not re-sent; an unset channel is skipped; no channel can
+#         fail the run.
+#     D25c October's check-in was still the 2026-10-02 test row, so the reminder stopped asking. A check-in can now be marked as a test (the
+#         form's last question, the API's is_test, a test caller, or a note that marks it: v5/code/_checkin_test.js) and a test never counts
+#         as the month's answer - the Site Tracker leaves it out of the monthly check, so the reminder keeps asking, and a test answer of
+#         "yes" to a manual action no longer raises a critical alert.
+# =============================================================================
+import url_lint as _ul41, retry_lint as _rl41
+from ladder_common import OPS_ALERTS_TABLE, OPS_ALERTS_COLS
+from env_settings import ENV as _ENV41
+ALERT_WEBHOOK_URL = _ENV41.get('SEO_ALERT_WEBHOOK_URL') or ''
+IMPACT_SRC = rd('code/_impact.js').rstrip('\n')
+CHECKIN_TEST_SRC = rd('code/_checkin_test.js').rstrip('\n')
+OPS_ALERT_SRC = rd('code/_ops_alert.js').rstrip('\n')
+
+# ---------- A. G7: the Chrome UX Report per template, between the entity check and the scoring ----------
+_ec41 = pos('Entity Check'); CX, CY = _ec41[0] + 220, _ec41[1]
+disconnect('Entity Check', 'Build Site Issues')
+add_node('CrUX Targets', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/CrUX_Requests.js')}, [CX, CY])
+if_node('Any CrUX?', '{{ !$json.skip }}', [CX + 220, CY])
+add_node('Fetch CrUX', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+    'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}',
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 400}}, 'timeout': 30000, 'response': {'response': {'neverError': True, 'fullResponse': True}}}},
+    [CX + 440, CY - 120], dict(onError='continueRegularOutput', **_rl41.RETRY))
+nodes['Fetch CrUX']['credentials'] = {'httpHeaderAuth': {'id': 'SEOcredPageSpeed', 'name': 'Google PageSpeed'}}
+add_node('Analyze CrUX', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Analyze_CrUX.js')}, [CX + 660, CY])
+for _a, _b in [('Entity Check', 'CrUX Targets'), ('CrUX Targets', 'Any CrUX?'), ('Fetch CrUX', 'Analyze CrUX'), ('Analyze CrUX', 'Build Site Issues')]:
+    connect(_a, _b)
+connect('Any CrUX?', 'Fetch CrUX', 0); connect('Any CrUX?', 'Analyze CrUX', 1)
+assert 'const SM = (() => {' in code('CrUX Targets'), 'CrUX Targets: site model kit not inlined'
+
+# the scored audit carries the field data, and says what it could not measure
+patch('Build Site Issues', "      entity: input.entity || null,\n", "      entity: input.entity || null,\n      crux: input.crux || null,\n")
+patch('Build Site Issues', "if (!input.pagespeed) not_assessed.push('Core Web Vitals (LCP, CLS, INP) from Google PageSpeed and real users');",
+      "if (!input.pagespeed) not_assessed.push('Core Web Vitals in a lab test (Google PageSpeed / Lighthouse) and the speed comparison with competitors');\n"
+      "if (!(input.crux && input.crux.available)) not_assessed.push('Core Web Vitals from real Chrome users per template (Chrome UX Report, 75th percentile): ' + ((input.crux && input.crux.not_available) || 'not collected in this run'));")
+
+# ---------- B. G26: order every finding by likely impact ----------
+setcode('Build Site Issues', IMPACT_SRC + '\n' + code('Build Site Issues'))
+patch('Build Site Issues', """// ===== 6. Sort =====
+findings.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity] || ((b.affected_pct || 0) - (a.affected_pct || 0)));""",
+      """// ===== 6. Order by likely impact (G26, 2026-10-12): severity x the share of pages affected x the clicks and impressions those pages
+// get in Search Console x their place in the site. Index blockers first, cosmetic items never first, notes about missing data last.
+// The severity label is unchanged and stays visible; the scoring below still groups by severity, so no score changes because of the order.
+IMP.rank(findings, { total_pages: total, search_console: input.search_console || null,
+  key_pages: [...(((input.html_analysis || {}).sampled_pages) || []).map(p => (p && p.url) || p), ...(((input.search_console || {}).top_pages) || []).slice(0, 5).map(p => p.page || p.url)].filter(Boolean) });""")
+patch('Build Site Issues', "      weights: WEIGHTS,\n", "      weights: WEIGHTS,\n      priority_method: IMP.method,\n      priority_first: IMP.firstReason(findings),\n")
+# the stored finding rows keep the weight, so the app's lists and recommendations order the same way
+_fr41 = code('Finding Rows')
+assert _fr41.count("affected_count: Number(f.affected_count) || 0 }));") == 1, 'Finding Rows: row shape moved'
+setcode('Finding Rows', _fr41.replace("affected_count: Number(f.affected_count) || 0 }));",
+        "affected_count: Number(f.affected_count) || 0, impact: Number(f.impact) || 0, impact_basis: String(f.impact_basis || '').slice(0, 400) }));"))
+
+# ---------- C. both audit reports: the field data per template, and why the first fix is first ----------
+CWV_SECTION_JS = r"""// ---- Core Web Vitals per template, from real Chrome users (G7, 2026-10-12) ----
+const cwvSection = (a) => {
+  const c = a.crux || null;
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  let h = `<h3>Core Web Vitals per template (real Chrome users)</h3>`;
+  if (!c) return h + `<p>Not measured per template in this run.</p>`;
+  const TH = c.thresholds || { lcp: 2500, inp: 200, cls: 0.1 };
+  if (!c.available) return h + `<p><b>Not available:</b> ${e2(c.not_available)}.${c.not_available_fix ? ' ' + e2(c.not_available_fix) : ''}</p>`
+    + `<p class="small">Source: Chrome UX Report (field data). Limits: LCP ${(TH.lcp / 1000).toFixed(1)} s, INP ${TH.inp} ms, CLS ${TH.cls.toFixed(2)} at the 75th percentile.</p>`;
+  const cell = (v, limit, fmt) => v == null ? '<td>—</td>' : `<td${v > limit ? ' style="color:#b91c1c;font-weight:bold"' : ''}>${fmt(v)}</td>`;
+  const secs = (ms) => (Math.round(ms / 100) / 10).toFixed(1) + ' s';
+  const rows = [];
+  for (const t of (c.templates || [])) for (const ff of ['phone', 'desktop']) {
+    const d = t.devices ? t.devices[ff] : null;
+    if (!d) continue;
+    rows.push(d.available
+      ? `<tr><td>${e2(t.label)}</td><td>${e2(p2(t.url))}</td><td>${ff}</td>` + cell(d.lcp_ms, TH.lcp, secs) + cell(d.inp_ms, TH.inp, (v) => Math.round(v) + ' ms') + cell(d.cls, TH.cls, (v) => Number(v).toFixed(2))
+        + `<td>${d.verdict ? (d.verdict.pass ? '<span class="ok">passes</span>' : '<span class="bad">fails ' + d.verdict.failed.join(', ').toUpperCase() + '</span>') : '—'}</td>`
+        + `<td class="small">${d.level === 'origin' ? 'whole site (this page has too little traffic)' : 'this page'}${d.period && d.period.last ? ', ' + e2(d.period.first) + ' to ' + e2(d.period.last) : ''}</td></tr>`
+      : `<tr><td>${e2(t.label)}</td><td>${e2(p2(t.url))}</td><td>${ff}</td><td colspan="5" class="small">${e2(d.not_available || 'no field data')}</td></tr>`);
+  }
+  h += rows.length ? `<table class="ct"><tr><th>Template</th><th>Page</th><th>Device</th><th>LCP</th><th>INP</th><th>CLS</th><th>Verdict</th><th>Source</th></tr>` + rows.join('') + `</table>` : `<p>No template could be measured.</p>`;
+  h += `<p class="small">Source: <b>Chrome UX Report field data</b> — what real Chrome users measured, at the 75th percentile of the 28 days`
+    + `${c.collection_period && c.collection_period.last ? ' ending ' + e2(c.collection_period.last) : ''}. Google's limits: LCP ${(TH.lcp / 1000).toFixed(1)} s, INP ${TH.inp} ms, CLS ${TH.cls.toFixed(2)}.`
+    + `${(c.templates_missing || []).length ? ' No page of these templates was found in the crawl: ' + e2(c.templates_missing.join(', ')) + '.' : ''}`
+    + ` These figures carry a low weight in the health score; lab measurements (Lighthouse / PageSpeed) are shown separately where this report has them.</p>`;
+  return h;
+};
+// ---- why the first fix is first (G26, 2026-10-12) ----
+const prioNote = (a) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return a.priority_first ? `<p class="small"><b>Ordered by likely impact.</b> ${e2(a.priority_first)}</p>` : '';
+};
+"""
+_FIX_LI = "top.map(f => `<li><b>${esc(f.title)}</b>${f.evidence ? ' <span class=\"small\">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}</li>`)"
+_FIX_LI_NEW = "top.map(f => `<li><b>${esc(f.title)}</b> <span class=\"badge\" style=\"background:${SEV_COLOR[f.severity]}\">${esc(f.severity)}</span>${f.evidence ? ' <span class=\"small\">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}${f.impact_basis ? '<br><span class=\"small\">Why here: ' + esc(f.impact_basis) + ' · impact score ' + esc(f.impact) + '</span>' : ''}</li>`)"
+for _rn41 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn41, "const findings = a.findings || [];", CWV_SECTION_JS + "const findings = a.findings || [];")
+    patch(_rn41, "'<h3>Fix These First</h3><ol>'", "'<h3>Fix These First</h3>' + prioNote(a) + '<ol>'")
+    patch(_rn41, _FIX_LI, _FIX_LI_NEW)
+    patch(_rn41, "    search_console: a.search_console || null,", "    search_console: a.search_console || null,\n    crux: a.crux || null,\n    priority_method: a.priority_method || '',\n    priority_first: a.priority_first || '',")
+# where each report shows the table and the methodology line
+patch('Build Audit Report', "html += `<h3>Key Measurements</h3><table class=\"kv\">` + msRows.map(r => `<tr><td class=\"k\">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('') + `</table>`;",
+      "html += `<h3>Key Measurements</h3><table class=\"kv\">` + msRows.map(r => `<tr><td class=\"k\">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('') + `</table>`;\nhtml += cwvSection(a);")
+patch('Build Audit Report', "html += `<h2>7. Methodology</h2>\n<p>${esc(a.scoring_method)}</p>", "html += `<h2>7. Methodology</h2>\n<p>${esc(a.scoring_method)}</p>\n${a.priority_method ? '<p><b>How the fix list is ordered:</b> ' + esc(a.priority_method) + '</p>' : ''}")
+patch('Build Full Report', "html += '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));", "html += cwvSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));")
+patch('Build Full Report', "html += `<h2 class=\"pb\">16. Methodology & Data Sources</h2><p>${esc(a.scoring_method)}</p>", "html += `<h2 class=\"pb\">16. Methodology & Data Sources</h2><p>${esc(a.scoring_method)}</p>\n${a.priority_method ? '<p><b>How the fix list is ordered:</b> ' + esc(a.priority_method) + '</p>' : ''}")
+# the API callback carries both (the app shows the speed figures and orders its own lists by the same weight)
+patch('Build Audit Response', "top_issues: d.top_issues,", "top_issues: d.top_issues, crux: d.crux || null, priority_method: d.priority_method || '', priority_first: d.priority_first || '',")
+
+# ---------- D. D25b: a second alert channel, and a row so a failure is never lost ----------
+_eh41 = os.path.join(HERE0, 'workflows', 'SEO_Agent_Error_Handler.json')
+_ehw41 = json.load(open(_eh41, encoding='utf-8')); _ehl41 = _ehw41 if isinstance(_ehw41, list) else [_ehw41]
+_ehwf = _ehl41[0]
+_ehn = {n['name']: n for n in _ehwf['nodes']}
+_ehc = _ehwf.setdefault('connections', {})
+_ehnid = lambda nm: str(uuid.uuid5(NS, 'errorhandler:' + nm))
+def _eh_add(name, ntype, version, params, position, extra=None):
+    n = _ehn.get(name) or {}
+    n.update({'parameters': params, 'id': n.get('id') or _ehnid(name), 'name': name, 'type': ntype, 'typeVersion': version, 'position': position})
+    for k in ('onError', 'retryOnFail', 'maxTries', 'waitBetweenTries', 'alwaysOutputData', 'executeOnce', 'credentials'):
+        n.pop(k, None)
+    if extra: n.update(extra)
+    _ehn[name] = n; return n
+def _eh_link(src, dst, out=0):
+    outs = _ehc.setdefault(src, {}).setdefault('main', [])
+    while len(outs) <= out: outs.append([])
+    if not any(t['node'] == dst for t in outs[out]): outs[out].append({'node': dst, 'type': 'main', 'index': 0})
+_eh_src = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_URL).replace('__OPS_EMAIL__', OPS_EMAIL)
+# the alert payload gains the execution mode (the webhook body and the row carry it)
+_fa41 = _ehn['Format Alert']['parameters']['jsCode']
+if 'mode,' not in _fa41:
+    assert _fa41.count("execution_url: url, message: msg } }];") == 1, 'Format Alert: return shape moved'
+    _ehn['Format Alert']['parameters']['jsCode'] = _fa41.replace("execution_url: url, message: msg } }];", "execution_url: url, message: msg, mode, when } }];")
+_EHY = 0
+_eh_add('Ensure Ops Alerts Table', DT_TYPE, DT_VERSION, dt_create_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS), [480, _EHY], {'onError': 'continueRegularOutput'})
+_eh_add('Load Ops Alerts', DT_TYPE, DT_VERSION, dt_get_all_params(OPS_ALERTS_TABLE), [700, _EHY], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+_eh_add('Alert Record', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src('code/Alert_Record.js')}, [920, _EHY])
+_eh_add('Save Ops Alert', DT_TYPE, DT_VERSION, dt_upsert_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, 'alert_key'), [1140, _EHY], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+_eh_add('Alert Channels', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src('code/Alert_Channels.js')}, [1360, _EHY])
+_ehif41 = {'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3},
+                  'conditions': [{'id': _ehnid('Send Webhook?:cond'), 'leftValue': '={{ $json.send_webhook }}', 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'looseTypeValidation': True, 'options': {}}
+_eh_add('Send Webhook?', 'n8n-nodes-base.if', 2.3, _ehif41, [1580, _EHY - 140])
+_eh_add('Post Alert Webhook', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': '={{ $json.webhook_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.webhook_body) }}',
+    'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}}, [1800, _EHY - 140], dict(onError='continueRegularOutput', **_rl41.RETRY))
+_eh_add('Send Email?', 'n8n-nodes-base.if', 2.3, {'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3},
+        'conditions': [{'id': _ehnid('Send Email?:cond'), 'leftValue': '={{ $json.send_email }}', 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'looseTypeValidation': True, 'options': {}}, [1580, _EHY + 140])
+# the e-mail keeps its own retries, reads the alert from Format Alert (its input is the channel decision now) and can no longer fail the run
+_eho = _ehn['Email Ops']
+_eho['parameters'].update({'fromEmail': SENDER, 'toEmail': OPS_EMAIL, 'subject': "={{ $('Format Alert').first().json.subject }}", 'html': "={{ $('Format Alert').first().json.html }}"})
+_eho.update({'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000, 'onError': 'continueRegularOutput'})
+_eho['position'] = [1800, _EHY + 140]
+_ehc.pop('Format Alert', None)
+for _a, _b in [('Format Alert', 'Ensure Ops Alerts Table'), ('Ensure Ops Alerts Table', 'Load Ops Alerts'), ('Load Ops Alerts', 'Alert Record'),
+               ('Alert Record', 'Save Ops Alert'), ('Save Ops Alert', 'Alert Channels'), ('Alert Channels', 'Send Webhook?'), ('Alert Channels', 'Send Email?'),
+               ('Send Webhook?', 'Post Alert Webhook'), ('Send Email?', 'Email Ops')]:
+    _eh_link(_a, _b)
+_ehn['Note']['parameters']['content'] = """## SEO Agent — Error Handler
+Attach this as **Settings → Error workflow** on every SEO Agent workflow (the builders set it).
+
+Three channels, in this order (D25b, 2026-10-12):
+1. **seo_ops_alerts** (Data Table) — every alert is recorded *first*, with the repeat count, so a failure is never lost even when both senders are down. This is the record ops reads after an outage.
+2. **Post Alert Webhook** — a POST to `SEO_ALERT_WEBHOOK_URL` from `n8n/.env` (Slack / Teams incoming webhook, or any endpoint). No SMTP involved: this is the channel that still works when the mail server refuses the connection, as it did on 2026-10-10 and 2026-10-12. Unset = skipped.
+3. **Email Ops** — the ops address (`SEO_OPS_EMAIL`), 3 tries 5 s apart, and it can no longer fail the run.
+
+The same failure within 30 minutes is counted on its row and not re-sent. The web app's failure watcher (`app/server/src/services/engineFailures.ts`) reads failed executions from n8n independently of all three.
+The payload has the execution id, a link to open it, the failed node and the error message. It does **not** contain the customer's form data (n8n error triggers only carry execution metadata)."""
+_ehwf['nodes'] = list(_ehn.values())
+_ehnames41 = set(_ehn)
+for _s41, _o41 in _ehc.items():
+    assert _s41 in _ehnames41, 'error handler: connection source missing: ' + _s41
+    for _lst41 in _o41.get('main', []):
+        for _t41 in _lst41: assert _t41['node'] in _ehnames41, 'error handler: connection target missing: ' + _t41['node']
+_rl41.check(_ehwf, _ehwf.get('name') or 'SEO Agent — Error Handler')
+_ul41.check(_ehwf, _ehwf.get('name') or 'SEO Agent — Error Handler')
+json.dump(_ehw41, open(_eh41, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+os.makedirs(OUT_CODE, exist_ok=True)
+for _n41 in _ehwf['nodes']:
+    if _n41['type'] == 'n8n-nodes-base.code':
+        open(os.path.join(OUT_CODE, 'EH__' + re.sub(r'[^A-Za-z0-9_.-]+', '_', _n41['name']) + '.js'), 'w').write(_n41['parameters']['jsCode'])
+# the same two nodes with a webhook URL configured: the harness has no n8n/.env, so this copy plays the channel a filled .env gives (S48)
+for _nm41, _fp41 in (('Alert Record', 'code/Alert_Record.js'), ('Alert Channels', 'code/Alert_Channels.js')):
+    open(os.path.join(OUT_CODE, 'EH__' + _nm41.replace(' ', '_') + '_Webhook.js'), 'w').write(
+        rd(_fp41).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', 'https://hooks.example.test/seo-agent-alerts').replace('__OPS_EMAIL__', OPS_EMAIL))
+
+# ---------- E. D25c: a test check-in never satisfies the month ----------
+setcode('Parse Check-in', code('Parse Check-in').replace('/*__CHECKIN_TEST__*/', CHECKIN_TEST_SRC))
+assert 'const CK = (() => {' in code('Parse Check-in'), 'Parse Check-in: the check-in test kit was not inlined'
+patch('Normalize Input', "const checkin_notes = String(pick(p2, 'notes') || p2.notes || '').trim().slice(0, 1000);",
+      "const checkin_notes = String(pick(p2, 'notes') || p2.notes || '').trim().slice(0, 1000);\nconst checkin_is_test = yes(pick(p2, 'test submission') || p2.checkin_is_test || p2.is_test);   // D25c: a test check-in is recorded but never counts as the month's answer")
+patch('Normalize Input', "    checkin_notes,\n", "    checkin_notes,\n    checkin_is_test,\n")
+nodes['Page Check-in']['parameters']['formFields']['values'].insert(5, {'fieldLabel': 'Is this a test submission?', 'fieldType': 'dropdown', 'fieldOptions': {'values': [{'option': 'No'}, {'option': 'Yes — do not count it as this month’s check-in'}]}})
+_ca41 = nodes['Checkin Alert?']['parameters']['conditions']['conditions'][0]
+assert _ca41['leftValue'].count('manual_action') == 1, 'Checkin Alert?: condition moved'
+_ca41['leftValue'] = "={{ !$('Parse Check-in').first().json.checkin_is_test && !!(($('Parse Check-in').first().json.checkin_row || {}).manual_action || ($('Parse Check-in').first().json.checkin_row || {}).security_issue) }}"
+
+# what the harness checks (S48): the channels, their order and the fact that the webhook does not hang off the e-mail node
+json.dump({'table': OPS_ALERTS_TABLE, 'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_configured': bool(ALERT_WEBHOOK_URL),
+           'nodes': [_n41['name'] for _n41 in _ehwf['nodes'] if _n41['type'] != 'n8n-nodes-base.stickyNote'],
+           'connections': {_s41: [[_t41['node'] for _t41 in _l41] for _l41 in _o41.get('main', [])] for _s41, _o41 in _ehc.items()},
+           'email': {'name': 'Email Ops', 'onError': _eho.get('onError'), 'retryOnFail': bool(_eho.get('retryOnFail')), 'maxTries': _eho.get('maxTries'),
+                     'reads_alert_from': "$('Format Alert')" in json.dumps(_eho['parameters'])},
+           'webhook': {'name': 'Post Alert Webhook', 'onError': _ehn['Post Alert Webhook'].get('onError'), 'retryOnFail': bool(_ehn['Post Alert Webhook'].get('retryOnFail')),
+                       'maxTries': _ehn['Post Alert Webhook'].get('maxTries'), 'uses_smtp': False},
+           'checkin_alert_gate': nodes['Checkin Alert?']['parameters']['conditions']['conditions'][0]['leftValue']},
+          open(os.path.join(HERE0, 'harness', 'ops_alert_wiring.json'), 'w'), indent=1, sort_keys=True)
+_ul41.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+sticky("""### Core Web Vitals per template, and the order of the fix list (G7 / G26, 2026-10-12)
+**CrUX Targets → Fetch CrUX → Analyze CrUX** (between the entity check and the scoring, both audit types): the Chrome UX Report's p75 for the homepage, a service page and a blog post, on phone and desktop, with the whole-site (origin) figures as the fallback for a page with too little traffic. Free, on the PageSpeed key — but the **Chrome UX Report API must be enabled** in that Google project; when it is not, the audit reports "not available" with that one step and never fails. Low weight in the score (unscored where the full report's Lighthouse run already scores speed), and both reports name the source and the 28-day period.
+**Impact priority** (`v5/code/_impact.js`): severity × the share of pages affected × the clicks and impressions those pages get in Search Console × their place in the site. Index blockers first, cosmetic items never first, notes about missing data last; the severity labels are unchanged, the weight is stored on every `seo_audit_findings` row, and both reports say why the first item is first.""", CX - 60, CY - 360, 1040, 300, 4)
+log('Core Web Vitals from the Chrome UX Report per template (2026-10-12, FIX_PLAN G7): CrUX Targets -> Fetch CrUX -> Analyze CrUX read the p75 of LCP / INP / CLS for the homepage, a service page and a blog post on phone and desktop in both audit types, fall back to the whole-site (origin) figures, degrade to "not available" with the enabling step when the CrUX API is off in the PageSpeed key\'s project, carry a low weight (unscored where the Lighthouse run already scores speed) and name their source and 28-day period in both reports')
+log('Impact-weighted priority for every audit finding (2026-10-12, FIX_PLAN G26): severity x pages affected x the Search Console clicks and impressions of those pages x their place in the site (v5/code/_impact.js), with index blockers first, cosmetic items never first and missing-data notes last; severities stay visible, both reports explain why the first fix is first, and the weight plus its one-line basis are stored on every seo_audit_findings row for the app')
+log('A second ops alert channel and a durable record (2026-10-12, FIX_PLAN D25b): the Error Handler records every alert in seo_ops_alerts before sending, then posts to SEO_ALERT_WEBHOOK_URL (Slack / Teams / any POST endpoint, no SMTP) as well as e-mailing the ops address; repeats of the same failure within 30 minutes are counted but not re-sent, an unset channel is skipped and no channel can fail the run')
+log('A test check-in can never pass as the month\'s Search Console check-in (2026-10-12, FIX_PLAN D25c): the form asks, the API takes is_test, a test caller or a note that marks the row counts too (v5/code/_checkin_test.js); the row is stored with is_test, the Site Tracker leaves it out of the monthly check so the reminder keeps asking, and a test "yes" raises no critical alert')
+
+# =============================================================================
 # 37. ONE RETRY RULE FOR EVERY EXTERNAL HTTP NODE (2026-10-12, system review FIX_PLAN G1, with D19 and D23 as its live cases).
 #     Retries differed by builder and by node: build_monitors.py's `get_http` had none (the Ahrefs DR lookup died on a single
 #     EAI_AGAIN and was never retried - D23), `HTTP_X` allowed 2 tries 3 s apart, and the nodes inherited from the v3 export

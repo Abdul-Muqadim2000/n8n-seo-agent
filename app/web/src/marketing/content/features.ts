@@ -302,20 +302,22 @@ export const features: Feature[] = [
     shortName: 'Technical audits',
     tagline: 'Crawl the site, read Search Console and get a fix pack, not just a list of problems.',
     summary:
-      'Ascentra crawls up to 1,000 pages, JavaScript included, and combines what it finds with Search Console index coverage and sitemaps, page speed and a brand and entity check. Every audit ends with a fix pack your developers can apply, and monthly audits show what changed since the last one.',
+      'Ascentra crawls up to 1,000 pages, JavaScript included, and combines what it finds with Search Console index coverage and sitemaps, the Core Web Vitals your real visitors measured and a brand and entity check. The fix list is ordered by the traffic each issue puts at risk, every audit ends with a fix pack your developers can apply, and monthly audits show what changed since the last one.',
     icon: ScanSearch,
     benefits: [
       'Crawls of 200, 500 or 1,000 pages, with JavaScript rendering',
       'Search Console index coverage, submitted sitemaps and site structure',
-      'Page speed and a brand and entity check',
+      'Core Web Vitals from real Chrome visitors, per template, on phone and desktop',
+      'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
+      'A brand and entity check',
       'A fix pack: robots.txt, llms.txt, redirects, schema and an internal-links CSV',
       'Monthly scheduled audits with what changed since the last audit',
       'Skipped automatically when nothing on the site has changed',
     ],
     steps: [
       { title: 'Crawl', body: 'Up to 1,000 pages, rendered with JavaScript where the content needs it.' },
-      { title: 'Combine', body: 'Crawl findings meet Search Console coverage, sitemaps, page speed and entity data.' },
-      { title: 'Prioritise', body: 'Issues are grouped by impact, with what changed since the last audit.' },
+      { title: 'Combine', body: 'Crawl findings meet Search Console coverage, sitemaps, the speed your real visitors measured and entity data.' },
+      { title: 'Prioritise', body: 'Issues are ranked by the traffic they put at risk — index blockers first, cosmetics never — and each one says why it ranks there.' },
       { title: 'Fix', body: 'Download the fix pack and hand it to your developers.' },
     ],
     facts: [
@@ -331,13 +333,21 @@ export const features: Feature[] = [
       { q: 'What is in the fix pack?', a: 'A robots.txt, an llms.txt, a redirect list, schema snippets and an internal-links CSV, zipped together.' },
       { q: 'Does it need access to my server?', a: 'No. Ascentra crawls the public site and reads Search Console through a service account you add as a user.' },
       { q: 'Does it handle JavaScript sites?', a: 'Yes. Pages can be rendered with JavaScript, so content that loads in the browser is audited too.' },
+      {
+        q: 'Where do the speed figures come from?',
+        a: 'From the Chrome User Experience Report: what real Chrome visitors measured over the last 28 days, at the 75th percentile, for your home page, a service page and a blog post on phone and desktop. A page with too few visits to report on its own shows the whole-site figures, marked as such. Speed carries a deliberately low weight in the health score.',
+      },
+      {
+        q: 'How is the fix list ordered?',
+        a: 'By likely impact: the severity of the issue, the share of pages it affects, and the clicks and impressions those pages get in Search Console. Issues that stop Google indexing a page come first, cosmetic items are never at the top, and every item says why it sits where it does.',
+      },
     ],
     related: ['site-tracking', 'content', 'reports'],
     image: 'analyticsMonitor',
     visual: 'audit',
     story: {
       title: 'Findings your developers can apply the same day.',
-      body: 'An audit only helps once it is fixed. Next to the prioritised findings, every audit delivers the files developers need, and the next audit shows what changed — so progress is visible, not assumed.',
+      body: 'An audit only helps once it is fixed, and only if you fix the right thing first. Issues are ranked by the traffic they put at risk, every audit delivers the files developers need, and the next audit shows what changed — so progress is visible, not assumed.',
     },
   },
   {

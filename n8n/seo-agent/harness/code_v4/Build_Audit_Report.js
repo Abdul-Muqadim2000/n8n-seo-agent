@@ -80,6 +80,40 @@ const v45Section = (a, num) => {
   h += `<h3>Fix pack (attached)</h3>` + ((FP.files || []).length ? `<table class="ct"><tr><th>File</th><th>What to do with it</th></tr>` + FP.files.map(f => `<tr><td>${e2(f.name)}</td><td>${e2(f.purpose)}</td></tr>`).join('') + `</table>` : `<p>No files.</p>`);
   return h;
 };
+// ---- Core Web Vitals per template, from real Chrome users (G7, 2026-10-12) ----
+const cwvSection = (a) => {
+  const c = a.crux || null;
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  let h = `<h3>Core Web Vitals per template (real Chrome users)</h3>`;
+  if (!c) return h + `<p>Not measured per template in this run.</p>`;
+  const TH = c.thresholds || { lcp: 2500, inp: 200, cls: 0.1 };
+  if (!c.available) return h + `<p><b>Not available:</b> ${e2(c.not_available)}.${c.not_available_fix ? ' ' + e2(c.not_available_fix) : ''}</p>`
+    + `<p class="small">Source: Chrome UX Report (field data). Limits: LCP ${(TH.lcp / 1000).toFixed(1)} s, INP ${TH.inp} ms, CLS ${TH.cls.toFixed(2)} at the 75th percentile.</p>`;
+  const cell = (v, limit, fmt) => v == null ? '<td>—</td>' : `<td${v > limit ? ' style="color:#b91c1c;font-weight:bold"' : ''}>${fmt(v)}</td>`;
+  const secs = (ms) => (Math.round(ms / 100) / 10).toFixed(1) + ' s';
+  const rows = [];
+  for (const t of (c.templates || [])) for (const ff of ['phone', 'desktop']) {
+    const d = t.devices ? t.devices[ff] : null;
+    if (!d) continue;
+    rows.push(d.available
+      ? `<tr><td>${e2(t.label)}</td><td>${e2(p2(t.url))}</td><td>${ff}</td>` + cell(d.lcp_ms, TH.lcp, secs) + cell(d.inp_ms, TH.inp, (v) => Math.round(v) + ' ms') + cell(d.cls, TH.cls, (v) => Number(v).toFixed(2))
+        + `<td>${d.verdict ? (d.verdict.pass ? '<span class="ok">passes</span>' : '<span class="bad">fails ' + d.verdict.failed.join(', ').toUpperCase() + '</span>') : '—'}</td>`
+        + `<td class="small">${d.level === 'origin' ? 'whole site (this page has too little traffic)' : 'this page'}${d.period && d.period.last ? ', ' + e2(d.period.first) + ' to ' + e2(d.period.last) : ''}</td></tr>`
+      : `<tr><td>${e2(t.label)}</td><td>${e2(p2(t.url))}</td><td>${ff}</td><td colspan="5" class="small">${e2(d.not_available || 'no field data')}</td></tr>`);
+  }
+  h += rows.length ? `<table class="ct"><tr><th>Template</th><th>Page</th><th>Device</th><th>LCP</th><th>INP</th><th>CLS</th><th>Verdict</th><th>Source</th></tr>` + rows.join('') + `</table>` : `<p>No template could be measured.</p>`;
+  h += `<p class="small">Source: <b>Chrome UX Report field data</b> — what real Chrome users measured, at the 75th percentile of the 28 days`
+    + `${c.collection_period && c.collection_period.last ? ' ending ' + e2(c.collection_period.last) : ''}. Google's limits: LCP ${(TH.lcp / 1000).toFixed(1)} s, INP ${TH.inp} ms, CLS ${TH.cls.toFixed(2)}.`
+    + `${(c.templates_missing || []).length ? ' No page of these templates was found in the crawl: ' + e2(c.templates_missing.join(', ')) + '.' : ''}`
+    + ` These figures carry a low weight in the health score; lab measurements (Lighthouse / PageSpeed) are shown separately where this report has them.</p>`;
+  return h;
+};
+// ---- why the first fix is first (G26, 2026-10-12) ----
+const prioNote = (a) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return a.priority_first ? `<p class="small"><b>Ordered by likely impact.</b> ${e2(a.priority_first)}</p>` : '';
+};
 const findings = a.findings || [];
 const top = findings.filter(f => f.severity === 'Critical' || f.severity === 'High').slice(0, 6);
 
@@ -107,7 +141,7 @@ html += `<h2 class="pb">1. Executive Summary</h2>
 <table class="ct"><tr>${SEV.map(s => `<th style="background:${SEV_COLOR[s]}">${s}</th>`).join('')}</tr>
 <tr>${SEV.map(s => `<td style="text-align:center;font-size:14pt"><b>${counts[s] || 0}</b></td>`).join('')}</tr></table>
 ${a.score_cap_reason ? `<div class="note"><b>Score limit applied:</b> ${esc(a.score_cap_reason)}. Calculated score before the limit: ${esc(a.raw_score)}/100.</div>` : ''}
-${top.length ? '<h3>Fix These First</h3><ol>' + top.map(f => `<li><b>${esc(f.title)}</b>${f.evidence ? ' <span class="small">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}</li>`).join('') + '</ol>' : '<p>No critical or high-priority issues found.</p>'}`;
+${top.length ? '<h3>Fix These First</h3>' + prioNote(a) + '<ol>' + top.map(f => `<li><b>${esc(f.title)}</b> <span class="badge" style="background:${SEV_COLOR[f.severity]}">${esc(f.severity)}</span>${f.evidence ? ' <span class="small">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}${f.impact_basis ? '<br><span class="small">Why here: ' + esc(f.impact_basis) + ' · impact score ' + esc(f.impact) + '</span>' : ''}</li>`).join('') + '</ol>' : '<p>No critical or high-priority issues found.</p>'}`;
 
 // ---------- Key measurements ----------
 const ms = a.measurements || {};
@@ -120,6 +154,7 @@ const msRows = [
   ['Server', a.server || ms.server || 'N/A']
 ];
 html += `<h3>Key Measurements</h3><table class="kv">` + msRows.map(r => `<tr><td class="k">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('') + `</table>`;
+html += cwvSection(a);
 
 // ---------- 2. Category scores ----------
 html += `<h2>2. Scores by Category</h2><table class="ct"><tr><th>Category</th><th style="width:60px">Score</th><th style="width:60px">Weight</th><th style="width:45%"></th></tr>` +
@@ -174,6 +209,7 @@ html += `<h2>6. Not Assessed in This Audit</h2>
 // ---------- 7. Methodology ----------
 html += `<h2>7. Methodology</h2>
 <p>${esc(a.scoring_method)}</p>
+${a.priority_method ? '<p><b>How the fix list is ordered:</b> ' + esc(a.priority_method) + '</p>' : ''}
 <table class="ct"><tr><th>Severity</th><th>Points deducted</th></tr>
 <tr><td>Critical</td><td>30</td></tr><tr><td>High</td><td>15</td></tr><tr><td>Medium</td><td>7</td></tr><tr><td>Low</td><td>3</td></tr><tr><td>Info</td><td>1</td></tr></table>
 <h3>Data Sources</h3>
@@ -236,6 +272,9 @@ return [{
     via_webhook: !!d.via_webhook,
     health_score: a.health_score,
     search_console: a.search_console || null,
+    crux: a.crux || null,
+    priority_method: a.priority_method || '',
+    priority_first: a.priority_first || '',
     site_structure: a.site_structure || null,
     grade: a.grade,
     issue_counts: counts,

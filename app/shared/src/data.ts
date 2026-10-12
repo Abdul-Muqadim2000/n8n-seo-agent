@@ -313,6 +313,9 @@ export interface Finding {
   affectedCount: number;
   previousCount: number | null;
   status: FindingStatus;
+  /** G26: the audit's impact weight and why it ranks where it does (null on audits written before 2026-10-12). */
+  impact: number | null;
+  impactBasis: string;
 }
 
 export interface TechnicalData {
