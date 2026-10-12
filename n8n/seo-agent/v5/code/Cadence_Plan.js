@@ -11,12 +11,15 @@
 //     content-log row with a published_url), or the main keyword's latest rank check is 1-30 (waiting_for_support lists ladders where that
 //     main page is all that is left to write).
 //   * won: the main keyword in the top 3 in each of the last 4 rank checks (failed checks skipped) -> no more pages (won_ladders).
-//   * pile-up guard: max_waiting or more pages written but not published (content log 'started', no published_url, last 120 days) -> nothing
-//     is written for the site (paused_reason 'pileup'); an on-demand run may bypass it only with force: true.
+//   * pile-up guard (v4.14, FIX_PLAN D5): max_waiting or more distinct keywords written but not published -> nothing is written for the
+//     site (paused_reason 'pileup'; waiting_keywords names them); an on-demand run may bypass it only with force: true. A keyword waits
+//     when a content-log row of the last 120 days has any status but published, or a ladder row is still 'writing' and its keyword has no
+//     published page (ladder pages reach the content log only from v4.14 on).
 //   * opportunity posts (striking / trend) only when opportunities is auto; when manual they are listed as suggestions.
 //   * Manual ladders are never written: each one's next eligible page is listed in awaiting_approval.
 // Sites without a pick but with something to say (paused, awaiting approval, suggestions, a main page waiting for support) get one report_only item (nothing_to_do: true) for the
 // Cadence Status note; dry_run only plans.
+/*__SITE_MODEL__*/
 const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4,
   max_active: 2, max_waiting: 3, waiting_days: 120, gate_head_position: 30, won_checks: 4, won_position: 3, suggestions: 5 };
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
@@ -27,6 +30,9 @@ const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').tr
 const lc = (v) => String(v == null ? '' : v).toLowerCase().trim();
 const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), cad = rowsOf('Load Cadence').filter(r => r.site_id), ladders = rowsOf('Load Ladders').filter(r => r.ladder_id && r.keyword), qh = rowsOf('Load Query History'), trends = rowsOf('Load Trends'), logs = rowsOf('Load Content Log').filter(r => r.keyword);
 const settings = rowsOf('Load Ladder Settings').filter(r => r.ladder_id), headRanks = rowsOf('Load Main Keyword Ranks').filter(r => r.ladder_id && r.keyword);
+// 2026-10-12 (FIX_PLAN D11): the site's page inventory (seo_pages, filled weekly by the Site Tracker). A candidate whose search a live page
+// already answers is not written as a new post: a ladder page becomes a refresh of that page, an opportunity post is dropped and named.
+const pageRows = rowsOf('Load Pages (Cadence)').filter(r => r.site_id && r.url);
 // v4.12 (AI_GROWTH_SPEC.md): the AI targets the AI Growth loop queued (questions AI answers without the business) and each site's AI pages a month
 const aiTargets = rowsOf('Load AI Targets (Cadence)').filter(r => r.target_id && r.status === 'queued'), monitors = rowsOf('Load Monitors (Cadence)');
 const aiQuotaOf = (siteId) => { const m = monitors.find(x => x.site_id === siteId) || {}; const on = (v) => !(v === false || /^(false|0|no|off)$/i.test(String(v == null ? '' : v))); if (!on(m.ai_visibility) || !on(m.ai_growth)) return 0; return m.ai_pages_month === '' || m.ai_pages_month == null || !Number.isFinite(Number(m.ai_pages_month)) ? 2 : Math.min(8, Math.max(0, Math.round(Number(m.ai_pages_month)))); };
@@ -109,9 +115,30 @@ for (const s of list) {
   let suggestions = [];
   if (cfg.opportunities === 'auto') cands.push(...opps);
   else { const sk = new Set(); suggestions = opps.filter(o => { const k = norm(o.keyword); if (!k || sk.has(k)) return false; sk.add(k); return true; }).slice(0, CONFIG.suggestions).map(o => ({ keyword: o.keyword, source: o.source, page_type: o.page_type, existing_page_url: o.existing_page_url || '', why: o.why })); }
-  const seen = new Set(); const uniq = cands.filter(x => { const k = norm(x.keyword); if (!k || seen.has(k)) return false; seen.add(k); return true; });
-  // pile-up guard: pages written but not published (each keyword once)
-  const waitingKw = new Set(slog.filter(l => l.status === 'started' && !l.published_url && (now - new Date(l.started_at || 0)) < CONFIG.waiting_days * 864e5).map(l => norm(l.keyword)));
+  // D11: one search, one page — a candidate a live page of the site already answers is written as a refresh of that page (ladder) or left out
+  const invRows = pageRows.filter(r => r.site_id === s.site_id);
+  const invModel = invRows.length ? SM.from({ site_id: s.site_id, domain: s.domain }, { pages: invRows }) : null;
+  const ukeyP = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const covered = [];
+  const coverOf = (x) => { if (!invModel || x.existing_page_url) return null; const m = SM.matchPage(invModel, x.keyword); return (m && ukeyP(m.url) !== ukeyP(x.existing_page_url)) ? m : null; };
+  const seen = new Set(); const uniq = cands.filter(x => { const k = norm(x.keyword); if (!k || seen.has(k)) return false; seen.add(k);
+    const c = coverOf(x); if (!c) return true;
+    covered.push({ keyword: x.keyword, source: x.source, url: c.url, matched_by: c.matched_by });
+    if (x.source !== 'ladder') return false;   // an opportunity post would be a second page for the same search
+    x.existing_page_url = c.url; x.covered_by = c.url; x.why += ' \u2014 ' + c.url + ' already answers this search, so it is refreshed, not written again';
+    return true; });
+  // pile-up guard (v4.14, FIX_PLAN D5): every page written and not published counts, each keyword once — the content log (any status
+  // but published, written in the last 120 days) AND the ladder rows still 'writing' whose keyword has no published page. Ladder pages
+  // were logged only from v4.14 on, so the ladder rows are what the guard sees for everything written before it.
+  const freshW = (t) => { const x = Date.parse(String(t || '')); return Number.isFinite(x) && (now - x) < CONFIG.waiting_days * 864e5; };
+  const waitingMap = new Map();   // keyword key -> { keyword, written_at, source }
+  for (const l of slog) { if (l.status === 'published' || !freshW(l.started_at)) continue; const k = norm(l.keyword); if (!k || waitingMap.has(k)) continue; waitingMap.set(k, { keyword: l.keyword, written_at: String(l.started_at || ''), source: String(l.source || '') }); }
+  for (const l of lrows) { if (l.status !== 'writing') continue; const k = norm(l.keyword); if (!k || waitingMap.has(k) || publishedKw.has(k)) continue;
+    const lg = slog.filter(r => norm(r.keyword) === k).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;
+    const at = String((lg && lg.started_at) || l.start_date || ''); if (!freshW(at)) continue;
+    waitingMap.set(k, { keyword: l.keyword, written_at: at, source: 'ladder' }); }
+  const waiting = [...waitingMap.values()].sort((a, b) => String(a.written_at).localeCompare(String(b.written_at)));
+  const waitingKw = new Set(waitingMap.keys());
   const pileup = waitingKw.size >= cfg.max_waiting;
   const paused_reason = pileup && !force ? 'pileup' : '';
   const picks = paused_reason ? [] : uniq.slice(0, pages);
@@ -143,9 +170,9 @@ for (const s of list) {
   if (aiPick) picks.push(aiPick);
   const fromUniq = paused_reason ? 0 : Math.min(pages, uniq.length);   // the AI page (v4.12) is not one of uniq
   const upcoming = uniq.slice(fromUniq, fromUniq + CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));
-  const pending = slog.filter(l => l.status === 'started' && !l.published_url).map(l => ({ keyword: l.keyword, started_at: l.started_at, days: Math.round((now - new Date(l.started_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);
+  const pending = waiting.map(w => ({ keyword: w.keyword, started_at: w.written_at, days: Math.round((now - new Date(w.written_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);   // D5: ladder pages are in `waiting` too
   const awaiting_approval = manualL.filter(x => x.eligible.length).map(x => { const l = x.eligible[0]; return { ladder_id: x.id, head: x.head, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '' }; });
-  const facts = { paused_reason, waiting_publish: waitingKw.size, max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,
+  const facts = { covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size, waiting_keywords: waiting.map(w => w.keyword).slice(0, 20), max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,
     ai_pages: { per_month: aiQuota, used_this_month: aiUsed, this_week: !!aiPick, next: aiCand ? { keyword: aiCand.keyword, source: aiCand.source, target_id: aiCand.target_id, why: aiCand.why } : null, queued: aiQueue.length },
     queued_ladders: queued.map(x => ({ ladder_id: x.id, head: x.head, priority: Number.isFinite(x.priority) ? x.priority : null, reason: 'max_active' })),
     won_ladders: info.filter(x => x.won || x.status === 'won').map(x => ({ ladder_id: x.id, head: x.head, position: x.head_position, checks: x.won_checks })),
@@ -156,7 +183,7 @@ for (const s of list) {
         ...(p.ai_target ? { ai_target: p.ai_target } : {}),
         ...(p.source === 'ladder' ? { ladder_id: p.ladder_id, ladder_rung: p.rung, ladder_head: p.head, ladder_page_no: p.page_no, ladder_links: (p.links || []).map(l => ({ url: l.url, path: String(l.url).replace(/^https?:\/\/[^\/]+/i, '') || '/', role: l.role, keyword: l.keyword, planned: true })) } : {}) } } }); });
   if (!picks.length && (paused_reason || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length)) {
-    const reason = paused_reason ? waitingKw.size + ' pages written but not published (limit ' + cfg.max_waiting + '): publish them to continue' : 'nothing to write automatically this week';
+    const reason = paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"').join(', ') + ' — publish them to continue' : 'nothing to write automatically this week';
     out.push({ json: { nothing_to_do: true, report_only: true, reason, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', request_id: 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_0',
       pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, ...facts } });
   }

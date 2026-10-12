@@ -109,7 +109,7 @@ export async function linkBuilderRun(body: Record<string, unknown>): Promise<{ o
   return { ok: res.ok && json.ok !== false, requestId: json.request_id ?? null, error: json.error ?? (res.ok ? null : `n8n answered ${res.status}`) };
 }
 
-export interface ReplyReading { ok: boolean; class: string; summary: string; return_date: string; referral_email: string; referral_name: string; needs_you: boolean; suggested_reply: string; link_found: boolean; link: { url: string; rel: string; anchor: string } | null; model_error?: string; error?: string }
+export interface ReplyReading { ok: boolean; class: string; summary: string; return_date: string; referral_email: string; referral_name: string; needs_you: boolean; suggested_reply: string; /** D14: claims in the suggested answer the facts on file do not carry (already bracketed in the text) */ unverified?: string[]; link_found: boolean; link: { url: string; rel: string; anchor: string } | null; model_error?: string; error?: string }
 /** v4.13 Reply Reader (synchronous, Claude Haiku ≈ $0.001): what a reply means, a suggested answer, and our link checked on their page. */
 export async function replyRead(body: Record<string, unknown>): Promise<ReplyReading | null> {
   try {

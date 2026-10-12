@@ -13,6 +13,37 @@ const answerScore = (a) => !a.answered ? null : a.mentioned ? posWeight(Number(a
 // questions people ask more often weigh more, but no single question dominates (log scale; unknown volume = weight 1)
 const volWeight = (v) => 1 + Math.log10(1 + Math.max(0, Number(v) || 0)) / 2;
 const visibilityScore = (answers, volumeOf) => { let s = 0, w = 0; for (const a of answers) { const x = answerScore(a); if (x === null) continue; const wt = volWeight(volumeOf ? volumeOf(a) : 0); s += x * wt; w += wt; } return w ? Math.round(1000 * s / w) / 10 : 0; };
+// ---- D19 (2026-10-11 system review): what counts as a brand, and one page one URL ----
+// A brand must be a business, not a heading or a category: ChatGPT's own brand list gave the heading "Tax technology and e-invoicing
+// software" and it was counted as a competitor (exec 362 / 363). A name without a website counts only when it reads like one: at most
+// 4 words, every word starting with a capital or a digit (or an inner capital: eBay), no joining word (and / or / for / in / vs: a
+// phrase, not a name), no sentence punctuation, and not a plain category ("Software Solutions"). A name that maps to a domain (an
+// alias learned by the Answer Analyst, a configured competitor, a link in the answer) always counts, whatever its shape.
+const BRAND_CATEGORY = /^(software|solutions?|services?|providers?|vendors?|tools?|platforms?|systems?|companies|company|consultants?|consultancies|agencies|agency|partners?|suppliers?|products?|apps?|options?|alternatives?|experts?|specialists?|firms?|list|guide|guides|comparison|reviews?|pricing|features?|top|best)$/i;
+const BRAND_JOIN = /(^|\s)(and|or|for|with|in|on|of|the|a|an|to|at|by|vs|versus|&)(\s|$)/i;
+const brandish = (name) => {
+  const n = String(name || '').replace(/\s+/g, ' ').trim();
+  if (n.length < 3 || n.length > 40 || /[:;,|/\\?!]|\.{2}/.test(n) || BRAND_JOIN.test(n)) return false;
+  const w = n.split(' '); if (w.length > 4) return false;
+  const letters = (x) => x.replace(/[^A-Za-z]/g, '');
+  if (w.every(x => BRAND_CATEGORY.test(letters(x)))) return false;
+  return w.every(x => /^[A-Z0-9]/.test(x) || /^[a-z]+[A-Z]/.test(x));
+};
+// one page, one URL: the host without "www.", no fragment (ChatGPT links carry "#:~:text=" highlights) and no tracking parameters
+// (every ChatGPT link carries utm_source=chatgpt.com), so the bare host and the www host of the same page are counted once. The scheme
+// and the real query are kept: this is the page we may ask to be named on, not only a key.
+const CITE_TRACK = /^(utm_[a-z_]*|srsltid|gclid|gbraid|wbraid|dclid|fbclid|msclkid|yclid|twclid|igshid|mc_cid|mc_eid|ref|ref_src|referrer|_hsenc|_hsmi|hsa_[a-z]+|spm|at_[a-z_]+)$/i;
+const cleanCiteUrl = (u) => {
+  const s = String(u || '').trim();
+  const m = s.match(/^(https?):\/\/([^/?#]+)([^?#]*)(\?[^#]*)?/i);
+  if (!m) return s.replace(/#.*$/, '');
+  const host = m[2].toLowerCase().replace(/^www\./, '').replace(/:(?:80|443)$/, '');
+  const q = (m[4] || '').replace(/^\?/, '').split('&').filter(kv => kv && !CITE_TRACK.test(kv.split('=')[0])).join('&');
+  return m[1].toLowerCase() + '://' + host + (m[3] || '/') + (q ? '?' + q : '');
+};
+// a source chip sometimes shows only a fragment of the title ("E", "Best e" live on 2026-10-11, G22): too short to be a title, so it is
+// dropped and the page's own <title> is read later (AI Growth fetches the cited pages). A real title is never cut here.
+const citeTitle = (t) => { const s = String(t || '').replace(/\s+/g, ' ').trim(); return s.length >= 8 ? s.slice(0, 160) : ''; };
 // one business, one key: a brand name the engines write ("Azentio Software", "ClearTax") joins the website it belongs to — a learned name
 // (Answer Analyst) or a name matching the domain's label (cleartax.com, azentio.com, edicomgroup.com); other names stay names
 const labelOf = (d) => String(d).toLowerCase().replace(/^www\./, '').split('.')[0].replace(/-/g, '');
@@ -34,14 +65,18 @@ const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//
 const SENT = ['positive', 'neutral', 'negative'];
 const read = new Map();
 jobs.forEach((j, i) => { const o = outs[i] && !outs[i].error ? parse(outs[i].output) : null; if (!o || !Array.isArray(o.answers)) return;
-  for (const a of o.answers) { const id = j.ids[(Number(a && a.n) || 0) - 1]; if (id) read.set(j.site_id + '|' + id, a); } });
+  for (const a of o.answers) { const id = j.ids[(Number(a && a.n) || 0) - 1]; if (id) read.set(j.site_id + '|' + id, { ...a, facts_ok: j.facts_ok !== false }); } });   // G10: facts_ok says whether a wrong claim could be judged at all
 return rows.map(r => {
   const a = read.get(r.site_id + '|' + r.prompt_id + '|' + r.engine); const out = {};
   for (const k of COLS) out[k] = r[k] === undefined ? '' : r[k];
   if (a && r.answered) {
     const p = plans.find(x => x.site_id === r.site_id) || { brand_names: [r.domain], domain: r.domain };
     const ours = (b) => { const d = normD(b.domain); const nm = String(b.name || '').toLowerCase(); return (d && (d === p.domain || d.endsWith('.' + p.domain))) || p.brand_names.some(x => String(x).toLowerCase() === nm || (nm && nm.includes(String(x).toLowerCase()) && String(x).length >= 5)); };
-    const brands = (Array.isArray(a.brands) ? a.brands : []).filter(b => b && b.name).slice(0, 10);
+    // D19 (2026-10-11): a brand must map to a website or read like a business name. The analyst and ChatGPT's own brand list both
+    // return headings ("Tax technology and e-invoicing software" was counted as a competitor in exec 362 / 363) — a heading in the
+    // list also pushed the business one place down, so the gate runs before the position is read.
+    const brands = (Array.isArray(a.brands) ? a.brands : []).filter(b => b && b.name)
+      .filter(b => ours(b) || /\./.test(normD(b.domain)) || brandish(b.name)).slice(0, 10);
     const at = brands.findIndex(ours);
     if (at >= 0) { out.mentioned = true; out.rank = at + 1; }
     else if (r.mentioned && !r.cited && String(a.sentiment) === 'not_mentioned') { out.mentioned = false; out.rank = 0; }   // the brand word matched something else (e.g. a common word or another company)
@@ -49,7 +84,8 @@ return rows.map(r => {
     out.competitors = [...mergeBrands([...others, ...String(r.competitors || '').split(/,\s*/).filter(Boolean)].map((k, i) => [k, i]), p.aliases).keys()].slice(0, 12).join(', ');   // names folded into their websites
     out.brands = brands.map(b => String(b.name).trim()).join(', ');
     out.sentiment = out.mentioned && SENT.includes(String(a.sentiment)) ? String(a.sentiment) : '';
-    out.issues = (Array.isArray(a.wrong) ? a.wrong : []).filter(w => w && w.claim).map(w => String(w.claim).slice(0, 160) + (w.correct ? ' → ' + String(w.correct).slice(0, 120) : '')).join(' | ').slice(0, 600);
+    // G10: with no fact sheet on file nothing can contradict it — the run reports "not checked", so a claim the model volunteered anyway is dropped
+    out.issues = a.facts_ok === false ? '' : (Array.isArray(a.wrong) ? a.wrong : []).filter(w => w && w.claim).map(w => String(w.claim).slice(0, 160) + (w.correct ? ' → ' + String(w.correct).slice(0, 120) : '')).join(' | ').slice(0, 600);
   }
   return { json: out };
 });

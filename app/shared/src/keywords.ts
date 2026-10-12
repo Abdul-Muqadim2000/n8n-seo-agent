@@ -63,6 +63,61 @@ export function forYouLabel(difficulty: DifficultyForYou | null, plan: PlanChoic
   return [DIFFICULTY_LABEL[difficulty], PLAN_CHOICE_LABEL[plan] + (stretch ? ' (stretch)' : ''), months ? `${months} months` : ''].filter(Boolean).join(' · ');
 }
 
+// ---------- time to rank (FIX_PLAN G3, 2026-10-11; n8n's REACH_BASE_RATE / REACH_CHANCE in v5/code/_reach.js — keep both the same) ----------
+
+/** The 2025 Ahrefs study behind "months, not weeks": 1.74% of new pages reach Google's top 10 within a year, 40.8% of those within a month. */
+export const REACH_BASE_RATE = { year: 2025, source: 'Ahrefs', top10WithinYearPct: 1.74, ofThoseWithinMonthPct: 40.8, url: 'https://ahrefs.com/blog/how-long-does-it-take-to-rank/' } as const;
+
+export type ChanceBand = 'good' | 'fair' | 'low' | 'slim' | 'none';
+/** The estimated chance of reaching the top 10 within the plan's months: a band per plan type (stretch = a very hard keyword on a full ladder). */
+export interface PlanChance {
+  band: ChanceBand;
+  range: readonly [number, number];
+}
+/** Judgement calls relative to the base rate (a keyword within the website's reach is far from a random new page). UNCALIBRATED until the
+ *  system has measured its own ladders (G17): every label says so. The same values live in n8n's _reach.js. */
+export const PLAN_CHANCE: Record<PlanType | 'stretch' | 'none', PlanChance> = {
+  direct: { band: 'good', range: [50, 70] },
+  short: { band: 'fair', range: [30, 50] },
+  full: { band: 'low', range: [15, 30] },
+  stretch: { band: 'slim', range: [5, 15] },
+  none: { band: 'none', range: [0, 0] },
+};
+export const CHANCE_NOTE = 'an uncalibrated estimate until this system has measured its own ladders';
+
+/** The chance band of a plan ('none' / null = no ladder). */
+export function planChance(plan: PlanChoice | null | undefined, stretch = false): PlanChance {
+  if (!plan || plan === 'none') return PLAN_CHANCE.none;
+  return PLAN_CHANCE[stretch ? 'stretch' : plan];
+}
+
+/** "estimated chance good (50-70%, uncalibrated)" (n8n's reachChance().label); '' for no ladder */
+export function chanceLabel(plan: PlanChoice | null | undefined, stretch = false): string {
+  const c = planChance(plan, stretch);
+  if (c.band === 'none') return '';
+  return `estimated chance ${c.band} (${c.range[0]}-${c.range[1]}%, uncalibrated)`;
+}
+
+/** The base rate in one sentence (n8n's reachBaseRateText). */
+export function baseRateText(): string {
+  return `Base rate (${REACH_BASE_RATE.source}, ${REACH_BASE_RATE.year}): only ${REACH_BASE_RATE.top10WithinYearPct}% of new pages reach Google's top 10 within a year, and ${REACH_BASE_RATE.ofThoseWithinMonthPct}% of those do so within a month — the rest take months.`;
+}
+
+/** The sentence under a plan's month range (n8n's reachChanceText): the band, that it is uncalibrated, and the base rate it is judged against. */
+export function chanceText(plan: PlanChoice | null | undefined, months: string, stretch = false): string {
+  const c = planChance(plan, stretch);
+  if (c.band === 'none' || !months) return '';
+  return `Estimated chance of reaching the top 10 within ${months} months: ${c.band} (${c.range[0]}-${c.range[1]}%) — ${CHANCE_NOTE}. ${baseRateText()}`;
+}
+
+/** The engine's `chance` object as the app's band (tolerant: unknown shapes fall back to the plan type's band). */
+export function toChance(raw: unknown, plan: PlanChoice | null | undefined, stretch = false): PlanChance {
+  const o = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : null;
+  const band = o && typeof o.band === 'string' && ['good', 'fair', 'low', 'slim', 'none'].includes(o.band) ? (o.band as ChanceBand) : null;
+  const r = o && Array.isArray(o.range) && o.range.length === 2 && o.range.every((x) => Number.isFinite(Number(x))) ? ([Number(o.range[0]), Number(o.range[1])] as const) : null;
+  return band && r ? { band, range: r } : planChance(plan, stretch);
+}
+
 const num = (v: unknown): number | null => (v == null || v === '' || typeof v === 'boolean' || !Number.isFinite(Number(v)) ? null : Number(v));
 const str = (v: unknown): string => (typeof v === 'string' ? v : v == null ? '' : String(v));
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.map((x) => str(x).trim()).filter(Boolean) : []);

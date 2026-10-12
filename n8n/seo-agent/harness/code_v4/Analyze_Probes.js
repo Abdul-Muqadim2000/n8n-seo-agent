@@ -15,6 +15,13 @@ const h = (id, name) => {
   return k ? String(hs[k]) : '';
 };
 const MAIN = 'home_content';   // the homepage as browsers get it (redirects followed)
+// D18 (2026-10-11): DataForSEO's duplicate_meta_tags counts <meta> tags that differ only by `media` (Next.js theme-color light / dark) as duplicates;
+// the homepage HTML is counted here and Build Site Issues drops or qualifies the finding with it. Properties that may repeat (og:image, article:tag …) are skipped.
+const metaDuplicates = (html) => { const seen = {}; const REPEATABLE = /^(og:image|og:image:[a-z_]+|og:video|og:video:[a-z_]+|og:audio|og:audio:[a-z_]+|og:locale:alternate|article:tag|article:author|book:author|book:tag|video:tag|video:actor|music:[a-z:_]+)$/i;
+  for (const tag of (String(html || '').match(/<meta\b[^>]*>/gi) || [])) { const nm = (tag.match(/\b(?:name|property|http-equiv)\s*=\s*["']?([^"'\s>]+)/i) || [])[1]; if (!nm || REPEATABLE.test(nm)) continue; const media = (tag.match(/\bmedia\s*=\s*["']([^"']*)["']/i) || [])[1] || ''; const k = nm.toLowerCase() + '|' + media.toLowerCase().replace(/\s+/g, ''); seen[k] = (seen[k] || 0) + 1; }
+  return Object.entries(seen).filter(([, n]) => n > 1).map(([k, n]) => ({ tag: k.split('|')[0], count: n })); };
+const homeHtml18 = (R[MAIN] || {}).status === 200 ? String((R[MAIN] || {}).body || '') : '';
+const homepage_meta = { checked: /<meta\b/i.test(homeHtml18), duplicates: homeHtml18 ? metaDuplicates(homeHtml18) : [] };
 
 const findings = [];
 const works = [];
@@ -26,8 +33,20 @@ const home = R.home || {}, www = R.www_https || {};
 const homeLoc = h('home', 'location');
 const apexToWww = home.status >= 300 && home.status < 400 && /^https?:\/\/www\./i.test(homeLoc);
 const canonical_host = apexToWww ? 'www.' + domain : domain;
+// D6 (2026-10-11): the host finding is raised only when both hosts answer 200 with no redirect, or when a redirect's target and the homepage's own
+// canonical tag disagree — never from DataForSEO's test_canonicalization alone (false on techand.ai while its apex 308-redirects to www). The fix
+// is worded after the host the canonical tags name.
+const canonTag = (String((R[MAIN] || {}).body || '').match(/<link\b[^>]*>/gi) || []).find(t => /\brel\s*=\s*["']?canonical\b/i.test(t)) || '';
+const canonHref = (canonTag.match(/\bhref\s*=\s*["']([^"']+)["']/i) || [])[1] || '';
+const canonical_tag_host = String((canonHref.match(/^https?:\/\/([^\/?#]+)/i) || [])[1] || '').toLowerCase();
+const WWW = 'www.' + domain;
+const hostFix = (preferred) => preferred === WWW ? 'Keep one host: 301-redirect https://' + domain + '/ to https://' + WWW + '/ (the canonical tags already name www) and keep every canonical tag on the www URL.'
+  : preferred === domain ? 'Keep one host: 301-redirect https://' + WWW + '/ to https://' + domain + '/ (the canonical tags already name the bare domain) and keep every canonical tag on it.'
+  : 'Pick one host, make every canonical tag name it, and 301-redirect the other host to it.';
+const hostFinding = (evidence, preferred) => add('Crawlability & Indexing', 'High', 'www and non-www versions are not consolidated', evidence, 'Two hosts answering for the same pages split links and ranking signals between them, and Google may index the one you did not intend.', hostFix(preferred));
+let hosts_consolidated = null;
 if (apexToWww) {
-  if (www.status === 200) works.push('One canonical host: https://' + domain + ' 301-redirects to https://www.' + domain);
+  if (www.status === 200) { if (canonical_tag_host && canonical_tag_host === domain) { hosts_consolidated = false; hostFinding('https://' + domain + '/ redirects (' + home.status + ') to https://' + WWW + '/, but the homepage canonical tag points to ' + canonHref, canonical_tag_host); } else { hosts_consolidated = true; works.push('One canonical host: https://' + domain + ' redirects (' + home.status + ') to https://' + WWW + (canonical_tag_host === WWW ? ', and the canonical tags agree' : '')); } }
   else if (!www.status || www.error) add('Security', 'Critical', 'Homepage redirects to www, but www does not load', 'https://' + domain + ' → ' + homeLoc + ' failed: ' + (www.error || 'no response'), 'Every visitor and crawler is sent to a host that does not answer, so the site is effectively down.', 'Fix the certificate/DNS for www.' + domain + ' or redirect apex to a host that works. Verify: https://www.' + domain + ' returns 200.');
   else if (www.status >= 300 && www.status < 400) add('Crawlability & Indexing', 'High', 'Redirect chain or loop between apex and www', 'https://' + domain + ' → ' + homeLoc + ' → ' + h('www_https', 'location'), 'Multi-hop redirects slow every first visit and can loop.', 'Make apex redirect in one hop to the final URL, and make sure the final URL returns 200.');
 } else if (home.status >= 300 && home.status < 400 && homeLoc && !homeLoc.includes(domain)) {
@@ -41,10 +60,11 @@ if (apexToWww) {
       'Add the www hostname to your hosting/CDN so it gets a valid certificate and 301-redirects to https://' + domain + ', or remove the www DNS record. Verify: https://www.' + domain + ' should load or redirect without an SSL error.');
   } else if (www.status >= 300 && www.status < 400) {
     const loc = h('www_https', 'location');
-    if (loc.includes('//' + domain)) works.push('www redirects to the main domain (' + www.status + ')');
+    if (loc.includes('//' + domain)) { if (canonical_tag_host === WWW) { hosts_consolidated = false; hostFinding('https://' + WWW + '/ redirects (' + www.status + ') to ' + loc + ', but the homepage canonical tag points to ' + canonHref, canonical_tag_host); } else { hosts_consolidated = true; works.push('www redirects to the main domain (' + www.status + ')' + (canonical_tag_host === domain ? ', and the canonical tags agree' : '')); } }
     else add('Crawlability & Indexing', 'Medium', 'www redirects somewhere unexpected', 'https://www.' + domain + ' → ' + loc, 'Signals may be split between hosts.', 'Redirect www directly to https://' + domain + '/ with a 301.');
   } else if (www.status === 200) {
-    add('Crawlability & Indexing', 'High', 'www and non-www both serve the site (duplicate host)', 'https://www.' + domain + ' and https://' + domain + ' both return 200', 'Two copies of every page split links and ranking signals.', 'Add a 301 redirect from www to https://' + domain + '/ (or the reverse) so only one host answers with 200.');
+    hosts_consolidated = false;
+    hostFinding('https://' + WWW + '/ and https://' + domain + '/ both return 200 with no redirect' + (canonical_tag_host ? '; the homepage canonical tag names ' + canonical_tag_host : '; the homepage has no canonical tag'), canonical_tag_host);
   }
 }
 const apexHttpLoc = h('apex_http', 'location');
@@ -162,6 +182,8 @@ return [{
       what_works: works,
       measurements: {
         canonical_host,
+        hosts: { apex_status: home.status || 0, apex_location: homeLoc || '', www_status: www.status || 0, www_location: h('www_https', 'location') || '', canonical_tag_host, consolidated: hosts_consolidated },
+        homepage_meta,
         cache_control: cc || null,
         cache_status: [cacheHdr, cacheHdr2].filter(Boolean),
         homepage_ttfb_ms: ttfb,

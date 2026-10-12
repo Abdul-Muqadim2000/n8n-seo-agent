@@ -4,14 +4,24 @@ queries, CTR gaps, decaying pages, tracked keywords, URL inspection of ladder pa
 property auto-detected), Google Trends (DataForSEO) and live SERP checks for the site's own keywords -> Data Table history -> one Claude
 brief -> HTML e-mail + PDF + callback with ready-to-send API bodies. Code nodes are also written to harness/code_v4 for the offline harness."""
 import json, os, re, uuid, sys
+import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
+import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, HISTORY_COLS, SITES_TABLE, METRICS_TABLE, QUERY_TABLE, SITES_COLS, METRICS_COLS, QUERY_COLS,
                            LOG_TABLE, LOG_COLS, TRENDS_TABLE, TRENDS_COLS, CADENCE_TABLE, CADENCE_COLS, ALERTS_TABLE, ALERTS_COLS, CHECKIN_TABLE, CHECKIN_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_VIS_TABLE, AI_VIS_COLS, BL_SNAP_TABLE, BL_SNAP_COLS, AUDITS_TABLE, AUDITS_COLS, PROSPECT_TABLE, PROSPECT_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS,
                            LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS, CASE_TABLE, CASE_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS,
+                           PROFILE_TABLE, PROFILE_COLS, PAGES_TABLE, PAGES_COLS, AI_PAGES_TABLE, AI_PAGES_COLS, CACHE_TABLE, CACHE_COLS,
                            DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_get_where_params, dt_upsert_params_keys, dt_update_params, dt_get_recent_params)
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
-rd = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
+_rdt = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
+SITE_MODEL_SRC = _rdt('code/_site_model.js').rstrip('\n')   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
+SITE_STATS_SRC = _rdt('code/_site_stats.js').rstrip('\n')     # G28 (FIX_PLAN 2026-10-12): the statistical test behind every traffic alert
+GSC_QUERIES_SRC = _rdt('code/_gsc_queries.js').rstrip('\n')   # G9 / D24: scraper queries, the brand split and the anonymised share, shared with the audit
+SERP_OBS_SRC = _rdt('code/_serp_obs.js').rstrip('\n')        # D26: a results-page feature is one observation at one moment, never a fact about the query
+RANK_SERP_SRC = _rdt('code/_rank_serp.js').rstrip('\n')      # G6 (FIX_PLAN 2026-10-12): the whole results page of one rank check (features, page 1, share of voice, snapshot)
+rd = lambda p: (_rdt(p).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
+                .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC))
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]
@@ -38,6 +48,8 @@ def link(conns, a, b, out=0):
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 def write(wfobj, fname):
+    url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
+    retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
         if _n['type'] == 'n8n-nodes-base.emailSend': _n.update({'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
     names = {n['name'] for n in wfobj['nodes']}
@@ -55,7 +67,7 @@ def write(wfobj, fname):
 GOOGLE_GET = lambda url: {'method': 'GET', 'url': url, 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi', 'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}}
 GOOGLE_POST = lambda url: {'method': 'POST', 'url': url, 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}}
 DFS_HTTP = {'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 300}}, 'timeout': 90000}}
-HTTP_X = dict(onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000)
+HTTP_X = dict(onError='continueRegularOutput', **retry_lint.RETRY)   # G1: one retry rule (3 tries, 5 s apart) for every external HTTP node
 at = lambda c, r: [c * 220, r * 220]
 urls = lambda s: s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL).replace('__SA_EMAIL__', SA_EMAIL or 'devai-seo@techand-site.iam.gserviceaccount.com')
 
@@ -83,12 +95,36 @@ N.append(node('Load AI Visibility (Site)', DT_TYPE, DT_VERSION, dt_get_all_param
 N.append(node('Load Backlink Snapshots (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(BL_SNAP_TABLE), at(9, 3), **LOAD))
 N.append(node('Load Audits (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(AUDITS_TABLE), at(10, 3), **LOAD))
 N.append(node('Load Trends (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(TRENDS_TABLE), at(11, 3), **LOAD))   # v4.6: trends younger than 25 days are reused, not bought again
+# G19 (SITE_MODEL_SPEC.md): what the weekly site-model resolver reads besides the site row - the business profile (name, NAP, logo) and the
+# monitor settings (brand names, competitors). seo_pages (the page inventory D11 fills) is created here so every install has it.
+N.append(node('Ensure Profile Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(PROFILE_TABLE, PROFILE_COLS), at(5, 6), onError='continueRegularOutput'))
+N.append(node('Load Profiles (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(PROFILE_TABLE), at(6, 6), **LOAD))
+N.append(node('Ensure Monitors Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(MONITORS_TABLE, MONITORS_COLS), at(7, 6), onError='continueRegularOutput'))
+N.append(node('Load Monitors (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(MONITORS_TABLE), at(8, 6), **LOAD))
+N.append(node('Ensure Pages Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(PAGES_TABLE, PAGES_COLS), at(9, 6), onError='continueRegularOutput'))
+# D11 (2026-10-12, FIX_PLAN): the page inventory the site model carries - what is already stored, plus AI Growth's key pages (their titles)
+N.append(node('Load Pages (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(PAGES_TABLE), at(10, 6), **LOAD))
+N.append(node('Ensure AI Pages Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(AI_PAGES_TABLE, AI_PAGES_COLS), at(11, 6), onError='continueRegularOutput'))
+N.append(node('Load AI Pages (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(AI_PAGES_TABLE), at(12, 6), **LOAD))
+# P2-2 (2026-10-12, Phase 2 live check): the stored site descriptions (seo_cache 'desc:<domain>', written by the main workflow's describer) are
+# the only place the services live, so the weekly model takes them from here -> seo_sites.services_json -> the brief's facts.website.services.
+N.append(node('Ensure Cache Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), at(13, 6), onError='continueRegularOutput'))
+N.append(node('Load Descriptions (Site)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'desc'), at(14, 6), **LOAD))
 N.append(node('Load Sites', DT_TYPE, DT_VERSION, dt_get_all_params(SITES_TABLE), at(5, 0), **LOAD))
 N.append(node('Load Ladders', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABLE), at(6, 0), **LOAD))
 N.append(node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_params(HISTORY_TABLE), at(7, 0), **LOAD))
 N.append(node('Load Site Metrics', DT_TYPE, DT_VERSION, dt_get_all_params(METRICS_TABLE), at(8, 0), **LOAD))
 N.append(node('Load Query History', DT_TYPE, DT_VERSION, dt_get_where_params(QUERY_TABLE, 'tracked', 'isTrue'), at(9, 0), **LOAD))
-N.append(code('Site Plan', urls(rd('code/Site_Plan.js')), at(10, 0)))
+# D25c (2026-10-12, system review FIX_PLAN): a check-in marked as a test never satisfies the month, so the reminder keeps asking. The rule
+# lives in v5/code/_checkin_test.js and is applied to the row filter here, because v5/code/Site_Plan.js belongs to parallel work this session.
+CHECKIN_TEST_SRC = rd('code/_checkin_test.js').rstrip('\n')
+_SITE_PLAN_SRC = urls(rd('code/Site_Plan.js'))
+_D25C_OLD = "const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month);"
+assert _SITE_PLAN_SRC.count(_D25C_OLD) == 1, 'D25c: the check-in row filter in Site_Plan.js moved'
+_SITE_PLAN_SRC = CHECKIN_TEST_SRC + '\n' + _SITE_PLAN_SRC.replace(
+    _D25C_OLD,
+    "const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month && !CK.isTest(r));   // D25c: a test check-in is kept out of the monthly check (_checkin_test.js), so the reminder keeps asking")
+N.append(code('Site Plan', _SITE_PLAN_SRC, at(10, 0)))
 N.append(iff('Any Sites?', '{{ !$json.nothing_to_do }}', at(11, 0)))
 N.append(node('Nothing To Track (Site)', 'n8n-nodes-base.noOp', 1, {}, at(12, 1)))
 # ---- v4.8 publish detection (PIPELINE_FEATURE_SPEC §6.5, phase 4): pages written but not published are looked for in the site's sitemap
@@ -104,13 +140,13 @@ XML, HTML = 'application/xml,text/xml,*/*', 'text/html,application/xhtml+xml'
 SAFE = dict(onError='continueRegularOutput')   # a failing detection step never stops the weekly report (Site Metrics reads the errors)
 N.append(code('Publish Candidates', dsrc('code/Publish_Candidates.js'), at(12, -2), **SAFE))
 N.append(iff('Any Detect Candidates?', '{{ !$json.skip && !$json.error }}', at(13, -2)))
-N.append(node('Fetch Sitemap (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.sitemap_url }}', XML, 30000, 5), at(14, -3), alwaysOutputData=True, onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000))
+N.append(node('Fetch Sitemap (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.sitemap_url }}', XML, 30000, 5), at(14, -3), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Sitemap Children (Detect)', dsrc('code/Sitemap_Children_Detect.js'), at(15, -3), **SAFE))
 N.append(iff('Any Child Sitemaps?', '{{ !$json.skip && !$json.error }}', at(16, -3)))
-N.append(node('Fetch Child Sitemaps (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', XML, 30000, 5), at(17, -4), alwaysOutputData=True, onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000))
+N.append(node('Fetch Child Sitemaps (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', XML, 30000, 5), at(17, -4), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Match Slugs (Detect)', dsrc('code/Match_Slugs_Detect.js'), at(18, -3), **SAFE))
 N.append(iff('Any Page Fetches?', '{{ !!$json.fetch }}', at(19, -3)))
-N.append(node('Fetch Pages (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', HTML, 20000, 5), at(20, -4), alwaysOutputData=True, onError='continueRegularOutput'))
+N.append(node('Fetch Pages (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', HTML, 20000, 5), at(20, -4), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Detect Published', dsrc('code/Detect_Published.js'), at(21, -3), **SAFE))
 N.append(code('Detected Log Rows', dsrc('code/Detected_Log_Rows.js'), at(22, -3), **SAFE))
 N.append(iff('Any Detected?', '{{ !$json.skip && !$json.error }}', at(23, -3)))
@@ -121,6 +157,13 @@ N.append(node('Mark Case Study Published (Detect)', DT_TYPE, DT_VERSION, dt_upda
 N.append(code('Detected Ladder Rows', dsrc('code/Detected_Ladder_Rows.js'), at(28, -4), **SAFE))
 N.append(iff('Any Ladder Detected?', '{{ !$json.skip && !$json.error }}', at(29, -4)))
 N.append(node('Mark Ladder Published (Detect)', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}', 'target_url': '={{ $json.target_url }}', 'page_exists': '={{ $json.page_exists }}'}), at(30, -5), onError='continueRegularOutput', alwaysOutputData=True))
+# ---- G19: the weekly site-model resolver (canonical host, name / NAP / logo, services, nav pages) ----
+N.append(code('Model Targets (Site)', rd('code/Model_Targets.js'), at(12, -1), **SAFE))
+N.append(iff('Need Homepage (Site)?', '{{ !$json.skip }}', at(13, -1)))
+N.append(node('Fetch Homepage (Site)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', HTML, 20000, 3), at(14, -1), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
+N.append(code('Site Model (Site)', rd('code/Site_Model_Site.js'), at(15, -1), **SAFE))
+N.append(sticky('Note Site Model', """## One site model (G19, v4.15)
+Per site, once a week: the **canonical host** (the homepage as a browser gets it, redirects followed, plus its `rel=canonical` and the site's own live URLs), the business **name / logo / NAP** (`seo_profiles` -> the homepage Organization / LocalBusiness schema -> Google Business Profile -> the app's fields), the **services**, the **nav pages**, the business facts, the brand names and the competitors (`seo_monitors`). *Site Metrics* merges `SM.toRow(model)` into the `seo_sites` row, so every workflow reads the same facts; a model younger than 7 days is kept and no request is made. The page inventory lives in `seo_pages` (D11). Kit: `v5/code/_site_model.js`, spec: `SITE_MODEL_SPEC.md`.""", [12 * 220 - 40, -2 * 220 - 60], 1100, 200, 5))
 N.append(sticky('Note Detection', f"""## Publish detection (v4.8)
 Before the Google part, per site with pages **written but not published** (`{LOG_TABLE}` status started, no URL, last 120 days; `{LADDER_TABLE}` status writing): `/sitemap.xml` is read (an index: its 5 newest child sitemaps) and every URL compared host-agnostically — **slug** (planned path / planned slug / keyword slug) first, then for up to 10 unmatched pages the **title / first H1** of up to 15 pages per site whose slug holds 60%+ of the keyword's words (80%+ needed in the title or H1). A page improving an existing URL counts when its sitemap `lastmod` is after it was written. Found pages are stored like "I published a page" (content log + ladder row + case study), inspected in Search Console in this run, and listed in the report and the callback (`detected_published`). Plain HTTP, no paid call; no waiting page = no request.""", [12 * 220 - 40, -7 * 220], 1500, 260, 4))
 # ---- row 1: Search Console ----
@@ -129,6 +172,11 @@ N.append(code('Resolve Properties', rd('code/Resolve_Properties.js'), at(13, 0))
 N.append(code('GSC Requests', rd('code/GSC_Requests.js'), at(14, 0)))
 N.append(iff('Any GSC?', '{{ !$json.skip }}', at(15, 0)))
 N.append(node('GSC Query', 'n8n-nodes-base.httpRequest', 4.5, GOOGLE_POST('={{ $json.url }}'), at(16, 0), credentials=GOOGLE, **HTTP_X))
+# G9 (2026-10-12, FIX_PLAN): the query / page kinds are read in full — the first request asks for 25,000 rows, and any kind that came back full
+# gets its next pages here (startRow), up to CONFIG.max_gsc_pages. Free (Google quota); a kind that came back short costs no extra request.
+N.append(code('GSC More Requests', rd('code/GSC_More_Requests.js'), at(16, -1)))
+N.append(iff('Any More GSC?', '{{ !$json.skip }}', at(17, -1)))
+N.append(node('GSC Query (More)', 'n8n-nodes-base.httpRequest', 4.5, GOOGLE_POST('={{ $json.url }}'), at(18, -1), credentials=GOOGLE, **HTTP_X))
 N.append(code('Parse GSC', rd('code/Parse_GSC.js'), at(17, 0)))
 # ---- row 2: GA4 (detect property, reports) ----
 N.append(iff('Need GA4 Detect?', "{{ $('Resolve Properties').all().some(i => !i.json.ga4_property_id) }}", at(12, 2)))
@@ -155,6 +203,12 @@ N.append(iff('Any SERP?', '{{ !$json.skip }}', at(13, 4)))
 N.append(node('SERP Check (Site)', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, at(14, 4), credentials=DFS, **HTTP_X))
 N.append(code('Parse Site SERP', rd('code/Parse_Site_SERP.js'), at(15, 4)))
 N.append(node('Save Site Rank History', DT_TYPE, DT_VERSION, dt_insert_params(HISTORY_TABLE, HISTORY_COLS), at(16, 4), onError='continueRegularOutput'))
+# D11: the week's page inventory (sitemap + Search Console pages and their queries + AI Growth's key pages + the pages found live) ->
+# the site model (SM.withPages) and seo_pages (only the rows that changed)
+N.append(code('Page Inventory (Site)', rd('code/Page_Inventory_Site.js'), at(16, 4), **SAFE))
+N.append(code('Page Rows (Site)', rd('code/Page_Rows_Site.js'), at(16, 5), **SAFE))
+N.append(iff('Any Page Rows?', '{{ !$json.skip }}', at(16, 6)))
+N.append(node('Save Pages (Site)', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PAGES_TABLE, PAGES_COLS, ['site_id', 'url']), at(16, 7), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(code('Site Metrics', urls(rd('code/Site_Metrics.js')), at(17, 4)))
 N.append(code('Metrics Rows', "// The insert gets exactly the table's columns: the Site Metrics item carries the whole report (live finding 2026-10-03: every insert failed on the nested `period` and continueRegularOutput hid it, so seo_site_metrics stayed empty).\nreturn $input.all().map(i => ({ json: i.json.metrics_row }));", at(17, 5)))
 N.append(node('Save Site Metrics', DT_TYPE, DT_VERSION, dt_insert_params(METRICS_TABLE, METRICS_COLS), at(18, 4), onError='continueRegularOutput'))
@@ -187,7 +241,7 @@ return src.map((s, i) => { const g = got[i] || {}; const pdf = (g.binary && g.bi
 N.append(code('Prepare PDF Site', PREP, at(15, 5)))
 N.append(node('Render PDF Site', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': 'http://gotenberg:3000/forms/chromium/convert/html', 'sendBody': True, 'contentType': 'multipart-form-data',
     'bodyParameters': {'parameters': [{'parameterType': 'formBinaryData', 'name': 'files', 'inputDataFieldName': 'html'}, {'name': 'paperWidth', 'value': '8.27'}, {'name': 'paperHeight', 'value': '11.69'}, {'name': 'marginTop', 'value': '0.5'}, {'name': 'marginBottom', 'value': '0.5'}, {'name': 'marginLeft', 'value': '0.5'}, {'name': 'marginRight', 'value': '0.5'}, {'name': 'printBackground', 'value': 'true'}]},
-    'options': {'timeout': 120000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'pdf'}}}}, at(16, 5), onError='continueRegularOutput'))
+    'options': {'timeout': 120000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'pdf'}}}}, at(16, 5), onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Attach PDF Site', ATTACH, at(17, 5)))
 N.append(iff('Has Email (Site)?', '{{ !!$json.email }}', at(18, 5)))
 N.append(node('Send Site Report', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False, 'fileAttachments': "={{ $binary.pdf ? 'pdf' : 'data' }}"}}, at(19, 5), credentials=SMTP, onError='continueRegularOutput'))
@@ -202,15 +256,19 @@ Runs **every Monday 09:00** (after the Rank Tracker) and on demand through *Manu
 Credential **Google Service Account (SEO Agent)** (`googleApi`, "Set up for use in HTTP Request node" on, scopes `https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/analytics.readonly`). The owner adds the service-account e-mail to Search Console (Full) and GA4 (Viewer); put that e-mail into `CONFIG.service_account_email` in *Site Plan* so the connect instructions name it. Not connected = the report still runs (trends, live checks) and explains the two steps.
 Form: {FORM_URL} · API: {API_URL} (`mode: track`)""", [-40, -560], 1180, 500))
 for a, b in [('Weekly Schedule', 'Ensure Sites Table'), ('Manual Run', 'Ensure Sites Table'), ('Ensure Sites Table', 'Ensure Metrics Table'), ('Ensure Metrics Table', 'Ensure Query Table'), ('Ensure Query Table', 'Ensure History Table (Site)'), ('Ensure History Table (Site)', 'Ensure Trends Table'), ('Ensure Trends Table', 'Ensure Log Table (Site)'), ('Ensure Log Table (Site)', 'Ensure Alerts Table (Site)'), ('Ensure Alerts Table (Site)', 'Ensure Checkin Table (Site)'), ('Ensure Checkin Table (Site)', 'Ensure AI Visibility Table (Site)'), ('Ensure AI Visibility Table (Site)', 'Ensure Snapshots Table (Site)'), ('Ensure Snapshots Table (Site)', 'Ensure Audits Table (Site)'), ('Ensure Audits Table (Site)', 'Load Sites'),
-             ('Load Sites', 'Load Ladders'), ('Load Ladders', 'Load Rank History'), ('Load Rank History', 'Load Site Metrics'), ('Load Site Metrics', 'Load Query History'), ('Load Query History', 'Load Content Log'), ('Load Content Log', 'Load Console Alerts'), ('Load Console Alerts', 'Load Check-ins'), ('Load Check-ins', 'Load AI Visibility (Site)'), ('Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)'), ('Load Backlink Snapshots (Site)', 'Load Audits (Site)'), ('Load Audits (Site)', 'Load Trends (Site)'), ('Load Trends (Site)', 'Site Plan'), ('Site Plan', 'Any Sites?'),
-             ('GSC Sites', 'Resolve Properties'), ('Resolve Properties', 'GSC Requests'), ('GSC Requests', 'Any GSC?'), ('GSC Query', 'Parse GSC'), ('Parse GSC', 'Need GA4 Detect?'),
+             ('Load Sites', 'Load Ladders'), ('Load Ladders', 'Load Rank History'), ('Load Rank History', 'Load Site Metrics'), ('Load Site Metrics', 'Load Query History'), ('Load Query History', 'Load Content Log'), ('Load Content Log', 'Load Console Alerts'), ('Load Console Alerts', 'Load Check-ins'), ('Load Check-ins', 'Load AI Visibility (Site)'), ('Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)'), ('Load Backlink Snapshots (Site)', 'Load Audits (Site)'), ('Load Audits (Site)', 'Load Trends (Site)'), ('Load Trends (Site)', 'Ensure Profile Table (Site)'), ('Ensure Profile Table (Site)', 'Load Profiles (Site)'), ('Load Profiles (Site)', 'Ensure Monitors Table (Site)'), ('Ensure Monitors Table (Site)', 'Load Monitors (Site)'), ('Load Monitors (Site)', 'Ensure Pages Table (Site)'), ('Ensure Pages Table (Site)', 'Load Pages (Site)'), ('Load Pages (Site)', 'Ensure AI Pages Table (Site)'), ('Ensure AI Pages Table (Site)', 'Load AI Pages (Site)'), ('Load AI Pages (Site)', 'Ensure Cache Table (Site)'), ('Ensure Cache Table (Site)', 'Load Descriptions (Site)'), ('Load Descriptions (Site)', 'Site Plan'), ('Site Plan', 'Any Sites?'),
+             ('GSC Sites', 'Resolve Properties'), ('Resolve Properties', 'GSC Requests'), ('GSC Requests', 'Any GSC?'), ('GSC Query', 'GSC More Requests'), ('GSC More Requests', 'Any More GSC?'), ('GSC Query (More)', 'Parse GSC'), ('Parse GSC', 'Need GA4 Detect?'),
              ('GA4 Accounts', 'Stream Requests'), ('Stream Requests', 'Any Streams?'), ('GA4 Streams', 'GA4 Requests'), ('GA4 Requests', 'Any GA4?'), ('GA4 Report', 'Parse GA4'), ('Parse GA4', 'Inspect Requests'),
              ('Inspect Requests', 'Any Inspections?'), ('Inspect URL', 'Parse Inspection'), ('Parse Inspection', 'Trends Requests'), ('Trends Requests', 'Any Trends?'), ('Google Trends', 'Parse Trends'), ('Parse Trends', 'Site SERP Requests'),
-             ('Site SERP Requests', 'Any SERP?'), ('SERP Check (Site)', 'Parse Site SERP'), ('Parse Site SERP', 'Save Site Rank History'), ('Save Site Rank History', 'Site Metrics'),
+             ('Site SERP Requests', 'Any SERP?'), ('SERP Check (Site)', 'Parse Site SERP'), ('Parse Site SERP', 'Save Site Rank History'), ('Save Site Rank History', 'Page Inventory (Site)'),
+             ('Page Inventory (Site)', 'Page Rows (Site)'), ('Page Rows (Site)', 'Any Page Rows?'), ('Save Pages (Site)', 'Site Metrics'),
              ('Site Metrics', 'Metrics Rows'), ('Metrics Rows', 'Save Site Metrics'), ('Save Site Metrics', 'Query Rows'), ('Query Rows', 'Any Query Rows?'), ('Save Query Rows', 'Trend Rows'), ('Trend Rows', 'Any Trend Rows?'), ('Save Trends', 'Site Rows'), ('Site Rows', 'Save Sites'), ('Save Sites', 'Brief Input'), ('Brief Input', 'Site Brief'), ('Site Brief', 'Site Report'),
              ('Site Report', 'Prepare PDF Site'), ('Prepare PDF Site', 'Render PDF Site'), ('Render PDF Site', 'Attach PDF Site'), ('Attach PDF Site', 'Has Email (Site)?'), ('Attach PDF Site', 'Build Site Callback'), ('Build Site Callback', 'Has Callback (Site)?')]:
     link(C, a, b)
-link(C, 'Any Sites?', 'Publish Candidates', 0); link(C, 'Any Sites?', 'Nothing To Track (Site)', 1)
+link(C, 'Any Sites?', 'Model Targets (Site)', 0); link(C, 'Any Sites?', 'Nothing To Track (Site)', 1)
+# G19: the site model is resolved first (one homepage read per stale site), then the publish detection runs as before
+link(C, 'Model Targets (Site)', 'Need Homepage (Site)?'); link(C, 'Need Homepage (Site)?', 'Fetch Homepage (Site)', 0); link(C, 'Need Homepage (Site)?', 'Site Model (Site)', 1)
+link(C, 'Fetch Homepage (Site)', 'Site Model (Site)'); link(C, 'Site Model (Site)', 'Publish Candidates')
 # v4.8 publish detection chain; every exit leads to GSC Sites (executeOnce), exactly one fires per run
 link(C, 'Publish Candidates', 'Any Detect Candidates?'); link(C, 'Any Detect Candidates?', 'Fetch Sitemap (Detect)', 0); link(C, 'Any Detect Candidates?', 'GSC Sites', 1)
 link(C, 'Fetch Sitemap (Detect)', 'Sitemap Children (Detect)'); link(C, 'Sitemap Children (Detect)', 'Any Child Sitemaps?')
@@ -221,12 +279,14 @@ link(C, 'Save Detected (Log)', 'Detected Case Rows'); link(C, 'Detected Case Row
 link(C, 'Mark Case Study Published (Detect)', 'Detected Ladder Rows'); link(C, 'Detected Ladder Rows', 'Any Ladder Detected?'); link(C, 'Any Ladder Detected?', 'Mark Ladder Published (Detect)', 0); link(C, 'Any Ladder Detected?', 'GSC Sites', 1)
 link(C, 'Mark Ladder Published (Detect)', 'GSC Sites')
 link(C, 'Any GSC?', 'GSC Query', 0); link(C, 'Any GSC?', 'Need GA4 Detect?', 1)
+link(C, 'Any More GSC?', 'GSC Query (More)', 0); link(C, 'Any More GSC?', 'Parse GSC', 1)   # G9: no kind came back full -> straight to Parse GSC
 link(C, 'Need GA4 Detect?', 'GA4 Accounts', 0); link(C, 'Need GA4 Detect?', 'GA4 Requests', 1)
 link(C, 'Any Streams?', 'GA4 Streams', 0); link(C, 'Any Streams?', 'GA4 Requests', 1)
 link(C, 'Any GA4?', 'GA4 Report', 0); link(C, 'Any GA4?', 'Inspect Requests', 1)
 link(C, 'Any Inspections?', 'Inspect URL', 0); link(C, 'Any Inspections?', 'Trends Requests', 1)
 link(C, 'Any Trends?', 'Google Trends', 0); link(C, 'Any Trends?', 'Parse Trends', 1)   # all trends stored -> Parse Trends returns them from seo_trends
-link(C, 'Any SERP?', 'SERP Check (Site)', 0); link(C, 'Any SERP?', 'Site Metrics', 1)
+link(C, 'Any SERP?', 'SERP Check (Site)', 0); link(C, 'Any SERP?', 'Page Inventory (Site)', 1)
+link(C, 'Any Page Rows?', 'Save Pages (Site)', 0); link(C, 'Any Page Rows?', 'Site Metrics', 1)
 link(C, 'Any Query Rows?', 'Save Query Rows', 0); link(C, 'Any Query Rows?', 'Trend Rows', 1)
 link(C, 'Any Trend Rows?', 'Save Trends', 0); link(C, 'Any Trend Rows?', 'Site Rows', 1)
 link(C, 'Has Email (Site)?', 'Send Site Report', 0); link(C, 'Has Callback (Site)?', 'POST Site Report', 0)
@@ -238,6 +298,14 @@ _code = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] ==
 for _n in ('Match Slugs (Detect)', 'Detect Published'): assert 'const overlapTokens' in _code[_n], _n + ': word rules not inlined'
 assert 'function publishedRows(' in _code['Detect Published'], 'Detect Published: published-page rows not inlined'
 assert not any(('/*__OVERLAP__*/' in c_) or ('/*__PUBLISH_ROWS__*/' in c_) for c_ in _code.values()), 'placeholder left in the Site Tracker'
+# FIX_PLAN 2026-10-12: G9 (every Search Console row, the anonymised share, brand vs non-brand, the audit's scraper rule), G28 (a traffic alert
+# fires on a two-sample Poisson z-test, not on a fixed percentage) and D21 (a sparse Trends series carries no percentage into the brief)
+for _n in ('Parse GSC',): assert 'const GQ = (() => {' in _code[_n], _n + ': the Search Console query rules are not inlined'
+for _n in ('Site Metrics', 'Brief Input'): assert 'const ST = (() => {' in _code[_n], _n + ': the site statistics are not inlined'
+assert 'startRow' in _code['GSC More Requests'] and "$('GSC Query (More)')" in _code['Parse GSC'], 'G9: the second page of Search Console rows is not read'
+assert 'ST.change(' in _code['Site Metrics'] and 'alert_min_click_events' in _code['Site Metrics'], 'G28: the alerts do not use the statistical test'
+assert 'too little search data' in _code['Brief Input'] and 'sparse ? null : change' in _code['Parse Trends'], 'D21: a sparse trend can still reach the brief as a percentage'
+assert not any(('/*__SITE_STATS__*/' in c_) or ('/*__GSC_QUERIES__*/' in c_) for c_ in _code.values()), 'statistics / query-rule placeholder left in the Site Tracker'
 write(wf(WF_ID, 'SEO Agent — Site Tracker', N, C), 'SEO_Agent_Site_Tracker.json')
 
 # =============================================================================
@@ -307,6 +375,9 @@ N.append(node('Load Main Keyword Ranks', DT_TYPE, DT_VERSION, dt_get_recent_para
 N.append(node('Ensure AI Targets Table (Cadence)', DT_TYPE, DT_VERSION, dt_create_params(AI_TARGETS_TABLE, AI_TARGETS_COLS), at(5, 2), onError='continueRegularOutput'))
 N.append(node('Load AI Targets (Cadence)', DT_TYPE, DT_VERSION, dt_get_where_params(AI_TARGETS_TABLE, 'status', 'eq', 'queued'), at(11, 2), **LOAD))
 N.append(node('Load Monitors (Cadence)', DT_TYPE, DT_VERSION, dt_get_all_params(MONITORS_TABLE), at(12, 2), **LOAD))
+# D11: the website's page inventory, so a search a live page already answers is refreshed, not written as a second page
+N.append(node('Ensure Pages Table (Cadence)', DT_TYPE, DT_VERSION, dt_create_params(PAGES_TABLE, PAGES_COLS), at(13, 2), onError='continueRegularOutput'))
+N.append(node('Load Pages (Cadence)', DT_TYPE, DT_VERSION, dt_get_all_params(PAGES_TABLE), at(14, 2), **LOAD))
 N.append(code('Cadence Plan', rd('code/Cadence_Plan.js'), at(10, 0)))
 N.append(iff('Any Pages?', '{{ !$json.nothing_to_do }}', at(11, 0)))
 N.append(iff('Site Notes?', '{{ !!$json.report_only && !$json.dry_run }}', at(12, 1)))
@@ -334,7 +405,7 @@ Each pick starts a content run in SEO Agent v4 (`mode: keyword`, `force_content`
 **Pipeline rules (v4.8)** from `{LADDER_SETTINGS_TABLE}` (written by the web app; one row per ladder + a `_site` row with the website defaults; no row = the site's default mode or Auto, active, priority by start date): only **Auto** ladders with status active / queued are written, at most `max_active` (default 2) at a time in **priority** order (ladder 1's pages before ladder 2's; plan type *direct* writes the main page first); the **main page waits** until half of the supporting pages are published or the main keyword ranks 1-30; a ladder whose main keyword held the **top 3 for 4 checks** gets no more pages; with `max_waiting` (default 3) pages written but not published the site is **paused** (`paused_reason: pileup`; on demand `force: true` bypasses it); opportunity posts only when `opportunities` is Auto (else listed as `suggestions`); **Manual** ladders' next pages are listed in `awaiting_approval`. Sites without a page but with news get a *Cadence Status* note (same callback stage).
 The owner publishes in any CMS and reports the URL ("I published a page" in the form, or API `mode: published`): the page is checked live, logged as published, the ladder row gets the real URL, and the Site Tracker inspects indexing and positions from the next Monday. `dry_run: true` only plans. Cost: about $1.20 of AI per page.
 Form: {FORM_URL} · API: {API_URL}""", [-40, -700], 1180, 560))
-for a, b in [('Weekly Schedule', 'Ensure Log Table'), ('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Ensure AI Targets Table (Cadence)'), ('Ensure AI Targets Table (Cadence)', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Load AI Targets (Cadence)'), ('Load AI Targets (Cadence)', 'Load Monitors (Cadence)'), ('Load Monitors (Cadence)', 'Cadence Plan'), ('Cadence Plan', 'Any Pages?'),
+for a, b in [('Weekly Schedule', 'Ensure Log Table'), ('Manual Run', 'Ensure Log Table'), ('Ensure Log Table', 'Ensure Cadence Table'), ('Ensure Cadence Table', 'Ensure Trends Table (Cadence)'), ('Ensure Trends Table (Cadence)', 'Ensure Ladder Settings Table'), ('Ensure Ladder Settings Table', 'Ensure AI Targets Table (Cadence)'), ('Ensure AI Targets Table (Cadence)', 'Load Sites'), ('Load Sites', 'Load Cadence'), ('Load Cadence', 'Load Ladders'), ('Load Ladders', 'Load Query History'), ('Load Query History', 'Load Trends'), ('Load Trends', 'Load Content Log'), ('Load Content Log', 'Load Ladder Settings'), ('Load Ladder Settings', 'Load Main Keyword Ranks'), ('Load Main Keyword Ranks', 'Load AI Targets (Cadence)'), ('Load AI Targets (Cadence)', 'Load Monitors (Cadence)'), ('Load Monitors (Cadence)', 'Ensure Pages Table (Cadence)'), ('Ensure Pages Table (Cadence)', 'Load Pages (Cadence)'), ('Load Pages (Cadence)', 'Cadence Plan'), ('Cadence Plan', 'Any Pages?'),
              ('Start Content Runs', 'Log Rows'), ('Log Rows', 'Save Content Log'), ('Save Content Log', 'Ladder Marks'), ('Ladder Marks', 'Any Ladder Marks?'), ('Mark Ladder Writing', 'AI Target Marks'), ('AI Target Marks', 'Any AI Marks?'), ('Mark AI Target Writing', 'Cadence Note'), ('Cadence Note', 'Has Email (Cadence)?'), ('Cadence Note', 'Has Callback (Cadence)?')]: link(C, a, b)
 link(C, 'Any Pages?', 'Dry Run?', 0); link(C, 'Any Pages?', 'Site Notes?', 1)
 link(C, 'Site Notes?', 'Cadence Status', 0); link(C, 'Site Notes?', 'Nothing To Write', 1)

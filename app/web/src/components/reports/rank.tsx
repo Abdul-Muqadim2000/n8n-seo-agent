@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowRight, Footprints, GitFork, ListOrdered, TrendingDown, TrendingUp } from 'lucide-react';
+import { ArrowRight, Footprints, GitFork, Layers, ListOrdered, TrendingDown, TrendingUp } from 'lucide-react';
 import { formatPosition, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Delta, ExternalLink, Meter } from '@/components/ui/misc';
 import { CountUp, HeroStat, IconTile, Stagger } from '@/components/insight';
 import { DataTable, type Column } from '@/components/ui/table';
-import { Block, Empty, num, obj, objs, shortUrl, str, type P } from './kit';
+import { Block, Empty, arr, num, obj, objs, shortUrl, str, type P } from './kit';
 import { modeTitle, prefillFromApiBody } from './meta';
 import { PositionPill, ReportHero, ScoreMark } from './visuals';
 
@@ -44,6 +44,7 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
   const apiBody = obj(p.api_body);
   const run = Object.keys(apiBody).length ? prefillFromApiBody(apiBody) : null;
   const ranking = positions.filter((x) => (num(x.position) ?? 0) > 0).length;
+  const labels = (r: P) => arr(r.feature_labels).map((x) => str(x)).filter(Boolean);
 
   const cols: Column<P>[] = [
     { key: 'rung', header: 'Rung', sortValue: (r) => num(r.rung), cell: (r) => <Badge>{num(r.rung) ?? '–'}</Badge>, width: '64px' },
@@ -60,10 +61,16 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
     },
     { key: 'previous', header: 'Previous', align: 'right', sortValue: (r) => num(r.previous), cell: (r) => <span className="text-ink-3">{formatPosition(num(r.previous))}</span>, hideOnMobile: true },
     { key: 'move', header: 'Change', align: 'right', cell: (r) => <MovementCell pos={num(r.position)} prev={num(r.previous)} /> },
+    { key: 'mobile', header: 'On a phone', align: 'right', sortValue: (r) => num(r.mobile_position), cell: (r) => (r.mobile_position == null ? <span className="text-xs text-ink-3">–</span> : <PositionPill value={num(r.mobile_position)} text={formatPosition(num(r.mobile_position))} />), hideOnMobile: true },
+    { key: 'sov', header: 'Share of voice', align: 'right', sortValue: (r) => num(r.share_of_voice), cell: (r) => (r.share_of_voice == null ? <span className="text-xs text-ink-3">–</span> : <span className="tabular text-[13px] text-ink-2">{num(r.share_of_voice)}%</span>) },
+    { key: 'features', header: 'The results page', cell: (r) => (labels(r).length ? <span className="text-[13px] text-ink-2">{labels(r).join(' · ')}</span> : <span className="text-xs text-ink-3">plain results</span>), hideOnMobile: true },
+    { key: 'above', header: 'Above you', cell: (r) => { const a = objs(r.above); return a.length ? <span className="text-[13px] text-ink-2">{a.slice(0, 2).map((x) => `${str(x.domain)} (#${num(x.position)})`).join(', ')}{a.length > 2 ? ` +${a.length - 2}` : ''}</span> : <span className="text-xs text-ink-3">–</span>; }, hideOnMobile: true },
     { key: 'url', header: 'Ranking URL', cell: (r) => (str(r.url) ? <ExternalLink href={str(r.url)} className="text-[13px]">{shortUrl(str(r.url))}</ExternalLink> : <span className="text-xs text-ink-3">–</span>), hideOnMobile: true },
   ];
 
   const top10 = positions.filter((x) => (num(x.position) ?? 0) > 0 && (num(x.position) ?? 99) <= 10).length;
+  const serp = obj(p.serp_summary);
+  const sf = obj(serp.features);
 
   return (
     <Stagger className="space-y-5">
@@ -163,6 +170,39 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
         <p className="mt-2 text-xs text-ink-3">“&gt;50” means not in the top 50 yet; a failed check is retried next week.</p>
       </Block>
 
+      {Object.keys(serp).length > 0 && (
+        <Block
+          title="The results pages"
+          icon={<Layers />}
+          description={<>Read in the same check, at no extra cost{num(serp.checked) ? <> · {num(serp.checked)} {num(serp.checked) === 1 ? 'keyword' : 'keywords'}</> : null}{num(serp.mobile_checked) ? <> · {num(serp.mobile_checked)} also checked on a phone</> : null}</>}
+        >
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <SerpStat label="AI Overview shown" value={num(sf.ai_overview) ?? 0} of={num(serp.checked)} hint={num(sf.ai_overview_cites_us) ? `cites you for ${num(sf.ai_overview_cites_us)}` : num(sf.ai_overview_sources_unknown) ? 'whether it cites you was not loaded' : 'it did not cite you in these checks'} />
+            <SerpStat label="Featured snippet" value={num(sf.featured_snippet) ?? 0} of={num(serp.checked)} hint={num(sf.snippet_ours) ? `${num(sf.snippet_ours)} held by you` : 'held by other sites'} />
+            <SerpStat label="People Also Ask" value={num(sf.people_also_ask) ?? 0} of={num(serp.checked)} hint="questions worth answering on the page" />
+            <SerpStat label="Your share of voice" value={null} display={serp.share_of_voice == null ? '–' : `${num(serp.share_of_voice)}%`} hint="estimated from the clicks page 1 offers" />
+          </div>
+          {objs(serp.competitors_above).length > 0 && (
+            <div className="mt-4">
+              <p className="text-[13px] font-medium text-ink-2">Who is above you</p>
+              <ul className="mt-2 divide-y divide-line">
+                {objs(serp.competitors_above).slice(0, 8).map((c) => (
+                  <li key={str(c.domain)} className="flex items-center justify-between gap-3 py-2 text-sm">
+                    <span className="flex items-center gap-2 text-ink">
+                      {str(c.domain)}
+                      {c.tracked === true && <Badge tone="accent">competitor</Badge>}
+                    </span>
+                    <span className="tabular text-[13px] text-ink-2">best #{num(c.best_position)} · ahead for {num(c.keywords)} {num(c.keywords) === 1 ? 'keyword' : 'keywords'}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {str(serp.head_line) && <p className="mt-3 text-xs text-ink-3">{str(serp.head_line)}</p>}
+          {str(serp.method) && <p className="mt-1 text-xs text-ink-3">Share of voice: {str(serp.method)}</p>}
+        </Block>
+      )}
+
       {(gains.length > 0 || drops.length > 0) && (
         <div className="grid gap-5 lg:grid-cols-2">
           <MoverList title="Gains" items={gains} icon={<TrendingUp />} tone="good" />
@@ -170,6 +210,20 @@ export function RankTrackerReport({ report }: { report: ReportDetail }) {
         </div>
       )}
     </Stagger>
+  );
+}
+
+/** one counted feature of the results pages; `display` is used when the figure is not a count out of the keywords checked */
+function SerpStat({ label, value, of, hint, display }: { label: string; value: number | null; of?: number | null; hint?: string; display?: string }) {
+  return (
+    <div className="rounded-xl border border-line bg-surface p-4 shadow-card">
+      <p className="text-[13px] font-medium text-ink-2">{label}</p>
+      <p className="mt-1 font-display text-2xl font-semibold text-ink">
+        {display ?? value ?? 0}
+        {display == null && of ? <span className="text-sm font-normal text-ink-3"> / {of}</span> : null}
+      </p>
+      {hint && <p className="mt-1 text-xs text-ink-3">{hint}</p>}
+    </div>
   );
 }
 

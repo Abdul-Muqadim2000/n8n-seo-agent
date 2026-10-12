@@ -56,6 +56,9 @@ import {
   type QueryRow,
   type RankHistoryRow,
   type RankPoint,
+  type SerpCompetitor,
+  type SerpFeatures,
+  type SerpReading,
   type RankingsData,
   type SearchData,
   type SiteMetricsRow,
@@ -68,6 +71,8 @@ import {
   type TrendPoint,
   type TrendRow,
   type MonitorSettings,
+  prospectDraft,
+  draftSuperseded,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { siteRows } from '../n8n/client';
@@ -288,11 +293,101 @@ export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData
 
 // ---------------- rankings ----------------
 
+/**
+ * G6: a mobile check is a second reading of the same keyword, so it never belongs in the position series. Rows written before G6 have
+ * no device at all, and those are desktop checks.
+ */
+const isMobile = (r: RankHistoryRow) => s(r.device) === 'mobile';
+const desktopRows = (rows: RankHistoryRow[]) => rows.filter((r) => !isMobile(r));
+
+const sov = (r: RankHistoryRow | undefined): number | null => {
+  const v = r?.share_of_voice;
+  if (v == null || v === ('' as unknown)) return null;
+  const x = Number(v);
+  return Number.isFinite(x) && x >= 0 ? x : null; // -1 = the check failed: no share, not 0%
+};
+
+type FeatJson = {
+  unavailable?: boolean; checked_at?: string | null;
+  ai_overview?: { shown?: boolean | null; cites_us?: boolean | null; content_loaded?: boolean; cited_domains?: string[] };
+  featured_snippet?: { shown?: boolean | null; ours?: boolean | null; domain?: string };
+  people_also_ask?: { shown?: boolean | null; count?: number; questions?: string[] };
+  local_pack?: { shown?: boolean | null; ours?: boolean | null };
+  video?: { shown?: boolean | null }; shopping?: { shown?: boolean | null };
+};
+type CompJson = {
+  our_position?: number | null; method?: string;
+  above?: { d?: string; p?: number | null; t?: boolean }[];
+  competitors?: { d?: string; p?: number | null; t?: boolean }[];
+};
+type SnapJson = { at?: string | null; device?: string; top?: { p?: number; u?: string; t?: string }[] };
+
+const tri = (v: boolean | null | undefined): boolean | null => (v === true ? true : v === false ? false : null);
+const comps = (list: CompJson['above']): SerpCompetitor[] =>
+  (list ?? []).filter((x) => s(x.d)).map((x) => ({ domain: s(x.d), position: x.p == null ? null : n(x.p), tracked: x.t === true }));
+
+/** the labels the tables show; the same words the weekly e-mail uses (_rank_serp.js RS.featureChips) */
+function featureLabels(f: SerpFeatures): string[] {
+  if (f.unavailable) return ['not read'];
+  const out: string[] = [];
+  if (f.aiOverview.shown) out.push(`AI Overview${f.aiOverview.citesUs === true ? ' (cites you)' : f.aiOverview.citesUs === null ? ' (sources not loaded)' : ''}`);
+  if (f.featuredSnippet.shown) out.push(`Snippet${f.featuredSnippet.ours ? ' (yours)' : ''}`);
+  if (f.peopleAlsoAsk.shown) out.push('PAA');
+  if (f.localPack.shown) out.push(`Local pack${f.localPack.ours ? ' (yours)' : ''}`);
+  if (f.video) out.push('Video');
+  if (f.shopping) out.push('Shopping');
+  return out;
+}
+
+/** G6: the results page of the latest desktop check of one keyword, plus the latest mobile reading when one was bought */
+export function serpReading(rows: RankHistoryRow[]): SerpReading | null {
+  const desk = desktopRows(rows).slice().sort(byDate((r) => s(r.checked_at)));
+  const last = desk[desk.length - 1];
+  const raw = last?.features_json ? safeJson<FeatJson | null>(last.features_json, null) : null;
+  const mobRow = rows.filter(isMobile).slice().sort(byDate((r) => s(r.checked_at))).pop();
+  const mobile = mobRow && n(mobRow.position) >= 0 ? { position: n(mobRow.position), checkedAt: s(mobRow.checked_at) } : null;
+  if (!raw) return mobile ? { features: emptyFeatures(), shareOfVoice: null, method: '', above: [], competitors: [], snapshot: { at: null, device: 'desktop', top: [] }, mobile } : null;
+  const c = safeJson<CompJson>(last?.competitors_json ?? '', {});
+  const snap = safeJson<SnapJson>(last?.snapshot_json ?? '', {});
+  const features: SerpFeatures = {
+    unavailable: raw.unavailable === true,
+    checkedAt: raw.checked_at ?? (last ? s(last.checked_at) : null),
+    aiOverview: { shown: tri(raw.ai_overview?.shown), citesUs: tri(raw.ai_overview?.cites_us), sourcesLoaded: raw.ai_overview?.content_loaded === true, citedDomains: (raw.ai_overview?.cited_domains ?? []).map(s).filter(Boolean) },
+    featuredSnippet: { shown: tri(raw.featured_snippet?.shown), ours: tri(raw.featured_snippet?.ours), domain: s(raw.featured_snippet?.domain) },
+    peopleAlsoAsk: { shown: tri(raw.people_also_ask?.shown), count: n(raw.people_also_ask?.count), questions: (raw.people_also_ask?.questions ?? []).map(s).filter(Boolean) },
+    localPack: { shown: tri(raw.local_pack?.shown), ours: tri(raw.local_pack?.ours) },
+    video: tri(raw.video?.shown),
+    shopping: tri(raw.shopping?.shown),
+    labels: [],
+  };
+  features.labels = featureLabels(features);
+  return {
+    features,
+    shareOfVoice: sov(last),
+    method: s(c.method),
+    above: comps(c.above),
+    competitors: comps(c.competitors),
+    snapshot: { at: snap.at ?? null, device: s(snap.device) || 'desktop', top: (snap.top ?? []).filter((t) => s(t.u)).map((t) => ({ position: n(t.p), url: s(t.u), title: s(t.t) })) },
+    mobile,
+  };
+}
+
+function emptyFeatures(): SerpFeatures {
+  return {
+    unavailable: true, checkedAt: null,
+    aiOverview: { shown: null, citesUs: null, sourcesLoaded: false, citedDomains: [] },
+    featuredSnippet: { shown: null, ours: null, domain: '' },
+    peopleAlsoAsk: { shown: null, count: 0, questions: [] },
+    localPack: { shown: null, ours: null },
+    video: null, shopping: null, labels: ['not read'],
+  };
+}
+
 export function rankSeries(rows: RankHistoryRow[]): { history: RankPoint[]; latest: number | null; previous: number | null; best: number | null; lastChecked: string | null } {
-  const history = rows
+  const history = desktopRows(rows)
     .slice()
     .sort(byDate((r) => s(r.checked_at)))
-    .map((r) => ({ checkedAt: s(r.checked_at), position: n(r.position) }));
+    .map((r) => ({ checkedAt: s(r.checked_at), position: n(r.position), shareOfVoice: sov(r) }));
   const ok = history.filter((h) => h.position >= 0); // -1 = the check failed: check again, not "does not rank"
   const pos = ok.filter((h) => h.position > 0).map((h) => h.position);
   return {
@@ -328,8 +423,10 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
       .slice()
       .sort((a, c) => n(a.rung) - n(c.rung) || n(a.page_no) - n(c.page_no))
       .map((r) => {
-        const series = rankSeries(histBy.get(`${id}|${s(r.keyword).toLowerCase()}`) ?? []);
+        const hist = histBy.get(`${id}|${s(r.keyword).toLowerCase()}`) ?? [];
+        const series = rankSeries(hist);
         return {
+          serp: serpReading(hist),
           rung: n(r.rung),
           pageNo: n(r.page_no),
           keyword: s(r.keyword),
@@ -372,11 +469,13 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
   for (const k of site.keywords) if (!siteKw.has(k.toLowerCase())) siteKw.set(k.toLowerCase(), []);
   const keywords: TrackedKeyword[] = [...siteKw.entries()].map(([kw, rs]) => {
     const series = rankSeries(rs);
-    const last = rs[rs.length - 1];
+    const desk = rs.filter((r) => s(r.device) !== 'mobile');
+    const last = desk[desk.length - 1];
     return {
       keyword: kw,
       url: s(last?.url),
       serpFeatures: splitList(last?.serp_features),
+      serp: serpReading(rs),
       latestPosition: series.latest,
       previousPosition: series.previous,
       bestPosition: series.best,
@@ -483,6 +582,12 @@ const toAudit = (r: AuditRow): AuditPoint => ({
   scheduled: b(r.scheduled),
 });
 
+/** G26: the impact weight of a stored finding — null for the audits written before the column existed (they keep the severity order). */
+const impactOf = (f: AuditFindingRow): number | null => {
+  const v: unknown = f.impact;
+  return v == null || v === '' ? null : n(v);
+};
+
 export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string): Promise<TechnicalData> {
   const d = site.domain;
   const [audits, reports] = await Promise.all([
@@ -508,13 +613,21 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
       affectedCount: n(f.affected_count),
       previousCount: prevBy.has(f.finding_key) ? n(prevBy.get(f.finding_key)!.affected_count) : null,
       status: (previous ? (prevBy.has(f.finding_key) ? 'open' : 'new') : 'open') as Finding['status'],
+      impact: impactOf(f),
+      impactBasis: s(f.impact_basis),
     })),
     ...prev
       .filter((f) => !curKeys.has(f.finding_key))
-      .map((f) => ({ key: s(f.finding_key), category: s(f.category), severity: s(f.severity), title: s(f.title), affectedCount: 0, previousCount: n(f.affected_count), status: 'fixed' as const })),
+      .map((f) => ({ key: s(f.finding_key), category: s(f.category), severity: s(f.severity), title: s(f.title), affectedCount: 0, previousCount: n(f.affected_count), status: 'fixed' as const, impact: impactOf(f), impactBasis: s(f.impact_basis) })),
   ];
   const sevRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-  findings.sort((a, c) => (sevRank[a.severity.toLowerCase()] ?? 5) - (sevRank[c.severity.toLowerCase()] ?? 5) || c.affectedCount - a.affectedCount);
+  // G26 (2026-10-12, FIX_PLAN): the audit ranked its findings by likely impact (severity x pages affected x the clicks and impressions
+  // those pages get x their place in the site). Keep that order where it exists, so the app's lists agree with the report; audits written
+  // before this change carry no weight and keep the severity order.
+  findings.sort((a, c) =>
+    a.impact != null && c.impact != null
+      ? c.impact - a.impact || (sevRank[a.severity.toLowerCase()] ?? 5) - (sevRank[c.severity.toLowerCase()] ?? 5)
+      : (sevRank[a.severity.toLowerCase()] ?? 5) - (sevRank[c.severity.toLowerCase()] ?? 5) || c.affectedCount - a.affectedCount);
   const cats = new Map<string, { category: string; critical: number; high: number; medium: number; low: number }>();
   for (const f of findings) {
     if (f.status === 'fixed') continue;
@@ -940,9 +1053,12 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
         firstSeen: s(p.first_seen),
         lastSeen: s(p.last_seen),
         wonAt: s(p.won_at),
-        outreachSubject: s(p.outreach_subject),
-        outreachBody: s(p.outreach_body),
-        note: s(p.note),
+        // P34-1: a draft written before the current outreach gates (or one with no date) is superseded — never offered again
+        outreachSubject: prospectDraft(p)?.subject ?? '',
+        outreachBody: prospectDraft(p)?.body ?? '',
+        note: draftSuperseded(p)
+          ? [s(p.note), 'The draft written for this site earlier was withdrawn: it dates from before the current outreach rules (no government portals, no competitors, no bare homepages, your business name from the site model). The next run writes a new one.'].filter(Boolean).join(' · ')
+          : s(p.note),
         score: n(p.score),
         origin: s(p.origin),
         contactEmail: s(p.contact_email),
@@ -1009,7 +1125,7 @@ function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTar
     const pr = prospects.find((x) => s(x.prospect_domain) === s(e.host)) ?? null;
     return { url: s(e.url), title: s(e.title), host: s(e.host), kind: s(e.kind), citations: n(e.citations), engines: arr<string>(e.engines).map(String), questions: arr<string>(e.questions).map(String),
       mentionsUs: e.mentions_us == null ? null : b(e.mentions_us), competitorsNamed: arr<string>(e.competitors_named).map(String), action: s(e.action), status: (s(pr?.status) || s(e.status)).replace(/^drafted$/, 'new'),
-      drafted: !!s(pr?.outreach_body), contactEmail: s(pr?.contact_email), draft: pr && s(pr.outreach_body) ? { subject: s(pr.outreach_subject), body: s(pr.outreach_body) } : null };
+      drafted: !!prospectDraft(pr), contactEmail: s(pr?.contact_email), draft: prospectDraft(pr) };   // P34-1: the stale pre-gate drafts are not this week's work and are not offered
   });
   const ent = safeJson<P | null>(g.entity_json, null);
   const month = new Date().toISOString().slice(0, 7);

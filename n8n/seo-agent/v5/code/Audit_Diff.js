@@ -1,12 +1,22 @@
-// Compares this audit with the site's previous one (seo_audits + seo_audit_findings): fixed, new and still-open findings (matched on category +
-// title with numbers ignored) and the score change; and suggests internal links from the crawl (pages with few links in, orphan pages, pages with
+// Compares this audit with the site's previous one OF THE SAME TYPE (seo_audits + seo_audit_findings, report_type technical / full): fixed, new and
+// still-open findings (matched on category + title with numbers ignored) and the score change; and suggests internal links from the crawl (pages with few links in, orphan pages, pages with
 // search impressions) from strong pages on the same topic. Adds audit_diff / internal_links to site_audit; audit_id identifies this audit.
+/*__SITE_MODEL__*/
 const d = $input.first().json; const a = d.site_audit || {};
 const base = $('Check Crawl').first().json; const domain = base.domain; const site_id = 'site_' + String(domain).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+// D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain
+// 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.
+let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
+const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);
 const rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && r.site_id); } catch (e) { return []; } };
 const audits = rowsOf('Load Audit History').filter(r => r.site_id === site_id).sort((x, y) => String(y.audited_at).localeCompare(String(x.audited_at)));
-const prev = audits[0] || null;
-const prevF = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id) : [];
+// D2 (2026-10-11): only an audit of the same type is comparable — a technical audit never checks rankings, AI answers or the keyword gap, so
+// compared with a full report it "fixed" 25 findings. Rows without a report_type (none since v4.5) are not compared either.
+const curType = a.audit_level || 'site_audit'; const LABEL = { site_audit: 'technical audit', full: 'full SEO report' }; const labelOf = (t) => LABEL[t] || String(t || 'audit');
+const prev = audits.find(r => String(r.report_type || '') === curType) || null;
+const otherType = !prev ? (audits.find(r => r.report_type && r.report_type !== curType) || null) : null;
+const assessed = new Set(Object.keys(a.weights || {}));   // the categories this audit type scores: a finding outside them is "not checked", never "fixed"
+const prevF = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id).filter(r => !assessed.size || assessed.has(r.category)) : [];
 const keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\d[\d,.%]*/g, '#').replace(/["'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
 const cur = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info');
 const curKeys = new Map(cur.map(f => [keyOf(f), f])); const prevKeys = new Map(prevF.map(f => [f.finding_key, f]));
@@ -17,8 +27,9 @@ const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]
 const audit_id = 'aud_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const audited_at = new Date().toISOString();
 const days = prev ? Math.round((Date.now() - new Date(prev.audited_at).getTime()) / 864e5) : null;
-const audit_diff = prev ? { baseline: false, previous: { audit_id: prev.audit_id, audited_at: prev.audited_at, health_score: Number(prev.health_score), grade: prev.grade, findings: Number(prev.findings) || prevF.length }, days_since: days,
-  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open' } : { baseline: true, summary: 'First audit stored: the next one shows what was fixed, what is new and what is still open.' };
+const audit_diff = prev ? { baseline: false, report_type: curType, previous: { audit_id: prev.audit_id, audited_at: prev.audited_at, report_type: prev.report_type, health_score: Number(prev.health_score), grade: prev.grade, findings: Number(prev.findings) || prevF.length }, days_since: days,
+  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')' }
+  : { baseline: true, report_type: curType, summary: 'First ' + labelOf(curType) + ' stored: the next one shows what was fixed, what is new and what is still open.' + (otherType ? ' The ' + labelOf(otherType.report_type) + ' of ' + String(otherType.audited_at).slice(0, 10) + ' is a different report type and is not compared.' : '') };
 // ---- internal links: targets that need links, sources on the same topic that already carry authority ----
 const pages = ($('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.status_code === 200 && p.resource_type === 'html' && !(p.checks || {}).is_redirect && !/(\?|\/(tag|category|author|page)\/|\/feed\/?$)/i.test(p.url));
 const norm = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
@@ -29,7 +40,7 @@ const titleOf = (p) => String(((p.meta || {}).htags || {}).h1?.[0] || (p.meta ||
 const topicOf = (p) => new Set([...toks(titleOf(p)), ...toks(String(p.url).replace(/^https?:\/\/[^\/]+/, ''))].filter(t => !brandToks.has(t)));
 const inl = (p) => Number((p.meta || {}).inbound_links_count) || 0;
 const sc = a.search_console || {}; const shown = new Map((sc.top_pages || []).map(x => [norm(x.page), Number(x.impressions) || 0]));
-const targets = pages.filter(p => norm(p.url) !== norm('https://' + domain) && (inl(p) <= 2 || (p.checks || {}).is_orphan_page || (shown.get(norm(p.url)) || 0) >= 50 && inl(p) <= 5) && !/privacy|terms|cookie|legal|login|cart|checkout/i.test(p.url))
+const targets = pages.filter(p => norm(p.url) !== norm(siteUrlOf(domain, '/')) && (inl(p) <= 2 || (p.checks || {}).is_orphan_page || (shown.get(norm(p.url)) || 0) >= 50 && inl(p) <= 5) && !/privacy|terms|cookie|legal|login|cart|checkout/i.test(p.url))
   .sort((x, y) => (shown.get(norm(y.url)) || 0) - (shown.get(norm(x.url)) || 0) || inl(x) - inl(y)).slice(0, 25);
 const sources = pages.filter(p => inl(p) >= 3 || (Number(p.click_depth) || 9) <= 1);
 const internal_links = [];

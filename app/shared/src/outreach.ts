@@ -7,7 +7,7 @@ import type { DtRow } from './tables';
 // ---- n8n Data Tables written by the Link Builder workflow (SEOagentLinkBld1) ----
 export interface LinkOutreachRow extends DtRow {
   site_id: string; domain: string; prospect_domain: string; type: string;
-  /** ready (qualified, contact found) | drafted (sequence written) | needs_contact | not_fit | fix (a redirect to add on our own site) */
+  /** ready (qualified, contact found) | drafted (sequence written and every check passed) | needs_edit (written, but the draft gate held it: the reason is in fit_reason) | needs_contact | not_fit | fix (a redirect to add on our own site) */
   status: string; score: number | null; fit: number | null; fit_reason: string; checks_json: string; page_url: string; page_title: string; evidence: string;
   contacts_json: string; contact_email: string; contact_form_url: string; country: string; language: string; target_url: string; target_reason: string;
   anchor_hint: string; sequence_json: string; deadline: string; drafted_at: string; checked_at: string; request_id: string;
@@ -160,4 +160,37 @@ export function parseReturnDate(text: string, now: Date): Date | null {
     m = s.match(/\b(\d{1,2})[/.](\d{1,2})(?:[/.](\d{2,4}))?\b/); if (m) { const y = m[3] ? (m[3].length === 2 ? 2000 + +m[3] : +m[3]) : undefined; const x = future(+m[2]! - 1, +m[1]!, y); if (x) return x; }   // day / month (most of the world)
   }
   return null;
+}
+
+// ---- which stored outreach draft may still be offered (P34-1, 2026-10-12) ----
+// The AI Growth report of 2026-10-12 counted eight "outreach drafts written" and printed a pitch to a government portal signed with the
+// website's domain — drafts written on 2026-10-02, before the gates that refuse government sites, competitors and bare homepages and
+// that take the business name from the site model. Nothing had written them that week: the counter read the stored prospect row.
+// Every writer now stamps `drafted_at`. A stored draft with no stamp, or one from before the gates, is **superseded**: it is not shown,
+// not counted and not offered to the owner; the engine clears it on its next run and says so in the row's note. A draft that was
+// already sent (the prospect is contacted or won) is part of the record and is never withdrawn.
+// The engine applies the identical rule in n8n/seo-agent/v5/code/_drafts.js — the two must stay in step.
+export const DRAFT_GATES_AT = '2026-10-12';
+export interface StoredDraftRow {
+  outreach_subject?: string | null; outreach_body?: string | null; drafted_at?: string | null;
+  status?: string | null; contacted_at?: string | null;
+}
+const draftStr = (v: unknown) => String(v ?? '').trim();
+/** was this draft sent? then it stays on the record whenever it was written */
+export const draftWasSent = (row: StoredDraftRow | null | undefined): boolean => {
+  const r = row ?? {};
+  return !!draftStr(r.contacted_at) || ['contacted', 'won'].includes(draftStr(r.status).toLowerCase());
+};
+/** a stored draft written before the current outreach rules (or with no date at all), and never sent */
+export const draftSuperseded = (row: StoredDraftRow | null | undefined): boolean => {
+  const r = row ?? {};
+  if (!draftStr(r.outreach_body) || draftWasSent(r)) return false;
+  const at = draftStr(r.drafted_at).slice(0, 10);
+  return !at || at < DRAFT_GATES_AT;
+};
+/** the draft to show for a prospect row, or null when there is none to offer */
+export function prospectDraft(row: StoredDraftRow | null | undefined): { subject: string; body: string; draftedAt: string } | null {
+  const r = row ?? {};
+  if (!draftStr(r.outreach_body) || draftSuperseded(r)) return null;
+  return { subject: draftStr(r.outreach_subject), body: draftStr(r.outreach_body), draftedAt: draftStr(r.drafted_at) };
 }

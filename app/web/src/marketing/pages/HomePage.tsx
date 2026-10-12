@@ -305,7 +305,8 @@ function LadderSpotlight() {
             <CheckList
               items={[
                 'Difficulty for your site, with a Direct, Short or Full plan',
-                'Weekly rank checks for every rung and the head term',
+                'Weekly rank checks for every rung and the head term, on desktop and on a phone',
+                'Every check records the results page too: AI Overview, snippet, who ranks above you and your share of voice',
                 'No keyword overlap between ladders, and a guard against drafts piling up',
               ]}
             />

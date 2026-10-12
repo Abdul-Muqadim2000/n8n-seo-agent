@@ -69,7 +69,13 @@ Per site with `link_builder` on (Site Admin `monitors`; the app turns it on):
    `wayback`), competitors' broken backlinks (DataForSEO `is_broken`, monthly, ≈ $0.07), and the **listings checklist** (§4).
 2. **Qualify** every new prospect of every type (also the monitor's and AI Growth's): the page answers, its language, signs it sells
    links (price lists, "sponsored post", casino / CBD / essay categories), hundreds of unrelated outbound domains, already linking,
-   spam score, contacted in the last 90 days → `not_fit` with the reason.
+   spam score, contacted in the last 90 days → `not_fit` with the reason. **Never pitched** (D13, 2026-10-12; `v5/code/_outreach_kit.js`):
+   a declared competitor or a prospect whose own page sells what we sell (our service words from the site model on their page *plus* the
+   signals of a vendor selling them — a list that leaves us out, a mention or a journalist request stays pitchable), a bare homepage,
+   a mailbox provider (outlook.com), a contact / company database (zoominfo.com), a CDN or a statistics page, a government portal, and a
+   list of accredited / approved providers while the site model's `accreditation` is empty. The business name for every pitch comes from
+   the **site model** (profile → the homepage's `og:site_name` / Organization name → what the app sent), never from the domain label
+   ("techand" for Tech&); with no name on file the e-mails carry `[Confirm: the business name]` and the draft gate holds them.
 3. **Contacts**: the prospect's page, its author page, contact and about pages; up to 3 addresses ranked author / named person on their
    domain → editorial (editor@, news@, press@) → general (info@, hello@); a contact form is a task for a person. Never no-reply, privacy,
    abuse, jobs. The address's source page is kept (GDPR Art. 14 line).
@@ -84,6 +90,8 @@ Per site with `link_builder` on (Site Admin `monitors`; the app turns it on):
 7. Report + callback `link_builder` (new opportunities, drafts ready, listings missing, impact reads).
 
 The **Backlink Monitor** keeps discovery and "won"; for a site with the Link Builder on it no longer drafts e-mails (one writer).
+**Facts only (D14, 2026-10-11):** the prompt always carries the facts block ("none on file" when empty) with the rule that any claim the facts do not state goes to the owner as `[Owner: …]`; the app sends `business_facts` and the business profile (`profile`: business, author, reviewer, address, phone, e-mail, service areas; `app/server/src/services/replyFacts.ts`), merged by Reply Input; Reply Result then checks every sentence of the suggested answer against the facts with `_claims.js` (`CL.check`: accredited, certified, partner, ISO, licensed, registered, approved, award, member of, founded, since, based in, numbers of years / clients / %, prices) and wraps an unsupported one in `[Owner: confirm — …]`, sets `needs_you` and lists it in `unverified`. Live 2026-10-11 the answer invented an accreditation with empty facts (execs 357-360).
+
 **SEO Agent — Reply Reader** (`SEOagentReplyRd1`, `POST /webhook/seo-reply-read`, synchronous, Claude Haiku ≈ $0.001): reads one reply
 with our e-mail → class (interested / question / says linked / wants payment / link swap / not now / declined / unsubscribe / wrong person
 / out of office / other), a one-line summary, the out-of-office return date, a referred contact, and a suggested answer; when the reply
@@ -141,6 +149,19 @@ questions, local), how we detect it (web search on that site for the brand / dom
 followed or not), whether competitors are there, and a submission kit from the business profile (name, one-line and 100-word
 descriptions, category, logo, address, phone). Statuses: linked / listed without link / missing / submitted / unknown. Nothing is
 submitted automatically (the platforms forbid bots; Google names automated link creation as spam): the person submits, we verify.
+
+### The draft gate (L2, 2026-10-12)
+Every sequence the writer produces passes **LB Draft QA** (`v5/code/_draft_qa.js`) before the app may offer it: every claim checked against
+the business facts on file (`CL.check` with `ours: true` — a word inside quotation marks or a URL is not a claim, and a sentence about *their*
+page is not a claim about us; what the facts do not carry is wrapped `[Owner: confirm — …]`), nothing left in brackets, the address on the
+prospect's own domain (a journalist request is answered at the address in the request), something really quoted from their page (three
+distinctive words in a row from its title, our evidence or the dead link), exactly one link per e-mail — the page we chose, on the canonical
+host —, the prospect gates of §2 again, first e-mail ≤ 120 words (press ≤ 200), follow-ups ≤ 60, a subject ≤ 70 characters, one clear ask, no
+SEO / AI / hype words, and the business name as the site model has it. A draft that fails is stored as **`needs_edit`** with its reasons
+(`fit_reason`): the app shows it for editing, automatic mode skips it, the report lists it, and nothing is sent. The app mirrors the same rules
+(`app/shared/src/draft-qa.ts`) and runs them again on approval, on the text as the person edited it — the two files change together.
+**Before the first e-mail** (L1) the recipient's domain is checked for an MX record (an A record counts); with neither, the address is
+suppressed with the reason and the sequence stops (`app/server/src/services/mail.ts` `mxCheck`, cached per domain for a day).
 
 ## 5. Which page of ours, which link text (rules)
 Candidates: published ladder pages (keyword, rung, page type), AI answer pages, written pages from the content log, the top Search
@@ -218,6 +239,7 @@ n8n tables (created by the workflow, columns in `ladder_common.py`): `seo_link_o
   website's monitor settings ("Link builder") or Site Admin `monitors` `{ link_builder: true }`; free checks run any time ("Find
   opportunities now" → free check).
 - techand.ai: connect its mailbox (company settings → Mailboxes) with a postal address; MoF accreditation (or the accredited partner's page).
+  Until the accreditation is on file (the site model's `accreditation`), accredited-provider lists are not pitched — by design (D13 / O3).
 Microsoft 365 (Graph OAuth) and Gmail OAuth mailboxes (Gmail needs Google's restricted-scope verification for reading replies); podcasts
 (Podcast Index key); the journalist digests (HARO / Source of Sources e-mails read from the connected mailbox); linkable-asset ideas from
 competitors' most-linked pages; reply rates per subject line (A/B).

@@ -154,6 +154,49 @@ export interface SearchData {
 export interface RankPoint {
   checkedAt: string;
   position: number;
+  /** G6: our modelled share of the clicks page 1 offers at that check (null = not recorded or the check failed) */
+  shareOfVoice?: number | null;
+}
+
+/**
+ * G6: what one rank check's results page showed, read back from the stored row (`features_json` of `seo_rank_history`, written by
+ * `v5/code/_rank_serp.js`). `null` always means "not known from this check", never "no": a check that failed claims nothing, and an
+ * AI Overview Google loads asynchronously comes back without its sources, so `citesUs` is then null.
+ */
+export interface SerpFeatures {
+  unavailable: boolean;
+  checkedAt: string | null;
+  aiOverview: { shown: boolean | null; citesUs: boolean | null; sourcesLoaded: boolean; citedDomains: string[] };
+  featuredSnippet: { shown: boolean | null; ours: boolean | null; domain: string };
+  peopleAlsoAsk: { shown: boolean | null; count: number; questions: string[] };
+  localPack: { shown: boolean | null; ours: boolean | null };
+  video: boolean | null;
+  shopping: boolean | null;
+  /** the short labels the tables show ("AI Overview (cites you)", "Snippet (yours)", "PAA", …) */
+  labels: string[];
+}
+
+/** G6: the other sites on the results page, from the same check */
+export interface SerpCompetitor {
+  domain: string;
+  position: number | null;
+  /** on the website's own competitor list (seo_monitors / the site model), not just a domain that happens to rank */
+  tracked: boolean;
+}
+
+/** G6: the whole results-page reading of the latest check of one keyword */
+export interface SerpReading {
+  features: SerpFeatures;
+  /** our modelled share of the clicks page 1 offers (null = the check failed) */
+  shareOfVoice: number | null;
+  /** how that share is modelled — shown wherever the number is shown; it is not measured clicks */
+  method: string;
+  above: SerpCompetitor[];
+  competitors: SerpCompetitor[];
+  /** the top 10 kept as proof of the reading */
+  snapshot: { at: string | null; device: string; top: { position: number; url: string; title: string }[] };
+  /** the mobile reading of the same keyword, when one was bought (the ladder's main keywords, weekly) */
+  mobile: { position: number; checkedAt: string } | null;
 }
 
 export interface LadderRung {
@@ -171,6 +214,8 @@ export interface LadderRung {
   bestPosition: number | null;
   lastChecked: string | null;
   history: RankPoint[];
+  /** G6: the results page of the latest check (features, competitors, share of voice, the mobile reading); absent before G6 */
+  serp?: SerpReading | null;
 }
 
 export interface Ladder {
@@ -192,6 +237,8 @@ export interface TrackedKeyword {
   bestPosition: number | null;
   lastChecked: string | null;
   history: RankPoint[];
+  /** G6: the results page of the latest check (features, competitors, share of voice, the mobile reading); absent before G6 */
+  serp?: SerpReading | null;
 }
 
 export interface RankingsData {
@@ -266,6 +313,9 @@ export interface Finding {
   affectedCount: number;
   previousCount: number | null;
   status: FindingStatus;
+  /** G26: the audit's impact weight and why it ranks where it does (null on audits written before 2026-10-12). */
+  impact: number | null;
+  impactBasis: string;
 }
 
 export interface TechnicalData {

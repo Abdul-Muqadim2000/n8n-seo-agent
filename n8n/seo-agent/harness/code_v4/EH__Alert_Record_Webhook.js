@@ -1,0 +1,58 @@
+// D25b (2026-10-12, system review FIX_PLAN.md): the seo_ops_alerts row for this failure (exact columns - the Data Table node auto-maps every
+// field it is given). The row is written BEFORE anything is sent, so a failed run is on record even when every channel is down.
+// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----
+// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console
+// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table
+// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook
+// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within
+// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is
+// simply skipped, and neither channel can fail the run.
+const OA = (() => {
+  const DEDUPE_MINUTES = 30;
+  const S = (v) => String(v == null ? '' : v).trim();
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so "timeout after 30012ms"
+  // and "timeout after 31004ms" at the same node are one alert
+  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',
+    S(a.message).toLowerCase().replace(/\d[\d.,:]*/g, '#').replace(/["'`][^"'`]*["'`]/g, '"x"').replace(/\s+/g, ' ').slice(0, 160)].join(' | ');
+  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';
+
+  const plan = (alert, rows, cfg) => {
+    const a = alert || {}, c = cfg || {};
+    const now = new Date();
+    const nowIso = now.toISOString();
+    const alert_key = keyOf(a);
+    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)
+      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;
+    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;
+    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;
+    const count = prior ? n0(prior.count) + 1 : 1;
+    const webhook_url = S(c.webhook_url);
+    const email_to = S(c.email_to);
+    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);
+    const notify = !repeat;
+    const plain = [S(a.workflow) + ' failed at "' + S(a.node) + '"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),
+      S(a.execution_url), S(a.message)].filter(Boolean).join('\n');
+    const row = {
+      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),
+      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),
+      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,
+      channels: channels.join(','),
+      delivered: notify ? 'pending' : 'deduped',
+      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500)
+    };
+    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else
+    const body = {
+      text: S(a.subject) + '\n' + plain, content: S(a.subject) + '\n' + plain, summary: S(a.subject),
+      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,
+        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }
+    };
+    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };
+  };
+
+  return { plan, keyOf, severityOf, DEDUPE_MINUTES };
+})();
+const alert = $('Format Alert').first().json;
+let rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}
+const CFG = { webhook_url: 'https://hooks.example.test/seo-agent-alerts', email_to: 'kinnngahmed@gmail.com' };   // baked from n8n/.env at build time ($env is blocked in nodes)
+return [{ json: OA.plan(alert, rows, CFG).row }];

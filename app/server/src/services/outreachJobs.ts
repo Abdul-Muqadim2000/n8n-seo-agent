@@ -1,10 +1,11 @@
 import { and, eq, inArray, lte, or, sql } from 'drizzle-orm';
-import { addWorkingDays, consentGate, emailDomain, inSendWindow, parseReturnDate, sendGap, warmupCap, type LinkOutreachRow, type ProspectRow } from '@seo/shared';
+import { addWorkingDays, consentGate, emailDomain, inSendWindow, parseReturnDate, sendGap, warmupCap, type LinkOutreachRow, type ProfileRow, type ProspectRow } from '@seo/shared';
 import { db, schema } from '../db';
 import type { MailboxRow, OutreachSequenceRow, SiteRow } from '../db/schema';
 import { replyRead, siteRows } from '../n8n/client';
 import { approve, isSuppressed, linkSettingsOf, sentCounts, setProspectStatus, suppress } from './linkBuilder';
-import { compose, connOf, imapClient, parseIncoming, rawMessage, savesSentCopy, smtpTransport, stripQuoted, type Incoming } from './mail';
+import { compose, connOf, imapClient, mxCheck, parseIncoming, rawMessage, savesSentCopy, smtpTransport, stripQuoted, type Incoming } from './mail';
+import { replyReadBody } from './replyFacts';
 
 // v4.13 Link Builder jobs (index.ts runs them on timers; LINK_BUILDER_JOBS=false switches them off):
 // - sender (every minute): per mailbox at most one e-mail per run, inside its sending window (Mon-Fri, its hours, its time zone), within the
@@ -84,6 +85,15 @@ export async function senderTick(log: Log, now = new Date()): Promise<number> {
         const site = await siteOf(q.siteId); if (!site) continue;
         const supp = await isSuppressed(q.orgId, q.toEmail);
         if (supp) { await db.update(schema.outreachSequences).set({ status: 'stopped', error: 'Not sent: ' + supp, nextAt: null, updatedAt: now }).where(eq(schema.outreachSequences.id, q.id)); continue; }
+        if (q.step === 0) {   // L1: the recipient's domain must accept mail at all — an address with no mail server is suppressed, never sent to
+          const mx = await mxCheck(q.toEmail);
+          if (!mx.ok) {
+            await suppress(q.orgId, 'email', q.toEmail, mx.via === 'none' ? 'no mail server for the domain (MX)' : 'not a valid address');
+            await db.update(schema.outreachSequences).set({ status: 'stopped', error: 'Not sent: ' + mx.reason, nextAt: null, updatedAt: now }).where(eq(schema.outreachSequences.id, q.id));
+            log.info({ sequence: q.id, domain: emailDomain(q.toEmail) }, 'outreach address suppressed: no mail server');
+            continue;
+          }
+        }
         if (q.step === 0) {   // at most 2 first e-mails to one site a week, never while another conversation with it is open
           const other = await db.select({ id: schema.outreachSequences.id, status: schema.outreachSequences.status, startedAt: schema.outreachSequences.startedAt }).from(schema.outreachSequences)
             .where(and(eq(schema.outreachSequences.orgId, q.orgId), eq(schema.outreachSequences.prospectDomain, q.prospectDomain), sql`${schema.outreachSequences.id} <> ${q.id}`));
@@ -138,8 +148,10 @@ async function handleIncoming(mb: MailboxRow, m: Incoming, log: Log): Promise<vo
     return;
   }
   const firstOut = await db.select().from(schema.outreachMessages).where(and(eq(schema.outreachMessages.sequenceId, q.id), eq(schema.outreachMessages.direction, 'out'))).orderBy(schema.outreachMessages.at).limit(1);
-  const reading = await replyRead({ domain: site.domain, prospect_domain: q.prospectDomain, page_url: q.pageUrl, business: site.business ? site.business.slice(0, 120) : site.domain, signer: [mb.signatureName || mb.fromName, mb.signatureTitle, mb.company].filter(Boolean).join(', '),
-    facts: site.businessFacts.slice(0, 1500), our_subject: firstOut[0]?.subject ?? q.steps[0]?.subject ?? '', our_body: firstOut[0]?.body ?? '', reply_from: m.from, reply_subject: m.subject, reply_text: m.kind === 'auto' ? m.text.slice(0, 3000) : text, received_at: now.toISOString() });
+  // D14: the business facts and the profile go with every reply, so the suggested answer states nothing the owner did not write
+  let profile: ProfileRow | null = null;
+  try { profile = (await siteRows<ProfileRow>('profiles', site.domain, { max: 5 }))[0] ?? null; } catch (e) { log.warn({ err: short(e) }, 'business profile not read for the reply'); }
+  const reading = await replyRead(replyReadBody({ site, profile, mailbox: mb, sequence: q, ourSubject: firstOut[0]?.subject ?? q.steps[0]?.subject ?? '', ourBody: firstOut[0]?.body ?? '', from: m.from, subject: m.subject, text: m.kind === 'auto' ? m.text.slice(0, 3000) : text, now }));
   const cls = m.kind === 'auto' ? 'out_of_office' : (reading?.class ?? (/^\s*(no|stop|unsubscribe|remove me)\b/i.test(text) || /^unsubscribe$/i.test(m.subject.trim()) ? 'unsubscribe' : 'other'));
   if (cls === 'out_of_office') {   // the conversation keeps its place: the next step waits until they are back
     const back = reading?.return_date ? new Date(reading.return_date + 'T09:00:00Z') : parseReturnDate(m.text, now);   // the app reads the date itself when the Reply Reader is off
@@ -204,6 +216,7 @@ export async function autoApproveTick(log: Log): Promise<number> {
       const taken = new Set((await db.select({ d: schema.outreachSequences.prospectDomain }).from(schema.outreachSequences).where(eq(schema.outreachSequences.orgId, site.orgId))).map((x) => x.d));
       for (const r of rows.sort((a, b) => Number(b.score) * (0.5 + Number(b.fit)) - Number(a.score) * (0.5 + Number(a.fit)))) {
         if (left <= 0) break; if (taken.has(String(r.prospect_domain)) || Number(r.fit) < 0.6 || r.type === 'press') continue;   // journalist answers always wait for a person
+        if (String(r.status) !== 'drafted') continue;   // L2: a draft the gate held ("needs_edit") waits for a person, never for the automatic mode
         const to = String(r.contact_email || ''); if (!to || consentGate(String(r.country), to).needed || (await isSuppressed(site.orgId, to))) continue;
         let steps; try { steps = (JSON.parse(String(r.sequence_json || '[]')) as { wait_days: number; subject: string; body: string }[]).map((x, i) => ({ step: i, waitDays: Number(x.wait_days) || 0, subject: x.subject || '', body: x.body || '' })); } catch { continue; }
         try { await approve(org, site, null, { prospectDomain: String(r.prospect_domain), type: String(r.type), toEmail: to, steps }); done++; left--; taken.add(String(r.prospect_domain)); } catch (e) { log.warn({ err: short(e), prospect: r.prospect_domain }, 'automatic approval skipped'); }

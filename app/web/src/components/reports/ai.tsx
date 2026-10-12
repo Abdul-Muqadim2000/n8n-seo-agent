@@ -70,10 +70,12 @@ export function AiVisibilityReport({ report }: { report: ReportDetail }) {
   ].sort((a, b) => b.value - a.value);
 
   const vis = num(m.visibility_score);
+  // D19 (fix plan of 2026-10-11): the rates count answered requests only, so the hint says how many requests failed
+  const failed = num(m.errors) ? ` · ${num(m.errors)} request${num(m.errors) === 1 ? '' : 's'} failed` : '';
   const mentionHint =
     arr<number>(m.mention_ci).length === 2
-      ? `95% range ${pct(arr<number>(m.mention_ci)[0], 0)}–${pct(arr<number>(m.mention_ci)[1], 0)} · ${num(m.samples) ?? num(m.answered) ?? 0} answers${delta.significant === true ? ' · real change' : delta.significant === false ? ' · change within noise' : ''}`
-      : `${num(m.mentioned) ?? 0} of ${num(m.answered) ?? 0} answers`;
+      ? `95% range ${pct(arr<number>(m.mention_ci)[0], 0)}–${pct(arr<number>(m.mention_ci)[1], 0)} · ${num(m.samples) ?? num(m.answered) ?? 0} answers${delta.significant === true ? ' · real change' : delta.significant === false ? ' · change within noise' : ''}${failed}`
+      : `${num(m.mentioned) ?? 0} of ${num(m.answered) ?? 0} answers${failed}`;
 
   return (
     <Stagger className="space-y-5">
@@ -301,7 +303,13 @@ function AiV49Blocks({ p, domain }: { p: P; domain: string }) {
         items={[
           { icon: <Gauge />, label: 'AI visibility score', value: num(m.visibility_score) != null ? `${Math.round(num(m.visibility_score)!)}/100` : '–', hint: 'named, how high in the list, linked; weighted by demand' },
           { icon: <Smile />, label: 'Sentiment', value: num(m.sentiment_score) != null ? `${num(m.sentiment_score)! > 0 ? '+' : ''}${num(m.sentiment_score)}` : '–', hint: `${num(per.positive) ?? 0} positive · ${num(per.negative) ?? 0} negative` },
-          { icon: <AlertTriangle />, label: 'Wrong claims', value: n(m.accuracy_issues ?? 0), hint: 'about you, against your business profile' },
+          // G10 (fix plan of 2026-10-11): "not checked" is not "nothing wrong" — without a fact sheet on file no claim can be judged
+          {
+            icon: <AlertTriangle />,
+            label: 'Wrong claims',
+            value: str(per.fact_check) && str(per.fact_check) !== 'checked' ? 'not checked' : n(m.accuracy_issues ?? 0),
+            hint: str(per.fact_check) && str(per.fact_check) !== 'checked' ? str(per.fact_check_note) || 'fill in your business profile and the next run checks every answer against it' : 'about you, against your business profile',
+          },
           { icon: <PieChart />, label: 'Market-wide share', value: num(idx.sov) != null ? pct(idx.sov) : '–', hint: num(idx.answers_citing_you) ? `${n(idx.answers_citing_you)} AI answers cite you` : 'AI-answer database, monthly' },
         ]}
       />

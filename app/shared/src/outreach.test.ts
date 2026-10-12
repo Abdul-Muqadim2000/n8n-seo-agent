@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addWorkingDays, consentGate, footerLines, inSendWindow, isAutoReply, isBounce, parseReturnDate, replySubject, sendGap, warmupCap } from './outreach';
+import { DRAFT_GATES_AT, addWorkingDays, consentGate, draftSuperseded, draftWasSent, footerLines, inSendWindow, isAutoReply, isBounce, parseReturnDate, prospectDraft, replySubject, sendGap, warmupCap, type StoredDraftRow } from './outreach';
 
 describe('link-building sending rules (v4.13)', () => {
   it('warms a new mailbox up: 5, then 10, then the set cap (at most 30)', () => {
@@ -60,5 +60,35 @@ describe('out-of-office return dates without the Reply Reader', () => {
     expect(parseReturnDate('I will be back 3/11', now)?.toISOString().slice(0, 10)).toBe('2026-11-03');
     expect(parseReturnDate('Away until 5 January', now)?.toISOString().slice(0, 10)).toBe('2027-01-05');
     expect(parseReturnDate('Thanks for your e-mail.', now)).toBeNull();
+  });
+});
+
+// P34-1 (live 2026-10-12): the AI growth page offered a pitch to a government portal, written on 2026-10-02 — before the gates — because
+// the app marked any prospect row with a stored body `drafted` and printed it.
+describe('stored outreach drafts: only the ones written under the current rules are offered (P34-1)', () => {
+  const row = (o: Partial<StoredDraftRow>): StoredDraftRow => ({ outreach_subject: 'A resource suggestion for your readers', outreach_body: 'I work at techand.ai. Your site appears in AI assistant answers…', ...o });
+  it('withdraws a draft written before the gates, and one with no date at all', () => {
+    expect(draftSuperseded(row({ drafted_at: '2026-10-02T06:00:00Z' }))).toBe(true);
+    expect(draftSuperseded(row({ drafted_at: '' }))).toBe(true);
+    expect(draftSuperseded(row({}))).toBe(true);
+    expect(prospectDraft(row({ drafted_at: '2026-10-02T06:00:00Z' }))).toBeNull();
+    expect(prospectDraft(row({ drafted_at: '' }))).toBeNull();
+  });
+  it('keeps a draft written on or after the gates, with its subject and body', () => {
+    const r = row({ drafted_at: `${DRAFT_GATES_AT}T11:00:00Z`, outreach_subject: 'A note on your e-invoicing page', outreach_body: 'Hello, I read your list this morning…' });
+    expect(draftSuperseded(r)).toBe(false);
+    expect(prospectDraft(r)).toEqual({ subject: 'A note on your e-invoicing page', body: 'Hello, I read your list this morning…', draftedAt: `${DRAFT_GATES_AT}T11:00:00Z` });
+    expect(prospectDraft(row({ drafted_at: '2026-11-04T08:00:00Z' }))?.body).toContain('techand.ai');
+  });
+  it('never withdraws a draft that was sent: it is the record the follow-ups build on', () => {
+    expect(draftWasSent(row({ status: 'contacted', contacted_at: '2026-10-03T06:00:00Z' }))).toBe(true);
+    expect(draftSuperseded(row({ status: 'contacted', contacted_at: '2026-10-03T06:00:00Z', drafted_at: '' }))).toBe(false);
+    expect(prospectDraft(row({ status: 'won', drafted_at: '2026-10-02T06:00:00Z' }))?.body).toBeTruthy();
+  });
+  it('a row with no draft is simply nothing to offer', () => {
+    expect(draftSuperseded({ outreach_body: '', drafted_at: '' })).toBe(false);
+    expect(prospectDraft({ outreach_body: '' })).toBeNull();
+    expect(prospectDraft(null)).toBeNull();
+    expect(prospectDraft(undefined)).toBeNull();
   });
 });

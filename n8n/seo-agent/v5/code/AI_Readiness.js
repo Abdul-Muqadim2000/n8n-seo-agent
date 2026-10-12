@@ -2,7 +2,8 @@
 // reachable and indexable (a 200, no noindex, under 4 MB — ChatGPT drops bigger pages), the text present in the raw HTML (ChatGPT, Claude,
 // Perplexity and Gemini fetchers run no JavaScript), the answer in the first ~200 characters after the H1 (what ChatGPT's retriever sees of a
 // page), a VISIBLE update date within 90 days (AI cites fresher pages; dates only in JSON-LD are stripped by ChatGPT), question headings, sourced
-// figures, lists / tables, an author, an FAQ. Schema and llms.txt are reported but not scored (no measurable effect on AI citations).
+// figures, lists / tables, an author. Schema and llms.txt are reported but not scored (no measurable effect on AI citations), and an FAQ block
+// is neither looked for nor scored since 2026-10-11 (FIX_PLAN G2: no FAQ rich results since 2026-05-07).
 // Bing's crawl state of each page comes from Bing Webmaster Tools (GetUrlInfo) when the site is in the Bing account.
 const reqs = (() => { try { return $('Page Requests (Growth)').all().map(i => i.json); } catch (e) { return []; } })();
 const res = (() => { try { return $('Fetch Key Pages').all().map(i => i.json); } catch (e) { return []; } })();
@@ -63,7 +64,9 @@ reqs.forEach((q, i) => {
       !updated_on ? 'Show "Last updated: <date>" near the top and update the page at least every 90 days with real changes — AI cites fresh pages far more often.' : age > 90 ? 'Last updated ' + Math.round(age) + ' days ago: refresh it with new facts and show the new date — pages not updated for 3+ months lose AI citations.' : 'The date is only in the metadata: show it on the page ("Last updated: …").');
     const heads = [...mainHtml.matchAll(/<h([23])\b[^>]*>([\s\S]*?)<\/h\1>/gi)].map(m => strip(m[2])).filter(Boolean);
     const qh = heads.filter(h => /\?\s*$/.test(h) || QWORD.test(h)).length;
-    add('question_headings', qh >= 2 ? true : qh === 1 ? 'partial' : false, 7, qh + ' question-style heading(s) of ' + heads.length, 'Phrase 2+ section headings as the questions buyers ask (each answered in its first sentence): assistants match questions to passages.');
+    // 2026-10-11 (FIX_PLAN G2): the FAQ check is gone (Google stopped showing FAQ rich results on 2026-05-07 and no assistant reads FAQPage
+    // markup); its weight moved to the question headings, which is what AI answers actually quote. The total still adds up to 100.
+    add('question_headings', qh >= 2 ? true : qh === 1 ? 'partial' : false, 10, qh + ' question-style heading(s) of ' + heads.length, 'Phrase 2+ section headings as the questions buyers ask (each answered in its first sentence): assistants match questions to passages.');
     add('structure', heads.length >= 3, 4, heads.length + ' H2/H3 sections', 'Break the page into clear H2 sections, one sub-question each.');
     const nums = (text.match(/\b\d[\d,.]*\s?(%|percent|per cent|million|billion|bn|k\b|x\b|days|weeks|months|hours|AED|USD|SAR|\$)/gi) || []).length + (text.match(/[$€£]\s?\d/g) || []).length;
     const outLinks = [...mainHtml.matchAll(/<a\b[^>]+href=["'](https?:\/\/[^"'#]+)["']/gi)].map(m => hostOf(m[1])).filter(h => h && h !== p.domain && !h.endsWith('.' + p.domain) && !/(facebook|twitter|x|linkedin|instagram|youtube|wa\.me|whatsapp|t\.me)\./.test(h + '.'));
@@ -72,9 +75,7 @@ reqs.forEach((q, i) => {
     add('lists_tables', lists >= 1, 4, lists + ' list(s) / table(s)', 'Put comparisons, steps and figures into a table or list: assistants lift them whole.');
     const author = /rel=["']author["']|class=["'][^"']*\b(author|byline)\b|"@type"\s*:\s*"Person"|\bby\s+[A-Z][a-z]+\s+[A-Z][a-z]+/.test(html);
     add('author', author, 5, author ? 'Author shown' : 'No author', 'Show who wrote or reviewed it (name, role, credentials): experience signals help AI and Google trust the page.');
-    const faq = heads.some(h => /faq|frequently asked/i.test(h)) || /"@type"\s*:\s*"FAQPage"/.test(html);
-    add('faq', faq, 3, faq ? 'FAQ section' : 'No FAQ section', 'Add 3-6 short FAQs with the follow-up questions AI searches for.');
-    checks.push({ key: 'schema', ok: /application\/ld\+json/i.test(html) ? true : false, weight: 0, label: /application\/ld\+json/i.test(html) ? 'Schema markup present' : 'No schema markup', fix: 'Schema helps rich results and Bing; it does not measurably change AI citations (informational).', detail: '' });
+    checks.push({ key: 'schema', ok: /application\/ld\+json/i.test(html) ? true : false, weight: 0, label: /application\/ld\+json/i.test(html) ? 'Schema markup present' : 'No schema markup', fix: 'Schema helps rich results and Bing; it does not measurably change AI citations (informational). FAQPage is not worth adding: Google stopped showing FAQ rich results on 2026-05-07.', detail: '' });
   }
   const total = checks.reduce((t, c) => t + c.weight, 0) || 100;
   score = reachable ? Math.round(100 * checks.reduce((t, c) => t + (c.ok === true ? c.weight : c.ok === 'partial' ? c.weight / 2 : 0), 0) / total) : 0;

@@ -25,6 +25,7 @@ import {
   type QueueItem,
   type RankHistoryRow,
   type Report,
+  type SitePageRow,
   type ThisWeekItem,
   type TrendRow,
 } from '@seo/shared';
@@ -48,7 +49,7 @@ const norm = normKeyword;
 /** Pages written and not published (the content log; every age), oldest first. */
 export function waitingPages(logs: ContentLogRow[], now = Date.now()): PipelineData['queue']['waiting'] {
   return logs
-    .filter((l) => l.status === 'started' && !l.published_url)
+    .filter((l) => l.status !== 'published' && !l.published_url) // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
     .map((l) => ({ keyword: l.keyword, startedAt: l.started_at, days: Math.max(0, Math.round((now - Date.parse(l.started_at || new Date(now).toISOString())) / 864e5)) }))
     .sort((a, b) => b.days - a.days);
 }
@@ -235,7 +236,11 @@ function thisWeekItems(
 export function cadenceDetail(next: QueueItem[], plan: CadenceWeek, build: Pick<LadderBuild, 'cards'>): string {
   const headOf = (id: string) => build.cards.find((c) => c.id === id)?.head ?? '';
   if (plan.pausedReason === 'pileup')
-    return `Writes nothing: ${plural(plan.waitingPublish, 'page')} wait to be published (your limit is ${plan.config.maxWaiting}). Publish them to continue`;
+    return (
+      `Writes nothing: ${plural(plan.waitingPublish, 'written page')} waiting for publication (pile-up guard, limit ${plan.config.maxWaiting})` +
+      (plan.waitingKeywords.length ? `: ${plan.waitingKeywords.slice(0, 4).map((k) => `“${k}”`).join(', ')}${plan.waitingKeywords.length > 4 ? ' …' : ''}` : '') +
+      '. Publish them to continue'
+    );
   if (next.length) return next.map((q) => (q.ladder ? `“${q.keyword}” for ladder “${q.ladder.head}”` : `“${q.keyword}” (${q.source === 'striking' ? 'close to page one' : 'rising search'})`)).join(' · ');
   const why: string[] = [];
   if (plan.awaitingApproval.length)
@@ -327,7 +332,7 @@ export async function ladderDetailData(org: OrgRow, site: SiteRow, ladderId: str
 
 async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: PipelineData; ladders: LadderBuild }> {
   const d = site.domain;
-  const [x, ladders, queries, trends, logs, history, settingsRows, app, spent, cadenceReport, recentReports, running, aiTargets] = await Promise.all([
+  const [x, ladders, queries, trends, logs, history, settingsRows, app, spent, cadenceReport, recentReports, running, aiTargets, sitePages] = await Promise.all([
     loadBundle(org, site),
     siteRows<LadderRow>('ladders', d, { max: 1000 }),
     siteRows<QueryRow>('queryHistory', d, { sortBy: 'period_end:desc', max: 4000 }),
@@ -344,6 +349,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     scheduledRunning(),
     // v4.12: the AI growth loop's questions to win (the queued ones are the cadence's AI page of the week)
     siteRows<AiTargetRow>('aiTargets', d, { max: 100 }).catch(() => [] as AiTargetRow[]),
+    siteRows<SitePageRow>('pages', d, { max: 3000 }).catch(() => [] as SitePageRow[]),   // D11: the website's page inventory (the cadence never writes a second page for a search a live page answers)
   ]);
   const ownRuns = activeRuns(app.runs);
   const verified = !!site.verifiedAt;
@@ -485,7 +491,7 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
   const aiOnlyRuns: string[] = [];
   if (!cadenceOn && aiPagesPerMonth > 0) { let at = nextScheduledRun(cadenceInfo.schedule, tz); for (let i = 0; i < 6 && at.getTime() <= horizon; i++) { aiOnlyRuns.push(at.toISOString()); at = nextScheduledRun(cadenceInfo.schedule, tz, new Date(at.getTime() + 60_000)); } }
   const cadenceRuns = cadenceOn ? calendar.filter((c) => c.automation === 'content_cadence').map((c) => c.at) : aiOnlyRuns;
-  const weeks = simulateCadence({ domain: d, pagesPerWeek: cadenceOn ? pagesPerWeek : 0, ladders, queries, trends, logs, settings: settingsRows, history, aiTargets, aiPagesPerMonth }, cadenceRuns, now);
+  const weeks = simulateCadence({ domain: d, pagesPerWeek: cadenceOn ? pagesPerWeek : 0, ladders, queries, trends, logs, settings: settingsRows, history, aiTargets, aiPagesPerMonth, pages: sitePages }, cadenceRuns, now);
   const week0 = weeks[0];
   const nextPicks = cadenceOn || aiPagesPerMonth > 0 ? week0.picks : [];
   const queue = {

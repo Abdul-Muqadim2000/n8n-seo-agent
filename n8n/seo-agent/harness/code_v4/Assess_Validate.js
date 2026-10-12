@@ -12,6 +12,19 @@ const REACH_CFG = { min_top10: 5, percentile: 0.75, ttl_days: 30, unknown_kd: 10
 const REACH_MONTHS = { direct: [2, 4], short: [4, 8], full: [9, 15] }, REACH_MONTHS_STRONG = { direct: [2, 3], short: [3, 6], full: [6, 12] };
 const REACH_DIFF_LABEL = { easy: 'Easy for your site', reachable: 'Reachable for your site', hard: 'Hard for your site', very_hard: 'Very hard for your site', not_realistic: 'Not realistic for your site' };
 const REACH_PLAN_LABEL = { direct: 'Direct plan', short: 'Short ladder', full: 'Full ladder', none: 'No ladder' };
+// G3 (2026-10-11): the evidence behind "months, not weeks" and an estimated chance per plan. Ahrefs 2025 (REACH_BASE_RATE.url): 1.74% of new
+// pages reached Google's top 10 within a year, and 40.8% of those did so within a month (the 2017 figure, 5.7%, is no longer cited). The chance
+// bands are judgement calls relative to that base rate (a keyword within the site's reach is far from a random new page) and are UNCALIBRATED
+// until G17 fits them to this system's own ladders — every text that shows them says so. The same values live in app/shared/src/keywords.ts.
+const REACH_BASE_RATE = { year: 2025, source: 'Ahrefs', top10_within_year_pct: 1.74, of_those_within_month_pct: 40.8, url: 'https://ahrefs.com/blog/how-long-does-it-take-to-rank/' };
+const REACH_CHANCE = { direct: { band: 'good', range: [50, 70] }, short: { band: 'fair', range: [30, 50] }, full: { band: 'low', range: [15, 30] }, stretch: { band: 'slim', range: [5, 15] }, none: { band: 'none', range: [0, 0] } };
+const REACH_CHANCE_NOTE = 'an uncalibrated estimate until this system has measured its own ladders';
+// { band, range, label }: "estimated chance good (50-70%, uncalibrated)"; '' label for no plan
+const reachChance = (plan_type, stretch) => { const c = REACH_CHANCE[plan_type === 'none' ? 'none' : (stretch ? 'stretch' : plan_type)] || REACH_CHANCE.full;
+  return { band: c.band, range: c.range.slice(), label: c.band === 'none' ? '' : 'estimated chance ' + c.band + ' (' + c.range[0] + '-' + c.range[1] + '%, uncalibrated)' }; };
+const reachBaseRateText = () => 'Base rate (' + REACH_BASE_RATE.source + ', ' + REACH_BASE_RATE.year + '): only ' + REACH_BASE_RATE.top10_within_year_pct + '% of new pages reach Google\'s top 10 within a year, and ' + REACH_BASE_RATE.of_those_within_month_pct + '% of those do so within a month — the rest take months.';
+// the sentence under a plan's month range: the chance band, that it is uncalibrated, and the 2025 base rate it is judged against
+const reachChanceText = (plan) => (plan && plan.chance && plan.chance.label) ? 'Estimated chance of reaching the top 10 within ' + plan.months + ' months: ' + plan.chance.band + ' (' + plan.chance.range[0] + '-' + plan.chance.range[1] + '%) — ' + REACH_CHANCE_NOTE + '. ' + reachBaseRateText() : '';
 const reachDomain = (d) => String(d || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
 const reachSiteId = (d) => 'site_' + reachDomain(d).replace(/[^a-z0-9]+/g, '-');
 const reachKey = (d) => 'reach:' + reachSiteId(d);
@@ -60,7 +73,7 @@ const reachStrong = (authority, position) => { const p = reachNum(position); ret
 function reachPlan(difficulty, strong) {
   const plan_type = { easy: 'direct', reachable: 'short', hard: 'full', very_hard: 'full', not_realistic: 'none' }[difficulty] || 'full';
   const m = plan_type === 'none' ? null : (strong ? REACH_MONTHS_STRONG : REACH_MONTHS)[plan_type];
-  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard' };
+  return { plan_type, months: m ? m[0] + '-' + m[1] : '', months_range: m ? m.slice() : null, stretch: difficulty === 'very_hard', chance: reachChance(plan_type, difficulty === 'very_hard') };
 }
 const reachLabel = (difficulty, plan) => [REACH_DIFF_LABEL[difficulty] || '', plan ? REACH_PLAN_LABEL[plan.plan_type] + (plan.stretch ? ' (stretch)' : '') : '', plan && plan.months ? plan.months + ' months' : ''].filter(Boolean).join(' · ');
 // DataForSEO Labs calls that measure reach on a cache miss (~$0.03): the site's top-10 keywords with their difficulty, and its size
@@ -129,11 +142,11 @@ const domainOk = (d) => {
 };
 // Keyword Check (v4.8, PIPELINE_FEATURE_SPEC §5.2): validates POST /webhook/seo-keyword-assess { keyword, country, domain, business?, services?,
 // existing_keywords? } with the main workflow's own country list and domain rules (copied in by build_api.py). Invalid -> 400 with one message per
-// field; a daily limit per caller (the web app sends X-Forwarded-For app:<company>, 40 a day each; 400 a day in total) -> 429.
+// field. The daily limit per caller (the web app sends X-Forwarded-For app:<company>, 40 a day each; 400 a day in total -> 429) is checked by
+// Assess Limit from the run ledger after this request reserved its row (v4.14, D1).
 const raw = $input.first().json || {};
 const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};
 const hdr = raw.headers || {};
-const LIMITS = { per_key_per_day: 40, global_per_day: 400 };
 const errors = {};
 const keyword = String(b.keyword == null ? '' : b.keyword).toLowerCase().replace(/\s+/g, ' ').trim();
 if (typeof b.keyword !== 'string' || keyword.length < 2 || keyword.length > 100) errors.keyword = 'keyword must be 2-100 characters';
@@ -147,20 +160,11 @@ if (b.services != null && !Array.isArray(b.services) && typeof b.services !== 's
 if (b.existing_keywords != null && !Array.isArray(b.existing_keywords)) errors.existing_keywords = 'existing_keywords must be an array of strings';
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).trim()).filter(Boolean);
 const bad = Object.keys(errors).length > 0;
-// daily limit (counted only for valid requests; static data persists for production webhook runs)
+// the caller's key for the daily limit (v4.14, D1: counted by Assess Limit from the run ledger once this valid request has reserved its row)
 const client = String(hdr['x-forwarded-for'] || hdr['x-real-ip'] || '').split(',')[0].trim().toLowerCase();
 const key = /^app:[a-z0-9-]{6,64}$/.test(client) ? client : (client || 'anon');
-let limited = '';
-if (!bad) {
-  const store = $getWorkflowStaticData('global'); const today = new Date().toISOString().slice(0, 10);
-  if (!store.assess || store.assess.day !== today) store.assess = { day: today, total: 0, keys: {} };
-  const used = store.assess.keys[key] || 0;
-  if (used >= LIMITS.per_key_per_day) limited = 'The daily limit of ' + LIMITS.per_key_per_day + ' keyword checks is reached. Please try again tomorrow.';
-  else if (store.assess.total >= LIMITS.global_per_day) limited = 'The daily limit of ' + LIMITS.global_per_day + ' keyword checks for all callers is reached. Please try again tomorrow.';
-  else { store.assess.keys[key] = used + 1; store.assess.total += 1; }
-}
 const c = COUNTRIES[countryName] || {};
-return [{ json: { ok: !bad && !limited, status: bad ? 400 : limited ? 429 : 200, errors, error: bad ? Object.values(errors).join('; ') : limited,
+return [{ json: { ok: !bad, status: bad ? 400 : 200, errors, error: bad ? Object.values(errors).join('; ') : '',
   keyword, domain, site_id: domain ? reachSiteId(domain) : '', country: countryName, country_iso: c.iso || '', location_code: c.code || null, language_code: c.lang || 'en',
   business: typeof b.business === 'string' ? b.business.trim().slice(0, 1500) : '', services: listOf(b.services).slice(0, 20).map(s => s.slice(0, 120)),
   existing_keywords: listOf(b.existing_keywords).slice(0, 300).map(s => s.toLowerCase().slice(0, 120)), caller: key, request_id: String(b.request_id || ('assess-' + $execution.id)) } }];

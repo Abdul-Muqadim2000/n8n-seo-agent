@@ -468,6 +468,10 @@ export function DescriptionReport({ report }: { report: ReportDetail }) {
   const p = report.payload;
   const d = obj(p.site_description);
   const list = (k: string) => strs(d[k]);
+  // D22: the engine reads the homepage and up to five of the site's own menu pages; say which ones the description came from
+  const pagesRead = objs(d.pages_read)
+    .map((x) => str(x.title) || shortUrl(str(x.url)))
+    .filter(Boolean);
   return (
     <Stagger className="space-y-5">
       <ReportHero
@@ -485,6 +489,11 @@ export function DescriptionReport({ report }: { report: ReportDetail }) {
         }
       />
       {p.site_read_failed === true && <Callout tone="warning">The homepage could not be read automatically (blocked or empty), so this description is based on what was entered.</Callout>}
+      {pagesRead.length > 0 && (
+        <p className="text-xs text-ink-3">
+          Read from {pagesRead.length} page{pagesRead.length === 1 ? '' : 's'}: {pagesRead.join(', ')}
+        </p>
+      )}
       {str(d.business_description) && (
         <Block title="The business" icon={<ScanText />} description={str(d.industry) || undefined}>
           <p className="text-sm leading-relaxed text-ink-2">{str(d.business_description)}</p>

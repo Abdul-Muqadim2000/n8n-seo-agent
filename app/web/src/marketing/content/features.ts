@@ -102,7 +102,8 @@ export const features: Feature[] = [
       'A “Needs you” queue for briefs, pages and decisions waiting on a person',
       'A 4-week calendar and every schedule with its next and last run',
       'Notices when a planned page goes live and moves the plan on',
-      'A pile-up guard: no new pages while too many wait to be published',
+      'A pile-up guard: no new pages while too many wait to be published — every written page counts, ladder pages included, and they are named',
+      'The queue never offers a page you already have: a search one of your live pages answers is queued as a refresh of that page',
     ],
     steps: [
       { title: 'Set the pace', body: 'Choose blog posts per week, the default mode — Auto or Manual — and how many ladders are written at once.' },
@@ -150,6 +151,7 @@ export const features: Feature[] = [
       'A plan type per keyword: Direct page, Short ladder or Full ladder',
       'Topic fit, so you only chase keywords your business can own',
       'A quick keyword check before you commit to a plan',
+      'Keywords one of your live pages already answers are marked with that page, so you refresh it instead of writing a second one',
     ],
     steps: [
       { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Ascentra looks at.' },
@@ -192,11 +194,16 @@ export const features: Feature[] = [
     icon: ChartNoAxesColumnIncreasing,
     benefits: [
       'A plan of supporting pages that climbs to your head term',
-      'Pages written in order, each linking up the ladder',
-      'Weekly rank tracking for every rung and for the head term',
+      'Pages written in order, each linking up the ladder — only to rungs that are already live',
+      'Weekly rank tracking for every rung and for the head term, with a reminder the week a rung goes live and its link can be added',
+      'Every check records the whole results page: AI Overview (and whether it cites you), featured snippet, People Also Ask, local pack and video',
+      'The other sites on page one with their positions, the competitors ranking above you and a share-of-voice estimate per keyword',
+      'Your main keywords are checked on a phone as well as on a desktop, because the two rarely match',
+      'The top ten results are kept with every check, so you can see what the page looked like when the position was read',
       'Auto or Manual per ladder, with a priority order',
       'Two active ladders at a time by default, so effort is not spread thin',
       'No keyword overlap between ladders, so your own pages never compete',
+      'A rung you already have a page for is planned as an improvement of that page, with its real address — never as a second page',
     ],
     steps: [
       { title: 'Choose the keyword', body: 'Pick a recommended keyword or type your own. Ascentra shows the reach for your site and the plan type.' },
@@ -207,6 +214,7 @@ export const features: Feature[] = [
     facts: [
       { value: 2, label: 'active ladders at a time by default' },
       { value: 'Weekly', label: 'rank checks for every rung' },
+      { value: 'Desktop + phone', label: 'checks for your main keywords' },
       { value: 0, label: 'keyword overlap between ladders' },
     ],
     faqs: [
@@ -220,6 +228,18 @@ export const features: Feature[] = [
       },
       { q: 'How many ladders can I run?', a: 'As many as you plan. By default two are written at once, in your priority order, and you can change the limit.' },
       { q: 'What does Auto or Manual change?', a: 'On Auto, rungs are written on schedule. On Manual, each rung waits for approval in “Needs you”.' },
+      {
+        q: 'Do you track AI Overviews?',
+        a: 'Yes. Every rank check records whether an AI Overview was on the page and whether it cited your site, with the time it was seen. AI Overviews vary between searches, so Ascentra reports what the check saw rather than claiming the search always looks that way.',
+      },
+      {
+        q: 'What is share of voice?',
+        a: 'An estimate of how much of the attention page one offers goes to your site, weighted by position and by the features on the page. It is a model built on published click-through rates, not measured clicks, and it is always labelled that way.',
+      },
+      {
+        q: 'Why check on a phone too?',
+        a: 'Mobile and desktop results differ for most searches, so a desktop-only position can be one your visitors never see. Ascentra checks your main keywords on both and shows the two side by side.',
+      },
     ],
     related: ['keyword-research', 'autopilot', 'content'],
     image: 'growthChartPaper',
@@ -243,12 +263,15 @@ export const features: Feature[] = [
       'Page types for hub and pillar pages, case studies, local (city) pages and video pages',
       'A three-image plan with alt text, file names and the social image',
       'A blog package as HTML, Markdown and meta.json, or a WordPress draft',
+      'Links only to pages that are already live, with link text that reads like a title; pages still to come are listed as links to add later',
+      'Every figure looked up in the source the page cites, and a source without independent authority cited at most once',
       'A live check of the published page: schema, images, links and metadata',
+      'One search, one page: a search a live page of yours already answers is written as a refresh of that page',
     ],
     steps: [
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile and your case studies.' },
       { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
-      { title: 'Check', body: 'SEO checks on every page. Figures that cannot be verified are marked for you to confirm.' },
+      { title: 'Check', body: 'SEO checks on every page. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm.' },
       { title: 'Publish and verify', body: 'Take the package or a WordPress draft; Ascentra checks the page once it is live.' },
     ],
     facts: [
@@ -279,20 +302,23 @@ export const features: Feature[] = [
     shortName: 'Technical audits',
     tagline: 'Crawl the site, read Search Console and get a fix pack, not just a list of problems.',
     summary:
-      'Ascentra crawls up to 1,000 pages, JavaScript included, and combines what it finds with Search Console index coverage and sitemaps, page speed and a brand and entity check. Every audit ends with a fix pack your developers can apply, and monthly audits show what changed since the last one.',
+      'Ascentra crawls up to 1,000 pages, JavaScript included, and combines what it finds with Search Console index coverage and sitemaps, the Core Web Vitals your real visitors measured and a brand and entity check. The fix list is ordered by the traffic each issue puts at risk, every audit ends with a fix pack your developers can apply, and monthly audits show what changed since the last one.',
     icon: ScanSearch,
     benefits: [
       'Crawls of 200, 500 or 1,000 pages, with JavaScript rendering',
       'Search Console index coverage, submitted sitemaps and site structure',
-      'Page speed and a brand and entity check',
+      'Core Web Vitals from real Chrome visitors, per template, on phone and desktop',
+      'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
+      'The smallest items folded into one “minor items” line, so the list you read is the list to act on',
+      'A brand and entity check',
       'A fix pack: robots.txt, llms.txt, redirects, schema and an internal-links CSV',
       'Monthly scheduled audits with what changed since the last audit',
       'Skipped automatically when nothing on the site has changed',
     ],
     steps: [
       { title: 'Crawl', body: 'Up to 1,000 pages, rendered with JavaScript where the content needs it.' },
-      { title: 'Combine', body: 'Crawl findings meet Search Console coverage, sitemaps, page speed and entity data.' },
-      { title: 'Prioritise', body: 'Issues are grouped by impact, with what changed since the last audit.' },
+      { title: 'Combine', body: 'Crawl findings meet Search Console coverage, sitemaps, the speed your real visitors measured and entity data.' },
+      { title: 'Prioritise', body: 'Issues are ranked by the traffic they put at risk — index blockers first, cosmetics never — and each one says why it ranks there.' },
       { title: 'Fix', body: 'Download the fix pack and hand it to your developers.' },
     ],
     facts: [
@@ -308,13 +334,25 @@ export const features: Feature[] = [
       { q: 'What is in the fix pack?', a: 'A robots.txt, an llms.txt, a redirect list, schema snippets and an internal-links CSV, zipped together.' },
       { q: 'Does it need access to my server?', a: 'No. Ascentra crawls the public site and reads Search Console through a service account you add as a user.' },
       { q: 'Does it handle JavaScript sites?', a: 'Yes. Pages can be rendered with JavaScript, so content that loads in the browser is audited too.' },
+      {
+        q: 'Where do the speed figures come from?',
+        a: 'From the Chrome User Experience Report: what real Chrome visitors measured over the last 28 days, at the 75th percentile, for your home page, a service page and a blog post on phone and desktop. A page with too few visits to report on its own shows the whole-site figures, marked as such. Speed carries a deliberately low weight in the health score.',
+      },
+      {
+        q: 'How is the fix list ordered?',
+        a: 'By likely impact: the severity of the issue, the share of pages it affects, and the clicks and impressions those pages get in Search Console. Issues that stop Google indexing a page come first, cosmetic items are never at the top, and every item says why it sits where it does.',
+      },
+      {
+        q: 'What happens to the tiny issues?',
+        a: 'They are folded into one “minor items” line with the count — a title one character too long, the link count of a navigation page, a cosmetic tag. Nothing is removed: they still count in the score, they are stored with the audit, and they open with one click in the app and sit in that one line in the report.',
+      },
     ],
     related: ['site-tracking', 'content', 'reports'],
     image: 'analyticsMonitor',
     visual: 'audit',
     story: {
       title: 'Findings your developers can apply the same day.',
-      body: 'An audit only helps once it is fixed. Next to the prioritised findings, every audit delivers the files developers need, and the next audit shows what changed — so progress is visible, not assumed.',
+      body: 'An audit only helps once it is fixed, and only if you fix the right thing first. Issues are ranked by the traffic they put at risk, every audit delivers the files developers need, and the next audit shows what changed — so progress is visible, not assumed.',
     },
   },
   {
@@ -327,10 +365,11 @@ export const features: Feature[] = [
     icon: ChartLine,
     benefits: [
       'Google Search Console and GA4, connected through a service account',
-      'Google Trends for your topics and live rank checks',
+      'Google Trends for your topics and live rank checks that also record the search features on the page and who ranks above you',
       'Striking-distance keywords: close to page one and worth a push',
       'A weekly report every Monday with the changes that matter',
       'Notices when you publish a page from the plan',
+      'A weekly list of the pages your site has, so the advice says “refresh this page” instead of “publish another one”',
       'Dashboards per website for search, traffic, rankings and content',
     ],
     steps: [
@@ -351,6 +390,10 @@ export const features: Feature[] = [
         a: 'A keyword where your page already ranks just below the top results. Small improvements there tend to pay off fastest, so the pipeline picks them early.',
       },
       { q: 'How often is the data refreshed?', a: 'Every week, with live rank checks for keywords Search Console does not report.' },
+      {
+        q: 'When does a drop become an alert?',
+        a: 'When the change is real: a fall is only called a fall once it is beyond normal week-to-week variation. On a small site, where a big percentage can be chance, you still get the alert — worded as something to watch, with both weeks’ counts named so you can see how small the numbers are.',
+      },
       {
         q: 'How does Ascentra know I published a planned page?',
         a: 'Each week it looks for the page in your sitemap by its slug and title. Once found, the page is checked live and its ranking is tracked from then on.',
@@ -379,6 +422,8 @@ export const features: Feature[] = [
       'A daily AI Pulse that alerts only on statistically real changes',
       'Visits, key events and revenue from AI referrals in GA4',
       'Answer Analyst for sentiment and wrong claims, plus AI crawler access and llms.txt',
+      'Every rate counts the answers that came back, and the report names any request that failed and was sent again',
+      'Wrong claims are checked against your business facts — with no profile on file the report says “not checked”, never “nothing wrong”',
     ],
     steps: [
       { title: 'Build the panel', body: 'Up to 50 questions your buyers ask, grouped by stage and topic.' },
@@ -426,14 +471,18 @@ export const features: Feature[] = [
       'Every link checked by Ascentra: rel, placement, noindex and canonical',
       'Lost only after two misses, with the reason',
       'SEO, referral and brand value for every link',
+      'Link-farm pages and search-results pages are written off, so your best links are the ones that really help',
       'Scored prospects with contacts, outreach drafts and follow-ups after 7 and 14 days',
+      'A competitor’s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
+      'Competitors, government portals, bare homepages and mailbox or data-broker addresses are never pitched',
+      'Every draft is checked before you see it: nothing claimed that your profile does not carry, something quoted from their page, one link to your page, short, with one clear ask',
       'A free-sources mode that costs nothing to run',
     ],
     steps: [
       { title: 'Merge', body: 'Nine sources flow into one ledger, one row per referring site.' },
       { title: 'Check', body: 'Ascentra visits each linking page and reads the link the way a search engine would.' },
       { title: 'Value', body: 'Every link gets an SEO, referral and brand value.' },
-      { title: 'Grow', body: 'Scored prospects, contacts, outreach drafts and follow-up reminders.' },
+      { title: 'Grow', body: 'Scored prospects, contacts, checked outreach drafts and follow-up reminders.' },
     ],
     facts: [
       { value: 9, label: 'link sources in one ledger' },
@@ -447,10 +496,19 @@ export const features: Feature[] = [
       },
       { q: 'Can I import links from other tools?', a: 'Yes. Upload the Search Console links export or a backlink CSV from another tool, and Ascentra merges it into the ledger.' },
       {
+        q: 'Which links are called your best?',
+        a: 'Only links that really pass value. A page that sells links, a scraped directory and a search-results page that happens to list you are written off whatever their authority score says, so they never head the list — they stay in the ledger, with the reason, and they are never suggested for outreach or disavowal.',
+      },
+      {
         q: 'What does the free-sources mode include?',
         a: 'Everything except the commercial index: Bing Webmaster Tools, Search Console and GA4 data, the Common Crawl graph, Wikipedia, Hacker News, news and web search.',
       },
-      { q: 'Does Ascentra send outreach e-mails?', a: 'It drafts outreach and reminds you to follow up after 7 and 14 days. Sending stays with your team.' },
+      { q: 'Does Ascentra send outreach e-mails?', a: 'It drafts outreach and reminds you to follow up after 7 and 14 days. Sending stays with your team, from your own mailbox.' },
+      {
+        q: 'Who gets pitched, and what is in the draft?',
+        a: 'Only sites that could really link to you: a competitor selling what you sell, a government portal, a page that sells links and a bare homepage are refused with the reason. Every draft then passes an automatic check — it may claim nothing your business profile does not carry, it quotes something from their page, it carries one link to the page it offers, it is short and makes one clear ask. A draft that fails any of these waits for your edit instead of being offered as ready.',
+      },
+      { q: 'What if an address cannot receive mail?', a: 'Before the first e-mail Ascentra checks that the recipient\'s domain has a mail server. If it has none, the address is set aside with the reason instead of being written to — a bounce would only hurt your own mailbox.' },
     ],
     related: ['ai-visibility', 'technical-audits', 'reports'],
     image: 'teamTable',

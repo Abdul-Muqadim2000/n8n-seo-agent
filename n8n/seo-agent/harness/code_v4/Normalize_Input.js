@@ -12,6 +12,10 @@ const CONFIG = {
   default_country: 'United States',
   ai_budget_usd: 6,                 // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 since 2026-10-02 at the user's request — the Anthropic Console workspace limit is the hard cap
   ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap
+  // P34-5 (2026-10-12): how long a run may hold its budget reservation before it is released as `stale` (two audits killed by the
+  // task runner held $0.77 of the day's estimate for ever), and the crawl size from which only one audit of a site may run at a time.
+  run_stale_hours: 2,
+  heavy_audit_pages: 100,
   ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)
   ladder_tracker_cadence: 'weekly', // the Rank Tracker workflow runs weekly; 'monthly' is documentation only until its schedule is changed
   ladder_auto_next_rung: false,     // false = the tracker recommends the next rung (one-click form link + API body); true is not wired
@@ -155,6 +159,7 @@ const yes = (v) => /^(y|true|1)/i.test(String(v == null ? '' : v).trim());
 const checkin_manual_action = yes(pick(p2, 'manual action') || p2.manual_action);
 const checkin_security_issue = yes(pick(p2, 'security issue') || p2.security_issue);
 const checkin_notes = String(pick(p2, 'notes') || p2.notes || '').trim().slice(0, 1000);
+const checkin_is_test = yes(pick(p2, 'test submission') || p2.checkin_is_test || p2.is_test);   // D25c: a test check-in is recorded but never counts as the month's answer
 const checkin_csv_text = String(p2.pages_csv_text || p2.pages_csv || '').slice(0, 400000);
 // ---- v4.4: business profile (author, reviewer, address), case-study intake, local pages, video ----
 const lab = (label) => { const v = p2[label]; return v == null ? '' : String(v).trim(); };   // exact form labels: several new labels share words with older ones
@@ -324,6 +329,7 @@ return [{
     checkin_manual_action,
     checkin_security_issue,
     checkin_notes,
+    checkin_is_test,
     checkin_csv_text,
     profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name) ? profile_input : null,
     case_study,
@@ -336,6 +342,7 @@ return [{
     ladder_rung: (p2.ladder_rung != null && p2.ladder_rung !== '') ? Number(p2.ladder_rung) : null,
     ladder_head: String(p2.ladder_head || ''),
     ladder_links,
+    ladder_words: Math.max(0, Math.round(Number(p2.ladder_words) || 0)),   // P2-7: the word count the ladder verdict set for this page
     ai_target,
     force_content: !!p2.force_content,
     publish_wordpress: !!CONFIG.wordpress_publish && !!wordpress_url,
@@ -353,6 +360,8 @@ return [{
     qa_max_rounds: CONFIG.qa_max_rounds,
     ai_budget_usd: CONFIG.ai_budget_usd,
     ai_budget_period: CONFIG.ai_budget_period,
+    run_stale_hours: CONFIG.run_stale_hours,
+    heavy_audit_pages: CONFIG.heavy_audit_pages,
     started_at: new Date().toISOString(),
     validation_error: ''
   }

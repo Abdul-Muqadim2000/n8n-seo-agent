@@ -3,8 +3,18 @@ LADDER_TABLE = 'seo_ladders'
 HISTORY_TABLE = 'seo_rank_history'
 LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('rung', 'number'), ('page_no', 'number'), ('keyword', 'string'),
                ('supporting', 'string'), ('page_type', 'string'), ('target_url', 'string'), ('page_exists', 'boolean'), ('status', 'string'), ('months', 'string'),
-               ('start_date', 'string'), ('country', 'string'), ('location_code', 'number'), ('language_code', 'string'), ('email', 'string'), ('callback_url', 'string'), ('request_id', 'string')]
+               ('start_date', 'string'), ('country', 'string'), ('location_code', 'number'), ('language_code', 'string'), ('email', 'string'), ('callback_url', 'string'), ('request_id', 'string'),
+               ('target_words', 'number')]   # P2-7 (2026-10-12): the word target the verdict set for this page (0 = unknown); run sync_tables.py after deploying
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number')]
+HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number'),
+                # v4.16 (G6, 2026-10-12 system review): the whole results page of the same SERP call, so a reading can be read back and
+                # trended. `device` = 'desktop' (every check so far) or 'mobile' (the ladder's main keywords); an empty value in a row
+                # written before G6 means desktop. The three JSON columns are written by _rank_serp.js (RS.pack keeps them small):
+                # features_json = AI Overview (shown / cites us / sources loaded), snippet, People Also Ask, local pack, video, shopping;
+                # competitors_json = the top-10 domains with positions, who is above us and the tracked competitors' positions;
+                # snapshot_json = the top 10 with URLs and trimmed titles, kept as proof of the reading (criterion 2.2).
+                # share_of_voice = our modelled share of the clicks page 1 offers (RS.METHOD), -1 when the check could not be read.
+                ('device', 'string'), ('features_json', 'string'), ('competitors_json', 'string'), ('snapshot_json', 'string'), ('share_of_voice', 'number')]
 DT_TYPE, DT_VERSION = 'n8n-nodes-base.dataTable', 1.1
 
 def dt_schema(cols):
@@ -24,7 +34,18 @@ METRICS_TABLE = 'seo_site_metrics'
 QUERY_TABLE = 'seo_query_history'
 SITES_COLS = [('site_id', 'string'), ('domain', 'string'), ('gsc_property', 'string'), ('ga4_property_id', 'string'), ('country', 'string'), ('location_code', 'number'),
               ('language_code', 'string'), ('email', 'string'), ('callback_url', 'string'), ('keywords', 'string'), ('status', 'string'), ('source', 'string'),
-              ('created_at', 'string'), ('last_run_at', 'string'), ('last_status', 'string'), ('request_id', 'string')]
+              ('created_at', 'string'), ('last_run_at', 'string'), ('last_status', 'string'), ('request_id', 'string'),
+              # v4.15 (G19, SITE_MODEL_SPEC.md): the one site model every workflow reads -- resolved weekly by the Site Tracker, on demand by the
+              # main workflow (v5/code/_site_model.js, SM.toRow). canonical_host = the host every emitted URL uses; nap_json / services_json /
+              # nav_pages_json are JSON strings; brand_names / competitors are comma-separated.
+              ('canonical_host', 'string'), ('business_name', 'string'), ('logo_url', 'string'), ('nap_json', 'string'), ('services_json', 'string'),
+              ('nav_pages_json', 'string'), ('business_facts', 'string'), ('cta', 'string'), ('brand_names', 'string'), ('competitors', 'string'),
+              ('accreditation', 'string'), ('model_updated_at', 'string')]
+# v4.15 (G19): the site's page inventory -- one row per site and URL (sitemap, Search Console, AI Growth key pages, publish detection), filled
+# by D11; `queries_json` holds the Search Console queries the page gets impressions for. SM.matchPage() reads it.
+PAGES_TABLE = 'seo_pages'
+PAGES_COLS = [('site_id', 'string'), ('url', 'string'), ('title', 'string'), ('h1', 'string'), ('source', 'string'), ('lastmod', 'string'),
+              ('queries_json', 'string'), ('updated_at', 'string')]
 METRICS_COLS = [('site_id', 'string'), ('domain', 'string'), ('period_start', 'string'), ('period_end', 'string'), ('checked_at', 'string'), ('gsc_connected', 'boolean'), ('ga4_connected', 'boolean'),
                 ('clicks', 'number'), ('impressions', 'number'), ('ctr', 'number'), ('position', 'number'), ('prev_clicks', 'number'), ('prev_impressions', 'number'), ('prev_ctr', 'number'), ('prev_position', 'number'),
                 ('yoy_clicks', 'number'), ('yoy_impressions', 'number'), ('sessions', 'number'), ('engaged_sessions', 'number'), ('key_events', 'number'), ('prev_sessions', 'number'), ('prev_engaged_sessions', 'number'),
@@ -64,11 +85,21 @@ def dt_update_params(table, cols, conditions, values):
             'filters': {'conditions': [{'keyName': k, 'condition': 'eq', 'keyValue': v} for k, v in conditions]},
             'columns': {'mappingMode': 'defineBelow', 'value': values, 'matchingColumns': [], 'schema': dt_schema(cols), 'attemptToConvertTypes': True, 'convertFieldsToString': False}, 'options': {}}
 
+def dt_update_where_params(table, cols, conditions, values):
+    """Update `values` (col -> expression) on every row matching ALL (column, condition, value) triples — like dt_update_params, but with
+    an operator per condition (P34-5: status = reserved AND created_at < cutoff marks the stale reservations)."""
+    return {'resource': 'row', 'operation': 'update', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'matchType': 'allConditions',
+            'filters': {'conditions': [{'keyName': k, 'condition': c, 'keyValue': v} for k, c, v in conditions]},
+            'columns': {'mappingMode': 'defineBelow', 'value': values, 'matchingColumns': [], 'schema': dt_schema(cols), 'attemptToConvertTypes': True, 'convertFieldsToString': False}, 'options': {}}
+
 # ---- Search Console notices (mail watcher) and monthly check-ins (v4.3) ----
 ALERTS_TABLE = 'seo_console_alerts'
 CHECKIN_TABLE = 'seo_console_checkins'
 ALERTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('kind', 'string'), ('severity', 'string'), ('subject', 'string'), ('summary', 'string'), ('received_at', 'string'), ('message_id', 'string'), ('status', 'string'), ('source', 'string')]
-CHECKIN_COLS = [('site_id', 'string'), ('domain', 'string'), ('month', 'string'), ('manual_action', 'boolean'), ('security_issue', 'boolean'), ('notes', 'string'), ('coverage_json', 'string'), ('not_indexed_total', 'number'), ('csv_kind', 'string'), ('submitted_at', 'string'), ('source', 'string'), ('request_id', 'string')]
+CHECKIN_COLS = [('site_id', 'string'), ('domain', 'string'), ('month', 'string'), ('manual_action', 'boolean'), ('security_issue', 'boolean'), ('notes', 'string'), ('coverage_json', 'string'), ('not_indexed_total', 'number'), ('csv_kind', 'string'), ('submitted_at', 'string'), ('source', 'string'), ('request_id', 'string'),
+                # D25c (2026-10-12, FIX_PLAN): a test check-in is stored like any other but never counts as the month's answer
+                # (v5/code/_checkin_test.js: the form's "test" answer, the API's is_test, a test caller, or a note that marks it)
+                ('is_test', 'boolean')]
 
 # ---- E-E-A-T and page types (v4.4): one business profile per site (author, reviewer, address / NAP) and the case-study library ----
 PROFILE_TABLE = 'seo_profiles'
@@ -139,7 +170,8 @@ BL_SNAP_COLS = [('site_id', 'string'), ('domain', 'string'), ('checked_at', 'str
 PROSPECT_COLS = [('site_id', 'string'), ('domain', 'string'), ('prospect_domain', 'string'), ('type', 'string'), ('rank', 'number'), ('spam_score', 'number'), ('detail', 'string'), ('source_url', 'string'), ('target_url', 'string'),
                  ('status', 'string'), ('first_seen', 'string'), ('last_seen', 'string'), ('won_at', 'string'), ('outreach_subject', 'string'), ('outreach_body', 'string'), ('note', 'string'),
                  ('score', 'number'), ('origin', 'string'), ('contact_email', 'string'), ('contact_url', 'string'), ('contacted_at', 'string'), ('followup_step', 'number'),
-                 ('followup_subject', 'string'), ('followup_body', 'string'), ('verified_at', 'string')]   # v4.10: value x likelihood score, where it came from, a contact found on the site, follow-up drafts (1 + 2), won only after the link is verified
+                 ('followup_subject', 'string'), ('followup_body', 'string'), ('verified_at', 'string'),   # v4.10: value x likelihood score, where it came from, a contact found on the site, follow-up drafts (1 + 2), won only after the link is verified
+                 ('drafted_at', 'string')]   # P34-1 (2026-10-12): when the stored draft was written. Empty, or before the D12 / D13 gates = superseded: cleared, never counted, never offered (v5/code/_drafts.js, app/shared/src/outreach.ts)
 # v4.10: the link ledger — one row per site and referring domain, merged from every source (DataForSEO, Bing Webmaster Tools, the Search Console
 # links export, GA4 referrals, Wikipedia / Hacker News / news / web mentions) and verified by fetching the linking page (BACKLINKS_SPEC.md).
 LINKS_TABLE = 'seo_backlinks'
@@ -179,7 +211,10 @@ LINK_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('import_id', 
                      ('anchor', 'string'), ('links', 'number'), ('last_crawled', 'string'), ('imported_at', 'string')]
 AUDITS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('report_type', 'string'), ('health_score', 'number'), ('grade', 'string'), ('pages_crawled', 'number'),
                ('findings', 'number'), ('critical', 'number'), ('high', 'number'), ('medium', 'number'), ('low', 'number'), ('scheduled', 'boolean'), ('request_id', 'string')]
-AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number')]
+AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number'),
+                       # G26 (2026-10-12, FIX_PLAN): the impact weight that ordered the fix list (severity x pages affected x their clicks and
+                       # impressions x their place in the site) and the one sentence that explains it, so the app can order the same way
+                       ('impact', 'number'), ('impact_basis', 'string')]
 
 # ---- reuse instead of repeat (v4.6): one key/value cache for results that do not need to be fetched again ----
 # keys: 'age:<domain>' (registration date, 365 days), 'desc:<domain>' (site description, 30 days), 'sitemap:<site_id>' (sitemap fingerprint)
@@ -217,3 +252,23 @@ def dt_delete_where_params(table, conditions):
     """Delete the rows matching ALL (column, condition, value) triples (retention of tables that only grow)."""
     return {'resource': 'row', 'operation': 'deleteRows', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'matchType': 'allConditions',
             'filters': {'conditions': [{'keyName': k, 'condition': c, 'keyValue': v} for k, c, v in conditions]}, 'options': {}}
+
+# ---- run ledger (v4.14, 2026-10-11, FIX_PLAN D1): one row per execution of the main workflow and per Keyword Check request, inserted BEFORE the
+# limits are checked, so parallel executions see each other (the static-data counters they used before overwrote one another: 8 runs counted as 5).
+# status: reserved -> done (settled_usd written at the end) | refused (the limit refused the run; never counted). Rate Limit / Assess Limit count
+# only rows with a lower id than their own, so row order decides ties. Keyword Check rows carry mode 'assess' and stay out of the main limits.
+RUN_LEDGER_TABLE = 'seo_run_ledger'
+RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), ('est_usd', 'number'), ('created_at', 'string'), ('status', 'string'), ('settled_usd', 'number'),
+                   # P34-5 (2026-10-12): which site a run is working on and whether it is a heavy crawl, so a second large audit of the
+                   # same site is refused while one is running (two 200-page audits at once killed the n8n task runner and both were
+                   # cancelled at the 90-minute timeout). status gains `stale`: reserved, never settled, older than the age limit.
+                   ('domain', 'string'), ('heavy', 'boolean')]
+
+# ---- ops alerts (D25b, 2026-10-12, FIX_PLAN): the Error Handler had one channel (e-mail), and on 2026-10-10 and 2026-10-12 it failed with a
+# connection error, so nobody learned that a run had failed. Every alert is now written here first (one row per alert key, the repeats counted)
+# and then sent to an independent webhook (SEO_ALERT_WEBHOOK_URL, Slack / Teams / anything that takes a POST) as well as the e-mail. The row is
+# the record of last resort: it survives both channels being down, and the app's failure watcher reads the same failures from n8n.
+OPS_ALERTS_TABLE = 'seo_ops_alerts'
+OPS_ALERTS_COLS = [('alert_key', 'string'), ('workflow', 'string'), ('node', 'string'), ('message', 'string'), ('execution_id', 'string'), ('execution_url', 'string'),
+                   ('mode', 'string'), ('severity', 'string'), ('first_seen_at', 'string'), ('last_seen_at', 'string'), ('count', 'number'),
+                   ('channels', 'string'), ('delivered', 'string'), ('notes', 'string')]

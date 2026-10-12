@@ -1,6 +1,11 @@
 // Restores the profile after the Data Table step and reports what it gives every page: the author box and Person schema (E-E-A-T),
 // the LocalBusiness / NAP block for local pages, and what is still missing.
+/*__SITE_MODEL__*/
 const r = $('Profile Row').first().json; const d = $('Normalize Input').first().json;
+// D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain
+// 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.
+let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
+const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);
 let stored = true, store_error = null;
 try { const s = ($('Save Profile').first() || {}).json || {}; if (s.error) { stored = false; store_error = String(s.error.message || s.error.description || s.error).slice(0, 200); } } catch (e) { stored = false; store_error = 'Data Table step did not run: ' + String(e.message || e).slice(0, 160); }
 let old = {}; try { old = $('Load Profile (Profile)').all().map(i => i.json).find(x => x && x.site_id === r.site_id) || {}; } catch (e) {}
@@ -22,7 +27,7 @@ const local = [
   { item: 'Phone', ok: has('phone') }, { item: 'Opening hours', ok: has('opening_hours') }, { item: 'Category', ok: has('business_type') }, { item: 'Areas served', ok: has('service_areas') }, { item: 'Map link', ok: has('map_url') }
 ];
 const score = (l) => Math.round(100 * l.filter(x => x.ok).length / l.length);
-const home = 'https://' + d.domain + '/';
+const home = siteUrlOf(d.domain, '/');
 const sameAs = String(r.author_same_as || '').split(/\s+/).filter(u => /^https?:\/\//.test(u));
 const person = has('author_name') ? { '@context': 'https://schema.org', '@type': 'Person', '@id': home + '#author-' + String(r.author_name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), name: r.author_name, ...(has('author_job_title') ? { jobTitle: r.author_job_title } : {}), ...(has('author_url') ? { url: r.author_url } : (sameAs[0] ? { url: sameAs[0] } : {})), ...(has('author_image_url') ? { image: r.author_image_url } : {}), ...(sameAs.length ? { sameAs } : {}), ...(has('author_knows_about') ? { knowsAbout: String(r.author_knows_about).split(/\s*,\s*/).filter(Boolean) } : {}), worksFor: { '@id': home + '#organization', name: r.business_name || d.domain } } : null;
 const localBusiness = (has('street_address') || has('phone')) ? { '@context': 'https://schema.org', '@type': 'LocalBusiness', '@id': home + '#business', name: r.business_name || d.domain, url: home, ...(has('phone') ? { telephone: r.phone } : {}), address: { '@type': 'PostalAddress', ...(has('street_address') ? { streetAddress: r.street_address } : {}), ...(has('city') ? { addressLocality: r.city } : {}), ...(has('region') ? { addressRegion: r.region } : {}), ...(has('postal_code') ? { postalCode: r.postal_code } : {}), ...(has('country_code') ? { addressCountry: r.country_code } : {}) } } : null;

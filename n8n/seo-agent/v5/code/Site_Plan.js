@@ -5,10 +5,13 @@
 const CONFIG = {
   service_account_email: '__SA_EMAIL__',   // filled from n8n/.env (SEO_GOOGLE_SA_EMAIL) at build time; shown in the connect instructions
   max_sites_per_run: 25, max_tracked_keywords: 40, max_gsc_keyword_requests: 30, max_inspections: 20, max_trend_keywords: 4, max_serp_checks: 20,
+  max_gsc_pages: 4,                 // G9: Search Console serves 25,000 rows per request; up to 4 pages per kind = 100,000 query / page rows
   striking_min_impressions: 30,     // "striking distance": position 4-20 with at least this many impressions in 28 days
   ctr_gap_min_impressions: 100,     // CTR gap: top-10 position, at least this many impressions, CTR under half the expected rate for the position
   decay_drop_pct: 25,               // decaying page: clicks down by this much vs the previous 28 days (and at least 10 clicks before)
-  alert_drop_pct: 30                // alert when site clicks / organic sessions drop by this much
+  // G28: a drop is an alert when it is statistically real (two-sample Poisson z, 95%) AND at least alert_min_pct; alert_drop_pct only decides
+  // whether that alert is "high" or "medium". min_*_events = the events both periods must carry together before anything is claimed at all.
+  alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40
 };
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
@@ -47,7 +50,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const blogs = logRows.filter(r => normD(r.domain) === s.domain);
   for (const b of blogs) { const k = String(b.keyword).toLowerCase().trim(); if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'blog', rung: 0, ladder_id: b.ladder_id || '', head_keyword: '' }); } }
   for (const b of blogs) { const u = String(b.published_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); pages.push({ url: u, keyword: b.keyword, rung: 0, status: 'published', ladder_id: b.ladder_id || '', page_exists: true, published_at: b.published_at || '' }); } }
-  const pending_publish = blogs.filter(b => b.status === 'started' && !b.published_url).map(b => ({ keyword: b.keyword, started_at: b.started_at || '', days: Math.round((Date.now() - new Date(b.started_at || now).getTime()) / 864e5) }));
+  // D5: 'started' and 'written' both wait for the owner's publish link. P2-4 (2026-10-12): the comment used to sit before the .map(),
+  // which an inline // swallows, so every row kept the raw content-log shape and the report said "(undefined days ago)".
+  const pending_publish = blogs.filter(b => b.status !== 'published' && !b.published_url)
+    .map(b => ({ keyword: b.keyword, started_at: b.started_at || '', days: Math.round((Date.now() - new Date(b.started_at || now).getTime()) / 864e5) }));
   const cutoff = new Date(Date.now() - 35 * 864e5).toISOString();
   const console_alerts = alertRows.filter(a => normD(a.domain) === s.domain && String(a.received_at) >= cutoff).sort((a, b) => String(b.received_at).localeCompare(String(a.received_at))).slice(0, 10).map(a => ({ kind: a.kind, severity: a.severity, subject: a.subject, summary: a.summary, received_at: a.received_at, source: a.source || 'mail' }));
   const cks = checkinRows.filter(c => c.site_id === s.site_id).sort((a, b) => String(b.month).localeCompare(String(a.month)));

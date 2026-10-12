@@ -19,7 +19,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Turns the Error Trigger payload into a readable ops alert.\nconst e = $input.first().json;\nconst ex = e.execution || {};\nconst err = ex.error || {};\nconst wfName = (e.workflow || {}).name || 'unknown workflow';\nconst node = ex.lastNodeExecuted || (err.node && err.node.name) || 'unknown node';\nconst msg = String(err.message || err.description || 'no message').slice(0, 800);\nconst url = ex.url || '';\nconst mode = ex.mode || '';\nconst when = new Date().toISOString();\nconst subject = `[SEO Agent] Run failed at \"${node}\" — ${wfName}`;\nconst html = `<p><b>Workflow:</b> ${wfName}<br><b>Execution:</b> ${ex.id || '?'} (${mode}) ${url ? '— <a href=\"' + url + '\">open</a>' : ''}<br><b>Failed node:</b> ${node}<br><b>When:</b> ${when}</p>\n<pre style=\"background:#f1f5f9;padding:10px;white-space:pre-wrap\">${msg.replace(/</g, '&lt;')}</pre>\n<p>Typical causes: DataForSEO/Jina credentials or credits, a site that blocks readers, an AI response that was not valid JSON, or a crawl that never finished.<br>\nIf a customer is waiting for an emailed report, re-run the execution from the failed node or tell them what happened.</p>`;\nreturn [{ json: { subject, html, node, workflow: wfName, execution_id: ex.id || null, execution_url: url, message: msg } }];"
+          "jsCode": "// Turns the Error Trigger payload into a readable ops alert.\nconst e = $input.first().json;\nconst ex = e.execution || {};\nconst err = ex.error || {};\nconst wfName = (e.workflow || {}).name || 'unknown workflow';\nconst node = ex.lastNodeExecuted || (err.node && err.node.name) || 'unknown node';\nconst msg = String(err.message || err.description || 'no message').slice(0, 800);\nconst url = ex.url || '';\nconst mode = ex.mode || '';\nconst when = new Date().toISOString();\nconst subject = `[SEO Agent] Run failed at \"${node}\" — ${wfName}`;\nconst html = `<p><b>Workflow:</b> ${wfName}<br><b>Execution:</b> ${ex.id || '?'} (${mode}) ${url ? '— <a href=\"' + url + '\">open</a>' : ''}<br><b>Failed node:</b> ${node}<br><b>When:</b> ${when}</p>\n<pre style=\"background:#f1f5f9;padding:10px;white-space:pre-wrap\">${msg.replace(/</g, '&lt;')}</pre>\n<p>Typical causes: DataForSEO/Jina credentials or credits, a site that blocks readers, an AI response that was not valid JSON, or a crawl that never finished.<br>\nIf a customer is waiting for an emailed report, re-run the execution from the failed node or tell them what happened.</p>`;\nreturn [{ json: { subject, html, node, workflow: wfName, execution_id: ex.id || null, execution_url: url, message: msg, mode, when } }];"
         },
         "id": "6dcbf3af-f989-409c-a8c8-8f3518465ec9",
         "name": "Format Alert",
@@ -34,9 +34,9 @@
         "parameters": {
           "fromEmail": "Dev SEO <kinnngahmed@gmail.com>",
           "toEmail": "kinnngahmed@gmail.com",
-          "subject": "={{ $json.subject }}",
+          "subject": "={{ $('Format Alert').first().json.subject }}",
           "emailFormat": "html",
-          "html": "={{ $json.html }}",
+          "html": "={{ $('Format Alert').first().json.html }}",
           "options": {
             "appendAttribution": false
           }
@@ -46,8 +46,8 @@
         "type": "n8n-nodes-base.emailSend",
         "typeVersion": 2.1,
         "position": [
-          480,
-          0
+          1800,
+          140
         ],
         "credentials": {
           "smtp": {
@@ -57,11 +57,12 @@
         },
         "retryOnFail": true,
         "maxTries": 3,
-        "waitBetweenTries": 5000
+        "waitBetweenTries": 5000,
+        "onError": "continueRegularOutput"
       },
       {
         "parameters": {
-          "content": "## SEO Agent — Error Handler\nAttach this as **Settings → Error workflow** on the SEO Agent workflow.\n\n1. *Email Ops* sends through the \"Gmail SMTP (SEO Agent)\" credential to kinnngahmed@gmail.com — change the address if ops alerts should go elsewhere.\n2. Optional: add a Slack / Teams node after *Format Alert*.\n\nThe payload has the execution id, a link to open it, the failed node and the error message. It does **not** contain the customer's form data (n8n error triggers only carry execution metadata); open the execution to see who was waiting for a report.",
+          "content": "## SEO Agent — Error Handler\nAttach this as **Settings → Error workflow** on every SEO Agent workflow (the builders set it).\n\nThree channels, in this order (D25b, 2026-10-12):\n1. **seo_ops_alerts** (Data Table) — every alert is recorded *first*, with the repeat count, so a failure is never lost even when both senders are down. This is the record ops reads after an outage.\n2. **Post Alert Webhook** — a POST to `SEO_ALERT_WEBHOOK_URL` from `n8n/.env` (Slack / Teams incoming webhook, or any endpoint). No SMTP involved: this is the channel that still works when the mail server refuses the connection, as it did on 2026-10-10 and 2026-10-12. Unset = skipped.\n3. **Email Ops** — the ops address (`SEO_OPS_EMAIL`), 3 tries 5 s apart, and it can no longer fail the run.\n\nThe same failure within 30 minutes is counted on its row and not re-sent. The web app's failure watcher (`app/server/src/services/engineFailures.ts`) reads failed executions from n8n independently of all three.\nThe payload has the execution id, a link to open it, the failed node and the error message. It does **not** contain the customer's form data (n8n error triggers only carry execution metadata).",
           "height": 320,
           "width": 520,
           "color": 3
@@ -73,6 +74,414 @@
         "position": [
           -60,
           -380
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_ops_alerts",
+          "columns": {
+            "column": [
+              {
+                "name": "alert_key",
+                "type": "string"
+              },
+              {
+                "name": "workflow",
+                "type": "string"
+              },
+              {
+                "name": "node",
+                "type": "string"
+              },
+              {
+                "name": "message",
+                "type": "string"
+              },
+              {
+                "name": "execution_id",
+                "type": "string"
+              },
+              {
+                "name": "execution_url",
+                "type": "string"
+              },
+              {
+                "name": "mode",
+                "type": "string"
+              },
+              {
+                "name": "severity",
+                "type": "string"
+              },
+              {
+                "name": "first_seen_at",
+                "type": "string"
+              },
+              {
+                "name": "last_seen_at",
+                "type": "string"
+              },
+              {
+                "name": "count",
+                "type": "number"
+              },
+              {
+                "name": "channels",
+                "type": "string"
+              },
+              {
+                "name": "delivered",
+                "type": "string"
+              },
+              {
+                "name": "notes",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "1fecca07-9450-5b45-bd16-57fa5e577907",
+        "name": "Ensure Ops Alerts Table",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          480,
+          0
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ops_alerts"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "fead11fd-4f58-5f50-afe7-a12957dc98b3",
+        "name": "Load Ops Alerts",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          700,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// D25b (2026-10-12, system review FIX_PLAN.md): the seo_ops_alerts row for this failure (exact columns - the Data Table node auto-maps every\n// field it is given). The row is written BEFORE anything is sent, so a failed run is on record even when every channel is down.\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = S(c.webhook_url);\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      delivered: notify ? 'pending' : 'deduped',\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, DEDUPE_MINUTES };\n})();\nconst alert = $('Format Alert').first().json;\nlet rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}\nconst CFG = { webhook_url: '', email_to: 'kinnngahmed@gmail.com' };   // baked from n8n/.env at build time ($env is blocked in nodes)\nreturn [{ json: OA.plan(alert, rows, CFG).row }];\n"
+        },
+        "id": "07359c91-c322-5544-82f9-b7d42d6e9a76",
+        "name": "Alert Record",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          920,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ops_alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "alert_key",
+                "condition": "eq",
+                "keyValue": "={{ $json.alert_key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "alert_key",
+                "displayName": "alert_key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "workflow",
+                "displayName": "workflow",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "node",
+                "displayName": "node",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "message",
+                "displayName": "message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "execution_id",
+                "displayName": "execution_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "execution_url",
+                "displayName": "execution_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mode",
+                "displayName": "mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "severity",
+                "displayName": "severity",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "first_seen_at",
+                "displayName": "first_seen_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_seen_at",
+                "displayName": "last_seen_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "count",
+                "displayName": "count",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "channels",
+                "displayName": "channels",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "delivered",
+                "displayName": "delivered",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "notes",
+                "displayName": "notes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "0ff7c0b4-31fd-582c-a154-87deec2cc07c",
+        "name": "Save Ops Alert",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1140,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// D25b (2026-10-12, system review FIX_PLAN.md): decides what to send after the alert is on record. Two independent channels - a webhook\n// (no SMTP involved: it is the one that still works when the mail server refuses the connection, as it did on 2026-10-10 and 2026-10-12) and\n// the ops e-mail. A channel that is not configured is skipped, a repeat within OA.DEDUPE_MINUTES is not re-sent, and neither can fail the run.\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = S(c.webhook_url);\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      delivered: notify ? 'pending' : 'deduped',\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, DEDUPE_MINUTES };\n})();\nconst alert = $('Format Alert').first().json;\nlet rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}\nconst CFG = { webhook_url: '', email_to: 'kinnngahmed@gmail.com' };   // baked from n8n/.env at build time ($env is blocked in nodes)\nconst p = OA.plan(alert, rows, CFG);\n// did the row reach the table? (a Data Table node with onError: continueRegularOutput answers with an error item instead of failing)\nlet recorded = true, record_error = '';\ntry { const s = ($('Save Ops Alert').first() || {}).json || {}; if (s.error) { recorded = false; record_error = String(s.error.message || s.error.description || s.error).slice(0, 200); } }\ncatch (e) { recorded = false; record_error = 'the alert row was not written: ' + String(e.message || e).slice(0, 160); }\nreturn [{ json: {\n  subject: alert.subject, html: alert.html, plain: p.plain, alert_key: p.alert_key, severity: p.severity,\n  notify: p.notify, repeat: p.repeat, seen_count: p.row.count, channels: p.channels, channels_text: p.channels.join(', '),\n  webhook_url: p.webhook_url, webhook_body: p.webhook_body, email_to: p.email_to,\n  send_webhook: !!(p.notify && p.webhook_url), send_email: !!(p.notify && p.email_to),\n  recorded, record_error,\n  note: p.notify\n    ? (p.channels.filter(c => c !== 'data_table').length ? 'sending to ' + p.channels.filter(c => c !== 'data_table').join(' and ') : 'no channel is configured - the alert is only on record in seo_ops_alerts')\n    : 'the same failure was alerted less than ' + p.DEDUPE_MINUTES + ' minutes ago: recorded (' + p.row.count + 'x), not re-sent'\n} }];\n"
+        },
+        "id": "c7199223-cbef-5a1a-88bf-a18be9964b58",
+        "name": "Alert Channels",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1360,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "0a724d77-5abd-59dc-8381-8100ed55eda2",
+                "leftValue": "={{ $json.send_webhook }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "f21e0e60-a7e2-5057-a31b-76d538c5f149",
+        "name": "Send Webhook?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1580,
+          -140
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.webhook_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.webhook_body) }}",
+          "options": {
+            "timeout": 15000,
+            "response": {
+              "response": {
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "9ed36a37-c221-5cac-8153-480e7d83a709",
+        "name": "Post Alert Webhook",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1800,
+          -140
+        ],
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "cebf9c45-77a5-514b-b77c-03e974bc6910",
+                "leftValue": "={{ $json.send_email }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "144d65d0-9c60-5af2-9510-f9690fbff69e",
+        "name": "Send Email?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1580,
+          140
         ]
       }
     ],
@@ -88,11 +497,93 @@
           ]
         ]
       },
-      "Format Alert": {
+      "Ensure Ops Alerts Table": {
+        "main": [
+          [
+            {
+              "node": "Load Ops Alerts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Ops Alerts": {
+        "main": [
+          [
+            {
+              "node": "Alert Record",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert Record": {
+        "main": [
+          [
+            {
+              "node": "Save Ops Alert",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Ops Alert": {
+        "main": [
+          [
+            {
+              "node": "Alert Channels",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert Channels": {
+        "main": [
+          [
+            {
+              "node": "Send Webhook?",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Send Email?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Webhook?": {
+        "main": [
+          [
+            {
+              "node": "Post Alert Webhook",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Send Email?": {
         "main": [
           [
             {
               "node": "Email Ops",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Format Alert": {
+        "main": [
+          [
+            {
+              "node": "Ensure Ops Alerts Table",
               "type": "main",
               "index": 0
             }

@@ -39,7 +39,7 @@ const scSection = (a, num) => {
   let h = `<h2 class="pb">${num}. Search Console &amp; Site Structure</h2>`;
   if (st.crawled_pages != null) {
     const db = st.depth_buckets || {}; const sm = st.sitemap || {};
-    h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` +
+    h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` + (st.crawl_coverage && st.crawl_coverage.text ? `<p>${e2(st.crawl_coverage.text)}.${st.crawl_coverage.coverage_pct != null && st.crawl_coverage.coverage_pct < 90 ? ' Every share below is a share of the pages that were crawled, not of the whole site.' : ''}</p>` : '') +
       `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td></tr></table>` +
       ((st.sections || []).length ? `<table class="ct"><tr><th>Section</th><th>Pages crawled</th></tr>` + st.sections.map(s => `<tr><td>${e2(s.section)}</td><td>${n2(s.pages)}</td></tr>`).join('') + `</table>` : '') +
       `<p>XML sitemap: ${sm.status === 200 ? n2(sm.urls) + ' URLs' + (sm.is_index ? ' (index of ' + n2(sm.children) + ' sitemaps)' : '') : 'not readable at ' + e2(sm.url)}${st.indexable_not_in_sitemap ? '; ' + n2(st.indexable_not_in_sitemap) + ' indexable pages missing from it' : ''}${st.sitemap_only ? '; ' + n2(st.sitemap_only) + ' sitemap URLs that no internal link reaches' : ''}${st.sitemap_broken ? '; ' + n2(st.sitemap_broken) + ' sitemap URLs not returning 200' : ''}.</p>`;
@@ -55,6 +55,7 @@ const scSection = (a, num) => {
     if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} sampled pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
     if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}</td></tr>`).join('') + `</table>`;
     if ((sc.top_queries || []).length) h += `<table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_queries.slice(0, 10).map(q => `<tr><td>${e2(q.query)}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
+    if ((sc.scraper_queries || {}).count) h += `<p class="small">${n2(sc.scraper_queries.count)} scraper ${sc.scraper_queries.count === 1 ? 'query' : 'queries'} (search operators such as site: or inurl:, ${n2(sc.scraper_queries.impressions)} impressions) left out of the top queries: they come from SEO tools and scrapers, not from customers.</p>`;
     if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_pages.slice(0, 10).map(q => `<tr><td>${e2(p2(q.page))}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
   }
   return h;
@@ -78,6 +79,53 @@ const v45Section = (a, num) => {
   else { const g = E.gbp; h += `<table class="ct"><tr><th></th><th>Google Business Profile</th><th>Your site / profile</th></tr><tr><td>Name</td><td>${e2(g ? g.title : 'not found')}</td><td>${e2(E.business_name)}</td></tr><tr><td>Phone</td><td>${e2(g ? g.phone : '—')}</td><td>${e2([(E.homepage_org || {}).telephone, ...(E.homepage_phones || [])].filter(Boolean).slice(0, 2).join(', ') || '—')}</td></tr><tr><td>Website</td><td>${e2(g ? g.website : '—')}</td><td>${e2(a.domain)}</td></tr>` + (g ? `<tr><td>Rating</td><td>${e2(g.rating != null ? g.rating + '★ (' + (g.reviews || 0) + ' reviews)' : '—')}${g.claimed ? '' : ' · <span class="bad">unclaimed</span>'}</td><td></td></tr>` : '') + `<tr><td>Official profiles (sameAs)</td><td colspan="2">${e2(((E.homepage_org || {}).sameAs || []).join(', ') || 'none in the homepage schema')}</td></tr></table>`; }
   h += `<h3>Fix pack (attached)</h3>` + ((FP.files || []).length ? `<table class="ct"><tr><th>File</th><th>What to do with it</th></tr>` + FP.files.map(f => `<tr><td>${e2(f.name)}</td><td>${e2(f.purpose)}</td></tr>`).join('') + `</table>` : `<p>No files.</p>`);
   return h;
+};
+// ---- Core Web Vitals per template, from real Chrome users (G7, 2026-10-12) ----
+const cwvSection = (a) => {
+  const c = a.crux || null;
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  let h = `<h3>Core Web Vitals per template (real Chrome users)</h3>`;
+  if (!c) return h + `<p>Not measured per template in this run.</p>`;
+  const TH = c.thresholds || { lcp: 2500, inp: 200, cls: 0.1 };
+  if (!c.available) return h + `<p><b>Not available:</b> ${e2(c.not_available)}.${c.not_available_fix ? ' ' + e2(c.not_available_fix) : ''}</p>`
+    + `<p class="small">Source: Chrome UX Report (field data). Limits: LCP ${(TH.lcp / 1000).toFixed(1)} s, INP ${TH.inp} ms, CLS ${TH.cls.toFixed(2)} at the 75th percentile.</p>`;
+  const cell = (v, limit, fmt) => v == null ? '<td>—</td>' : `<td${v > limit ? ' style="color:#b91c1c;font-weight:bold"' : ''}>${fmt(v)}</td>`;
+  const secs = (ms) => (Math.round(ms / 100) / 10).toFixed(1) + ' s';
+  const rows = [];
+  for (const t of (c.templates || [])) for (const ff of ['phone', 'desktop']) {
+    const d = t.devices ? t.devices[ff] : null;
+    if (!d) continue;
+    rows.push(d.available
+      ? `<tr><td>${e2(t.label)}</td><td>${e2(p2(t.url))}</td><td>${ff}</td>` + cell(d.lcp_ms, TH.lcp, secs) + cell(d.inp_ms, TH.inp, (v) => Math.round(v) + ' ms') + cell(d.cls, TH.cls, (v) => Number(v).toFixed(2))
+        + `<td>${d.verdict ? (d.verdict.pass ? '<span class="ok">passes</span>' : '<span class="bad">fails ' + d.verdict.failed.join(', ').toUpperCase() + '</span>') : '—'}</td>`
+        + `<td class="small">${d.level === 'origin' ? 'whole site (this page has too little traffic)' : 'this page'}${d.period && d.period.last ? ', ' + e2(d.period.first) + ' to ' + e2(d.period.last) : ''}</td></tr>`
+      : `<tr><td>${e2(t.label)}</td><td>${e2(p2(t.url))}</td><td>${ff}</td><td colspan="5" class="small">${e2(d.not_available || 'no field data')}</td></tr>`);
+  }
+  h += rows.length ? `<table class="ct"><tr><th>Template</th><th>Page</th><th>Device</th><th>LCP</th><th>INP</th><th>CLS</th><th>Verdict</th><th>Source</th></tr>` + rows.join('') + `</table>` : `<p>No template could be measured.</p>`;
+  h += `<p class="small">Source: <b>Chrome UX Report field data</b> — what real Chrome users measured, at the 75th percentile of the 28 days`
+    + `${c.collection_period && c.collection_period.last ? ' ending ' + e2(c.collection_period.last) : ''}. Google's limits: LCP ${(TH.lcp / 1000).toFixed(1)} s, INP ${TH.inp} ms, CLS ${TH.cls.toFixed(2)}.`
+    + `${(c.templates_missing || []).length ? ' No page of these templates was found in the crawl: ' + e2(c.templates_missing.join(', ')) + '.' : ''}`
+    + ` These figures carry a low weight in the health score; lab measurements (Lighthouse / PageSpeed) are shown separately where this report has them.</p>`;
+  return h;
+};
+// ---- why the first fix is first (G26, 2026-10-12) ----
+const prioNote = (a) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return a.priority_first ? `<p class="small"><b>Ordered by likely impact.</b> ${e2(a.priority_first)}</p>` : '';
+};
+// ---- the minor band folded into one line (G18-2, 2026-10-12) ----
+const minorOf = (list) => (list || []).filter(f => f && f.minor === true);
+const minorBlock = (list, where) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const m = minorOf(list);
+  if (!m.length) return '';
+  const row = (f) => `<tr><td><b>${e2(f.title)}</b></td><td class="small">${e2(f.category)} · ${e2(f.severity)}</td>`
+    + `<td class="small">${f.scope === 'site' ? 'Whole website' : e2((f.affected_count || 0) + ' page' + ((f.affected_count || 0) === 1 ? '' : 's'))}</td>`
+    + `<td class="small">${e2(f.fix || '')}${f.evidence ? '<br>' + e2(f.evidence) : ''}</td></tr>`;
+  return `<details open class="minorfold"><summary><b>Minor items (${m.length})</b> — true, and the lowest impact of this audit`
+    + `${where ? ' in ' + e2(where) : ''}: one line each instead of a section each, so the list above is the one to act on. Nothing is left out of the score or of the stored findings.</summary>`
+    + `<table class="ct"><tr><th>Item</th><th>Area</th><th>Pages</th><th>What to do</th></tr>${m.map(row).join('')}</table></details>`;
 };
 const findings = a.findings || [];
 const top = findings.filter(f => f.severity === 'Critical' || f.severity === 'High').slice(0, 6);
@@ -106,7 +154,7 @@ html += `<h2 class="pb">1. Executive Summary</h2>
 <table class="ct"><tr>${SEV.map(s => `<th style="background:${SEV_COLOR[s]}">${s}</th>`).join('')}</tr>
 <tr>${SEV.map(s => `<td style="text-align:center;font-size:14pt"><b>${counts[s] || 0}</b></td>`).join('')}</tr></table>
 ${a.score_cap_reason ? `<div class="note"><b>Score limit applied:</b> ${esc(a.score_cap_reason)}. Calculated score before the limit: ${esc(a.raw_score)}/100.</div>` : ''}
-${top.length ? '<h3>Fix These First</h3><ol>' + top.map(f => `<li><b>${esc(f.title)}</b>${f.evidence ? ' <span class="small">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}</li>`).join('') + '</ol>' : '<p>No critical or high-priority issues found.</p>'}`;
+${top.length ? '<h3>Fix These First</h3>' + prioNote(a) + '<ol>' + top.map(f => `<li><b>${esc(f.title)}</b> <span class="badge" style="background:${SEV_COLOR[f.severity]}">${esc(f.severity)}</span>${f.evidence ? ' <span class="small">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}${f.impact_basis ? '<br><span class="small">Why here: ' + esc(f.impact_basis) + ' · impact score ' + esc(f.impact) + '</span>' : ''}</li>`).join('') + '</ol>' : '<p>No critical or high-priority issues found.</p>'}`;
 
 // ---------- Key measurements ----------
 const ms = a.measurements || {};
@@ -119,6 +167,7 @@ const msRows = [
   ['Server', a.server || ms.server || 'N/A']
 ];
 html += `<h3>Key Measurements</h3><table class="kv">` + msRows.map(r => `<tr><td class="k">${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('') + `</table>`;
+html += cwvSection(a);
 
 // ---------- 2. Category scores ----------
 html += `<h2>2. Scores by Category</h2><table class="ct"><tr><th>Category</th><th style="width:60px">Score</th><th style="width:60px">Weight</th><th style="width:45%"></th></tr>` +
@@ -132,8 +181,10 @@ html += `<h2>3. What Works Well</h2><ul class="good">` +
 
 // ---------- 4. Findings ----------
 html += `<h2 class="pb">4. Issues Found</h2>`;
+const mainFindings = findings.filter(f => f.minor !== true);
+if (minorOf(findings).length) html += `<p class="small">${esc(a.minor_note || '')}</p>`;
 for (const sev of SEV) {
-  const list = findings.filter(f => f.severity === sev);
+  const list = mainFindings.filter(f => f.severity === sev);
   if (!list.length) continue;
   html += `<h3 style="color:${SEV_COLOR[sev]}">${sev} Priority (${list.length})</h3>`;
   for (const f of list) {
@@ -151,16 +202,19 @@ for (const sev of SEV) {
   }
 }
 
+html += minorBlock(findings);
+
 // ---------- 5. Action plan ----------
 const phase = (title, sevs, when) => {
-  const list = findings.filter(f => sevs.includes(f.severity));
+  const list = findings.filter(f => sevs.includes(f.severity) && f.minor !== true);
   if (!list.length) return '';
   return `<h3>${title} <span class="small">(${when})</span></h3><ul>` + list.map(f => `<li>${esc(f.title)}</li>`).join('') + `</ul>`;
 };
 html += `<h2 class="pb">5. Action Plan</h2>` +
   phase('Phase 1 — Urgent', ['Critical', 'High'], 'this week') +
   phase('Phase 2 — Important', ['Medium'], 'next 2-4 weeks') +
-  phase('Phase 3 — Polish', ['Low', 'Info'], 'when time allows');
+  phase('Phase 3 — Polish', ['Low', 'Info'], 'when time allows') +
+  (minorOf(findings).length ? `<p class="small">Plus ${minorOf(findings).length} minor item(s), folded into one line in section 4.</p>` : '');
 
 html += scSection(a, '5b');
 html += v45Section(a, '5c');
@@ -173,6 +227,7 @@ html += `<h2>6. Not Assessed in This Audit</h2>
 // ---------- 7. Methodology ----------
 html += `<h2>7. Methodology</h2>
 <p>${esc(a.scoring_method)}</p>
+${a.priority_method ? '<p><b>How the fix list is ordered:</b> ' + esc(a.priority_method) + '</p>' : ''}
 <table class="ct"><tr><th>Severity</th><th>Points deducted</th></tr>
 <tr><td>Critical</td><td>30</td></tr><tr><td>High</td><td>15</td></tr><tr><td>Medium</td><td>7</td></tr><tr><td>Low</td><td>3</td></tr><tr><td>Info</td><td>1</td></tr></table>
 <h3>Data Sources</h3>
@@ -235,6 +290,11 @@ return [{
     via_webhook: !!d.via_webhook,
     health_score: a.health_score,
     search_console: a.search_console || null,
+    crux: a.crux || null,
+    priority_method: a.priority_method || '',
+    priority_first: a.priority_first || '',
+    minor_count: a.minor_count || 0,
+    minor_note: a.minor_note || '',
     site_structure: a.site_structure || null,
     grade: a.grade,
     issue_counts: counts,

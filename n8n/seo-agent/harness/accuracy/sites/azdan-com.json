@@ -1,0 +1,741 @@
+{
+ "domain": "azdan.com",
+ "site_host": "www.azdan.com",
+ "fetched_at": "2026-10-12",
+ "captured_by": "harness/accuracy/capture.js (free public GETs only)",
+ "probes": {
+  "home": {
+   "status": 301,
+   "headers": {
+    "location": "https://www.azdan.com/",
+    "content-type": "text/html; charset=iso-8859-1",
+    "server": "Apache"
+   },
+   "body_len": 270
+  },
+  "www_https": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000",
+    "cf-cache-status": "HIT",
+    "content-encoding": "gzip"
+   },
+   "body_len": 117798
+  },
+  "www_http": {
+   "status": 301,
+   "headers": {
+    "location": "https://www.azdan.com/",
+    "cache-control": "private",
+    "content-type": "text/html",
+    "server": "cloudflare",
+    "cf-cache-status": "HIT"
+   },
+   "body_len": 166
+  },
+  "apex_http": {
+   "status": 301,
+   "headers": {
+    "location": "https://www.azdan.com/",
+    "content-type": "text/html; charset=iso-8859-1",
+    "server": "Apache"
+   },
+   "body_len": 270
+  },
+  "home_content": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000",
+    "cf-cache-status": "HIT",
+    "content-encoding": "gzip"
+   },
+   "body_len": 117798,
+   "head": "<!DOCTYPE html><html data-wf-domain=\"www.azdan.com\" data-wf-page=\"69bed4a3501e7a0235809b7a\" data-wf-site=\"69bed4a2501e7a0235809a57\" data-wf-intellimize-customer-id=\"[redacted-phone]\" lang=\"en\"><head><meta charset=\"utf-8\"/><link href=\"https://cdn.prod.website-files.com\" rel=\"preconnect\" crossorigin=\"anonymous\"/><title>Oracle NetSuite Solution Provider in UAE, KSA &amp; Egypt | Azdan</title><meta content=\"Azdan is the leading Oracle NetSuite Solution Provider. 200+ implementations across UAE, KSA, and Egypt, delivered fixed-fee by certified consultants.\" name=\"description\"/><meta content=\"Oracle NetSuite Solution Provider in UAE, KSA &amp; Egypt | Azdan\" property=\"og:title\"/><meta content=\"Azdan is the leading Oracle NetSuite Solution Provider. 200+ implementations across UAE, KSA, and Egypt, delivered fixed-fee by certified consultants.\" property=\"og:description\"/><meta content=\"https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/69f5be97896711f90c337741_Azdan_Opengraph_1200x630.jpg\" property=\"og:image\"/><meta content=\"Oracle NetSuite Solution Provider in UAE, KSA &amp; Egypt | Azdan\" name=\"twitter:title\"/><meta content=\"Azdan is the leading Oracle NetSuite Solution Provider. 200+ implementations across UAE, KSA, and Egypt, delivered fixed-fee by certified consultants.\" name=\"twitter:description\"/><meta property=\"og:type\" content=\"website\"/><meta content=\"summary_large_image\" name=\"twitter:card\"/><meta content=\"width=device-width, initial-scale=1\" name=\"viewport\"/><meta content=\"udfqxKiw4HfQBVs6_pEQUUW5rxOhpcnSol4OzO50un8\" name=\"google-site-verification\"/><meta content=\"Webflow\" name=\"generator\"/><link href=\"https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/css/azdan-staging.webflow.shared.e81c29b2d.css\" rel=\"stylesheet\" type=\"text/css\" integrity=\"sha384-6BwpstWiS5f4tUXUrDhpyKZRu+yZCvkMWtnOJr+HFXWWSbURl3ed2wHQkcrUzuMI\" crossorigin=\"anonymous\"/><link href=\"https://fonts.googleapis.com\" rel=\"preconnect\"/><link href=\"https://fonts.gstatic.com\" rel=\"preconnect\" crossorigin=\"anonymous\"/><link href=\"https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/6a4f4c9bada5f66d1de19fc6_Picture1_512x512.png\" rel=\"icon\" type=\"image/png\" sizes=\"32x32\" media=\"(prefers-color-scheme: light)\"/><link href=\"https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/6a4f4c9bada5f66d1de19fc6_Picture1_512x512.png\" rel=\"icon\" type=\"image/png\" sizes=\"32x32\" media=\"(prefers-color-scheme: dark)\"/><link href=\"https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/6a4f4c9b45b2174a26d1d662_Picture1_512x512.png\" rel=\"icon\" type=\"image/png\" sizes=\"48x48\"/><link href=\"https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/6a4f4c9be851d09c9541f17c_Picture1_512x512.png\" rel=\"apple-touch-icon\" sizes=\"180x180\"/><link href=\"https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/6a4f4c9bada5f66d1de19fd8_Picture1_512x512.png\" rel=\"icon\" type=\"image/png\" sizes=\"192x192\"/><link href=\"https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/6a4f4c9b8c872803ccfba973_Picture1_512x512.png\" rel=\"icon\" type=\"image/png\" sizes=\"512x512\"/><link href=\"https://www.azdan.com\" rel=\"canonical\"/><meta property=\"og:url\" content=\"https://www.azdan.com\"/></head>"
+  },
+  "home_repeat": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000",
+    "cf-cache-status": "HIT",
+    "content-encoding": "gzip"
+   },
+   "body_len": 117798
+  },
+  "robots": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/plain; charset=utf-8",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000",
+    "cf-cache-status": "HIT",
+    "content-encoding": "gzip"
+   },
+   "body_len": 86,
+   "text": "User-agent: *\nAllow: /\nDisallow: /password\n\nSitemap: https://www.azdan.com/sitemap.xml"
+  },
+  "sitemap": {
+   "status": 200,
+   "headers": {
+    "content-type": "application/rss+xml; charset=utf-8",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000",
+    "cf-cache-status": "HIT",
+    "content-encoding": "br"
+   },
+   "body_len": 40596,
+   "is_index": false,
+   "locs": [
+    "https://www.azdan.com",
+    "https://www.azdan.com/apps/netsuite-smart-approvals",
+    "https://www.azdan.com/services/oracle-netsuite-implementation",
+    "https://www.azdan.com/industries/netsuite-erp-real-estate",
+    "https://www.azdan.com/demo",
+    "https://www.azdan.com/contact",
+    "https://www.azdan.com/netsuite-pricing-calculator",
+    "https://www.azdan.com/about",
+    "https://www.azdan.com/customer-testimonials",
+    "https://www.azdan.com/terms",
+    "https://www.azdan.com/blog",
+    "https://www.azdan.com/netsuite-services",
+    "https://www.azdan.com/industries",
+    "https://www.azdan.com/apps/netsuite-human-capital-management",
+    "https://www.azdan.com/locations/netsuite-solution-provider-in-uae",
+    "https://www.azdan.com/services/oracle-netsuite-support",
+    "https://www.azdan.com/services/oracle-netsuite-managed-services",
+    "https://www.azdan.com/services/oracle-netsuite-development",
+    "https://www.azdan.com/services/oracle-netsuite-integration",
+    "https://www.azdan.com/services/netsuite-epm-services",
+    "https://www.azdan.com/apps/netsuite-post-dated-cheques",
+    "https://www.azdan.com/apps/netsuite-secure-file-cabinet",
+    "https://www.azdan.com/apps/netsuite-e-invoicing-egypt",
+    "https://www.azdan.com/apps/netsuite-e-invoicing-ksa",
+    "https://www.azdan.com/apps/netsuite-e-invoice-uae",
+    "https://www.azdan.com/apps/netsuite-e-invoicing-jordan",
+    "https://www.azdan.com/apps/netsuite-payroll-automation",
+    "https://www.azdan.com/apps/netsuite-property-sales-management",
+    "https://www.azdan.com/apps/netsuite-property-lease-management",
+    "https://www.azdan.com/apps/netsuite-project-costing",
+    "https://www.azdan.com/apps/netsuite-investment-portfolio-management",
+    "https://www.azdan.com/apps/netsuite-transportation-management-system",
+    "https://www.azdan.com/industries/netsuite-erp-for-property-owner-association",
+    "https://www.azdan.com/industries/netsuite-erp-for-proptech",
+    "https://www.azdan.com/industries/netsuite-erp-for-facility-management",
+    "https://www.azdan.com/industries/netsuite-erp-for-engineering-procurement-construction-epc",
+    "https://www.azdan.com/industries/netsuite-erp-for-contracting-subcontracting",
+    "https://www.azdan.com/industries/netsuite-erp-for-holding-groups",
+    "https://www.azdan.com/industries/netsuite-erp-for-family-office",
+    "https://www.azdan.com/industries/netsuite-erp-for-transportation-and-logistics",
+    "https://www.azdan.com/industries/netsuite-erp-for-wholesale-distribution",
+    "https://www.azdan.com/industries/netsuite-erp-for-beverages-distribution",
+    "https://www.azdan.com/industries/netsuite-erp-for-marine-offshore-services",
+    "https://www.azdan.com/industries/netsuite-erp-for-couriers",
+    "https://www.azdan.com/industries/netsuite-erp-for-advertising",
+    "https://www.azdan.com/industries/netsuite-erp-for-outdoor-advertising",
+    "https://www.azdan.com/industries/netsuite-erp-for-event-management",
+    "https://www.azdan.com/industries/netsuite-erp-for-oil-and-gas",
+    "https://www.azdan.com/industries/netsuite-erp-for-solar-energy",
+    "https://www.azdan.com/industries/netsuite-erp-for-pharmaceuticals",
+    "https://www.azdan.com/industries/netsuite-erp-for-healthcare",
+    "https://www.azdan.com/industries/netsuite-erp-for-hospitality",
+    "https://www.azdan.com/industries/netsuite-erp-for-automotive",
+    "https://www.azdan.com/industries/netsuite-erp-for-automobile-spare-parts",
+    "https://www.azdan.com/industries/netsuite-erp-for-professional-services",
+    "https://www.azdan.com/industries/netsuite-erp-for-engineering-consulting",
+    "https://www.azdan.com/industries/netsuite-erp-for-architecture",
+    "https://www.azdan.com/industries/netsuite-erp-for-management-consulting",
+    "https://www.azdan.com/industries/netsuite-erp-for-agribusiness",
+    "https://www.azdan.com/industries/netsuite-erp-for-food-and-beverages",
+    "https://www.azdan.com/industries/netsuite-erp-for-manufacturing",
+    "https://www.azdan.com/industries/netsuite-erp-for-process-manufacturing",
+    "https://www.azdan.com/industries/netsuite-erp-for-discrete-manufacturing",
+    "https://www.azdan.com/industries/netsuite-erp-for-batch-processing",
+    "https://www.azdan.com/industries/netsuite-erp-for-industrial-machinery",
+    "https://www.azdan.com/industries/netsuite-erp-for-heavy-equipment",
+    "https://www.azdan.com/industries/netsuite-erp-for-retail",
+    "https://www.azdan.com/industries/netsuite-erp-for-e-commerce",
+    "https://www.azdan.com/industries/netsuite-erp-for-financial-services",
+    "https://www.azdan.com/industries/netsuite-erp-for-insurance",
+    "https://www.azdan.com/industries/netsuite-erp-for-telecom",
+    "https://www.azdan.com/industries/netsuite-erp-for-it-services",
+    "https://www.azdan.com/industries/netsuite-erp-for-software-companies",
+    "https://www.azdan.com/industries/netsuite-erp-for-aviation",
+    "https://www.azdan.com/industries/netsuite-erp-for-education-and-training",
+    "https://www.azdan.com/industries/netsuite-erp-for-higher-education",
+    "https://www.azdan.com/privacy-policy",
+    "https://www.azdan.com/locations/netsuite-solution-provider-in-ksa",
+    "https://www.azdan.com/locations/netsuite-solution-provider-in-egypt",
+    "https://www.azdan.com/careers",
+    "https://www.azdan.com/author/jack-tadros",
+    "https://www.azdan.com/social-responsibility",
+    "https://www.azdan.com/trust-and-compliance",
+    "https://www.azdan.com/leadership",
+    "https://www.azdan.com/leadership/tariq-shahabedden",
+    "https://www.azdan.com/companies",
+    "https://www.azdan.com/leadership/bishoy-sami",
+    "https://www.azdan.com/leadership/ibraam-sami",
+    "https://www.azdan.com/leadership/jack-tadros",
+    "https://www.azdan.com/leadership/younan-sami",
+    "https://www.azdan.com/leadership/mouner-nijmeh",
+    "https://www.azdan.com/leadership/ghaida-khader",
+    "https://www.azdan.com/apps/netsuite-contract-management",
+    "https://www.azdan.com/apps/netsuite-legal-case-management",
+    "https://www.azdan.com/apps/netsuite-bank-connector",
+    "https://www.azdan.com/apps/netsuite-community-management-app",
+    "https://www.azdan.com/glossary",
+    "https://www.azdan.com/apps/netsuite-integration-control-tower",
+    "https://www.azdan.com/e-books",
+    "https://www.azdan.com/services/netsuite-health-check-gap-analysis",
+    "https://www.azdan.com/locations/netsuite-solution-provider-in-turkey",
+    "https://www.azdan.com/apps/uae-e-invoice-for-oracle-fusion",
+    "https://www.azdan.com/uae-e-invoicing",
+    "https://www.azdan.com/referral-program",
+    "https://www.azdan.com/apps/uae-e-invoice-for-oracle-jd-edwards",
+    "https://www.azdan.com/apps/uae-e-invoice-for-oracle-e-business-suite",
+    "https://www.azdan.com/apps/uae-e-invoicing-for-legacy-custom-systems",
+    "https://www.azdan.com/uae-e-invoicing-glossary",
+    "https://www.azdan.com/apps",
+    "https://www.azdan.com/locations",
+    "https://www.azdan.com/netsuite-glossary",
+    "https://www.azdan.com/blog/10-best-financial-consolidation-software-in-the-uae-2026",
+    "https://www.azdan.com/blog/10-erp-systems-that-support-uae-e-invoicing-full-guide",
+    "https://www.azdan.com/blog/10-rpa-providers-in-saudi-arabia-industry-specialisations-platforms",
+    "https://www.azdan.com/blog/10-salesforce-partners-middle-east",
+    "https://www.azdan.com/blog/15-accounting-systems-approved-by-zatca-in-saudi-arabia-2026",
+    "https://www.azdan.com/blog/15-best-oracle-fusion-partners-in-the-ksa",
+    "https://www.azdan.com/blog/15-best-oracle-fusion-partners-in-the-uae-2026",
+    "https://www.azdan.com/blog/15-rpa-providers-in-uae-industry-specialisations-platforms",
+    "https://www.azdan.com/blog/20-best-crm-software-in-uae",
+    "https://www.azdan.com/blog/20-best-odoo-partners-in-egypt-for-implementation-and-support",
+    "https://www.azdan.com/blog/20-microsoft-dynamics-partners-gcc",
+    "https://www.azdan.com/blog/20-oracle-netsuite-solution-providers-middle-east",
+    "https://www.azdan.com/blog/20-sap-partners-gcc",
+    "https://www.azdan.com/blog/best-erp-companies-in-uae-2026",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-advertising",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-apparel-footwear-accessories",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-campus-stores",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-food-and-beverage",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-health-and-beauty",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-healthcare",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-hospitality",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-manufacturing",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-media",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-nonprofits",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-publishing",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-retail",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-services",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-software-companies",
+    "https://www.azdan.com/blog/end-to-end-business-process-for-technology-services",
+    "https://www.azdan.com/blog/erp-companies-egypt",
+    "https://www.azdan.com/blog/erp-companies-ksa",
+    "https://www.azdan.com/blog/fdl-10-brmj-mhsby-fy-lsaawdy",
+    "https://www.azdan.com/blog/how-azdan-implemented-netsuite-for-construction-and-contracting",
+    "https://www.azdan.com/blog/how-to-implement-netsuite-erp",
+    "https://www.azdan.com/blog/how-to-implement-netsuite-for-manufacturing-companies",
+    "https://www.azdan.com/blog/how-to-implement-netsuite-for-services-companies",
+    "https://www.azdan.com/blog/how-to-implement-netsuite-for-software-companies",
+    "https://www.azdan.com/blog/how-to-optimize-your-netsuite-license-costs",
+    "https://www.azdan.com/blog/local-hcm-systems-in-the-middle-east-2026",
+    "https://www.azdan.com/blog/logistics-and-shipping-suiteapps-for-netsuite",
+    "https://www.azdan.com/blog/netsuite-account-reconciliation-vs-blackline-and-floqast",
+    "https://www.azdan.com/blog/netsuite-billing-vs-zuora-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-breeder-erp-poultry-flock-accounting",
+    "https://www.azdan.com/blog/netsuite-clinic-management-system",
+    "https://www.azdan.com/blog/netsuite-hcm-gcc-compliance-guide",
+    "https://www.azdan.com/blog/netsuite-integration-platform-vs-direct-api",
+    "https://www.azdan.com/blog/netsuite-investment-management-ifrs",
+    "https://www.azdan.com/blog/netsuite-planning-and-budgeting-vs-adaptive-anaplan-planful-vena",
+    "https://www.azdan.com/blog/netsuite-pricing-guide",
+    "https://www.azdan.com/blog/netsuite-real-estate-sales-operations",
+    "https://www.azdan.com/blog/netsuite-vs-acumatica-unbiased-erp-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-dynamics-365-business-central-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-dynamics-365-finance-scm-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-dynamics-365-finance-scm-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-epicor-unbiased-erp-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-infor-unbiased-erp-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-odoo-unbiased-erp-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-quickbooks-enterprise-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-quickbooks-online-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-sage-intacct-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-sage-intacct-unbiased-comparison-tzhzc",
+    "https://www.azdan.com/blog/netsuite-vs-sage-x3-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-sap-business-bydesign-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-sap-business-one-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-sap-s4hana-cloud-public-edition-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-saudi-accounting-software-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-workday-unbiased-comparison",
+    "https://www.azdan.com/blog/netsuite-vs-xero-unbiased-erp-comparison",
+    "https://www.azdan.com/blog/oracle-epm-partners-middle-east",
+    "https://www.azdan.com/blog/oracle-netsuite-for-automotive-dealerships-crm",
+    "https://www.azdan.com/blog/oracle-netsuite-partners-emea-top-10",
+    "https://www.azdan.com/blog/oracle-netsuite-partners-of-the-year",
+    "https://www.azdan.com/blog/top-10-financial-planning-budgeting-tools-for-uae-businesses-2026",
+    "https://www.azdan.com/blog/top-10-investment-fund-and-portfolio-accounting-software",
+    "https://www.azdan.com/blog/top-10-uae-community-management-software-for-developers",
+    "https://www.azdan.com/blog/top-20-odoo-partners-in-saudi-arabia-2026",
+    "https://www.azdan.com/blog/top-20-pos-software-providers-in-the-ksa",
+    "https://www.azdan.com/blog/top-20-pos-software-providers-in-the-uae",
+    "https://www.azdan.com/blog/top-20-uae-einvoicing-service-providers",
+    "https://www.azdan.com/blog/top-5-certified-shopify-agencies-in-egypt",
+    "https://www.azdan.com/blog/top-5-netsuite-construction-solutions-2026-guide",
+    "https://www.azdan.com/blog/top-5-netsuite-payroll-solutions-by-region-2026",
+    "https://www.azdan.com/blog/top-5-netsuite-real-estate-solutions-2026-guide",
+    "https://www.azdan.com/blog/top-5-netsuite-suiteapps-for-transportation-and-delivery-2026-guide",
+    "https://www.azdan.com/blog/top-5-oracle-netsuite-partners-for-poultry",
+    "https://www.azdan.com/blog/top-crm-for-real-estate-developers-in-uae-2026",
+    "https://www.azdan.com/blog/top-netsuite-solutions-for-agriculture-and-crop-management",
+    "https://www.azdan.com/blog/top-odoo-partners-in-uae-in-2026",
+    "https://www.azdan.com/blog/top-oracle-fusion-partners-in-egypt",
+    "https://www.azdan.com/blog/uae-e-invoicing-guide",
+    "https://www.azdan.com/blog/what-is-oracle-netsuite-arabic-guide",
+    "https://www.azdan.com/blog/why-do-uae-e-invoices-get-rejected-the-10-most-common-mistakes",
+    "https://www.azdan.com/blog/yardi-partners-in-uae",
+    "https://www.azdan.com/case-studies/aesg",
+    "https://www.azdan.com/case-studies/agrimatco",
+    "https://www.azdan.com/case-studies/al-basateen",
+    "https://www.azdan.com/case-studies/designlab-experience",
+    "https://www.azdan.com/case-studies/deyaar-community-management",
+    "https://www.azdan.com/case-studies/dubizzle",
+    "https://www.azdan.com/case-studies/foodics",
+    "https://www.azdan.com/case-studies/fos-energy",
+    "https://www.azdan.com/case-studies/hea-investments",
+    "https://www.azdan.com/case-studies/how-acs-abu-dhabi-connected-its-finance-office-to-veracross-on-netsuite",
+    "https://www.azdan.com/case-studies/how-alkan-cit-sees-profit-per-project-on-netsuite",
+    "https://www.azdan.com/case-studies/how-green-coast-consolidates-its-group-on-netsuite",
+    "https://www.azdan.com/case-studies/how-hea-energy-tracks-every-vessels-p-l-on-netsuite",
+    "https://www.azdan.com/case-studies/how-radiant-real-estate-sells-and-collects-on-netsuite",
+    "https://www.azdan.com/case-studies/how-rotana-signs-runs-600-media-sites-on-netsuite",
+    "https://www.azdan.com/case-studies/how-spire-solutions-runs-three-revenue-models-on-netsuite",
+    "https://www.azdan.com/case-studies/national-creativity",
+    "https://www.azdan.com/case-studies/nawy",
+    "https://www.azdan.com/case-studies/one-development",
+    "https://www.azdan.com/case-studies/redcon-properties",
+    "https://www.azdan.com/case-studies/tatweer-company",
+    "https://www.azdan.com/case-studies/the-roasting-house",
+    "https://www.azdan.com/case-studies/united-motors-company",
+    "https://www.azdan.com/case-studies/united-pharmaceuticals-company",
+    "https://www.azdan.com/e-books/5-ai-use-cases-for-accounting",
+    "https://www.azdan.com/e-books/5-fresh-metrics-every-cfo-should-be-measuring",
+    "https://www.azdan.com/e-books/7-steps-to-prepare-for-an-ipo",
+    "https://www.azdan.com/e-books/beyond-the-numbers-owning-your-impact-as-a-finance-leader",
+    "https://www.azdan.com/e-books/get-answers-faster--without-waiting-on-your-data-team",
+    "https://www.azdan.com/e-books/how-ai-helps-cfos-close-faster-forecast-smarter-and-gain-deeper-insights",
+    "https://www.azdan.com/e-books/how-to-configure-and-secure-the-netsuite-ai-connector-service",
+    "https://www.azdan.com/e-books/how-to-overcome-5-barriers-to-connected-budgeting-and-forecasting",
+    "https://www.azdan.com/e-books/how-to-select-the-right-erp-for-your-retail-business",
+    "https://www.azdan.com/e-books/navigating-global-trade-3-insights-for-leaders",
+    "https://www.azdan.com/e-books/netsuite-media-edition-cloud-management-system-for-media-companies",
+    "https://www.azdan.com/e-books/netsuite-meets-ai",
+    "https://www.azdan.com/e-books/netsuite-next-starts-now",
+    "https://www.azdan.com/e-books/netsuite-planning-and-budgeting-how-to-manage-ad-hoc-reporting",
+    "https://www.azdan.com/e-books/scale-smarter-with-netsuite-integrations",
+    "https://www.azdan.com/e-books/the-cfo-agenda-2026-12-ways-to-flourish-now",
+    "https://www.azdan.com/e-books/the-cfos-daily-checklist",
+    "https://www.azdan.com/e-books/the-cfos-guide-to-ai-in-finance",
+    "https://www.azdan.com/e-books/the-finance-teams-role-in-improving-inventory-management",
+    "https://www.azdan.com/e-books/the-great-accountant-shortage",
+    "https://www.azdan.com/e-books/the-ultimate-guide-to-scenario-planning",
+    "https://www.azdan.com/e-books/upskill-your-finance-team-with-ai-and-soft-skills",
+    "https://www.azdan.com/e-books/your-ai-adoption-playbook",
+    "https://www.azdan.com/e-books/your-next-6-months-as-cfo"
+   ]
+  },
+  "llms": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/plain; charset=utf-8",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000",
+    "cf-cache-status": "HIT",
+    "content-encoding": "gzip"
+   },
+   "body_len": 28841,
+   "has_html": false,
+   "text": ""
+  },
+  "markdown": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000",
+    "cf-cache-status": "HIT",
+    "content-encoding": "gzip"
+   },
+   "body_len": 117798
+  },
+  "bot:GPTBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:OAI-SearchBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:ChatGPT-User": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:ClaudeBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:PerplexityBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:Googlebot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:Bingbot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:CCBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:Amazonbot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:Applebot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  },
+  "bot:Meta-ExternalAgent": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 117798
+  }
+ },
+ "pages": [
+  {
+   "url": "https://www.azdan.com/",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 0,
+   "checks": {
+    "duplicate_meta_tags": true
+   },
+   "meta": {
+    "title": "Oracle NetSuite Solution Provider in UAE, KSA & Egypt | Azdan",
+    "description": "Azdan is the leading Oracle NetSuite Solution Provider. 200+ implementations across UAE, KSA, and Egypt, delivered fixed-fee by certified consultants.",
+    "canonical": "https://www.azdan.com",
+    "htags": {
+     "h1": [
+      "NetSuite Solution Provider That deliver advanced Workflows"
+     ],
+     "h2": [
+      "From the first scoping call to ongoing managed support \u2014 Azdan covers the full NetSuite lifecycle for businesses across the Middle East.",
+      "The Full NetSuite Service Lifecycle, Delivered by One Team",
+      "The Middle East\u2019s Most Trusted Oracle NetSuite Solution Provider",
+      "NetSuite Services for Every Stage of Your Business",
+      "Growth Exposes the Gaps Your Systems Were Never Built For.",
+      "Industries We Serve",
+      "From First Scoping Call to Ongoing Managed Support",
+      "Built Inside NetSuite for the Middle East",
+      "Common Questions About NetSuite",
+      "NetSuite Insights",
+      "Ready to Strategize Your Next Move?"
+     ],
+     "h3": [
+      "200+",
+      "20+",
+      "#1",
+      "NetSuite Implementation",
+      "NetSuite Support",
+      "NetSuite Customization",
+      "NetSuite for Agriculture: Crop Costing, Water and Traceability",
+      "ERP Leading Practice for Healthcare",
+      "ERP Leading Practice for Restaurants and Hotels"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "Oracle NetSuite Solution Provider in UAE, KSA & Egypt | Azdan",
+     "og:description": "Azdan is the leading Oracle NetSuite Solution Provider. 200+ implementations across UAE, KSA, and Egypt, delivered fixed-fee by certified consultants.",
+     "og:image": "https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/69f5be97896711f90c337741_Azdan_Opengraph_1200x630.jpg",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 156,
+    "external_links_count": 17,
+    "content": {
+     "plain_text_word_count": 2239
+    }
+   },
+   "checks_from": [
+    "duplicate_meta_tags: assumed set, so that our own homepage verification is scored against the real HTML (there is no crawl of this site)"
+   ]
+  },
+  {
+   "url": "https://www.azdan.com/services/oracle-netsuite-implementation",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {},
+   "meta": {
+    "title": "Oracle NetSuite Implementation | Azdan",
+    "description": "Oracle NetSuite implementation delivered by 200+ certified consultants. Fixed-fee scoping, regional localization, data migration, and post-go-live support.",
+    "canonical": "https://www.azdan.com/services/oracle-netsuite-implementation",
+    "htags": {
+     "h1": [
+      "NetSuite Implementation Built for How You Actually Operate"
+     ],
+     "h2": [
+      "Discovery & Solution Design",
+      "Configuration, Build & Migration",
+      "Training, Go-Live & Managed Support",
+      "The AI Layer That Separates Us From Everyone Else.",
+      "Al Basateen Real Estate",
+      "Common Questions About NetSuite",
+      "Ready to Strategize Your Next Move?"
+     ],
+     "h3": []
+    },
+    "social_media_tags": {
+     "og:title": "Oracle NetSuite Implementation | Azdan",
+     "og:description": "Oracle NetSuite implementation delivered by 200+ certified consultants. Fixed-fee scoping, regional localization, data migration, and post-go-live support.",
+     "og:image": "https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/69f5be97896711f90c337741_Azdan_Opengraph_1200x630.jpg",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 140,
+    "external_links_count": 16,
+    "content": {
+     "plain_text_word_count": 2500
+    }
+   }
+  },
+  {
+   "url": "https://www.azdan.com/about",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {},
+   "meta": {
+    "title": "About Azdan, Oracle NetSuite Partner in GCC | Azdan",
+    "description": "Azdan is an award-winning Oracle NetSuite Solution Provider and Oracle EPM partner. 200+ implementations across the Middle East.",
+    "canonical": "https://www.azdan.com/about",
+    "htags": {
+     "h1": [
+      "Welcome to Life at Azdan"
+     ],
+     "h2": [
+      "The Modern Way to Grow Your Business",
+      "Our mission is to help Middle East businesses run their full operations on a single connected platform \u2014 and to keep them running as they grow.",
+      "Over a Decade of NetSuite in the Middle East",
+      "How We Think, Work, and Deliver",
+      "Ready to Scale Your Business with NetSuite?"
+     ],
+     "h3": []
+    },
+    "social_media_tags": {
+     "og:title": "About Azdan, Oracle NetSuite Partner in GCC | Azdan",
+     "og:description": "Azdan is an award-winning Oracle NetSuite Solution Provider and Oracle EPM partner. 200+ implementations across the Middle East.",
+     "og:image": "https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/69f5be97896711f90c337741_Azdan_Opengraph_1200x630.jpg",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 134,
+    "external_links_count": 15,
+    "content": {
+     "plain_text_word_count": 1186
+    }
+   }
+  },
+  {
+   "url": "https://www.azdan.com/netsuite-services",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {},
+   "meta": {
+    "title": "NetSuite Services | Support & Managed Services | Azdan",
+    "description": "NetSuite implementation, support, managed services, customization, integration, and Oracle EPM from Azdan&#x27;s certified Middle East consultants.",
+    "canonical": "https://www.azdan.com/netsuite-services",
+    "htags": {
+     "h1": [
+      "NetSuite Services for Every Stage of Your Business"
+     ],
+     "h2": [
+      "The full NetSuite lifecycle, from initial scoping through to ongoing managed support, delivered by consultants who know the platform and the region.",
+      "NetSuite Services Tailored to Your Business",
+      "Oracle EPM Planning, Budgeting, and Financial Consolidation",
+      "Industries We Serve",
+      "Common Questions About NetSuite",
+      "Ready to See NetSuite in Action?"
+     ],
+     "h3": [
+      "Oracle NetSuite Implementation",
+      "Oracle NetSuite Support",
+      "Oracle NetSuite Customization",
+      "Oracle NetSuite Integration",
+      "Automotive",
+      "Real Estate",
+      "Investment"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "NetSuite Services | Support & Managed Services | Azdan",
+     "og:description": "NetSuite implementation, support, managed services, customization, integration, and Oracle EPM from Azdan&#x27;s certified Middle East consultants.",
+     "og:image": "https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/69f5be97896711f90c337741_Azdan_Opengraph_1200x630.jpg",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 141,
+    "external_links_count": 16,
+    "content": {
+     "plain_text_word_count": 1986
+    }
+   }
+  },
+  {
+   "url": "https://www.azdan.com/blog",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {},
+   "meta": {
+    "title": "NetSuite Insights & Resources | Azdan Blog",
+    "description": "NetSuite implementation guides, ERP best practices, and regional insights from Azdan&#x27;s consultants across the UAE, Saudi Arabia, and Egypt.",
+    "canonical": "https://www.azdan.com/blog",
+    "htags": {
+     "h1": [
+      "NetSuite Insights"
+     ],
+     "h2": [
+      "NetSuite for Agriculture: Crop Costing, Water and Traceability",
+      "ERP Leading Practice for Healthcare",
+      "ERP Leading Practice for Restaurants and Hotels",
+      "ERP Leading Practice for Manufacturing Companies",
+      "ERP Leading Practice for Media Companies",
+      "ERP Leading Practice for Nonprofits",
+      "ERP Leading Practice for Project-Based Companies",
+      "ERP Leading Practice for Publishing",
+      "ERP Leading Practice for Retail",
+      "ERP Leading Practice for SaaS Companies",
+      "ERP Leading Practice for Services Companies",
+      "ERP Leading Practice for Software Companies"
+     ],
+     "h3": [
+      "NetSuite for Agriculture: Crop Costing, Water and Traceability",
+      "NetSuite Poultry Breeder Accounting: IAS 41",
+      "NetSuite for Real Estate Sales: Lessons Learned",
+      "NetSuite for Construction: Azdan&#x27;s Implementation",
+      "NetSuite Investment Management: IFRS Accounting on One Ledger",
+      "NetSuite Clinic Management System",
+      "Oracle NetSuite for Automotive Dealerships CRM",
+      "NetSuite HCM: The Complete Guide for GCC Businesses",
+      "ERP Leading Practice for Healthcare",
+      "ERP Leading Practice for Restaurants and Hotels",
+      "ERP Leading Practice for Manufacturing Companies",
+      "ERP Leading Practice for Media Companies"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "NetSuite Insights & Resources | Azdan Blog",
+     "og:description": "NetSuite implementation guides, ERP best practices, and regional insights from Azdan&#x27;s consultants across the UAE, Saudi Arabia, and Egypt.",
+     "og:image": "https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/69f5be97896711f90c337741_Azdan_Opengraph_1200x630.jpg",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 338,
+    "external_links_count": 15,
+    "content": {
+     "plain_text_word_count": 7295
+    }
+   }
+  },
+  {
+   "url": "https://www.azdan.com/industries",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {},
+   "meta": {
+    "title": "Oracle NetSuite ERP Industries | Azdan",
+    "description": "Azdan delivers industry-specific NetSuite ERP implementations across real estate, manufacturing, logistics, technology, and more across the Middle East.",
+    "canonical": "https://www.azdan.com/industries",
+    "htags": {
+     "h1": [
+      "NetSuite ERP Configured for Your Industry"
+     ],
+     "h2": [
+      "Every industry has processes, compliance requirements, and operational realities that a standard ERP configuration won&#x27;t cover. Azdan&#x27;s implementations are built around yours.",
+      "Industries Served",
+      "Industry-specific NetSuite implementations built for how your sector actually operates",
+      "Common Questions About NetSuite",
+      "Ready to Strategize Your Next Move?"
+     ],
+     "h3": [
+      "Construction",
+      "Real Estate",
+      "Manufacturing",
+      "Logistics",
+      "Facility Management",
+      "Hospitality",
+      "Contracting & Subcontracting",
+      "Holding Groups",
+      "Family Office",
+      "Wholesale Distribution",
+      "Marine & Offshore Services",
+      "Advertising"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "Oracle NetSuite ERP Industries | Azdan",
+     "og:description": "Azdan delivers industry-specific NetSuite ERP implementations across real estate, manufacturing, logistics, technology, and more across the Middle East.",
+     "og:image": "https://cdn.prod.website-files.com/69bed4a2501e7a0235809a57/69f5be97896711f90c337741_Azdan_Opengraph_1200x630.jpg",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 178,
+    "external_links_count": 15,
+    "content": {
+     "plain_text_word_count": 2142
+    }
+   }
+  }
+ ],
+ "crawl": {
+  "domain_info": {
+   "checks": {},
+   "ssl_info": {}
+  },
+  "page_metrics": {}
+ },
+ "checks_note": "`checks` are the DataForSEO page flags the audit reads. Only flags that can be justified from the saved evidence are set, and each page lists why in `checks_from`; every other flag is left unset, so no finding that depends on the paid crawl alone can fire."
+}

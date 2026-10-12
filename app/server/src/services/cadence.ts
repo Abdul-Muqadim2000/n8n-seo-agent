@@ -10,6 +10,7 @@ import {
   type QueryRow,
   type QueueItem,
   type RankHistoryRow,
+  type SitePageRow,
   type TrendRow,
 } from '@seo/shared';
 
@@ -23,14 +24,19 @@ import {
 // - main-page gate (not Direct): the main page waits until half of the supporting pages are published (ladder row 'published' or a
 //   content-log row with a published_url), or the main keyword's latest valid rank check is 1-30;
 // - won: the main keyword in the top 3 in each of the last 4 valid checks (failed checks, -1, skipped), or status 'won';
-// - pile-up guard: max_waiting or more distinct keywords written but not published (content log 'started', no published_url,
-//   started in the last 120 days) -> nothing is written that week;
+// - pile-up guard (v4.14, FIX_PLAN D5): max_waiting or more distinct keywords written but not published -> nothing is written that
+//   week. A keyword waits when a content-log row of the last 120 days has any status but published (every content run writes one:
+//   the ladder's page runs, the app's "Write now", the cadence), or a ladder row is still 'writing' and its keyword has no
+//   published page;
 // - opportunity posts (Search Console striking distance, then rising Google Trends searches) only when opportunities is Auto;
 //   when Manual they are suggestions (the first 5);
 // - Manual ladders are never written: each one's next eligible page waits for approval;
 // - skips keywords written in the last 90 days (or published), ladder rows marked writing / published, brand queries;
 // - v4.12 (AI_GROWTH_SPEC.md): the AI page of the week — the most valuable queued AI target (seo_ai_targets) as a new answer page or a refresh,
 //   on top of the blog posts, at most one a week and ai_pages_month a month, not while the pile-up guard holds; Manual opportunities -> a suggestion.
+// - v4.15 (D11, SITE_MODEL_SPEC.md): one search, one page — a candidate whose search a LIVE page of the website already answers
+//   (the page inventory seo_pages, matched like SM.matchPage in n8n/seo-agent/v5/code/_site_model.js) is never written as a second
+//   page: a ladder page becomes a refresh of that page, an opportunity post is left out and named in `coveredByLivePages`.
 
 export const CADENCE = {
   maxPerWeek: 3,
@@ -64,6 +70,36 @@ export const posInt = (v: unknown, d: number, max: number) => {
   const x = Number(v);
   return v !== '' && v != null && Number.isFinite(x) && x >= 1 ? Math.min(max, Math.floor(x)) : d;
 };
+// ---- D11: does a live page of the website already answer this search? (SM.matchPage in v5/code/_site_model.js, rule for rule) ----
+const PAGE_STOP = new Set(['a', 'an', 'and', 'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on', 'or', 'the', 'to', 'vs', 'with', 'your', 'our', 'my']);
+const pageTokens = (v: unknown) => String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+/** meaningful words: one-letter parts ("e" of "e invoicing") and stop words never decide a match */
+const pageTerms = (v: unknown) => [...new Set(pageTokens(v).filter((t) => t.length > 1 && !PAGE_STOP.has(t)))];
+const pagePath = (u: unknown) => String(u || '').replace(/^https?:\/\/[^/]*/i, '') || '/';
+export const PAGE_MATCH_MIN = 0.75;
+export interface PageMatch { url: string; title: string; matchedBy: 'query' | 'slug' | 'title'; score: number }
+/** The page that already answers `keyword`, or null — impressions for the exact query first, then 75% of its words in the slug or title. */
+export function matchPage(pages: SitePageRow[], keyword: string): PageMatch | null {
+  const want = pageTerms(keyword);
+  if (!want.length || !pages.length) return null;
+  const key = pageTokens(keyword).join(' ');
+  for (const p of pages) {
+    let qs: Array<{ query?: string; impressions?: number }> = [];
+    try { const x = JSON.parse(String(p.queries_json || '[]')); if (Array.isArray(x)) qs = x; } catch { qs = []; }
+    if (qs.some((q) => pageTokens(q?.query).join(' ') === key && (Number(q?.impressions) || 0) > 0)) return { url: p.url, title: p.title || '', matchedBy: 'query', score: 1 };
+  }
+  let best: PageMatch | null = null;
+  for (const p of pages) {
+    const slug = pageTerms(pagePath(p.url).replace(/\.[a-z]{2,5}$/i, ''));
+    const title = pageTerms(`${p.title || ''} ${p.h1 || ''}`);
+    const inSlug = want.filter((t) => slug.includes(t)).length / want.length;
+    const inTitle = want.filter((t) => title.includes(t)).length / want.length;
+    const score = Math.max(inSlug, inTitle);
+    if (score + 1e-9 >= PAGE_MATCH_MIN && (!best || score > best.score))
+      best = { url: p.url, title: p.title || '', matchedBy: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100 };
+  }
+  return best;
+}
 const isTop = (l: LadderRow) => Number(l.rung) === 4;
 const byRung = (a: LadderRow, b: LadderRow) => num(a.rung) - num(b.rung) || num(a.page_no) - num(b.page_no);
 
@@ -81,6 +117,8 @@ export interface CadenceInput {
   /** v4.12: the AI growth loop's targets (queued ones are written) and the AI pages a month (0 = none, or AI visibility / growth off) */
   aiTargets?: AiTargetRow[];
   aiPagesPerMonth?: number;
+  /** v4.15 (D11): the website's page inventory (seo_pages) — the pages it already has */
+  pages?: SitePageRow[];
 }
 
 /** The website's defaults as n8n reads them from the '_site' row. */
@@ -144,6 +182,10 @@ export interface CadencePlan {
   pausedReason: '' | 'pileup';
   /** distinct keywords written and not published (the pile-up count) */
   waitingPublish: number;
+  /** those keywords, oldest first (v4.14, D5: ladder pages included) */
+  waitingKeywords: string[];
+  /** v4.15 (D11): candidates a live page of the website already answers (refreshed or left out, never written as a second page) */
+  coveredByLivePages: Array<{ keyword: string; source: QueueItem['source']; url: string }>;
 }
 
 function ladderItem(l: LadderRow): QueueItem {
@@ -266,18 +308,47 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
       })
       .slice(0, CADENCE.suggestions);
   }
+  // D11: one search, one page — a candidate a live page of the website already answers is refreshed (ladder) or left out (opportunity post)
+  const inventory = (input.pages || []).filter((p) => p && p.url);
+  const coveredByLivePages: CadencePlan['coveredByLivePages'] = [];
   const seen = new Set<string>();
   const candidates = cands.filter((c) => {
     const k = norm(c.keyword);
     if (!k || seen.has(k)) return false;
     seen.add(k);
+    if (c.existingPageUrl) return true;
+    const hit = matchPage(inventory, c.keyword);
+    if (!hit) return true;
+    coveredByLivePages.push({ keyword: c.keyword, source: c.source, url: hit.url });
+    if (c.source !== 'ladder') return false;
+    c.existingPageUrl = hit.url;
+    c.why += ` — ${hit.url} already answers this search, so it is refreshed, not written again`;
     return true;
   });
 
-  // ---- pile-up guard ----
-  const waitingKw = new Set(
-    logs.filter((l) => l.status === 'started' && !l.published_url && now - ms(l.started_at) < CADENCE.waitingDays * 864e5).map((l) => norm(l.keyword)),
-  );
+  // ---- pile-up guard (v4.14, FIX_PLAN D5: Cadence_Plan.js) ----
+  // Every page written and not published counts, each keyword once: the content log (any status but published, written in the last
+  // 120 days) and the ladder rows still 'writing' whose keyword has no published page — ladder pages reached the content log only
+  // from v4.14 on, so their rows are what the guard sees for everything written before it.
+  const freshW = (t: unknown) => { const x = ms(t); return x > 0 && now - x < CADENCE.waitingDays * 864e5; };
+  const waitingMap = new Map<string, { keyword: string; writtenAt: string }>();
+  for (const l of logs) {
+    if (l.status === 'published' || !freshW(l.started_at)) continue;
+    const k = norm(l.keyword);
+    if (!k || waitingMap.has(k)) continue;
+    waitingMap.set(k, { keyword: l.keyword, writtenAt: String(l.started_at || '') });
+  }
+  for (const l of lrows) {
+    if (l.status !== 'writing') continue;
+    const k = norm(l.keyword);
+    if (!k || waitingMap.has(k) || publishedKw.has(k)) continue;
+    const lg = logs.filter((r) => norm(r.keyword) === k).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] ?? null;
+    const at = String(lg?.started_at || l.start_date || '');
+    if (!freshW(at)) continue;
+    waitingMap.set(k, { keyword: l.keyword, writtenAt: at });
+  }
+  const waitingKw = new Set(waitingMap.keys());
+  const waitingKeywords = [...waitingMap.values()].sort((a, b) => a.writtenAt.localeCompare(b.writtenAt)).map((w) => w.keyword);
   const pausedReason = pages > 0 && waitingKw.size >= cfg.maxWaiting ? 'pileup' : '';
   const picks = pausedReason ? [] : candidates.slice(0, pages);
 
@@ -352,6 +423,8 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     waitingForSupport: info.filter((x) => x.mainWaiting && (x.status === 'active' || x.status === 'queued') && !x.won).map((x) => x.id),
     pausedReason,
     waitingPublish: waitingKw.size,
+    waitingKeywords,
+    coveredByLivePages,
   };
 }
 
@@ -361,7 +434,7 @@ export interface CadenceWeek extends CadencePlan {
 }
 
 /**
- * The coming Monday runs, one after the other: each run's picks are logged as written (content log 'started' at the run), as the
+ * The coming Monday runs, one after the other: each run's picks are logged as written (content log 'written' at the run), as the
  * real runs do, so later runs move on — and stop once the pile-up guard holds. Nothing is assumed to get published or to rank.
  * Without runs (weekly posts off), one plan at `now` shows what would be written.
  */
@@ -376,7 +449,7 @@ export function simulateCadence(input: CadenceInput, runs: string[], now = Date.
     for (const p of plan.picks)
       logs.push({
         keyword: p.keyword,
-        status: 'started',
+        status: 'written',
         started_at: at,
         published_url: '',
         published_at: '',

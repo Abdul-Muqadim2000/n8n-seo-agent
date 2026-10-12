@@ -32,7 +32,9 @@ for (const p of plans) {
     if (!M.has(k)) M.set(k, { ref_domain: k, kind, sources: new Set(), from_url: '', to_url: '', anchor: '', rel: '', placement: '', first_seen: '', last_seen: '', authority: 0, page_keywords: 0, spam: 0, original: null, sitewide: 0, links: 0, visits: 0, visits_28d: 0, key_events: 0, dfs_lost: null, pages: [] });
     return M.get(k); };
   const seen = (e, src, d) => { e.sources.add(src); const x = ymd(d) || today; if (!e.first_seen || x < e.first_seen) e.first_seen = x; if (!e.last_seen || x > e.last_seen) e.last_seen = x; };
-  const page = (e, url, src) => { if (url && !e.pages.some(x => x.url === url)) e.pages.push({ url, src }); if (url && !e.from_url) e.from_url = url; };
+  // D23 (2026-10-11): the URL we store carries no tracking parameters (`?utm_source=chatgpt.com` and `srsltid` came in through GA4
+  // referrals and AI citations and were kept in the ledger, in the report and in outreach)
+  const page = (e, url0, src) => { const url = url0 ? LK.cleanUrl(url0) : url0; if (url && !e.pages.some(x => x.url === url)) e.pages.push({ url, src }); if (url && !e.from_url) e.from_url = url; };
   const mine = (arr, list) => list.map((r, i) => [r, arr[i]]).filter(([r]) => r && r.site_id === p.site_id);
   // ---- DataForSEO
   for (const [r, resp] of mine(resps, reqs)) {
@@ -105,6 +107,9 @@ for (const p of plans) {
   const dedupe = (arr) => arr.filter((x, i) => x.url && arr.findIndex(y => y.url === x.url) === i);
   const ai_sources = new Set(prospects.filter(x => x.site_id === p.site_id && x.type === 'ai_source').map(x => LK.refKey(x.prospect_domain)));
   const entries = [...M.values()].map(e => ({ ...e, sources: [...e.sources], prev: prev.get(e.ref_domain) || null, ai_cited: ai_sources.has(e.ref_domain), cc_rank: e.cc_rank || ccRank.get(e.ref_domain) || 0 }));
+  // footprint tags (D3): link-farm clusters seen here already, so the Link Analyst skips them and the link check puts them last; the gate in Parse Backlinks decides
+  const fp = LK.footprints(entries.map(e => ({ ref_domain: e.ref_domain, from_url: e.from_url || (e.prev || {}).from_url || '', anchor: e.anchor || (e.prev || {}).anchor || '', page_title: (e.prev || {}).page_title || '' })), { domain: p.domain, brands: (p.brand_names || []).filter(b => !String(b).includes('.')) });
+  for (const e of entries) if (fp.has(e.ref_domain) || (e.prev && e.prev.link_type === 'spam')) e.footprint = fp.get(e.ref_domain) || 'labelled spam';
   const counts = {}; for (const e of entries) for (const s of e.sources) counts[s] = (counts[s] || 0) + 1;
   out.push({ json: { site_id: p.site_id, domain: p.domain, mode: p.mode, entries, mention_pages: dedupe(mentionPages).filter(m => !linkedDomains.has(m.domain) || m.source === 'news').slice(0, 120), list_pages: dedupe(listPages).slice(0, 20),
     cc_gap: ccGap.filter(g => !linkedDomains.has(g.domain)).sort((a, b) => (b.links_to.length - a.links_to.length) || (a.cc_rank - b.cc_rank)).slice(0, 60), cc_rank: Object.fromEntries([...ccRank].slice(0, 3000)),

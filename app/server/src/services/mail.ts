@@ -1,8 +1,9 @@
-import { resolveTxt } from 'node:dns/promises';
+import { resolve4, resolveMx, resolveTxt } from 'node:dns/promises';
 import { ImapFlow } from 'imapflow';
 import { simpleParser, type AddressObject } from 'mailparser';
 import nodemailer from 'nodemailer';
 import { emailDomain, footerLines, isAutoReply, isBounce, replySubject, type DnsCheck } from '@seo/shared';
+import { config } from '../config';
 import type { MailboxRow } from '../db/schema';
 import { randomToken } from '../lib/crypto';
 import { unseal } from '../lib/secretBox';
@@ -50,8 +51,45 @@ export async function dnsCheck(domain: string): Promise<DnsCheck> {
   return { spf, dmarc, dkim, checkedAt: new Date().toISOString(), notes };
 }
 
-export interface MailboxTest { smtp: { ok: boolean; error: string }; imap: { ok: boolean; error: string; sentFolder: string; uidNext: number; uidValidity: string }; dns: DnsCheck }
 const short = (e: unknown) => String((e as Error)?.message || e).replace(/\s+/g, ' ').slice(0, 220);
+
+// ---- L1: does the recipient's domain accept mail at all? ----
+// Before the first e-mail to an address: its syntax, then an MX lookup for its domain (an A record counts: a host without MX still takes
+// mail). An address whose domain has neither is suppressed with the reason instead of being written to - it would only bounce, and bounces
+// cost the customer's mailbox its reputation. Answers are cached per domain for a day; a lookup that fails for another reason (a timeout, no
+// network) never blocks a send.
+export interface MxLookup { mx: (domain: string) => Promise<{ exchange: string; priority: number }[]>; a: (domain: string) => Promise<string[]> }
+let mxLookup: MxLookup = { mx: (d) => resolveMx(d), a: (d) => resolve4(d) };
+export interface MxResult { ok: boolean; reason: string; via: 'mx' | 'a' | 'none' | 'invalid' | 'error' | 'off' }
+const mxCache = new Map<string, { at: number; res: MxResult }>();
+const MX_TTL = 864e5;
+export const clearMxCache = () => mxCache.clear();
+/** tests (and the local end-to-end mail run) inject a resolver here, so no DNS query is made */
+export const setMxLookup = (l: Partial<MxLookup>) => { mxLookup = { ...mxLookup, ...l }; clearMxCache(); };
+export async function mxCheck(email: string): Promise<MxResult> {
+  const e = String(email ?? '').trim().toLowerCase();
+  if (!config.outreachMxCheck) return { ok: true, reason: '', via: 'off' };   // a local mail test with made-up domains (app/scripts/outreach_e2e.py)
+  if (!/^[^@\s,;:<>"]+@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(e)) return { ok: false, reason: `${e || 'the address'} is not a valid e-mail address`, via: 'invalid' };
+  const domain = emailDomain(e);
+  const hit = mxCache.get(domain);
+  if (hit && Date.now() - hit.at < MX_TTL) return hit.res;
+  const aFallback = async (why: string): Promise<MxResult> => {
+    const a = await mxLookup.a(domain).catch(() => [] as string[]);
+    return a.length ? { ok: true, reason: '', via: 'a' } : { ok: false, reason: `${domain} has no mail server (${why}): the address cannot receive e-mail`, via: 'none' };
+  };
+  let res: MxResult;
+  try {
+    const mx = (await mxLookup.mx(domain)).filter((r) => r && r.exchange && r.exchange !== '.');
+    res = mx.length ? { ok: true, reason: '', via: 'mx' } : await aFallback('no MX record');
+  } catch (err) {
+    const code = String((err as { code?: string }).code ?? '');
+    res = ['ENOTFOUND', 'NXDOMAIN', 'ENODATA'].includes(code) ? await aFallback(code) : { ok: true, reason: `the mail server of ${domain} could not be checked (${code || short(err)})`, via: 'error' };
+  }
+  mxCache.set(domain, { at: Date.now(), res });
+  return res;
+}
+
+export interface MailboxTest { smtp: { ok: boolean; error: string }; imap: { ok: boolean; error: string; sentFolder: string; uidNext: number; uidValidity: string }; dns: DnsCheck }
 /** Logs in to both servers (nothing is sent), finds the Sent folder and the inbox's position, checks the domain's DNS. */
 export async function testMailbox(c: MailboxConn, fromEmail: string): Promise<MailboxTest> {
   const smtp = { ok: false, error: '' };

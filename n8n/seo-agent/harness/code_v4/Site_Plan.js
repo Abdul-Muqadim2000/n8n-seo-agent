@@ -1,3 +1,27 @@
+// ---- a check-in that is a test (D25c, 2026-10-12; the builders inline this file where a node asks for the CHECKIN_TEST kit) ----
+// October's Search Console check-in was still the 2026-10-02 test row ("October check-in (test)"), so the reminder stopped asking the owner
+// and the Monday report showed a test as the month's answer. A check-in is a test when the person said so (the form's "test" answer or the
+// API's is_test), when it was written by a test caller (source "test"), or when its own note marks it as one. A test check-in is recorded
+// like any other, but it never satisfies the month: CK.isTest(row) keeps it out of the monthly check, so the reminder keeps asking.
+const CK = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const yes = (v) => /^(y|yes|true|1|on)$/i.test(S(v));
+  // the note marks it as a test: "(test)", "test check-in / submission / entry / row / run / data", or a note that starts with "test"
+  const MARK = /\(\s*test[^)]*\)|\btest\s+(check-?in|submission|entry|row|run|data)\b|^test\b[\s:,-]/i;
+  const isTest = (row) => {
+    const r = row || {};
+    return yes(r.is_test) || S(r.source).toLowerCase() === 'test' || MARK.test(S(r.notes));
+  };
+  // why a stored row counts as a test (for the report and the harness)
+  const testReason = (row) => {
+    const r = row || {};
+    if (yes(r.is_test)) return 'marked as a test when it was submitted';
+    if (S(r.source).toLowerCase() === 'test') return 'written by a test caller (source "test")';
+    if (MARK.test(S(r.notes))) return 'its note marks it as a test';
+    return '';
+  };
+  return { isTest, testReason, yes, MARK };
+})();
 // Site tracker plan: one job per tracked site. Sites come from the Data Table "seo_sites" (registered through the form option
 // "Track my site" / API mode "track") plus every domain that has a keyword ladder (registered automatically, e-mail from the ladder).
 // Google data is read for the last 28 complete days ending 3 days ago (Search Console data is final after about 3 days),
@@ -5,10 +29,13 @@
 const CONFIG = {
   service_account_email: 'devai-seo@techand-site.iam.gserviceaccount.com',   // filled from n8n/.env (SEO_GOOGLE_SA_EMAIL) at build time; shown in the connect instructions
   max_sites_per_run: 25, max_tracked_keywords: 40, max_gsc_keyword_requests: 30, max_inspections: 20, max_trend_keywords: 4, max_serp_checks: 20,
+  max_gsc_pages: 4,                 // G9: Search Console serves 25,000 rows per request; up to 4 pages per kind = 100,000 query / page rows
   striking_min_impressions: 30,     // "striking distance": position 4-20 with at least this many impressions in 28 days
   ctr_gap_min_impressions: 100,     // CTR gap: top-10 position, at least this many impressions, CTR under half the expected rate for the position
   decay_drop_pct: 25,               // decaying page: clicks down by this much vs the previous 28 days (and at least 10 clicks before)
-  alert_drop_pct: 30                // alert when site clicks / organic sessions drop by this much
+  // G28: a drop is an alert when it is statistically real (two-sample Poisson z, 95%) AND at least alert_min_pct; alert_drop_pct only decides
+  // whether that alert is "high" or "medium". min_*_events = the events both periods must carry together before anything is claimed at all.
+  alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40
 };
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };
@@ -21,7 +48,7 @@ const ladders = rowsOf('Load Ladders').filter(r => r.ladder_id && r.domain && r.
 const history = rowsOf('Load Rank History').filter(r => r.keyword && r.checked_at);
 const logRows = rowsOf('Load Content Log').filter(r => r.keyword && r.domain);   // pages written by the Content Cadence / reported as published
 const alertRows = rowsOf('Load Console Alerts').filter(r => r.domain && r.kind);     // Search Console notification mails + check-in flags
-const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month);     // monthly owner check-ins (manual action / security / Pages export)
+const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month && !CK.isTest(r));   // D25c: a test check-in is kept out of the monthly check (_checkin_test.js), so the reminder keeps asking     // monthly owner check-ins (manual action / security / Pages export)
 const byDomain = new Map();
 for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: kwList(s.keywords), virtual: false }); }
 for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, gsc_property: '', ga4_property_id: '', country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', created_at: '', last_run_at: '', request_id: l.request_id || '', virtual: true }); }
@@ -47,7 +74,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const blogs = logRows.filter(r => normD(r.domain) === s.domain);
   for (const b of blogs) { const k = String(b.keyword).toLowerCase().trim(); if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'blog', rung: 0, ladder_id: b.ladder_id || '', head_keyword: '' }); } }
   for (const b of blogs) { const u = String(b.published_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); pages.push({ url: u, keyword: b.keyword, rung: 0, status: 'published', ladder_id: b.ladder_id || '', page_exists: true, published_at: b.published_at || '' }); } }
-  const pending_publish = blogs.filter(b => b.status === 'started' && !b.published_url).map(b => ({ keyword: b.keyword, started_at: b.started_at || '', days: Math.round((Date.now() - new Date(b.started_at || now).getTime()) / 864e5) }));
+  // D5: 'started' and 'written' both wait for the owner's publish link. P2-4 (2026-10-12): the comment used to sit before the .map(),
+  // which an inline // swallows, so every row kept the raw content-log shape and the report said "(undefined days ago)".
+  const pending_publish = blogs.filter(b => b.status !== 'published' && !b.published_url)
+    .map(b => ({ keyword: b.keyword, started_at: b.started_at || '', days: Math.round((Date.now() - new Date(b.started_at || now).getTime()) / 864e5) }));
   const cutoff = new Date(Date.now() - 35 * 864e5).toISOString();
   const console_alerts = alertRows.filter(a => normD(a.domain) === s.domain && String(a.received_at) >= cutoff).sort((a, b) => String(b.received_at).localeCompare(String(a.received_at))).slice(0, 10).map(a => ({ kind: a.kind, severity: a.severity, subject: a.subject, summary: a.summary, received_at: a.received_at, source: a.source || 'mail' }));
   const cks = checkinRows.filter(c => c.site_id === s.site_id).sort((a, b) => String(b.month).localeCompare(String(a.month)));

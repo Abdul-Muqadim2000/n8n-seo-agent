@@ -36,7 +36,8 @@ const html = `
     <div class="card"><h2>Details</h2>
       <p><b>Industry:</b> ${esc(s.industry)}<br>
       <b>Serves:</b> ${esc(s.location_served)}<br>
-      <b>Brand Tone:</b> ${esc(s.tone_of_brand)}</p>
+      <b>Brand Tone:</b> ${esc(s.tone_of_brand)}<br>
+      <b>Pages read:</b> ${(s.pages_read || []).length ? (s.pages_read || []).map(p => esc(p.title || p.url)).join(', ') : 'homepage'}</p>
     </div>
   </div>
 

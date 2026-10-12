@@ -1,5 +1,9 @@
+/*__FIT_GATE__*/
 // Ladder mode: merges the research pulls into one pool around the head term, keeps only keywords that share its
 // topic, scores opportunity (same formula as discovery) and records where the client's site ranks today.
+// 2026-10-11 (FIX_PLAN D8): the shared fit gate refuses other companies' brands (a competitor, a domain on the results page — facts.ae ↔ "facts" —,
+// a brand AI names), government / portal queries and navigational searches before the rungs; research.refused lists them with a reason and
+// other_brands tells the AI relevance screen which names are brands.
 const base = $('Parse Verdict').first().json;
 const reqs = $('Ladder Requests').all().map(i => i.json);
 const res = $input.all().map(i => i.json);
@@ -72,7 +76,19 @@ const all = [...pool.values()].map(e => {
   const r = rankings[e.keyword];
   return { ...e, ...score(e), your_position: r ? r.position : null, your_url: r ? r.url : null };
 }).sort((a, b) => b.pre_score - a.pre_score);
-const candidates = all.filter(e => e.intent !== 'navigational' && !sameAsHead(e.keyword)).slice(0, 160);
+// the fit gate: the website itself, declared competitors (strict), the domains on the head term's results page (vendor-like), the brand names AI
+// uses for other companies (seo_cache ai_brands:), the head term / services / business words protected
+let cacheRows = []; try { cacheRows = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRows = []; }
+const sd0 = base.site_description || {};
+const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: [...new Set((base.competitors_summary || []).map(c => String(c.domain || '')).filter(Boolean))],
+  brands: fitLearnedBrands(cacheRows), protect: [head, ...(sd0.products_or_services || []), ...(base.services || []), String(base.business || sd0.business_description || '').slice(0, 400)] };
+const refused = [];
+const candidates = all.filter(e => e.intent !== 'navigational' && !sameAsHead(e.keyword)).filter(e => {
+  const g = fitGate(e.keyword, { ...fitCtx, intent: e.intent });
+  if (!g.ok) refused.push({ keyword: e.keyword, volume: e.volume, reason: g.reason, detail: g.detail });
+  return g.ok;
+}).slice(0, 160);
+const other_brands = fitBrandList(fitCtx, fitCtx.protect);
 const bySource = {}; for (const e of all) for (const s of e.sources) bySource[s] = (bySource[s] || 0) + 1;
 const failures = reqs.map((r, i) => [r, res[i]]).filter(([r, x]) => !x || x.error || ((x.tasks || [])[0] || {}).status_code >= 40000)
   .map(([r, x]) => r.label + ': ' + ((x && ((x.error && x.error.message) || ((x.tasks || [])[0] || {}).status_message)) || 'no response'));
@@ -86,8 +102,8 @@ const sd = base.site_description || {};
 // Context for the AI relevance screen: anchor "relevance" on the head term, not just on the business
 const business = (base.business || sd.business_description || 'unknown') + '. KEYWORD LADDER: this research is for a ladder of pages that climb towards the head keyword "' + head +
   '". A keyword is core (2) only when a page about it would naturally link up to a page about "' + head + '"; neighbouring topics are adjacent (1); jobs, courses, unrelated definitions and other brands are 0.';
-return [{ json: { ...base, business, services: (sd.products_or_services || []).slice(0, 8),
-  research: { pool_size: all.length, candidates, by_source: bySource, failures, requests: reqs.length },
+return [{ json: { ...base, business, services: (sd.products_or_services || []).slice(0, 8), other_brands,
+  research: { pool_size: all.length, candidates, by_source: bySource, failures, requests: reqs.length, refused: refused.slice(0, 60) },
   site_rankings: { count: Object.keys(rankings).length, head: headRank, keywords: Object.fromEntries(Object.entries(rankings).slice(0, 400)), available: rankedOk,
     top10: Object.entries(rankings).filter(([k, r]) => r.position >= 1 && r.position <= 10).map(([k, r]) => ({ keyword: k, kd: r.kd, position: r.position })) },
   head_tokens: headTok, head_geo: headGeo } }];

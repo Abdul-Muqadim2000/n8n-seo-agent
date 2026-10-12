@@ -37,6 +37,7 @@ const scoreColor = (s) => s >= 90 ? '#15803D' : s >= 75 ? '#65A30D' : s >= 60 ? 
 const bar = (s) => `<table class="bar"><tr><td style="width:${s}%;background:${scoreColor(s)}">&nbsp;</td><td style="width:${100 - s}%;background:#E2E8F0">&nbsp;</td></tr></table>`;
 const yn = (v) => { const t = String(v || '').toLowerCase(); const c = t === 'yes' ? '#15803D' : t === 'no' ? '#B91C1C' : '#CA8A04'; return `<b style="color:${c}">${esc(v || 'unclear')}</b>`; };
 const youTag = (r) => r.is_you ? '<b>' + esc(r.domain) + ' (you)</b>' : esc(r.domain);
+const cpcTxt = (c) => (c == null || c === '' || isNaN(c)) ? 'N/A' : (Math.round(Number(c) * 100) / 100).toFixed(2);   // P1-5 (2026-10-12): DataForSEO CPCs are float32
 const diffLabel = (v) => v == null ? 'N/A' : v + (v < 30 ? ' (easy)' : v < 50 ? ' (medium)' : v < 70 ? ' (hard)' : ' (very hard)');
 
 // ---- Search Console & site structure section (v4.3) ----
@@ -48,7 +49,7 @@ const scSection = (a, num) => {
   let h = `<h2 class="pb">${num}. Search Console &amp; Site Structure</h2>`;
   if (st.crawled_pages != null) {
     const db = st.depth_buckets || {}; const sm = st.sitemap || {};
-    h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` +
+    h += `<h3>Site structure (from the crawl)</h3><p>${n2(st.crawled_pages)} pages crawled, ${n2(st.indexable_pages)} indexable${st.within_3_clicks_pct != null ? '; ' + st.within_3_clicks_pct + '% of pages are within 3 clicks of the homepage' : ''}.</p>` + (st.crawl_coverage && st.crawl_coverage.text ? `<p>${e2(st.crawl_coverage.text)}.${st.crawl_coverage.coverage_pct != null && st.crawl_coverage.coverage_pct < 90 ? ' Every share below is a share of the pages that were crawled, not of the whole site.' : ''}</p>` : '') +
       `<table class="ct"><tr><th>Clicks from home</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4+</th></tr><tr><td>Pages</td><td>${n2(db[0])}</td><td>${n2(db[1])}</td><td>${n2(db[2])}</td><td>${n2(db[3])}</td><td>${n2(db['4+'])}</td></tr></table>` +
       ((st.sections || []).length ? `<table class="ct"><tr><th>Section</th><th>Pages crawled</th></tr>` + st.sections.map(s => `<tr><td>${e2(s.section)}</td><td>${n2(s.pages)}</td></tr>`).join('') + `</table>` : '') +
       `<p>XML sitemap: ${sm.status === 200 ? n2(sm.urls) + ' URLs' + (sm.is_index ? ' (index of ' + n2(sm.children) + ' sitemaps)' : '') : 'not readable at ' + e2(sm.url)}${st.indexable_not_in_sitemap ? '; ' + n2(st.indexable_not_in_sitemap) + ' indexable pages missing from it' : ''}${st.sitemap_only ? '; ' + n2(st.sitemap_only) + ' sitemap URLs that no internal link reaches' : ''}${st.sitemap_broken ? '; ' + n2(st.sitemap_broken) + ' sitemap URLs not returning 200' : ''}.</p>`;
@@ -64,6 +65,7 @@ const scSection = (a, num) => {
     if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} sampled pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
     if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}</td></tr>`).join('') + `</table>`;
     if ((sc.top_queries || []).length) h += `<table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_queries.slice(0, 10).map(q => `<tr><td>${e2(q.query)}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
+    if ((sc.scraper_queries || {}).count) h += `<p class="small">${n2(sc.scraper_queries.count)} scraper ${sc.scraper_queries.count === 1 ? 'query' : 'queries'} (search operators such as site: or inurl:, ${n2(sc.scraper_queries.impressions)} impressions) left out of the top queries: they come from SEO tools and scrapers, not from customers.</p>`;
     if ((sc.top_pages || []).length) h += `<table class="ct"><tr><th>Top page</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_pages.slice(0, 10).map(q => `<tr><td>${e2(p2(q.page))}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
   }
   return h;
@@ -88,6 +90,53 @@ const v45Section = (a, num) => {
   h += `<h3>Fix pack (attached)</h3>` + ((FP.files || []).length ? `<table class="ct"><tr><th>File</th><th>What to do with it</th></tr>` + FP.files.map(f => `<tr><td>${e2(f.name)}</td><td>${e2(f.purpose)}</td></tr>`).join('') + `</table>` : `<p>No files.</p>`);
   return h;
 };
+// ---- Core Web Vitals per template, from real Chrome users (G7, 2026-10-12) ----
+const cwvSection = (a) => {
+  const c = a.crux || null;
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const p2 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  let h = `<h3>Core Web Vitals per template (real Chrome users)</h3>`;
+  if (!c) return h + `<p>Not measured per template in this run.</p>`;
+  const TH = c.thresholds || { lcp: 2500, inp: 200, cls: 0.1 };
+  if (!c.available) return h + `<p><b>Not available:</b> ${e2(c.not_available)}.${c.not_available_fix ? ' ' + e2(c.not_available_fix) : ''}</p>`
+    + `<p class="small">Source: Chrome UX Report (field data). Limits: LCP ${(TH.lcp / 1000).toFixed(1)} s, INP ${TH.inp} ms, CLS ${TH.cls.toFixed(2)} at the 75th percentile.</p>`;
+  const cell = (v, limit, fmt) => v == null ? '<td>—</td>' : `<td${v > limit ? ' style="color:#b91c1c;font-weight:bold"' : ''}>${fmt(v)}</td>`;
+  const secs = (ms) => (Math.round(ms / 100) / 10).toFixed(1) + ' s';
+  const rows = [];
+  for (const t of (c.templates || [])) for (const ff of ['phone', 'desktop']) {
+    const d = t.devices ? t.devices[ff] : null;
+    if (!d) continue;
+    rows.push(d.available
+      ? `<tr><td>${e2(t.label)}</td><td>${e2(p2(t.url))}</td><td>${ff}</td>` + cell(d.lcp_ms, TH.lcp, secs) + cell(d.inp_ms, TH.inp, (v) => Math.round(v) + ' ms') + cell(d.cls, TH.cls, (v) => Number(v).toFixed(2))
+        + `<td>${d.verdict ? (d.verdict.pass ? '<span class="ok">passes</span>' : '<span class="bad">fails ' + d.verdict.failed.join(', ').toUpperCase() + '</span>') : '—'}</td>`
+        + `<td class="small">${d.level === 'origin' ? 'whole site (this page has too little traffic)' : 'this page'}${d.period && d.period.last ? ', ' + e2(d.period.first) + ' to ' + e2(d.period.last) : ''}</td></tr>`
+      : `<tr><td>${e2(t.label)}</td><td>${e2(p2(t.url))}</td><td>${ff}</td><td colspan="5" class="small">${e2(d.not_available || 'no field data')}</td></tr>`);
+  }
+  h += rows.length ? `<table class="ct"><tr><th>Template</th><th>Page</th><th>Device</th><th>LCP</th><th>INP</th><th>CLS</th><th>Verdict</th><th>Source</th></tr>` + rows.join('') + `</table>` : `<p>No template could be measured.</p>`;
+  h += `<p class="small">Source: <b>Chrome UX Report field data</b> — what real Chrome users measured, at the 75th percentile of the 28 days`
+    + `${c.collection_period && c.collection_period.last ? ' ending ' + e2(c.collection_period.last) : ''}. Google's limits: LCP ${(TH.lcp / 1000).toFixed(1)} s, INP ${TH.inp} ms, CLS ${TH.cls.toFixed(2)}.`
+    + `${(c.templates_missing || []).length ? ' No page of these templates was found in the crawl: ' + e2(c.templates_missing.join(', ')) + '.' : ''}`
+    + ` These figures carry a low weight in the health score; lab measurements (Lighthouse / PageSpeed) are shown separately where this report has them.</p>`;
+  return h;
+};
+// ---- why the first fix is first (G26, 2026-10-12) ----
+const prioNote = (a) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return a.priority_first ? `<p class="small"><b>Ordered by likely impact.</b> ${e2(a.priority_first)}</p>` : '';
+};
+// ---- the minor band folded into one line (G18-2, 2026-10-12) ----
+const minorOf = (list) => (list || []).filter(f => f && f.minor === true);
+const minorBlock = (list, where) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const m = minorOf(list);
+  if (!m.length) return '';
+  const row = (f) => `<tr><td><b>${e2(f.title)}</b></td><td class="small">${e2(f.category)} · ${e2(f.severity)}</td>`
+    + `<td class="small">${f.scope === 'site' ? 'Whole website' : e2((f.affected_count || 0) + ' page' + ((f.affected_count || 0) === 1 ? '' : 's'))}</td>`
+    + `<td class="small">${e2(f.fix || '')}${f.evidence ? '<br>' + e2(f.evidence) : ''}</td></tr>`;
+  return `<details open class="minorfold"><summary><b>Minor items (${m.length})</b> — true, and the lowest impact of this audit`
+    + `${where ? ' in ' + e2(where) : ''}: one line each instead of a section each, so the list above is the one to act on. Nothing is left out of the score or of the stored findings.</summary>`
+    + `<table class="ct"><tr><th>Item</th><th>Area</th><th>Pages</th><th>What to do</th></tr>${m.map(row).join('')}</table></details>`;
+};
 const findings = a.findings || [];
 const counts = a.issue_counts || {};
 const byCat = (cat) => findings.filter(f => f.category === cat);
@@ -104,8 +153,8 @@ function card(f) {
     ${urls.length ? '<p class="small"><b>Affected pages:</b><br>' + urls.map(esc).join('<br>') + (f.affected_count > urls.length ? '<br>…and ' + (f.affected_count - urls.length) + ' more' : '') + '</p>' : ''}
   </div>`;
 }
-const findingsBlock = (list) => list.length
-  ? SEV.map(s => list.filter(f => f.severity === s).map(card).join('')).join('')
+const findingsBlock = (list, where) => list.length
+  ? (SEV.map(s => list.filter(f => f.severity === s && f.minor !== true).map(card).join('')).join('') + minorBlock(list, where)) || '<p class="okline">Only minor items in this area.</p>'
   : '<p class="okline">No issues found in this area.</p>';
 
 // ---------- Merged benchmark ----------
@@ -158,7 +207,7 @@ ${a.score_cap_reason ? `<div class="note"><b>Score limit applied:</b> ${esc(a.sc
 <tr><td>Referring domains</td><td>${num(you.rd)}</td><td>${num(au && au.medians && au.medians.referring_domains)}</td></tr>
 <tr><td>Mobile PageSpeed</td><td>${num(you.speed)}</td><td>${num(ps && ps.medians && ps.medians.score)}</td></tr>
 <tr><td>Domain age (years)</td><td>${num(you.age)}</td><td>${num(cb.medians && cb.medians.domain_age_years)}</td></tr></table>
-${top.length ? '<h3>Fix These First</h3><ol>' + top.map(f => `<li><b>${esc(f.title)}</b>${f.evidence ? ' <span class="small">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}</li>`).join('') + '</ol>' : ''}`;
+${top.length ? '<h3>Fix These First</h3>' + prioNote(a) + '<ol>' + top.map(f => `<li><b>${esc(f.title)}</b> <span class="badge" style="background:${SEV_COLOR[f.severity]}">${esc(f.severity)}</span>${f.evidence ? ' <span class="small">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}${f.impact_basis ? '<br><span class="small">Why here: ' + esc(f.impact_basis) + ' · impact score ' + esc(f.impact) + '</span>' : ''}</li>`).join('') + '</ol>' : ''}`;
 
 // ---------- 2. Scorecard ----------
 html += `<h2>2. Scorecard</h2><table class="ct"><tr><th>Category</th><th style="width:60px">Score</th><th style="width:60px">Weight</th><th style="width:45%"></th></tr>` +
@@ -205,7 +254,7 @@ if (sk) {
     const list = (sk.opportunities_by_intent || {})[i] || [];
     html += `<h3>${cap(i)} Keywords</h3><p class="small">${INT_DESC[i]}</p>` + (list.length
       ? `<table class="ct"><tr><th>Keyword</th><th>Searches/mo</th><th>Difficulty</th><th>CPC $</th><th>Your position</th><th>Competitors in top 10</th></tr>` +
-        list.map(k => `<tr><td>${esc(k.keyword)}</td><td>${num(k.volume)}</td><td>${diffLabel(k.difficulty)}</td><td>${k.cpc == null ? 'N/A' : k.cpc}</td><td>${k.your_position ? '#' + k.your_position : '—'}</td><td class="small">${compCell(k.competitors)}</td></tr>`).join('') + `</table>`
+        list.map(k => `<tr><td>${esc(k.keyword)}</td><td>${num(k.volume)}</td><td>${diffLabel(k.difficulty)}</td><td>${cpcTxt(k.cpc)}</td><td>${k.your_position ? '#' + k.your_position : '—'}</td><td class="small">${compCell(k.competitors)}</td></tr>`).join('') + `</table>`
       : '<p>No keywords with measurable search volume found for this intent.</p>');
   });
 
@@ -217,6 +266,7 @@ if (sk) {
   html += `<h3>Keyword Gap: Competitors Rank, You Don't</h3>` + ((sk.keyword_gap || []).length
     ? `<table class="ct"><tr><th>Keyword</th><th>Searches/mo</th><th>Difficulty</th><th>Intent</th><th>Competitors ranking</th></tr>` + sk.keyword_gap.slice(0, 20).map(g => `<tr><td>${esc(g.keyword)}</td><td>${num(g.volume)}</td><td>${diffLabel(g.difficulty)}</td><td>${cap(g.intent)}</td><td class="small">${compCell(g.competitors)}</td></tr>`).join('') + `</table>`
     : '<p>No keyword gap found.</p>');
+  if ((sk.refused || []).length) html += '<p class="small">Left out of the gap on purpose: ' + sk.refused.length + ' searches for government portals, logins or other companies\' brands (e.g. ' + sk.refused.slice(0, 5).map(r => esc(r.keyword) + ' — ' + esc(r.reason)).join(', ') + ').</p>';
 
   if ((sk.striking_distance || []).length) {
     html += `<h3>Quick Wins: Keywords on Page 2</h3><table class="ct"><tr><th>Keyword</th><th>Position</th><th>Searches/mo</th><th>Ranking page</th></tr>` +
@@ -230,7 +280,7 @@ if (au && au.available) {
   html += `<table class="ct"><tr><th>Domain</th><th>Domain rank</th><th>Backlinks</th><th>Referring domains</th><th>Followed %</th><th>Spam score</th></tr>` +
     au.rows.map(r => `<tr${r.is_you ? ' class="you"' : ''}><td>${youTag(r)}</td><td>${num(r.domain_rank)}</td><td>${num(r.backlinks)}</td><td>${num(r.referring_domains)}</td><td>${r.dofollow_pct == null ? 'N/A' : r.dofollow_pct + '%'}</td><td>${num(r.spam_score)}</td></tr>`).join('') + `</table>`;
   if ((au.gap || []).length) html += `<h3>Link Opportunities (link to competitors, not to you)</h3><table class="ct"><tr><th>Website</th><th>Links to # competitors</th></tr>` +
-    au.gap.slice(0, 20).map(g => `<tr><td>${esc(g.referring_domain)}</td><td>${num(g.links_to_competitors)}</td></tr>`).join('') + `</table>`;
+    au.gap.slice(0, 20).map(g => `<tr><td>${esc(g.referring_domain)}${g.pitch === false ? `<div class="small">not pitched: ${esc(g.reason || 'off topic')}</div>` : ''}</td><td>${num(g.links_to_competitors)}</td></tr>`).join('') + `</table>`;
 } else html += '<div class="note">Backlink data was not available for this run (DataForSEO Backlinks API not active).</div>';
 html += '<h3>Findings</h3>' + findingsBlock(byCat('Authority'));
 
@@ -252,7 +302,7 @@ if (ps) {
   const yps = ps.rows.find(r => r.is_you) || {};
   if ((yps.opportunities || []).length) html += '<h3>Biggest Speed Savings (your homepage)</h3><ul>' + yps.opportunities.map(o => `<li>${esc(o.title)} — about ${num(o.savings_ms)}ms</li>`).join('') + '</ul>';
 }
-html += '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));
+html += cwvSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));
 
 // ---------- 8. AI visibility ----------
 html += `<h2 class="pb">8. AI Search Visibility</h2>`;
@@ -316,6 +366,7 @@ html += `<h2>15. Leading Indicators to Track</h2><ul>` + li.map(x => '<li>' + es
 
 // ---------- 16. Methodology ----------
 html += `<h2 class="pb">16. Methodology & Data Sources</h2><p>${esc(a.scoring_method)}</p>
+${a.priority_method ? '<p><b>How the fix list is ordered:</b> ' + esc(a.priority_method) + '</p>' : ''}
 <table class="ct"><tr><th>Severity</th><th>Points deducted</th></tr><tr><td>Critical</td><td>30</td></tr><tr><td>High</td><td>15</td></tr><tr><td>Medium</td><td>7</td></tr><tr><td>Low</td><td>3</td></tr><tr><td>Info</td><td>1</td></tr></table>
 <table class="ct"><tr><th>Source</th><th>Used for</th></tr>
 <tr><td>DataForSEO On-Page crawl</td><td>Page-level technical and on-page checks (up to ${num(d.crawl_max_pages || 200)} pages incl. sitemap)</td></tr>
@@ -387,6 +438,11 @@ return [{
     via_webhook: !!d.via_webhook,
     health_score: a.health_score,
     search_console: a.search_console || null,
+    crux: a.crux || null,
+    priority_method: a.priority_method || '',
+    priority_first: a.priority_first || '',
+    minor_count: a.minor_count || 0,
+    minor_note: a.minor_note || '',
     site_structure: a.site_structure || null,
     grade: a.grade,
     issue_counts: counts,

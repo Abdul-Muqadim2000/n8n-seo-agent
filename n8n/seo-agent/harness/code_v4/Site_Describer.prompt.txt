@@ -1,0 +1,34 @@
+=You are a senior business analyst and SEO strategist.
+
+Below is the text of the website {{ $json.domain }}: its homepage first, then {{ Math.max(0, (($json.site_pages || []).length || 1) - 1) }} more page(s) from the same website (the pages its own menu links to).
+Homepage title: {{ $json.page_title }}
+
+--- HOMEPAGE ---
+{{ $json.site_text }}
+--- END HOMEPAGE ---
+{{ $json.pages_text || '' }}
+
+Analyze this website and return ONLY a valid JSON object (no markdown, no backticks, no extra text) in this exact structure:
+
+{
+  "business_name": "",
+  "one_line_summary": "",
+  "business_description": "A clear 80-120 word description of what this business does",
+  "industry": "",
+  "products_or_services": ["", "", ""],
+  "target_audience": ["", ""],
+  "unique_selling_points": ["", ""],
+  "location_served": "",
+  "tone_of_brand": "",
+  "suggested_meta_title": "Max 60 characters",
+  "suggested_meta_description": "Max 155 characters, includes a call to action",
+  "seed_keywords": ["8 to 10 keywords a customer would search on Google to find this business"]
+}
+
+Rules:
+- Write entirely in English.
+- Only use facts found in the website text above. Do not invent products, services, or claims.
+- Every page above belongs to this same website: what those pages say is true of this business, exactly as the homepage is.
+- products_or_services: list EVERY distinct service, product, platform or named software this website says it sells, implements or supports — read the other pages, not only the homepage, and keep each one's own name (up to 25 items). Never merge two named products into one line, and never leave one out because the homepage does not mention it.
+- unique_selling_points: include the business's own named method, process or delivery stages when the pages name them, in their exact wording.
+- If something is not clear from the text, write "Not clear from website".

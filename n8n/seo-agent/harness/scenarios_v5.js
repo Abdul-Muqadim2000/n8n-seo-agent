@@ -7,6 +7,36 @@ const decode = (items) => Buffer.from(items[0].binary.data.data, 'base64').toStr
 const guard = async (name, fn) => { try { await fn(); } catch (e) { const msg = (e.message || e).split('\n')[0]; console.log(`   !! scenario "${name}" aborted at: ${msg}`); if (e.stack) console.log('      ' + String(e.stack).split('\n').slice(1, 4).map(x => x.trim()).join(' | ')); H.results.push({ scenario: name, node: 'scenario aborted', ok: false, ms: 0, error: msg, items: [] }); } };   // an aborted scenario is a failure (it was silent before 2026-10-08)
 const reset = () => { for (const k of Object.keys(store)) delete store[k]; };
 let pvS1 = null;   // Parse Verdict output of S1, reused by S18 (page types)
+// v4.14 (FIX_PLAN D1): the run ledger (seo_run_ledger) replaced the static-data counters. `ledgerRun` plays one execution's intake as n8n runs
+// it: Run Ledger Row -> Reserve Run Ledger (the row gets the next id) -> Load Run Ledger (the period's rows, this one included) -> Rate Limit; a
+// refused run's row is marked refused (Mark Run Refused, a Data Table node). `assessRun` does the same for the Keyword Check (Assess Validate ->
+// Run Ledger Row (Assess) -> Reserve -> Load (mode assess) -> Assess Limit). `o.row` overrides the row (a lower id = a parallel run that reserved first).
+const LEDGER = { rows: [], seq: 0 };
+const ledgerReset = (rows = []) => { LEDGER.rows = rows.map((r, i) => ({ id: i + 1, run_id: 'fx-' + (i + 1), status: 'reserved', settled_usd: 0, ...r })); LEDGER.seq = LEDGER.rows.reduce((m, r) => Math.max(m, Number(r.id) || 0), 0); };
+const ledgerFixture = (key, n, mode = 'keyword', est = 0, when = new Date().toISOString()) => Array.from({ length: n }, () => ({ key, mode, est_usd: est, created_at: when }));
+const ledgerItems = (rows) => rows.length ? rows.map(r => ({ json: { ...r } })) : [{ json: {} }];   // alwaysOutputData: one empty item when the table is empty
+const ledgerKeys = (mode) => LEDGER.rows.filter(r => r.status !== 'refused' && (mode === 'assess' ? r.mode === 'assess' : (r.mode !== 'assess' && !['published', 'checkin', 'profile'].includes(r.mode)))).reduce((m, r) => { m[r.key] = (m[r.key] || 0) + 1; return m; }, {});
+const ledgerRun = async (input, o = {}) => {
+  const had = 'Normalize Input' in store, prev = store['Normalize Input'];
+  if (input !== undefined) mock('Normalize Input', input);
+  const row = (await run('Run Ledger Row', [{ json: { id: 'tbl', name: 'seo_run_ledger' } }]))[0].json;   // input = the Ensure node's table object, as live
+  const mine = { id: ++LEDGER.seq, ...row, ...(o.row || {}) }; LEDGER.rows.push(mine);
+  mock('Reserve Run Ledger', [{ json: { ...mine } }]); mock('Load Run Ledger', ledgerItems(LEDGER.rows));
+  const out = await run('Rate Limit', store['Load Run Ledger']);
+  if (out[0].json.validation_error) mine.status = 'refused';
+  if (input !== undefined) { if (had) store['Normalize Input'] = prev; else delete store['Normalize Input']; }
+  return out;
+};
+const assessRun = async (req, o = {}) => {
+  const v = (await run('Assess Validate', req))[0].json;
+  if (!v.ok) return v;
+  const row = (await run('Run Ledger Row (Assess)', [{ json: { id: 'tbl', name: 'seo_run_ledger' } }]))[0].json;
+  const mine = { id: ++LEDGER.seq, ...row, ...(o.row || {}) }; LEDGER.rows.push(mine);
+  mock('Reserve Run Ledger (Assess)', [{ json: { ...mine } }]); mock('Load Run Ledger (Assess)', ledgerItems(LEDGER.rows.filter(r => r.mode === 'assess')));
+  const out = (await run('Assess Limit', store['Load Run Ledger (Assess)']))[0].json;
+  if (out.status === 429) mine.status = 'refused';
+  return out;
+};
 // Search Console + sitemap part of the audit (between the data collection and Build Site Issues); `mode`: 'ok' | 'denied' | 'nosm'
 const runGscAudit = async (input, mode) => {
   const T = require('./fixtures_tracking');
@@ -38,7 +68,7 @@ await guard('validation', async () => {
   const v2 = await run('Normalize Input', F.forms.badDomain); console.log('   bad domain ->', JSON.stringify(v2[0].json.validation_error));
   mock('Start Form', F.forms.startDescribe);
   const v3 = await run('Normalize Input', F.forms.localhostDomain); console.log('   internal host ->', JSON.stringify(v3[0].json.validation_error));
-  const v4 = await run('Rate Limit', v3); console.log('   rate limit passthrough keeps error ->', !!v4[0].json.validation_error);
+  const v4 = await ledgerRun(v3); console.log('   rate limit passthrough keeps error ->', !!v4[0].json.validation_error);
   // webhook verdict (no Start Form)
   reset();
   const wv = await run('Normalize Input', F.forms.webhookVerdict);
@@ -46,9 +76,9 @@ await guard('validation', async () => {
   const wk = await run('Normalize Input', F.forms.webhookKeywordDefault);
   console.log('   webhook default ->', JSON.stringify({ mode: wk[0].json.mode, include_content: wk[0].json.include_content, include_seo_report: wk[0].json.include_seo_report, page_type: wk[0].json.page_type, run_page_check: wk[0].json.run_page_check }));
   // rate limit
-  H.staticData.rate = undefined;
-  for (let i = 0; i < 6; i++) await run('Rate Limit', wk);
-  const rl7 = await run('Rate Limit', wk); console.log('   7th run ->', JSON.stringify(rl7[0].json.validation_error));
+  ledgerReset();
+  for (let i = 0; i < 6; i++) await ledgerRun(wk);
+  const rl7 = await ledgerRun(wk); console.log('   7th run ->', JSON.stringify(rl7[0].json.validation_error));
   const wnc = await run('Normalize Input', { body: { keyword: 'x', country: 'US' } }); console.log('   API without callback/email ->', JSON.stringify(wnc[0].json.validation_error));
 });
 
@@ -59,12 +89,15 @@ await guard('keyword', async () => {
   const n = await run('Normalize Input', F.forms.pageKeyword);
   console.log('   new fields ->', JSON.stringify({ goal: n[0].json.goal, tone: n[0].json.tone, cta: n[0].json.cta, business_facts: n[0].json.business_facts }));
   console.log('   normalized ->', JSON.stringify({ keyword: n[0].json.keyword, domain: n[0].json.domain, email: n[0].json.email, include_content: n[0].json.include_content, include_seo_report: n[0].json.include_seo_report, run_page_check: n[0].json.run_page_check, need_site_description: n[0].json.need_site_description, language_code: n[0].json.language_code }));
-  await run('Rate Limit');
+  ledgerReset(); await ledgerRun();
   const nro = await run('Normalize Input', F.forms.pageKeywordReportOnly); console.log('   report-only request -> include_content', nro[0].json.include_content, '| include_seo_report', nro[0].json.include_seo_report);
   store['Normalize Input'] = n;
   mock('Read Website', { site_text: F.jinaSite });
   const cs = await run('Clean Site Text', store['Read Website']);
-  console.log('   clean site ->', JSON.stringify({ page_title: cs[0].json.page_title, read_ok: cs[0].json.read_ok, len: cs[0].json.site_text.length }));
+  console.log('   clean site ->', JSON.stringify({ page_title: cs[0].json.page_title, read_ok: cs[0].json.read_ok, len: cs[0].json.site_text.length, nav_pages: (cs[0].json.nav_pages || []).map(p => p.path) }));
+  const npp1 = await run('Nav Pages Plan', cs);   // D22: this homepage links only to /contact/ — nothing to read, the IF sends the item straight to Site Pages
+  console.log('   nav pages plan ->', npp1[0].json.skip ? 'skip: ' + npp1[0].json.reason : npp1.map(p => p.json.path).join(', '));
+  await run('Site Pages', npp1);
   mock('Site Describer', { output: { business_name: 'Northwind ERP', one_line_summary: 'ERP partner for distributors', business_description: 'Northwind ERP implements and customises Odoo and Dynamics 365 for distributors in the UAE.', industry: 'IT services', products_or_services: ['ERP implementation', 'Data migration'], target_audience: ['Distributors', 'Wholesalers'], unique_selling_points: ['Bilingual consultants'], location_served: 'UAE', tone_of_brand: 'Professional', suggested_meta_title: 'Northwind ERP | ERP Implementation Dubai', suggested_meta_description: 'ERP implementation for UAE distributors. Book a call.', seed_keywords: ['erp implementation dubai', 'odoo partner uae', 'erp for distributors', 'northwind erp'] } });
   await run('Parse Description', store['Site Describer']);
   mock('Route Mode', store['Parse Description']);
@@ -226,7 +259,7 @@ await guard('describe', async () => {
   mock('Start Form', F.forms.startDescribe);
   const n = await run('Normalize Input', F.forms.pageDescribe);
   console.log('   ->', JSON.stringify({ mode: n[0].json.mode, country: n[0].json.country, need_site_description: n[0].json.need_site_description }));
-  await run('Rate Limit');
+  ledgerReset(); await ledgerRun();
   mock('Read Website', { error: { message: 'timeout of 30000ms exceeded' } });
   const cs = await run('Clean Site Text', store['Read Website']);
   console.log('   read failed -> read_ok', cs[0].json.read_ok, '| site_text len', cs[0].json.site_text.length, '(Site Describer would still be called with empty text)');
@@ -288,7 +321,7 @@ await guard('discover', async () => {
   delete store['Start Form'];
   const nsf = await run('Normalize Input', sfu[0]);
   console.log('   spawned keyword run ->', JSON.stringify({ mode: nsf[0].json.mode, via_webhook: nsf[0].json.via_webhook, keyword: nsf[0].json.keyword, include_content: nsf[0].json.include_content, include_seo_report: nsf[0].json.include_seo_report, pipeline_source: nsf[0].json.pipeline_source, reason: nsf[0].json.chosen_keyword_reason.slice(0, 40), err: nsf[0].json.validation_error }));
-  const rlsf = await run('Rate Limit', nsf); console.log('   spawned run estimate ->', rlsf[0].json.ai_spend_estimate_usd);
+  const rlsf = await ledgerRun(nsf); console.log('   spawned run estimate ->', rlsf[0].json.ai_spend_estimate_usd);
   const nsa = await run('Normalize Input', sfu[1]);
   console.log('   spawned audit run ->', JSON.stringify({ mode: nsa[0].json.mode, audit_level: nsa[0].json.audit_level, email: nsa[0].json.email, err: nsa[0].json.validation_error }));
   mock('Start Form', F.forms.startDiscover);
@@ -474,8 +507,8 @@ await guard('ladder', async () => {
   const n = await run('Normalize Input', F.forms.pageLadder);
   const j = n[0].json;
   console.log('   form ladder ->', JSON.stringify({ mode: j.mode, keyword: j.keyword, domain: j.domain, pages_now: j.pages_now, ladder_id: /^lad_/.test(j.ladder_id), include_content: j.include_content, need_site_description: j.need_site_description, run_page_check: j.run_page_check, business: j.business, email: j.email, tracker: j.tracker_cadence, wp: j.publish_wordpress }));
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined;
-  const rl = await run('Rate Limit', n); console.log('   rate limit est ->', rl[0].json.ai_spend_estimate_usd, '| error:', rl[0].json.validation_error || 'none');
+  ledgerReset();
+  const rl = await ledgerRun(n); console.log('   rate limit est ->', rl[0].json.ai_spend_estimate_usd, '| error:', rl[0].json.validation_error || 'none');
   delete store['Start Form'];
   const na = await run('Normalize Input', { body: { mode: 'ladder', keyword: 'E Invoicing in UAE', country: 'AE', domain: 'techand.ai', business: 'ERP partner', pages_now: 2, callback_url: 'https://hooks.example.com/x' } });
   console.log('   api ladder ->', JSON.stringify({ mode: na[0].json.mode, pages_now: na[0].json.pages_now, via_webhook: na[0].json.via_webhook, err: na[0].json.validation_error }));
@@ -557,7 +590,7 @@ await guard('tracker', async () => {
   const posOf = (c, i) => c.json.rung === 4 ? 0 : (i % 3 === 0 ? 7 : i % 3 === 1 ? 2 : 0);
   mock('SERP Check', tp.map((c, i) => i === 2 ? { error: { message: 'timeout' } } : V.serpFor(c.json.keyword, c.json.domain, posOf(c, i))));
   const pp = await run('Parse Positions', store['SERP Check']);
-  const HCOLS = ['ladder_id', 'keyword', 'checked_at', 'position', 'url', 'serp_features', 'domain', 'rung'];
+  const HCOLS = require('./table_cols.json').HISTORY;   // G6: the seo_rank_history columns as ladder_common.py defines them
   console.log('   positions ->', pp.map(p => p.json.position).join(','), '| columns exact?', pp.every(p => JSON.stringify(Object.keys(p.json).sort()) === JSON.stringify(HCOLS.slice().sort())), '| failed check = -1?', pp[2].json.position === -1, '| url for #7:', pp[0].json.url);
   mock('Save History', pp);
   const tr = await run('Tracker Report', store['Save History']);
@@ -582,7 +615,9 @@ await guard('tracker', async () => {
   console.log('   unpublished pages ->', JSON.stringify({ checked_now: tp5.length, deferred: dfr.length, first_deferred: dfr[0] && { kw: dfr[0].keyword, last: dfr[0].last_position, at: String(dfr[0].last_checked).slice(0, 10) } }));
   mock('SERP Check', tp5.map(c => V.serpFor(c.json.keyword, c.json.domain, 5))); const pp5 = await run('Parse Positions', store['SERP Check']); mock('Save History', pp5);
   const tr5 = await run('Tracker Report', store['Save History']); console.log('   report keeps the deferred pages ->', tr5[0].json.positions.length, '| label', /not published yet: checked monthly/.test(tr5[0].json.html));
-  if (!dfr.length || tp5.length + dfr.length !== mixed.length) throw new Error('rank tracker deferral lost pages');
+  const desk5 = tp5.filter(c => c.json.device === 'desktop'), dfrD = dfr.filter(d => d.device !== 'mobile');
+  if (!dfrD.length || desk5.length + dfrD.length !== mixed.length) throw new Error('rank tracker deferral lost pages');
+  console.log('   G6 mobile ->', tp5.filter(c => c.json.device === 'mobile').length, 'mobile check(s) for the main keywords, on top of', desk5.length, 'desktop checks');
   mock('Load Ladders', ladderRows);
   // stop rule: the head term has held the top 3 for 4 checks -> ladder skipped; nothing to do when no ladders
   const headKw = ladderRows[ladderRows.length - 1].json.keyword;
@@ -614,8 +649,8 @@ await guard('site tracker', async () => {
   const n = await run('Normalize Input', { 'Website Domain': 'https://www.northwind-erp.com/', 'Target Country': 'United Arab Emirates', 'Search terms to track (optional)': 'ERP implementation Dubai\ne invoicing software uae, Northwind ERP login\n erp implementation dubai ', 'GA4 property ID (optional)': 'properties/222', 'Email me the weekly report': 'Owner@Example.com' });
   const j = n[0].json;
   console.log('   form track ->', JSON.stringify({ mode: j.mode, domain: j.domain, keyword: j.keyword, terms: j.track_keywords, ga4: j.ga4_property_id, email: j.email, need_desc: j.need_site_description, loc: j.location_code, err: j.validation_error }));
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined;
-  const rl = await run('Rate Limit', n); console.log('   rate limit est ->', rl[0].json.ai_spend_estimate_usd, '| error:', rl[0].json.validation_error || 'none');
+  ledgerReset();
+  const rl = await ledgerRun(n); console.log('   rate limit est ->', rl[0].json.ai_spend_estimate_usd, '| error:', rl[0].json.validation_error || 'none');
   delete store['Start Form'];
   const na = await run('Normalize Input', { body: { mode: 'track', domain: 'techand.ai', country: 'AE', keywords: ['E Invoicing UAE', 'erp dubai', 'e invoicing uae'], ga4_property_id: '333', callback_url: 'https://hooks.example.com/x', request_id: 'r-track' } });
   console.log('   api track ->', JSON.stringify({ mode: na[0].json.mode, via_webhook: na[0].json.via_webhook, terms: na[0].json.track_keywords, ga4: na[0].json.ga4_property_id, err: na[0].json.validation_error }));
@@ -706,7 +741,7 @@ await guard('site tracker', async () => {
   store['Resolve Properties'] = savedRP; if (savedGsc) store['Parse GSC'] = savedGsc; else delete store['Parse GSC'];
   mock('SERP Check (Site)', sq.map((q, i) => i === 2 ? { error: { message: 'timeout' } } : V.serpFor(q.json.keyword, q.json.domain, [5, 0, 1][i])));
   const ps = await run('Parse Site SERP', store['SERP Check (Site)']);
-  const HCOLS = ['ladder_id', 'keyword', 'checked_at', 'position', 'url', 'serp_features', 'domain', 'rung'];
+  const HCOLS = require('./table_cols.json').HISTORY;   // G6: the same columns the Rank Tracker writes
   console.log('   serp rows ->', ps.map(x => x.json.keyword + '=' + x.json.position).join(', '), '| cols exact?', ps.every(x => same(Object.keys(x.json), HCOLS)), '| ladder_id = site id?', ps[0].json.ladder_id === 'site_northwind-erp-com');
   mock('Save Site Rank History', ps);
   // --- metrics, rows, brief input, report ---
@@ -719,7 +754,7 @@ await guard('site tracker', async () => {
   console.log('   metrics ->', JSON.stringify({ gsc: m.gsc.connected, ga4: m.ga4.connected, ga4_detected: m.ga4.detected, alerts: m.alerts.map(x => x.level + ': ' + x.text.slice(0, 70)), actions: m.actions.map(x => x.priority + ':' + x.type), api_bodies: m.actions.filter(x => x.api_body).length }));
   console.log('   tracked ->', JSON.stringify(m.tracked.map(t => [t.keyword, t.source, t.gsc_position, t.gsc_prev_position, t.serp_position])));
   console.log('   ladder pages ->', JSON.stringify(m.ladder_pages.map(x => [x.url.replace(/^https?:\/\/[^/]+/, ''), x.rung, x.status, x.indexed])));
-  console.log('   rows ->', JSON.stringify({ metrics_cols_exact: same(Object.keys(m.metrics_row), MCOLS), metrics: { clicks: m.metrics_row.clicks, prev: m.metrics_row.prev_clicks, sessions: m.metrics_row.sessions, striking: m.metrics_row.striking, alerts: m.metrics_row.alerts.slice(0, 60) }, query_rows: m.query_rows.length, query_cols_exact: m.query_rows.every(r => same(Object.keys(r), QCOLS)), tracked_rows: m.query_rows.filter(r => r.tracked).length, site_cols_exact: same(Object.keys(m.site_row), SCOLS), site_row: { gsc: m.site_row.gsc_property, ga4: m.site_row.ga4_property_id, last_status: m.site_row.last_status, keywords: m.site_row.keywords } }));
+  console.log('   rows ->', JSON.stringify({ metrics_cols_exact: same(Object.keys(m.metrics_row), MCOLS), metrics: { clicks: m.metrics_row.clicks, prev: m.metrics_row.prev_clicks, sessions: m.metrics_row.sessions, striking: m.metrics_row.striking, alerts: m.metrics_row.alerts.slice(0, 60) }, query_rows: m.query_rows.length, query_cols_exact: m.query_rows.every(r => same(Object.keys(r), QCOLS)), tracked_rows: m.query_rows.filter(r => r.tracked).length, site_cols_exact: same(Object.keys(m.site_row), require('./table_cols.json').SITES), site_row: { gsc: m.site_row.gsc_property, ga4: m.site_row.ga4_property_id, last_status: m.site_row.last_status, keywords: m.site_row.keywords } }));
   const checks2 = { notice_alert: m.alerts.some(x => /Search Console notice/.test(x.text)), manual_action_first: m.actions[0] && m.actions[0].type === 'manual_action', checkin_action: m.actions.some(x => x.type === 'checkin'), coverage_report_action: m.actions.some(x => x.type === 'coverage_report'), old_notice_excluded: m.console.notices.length === 1, index_action: m.actions.some(x => x.type === 'index'), publish_action: m.actions.some(x => x.type === 'publish'), planned_not_inspected: m.ladder_pages.filter(p => p.status === 'planned' && !p.page_exists).every(p => p.indexed === null && /planned/.test(p.inspect_error)), striking_action: m.actions.some(x => x.type === 'striking' && x.api_body && x.api_body.existing_page_url), ctr_action: m.actions.some(x => x.type === 'ctr'), decay_action: m.actions.some(x => x.type === 'decay'), trend_action: m.actions.some(x => x.type === 'trend'), ga4_connected: m.ga4.connected, no_setup_alerts: !m.alerts.some(x => x.level === 'setup'), not_indexed_alert: m.alerts.some(x => /not indexed/.test(x.text)), slip_alert: m.alerts.some(x => /slipped/.test(x.text)), serp_merged: m.tracked.some(t => t.serp_position === 5) };
   console.log('   checks ->', JSON.stringify(checks2), Object.values(checks2).every(Boolean) ? 'ALL OK' : '!! SOME FAILED');
   const qr = await run('Query Rows', sm); const srw = await run('Site Rows', sm); console.log('   query rows ->', qr.length, '| site rows ->', srw.length);
@@ -767,9 +802,9 @@ await guard('content cadence', async () => {
   console.log('   upcoming ->', cp[0].json.upcoming.map(u => u.keyword + ' (' + u.source + ')').join(', '), '| pending:', JSON.stringify(cp[0].json.pending_publish), '| candidates:', cp[0].json.candidates);
   delete store['Start Form'];
   const nb = await run('Normalize Input', { body: b }); console.log('   content run normalised ->', JSON.stringify({ mode: nb[0].json.mode, keyword: nb[0].json.keyword, force_content: nb[0].json.force_content, ladder_id: !!nb[0].json.ladder_id, links: (nb[0].json.ladder_links || []).length, need_desc: nb[0].json.need_site_description, err: nb[0].json.validation_error }));
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined;
-  for (let i = 0; i < 7; i++) await run('Rate Limit', [{ json: { ...nb[0].json, email: 'owner@example.com', client_ip: 'public' } }]);
-  const rlInt = await run('Rate Limit', nb); console.log('   internal spawn not blocked by the owner limit ->', !rlInt[0].json.validation_error, '| key counted:', JSON.stringify(Object.keys(H.staticData.rate.keys)));
+  ledgerReset();
+  for (let i = 0; i < 7; i++) await ledgerRun([{ json: { ...nb[0].json, email: 'owner@example.com', client_ip: 'public' } }]);
+  const rlInt = await ledgerRun(nb); console.log('   internal spawn not blocked by the owner limit ->', !rlInt[0].json.validation_error, '| key counted:', JSON.stringify(Object.keys(ledgerKeys())));
   const lr = await run('Log Rows', cp); const LCOLS = ['site_id', 'domain', 'keyword', 'source', 'page_type', 'existing_page_url', 'rung', 'ladder_id', 'request_id', 'started_at', 'status', 'published_url', 'published_at', 'week'];
   console.log('   log rows ->', lr.length, '| cols exact?', lr.every(x => same(Object.keys(x.json), LCOLS)), '| status:', lr[0].json.status);
   const lm = await run('Ladder Marks', lr); console.log('   ladder marks ->', JSON.stringify(lm.map(x => x.json)));
@@ -799,8 +834,8 @@ await guard('published', async () => {
   const bad2 = await run('Normalize Input', { 'Website Domain': 'northwind-erp.com', 'Keyword of the page': 'wms uae', 'Published page URL': 'https://other.example/wms-uae/' }); console.log('   other domain ->', JSON.stringify(bad2[0].json.validation_error));
   const n = await run('Normalize Input', { 'Website Domain': 'https://www.northwind-erp.com', 'Keyword of the page': ' WMS UAE ', 'Published page URL': 'https://www.northwind-erp.com/blog/wms-uae/' });
   console.log('   form published ->', JSON.stringify({ mode: n[0].json.mode, domain: n[0].json.domain, keyword: n[0].json.keyword, url: n[0].json.published_url, err: n[0].json.validation_error }));
-  H.staticData.rate = { day: new Date().toISOString().slice(0, 10), total: 0, keys: { 'northwind-erp.com': 6 } }; H.staticData.ai_budget = undefined;
-  const rl = await run('Rate Limit', n); console.log('   published is never rate-limited ->', !rl[0].json.validation_error, '| est', rl[0].json.ai_spend_estimate_usd);
+  ledgerReset(ledgerFixture('northwind-erp.com', 6));
+  const rl = await ledgerRun(n); console.log('   published is never rate-limited ->', !rl[0].json.validation_error, '| est', rl[0].json.ai_spend_estimate_usd);
   delete store['Start Form'];
   const na = await run('Normalize Input', { body: { mode: 'published', domain: 'northwind-erp.com', content_request_id: 'cad_old', url: 'https://www.northwind-erp.com/blog/wms-uae/', callback_url: 'https://hooks.example.com/x', request_id: 'pub-1' } });
   console.log('   api published ->', JSON.stringify({ mode: na[0].json.mode, keyword: na[0].json.keyword, rid: na[0].json.content_request_id, url: na[0].json.published_url, err: na[0].json.validation_error }));
@@ -851,7 +886,7 @@ await guard('checkin', async () => {
   console.log('   intake ->', JSON.stringify({ file: intake[0].json.pages_csv_file, chars: intake[0].json.pages_csv_text.length }));
   const n = await run('Normalize Input', intake); const j = n[0].json;
   console.log('   normalised ->', JSON.stringify({ mode: j.mode, domain: j.domain, manual: j.checkin_manual_action, security: j.checkin_security_issue, notes: j.checkin_notes, csv: j.checkin_csv_text.length, err: j.validation_error }));
-  H.staticData.rate = { day: new Date().toISOString().slice(0, 10), total: 0, keys: { 'northwind-erp.com': 6 } }; const rl = await run('Rate Limit', n); console.log('   never rate-limited ->', !rl[0].json.validation_error);
+  ledgerReset(ledgerFixture('northwind-erp.com', 6)); const rl = await ledgerRun(n); console.log('   never rate-limited ->', !rl[0].json.validation_error);
   const pc = await run('Parse Check-in', n); const c = pc[0].json;
   console.log('   parsed ->', JSON.stringify({ kind: c.coverage.kind, reasons: c.coverage.reasons.map(r => r.reason + ':' + r.pages), total: c.coverage.not_indexed_total, month: c.checkin_month, lines: c.summary_lines.length }));
   const KCOLS = ['site_id', 'domain', 'month', 'manual_action', 'security_issue', 'notes', 'coverage_json', 'not_indexed_total', 'csv_kind', 'submitted_at', 'source', 'request_id'];
@@ -881,8 +916,8 @@ await guard('profile', async () => {
     'Phone': '+971 4 555 0100', 'Public e-mail on the website': 'hello@northwind-erp.com', 'Opening hours': 'Mo-Fr 09:00-18:00', 'Areas you serve': 'Dubai, Abu Dhabi, Sharjah', 'Google Maps link (optional)': 'https://maps.google.com/?cid=123', 'Logo URL (optional)': 'https://northwind-erp.com/logo.png', 'Email (optional)': '' };
   const n = await run('Normalize Input', form); const pi = n[0].json.profile_input || {};
   console.log('   form profile ->', JSON.stringify({ mode: n[0].json.mode, domain: n[0].json.domain, err: n[0].json.validation_error, keyword: n[0].json.keyword, business: n[0].json.business, author: pi.author_name, url: pi.author_url, same_as: pi.author_same_as, reviewer: [pi.reviewer_name, pi.reviewer_job_title, pi.reviewer_url], country: pi.country_code, city: pi.city, areas: pi.service_areas, need_site_description: n[0].json.need_site_description }));
-  H.staticData.rate = { day: new Date().toISOString().slice(0, 10), total: 0, keys: { 'northwind-erp.com': 6 } }; H.staticData.ai_budget = undefined;
-  const rl = await run('Rate Limit', n); console.log('   profile is never rate-limited ->', !rl[0].json.validation_error, '| est', rl[0].json.ai_spend_estimate_usd);
+  ledgerReset(ledgerFixture('northwind-erp.com', 6));
+  const rl = await ledgerRun(n); console.log('   profile is never rate-limited ->', !rl[0].json.validation_error, '| est', rl[0].json.ai_spend_estimate_usd);
   mock('Load Profile (Profile)', [{ json: { site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', business_name: 'Northwind ERP LLC', author_bio: 'old bio', phone: '+971 4 000 0000', city: 'Dubai', price_range: '$$' } }]);
   const pr = await run('Profile Row', store['Load Profile (Profile)']);
   console.log('   profile row ->', JSON.stringify({ cols_exact: same(Object.keys(pr[0].json), PCOLS), site_id: pr[0].json.site_id, business: pr[0].json.business_name, phone: pr[0].json.phone, price_kept: pr[0].json.price_range, bio_replaced: pr[0].json.author_bio.slice(0, 20) }));
@@ -918,10 +953,10 @@ await guard('case study', async () => {
   const n = await run('Normalize Input', csForm); const j = n[0].json;
   console.log('   form intake ->', JSON.stringify({ mode: j.mode, keyword: j.keyword, page_type: j.page_type, case_id: /^cs_/.test(j.case_id), public: j.case_study.client_public, service: j.case_study.service, results: j.case_study.results.slice(0, 30), err: j.validation_error, include_content: j.include_content, need_site_description: j.need_site_description }));
   const today = new Date().toISOString().slice(0, 10);
-  H.staticData.rate = undefined; H.staticData.ai_budget = { period: today, spent_est: 9.5, runs: 4 };
-  const rlx = await run('Rate Limit', n); console.log('   no room for the page today ->', JSON.stringify(rlx[0].json.validation_error));
-  H.staticData.ai_budget = undefined; H.staticData.rate = undefined;
-  const rl = await run('Rate Limit', n); console.log('   intake ->', JSON.stringify({ err: rl[0].json.validation_error, est: rl[0].json.ai_spend_estimate_usd, owner_runs: H.staticData.rate.keys['owner@northwind-erp.com'] }));
+  ledgerReset(ledgerFixture('someone@else.com', 4, 'keyword', 2.375));   // $9.50 estimated today by other runs
+  const rlx = await ledgerRun(n); console.log('   no room for the page today ->', JSON.stringify(rlx[0].json.validation_error));
+  ledgerReset();
+  const rl = await ledgerRun(n); console.log('   intake ->', JSON.stringify({ err: rl[0].json.validation_error, est: rl[0].json.ai_spend_estimate_usd, owner_runs: ledgerKeys()['owner@northwind-erp.com'] }));
   mock('Ensure Case Table', [{ json: { id: 't1', name: 'seo_case_studies' } }]); mock('Ensure Log Table (Case)', [{ json: { id: 't2', name: 'seo_content_log' } }]);
   const cr = await run('Case Study Row', store['Ensure Log Table (Case)']);   // input = the table object, as live
   console.log('   case row ->', JSON.stringify({ cols_exact: same(Object.keys(cr[0].json), CCOLS), title: cr[0].json.title, public: cr[0].json.client_public, status: cr[0].json.status, rid: !!cr[0].json.request_id }));
@@ -933,7 +968,7 @@ await guard('case study', async () => {
   const saveN = n; delete store['Start Form'];
   const rn = await run('Normalize Input', { body }); const r = rn[0].json;
   console.log('   page run normalised ->', JSON.stringify({ err: r.validation_error, mode: r.mode, page_type: r.page_type, keyword: r.keyword, case_kept: !!(r.case_study && r.case_study.results), public: r.case_study && r.case_study.client_public, include_content: r.include_content, force: r.force_content, case_id: r.case_id === body.case_id }));
-  const rrl = await run('Rate Limit', rn); console.log('   page run rate limit ->', JSON.stringify({ err: rrl[0].json.validation_error, est: rrl[0].json.ai_spend_estimate_usd, internal_key: H.staticData.rate.keys['casestudy:site_northwind-erp-com'], owner_runs_unchanged: H.staticData.rate.keys['owner@northwind-erp.com'] }));
+  const rrl = await ledgerRun(rn); console.log('   page run rate limit ->', JSON.stringify({ err: rrl[0].json.validation_error, est: rrl[0].json.ai_spend_estimate_usd, internal_key: ledgerKeys()['casestudy:site_northwind-erp-com'], owner_runs_unchanged: ledgerKeys()['owner@northwind-erp.com'] }));
   store['Normalize Input'] = saveN; mock('Start Form', { 'What do you want?': 'Write a case study' });
   mock('Start Case Study Run', [{ json: {} }]); const dl = await run('Case Study Delivery', store['Start Case Study Run']);
   console.log('   delivery ->', JSON.stringify({ status: dl[0].json.status, stored: dl[0].json.stored, started: dl[0].json.started, hints: dl[0].json.hints.length }), '|', dl[0].json.plain.split('\n')[0].slice(0, 160));
@@ -1049,7 +1084,7 @@ await guard('ai visibility', async () => {
     'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json'];
   const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at'];
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
-    'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at'];   // v4.10 columns kept by the AI tracker since v4.12
+    'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // v4.10 columns kept by the AI tracker since v4.12; drafted_at since P34-1
   const CACHE = ['key', 'kind', 'site_id', 'value', 'updated_at'];
   const sitesGa4 = () => M.sites().map(s => ({ json: { ...s.json, ga4_property_id: '543096312' } }));
   const gsc = [{ json: { site_id: M.SITE, domain: M.DOMAIN, query: 'which e invoicing provider is best for distributors in the uae', impressions: 120, clicks: 3, position: 14, checked_at: new Date().toISOString() } }, { json: { site_id: M.SITE, domain: M.DOMAIN, query: 'odoo uae', impressions: 900, clicks: 40, position: 4, checked_at: new Date().toISOString() } }];
@@ -1089,7 +1124,14 @@ await guard('ai visibility', async () => {
   // real answers; the client is named + cited by ChatGPT, Gemini and Claude on the recommend questions, Perplexity fails once
   const us = (q) => q.kind === 'recommend' && ['chatgpt', 'claude', 'gemini'].includes(q.engine);
   mock('Run AI Requests', R.map((q, i) => A9.answerFor(q, i, { us, fail: (q2, j) => q2.engine === 'perplexity' && j === R.findIndex(x => x.engine === 'perplexity') })));
-  const pa = await run('Parse AI Answers', store['Run AI Requests']); const AN = pa.map(r => r.json);
+  // D19 (2026-10-11 system review): the retry gate sits between the requests and the parser. The failed Perplexity task is re-sent once;
+  // here it fails again, so its error is kept and counted (S44 covers a retry that works and a 50000 server error).
+  const rt1 = await run('AI Retry Requests', store['Run AI Requests']);
+  check('retry gate: only the failed request is re-sent, with the reason DataForSEO gave inside the HTTP 200', rt1.length === 1 && rt1[0].json.engine === 'perplexity' && rt1[0].json.retry_of === R.findIndex(x => x.engine === 'perplexity') && /40501/.test(rt1[0].json.retry_reason) && rt1[0].json.is_retry === true, JSON.stringify(rt1.map(x => x.json.engine + ': ' + x.json.retry_reason)));
+  mock('Run AI Retries', rt1.map(q => M.answerFor(q.json, 0, { fail: () => true })));
+  const mg1 = await run('Merge AI Answers', store['Run AI Retries']);
+  check('a retry that fails again keeps the first answer, the item order is untouched and both counts are reported', mg1.length === R.length && mg1[0].json.retry_asked === 1 && mg1[0].json.retry_answered === 0 && !mg1.some(x => x.json.retried), JSON.stringify({ n: mg1.length, want: R.length, asked: mg1[0].json.retry_asked, fixed: mg1[0].json.retry_answered }));
+  const pa = await run('Parse AI Answers', mg1); const AN = pa.map(r => r.json);
   const cg = AN.find(a => a.engine === 'chatgpt' && a.mentioned); const gm = AN.find(a => a.engine === 'gemini' && a.mentioned);
   console.log('   chatgpt answer ->', JSON.stringify({ rank: cg.rank, brands: cg.brands, competitors: cg.competitors.split(', ').slice(0, 5), fanout: cg.fanout }));
   check('answers: table columns + the answer text for the analyst; database views not stored; one failed request kept as an error', AN.every(a => same2(Object.keys(a), [...ANS, '_text'])) && !AN.some(a => /^(market|index_)/.test(a.engine)) && AN.filter(a => a.error).length === 1 && AN.every(a => a.run_kind === 'full'), JSON.stringify(Object.keys(AN[0])));
@@ -1148,7 +1190,10 @@ await guard('ai visibility', async () => {
   const rq2 = await run('AI Requests', ac2); const eng2 = rq2.reduce((m, q) => { m[q.json.engine] = (m[q.json.engine] || 0) + 1; return m; }, {});
   check('week 2 requests: the weekly engines incl. Gemini, no Claude, no brand question, no database views', eng2.chatgpt === 6 && eng2.gemini === 6 && !eng2.claude && !eng2.market && !eng2.index_sov && !rq2.some(q => q.json.kind === 'brand') && rq2.every(q => q.json.run_kind === 'weekly'), JSON.stringify(eng2));
   mock('Run AI Requests', rq2.map((q, i) => A9.answerFor(q.json, i, { noAio: true })));
-  await run('Parse AI Answers', store['Run AI Requests']); const aj2 = await run('Analyst Jobs', store['Parse AI Answers']); mock('Answer Analyst', aj2.filter(j => !j.json.skip).map(j => ({ json: A9.analystFor(j.json) })));
+  const rt2 = await run('AI Retry Requests', store['Run AI Requests']);
+  const mg2 = await run('Merge AI Answers', rt2);
+  check('week 2: nothing failed, so nothing is re-sent and every answer passes through the gate unchanged', rt2[0].json.skip === true && /every request answered/.test(rt2[0].json.reason) && mg2.length === rq2.length && !mg2.some(x => x.json.retried), JSON.stringify({ skip: rt2[0].json.reason, n: mg2.length, want: rq2.length }));
+  await run('Parse AI Answers', mg2); const aj2 = await run('Analyst Jobs', store['Parse AI Answers']); mock('Answer Analyst', aj2.filter(j => !j.json.skip).map(j => ({ json: A9.analystFor(j.json) })));
   await run('Apply Analysis', store['Answer Analyst']); const mt2 = await run('AI Metrics', store['Apply Analysis']); const Y = mt2[0].json; const YM = Y.metrics;
   console.log('   week 2 ->', JSON.stringify({ samples: YM.samples, pulse: YM.pulse_samples, mention: YM.mention_rate, ci: YM.mention_ci, delta: YM.delta, alerts: Y.alerts.map(a => a.level + ': ' + a.text.slice(0, 60)) }));
   check('week 2: pulse samples counted (6 x 18), rate = this week\'s answers + pulse, change tested for significance', YM.pulse_samples === 108 && YM.samples === YM.answered + 108 && typeof YM.delta.significant === 'boolean', JSON.stringify(YM.delta));
@@ -1178,7 +1223,7 @@ await guard('backlinks', async () => {
   const SNAP = ['site_id', 'domain', 'checked_at', 'mode', 'rank', 'backlinks', 'referring_domains', 'referring_domains_nofollow', 'spam_score', 'broken_backlinks', 'new_links', 'lost_links', 'important_lost', 'spammy_new', 'lost_json', 'new_json', 'competitors_json', 'timeseries_json', 'cost_usd',
     'union_domains', 'best_links', 'verified_live', 'at_risk', 'confirmed_lost', 'referral_visits', 'referral_key_events', 'coverage_json', 'anchors_json', 'pages_json', 'values_json'];   // v4.10
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
-    'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at'];   // v4.10
+    'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // v4.10; drafted_at since P34-1
   const loadAll = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', M.profiles()); mock('Load Backlink Snapshots', o.snaps || [{ json: {} }]); mock('Load Link Prospects', o.prospects || [{ json: {} }]);
     mock('Load Content Log', [{ json: { site_id: M.SITE, domain: M.DOMAIN, keyword: 'erp for distributors', published_url: 'https://northwind-erp.com/erp-for-distributors/', status: 'published' } }]); mock('Load Case Studies', [{ json: { case_id: 'cs_1', site_id: M.SITE, title: 'Gulf Fresh Foods: Odoo', page_url: 'https://northwind-erp.com/case-studies/gulf-fresh/' } }]); };
   // an existing prospect that now links (won) and an AI-source prospect without a draft
@@ -1328,8 +1373,8 @@ await guard('audit upgrades', async () => {
   mock('Manual Run', { domain: M.DOMAIN }); const sp3 = await sched('on demand, audited 5 days ago', smA, 5, storedFp); delete store['Manual Run'];
   if (!sp3[0].json.run) throw new Error('on-demand audit was skipped');
   console.log('   scheduled body ->', JSON.stringify(sp[0].json.body));
-  delete store['Start Form']; const sn = await run('Normalize Input', { body: sp[0].json.body }); H.staticData.rate = undefined;
-  const srl = await run('Rate Limit', sn); console.log('   scheduled audit run ->', JSON.stringify({ mode: sn[0].json.mode, pages: sn[0].json.crawl_max_pages, js: sn[0].json.crawl_js, scheduled: sn[0].json.scheduled, err: sn[0].json.validation_error, internal_key: !!H.staticData.rate.keys['audit:' + M.SITE], est: srl[0].json.ai_spend_estimate_usd }));
+  delete store['Start Form']; const sn = await run('Normalize Input', { body: sp[0].json.body }); ledgerReset();
+  const srl = await ledgerRun(sn); console.log('   scheduled audit run ->', JSON.stringify({ mode: sn[0].json.mode, pages: sn[0].json.crawl_max_pages, js: sn[0].json.crawl_js, scheduled: sn[0].json.scheduled, err: sn[0].json.validation_error, internal_key: !!ledgerKeys()['audit:' + M.SITE], est: srl[0].json.ai_spend_estimate_usd }));
 });
 
 // ===================================================================================
@@ -1339,7 +1384,7 @@ await guard('monitor intake', async () => {
   mock('Start Form', { 'What do you want?': 'Check my AI visibility' });
   const n = await run('Normalize Input', { 'Website Domain': 'www.northwind-erp.com', 'Target Country': 'United Arab Emirates', 'Competitors (optional)': 'azentio.com, https://www.cleartax.com/ae', 'Email me the report': 'owner@northwind-erp.com' });
   console.log('   form ai visibility ->', JSON.stringify({ mode: n[0].json.mode, domain: n[0].json.domain, competitors: n[0].json.competitors, err: n[0].json.validation_error }));
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined; const rl = await run('Rate Limit', n); console.log('   rate limit ->', JSON.stringify({ err: rl[0].json.validation_error, est: rl[0].json.ai_spend_estimate_usd, counted: H.staticData.rate.keys['owner@northwind-erp.com'] }));
+  ledgerReset(); const rl = await ledgerRun(n); console.log('   rate limit ->', JSON.stringify({ err: rl[0].json.validation_error, est: rl[0].json.ai_spend_estimate_usd, counted: ledgerKeys()['owner@northwind-erp.com'] }));
   const ms = await run('Monitor Start', n); console.log('   monitor start body ->', JSON.stringify(ms[0].json));
   mock('Start AI Visibility', [{ json: {} }]); const st = await run('Monitor Started', store['Start AI Visibility']); console.log('   started ->', st[0].json.stage, st[0].json.status, '|', st[0].json.plain.split('\n')[0].slice(0, 120));
   delete store['Start Form'];
@@ -1387,16 +1432,16 @@ await guard('web app', async () => {
   const kw = P.find(f => f.body.mode === 'keyword');
   const qk = await run('Quick Validate', { headers: kw.headers, body: kw.body }); delete store['Start Form'];
   const nk = await run('Normalize Input', qk[0].json.forward);
-  H.staticData.rate = undefined; H.staticData.ai_budget = undefined;
+  ledgerReset();
   const big = [{ json: { ...nk[0].json, ai_budget_usd: 0 } }];
-  let last; for (let i = 0; i < 41; i++) last = await run('Rate Limit', big);
-  check('company key counted', H.staticData.rate.keys['app:7a1c2d3e-org'] === 40 && !H.staticData.rate.keys['owner@northwind-erp.com'], JSON.stringify(H.staticData.rate.keys));
+  let last; for (let i = 0; i < 41; i++) last = await ledgerRun(big);
+  check('company key counted', ledgerKeys()['app:7a1c2d3e-org'] === 40 && !ledgerKeys()['owner@northwind-erp.com'], JSON.stringify(ledgerKeys()));
   check('41st company run blocked', /daily limit of 40 runs/.test(last[0].json.validation_error || ''), last[0].json.validation_error);
   // a spoofed marker that is not app:<id> keeps the old e-mail key
-  H.staticData.rate = undefined;
-  await run('Rate Limit', [{ json: { ...nk[0].json, client_ip: 'app:', ai_budget_usd: 0 } }]);
-  check('malformed app marker falls back to e-mail', H.staticData.rate.keys['owner@northwind-erp.com'] === 1, JSON.stringify(H.staticData.rate.keys));
-  console.log('   rate limit ->', JSON.stringify(H.staticData.rate.keys));
+  ledgerReset();
+  await ledgerRun([{ json: { ...nk[0].json, client_ip: 'app:', ai_budget_usd: 0 } }]);
+  check('malformed app marker falls back to e-mail', ledgerKeys()['owner@northwind-erp.com'] === 1, JSON.stringify(ledgerKeys()));
+  console.log('   rate limit ->', JSON.stringify(ledgerKeys()));
   // Admin API validation (Site Admin's rules as a 400)
   const av1 = await run('Admin Validate', { body: { action: 'cadence', domain: 'northwind-erp.com', pages_per_week: 2 } });
   check('admin cadence valid', av1[0].json.ok && av1[0].json.forward.request_id.startsWith('admin-'), JSON.stringify(av1[0].json));
@@ -1439,6 +1484,10 @@ await guard('pipeline', async () => {
   };
   const A = (st) => std('lad_A', 'peppol uae', '2026-07-01T00:00:00.000Z', st), B = (st) => std('lad_B', 'vat software uae', '2026-08-01T00:00:00.000Z', st), Cl = (st) => std('lad_C', 'wms dubai', '2026-09-01T00:00:00.000Z', st);
   const W3 = { a: 'writing', b: 'writing', c: 'writing' };
+  // v4.14 (FIX_PLAN D5): ladder rows still 'writing' are pages written and waiting to be published, so a fixture with three or more of
+  // them now trips the pile-up guard. The cases below test something else (focus, the main-page gate), so they raise the website's limit;
+  // the guard itself is case 8 here and S37.
+  const noGuard = [siteSet({ max_waiting: 20 })];
 
   // 1. priority: ladder B (priority 1) before ladder A (priority 2); B's written pages skipped, its main page waits for support
   let p = await plan({ ladders: [...A(), ...B({ a: 'writing', b: 'writing' })], settings: [set('lad_A', { priority: 2 }), set('lad_B', { priority: 1 })] });
@@ -1457,31 +1506,31 @@ await guard('pipeline', async () => {
   const cnm = await run('Cadence Note', [{ json: {} }]); scanHtml('cadence note (manual ladder)', cnm[0].json.html);
   check('cadence note carries the pipeline facts', cnm[0].json.awaiting_approval.length === 1 && /Ready for your approval/.test(cnm[0].json.html) && cnm[0].json.paused_reason === '' && Array.isArray(cnm[0].json.queued_ladders), JSON.stringify(Object.keys(cnm[0].json)));
   // 4. focus: three Auto ladders, max_active 2 (default) -> the newest waits; a fully written ladder frees its slot; max_active 3 writes all
-  p = await plan({ ladders: [...A(W3), ...B(W3), ...Cl()] });
+  p = await plan({ ladders: [...A(W3), ...B(W3), ...Cl()], settings: noGuard });
   console.log('   3 ladders, max 2 ->', p.kws.join(' | '), '| queued:', JSON.stringify(p.first.queued_ladders));
   check('max_active 2: third ladder not written', eq(p.kws, ['peppol uae providers', 'vat software uae providers']), p.kws);
   check('third ladder listed as queued', eq(p.first.queued_ladders, [{ ladder_id: 'lad_C', head: 'wms dubai', priority: null, reason: 'max_active' }]), JSON.stringify(p.first.queued_ladders));
-  p = await plan({ ladders: [...A(W3), ...B(W3), ...Cl()], settings: [siteSet({ max_active: 3 })] });
+  p = await plan({ ladders: [...A(W3), ...B(W3), ...Cl()], settings: [siteSet({ max_active: 3, max_waiting: 20 })] });
   check('max_active 3 from the _site row: third ladder written', eq(p.kws, ['peppol uae providers', 'vat software uae providers', 'wms dubai cost']), p.kws);
-  p = await plan({ ladders: [...A({ ...W3, d: 'writing', top: 'writing' }), ...B(W3), ...Cl()] });
+  p = await plan({ ladders: [...A({ ...W3, d: 'writing', top: 'writing' }), ...B(W3), ...Cl()], settings: noGuard });
   check('fully written ladder frees its slot', eq(p.kws, ['vat software uae providers', 'wms dubai cost', 'wms dubai guide']) && !p.first.queued_ladders.length, p.kws);
   // 5. direct plan: the main page first, linking down to its cluster
   p = await plan({ ladders: A(), settings: [set('lad_A', { plan_type: 'direct' })] });
   console.log('   direct ->', p.kws.join(' | '));
   check('direct ladder: main page first', p.kws[0] === 'peppol uae' && p.picks[0].rung === 4 && p.picks[0].body.ladder_links.every(l => l.role === 'down') && p.picks[0].body.ladder_links.length === 4, p.kws);
   // 6. main-page gate
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }) });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard });
   console.log('   gate blocked ->', JSON.stringify(p.status && { reason: p.status.reason, waiting_for_support: p.status.waiting_for_support }));
   check('gate blocked: 1 of 4 published -> main page not written', !p.picks.length && p.status && eq(p.status.waiting_for_support, [{ ladder_id: 'lad_A', head: 'peppol uae', published: 1, supporting: 4, needed: 2, head_position: null }]), JSON.stringify(p.items.map(x => x.json.keyword || x.json.reason)));
   const cs = await run('Cadence Status', p.items); scanHtml('cadence status (gate)', cs[0].json.html);
   check('status note for a gated main page', cs.length === 1 && /supporting pages/.test(cs[0].json.subject) && eq(cs[0].json.pages, []) && cs[0].json.stage === 'content_cadence', cs[0] && cs[0].json.subject);
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), logs: [logRow('peppol uae guide', { status: 'published', published_url: slug('peppol uae guide'), published_at: daysAgo(5) })] });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard, logs: [logRow('peppol uae guide', { status: 'published', published_url: slug('peppol uae guide'), published_at: daysAgo(5) })] });
   check('gate open: half published (ladder row + content log) -> main page written', eq(p.kws, ['peppol uae']), p.kws);
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), ranks: ranks('lad_A', 'peppol uae', [25, 60]) });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard, ranks: ranks('lad_A', 'peppol uae', [25, 60]) });
   check('gate open: main keyword at #25', eq(p.kws, ['peppol uae']), p.kws);
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), ranks: ranks('lad_A', 'peppol uae', [-1, 25]) });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard, ranks: ranks('lad_A', 'peppol uae', [-1, 25]) });
   check('gate: a failed check (-1) is skipped, #25 still counts', eq(p.kws, ['peppol uae']), p.kws);
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), ranks: ranks('lad_A', 'peppol uae', [45, 25]) });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard, ranks: ranks('lad_A', 'peppol uae', [45, 25]) });
   check('gate: the latest check (#45) decides', !p.picks.length, p.kws);
   // 7. won: main keyword top 3 in the last 4 checks -> no more pages, slot freed
   p = await plan({ ladders: [...A(), ...B()], ranks: ranks('lad_A', 'peppol uae', [2, 1, 3, 2]) });
@@ -1495,7 +1544,7 @@ await guard('pipeline', async () => {
   console.log('   pile-up ->', JSON.stringify(p.status && { reason: p.status.reason, paused_reason: p.status.paused_reason, waiting: p.status.waiting_publish, upcoming: p.status.upcoming.length }));
   check('pile-up: 3 waiting -> nothing picked, reason recorded', !p.picks.length && p.status && p.status.paused_reason === 'pileup' && p.status.waiting_publish === 3 && p.status.upcoming.length === 4, JSON.stringify(p.first));
   const csp = await run('Cadence Status', p.items); scanHtml('cadence status (pile-up)', csp[0].json.html); save('cadence-status-pileup.html', csp[0].json.html);
-  check('pile-up status note (subject, callback fields)', /paused, 3 pages wait/.test(csp[0].json.subject) && csp[0].json.paused_reason === 'pileup' && csp[0].json.request_id.endsWith('_0') && csp[0].json.callback_url, csp[0].json.subject);
+  check('pile-up status note (subject, callback fields)', /paused, 3 written pages waiting for publication/.test(csp[0].json.subject) && csp[0].json.paused_reason === 'pileup' && csp[0].json.request_id.endsWith('_0') && csp[0].json.callback_url, csp[0].json.subject);
   const csd = await run('Cadence Status', p.items.map(x => ({ json: { ...x.json, dry_run: true } })));
   check('no status note in a dry run', csd.length === 0, csd.length);
   p = await plan({ ladders: A(), logs: waiting3, trigger: { domain: D } });
@@ -1851,14 +1900,14 @@ await guard('pipeline phase 3', async () => {
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
   const N0 = await discover(false);
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach'].includes(k) ? undefined : v));
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
 
   // ---------- G. Keyword Check workflow (SEOagentAssess) ----------
-  const AV = async (body, ip) => { const r = await run('Assess Validate', { headers: { 'x-forwarded-for': ip || 'app:7a1c2d3e-org' }, body }); return r[0].json; };
-  H.staticData.assess = undefined;
+  const AV = (body, ip) => assessRun({ headers: { 'x-forwarded-for': ip || 'app:7a1c2d3e-org' }, body });   // v4.14: validate -> reserve a ledger row -> Assess Limit
+  ledgerReset();
   const okBody = { keyword: '  E Invoicing Software UAE ', country: 'AE', domain: 'https://www.Northwind-ERP.com/', business: 'ERP and e-invoicing implementation partner', services: ['ERP implementation', 'Peppol e-invoicing'], existing_keywords: ['e invoicing in uae', 'peppol uae'] };
   let v = await AV(okBody);
   check('assess: a valid body is normalised (keyword, domain, country, site id)', v.ok && v.status === 200 && v.keyword === 'e invoicing software uae' && v.domain === D && v.country === 'United Arab Emirates' && v.location_code === 2784 && v.language_code === 'en' && v.site_id === SITE && v.services.length === 2 && v.existing_keywords.length === 2, JSON.stringify(v));
@@ -1870,14 +1919,14 @@ await guard('pipeline phase 3', async () => {
   }
   v = await AV({});
   check('assess 400: an empty body -> keyword, domain and country errors at once', v.status === 400 && eq(Object.keys(v.errors).sort(), ['country', 'domain', 'keyword']) && v.error.split('; ').length === 3, JSON.stringify(v.errors));
-  check('assess: rejected requests are not counted', !H.staticData.assess || !H.staticData.assess.total || H.staticData.assess.total === 1, JSON.stringify(H.staticData.assess));
-  H.staticData.assess = undefined;
+  check('assess: rejected requests reserve no ledger row (the one valid request so far)', LEDGER.rows.filter(r => r.mode === 'assess').length === 1, JSON.stringify(LEDGER.rows));
+  ledgerReset();
   for (let i = 0; i < 40; i++) v = await AV(okBody);
   const v41 = await AV(okBody);
-  check('assess 429: the 41st check of one company in a day', v.ok && v41.status === 429 && !v41.ok && /daily limit of 40/.test(v41.error) && H.staticData.assess.keys['app:7a1c2d3e-org'] === 40, v41.error);
+  check('assess 429: the 41st check of one company in a day', v.ok && v41.status === 429 && !v41.ok && /daily limit of 40/.test(v41.error) && ledgerKeys('assess')['app:7a1c2d3e-org'] === 40, v41.error);
   const vOther = await AV(okBody, 'app:other-company-1');
   check('assess: another company has its own daily limit', vOther.ok, vOther.error);
-  H.staticData.assess = undefined;
+  ledgerReset();
   v = await AV(okBody); mock('Assess Validate', [{ json: v }]);
   mock('Load Assess Cache', EMPTY);
   const aq = await run('Assess Requests', EMPTY);
@@ -1948,7 +1997,8 @@ await guard('pipeline phase 3', async () => {
   check('won ladder checked 7 days ago: nothing this week (monthly)', tp.length === 1 && tp[0].json.nothing_to_do && tp[0].json.skipped[0].won === true && /checked monthly, next after/.test(tp[0].json.skipped[0].reason), JSON.stringify(tp[0].json));
   mock('Load History', [hW(2, 29), hW(1, 36), hW(3, 43), hW(2, 50)]);
   tp = await run('Tracker Plan', store['Load History']);
-  check('won ladder, last check 29 days ago: the main keyword and the published pages are checked (not the planned page)', eq(tp.map(c => c.json.keyword).sort(), ['peppol uae', 'peppol uae cost', 'peppol uae software']) && tp.every(c => c.json.won_monthly === true), JSON.stringify(tp.map(c => c.json.keyword)));
+  check('won ladder, last check 29 days ago: the main keyword and the published pages are checked (not the planned page)', eq(tp.filter(c => c.json.device === 'desktop').map(c => c.json.keyword).sort(), ['peppol uae', 'peppol uae cost', 'peppol uae software']) && tp.every(c => c.json.won_monthly === true), JSON.stringify(tp.map(c => [c.json.keyword, c.json.device])));
+  check('G6: a won ladder\'s mobile check follows the same monthly rhythm (the main keywords only, never the planned page)', eq(tp.filter(c => c.json.device === 'mobile').map(c => c.json.keyword).sort(), ['peppol uae', 'peppol uae cost']), JSON.stringify(tp.filter(c => c.json.device === 'mobile').map(c => c.json.keyword)));
   mock('SERP Check', tp.map(c => V.serpFor(c.json.keyword, D, c.json.keyword === 'peppol uae' ? 2 : 5)));
   let pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
   let tr = await run('Tracker Report', pp);
@@ -1958,7 +2008,7 @@ await guard('pipeline phase 3', async () => {
   check('a failed check (-1) does not break a won ladder', tp[0].json.nothing_to_do && tp[0].json.skipped.length === 1 && tp[0].json.skipped[0].won === true, JSON.stringify(tp[0].json));
   mock('Load History', [hW(8, 7), hW(2, 14), hW(1, 21), hW(3, 28)]);
   tp = await run('Tracker Plan', store['Load History']);
-  check('a drop out of the top 3 brings the ladder back to weekly checks of every page', tp.length === 4 && tp.every(c => c.json.won_monthly === false), JSON.stringify(tp.map(c => c.json.keyword)));
+  check('a drop out of the top 3 brings the ladder back to weekly checks of every page', tp.filter(c => c.json.device === 'desktop').length === 4 && tp.every(c => c.json.won_monthly === false), JSON.stringify(tp.map(c => [c.json.keyword, c.json.device])));
 });
 
 // ===================================================================================
@@ -2074,11 +2124,13 @@ await guard('publish detection', async () => {
   check('case study found live -> its proof row (site_id, keyword, page_url)', cr.length === 1 && eq(cr[0].json, { site_id: SITE, keyword: 'ifrs 17 case study', page_url: W + '/case-studies/ifrs-17-case-study/' }), JSON.stringify(cr.map(x => x.json)));
   const lrr = await run('Detected Ladder Rows', cr); const LRR = lrr.map(x => x.json);
   check('ladder rows: the 3 ladder pages found (fta, requirements, distributors), status published + live URL + page_exists', LRR.length === 3 && LRR.every(r => keysAre(r, ['ladder_id', 'keyword', 'status', 'target_url', 'page_exists']) && r.status === 'published' && r.page_exists === true && r.ladder_id === 'lad_D') && eq(LRR.map(r => r.keyword).sort(), ['e invoicing uae fta', 'erp for distributors', 'uae e invoicing requirements']), JSON.stringify(LRR));
-  // ---- 5. no candidates -> no requests ----
+  // ---- 5. no candidates -> nothing to match (the sitemap is still read: D11 builds the page inventory from it) ----
   const savedLogs = store['Load Content Log'], savedLad = store['Load Ladders'];
   mock('Load Content Log', LOGS.filter(l => l.json.status === 'published')); mock('Load Ladders', LADDERS.map(l => ({ json: { ...l.json, status: l.json.status === 'writing' ? 'planned' : l.json.status } })));
   const pc0 = await run('Publish Candidates', plan);
-  check('nothing written and waiting -> one skip item, no sitemap request', pc0.length === 1 && pc0[0].json.skip === true && !pc0[0].json.sitemap_url, JSON.stringify(pc0[0].json));
+  check('nothing written and waiting -> no candidate to match, and no page is fetched (the sitemap read stays, D11)', pc0.every(x => x.json.skip || (!x.json.candidates.length && x.json.detect === false && !!x.json.sitemap_url)), JSON.stringify(pc0.map(x => x.json.skip ? 'skip' : [x.json.domain, x.json.candidates.length, x.json.detect])));
+  const ms0 = await run('Match Slugs (Detect)', pc0);
+  check('and with no candidate nothing is fetched, while the sitemap URLs still become the page inventory', ms0.length === 1 && ms0[0].json.skip === true && (ms0[0].json.sites || []).every(st => !st.fetches.length && !st.slug_matches.length), JSON.stringify((ms0[0].json.sites || []).map(st => [st.domain, st.fetches.length, (st.inventory || []).length])));
   store['Load Content Log'] = savedLogs; store['Load Ladders'] = savedLad; await run('Publish Candidates', plan);
   // ---- 6. the rest of the run: inspection of the pages found, metrics, report, callback ----
   mock('GSC Sites', T.gscSites()); const rp = await run('Resolve Properties', store['GSC Sites']);
@@ -2145,7 +2197,12 @@ await guard('ai pulse', async () => {
   check('pulse requests: 7 questions x 3 fast engines (Copilot only when chosen), no database views, about $0.08', R.length === 21 && byE.chatgpt === 7 && byE.gemini === 7 && byE.ai_mode === 7 && !byE.copilot && R.every(r => r.run_kind === 'pulse') && Math.abs(R.reduce((s, r) => s + r.est_cost, 0) - 0.084) < 0.001, JSON.stringify(byE));
   // a bad day: no answer names the client; ChatGPT names Zoho Books (learned name -> zoho.com) in every answer
   mock('Run AI Requests', R.map((q, i) => A9.answerFor(q, i, {})));
-  const pa = await run('Parse AI Answers', store['Run AI Requests'], PP); const AN = pa.map(r => r.json);
+  // D19: the pulse carries the same gate (its figures become the week's samples), run from its own extracted files
+  const RT = { code: 'Pulse__AI_Retry_Requests' }, MG = { code: 'Pulse__Merge_AI_Answers' };
+  const prt = await run('AI Retry Requests', store['Run AI Requests'], RT);
+  const pmg = await run('Merge AI Answers', prt, MG);
+  check('pulse: no failed task, nothing re-sent, the 21 answers pass through the gate in order', prt[0].json.skip === true && pmg.length === R.length, JSON.stringify({ skip: prt[0].json.skip, n: pmg.length }));
+  const pa = await run('Parse AI Answers', pmg, PP); const AN = pa.map(r => r.json);
   // the past week named the same businesses as today except Zoho Books (zoho.com): rebuild the baseline from today's names, then plan again
   seenBefore = {}; for (const a of AN) for (const d of String(a.competitors).split(/,\s*/).filter(Boolean)) if (d !== 'zoho.com') seenBefore[d] = 5;
   mock('Load AI Daily', baseline()); await run('AI Plan', store['Load Cache (AI)'], PN);
@@ -2272,10 +2329,18 @@ await guard('backlinks v4.10', async () => {
   check('reclaim: the most-linked guide answers 404 → 301 suggestion with the referrers Bing reported', R.reclaim.some(r => /old-peppol-guide/.test(r.broken_url) && r.links >= 2), JSON.stringify(R.reclaim));
   check('competitors: fintechnews just linked to complyance.io (spam farm and current referrers dropped); the list page and the CC gap become prospects', R.comp_new.length === 1 && R.comp_new[0].domain === 'fintechnews.ae' && R.candidates.some(c => c.type === 'list' && c.prospect_domain === 'bestof-software.com') && R.candidates.some(c => c.type === 'gap' && c.origin === 'cc' && c.prospect_domain === 'einvoicingnews.com') && R.candidates.some(c => c.type === 'comp_new'), JSON.stringify(R.candidates.map(c => c.type + ':' + c.prospect_domain + ':' + c.score)));
   const sc = (t, d) => (R.candidates.find(c => c.type === t && c.prospect_domain === d) || {}).score || 0;
-  check('gap (live findings): a site linking to both competitors outranks a household name (stripe.com); the competitor\'s sister domain (cleartax.in) is not a prospect; a local .ae site outranks the same site elsewhere', sc('gap', 'einvoicingnews.com') > sc('gap', 'stripe.com') && sc('gap', 'taxhub.ae') > sc('gap', 'taxhub-global.com') && sc('gap', 'taxhub-global.com') > 0 && !R.candidates.some(c => c.prospect_domain === 'cleartax.in') && !R.gap.some(g => g.domain === 'cleartax.in'), JSON.stringify([sc('gap', 'einvoicingnews.com'), sc('gap', 'stripe.com')]));
+  check('gap (live findings): a household name off your topics (stripe.com) is listed with its reason and never pitched (D23); the competitor\'s sister domain (cleartax.in) is not a prospect; a local .ae site outranks the same site elsewhere', sc('gap', 'stripe.com') === 0 && R.gap.find(g => g.domain === 'stripe.com').off_topic === true && /off topic/.test(R.gap.find(g => g.domain === 'stripe.com').topic_reason) && sc('gap', 'einvoicingnews.com') > 0 && sc('gap', 'einvoicing-hub.ae') > sc('gap', 'einvoicing-hub-global.com') && sc('gap', 'einvoicing-hub-global.com') > 0 && !R.candidates.some(c => c.prospect_domain === 'cleartax.in') && !R.gap.some(g => g.domain === 'cleartax.in'), JSON.stringify(R.gap.map(g => g.domain + ':' + (g.off_topic ? 'off' : sc('gap', g.domain)))));
   check('scores: a checked unlinked mention outranks a cold gap site of similar authority', sc('mention', 'gulfbiz.ae') > sc('gap', 'einvoicingnews.com'), JSON.stringify([sc('mention', 'gulfbiz.ae'), sc('gap', 'einvoicingnews.com')]));
   check('anchors: kinds over the live referrers, the money anchor from the anchor list flagged', R.anchors.kinds.brand >= 1 && R.anchors.top.some(a => a.anchor === 'best casino bonus' && a.kind === 'money'), JSON.stringify(R.anchors));
   check('erpnews.ae (a contacted gap prospect) now links: the referrer set includes it', R.refdomains.includes('erpnews.ae'), JSON.stringify(R.refdomains.slice(0, 20)));
+  // ---- D3 (2026-10-11, exec 368): the link-farm cluster of 16 — the footprint gate (LK.footprints) over the whole ledger before scoring ----
+  const FARM = B.FARM_ALL; const dz = (R.disavow_text.match(/^domain:(.+)$/gm) || []).map(l => l.slice(7));
+  check('D3: all 16 link-farm domains are spam by the footprint gate — SEO and brand value 0, the reason in the note (the index had flagged 5)', FARM.length === 16 && FARM.every(d => LR(d).link_type === 'spam' && LR(d).seo_value === 0 && LR(d).brand_value === 0 && /^link farm: /.test(LR(d).note)), JSON.stringify(FARM.map(d => [d, LR(d).link_type, LR(d).seo_value, LR(d).note])));
+  check('D3: the reasons — the same path on 12 sites, the same keyword anchor on 3 sites, a gambling host; a farm page whose link is still there is spam too', /same page path on 12 sites/.test(LR('dupurgeniefr.com').note) && /same keyword anchor on 3 sites/.test(LR('gulfventuretimes.com').note) && /gambling site/.test(LR('bestnz-poker-casinoslot.com').note) && LR('hearthsidemag.net').verify === 'found' && LR('hearthsidemag.net').link_type === 'spam', JSON.stringify(['dupurgeniefr.com', 'gulfventuretimes.com', 'bestnz-poker-casinoslot.com', 'hearthsidemag.net'].map(d => [d, LR(d).note, LR(d).verify])));
+  check('D3: peppol.org is the top best link; no farm page in the best lists, the wins or the prospects', R.values.best_seo[0].ref_domain === 'peppol.org' && !R.values.best_seo.some(x => FARM.includes(x.ref_domain)) && !R.values.best_brand.some(x => FARM.includes(x.ref_domain)) && !R.wins.some(w => FARM.includes(w.ref_domain)) && !R.candidates.some(c => FARM.includes(c.prospect_domain)), JSON.stringify({ best: R.values.best_seo.map(x => x.ref_domain + ':' + x.value), wins: R.wins.map(w => w.ref_domain) }));
+  check('D3: the disavow candidates hold exactly the 16 (review-only); legitimate links untouched (two /partners pages, brand anchors everywhere, the ugc directory, the search page)', dz.length === 16 && FARM.every(d => dz.includes(d)) && ['jsapp.io', 'gonepartner.com', 'partnerdir.ae', 'erpnews.ae', 'stablevendors.org', 'peppol.org', 'robuta.com'].every(d => LR(d).link_type !== 'spam') && R.farms.length === 16, JSON.stringify({ disavow: dz, farms: R.farms.map(f => f.ref_domain), robuta: LR('robuta.com').link_type }));
+  check('D3: no at-risk entry or alert, no important-lost, no restore draft for farm pages (10 of them not found on their page); one low note lists them', !R.at_risk.some(a => FARM.includes(a.ref_domain)) && !R.alerts.some(a => /not found on their page/.test(a.text) && FARM.some(d => a.text.includes(d))) && !R.important_lost.some(l => FARM.includes(l.from_domain)) && R.alerts.some(a => a.level === 'low' && /link farms/.test(a.text) && /16 link/.test(a.text)), JSON.stringify(R.alerts.map(a => a.level + ': ' + a.text.slice(0, 110))));
+  check('D3: the Link Analyst never reads a farm page (no tokens on them); the link check puts farm pages last, after every other link', !aj[0].json.ids.some(d => FARM.includes(d)) && (() => { const l = VR.filter(x => x.purpose === 'link'); const i = l.findIndex(x => x.why === 'footprint'); return i > 0 && l.slice(i).every(x => x.why === 'footprint' && FARM.includes(x.ref_domain)) && l.slice(0, i).every(x => x.why !== 'footprint'); })(), JSON.stringify(VR.filter(x => x.purpose === 'link').map(x => x.ref_domain + ':' + x.why)));
   // outreach: jobs by score + follow-ups, contacts, writer, pipeline
   const oj = await run('Outreach Jobs', pb); const OJ = oj[0].json.prospects;
   check('outreach: first drafts by score (no reclaim), follow-up 1 for the prospect contacted 9 days ago, none for the one that now links', OJ.some(p => p.type === 'followup' && p.prospect_domain === 'peppolnews.com' && p.step === 1) && !OJ.some(p => p.prospect_domain === 'erpnews.ae') && !OJ.some(p => p.type === 'reclaim') && OJ.filter(p => p.type !== 'followup').every((p, i, a) => !i || (Number(a[i - 1].score) || 0) >= (Number(p.score) || 0)), JSON.stringify(OJ.map(p => p.type + ':' + p.prospect_domain + ':' + (p.score || p.step))));
@@ -2285,7 +2350,7 @@ await guard('backlinks v4.10', async () => {
   check('contacts: the editor address on the site (noreply skipped)', gp.contact_email === 'editor@gulfbiz.ae', JSON.stringify(gp));
   mock('Outreach Writer', [B.writer(oi[0].json)]);
   const prw = await run('Prospect Rows', store['Outreach Writer']); const PR = prw.map(r => r.json); const PRO = (d, t) => PR.find(r => r.prospect_domain === d && (!t || r.type === t)) || {};
-  const PCOLS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note', 'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at'];
+  const PCOLS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note', 'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // drafted_at: P34-1
   check('pipeline rows: exact columns; contact stored; follow-up 1 drafted for the contacted prospect; erpnews.ae won and verified on the page', same2(Object.keys(PR[0]), PCOLS) && PRO('gulfbiz.ae', 'mention').contact_email === 'editor@gulfbiz.ae' && PRO('peppolnews.com').followup_step === 1 && /^Re: /.test(PRO('peppolnews.com').followup_subject) && PRO('erpnews.ae').status === 'won' && !!PRO('erpnews.ae').verified_at && PRO('erpnews.ae').note === 'pitched the guide', JSON.stringify([PRO('peppolnews.com'), PRO('erpnews.ae')].map(r => [r.status, r.followup_step, r.verified_at, r.note])));
   mock('Save Prospects', prw);
   const LCOLS = ['site_id', 'domain', 'ref_domain', 'kind', 'from_url', 'to_url', 'anchor', 'anchor_kind', 'rel', 'placement', 'link_type', 'relevance', 'note', 'sources', 'source_count', 'first_seen', 'last_seen', 'status', 'lost_at', 'lost_reason', 'miss_count', 'verify', 'verified_at', 'noindex', 'canonical_elsewhere', 'outbound', 'page_title', 'context', 'authority', 'dr', 'cc_rank', 'page_keywords', 'spam_score', 'original', 'sitewide', 'links', 'visits', 'key_events', 'ai_cited', 'seo_value', 'referral_value', 'brand_value', 'updated_at'];
@@ -2298,6 +2363,8 @@ await guard('backlinks v4.10', async () => {
   const rp = await run('BL Report', snr); const html = rp[0].json.html; save('backlink-report-v410.html', html); scanHtml('backlink report v4.10', html);
   check('report: coverage table, best links, losses with the reason, list pages, competitors\' new links, CC gap, follow-ups, data credits (GDELT, Common Crawl, Ahrefs DR)', ['Where the links were found', 'Best links', 'Links lost (confirmed by two checks)', 'page gone', '"Best of" lists', 'Sites that just linked to a competitor', 'Common Crawl', 'Follow-ups due', 'GDELT Project', 'Domain Rating by Ahrefs', 'Links that send visits'].every(t => html.includes(t.replace(/"/g, '&quot;')) || html.includes(t)), ['Where the links were found', 'Best links', 'Links lost (confirmed by two checks)', 'page gone', 'Best of', 'Sites that just linked to a competitor', 'Common Crawl', 'Follow-ups due', 'GDELT Project', 'Domain Rating by Ahrefs', 'Links that send visits'].filter(t => !html.includes(t)).join(' | '));
   check('report: contact shown on the draft, csv has the new columns', /to: editor@gulfbiz\.ae/.test(html) && /contact_email/.test(Buffer.from(rp[0].binary.prospects_csv.data, 'base64').toString()), '');
+  const farmNote = html.indexOf('link farms set aside'); const bestTbl = html.slice(Math.max(0, html.lastIndexOf('Best links', farmNote)), farmNote);   // the best-links table sits between its heading and the note
+  check('D3: the report sets the farms aside under the best links (no farm row in that table) and attaches the disavow file with the 16', farmNote > 0 && /16 link\(s\) from link farms set aside/.test(html) && !/dupurgeniefr\.com|hearthsidemag\.net|onvaxs\.com/.test(bestTbl) && (Buffer.from(rp[0].binary.disavow_txt.data, 'base64').toString().match(/^domain:/gm) || []).length === 16, bestTbl.slice(-400));
   mock('Render PDF BL', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQK', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
   await run('Prepare PDF BL', rp); const att = await run('Attach PDF BL', store['Render PDF BL']); const cb = await run('Build BL Callback', att); const CB = cb[0].json;
   check('callback: coverage, best links, wins, lists, competitors\' new links, at risk; no ledger dump, no refdomains, no html', !!CB.coverage && CB.best.length > 0 && Array.isArray(CB.wins) && Array.isArray(CB.lists) && Array.isArray(CB.comp_new) && Array.isArray(CB.at_risk) && CB.ledger_rows === undefined && CB.refdomains === undefined && CB.html === undefined && CB.stage === 'backlinks', Object.keys(CB).join(','));
@@ -2314,6 +2381,7 @@ await guard('backlinks v4.10', async () => {
   const rr2 = await run('Referral Requests', store['Fetch Bing']); mock('GA4 Referrals', rr2.map(r => g4[r.json.kind]));
   const lm2 = await run('Link Merge', store['GA4 Referrals']); const lr2 = await run('Locate Requests', lm2); mock('Fetch Locate', lr2.map(r => r.json.skip ? {} : B.locateFor(r.json.ref_domain)));
   const vr2 = await run('Verify Requests', store['Fetch Locate']); const VR2 = vr2.map(r => r.json);
+  check('D3: the light run never re-checks a farm page (missed once or not)', !VR2.some(x => x.why === 'footprint' || FARM.includes(x.ref_domain)), JSON.stringify(VR2.filter(x => x.purpose === 'link').map(x => x.ref_domain + ':' + x.why)));
   check('light run: only the links that matter are re-checked (missed once, valuable, won) — not the rotation, no mentions beyond news, no list / own pages', VR2.length < VR.length && VR2.some(x => x.ref_domain === 'oldsite-erp.net' && x.why === 'missed_once') && !VR2.some(x => x.purpose === 'list' || x.purpose === 'target') && VR2.filter(x => x.purpose === 'link').every(x => x.why !== 'rotation'), JSON.stringify(VR2.map(x => x.purpose + ':' + x.ref_domain + ':' + (x.why || ''))));
   mock('Fetch Linking Pages', VR2.map(x => B.pageFor(x.url))); const rn2 = await run('Render Requests', store['Fetch Linking Pages']); if (!rn2[0].json.skip) mock('Render Pages', rn2.map(() => B.rendered())); else delete store['Render Pages'];
   const vl2 = await run('Verify Links', store['Fetch Linking Pages']); const ar2 = await run('Authority Requests', vl2); if (!ar2[0].json.skip) mock('Run Authority', ar2.map(a => a.json.kind === 'ranks' ? B.ranksFor(a.json.targets) : B.spamFor(a.json.targets))); else delete store['Run Authority'];
@@ -2491,7 +2559,7 @@ await guard('ai growth', async () => {
   const prompts = [{ json: { prompt_id: 'p_0', site_id: SITE, prompt: gaps[0].prompt, kind: 'recommend', keyword: 'e invoicing in uae', status: 'active' } }, { json: { prompt_id: 'p_3', site_id: SITE, prompt: gaps[1].prompt, kind: 'compare', keyword: 'odoo vs business central uae', status: 'active' } }];
   const qh = [['e invoicing in uae', WWW + '/e-invoicing-uae/', 1200, 8.4], ['uae e invoicing deadline', WWW + '/e-invoicing-uae/', 300, 12], ['erp partner dubai', WWW + '/erp-partner-dubai/', 500, 15], ['northwind erp', WWW + '/', 900, 1]]
     .map(([q, page, imp, pos]) => ({ json: { site_id: SITE, domain: D, period_end: '2026-10-04', query: q, page, impressions: imp, clicks: 10, position: pos } }));
-  const loadG = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', M.profiles()); mock('Load AI Visibility', [{ json: visRow }]); mock('Load AI Prompts', prompts);
+  const loadG = (o = {}) => { mock('Load Sites', o.sites || M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', o.profiles || M.profiles()); mock('Load AI Visibility', [{ json: visRow }]); mock('Load AI Prompts', prompts);
     mock('Load Content Log', [{ json: { site_id: SITE, domain: D, keyword: 'peppol uae', source: 'ladder', status: 'published', published_url: WWW + '/peppol-uae/', published_at: ago(2), started_at: ago(9) } }]); mock('Load Query History', qh);
     mock('Load AI Pages', o.pages || [{ json: { site_id: SITE, domain: D, url: WWW + '/e-invoicing-uae/', kind: 'cited', checked_at: ago(30), score: 55, updated_on: ago(200).slice(0, 10), submitted_at: '', bing_crawled_at: ago(40), bing_status: 200 } }]);
     mock('Load AI Targets', o.targets || [{ json: { target_id: 'ait_northwind-erp-com_p_9', site_id: SITE, domain: D, prompt_id: 'p_9', question: 'Who is the best Odoo partner in Dubai?', keyword: 'odoo partner dubai', kind: 'answer', status: 'writing', created_at: ago(20), written_at: ago(14) } }]);
@@ -2510,7 +2578,10 @@ await guard('ai growth', async () => {
   check('IndexNow key made once (32 hex) and the monthly entity check due', /^[a-f0-9]{32}$/.test(G.indexnow_key) && G.indexnow_new === true && G.entity_due === true, G.indexnow_key);
   // ---- (c) requests: pages, cited pages, Bing (sites -> quota + crawl state -> submission), IndexNow, Wikidata ----
   const pr = await run('Page Requests (Growth)', gp); const er = await run('Earned Requests', gp);
-  const bs = await run('Bing Sites (Growth)', gp);
+  // the Bing key is baked in at build time (BING_ON): a build without n8n/.env has it off, so the node runs from a copy with it on (as S28 does)
+  const fsB = require('fs'), pathB = require('path'), CDB = process.env.CODE_DIR || pathB.join(__dirname, 'code'); const bsrc = fsB.readFileSync(pathB.join(CDB, 'Bing_Sites_Growth_.js'), 'utf8');
+  const bsOn = bsrc.includes('const BING = false;') ? (fsB.writeFileSync(pathB.join(CDB, 'Bing_Sites_Growth___on.js'), bsrc.replace('const BING = false;', 'const BING = true;')), 'Bing_Sites_Growth___on') : null;
+  const bs = await run('Bing Sites (Growth)', gp, bsOn ? { code: bsOn } : {}); if (bsOn) { try { fsB.unlinkSync(pathB.join(CDB, bsOn + '.js')); } catch (e) {} }
   check('requests: the pages to check and the cited pages to fetch; Bing sites asked once', pr.length === G.audit.length && er.length === G.earned_fetch.length && bs.length === 1 && /GetUserSites/.test(bs[0].json.url), JSON.stringify({ pr: pr.length, er: er.length, bs: bs[0].json }));
   mock('Fetch Bing Sites (Growth)', [{ json: { d: [{ Url: 'https://www.' + D + '/', IsVerified: true }, { Url: 'https://other.example.com/' }] } }]);
   const br = await run('Bing Growth Requests', store['Fetch Bing Sites (Growth)']); const BR = br.map(r => r.json);
@@ -2544,7 +2615,7 @@ await guard('ai growth', async () => {
   const rGood = rd.find(r => /e-invoicing-uae/.test(r.url)), rShell = rd.find(r => /erp-partner-dubai/.test(r.url)), r404 = rd.find(r => /peppol-uae/.test(r.url)), rNo = rd.find(r => !/e-invoicing-uae|erp-partner-dubai|peppol-uae/.test(r.url));
   console.log('   readiness ->', JSON.stringify(rd.map(r => [r.url.replace(WWW, ''), r.status, r.score, r.updated_on, r.bing_crawled_at.slice(0, 10), r.issues[0] && r.issues[0].slice(0, 50)])));
   const ck = (r, k) => (r.checks.find(c => c.key === k) || {}).ok;
-  check('readiness: a page that answers first, dated 5 days ago (visible), question headings, sourced figures, table, author, FAQ scores 85+', rGood.score >= 85 && ck(rGood, 'answer_first') === true && ck(rGood, 'fresh') === true && rGood.updated_on && ck(rGood, 'question_headings') === true && ck(rGood, 'sourced_figures') === true && ck(rGood, 'author') === true && ck(rGood, 'faq') === true, JSON.stringify(rGood.checks.map(c => c.key + ':' + c.ok)));
+  check('readiness: a page that answers first, dated 5 days ago (visible), question headings, sourced figures, table, author scores 85+; no FAQ check any more (FIX_PLAN G2)', rGood.score >= 85 && ck(rGood, 'answer_first') === true && ck(rGood, 'fresh') === true && rGood.updated_on && ck(rGood, 'question_headings') === true && ck(rGood, 'sourced_figures') === true && ck(rGood, 'author') === true && ck(rGood, 'faq') === undefined && rGood.checks.filter(c => c.weight > 0).reduce((t, c) => t + c.weight, 0) === 100, JSON.stringify(rGood.checks.map(c => c.key + ':' + c.ok)));
   check('readiness: a JavaScript shell (no text in the raw HTML) fails raw_text; a 404 scores 0; noindex is capped at 40; schema is never scored', ck(rShell, 'raw_text') === false && rShell.score < 50 && r404.score === 0 && r404.status === 404 && (!rNo || (ck(rNo, 'indexable') === false && rNo.score <= 40)) && rd.every(r => !r.checks.some(c => c.key === 'schema' && c.weight > 0)), JSON.stringify([rShell.score, r404.score, rNo && rNo.score]));
   check('readiness: Bing\'s crawl state per page (never crawled = empty date)', rd.find(r => r.url === neverPage.page).bing_crawled_at === '' && rGood.bing_crawled_at.startsWith('2025-10-01'), JSON.stringify(rd.map(r => r.bing_crawled_at)));
   // ---- (e) earned media: the cited pages fetched (who they name), prospects with exact columns, at most 3 drafts ----
@@ -2605,6 +2676,40 @@ await guard('ai growth', async () => {
   check('Normalize Input: the AI target is kept, sanitised (question, refresh, searches split, sources {url,title}, competitors), unknown fields dropped', AT && AT.kind === 'refresh' && AT.fanout.length === 2 && AT.sources.length === 1 && AT.sources[0].url === 'https://gulfnews.com/x' && AT.competitors[0] === 'zoho.com' && !('extra' in AT), JSON.stringify(AT));
   const nt2 = await run('Normalize Input', { body: { mode: 'keyword', keyword: 'x y', country: 'US', callback_url: 'https://hooks.example.com/x', ai_target: { question: 'short' } } });
   check('Normalize Input: no AI target unless it carries a real question', nt2[0].json.ai_target === null, JSON.stringify(nt2[0].json.ai_target));
+  // ---- (i) D12 (system review 2026-10-11, exec 376): one writer, and the Link Builder's gates on AI Growth's own drafts ----
+  // Live it drafted to mof.gov.ae / tax.gov.ae and to three competitors, opened with "your site is cited in AI answers", quoted nothing and
+  // signed "techand" / "techand.ai"; finline.ae was drafted by both writers.
+  const SVC = JSON.stringify(['ERP implementation', 'e-invoicing integration', 'Business Central support']);
+  const siteModel = (o = {}) => M.sites({ canonical_host: 'www.' + D, business_name: '', services_json: SVC, model_updated_at: ago(2), ...o });
+  const vendorRow = { json: { site_id: SITE, domain: D, run_id: 'ai_20261005', checked_at: ago(1), prompt_id: 'p_0', prompt: gaps[0].prompt, kind: 'recommend', engine: 'chatgpt', answered: true, mentioned: false, cited: false, our_urls: '',
+    cited_urls: JSON.stringify([cited('https://orksync.com/erp-implementation/', 'ERP Implementation Services in Dubai, UAE | E-Invoicing Ready'), cited('https://tax.gov.ae/en/content/uae.einvoicing.aspx', 'UAE e-invoicing')]) } };
+  const vendorHtml = '<html><head><title>ERP Implementation Services in Dubai, UAE | E-Invoicing Ready</title></head><body><h1>ERP implementation in Dubai</h1>'
+    + '<p>Our services: ERP implementation, Business Central support and e-invoicing integration for UAE businesses. Book a demo or request a quote.</p>'
+    + '<p>We provide ongoing support after go-live.</p></body></html>';
+  const pageFor = (u) => /gulfnews/.test(u) ? listHtml : /reddit/.test(u) ? reddit : /mof\.gov/.test(u) ? mof : /orksync/.test(u) ? vendorHtml : /tax\.gov/.test(u) ? '<html><head><title>UAE e-invoicing</title></head><body><p>Federal Tax Authority page on e-invoicing.</p></body></html>' : yt;
+  const growthPass = async (o = {}) => { loadG({ sites: siteModel(o.site || {}), profiles: o.profiles || M.profiles(), monitors: o.monitors || M.monitors() });
+    mock('Load AI Answers', [...ansRows, vendorRow]);
+    const g2 = await run('Growth Plan', store['Load Cache (Growth)']);
+    const er2 = await run('Earned Requests', g2);
+    mock('Fetch Cited Pages', er2.map(r => ({ json: { statusCode: 200, headers: {}, data: pageFor(r.json.url) } })));
+    const em2 = (await run('Earned Media', store['Fetch Cited Pages']))[0].json;
+    const oi2 = (await run('AI Outreach Input', store['Earned Media']))[0].json;
+    return { G: g2[0].json, em: em2, oi: oi2, row: (d) => em2.prospect_rows.find(r => r.prospect_domain === d) || {} }; };
+  const OFF = await growthPass();
+  check('D12: with the Link Builder off AI Growth still drafts, but never to a competitor selling what we sell (orksync.com) and never to a government page',
+    OFF.em.outreach_jobs.length >= 1 && !OFF.em.outreach_jobs.some(j => j.prospect_domain === 'orksync.com') && !OFF.em.outreach_jobs.some(j => /\.gov(\.|$)/.test(j.prospect_domain))
+    && /competing provider/.test(OFF.row('orksync.com').note), JSON.stringify({ jobs: OFF.em.outreach_jobs.map(j => j.prospect_domain), orksync: OFF.row('orksync.com').note }));
+  check('D12: the name comes from the site model, never the domain label — with no profile the drafts are for "Tech&", and the facts tell the writer nothing is accredited',
+    (await growthPass({ site: { business_name: 'Tech&' }, profiles: [] })).em.business === 'Tech&'
+    && /Business: Tech&/.test((await growthPass({ site: { business_name: 'Tech&' }, profiles: [] })).oi.facts) && !/Accreditation/.test(OFF.oi.facts), JSON.stringify(OFF.oi.facts).slice(0, 200));
+  const ON = await growthPass({ monitors: M.monitors({ link_builder: true }) });
+  check('D12: with the Link Builder on AI Growth writes nothing (one writer) and hands its earned-media prospects over for qualification, with the question AI cites them for as the evidence',
+    ON.em.outreach_jobs.length === 0 && ON.oi.skip === true && ON.em.prospect_rows.length >= 3 && ON.row('gulfnews.com').status === 'new' && /AI cites this list/.test(ON.row('gulfnews.com').detail)
+    && /Link Builder writes to them/.test(ON.row('gulfnews.com').note) && ON.row('gulfnews.com').origin === 'ai_growth', JSON.stringify(ON.em.prospect_rows.map(r => [r.prospect_domain, r.status, r.note.slice(0, 40)])));
+  check('D12: the prompt no longer tells them they are cited in AI answers, must quote their page and writes the name as the facts have it',
+    (() => { const fs2 = require('fs'); const path2 = require('path'); const CD2 = process.env.CODE_DIR || path2.join(__dirname, 'code');
+      const pr2 = fs2.readFileSync(path2.join(CD2, 'AI_Outreach_Writer.prompt.txt'), 'utf8');
+      return !/cite when buyers ask|is cited in AI answers/.test(pr2) && /no word about AI assistants/.test(pr2) && /quote something from the page itself/.test(pr2) && /exactly as it stands above/.test(pr2) && /\[Owner: confirm/.test(pr2); })(), 'ai_outreach.txt');
 });
 
 // ===================================================================================
@@ -2619,7 +2724,7 @@ await guard('link builder', async () => {
   const F = require('./fixtures_lb413'); const TC = require('./table_cols.json');
   const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
   const J = (x) => { try { return JSON.parse(x || ''); } catch (e) { return null; } };
-  const loadAll = (o = {}) => { mock('Load Sites', F.sites().map(x => x)); mock('Load Ladders', F.ladders()); mock('Load Monitors', o.monitors || F.monitors()); mock('Load Profiles', F.profiles());
+  const loadAll = (o = {}) => { mock('Load Sites', (o.sites || F.sites()).map(x => x)); mock('Load Ladders', F.ladders()); mock('Load Monitors', o.monitors || F.monitors()); mock('Load Profiles', o.profiles || F.profiles());
     mock('Load Link Prospects', F.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', (o.outreach || F.outreachPrev()).map(j => ({ json: j }))); mock('Load Listings', F.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', [{ json: {} }]);
     mock('Load Backlinks', F.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]); mock('Load AI Targets', F.targets().map(j => ({ json: j })));
     mock('Load Query History', F.queries().map(j => ({ json: j }))); mock('Load Rank History', F.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', (o.cache || F.cache()).map(j => ({ json: j }))); };
@@ -2660,10 +2765,10 @@ await guard('link builder', async () => {
   check("a competitor's dead page (DataForSEO): new prospect, the dead link quoted, our guide on accredited providers as the replacement; the casino site refused", O('erpinsights.ae', 'broken').status === 'ready' && O('erpinsights.ae').target_url === F.GUIDE && /accredited Peppol providers/.test(O('erpinsights.ae').evidence) && O('casino-links.biz').status === 'not_fit' && AS.prospect_rows.some(x => x.prospect_domain === 'erpinsights.ae' && x.type === 'broken' && x.status === 'new') && !AS.prospect_rows.some(x => x.prospect_domain === 'casino-links.biz'), JSON.stringify([O('erpinsights.ae'), O('casino-links.biz').fit_reason]));
   check('our old URL from the Wayback Machine that now answers 404 → a redirect row (one row per URL), to the closest live page', AS.fixes.length === 1 && AS.fixes[0].from === 'https://techand.ai/capabilities/data' && AS.outreach_rows.some(o => o.type === 'redirect' && o.prospect_domain === 'techand.ai/capabilities/data' && o.status === 'fix'), JSON.stringify(AS.fixes));
   const LS = (id) => AS.listing_rows.find(l => l.listing_id === id) || {};
-  check('listings: the MoF list (real page) is missing with ClearTax and Azentio on it; LinkedIn listed (our homepage links it); SaaSHub missing (its page 404s); Crunchbase found by search behind a bot wall = listed, to confirm; G2 stays "submitted"; Azentio is on G2', LS('mof_asp').status === 'missing' && /cleartax\.com/.test(LS('mof_asp').competitors) && /azentio\.com/.test(LS('mof_asp').competitors) && ['listed', 'linked'].includes(LS('linkedin').status) && LS('saashub').status === 'missing' && LS('crunchbase').status === 'listed' && /confirm/.test(LS('crunchbase').why) && LS('g2').status === 'submitted' && /azentio/.test(LS('g2').competitors), JSON.stringify(AS.listing_rows.map(l => [l.listing_id, l.status, l.competitors])));
+  check('listings: the MoF list (real page) is missing with ClearTax and Azentio on it; LinkedIn listed (our homepage links it); SaaSHub missing (its page 404s); Crunchbase found by search behind a bot wall = unknown with the URL to open (P34-2: never "listed"); G2 stays "submitted"; Azentio is on G2', LS('mof_asp').status === 'missing' && /cleartax\.com/.test(LS('mof_asp').competitors) && /azentio\.com/.test(LS('mof_asp').competitors) && ['listed', 'linked'].includes(LS('linkedin').status) && LS('saashub').status === 'missing' && LS('crunchbase').status === 'unknown' && /open it to confirm/.test(LS('crunchbase').why) && /not counted as a listing/.test(LS('crunchbase').why) && LS('g2').status === 'submitted' && /azentio/.test(LS('g2').competitors), JSON.stringify(AS.listing_rows.map(l => [l.listing_id, l.status, l.competitors])));
   check('listings: only what fits — UAE entries for a UAE site, no local-business entries for an e-invoicing consultancy, no marketplace without the integration on the site', LS('yellowpages_uae').listing_id && !LS('google_business').listing_id && !LS('odoo_apps').listing_id, JSON.stringify(AS.listing_rows.map(l => l.listing_id)));
   const IM = (d) => AS.impact_rows.find(x => x.ref_domain === d) || {};
-  check('impact: peppol.org (live 80 days) → the homepage moved 9 positions while the other pages moved ~1: "likely helped", with the control; the link found 20 days ago is "too early"', IM('peppol.org').weeks >= 11 && IM('peppol.org').page_change > 8 && Math.abs(IM('peppol.org').control_change) <= 1.5 && IM('peppol.org').verdict === 'likely_helped' && IM('gulfbiz.ae').verdict === 'too_early' && !IM('erpdir.ae').ref_domain, JSON.stringify(AS.impact_rows));   /* erpdir.ae was there when tracking began: no t0 */
+  check('impact: peppol.org (live 80 days) → the homepage moved 9 positions while the other pages moved ~1: "likely helped", with the control; the link found 20 days ago is "too early"', IM('peppol.org').weeks >= 11 && IM('peppol.org').page_change > 8 && Math.abs(IM('peppol.org').control_change) <= 1.5 && IM('peppol.org').verdict === 'likely_helped' && IM('gulfbiz.ae').verdict === 'too_early' && !IM('erpdir.ae').ref_domain && !IM('onvaxs.com').ref_domain, JSON.stringify(AS.impact_rows));   /* erpdir.ae was there when tracking began: no t0; onvaxs.com is a link-farm page (D3): no impact row, and not a link for the links-per-page count (rds above) */
   check('jobs: the best ready prospects (≤ 10) incl. last week\'s qualified one, none already drafted', AS.jobs.length >= 4 && AS.jobs.length <= 10 && AS.jobs.some(j => j.prospect_domain === 'consultsynergy.ae') && !AS.jobs.some(j => j.prospect_domain === 'invoicefatura.com') && AS.jobs.every(j => j.status === 'ready'), JSON.stringify(AS.jobs.map(j => [j.prospect_domain, j.type, j.score])));
   const cv = J(AS.cache_row.value) || {};
   check('cache: listings / wayback / broken dated now, resources keep their date', cv.listings_at.slice(0, 10) === new Date().toISOString().slice(0, 10) && cv.wayback_at && cv.resources_at === P.state.resources_at, JSON.stringify(cv));
@@ -2671,6 +2776,9 @@ await guard('link builder', async () => {
   const WI = (await run('LB Writer Input', [{ json: {} }]))[0].json;
   check('writer input: the signer from the business profile, facts, each prospect with its angle, evidence, contact kind and our page', WI.signer === 'Sara Khan, Head of Finance Systems, Techand Systems' && WI.jobs.some(j => j.prospect_domain === 'erpinsights.ae' && j.angle === 'broken' && j.dead) && WI.jobs.some(j => j.prospect_domain === 'penieltech.com' && j.angle === 'list' && j.dead) && WI.jobs.some(j => j.type === 'press' && j.deadline === '20 Oct') && /Competitors/.test(WI.facts), JSON.stringify(WI.jobs.map(j => [j.n, j.prospect_domain, j.angle, j.contact])));
   mock('Outreach Sequence Writer', [F.writer(WI.jobs)]);
+  const QA = (await run('LB Draft QA', [{ json: {} }]))[0].json;
+  check('L2: every one of this week\'s drafts passes the gate (quote of their page, one link to the page we chose, a clear ask, the business name as the model has it, no claim outside the facts)',
+    QA.verdicts.length >= 4 && QA.held === 0 && QA.verdicts.every(v => v.ok && v.steps.length), JSON.stringify(QA.verdicts.map(v => [v.prospect_domain, v.ok, v.held])));
   const RW = (await run('LB Rows', [{ json: {} }]))[0].json; const RO = (d) => RW.outreach_rows.find(o => o.prospect_domain === d) || {};
   const seq = J(RO('azdan.com').sequence_json) || []; const pseq = J(RO('gulffinance.bsky.social/3mfinreq1').sequence_json) || [];
   check('rows: sequences merged (drafted; first e-mail + 2 follow-ups after 4 and 8 working days, subject only on the first), journalist requests 2 steps (3 days), the writer\'s refusal kept as the reason', RO('azdan.com').status === 'drafted' && seq.length === 3 && seq.map(x => x.wait_days).join() === '0,4,8' && seq[0].subject && !seq[1].subject && pseq.length === 2 && pseq[1].wait_days === 3 && RO('flick.network').status === 'not_fit' && /competing/.test(RO('flick.network').fit_reason) && RW.drafted >= 4, JSON.stringify([RO('azdan.com').status, seq.map(x => x.wait_days), pseq.length, RO('flick.network').fit_reason, RW.drafted]));
@@ -2710,7 +2818,3297 @@ await guard('link builder', async () => {
   // ---- (i) Site Admin accepts the new prospect status "replied" ----
   const aa = (await run('Admin Action', { body: { action: 'prospect', domain: 'techand.ai', prospect_domain: 'erpdaily.ae', status: 'replied' } }))[0].json;
   check('Site Admin: prospect status "replied" (v4.13)', aa.prospect_status === 'replied', JSON.stringify(aa));
+  // ---- (j) D13 (system review 2026-10-11, exec 372): who is pitched, and as whom ----
+  const pass = async (o = {}) => { loadAll(o); delete store['Manual Run'];
+    const P2 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+    const SR2 = (await run('LB Source Requests', [{ json: P2 }])).map(r => r.json); mock('Fetch LB Sources', SR2.map(r => sourceFor(r)));
+    const DR2 = (await run('LB DFS Requests', [{ json: P2 }])).map(r => r.json); mock('Run LB DFS', DR2.map(() => F.dfsBroken()));
+    const PR2 = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json); mock('Fetch LB Pages', PR2.map(r => F.fetchPage(r.url)));
+    const S22 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json); mock('Fetch LB Second', S22.map(r => F.fetchPage(r.url)));
+    const AS2 = (await run('LB Assemble', [{ json: {} }]))[0].json;
+    const WI2 = (await run('LB Writer Input', [{ json: {} }]))[0].json;
+    return { P: P2, PR: PR2, AS: AS2, WI: WI2, O: (d, t) => AS2.outreach_rows.find(x => x.prospect_domain === d && (!t || x.type === t)) || {} }; };
+  const D13 = await pass();
+  check('D13: a competitor is never pitched — their own service page selling what we sell (bemea.com, sscoglobal.com, flick.network) is refused with the reason',
+    ['bemea.com', 'sscoglobal.com', 'flick.network'].every(d => D13.O(d).status === 'not_fit' && /competing provider/.test(D13.O(d).fit_reason)) && !D13.AS.jobs.some(j => ['bemea.com', 'sscoglobal.com', 'flick.network'].includes(j.prospect_domain)),
+    JSON.stringify(['bemea.com', 'sscoglobal.com', 'flick.network'].map(d => [d, D13.O(d).status, D13.O(d).fit_reason])));
+  check('D13: a list that leaves us out is still pitched although the publisher sells software too (azdan.com, penieltech.com): the competitor rule only refuses their own service pages',
+    D13.O('azdan.com').status === 'ready' && D13.O('penieltech.com').status === 'ready', JSON.stringify([D13.O('azdan.com').status, D13.O('azdan.com').fit_reason, D13.O('penieltech.com').status]));
+  check('D13: a bare homepage is refused (apideck.com) — a front page has no section for a link',
+    D13.O('apideck.com').status === 'not_fit' && /only their homepage/.test(D13.O('apideck.com').fit_reason), JSON.stringify(D13.O('apideck.com')));
+  check('D13: a mailbox provider and a contact database are refused without reading them (outlook.com, zoominfo.com)',
+    D13.O('outlook.com').status === 'not_fit' && /mailbox provider/.test(D13.O('outlook.com').fit_reason) && D13.O('zoominfo.com').status === 'not_fit' && /contact \/ company database/.test(D13.O('zoominfo.com').fit_reason)
+    && !D13.PR.some(r => /outlook\.com|zoominfo\.com/.test(r.url)), JSON.stringify([D13.O('outlook.com').fit_reason, D13.O('zoominfo.com').fit_reason]));
+  check('D13: an accredited-provider list is not asked to add us while the facts do not say we hold the accreditation (uae-asp.ae)',
+    D13.O('uae-asp.ae').status === 'not_fit' && /accredited \/ approved providers/.test(D13.O('uae-asp.ae').fit_reason), JSON.stringify(D13.O('uae-asp.ae')));
+  check('D13: every target is on the canonical host — the ladder page stored on www is emitted on the bare host, and no page of ours carries www',
+    D13.P.pages.some(x => x.url === F.SERVICE) && !D13.P.pages.some(x => /\/\/www\./.test(x.url)) && !D13.AS.outreach_rows.some(o => /\/\/www\.techand/.test(o.target_url)), JSON.stringify(D13.P.pages.map(x => x.url)));
+  const LS2 = (id) => D13.AS.listing_rows.find(l => l.listing_id === id) || {};
+  check('D13: a listing that was definitely missing keeps that answer with the date it was checked when nothing can be read this week (never a fresh "unknown"; P34-2 says in the line whether the platform blocked the check or nothing new could be read)',
+    LS2('trustradius').status === 'missing' && /missing \(checked \d{4}-\d{2}-\d{2}\)/.test(LS2('trustradius').why) && /nothing new could be read this week/.test(LS2('trustradius').why), JSON.stringify(LS2('trustradius')));
+  // the business name: no profile row, the name from the site model (the homepage's og:site_name / Organization name, stored by the Site Tracker)
+  const D13b = await pass({ sites: F.sites({ business_name: 'Tech&' }), profiles: [] });
+  check('D13: with no business profile the pitches are signed with the name from the site model ("Tech&"), never the domain label ("techand")',
+    D13b.P.brand === 'Tech&' && D13b.P.brand_known === true && D13b.WI.business === 'Tech&' && D13b.WI.signer === '[Your name], Tech&' && !/Accreditation/.test(D13b.WI.facts), JSON.stringify([D13b.P.brand, D13b.WI.signer, D13b.WI.facts]));   // nothing on file: the word never appears in the facts, so the gate cannot be fooled into passing a claim
+  const D13c = await pass({ sites: F.sites({ business_name: '' }), profiles: [] });
+  check('D13: with no name anywhere the e-mails carry a bracket for the owner, never the website address as a name',
+    D13c.P.brand === 'techand.ai' && D13c.P.brand_known === false && D13c.WI.business === '[Confirm: the business name]' && /business name is not on file/.test(D13c.WI.facts), JSON.stringify([D13c.P.brand, D13c.WI.business]));
+  // the same accredited list, with the accreditation on file: now it may be asked
+  const D13d = await pass({ sites: F.sites({ accreditation: 'Accredited e-invoicing service provider (ASP), UAE Ministry of Finance, 2026' }) });
+  check('D13: with the accreditation on file the same list becomes a prospect again (the fact decides, not the page)',
+    ['ready', 'needs_contact'].includes(D13d.O('uae-asp.ae').status) && !/accredited \/ approved providers/.test(D13d.O('uae-asp.ae').fit_reason), JSON.stringify(D13d.O('uae-asp.ae')));
 });
+
+// ===================================================================================
+await guard('S31 D1 D7', async () => {
+  const SN = 'S31 D1 D7 — run ledger: concurrency-safe rate / spend guards and the Keyword Check limit (seo_run_ledger); RDAP parsed before WHOIS';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const TC = require('./table_cols.json');
+  const now = new Date().toISOString(), today = now.slice(0, 10);
+  const err = (r) => r[0].json.validation_error || '';
+  delete store['Start Form'];
+  // ---------- A. the reservation row (Run Ledger Row) and a clean first run ----------
+  const n = await run('Normalize Input', F.forms.webhookVerdict);   // API verdict ($0.20)
+  const K = 'owner@northwind-erp.com';
+  const IN = (o = {}) => [{ json: { ...n[0].json, email: K, ai_budget_usd: 6, ai_budget_period: 'day', ...o } }];
+  mock('Normalize Input', IN());
+  const row = (await run('Run Ledger Row', [{ json: { id: 'tbl', name: 'seo_run_ledger' } }]))[0].json;   // input = the Ensure node's table object, as live
+  check('ledger row: exact seo_run_ledger columns', eq(Object.keys(row), TC.RUN_LEDGER), Object.keys(row).join(','));
+  check('ledger row: run id, key = the e-mail, mode, estimate, reserved, $0 settled', row.run_id === 'test-exec' && row.key === K && row.mode === 'keyword' && row.est_usd > 0 && row.status === 'reserved' && row.settled_usd === 0 && row.created_at.slice(0, 10) === today, JSON.stringify(row));
+  ledgerReset(); const r0 = await ledgerRun(IN());
+  check('empty ledger: the first run passes as run 1 with the same estimate as its row (one copy of the EST table)', !err(r0) && r0[0].json.run_number_today === 1 && r0[0].json.ai_spend_estimate_usd === row.est_usd && r0[0].json.ai_budget_used_est_usd === row.est_usd, JSON.stringify([err(r0), r0[0].json.run_number_today, r0[0].json.ai_spend_estimate_usd, row.est_usd]));
+  // ---------- B. N rows -> run N + 1 refused; row order (id) decides ties, not the timestamp ----------
+  ledgerReset(ledgerFixture(K, 5, 'keyword', 0, now)); const r6 = await ledgerRun(IN());
+  check('5 rows today for the e-mail: the 6th run passes (run number 6)', !err(r6) && r6[0].json.run_number_today === 6, err(r6));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, now)); const r7 = await ledgerRun(IN());
+  check('6 rows today for the e-mail: the 7th run is refused (daily limit of 6)', /daily limit of 6 runs/.test(err(r7)), err(r7));
+  check('the refused run marked its row refused', LEDGER.rows.length === 7 && LEDGER.rows[6].status === 'refused', JSON.stringify(LEDGER.rows.map(r => r.status)));
+  const r8 = await ledgerRun(IN());
+  check('refused rows never count: the next run still sees 6 and is refused (not 7)', /daily limit of 6 runs/.test(err(r8)) && LEDGER.rows.filter(r => r.status !== 'refused').length === 6, err(r8));
+  const par = [1, 2, 3, 5, 6, 7].map(id => ({ id, run_id: 'par-' + id, key: K, mode: 'keyword', est_usd: 0, created_at: now, status: 'reserved', settled_usd: 0 }));
+  ledgerReset(par); const rLow = await ledgerRun(IN(), { row: { id: 4, created_at: now } });
+  check('parallel rows with the same timestamp: the run that reserved row 4 counts rows 1-3 only and passes as run 4', !err(rLow) && rLow[0].json.run_number_today === 4, JSON.stringify([err(rLow), rLow[0].json.run_number_today]));
+  const rHigh = await ledgerRun(IN(), { row: { id: 9, created_at: now } });
+  check('the run that reserved row 9 sees seven earlier rows (1-7, same timestamp) and is refused', /daily limit of 6 runs/.test(err(rHigh)), err(rHigh));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, now)); const rNoId = await ledgerRun(IN(), { row: { id: undefined } });
+  check('no row id (the insert failed): every other row counts, so the run is still refused', /daily limit of 6 runs/.test(err(rNoId)), err(rNoId));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, new Date(Date.now() - 864e5).toISOString())); const rY = await ledgerRun(IN());
+  check('yesterday\'s rows do not count today', !err(rY) && rY[0].json.run_number_today === 1, err(rY));
+  // ---------- C. the AI budget from the ledger: reservations, settlements, refusals, the period ----------
+  const spentRows = (status, est, settled) => ledgerFixture('other@example.com', 3, 'keyword', est, now).map(r => ({ ...r, status, settled_usd: settled }));
+  ledgerReset(spentRows('reserved', 2, 0)); const rB1 = await ledgerRun(IN());
+  check('three reservations of $2.00 today: $6.00 of the $6 budget used -> refused with the estimate in the message', /used up \(estimated \$6\.00 of \$6;/.test(err(rB1)), err(rB1));
+  ledgerReset(spentRows('done', 2, 1)); const rB2 = await ledgerRun(IN());
+  check('the same runs settled at $1.00 each (status done, settled_usd): $3.00 used -> the run passes and reports the budget used', !err(rB2) && rB2[0].json.ai_budget_used_est_usd === +(3 + row.est_usd).toFixed(2), JSON.stringify([err(rB2), rB2[0].json.ai_budget_used_est_usd]));
+  ledgerReset(spentRows('refused', 2, 0)); const rB3 = await ledgerRun(IN());
+  check('refused reservations do not spend the budget', !err(rB3) && rB3[0].json.ai_budget_used_est_usd === row.est_usd, JSON.stringify([err(rB3), rB3[0].json.ai_budget_used_est_usd]));
+  const prior = Number(today.slice(8, 10)) > 1 ? today.slice(0, 8) + '01T00:00:00.000Z' : null;
+  if (prior) {
+    // P34-5: the earlier run has to be a settled row — a reservation from earlier in the month that nobody settled is released as stale (S51)
+    ledgerReset(ledgerFixture('other@example.com', 1, 'keyword', 6, prior).map(r => ({ ...r, status: 'done', settled_usd: 6 }))); const rM = await ledgerRun(IN({ ai_budget_period: 'month' })); const rD = await ledgerRun(IN({ ai_budget_period: 'day' }));
+    check('a $6 run earlier this month: refused with a monthly budget, ignored by a daily one', /used up/.test(err(rM)) && !err(rD), JSON.stringify([err(rM), err(rD)]));
+  } else console.log('   (1st of the month: the month-vs-day period check needs an earlier day; skipped)');
+  // ---------- D. the other keys and caps, unchanged ----------
+  const APP = 'app:7a1c2d3e-org';
+  ledgerReset(ledgerFixture(APP, 39, 'keyword', 0, now)); const rA1 = await ledgerRun(IN({ client_ip: APP, ai_budget_usd: 0 }));
+  ledgerReset(ledgerFixture(APP, 40, 'keyword', 0, now)); const rA2 = await ledgerRun(IN({ client_ip: APP, ai_budget_usd: 0 }));
+  check('the web app company key: 39 rows -> run 40 passes, 40 rows -> refused (daily limit of 40)', !err(rA1) && rA1[0].json.run_number_today === 40 && /daily limit of 40 runs/.test(err(rA2)), JSON.stringify([err(rA1), err(rA2)]));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, now)); const rI = await ledgerRun(IN({ client_ip: 'ladder:site_northwind-erp-com' }));
+  check('an internal spawn (ladder:) bypasses the owner\'s 6 / day and is keyed by its marker', !err(rI) && LEDGER.rows[6].key === 'ladder:site_northwind-erp-com' && rI[0].json.run_number_today === 1, JSON.stringify([err(rI), LEDGER.rows[6].key]));
+  ledgerReset(ledgerFixture(K, 6, 'keyword', 0, now)); const rP = await ledgerRun(IN({ mode: 'published' }));
+  check('a published-page report is never blocked by the per-key limit', !err(rP), err(rP));
+  ledgerReset(ledgerFixture(K, 6, 'published', 0, now)); const rF = await ledgerRun(IN());
+  check('free rows (published / check-in / profile) do not count against the e-mail\'s limit', !err(rF) && rF[0].json.run_number_today === 1, err(rF));
+  ledgerReset(ledgerFixture('someone@else.com', 150, 'keyword', 0, now)); const rG = await ledgerRun(IN());
+  ledgerReset(ledgerFixture('app:other-company-1', 150, 'assess', 0, now)); const rG2 = await ledgerRun(IN());
+  check('150 rows today from anyone: daily capacity; 150 Keyword Check rows (mode assess): not counted', /daily capacity/.test(err(rG)) && !err(rG2), JSON.stringify([err(rG), err(rG2)]));
+  // ---------- E. the refused path, the validation-error passthrough and a failed ledger ----------
+  ledgerReset(); const rv = await ledgerRun([{ json: { validation_error: 'Please enter a keyword.', via_webhook: true, mode: null, email: K } }]);
+  const vrow = LEDGER.rows.slice(-1)[0];
+  check('a validation error passes straight through Rate Limit; its row is reserved at $0 and marked refused', rv[0].json.validation_error === 'Please enter a keyword.' && vrow.est_usd === 0 && vrow.status === 'refused' && vrow.mode === '' && vrow.key === K, JSON.stringify(vrow));
+  mock('Rate Limit', r7); const ri = await run('Refused Input', [{ json: { id: 7, run_id: 'test-exec', status: 'refused' } }]);   // input = the Data Table node's row, as live
+  check('Refused Input restores the refused request after the ledger row is marked', eq(ri[0].json, r7[0].json), JSON.stringify(ri[0].json).slice(0, 200));
+  mock('Normalize Input', IN()); mock('Reserve Run Ledger', [{ json: { error: { message: 'no table' } } }]); mock('Load Run Ledger', [{ json: { error: { message: 'no table' } } }]);
+  const rE = await run('Rate Limit', store['Load Run Ledger']);
+  check('a failed ledger insert / read does not block the run (fail-open, as before; run number 1)', !err(rE) && rE[0].json.run_number_today === 1, err(rE));
+  const fs = require('fs'), path = require('path'), CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
+  check('no node counts in workflow static data any more (Rate Limit, Assess Validate)', !/getWorkflowStaticData/.test(fs.readFileSync(path.join(CD, 'Rate_Limit.js'), 'utf8')) && !/getWorkflowStaticData/.test(fs.readFileSync(path.join(CD, 'Assess_Validate.js'), 'utf8')), 'static data still used');
+  // ---------- F. the Keyword Check: the same ledger, mode assess, 40 / day per caller, 400 in total ----------
+  const D = 'northwind-erp.com';
+  const AQ = (ip, o = {}) => assessRun({ headers: { 'x-forwarded-for': ip || APP }, body: { keyword: 'e invoicing software uae', country: 'AE', domain: D } }, o);
+  ledgerReset(); const a1 = await AQ(); const arow = LEDGER.rows[0];
+  check('keyword check: a valid request reserves a row with the exact columns (mode assess, the caller as key) and passes as check 1', a1.ok && a1.status === 200 && a1.checks_today === 1 && eq(Object.keys(arow).filter(k => k !== 'id'), TC.RUN_LEDGER) && arow.mode === 'assess' && arow.key === APP && arow.status === 'reserved' && arow.est_usd > 0, JSON.stringify(arow));
+  const aBad = await assessRun({ headers: { 'x-forwarded-for': APP }, body: {} });
+  check('an invalid request (400) reserves no row', aBad.status === 400 && LEDGER.rows.length === 1, JSON.stringify([aBad.status, LEDGER.rows.length]));
+  ledgerReset(ledgerFixture(APP, 40, 'assess', 0.002, now)); const a41 = await AQ();
+  check('40 checks today for the company: the 41st is 429 and its row is marked refused', a41.status === 429 && !a41.ok && /daily limit of 40 keyword checks/.test(a41.error) && LEDGER.rows[40].status === 'refused', JSON.stringify([a41.status, a41.error, LEDGER.rows[40].status]));
+  const aO = await AQ('app:other-company-1');
+  check('another company still passes (its own count)', aO.ok && aO.checks_today === 1, JSON.stringify(aO).slice(0, 200));
+  const parA = Array.from({ length: 41 }, (_, i) => i + 1).filter(id => id !== 3).map(id => ({ id, run_id: 'par-' + id, key: APP, mode: 'assess', est_usd: 0.002, created_at: now, status: 'reserved', settled_usd: 0 }));
+  ledgerReset(parA); const aLow = await AQ(APP, { row: { id: 3, created_at: now } });
+  check('keyword check, same timestamp: the request that reserved row 3 counts rows 1-2 only and passes as check 3', aLow.ok && aLow.checks_today === 3, JSON.stringify([aLow.status, aLow.checks_today]));
+  const aHigh = await AQ(APP, { row: { id: 42, created_at: now } });
+  check('the request that reserved row 42 sees 41 earlier checks and is refused', aHigh.status === 429, JSON.stringify([aHigh.status, aHigh.error]));
+  ledgerReset(ledgerFixture('x', 400, 'assess', 0, now)); const aG = await AQ();
+  ledgerReset(ledgerFixture('x', 400, 'keyword', 0, now)); const aG2 = await AQ();
+  check('400 checks today in total: 429 for all callers; 400 main-workflow rows: not counted', aG.status === 429 && /for all callers/.test(aG.error) && aG2.ok, JSON.stringify([aG.error, aG2.ok]));
+  ledgerReset(ledgerFixture(APP, 40, 'assess', 0, new Date(Date.now() - 864e5).toISOString())); const aY = await AQ();
+  check('keyword check: yesterday\'s rows do not count', aY.ok && aY.checks_today === 1, JSON.stringify([aY.status, aY.checks_today]));
+  // ---------- G. D7: RDAP answers arrive as text; they are parsed, and WHOIS is paid only for the gaps ----------
+  const RD = (dom, date) => ({ objectClassName: 'domain', ldhName: dom, events: [{ eventAction: 'registration', eventDate: date + 'T00:00:00Z' }, { eventAction: 'expiration', eventDate: '2027-01-01T00:00:00Z' }] });
+  const DOMS = ['textdata.ae', 'textbody.com', 'object.com', 'htmlerr.ae', 'notfound.ae', 'failed.com', 'noevents.com'];
+  mock('Pick Competitors', DOMS.map(d => ({ domain: d, is_you: false }))); mock('Load Age Cache', [{ json: {} }]);
+  const alp = await run('Age Lookup Plan', store['Load Age Cache']);
+  check('seven domains to look up (nothing stored)', alp.length === 7 && eq(alp.map(x => x.json.domain), DOMS), JSON.stringify(alp.map(x => x.json.domain)));
+  mock('RDAP Lookup', [
+    { data: JSON.stringify(RD('textdata.ae', '2015-06-01')) },                       // the live shape (exec 370): rdap+json as text under data
+    { body: JSON.stringify(RD('textbody.com', '2009-02-10')), statusCode: 200 },    // a full response: the text under body
+    RD('object.com', '2001-11-30'),                                                  // an object (the only shape the code read before)
+    { data: '<html><body>404 Not Found</body></html>' },                             // an HTML error page
+    { data: JSON.stringify({ errorCode: 404, title: 'Not Found' }) },                // RDAP's own not-found answer
+    { error: { message: 'connect ETIMEDOUT' } },                                     // the request failed
+    { data: JSON.stringify({ objectClassName: 'domain', events: [{ eventAction: 'expiration', eventDate: '2027-01-01T00:00:00Z' }] }) }   // no registration event
+  ]);
+  const rr = await run('RDAP Results', store['RDAP Lookup']);
+  check('D7: the text answers under data / body and the object are read -> only the four gaps go to WHOIS', eq(rr.map(x => x.json.domain), ['htmlerr.ae', 'notfound.ae', 'failed.com', 'noevents.com']), JSON.stringify(rr.map(x => x.json)));
+  mock('DataForSEO Whois', rr.map(c => F.whois(c.json.domain)));
+  const da = await run('Domain Ages', store['DataForSEO Whois']); const A = da[0].json.ages;
+  check('Domain Ages: the RDAP dates from the text answers (source rdap), WHOIS only for the rest, exact cache rows', A['textdata.ae'].registered === '2015-06-01' && A['textdata.ae'].source === 'rdap' && A['textbody.com'].registered === '2009-02-10' && A['textbody.com'].source === 'rdap' && A['object.com'].registered === '2001-11-30' && A['object.com'].source === 'rdap' && A['htmlerr.ae'].source === 'whois' && A['noevents.com'].source === 'whois' && da[0].json.whois_requests === 4 && da[0].json.rows.length === 7 && da[0].json.rows.every(r => eq(Object.keys(r), TC.CACHE)), JSON.stringify(A));
+  mock('RDAP Lookup', alp.map(x => ({ data: JSON.stringify(RD(x.json.domain, '2010-01-01')) })));
+  const rrAll = await run('RDAP Results', store['RDAP Lookup']);
+  check('every domain answered by RDAP as text -> no WHOIS request at all', rrAll.length === 1 && rrAll[0].json.skip === true, JSON.stringify(rrAll.map(x => x.json)));
+  mock('RDAP Lookup', alp.map(() => ({ data: '' })));
+  const rrNone = await run('RDAP Results', store['RDAP Lookup']);
+  check('empty RDAP answers -> every domain goes to WHOIS', rrNone.length === 7 && eq(rrNone.map(x => x.json.domain), DOMS), JSON.stringify(rrNone.map(x => x.json.domain)));
+});
+
+// ===================================================================================
+await guard('audit correctness (FIX_PLAN D2 D6 D18 D17 D24)', async () => {
+  reset(); const SN = 'S32 D2 D6 D18 D17 D24 — audit diff by report type, www / non-www from the host probes, duplicate meta verified on the homepage, robots.txt edited not rebuilt, one finding per issue, cap text only when it lowered the score, scraper queries';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const M = require('./fixtures_monitors');
+  // a Next.js-style head: three theme-color tags that differ by `media`, og:image twice (repeatable), one description, the canonical on CANON
+  const NEXT_HEAD = '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff"><meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000"><meta name="theme-color" media="print" content="#888888"><meta name="description" content="One description"><meta property="og:image" content="/a.png"><meta property="og:image" content="/b.png"><title>Northwind ERP</title><link rel="canonical" href="https://CANON/"></head><body><h1>Home</h1><p>Hello</p></body></html>';
+  const htmlFor = (host) => NEXT_HEAD.replace('CANON', host);
+  // host probes for a variant: 'apex' (apex 200, www 301 → apex), 'www' (apex 308 → www, www 200), 'both' (apex 200 and www 200, no redirect); the content probes carry `html`
+  const probesFor = (variant, html) => { const all = F.probeResults(variant === 'both' ? 'apex' : variant); const H2 = { 'content-type': 'text/html; charset=utf-8' };
+    if (variant === 'both') all[2] = { statusCode: 200, headers: H2, body: html };
+    if (variant === 'www') all[0] = { ...all[0], statusCode: 308 };
+    const content = { statusCode: 200, headers: H2, body: html };
+    mock('Run Probes', [all[0], all[2], all[3], all[4]]); mock('Run Content Probes', [content, content, all[5], all[6], all[7], all[8], ...all.slice(9)]); };
+  // a technical audit up to Build Site Issues (the S6 path; the crawl summary says test_canonicalization: false in every run)
+  const techAudit = async (variant, html, extra = {}) => {
+    mock('Start Form', F.forms.startAudit); const n = await run('Normalize Input', F.forms.pageAuditTech); mock('Route Mode', n);
+    await run('Save Task ID', F.crawlTaskPost); await run('Check Crawl', F.summaryDone, { runIndex: 2 });
+    const pagesRes = JSON.parse(JSON.stringify(F.crawledPagesRes)); if (extra.dupMeta) pagesRes.tasks[0].result[0].items.forEach((p, i) => { if (i < 12 && !(extra.homeNotFlagged && i === 0)) p.checks.duplicate_meta_tags = true; });
+    mock('Get Crawled Pages', pagesRes); await run('Crawl Extra Requests', store['Get Crawled Pages']); mock('Run Crawl Extras', F.extrasRes); await run('Collect Crawl Extras', store['Run Crawl Extras']);
+    await run('Build Probes'); await run('Content Probes', store['Collect Crawl Extras']); probesFor(variant, html);
+    const ap = await run('Analyze Probes', store['Run Content Probes']);
+    const gf = await runGscAudit(ap, 'ok');
+    const bsi = await run('Build Site Issues', extra.extraFindings ? [{ json: { ...gf[0].json, extra_findings: [...(gf[0].json.extra_findings || []), ...extra.extraFindings] } }] : gf);
+    return { ap: ap[0].json, a: bsi[0].json.site_audit, bsi, gf };
+  };
+  // ---- D6: www / non-www only from the host probes ----
+  const w = await techAudit('www', htmlFor('www.northwind-erp.com'));
+  const wwwF = (a) => a.findings.filter(f => /www and non-www|duplicate host/i.test(f.title));
+  check('D6: apex 308 → www with a www canonical: no host finding, "One canonical host" in what works, hosts.consolidated true', wwwF(w.a).length === 0 && w.a.what_works.some(x => /One canonical host.*\(308\).*canonical tags agree/.test(x)) && w.ap.probe.measurements.hosts.consolidated === true && w.ap.probe.measurements.hosts.canonical_tag_host === 'www.northwind-erp.com', JSON.stringify({ f: wwwF(w.a).map(f => f.title), works: w.a.what_works.filter(x => /canonical host/.test(x)), hosts: w.ap.probe.measurements.hosts }));
+  check('D6: never from test_canonicalization alone (the crawl summary says false, no finding quotes the crawler test)', F.summaryDone.tasks[0].result[0].domain_info.checks.test_canonicalization === false && !w.a.findings.some(f => /canonicalization test/i.test(f.evidence)), JSON.stringify(w.a.findings.map(f => f.title)));
+  const b = await techAudit('both', htmlFor('northwind-erp.com')); const hf = wwwF(b.a);
+  check('D6: both hosts 200 with no redirect: one High "not consolidated" finding, fix worded after the canonical host (bare domain)', hf.length === 1 && hf[0].severity === 'High' && /not consolidated/.test(hf[0].title) && /both return 200 with no redirect/.test(hf[0].evidence) && /301-redirect https:\/\/www\.northwind-erp\.com\/ to https:\/\/northwind-erp\.com\//.test(hf[0].fix) && b.ap.probe.measurements.hosts.consolidated === false, JSON.stringify(hf));
+  const b2 = await techAudit('both', htmlFor('www.northwind-erp.com')); const hf2 = wwwF(b2.a);
+  check('D6: both hosts 200 with a www canonical: the fix redirects the bare domain to www', hf2.length === 1 && /301-redirect https:\/\/northwind-erp\.com\/ to https:\/\/www\.northwind-erp\.com\//.test(hf2[0].fix) && /canonical tag names www\.northwind-erp\.com/.test(hf2[0].evidence), JSON.stringify(hf2.map(f => [f.evidence, f.fix])));
+  const dis = await techAudit('www', htmlFor('northwind-erp.com')); const hf3 = wwwF(dis.a);
+  check('D6: apex redirects to www but the canonical tag names the bare domain: finding (redirect and canonical disagree), fix keeps the bare domain', hf3.length === 1 && /redirects \(308\) to https:\/\/www\.northwind-erp\.com\/, but the homepage canonical tag points to https:\/\/northwind-erp\.com\//.test(hf3[0].evidence) && /301-redirect https:\/\/www\.northwind-erp\.com\/ to https:\/\/northwind-erp\.com\//.test(hf3[0].fix), JSON.stringify(hf3));
+  const apx = await techAudit('apex', htmlFor('northwind-erp.com'));
+  check('D6: www 301 → apex with a bare-domain canonical: no finding, works says the canonical tags agree', wwwF(apx.a).length === 0 && apx.a.what_works.some(x => /www redirects to the main domain \(301\), and the canonical tags agree/.test(x)), JSON.stringify(apx.a.what_works.filter(x => /www/.test(x))));
+  // ---- D18: duplicate meta tags verified on the homepage HTML (DataForSEO flags 12 of 14 pages, the homepage among them) ----
+  const d18a = await techAudit('apex', htmlFor('northwind-erp.com'), { dupMeta: true });
+  check('D18: three theme-color tags with different media (+ og:image twice) are not duplicates: finding dropped, a what-works line, no homepage duplicates measured', !d18a.a.findings.some(f => /Duplicate meta tags/.test(f.title)) && d18a.a.what_works.some(x => /No duplicate meta tags on the homepage/.test(x)) && d18a.ap.probe.measurements.homepage_meta.checked === true && d18a.ap.probe.measurements.homepage_meta.duplicates.length === 0, JSON.stringify({ meta: d18a.ap.probe.measurements.homepage_meta, f: d18a.a.findings.filter(f => /meta/i.test(f.title)).map(f => f.title) }));
+  const d18b = await techAudit('apex', htmlFor('northwind-erp.com').replace('<title>', '<meta name="description" content="Second description"><title>'), { dupMeta: true }); const dm = d18b.a.findings.find(f => /Duplicate meta tags/.test(f.title));
+  check('D18: two description metas: the finding stays and names <meta description> ×2 (not theme-color)', !!dm && /verified on the homepage: <meta description> ×2$/.test(dm.evidence) && /Keep a single <meta description> tag/.test(dm.fix) && !/theme-color> ×/.test(dm.evidence), JSON.stringify(dm && { e: dm.evidence, fix: dm.fix }));
+  const d18c = await techAudit('apex', htmlFor('northwind-erp.com'), { dupMeta: true, homeNotFlagged: true });
+  check('D18: the homepage was not flagged by the crawler, so nothing can be verified: the crawler finding is kept as reported', d18c.a.findings.some(f => /Duplicate meta tags/.test(f.title) && /11 of 14 crawled pages$/.test(f.evidence)), JSON.stringify(d18c.a.findings.filter(f => /meta/i.test(f.title)).map(f => f.evidence)));
+  // ---- D17: the fix pack edits the live robots.txt ----
+  const TECHAND_ROBOTS = 'User-Agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin/\nDisallow: /private/\n\nHost: https://www.techand.ai\nSitemap: https://www.techand.ai/sitemap.xml\n';   // techand.ai's live file, fetched 2026-10-11
+  const fixPack = async (robots) => { mock('Audit Diff', [{ json: { ...d18a.bsi[0].json, site_id: 'site_northwind-erp-com', audit_id: 'aud_s32', audited_at: new Date().toISOString(), site_audit: { ...d18a.a, measurements: { ...d18a.a.measurements, robots_txt: robots } } } }]); mock('Load Profile (Audit)', M.profiles());
+    const fp = await run('Fix Pack', [{ json: {} }]); const file = fp[0].json.fix_pack.files.find(f => f.name === 'robots.txt'); return { content: file.content, purpose: file.purpose, changes: fp[0].json.site_audit.fix_pack.robots_changes }; };
+  const r1 = await fixPack(TECHAND_ROBOTS); const body1 = r1.content.split('\n').filter(l => !/^#/.test(l)).join('\n').trim();
+  check('D17: techand.ai\'s live robots.txt comes back unchanged except comments ("no change needed"): no AI group, its Disallow lines, Host and Sitemap intact', body1 === TECHAND_ROBOTS.trim() && r1.changes.length === 0 && /no change needed/.test(r1.purpose) && /^# Changes: none needed$/m.test(r1.content) && !/OAI-SearchBot/.test(r1.content), JSON.stringify({ body1, changes: r1.changes, purpose: r1.purpose }));
+  save('fix-pack-robots-techand.txt', r1.content);
+  const BLOCKING = 'User-agent: *\nDisallow: /api/\nDisallow: /admin/\nAllow: /api/public/\n\nUser-agent: OAI-SearchBot\nUser-agent: PerplexityBot\nUser-agent: GPTBot\nDisallow: /\n\nUser-agent: ClaudeBot\nDisallow: /\n\nSitemap: https://northwind-erp.com/sitemap.xml\n';
+  const r2 = await fixPack(BLOCKING); const c2 = r2.content; const aiGroup = (c2.match(/User-agent: OAI-SearchBot\nUser-agent: PerplexityBot\n(?:(?:Dis)?[Aa]llow:[^\n]*\n)+/) || [''])[0];
+  check('D17: a robots.txt that blocks AI search bots: they get a group with the * group\'s path rules copied in (never an allow-only group); GPTBot and ClaudeBot stay blocked; the * group is kept', aiGroup === 'User-agent: OAI-SearchBot\nUser-agent: PerplexityBot\nDisallow: /api/\nDisallow: /admin/\nAllow: /api/public/\n' && /User-agent: GPTBot\nDisallow: \/\n/.test(c2) && /User-agent: ClaudeBot\nDisallow: \/\n/.test(c2) && /User-agent: \*\nDisallow: \/api\/\nDisallow: \/admin\/\nAllow: \/api\/public\//.test(c2) && r2.changes.length === 1 && /OAI-SearchBot, PerplexityBot were blocked.*3 path rule\(s\) copied/.test(r2.changes[0]), JSON.stringify({ aiGroup, changes: r2.changes, c2 }));
+  check('D17: the AI bots are no longer under a "Disallow: /", the Sitemap line appears once, the purpose names the change', !/User-agent: OAI-SearchBot\nUser-agent: PerplexityBot\nDisallow: \/\n/.test(c2) && (c2.match(/^Sitemap: https:\/\/northwind-erp\.com\/sitemap\.xml$/gm) || []).length === 1 && /1 change\(s\)/.test(r2.purpose), c2);
+  save('fix-pack-robots-unblocked.txt', c2);
+  const r3 = await fixPack(''); check('D17: no robots.txt at all: a minimal file (User-agent: * / Allow: /) with the Sitemap line and no AI group', /User-agent: \*\nAllow: \//.test(r3.content) && /^Sitemap: https:\/\/northwind-erp\.com\/sitemap\.xml$/m.test(r3.content) && !/OAI-SearchBot/.test(r3.content) && r3.changes.length === 1 && /created/.test(r3.changes[0]), JSON.stringify(r3.changes));
+  const r4 = await fixPack('User-agent: *\nDisallow: /\n\nSitemap: https://northwind-erp.com/sitemap.xml\n'); check('D17: a site-wide "Disallow: /" for * is still removed (commented out)', /# Disallow: \/   <- removed/.test(r4.content) && !/^Disallow: \/$/m.test(r4.content) && r4.changes.length === 1, JSON.stringify(r4.changes));
+  // ---- D2: the audit diff compares only audits of the same report type ----
+  const site_id = 'site_northwind-erp-com'; const DOM = 'northwind-erp.com'; const ago = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  mock('Build Site Issues', d18a.bsi); mock('Load Audit History', [{ json: {} }]); mock('Load Audit Findings', [{ json: {} }]);
+  const base0 = await run('Audit Diff', store['Load Audit Findings']); const ar0 = await run('Audit Row', base0); const fr0 = await run('Finding Rows', ar0);
+  check('D2: nothing stored: baseline, the row says report_type site_audit', base0[0].json.site_audit.audit_diff.baseline === true && base0[0].json.site_audit.audit_diff.report_type === 'site_audit' && ar0[0].json.report_type === 'site_audit' && fr0.length > 3, JSON.stringify({ diff: base0[0].json.site_audit.audit_diff, rows: fr0.length }));
+  const techRow = { ...ar0[0].json, audit_id: 'aud_tech1', audited_at: ago(30), report_type: 'site_audit', health_score: ar0[0].json.health_score - 5 };
+  const fullRow = { ...ar0[0].json, audit_id: 'aud_full1', audited_at: ago(1), report_type: 'full', health_score: ar0[0].json.health_score - 12, findings: 5 };
+  const fRow = (audit_id, category, title, severity) => ({ json: { site_id, domain: DOM, audit_id, audited_at: ago(1), finding_key: category + '|' + title.toLowerCase().replace(/\d[\d,.%]*/g, '#'), category, severity, title, affected_count: 0 } });
+  const techFindings = [...fr0.slice(1).map(r => ({ json: { ...r.json, audit_id: 'aud_tech1', audited_at: ago(30) } })), fRow('aud_tech1', 'Security', 'An old issue that is now gone', 'High'), fRow('aud_tech1', 'Authority', 'The site does not rank in Google\'s top 10 for its own keywords', 'High')];
+  const OUTSIDE = ['The site does not rank in Google\'s top 10 for its own keywords', 'ChatGPT recommends other providers for your buyer questions', 'Keyword gap: 12 keywords your competitors rank for and you do not'];
+  const fullFindings = [fRow('aud_full1', 'Authority', OUTSIDE[0], 'High'), fRow('aud_full1', 'AI Search Readiness', OUTSIDE[1], 'High'), fRow('aud_full1', 'Content', OUTSIDE[2], 'Medium'), ...fr0.slice(0, 2).map(r => ({ json: { ...r.json, audit_id: 'aud_full1', audited_at: ago(1) } }))];
+  mock('Load Audit History', [{ json: fullRow }, { json: techRow }]); mock('Load Audit Findings', [...fullFindings, ...techFindings]);
+  const d2a = (await run('Audit Diff', store['Load Audit Findings']))[0].json.site_audit.audit_diff;
+  check('D2: history [technical 30 days ago, full report yesterday] + a new technical audit compares with the technical one (score delta against it, summary names it)', d2a.baseline === false && d2a.previous.audit_id === 'aud_tech1' && d2a.previous.report_type === 'site_audit' && d2a.days_since === 30 && d2a.score_delta === 5 && /compared with the technical audit of/.test(d2a.summary), JSON.stringify({ prev: d2a.previous, days: d2a.days_since, delta: d2a.score_delta, summary: d2a.summary }));
+  check('D2: the old Security issue is "fixed"; the first finding (left out of the stored rows) is "new"; the rest still open', d2a.fixed.some(f => f.title === 'An old issue that is now gone') && d2a.new.length === 1 && d2a.open.length === fr0.length - 1, JSON.stringify({ fixed: d2a.fixed.map(f => f.title), new: d2a.new.map(f => f.title), open: d2a.open.length }));
+  check('D2: a ranking / AI / keyword-gap finding is never "fixed" by a technical audit (not from the full report, not from a stray Authority row of the old technical audit)', !d2a.fixed.some(f => OUTSIDE.includes(f.title) || /Authority|AI Search/.test(f.category) && /rank|ChatGPT|gap/i.test(f.title)), JSON.stringify(d2a.fixed));
+  mock('Load Audit History', [{ json: fullRow }]); mock('Load Audit Findings', fullFindings);
+  const d2b = (await run('Audit Diff', store['Load Audit Findings']))[0].json.site_audit.audit_diff;
+  check('D2: a technical audit with only a full report stored is a baseline that says why', d2b.baseline === true && /First technical audit stored/.test(d2b.summary) && /full SEO report of \d{4}-\d{2}-\d{2} is a different report type and is not compared/.test(d2b.summary), JSON.stringify(d2b));
+  mock('Load Audit History', [{ json: { ...techRow, report_type: '' } }]); mock('Load Audit Findings', techFindings);
+  const d2c = (await run('Audit Diff', store['Load Audit Findings']))[0].json.site_audit.audit_diff;
+  check('D2: a stored row without a report type is not compared', d2c.baseline === true, JSON.stringify(d2c));
+  mock('Build Site Issues', [{ json: { ...d18a.bsi[0].json, site_audit: { ...d18a.a, audit_level: 'full', weights: { ...d18a.a.weights, Schema: 12, Authority: 12 } } } }]);
+  mock('Load Audit History', [{ json: fullRow }, { json: techRow }]); mock('Load Audit Findings', [...fullFindings, ...techFindings]);
+  const d2d = (await run('Audit Diff', store['Load Audit Findings']))[0].json.site_audit.audit_diff;
+  check('D2: a full report compares with the last full report (the ranking finding it no longer lists is then legitimately "fixed")', d2d.previous.audit_id === 'aud_full1' && d2d.previous.report_type === 'full' && d2d.fixed.some(f => f.title === OUTSIDE[0]) && /compared with the full SEO report of/.test(d2d.summary), JSON.stringify({ prev: d2d.previous, fixed: d2d.fixed.map(f => f.title) }));
+  mock('Build Site Issues', d18a.bsi); mock('Load Audit History', [{ json: fullRow }, { json: techRow }]); mock('Load Audit Findings', [...fullFindings, ...techFindings]);
+  const d2e = await run('Audit Diff', store['Load Audit Findings']); const repD2 = await run('Build Audit Report', d2e); const docD2 = decode(repD2);
+  check('D2: the audit report\'s "Since the last audit" names the technical audit it was compared with', /compared with the technical audit of \d{4}-\d{2}-\d{2}/.test(docD2) && /fixed<\/span>/.test(docD2), docD2.slice(docD2.indexOf('Since the last audit'), docD2.indexOf('Since the last audit') + 400));
+  // ---- D24: one finding per issue ----
+  const AUTH_M = { category: 'Content', severity: 'Medium', title: 'Articles have no named human author', evidence: '2 of 3 sampled articles', why: 'w', fix: 'f', sample_urls: ['https://northwind-erp.com/blog/a/'], affected_count: 2, affected_pct: 67, scope: 'page' };
+  const AUTH_AI = { category: 'Content', severity: 'High', title: 'No named authors on blog articles', evidence: 'Author: Northwind Team', why: 'w', fix: 'f', sample_urls: ['https://northwind-erp.com/blog/b/'], affected_count: null, affected_pct: 100, scope: 'site', scoring: false, source: 'ai_review' };
+  const dd = await techAudit('apex', htmlFor('northwind-erp.com'), { extraFindings: [AUTH_M, AUTH_AI, { ...AUTH_M, evidence: '2 of 3 sampled articles' }] });
+  const auth = dd.a.findings.filter(f => f.category === 'Content' && /author/i.test(f.title));
+  check('D24: two author findings (HTML analysis + content review, + an exact repeat) become one: the higher severity, the measured evidence and pages kept, scored', auth.length === 1 && auth[0].severity === 'High' && auth[0].title === AUTH_M.title && auth[0].scoring !== false && auth[0].sample_urls.length === 2 && /2 of 3 sampled articles; content review: Author: Northwind Team/.test(auth[0].evidence) && auth[0].merged_titles.length === 3 && auth[0].affected_count === 2, JSON.stringify(auth));
+  check('D24: two measured findings on the same topic with different titles stay apart (thin / light content)', dd.a.findings.some(f => /^Thin content/.test(f.title)) && dd.a.findings.some(f => /^Light content/.test(f.title)), JSON.stringify(dd.a.findings.filter(f => f.category === 'Content').map(f => f.title)));
+  check('D24: the merged finding is counted once', dd.a.issue_counts.High === d18a.a.issue_counts.High + 1 && dd.a.issue_counts.Medium === d18a.a.issue_counts.Medium, JSON.stringify([dd.a.issue_counts, d18a.a.issue_counts]));
+  // ---- D24: the cap message only when the cap lowered the score ----
+  const HIGH = (cat, title) => ({ category: cat, severity: 'High', title, why: 'w', fix: 'f', evidence: 'e', affected_count: null, affected_pct: 100, sample_urls: [], scope: 'site' });
+  const many = await techAudit('apex', htmlFor('northwind-erp.com'), { extraFindings: ['Crawlability & Indexing', 'On-Page', 'Content', 'Performance', 'Security'].flatMap(c => [HIGH(c, 'Site-wide problem A in ' + c), HIGH(c, 'Site-wide problem B in ' + c)]) });
+  check('D24: 10+ High findings but the raw score is already under 85: no cap text, score_cap null, health = raw', many.a.issue_counts.High >= 10 && many.a.raw_score < 85 && many.a.score_cap_reason === '' && many.a.score_cap === null && many.a.health_score === many.a.raw_score, JSON.stringify({ raw: many.a.raw_score, cap: many.a.score_cap, reason: many.a.score_cap_reason, high: many.a.issue_counts.High }));
+  const repMany = await run('Build Audit Report', many.bsi); check('D24: the report shows no "Score limit applied" for it', !/Score limit applied/.test(decode(repMany)), '');
+  // a clean site with five High findings in one light category: raw 97 → capped at 85 → the message is shown
+  const cleanPage = (p, i) => ({ resource_type: 'html', status_code: 200, url: 'https://' + DOM + p, click_depth: p === '/' ? 0 : 1, checks: {}, page_timing: { largest_contentful_paint: 1500, time_to_interactive: 2500, waiting_time: 200 }, meta: { title: 'Northwind ERP services for distributors ' + i, description: 'A meta description long enough to pass the length rules, written for visitors who want to know what the page offers them today.', htags: { h1: ['Heading ' + i], h2: ['A', 'B'] }, canonical: 'https://' + DOM + p, inbound_links_count: 12, internal_links_count: 30, external_links_count: 2, images_size: 1000, cumulative_layout_shift: 0.01, social_media_tags: { 'og:title': 'x', 'og:image': 'y', 'twitter:card': 'summary' }, content: { plain_text_word_count: 900 } } });
+  mock('Check Crawl', [{ json: { domain: DOM, audit_level: 'site_audit', pages_crawled: 3, crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+  mock('Get Crawled Pages', { tasks: [{ result: [{ items: ['/', '/services/', '/contact/'].map(cleanPage) }] }] }); mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+  const capped = (await run('Build Site Issues', [{ json: { probe: { findings: ['alpha', 'beta', 'gamma', 'delta', 'epsilon'].map(w => HIGH('Images', 'Image problem ' + w)), what_works: [], measurements: {} }, extra_findings: [], extra_works: [] } }]))[0].json.site_audit;   // distinct words: titles that differ only by a number are one finding (Finding Rows' key rule)
+  check('D24: five High findings on an otherwise clean site: raw above 85, capped at 85, the message says so', capped.raw_score > 85 && capped.health_score === 85 && capped.score_cap === 85 && /5 high-priority issues found — score capped at 85/.test(capped.score_cap_reason), JSON.stringify({ raw: capped.raw_score, health: capped.health_score, cap: capped.score_cap, reason: capped.score_cap_reason }));
+  // ---- D24: scraper queries ----
+  const gr = store['GSC Audit Requests']; const qi = gr.findIndex(q => q.json.kind === 'queries'); const resp = store['GSC Audit Query'].map(x => x.json);
+  const SCRAPERS = ['site:northwind-erp.com "erp" OR inurl:blog', 'intitle:"erp implementation" dubai', '"odoo partner" AND "dubai"'];
+  resp[qi] = { rows: [...SCRAPERS.map((q, i) => ({ keys: [q], clicks: i, impressions: 400 - i * 100, ctr: 0, position: 1.2 })), ...resp[qi].rows] }; mock('GSC Audit Query', resp);
+  const gq = (await run('GSC Audit Findings', store['GSC Sitemaps (Audit)']))[0].json; const sc = gq.search_console;
+  check('D24: queries with search operators (site:, inurl:, intitle:, quoted + AND / OR) are left out of the top queries and counted as scraper queries', !sc.top_queries.some(q => SCRAPERS.includes(q.query)) && sc.scraper_queries.count === 3 && sc.scraper_queries.impressions === 900 && sc.scraper_queries.clicks === 3 && sc.scraper_queries.sample.length === 3 && sc.top_queries.length > 0 && sc.queries_with_impressions === resp[qi].rows.length - 3, JSON.stringify({ top: sc.top_queries.map(q => q.query), scraper: sc.scraper_queries }));
+  check('D24: an ordinary query that merely contains "or" / "and" / a colon in prose is not a scraper query', sc.top_queries.some(q => /erp/.test(q.query)) && !(/(^|\s)(AND|OR)(\s|$)/.test('erp software and accounting for distributors')) , JSON.stringify(sc.top_queries.map(q => q.query)));
+  const bsiQ = await run('Build Site Issues', [{ json: gq }]); const repQ = await run('Build Audit Report', bsiQ); const docQ = decode(repQ);
+  check('D24: the report says how many scraper queries were left out', /3 scraper queries \(search operators such as site: or inurl:, 900 impressions\) left out of the top queries/.test(docQ) && !/site:northwind-erp\.com/.test(docQ), docQ.slice(Math.max(0, docQ.indexOf('scraper quer') - 200), docQ.indexOf('scraper quer') + 200));
+});
+
+// S33 D14 (2026-10-11): the Reply Reader never invents a business fact — the prompt always carries the facts block ("none on file" when
+// empty) with the [Owner: …] rule, and every sentence of the suggested answer that claims something the facts do not carry is bracketed
+// for the owner (CL.check, one list for every draft) and makes the reply need the owner; the app sends business facts + the profile
+// ===================================================================================
+await guard('reply facts', async () => {
+  reset(); const SN = 'S33 D14 — Reply Reader facts: the prompt always carries the facts block; unsupported claims bracketed + needs_you; supported claims pass; numbers; business facts + profile merged';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 600))); };
+  const fs = require('fs'); const path = require('path'); const CD = process.env.CODE_DIR || path.join(__dirname, 'code');
+  const prompt = fs.readFileSync(path.join(CD, 'Reply_Reader.prompt.txt'), 'utf8');   // written by build_monitors.py next to the Code nodes
+  check('prompt: the facts block is unconditional ("none on file" when empty) with the [Owner: …] rule; the old "use only this" ternary is gone', /WHAT WE KNOW ABOUT THE BUSINESS/.test(prompt) && /\{\{ \$json\.facts \|\| 'none on file' \}\}/.test(prompt) && /\[Owner: confirm whether we are accredited/.test(prompt) && !/\$json\.facts \?/.test(prompt) && /not even hedged/.test(prompt), prompt.slice(0, 300));
+  // the exec-357 question (a synthetic reply of the whole-system test), no facts on file
+  const Q = 'Hi, thanks for reaching out. The guide looks relevant. Before I add it, can you tell me whether Tech& is an accredited service provider with the Ministry of Finance, or do you work through a partner? Also, do you have a short company description (2 lines) I could use?\n\nThe editor';
+  const base = { domain: 'techand.ai', prospect_domain: 'consultsynergy.ae', business: 'Tech&', signer: 'Sara Khan, Head of Finance Systems, Tech&', our_subject: 'A UAE e-invoicing guide for your readers', our_body: 'Hello …', reply_from: 'editor@consultsynergy.ae', reply_subject: 'Re: A UAE e-invoicing guide for your readers', reply_text: Q };
+  const ri = (await run('Reply Input', { body: { ...base, facts: '' } }))[0].json;
+  check('Reply Input: no facts → facts empty (the prompt shows "none on file"), no page to check', ri.ok && ri.facts === '' && ri.urls.length === 0, JSON.stringify(ri));
+  mock('Reply Classify Input', [{ json: { ...ri, link_found: false, link: null, checks: [], link_note: 'no page checked' } }]);
+  // what the model answered live (execs 357-360): an accreditation claim invented from nothing; needs_you false here to prove the check decides
+  const INVENTED = "Hi, thanks for considering it! Tech& is a Microsoft Dynamics 365 partner based in Dubai—we're not directly accredited by the Ministry, but we work with accredited providers on integrations. Here's our description: \"Tech& helps finance teams implement ERP compliance for UAE e-invoicing mandates.\" Let me know if you need anything else.\n\nSara Khan, Head of Finance Systems, Tech&";
+  mock('Reply Reader', [{ json: { output: { class: 'question', summary: 'Asks whether Tech& is MoF-accredited and for a 2-line description', needs_you: false, suggested_reply: INVENTED } } }]);
+  const r1 = (await run('Reply Result', [{ json: {} }]))[0].json; const outside = r1.suggested_reply.replace(/\[[^\]]*\]/g, '');
+  check('no facts: the accreditation / partner sentence is bracketed for the owner, nothing about accreditation or partnership stays outside brackets, needs_you true, the claim listed', r1.class === 'question' && r1.needs_you === true && !/accredit|partner/i.test(outside) && /\[Owner: confirm — [^\]]*accredited[^\]]*\]/.test(r1.suggested_reply) && r1.unverified.length >= 1 && /accredit|partner/i.test(r1.unverified[0]), JSON.stringify(r1));
+  check('no facts: the sentences without a claim stay as written (the thanks, the close); the signature is untouched', /^Hi, thanks for considering it!/.test(r1.suggested_reply) && /Let me know if you need anything else\./.test(outside) && /Sara Khan, Head of Finance Systems, Tech&$/.test(r1.suggested_reply), r1.suggested_reply);
+  // facts that state the accreditation and the partnership: the same claims pass unbracketed
+  const FACTS = 'Tech& (Techand Systems) is an accredited e-invoicing service provider (ASP) with the UAE Ministry of Finance since 2026 and a Microsoft Dynamics 365 partner based in Dubai.';
+  const ri2 = (await run('Reply Input', { body: { ...base, facts: FACTS } }))[0].json;
+  mock('Reply Classify Input', [{ json: { ...ri2, link_found: false, link: null, checks: [], link_note: 'no page checked' } }]);
+  const TRUE_ = "Hi, thanks for considering it! Yes — Tech& is an accredited service provider with the Ministry of Finance, and a Microsoft Dynamics 365 partner based in Dubai. Our two-line description: \"Tech& helps finance teams in the UAE meet the e-invoicing mandate with Dynamics 365.\" Happy to send a logo too.\n\nSara Khan, Head of Finance Systems, Tech&";
+  mock('Reply Reader', [{ json: { output: { class: 'question', summary: 'Asks about MoF accreditation and a description', needs_you: false, suggested_reply: TRUE_ } } }]);
+  const r2 = (await run('Reply Result', [{ json: {} }]))[0].json;
+  check('facts on file state the accreditation and the partnership: the claims pass unbracketed, needs_you stays as the model said (false)', r2.suggested_reply === TRUE_ && r2.needs_you === false && r2.unverified.length === 0, JSON.stringify(r2));
+  // numbers: "12 years" with no 12 on file → bracketed; "since 2026" on file → kept
+  mock('Reply Reader', [{ json: { output: { class: 'interested', summary: 's', needs_you: false, suggested_reply: 'Thanks! We have served UAE finance teams for 12 years. We have been accredited since 2026.\n\nSara Khan, Head of Finance Systems, Tech&' } } }]);
+  const r3 = (await run('Reply Result', [{ json: {} }]))[0].json;
+  check('numbers: "12 years" not on file → bracketed, needs_you; "since 2026" on file → kept as written', /\[Owner: confirm — We have served UAE finance teams for 12 years\.\]/.test(r3.suggested_reply) && /We have been accredited since 2026\./.test(r3.suggested_reply.replace(/\[[^\]]*\]/g, '')) && r3.needs_you === true && r3.unverified.length === 1, JSON.stringify(r3));
+  // an opt-out still gets no suggested answer; a model failure still answers
+  mock('Reply Classify Input', [{ json: { ...ri, reply_text: 'Please remove me from your list.', link_found: false, link: null, checks: [], link_note: 'no page checked' } }]); mock('Reply Reader', [{ json: { error: { message: 'model timeout' } } }]);
+  const r4 = (await run('Reply Result', [{ json: {} }]))[0].json; check('opt-out with a failed model: unsubscribe, empty answer, nothing to verify', r4.class === 'unsubscribe' && r4.suggested_reply === '' && r4.unverified.length === 0 && r4.needs_you === false, JSON.stringify(r4));
+  // the app sends the owner's business facts and the business profile: one facts block, deduplicated
+  const ri3 = (await run('Reply Input', { body: { ...base, business_facts: 'Accredited ASP with the UAE Ministry of Finance.', facts: 'Accredited ASP with the UAE Ministry of Finance.', profile: { business_name: 'Techand Systems', business_type: 'ERP and e-invoicing consultancy', author_name: 'Sara Khan', author_job_title: 'Head of Finance Systems', author_credentials: 'FCCA', reviewer_name: 'Omar Haddad', reviewer_job_title: 'Peppol specialist', street_address: 'Office 1204, Bay Square', city: 'Dubai', country: 'United Arab Emirates', phone: '+971 4 000 0000', public_email: 'hello@techand.ai', service_areas: 'UAE, KSA' } } }))[0].json;
+  check('Reply Input: business facts + the profile (business, author, reviewer, address, phone, e-mail, service areas) in one facts block, the duplicate line dropped', ri3.facts.split('\n').length === 8 && ri3.facts.startsWith('Accredited ASP') && /Business: Techand Systems — ERP and e-invoicing consultancy/.test(ri3.facts) && /Spokesperson \/ author: Sara Khan, Head of Finance Systems, FCCA/.test(ri3.facts) && /Reviewer: Omar Haddad, Peppol specialist/.test(ri3.facts) && /Address: Office 1204, Bay Square, Dubai, United Arab Emirates/.test(ri3.facts) && /Phone: \+971 4 000 0000/.test(ri3.facts) && /E-mail: hello@techand\.ai/.test(ri3.facts) && /Service areas: UAE, KSA/.test(ri3.facts), ri3.facts);
+});
+
+// ===================================================================================
+await guard('fix plan phase 1 — keywords and ladders', async () => {
+  const SN = 'S34 D4 D8 D16 D26 G3 — the keyword fit gate (government / portal / other brands), "facts erp" out of the rungs, the Rank Tracker\'s next step by ladder state, the AI Overview as a timed observation, 2025 time-to-rank with an uncalibrated chance band';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const EMPTY = [{ json: {} }];
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+
+  // ---------- D4 (a): the gate alone (code_v4/_fit_gate.js, a shim written by build_v4.py section 26) ----------
+  const gate = async (list, ctx) => (await run('_fit_gate', list.map(k => ({ json: { keyword: typeof k === 'string' ? k : k.keyword, intent: typeof k === 'string' ? '' : k.intent, ctx } })))).map(i => i.json);
+  const CTX = { own_domain: 'techand.ai', competitors: ['cleartax.com', 'azentio.com'], serp_domains: ['facts.ae', 'sage.com', 'oracle.com', 'erp.ae'], brands: { 'Zoho Books': 'zoho.com', 'Microsoft Dynamics 365': 'microsoft.com', 'SAP': 'sap.com' }, protect: ['erp software uae', 'ERP implementation', 'Dynamics 365 Business Central'] };
+  const five = [{ keyword: 'fta login', intent: 'navigational' }, { keyword: 'fta', intent: 'informational' }, { keyword: 'emaratax', intent: 'navigational' }, { keyword: 'emirates id', intent: 'informational' }, { keyword: 'emirates id status', intent: 'informational' }];
+  let g = await gate(five, CTX);
+  console.log('   exec-370 gap keywords ->', g.map(x => x.keyword + ': ' + (x.ok ? 'kept' : x.reason)).join(' | '));
+  check('D4: the five exec-370 gap keywords are refused, each with a reason and a detail', g.every(x => x.ok === false && x.reason && x.detail) && eq(g.map(x => x.reason), ['navigational', 'government', 'navigational', 'government', 'government']), JSON.stringify(g.map(x => [x.keyword, x.reason])));
+  g = await gate(five.map(x => x.keyword), CTX);
+  check('D4: without the search data\'s intent the government / portal rules still refuse all five', g.every(x => x.ok === false) && eq(g.map(x => x.reason), ['government', 'government', 'government', 'government', 'government']), JSON.stringify(g.map(x => [x.keyword, x.reason])));
+  const more = ['uae id card status', 'emaratax login', 'check emirates id status', 'vat tax login', 'fta portal', 'trn verification', 'emaratax portal', 'i d card status', 'ministry of finance uae', 'federal tax authority', 'erp software login'];
+  g = await gate(more, CTX);
+  check('D4: the other exec-370 government / portal gap keywords are refused too', g.every(x => x.ok === false && ['government', 'portal'].includes(x.reason)), JSON.stringify(g.filter(x => x.ok).map(x => x.keyword)));
+  const kept = ['e invoicing software uae', 'vat registration uae', 'corporate tax uae', 'value-added tax', 'vat', 'fta accredited e invoicing software', 'zatca e invoicing', 'fta vat registration', 'emaratax registration guide', 'sap implementation dubai', 'microsoft dynamics 365 partner uae', 'dynamics 365 business central uae', 'facts erp vs odoo', 'cleartax vs zoho', 'zoho books integration', 'erp software uae', 'erp facts and figures guide', 'best erp software with mobile login'];
+  g = await gate(kept, CTX);
+  check('D4: legitimate keywords survive (the bounds: topic + body, provider / partner / comparison words, protected and generic labels)', g.every(x => x.ok === true), JSON.stringify(g.filter(x => !x.ok).map(x => [x.keyword, x.reason, x.detail])));
+  g = await gate(['facts erp', 'cleartax', 'cleartax uae', 'zoho books', 'oracle erp', 'techand erp', 'sage intacct', 'best facts erp'], { ...CTX });
+  check('D8: other brands — a results-page label (facts.ae ↔ "facts"), a competitor, a learned AI name, a vendor; the site itself = own brand', eq(g.map(x => x.reason), ['other brand', 'other brand', 'other brand', 'other brand', 'other brand', 'own brand', 'other brand', 'other brand']) && /facts \(facts\.ae/.test(g[0].detail) && /Zoho Books/.test(g[3].detail), JSON.stringify(g.map(x => [x.keyword, x.reason, x.detail])));
+  g = await gate(['sage intacct', 'tax registration number', 'erp software uae'], { ...CTX, serp_domains: [] });
+  check('D8: with the keyword\'s own results page in hand: one domain holding 3 of the top 5 = a brand query; 3 government hosts = government', (await gate(['sage intacct'], { ...CTX, serp_domains: [], serp: ['sage.com', 'www.sage.com', 'sage.com', 'g2.com', 'capterra.com'] }))[0].reason === 'other brand' && (await gate(['tax registration number uae'], { ...CTX, serp: ['tax.gov.ae', 'u.ae', 'mof.gov.ae', 'cleartax.com', 'pwc.com'] }))[0].reason === 'government' && g[2].ok === true && g[0].ok === true, JSON.stringify(g));
+  check('D8: the brand list for the relevance prompt names the labels with their domains', /facts \(facts\.ae\)/.test(g[0].brands_text) === false && /facts \(facts\.ae\)/.test((await gate(['x'], CTX))[0].brands_text) && /Zoho Books \(zoho\.com\)/.test((await gate(['x'], CTX))[0].brands_text), (await gate(['x'], CTX))[0].brands_text);
+
+  // ---------- D4 (b): Analyze Keywords (the full report's keyword gap) on the exec-370 shape ----------
+  const rkRow = (dom, [k, v, kd, intent, pos]) => ({ se_type: 'google', keyword_data: { keyword: k, keyword_info: { search_volume: v, cpc: 2.5, competition_level: 'HIGH' }, keyword_properties: { keyword_difficulty: kd }, search_intent_info: { main_intent: intent } }, ranked_serp_element: { serp_item: { type: 'organic', rank_group: pos, rank_absolute: pos, url: 'https://' + dom + '/' + k.replace(/\s+/g, '-') } } });
+  const ranked = (dom, list) => V.task({ target: dom, items: list.map(l => rkRow(dom, l)) });
+  const CLEARTAX = [['fta login', 90500, 33, 'navigational', 10], ['fta', 49500, 28, 'informational', 7], ['emaratax', 33100, 14, 'navigational', 6], ['emirates id', 18100, 22, 'informational', 10], ['emirates id status', 18100, 22, 'informational', 3], ['e invoicing software uae', 320, 20, 'commercial', 4], ['corporate tax uae', 4400, 32, 'informational', 7], ['vat registration uae', 2900, 30, 'commercial', 3], ['cleartax e invoicing', 400, 10, 'navigational', 1]];
+  mock('Competitor Analysis', { domain: 'techand.ai', competitors: ['cleartax.com'], business: 'ERP, e-invoicing and Microsoft Dynamics 365 partner in the UAE', services: ['ERP implementation', 'E-invoicing'], extra_findings: [], extra_works: [] });
+  mock('KW Targets', [{ domain: 'techand.ai', is_you: true }, { domain: 'cleartax.com', is_you: false }]);
+  mock('Ranked Keywords', [ranked('techand.ai', [['techand', 30, 1, 'navigational', 1]]), ranked('cleartax.com', CLEARTAX)]);
+  mock('Fallback Queries', [{ query: 'e invoicing uae' }, { query: 'erp software uae' }]);
+  delete store['Load Site Cache'];
+  const ak = (await run('Analyze Keywords', V.task({ items: [{ se_type: 'google', keyword: 'e invoicing software uae', keyword_info: { search_volume: 320, cpc: 6 }, keyword_properties: { keyword_difficulty: 20 }, search_intent_info: { main_intent: 'commercial' } }] })))[0].json.site_keywords;
+  const gapK = ak.keyword_gap.map(k => k.keyword);
+  console.log('   keyword gap ->', gapK.join(' | '), '| refused:', ak.refused.map(r => r.keyword + ' (' + r.reason + ')').join(', '));
+  check('D4: the keyword gap holds none of the five government queries and no competitor brand, and keeps the real gaps', !five.some(f => gapK.includes(f.keyword)) && !gapK.includes('cleartax e invoicing') && eq(gapK.slice().sort(), ['corporate tax uae', 'e invoicing software uae', 'vat registration uae']), JSON.stringify(gapK));
+  check('D4: site_keywords.refused lists them with a reason each; easy wins and the commercial opportunities are gated too', ak.refused.length === 6 && five.every(f => ak.refused.some(r => r.keyword === f.keyword && r.reason && r.detail)) && !ak.easy_wins.some(k => k.keyword === 'emaratax') && !ak.opportunities_by_intent.informational.some(k => k.keyword === 'fta'), JSON.stringify(ak.refused));
+  check('D4: the finding\'s evidence quotes no government query', !/fta|emaratax|emirates id/.test((store['Analyze Keywords'][0].json.extra_findings.find(f => /Keyword gap/.test(f.title)) || {}).evidence || ''), JSON.stringify(store['Analyze Keywords'][0].json.extra_findings.map(f => f.evidence)));
+
+  // ---------- D8: the exec-352 ladder pool ("erp software uae" on techand.ai, facts.ae on the results page) ----------
+  const D = 'techand.ai', SITE = 'site_techand-ai', LOC = 2784;
+  const SERP6 = [{ rank: 1, domain: 'sage.com', url: 'https://www.sage.com/en-ae/erp/', title: 'ERP software UAE | Sage' }, { rank: 2, domain: 'ramco.com', url: 'https://ramco.com/ae', title: 'Ramco ERP' }, { rank: 3, domain: 'brainsphere.ae', url: 'https://brainsphere.ae/erp', title: 'ERP Dubai' }, { rank: 4, domain: 'firstbit.ae', url: 'https://firstbit.ae/blog/best-erp', title: 'Best ERP software in UAE' }, { rank: 5, domain: 'lumitech.ae', url: 'https://lumitech.ae/erp-uae', title: 'ERP UAE guide' }, { rank: 6, domain: 'facts.ae', url: 'https://facts.ae/blog/top-erp-software-uae', title: 'Top ERP software in UAE | FACTS' }];
+  const SF = { se_results_count: 1200000, checked_at: '2026-10-11T15:58:12.000Z', people_also_ask: ['What is the best ERP in UAE?'], related_searches: ['top 10 erp software in uae'], forum_threads: [], featured_snippet: null, ai_overview: { present: false, text: '', cited_domains: [], seen_at: '2026-10-11T15:58:12.000Z' }, features_present: ['people_also_ask'], video_results: false, shopping_results: false, local_pack: false };
+  const PV = { keyword: 'erp software uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads', email: '', callback_url: '', request_id: 'r-352', ladder_id: 'lad_test352', pages_now: 1, page_type: 'Service Page', recommended_page: 'Service Page',
+    competitors: [], competitors_summary: SERP6, serp_features: SF, business: 'Enterprise digital transformation and Microsoft Dynamics 365 partner in the GCC', services: ['ERP implementation', 'Dynamics 365 Business Central'],
+    site_description: { business_description: 'Enterprise digital transformation and Microsoft Dynamics 365 partner in the GCC', products_or_services: ['ERP implementation', 'Dynamics 365 Business Central'] },
+    keyword_data: { search_volume: 480, cpc: 13.98, keyword_difficulty: 3, google_intent: 'commercial', competitor_backlink_strength: { avg_referring_domains: 40 } }, verdict: 'GO_WITH_CHANGES', verdict_score: 70, verdict_reasons: ['KD 3 (Easy) and a SERP with thin vendor pages leave room to rank.'], verdict_changes: [], verdict_risks: [], secondary_keywords: ['erp software dubai', 'best erp software in uae'],
+    site_authority: { organic_keywords: 12, top3: 0, top10: 0, est_monthly_traffic: 20 }, site_urls: ['https://' + D + '/', 'https://' + D + '/whatwedo/'], expected_visits_top3: 100, time_to_rank_months: 3 };
+  mock('Parse Verdict', PV);
+  const POOL = ['best erp software in dubai', 'erp software dubai', 'facts erp', 'zoho books erp', 'erp software uae pricing', 'erp system examples', 'erp meaning', 'erp software company in uae', 'top 10 erp software in uae', 'erp software for small business uae', 'sap erp implementation dubai', 'erp software login', 'erp software for manufacturing uae', 'cloud erp software uae', 'erp software price in uae', 'erp software for trading company uae'];
+  mock('Ladder Requests', [{ kind: 'suggestions', label: 'suggestions for erp software uae', body: [{ keyword: 'erp software uae' }] }, { kind: 'ranked', label: 'keywords ' + D + ' ranks for', domain: D, body: [{ target: D }] }]);
+  mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 10, method: 'size', p75: null, size_reach: 10, sample: 0, top10: 0, organic_keywords: 12, location_code: LOC }), updated_at: daysAgo(3) } },
+    { json: { id: 2, key: 'ai_brands:' + SITE, kind: 'ai', site_id: SITE, value: JSON.stringify({ 'Zoho Books': 'zoho.com', 'Microsoft Dynamics 365': 'microsoft.com' }), updated_at: daysAgo(3) } }]);
+  mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+  const lp = (await run('Ladder Pool', [V.task({ seed_keyword: 'erp software uae', items: POOL.map((k, i) => V.kwItem(k, i)) }), V.task({ target: D, items: [] })]))[0].json;
+  const cand = lp.research.candidates.map(c => c.keyword);
+  console.log('   pool candidates ->', cand.join(' | '), '| refused:', lp.research.refused.map(r => r.keyword + ' (' + r.reason + ')').join(', '), '| brands:', lp.other_brands);
+  check('D8: "facts erp" is refused as another brand (facts.ae on the results page); "zoho books erp" through the learned AI name; "erp software login" as a portal task', !cand.includes('facts erp') && !cand.includes('zoho books erp') && !cand.includes('erp software login') && lp.research.refused.some(r => r.keyword === 'facts erp' && r.reason === 'other brand' && /facts\.ae/.test(r.detail)) && lp.research.refused.some(r => r.keyword === 'zoho books erp' && r.reason === 'other brand') && lp.research.refused.some(r => r.keyword === 'erp software login' && r.reason === 'portal'), JSON.stringify(lp.research.refused));
+  check('D8: the other rungs are unchanged — the real keywords of the pool stay, "sap erp implementation dubai" (a partner keyword) included', ['best erp software in dubai', 'erp software dubai', 'erp software uae pricing', 'sap erp implementation dubai', 'cloud erp software uae', 'erp software for small business uae'].every(k => cand.includes(k)) && cand.length === POOL.length - 3, JSON.stringify(cand));
+  check('D8: the pool tells the relevance screen which names are brands (results-page labels + learned names)', /facts \(facts\.ae\)/.test(lp.other_brands) && /Zoho Books \(zoho\.com\)/.test(lp.other_brands) && /sage \(sage\.com\)/.test(lp.other_brands), lp.other_brands);
+  const lch = await run('Ladder Relevance Chunks', [{ json: lp }]);
+  check('D8: the relevance chunk carries other_brands for the prompt', /facts \(facts\.ae\)/.test(lch[0].json.other_brands) && !lch[0].json.keywords_chunk.some(k => k.keyword === 'facts erp'), JSON.stringify(lch[0].json.other_brands));
+  mock('Ladder Keyword Relevance', lch.map(c => V.ladderRelevance(c.json)));
+  const plan = (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json; const L = plan.ladder;
+  const rungK = L.rungs.flatMap(r => r.pages.flatMap(p => [p.keyword, ...p.supporting]));
+  console.log('   ladder ->', JSON.stringify({ plan: L.plan_type, label: L.label, chance: L.chance, pages: L.rungs.map(r => r.pages.map(p => p.keyword)), refused: L.refused_keywords.map(r => r.keyword) }));
+  check('D8: no rung page or supporting keyword is "facts erp" or "zoho books erp"; the plan notes what was refused', !rungK.some(k => /facts erp|zoho books/.test(k)) && !L.top.links_to.some(l => /facts erp/.test(l.keyword)) && L.refused_keywords.some(r => r.keyword === 'facts erp' && r.reason === 'other brand') && L.notes.some(n => /"facts erp" \(other brand\)/.test(n)) && L.stats.refused_keywords >= 3, JSON.stringify({ rungK, notes: L.notes }));
+  check('G3: the plan carries the chance band (easy → direct → good, uncalibrated) and the 2025 base rate; the label is unchanged', L.plan_type === 'direct' && L.label === 'Easy for your site · Direct plan · 2-4 months' && eq(L.chance, { band: 'good', range: [50, 70], label: 'estimated chance good (50-70%, uncalibrated)' }) && /^Estimated chance of reaching the top 10 within 2-4 months: good \(50-70%\) — an uncalibrated estimate until this system has measured its own ladders\. Base rate \(Ahrefs, 2025\): only 1\.74% of new pages reach Google's top 10 within a year, and 40\.8% of those do so within a month/.test(L.chance_text) && L.base_rate.year === 2025, JSON.stringify({ c: L.chance, t: L.chance_text }));
+  mock('Parse Verdict', { ...PV, keyword: 'facts erp', keyword_data: { ...PV.keyword_data, keyword_difficulty: 19, search_volume: 260 }, competitors_summary: [{ rank: 1, domain: 'facts.ae' }, { rank: 2, domain: 'facts.ae' }, { rank: 3, domain: 'facts.ae' }, { rank: 4, domain: 'g2.com' }, { rank: 5, domain: 'firstbit.ae' }] });
+  const Lb = (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json.ladder;
+  check('D8: a competitor brand as the MAIN keyword ("facts erp", facts.ae holding 3 of the top 5) is not realistic: no ladder, the reason says so', Lb.planned === false && Lb.difficulty_for_you === 'not_realistic' && Lb.refusal.reason === 'not_realistic' && /another company's brand/.test(Lb.refusal.message) && /facts\.ae/.test(Lb.refusal.message), JSON.stringify(Lb.refusal));
+  mock('Parse Verdict', PV); mock('Ladder Plan', [{ json: plan }]);
+  const rep = await run('Build Ladder Report', EMPTY); const html = decode(rep); save('ladder-plan-fitgate-chance.doc.html', html); scanHtml('ladder plan (fit gate, chance band, AI Overview observation)', html);
+  check('G3: the ladder report shows the 2025 base rate and the chance band marked uncalibrated, never the 2017 figure', /Estimated chance<\/b> of reaching the top 10 within 2-4 months: <b>good<\/b> \(50-70%\)/.test(html) && /uncalibrated estimate until this system has measured its own ladders/.test(html) && /Base rate \(Ahrefs, 2025\): only 1\.74% of new pages/.test(html) && /2025 Ahrefs study/.test(html) && !/5\.7%/.test(html) && !/2017/.test(html), (html.match(/Why this plan[\s\S]{0,1200}/) || [''])[0]);
+  check('D26: the ladder report reports the AI Overview as an observation with its time', /AI Overview not seen in the check at 15:58 UTC on 2026-10-11/.test(html) && /AI Overviews vary between searches/.test(html) && !/There is no AI Overview/.test(html), (html.match(/Results page in the check[\s\S]{0,300}/) || [''])[0]);
+  check('D8: the ladder report lists the refused brands', /Left out as other companies' brands[\s\S]{0,200}"facts erp" \(other brand\)/.test(html), (html.match(/Left out as other[\s\S]{0,300}/) || [''])[0]);
+  // the hub page's cluster list (Brief Context): an old ladder row that still carries "facts erp" never reaches the writer
+  mock('Parse Verdict', { ...PV, ladder_rung: 4, ladder_links: [{ url: 'https://' + D + '/best-erp-software-in-dubai/', path: '/best-erp-software-in-dubai/', role: 'rung 1', keyword: 'best erp software in dubai', planned: true }, { url: 'https://' + D + '/facts-erp/', path: '/facts-erp/', role: 'rung 2', keyword: 'facts erp', planned: true }, { url: 'https://' + D + '/erp-software-dubai/', path: '/erp-software-dubai/', role: 'rung 2', keyword: 'erp software dubai', planned: true }] });
+  delete store['Load Profile (Brief)']; delete store['Load Case Studies (Brief)'];
+  const bc = (await run('Brief Context', [{ json: {} }]))[0].json; const hubK = (bc.hub_pages || []).map(p => p.keyword);
+  check('D8: Brief Context\'s cluster list for the hub page drops "facts erp" and keeps the real pages', bc.page_role === 'hub' && eq(hubK, ['best erp software in dubai', 'erp software dubai']), JSON.stringify(bc.hub_pages));
+
+  // ---------- D16: the Rank Tracker's next step by ladder state ----------
+  const DN = 'northwind-erp.com', HOST = 'https://www.northwind-erp.com/';
+  const slug = (k) => HOST + k.replace(/\s+/g, '-') + '/';
+  const lrow = (id, head, [rung, page_no, keyword, status]) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: id, domain: DN, head_keyword: head, rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: slug(keyword), page_exists: false, status, months: '', start_date: daysAgo(30), country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'https://hooks.example.com/x', request_id: 'r-' + id } });
+  const trk = async (rows, posOf) => {
+    mock('Load Ladders', rows); mock('Load History', EMPTY); mock('Load Content Log (Tracker)', EMPTY);
+    const tp = await run('Tracker Plan', store['Load History']);
+    mock('SERP Check', tp.map(c => V.serpFor(c.json.keyword, c.json.domain, posOf(c.json.keyword))));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    const tr = (await run('Tracker Report', pp))[0].json; return { next: tr.next_step, api: tr.api_body, html: tr.html };
+  };
+  const none = () => 0;
+  let t = await trk([lrow('lad_P', 'peppol uae', [4, 1, 'peppol uae', 'writing'])], none);
+  console.log('   main page only, written ->', JSON.stringify(t.next));
+  check('D16: main page only, written but not published → "publish it" with the page\'s URL, no request to start', t.next.action === 'publish_top' && /is written but not live yet: publish it at https:\/\/www\.northwind-erp\.com\/peppol-uae\//.test(t.next.text) && t.next.publish_url === slug('peppol uae') && t.api === null && !/Every rung is in the top 10/.test(t.next.text) && /Page to publish/.test(t.html), JSON.stringify(t.next));
+  t = await trk([lrow('lad_P', 'peppol uae', [4, 1, 'peppol uae', 'planned'])], none);
+  check('D16: main page only, not written → "write the main page" (and a request to start it)', t.next.action === 'write_top' && /The main page is the whole ladder for now: write the main page "peppol uae"/.test(t.next.text) && t.api && t.api.keyword === 'peppol uae' && t.api.ladder_rung === 4, JSON.stringify(t.next));
+  const direct = (mainStatus) => [lrow('lad_D', 'erp software uae', [4, 1, 'erp software uae', mainStatus]), lrow('lad_D', 'erp software uae', [1, 2, 'best erp software in dubai', 'planned']), lrow('lad_D', 'erp software uae', [2, 3, 'erp software dubai', 'planned'])];
+  t = await trk(direct('writing'), none);
+  console.log('   direct, main written ->', JSON.stringify(t.next));
+  check('D16: Direct plan with the main page written → "publish it", not "work on rung 1"', t.next.action === 'publish_top' && /publish it at/.test(t.next.text) && /supporting pages wait for it/.test(t.next.text) && !/rung 1/.test(t.next.text), JSON.stringify(t.next));
+  t = await trk(direct('planned'), none);
+  check('D16: Direct plan with nothing written → write the main page first', t.next.action === 'write_top' && /This plan writes the main page first: write the main page "erp software uae"; its supporting pages follow once it is live/.test(t.next.text), JSON.stringify(t.next));
+  t = await trk(direct('published'), none);
+  check('D16: Direct plan with the main page live → the rungs come next', t.next.action === 'write_rung_1' && /Work on rung 1/.test(t.next.text) && t.next.main_page === 'live', JSON.stringify(t.next));
+  const full = (mainStatus) => [lrow('lad_F', 'vat software uae', [1, 1, 'vat software uae cost', 'published']), lrow('lad_F', 'vat software uae', [1, 2, 'vat software uae guide', 'published']), lrow('lad_F', 'vat software uae', [2, 3, 'vat software uae software', 'published']), lrow('lad_F', 'vat software uae', [4, 0, 'vat software uae', mainStatus])];
+  const allIn = (k) => ({ 'vat software uae cost': 3, 'vat software uae guide': 5, 'vat software uae software': 7 })[k] || 0;
+  t = await trk(full('planned'), allIn);
+  console.log('   full, rungs all in ->', JSON.stringify(t.next));
+  check('D16: full plan, every rung in the top 10, main page not written → "every rung is in the top 10: write the main page"', t.next.action === 'write_top' && /^Every rung is in the top 10: write the main page "vat software uae"\.$/.test(t.next.text) && t.api && t.api.keyword === 'vat software uae', JSON.stringify(t.next));
+  t = await trk(full('writing'), allIn);
+  check('D16: full plan, every rung in, main page written → publish it', t.next.action === 'publish_top' && /publish it at/.test(t.next.text), JSON.stringify(t.next));
+  t = await trk(full('published'), (k) => k === 'vat software uae' ? 8 : allIn(k));
+  check('D16: full plan, every rung in, main page live at #8 → improve it (the request carries the page URL)', t.next.action === 'improve_top' && /Every rung is in the top 10 and the main page is live: improve the main page "vat software uae"/.test(t.next.text) && t.api && t.api.existing_page_url === slug('vat software uae'), JSON.stringify(t.next));
+  t = await trk(full('planned'), (k) => k === 'vat software uae cost' ? 12 : allIn(k));
+  check('D16: full plan with a rung pending → the rung step, as before', t.next.action === 'write_rung_1' && /Work on rung 1: 1 of 2 pages are in the top 10/.test(t.next.text) && t.next.main_page === 'planned', JSON.stringify(t.next));
+
+  // ---------- D26: the AI Overview as an observation with its time ----------
+  const ob = (await run('_serp_obs', [{ json: { serp: { tasks: [{ result: [{ datetime: '2026-10-11 15:58:12 +00:00' }] }] }, obs: [{ seen: true, at: '2026-10-11T15:58:12.000Z', source: 'live Google results' }] } },
+    { json: { obs: [{ seen: false, at: null, source: 'stored results page' }, { seen: true, at: '2026-10-11T16:03:00.000Z', source: 'live check' }] } }, { json: { obs: [{ seen: null, at: null }] } },
+    { json: { serp: { tasks: [{ time: '0.2 sec.', result: [{ datetime: '2026-10-11 19:58:12 +04:00' }] }] }, at: '2026-10-11T15:58:12.000Z', obs: [{ seen: false, at: '2026-10-11T15:58:12.000Z' }] } }])).map(i => i.json);
+  check('D26: one check → "seen in the check at 15:58 UTC on 2026-10-11 … AI Overviews vary between searches"', ob[0].seen_at === '2026-10-11T15:58:12.000Z' && ob[0].text === 'seen in the check at 15:58 UTC on 2026-10-11 (live Google results) — AI Overviews vary between searches, so this is one observation, not a fixed feature of the query', ob[0].text);
+  check('D26: several checks → "seen in 1 of 2 checks (…)"; an unreadable check → unknown; a +04:00 time lands on UTC', /^seen in 1 of 2 checks \(not seen in the check at an unknown time \(stored results page\); seen in the check at 16:03 UTC on 2026-10-11 \(live check\)\) — AI Overviews vary between searches$/.test(ob[1].text) && /^unknown/.test(ob[2].text) && ob[3].seen_at === '2026-10-11T15:58:12.000Z' && ob[3].clock === '15:58 UTC on 2026-10-11' && /^not seen in the check at 15:58 UTC/.test(ob[3].text), JSON.stringify(ob.slice(1)));
+  // the digest for the verdict and the keyword report (the S29 flow, with a dated SERP that shows an AI Overview)
+  const dated = (serp, dt, dropAio) => ({ ...serp, tasks: [{ ...serp.tasks[0], result: [{ ...serp.tasks[0].result[0], datetime: dt, items: serp.tasks[0].result[0].items.filter(x => !(dropAio && x.type === 'ai_overview')) }] }] });
+  mock('Start Form', F.forms.startVerdict);
+  const nv = await run('Normalize Input', F.forms.pageVerdict); mock('Route Mode', nv);
+  await run('Prepare Keyword Run', nv); mock('Fetch Sitemaps', []); await run('Collect Site URLs', []);
+  const digestFor = async (serp) => { mock('SERP Top 10', serp); delete store['SERP Top 10 (Retry)']; const t6 = await run('Pick Top 6', store['SERP Top 10']);
+    mock('Read Competitor Pages', t6.map((x, i) => ({ page_text: F.compPage(i, 300 + i * 20) }))); delete store['Retry Blocked Pages']; delete store['Blocked Page Items']; delete store['Collect Client Pages'];
+    await run('Find Blocked Pages', store['Read Competitor Pages']); return (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json; };
+  const a0 = await digestFor(dated(F.serpTop, '2026-10-11 15:58:12 +00:00', true));
+  check('D26: no AI Overview in the check → the digest says "not seen in the check at 15:58 UTC on 2026-10-11", never "not shown"', /AI OVERVIEW: not seen in the check at 15:58 UTC on 2026-10-11 \(live Google results\) — AI Overviews vary between searches/.test(a0.serp_digest) && !/not shown/.test(a0.serp_digest) && a0.serp_features.ai_overview.present === false && a0.serp_features.ai_overview.seen_at === '2026-10-11T15:58:12.000Z' && a0.serp_features.checked_at === '2026-10-11T15:58:12.000Z', (a0.serp_digest.match(/AI OVERVIEW[^\n]*/) || [''])[0]);
+  const a1 = await digestFor(dated(F.serpTop, '2026-10-11 15:58:12 +00:00', false));
+  const aioLine = (a1.serp_digest.match(/AI OVERVIEW[^\n]*/) || [''])[0];
+  check('D26: an AI Overview in the check → "seen in the check at …", the cited domains tied to that check, and the instruction not to state it as a fact', /^AI OVERVIEW: seen in the check at 15:58 UTC on 2026-10-11 \(live Google results\) — AI Overviews vary between searches/.test(aioLine) && /In that check it cited [^\n]*erpguide\.net/.test(aioLine) && /gulferp\.ae/.test(aioLine) && /erpmasters\.com/.test(aioLine) && /Do not write "there is no AI Overview"/.test(aioLine) && a1.serp_features.ai_overview.present === true && a1.serp_features.ai_overview.seen_at === '2026-10-11T15:58:12.000Z', aioLine);
+  mock('Facts SERP', V.factsSerp); delete store['Facts SERP (Retry)']; await run('Collect Facts', store['Facts SERP']);
+  mock('Competitor Analyzer', { output: F.competitorAnalysis }); await run('Parse Analysis', store['Competitor Analyzer']);
+  mock('Keyword Data', F.keywordOverview); delete store['Site Authority']; await run('Merge Keyword Data', store['Keyword Data']);
+  mock('Verdict Agent', { output: F.verdictGo }); const pv = await run('Parse Verdict', store['Verdict Agent']);
+  const wf = await run('Build Word File', [{ json: { ...pv[0].json, include_seo_report: true } }]); const doc = decode(wf); scanHtml('keyword report, AI Overview observation', doc);
+  const aioRow = (doc.match(/<td class="k">AI Overview<\/td><td>([^<]*)<\/td>/) || ['', ''])[1];
+  check('D26: the keyword report\'s results-page row says when the AI Overview was seen, with the domains it cited in that check', /^Seen in the check at 15:58 UTC on 2026-10-11 — AI Overviews vary between searches, so this is one observation, not a fixed feature of the query\. In that check it cited /.test(aioRow) && ['erpguide.net', 'gulferp.ae', 'erpmasters.com'].every(d => aioRow.includes(d)) && !/Shown — cites/.test(doc) && !/Not shown for this query/.test(doc), aioRow || (doc.match(/What the Results Page Looks Like[\s\S]{0,700}/) || [''])[0]);
+  // the keyword strategy: the stored results page (undated) and the live check are two observations
+  const K = { keyword: 'e invoicing software uae', volume: 320, kd: 20, cpc: 6, intent: 'commercial', page_type: 'Service Page', topic: 'e invoicing', opportunity: 50, traffic_potential: 90, serp_types: ['organic', 'people_also_ask', 'ai_overview'], competitors: [], competitors_in_top20: 0, words: 4, relevance: 2, difficulty_for_you: 'easy', plan_type: 'direct', months: '2-4', for_you_label: 'Easy for your site · Direct plan · 2-4 months', chance: { band: 'good', range: [50, 70], label: 'estimated chance good (50-70%, uncalibrated)' } };
+  mock('Rank Keywords', { domain: D, country: 'United Arab Emirates', goal: 'leads', seeds: ['e invoicing'], research: { requests: 4 }, keyword_strategy: { goal: 'leads', pool_size: 12, ai_reviewed: 12, total_relevant: 6, keywords: [K], clusters: [], quick_wins: [K], questions: [], long_tail: [], competitor_gaps: [], by_intent: {}, priority: [K], pipeline_keyword: K, competitor_domains: ['cleartax.com'], by_source: { ideas: 12 }, research_failures: [], refused: [{ keyword: 'fta login', volume: 90500, reason: 'navigational', detail: 'x' }], reach: { reach: 30, method: 'size', p75: null, size_reach: 30, sample: 0, top10: 12, organic_keywords: 90, cached: false, cached_at: null, strong: false } } });
+  mock('Priority Keywords', [{ keyword: K.keyword }]); delete store['AI Demand'];
+  const ks = (await run('Build Keyword Strategy', [dated(V.serpFor(K.keyword, D, 0), '2026-10-11 16:03:00 +00:00', true)]))[0].json;
+  const p0 = ks.keyword_strategy.priority[0];
+  console.log('   strategy card why ->', p0.why);
+  // 2026-10-12 (FIX_PLAN D20): D26 averaged the undated stored value and the live check into "seen in 1 of 2 checks", which still read as
+  // "there is an AI Overview" on a card whose own live check had found none. The live check now speaks alone, and the stored Labs value is
+  // only ever quoted as historical (S43 covers the three cases: live yes, live no, no live check).
+  check('D26 + D20: the live check at 16:03 UTC found no AI Overview, so the card claims none — and the undated stored value is quoted as historical', !/AI Overview was seen/.test(p0.why) && !/write a quotable answer block/.test(p0.why) && p0.live.checked_at === '2026-10-11T16:03:00.000Z' && p0.live.ai_overview === false && /not seen in the check at 16:03 UTC on 2026-10-11 \(live check\)/.test(ks.result_html) && /the stored results page showed one \(historical, undated\)/.test(ks.result_html) && !/seen in 1 of 2 checks/.test(ks.result_html), p0.why);
+  check('D20 (in passing): the "Who ranks now" domains are deduplicated', eq(p0.live.top_domains, [...new Set(p0.live.top_domains)]), JSON.stringify(p0.live.top_domains));
+  check('G3: the keyword strategy report shows the 2025 base rate and the chance band (uncalibrated) next to the months; the refused keywords are listed', /Base rate \(Ahrefs, 2025\): only 1\.74% of new pages/.test(ks.result_html) && /direct, 2-4 mo, good chance \(50-70%, uncalibrated\)/.test(ks.result_html) && /1 keyword\(s\) were left out as government, portal or other companies' brand searches \(e\.g\. "fta login" — navigational\)/.test(ks.result_html) && !/5\.7%/.test(ks.result_html), (ks.result_html.match(/Your site's reach[\s\S]{0,600}/) || [''])[0]);
+  scanHtml('keyword strategy (observations, chance band)', ks.result_html);
+  const ir = (await run('Build Ideas Response', [{ json: ks, binary: {} }]))[0].json;
+  check('G3 / D4: the keyword_strategy callback carries chance per keyword and the refused list', eq(ir.priority[0].chance, K.chance) && ir.refused.length === 1 && ir.refused[0].keyword === 'fta login', JSON.stringify([ir.priority[0].chance, ir.refused]));
+
+  // ---------- G3: the keyword check's answer ----------
+  const AR = (o = {}) => ({ ok: true, keyword: 'e invoicing software uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', volume: 320, kd: 40, cpc: 6.5, intent: 'commercial', known: true, position: null, position_url: null,
+    reach_info: { reach: 35, method: 'size', p75: null, size_reach: 35, sample: 2, top10: 60, organic_keywords: 400, cached: true, cached_at: daysAgo(3) }, reach_errors: [], cache_row: null, dfs_cost: 0.0202, business: 'ERP partner', services: ['ERP'], existing_keywords: [], business_source: 'request', ...o });
+  const answer = async (ar) => { mock('Assess Result', ar); return (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: [] } } }]))[0].json.body; };
+  let b = await answer(AR());
+  check('G3: the keyword check answers with the chance band (easy → direct → good), the text and the 2025 base rate; the label is unchanged', b.label === 'Easy for your site · Direct plan · 2-4 months' && eq(b.chance, { band: 'good', range: [50, 70], label: 'estimated chance good (50-70%, uncalibrated)' }) && /^Estimated chance of reaching the top 10 within 2-4 months: good \(50-70%\) — an uncalibrated estimate/.test(b.chance_text) && /1\.74%/.test(b.chance_text) && b.base_rate.year === 2025 && b.base_rate.top10_within_year_pct === 1.74, JSON.stringify({ c: b.chance, t: b.chance_text }));
+  b = await answer(AR({ kd: 76 }));
+  check('G3: very hard → full ladder (stretch) → slim 5-15%', b.stretch === true && eq(b.chance, { band: 'slim', range: [5, 15], label: 'estimated chance slim (5-15%, uncalibrated)' }), JSON.stringify(b.chance));
+  mock('Assess Result', AR({ intent: 'navigational' })); b = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: true, alternatives: ['e invoicing software uae pricing'] } } }]))[0].json.body;
+  check('G3: no ladder → no chance band', b.plan_type === 'none' && b.chance === null && b.chance_text === '', JSON.stringify(b.chance));
+});
+
+// ===================================================================================
+// The five defects the Phase 1 live check of 2026-10-12 found on techand.ai
+// (docs/system-review-2026-10-11/LIVE_CHECK_phase1_2026-10-12.md §3).
+await guard('phase 1 live-check defects (P1-1 … P1-5)', async () => {
+  const SN = 'S36 P1-1..P1-5 — every run settles its ledger row once, link farms out of the lost list / reclaim / the referring-sites alert, scraper queries with "-site:" and lower-case and / or, the fit gate on every keyword list shown, CPCs rounded';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  // ---------- P1-1: the run ledger settles exactly once, and never un-refuses a row ----------
+  // The wiring is generated (build_v4.py section 29 / build_api.py) into harness/ledger_wiring.json: which node settles which mode, and the
+  // filter + values of the two Data Table update nodes. The nodes themselves are Data Table nodes, so the harness plays their update here.
+  const LW = require('./ledger_wiring.json');
+  const dtUpdate = (rows, conds, values, ctx) => { let hit = 0;
+    const want = conds.map(([k, v]) => [k, String(v).startsWith('=') ? ctx[k] : v]);
+    for (const r of rows) if (want.every(([k, v]) => String(r[k]) === String(v))) { hit++; for (const [k, v] of Object.entries(values)) r[k] = String(v).startsWith('=') ? ctx[k] : v; }
+    return hit; };
+  const SHORT = { describe: 'Build Description Page', track: 'Start Site Tracker', published: 'Published Delivery', checkin: 'Check-in Delivery', profile: 'Profile Delivery', case_study: 'Case Study Delivery', ai_visibility: 'Monitor Started', backlinks: 'Monitor Started' };
+  check('P1-1: every mode of Route Mode reaches Settle Run Ledger — the short ones through their own last node (they left the row reserved for ever)',
+    Object.entries(SHORT).every(([m, n]) => (LW.modes[m] || []).includes(n) && LW.settle_from.includes(n)) && Object.values(LW.modes).every(l => l.length > 0) && ['keyword', 'discover', 'audit', 'ladder'].every(m => (LW.modes[m] || []).length > 0),
+    JSON.stringify(LW.modes));
+  check('P1-1: the settle update matches status = reserved (so it cannot settle a row twice or a refused one), in the main workflow and in the Keyword Check',
+    eq(LW.settle_conditions, [['run_id', '={{ $execution.id }}'], ['status', 'reserved']]) && eq(LW.assess.settle_conditions, [['run_id', '={{ $execution.id }}'], ['status', 'reserved']]) && LW.settle_values.status === 'done' && /est_usd/.test(String(LW.settle_values.settled_usd)),
+    JSON.stringify([LW.settle_conditions, LW.assess.settle_conditions]));
+  check('P1-1: the Keyword Check settles after the answer AND after an upstream failure (502 left the row reserved)', eq(LW.assess.settle_from, ['Respond Assess', 'Respond Assess Upstream Error']), JSON.stringify(LW.assess.settle_from));
+  // a real describe run: its reserved row, then the settle node, twice
+  const nd = await run('Normalize Input', F.forms.webhookDescribe || F.forms.webhookVerdict);
+  ledgerReset(); const dOut = await ledgerRun([{ json: { ...nd[0].json, mode: 'site_description', email: 'owner@northwind-erp.com', ai_budget_usd: 6, ai_budget_period: 'day' } }]);
+  const dRow = LEDGER.rows[0];
+  check('P1-1: a describe run reserves one row at its estimate (status reserved, nothing settled)', !dOut[0].json.validation_error && dRow.status === 'reserved' && dRow.settled_usd === 0 && dRow.est_usd > 0 && dRow.run_id === 'test-exec', JSON.stringify(dRow));
+  const ctx = { run_id: 'test-exec', settled_usd: dRow.est_usd };
+  const hit1 = dtUpdate(LEDGER.rows, LW.settle_conditions, LW.settle_values, ctx);
+  check('P1-1: the describe run settles its row — status done, settled_usd = the reservation', hit1 === 1 && dRow.status === 'done' && dRow.settled_usd === dRow.est_usd, JSON.stringify(dRow));
+  const hit2 = dtUpdate(LEDGER.rows, LW.settle_conditions, LW.settle_values, { run_id: 'test-exec', settled_usd: 99 });
+  check('P1-1: a second settle (two branches reaching the node) matches no row — a run can never settle twice', hit2 === 0 && dRow.settled_usd === dRow.est_usd, JSON.stringify([hit2, dRow]));
+  ledgerReset(ledgerFixture('owner@northwind-erp.com', 6, 'keyword', 0, new Date().toISOString()));
+  const rOut = await ledgerRun([{ json: { ...nd[0].json, mode: 'site_description', email: 'owner@northwind-erp.com', ai_budget_usd: 6, ai_budget_period: 'day' } }]);
+  const rRow = LEDGER.rows[6];
+  dtUpdate(LEDGER.rows, LW.refused_conditions, LW.refused_values, { run_id: 'test-exec' });
+  const hitR = dtUpdate(LEDGER.rows, LW.settle_conditions, LW.settle_values, { run_id: 'test-exec', settled_usd: 5 });
+  check('P1-1: a refused run stays refused — the settle update does not touch it', /daily limit/.test(rOut[0].json.validation_error || '') && rRow.status === 'refused' && hitR === 0 && rRow.settled_usd === 0, JSON.stringify(rRow));
+
+  // ---------- P1-2: link-farm pages never count as lost, never earn reclaim advice, never drive the drop alert ----------
+  const NOW = new Date().toISOString(), DAY = NOW.slice(0, 10), SITE = 'site_northwind-erp-com', DOM = 'northwind-erp.com';
+  const BROKEN = 'https://' + DOM + '/old-guide/';
+  const FARMS = Array.from({ length: 13 }, (_, i) => 'farmsite' + (i + 1) + '.example');
+  const GOOD = ['goodpartner.com', 'erpnews.ae', 'peppol.org', 'uaedirectory.biz'];
+  const prevRow = (o) => ({ status: 'live', miss_count: 0, verify: 'found', sources: 'dfs', last_seen: DAY, verified_at: NOW, seo_value: 45, rel: 'follow', ...o });
+  const entry = (d, o = {}) => ({ ref_domain: d, kind: 'web', sources: [], from_url: 'https://' + d + '/', to_url: 'https://' + DOM + '/', anchor: 'northwind erp', first_seen: DAY, last_seen: DAY, authority: 120, visits: 0, visits_28d: 0, key_events: 0, pages: [{ url: 'https://' + d + '/' }], prev: prevRow(), ai_cited: false, ...o });
+  const entries = [
+    ...GOOD.map((d, i) => entry(d, { sources: ['dfs'], from_url: 'https://' + d + '/partners/page-' + i, to_url: i === 0 ? BROKEN : 'https://' + DOM + '/' })),
+    ...FARMS.map(d => entry(d, { from_url: 'https://' + d + '/all/2835/13.html', to_url: BROKEN, anchor: 'buy cheap backlinks for erp software uae', prev: prevRow({ status: 'at_risk', miss_count: 1, verify: 'missing' }) }))];
+  const vl = [
+    ...GOOD.map((d, i) => ({ site_id: SITE, purpose: 'link', ref_domain: d, url: 'https://' + d + '/partners/page-' + i, verify: 'found', rel: 'follow', placement: 'content', to_url: i === 0 ? BROKEN : 'https://' + DOM + '/', anchor: 'northwind erp', title: 'Partners', context: 'Our partner Northwind ERP', outbound_domains: 5 })),
+    ...FARMS.map(d => ({ site_id: SITE, purpose: 'link', ref_domain: d, url: 'https://' + d + '/all/2835/13.html', verify: 'missing', why: 'footprint' })),
+    { site_id: SITE, purpose: 'target', url: BROKEN, broken: true, status: 404, referring: 5 }];
+  const plan = (previous) => [{ json: { site_id: SITE, domain: DOM, mode: 'full', on_demand: false, checked_at: NOW, since: new Date(Date.now() - 7 * 864e5).toISOString(), country_iso: 'AE', competitors: [], brand_names: ['Northwind'], assets: [{ url: 'https://' + DOM + '/', title: 'Northwind ERP' }], stored_gap: [], stored_timeseries: [], previous } }];
+  for (const k of ['BL Requests', 'Run BL Requests', 'Gap Requests', 'Run Gap Requests', 'Authority Requests', 'Run Authority', 'DR Requests', 'Fetch DR', 'Link Analyst Jobs', 'Link Analyst']) delete store[k];
+  mock('Link Merge', [{ json: { site_id: SITE, entries, mention_pages: [], list_pages: [], cc_gap: [], sources: {} } }]);
+  mock('Verify Links', vl);
+  mock('BL Plan', plan({ union_domains: 17, referring_domains: 17, spam_score: 0 }));
+  const R = (await run('Parse Backlinks', store['Verify Links']))[0].json;
+  const isFarm = (d) => FARMS.includes(d);
+  console.log('   lost ->', JSON.stringify(R.lost.map(l => l.from_domain)), '| farms', R.farms.length, '| alerts', JSON.stringify(R.alerts.map(a => a.level + ': ' + a.text.slice(0, 80))));
+  check('P1-2: the 13 link-farm pages are labelled spam and set aside, but never appear in "Links lost" or in important_lost (they filled both live)',
+    R.farms.length === 13 && FARMS.every(d => (R.ledger_rows.find(r => r.ref_domain === d) || {}).link_type === 'spam') && !R.lost.some(l => isFarm(l.from_domain)) && !R.important_lost.some(l => isFarm(l.from_domain)) && !R.candidates.some(c => c.type === 'lost' && isFarm(c.prospect_domain)),
+    JSON.stringify({ lost: R.lost.map(l => l.from_domain), farms: R.farms.length }));
+  check('P1-2: no "restore it" advice at all — the only confirmed losses were the farm pages, so there is no lost-link alert', R.lost.length === 0 && !R.alerts.some(a => /link\(s\) lost/.test(a.text)), JSON.stringify(R.alerts.map(a => a.text.slice(0, 90))));
+  check('P1-2: reclaim keeps the broken page but names only the real referrer, never a farm page', R.reclaim.length === 1 && R.reclaim[0].broken_url === BROKEN && eq(R.reclaim[0].domains, ['goodpartner.com']) && !R.candidates.some(c => c.type === 'reclaim' && isFarm(c.prospect_domain)), JSON.stringify(R.reclaim));
+  check('P1-2: the referring-sites drop counts non-spam sites only — 17 of which 13 were farm pages is not a fall to 4', !R.alerts.some(a => /Referring sites \(all sources\) fell/.test(a.text)), JSON.stringify(R.alerts.map(a => a.text)));
+  mock('BL Plan', plan({ union_domains: 30, referring_domains: 30, spam_score: 0 }));
+  const R2 = (await run('Parse Backlinks', store['Verify Links']))[0].json;
+  const drop = (R2.alerts.find(a => /Referring sites \(all sources\) fell/.test(a.text)) || {}).text || '';
+  check('P1-2: a real fall is still reported, with the farm pages taken off both sides of the comparison (30 - 13 = 17 → 4)', /fell from 17 to 4\./.test(drop) && /Link-farm pages are not counted/.test(drop), drop || JSON.stringify(R2.alerts.map(a => a.text)));
+
+  // ---------- P1-3: scraper queries ----------
+  mock('GSC Audit Plan', [{ json: { base: { domain: DOM }, domain: DOM, pages: [], crawl_finished: false, crawl_limit: 200, pages_crawled: 0, range: 'last 28 days', sitemap_url: 'https://' + DOM + '/sitemap.xml' } }]);
+  mock('GSC Audit Requests', [{ json: { site_id: SITE, kind: 'queries', connected: true, property: 'sc-domain:' + DOM, permission: 'siteOwner' } }]);
+  const SCRAPE = ['-site:techand.ai', 'cleartax OR techand', '"e invoicing" and uae', '"uae federal tax authority" -site:csc.gov.ae -site:facebook.com', '"dynamics 365" ("customer" or "client") -webinar -guide', 'site:northwind-erp.com "erp" OR inurl:blog'];
+  const REAL = ['erp software and accounting for distributors', 'e invoicing in uae', 'dynamics 365 business central pricing', 'tax and accounting services dubai'];
+  mock('GSC Audit Query', [{ json: { rows: [...SCRAPE, ...REAL].map((q, i) => ({ keys: [q], clicks: i, impressions: 500 - i * 10, ctr: 0.01, position: 4.2 })) } }]);
+  for (const k of ['Fetch Sitemap (Audit)', 'Fetch Sitemap Children (Audit)', 'GSC Sitemaps (Audit)', 'Sitemap Children (Audit)']) delete store[k];
+  const scQ = (await run('GSC Audit Findings', store['GSC Audit Query']))[0].json.search_console;
+  console.log('   scraper queries ->', JSON.stringify(scQ.scraper_queries), '| top:', scQ.top_queries.map(q => q.query).join(' | '));
+  check('P1-3: "-site:", a capital OR without quotes and a quoted phrase with a lower-case "and" are all scraper queries (live: 4 of the 10 top queries slipped through)',
+    scQ.scraper_queries.count === SCRAPE.length && SCRAPE.every(q => !scQ.top_queries.some(t => t.query === q)) && scQ.queries_with_impressions === REAL.length,
+    JSON.stringify({ count: scQ.scraper_queries.count, top: scQ.top_queries.map(q => q.query) }));
+  check('P1-3: an ordinary query with the word "and" (or "or") in prose is still a customer query', REAL.every(q => scQ.top_queries.some(t => t.query === q)), JSON.stringify(scQ.top_queries.map(q => q.query)));
+
+  // ---------- P1-4 / P1-5: the fit gate on every keyword list shown, and rounded CPCs ----------
+  const rkRow = (dom, [k, v, kd, intent, pos, cpc]) => ({ se_type: 'google', keyword_data: { keyword: k, keyword_info: { search_volume: v, cpc: cpc == null ? 2.5 : cpc, competition_level: 'HIGH' }, keyword_properties: { keyword_difficulty: kd }, search_intent_info: { main_intent: intent } }, ranked_serp_element: { serp_item: { type: 'organic', rank_group: pos, rank_absolute: pos, url: 'https://' + dom + '/' + k.replace(/\s+/g, '-') } } });
+  const ranked = (dom, list) => V.task({ target: dom, items: list.map(l => rkRow(dom, l)) });
+  const GOVFIVE = ['fta login', 'fta', 'emaratax', 'emirates id', 'emirates id status'];
+  const CLEARTAX = [['fta login', 90500, 33, 'navigational', 10], ['fta', 49500, 28, 'informational', 7], ['emaratax', 33100, 14, 'navigational', 6], ['emirates id', 18100, 22, 'informational', 10], ['emirates id status', 18100, 22, 'informational', 3], ['fta portal', 12100, 18, 'navigational', 2], ['cleartax e invoicing', 400, 10, 'navigational', 1], ['e invoicing software uae', 320, 20, 'commercial', 4, 1.2345], ['corporate tax uae', 4400, 32, 'informational', 7]];
+  mock('Competitor Analysis', { domain: 'techand.ai', competitors: ['cleartax.com'], country: 'United Arab Emirates', business: 'ERP, e-invoicing and Microsoft Dynamics 365 partner in the UAE', services: ['ERP implementation', 'E-invoicing'], extra_findings: [], extra_works: [] });
+  mock('KW Targets', [{ domain: 'techand.ai', is_you: true }, { domain: 'cleartax.com', is_you: false }]);
+  mock('Ranked Keywords', [ranked('techand.ai', [['techand', 30, 1, 'navigational', 12], ['fta portal', 12100, 18, 'navigational', 15], ['e invoicing uae', 300, 20, 'commercial', 13]]), ranked('cleartax.com', CLEARTAX)]);
+  mock('Fallback Queries', [{ query: 'e invoicing uae' }, { query: 'erp software uae' }]);
+  delete store['Load Site Cache'];
+  const akItems = await run('Analyze Keywords', V.task({ items: [{ se_type: 'google', keyword: 'e invoicing software uae', keyword_info: { search_volume: 320, cpc: 1.2345 }, keyword_properties: { keyword_difficulty: 20 }, search_intent_info: { main_intent: 'commercial' } }] }));
+  const ak = akItems[0].json.site_keywords; const obi = ak.opportunities_by_intent;
+  const allShown = [...Object.values(obi).flat(), ...ak.easy_wins, ...ak.keyword_gap].map(k => k.keyword);
+  console.log('   opportunities ->', JSON.stringify(Object.fromEntries(Object.entries(obi).map(([i, l]) => [i, l.map(k => k.keyword)]))), '| striking:', ak.striking_distance.map(k => k.keyword).join(', '));
+  check('P1-4: the opportunities by intent no longer recommend the government / portal searches or a competitor brand (live §4a listed fta login 90,500/mo, emaratax, fta portal)',
+    [...GOVFIVE, 'fta portal', 'cleartax e invoicing'].every(k => !allShown.includes(k)) && obi.navigational.length === 0 && allShown.includes('e invoicing software uae'),
+    JSON.stringify({ shown: allShown, navigational: obi.navigational.map(k => k.keyword) }));
+  check('P1-4: the page-2 "quick wins" are gated too, but the site\'s own brand stays (ranking 15th for your own name is a problem to fix, not a keyword to drop)',
+    eq(ak.striking_distance.map(k => k.keyword).sort(), ['e invoicing uae', 'techand']) && ak.refused.some(r => r.keyword === 'fta portal') && ak.refused.every((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i),
+    JSON.stringify({ striking: ak.striking_distance.map(k => k.keyword), refused: ak.refused.map(r => r.keyword + ':' + r.reason) }));
+  check('P1-4: "No rankings for navigational searches" is gone (it counted other companies\' brand searches as a gap)',
+    !akItems[0].json.extra_findings.some(f => /navigational searches/.test(f.title)) && akItems[0].json.extra_findings.some(f => /No rankings for (informational|commercial|transactional) searches/.test(f.title) || /Keyword gap/.test(f.title)),
+    JSON.stringify(akItems[0].json.extra_findings.map(f => f.title)));
+  mock('Normalize Input', [{ json: { domain: 'techand.ai', country: 'United Arab Emirates', started_at: new Date().toISOString() } }]);
+  const fullDoc = decode(await run('Build Full Report', [{ json: { ...akItems[0].json, domain: 'techand.ai', country: 'United Arab Emirates', site_audit: { health_score: 69, raw_score: 69, grade: 'C', findings: [], what_works: [], issue_counts: {}, category_scores: {}, not_assessed: [], notes: [] } } }]));
+  const cpcCell = (fullDoc.match(/<td>1\.2345[0-9]*<\/td>|<td>1\.23<\/td>/g) || []);
+  check('P1-5: §4a prints the CPC rounded to 2 decimals (DataForSEO sends float32: 1.2345 / 8.84000015258789)', fullDoc.includes('<td>1.23</td>') && !/1\.2345/.test(fullDoc) && !/\d\.\d{4,}/.test(fullDoc), JSON.stringify(cpcCell) + ' | ' + (fullDoc.match(/\d\.\d{4,}/g) || []).slice(0, 5).join(','));
+  // §4a is everything from its heading to section 5: the four intent tables, the easy wins, the gap and the page-2 quick wins. The site's OWN
+  // rankings (section 4, above it) are a description of where it stands and stay as they are — "fta portal #15" is a fact, not a recommendation.
+  const s4a = fullDoc.slice(fullDoc.indexOf('4a. Keyword Opportunities'), fullDoc.indexOf('5. Authority'));
+  check('P1-4: §4a of the delivered Word file (intent tables, easy wins, gap, quick wins) holds no government, portal or competitor-brand row',
+    s4a.length > 200 && [...GOVFIVE, 'fta portal', 'cleartax e invoicing'].every(k => !s4a.includes('<td>' + k + '</td>')) && s4a.includes('<td>e invoicing software uae</td>'),
+    String(s4a.length) + ' | ' + [...GOVFIVE, 'fta portal', 'cleartax e invoicing'].filter(k => s4a.includes('<td>' + k + '</td>')).join(', '));
+});
+
+// ===================================================================================
+// S35 G19 (2026-10-12, system review FIX_PLAN): one site model that every workflow reads — the kit `v5/code/_site_model.js` (harness shim
+// `code_v4/_site_model.js`, written by build_v4.py section 30), the weekly resolver in the Site Tracker (Model Targets (Site) -> Fetch
+// Homepage (Site) -> Site Model (Site) -> the seo_sites row in Site Metrics) and the on-demand resolver in the main workflow
+// (Site Model Plan -> Site Model -> Model Cache Row, reused for 7 days). D15 / D11 / D10 / D22 build on it: SITE_MODEL_SPEC.md.
+await guard('one site model (FIX_PLAN G19)', async () => {
+  const SN = 'S35 G19 — one site model: canonical host and siteUrl, name / NAP / logo precedence, services, nav pages, matchPage (no S26 false match), the weekly resolver with the exact seo_sites row, 7-day reuse vs rebuild, the Site Tracker brief';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T = require('./fixtures_tracking'), TC = require('./table_cols.json');
+  const D = T.D, SITE = 'site_northwind-erp-com', W = 'https://www.' + D, B = 'https://' + D;
+  const D2 = 'acme.example', SITE2 = 'site_acme-example';
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const EMPTY = [{ json: {} }];
+  const ORG = { '@context': 'https://schema.org', '@type': ['LocalBusiness', 'Organization'], name: 'Northwind ERP LLC', telephone: '+971 4 123 4567', email: 'hello@' + D,
+    logo: { url: W + '/logo.png' }, sameAs: ['https://www.linkedin.com/company/northwind'], address: { '@type': 'PostalAddress', streetAddress: 'Office 1203, DAFZA', addressLocality: 'Dubai', addressRegion: 'Dubai', addressCountry: 'AE' } };
+  const page = (o) => '<!DOCTYPE html><html><head><title>Northwind ERP</title>' + (o && o.canonical === false ? '' : '<link rel="canonical" href="' + ((o && o.canonical) || (W + '/')) + '">') +
+    (o && o.ld === false ? '' : '<scr' + 'ipt type="application/ld+json">' + JSON.stringify((o && o.ld) || ORG) + '</scr' + 'ipt>') +
+    '</head><body><header><nav><a href="/whatwedo/">What we do</a><a href="/erp/">ERP implementation</a><a href="https://twitter.com/northwind">Twitter</a><a href="/">Home</a><a href="#top">Top</a></nav></header><h1>Northwind</h1></body></html>';
+  const kit = async (items) => (await run('_site_model', items.map(j => ({ json: j })))).map(i => i.json);
+
+  // ---- 1. the canonical host and SM.siteUrl ----
+  const [k1] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: '/erp-software-uae/' }]);
+  check('canonical host from the homepage rel=canonical; SM.siteUrl writes https on that host', k1.model.canonical_host === 'www.' + D && k1.model.host_source === 'canonical tag' && k1.site_url === W + '/erp-software-uae/', JSON.stringify([k1.model.canonical_host, k1.model.host_source, k1.site_url]));
+  const paths = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: '' }, { site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: 'erp' },
+    { site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: '//blog//a/' }, { site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: B + '/already/' }]);
+  check('siteUrl: empty path = the home URL, a bare path gets one slash, a double slash is collapsed, an absolute URL is left alone',
+    eq(paths.map(p => p.site_url), [W + '/', W + '/erp', W + '/blog/a/', B + '/already/']), JSON.stringify(paths.map(p => p.site_url)));
+  const [k2] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ canonical: false, ld: false }) }, path: '/x' }]);
+  check('no canonical tag and no other evidence → the bare domain, and the API target is always the bare domain', k2.model.canonical_host === D && k2.model.host_source === 'domain' && k2.site_url === B + '/x' && k2.api_target === D && k1.api_target === D, JSON.stringify([k2.model.canonical_host, k2.site_url, k1.api_target]));
+  const [k3] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ canonical: false, ld: false }), seen_hosts: [W + '/peppol-uae/', W + '/erp/', B + '/old/'] }, path: '/x' }]);
+  check('no canonical tag → the host the site\'s own live URLs use (www here) decides', k3.model.canonical_host === 'www.' + D && k3.model.host_source === 'live urls', JSON.stringify([k3.model.canonical_host, k3.model.host_source]));
+  const [k4] = await kit([{ site_row: { site_id: SITE, domain: D, canonical_host: 'https://www.' + D + '/', model_updated_at: daysAgo(2) }, path: '/x' }]);
+  check('a stored canonical host is normalised (scheme and trailing slash dropped) and a 2-day-old model counts as fresh', k4.model.canonical_host === 'www.' + D && k4.model.host_source === 'stored' && k4.site_url === W + '/x' && k4.fresh === true, JSON.stringify([k4.model.canonical_host, k4.fresh]));
+  const [k5] = await kit([{ site_row: { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(9) } }]);
+  check('a model older than 7 days is not fresh', k5.fresh === false && Math.round(k5.age_days) === 9, JSON.stringify([k5.fresh, k5.age_days]));
+  const [kx] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ canonical: 'https://cdn.other.example/x/' }), ld: false } }]);
+  check('a canonical tag on another domain is ignored', kx.model.canonical_host === D, kx.model.canonical_host + ' / ' + kx.model.host_source);
+
+  // ---- 2. name, logo and NAP: profile -> homepage schema -> Google Business Profile -> the app's fields ----
+  const PROF = { site_id: SITE, business_name: 'Northwind ERP', street_address: 'Office 1203, DAFZA Building 6', city: 'Dubai', region: 'Dubai', country_code: 'AE', phone: '+971 4 999 0000', public_email: 'hello@' + D, logo_url: W + '/brand/logo.svg', price_range: 'From AED 50,000' };
+  const GBP = { name: 'Northwind ERP Software LLC', phone: '+971 4 555 1111', address: 'Sheikh Zayed Road', city: 'Dubai' };
+  const APP = { business_name: 'Northwind (app)', phone: '+971 4 000 0000', business_facts: 'ERP partner in Dubai since 2016', cta: 'Book a scoping call' };
+  const [p1] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page(), profile: PROF, gbp: GBP, request: APP } }]);
+  check('with a profile: the name, the logo and the NAP come from it', p1.name === 'Northwind ERP' && p1.model.name_source === 'profile' && p1.model.logo_url === W + '/brand/logo.svg' && p1.nap.street_address === 'Office 1203, DAFZA Building 6' && p1.nap.phone === '+971 4 999 0000' && p1.nap.source === 'profile', JSON.stringify([p1.name, p1.model.name_source, p1.nap]));
+  const [p2] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page(), gbp: GBP, request: APP } }]);
+  check('no profile: the homepage Organization / LocalBusiness schema is used (D10: never "[Your Business Name]")', p2.name === 'Northwind ERP LLC' && p2.model.name_source === 'homepage_schema' && p2.nap.street_address === 'Office 1203, DAFZA' && p2.nap.city === 'Dubai' && p2.nap.phone === '+971 4 123 4567' && p2.nap.country_code === 'AE' && p2.model.logo_url === W + '/logo.png' && p2.nap.source === 'homepage_schema', JSON.stringify([p2.name, p2.model.name_source, p2.nap]));
+  const [p3] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ ld: false }), gbp: GBP, request: APP } }]);
+  check('no profile and no homepage schema: the Google Business Profile', p3.name === 'Northwind ERP Software LLC' && p3.model.name_source === 'gbp' && p3.nap.street_address === 'Sheikh Zayed Road' && p3.nap.source === 'gbp', JSON.stringify([p3.name, p3.model.name_source, p3.nap.street_address]));
+  const [p4] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ ld: false }), request: APP } }]);
+  check('nothing but what the app sent: its name, and the business facts / call to action ride in the model (D10)', p4.name === 'Northwind (app)' && p4.model.name_source === 'app' && p4.model.business_facts === APP.business_facts && p4.model.cta === APP.cta && p4.facts.pricing === false && p4.facts.timeline === false, JSON.stringify([p4.name, p4.model.name_source, p4.facts]));
+  const [p5] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ ld: false }), profile: PROF, request: { business_facts: 'Go-live in 12 weeks, licences from AED 50,000' } } }]);
+  check('SM.facts tells D10 whether pricing and timeline facts exist at all', p5.facts.pricing === true && p5.facts.timeline === true && p5.name === 'Northwind ERP', JSON.stringify(p5.facts));
+
+  // ---- 3. services and nav pages (D22 reads them) ----
+  const [s1] = await kit([{ site_row: { site_id: SITE, domain: D, services_json: JSON.stringify(['Power Platform', 'ERP implementation']) }, extras: { html: page(), services: ['ERP implementation', 'Business Central'] } }]);
+  check('services: this run\'s list first, the stored ones merged in, no duplicates', eq(s1.services, ['ERP implementation', 'Business Central', 'Power Platform']), JSON.stringify(s1.services));
+  check('nav pages: same-host links of the header / nav with their text; outside links, the home link and anchors dropped', eq(s1.model.nav_pages.map(p => p.path), ['/whatwedo/', '/erp/']) && s1.model.nav_pages[0].title === 'What we do', JSON.stringify(s1.model.nav_pages));
+
+  // ---- 4. SM.matchPage: the page a keyword already has (D11) ----
+  const INS = W + '/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs';
+  const INV = [{ url: INS, title: 'The cost of non-compliance: UAE e-invoicing penalties and mitigation costs', source: 'sitemap', lastmod: '2026-08-21' },
+    { url: W + '/uae-e-invoicing-fta-rules/', title: 'UAE e-invoicing: FTA rules explained', source: 'sitemap' },
+    { url: W + '/erp-pricing/', title: 'ERP pricing in Dubai', source: 'gsc', queries: [{ query: 'erp cost dubai', impressions: 240 }, { query: 'erp price uae', impressions: 0 }] }];
+  const row4 = { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1) };
+  const [m1, m2, m3, m4] = await kit([{ site_row: row4, extras: { pages: INV }, keyword: 'uae e invoicing penalties' }, { site_row: row4, extras: { pages: INV }, keyword: 'e invoicing uae penalties' },
+    { site_row: row4, extras: { pages: INV }, keyword: 'erp cost dubai' }, { site_row: row4, extras: { pages: INV }, keyword: 'wms implementation dubai' }]);
+  check('D11: "uae e invoicing penalties" finds the live /insights/ page (slug), not "publish it"', m1.match && m1.match.url === INS && m1.match.matched_by === 'slug' && m1.match.score === 1, JSON.stringify(m1.match));
+  check('S26 false-match pair: "e invoicing uae penalties" never claims the FTA rules page ("e" and stop words do not count)', m2.match && m2.match.url === INS && !/fta-rules/.test(m2.match.url), JSON.stringify(m2.match));
+  const [only] = await kit([{ site_row: row4, extras: { pages: [INV[1]] }, keyword: 'e invoicing uae penalties' }]);
+  check('with only the FTA rules page in the inventory the keyword matches nothing (2 of 3 words)', only.match === null, JSON.stringify(only.match));
+  check('a page with impressions for the exact query matches even when the slug does not', m3.match && m3.match.url === W + '/erp-pricing/' && m3.match.matched_by === 'query' && m3.match.impressions === 240, JSON.stringify(m3.match));
+  check('an unrelated keyword matches nothing', m4.match === null, JSON.stringify(m4.match));
+  check('SM.pageRows writes exactly the seo_pages columns', m1.page_rows.length === 3 && m1.page_rows.every(r => eq(Object.keys(r).sort(), [...TC.PAGES].sort())) && m1.page_rows[0].url === INS, JSON.stringify(Object.keys(m1.page_rows[0])));
+
+  // ---- 5. SM.toRow: exactly the seo_sites columns the model owns ----
+  const MODEL_COLS = ['canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];
+  check('SM.toRow writes only seo_sites columns and every model column (sync_tables.py adds them to the live table)',
+    Object.keys(p1.row).every(k => TC.SITES.includes(k)) && MODEL_COLS.every(k => k in p1.row) && eq(p1.columns, ['site_id', 'domain', ...MODEL_COLS]) && JSON.parse(p1.row.nap_json).city === 'Dubai', JSON.stringify(Object.keys(p1.row)));
+
+  // ---- 6. the weekly resolver in the Site Tracker ----
+  const staleRow = T.sitesRows({ services_json: JSON.stringify(['ERP implementation', 'Business Central']), canonical_host: '', model_updated_at: '' })[0];
+  const freshRow = T.sitesRows({ id: 2, site_id: SITE2, domain: D2, keywords: '', canonical_host: 'www.' + D2, business_name: 'Acme Systems', nap_json: JSON.stringify({ city: 'Abu Dhabi', phone: '+971 2 111 2222', source: 'profile' }), model_updated_at: daysAgo(2) })[0];
+  mock('Load Sites', [staleRow, freshRow]); mock('Load Ladders', EMPTY); mock('Load Rank History', EMPTY); mock('Load Site Metrics', EMPTY); mock('Load Query History', EMPTY);
+  mock('Load Content Log', EMPTY); mock('Load Console Alerts', EMPTY); mock('Load Check-ins', EMPTY);
+  mock('Load Profiles (Site)', [{ json: { ...PROF, id: 1 } }]); mock('Load Monitors (Site)', [{ json: { site_id: SITE, domain: D, brand_names: 'Northwind, Northwind ERP', competitors: 'cleartax.com, azentio.com' } }]);
+  const plan = await run('Site Plan', EMPTY);
+  const targets = await run('Model Targets (Site)', plan);
+  check('only the site whose model is older than 7 days is read; the 2-day-old one is reused (no request)', targets.length === 1 && targets[0].json.site_id === SITE && targets[0].json.url === B + '/', JSON.stringify(targets.map(t => t.json)));
+  mock('Fetch Homepage (Site)', [{ statusCode: 200, headers: { 'content-type': 'text/html' }, body: page() }]);
+  const models = await run('Site Model (Site)', store['Fetch Homepage (Site)']);
+  const mm1 = models.find(x => x.json.site_id === SITE).json, mm2 = models.find(x => x.json.site_id === SITE2).json;
+  check('the stale site is rebuilt from its homepage (canonical host, profile name, brand names and competitors from seo_monitors)',
+    mm1.rebuilt === true && mm1.model.canonical_host === 'www.' + D && mm1.model.business_name === 'Northwind ERP' && mm1.model.competitors.includes('cleartax.com') && mm1.model.brand_names.includes('Northwind'), JSON.stringify({ host: mm1.model.canonical_host, name: mm1.model.business_name, comp: mm1.model.competitors }));
+  check('the fresh site keeps its stored model and is not rebuilt', mm2.rebuilt === false && mm2.model.canonical_host === 'www.' + D2 && mm2.model.business_name === 'Acme Systems' && mm2.model.nap.city === 'Abu Dhabi' && Math.round(mm2.age_days) === 2, JSON.stringify({ rebuilt: mm2.rebuilt, host: mm2.model.canonical_host, age: mm2.age_days }));
+  mock('Resolve Properties', plan.map(p => ({ json: { ...p.json, gsc_connected: false, gsc_property: '', gsc_error: 'no property for this account' } })));
+  const sm = await run('Site Metrics', store['Resolve Properties']);
+  const row1 = sm.find(x => x.json.site_id === SITE).json.site_row;
+  check('the weekly seo_sites row carries the model and has exactly the table columns', eq(Object.keys(row1).sort(), [...TC.SITES].sort()) && row1.canonical_host === 'www.' + D && row1.business_name === 'Northwind ERP' && JSON.parse(row1.services_json).includes('Business Central') && row1.model_updated_at, JSON.stringify({ cols: Object.keys(row1).length, host: row1.canonical_host, name: row1.business_name }));
+  check('the site keeps its registration fields (the model never overwrites them)', row1.site_id === SITE && row1.domain === D && row1.keywords === staleRow.json.keywords && row1.callback_url === staleRow.json.callback_url, JSON.stringify([row1.site_id, row1.keywords]));
+  const bi = await run('Brief Input', sm);
+  const facts = JSON.parse(bi.find(x => x.json.site_id === SITE).json.facts);
+  check('the Site Tracker brief is given the canonical host, the home URL and the business name from the model (never the bare domain)',
+    facts.website.canonical_host === 'www.' + D && facts.website.home_url === W + '/' && facts.website.business_name === 'Northwind ERP' && facts.website.city === 'Dubai' && facts.website.services.includes('Business Central'), JSON.stringify(facts.website));
+
+  // ---- 7. the on-demand resolver in the main workflow ----
+  const REQ = { domain: D, mode: 'keyword', keyword: 'erp software uae', business_facts: 'ERP partner in Dubai since 2016', cta: 'Book a scoping call', site_description: { services: ['ERP implementation', 'Business Central'] } };
+  mock('Use Cached Description', [{ json: REQ }]); mock('Load Site Row (Model)', EMPTY); mock('Load Site Cache', EMPTY); mock('Load Profile (Model)', EMPTY);
+  const pl1 = await run('Site Model Plan', EMPTY);
+  check('nothing stored → the homepage is read once', pl1[0].json.skip === false && pl1[0].json.site_id === SITE && pl1[0].json.url === B + '/', JSON.stringify(pl1[0].json));
+  mock('Fetch Homepage (Model)', [{ statusCode: 200, headers: {}, body: page() }]);
+  const od1 = await run('Site Model', store['Fetch Homepage (Model)']);
+  const o1 = od1[0].json;
+  check('the request is passed on unchanged with the model attached (canonical host, homepage schema, the request\'s facts and CTA)',
+    o1.mode === 'keyword' && o1.keyword === 'erp software uae' && o1.site_model.canonical_host === 'www.' + D && o1.site_model.business_name === 'Northwind ERP LLC' && o1.site_model.business_facts === REQ.business_facts && o1.site_model.cta === REQ.cta && o1.site_model.services.includes('Business Central') && o1.site_model_source === 'homepage', JSON.stringify({ host: o1.site_model.canonical_host, name: o1.site_model.business_name, src: o1.site_model_source }));
+  const cr = await run('Model Cache Row', od1);
+  check('a rebuilt model is cached in seo_cache with the exact columns (never in seo_sites: a row there would start the weekly paid runs)',
+    eq(Object.keys(cr[0].json).sort(), [...TC.CACHE].sort()) && cr[0].json.key === 'model:' + SITE && cr[0].json.kind === 'model' && JSON.parse(cr[0].json.value).canonical_host === 'www.' + D, JSON.stringify(cr[0].json).slice(0, 200));
+  mock('Load Site Cache', [{ json: { key: 'model:' + SITE, kind: 'model', site_id: SITE, value: cr[0].json.value, updated_at: daysAgo(3) } }]);
+  const pl2 = await run('Site Model Plan', EMPTY);
+  check('a model from 3 days ago is reused: no homepage request', pl2[0].json.skip === true && pl2[0].json.reused === true && /3 days old/.test(pl2[0].json.reason), JSON.stringify(pl2[0].json));
+  delete store['Fetch Homepage (Model)'];
+  const od2 = await run('Site Model', pl2);
+  check('the reused model still carries the host and the name, and this run\'s business facts', od2[0].json.site_model_reused === true && od2[0].json.site_model_source === 'stored' && od2[0].json.site_model.canonical_host === 'www.' + D && od2[0].json.site_model.business_name === 'Northwind ERP LLC' && od2[0].json.site_model.business_facts === REQ.business_facts, JSON.stringify([od2[0].json.site_model_source, od2[0].json.site_model.canonical_host]));
+  const cr2 = await run('Model Cache Row', od2);
+  check('a reused model is not written back (its age would never grow)', cr2[0].json.skip === true, JSON.stringify(cr2[0].json));
+  const rest = await run('Restore Site Model', [{ json: { key: 'model:' + SITE, kind: 'model' } }]);
+  check('Restore Site Model hands the request item on, not the stored row', rest[0].json.mode === 'keyword' && !!rest[0].json.site_model, JSON.stringify(Object.keys(rest[0].json)));
+  mock('Load Site Cache', [{ json: { key: 'model:' + SITE, kind: 'model', site_id: SITE, value: cr[0].json.value, updated_at: daysAgo(9) } }]);
+  const pl3 = await run('Site Model Plan', EMPTY);
+  check('a model from 9 days ago is rebuilt, and read on the canonical host the stale model already knows (D15)',
+    pl3[0].json.skip === false && pl3[0].json.url === W + '/', JSON.stringify(pl3[0].json));
+  mock('Use Cached Description', [{ json: { mode: 'discover', keyword: 'erp software uae' } }]);
+  const pl4 = await run('Site Model Plan', EMPTY);
+  check('a request without a website asks for nothing', pl4[0].json.skip === true && /no website/.test(pl4[0].json.reason), JSON.stringify(pl4[0].json));
+});
+
+// ===================================================================================
+await guard('d5-content-log', async () => {
+  const SN = 'S37 D5 — every written page waits in the open: one content-log row per content run (ladder / app / cadence) in the main workflow, and the pile-up guard counts the log rows plus the ladder rows still writing';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const T = require('./fixtures_tracking');
+  const LOGCOLS = require('./table_cols.json').LOG;   // seo_content_log's columns, as ladder_common.py defines them
+  const D = 'northwind-erp.com', SITE = 'site_northwind-erp-com', HOST = 'https://www.northwind-erp.com/';
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const slug = (k) => HOST + k.replace(/\s+/g, '-') + '/';
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const ladder = (id, head, pages, start) => pages.map(([rung, page_no, keyword, status]) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: id, domain: D, head_keyword: head, rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: slug(keyword), page_exists: false, status: status || 'planned', months: '', start_date: start, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@example.com', callback_url: 'https://hooks.example.com/x', request_id: 'r-' + id } }));
+  const std = (id, h, start, st = {}) => ladder(id, h, [[1, 1, h + ' cost', st.a], [1, 2, h + ' guide', st.b], [2, 3, h + ' software', st.c], [3, 4, h + ' providers', st.d], [4, 0, h, st.top]], start);
+  const set = (ladder_id, o = {}) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id, site_id: SITE, domain: D, head_keyword: '', mode: 'auto', priority: null, status: 'active', plan_type: '', reach: null, source: 'app', opportunities: '', auto_start: false, max_active: null, max_waiting: null, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z', ...o } });
+  const siteSet = (o) => set('_site', { opportunities: 'auto', max_active: 2, max_waiting: 3, ...o });
+  const logRow = (keyword, o = {}) => ({ json: { site_id: SITE, domain: D, keyword, source: 'cadence', page_type: 'Guide', existing_page_url: '', rung: 0, ladder_id: '', request_id: 'cad_x', started_at: daysAgo(10), status: 'started', published_url: '', published_at: '', week: '2026-09-21', ...o } });
+  const cad = (n) => [{ json: { site_id: SITE, domain: D, pages_per_week: n, status: 'active', updated_at: 'x', request_id: '' } }];
+  const EMPTY = [{ json: {} }];
+  const plan = async (o = {}) => {
+    mock('Manual Run', o.trigger || EMPTY); mock('Load Sites', T.sitesRows()); mock('Load Cadence', cad(o.pages == null ? 2 : o.pages)); mock('Load Ladders', o.ladders || EMPTY);
+    mock('Load Query History', EMPTY); mock('Load Trends', EMPTY); mock('Load Content Log', o.logs || EMPTY);
+    mock('Load Ladder Settings', o.settings || EMPTY); mock('Load Main Keyword Ranks', EMPTY);
+    const r = await run('Cadence Plan', store['Load Main Keyword Ranks']);
+    const picks = r.filter(x => !x.json.nothing_to_do).map(x => x.json);
+    return { items: r, picks, kws: picks.map(p => p.keyword), first: r[0].json, status: (r.find(x => x.json.report_only) || {}).json };
+  };
+  const A = (st) => std('lad_A', 'peppol uae', daysAgo(40), st);
+
+  // ---------- (a) the guard counts the content log AND the ladder rows still writing ----------
+  // exec 380: 2 pages were in the log, 2 more had been written by the ladder (rows 'writing', no log row) — the cadence saw 2 and wrote 2 more
+  let p = await plan({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors')] });
+  console.log('   D5 pile-up ->', JSON.stringify({ paused: p.status && p.status.paused_reason, waiting: p.status && p.status.waiting_publish, kws: p.status && p.status.waiting_keywords }));
+  check('D5: 2 log rows + 2 ladder rows writing = 4 waiting at limit 3 -> pile-up, nothing planned', !p.picks.length && p.status && p.status.paused_reason === 'pileup' && p.status.waiting_publish === 4, JSON.stringify(p.items.map(x => x.json.keyword || x.json.reason)));
+  check('D5: the waiting pages are named (ladder pages included) and the reason uses the agreed wording', eq([...p.status.waiting_keywords].sort(), ['erp for distributors', 'erp pricing uae', 'peppol uae cost', 'peppol uae guide']) && /^4 written pages waiting for publication \(pile-up guard, limit 3\): /.test(p.status.reason) && /"peppol uae cost"/.test(p.status.reason), JSON.stringify({ kws: p.status.waiting_keywords, reason: p.status.reason }));
+  const csn = await run('Cadence Status', p.items); scanHtml('cadence status (D5 pile-up)', csn[0].json.html);
+  check('D5: the status note says "N written pages waiting for publication (pile-up guard, limit L)" and names them', /paused, 4 written pages waiting for publication/.test(csn[0].json.subject) && /4 written pages waiting for publication \(pile-up guard, limit 3\): <b>peppol uae cost<\/b>/.test(csn[0].json.html) && csn[0].json.waiting_keywords.length === 4, JSON.stringify({ s: csn[0].json.subject, w: csn[0].json.waiting_keywords }));
+  const cnote = await run('Cadence Note', [{ json: {} }]);
+  check('D5: nothing was written, so there is no cadence note (only the status note)', cnote.length === 0, cnote.length);
+  // the old behaviour (log rows only) would have counted 2 and written 2 pages
+  p = await plan({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors')], settings: [siteSet({ max_waiting: 5 })] });
+  check('D5: with the limit at 5 the same website is written again (the guard, not the ladder, stops it)', p.kws.length === 2 && p.first.waiting_publish === 4, JSON.stringify({ kws: p.kws, waiting: p.first.waiting_publish }));
+
+  // ---------- (b) a keyword in both counts once ----------
+  p = await plan({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('peppol uae cost', { source: 'ladder', ladder_id: 'lad_A', status: 'written' }), logRow('peppol uae guide', { source: 'ladder', ladder_id: 'lad_A', status: 'written' })] });
+  check('D5: a page in the content log and on its ladder row counts once (2 waiting, not 4)', p.first.waiting_publish === 2 && p.first.paused_reason === '' && eq([...p.first.waiting_keywords].sort(), ['peppol uae cost', 'peppol uae guide']), JSON.stringify({ w: p.first.waiting_publish, kws: p.first.waiting_keywords }));
+  check('D5: status "written" waits like "started" (the main workflow writes it when the page exists)', p.kws.length === 2 && !p.kws.includes('peppol uae cost'), p.kws);
+
+  // ---------- (c) published pages never count ----------
+  p = await plan({ ladders: A({ a: 'published', b: 'published', c: 'published' }), logs: ['peppol uae cost', 'peppol uae guide', 'peppol uae software'].map(k => logRow(k, { status: 'published', published_url: slug(k), published_at: daysAgo(3) })) });
+  check('D5: published log rows and published ladder rows do not count', p.first.waiting_publish === 0 && p.first.paused_reason === '' && p.kws.length === 2, JSON.stringify({ w: p.first.waiting_publish, kws: p.kws }));
+  p = await plan({ ladders: A({ a: 'writing', b: 'writing', c: 'writing' }), logs: ['peppol uae cost', 'peppol uae guide', 'peppol uae software'].map(k => logRow(k, { status: 'published', published_url: slug(k), published_at: daysAgo(3) })) });
+  check('D5: a ladder row left on "writing" whose page is published (content log) does not count', p.first.waiting_publish === 0 && p.first.paused_reason === '', JSON.stringify({ w: p.first.waiting_publish, kws: p.first.waiting_keywords }));
+
+  // ---------- (d) 120 days ----------
+  p = await plan({ ladders: std('lad_O', 'wms dubai', daysAgo(200), { a: 'writing', b: 'writing', c: 'writing' }), logs: [logRow('erp pricing uae', { started_at: daysAgo(130) })] });
+  check('D5: nothing newer than 120 days: no page waits (old log row, old ladder)', p.first.waiting_publish === 0 && p.first.paused_reason === '', JSON.stringify({ w: p.first.waiting_publish, kws: p.first.waiting_keywords }));
+  p = await plan({ ladders: std('lad_O', 'wms dubai', daysAgo(200), { a: 'writing' }), logs: [logRow('wms dubai cost', { started_at: daysAgo(9), source: 'ladder', ladder_id: 'lad_O' })] });
+  check('D5: an old ladder whose page was written 9 days ago still counts (the log row dates it)', p.first.waiting_publish === 1 && eq(p.first.waiting_keywords, ['wms dubai cost']), JSON.stringify(p.first.waiting_keywords));
+
+  // ---------- (e) the row every content run writes in the main workflow ----------
+  const NI = (o = {}) => [{ json: { mode: 'keyword', domain: D, keyword: 'peppol uae cost', page_type: 'Guide', existing_page_url: '', request_id: 'req-1', client_ip: '', ladder_id: '', ladder_rung: null, ...o } }];
+  const logWrite = async (ni, stored, pkg) => { mock('Normalize Input', ni); mock('Blog Package', [{ json: pkg === undefined ? { article_html: '<h1>a page</h1>', page_markdown: '# a page' } : pkg }]); mock('Load Content Log (Run)', stored && stored.length ? stored : EMPTY); return (await run('Content Log Row', store['Load Content Log (Run)']))[0].json; };
+  const exact = (r) => eq(Object.keys(r).sort(), LOGCOLS.slice().sort());
+  let row = await logWrite(NI({ client_ip: 'ladder:lad_A', ladder_id: 'lad_A', ladder_rung: 1 }));
+  console.log('   D5 ladder spawn row ->', JSON.stringify(row));
+  check('D5: a ladder page run writes the row (source ladder, status written, exactly the table columns)', exact(row) && row.source === 'ladder' && row.status === 'written' && row.site_id === SITE && row.ladder_id === 'lad_A' && row.rung === 1 && row.published_url === '' && row.week === new Date().toISOString().slice(0, 10), JSON.stringify({ cols: Object.keys(row), row }));
+  row = await logWrite(NI({ client_ip: 'app:cmp-abc123', keyword: 'erp pricing uae', request_id: 'app-7' }), [logRow('erp pricing uae', { source: 'app', request_id: 'app-7', started_at: daysAgo(0), week: '2026-10-05' })]);
+  check('D5: the app\'s "Write now" updates its own row (same request): source app, start of the week kept, status written', exact(row) && row.source === 'app' && row.status === 'written' && row.week === '2026-10-05' && row.request_id === 'app-7', JSON.stringify(row));
+  row = await logWrite(NI({ client_ip: 'cadence:' + SITE, keyword: 'best e invoicing software uae', request_id: 'cad_20261012_northwind-erp-com_1' }), [logRow('best e invoicing software uae', { source: 'ai_answer', request_id: 'cad_20261012_northwind-erp-com_1' })]);
+  check('D5: a cadence run keeps where the keyword came from (ai_answer survives, so the AI quota still counts it)', exact(row) && row.source === 'ai_answer' && row.status === 'written', JSON.stringify(row));
+  row = await logWrite(NI({ client_ip: '', keyword: 'erp for distributors', request_id: '' }));
+  check('D5: a run started by hand is logged too (source manual), so its page waits like the others', exact(row) && row.source === 'manual' && row.status === 'written' && row.ladder_id === '' && row.rung === 0, JSON.stringify(row));
+  row = await logWrite(NI({ keyword: 'peppol uae cost', existing_page_url: slug('peppol uae cost') }), [logRow('peppol uae cost', { status: 'published', published_url: slug('peppol uae cost'), published_at: daysAgo(30), source: 'ladder', request_id: 'old' })]);
+  check('D5: a page written again keeps its published URL but waits again (status written)', exact(row) && row.status === 'written' && row.published_url === slug('peppol uae cost') && row.published_at !== '' && row.source === 'ladder' && row.request_id === 'req-1', JSON.stringify(row));
+  const skipRow = await logWrite(NI({ domain: '' }));
+  check('D5: a run without a website writes nothing (the IF node stops it)', skipRow.skip === true && /nothing to follow/.test(skipRow.reason), JSON.stringify(skipRow));
+  const reportOnly = await logWrite(NI({}), [], { keyword: 'peppol uae cost' });   // a keyword report / verdict takes the same delivery path, but no page exists
+  check('D5: a report-only run writes nothing (no page was written)', reportOnly.skip === true && /report only/.test(reportOnly.reason), JSON.stringify(reportOnly));
+  // the row the ladder run writes is exactly what the guard reads next Monday
+  const spawned = await logWrite(NI({ client_ip: 'ladder:lad_A', ladder_id: 'lad_A', ladder_rung: 1 }));
+  p = await plan({ ladders: A({ a: 'writing', b: 'writing' }), logs: [{ json: { id: 1, createdAt: 'x', updatedAt: 'x', ...spawned } }, logRow('erp pricing uae'), logRow('erp for distributors')] });
+  check('D5: the row a ladder run writes is counted by the cadence (4 waiting, still one entry for that keyword)', p.status && p.status.waiting_publish === 4 && p.status.paused_reason === 'pileup', JSON.stringify(p.status && p.status.waiting_keywords));
+
+  // ---------- publish detection and the Site Tracker read "written" as waiting ----------
+  mock('Site Plan', [{ json: { site_id: SITE, domain: D, sitemap_url: HOST + 'sitemap.xml' } }]);
+  mock('Load Content Log', [logRow('peppol uae cost', { status: 'written', source: 'ladder', ladder_id: 'lad_A', rung: 1, started_at: daysAgo(6) })]);
+  mock('Load Ladders', A({ a: 'writing' }));
+  const pc = await run('Publish Candidates', store['Load Ladders']);
+  check('D5: publish detection still picks up the page, now that the run logged it as "written"', pc.length === 1 && !pc[0].json.nothing_to_do && (pc[0].json.candidates || []).some(c => c.keyword === 'peppol uae cost'), JSON.stringify(pc.map(x => (x.json.candidates || []).map(c => c.keyword))));
+});
+
+// ===================================================================================
+// S38 D9 / G2 / G4 (2026-10-11, system review) — the three content-quality items of the fix plan, on the shape of the live page of
+// execution 365 (`docs/system-review-2026-10-11/files/erp-software-uae.*`): it linked twice each to three pages that do not exist,
+// wrote "Facts erp" as an anchor, carried FAQPage schema, kept `?srsltid=` on a Statista link and cited one vendor blog three times.
+// ===================================================================================
+await guard('content correctness', async () => {
+  const SN = 'S38 D9 G2 G4 — a hub links only to live pages with title-cased anchors, no FAQPage anywhere, every figure checked against its source, weak sources capped, tracking parameters stripped';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const EMPTY = [{ json: {} }];
+  const D = 'techand.ai';
+
+  // ---------- D9 (a): the anchor kit (code_v4/_anchor.js, a shim written by build_v4.py section 32) ----------
+  const anch = async (list) => (await run('_anchor', list.map(j => ({ json: j })))).map(i => i.json);
+  const A = await anch([{ keyword: 'facts erp' }, { keyword: 'erp software dubai' }, { keyword: 'best erp software in dubai' }, { keyword: 'vat and crm for sme in uae' },
+    { keyword: 'erp software uae', title: 'ERP Software UAE: The 2026 Buyer Guide | Tech&' }, { url: 'https://' + D + '/peppol-access-point/' }, { keyword: 'SAP vs ERP' }]);
+  console.log('   anchors ->', A.map(x => x.anchor).join(' | '));
+  check('D9: anchors are title-cased and keep the acronyms ("Facts erp" became "Facts ERP"); a page title wins and loses the brand tail; a URL falls back to its last path piece; no anchor is all lower-case',
+    eq(A.map(x => x.anchor), ['Facts ERP', 'ERP Software Dubai', 'Best ERP Software in Dubai', 'VAT and CRM for SME in UAE', 'ERP Software UAE: The 2026 Buyer Guide', 'Peppol Access Point', 'SAP vs ERP'])
+    && A.every(x => x.anchor !== x.anchor.toLowerCase()), JSON.stringify(A.map(x => x.anchor)));
+
+  // ---------- G4 (a): the source kit (code_v4/_sources.js) ----------
+  const srcq = async (list) => (await run('_sources', list.map(j => ({ json: j })))).map(i => i.json);
+  const STAT = 'https://www.statista.com/outlook/tmo/software/erp/worldwide/?srsltid=AU7gw4WlnBr0cwotONj2rz1OX8NuhJp4cm';
+  const S = await srcq([{ url: STAT }, { url: 'https://example.com/a?utm_source=news&id=7&utm_medium=email&utm_campaign=x#top' }, { url: 'https://example.com/p?gclid=1&fbclid=2&msclkid=3' }, { url: 'https://example.com/plain' },
+    { url: 'https://tax.gov.ae/en/vendors.aspx' }, { url: 'https://www.statista.com/outlook/erp/' }, { url: 'https://www.reuters.com/tech/x' }, { url: 'https://learn.microsoft.com/dynamics365/finance' },
+    { url: 'https://www.microsoft.com/en/blog/erp-trends' }, { url: 'https://enterprise.trangotech.com/blog/top-erp-systems/' }, { url: 'https://peppol.org/members/' }]);
+  console.log('   sources ->', S.map(x => x.host + ':' + x.tier).join(' | '));
+  check('G4: srsltid, utm_*, gclid, fbclid and msclkid are stripped, the real query and the fragment survive, a plain URL is untouched',
+    S[0].url === 'https://www.statista.com/outlook/tmo/software/erp/worldwide/' && S[1].url === 'https://example.com/a?id=7#top' && S[2].url === 'https://example.com/p' && S[3].url === 'https://example.com/plain', JSON.stringify(S.slice(0, 4).map(x => x.url)));
+  check('G4: the source-quality list — government, research, major press, vendor documentation, a vendor blog and an unknown vendor site (weak), a standards body',
+    eq(S.slice(4).map(x => x.tier), ['primary', 'research', 'press', 'vendor', 'weak', 'weak', 'primary']), JSON.stringify(S.slice(4).map(x => [x.host, x.tier])));
+  const fig = async (list) => (await srcq(list)).map(x => x.found);
+  const MOF = 'The UAE e-invoicing mandate starts in July 2026 for taxpayers with revenue of AED 50 million and above; 1,234 businesses registered and adoption rose 23.5%.';
+  check('G4: a figure is found whatever the formatting — "AED 50m" = "AED 50 million", "1234" = "1,234", "23.5 percent" = "23.5%", the year as written',
+    eq(await fig([{ figure: 'AED 50m', source: MOF }, { figure: '1234', source: MOF }, { figure: '23.5 percent', source: MOF }, { figure: '2026', source: MOF }]), [true, true, true, true]), 'formatting variants');
+  check('G4: a figure the source does not carry is not found (a different number, a different magnitude, another year)',
+    eq(await fig([{ figure: 'USD 1,802 million', source: MOF }, { figure: 'AED 50bn', source: MOF }, { figure: '2027', source: MOF }, { figure: '3,952', source: MOF }]), [false, false, false, false]), 'missing figures');
+  const F1 = (await srcq([{ text: 'We run 8 phases over 3 months and migrate 12 tables. Revenue of AED 50m, 23.5% growth and 1,234 orders in 2025.' }]))[0].figures.map(f => f.raw);
+  console.log('   figures found ->', F1.join(' | '));
+  check('G4: small bare numbers ("8 phases", "3 months", "12 tables") are never treated as claims; amounts, percentages, counts over 1,000 and years are',
+    eq(F1, ['AED 50m', '23.5%', '1,234', '2025']), JSON.stringify(F1));
+
+  // ---------- D9 (b): Collect Site URLs splits the ladder links into live and planned ----------
+  const sitemap = '<?xml version="1.0"?><urlset>' + ['/', '/e-invoicing-software-uae/', '/contact-us'].map(p => '<url><loc>https://' + D + p + '</loc></url>').join('') + '</urlset>';
+  const LADDER = [{ url: 'https://' + D + '/e-invoicing-software-uae/', path: '/e-invoicing-software-uae/', role: 'rung 1', keyword: 'e invoicing software uae', planned: true },
+    { url: 'https://' + D + '/best-erp-software-in-dubai/', path: '/best-erp-software-in-dubai/', role: 'rung 1', keyword: 'best erp software in dubai', planned: true },
+    { url: 'https://' + D + '/erp-software-dubai/', path: '/erp-software-dubai/', role: 'rung 2', keyword: 'erp software dubai', planned: true },
+    { url: 'https://' + D + '/erp-implementation-cost-uae/', path: '/erp-implementation-cost-uae/', role: 'rung 2', keyword: 'erp implementation cost uae', planned: true }];
+  mock('Prepare Keyword Run', { domain: D, keyword: 'erp software uae', ladder_links: LADDER, ladder_id: 'lad_365', ladder_rung: 4 });
+  mock('Fetch Sitemaps', [{ json: { body: sitemap } }]);
+  const cu = (await run('Collect Site URLs', store['Fetch Sitemaps']))[0].json;
+  console.log('   link candidates ->', cu.internal_link_candidates.map(c => c.path).join(' | '), '|| planned ->', (cu.planned_link_targets || []).map(c => c.about).join(' | '));
+  check('D9: only the ladder page the sitemap really has is a link candidate; the three that are not published are planned_link_targets',
+    cu.internal_link_candidates.some(c => c.url === 'https://' + D + '/e-invoicing-software-uae/' && c.planned === false)
+    && !cu.internal_link_candidates.some(c => /best-erp-software-in-dubai|erp-software-dubai|erp-implementation-cost-uae/.test(c.url))
+    && eq((cu.planned_link_targets || []).map(c => c.about), ['best erp software in dubai', 'erp software dubai', 'erp implementation cost uae'])
+    && (cu.planned_link_targets || []).every(c => c.planned === true), JSON.stringify({ cand: cu.internal_link_candidates.map(c => c.url), planned: cu.planned_link_targets }));
+
+  // ---------- D9 (c): Brief Context marks the cluster pages and gives each one its anchor ----------
+  const PV = { ...cu, keyword: 'erp software uae', domain: D, country: 'United Arab Emirates', page_type: 'Pillar Page', recommended_page: 'Pillar Page', ladder_rung: 4, ladder_head: 'erp software uae', ladder_id: 'lad_365',
+    business: 'Enterprise digital transformation and Microsoft Dynamics 365 partner in the UAE', services: ['ERP implementation'], competitors: [], competitors_summary: [], site_description: { business_description: 'ERP and e-invoicing partner', products_or_services: ['ERP implementation'] } };
+  mock('Parse Verdict', PV); delete store['Load Profile (Brief)']; delete store['Load Case Studies (Brief)'];
+  const bc = (await run('Brief Context', EMPTY))[0].json;
+  console.log('   hub pages ->', (bc.hub_pages || []).map(p => p.keyword + (p.planned ? ' (planned)' : ' (live)') + ' = "' + p.anchor + '"').join(' | '));
+  check('D9: the hub has 1 live cluster page and 3 planned ones, each with its anchor; the brief tells the writer to link only to the live one',
+    bc.page_role === 'hub' && bc.hub_pages.filter(p => !p.planned).length === 1 && bc.hub_pages.filter(p => p.planned).length === 3
+    && bc.hub_pages.every(p => p.anchor && p.anchor !== p.anchor.toLowerCase())
+    && /LIVE — link to these, with the anchor shown:\n- e invoicing software uae — https:\/\/techand\.ai\/e-invoicing-software-uae\/ — anchor: "E Invoicing Software UAE"/.test(bc.role_brief)
+    && /PLANNED, NOT PUBLISHED — write the section, set no link_to and never write a link to these:/.test(bc.role_brief)
+    && /A section without a "link_to" is about a page that is not published yet: summarise the subtopic and write NO link for it/.test(bc.role_writer), JSON.stringify({ hub: bc.hub_pages.map(p => [p.keyword, p.planned, p.anchor]), rb: (bc.role_brief || '').slice(-500), rw: bc.role_writer }));
+
+  // ---------- the draft of execution 365, in miniature ----------
+  const FACTS = [
+    { claim: 'The mandate starts in July 2026 for taxpayers with revenue of AED 50 million and above. Adoption rose 23.5% in the first wave.', text: 'UAE e-invoicing — The mandate starts in July 2026 for taxpayers with revenue of AED 50 million and above. Adoption rose 23.5% in the first wave.', url: 'https://mof.gov.ae/e-invoicing/', source: 'mof.gov.ae', title: 'UAE e-invoicing', authority: 'high', tier: 'primary', year: '2026' },
+    { claim: 'Worldwide ERP software revenue reached 1,234 million US dollars in 2025.', text: 'Enterprise resource planning software worldwide — Worldwide ERP software revenue reached 1,234 million US dollars in 2025.', url: 'https://www.statista.com/outlook/tmo/software/erp/worldwide/', source: 'statista.com', title: 'ERP software worldwide', authority: 'high', tier: 'research', year: '2025' }];
+  const BRIEF = { h1: 'ERP software for UAE companies', target_word_count: 300, outline: [], terms_to_use: [{ term: 'data migration', min_count: 1 }], snippet_targets: [], secondary_keywords: ['erp software dubai'],
+    evidence_plan: FACTS.map(f => ({ fact: f.claim, source_url: f.url })) };
+  const PB = { ...bc, content_brief: BRIEF, facts: FACTS, currency: 'AED', business_facts: '', term_model: [], existing_page: null };
+  const QA_BASE = [
+    'Title: ERP Software UAE: The 2026 Buyer Guide',
+    'Meta Description: Choose ERP software in the UAE with a clear comparison, the compliance checklist and the costs that matter before you sign.',
+    'Slug: erp-software-uae', '', '# ERP software for UAE companies', '',
+    'Choosing ERP software for UAE companies is a compliance decision as much as a software decision, and this guide walks through it.', '',
+    '**Quick answer:** Pick the ERP software for UAE companies that already handles VAT, corporate tax and the e-invoicing mandate, then judge it on the data migration effort and the partner behind it. Shortlist three vendors, score them against your own processes and ask each one for a fixed-scope plan.', '',
+    '## What does the e-invoicing mandate change?', '',
+    'The mandate starts in July 2026 ([Ministry of Finance](https://mof.gov.ae/e-invoicing/)). Companies with revenue of AED 50m and above go first ([Ministry of Finance](https://mof.gov.ae/e-invoicing/)), and adoption rose 23.5% in the first wave ([Ministry of Finance](https://mof.gov.ae/e-invoicing/)).', '',
+    'Worldwide ERP revenue reached USD 1,802 million in 2025 ([Statista](' + STAT + ')), which tells you how crowded the market is.', '',
+    '## How big is the market?', '',
+    'Vendor lists differ widely ([TrangoTech](https://enterprise.trangotech.com/blog/top-erp-systems/)), and the categories they use rarely match the way a UAE distributor buys.', '',
+    'Some lists rank by revenue ([TrangoTech](https://enterprise.trangotech.com/blog/top-erp-systems/)); others rank by reviews ([TrangoTech](https://enterprise.trangotech.com/blog/top-erp-systems/)).', '',
+    'Analyst coverage is a better starting point ([Gartner](https://www.gartner.com/en/erp?utm_source=newsletter&utm_medium=email)).', '',
+    '| Option | Suits |', '|---|---|', '| Business Central | Mid-market distributors |', '| Odoo | Lean operations teams |', '',
+    '## Which ERP suits a distributor?', '',
+    'Start from the data migration effort. Our guide to [e invoicing software uae](https://' + D + '/e-invoicing-software-uae/) covers the submission path, our page on [best erp software in dubai](https://' + D + '/best-erp-software-in-dubai/) ranks the shortlist, and [erp software dubai](https://' + D + '/erp-software-dubai/) explains the local partner market.', '',
+    'Read [best erp software in dubai](https://' + D + '/best-erp-software-in-dubai/) before you shortlist, and [erp implementation cost uae](https://' + D + '/erp-implementation-cost-uae/) before you budget.', '',
+    '## How long does an ERP rollout take?', '',
+    'Plan 8 phases over 3 months for a single entity, with 12 tables of master data to clean before go-live, and keep one owner per table.', '',
+    '## Talk to us', '',
+    'Book a scoping call and we will map your ERP software for UAE companies against your data migration plan in one workshop.'].join('\n');
+  // the same draft with the FAQ block the copywriter used to be told to write, in its old place: last section before the CTA
+  const QA_FAQ = QA_BASE.replace('## Talk to us', '## Frequently Asked Questions\n\nQ1: Does the mandate apply to free-zone companies?\nA1: Yes. Free-zone companies that are registered for UAE VAT fall under the same mandate as mainland companies, on the same timetable, and must issue invoices through an accredited service provider rather than by e-mail.\n\nQ2: Can we keep our current accounting system?\nA2: You can, as long as it can produce the required format and connect to an accredited provider. Most teams find the data migration and reporting work easier inside one ERP than across two systems.\n\n## Talk to us');
+  const qaRun = async (md, over) => { mock('Parse Brief', { ...PB, ...(over || {}) }); return (await run('Content QA', [{ json: { output: md, critique: null } }], { runIndex: 0 }))[0].json; };
+
+  const q = await qaRun(QA_BASE);
+  const out = q.output, QA = q.content_qa, types = QA.schema_types;
+  console.log('   QA fixes ->', JSON.stringify(QA.auto_fixes));
+  console.log('   QA schema ->', types.join(', '), '| sources ->', JSON.stringify(QA.source_quality), '| figures ->', JSON.stringify(QA.unverified_figures));
+
+  // D9 in the copy
+  check('D9: the links to the three pages that are not published are gone (their words stay); the link to the page the site really has survives',
+    !/\]\(https:\/\/techand\.ai\/(best-erp-software-in-dubai|erp-software-dubai|erp-implementation-cost-uae)\//.test(out)
+    && /\[e invoicing software uae\]\(https:\/\/techand\.ai\/e-invoicing-software-uae\/\)/.test(out)
+    && /our page on best erp software in dubai ranks the shortlist/.test(out) && QA.internal_links === 1
+    && QA.auto_fixes.some(f => /Removed 4 link\(s\) to pages that are planned but not published yet/.test(f)), JSON.stringify({ internal: QA.internal_links, fixes: QA.auto_fixes }));
+  check('D9: the hub ItemList lists the live page only, with its anchor, and the report names the links to add later',
+    types.includes('ItemList') && eq(q.schema_blocks.find(b => b.type === 'ItemList').json.itemListElement.map(x => x.name), ['E Invoicing Software UAE'])
+    && eq(QA.links_to_add_when_published.map(x => x.anchor), ['Best ERP Software in Dubai', 'ERP Software Dubai', 'ERP Implementation Cost UAE'])
+    && QA.eeat_notes.some(n => /3 cluster page\(s\) are planned and not live yet: this page links to none of them/.test(n)), JSON.stringify({ types, add: QA.links_to_add_when_published }));
+
+  // G2 in the schema and the score
+  check('G2: no FAQPage block is emitted, with or without an FAQ section in the draft',
+    !types.includes('FAQPage') && !(await qaRun(QA_FAQ)).content_qa.schema_types.includes('FAQPage')
+    && !JSON.stringify(q.schema_blocks).includes('FAQPage'), JSON.stringify(types));
+  const qF = await qaRun(QA_FAQ);
+  console.log('   G2 structure points -> without FAQ', QA.score_breakdown.structure, '| with FAQ', qF.content_qa.score_breakdown.structure);
+  check('G2: the structure score is the same with and without an FAQ section (question headings are what counts), and no warning asks for FAQs',
+    QA.score_breakdown.structure === qF.content_qa.score_breakdown.structure && QA.score_breakdown.structure >= 22
+    && QA.question_headings >= 3 && QA.answered_questions >= 3
+    && !QA.warnings.some(w => /complete FAQs/.test(w)) && !qF.content_qa.warnings.some(w => /complete FAQs/.test(w)), JSON.stringify({ a: QA.score_breakdown, b: qF.content_qa.score_breakdown, qh: QA.question_headings, w: QA.warnings }));
+
+  // G4 in the copy
+  check('G4: srsltid and utm_* are stripped from every citation in the copy and the schema',
+    /\[Statista\]\(https:\/\/www\.statista\.com\/outlook\/tmo\/software\/erp\/worldwide\/\)/.test(out) && !/srsltid|utm_/.test(out) && !/srsltid|utm_/.test(JSON.stringify(q.schema_blocks))
+    && QA.auto_fixes.some(f => /Stripped tracking parameters .* from 2 link\(s\)/.test(f)), (out.match(/\[(Statista|Gartner)\]\([^)]*\)/g) || []).join(' | '));
+  check('G4: a figure the cited source does not carry is bracketed [Confirm: …] and reported; the ones the source states (a magnitude variant, a percentage, the year) stay as written',
+    /\[Confirm: USD 1,802 million\]/.test(out) && /revenue of AED 50m and above/.test(out) && /adoption rose 23\.5% in the first wave/.test(out) && /starts in July 2026 \(/.test(out)
+    && eq(QA.unverified_figures.map(f => f.figure), ['USD 1,802 million']) && eq(QA.unverified_figures[0].sources, ['statista.com'])
+    && QA.warnings.some(w => /Figures the cited source does not carry \(now marked \[Confirm: …\]\): "USD 1,802 million" \(statista\.com\)/.test(w)), JSON.stringify({ u: QA.unverified_figures, line: (out.match(/^Worldwide ERP[^\n]*/m) || [])[0] }));
+  check('G4: a weak source is cited once — the second and third links to it are unlinked, with the reason; the strong sources are untouched',
+    (out.match(/\]\(https:\/\/enterprise\.trangotech\.com/g) || []).length === 1 && /Some lists rank by revenue \(TrangoTech\); others rank by reviews \(TrangoTech\)\./.test(out)
+    && eq(QA.weak_sources_unlinked, ['enterprise.trangotech.com']) && eq(QA.source_quality, { primary: 3, research: 2, weak: 1 })
+    && QA.auto_fixes.some(f => /Unlinked 2 repeat citation\(s\) of a source with no independent authority/.test(f))
+    && QA.warnings.some(w => /A source with no independent authority was cited more than once \(enterprise\.trangotech\.com\)/.test(w)), JSON.stringify({ q: QA.source_quality, w: QA.weak_sources_unlinked }));
+  check('G4: a sentence whose source we never read is left alone (nothing to look the figure up in)',
+    /Plan 8 phases over 3 months for a single entity, with 12 tables/.test(out) && !/\[Confirm: 8\]/.test(out), (out.match(/^Plan 8[^\n]*/m) || [])[0]);
+
+  // ---------- D9 (d): the blog package ----------
+  const bp = (await run('Blog Package', [{ json: { ...q, page_markdown: q.output, content_brief_slug: 'erp-software-uae', content_images: [] } }]))[0];
+  const bhtml = Buffer.from(bp.binary.article_html.data, 'base64').toString('utf8');
+  const bmd = Buffer.from(bp.binary.article_md.data, 'base64').toString('utf8');
+  const bmeta = JSON.parse(Buffer.from(bp.binary.meta_json.data, 'base64').toString('utf8'));
+  const clusterHtml = (bhtml.match(/<nav class="cluster"[\s\S]*?<\/nav>/) || [''])[0];
+  const clusterMd = (bmd.match(/## Guides in this series\n\n([\s\S]*?)(\n\n|$)/) || ['', ''])[1];
+  console.log('   guides in this series ->', clusterMd.replace(/\n/g, ' / '), '|| to add ->', JSON.stringify(bmeta.links_to_add_when_published.map(x => x.anchor)));
+  check('D9: "Guides in this series" has exactly one link in the HTML and one in the Markdown — the page that is live — with its anchor, never a lower-case keyword',
+    (clusterHtml.match(/<a href=/g) || []).length === 1 && /<a href="https:\/\/techand\.ai\/e-invoicing-software-uae\/">E Invoicing Software UAE<\/a>/.test(clusterHtml)
+    && clusterMd.split('\n').filter(Boolean).length === 1 && /^- \[E Invoicing Software UAE\]\(https:\/\/techand\.ai\/e-invoicing-software-uae\/\)$/.test(clusterMd.trim())
+    && !/Facts erp|Erp software/.test(bhtml + bmd), JSON.stringify({ html: clusterHtml, md: clusterMd }));
+  check('D9: meta.json carries the three planned pages as links to add when they are published (keyword, planned URL, anchor), and the article links to none of them',
+    bmeta.links_to_add_when_published.length === 3
+    && eq(bmeta.links_to_add_when_published.map(x => [x.keyword, x.planned_url, x.anchor]), [['best erp software in dubai', 'https://techand.ai/best-erp-software-in-dubai/', 'Best ERP Software in Dubai'], ['erp software dubai', 'https://techand.ai/erp-software-dubai/', 'ERP Software Dubai'], ['erp implementation cost uae', 'https://techand.ai/erp-implementation-cost-uae/', 'ERP Implementation Cost UAE']])
+    && bmeta.hub.planned === 3 && bmeta.hub.cluster_pages.length === 1
+    && !/best-erp-software-in-dubai|erp-software-dubai|erp-implementation-cost-uae/.test(bhtml + bmd)
+    && bmeta.publish_checklist.some(x => /links_to_add_when_published" lists 3 page\(s\)/.test(x)), JSON.stringify(bmeta.links_to_add_when_published));
+  check('G2 / G4 in the package: no FAQPage in the article or its schema, and no tracking parameter survives into the HTML or the Markdown',
+    !/FAQPage/.test(bhtml) && !bmeta.schema_blocks.some(b => b.type === 'FAQPage') && !/srsltid|utm_/.test(bhtml + bmd + JSON.stringify(bmeta)), (bhtml.match(/srsltid[^"]*/) || [''])[0]);
+
+  // ---------- D9 (e): the Rank Tracker reminds the owner the week a planned page goes live ----------
+  const DN = 'northwind-erp.com';
+  const slug = (k) => 'https://www.' + DN + '/' + k.replace(/\s+/g, '-') + '/';
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_R', domain: DN, head_keyword: 'peppol uae', rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: slug(keyword), page_exists: false, status, months: '', start_date: daysAgo(40), country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'https://hooks.example.com/x', request_id: 'r-R' } });
+  const ROWS = [lrow(4, 1, 'peppol uae', 'published'), lrow(1, 2, 'peppol access point uae', 'published')];
+  const trackerWith = async (log) => {
+    mock('Load Ladders', ROWS); mock('Load Content Log (Tracker)', log);
+    mock('Load History', ROWS.map(r => ({ json: { ladder_id: 'lad_R', keyword: r.json.keyword, position: 12, checked_at: daysAgo(7), url: '' } })));
+    const tp = await run('Tracker Plan', store['Load History']);
+    mock('SERP Check', tp.map(c => V.serpFor(c.json.keyword, c.json.domain, 0)));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    return (await run('Tracker Report', pp))[0].json;
+  };
+  const logRow = (kw, days) => ({ json: { id: 2, keyword: kw, domain: DN, ladder_id: 'lad_R', published_url: slug(kw), published_at: daysAgo(days), title: '', started_at: daysAgo(days) } });
+  const tNew = await trackerWith([logRow('peppol access point uae', 2)]);
+  console.log('   tracker reminder ->', JSON.stringify(tNew.links_to_add));
+  check('D9: a page published since the last check gives one reminder line with its anchor and URL, in the e-mail and in the callback',
+    eq((tNew.links_to_add || []).map(x => [x.keyword, x.anchor]), [['peppol access point uae', 'Peppol Access Point UAE']])
+    && /<b>Now live — add the links:<\/b> "Peppol Access Point UAE" \(https:\/\/www\.northwind-erp\.com\/peppol-access-point-uae\/\)/.test(tNew.html)
+    && /add one link from the main page "peppol uae" using the anchor shown/.test(tNew.html), JSON.stringify({ l: tNew.links_to_add, h: (tNew.html.match(/Now live[\s\S]{0,260}/) || [''])[0] }));
+  const tOld = await trackerWith([logRow('peppol access point uae', 30)]);
+  check('D9: a page that was already live at the last check is not reminded again',
+    (tOld.links_to_add || []).length === 0 && !/Now live/.test(tOld.html), JSON.stringify(tOld.links_to_add));
+});
+
+// ===================================================================================
+// S42 (2026-10-11, system review FIX_PLAN D22) — the site description reads the whole site, not only the homepage
+// ===================================================================================
+await guard('site description from the whole site', async () => {
+  reset();
+  const SN = 'S42 D22 — the site description reads the homepage AND its menu pages (services, keyword fit, the critic)';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fs = require('fs'), path = require('path'), CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
+  const D = 'techand.ai', SITE = 'site_techand-ai', LOC = 2784;
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const EMPTY = [{ json: {} }];
+  // ---------- the real shape of the live defect: the services live on /whatwedo/, not on the homepage ----------
+  const home = `Title: Tech& | Enterprise technology partner in the UAE\n\nURL Source: https://techand.ai/\n\nMarkdown Content:\n[Home](https://techand.ai/)\n[What we do](https://techand.ai/whatwedo/)\n[Solutions](https://techand.ai/solutions/)\n[Platforms](https://techand.ai/platforms/)\n[Industries](https://techand.ai/industries/)\n[Our approach](https://techand.ai/approach/)\n[Partners](https://techand.ai/partners/)\n[Insights](https://techand.ai/insights/)\n[Careers](https://techand.ai/careers/)\n[Contact us](https://techand.ai/contact/)\n[العربية](https://techand.ai/ar/)\n[LinkedIn](https://www.linkedin.com/company/techand)\n\n# Technology that moves your business forward\n\nTech& is an enterprise technology partner working with organisations across the UAE and Saudi Arabia. ${F.words(140)}\n\n## How we help\n\n- Digital transformation consulting\n- Data and analytics\n- Managed services and support\n\n[Privacy policy](https://techand.ai/privacy/)\n[Download our brochure](https://techand.ai/download/brochure.pdf)\n`;
+  const whatwedo = `Title: What we do | Tech&\n\nURL Source: https://techand.ai/whatwedo/\n\nMarkdown Content:\n# What we do\n\n## Microsoft Dynamics 365 Business Central\n\nWe implement, migrate and support Microsoft Dynamics 365 Business Central for finance and distribution teams in the UAE. ${F.words(70)}\n\n## Dynamics 365 Customer Engagement (CRM)\n\nSales, service and marketing on Dynamics 365 CRM, integrated with finance. ${F.words(60)}\n\n## Microsoft Power Platform\n\nPower BI, Power Apps and Power Automate for teams that want to build their own tools. ${F.words(60)}\n\n## Assess & Envision\n\nEvery engagement starts with an Assess & Envision workshop: we map the processes, the data and the decisions before anything is configured. ${F.words(50)}\n\n## Run & Optimise\n\nAfter go-live we Run & Optimise the platform with a named team, a monthly service review and a backlog of improvements. ${F.words(50)}\n`;
+  const solutions = `Title: Solutions | Tech&\n\nURL Source: https://techand.ai/solutions/\n\nMarkdown Content:\n# Solutions\n\n## E-invoicing for the UAE\n\nPeppol-ready e-invoicing connected to Business Central. ${F.words(70)}\n\n## Data and AI\n\nFabric, Power BI and Azure OpenAI for reporting and forecasting. ${F.words(60)}\n`;
+  mock('Normalize Input', [{ json: { mode: 'keyword', domain: D, keyword: 'business central partner uae', country: 'United Arab Emirates', business: '', audience: '', need_site_description: true } }]);
+  mock('Read Website', { site_text: home });
+  const cs = await run('Clean Site Text', store['Read Website']);
+  const nav = cs[0].json.nav_pages || [];
+  console.log('   nav pages ->', nav.map(p => p.path + (p.in_header ? '' : ' (below)')).join(', '));
+  check('D22: the homepage\'s own menu links are kept (same host only, no root, no file, no duplicate), with their link text', nav.length === 10 && nav.every(p => /^\/[a-z؀-ۿ]/i.test(p.path) && p.in_header) && nav.find(p => p.path === '/whatwedo').text === 'What we do' && !nav.some(p => /linkedin|brochure/.test(p.url)) && !nav.some(p => p.path === '/'), JSON.stringify(nav.map(p => p.path)));
+
+  const npp = await run('Nav Pages Plan', cs);
+  const picked = npp.map(p => p.json.path);
+  console.log('   nav pages plan ->', npp.map(p => p.json.path + ' (' + p.json.score + ')').join(', '));
+  check('D22: at most 5 pages are read, service and section pages first; blog, careers, contact and the Arabic copy are never read', picked.length === 5 && eq(picked, ['/whatwedo', '/solutions', '/platforms', '/industries', '/approach']) && !picked.some(p => /insight|career|contact|^\/ar/.test(p)), JSON.stringify(picked));
+
+  // one page answers, one times out, one is behind a bot wall, one is nearly empty: the run carries on with what it has
+  mock('Read Nav Pages', [{ page_text: whatwedo }, { page_text: solutions }, { error: { message: 'timeout of 20000ms exceeded' } }, { page_text: 'Just a moment...\nEnable JavaScript and cookies to continue' }, { page_text: 'Title: Our approach\n\nMarkdown Content:\n# Our approach\n' }]);
+  const sp = await run('Site Pages', store['Read Nav Pages']);
+  const SP = sp[0].json;
+  console.log('   site pages ->', SP.site_pages.map(p => p.kind + ':' + p.url).join(' | '), '| failed:', SP.pages_failed.map(f => f.url + ' (' + f.reason + ')').join(', '));
+  check('D22: a page that fails, is blocked or is nearly empty is skipped, never an error; the homepage is always page 1', SP.site_pages.length === 3 && SP.site_pages[0].kind === 'homepage' && SP.site_pages.slice(1).every(p => p.kind === 'nav') && SP.pages_failed.length === 3 && /timeout/.test(SP.pages_failed[0].reason) && SP.pages_failed.slice(1).every(f => /blocked or too little text/.test(f.reason)), JSON.stringify(SP.pages_failed));
+  check('D22: the describer is given the homepage plus the pages read, each trimmed, with its own heading line', /--- PAGE: What we do \| Tech& \(https:\/\/techand\.ai\/whatwedo\/\) ---/.test(SP.pages_text) && /Microsoft Dynamics 365 Business Central/.test(SP.pages_text) && /--- PAGE: Solutions/.test(SP.pages_text) && !/Just a moment/.test(SP.pages_text) && SP.pages_text.length < 11000, SP.pages_text.slice(0, 200));
+  check('D22: what the site says about itself is collected as site_facts (the headings of every page read)', SP.site_facts.includes('Assess & Envision') && SP.site_facts.includes('Run & Optimise') && SP.site_facts.includes('Microsoft Power Platform') && SP.site_facts.includes('How we help'), JSON.stringify(SP.site_facts));
+  const prompt = fs.readFileSync(path.join(CD, 'Site_Describer.prompt.txt'), 'utf8');   // written by build_v4.py section 36 next to the Code nodes
+  check('D22: the describer prompt carries the extra pages and must name every service it finds', /\$json\.pages_text/.test(prompt) && /list EVERY distinct service, product, platform or named software/.test(prompt) && /belongs to this same website/.test(prompt), prompt.slice(0, 200));
+
+  const DESC = { business_name: 'Tech&', one_line_summary: 'Enterprise technology partner in the UAE', business_description: 'Tech& implements and supports Microsoft business platforms for enterprises in the UAE and Saudi Arabia.', industry: 'IT services',
+    products_or_services: ['Digital transformation consulting', 'Data and analytics', 'Managed services and support', 'Microsoft Dynamics 365 Business Central', 'Dynamics 365 Customer Engagement (CRM)', 'Microsoft Power Platform', 'E-invoicing for the UAE', 'Data and AI'],
+    target_audience: ['Finance teams', 'Operations leaders'], unique_selling_points: ['Assess & Envision workshop', 'Run & Optimise service reviews'], location_served: 'UAE and Saudi Arabia', tone_of_brand: 'Professional',
+    suggested_meta_title: 'Tech& | Microsoft partner in the UAE', suggested_meta_description: 'Business Central, CRM and Power Platform, delivered in the UAE. Talk to us.', seed_keywords: ['business central partner uae', 'dynamics 365 uae', 'power platform dubai'] };
+  mock('Site Describer', { output: DESC });
+  const pd = await run('Parse Description', store['Site Describer']);
+  const sd = pd[0].json.site_description;
+  console.log('   description ->', sd.products_or_services.length, 'services |', sd.pages_read.length, 'pages read |', sd.site_facts.length, 'site facts');
+  check('D22: Business Central, CRM and Power Platform are in the services (they are on /whatwedo/, never on the homepage)', ['Microsoft Dynamics 365 Business Central', 'Dynamics 365 Customer Engagement (CRM)', 'Microsoft Power Platform'].every(s => sd.products_or_services.includes(s)), JSON.stringify(sd.products_or_services));
+  check('D22: the pages read, the menu links and the site facts travel with the description; the long page text does not', sd.pages_read.length === 3 && sd.pages_read[0].kind === 'homepage' && sd.pages_read[1].url === 'https://techand.ai/whatwedo/' && sd.nav_pages.length === 10 && sd.site_facts.includes('Assess & Envision') && pd[0].json.site_text === undefined && pd[0].json.pages_text === undefined && pd[0].json.site_pages === undefined, JSON.stringify({ pages: sd.pages_read, nav: sd.nav_pages.length }));
+  const dcr = await run('Description Cache Row', pd);
+  const cached = JSON.parse(dcr[0].json.value);
+  check('D22: the 30-day cache row carries the full description, the pages read and the site facts', dcr[0].json.key === 'desc:' + D && cached.description.products_or_services.length === 8 && cached.description.pages_read.length === 3 && cached.description.site_facts.includes('Run & Optimise'), JSON.stringify(dcr[0].json).slice(0, 220));
+  const dp = await run('Build Description Page', pd);
+  check('D22: the describe page tells the customer which pages were read', /<b>Pages read:<\/b> Tech&amp;[^<]*What we do[^<]*Solutions/.test(dp[0].json.result_html), (dp[0].json.result_html.match(/Pages read:[\s\S]{0,160}/) || [''])[0]);
+
+  // ---------- the 30-day cache: this description is reused, a homepage-only one written before D22 is not ----------
+  const row = (desc, days) => [{ json: { key: 'desc:' + D, kind: 'desc', site_id: SITE, value: JSON.stringify({ description: desc, page_title: 'Tech&' }), updated_at: daysAgo(days) } }];
+  mock('Rate Limit', [{ json: { mode: 'keyword', domain: D, need_site_description: true, business: '', audience: '' } }]);
+  const fresh = (await run('Use Cached Description', row(cached.description, 5)))[0].json;
+  check('D22: a description written from the site\'s pages is still reused for 30 days', fresh.need_site_description === false && fresh.site_description.products_or_services.includes('Microsoft Power Platform') && fresh.site_description_cached === daysAgo(5).slice(0, 10), JSON.stringify({ need: fresh.need_site_description, cached: fresh.site_description_cached }));
+  const STALE = { business_description: 'Tech& is an enterprise technology partner in the UAE.', products_or_services: ['Digital transformation consulting', 'Data and analytics', 'Managed services and support'], target_audience: ['Finance teams'] };
+  const stale = (await run('Use Cached Description', row(STALE, 5)))[0].json;
+  check('D22: a stored description with no pages_read (written from the homepage alone, before this change) is read again, not trusted', stale.need_site_description === true && !stale.site_description, JSON.stringify({ need: stale.need_site_description, has: !!stale.site_description }));
+
+  // ---------- the Keyword Check: "business central partner uae" ----------
+  const V = { ok: true, keyword: 'business central partner uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', business: '', services: [], existing_keywords: [] };
+  const dfsAssess = (reqs) => reqs.map(r => r.json.kind === 'overview'
+    ? { tasks: [{ status_code: 20000, cost: 0.01, result: [{ items: [{ keyword_info: { search_volume: 140, cpc: 9.1 }, keyword_properties: { keyword_difficulty: 34 }, search_intent_info: { main_intent: 'commercial' } }] }] }] }
+    : { tasks: [{ status_code: 20000, cost: 0.01, result: [{ items: [] }] }] });
+  // the model decides the fit from the services the prompt carries (v5/prompts/keyword_fit.txt); this stand-in applies that rule offline:
+  // core (2) when the keyword's product name is one of the services, neighbouring (1) when it is not
+  const fitFromServices = (keyword, services) => { const k = String(keyword).toLowerCase(); const w = k.split(' ').filter(x => x.length > 2);
+    const pairs = w.slice(0, -1).map((x, i) => x + ' ' + w[i + 1]); const blob = services.join(' | ').toLowerCase();
+    return pairs.some(p => blob.includes(p)) ? 2 : 1; };
+  const assess = async (cacheDesc) => {
+    mock('Assess Validate', [{ json: V }]);
+    const aq = await run('Assess Requests', EMPTY);
+    mock('Load Assess Cache', [{ json: { key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 30, method: 'size', p75: null, size_reach: 30, sample: 0, top10: 20, organic_keywords: 300, location_code: LOC }), updated_at: daysAgo(3) } }, ...row(cacheDesc, 5)]);
+    mock('Run Assess Requests', dfsAssess(aq.filter(r => !r.json.skip)));
+    const ar = (await run('Assess Result', store['Run Assess Requests']))[0].json;
+    const fit = fitFromServices(V.keyword, ar.services);
+    return { ar, body: (await run('Assess Response', [{ json: { output: { fit, navigational: false, alternatives: [] } } }]))[0].json.body };
+  };
+  const now = await assess(cached.description);
+  console.log('   keyword check (site read) ->', JSON.stringify({ services: now.ar.services.length, source: now.ar.services_source, fit: now.body.fit }));
+  check('D22: the Keyword Check sees the full service list and gives "business central partner uae" fit 2', now.ar.services.includes('Microsoft Dynamics 365 Business Central') && now.ar.services_source === 'stored description (3 pages read)' && now.body.fit === 2 && !now.body.warnings.some(w => /homepage only/.test(w)), JSON.stringify({ services: now.ar.services, fit: now.body.fit }));
+  const before = await assess(STALE);
+  check('D22 (the live defect): with the old homepage-only description the same keyword was fit 1, and the answer now says why', before.body.fit === 1 && before.ar.services_source === 'stored description (homepage only)' && before.body.warnings.some(w => /homepage only.*Describe my website/.test(w)), JSON.stringify({ fit: before.body.fit, warnings: before.body.warnings }));
+
+  // ---------- the critic: a claim found on the site is not "invented" ----------
+  const critPrompt = fs.readFileSync(path.join(CD, 'Critic.prompt.txt'), 'utf8');
+  check('D22: the critic prompt carries the facts from the client\'s own website and the rule that follows from them', /Facts from the client's own website/.test(critPrompt) && /site_facts/.test(critPrompt) && /never call it invented/.test(critPrompt) && /the word is "unverified"/.test(critPrompt), critPrompt.slice(0, 120));
+  mock('Parse Brief', [{ json: { keyword: 'business central partner uae', domain: D, site_description: sd, business: '', business_facts: '', case_facts_text: '', content_brief: { client_facts: [], target_word_count: 1600 } } }]);
+  mock('Copywriter', [{ json: { output: '## How we work\n\nEvery project starts with an Assess & Envision workshop, then we Run & Optimise the platform after go-live. We have delivered 400+ Business Central projects.' } }]);
+  const CRIT = { score: 72, verdict: 'revise', strengths: ['Clear structure'],
+    problems: [{ severity: 'high', location: 'Assess & Envision workshop', issue: 'The draft invents a delivery stage called "Assess & Envision" that this business does not use.', fix: 'Remove the invented stage names.' },
+      { severity: 'medium', location: '400+ Business Central projects', issue: 'Invented number: no source is given for "400+".', fix: 'Add a source or a bracketed placeholder.' }],
+    banned_phrases_found: [], unsupported_claims: ['our "Assess & Envision" stage', 'we Run & Optimise the platform', 'we have delivered 400+ Business Central projects', 'our Assess & Envision workshop cuts go-live time by 30%'],
+    missing_brief_items: [], revision_instructions: '1. Remove the invented delivery stages. 2. Source the invented 400+ figure.' };
+  const pc = (await run('Parse Critique', [{ json: { output: CRIT } }]))[0].json.critique;
+  console.log('   critique ->', JSON.stringify({ on_site: pc.claims_on_site, unsupported: pc.unsupported_claims, problems: pc.problems.map(p => p.issue) }));
+  check('D22: the site\'s own delivery stages are no longer "invented" — the claims are recognised and the problem is dropped', pc.claims_on_site.length === 2 && pc.claims_on_site.every(c => /Assess & Envision|Run & Optimise/.test(c)) && !pc.unsupported_claims.includes('our "Assess & Envision" stage') && !pc.unsupported_claims.includes('we Run & Optimise the platform') && pc.problems.length === 1 && pc.site_pages_read === 3, JSON.stringify({ on_site: pc.claims_on_site, problems: pc.problems.length }));
+  check('D22: a claim that is nowhere on the site stays, and is called unverified, never invented; a figure the site never states is not excused by the words around it', pc.unsupported_claims.length === 2 && /400\+/.test(pc.unsupported_claims[0]) && /30%/.test(pc.unsupported_claims[1]) && /unverified number/.test(pc.problems[0].issue) && !/invent/i.test(pc.problems[0].issue) && !/invent/i.test(pc.revision_instructions) && /unverified/.test(pc.revision_instructions), JSON.stringify({ claims: pc.unsupported_claims, issue: pc.problems[0].issue, ri: pc.revision_instructions }));
+});
+
+// ===================================================================================
+// S41 D10 (2026-10-11 system review) — a page someone can publish, on the real page of execution 365
+// (`docs/system-review-2026-10-11/files/erp-software-uae.md`, kept here as `fixtures_live/page_erp_365.md`): it held 30 × [Price],
+// 20 × [Timeline], [Office address], [Phone number] and "[Your Business Name]" in its schema — although techand.ai's homepage states
+// Tech&, the DAFZA address and the phone number — ran 3,952 words against the 2,100 the verdict asked for, and Content QA passed it at 91.
+// ===================================================================================
+await guard('publishable page', async () => {
+  const SN = 'S41 D10 — a page someone can publish: the live page fails on placeholders and length, the schema carries the real name and NAP without a profile, the brief is clamped to the verdict\'s target, a cost angle needs price facts and the page type is one fixed option';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fs = require('fs'), path = require('path'), zlib = require('zlib');
+  const EMPTY = [{ json: {} }];
+  const D = 'techand.ai', SITE = 'site_techand-ai', LOC = 2784;
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const FREE_TEXT = 'Service Page (ERP implementation UAE) with built-in vendor-neutral comparison, cost and compliance sections';   // what the verdict wrote in execution 365
+
+  // ---------- (5) the page type: one of the form's fixed options, the sentence kept as page_notes ----------
+  const PTS = (await run('_page_type', [{ page_type: FREE_TEXT }, { page_type: 'Comparison Page' }, { page_type: 'Location Page' }, { page_type: 'Pillar / hub page' },
+    { page_type: 'Local page (city or area)' }, { page_type: 'FAQ Page' }, { page_type: 'Category Page' }, { page_type: 'a deep-dive guide comparing vendors' },
+    { page_type: 'Case Study' }, { page_type: '', default: 'Blog Post' }].map(j => ({ json: j })))).map(i => i.json);
+  console.log('   page types ->', PTS.map(x => x.page_type).join(' | '));
+  check('D10: every page type is one of the form\'s options — the free text of exec 365 is a Service Page (the word "comparison" later in the sentence does not decide it), the form\'s own labels map to their value, an unknown sentence falls back by its words',
+    eq(PTS.map(x => x.page_type), ['Service Page', 'Guide', 'Service Page', 'Pillar Page', 'Local Page', 'Guide', 'Service Page', 'Guide', 'Case Study', 'Blog Post'])
+    && PTS.every(x => x.types.includes(x.page_type)), JSON.stringify(PTS.map(x => x.page_type)));
+  check('D10: the free text is kept as page_notes, and a plain label (the form\'s own wording) adds nothing',
+    PTS[0].page_notes === FREE_TEXT && PTS[3].page_notes === '' && PTS[4].page_notes === '' && PTS[8].page_notes === '' && PTS[9].page_notes === '', JSON.stringify(PTS.map(x => x.page_notes)));
+
+  const PV = { keyword: 'erp software uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads', page_type: 'Service Page',
+    business: 'Enterprise digital transformation and Microsoft Dynamics 365 partner in the UAE', business_facts: '', services: ['ERP implementation'],
+    site_description: { business_description: 'Microsoft Dynamics 365 partner', products_or_services: ['ERP implementation'] }, competitors: [], competitors_summary: [],
+    keyword_data: { search_volume: 480, cpc: 13.98, keyword_difficulty: 3, google_intent: 'commercial' }, secondary_keywords: ['erp software dubai'],
+    verdict: 'GO_WITH_CHANGES', verdict_score: 70, verdict_reasons: ['The SERP mixes vendor pages with 1,785-4,327 word comparison guides.'],
+    verdict_changes: ['Build a service page of about 2,100 words with a 40-70 word answer block at the top.'], verdict_risks: [],
+    site_authority: { organic_keywords: 12, top3: 0, top10: 0 }, site_urls: ['https://' + D + '/'], pages_now: 1, ladder_id: 'lad_test410', request_id: 'r-365' };
+  mock('Merge Keyword Data', PV);
+  const pvOut = (await run('Parse Verdict', [{ json: { output: JSON.stringify({ verdict: 'GO_WITH_CHANGES', score: 70, recommended_page: FREE_TEXT, reasons: [], risks: [], secondary_keywords: ['erp software dubai'] }) } }]))[0].json;
+  check('D10: Parse Verdict stores the fixed option and passes the sentence on as page_notes (meta.json, the schema and the length band all read the page type)',
+    pvOut.recommended_page === 'Service Page' && pvOut.page_notes === FREE_TEXT, JSON.stringify({ rp: pvOut.recommended_page, notes: pvOut.page_notes }));
+  mock('Collect Facts', { ...PV, page_type: FREE_TEXT });
+  const paFree = (await run('Parse Analysis', [{ json: { output: JSON.stringify({ recommended_word_count: 3000, content_gaps: [] }) } }]))[0].json.competitor_analysis.recommended_word_count;
+  mock('Collect Facts', { ...PV, page_type: 'Guide' });
+  const paGuide = (await run('Parse Analysis', [{ json: { output: JSON.stringify({ recommended_word_count: 3000, content_gaps: [] }) } }]))[0].json.competitor_analysis.recommended_word_count;
+  check('D10: the length band comes from the fixed option — the free text is a service page (900-2,400), a guide keeps 1,200-3,000', paFree === 2400 && paGuide === 3000, JSON.stringify({ free: paFree, guide: paGuide }));
+
+  // ---------- (5b) the ladder stores the fixed type too (the page run reads the row) ----------
+  mock('Parse Verdict', { ...PV, recommended_page: FREE_TEXT });
+  mock('Ladder Requests', [{ kind: 'suggestions', label: 'suggestions', body: [{ keyword: 'erp software uae' }] }, { kind: 'ranked', label: 'ranked', domain: D, body: [{ target: D }] }]);
+  mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 10, method: 'size', p75: null, size_reach: 10, sample: 0, top10: 0, organic_keywords: 12, location_code: LOC }), updated_at: daysAgo(3) } }]);
+  mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+  const POOL = ['best erp software in dubai', 'erp software dubai', 'erp implementation cost uae', 'cloud erp software uae', 'erp software for small business uae'];
+  const lp = (await run('Ladder Pool', [V.task({ seed_keyword: 'erp software uae', items: POOL.map((k, i) => V.kwItem(k, i)) }), V.task({ target: D, items: [] })]))[0].json;
+  const lch = await run('Ladder Relevance Chunks', [{ json: lp }]);
+  mock('Ladder Keyword Relevance', lch.map(c => V.ladderRelevance(c.json)));
+  const L = (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json.ladder;
+  const rungTypes = L.rungs.flatMap(r => r.pages.map(p => p.page_type));
+  console.log('   ladder page types ->', L.top.page_type, '|', rungTypes.join(', '), '| notes:', JSON.stringify(L.top.page_notes));
+  check('D10: the ladder\'s main page is a Service Page (not the sentence), every rung page is a fixed option too, and the sentence survives as page_notes',
+    L.top.page_type === 'Service Page' && L.top.page_notes === FREE_TEXT && rungTypes.length > 0 && rungTypes.every(t => PTS[0].types.includes(t)), JSON.stringify({ top: L.top.page_type, rungs: rungTypes }));
+  mock('Attach PDF Ladder', { ladder: L, domain: D, keyword: 'erp software uae', country: 'United Arab Emirates', location_code: LOC, language_code: 'en', email: '', callback_url: '', request_id: 'r-365' });
+  const rows = (await run('Ladder Rows', EMPTY)).map(i => i.json);
+  check('D10: the stored seo_ladders rows carry the fixed page type and nothing else new (the next page run reads page_type from the row)',
+    rows.length > 1 && rows.every(r => PTS[0].types.includes(r.page_type)) && rows.every(r => !('page_notes' in r)) && rows.some(r => r.rung === 4 && r.page_type === 'Service Page'), JSON.stringify(rows.map(r => [r.rung, r.page_type])));
+
+  // ---------- (2) a cost or timeline angle needs price or timeline facts ----------
+  reset(); begin(SN);
+  mock('Parse Verdict', { ...PV, recommended_page: 'Service Page', page_notes: FREE_TEXT });
+  const bcNo = (await run('Brief Context', EMPTY))[0].json;
+  mock('Parse Verdict', { ...PV, recommended_page: 'Service Page', business_facts: 'Implementations start at AED 45,000 for a single entity and go live in 8 weeks.' });
+  const bcYes = (await run('Brief Context', EMPTY))[0].json;
+  console.log('   angle rules (no facts) ->', String(bcNo.angle_rules).slice(0, 180));
+  check('D10: without price or timeline facts the brief is told not to build the page on cost or duration, and to answer such questions qualitatively instead',
+    bcNo.pricing_facts === false && bcNo.timeline_facts === false && /^ANGLE LIMIT: this business has given no price or timeline facts/.test(bcNo.angle_rules)
+    && /never plan a row that can only be filled with \[Price\] or \[Timeline\]/.test(bcNo.angle_rules) && /may still be answered — qualitatively/.test(bcNo.angle_rules), bcNo.angle_rules);
+  check('D10: with the facts on file (a price and a go-live time) the angle is allowed, and every figure must come from them',
+    bcYes.pricing_facts === true && bcYes.timeline_facts === true && /^ANGLE: price and timeline facts are on file/.test(bcYes.angle_rules), bcYes.angle_rules);
+
+  // ---------- (2 + 3) Parse Brief: the length is clamped and a cost angle without facts is dropped ----------
+  const BRIEF = { target_word_count: 3100, unique_angle: 'The first UAE ERP guide with a full cost framework and an implementation timeline',
+    information_gain: ['A cost framework in AED for every module', 'A phased implementation timeline from discovery to go-live', 'A compliance scorecard for VAT, corporate tax, WPS and e-invoicing'],
+    comparison_table: { title: 'ERP options', columns: ['Option', 'Price', 'Implementation timeline', 'Who it suits'], rows_hint: 'what the rows compare; use [Price], [Timeline] for business-specific figures' },
+    gaps_to_cover: ['Free-zone multi-entity setups'], outline: [{ h2: 'What is ERP', target_words: 600 }, { h2: 'How to choose', target_words: 900 }, { h2: 'What it costs', target_words: 800 }, { h2: 'How long it takes', target_words: 500 }, { h2: 'Next step', target_words: 300 }] };
+  const briefRun = async (ctx, brief) => { mock('Brief Context', ctx); return (await run('Parse Brief', [{ json: { output: JSON.stringify(brief || BRIEF) } }]))[0].json; };
+  const b1 = await briefRun({ ...bcNo, competitor_analysis: { recommended_word_count: 2400 } });
+  console.log('   brief ->', b1.content_brief.target_word_count, 'words | sections', JSON.stringify(b1.content_brief.outline.map(o => o.target_words)), '| angle:', b1.content_brief.unique_angle);
+  check('D10: a brief asking for 3,100 words is clamped to the verdict\'s own target ("about 2,100 words") + 10% = 2,310, and the outline is scaled with it, so the writer is not sent to write 3,100',
+    b1.content_brief.target_word_count === 2310 && b1.brief_outline_words === 2310 && eq(b1.content_brief.outline.map(o => o.target_words), [450, 670, 600, 370, 220])
+    && b1.brief_adjustments.some(a => /Target length 3100 -> 2310 words \(the verdict asked for about 2100, within 10%\)/.test(a)), JSON.stringify({ t: b1.content_brief.target_word_count, o: b1.content_brief.outline.map(o => o.target_words), adj: b1.brief_adjustments }));
+  const b2 = await briefRun({ ...bcNo, verdict_changes: [], competitor_analysis: { recommended_word_count: 2100 } });
+  check('D10: with no target in the verdict the competitor analysis\' recommended count decides it (2,100 + 10%), and a brief already inside 10% is left alone',
+    b2.content_brief.target_word_count === 2310 && (await briefRun({ ...bcNo, verdict_changes: [], competitor_analysis: { recommended_word_count: 2000 } }, { ...BRIEF, target_word_count: 2050 })).content_brief.target_word_count === 2050, JSON.stringify(b2.brief_adjustments));
+  check('D10: the cost / timeline angle is refused when no such facts exist — the angle becomes the compliance one, the two promises nobody could keep are gone and the table loses the Price and Timeline columns',
+    b1.content_brief.unique_angle === 'A compliance scorecard for VAT, corporate tax, WPS and e-invoicing'
+    && eq(b1.content_brief.information_gain, ['A compliance scorecard for VAT, corporate tax, WPS and e-invoicing'])
+    && eq(b1.content_brief.comparison_table.columns, ['Option', 'Who it suits']) && !/\[Price\]|\[Timeline\]/.test(b1.content_brief.comparison_table.rows_hint)
+    && b1.brief_adjustments.some(a => /^Angle dropped \(no price or timeline facts on file\)/.test(a)), JSON.stringify({ a: b1.content_brief.unique_angle, g: b1.content_brief.information_gain, c: b1.content_brief.comparison_table }));
+  const b3 = await briefRun({ ...bcYes, competitor_analysis: { recommended_word_count: 2400 } });
+  check('D10: with price and timeline facts on file the same brief keeps its cost angle, its promises and its table columns',
+    b3.content_brief.unique_angle === BRIEF.unique_angle && b3.content_brief.information_gain.length === 3 && eq(b3.content_brief.comparison_table.columns, BRIEF.comparison_table.columns)
+    && !b3.brief_adjustments.some(a => /Angle dropped/.test(a)), JSON.stringify({ a: b3.content_brief.unique_angle, adj: b3.brief_adjustments }));
+
+  // ---------- (4) Content QA on the real page of execution 365 ----------
+  reset(); begin(SN);
+  const ERP = fs.readFileSync(path.join(__dirname, 'fixtures_live', 'page_erp_365.md'), 'utf8');
+  const META365 = ['Title: ERP Software UAE: Costs, Comparison & Implementation',
+    'Meta Description: Compare ERP software in the UAE (Odoo, NetSuite, SAP, Dynamics 365) by cost, timeline and FTA compliance. Then book an ERP scoping call.',
+    'Slug: erp-software-uae', ''].join('\n');
+  const PB = { keyword: 'erp software uae', domain: D, country: 'United Arab Emirates', currency: 'AED', page_type: 'Service Page', page_role: 'standard', article_like: false,
+    content_brief: { target_word_count: 2310, outline: [], terms_to_use: [{ term: 'data migration', min_count: 1 }], snippet_targets: [], secondary_keywords: ['erp software dubai'], evidence_plan: [] },
+    facts: [], business: 'Microsoft Dynamics 365 partner in the UAE', business_facts: '', site_profile: null, site_description: {}, internal_link_candidates: [], site_urls: [], hub_pages: [] };
+  const qaRun = async (md, over) => { mock('Parse Brief', { ...PB, ...(over || {}) }); return (await run('Content QA', [{ json: { output: md, critique: null } }], { runIndex: 0 }))[0].json; };
+  const q365 = await qaRun(META365 + ERP);
+  const QA = q365.content_qa;
+  console.log('   exec 365 ->', QA.placeholder_count, 'placeholders,', QA.main_content_words, 'words vs', QA.target_word_count, '| score', QA.content_score, '| passed', QA.passed);
+  console.log('   top placeholders ->', JSON.stringify(QA.placeholders.slice(0, 5)));
+  check('D10: the page of execution 365 does not pass any more — 50+ placeholders ([Price] × 30, [Timeline] × 20) and 4,046 main words against a 2,310 target, although it still scores 80+',
+    QA.passed === false && QA.content_score >= 80 && QA.placeholder_count > 50 && QA.placeholders[0].token === '[Price]' && QA.placeholders[0].count === 30
+    && QA.placeholders.some(p => p.token === '[Timeline]' && p.count === 20) && QA.main_content_words > QA.target_word_count * 1.25, JSON.stringify({ passed: QA.passed, ph: QA.placeholder_count, words: QA.main_content_words, score: QA.content_score }));
+  check('D10: both reasons are named for the editor, and the editor pass is forced (it is the round that has to cut them)',
+    QA.warnings.some(w => /^Too many placeholders to publish \(6\d, at most 5 allowed\): \[Price\] x30, \[Timeline\] x20/.test(w))
+    && QA.warnings.some(w => /^Main content is too long: 4046 words vs target 2310/.test(w)) && QA.editor_needed === true, JSON.stringify(QA.warnings.slice(0, 3)));
+
+  // a draft the owner can publish: five gaps and the length on target
+  const CLEAN = [
+    'Title: ERP Software UAE: The 2026 Buyer Guide',
+    'Meta Description: Choose ERP software in the UAE with a clear comparison, the compliance checklist and the questions to ask before you sign.',
+    'Slug: erp-software-uae', '', '# ERP software UAE: how to choose', '',
+    'Choosing ERP software UAE buyers can rely on starts with the rules you must meet, not with the vendor list, and this guide walks you through each step.', '',
+    '**Quick answer:** Pick ERP software UAE teams can run under VAT, corporate tax and the e-invoicing mandate, then judge it on data migration effort and the partner behind it. Shortlist three vendors, score them against your own processes and ask each one for a fixed-scope plan before you sign anything.', '',
+    '## What does the mandate change?', '',
+    'The mandate covers every VAT-registered business. You need software that can issue the required format and connect to an accredited provider, so ask for proof in writing.', '',
+    'For example, a distributor with three entities must map each one to a tax group first. Choose a product with native support if your team is small.', '',
+    '## How do you shortlist ERP software UAE vendors?', '',
+    'Start from the data migration effort and the people who will run it. Step 1: list your processes. Step 2: score each vendor against them. Step 3: ask for a fixed scope.', '',
+    '| Option | Suits |', '|---|---|', '| Business Central | Mid-market distributors |', '| Odoo | Lean operations teams |', '',
+    '## Which mistakes cost the most?', '',
+    'Teams skip the data clean-up and pay for it later. A rule of thumb: clean the master data before the build, not after, and name one owner per table.', '',
+    'Another mistake is buying modules nobody uses. Ask for a phased plan, in practice 4 stages, and keep the scope in writing.', '',
+    '## Talk to us', '',
+    'Book a scoping call and we will map your ERP software UAE shortlist against your own processes in one workshop.'].join('\n');
+  const qClean = await qaRun(CLEAN, { content_brief: { ...PB.content_brief, target_word_count: 260 } });
+  console.log('   clean draft ->', qClean.content_qa.placeholder_count, 'placeholders,', qClean.content_qa.main_content_words, 'words | passed', qClean.content_qa.passed);
+  check('D10: a draft with no placeholder and a length on target passes, as before',
+    qClean.content_qa.passed === true && qClean.content_qa.placeholder_count === 0 && qClean.content_qa.warnings.length === 0, JSON.stringify({ p: qClean.content_qa.passed, w: qClean.content_qa.warnings }));
+  const WITH_NOTES = CLEAN.replace('so ask for proof in writing.', 'so ask for proof in writing. Licence fees start at [Price] per user and the first phase needs [Number] data owners.')
+    .replace('name one owner per table.', 'name one owner per table. Adoption rose [Confirm: 23.5%] in the first wave, and the hardware budget is [Price].')
+    .replace('keep the scope in writing.', 'keep the scope in writing. [Author insight: the mistake you see most in a first rollout] [Owner: confirm — whether we are accredited with the Ministry of Finance]');
+  const qNotes = await qaRun(WITH_NOTES, { content_brief: { ...PB.content_brief, target_word_count: 300 } });
+  console.log('   five gaps ->', qNotes.content_qa.placeholder_count, 'placeholders,', qNotes.content_qa.review_notes, 'review notes | passed', qNotes.content_qa.passed);
+  check('D10: a note the owner has to read ([Confirm: …], [Owner: confirm — …], [Author insight: …]) is not a placeholder; three real gaps stay under the limit and the page still passes',
+    qNotes.content_qa.placeholder_count === 3 && qNotes.content_qa.review_notes === 3 && qNotes.content_qa.passed === true
+    && !qNotes.content_qa.warnings.some(w => /Too many placeholders/.test(w)), JSON.stringify({ ph: qNotes.content_qa.placeholders, notes: qNotes.content_qa.review_notes, w: qNotes.content_qa.warnings }));
+  const qSix = await qaRun(WITH_NOTES.replace('in one workshop.', 'in one workshop. Ask for [Price], [Timeline] and [Number] before you sign.'), { content_brief: { ...PB.content_brief, target_word_count: 300 } });
+  check('D10: one gap over the limit fails the page and forces the editor round',
+    qSix.content_qa.placeholder_count === 6 && qSix.content_qa.passed === false && qSix.content_qa.editor_needed === true
+    && qSix.content_qa.warnings.some(w => /^Too many placeholders to publish \(6, at most 5 allowed\)/.test(w)), JSON.stringify({ ph: qSix.content_qa.placeholder_count, w: qSix.content_qa.warnings }));
+
+  // ---------- (1) the name, logo and NAP come from the site model, with no business profile on file ----------
+  const HOME = zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', 'lb_page_techand_home.html.gz'))).toString('utf8');
+  const SMout = (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D }, extras: { html: HOME, final_url: 'https://www.techand.ai/' } } }]))[0].json;
+  mock('Site Model', { site_model: SMout.model });
+  const qNoProfile = await qaRun(CLEAN, { content_brief: { ...PB.content_brief, target_word_count: 260 }, site_profile: null });
+  const orgQ = (qNoProfile.schema_blocks.find(b => b.type === 'Service') || {}).json.provider;
+  console.log('   schema without a profile ->', JSON.stringify(orgQ));
+  check('D10: a site with no business profile still gets its real name and logo in the schema, read from the homepage Organization block — never "[Your Business Name]"',
+    qNoProfile.content_qa.business_name === 'Tech&' && qNoProfile.content_qa.nap_source === 'homepage_schema' && orgQ.name === 'Tech&' && orgQ.logo === 'https://www.techand.ai/logo1.png'
+    && !JSON.stringify(qNoProfile.schema_blocks).includes('[Your Business Name]'), JSON.stringify({ n: qNoProfile.content_qa.business_name, s: qNoProfile.content_qa.nap_source, org: orgQ }));
+  const qLocal = await qaRun(CLEAN, { content_brief: { ...PB.content_brief, target_word_count: 260 }, site_profile: null, page_role: 'local', page_type: 'Local Page', local_area: 'Dubai' });
+  const lb = qLocal.schema_blocks.find(b => /LocalBusiness/.test(b.type)).json;
+  console.log('   local business ->', JSON.stringify({ n: lb.name, a: lb.address.streetAddress.slice(0, 40), t: lb.telephone }));
+  check('D10: the local page\'s LocalBusiness schema carries the real address and phone from the homepage, not [Street address] / [Phone], and the local note no longer asks for a profile',
+    lb.name === 'Tech&' && /Dubai Airport Freezone Authority \(DAFZA\)/.test(lb.address.streetAddress) && lb.address.addressLocality === 'Dubai' && lb.telephone === '+971507020541'
+    && !/\[Street address\]|\[Phone\]|\[Country code\]/.test(JSON.stringify(lb)) && !qLocal.content_qa.eeat_notes.some(n => /Local page without a full address/.test(n)), JSON.stringify(lb).slice(0, 400));
+  const bpL = (await run('Blog Package', [{ json: { ...qLocal, page_markdown: qLocal.output, content_brief_slug: 'erp-software-uae', content_images: [] } }]))[0];
+  const bmdL = Buffer.from(bpL.binary.article_md.data, 'base64').toString('utf8');
+  const bhtmlL = Buffer.from(bpL.binary.article_html.data, 'base64').toString('utf8');
+  console.log('   NAP block ->', (bmdL.match(/\*\*Tech&[^\n]*\n[^\n]*/) || ['(none)'])[0].replace(/\n/g, ' / '));
+  check('D10: the package\'s NAP block uses the same values (the merged profile travels on from Content QA), so the published page shows the real name, address and phone',
+    /\*\*Tech& — serving Dubai\*\*/.test(bmdL) && /Dubai Airport Freezone Authority \(DAFZA\)/.test(bmdL) && /\+971507020541/.test(bmdL)
+    && /Dubai Airport Freezone Authority \(DAFZA\)/.test(bhtmlL) && !/\[Your Business Name\]|\[Street address, City\]/.test(bmdL + bhtmlL), (bmdL.match(/\*\*Tech&[\s\S]{0,200}/) || [''])[0]);
+  const qProf = await qaRun(CLEAN, { content_brief: { ...PB.content_brief, target_word_count: 260 },
+    site_profile: { business_name: 'Tech& FZCO', logo_url: 'https://techand.ai/brand.svg', phone: '+971 4 123 4567', address: { street: 'Office 12, DAFZA', city: 'Dubai', region: '', postal_code: '', country_code: 'AE' } }, page_role: 'local', page_type: 'Local Page', local_area: 'Dubai' });
+  const lbP = qProf.schema_blocks.find(b => /LocalBusiness/.test(b.type)).json;
+  check('D10: a stored business profile still wins over the homepage schema (the model only fills what the profile does not have: the e-mail here)',
+    lbP.name === 'Tech& FZCO' && lbP.telephone === '+971 4 123 4567' && lbP.address.streetAddress === 'Office 12, DAFZA' && lbP.email === 'contact@techand.ai'
+    && qProf.content_qa.nap_source === 'profile', JSON.stringify({ n: lbP.name, t: lbP.telephone, a: lbP.address.streetAddress, e: lbP.email, s: qProf.content_qa.nap_source }));
+});
+
+// ===================================================================================
+// S39 D15 (2026-10-11, system review) — one canonical host. techand.ai's apex 308-redirects to www, so every URL the agent handed
+// out (the ladder's target_url, internal links, the IndexNow key file, the pages sent to Bing, Link Builder targets, audit
+// candidates, the profile e-mail) pointed at a redirect, and the audit flagged it. All of them now come from
+// SM.siteUrl(model, path) of the one site model (SITE_MODEL_SPEC.md §6), while API payloads keep the bare domain.
+// ===================================================================================
+await guard('one canonical host (FIX_PLAN D15)', async () => {
+  const SN = 'S39 D15 — every URL we emit is on the site\'s canonical host (www or bare), API targets stay bare, no model = today\'s behaviour';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log((ok ? '   ok   ' : '   FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const EMPTY = [{ json: {} }];
+  const MO = require('./fixtures_monitors');
+  const D = MO.DOMAIN, SITE = MO.SITE, W = 'https://www.' + D, B = 'https://' + D;
+  const now = new Date().toISOString(), ago = (d) => new Date(Date.now() - d * 864e5).toISOString();
+
+  // ---------- the two models: the same site, one serving www, one serving the bare host ----------
+  const modelOf = async (host) => (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D, canonical_host: host, business_name: 'Northwind ERP', model_updated_at: now } } }]))[0].json;
+  const WM = await modelOf('www.' + D), BM = await modelOf(D);
+  console.log('   models ->', WM.model.canonical_host, '|', BM.model.canonical_host);
+  check('the kit: a www model emits www URLs, a bare model bare ones, and both keep the bare domain for API payloads',
+    WM.site_url === W + '/' && WM.api_target === D && BM.site_url === B + '/' && BM.api_target === D, JSON.stringify([WM.site_url, WM.api_target, BM.site_url, BM.api_target]));
+
+  // ---------- the main workflow: the nodes read $('Site Model') ----------
+  const mainRun = async (model) => {
+    if (model) mock('Site Model', [{ json: { site_model: model } }]); else delete store['Site Model'];
+    const out = {};
+    out.client = (await run('Client Page Requests', [{ json: { domain: D, internal_link_candidates: [] } }]))[0].json.url;
+    mock('Prepare Keyword Run', { domain: D, keyword: 'e invoicing in uae' });
+    mock('Fetch Sitemaps', [{ statusCode: 200, headers: {}, sitemap_xml: F.urlset(F.siteUrls) }]);
+    const cu = (await run('Collect Site URLs', store['Fetch Sitemaps']))[0].json;
+    out.home_link = (cu.internal_link_candidates.find(c => c.path === '/') || {}).url;
+    mock('Check Crawl', { domain: D });
+    mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items: [] }] }] } }]);
+    out.sitemap = (await run('GSC Audit Plan', [{ json: { domain: D } }]))[0].json.sitemap_url;
+    mock('Normalize Input', [{ json: { domain: D, mode: 'profile' } }]);
+    mock('Profile Row', [{ json: { site_id: SITE, domain: D, business_name: 'Northwind ERP', author_name: 'Sara Khan', author_job_title: 'Head of ERP Delivery', phone: '+971 4 555 0100', street_address: 'Office 1203, Aspect Tower', city: 'Dubai', country_code: 'AE', updated_at: now } }]);
+    mock('Save Profile', store['Profile Row']); mock('Load Profile (Profile)', EMPTY);
+    const pd = (await run('Profile Delivery', store['Profile Row']))[0].json;
+    out.profile = JSON.parse(pd.schema_preview ? JSON.stringify(pd.schema_preview) : '{}');
+    out.profile_urls = JSON.stringify(pd).match(/https?:\/\/[^"'\\ ]*northwind-erp\.com[^"'\\ ]*/g) || [];
+    return out;
+  };
+  const mainW = await mainRun(WM.model);
+  console.log('   main workflow (www) ->', JSON.stringify({ client: mainW.client, home_link: mainW.home_link, sitemap: mainW.sitemap, profile: mainW.profile_urls.slice(0, 3) }));
+  check('main workflow: the client pages we read, the home page offered as an internal link, the sitemap the audit looks for and the profile schema are all on www',
+    mainW.client === W + '/' && mainW.home_link === W + '/' && mainW.sitemap === W + '/sitemap.xml'
+    && mainW.profile_urls.length > 0 && mainW.profile_urls.every(u => u.startsWith(W)), JSON.stringify({ c: mainW.client, h: mainW.home_link, s: mainW.sitemap, p: mainW.profile_urls.slice(0, 4) }));
+  const mainB = await mainRun(BM.model);
+  check('main workflow: a site whose canonical host is the bare domain gets bare URLs',
+    mainB.client === B + '/' && mainB.home_link === B + '/' && mainB.sitemap === B + '/sitemap.xml' && mainB.profile_urls.every(u => !u.startsWith(W)), JSON.stringify({ c: mainB.client, h: mainB.home_link, s: mainB.sitemap }));
+  const mainN = await mainRun(null);
+  check('main workflow: with no site model in the run nothing breaks — the bare domain, exactly as before D15',
+    mainN.client === B + '/' && mainN.home_link === B + '/' && mainN.sitemap === B + '/sitemap.xml', JSON.stringify({ c: mainN.client, h: mainN.home_link, s: mainN.sitemap }));
+
+  // ---------- the ladder: the pages it promises and the links between them ----------
+  const ladderWith = async (model) => {
+    if (model) mock('Site Model', [{ json: { site_model: model } }]); else delete store['Site Model'];
+    mock('Start Form', F.forms.startLadder);
+    const n = await run('Normalize Input', F.forms.pageLadder);   // the same ladder intake S5 uses
+    mock('Route Mode', n); await run('Prepare Keyword Run', n);
+    mock('Fetch Sitemaps', [{ statusCode: 200, headers: {}, sitemap_xml: F.urlset(F.siteUrls) }]);
+    const cu = await run('Collect Site URLs', store['Fetch Sitemaps']);
+    mock('Parse Analysis', { ...cu[0].json, competitor_analysis: F.competitorAnalysis, competitors: [] });
+    mock('Keyword Data', F.keywordOverview); mock('Site Authority', F.rankOverview(F.OUR));
+    await run('Merge Keyword Data', store['Site Authority']);
+    mock('Verdict Agent', { output: { ...F.verdictGo, what_must_change: ['Earn 20+ referring domains'], expected_monthly_visits_top3: 90, time_to_rank_months: 9 } });
+    const pv = await run('Parse Verdict', store['Verdict Agent']);
+    const lr = await run('Ladder Requests', pv);
+    mock('Run Ladder Research', V.ladderResearch(lr.map(r => r.json)));
+    const lp = await run('Ladder Pool', store['Run Ladder Research']);
+    const ch = await run('Ladder Relevance Chunks', lp);
+    mock('Ladder Keyword Relevance', ch.map(c => V.ladderRelevance(c.json)));
+    return (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json.ladder;
+  };
+  const pagesOf = (L) => [L.top, ...L.rungs.flatMap(r => r.pages)];
+  const plannedUrls = (L) => pagesOf(L).filter(p => !p.exists).map(p => p.target_url).filter(Boolean);
+  const existingUrls = (L) => pagesOf(L).filter(p => p.exists).map(p => p.target_url).filter(Boolean);
+  const linkUrls = (L) => L.rungs.flatMap(r => r.pages.flatMap(p => (p.links_to || []).map(l => l.url))).filter(u => u && u !== L.top.target_url);
+  const LW = await ladderWith(WM.model);
+  console.log('   ladder (www) -> planned', JSON.stringify(plannedUrls(LW).slice(0, 3)), '| existing', JSON.stringify(existingUrls(LW)));
+  check('ladder: every page it promises and every link between those pages is on www (target_url, links_to), while a page the site already has keeps the URL it really has',
+    plannedUrls(LW).length > 2 && plannedUrls(LW).every(u => u.startsWith(W + '/')) && linkUrls(LW).length > 0 && linkUrls(LW).every(u => u.startsWith(W + '/'))
+    && existingUrls(LW).every(u => u.startsWith(B + '/')), JSON.stringify({ planned: plannedUrls(LW).slice(0, 4), links: linkUrls(LW).slice(0, 2), existing: existingUrls(LW) }));
+  const LB2 = await ladderWith(BM.model);
+  check('ladder: a bare-host site keeps bare target URLs', plannedUrls(LB2).length > 2 && plannedUrls(LB2).every(u => u.startsWith(B + '/')), JSON.stringify(plannedUrls(LB2).slice(0, 4)));
+  const LN = await ladderWith(null);
+  check('ladder: with no site model the bare domain is used, as before', plannedUrls(LN).length > 2 && plannedUrls(LN).every(u => u.startsWith(B + '/')), JSON.stringify(plannedUrls(LN).slice(0, 4)));
+
+  // ---------- AI Growth: the model decides the host, no more vote on the stored URLs ----------
+  const growthWith = async (host) => {
+    const row = { ...MO.sites()[0].json, business_name: 'Northwind ERP', model_updated_at: host ? now : '', canonical_host: host || '' };
+    mock('Load Sites', [{ json: row }]); mock('Load Ladders', MO.ladders()); mock('Load Monitors', MO.monitors()); mock('Load Profiles', MO.profiles());
+    for (const nm of ['Load AI Visibility', 'Load AI Answers', 'Load AI Prompts', 'Load AI Pages', 'Load AI Targets', 'Load AI Growth', 'Load Link Prospects (Growth)', 'Load Cache (Growth)']) mock(nm, EMPTY);
+    // every stored URL of the site is on www: the old vote followed them even for a site that serves the bare host
+    mock('Load Content Log', [{ json: { site_id: SITE, domain: D, keyword: 'peppol uae', source: 'ladder', status: 'published', published_url: W + '/peppol-uae/', published_at: ago(2), started_at: ago(9) } }]);
+    mock('Load Query History', [{ json: { site_id: SITE, domain: D, period_end: '2026-10-04', query: 'e invoicing in uae', page: W + '/e-invoicing-uae/', impressions: 1200, clicks: 20, position: 8.4 } }]);
+    const g = (await run('Growth Plan', store['Load Cache (Growth)']))[0].json;
+    const ik = await run('IndexNow Key Requests', [{ json: g }]);
+    return { g, key_url: ik[0].json.url };
+  };
+  const GW = await growthWith('www.' + D);
+  console.log('   AI growth (www) ->', JSON.stringify({ host: GW.g.site_host, key: GW.key_url, submit: GW.g.submit.map(x => x.url) }).slice(0, 300));
+  check('AI growth: the key pages, the pages sent to Bing / IndexNow and the IndexNow key file are on the canonical host; the API payload keeps the bare domain',
+    GW.g.site_host === 'www.' + D && GW.g.key_pages.length > 0 && GW.g.key_pages.every(k => k.url.startsWith(W + '/')) && GW.g.submit.every(x => x.url.startsWith(W + '/'))
+    && GW.key_url === W + '/' + GW.g.indexnow_key + '.txt' && GW.g.domain === D, JSON.stringify({ host: GW.g.site_host, key: GW.key_url, domain: GW.g.domain, pages: GW.g.key_pages.map(k => k.url).slice(0, 3) }));
+  const GB = await growthWith(D);
+  check('AI growth: a site whose model says the bare host is canonical gets bare URLs, although every stored URL is on www (the host vote is gone)',
+    GB.g.site_host === D && GB.g.key_pages.every(k => k.url.startsWith(B + '/') && !k.url.startsWith(W)) && GB.key_url === B + '/' + GB.g.indexnow_key + '.txt',
+    JSON.stringify({ host: GB.g.site_host, pages: GB.g.key_pages.map(k => k.url).slice(0, 3) }));
+  const GN = await growthWith('');
+  check('AI growth: with no model yet the site\'s own live URLs still decide the host (www), as before',
+    GN.g.site_host === 'www.' + D && GN.key_url === W + '/' + GN.g.indexnow_key + '.txt', GN.g.site_host);
+
+  // ---------- the Link Builder, the Audit Scheduler and the AI crawler check ----------
+  const monitorWith = async (host) => {
+    const row = { ...MO.sites()[0].json, business_name: 'Northwind ERP', model_updated_at: host ? now : '', canonical_host: host || '' };
+    mock('Load Sites', [{ json: row }]); mock('Load Ladders', MO.ladders()); mock('Load Profiles', MO.profiles());
+    mock('Load Monitors', [{ json: { ...MO.monitors()[0].json, link_builder: true } }]); delete store['Manual Run'];
+    for (const nm of ['Load Link Prospects', 'Load Link Outreach', 'Load Content Log', 'Load Backlink Snapshots', 'Load Cache (Links)', 'Load AI Targets', 'Load Backlinks', 'Load Query History', 'Load Rank History', 'Load Audits']) mock(nm, EMPTY);
+    const lb = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+    const ac = (await run('Audit Candidates', store['Load Audits']))[0].json;
+    mock('AI Plan', [{ json: { site_id: SITE, domain: D, canonical_host: host || D } }]);
+    const acc = (await run('Access Requests', EMPTY)).map(x => x.json);
+    return { lb, ac, acc };
+  };
+  const MW = await monitorWith('www.' + D);
+  console.log('   monitors (www) ->', JSON.stringify({ home: MW.lb.home, sitemap: MW.ac.sitemap_url, access: MW.acc.map(a => a.url).slice(0, 3) }));
+  check('Link Builder: the page we ask for a link to, the audit candidate\'s sitemap and the AI-crawler checks are on the canonical host; the API targets stay bare',
+    MW.lb.home === W + '/' && MW.lb.pages[0].url === W + '/' && MW.lb.domain === D
+    && MW.ac.sitemap_url === W + '/sitemap.xml' && MW.ac.domain === D
+    && MW.acc.length > 0 && MW.acc.every(a => a.url.startsWith(W + '/')), JSON.stringify({ home: MW.lb.home, page: MW.lb.pages[0].url, sitemap: MW.ac.sitemap_url, acc: MW.acc.map(a => a.url).slice(0, 3) }));
+  const MB = await monitorWith(D);
+  check('the same three on a bare-host site are bare', MB.lb.home === B + '/' && MB.ac.sitemap_url === B + '/sitemap.xml' && MB.acc.every(a => a.url.startsWith(B + '/')),
+    JSON.stringify({ home: MB.lb.home, sitemap: MB.ac.sitemap_url }));
+  const MN = await monitorWith('');
+  check('with no model the monitors fall back to the bare domain and nothing breaks',
+    MN.lb.home === B + '/' && MN.ac.sitemap_url === B + '/sitemap.xml' && MN.acc.length > 0, JSON.stringify({ home: MN.lb.home, sitemap: MN.ac.sitemap_url }));
+});
+
+// ===================================================================================
+// S40 D11 (2026-10-12, system review FIX_PLAN): the agent was blind to the pages the website already has. The 2026-10-01 ladder planned
+// "uae e invoicing penalties" as a NEW page although /insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs had
+// been live since August, and the Rank Tracker / Site Tracker then said "publish it" — which would cannibalise the live page.
+// The Site Tracker now keeps a weekly page inventory in seo_pages (SITE_MODEL_SPEC.md §6) and every consumer asks SM.matchPage first.
+await guard('d11-existing-pages', async () => {
+  const SN = 'S40 D11 — the pages the site already has: the weekly inventory in seo_pages (sitemap + Search Console queries + AI pages, only changed rows), and Ladder Plan / discovery / the Rank Tracker / the Site Tracker / the Content Cadence refreshing that page instead of publishing a second one';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T = require('./fixtures_tracking'), TC = require('./table_cols.json');
+  const D = T.D, SITE = 'site_northwind-erp-com', W = 'https://www.' + D, EMPTY = [{ json: {} }];
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  // the live page of the system review, with its real path and title
+  const INS = W + '/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs';
+  const INS_T = 'The cost of non-compliance: UAE e-invoicing penalties and mitigation costs';
+  const FTA = W + '/uae-e-invoicing-fta-rules/';
+  const PRICING = W + '/erp-pricing/';
+  const KW = 'uae e invoicing penalties';                 // the keyword the 2026-10-01 ladder planned as a new page
+  const FALSE_PAIR = 'e invoicing uae penalties';         // S26's false-match pair: must never claim the FTA rules page
+
+  // ---- 1. the weekly inventory: the Site Tracker turns what it already read into seo_pages rows ----
+  const modelOf = async (row) => (await run('_site_model', [{ json: { site_row: row } }]))[0].json.model;
+  const model = await modelOf({ site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1) });
+  mock('Resolve Properties', [{ json: { site_id: SITE, domain: D } }]);
+  mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model } }]);
+  mock('Detect Published', [{ json: { site_idx: 0, site_id: SITE, domain: D, candidates: 1, sitemap: { ok: true, urls: 3 }, detected: [{ keyword: 'peppol uae', url: W + '/peppol-uae/', matched_by: 'slug' }],
+    inventory: [{ url: INS, lastmod: '2026-08-21' }, { url: FTA, lastmod: '2026-07-02' }, { url: W + '/about/', lastmod: '' }], page_titles: [{ url: INS, title: INS_T, h1: 'UAE e-invoicing penalties' }] } }]);
+  mock('Parse GSC', [{ json: { site_idx: 0, site_id: SITE, pages: [{ page: PRICING, clicks: 12, impressions: 300 }],
+    queries: [{ query: 'erp cost dubai', page: PRICING, impressions: 240, clicks: 9, position: 7.4 }, { query: 'erp price uae', page: PRICING, impressions: 0, clicks: 0, position: 44 }] } }]);
+  mock('Load AI Pages (Site)', [{ json: { site_id: SITE, url: 'https://' + D + '/about/', title: 'About Northwind ERP' } }]);   // bare host: the same page as the sitemap's /about/
+  mock('Load Pages (Site)', EMPTY);
+  const inv1 = (await run('Page Inventory (Site)', store['Resolve Properties']))[0].json;
+  console.log('   inventory ->', JSON.stringify({ total: inv1.total, by_source: inv1.by_source, changed: inv1.changed }));
+  check('the inventory merges the sitemap, the Search Console pages, AI Growth\'s key pages and the pages found live, host-agnostically (the bare-host /about/ is not a second page)',
+    inv1.total === 5 && inv1.pages.filter(p => /\/about\/?$/.test(p.url)).length === 1 && inv1.by_source.sitemap === 3 && inv1.by_source.gsc === 1 && inv1.by_source.detected === 1, JSON.stringify(inv1.pages.map(p => [p.url.replace(W, ''), p.source])));
+  check('the page the detection read keeps its title and H1, and the Search Console page keeps the queries it gets impressions for (0 impressions are left out)',
+    (inv1.pages.find(p => p.url === INS) || {}).title === INS_T && (inv1.pages.find(p => p.url === INS) || {}).h1 === 'UAE e-invoicing penalties'
+    && eq(((inv1.pages.find(p => p.url === PRICING) || {}).queries || []).map(q => q.query), ['erp cost dubai']) && inv1.with_queries === 1, JSON.stringify(inv1.pages.map(p => [p.url.replace(W, ''), p.title, (p.queries || []).length])));
+  const prow = await run('Page Rows (Site)', store['Page Inventory (Site)']);
+  check('the seo_pages rows carry exactly the table\'s columns (table_cols.json PAGES) and one row per page',
+    prow.length === 5 && prow.every(r => eq(Object.keys(r.json).sort(), [...TC.PAGES].sort())) && prow.every(r => r.json.site_id === SITE) && prow.some(r => r.json.url === INS && r.json.title === INS_T), JSON.stringify(Object.keys(prow[0].json)));
+  mock('Load Pages (Site)', prow.map(r => ({ json: { ...r.json, id: 1 } })));
+  const inv2 = (await run('Page Inventory (Site)', store['Resolve Properties']))[0].json;
+  check('next week nothing changed: the same pages, no row written again (the upsert keys are site_id + url)', inv2.total === 5 && inv2.changed === 0 && inv2.stored === 5, JSON.stringify({ total: inv2.total, changed: inv2.changed }));
+  const prow2 = await run('Page Rows (Site)', store['Page Inventory (Site)']);
+  check('and Page Rows (Site) then has nothing to save', prow2.length === 1 && prow2[0].json.skip === true, JSON.stringify(prow2[0].json));
+
+  // ---- 2. SM.matchPage on that inventory: the live page, the false-match pair, a query match ----
+  const kit = async (keyword, pages) => (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1) }, extras: { pages }, keyword } }]))[0].json.match;
+  const INV = inv1.pages;
+  const mHit = await kit(KW, INV), mPair = await kit(FALSE_PAIR, INV), mQuery = await kit('erp cost dubai', INV), mNone = await kit('wms implementation dubai', INV);
+  check('D11: "uae e invoicing penalties" maps to the live /insights/ page (3 of 3 meaningful words in the slug)', mHit && mHit.url === INS && mHit.matched_by === 'slug' && mHit.score === 1, JSON.stringify(mHit));
+  check('S26\'s false-match pair still does not claim the FTA rules page', mPair && mPair.url === INS && !/fta-rules/.test(mPair.url) && (await kit(FALSE_PAIR, INV.filter(p => p.url === FTA))) === null, JSON.stringify(mPair));
+  check('a keyword with impressions on a page matches even though the slug says nothing about it', mQuery && mQuery.url === PRICING && mQuery.matched_by === 'query' && mQuery.impressions === 240, JSON.stringify(mQuery));
+  check('an unrelated keyword matches nothing, and an empty inventory matches nothing', mNone === null && (await kit(KW, [])) === null, JSON.stringify(mNone));
+  const invPages = INV.map(p => ({ url: p.url, title: p.title, h1: p.h1, source: p.source, lastmod: p.lastmod, queries_json: JSON.stringify(p.queries || []) }));   // as seo_pages stores them
+
+  // ---- 3. Ladder Plan: status 'improve' with the real URL instead of a new page ----
+  const siteModel = { ...model, pages: INV };
+  const cand = (keyword, kd, volume) => ({ keyword, volume, kd, cpc: 2.5, intent: 'commercial', words: keyword.split(' ').length, pre_score: 50 + volume / 10, traffic_potential: volume, competitors: [], your_position: null, your_url: '' });
+  const CANDS = [cand(KW, 18, 140), cand('e invoicing penalty calculator uae', 14, 60), cand('uae e invoicing fines', 16, 90)];
+  const PV = { keyword: 'e invoicing software uae', domain: D, country: 'United Arab Emirates', location_code: 2784, goal: 'leads', ladder_id: 'lad_D11', pages_now: 1,
+    keyword_data: { keyword_difficulty: 22, search_volume: 300, cpc: 4, google_intent: 'commercial' }, verdict: 'GO', verdict_reasons: [], verdict_changes: [], secondary_keywords: [],
+    competitors: [], competitors_summary: [], site_authority: { organic_keywords: 400, top10: 30, top3: 6 }, recommended_page: 'Service Page', services: ['ERP implementation'], business: 'ERP partner in Dubai',
+    site_description: { products_or_services: ['ERP implementation'] }, site_urls: [W + '/', FTA, W + '/about/'] };   // this run's sitemap does NOT contain the /insights/ page
+  const ladderWith = async (o = {}) => {
+    mock('Parse Verdict', [{ json: { ...PV, ...(o.pv || {}) } }]);
+    mock('Ladder Pool', [{ json: { research: { candidates: CANDS, refused: [], pool_size: 3, failures: [] }, site_rankings: { available: true, top10: [{ keyword: 'erp dubai', kd: 20, position: 6 }], head: null, count: 1 }, head_geo: [] } }]);
+    mock('Ladder Relevance Chunks', [{ json: { keywords_chunk: CANDS.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', EMPTY); mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+    if (o.model === null) delete store['Site Model']; else mock('Site Model', [{ json: { site_model: o.model || siteModel } }]);
+    const rel = [{ json: { output: { items: CANDS.map(c => ({ keyword: c.keyword, relevance: 2, intent: 'commercial', page_type: 'Guide', topic: c.keyword })) } } }];
+    return (await run('Ladder Plan', rel))[0].json.ladder;
+  };
+  const LD = await ladderWith();
+  const pageFor = (L, kw) => L.rungs.flatMap(r => r.pages).find(p => p.keyword === kw) || null;
+  const pD11 = pageFor(LD, KW);
+  console.log('   ladder page ->', JSON.stringify(pD11 && { keyword: pD11.keyword, status: pD11.status, target_url: pD11.target_url, source: pD11.existing_source }));
+  check('D11: the ladder plans "uae e invoicing penalties" as improve of the live /insights/ page, not as a new URL',
+    !!pD11 && pD11.status === 'improve' && pD11.exists === true && pD11.target_url === INS && pD11.existing_source === 'sitemap', JSON.stringify(pD11 && [pD11.status, pD11.target_url]));
+  check('a keyword the site has no page for is still planned as a new page on its own slug',
+    (pageFor(LD, 'e invoicing penalty calculator uae') || {}).status === 'new' && /e-invoicing-penalty-calculator-uae/.test((pageFor(LD, 'e invoicing penalty calculator uae') || {}).target_url || ''), JSON.stringify(LD.rungs.flatMap(r => r.pages).map(p => [p.keyword, p.status])));
+  const LD0 = await ladderWith({ model: null });
+  check('with no page inventory and no model the ladder behaves exactly as before: every page new, on its planned slug',
+    LD0.rungs.flatMap(r => r.pages).every(p => p.status === 'new' && !p.exists) && LD0.top.status === 'new', JSON.stringify(LD0.rungs.flatMap(r => r.pages).map(p => [p.keyword, p.status])));
+  const LDh = await ladderWith({ pv: { keyword: KW } });
+  check('and when the MAIN keyword is the one the live page answers, the main page is that page (improve), never a second URL',
+    LDh.top.status === 'improve' && LDh.top.target_url === INS, JSON.stringify([LDh.top.status, LDh.top.target_url]));
+
+  // ---- 4. discovery: the keyword is labelled "covered by a live page" and is not what the pipeline writes ----
+  const discWith = async (o = {}) => {
+    mock('Collect Research', [{ json: { domain: D, goal: 'leads', seeds: ['e invoicing'], services: ['ERP implementation'], business: 'ERP partner in Dubai', competitors: [], site_urls: PV.site_urls,
+      research: { candidates: CANDS, pool_size: 3, competitor_domains: [], by_source: {}, failures: [] } } }]);
+    mock('Relevance Chunks', [{ json: { keywords_chunk: CANDS.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', EMPTY); delete store['Reach (Discovery)'];
+    if (o.model === null) delete store['Site Model']; else mock('Site Model', [{ json: { site_model: o.model || siteModel } }]);
+    const rel = [{ json: { output: { items: CANDS.map(c => ({ keyword: c.keyword, relevance: 2, intent: 'commercial', page_type: 'Guide', topic: c.keyword })) } } }];
+    return (await run('Rank Keywords', rel))[0].json.keyword_strategy;
+  };
+  const KS = await discWith();
+  const kHit = KS.keywords.find(k => k.keyword === KW);
+  console.log('   discovery ->', JSON.stringify({ covered: KS.covered, pipeline: KS.pipeline_keyword && KS.pipeline_keyword.keyword }));
+  check('D11: the keyword is labelled with the live page that already answers it, and listed in keyword_strategy.covered',
+    kHit && kHit.covered_by && kHit.covered_by.url === INS && KS.covered.length === 1 && KS.covered[0].keyword === KW && KS.pages_known === 6, JSON.stringify({ c: kHit && kHit.covered_by, known: KS.pages_known }));   // 6 = the 5 stored pages + the homepage of this run's sitemap
+  check('the keyword the pipeline writes next is one the site has no page for', KS.pipeline_keyword && KS.pipeline_keyword.keyword !== KW && !KS.pipeline_keyword.covered_by, JSON.stringify(KS.pipeline_keyword && KS.pipeline_keyword.keyword));
+  mock('Rank Keywords', [{ json: { domain: D, keyword_strategy: KS } }]); mock('Priority Keywords', EMPTY); delete store['AI Demand'];
+  const KSR = (await run('Build Keyword Strategy', EMPTY))[0].json;
+  check('the keyword strategy report names the page and says to refresh it instead of writing a new one',
+    /already answered by a page you have/.test(KSR.result_html) && KSR.result_html.includes(INS) && /Refresh those pages instead of writing new ones/.test(KSR.result_html) && KSR.keyword_suggestions.covered.length === 1, (KSR.result_html.match(/already answered[\s\S]{0,220}/) || [''])[0]);
+  const KS0 = await discWith({ model: null });
+  check('with no inventory every keyword is uncovered and the list is exactly as before', KS0.keywords.every(k => k.covered_by === null) && KS0.covered.length === 0 && KS0.pages_known === 3, JSON.stringify(KS0.covered));
+
+  // ---- 5. the Rank Tracker: never "publish it" for a search a live page already answers ----
+  const slugU = (k) => W + '/' + k.replace(/\s+/g, '-') + '/';
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_D11', domain: D, head_keyword: 'e invoicing software uae', rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: slugU(keyword), page_exists: false, status, months: '', start_date: daysAgo(40), country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'https://hooks.example.com/x', request_id: 'r-D11' } });
+  const ROWS = [lrow(4, 3, 'e invoicing software uae', 'published'), lrow(1, 1, KW, 'writing'), lrow(1, 2, 'uae e invoicing fines', 'planned')];
+  const trackerWith = async (pages) => {
+    reset(); mock('Load Ladders', ROWS); mock('Load Content Log (Tracker)', EMPTY);
+    mock('Load Pages (Tracker)', pages.length ? pages.map(p => ({ json: { ...p, site_id: SITE, id: 1 } })) : EMPTY);
+    mock('Load History', ROWS.map(r => ({ json: { ladder_id: 'lad_D11', keyword: r.json.keyword, position: 12, checked_at: daysAgo(7), url: '' } })));
+    const tp = await run('Tracker Plan', store['Load History']);
+    mock('SERP Check', tp.map(c => V.serpFor(c.json.keyword, c.json.domain, 0)));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    return (await run('Tracker Report', pp))[0].json;
+  };
+  const tr = await trackerWith(invPages);
+  console.log('   tracker next ->', tr.next_step.text);
+  check('D11: the next step names the live page and asks for a refresh — the words "publish it" never appear for that keyword',
+    tr.next_step.text.includes(INS) && /already answers this search — refresh that page, do not publish a second one/.test(tr.next_step.text) && !/publish it/.test(tr.next_step.text) && !/publish it/.test(tr.html), tr.next_step.text);
+  check('the page of the next step points at the live URL, and the ready-made run is a refresh of it (existing_page_url)',
+    (tr.next_step.pages.find(p => p.keyword === KW) || {}).target_url === INS && (tr.next_step.pages.find(p => p.keyword === KW) || {}).covered_by === INS
+    && tr.api_body && tr.api_body.keyword === KW && tr.api_body.existing_page_url === INS, JSON.stringify({ p: tr.next_step.pages, b: tr.api_body }));
+  const tr0 = await trackerWith([]);
+  check('with no inventory the Rank Tracker says exactly what it said before ("already written — publish it")',
+    /\(already written — publish it\)/.test(tr0.next_step.text) && !/refresh that page/.test(tr0.next_step.text), tr0.next_step.text);
+
+  // ---- 6. the Content Cadence: a ladder page becomes a refresh, an opportunity post is left out ----
+  const cadWith = async (pages) => {
+    reset(); mock('Manual Run', EMPTY); mock('Load Sites', T.sitesRows()); mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: 2, status: 'active', updated_at: 'x', request_id: '' } }]);
+    mock('Load Ladders', [lrow(1, 1, 'uae e invoicing fines', 'planned')]);
+    mock('Load Query History', EMPTY);
+    mock('Load Trends', [{ json: { site_id: SITE, domain: D, keyword: 'e invoicing', direction: 'rising', rising: KW + ' (+120%)', change_pct: 120, checked_at: daysAgo(2) } }]);
+    mock('Load Content Log', EMPTY); mock('Load Ladder Settings', EMPTY); mock('Load Main Keyword Ranks', EMPTY);
+    mock('Load Pages (Cadence)', pages.length ? pages.map(p => ({ json: { ...p, site_id: SITE, id: 1 } })) : EMPTY);
+    const r = await run('Cadence Plan', store['Load Pages (Cadence)']);
+    return { picks: r.filter(x => !x.json.nothing_to_do).map(x => x.json), first: r[0].json };
+  };
+  const cad = await cadWith(invPages);
+  console.log('   cadence picks ->', JSON.stringify(cad.picks.map(p => [p.keyword, p.source, p.existing_page_url])));
+  check('D11: the rising search "uae e invoicing penalties" is not written as a new blog post — a live page already answers it',
+    !cad.picks.some(p => p.keyword === KW) && (cad.first.covered_by_live_pages || []).some(c => c.keyword === KW && c.url === INS), JSON.stringify(cad.first.covered_by_live_pages));
+  const cadL = await cadWith(invPages.map(p => (p.url === INS ? { ...p, url: W + '/uae-e-invoicing-fines/' } : p)));
+  check('a LADDER page whose search a live page answers is still written, but as a refresh of that page (never a second URL)',
+    cadL.picks.some(p => p.keyword === 'uae e invoicing fines' && p.existing_page_url === W + '/uae-e-invoicing-fines/'), JSON.stringify(cadL.picks.map(p => [p.keyword, p.existing_page_url])));
+  const cad0 = await cadWith([]);
+  check('with no inventory the cadence picks exactly what it picked before (the rising search is written)',
+    cad0.picks.some(p => p.keyword === KW && p.source === 'trend') && !(cad0.first.covered_by_live_pages || []).length, JSON.stringify(cad0.picks.map(p => p.keyword)));
+
+  // ---- 7. the Site Tracker's advice: refresh the existing page, never "publish" a second one ----
+  const metricsWith = async (pages) => {
+    reset();
+    mock('Load Sites', T.sitesRows()); mock('Load Ladders', [lrow(1, 1, KW, 'writing')]); mock('Load Rank History', EMPTY); mock('Load Site Metrics', EMPTY); mock('Load Query History', EMPTY);
+    mock('Load Content Log', EMPTY); mock('Load Console Alerts', EMPTY); mock('Load Check-ins', EMPTY); mock('Load Profiles (Site)', EMPTY); mock('Load Monitors (Site)', EMPTY);
+    const plan = await run('Site Plan', EMPTY);
+    mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model } }]);
+    mock('Resolve Properties', plan.map(p => ({ json: { ...p.json, gsc_connected: false, gsc_property: '', gsc_error: 'no property for this account' } })));
+    mock('Page Inventory (Site)', [{ json: { site_id: SITE, domain: D, pages, total: pages.length, changed: 0, stored: pages.length, by_source: {}, sitemap_read: true, with_queries: 0 } }]);
+    const sm = (await run('Site Metrics', store['Resolve Properties']))[0].json;
+    return { sm, brief: JSON.parse((await run('Brief Input', [{ json: sm }]))[0].json.facts) };
+  };
+  const M1 = await metricsWith(INV);
+  const act1 = M1.sm.actions.find(a => a.keyword === KW) || {};
+  console.log('   site action ->', JSON.stringify([act1.type, act1.url]));
+  check('D11: the written page is not told to go live as a second URL — the action is to refresh the page that answers the search',
+    act1.type === 'refresh_existing' && act1.url === INS && /Do not publish the new page/.test(act1.action) && !M1.sm.actions.some(a => a.type === 'publish' && a.keyword === KW), JSON.stringify(act1));
+  check('the brief is told how many pages the site has and never to publish a second page for the same search',
+    M1.brief.website.pages_known === 5 && /never tell the owner to publish a new page for a search a page in the list already answers/.test(M1.brief.website.note) && M1.sm.page_inventory.pages === 5, JSON.stringify(M1.brief.website.pages_known));
+  const M0 = await metricsWith([]);
+  check('with no inventory the Site Tracker still asks for the written page to be published, exactly as before',
+    (M0.sm.actions.find(a => a.keyword === KW) || {}).type === 'publish' && M0.brief.website.pages_known === 0, JSON.stringify(M0.sm.actions.map(a => a.type)));
+});
+
+// ===================================================================================
+// S43 D20 D21 G9 G24 G28 (2026-10-12, system review FIX_PLAN): five places where the agent said more than its data supported — a discovery
+// top pick ("e invoicing") that overlapped the running ladder head "e invoicing in uae" with no warning, a card claiming an AI Overview its
+// own live check had not found, "+1,200%" from a Google Trends series that is zero most weeks, 500 Search Console rows presented as "the"
+// queries, an audit that never said how much of the site it had crawled, and a traffic alert that fired on a fixed 30%.
+// G28 follow-up (2026-10-13, FIX_PLAN §3.8): a big relative drop that the test cannot confirm is now a medium "Watch" alert with the two
+// periods' counts named as "small numbers", so a site with 20 clicks a month hears about it without being told its traffic fell.
+// ===================================================================================
+await guard('d20-d21-g9-g24-g28', async () => {
+  const SN = 'S43 D20 D21 G9 G24 G28 — a keyword one of the site\'s ladders already covers, an AI Overview only from the live check, no percentage for a sparse trend, every Search Console row with its anonymised share and brand split, crawl coverage in the audit, alerts on a statistical test';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T = require('./fixtures_tracking');
+  const D = T.D, SITE = 'site_northwind-erp-com', W = 'https://www.' + D, EMPTY = [{ json: {} }];
+
+  // ---- 1. D20: discovery loads the site's own keyword ladders (it never did) ----
+  const HEAD = 'e invoicing in uae';
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: 1, ladder_id: 'lad_D20', domain: D, head_keyword: HEAD, rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: W + '/' + keyword.replace(/\s+/g, '-') + '/', page_exists: false, status, months: '', start_date: '', country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: '', request_id: '' } });
+  const LADDER = [lrow(4, 3, HEAD, 'writing'), lrow(1, 1, 'uae e invoicing penalties', 'planned')];
+  const FLOAT_CPC = 13.65999984741211;   // DataForSEO sends CPCs as float32
+  const cand = (keyword, kd, volume, cpc) => ({ keyword, volume, kd, cpc: cpc == null ? 2.5 : cpc, intent: 'commercial', words: keyword.split(' ').length, pre_score: 60 + volume / 10, traffic_potential: volume, competitors: [], your_position: null, your_url: '' });
+  const CANDS = [cand('e invoicing', 22, 900, FLOAT_CPC), cand('wms implementation dubai', 18, 200), cand('uae e invoicing penalties', 14, 120)];
+  const discWith = async (ladderRows, settingsRows) => {
+    reset();
+    mock('Collect Research', [{ json: { domain: D, goal: 'leads', seeds: ['e invoicing'], services: ['ERP implementation'], business: 'ERP partner in Dubai', competitors: [], site_urls: [],
+      research: { candidates: CANDS, pool_size: 3, competitor_domains: [], by_source: {}, failures: [] } } }]);
+    mock('Relevance Chunks', [{ json: { keywords_chunk: CANDS.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', EMPTY); delete store['Reach (Discovery)']; delete store['Site Model'];
+    mock('Load Domain Ladders (Discovery)', ladderRows.length ? ladderRows : EMPTY);
+    mock('Load Ladder Settings (Discovery)', (settingsRows || []).length ? settingsRows : EMPTY);
+    const rel = [{ json: { output: { items: CANDS.map(c => ({ keyword: c.keyword, relevance: 2, intent: 'commercial', page_type: 'Guide', topic: c.keyword })) } } }];
+    return (await run('Rank Keywords', rel))[0].json.keyword_strategy;
+  };
+  const KS = await discWith(LADDER);
+  const kOver = KS.keywords.find(k => k.keyword === 'e invoicing');
+  console.log('   ladder overlap ->', JSON.stringify(KS.ladder_covered), '| pipeline:', KS.pipeline_keyword && KS.pipeline_keyword.keyword);
+  check('D20: "e invoicing" is flagged as covered by the running ladder "e invoicing in uae" (its main page), with the ladder named',
+    !!kOver.ladder_covered && kOver.ladder_covered.ladder_id === 'lad_D20' && kOver.ladder_covered.head_keyword === HEAD && kOver.ladder_covered.part === 'head' && kOver.ladder_covered.how === 'part of a broader page' && KS.ladders_known === 1, JSON.stringify(kOver.ladder_covered));
+  check('D20: a keyword that is a rung of that ladder is flagged too (the same search), and a keyword no ladder touches is free',
+    (KS.keywords.find(k => k.keyword === 'uae e invoicing penalties').ladder_covered || {}).how === 'the same search'
+    && (KS.keywords.find(k => k.keyword === 'uae e invoicing penalties').ladder_covered || {}).part === 'rung'
+    && KS.keywords.find(k => k.keyword === 'wms implementation dubai').ladder_covered === null && KS.ladder_covered.length === 2, JSON.stringify(KS.ladder_covered.map(c => [c.keyword, c.part, c.how])));
+  check('D20: the keyword the pipeline writes next is not one of the ladder\'s searches (one search, one page)',
+    KS.pipeline_keyword.keyword === 'wms implementation dubai' && !KS.pipeline_keyword.ladder_covered, JSON.stringify(KS.pipeline_keyword && KS.pipeline_keyword.keyword));
+  const KSarch = await discWith(LADDER, [{ json: { ladder_id: 'lad_D20', site_id: SITE, domain: D, status: 'archived', mode: 'auto', priority: 1 } }]);
+  check('D20: an archived ladder covers nothing — the keyword is recommended again, exactly as before this fix',
+    KSarch.keywords.every(k => k.ladder_covered === null) && KSarch.ladder_covered.length === 0 && KSarch.pipeline_keyword.keyword === 'e invoicing', JSON.stringify(KSarch.pipeline_keyword && KSarch.pipeline_keyword.keyword));
+  const KSnone = await discWith([]);
+  check('D20: with no ladder at all every keyword is free and the list is unchanged (back-compatible)',
+    KSnone.keywords.every(k => k.ladder_covered === null) && KSnone.ladders_known === 0 && KSnone.pipeline_keyword.keyword === 'e invoicing', JSON.stringify(KSnone.ladder_covered));
+
+  // the report and the callback name the ladder
+  const strategyFrom = async (ks, serps) => { mock('Rank Keywords', [{ json: { domain: D, country: 'United Arab Emirates', goal: 'leads', seeds: ['e invoicing'], research: { requests: 4 }, keyword_strategy: ks } }]);
+    mock('Priority Keywords', ks.priority.map(k => ({ keyword: k.keyword }))); delete store['AI Demand'];
+    return (await run('Build Keyword Strategy', serps))[0].json; };
+  const KSR = await strategyFrom(KS, KS.priority.map(() => ({ json: {} })));   // no live check in this run
+  check('D20: the keyword report names the ladder that already covers the search and says to let it finish',
+    /already covered by a keyword ladder of yours/.test(KSR.result_html) && KSR.result_html.includes(HEAD) && /two pages for one search split the signals/.test(KSR.result_html)
+    && /Already in your ladder/.test(KSR.result_html) && KSR.keyword_suggestions.ladder_covered.length === 2, (KSR.result_html.match(/already covered by a keyword ladder[\s\S]{0,260}/) || [''])[0]);
+
+  // ---- 2. D20: an AI Overview is claimed from the LIVE check only; the undated stored value is "historical" ----
+  const K2 = { keyword: 'e invoicing software uae', volume: 320, kd: 20, cpc: FLOAT_CPC, intent: 'commercial', page_type: 'Service Page', topic: 'e invoicing', opportunity: 50, traffic_potential: 90,
+    serp_types: ['organic', 'people_also_ask', 'ai_overview'], competitors: [], competitors_in_top20: 0, words: 4, relevance: 2, covered_by: null, ladder_covered: null };
+  const KS2 = { goal: 'leads', pool_size: 12, ai_reviewed: 12, total_relevant: 1, keywords: [K2], clusters: [], quick_wins: [K2], questions: [], long_tail: [], competitor_gaps: [], by_intent: {}, priority: [K2], pipeline_keyword: K2,
+    competitor_domains: [], by_source: { ideas: 12 }, research_failures: [], refused: [], covered: [], ladder_covered: [], pages_known: 0, ladders_known: 0, reach: null };
+  const DUP_DOMAINS = ['a.example', 'a.example', 'b.example', 'b.example', 'c.example', 'd.example', 'e.example'];
+  const serpWith = (aio, dt) => V.task({ keyword: K2.keyword, datetime: dt, items: [
+    ...DUP_DOMAINS.map((dom, i) => ({ type: 'organic', rank_group: i + 1, rank_absolute: i + 1, domain: dom, url: 'https://' + dom + '/p' + (i + 1) })),
+    { type: 'people_also_ask', items: [{ title: 'Who must issue e-invoices in the UAE?' }] },
+    ...(aio ? [{ type: 'ai_overview', items: [] }] : []) ] });
+  const noAio = await strategyFrom(KS2, [{ json: serpWith(false, '2026-10-11 16:03:00 +00:00') }]);
+  const p0 = noAio.keyword_strategy.priority[0];
+  console.log('   card why (live check, no AI Overview) ->', p0.why);
+  check('D20: the live check found no AI Overview, so the card never claims one — and the undated stored value is named as historical, not as today',
+    p0.live.ai_overview === false && !/AI Overview was seen/.test(p0.why) && !/write a quotable answer block/.test(p0.why)
+    && /not seen in the check at 16:03 UTC on 2026-10-11/.test(noAio.result_html) && /the stored results page showed one \(historical, undated\)/.test(noAio.result_html), p0.why);
+  check('D20: the "Who ranks now" domains are deduplicated BEFORE the first five are taken (duplicates used to eat the slots)',
+    eq(p0.live.top_domains, ['a.example', 'b.example', 'c.example', 'd.example', 'e.example']), JSON.stringify(p0.live.top_domains));
+  const withAio = await strategyFrom(KS2, [{ json: serpWith(true, '2026-10-11 16:03:00 +00:00') }]);
+  check('D20: when the live check DID see an AI Overview the card says so with the day it was seen',
+    /an AI Overview was seen on 2026-10-11 \(they vary between searches\) — write a quotable answer block/.test(withAio.keyword_strategy.priority[0].why), withAio.keyword_strategy.priority[0].why);
+  const failed = await strategyFrom(KS2, [{ json: { tasks: [{ status_code: 50000, status_message: 'Internal Server Error.' }] } }]);
+  const pf = failed.keyword_strategy.priority[0];
+  check('D20: with no live check the stored results page is quoted as historical and undated, never as a current feature',
+    pf.live === null && /the stored results page showed an AI Overview \(historical, undated — not checked live\)/.test(pf.why) && /historical, undated/.test(failed.result_html), pf.why);
+  const ir = (await run('Build Ideas Response', [{ json: noAio, binary: {} }]))[0].json;
+  check('D20: the callback rounds CPCs to 2 decimals (no float32 tail anywhere) and carries the ladder overlap field',
+    ir.priority[0].cpc === 13.66 && ir.start_with.cpc === 13.66 && ir.quick_wins.every(k => k.cpc === 13.66) && !/13\.6599/.test(JSON.stringify(ir)) && 'ladder_covered' in ir.priority[0] && eq(ir.ladder_covered, []), JSON.stringify({ cpc: ir.priority[0].cpc, start: ir.start_with.cpc }));
+
+  // ---- 3. D21: a sparse Google Trends series carries no percentage (the brief said "peppol uae up 1,200%") ----
+  const WEEK = (i) => new Date(Date.UTC(2025, 9, 5) + i * 7 * 864e5).toISOString().slice(0, 10);
+  const trendRes = (kw, kind) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', tasks: [{ id: 't', status_code: 20000, status_message: 'Ok.', cost: 0.0012, result: [{ keywords: [kw], items: [
+    { position: 1, type: 'google_trends_graph', title: 'Interest over time', data: Array.from({ length: 52 }, (_, i) => ({ date_from: WEEK(i), date_to: WEEK(i), missing_data: false, values: [kind === 'sparse' ? (i >= 49 ? 100 : 0) : (i >= 48 ? 90 : 40)] })) },
+    { position: 2, type: 'google_trends_queries_list', title: 'Related queries', data: { top: [{ query: kw + ' uae', value: '100' }], rising: [{ query: kw + ' 2026', value: 'Breakout' }] } }] }] }] });
+  reset();
+  mock('Trends Requests', [{ json: { site_idx: 0, site_id: SITE, keyword: 'peppol uae', endpoint: 'https://api.dataforseo.com/v3/keywords_data/google_trends/explore/live', body: [{ keywords: ['peppol uae'] }],
+    cached_trends: [{ site_idx: 0, site_id: SITE, keyword: 'peppol uae stored', row: { direction: 'sparse', change_pct: 1200, latest: 100, average: 6, peak_date: '2026-09-28', rising: 'peppol uae 2026 (Breakout)', top: 'peppol (100)', checked_at: '2026-10-05T06:00:00.000Z' } }] } },
+    { json: { site_idx: 0, site_id: SITE, keyword: 'e invoicing uae', endpoint: 'x', body: [{ keywords: ['e invoicing uae'] }] } }]);
+  const pt = await run('Parse Trends', [{ json: trendRes('peppol uae', 'sparse') }, { json: trendRes('e invoicing uae', 'rising') }]);
+  const tS = pt.find(x => x.json.keyword === 'peppol uae').json, tC = pt.find(x => x.json.keyword === 'peppol uae stored').json, tR = pt.find(x => x.json.keyword === 'e invoicing uae').json;
+  console.log('   trends ->', JSON.stringify(pt.map(x => [x.json.keyword, x.json.direction, x.json.change_pct])));
+  check('D21: a sparse series (zero most weeks, a spike at the end: the live "+1,200%") reports direction sparse and NO percentage',
+    tS.direction === 'sparse' && tS.change_pct === null && tS.sparse === true, JSON.stringify([tS.direction, tS.change_pct]));
+  check('D21: a stored sparse row loses its percentage too (it used to come back from seo_trends as 1,200%)',
+    tC.direction === 'sparse' && tC.change_pct === null && tC.sparse === true && tC.cached === true, JSON.stringify([tC.direction, tC.change_pct]));
+  check('D21: a real rising series keeps its percentage', tR.direction === 'rising' && tR.change_pct > 50 && tR.sparse === false, JSON.stringify([tR.direction, tR.change_pct]));
+  const TRENDS = pt.map(x => x.json);
+
+  // ---- 4. G9: every Search Console row, the anonymised share, brand vs non-brand, scraper queries apart ----
+  const RANGES = { current: { start: '2026-09-10', end: '2026-10-07' }, previous: { start: '2026-08-13', end: '2026-09-09' }, yoy: { start: '2025-09-10', end: '2025-10-07' } };
+  const CFG = { max_gsc_keyword_requests: 30, max_gsc_pages: 3, striking_min_impressions: 30, ctr_gap_min_impressions: 100, decay_drop_pct: 25, alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40, service_account_email: 'svc@example.com' };
+  const SITE_ROW = { site_id: SITE, domain: D, gsc_property: 'sc-domain:' + D, gsc_connected: true, gsc_permission: 'siteFullUser', gsc_error: null, country: 'United Arab Emirates', location_code: 2784, language_code: 'en',
+    email: '', callback_url: '', request_id: '', source: 'form', status: 'active', created_at: '2026-01-01T00:00:00.000Z', keywords: ['erp implementation dubai'], tracked: [{ keyword: 'erp implementation dubai', source: 'site', rung: 0, ladder_id: '', head_keyword: '' }],
+    ladder_pages: [], ladder_heads: [], serp_positions: {}, pending_publish: [], console_alerts: [], last_checkin: null, checkin_due: false, ranges: RANGES, on_demand: false, checked_at: new Date().toISOString(), config: CFG };
+  mock('Resolve Properties', [{ json: SITE_ROW }]);
+  const greq = await run('GSC Requests', store['Resolve Properties']);
+  const paged = greq.filter(q => q.json.paged);
+  console.log('   gsc requests ->', JSON.stringify(greq.map(q => q.json.kind + (q.json.paged ? ':' + q.json.body.rowLimit + '@' + q.json.body.startRow : ''))));
+  check('G9: the query and page kinds ask for Search Console\'s maximum of 25,000 rows from row 0 (it was a 500-row sample)',
+    paged.length === 4 && eq(paged.map(q => q.json.kind).sort(), ['pages_cur', 'pages_prev', 'queries_cur', 'queries_prev']) && paged.every(q => q.json.body.rowLimit === 25000 && q.json.body.startRow === 0 && q.json.page === 1 && q.json.max_pages === 3), JSON.stringify(paged.map(q => [q.json.kind, q.json.body.rowLimit, q.json.max_pages])));
+  // the paging itself, on a page size of 2 so the fixtures stay small
+  const PAGE_A = W + '/erp-implementation-dubai/', PAGE_B = W + '/', PAGE_C = W + '/e-invoicing-uae/', PAGE_D = W + '/contact/', PAGE_E = W + '/wms/';
+  const qrow = (keys, clicks, impressions, position) => ({ keys, clicks, impressions, ctr: impressions ? clicks / impressions : 0, position });
+  const req1 = (kind, dims) => ({ json: { site_idx: 0, site_id: SITE, kind, url: 'https://gsc/q', body: { type: 'web', dataState: 'final', rowLimit: 2, startRow: 0, dimensions: dims, startDate: RANGES.current.start, endDate: RANGES.current.end }, paged: true, page: 1, max_pages: 3, page_rows: 2 } });
+  const REQS1 = [
+    { json: { site_idx: 0, site_id: SITE, kind: 'by_date', url: 'https://gsc/q', body: { dimensions: ['date'], rowLimit: 100 }, paged: false, page: 1, max_pages: 3, page_rows: 25000 } },
+    req1('queries_cur', ['query', 'page']), req1('queries_prev', ['query']), req1('pages_cur', ['page']), req1('pages_prev', ['page'])
+  ];
+  const RES1 = [
+    { rows: [qrow([RANGES.current.start], 50, 400, 6), qrow([RANGES.current.end], 50, 400, 6), qrow([RANGES.previous.start], 40, 300, 7), qrow([RANGES.previous.end], 40, 300, 7)] },
+    { rows: [qrow(['erp implementation dubai', PAGE_A], 40, 300, 6), qrow(['northwind erp login', PAGE_B], 25, 120, 1.2)] },          // full page -> more rows wait
+    { rows: [qrow(['erp implementation dubai'], 30, 260, 7)] },                                                                        // short page -> finished
+    { rows: [qrow([PAGE_A], 40, 300, 6), qrow([PAGE_B], 25, 120, 1.2)] },                                                              // full page
+    { rows: [] }
+  ];
+  mock('GSC Requests', REQS1); mock('GSC Query', RES1.map(r => ({ json: r })));
+  const more = await run('GSC More Requests', store['GSC Query']);
+  console.log('   more requests ->', JSON.stringify(more.map(q => q.json.kind + '@' + q.json.body.startRow)));
+  check('G9: only the kinds that came back FULL ask for their next pages (startRow 2 and 4), up to max_gsc_pages; a short or failed page costs no request',
+    more.length === 4 && eq(more.map(q => q.json.kind + '@' + q.json.body.startRow + ':' + q.json.page), ['queries_cur@2:2', 'queries_cur@4:3', 'pages_cur@2:2', 'pages_cur@4:3']), JSON.stringify(more.map(q => q.json.kind)));
+  const RES2 = [
+    { rows: [qrow(['e invoicing software uae', PAGE_C], 5, 150, 12), qrow(['site:northwind-erp.com erp', PAGE_A], 2, 90, 1.1)] },      // page 2: still full
+    { rows: [qrow(['wms dubai', PAGE_E], 0, 40, 22)] },                                                                                 // page 3: the last rows
+    { rows: [qrow([PAGE_C], 5, 150, 12), qrow([PAGE_D], 2, 90, 1.1)] },
+    { rows: [qrow([PAGE_E], 0, 40, 22)] }
+  ];
+  mock('GSC Query (More)', RES2.map(r => ({ json: r })));
+  const MODEL = (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D, canonical_host: 'www.' + D, business_name: 'Northwind ERP', model_updated_at: new Date().toISOString() }, extras: { monitors: { brand_names: 'Northwind ERP' } } } }]))[0].json.model;
+  mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model: MODEL } }]);
+  mock('GSC Requests', REQS1); mock('GSC Query', RES1.map(r => ({ json: r }))); mock('GSC More Requests', more);
+  const PG = (await run('Parse GSC', store['GSC Query (More)']))[0].json;
+  console.log('   parse gsc ->', JSON.stringify({ rows: PG.rows_read, queries: PG.query_count, pages: PG.page_count, anon: PG.anonymised.current, brand: PG.brand_split.brand_clicks_pct, scraper: PG.scraper_queries }));
+  check('G9: the rows of every page are merged into one list (2 + 2 + 1 per kind), so a query from page 3 is in the report like any other',
+    PG.query_count === 4 && PG.page_count === 5 && PG.rows_read === 11 && PG.queries.some(q => q.query === 'wms dubai') && eq(PG.paging.find(p => p.kind === 'queries_cur'), { kind: 'queries_cur', pages: 3, rows: 5, truncated: false }), JSON.stringify({ q: PG.query_count, p: PG.page_count, rows: PG.rows_read, paging: PG.paging }));
+  check('G9: the queries Google withholds are reported, not silently dropped: the period totals minus the sum of the rows',
+    PG.totals.cur.clicks === 100 && PG.anonymised.current.clicks === 28 && PG.anonymised.current.impressions === 100 && PG.anonymised.current.impressions_pct === 12.5 && PG.anonymised.current.named_clicks === 72
+    && /withholds the queries of rare searches/.test(PG.anonymised.current.note), JSON.stringify(PG.anonymised.current));
+  check('G9: brand and non-brand are split with the business\'s own names (seo_monitors / the site model), not just the domain label',
+    eq(PG.brand_split.names, ['northwinderp']) && PG.brand_split.brand.queries === 1 && PG.brand_split.brand.clicks === 25 && PG.brand_split.non_brand.queries === 3 && PG.brand_split.non_brand.clicks === 45
+    && PG.brand_split.brand_clicks_pct === 25 && PG.brand_split.previous.non_brand.clicks === 30, JSON.stringify({ names: PG.brand_split.names, brand: PG.brand_split.brand.clicks, non: PG.brand_split.non_brand.clicks }));
+  check('G9 / D24: a query with a search operator is counted apart and never appears as a customer search (the audit\'s own rule, shared kit)',
+    PG.scraper_queries.count === 1 && PG.scraper_queries.clicks === 2 && PG.scraper_queries.impressions === 90 && !PG.queries.some(q => /site:/.test(q.query)) && !PG.striking.some(q => /site:/.test(q.query)), JSON.stringify(PG.scraper_queries));
+  // a kind still full on the last allowed page is reported as truncated, never as "all of it"
+  mock('GSC Query (More)', [{ json: { rows: [qrow(['e invoicing software uae', PAGE_C], 5, 150, 12), qrow(['site:northwind-erp.com erp', PAGE_A], 2, 90, 1.1)] } }, { json: { rows: [qrow(['wms dubai', PAGE_E], 0, 40, 22), qrow(['erp dubai cost', PAGE_C], 1, 50, 18)] } }, { json: { rows: [] } }, { json: { rows: [] } }]);
+  mock('GSC Requests', REQS1); mock('GSC Query', RES1.map(r => ({ json: r }))); mock('GSC More Requests', more);
+  const PGt = (await run('Parse GSC', store['GSC Query (More)']))[0].json;
+  check('G9: when the last allowed page is still full, the run says the rows were truncated instead of pretending to have them all',
+    eq(PGt.truncated, ['queries_cur']) && PGt.rows_read === 9, JSON.stringify({ truncated: PGt.truncated, rows: PGt.rows_read }));
+
+  // ---- 5. G28 + D21 + G9 in the weekly report: alerts on a statistical test, no percentage for a sparse trend ----
+  const GA4 = (cur, prev) => ({ site_idx: 0, ga4_property_id: '222', ga4_detected: false, ga4_property_name: 'Northwind', organic: { cur: { sessions: cur, engaged: Math.round(cur * 0.6), key_events: Math.round(cur / 30), users: cur }, prev: { sessions: prev, engaged: Math.round(prev * 0.6), key_events: Math.round(prev / 30), users: prev } },
+    total: { cur: { sessions: cur * 2 }, prev: { sessions: prev * 2 } }, organic_share: 50, channels: [], landing: [], daily: [], errors: [] });
+  const metricsWith = async (o) => {
+    reset();
+    mock('Resolve Properties', [{ json: SITE_ROW }]); mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model: MODEL } }]);
+    const cur = { ...PG.totals.cur, ...(o.cur || {}) }, prev = { ...PG.totals.prev, ...(o.prev || {}) };
+    const dl = (c, p) => p > 0 ? Math.round((c - p) / p * 100) : null;
+    mock('Parse GSC', [{ json: { ...PG, totals: { cur, prev, yoy: null }, deltas: { ...PG.deltas, clicks_pct: dl(cur.clicks, prev.clicks), impressions_pct: dl(cur.impressions, prev.impressions) } } }]);
+    if (o.ga4) mock('Parse GA4', [{ json: GA4(o.ga4[0], o.ga4[1]) }]);
+    if (o.trends) mock('Parse Trends', o.trends.map(t => ({ json: t })));
+    return (await run('Site Metrics', store['Resolve Properties']))[0].json;
+  };
+  const real = await metricsWith({ cur: { clicks: 1150, impressions: 9000 }, prev: { clicks: 1600, impressions: 9200 }, trends: TRENDS });   // 1,150 and not 1,200: the sparse-trend check below proves no "1200" reaches the brief
+  const aClicks = real.alerts.find(a => a.stat === 'clicks') || {};
+  console.log('   significant drop ->', JSON.stringify(real.significance.clicks), '|', aClicks.text);
+  check('G28: a 28% fall on 1,600 clicks is beyond sampling noise, so it alerts — with the 95% range, the z value and the Google update that ran in the period',
+    real.significance.clicks.significant === true && real.significance.clicks.real === true && aClicks.level === 'medium' && /Search clicks fell 28%/.test(aClicks.text) && /95% range/.test(aClicks.text) && /z -8/.test(aClicks.text)
+    && /September 2026 core update \(2026-09-15 to 2026-09-30\) ran inside this period/.test(aClicks.text) && /cannot be proven/.test(aClicks.text), JSON.stringify([aClicks.level, aClicks.text]));
+  check('G28: a 2% move in impressions on the same run is neither an alert nor called a change',
+    real.significance.impressions.big === false && !real.alerts.some(a => a.stat === 'impressions'), JSON.stringify(real.significance.impressions));
+  const noise = await metricsWith({ cur: { clicks: 12, impressions: 9000 }, prev: { clicks: 20, impressions: 9200 }, trends: TRENDS });
+  const aNoise = noise.alerts.find(a => a.stat === 'clicks') || {};
+  console.log('   noise ->', JSON.stringify(noise.significance.clicks), '|', aNoise.text);
+  // G28 follow-up (2026-10-12, FIX_PLAN section 3.8): a small site still hears about a big relative drop — a MEDIUM alert (so it reaches
+  // seo_site_metrics.alerts and the app) worded "Watch", with the counts of both periods named as "small numbers", and never "high".
+  check('G28: the same 40% fall on 20 clicks is NOT called a fall — it is a "Watch" line, with the small numbers named (32 clicks over both periods) and never in the high band',
+    noise.significance.clicks.significant === false && noise.significance.clicks.watch === true && aNoise.level === 'medium' && aNoise.small_numbers === true
+    && /^Watch: search clicks are 40% lower \(20 → 12 in 28 days\)/.test(aNoise.text) && /Small numbers: 32 search clicks over both periods together/.test(aNoise.text)
+    && /happens by chance \(z -1\.41\)/.test(aNoise.text) && /not a confirmed fall/.test(aNoise.text)
+    && !noise.alerts.some(a => a.level === 'high') && !noise.alerts.some(a => /clicks fell/.test(a.text)), JSON.stringify([aNoise.level, aNoise.text]));
+  check('G28: the small-numbers alert is stored and shown like any other medium one, so an owner with 20 clicks a month is told something moved',
+    /Watch: search clicks are 40% lower/.test(noise.metrics_row.alerts) && noise.metrics_row.alerts.length <= 500, JSON.stringify(noise.metrics_row.alerts.slice(0, 200)));
+  const noise2 = await metricsWith({ cur: { clicks: 18, impressions: 9000 }, prev: { clicks: 30, impressions: 9200 }, trends: TRENDS });
+  check('G28: 30 -> 18 clicks (enough events to measure, z -1.73) is still not significant: a medium "Watch" with its counts, never "fell" and never high',
+    noise2.significance.clicks.measurable === true && noise2.significance.clicks.significant === false
+    && (noise2.alerts.find(a => a.stat === 'clicks') || {}).level === 'medium' && /Small numbers: 48 search clicks/.test((noise2.alerts.find(a => a.stat === 'clicks') || {}).text)
+    && !noise2.alerts.some(a => a.level === 'high'), JSON.stringify(noise2.significance.clicks));
+  const big = await metricsWith({ cur: { clicks: 900, impressions: 5000 }, prev: { clicks: 1600, impressions: 9200 }, ga4: [300, 500], trends: TRENDS });
+  check('G28: a real fall past alert_drop_pct is "high", and GA4 organic sessions go through the same test',
+    (big.alerts.find(a => a.stat === 'clicks') || {}).level === 'high' && (big.alerts.find(a => a.stat === 'impressions') || {}).level === 'high'
+    && (big.alerts.find(a => a.stat === 'sessions') || {}).level === 'high' && /Organic sessions fell 40%/.test((big.alerts.find(a => a.stat === 'sessions') || {}).text), JSON.stringify(big.alerts.filter(a => a.stat).map(a => [a.stat, a.level])));
+  const zero = await metricsWith({ cur: { clicks: 0, impressions: 0 }, prev: { clicks: 1600, impressions: 9200 }, trends: TRENDS });
+  const aZero = zero.alerts.find(a => a.stat === 'clicks') || {};
+  check('G28: a site that lost every click is still reported (no 95% range exists for a zero period, and nothing throws)',
+    aZero.level === 'high' && /Search clicks fell 100% \(1600 → 0 in 28 days, z -40\)/.test(aZero.text) && zero.significance.clicks.ci === null, JSON.stringify([aZero.level, aZero.text]));
+  // the brief and the report
+  const bi = await run('Brief Input', [{ json: real }]); const facts = JSON.parse(bi[0].json.facts);
+  console.log('   facts trends ->', JSON.stringify(facts.trends), '| anon:', JSON.stringify(facts.search_console.queries_google_does_not_name));
+  check('D21: the brief is given no percentage for a sparse trend — only "too little search data" (it quoted "up 1,200%" live)',
+    facts.trends.filter(t => t.direction === 'sparse').length === 2 && facts.trends.filter(t => t.direction === 'sparse').every(t => t.change === 'too little search data for a percentage' && !('change_pct' in t))
+    && !/1200|1,200/.test(bi[0].json.facts) && (facts.trends.find(t => t.direction === 'rising') || {}).change_pct > 50, JSON.stringify(facts.trends));
+  check('G9: the brief is told the anonymised share, brand vs non-brand and how many rows were read',
+    facts.search_console.queries_google_does_not_name.share_of_impressions_pct === 12.5 && facts.search_console.brand_vs_non_brand.non_brand.clicks === 45 && facts.search_console.brand_vs_non_brand.brand.clicks === 25
+    && facts.search_console.rows_read === 11 && facts.search_console.pages_with_impressions === 5 && facts.search_console.tool_and_scraper_queries.count === 1, JSON.stringify(facts.search_console.brand_vs_non_brand));
+  check('G28: the brief is told which changes are statistically real and which are only to watch, plus the Google updates in the period',
+    (facts.traffic_significance.find(x => x.metric === 'clicks') || {}).statistically_real === true && eq(facts.google_updates_in_period, ['September 2026 core update (2026-09-15 to 2026-09-30)']), JSON.stringify(facts.traffic_significance));
+  mock('Site Brief', [{ json: { error: 'no model in this test' } }]);
+  const rep = (await run('Site Report', bi))[0].json;
+  scanHtml('weekly report, G9 + G28', rep.html); save('site-report-g9-g28.html', rep.html);
+  check('D21: the weekly report shows "too little search volume for a trend" and a dash — never the percentage',
+    /too little search volume for a trend/.test(rep.html) && !/1200%|1,200%/.test(rep.html) && /\+105%|\+10\d%/.test(rep.html), (rep.html.match(/Search interest[\s\S]{0,600}/) || [''])[0].slice(0, 400));
+  check('G9: the report tells the owner what the figures cover — non-brand vs brand clicks and the queries Google does not name',
+    /Where the searches came from/.test(rep.html) && /Non-brand \(people who did not search your name\)/.test(rep.html) && /Queries Google does not name/.test(rep.html) && /12\.5% of all impressions/.test(rep.html)
+    && /came from SEO tools or scrapers/.test(rep.html), (rep.html.match(/Where the searches came from[\s\S]{0,700}/) || [''])[0].slice(0, 500));
+  check('G28: the report explains the test instead of leaving a 30% rule unexplained',
+    /only called a fall when it is beyond normal week-to-week variation \(two-sample Poisson test, 95%\)/.test(rep.html), (rep.html.match(/beyond normal week[\s\S]{0,200}/) || [''])[0]);
+
+  // ---- 6. G24: the audit says how much of the site it crawled ----
+  const SM_URLS = Array.from({ length: 12 }, (_, i) => W + '/p' + (i + 1) + '/');
+  const crawledPage = (u, i) => ({ url: u, status: 200, depth: i === 0 ? 0 : 1, inbound: 5, orphan: false, indexable: true });
+  const auditCoverage = async (crawledCount, gscPages) => {
+    reset();
+    const pages = SM_URLS.slice(0, crawledCount).map(crawledPage);
+    mock('GSC Audit Plan', [{ json: { base: { domain: D, audit_level: 'site_audit', extra_findings: [], extra_works: [] }, domain: D, crawl_pages: pages.length, crawl_indexable: pages.length, crawl_limit: 200, crawl_finished: true, pages_crawled: pages.length,
+      pages, sample: pages.slice(0, 2).map(p => p.url), sitemap_url: W + '/sitemap.xml', range: { start: RANGES.current.start, end: RANGES.current.end } } }]);
+    mock('Fetch Sitemap (Audit)', { statusCode: 200, headers: {}, data: '<?xml version="1.0"?><urlset>' + SM_URLS.map(u => '<url><loc>' + u + '</loc></url>').join('') + '</urlset>' });
+    delete store['Fetch Sitemap Children (Audit)'];
+    mock('GSC Audit Requests', [{ json: { kind: 'totals', connected: true, property: 'sc-domain:' + D, permission: 'siteFullUser' } }, { json: { kind: 'pages', connected: true, property: 'sc-domain:' + D } }, { json: { kind: 'queries', connected: true, property: 'sc-domain:' + D } }]);
+    mock('GSC Audit Query', [{ json: { rows: [{ keys: [], clicks: 100, impressions: 2000, ctr: 0.05, position: 12 }] } },
+      { json: { rows: gscPages.map(u => ({ keys: [u], clicks: 3, impressions: 90, ctr: 0.03, position: 14 })) } },
+      { json: { rows: [{ keys: ['erp implementation dubai'], clicks: 20, impressions: 400, ctr: 0.05, position: 6 }, { keys: ['site:' + D + ' erp'], clicks: 1, impressions: 80, ctr: 0.01, position: 1 }] } }]);
+    mock('GSC Sitemaps (Audit)', T.gscSitemaps());
+    return (await run('GSC Audit Findings', store['GSC Sitemaps (Audit)']))[0].json;
+  };
+  const low = await auditCoverage(8, [W + '/news/launch/', W + '/news/award/']);
+  const cov = low.site_structure.crawl_coverage;
+  console.log('   crawl coverage ->', JSON.stringify({ known: cov.known_urls, crawled: cov.crawled_known, pct: cov.coverage_pct, text: cov.text }));
+  check('G24: the audit reports crawl coverage against the sitemap UNION the pages Search Console reports impressions for',
+    cov.known_urls === 14 && cov.crawled_known === 8 && cov.coverage_pct === 57 && cov.not_crawled === 6 && eq(cov.sources, { sitemap: 12, search_console_pages: 2 }) && /^Crawled 8 of 14 known URLs \(57%; sitemap 12 \+ 2 pages with Search Console impressions\)$/.test(cov.text), JSON.stringify(cov));
+  check('G24: under 90% the audit says the crawl covered only part of the site, with the URLs it never reached',
+    low.extra_findings.some(f => f.title === 'The crawl covered only part of the site' && f.severity === 'Medium' && /Crawled 8 of 14 known URLs/.test(f.evidence) && f.sample_urls.length > 0 && f.affected_count === 6), JSON.stringify(low.extra_findings.map(f => f.title)));
+  const high = await auditCoverage(12, [SM_URLS[0], W + '/news/launch/']);
+  const cov2 = high.site_structure.crawl_coverage;
+  check('G24: a nearly complete crawl is a "what works" line, not a finding (13 known, 12 reached = 92%)',
+    cov2.known_urls === 13 && cov2.coverage_pct === 92 && !high.extra_findings.some(f => f.title === 'The crawl covered only part of the site') && high.extra_works.some(w => /Crawled 12 of 13 known URLs/.test(w)), JSON.stringify(cov2));
+  mock('Check Crawl', [{ json: { domain: D, audit_level: 'site_audit', pages_crawled: 8, crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+  mock('Get Crawled Pages', { tasks: [{ result: [{ items: [] }] }] }); mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+  const bsi = (await run('Build Site Issues', [{ json: low }]))[0].json;
+  const docA = decode(await run('Build Audit Report', [{ json: bsi }]));
+  check('G24: the audit report prints the coverage figure and warns that every share below is a share of the crawled pages',
+    /Crawled 8 of 14 known URLs \(57%/.test(docA) && /Every share below is a share of the pages that were crawled, not of the whole site/.test(docA), (docA.match(/Crawled 8 of 14[\s\S]{0,260}/) || [''])[0]);
+});
+
+// ===================================================================================
+// S44 (2026-10-12, system review FIX_PLAN G1 / D19 / D23 / G22 / G10) — the reliability and AI-data items of the fix plan:
+// one retry rule for every external HTTP node with the build-time lint that enforces it and the code-level gate for the task
+// errors DataForSEO reports inside an HTTP 200 (7 of 42 requests of execution 362 / 363 vanished that way), AI visibility that
+// counts answered requests only and names what failed, a brand that has to be a business and not a heading, one URL per cited
+// page, a competitor's sister domain and an off-topic gap domain kept out of the prospects, source titles kept whole, and the
+// wrong-claim check reported as "not checked" when there is no fact sheet to check against.
+await guard('retries, AI data, sister domains and the fact base', async () => {
+  reset(); const SN = 'S44 G1 D19 D23 G22 G10 — one retry rule and a gate for task errors inside an HTTP 200, AI errors / brands / URL variants, sister domains and the off-topic gap, whole source titles, answers checked against a fact base';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const M = require('./fixtures_monitors'); const A9 = require('./fixtures_ai49'); const B = require('./fixtures_bl410');
+  const RW = require('./retry_wiring.json');
+
+  // ---------- A. G1: the one retry rule in every builder, and the lint that fails the build without it ----------
+  const httpNode = (wf, nm) => (RW.workflows[wf] || []).find(x => x.name === nm);
+  const keepsRule = (x) => !!x && x.retryOnFail === true && Number(x.maxTries) >= RW.rule.maxTries && Number(x.waitBetweenTries) >= RW.rule.waitBetweenTries;
+  const broken = Object.entries(RW.workflows).flatMap(([wf, ns]) => ns.filter(x => !x.allowed && !keepsRule(x)).map(x => wf + ' / ' + x.name));
+  console.log('   retry rule ->', Object.keys(RW.workflows).length, 'workflows,', Object.values(RW.workflows).reduce((s, l) => s + l.length, 0), 'HTTP nodes,', Object.values(RW.workflows).reduce((s, l) => s + l.filter(x => x.allowed).length, 0), 'on the allow-list');
+  check('G1: every external HTTP node of every generated workflow retries 3 times, 5 s apart (the rule lives in retry_lint.py and is set in every builder)', Object.keys(RW.workflows).length >= 19 && !broken.length && RW.rule.maxTries === 3 && RW.rule.waitBetweenTries === 5000, broken.join(' | '));
+  check('G1 / D23: the Ahrefs DR lookup is retried after a network error (one EAI_AGAIN lost it live), and so are the free sources, Bing, the linking pages and the PDF renderer', ['Fetch DR', 'Fetch Sources', 'Fetch Bing', 'Fetch Linking Pages', 'Fetch Contacts', 'Render PDF BL'].every(nm => keepsRule(httpNode('SEO Agent — Backlink Monitor', nm))), JSON.stringify(['Fetch DR', 'Fetch Sources', 'Fetch Bing', 'Fetch Linking Pages', 'Fetch Contacts', 'Render PDF BL'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent — Backlink Monitor', nm)))));
+  check('G1: the nodes inherited from v3 keep the same rule (the DataForSEO reads, PageSpeed, RDAP, the probes, the Gotenberg renders)', ['Keyword Data', 'Find Competitors', 'PageSpeed', 'RDAP Lookup', 'Run Probes', 'Render PDF Report', 'Read Website', 'SERP Top 10 (Retry)'].every(nm => keepsRule(httpNode('SEO Agent v4', nm))), JSON.stringify(['Keyword Data', 'PageSpeed', 'RDAP Lookup', 'SERP Top 10 (Retry)'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent v4', nm)))));
+  check('G1: the allow-list holds only what is not idempotent — the report callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 12 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft') && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false, JSON.stringify(Object.keys(RW.allow)));
+  check('G1: the lint bites — it flags an HTTP node with no retry and one with a weaker retry, honours its allow-list and leaves other node types alone (self-test run by build_v4.py section 37)', RW.selftest.flags_node_without_retry === true && RW.selftest.flags_weaker_retry === true && RW.selftest.honours_allow_list === true && RW.selftest.ignores_other_nodes === true, JSON.stringify(RW.selftest));
+  const GATE = ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', 'Parse AI Answers'];
+  check('D19: the retry gate is wired in both AI workflows (the pause is a Wait node, the retry an own DataForSEO call, the answers merged before the parser)', ['SEO Agent — AI Visibility Tracker', 'SEO Agent — AI Pulse'].every(wf => JSON.stringify((RW.ai_gate || {})[wf]) === JSON.stringify(GATE)), JSON.stringify(RW.ai_gate));
+
+  // ---------- B. D19: a 50000 task error inside an HTTP 200 is re-sent once, and the retry's answer is used and counted ----------
+  const qs = [['Which companies help UAE businesses with e-invoicing before 2027?', 'recommend'], ['What should I check before choosing an e-invoicing provider in the UAE?', 'choose'], ['What is Northwind ERP and what does it offer?', 'brand']];
+  const prompts = qs.map(([q, k], i) => ({ json: { prompt_id: 'p_' + i, site_id: M.SITE, domain: M.DOMAIN, prompt: q, kind: k, topic: 'e invoicing in uae', keyword: 'e invoicing uae ' + i, source: 'auto', status: 'active', created_at: '2026-10-01', stage: 'decision', cluster: 'e invoicing', volume: 400, origin: 'writer', updated_at: '' } }));
+  const loadAll = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors()); mock('Load Profiles', o.profiles || M.profiles()); mock('Load AI Prompts', prompts);
+    mock('Load AI Visibility', [{ json: {} }]); mock('Load Link Prospects', [{ json: {} }]); mock('Load AI Daily', [{ json: {} }]); mock('Load Cache (AI)', [{ json: {} }]); mock('Load Query History', [{ json: {} }]); };
+  loadAll();
+  const plan = await run('AI Plan', store['Load Query History']);
+  const rq = await run('AI Requests', plan); const R = rq.map(x => x.json);
+  const iMode = R.findIndex(q => q.engine === 'ai_mode'), iGpt = R.findIndex(q => q.engine === 'chatgpt');
+  const serverErr = { tasks: [{ status_code: 50000, status_message: 'Internal SE Server Error.', cost: 0, result: null }] };   // the exact live answer of exec 362 / 363
+  mock('Run AI Requests', R.map((q, i) => i === iMode ? serverErr : i === iGpt ? { error: { message: 'no response' } } : A9.answerFor(q, i, { us: () => true })));
+  const rt = await run('AI Retry Requests', store['Run AI Requests']); const RT = rt.map(x => x.json);
+  console.log('   retries ->', RT.map(q => q.engine + ': ' + q.retry_reason).join(' | '));
+  check('the server error inside the HTTP 200 and the missing response are the only requests re-sent, each with its reason and its place in the list', RT.length === 2 && RT.some(q => q.retry_of === iMode && /50000: Internal SE Server Error/.test(q.retry_reason)) && RT.some(q => q.retry_of === iGpt && /no response/.test(q.retry_reason)) && RT.every(q => q.is_retry && q.endpoint && q.body) && RT[0].retry_total === 2, JSON.stringify(RT.map(q => [q.engine, q.retry_of, q.retry_reason])));
+  mock('Run AI Retries', RT.map(q => q.engine === 'ai_mode' ? A9.answerFor(q, 0, { us: () => true }) : { error: { message: 'no response' } }));
+  const mg = await run('Merge AI Answers', store['Run AI Retries']); const MG = mg.map(x => x.json);
+  check('the retry that worked takes the failed answer\'s place, the one that failed twice keeps its failure, the order and the count are untouched, and both are reported', MG.length === R.length && MG[iMode].retried === true && !MG[iGpt].retried && MG[0].retry_asked === 2 && MG[0].retry_answered === 1 && MG[0].requests_failed === 2, JSON.stringify({ n: MG.length, want: R.length, mode: !!MG[iMode].retried, gpt: !!MG[iGpt].retried, asked: MG[0].retry_asked, fixed: MG[0].retry_answered }));
+  const pa = await run('Parse AI Answers', mg); const AN = pa.map(x => x.json);
+  const modeRow = AN.find(a => a.engine === 'ai_mode'), gptRow = AN.find(a => a.engine === 'chatgpt');
+  check('the parser uses the retry\'s data: the AI Mode question is answered, the ChatGPT one is the only error left', modeRow.answered === true && !modeRow.error && gptRow.answered === false && /no response/.test(gptRow.error) && AN.filter(a => a.error).length === 1, JSON.stringify({ mode: [modeRow.answered, modeRow.error], gpt: [gptRow.answered, gptRow.error], errors: AN.filter(a => a.error).length }));
+
+  // ---------- C. D19: rates count answered requests only, and the failures are listed ----------
+  const aj = await run('Analyst Jobs', pa); const AJ = aj.map(x => x.json).filter(j => !j.skip);
+  check('G10: with a profile on file the fact sheet is complete and the wrong-claim check is on', AJ.length >= 1 && AJ[0].fact_check === 'on' && AJ[0].facts_ok === true && /City: Dubai/.test(AJ[0].facts) && /Services on the site|Topics/.test(AJ[0].facts), JSON.stringify(AJ.map(j => j.fact_check)).slice(0, 200));
+  mock('Answer Analyst', AJ.map(j => ({ json: A9.analystFor(j) })));
+  const ap = await run('Apply Analysis', store['Answer Analyst']);
+  const mt = await run('AI Metrics', ap); const X = mt[0].json; const XM = X.metrics;
+  console.log('   errors ->', JSON.stringify({ requests: XM.requests, errors: XM.errors, rate: XM.error_rate, retried: XM.retried, answered_on_retry: XM.retry_answered, list: XM.errors_list }));
+  check('every rate counts answered requests only, and the one request that failed twice is listed with its engine, its message and the retry outcome', XM.samples === XM.answered && XM.errors === 1 && XM.error_rate === Math.round(1000 / XM.requests) / 10 && XM.retried === 2 && XM.retry_answered === 1 && XM.errors_list.length === 1 && XM.errors_list[0].engine === 'ChatGPT' && /no response/.test(XM.errors_list[0].message), JSON.stringify(XM).slice(0, 400));
+  check('the failures are an alert of their own, which says how many answers the rates are based on', X.alerts.some(a => /1 of \d+ AI requests failed/.test(a.text) && /1 of 2 answered on the retry/.test(a.text) && /rates below count/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
+  const rp = await run('AI Report', mt); const html = rp[0].json.html;
+  check('the report names the failures above the figures instead of hiding them', /requests failed this run/.test(html) && /answered when they were sent again/.test(html) && /answers that came back/.test(html), html.slice(0, 200));
+
+  // ---------- D. D19 / G22: a heading is not a brand, two URL variants are one page, a title is never cut ----------
+  const PAGE = 'https://gulfnews.com/business/best-e-invoicing-providers-uae-2026-1.501';
+  const chat = (o = {}) => ({ tasks: [{ status_code: 20000, status_message: 'Ok.', cost: 0.004, result: [{ items_count: 1, markdown: 'Tax technology and e-invoicing software\n\nThe providers used most in the UAE are **ClearTax**, **Zoho Books** and Azentio Software.',
+    brand_entities: o.entities || [{ title: 'Tax technology and e-invoicing software' }, { title: 'Zoho Books' }, { title: 'Best e-invoicing providers in the UAE for 2026' }, { title: 'ERP software' }],
+    sources: o.sources || [{ type: 'chat_gpt_source', domain: 'www.gulfnews.com', url: 'https://www.gulfnews.com/business/best-e-invoicing-providers-uae-2026-1.501?utm_source=chatgpt.com#:~:text=best%20providers', title: 'Best e-invoicing providers in the UAE for 2026' },
+      { type: 'chat_gpt_source', domain: 'gulfnews.com', url: PAGE, title: 'E' }, { type: 'chat_gpt_source', domain: 'cleartax.com', url: 'https://cleartax.com/ae/?srsltid=abc', title: 'ClearTax UAE' }], fan_out_queries: [] }] }] });
+  mock('AI Requests', [{ json: { site_id: M.SITE, domain: M.DOMAIN, run_id: 'ai_x', run_kind: 'weekly', prompt_id: 'p_0', prompt: qs[0][0], kind: 'recommend', topic: 'e invoicing in uae', keyword: 'e invoicing uae', engine: 'chatgpt', endpoint: 'x', body: [], est_cost: 0.004 } }]);
+  mock('AI Plan', [{ json: { ...plan[0].json, aliases: { 'Azentio Software': 'azentio.com' } } }]);
+  const one = (await run('Parse AI Answers', [{ json: chat() }]))[0].json;
+  const cited = JSON.parse(one.cited_urls || '[]');
+  console.log('   brands ->', one.brands, '| competitors ->', one.competitors, '| cited ->', JSON.stringify(cited));
+  check('D19: the heading ChatGPT returns in its own brand list is not a business ("Tax technology and e-invoicing software", "Best e-invoicing providers…", "ERP software"), while Zoho Books and the learned Azentio Software are', !/Tax technology|Best e-invoicing|ERP software/i.test(one.competitors + ' ' + one.brands) && /Zoho Books/.test(one.competitors) && /azentio\.com/.test(one.competitors) && /cleartax\.com/.test(one.competitors), JSON.stringify({ b: one.brands, c: one.competitors }));
+  check('D19: the www address with a tracking parameter and a #:~:text= highlight and the bare address are one cited page, and the tracking parameter is gone from what we store', cited.filter(c => /gulfnews\.com/.test(c.u)).length === 1 && cited.some(c => c.u === PAGE) && !/utm_|srsltid|#/.test(one.cited_urls) && !/utm_|srsltid/.test(one.our_urls + one.sources), JSON.stringify(cited));
+  check('G22: the full source title survives, while a one-letter fragment of a title is dropped instead of being kept as "E"', cited.find(c => c.u === PAGE).t === 'Best e-invoicing providers in the UAE for 2026' && !cited.some(c => c.t === 'E' || c.t === 'Best e'), JSON.stringify(cited.map(c => c.t)));
+
+  // ---------- E. G10: without a fact sheet the wrong-claim check is "not checked", never "no wrong claims" ----------
+  reset(); loadAll({ profiles: [{ json: { site_id: M.SITE, domain: M.DOMAIN } }] });
+  const plan2 = await run('AI Plan', store['Load Query History']);
+  const rq2 = await run('AI Requests', plan2); const R2 = rq2.map(x => x.json);
+  mock('Run AI Requests', R2.map((q, i) => A9.answerFor(q, i, { us: () => true })));
+  const rt2 = await run('AI Retry Requests', store['Run AI Requests']); const mg2 = await run('Merge AI Answers', rt2);
+  const pa2 = await run('Parse AI Answers', mg2);
+  const aj2 = (await run('Analyst Jobs', pa2)).map(x => x.json).filter(j => !j.skip);
+  check('G10: a site with nothing but a website on file gets the fact check switched off, and the prompt says so', aj2.length >= 1 && aj2[0].fact_check === 'off' && aj2[0].facts_ok === false, JSON.stringify(aj2.map(j => [j.fact_check, j.facts.slice(0, 60)])));
+  mock('Answer Analyst', aj2.map(j => ({ json: A9.analystFor(j) })));
+  const ap2 = await run('Apply Analysis', store['Answer Analyst']);
+  check('G10: a wrong claim the model volunteered anyway is dropped — nothing contradicts a sheet we do not have', !ap2.some(x => x.json.issues), JSON.stringify(ap2.map(x => x.json.issues).filter(Boolean)));
+  const mt2 = await run('AI Metrics', ap2); const X2 = mt2[0].json;
+  check('G10: the result is "not checked" with the step for the owner, the issue count is not 0 but unknown, and the report says so', X2.perception.fact_check === 'no_facts' && /fill the business profile/.test(X2.perception.fact_check_note) && X2.metrics.accuracy_issues === null && X2.vis_row.accuracy_issues === null, JSON.stringify({ fc: X2.perception.fact_check, n: X2.metrics.accuracy_issues }));
+  const html2 = (await run('AI Report', mt2))[0].json.html;
+  check('G10: the report reads "What AI gets wrong: not checked", never "nothing wrong"', /What AI gets wrong<\/b>: not checked/.test(html2) && /fill the business profile/.test(html2), html2.slice(html2.indexOf('What AI gets wrong') - 20, html2.indexOf('What AI gets wrong') + 200));
+  check('G10: with the profile on file the same report states that the answers were checked', /What AI gets wrong<\/b>: nothing that contradicts your business facts|What AI gets wrong<\/b><\/p>/.test(html), 'first report');
+
+  // ---------- F. D23: a sister domain and an off-topic gap domain are never prospects ----------
+  reset();
+  const gapRow = (d, o = {}) => ({ json: { site_id: B.SITE, domain: B.DOMAIN, release: 'cc-main-2026-jul-aug-sep', kind: 'gap', ref_domain: d, hc_pos: o.hc || 500000, pr_pos: 600000, n_hosts: 2, links_to: o.to || 'cleartax.com,complyance.io', checked_at: new Date(Date.now() - 6 * 864e5).toISOString() } });
+  mock('Load Sites', B.sites()); mock('Load Ladders', B.ladders()); mock('Load Monitors', B.monitors()); mock('Load Profiles', B.profiles());
+  mock('Load Backlink Snapshots', [{ json: {} }]); mock('Load Link Prospects', [{ json: {} }]); mock('Load Content Log', [{ json: {} }]); mock('Load Case Studies', [{ json: {} }]);
+  mock('Load Backlinks', B.ledgerPrev().map(j => ({ json: j }))); mock('Load Link Imports', [{ json: {} }]);
+  mock('Load Link Graph', [gapRow('einvoicing-uae-news.com'), gapRow('clear.in'), gapRow('invoicing-partner.net'), gapRow('stripe.com', { hc: 64 }), gapRow('weforum.org', { hc: 900 }), gapRow('kirkland.com', { hc: 4000 }), gapRow('gulfbiz.ae')]);
+  const bplan = await run('BL Plan', store['Load Link Graph']);
+  const merged = await run('Link Merge', bplan);
+  // invoicing-partner.net is on our topic by its name, but the page we fetched canonicalises to the competitor: a sister domain
+  mock('Verify Links', [{ json: { site_id: B.SITE, purpose: 'mention', ref_domain: 'invoicing-partner.net', url: 'https://invoicing-partner.net/uae', verify: 'missing', named: false, canonical: 'https://www.complyance.io/uae', status: 200, source: 'web' } }]);
+  const pb = (await run('Parse Backlinks', merged))[0].json;
+  const gapOf = (d) => pb.gap.find(g => g.domain === d);
+  const prospect = (d) => pb.candidates.some(c => c.prospect_domain === d);
+  console.log('   gap ->', pb.gap.map(g => g.domain + (g.off_topic ? ' [off topic]' : '')).join(' | '), '| refused as siblings:', ['clear.in', 'invoicing-partner.net'].filter(d => !gapOf(d)).join(', '));
+  check('D23: clear.in is refused as ClearTax\'s sister domain (a shared brand stem of 5 characters; comparing the first label missed it)', !gapOf('clear.in') && !prospect('clear.in'), JSON.stringify(pb.gap.map(g => g.domain)));
+  check('D23: a domain whose page canonicalises to the competitor is a sister domain too, even though its name is on our topic', !gapOf('invoicing-partner.net') && !prospect('invoicing-partner.net'), JSON.stringify(pb.gap.map(g => g.domain)));
+  check('D23: stripe.com, weforum.org and kirkland.com are refused as off topic — listed in the link gap with the reason, never stored as prospects to pitch', ['stripe.com', 'weforum.org', 'kirkland.com'].every(d => gapOf(d) && gapOf(d).off_topic === true && /off topic/.test(gapOf(d).topic_reason) && !prospect(d)) && pb.gap_off_topic === 3, JSON.stringify(pb.gap.map(g => [g.domain, g.off_topic, g.topic_reason])));
+  check('D23: a gap domain whose name carries the topic and a site in the same market are still prospects (the gate refuses, it does not empty the pipeline)', gapOf('einvoicing-uae-news.com') && !gapOf('einvoicing-uae-news.com').off_topic && prospect('einvoicing-uae-news.com') && gapOf('gulfbiz.ae') && !gapOf('gulfbiz.ae').off_topic && /market/.test(gapOf('gulfbiz.ae').topic_reason) && prospect('gulfbiz.ae'), JSON.stringify(pb.gap.map(g => [g.domain, g.topic_reason])));
+  const blHtml = (await run('BL Report', [{ json: pb }]))[0].json.html;
+  check('D23: the report keeps the off-topic gap sites in the table with "not pitched" and the reason', /not pitched: off topic/.test(blHtml) && /stripe\.com/.test(blHtml), blHtml.slice(blHtml.indexOf('Link gap'), blHtml.indexOf('Link gap') + 200));
+
+  // ---------- G. D23: the tracking parameters are gone from the URLs we store ----------
+  const ledger = (await run('Ledger Rows', [{ json: pb }])).map(x => x.json).filter(r => !r.skip);
+  check('D23: no stored URL keeps utm_* or srsltid (they came in with GA4 referrals and AI citations and reached the report and the outreach)', !ledger.some(r => /utm_|srsltid|gclid/.test(String(r.from_url) + String(r.to_url))) && ledger.length > 0, JSON.stringify(ledger.map(r => r.from_url).slice(0, 5)));
+});
+
+// ===================================================================================
+// S45 L2 L1 (2026-10-11 system review, FIX_PLAN L2 / L1): the draft gate every outreach e-mail passes before the app may offer it for
+// approval — no claim the facts do not carry, nothing left in brackets, the address on the prospect's own domain, a real quote from their
+// page, one link to the page we chose on the canonical host, length and one clear ask, no SEO / AI jargon, the business name as the site
+// model has it. A draft that fails is held as `needs_edit` with its reasons (the app shows them, automatic mode skips it, nothing is sent).
+// L1 (the MX check before the first e-mail) lives where the sending lives — the app: app/server/test/draftGate.test.ts covers it.
+// ===================================================================================
+await guard('draft gate', async () => {
+  const SN = 'S45 L2 L1 — the draft gate: claims, brackets, the recipient\'s own domain, a quote from their page, one link to our page, length and one ask, jargon, the business name; held drafts become needs_edit (the MX check is in the app)';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const TC = require('./table_cols.json');
+  const SITE = 'site_techand-ai', D = 'techand.ai', H_ = 'https://techand.ai', GUIDE = H_ + '/insights/peppol-accredited-service-providers-uae';
+  const NOW = new Date().toISOString();
+  const FACTS = 'Business: Tech& (techand.ai), ERP and e-invoicing consultancy\nTopics: e invoicing in uae';   // nothing about an accreditation on file
+  const SIGNER = 'Sara Khan, Head of Finance Systems, Tech&';
+  const plan = { site_id: SITE, domain: D, canonical_host: D, brand: 'Tech&', brand_known: true, competitors: ['rival-erp.example', 'other-rival.example'], accreditation: '', home: H_ + '/', pages: [], topics: ['e invoicing in uae'], profile: {} };
+  // one job per case: the same prospect page, a different draft
+  const job = (n, name, o = {}) => { const dom = o.prospect_domain || name + '.example';
+    return { n, prospect_domain: dom, type: o.type || 'resource', angle: 'resource',
+      page_url: o.page_url === 'home' ? 'https://' + dom + '/' : 'https://www.' + dom + '/peppol-guide', page_title: 'A practical Peppol guide for UAE finance teams',
+      evidence: '"Finance teams in the UAE should check the list of accredited Peppol providers before choosing an e-invoicing partner."',
+      dead: null, competitors_named: [], contact: 'editorial on their site', to: o.to || 'editor@' + dom, deadline: '', target_url: o.target_url || GUIDE, target_title: 'Accredited Peppol service providers in the UAE', anchor_hint: 'title' }; };
+  const CLEAN = 'Hello, I read "A practical Peppol guide for UAE finance teams" this morning. Our own page on the same subject is here: ' + GUIDE + '. Would you like me to send a one-line description for it? ' + SIGNER;
+  const seq = (n, body, more = {}) => ({ n, steps: [{ step: 0, subject: more.subject || 'A note on your Peppol guide', body }, { step: 1, body: more.f1 || 'One more detail: the page names each provider with the standard it supports. Happy to send it as plain text.' }] });
+  const cases = [
+    ['clean', CLEAN, {}],
+    ['claim', CLEAN.replace('Our own page', 'We are an accredited service provider, and our page'), {}],
+    ['bracket', CLEAN.replace('Our own page', 'We work with [number] UAE finance teams, and our page'), {}],
+    ['recipient', CLEAN, { to: 'editor@someone-else.example' }],   // an address found on their page that belongs to another company
+    ['quote', 'Hello, we publish a list of providers in the UAE: ' + GUIDE + '. Would you like a one-line description? ' + SIGNER, {}],
+    ['competitor', CLEAN, { prospect_domain: 'rival-erp.example' }],
+    ['homepage', CLEAN, { page_url: 'home' }],
+    ['jargon', CLEAN + ' A dofollow backlink would help our SEO.', {}],
+    ['label', CLEAN.replace(SIGNER, 'Sara Khan, techand'), {}],
+    ['twolinks', CLEAN.replace('Would you', 'Our service page is at ' + H_ + '/services/e-invoicing too. Would you'), {}],
+    ['noask', CLEAN.replace('Would you like me to send a one-line description for it?', 'We thought your readers might find it useful.'), {}],
+  ];
+  const jobs = cases.map(([name, , o], i) => ({ ...job(i + 1, name, o), case: name }));
+  mock('LB Plan', [{ json: plan }]);
+  mock('LB Writer Input', [{ json: { site_id: SITE, domain: D, business: 'Tech&', facts: FACTS, signer: SIGNER, home: H_ + '/', jobs } }]);
+  mock('Outreach Sequence Writer', [{ json: { output: { sequences: cases.map(([, body], i) => seq(i + 1, body)), skip: [] } } }]);
+  const QA = (await run('LB Draft QA', [{ json: {} }]))[0].json;
+  const V = (name) => QA.verdicts[cases.findIndex(c => c[0] === name)] || {};
+  const why = (name) => (V(name).held || []).join(' | ');
+  console.log('   verdicts ->', JSON.stringify(QA.verdicts.map((v, i) => [cases[i][0], v.ok, (v.held || [])[0] || ''])));
+  check('a clean pitch passes every check', V('clean').ok === true && V('clean').steps.length === 2 && QA.checked === cases.length, why('clean'));
+  check('a claim the facts do not carry is held and wrapped for the owner', V('claim').ok === false && /needs your confirmation: "accredited"/.test(why('claim')) && /\[Owner: confirm — We are an accredited service provider/.test(V('claim').steps[0].body), why('claim'));
+  check('a placeholder nobody filled in is held', V('bracket').ok === false && /needs you: \[number\]/.test(why('bracket')), why('bracket'));
+  check('an address that is not on the prospect\'s own domain is held', V('recipient').ok === false && /is not on recipient\.example/.test(why('recipient')), why('recipient'));
+  check('a first e-mail that quotes nothing from their page is held', V('quote').ok === false && /quotes nothing that is on their page/.test(why('quote')), why('quote'));
+  check('a competitor as the recipient is held', V('competitor').ok === false && /competing site of yours/.test(why('competitor')), why('competitor'));
+  check('a bare homepage as the only page is held', V('homepage').ok === false && /only their homepage/.test(why('homepage')), why('homepage'));
+  check('SEO jargon is held', V('jargon').ok === false && /backlink/.test(why('jargon')), why('jargon'));
+  check('the domain label written as the business name is held', V('label').ok === false && /writes the business name as "techand"/.test(why('label')), why('label'));
+  check('a second link is held, and a link must be the page we chose on the canonical host', V('twolinks').ok === false && /carries 2 links/.test(why('twolinks')), why('twolinks'));
+  check('a first e-mail with no clear ask is held', V('noask').ok === false && /makes no clear ask/.test(why('noask')), why('noask'));
+  check('the gate counts what it held', QA.held === cases.length - 1, JSON.stringify([QA.checked, QA.held]));
+  // the held drafts reach the rows as needs_edit with their reasons; the clean one is drafted and may be approved
+  const rowOf = (j) => ({ site_id: SITE, domain: D, prospect_domain: j.prospect_domain, type: j.type, status: 'ready', score: 40, fit: 0.6, fit_reason: 'topic match 60%', checks_json: '{}', page_url: j.page_url, page_title: j.page_title,
+    evidence: j.evidence, contacts_json: JSON.stringify([{ email: j.to, kind: 'editorial', own: true, source_url: j.page_url }]), contact_email: j.to, contact_form_url: '', country: 'AE', language: 'en', target_url: j.target_url, target_reason: 'topic match', anchor_hint: 'title', sequence_json: '', deadline: '', drafted_at: '', checked_at: NOW, request_id: '' });
+  const rows = jobs.map(rowOf);
+  mock('LB Assemble', [{ json: { site_id: SITE, domain: D, email: '', callback_url: '', request_id: '', on_demand: false, free_only: false, checked_at: NOW,
+    outreach_rows: rows, prospect_rows: [], listing_rows: [], impact_rows: [], jobs: rows, fixes: [], cache_row: { key: 'linkbld:' + SITE, kind: 'linkbld', site_id: SITE, value: '{}', updated_at: NOW },
+    summary: { press: 0, qualified: rows.length, not_fit: 0, needs_contact: 0, ready: rows.length, to_draft: rows.length, redirects: 0, listings_missing: 0, listings_linked: 0, impact_reads: 0 } } }]);
+  const RW = (await run('LB Rows', [{ json: {} }]))[0].json; const R = (name) => RW.outreach_rows.find(r => r.prospect_domain === (name === 'competitor' ? 'rival-erp.example' : name + '.example')) || {};
+  check('rows: the clean draft is "drafted", every held one is "needs_edit" with its reasons, and all of them keep their text so a person can fix it',
+    RW.drafted === 1 && RW.held === cases.length - 1 && R('clean').status === 'drafted' && R('claim').status === 'needs_edit' && /^held for your edit: /.test(R('claim').fit_reason)
+    && JSON.parse(R('claim').sequence_json || '[]').length === 2 && JSON.parse(R('clean').sequence_json || '[]')[1].wait_days === 4, JSON.stringify(RW.outreach_rows.map(r => [r.prospect_domain, r.status])));
+  const OR = (await run('Outreach Rows', [{ json: {} }])).map(r => r.json);
+  check('the held rows still carry the exact seo_link_outreach columns', OR.length === rows.length && OR.every(r => Object.keys(r).length === TC.LINK_OUTREACH.length && TC.LINK_OUTREACH.every(c => c in r)), JSON.stringify(Object.keys(OR[0] || {})));
+  const RP = (await run('LB Report', [{ json: {} }]))[0].json; save('link-builder-held-report.html', RP.html); scanHtml('link builder report (held drafts)', RP.html);
+  check('report: the held pitches are listed with the reason, and the ready count says how many need an edit', /Pitches that need your edit before they go out/.test(RP.html) && /needs your confirmation/.test(RP.html) && /need your edit/.test(RP.html) && RP.summary.held === cases.length - 1, JSON.stringify(RP.summary));
+  // a writer that answers nothing usable, and the writer's own refusal
+  mock('Outreach Sequence Writer', [{ json: { output: { sequences: [{ n: 1, steps: [{ step: 0, subject: 'x', body: '' }] }], skip: [{ n: 2, reason: 'their page sells links' }] } } }]);
+  const QA3 = (await run('LB Draft QA', [{ json: {} }]))[0].json;
+  const RW3 = (await run('LB Rows', [{ json: {} }]))[0].json; const R3 = (name) => RW3.outreach_rows.find(r => r.prospect_domain === name + '.example') || {};
+  check('an empty e-mail is held, the writer\'s own refusal is kept as the reason, and nothing else is drafted',
+    QA3.verdicts[0].ok === false && /no e-mail was written/.test(QA3.verdicts[0].held.join(' ')) && QA3.writer_skip[0].prospect_domain === 'claim.example' && RW3.drafted === 0 && RW3.skipped === 1
+    && R3('claim').status === 'not_fit', JSON.stringify([QA3.verdicts[0], RW3.skipped]));
+});
+
+// ===================================================================================
+// S46 (2026-10-12, Phase 2 live check — `docs/system-review-2026-10-11/LIVE_CHECK_phase2_2026-10-12.md` §3) — the seven defects the live
+// runs on techand.ai left behind. Every one of them passed the harness before and failed in the real run, so every check here is written
+// the way it would have failed then: P2-1 the describer read the homepage alone although the model held the real 12-entry menu; P2-2
+// services_json was "[]" on every site; P2-3 the delivered meta.json told the owner to publish at a bare host that 308-redirects; P2-4 the
+// weekly report said "(undefined days ago)"; P2-5 a verdict recommended a NEW page for a search the site's own page has answered since
+// August; P2-6 QA reported 0 placeholders for a page with 11 bracketed fields in its author box; P2-7 a "Write now" run had no word target.
+// ===================================================================================
+await guard('p2-live-check', async () => {
+  const SN = 'S46 P2-1..P2-7 — the Phase 2 live check: the menu from the site model, the services stored, every promised URL on the canonical host, real day counts, the verdict improving the page the site has, the author box counted, the ladder\'s word target kept';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fs = require('fs'), path = require('path'), zlib = require('zlib');
+  const TC = require('./table_cols.json'), CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
+  const D = 'techand.ai', SITE = 'site_techand-ai', W = 'https://www.' + D, B = 'https://' + D, LOC = 2784, EMPTY = [{ json: {} }];
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const decodeB = (item, key) => Buffer.from(item.binary[key].data, 'base64').toString('utf8');
+  // the nine services the describer found on techand.ai in run 435 (describe-run435-2026-10-12.json)
+  const SERVICES = ['Microsoft Dynamics 365 Finance & Operations', 'Microsoft 365 Copilot', 'Microsoft Azure cloud services', 'Peppol E-Invoicing software',
+    'UAE E-invoicing solutions', 'VAT compliance solutions', 'Digital transformation consulting', 'Enterprise AI tools', 'Cloud migration services'];
+  const DESC = { business_name: 'Tech&', one_line_summary: 'Enterprise technology partner in the UAE', business_description: 'Tech& implements Microsoft business platforms for enterprises in the UAE.',
+    industry: 'IT services', products_or_services: SERVICES, target_audience: ['Finance teams'], unique_selling_points: [], location_served: 'United Arab Emirates', tone_of_brand: 'Professional',
+    pages_read: [{ url: B + '/', title: 'Tech&', kind: 'homepage' }], nav_pages: [], site_facts: SERVICES.slice(0, 3) };
+
+  // ---------- P2-1: the menu the describer reads comes from the site model (raw HTML), not from the markdown links ----------
+  const HOME = zlib.gunzipSync(fs.readFileSync(path.join(__dirname, 'fixtures_live', 'lb_page_techand_home.html.gz'))).toString('utf8');   // techand.ai's real homepage (219 KB, 112 hrefs)
+  const SMout = (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D }, extras: { html: HOME } } }]))[0].json;
+  const model = SMout.model;
+  console.log('   model ->', model.canonical_host, '|', model.nav_pages.length, 'nav pages |', model.services.length, 'services');
+  check('P2-1: the site model reads the real 12-entry menu out of the raw homepage HTML, with the service sections among it',
+    model.nav_pages.length === 12 && model.canonical_host === 'www.' + D && model.nav_pages.some(p => p.path === '/capabilities/business-applications')
+    && model.nav_pages.some(p => p.path === '/capabilities/cloud-services') && model.nav_pages.some(p => p.path === '/insights'), JSON.stringify(model.nav_pages.map(p => p.path)));
+  // the Jina markdown of the same homepage: the menu is built by JavaScript, so only one article link survives (the live input of run 435)
+  const MD_HOME = ['Title: Tech& | Turning Technology into measurable Business Impact', '', 'URL Source: https://techand.ai/', '', 'Markdown Content:', '',
+    '# Turning Technology into measurable Business Impact', '', 'Tech& is an enterprise technology partner working with organisations across the UAE.', '', '## Insights', '',
+    '[Read more about How Microsoft 365 Copilot Is Changing Business Productivity](https://techand.ai/insights/how-microsoft-365-copilot-is-changing-business-productivity)', ''].join('\n');
+  mock('Normalize Input', [{ json: { mode: 'keyword', domain: D, keyword: 'business central partner uae', country: 'United Arab Emirates', need_site_description: true } }]);
+  mock('Read Website', [{ json: { site_text: MD_HOME } }]);
+  const cs = await run('Clean Site Text', store['Read Website']);
+  check('P2-1: the markdown of that homepage holds one link only — the /insights/ article the node rightly skips', (cs[0].json.nav_pages || []).length === 1 && /^\/insights\//.test(cs[0].json.nav_pages[0].path), JSON.stringify(cs[0].json.nav_pages));
+  delete store['Site Model'];
+  const navBefore = await run('Nav Pages Plan', cs);
+  check('P2-1 (the live defect): without the model the plan is "no service or section page in the menu" and the describer reads the homepage alone',
+    navBefore.length === 1 && navBefore[0].json.skip === true && /no service or section page/.test(navBefore[0].json.reason), JSON.stringify(navBefore[0].json));
+  mock('Site Model', [{ json: { site_model: model } }]);
+  const navAfter = await run('Nav Pages Plan', cs);
+  const navPaths = navAfter.map(i => i.json.path);
+  console.log('   nav pages plan ->', navAfter.map(i => i.json.path + ' (' + i.json.score + ')').join(', '));
+  check('P2-1: with the model five pages are read — the capability pages first (Business Central lives on /capabilities/business-applications), the blog never, /industries once although the menu links it seven times with #fragments',
+    navAfter.length === 5 && navPaths.includes('/capabilities/business-applications') && navPaths.includes('/capabilities/cloud-services') && navPaths.includes('/industries')
+    && navPaths.filter(p => p === '/industries').length === 1 && !navPaths.some(p => /insight|#/.test(p)) && navAfter.every(i => i.json.nav_source === 'site model' && /^https:\/\/www\./.test(i.json.url)), JSON.stringify(navPaths));
+
+  // ---------- P2-2: the services the describer finds reach the model, the stored row and the brief ----------
+  const kitNoDesc = (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D }, extras: { html: HOME } } }]))[0].json;
+  const kitDesc = (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D }, extras: { html: HOME, description: DESC } } }]))[0].json;
+  check('P2-2 (the live defect): the model built before the describer has no services at all; with the description it carries all nine (the describer\'s own key is products_or_services)',
+    kitNoDesc.services.length === 0 && JSON.parse(kitNoDesc.row.services_json).length === 0 && kitDesc.services.length === 9
+    && kitDesc.services.includes('Peppol E-Invoicing software') && JSON.parse(kitDesc.row.services_json).length === 9, JSON.stringify({ before: kitNoDesc.services, after: kitDesc.services.length }));
+  mock('Site Model', [{ json: { domain: D, mode: 'site_description', site_model: model } }]);
+  mock('Restore Description', [{ json: { domain: D, mode: 'site_description', site_description: DESC, page_title: 'Tech&' } }]);
+  const msr = (await run('Model Services Row', store['Restore Description']))[0].json;
+  const stored = JSON.parse(msr.value || '{}');
+  console.log('   model services row ->', msr.key, '|', (JSON.parse(stored.services_json || '[]') || []).length, 'services');
+  check('P2-2: a describe run re-saves the model with the services (seo_cache model:<site_id>, exactly the table columns) — nothing did before, so services_json stayed "[]"',
+    eq(Object.keys(msr).sort(), [...TC.CACHE].sort()) && msr.key === 'model:' + SITE && msr.kind === 'model' && eq(JSON.parse(stored.services_json), SERVICES)
+    && stored.canonical_host === 'www.' + D && stored.business_name === 'Tech&', JSON.stringify(msr).slice(0, 220));
+  mock('Restore Description', [{ json: { domain: D, mode: 'site_description', site_description: { business_description: 'x', products_or_services: [] } } }]);
+  check('P2-2: a run whose description names no service writes nothing', (await run('Model Services Row', store['Restore Description']))[0].json.skip === true, 'expected skip');
+
+  // the weekly side: the Site Tracker reads the stored description into its model -> seo_sites.services_json -> the brief's facts
+  const siteRow = { id: 1, site_id: SITE, domain: D, gsc_property: '', ga4_property_id: '', country: 'United Arab Emirates', location_code: LOC, language_code: 'en', email: '', callback_url: '',
+    keywords: 'erp software uae', status: 'active', source: 'form', created_at: daysAgo(40), last_run_at: daysAgo(7), last_status: 'gsc:off', request_id: '',
+    canonical_host: 'www.' + D, business_name: 'Tech&', logo_url: W + '/logo1.png', nap_json: JSON.stringify({ city: 'Dubai', country_code: 'AE', phone: '+971507020541', source: 'homepage_schema' }),
+    services_json: '[]', nav_pages_json: JSON.stringify(model.nav_pages.map(p => ({ url: p.url, title: p.title }))), business_facts: '', cta: '', brand_names: 'Techand, Tech&', competitors: '', accreditation: '', model_updated_at: daysAgo(2) };
+  const lrow = (id, rung, keyword, status, url, o) => ({ json: { id, ladder_id: 'lad_mv40b6s9h5a8', domain: D, head_keyword: 'erp software uae', rung, page_no: rung, keyword, supporting: '',
+    page_type: 'Service Page', target_url: url, page_exists: status === 'published', status, months: '1-2', start_date: daysAgo(20), country: 'United Arab Emirates', location_code: LOC,
+    language_code: 'en', email: '', callback_url: '', request_id: '', target_words: 0, ...(o || {}) } });
+  const logRow = (keyword, days) => ({ json: { site_id: SITE, domain: D, keyword, source: 'cadence', page_type: 'Blog Post', existing_page_url: '', rung: 0, ladder_id: '', request_id: '',
+    status: 'written', started_at: daysAgo(days), published_url: '', published_at: '', week: '', title: keyword, slug: keyword.replace(/\s+/g, '-'), words: 1800, content_score: 84 } });
+  const descRow = [{ json: { id: 7, key: 'desc:' + D, kind: 'desc', site_id: SITE, value: JSON.stringify({ description: DESC, page_title: 'Tech&' }), updated_at: daysAgo(3) } }];
+  const trackerRun = async (descriptions) => {
+    mock('Load Sites', [{ json: siteRow }]);
+    mock('Load Ladders', [lrow(1, 1, 'e invoicing uae fta', 'writing', B + '/e-invoicing-uae-fta/'), lrow(2, 2, 'peppol uae', 'published', B + '/peppol-uae/')]);
+    mock('Load Rank History', EMPTY); mock('Load Site Metrics', EMPTY); mock('Load Query History', EMPTY);
+    mock('Load Content Log', [logRow('e invoicing uae fta', 11), logRow('peppol uae blog', 10)]);
+    mock('Load Console Alerts', EMPTY); mock('Load Check-ins', EMPTY); mock('Load Profiles (Site)', EMPTY); mock('Load Monitors (Site)', EMPTY);
+    mock('Load Descriptions (Site)', descriptions);
+    const plan = await run('Site Plan', EMPTY);
+    const targets = await run('Model Targets (Site)', plan);
+    delete store['Fetch Homepage (Site)'];
+    const models = await run('Site Model (Site)', targets);
+    mock('Resolve Properties', plan.map(p => ({ json: { ...p.json, gsc_connected: false, gsc_property: '', gsc_error: 'no property for this account' } })));
+    const sm = (await run('Site Metrics', store['Resolve Properties']))[0].json;
+    const bi = await run('Brief Input', [{ json: sm }]);
+    return { plan: plan[0].json, models: models[0].json, sm, bi, facts: JSON.parse(bi[0].json.facts) };
+  };
+  const TR = await trackerRun(descRow);
+  console.log('   weekly model ->', TR.models.services_source, '|', (TR.models.model.services || []).length, 'services | row', TR.sm.site_row.services_json.slice(0, 60));
+  check('P2-2: the weekly site model takes the services from the stored description, so seo_sites.services_json and the brief\'s facts.website.services are filled (both were empty live)',
+    TR.models.services_source === 'stored description' && eq(TR.models.model.services, SERVICES) && eq(JSON.parse(TR.sm.site_row.services_json), SERVICES)
+    && eq(Object.keys(TR.sm.site_row).sort(), [...TC.SITES].sort()) && TR.facts.website.services.length === 9 && TR.facts.website.services.includes('Peppol E-Invoicing software'), JSON.stringify({ src: TR.models.services_source, row: TR.sm.site_row.services_json.slice(0, 80), facts: TR.facts.website.services.length }));
+  const TR0 = await trackerRun(EMPTY);
+  check('P2-2 (the live defect): with no stored description the same run leaves services_json "[]" and the brief\'s services empty, exactly as on 2026-10-12',
+    eq(JSON.parse(TR0.sm.site_row.services_json), []) && TR0.facts.website.services.length === 0 && TR0.models.services_source === 'none yet', JSON.stringify({ row: TR0.sm.site_row.services_json, facts: TR0.facts.website.services }));
+
+  // ---------- P2-4: the weekly report counts the days again ----------
+  console.log('   pending publish ->', JSON.stringify(TR.plan.pending_publish));
+  check('P2-4 (the live defect): Site Plan now maps the waiting pages to { keyword, started_at, days } — the inline comment used to swallow the .map(), so `days` was undefined',
+    TR.plan.pending_publish.length === 2 && TR.plan.pending_publish.every(p => p.keyword && typeof p.days === 'number' && Number.isFinite(p.days))
+    && TR.plan.pending_publish[0].days === 11 && TR.plan.pending_publish[1].days === 10 && !!TR.plan.pending_publish[0].started_at, JSON.stringify(TR.plan.pending_publish));
+  check('P2-4: the AI brief gets the real day counts, never "(undefined days)"',
+    eq(TR.facts.pages_waiting_for_publish_link, ['e invoicing uae fta (11 days)', 'peppol uae blog (10 days)']) && !JSON.stringify(TR.facts).includes('undefined'), JSON.stringify(TR.facts.pages_waiting_for_publish_link));
+  mock('Site Brief', [{ json: { error: 'model not called in this test' } }]);
+  const rep = (await run('Site Report', TR.bi))[0].json;
+  const waiting = (rep.html.match(/Written, waiting for your publish link:[\s\S]{0,240}/) || [''])[0];
+  console.log('   report line ->', waiting);
+  check('P2-4: the delivered weekly report prints "(11 days ago)" and the whole page holds no "undefined"',
+    /\(11 days ago\)/.test(waiting) && /\(10 days ago\)/.test(waiting) && !/undefined/.test(rep.html), waiting || rep.html.slice(0, 200));
+
+  // ---------- P2-3: every URL we promise is on the canonical host ----------
+  const act = TR.sm.actions.find(a => a.type === 'publish') || {};
+  const pagesOut = TR.sm.ladder_pages;
+  console.log('   publish action ->', act.action);
+  check('P2-3: the weekly action and the page list name the planned URL on the canonical host (live: "planned URL https://techand.ai/e-invoicing-uae-fta/", a 308 redirect)',
+    act.url === W + '/e-invoicing-uae-fta/' && /planned URL https:\/\/www\.techand\.ai\/e-invoicing-uae-fta\//.test(act.action)
+    && (pagesOut.find(p => p.keyword === 'e invoicing uae fta') || {}).url === W + '/e-invoicing-uae-fta/', JSON.stringify({ url: act.url, action: act.action }));
+  check('P2-3: a page that is live keeps the URL it really has (we only move the URLs we promise)',
+    (pagesOut.find(p => p.keyword === 'peppol uae') || {}).url === B + '/peppol-uae/', JSON.stringify(pagesOut.map(p => [p.keyword, p.url])));
+  check('P2-3: no node of the package builds a host by hand any more (Blog Package came off url_lint.py\'s allow-list)',
+    !/'https:\/\/'\s*\+\s*dom\b/.test(fs.readFileSync(path.join(CD, 'Blog_Package.js'), 'utf8')), 'Blog_Package.js still glues a host together');
+
+  // the package of a hub page: the suggested URL and every planned link on www
+  const PLANNED = W + '/best-erp-software-in-dubai/';   // what the ladder promises after the fix
+  const HUB = { keyword: 'erp software uae', domain: D, country: 'United Arab Emirates', page_type: 'Pillar Page', page_role: 'hub', article_like: true, currency: 'AED',
+    content_brief: { target_word_count: 260, outline: [], terms_to_use: [{ term: 'data migration', min_count: 1 }], snippet_targets: [], secondary_keywords: ['erp software dubai'], evidence_plan: [] }, facts: [], business: 'Microsoft partner in the UAE',
+    business_facts: '', site_profile: null, site_description: DESC, internal_link_candidates: [], site_urls: [],
+    hub_pages: [{ url: B + '/best-erp-software-in-dubai/', keyword: 'best erp software in dubai', planned: true, anchor: 'Best ERP Software in Dubai' },
+      { url: W + '/e-invoicing-software-uae/', keyword: 'e invoicing software uae', planned: false, title: 'E-invoicing software UAE', anchor: 'E Invoicing Software UAE' }] };
+  // the draft of S41's "a page someone can publish" check: no placeholder in the copy and the length on target, so every bracket in the
+  // delivered page comes from the author box the package attaches (P2-6)
+  const DRAFT = [
+    'Title: ERP Software UAE: The 2026 Buyer Guide',
+    'Meta Description: Choose ERP software in the UAE with a clear comparison, the compliance checklist and the questions to ask before you sign.',
+    'Slug: erp-software-uae', '', '# ERP software UAE: how to choose', '',
+    'Choosing ERP software UAE buyers can rely on starts with the rules you must meet, not with the vendor list, and this guide walks you through each step.', '',
+    '**Quick answer:** Pick ERP software UAE teams can run under VAT, corporate tax and the e-invoicing mandate, then judge it on data migration effort and the partner behind it. Shortlist three vendors, score them against your own processes and ask each one for a fixed-scope plan before you sign anything.', '',
+    '## What does the mandate change?', '',
+    'The mandate covers every VAT-registered business. You need software that can issue the required format and connect to an accredited provider, so ask for proof in writing.', '',
+    'For example, a distributor with three entities must map each one to a tax group first. Choose a product with native support if your team is small.', '',
+    '## How do you shortlist ERP software UAE vendors?', '',
+    'Start from the data migration effort and the people who will run it. Step 1: list your processes. Step 2: score each vendor against them. Step 3: ask for a fixed scope.', '',
+    '| Option | Suits |', '|---|---|', '| Business Central | Mid-market distributors |', '| Odoo | Lean operations teams |', '',
+    '## Which mistakes cost the most?', '',
+    'Teams skip the data clean-up and pay for it later. A rule of thumb: clean the master data before the build, not after, and name one owner per table.', '',
+    'Another mistake is buying modules nobody uses. Ask for a phased plan, in practice 4 stages, and keep the scope in writing.', '',
+    '## Talk to us', '',
+    'Book a scoping call and we will map your ERP software UAE shortlist against your own processes in one workshop.'].join('\n');
+  mock('Site Model', [{ json: { site_model: model } }]);
+  mock('Parse Brief', [{ json: HUB }]);
+  const qHub = (await run('Content QA', [{ json: { output: DRAFT, critique: null } }], { runIndex: 0 }))[0].json;
+  const bp = (await run('Blog Package', [{ json: { ...qHub, page_markdown: qHub.output, content_brief_slug: 'erp-software-uae', content_images: [] } }]))[0];
+  const meta = JSON.parse(decodeB(bp, 'meta_json'));
+  console.log('   suggested url ->', meta.suggested_url, '| planned ->', JSON.stringify(meta.links_to_add_when_published.map(x => x.planned_url)));
+  check('P2-3: the delivered meta.json publishes at the canonical host and promises every not-yet-published link there too (live: all three were bare-host)',
+    meta.suggested_url === W + '/erp-software-uae/' && eq(meta.links_to_add_when_published.map(x => x.planned_url), [PLANNED])
+    && eq(meta.hub.planned_pages.map(x => x.url), [PLANNED]) && eq(qHub.content_qa.links_to_add_when_published.map(x => x.url), [PLANNED]), JSON.stringify({ s: meta.suggested_url, p: meta.links_to_add_when_published, h: meta.hub.planned_pages.map(x => x.url) }));
+  check('P2-3: and no bare-host URL is left anywhere in the package of that page',
+    !decodeB(bp, 'meta_json').includes(B + '/') && !decodeB(bp, 'article_html').includes(B + '/') && !decodeB(bp, 'article_md').includes(B + '/'), (decodeB(bp, 'meta_json').match(new RegExp(B.replace('.', '\\.') + '/[^"]*', 'g')) || []).slice(0, 4).join(' | '));
+
+  // ---------- P2-6: the author box the package attaches is counted ----------
+  const qa = qHub.content_qa;
+  const html = decodeB(bp, 'article_html');
+  const brackets = (html.replace(/<script[\s\S]*?<\/script>/g, '').match(/\[[^\]\n]{1,80}\]/g) || []);   // the byline and the author box; the Person schema carries the same gaps
+  console.log('   placeholders ->', qa.placeholder_count, 'in the copy |', qa.profile_placeholders, 'in the author box | in the delivered HTML:', brackets.length);
+  check('P2-6 (the live defect): the copy holds no placeholder, yet the delivered page carries 11 bracketed fields — QA counts exactly those now and no longer reports 0',
+    qa.placeholder_count === 0 && qa.profile_placeholders === 11 && qa.placeholders_total === 11 && brackets.length === 11
+    && eq(qa.profile_placeholder_fields.map(f => f.token).sort(), [...new Set(brackets)].sort()), JSON.stringify({ copy: qa.placeholder_count, box: qa.profile_placeholders, html: brackets }));
+  check('P2-6: a page that cannot be published as it is does not pass — but the editor is not sent to rewrite what only the owner can fill, and the note names the fields',
+    qa.passed === false && qa.passed_copy === true && qa.editor_needed === false
+    && qa.eeat_notes.some(n => /^11 bracketed field\(s\) in the byline, the author box and the Person schema still need your details/.test(n) && /cannot be published as it is/.test(n)), JSON.stringify({ passed: qa.passed, copy: qa.passed_copy, editor: qa.editor_needed, notes: qa.eeat_notes }));
+  const WF = fs.readFileSync(path.join(CD, 'Build_Word_File.js'), 'utf8');
+  check('P2-6: the report the owner reads shows them as an item to review, not as a clean "passed"',
+    /Fields only you can fill/.test(WF) && /\(qa\.warnings \|\| \[\]\)\.length \+ \(qa\.profile_placeholders \? 1 : 0\)/.test(WF), WF.slice(WF.indexOf('qa_summary'), WF.indexOf('qa_summary') + 200));
+  mock('Parse Brief', [{ json: { ...HUB, author: { name: 'Sara Khan', job_title: 'ERP lead', bio: 'Sara has led 20 Dynamics 365 rollouts in the UAE.', credentials: '12 years in ERP', url: W + '/team/sara-khan', same_as: ['https://www.linkedin.com/in/sarakhan'], has_author_page: true } } }]);
+  const qAuthor = (await run('Content QA', [{ json: { output: DRAFT, critique: null } }], { runIndex: 0 }))[0].json.content_qa;
+  mock('Parse Brief', [{ json: { ...HUB, page_role: 'standard', page_type: 'Service Page', article_like: false } }]);
+  const qService = (await run('Content QA', [{ json: { output: DRAFT, critique: null } }], { runIndex: 0 }))[0].json.content_qa;
+  check('P2-6: with the author on file nothing is bracketed and the page passes; a page with no author box (a service page) has nothing to count either',
+    qAuthor.profile_placeholders === 0 && qAuthor.passed === true && qService.profile_placeholders === 0 && qService.passed === true, JSON.stringify({ author: qAuthor.profile_placeholders, authorPassed: qAuthor.passed, service: qService.profile_placeholders }));
+
+  // ---------- P2-5: a verdict for a search one of the site's pages already answers ----------
+  const KW = 'uae e invoicing penalties';
+  const INS = W + '/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs';
+  const INV = [{ url: INS, title: 'The cost of non-compliance: UAE e-invoicing penalties and mitigation costs', source: 'sitemap', lastmod: '2026-08-21' },
+    { url: W + '/peppol-uae/', title: 'Peppol in the UAE', source: 'sitemap' }];
+  const invModel = (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1) }, extras: { pages: INV } } }]))[0].json.model;
+  const CTX = { domain: D, keyword: KW, mode: 'verdict', country: 'United Arab Emirates', location_code: LOC, existing_page: null, existing_page_url: '',
+    internal_link_candidates: [{ url: W + '/peppol-uae/', path: '/peppol-uae/' }], site_urls: [W + '/'] };
+  const verdictPath = async (m) => {
+    mock('Site Model', [{ json: { site_model: m } }]);
+    mock('Collect Site URLs', [{ json: CTX }]);
+    const reqs = await run('Client Page Requests', [{ json: CTX }]);
+    mock('Read Client Pages', reqs.map(r => ({ json: { page_text: 'Title: ' + r.json.kind + '\n\nMarkdown Content:\n' + 'UAE e-invoicing penalties start at AED 5,000 for a missing invoice. '.repeat(40) } })));
+    const ccp = (await run('Collect Client Pages', store['Read Client Pages']))[0].json;
+    return { reqs: reqs.map(r => r.json), ccp };
+  };
+  const VP = await verdictPath(invModel);
+  console.log('   client pages ->', JSON.stringify(VP.reqs.map(r => [r.kind, r.url])));
+  check('P2-5: the page the inventory already has for this search is read as the EXISTING page (live: it was fetched as a "related" page and existing_page stayed null)',
+    VP.reqs[0].kind === 'existing' && VP.reqs[0].url === INS && VP.ccp.existing_page && VP.ccp.existing_page.url === INS && VP.ccp.existing_page.source === 'page inventory'
+    && VP.ccp.existing_page_url === INS && VP.ccp.existing_page_text.length > 200, JSON.stringify({ reqs: VP.reqs.map(r => r.kind), ep: VP.ccp.existing_page }));
+  const VP0 = await verdictPath((await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1) } } }]))[0].json.model);
+  check('P2-5: with an empty inventory the path behaves exactly as before (no existing page invented)',
+    VP0.reqs[0].kind === 'home' && !VP0.ccp.existing_page && !VP0.ccp.existing_page_url, JSON.stringify({ reqs: VP0.reqs.map(r => r.kind), ep: VP0.ccp.existing_page || null }));
+  const LIVE_ANSWER = { verdict: 'GO_WITH_CHANGES', score: 58, reasons: ['The SERP mixes advisory firms with FTA pages.'], risks: [], recommended_page: 'Guide',
+    what_must_change: ['Build an informational penalty guide of about 1,800 words with a service CTA block', 'Add a table of the fines per article'], expected_monthly_visits_top3: 90, time_to_rank_months: 8, secondary_keywords: ['uae e invoicing fines'] };
+  const pvRun = async (prev, answer) => { mock('Merge Keyword Data', [{ json: prev }]); return (await run('Parse Verdict', [{ json: { output: JSON.stringify(answer || LIVE_ANSWER) } }]))[0].json; };
+  const pvHas = await pvRun({ ...CTX, page_type: 'Guide', existing_page: { url: INS, source: 'page inventory', matched_by: 'slug', match: 1 } });
+  console.log('   verdict changes ->', JSON.stringify(pvHas.verdict_changes));
+  check('P2-5: the verdict\'s plan becomes "improve that URL" — the live "Build an informational penalty guide …" line now asks for that work on the page that exists, nothing asks for a new page, and the length it wanted is kept',
+    pvHas.existing_page_action === 'improve' && /^Improve the page the site already has for this search \(https:\/\/www\.techand\.ai\/insights\/the-cost-of-non-compliance/.test(pvHas.verdict_changes[0])
+    && /do not publish a second page/.test(pvHas.verdict_changes[0]) && !pvHas.verdict_changes.some(c => /^Build /.test(c))
+    && pvHas.verdict_changes.some(c => /^On that page, build an informational penalty guide of about 1,800 words/.test(c))
+    && pvHas.verdict_changes.some(c => /table of the fines/.test(c)), JSON.stringify(pvHas.verdict_changes));
+  const pvSecond = await pvRun({ ...CTX, page_type: 'Guide', existing_page: { url: INS, source: 'page inventory' } }, { ...LIVE_ANSWER, what_must_change: ['Publish a dedicated page for the penalties of about 1,800 words', 'Add internal links from the service pages'] });
+  check('P2-5: a line that asks outright for a second URL is dropped, and the length it named survives as advice for the page that exists',
+    !pvSecond.verdict_changes.some(c => /dedicated page/.test(c)) && pvSecond.verdict_changes.some(c => /^Aim for about 1,800 words on that page\.$/.test(c))
+    && pvSecond.verdict_changes.some(c => /internal links/.test(c)), JSON.stringify(pvSecond.verdict_changes));
+  const pvNone = await pvRun({ ...CTX, page_type: 'Guide' });
+  check('P2-5: a keyword with no page of its own keeps the verdict exactly as the model wrote it',
+    pvNone.existing_page_action === null && eq(pvNone.verdict_changes, LIVE_ANSWER.what_must_change), JSON.stringify(pvNone.verdict_changes));
+  const VPROMPT = fs.readFileSync(path.join(CD, 'Verdict_Agent.prompt.txt'), 'utf8');
+  check('P2-5: the verdict prompt itself forbids a new page for a search the site already answers',
+    /THE SITE ALREADY HAS A PAGE FOR THIS SEARCH/.test(VPROMPT) && /Never recommend a new page or a second URL for this keyword/.test(VPROMPT)
+    && /nothing may suggest publishing a new page, a second URL, a "dedicated" or "separate" page/.test(VPROMPT), VPROMPT.slice(0, 160));
+
+  // ---------- P2-7: the word count the ladder verdict set survives to the page run ----------
+  reset(); begin(SN);
+  const PV7 = { keyword: 'erp software uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads', page_type: 'Service Page',
+    business: 'Microsoft Dynamics 365 partner in the UAE', business_facts: '', services: ['ERP implementation'], site_description: DESC, competitors: [], competitors_summary: [],
+    keyword_data: { search_volume: 480, cpc: 13.98, keyword_difficulty: 3, google_intent: 'commercial' }, secondary_keywords: ['erp software dubai'],
+    verdict: 'GO_WITH_CHANGES', verdict_score: 70, verdict_reasons: [], verdict_changes: ['Build a service page of about 2,100 words with a 40-70 word answer block at the top.'], verdict_risks: [],
+    site_authority: { organic_keywords: 12, top3: 0, top10: 0 }, site_urls: [W + '/'], pages_now: 1, ladder_id: 'lad_test p2', request_id: 'r-442', email: '', callback_url: '' };
+  mock('Parse Verdict', [{ json: PV7 }]);
+  mock('Ladder Requests', [{ json: { kind: 'suggestions', label: 'suggestions', body: [{ keyword: 'erp software uae' }] } }, { json: { kind: 'ranked', label: 'ranked', domain: D, body: [{ target: D }] } }]);
+  mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 10, method: 'size', p75: null, size_reach: 10, sample: 0, top10: 0, organic_keywords: 12, location_code: LOC }), updated_at: daysAgo(3) } }]);
+  mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+  const POOL = ['best erp software in dubai', 'erp software dubai', 'erp implementation cost uae', 'cloud erp software uae', 'erp software for small business uae'];
+  const lp7 = (await run('Ladder Pool', [V.task({ seed_keyword: 'erp software uae', items: POOL.map((k, i) => V.kwItem(k, i)) }), V.task({ target: D, items: [] })]))[0].json;
+  const lch7 = await run('Ladder Relevance Chunks', [{ json: lp7 }]);
+  mock('Ladder Keyword Relevance', lch7.map(c => V.ladderRelevance(c.json)));
+  const planItem = (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json;
+  const L7 = planItem.ladder;
+  console.log('   ladder target words ->', L7.top.target_words, '| write now:', JSON.stringify(L7.write_now.map(p => [p.keyword, p.target_words])));
+  check('P2-7: the ladder stores the length its verdict asked for ("a service page of about 2,100 words") with the main page, and the page it writes now carries it',
+    L7.top.target_words === 2100 && L7.write_now.length >= 1 && L7.write_now.every(p => typeof p.target_words === 'number'), JSON.stringify({ top: L7.top.target_words, now: L7.write_now.map(p => p.target_words) }));
+  mock('Attach PDF Ladder', [{ json: { ladder: L7, domain: D, keyword: 'erp software uae', country: 'United Arab Emirates', location_code: LOC, language_code: 'en', email: '', callback_url: '', request_id: 'r-442' } }]);
+  const rows7 = (await run('Ladder Rows', EMPTY)).map(i => i.json);
+  const topRow = rows7.find(r => r.rung === 4) || {};
+  check('P2-7: the stored seo_ladders row carries target_words and has exactly the table columns (run sync_tables.py when deploying)',
+    eq(Object.keys(topRow).sort(), [...TC.LADDER].sort()) && topRow.target_words === 2100 && rows7.filter(r => r.rung !== 4).every(r => r.target_words === 0), JSON.stringify(rows7.map(r => [r.rung, r.target_words])));
+  const spawn = (await run('Spawn Page Runs', [{ json: planItem }])).map(i => i.json.body);
+  check('P2-7: the page run the ladder starts is given that target (ladder_words)', spawn.length >= 1 && spawn.every(b => b.ladder_words === 2100 && b.force_content === true), JSON.stringify(spawn.map(b => [b.keyword, b.ladder_words])));
+  const niRun = async (body) => (await run('Normalize Input', [{ json: { headers: { 'content-type': 'application/json' }, params: {}, query: {}, body } }]))[0].json;
+  const ni = await niRun({ mode: 'keyword', keyword: 'erp software uae', country: 'United Arab Emirates', domain: D, page_type: 'Service Page', receive: ['Keyword Report', 'Page Content'],
+    force_content: true, ladder_id: 'lad_mv40b6s9h5a8', ladder_rung: 4, ladder_head: 'erp software uae', ladder_words: 2100, client_ip: 'app:co_1', callback_url: 'https://hooks.example.com/x' });
+  check('P2-7: the app\'s "Write now" body brings the number through Normalize Input', ni.ladder_words === 2100 && ni.force_content === true && !ni.validation_error, JSON.stringify({ w: ni.ladder_words, e: ni.validation_error }));
+  const niPlain = await niRun({ mode: 'keyword', keyword: 'erp software uae', country: 'United Arab Emirates', domain: D, page_type: 'Service Page', receive: ['Keyword Report', 'Page Content'],
+    force_content: true, ladder_id: 'lad_mv40b6s9h5a8', ladder_rung: 4, ladder_head: 'erp software uae', client_ip: 'app:co_1', callback_url: 'https://hooks.example.com/x' });
+  check('P2-7: a body without it invents no target (a ladder planned before this fix)', niPlain.ladder_words === 0 && !niPlain.validation_error, JSON.stringify({ w: niPlain.ladder_words, e: niPlain.validation_error }));
+  // *Parse Brief* clamps to it although neither the competitor analysis nor a verdict of its own ran
+  const BRIEF7 = { target_word_count: 3100, unique_angle: 'What a UAE finance team should ask every ERP vendor', information_gain: ['A compliance checklist'], gaps_to_cover: [],
+    outline: [{ h2: 'What ERP means here', target_words: 1200 }, { h2: 'How to choose', target_words: 1200 }, { h2: 'Next step', target_words: 700 }] };
+  const briefRun7 = async (ctx) => { mock('Brief Context', [{ json: ctx }]); return (await run('Parse Brief', [{ json: { output: JSON.stringify(BRIEF7) } }]))[0].json; };
+  const CTX7 = { ...PV7, verdict_changes: [], competitor_analysis: {}, content_brief: {}, keyword: 'erp software uae' };
+  const bWith = await briefRun7({ ...CTX7, ladder_words: 2100 });
+  const bWithout = await briefRun7({ ...CTX7, ladder_words: 0 });
+  console.log('   brief ->', bWithout.content_brief.target_word_count, 'without the ladder target |', bWith.content_brief.target_word_count, 'with it');
+  check('P2-7 (the live defect): a force_content run with no competitor analysis and no verdict of its own used to write what the agent asked for (3,100 words for a 2,100-word page, +84% live); it is clamped to the ladder\'s own target now',
+    bWithout.content_brief.target_word_count === 3100 && bWith.content_brief.target_word_count === 2310 && bWith.brief_outline_words === 2300
+    && bWith.brief_adjustments.some(a => /Target length 3100 -> 2310 words \(the keyword ladder's own target is 2100, within 10%\)/.test(a)), JSON.stringify({ without: bWithout.content_brief.target_word_count, with: bWith.content_brief.target_word_count, adj: bWith.brief_adjustments }));
+});
+
+// ===================================================================================
+// S47 G6 (2026-10-12, system review FIX_PLAN): rank tracking was the weakest area (3/10 against AccuRanker and Semrush Position
+// Tracking) — one SERP call per keyword was paid for and only the position, the ranking URL and a list of item types were kept.
+// It now records the whole results page from that same answer, adds a weekly mobile check for the ladder's main keywords, and says
+// what is modelled and what was measured.
+// ===================================================================================
+await guard('S47 G6 rank tracker depth', async () => {
+  reset();
+  const SN = 'S47 G6 — the whole results page of a rank check: AI Overview (shown / cites us), snippet, People Also Ask, local pack, video, the top-10 domains with competitor positions, the share of voice, the stored snapshot, and a mobile check for the main keywords';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const HCOLS = require('./table_cols.json').HISTORY;
+  const EMPTY = [{ json: {} }];
+  const D = 'techand.ai', SITE = 'site_techand-ai', HEAD = 'e invoicing software uae';
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_G6', domain: D, head_keyword: HEAD, rung, page_no, keyword, supporting: '',
+    page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: 'https://' + D + '/' + keyword.replace(/\s+/g, '-') + '/', page_exists: false, status, months: '', start_date: daysAgo(60),
+    country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@techand.ai', callback_url: 'https://hooks.example.com/x', request_id: 'r-G6' } });
+  const ROWS = [lrow(4, 1, HEAD, 'published'), lrow(1, 2, 'uae e invoicing penalties', 'published'), lrow(2, 3, 'peppol access point uae', 'planned')];
+  const SITES = [{ json: { id: 1, site_id: SITE, domain: D, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', status: 'active', competitors: 'cleartax.com, zoho.com' } }];
+  const MONS = [{ json: { id: 1, site_id: SITE, domain: D, competitors: 'complyance.io', brand_names: 'Tech&' } }];
+  // the plan: every check carries the device and the competitor list; the main keywords also get a mobile check
+  const plan = async (history, opts = {}) => {
+    reset();
+    mock('Load Ladders', opts.ladders || ROWS); mock('Load Content Log (Tracker)', EMPTY); mock('Load Pages (Tracker)', EMPTY);
+    mock('Load Sites (Tracker)', opts.sites === null ? EMPTY : (opts.sites || SITES)); mock('Load Monitors (Tracker)', opts.monitors === null ? EMPTY : (opts.monitors || MONS));
+    mock('Load History', history && history.length ? history : EMPTY);
+    return (await run('Tracker Plan', store['Load History'])).map(x => x.json);
+  };
+  const P1 = await plan([]);
+  console.log('   plan ->', JSON.stringify(P1.map(c => [c.keyword, c.device, c.body[0].device, c.body[0].os])));
+  check('every check names its device and the ladder\'s main keyword also gets a MOBILE check (desktop was never set before G6)',
+    P1.filter(c => c.device === 'desktop').length === 3 && P1.filter(c => c.device === 'mobile').length === 1
+    && P1.every(c => c.body[0].device === c.device && c.body[0].os === (c.device === 'mobile' ? 'android' : 'windows'))
+    && P1.find(c => c.device === 'mobile').keyword === HEAD && P1.every(c => c.body[0].depth === 50), JSON.stringify(P1.map(c => [c.keyword, c.device])));
+  check('the desktop checks come first, so the per-run cap is spent on the series before the extra device',
+    P1.findIndex(c => c.device === 'mobile') === P1.length - 1, JSON.stringify(P1.map(c => c.device)));
+  check('G6: the competitor list of the site model (seo_monitors + the seo_sites column) travels with every check',
+    P1.every(c => JSON.stringify(c.competitors) === JSON.stringify(['complyance.io', 'cleartax.com', 'zoho.com'])), JSON.stringify(P1[0].competitors));
+  const Pnone = await plan([], { sites: null, monitors: null });
+  check('with no site and no monitor rows stored the competitor list is empty and the plan is otherwise unchanged',
+    Pnone.every(c => c.competitors.length === 0) && Pnone.length === P1.length, JSON.stringify(Pnone[0].competitors));
+  // the mobile check is weekly, not per run: a run started by hand the same day reuses the last reading
+  const mobHist = [{ json: { ladder_id: 'lad_G6', keyword: HEAD, checked_at: daysAgo(2), position: 9, url: '', serp_features: '', domain: D, rung: 4, device: 'mobile' } }];
+  const P2 = await plan(mobHist);
+  check('a mobile check 2 days old is not bought again: it is carried as a deferred mobile reading, the desktop checks still run',
+    !P2.some(c => c.device === 'mobile') && P2.length === 3 && (P2[0].deferred_pages || []).some(d => d.device === 'mobile' && d.keyword === HEAD && d.last_position === 9), JSON.stringify((P2[0].deferred_pages || []).map(d => [d.keyword, d.device])));
+  const P3 = await plan([{ json: { ...mobHist[0].json, checked_at: daysAgo(8) } }]);
+  check('a mobile check 8 days old is bought again', P3.some(c => c.device === 'mobile'), JSON.stringify(P3.map(c => [c.keyword, c.device])));
+  check('a MOBILE row never counts in the desktop series: the "not published yet" deferral and the won rule read desktop rows only',
+    P3.filter(c => c.device === 'desktop').length === 3, JSON.stringify(P3.map(c => [c.keyword, c.device])));
+
+  // ---------- the reading itself ----------
+  const answers = {
+    [HEAD]: V.serpRich({ keyword: HEAD, domain: D, position: 7, aio: 'cited', snippet: 'cleartax.com', paa: true, local: true, video: true, shopping: true, related: true }),
+    'uae e invoicing penalties': V.serpRich({ keyword: 'uae e invoicing penalties', domain: D, position: 3, aio: 'uncited', snippet: 'ours', paa: ['What are the fines?'] }),
+    'peppol access point uae': V.serpRich({ keyword: 'peppol access point uae', domain: D, position: 0 }),
+  };
+  const PL = await plan([]);
+  mock('SERP Check', PL.map(c => c.device === 'mobile' ? V.serpRich({ keyword: c.keyword, domain: D, position: 14, aio: 'async', device: 'mobile' }) : answers[c.keyword]));
+  const rowsOut = (await run('Parse Positions', store['SERP Check'])).map(x => x.json);
+  const rowOf = (kw, device) => rowsOut.find(r => r.keyword === kw && r.device === (device || 'desktop'));
+  const jsonOf = (kw, col, device) => JSON.parse(rowOf(kw, device)[col]);
+  const row = rowOf(HEAD), feats = jsonOf(HEAD, 'features_json'), comps = jsonOf(HEAD, 'competitors_json'), snap = jsonOf(HEAD, 'snapshot_json');
+  const PEN = 'uae e invoicing penalties', PEP = 'peppol access point uae';
+  console.log('   row ->', JSON.stringify({ position: row.position, device: row.device, sov: row.share_of_voice, features: feats.types, snapshot_chars: row.snapshot_json.length }));
+  check('the history row is exactly the seo_rank_history columns (table_cols.json HISTORY), for every check of the run',
+    rowsOut.every(r => JSON.stringify(Object.keys(r).sort()) === JSON.stringify(HCOLS.slice().sort())), JSON.stringify(Object.keys(row)));
+  check('G6: the AI Overview is recorded as shown AND as citing us, with the domains it cited and the moment the page was read',
+    feats.ai_overview.shown === true && feats.ai_overview.cites_us === true && feats.ai_overview.content_loaded === true
+    && feats.ai_overview.cited_domains.includes(D) && feats.ai_overview.cited_domains.includes('tax.gov.ae')
+    && String(feats.checked_at).slice(0, 10) === '2026-10-12', JSON.stringify(feats.ai_overview));
+  check('an AI Overview that does not cite us is recorded as shown with cites_us false (the keyword that holds the snippet)',
+    (() => { const f = jsonOf(PEN, 'features_json'); return f.ai_overview.shown === true && f.ai_overview.cites_us === false && f.featured_snippet.ours === true && f.featured_snippet.shown === true; })(), rowOf(PEN).features_json.slice(0, 200));
+  check('the featured snippet, People Also Ask (with its questions), the local pack, video and shopping blocks are all recorded',
+    feats.featured_snippet.shown === true && feats.featured_snippet.ours === false && feats.featured_snippet.domain === 'cleartax.com'
+    && feats.people_also_ask.shown === true && feats.people_also_ask.count === 2 && /mandatory/.test(feats.people_also_ask.questions[0])
+    && feats.local_pack.shown === true && feats.local_pack.ours === false && feats.video.shown === true && feats.shopping.shown === true, JSON.stringify(feats));
+  check('a keyword with a plain results page records every flag as false, not as unknown', (() => { const f = jsonOf(PEP, 'features_json');
+    return f.unavailable === false && f.ai_overview.shown === false && f.ai_overview.cites_us === false && f.featured_snippet.shown === false && f.people_also_ask.shown === false && f.video.shown === false; })(), rowOf(PEP).features_json.slice(0, 200));
+  check('the serp_features column still holds the comma list it always held (nothing that reads it changes)',
+    row.serp_features.split(',').includes('ai_overview') && row.serp_features.split(',').includes('people_also_ask') && !row.serp_features.split(',').includes('organic'), row.serp_features);
+  check('G6: the top-10 domains give our competitors\' positions — the ones on the list are marked, page-1 domains nobody named are kept too',
+    comps.competitors.find(c => c.d === 'cleartax.com').p === 1 && comps.competitors.find(c => c.d === 'cleartax.com').t === true
+    && comps.competitors.find(c => c.d === 'zoho.com').p === 3 && comps.competitors.find(c => c.d === 'complyance.io').p === 4
+    && comps.competitors.some(c => c.d === 'pwc.com' && c.t === false), JSON.stringify(comps.competitors));
+  check('a tracked competitor whose place on the page our own page took is reported as not on it (null), never as 0 — that would read as "not in the top 50"',
+    (() => { const c2 = jsonOf(PEN, 'competitors_json'); const z = c2.competitors.find(x => x.d === 'zoho.com'); return z && z.p === null && c2.tracked.length === 3 && c2.our_position === 3; })(), rowOf(PEN).competitors_json.slice(0, 260));
+  check('the domains above us are listed with their positions (we are #7, so six domains are above us)',
+    comps.our_position === 7 && comps.above.length === 6 && comps.above[0].d === 'cleartax.com' && comps.above.every(a => a.p < 7), JSON.stringify(comps.above));
+  check('G6: the share of voice is CTR- and feature-weighted, between 0 and 100, and travels with the sentence that says it is a model',
+    row.share_of_voice > 0 && row.share_of_voice < 100 && /modelled/.test(comps.method) && /Not measured clicks/.test(comps.method)
+    && comps.shares[0].domain === 'cleartax.com' && comps.shares.find(s => s.domain === D).pct === row.share_of_voice, JSON.stringify({ sov: row.share_of_voice, shares: comps.shares.slice(0, 3) }));
+  check('a keyword we do not rank for at all has a share of voice of 0, and #3 has more than #7',
+    rowOf(PEP).share_of_voice === 0 && rowOf(PEN).share_of_voice > row.share_of_voice && row.share_of_voice > 0, JSON.stringify(rowsOut.map(r => [r.keyword, r.device, r.share_of_voice])));
+  check('G6: the snapshot kept as proof carries the top 10 with their URLs and trimmed titles, when it was read and on which device — and stays small',
+    snap.top.length === 10 && snap.top[0].p === 1 && /^https:\/\//.test(snap.top[0].u) && snap.top.every(t => String(t.t || '').length <= 80)
+    && String(snap.at).slice(0, 10) === '2026-10-12' && snap.device === 'desktop' && row.snapshot_json.length <= 1800
+    && row.features_json.length <= 1600 && row.competitors_json.length <= 1800, JSON.stringify({ chars: row.snapshot_json.length, at: snap.at, top0: snap.top[0] }));
+  check('the mobile reading is its own row for the same keyword, with the mobile device and its own position',
+    (() => { const m = rowOf(HEAD, 'mobile'); return m && m.position === 14 && JSON.parse(m.snapshot_json).device === 'mobile' && rowsOut.filter(r => r.keyword === HEAD).length === 2; })(), JSON.stringify(rowsOut.map(r => [r.keyword, r.device, r.position])));
+  check('G6: an AI Overview Google loaded asynchronously is "shown" with cites_us UNKNOWN (null), never false — loading its sources costs extra',
+    (() => { const f = jsonOf(HEAD, 'features_json', 'mobile'); return f.ai_overview.shown === true && f.ai_overview.cites_us === null && f.ai_overview.content_loaded === false; })(), rowOf(HEAD, 'mobile').features_json.slice(0, 200));
+
+  // a failed check: "check again", never a fact about the page
+  const PF = await plan([]);
+  mock('SERP Check', PF.map((c, i) => i === 0 ? V.serpRich({ error: 'task' }) : (i === 1 ? V.serpRich({ error: 'http' }) : answers[c.keyword])));
+  const failRows = (await run('Parse Positions', store['SERP Check'])).map(x => x.json);
+  const ff = JSON.parse(failRows[0].features_json);
+  check('G6: a DataForSEO task error inside an HTTP 200 and a transport error both mean "check again" — position -1, share of voice -1, every flag null',
+    failRows[0].position === -1 && failRows[1].position === -1 && failRows[0].share_of_voice === -1 && failRows[1].share_of_voice === -1
+    && ff.unavailable === true && ff.ai_overview.shown === null && ff.ai_overview.cites_us === null && ff.featured_snippet.shown === null
+    && failRows[0].serp_features === '' && JSON.parse(failRows[0].snapshot_json).unavailable === true, JSON.stringify({ p: failRows[0].position, sov: failRows[0].share_of_voice, f: ff.ai_overview }));
+  check('a failed check keeps the row\'s columns exactly, so it still stores', failRows.every(r => JSON.stringify(Object.keys(r).sort()) === JSON.stringify(HCOLS.slice().sort())), JSON.stringify(Object.keys(failRows[0])));
+
+  // ---------- the report and the callback ----------
+  const reportWith = async (history) => {
+    const pl = await plan(history);
+    mock('SERP Check', pl.map(c => c.device === 'mobile' ? V.serpRich({ keyword: c.keyword, domain: D, position: 14, aio: 'async', device: 'mobile' }) : answers[c.keyword]));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    return (await run('Tracker Report', pp))[0].json;
+  };
+  const R = await reportWith([]);
+  console.log('   report ->', JSON.stringify({ positions: R.positions.length, sov: R.serp_summary.share_of_voice, above: R.serp_summary.competitors_above.slice(0, 2), features: R.serp_summary.features }));
+  check('G6: the report has one row per keyword — the mobile reading never becomes a fourth ladder row, it sits on the keyword\'s row',
+    R.positions.length === 3 && R.positions.every(p => p.device === 'desktop') && R.positions.find(p => p.keyword === HEAD).mobile_position === 14
+    && R.positions.find(p => p.keyword === HEAD).position === 7 && R.serp_summary.mobile_checked === 1, JSON.stringify(R.positions.map(p => [p.keyword, p.position, p.mobile_position])));
+  const pOf = (kw) => R.positions.find(p => p.keyword === kw);
+  check('the callback carries the features, the share of voice, the domains above us and the competitors per keyword',
+    pOf(HEAD).features.ai_overview.cites_us === true && pOf(HEAD).share_of_voice > 0 && pOf(HEAD).above.length === 6
+    && pOf(HEAD).above[0].domain === 'cleartax.com' && pOf(HEAD).competitors.some(c => c.domain === 'cleartax.com' && c.tracked)
+    && pOf(HEAD).feature_labels.includes('AI Overview (cites you)') && pOf(PEN).feature_labels.includes('Snippet (yours)'), JSON.stringify({ labels: pOf(HEAD).feature_labels, sov: pOf(HEAD).share_of_voice }));
+  check('G6: the ladder summary counts the features, averages the share of voice and ranks the competitors above us by how many keywords they beat us for',
+    R.serp_summary.features.ai_overview === 2 && R.serp_summary.features.ai_overview_cites_us === 1 && R.serp_summary.features.featured_snippet === 2
+    && R.serp_summary.features.snippet_ours === 1 && R.serp_summary.features.people_also_ask === 2 && R.serp_summary.features.local_pack === 1
+    && R.serp_summary.share_of_voice > 0 && R.serp_summary.head_share_of_voice === R.positions.find(p => p.keyword === HEAD).share_of_voice
+    && R.serp_summary.competitors_above[0].keywords >= 1 && R.serp_summary.competitors_above.some(c => c.tracked), JSON.stringify(R.serp_summary.competitors_above));
+  check('G6: the e-mail shows the results page, the share of voice, the mobile position and who is above us, and says the share is an estimate',
+    /The results page itself/.test(R.html) && /AI Overview \(cites you\)/.test(R.html) && /Share of voice/.test(R.html) && /Mobile/.test(R.html)
+    && /cleartax\.com \(#1\)/.test(R.html) && /not measured clicks/.test(R.html) && /13% of sites hold the same position on both devices/.test(R.html), (R.html.match(/The results page itself[\s\S]{0,300}/) || [''])[0]);
+  check('D26 is kept: the AI Overview line in the report is an observation with its time, never "there is no AI Overview"',
+    /AI Overview seen in the check at \d\d:\d\d UTC on 2026-10-12/.test(R.serp_summary.head_line) && /vary between searches/.test(R.serp_summary.head_line)
+    && !/there is no AI Overview/.test(R.html), R.serp_summary.head_line);
+  scanHtml('G6 tracker email', R.html);
+  // the second week: the stored readings make it "seen in N of M checks", and the next step is untouched by G6
+  const week1 = (await run('Parse Positions', store['SERP Check'])).map(x => ({ json: { ...x.json, checked_at: daysAgo(7) } }));
+  const R2 = await reportWith(week1);
+  check('with a stored reading the AI Overview becomes "seen in 2 of 2 checks" (one search at one moment, counted, never a fact)',
+    /seen in 2 of 2 checks/.test(R2.serp_summary.head_line), R2.serp_summary.head_line);
+  check('D16 / D11 are untouched: the next step still follows the ladder state and the previous positions still come from the desktop series',
+    R2.next_step.action === 'write_rung_2' && R2.positions.find(p => p.keyword === HEAD).previous === 7 && R2.won === false, JSON.stringify({ next: R2.next_step.action, prev: R2.positions.map(p => p.previous) }));
+  const Rfail = await (async () => { const pl = await plan([]); mock('SERP Check', pl.map(() => V.serpRich({ error: 'task' })));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp); return (await run('Tracker Report', pp))[0].json; })();
+  check('when every check failed the report claims nothing about the pages and no share of voice',
+    Rfail.serp_summary.share_of_voice === null && Rfail.serp_summary.features.not_read === 3 && /could not be read/.test(Rfail.serp_summary.head_line)
+    && !/AI Overview \(/.test(Rfail.html), Rfail.serp_summary.head_line);
+
+  // ---------- the kit itself (the shim the build writes next to the Code nodes) ----------
+  const kit = async (input) => (await run('_rank_serp', [{ json: input }], { code: '_rank_serp' }))[0].json;
+  const K = await kit({ serp: answers[HEAD], domain: D, competitors: ['cleartax.com'], device: 'desktop' });
+  check('the kit\'s CTR curve is the one the Search Console report uses, and page 1 is deduplicated by domain before the top 10 is taken',
+    JSON.stringify(K.ctr) === JSON.stringify([0.28, 0.15, 0.11, 0.08, 0.07, 0.05, 0.04, 0.035, 0.03, 0.025])
+    && K.landscape.top.length === 10 && new Set(K.landscape.top.map(t => t.domain)).size === 10, JSON.stringify(K.landscape.top.map(t => t.domain)));
+  const Kdup = await kit({ serp: V.serpRich({ domain: D, position: 4, top: ['a.com', 'a.com', 'b.com', D, 'b.com', 'c.com', 'c.com', 'd.com', 'e.com', 'f.com'] }), domain: D });
+  check('a domain that holds several places on page 1 is one row, at its best position', Kdup.landscape.top.filter(t => t.domain === 'a.com').length === 1
+    && Kdup.landscape.top.find(t => t.domain === 'a.com').position === 1 && Kdup.landscape.top.length === 7, JSON.stringify(Kdup.landscape.top.map(t => [t.domain, t.position])));
+  const plain = (await kit({ serp: V.serpRich({ domain: D, position: 1 }), domain: D })).voice.ours;
+  const uncited = (await kit({ serp: V.serpRich({ domain: D, position: 1, aio: 'uncited' }), domain: D })).voice.ours;
+  const cited = (await kit({ serp: V.serpRich({ domain: D, position: 1, aio: 'cited' }), domain: D })).voice.ours;
+  check('an AI Overview that does not cite us costs us organic share (R3), and being cited in it gives some of that share back',
+    uncited < plain && cited > uncited, JSON.stringify({ plain, uncited, cited }));
+  const asyncV = await kit({ serp: V.serpRich({ domain: D, position: 1, aio: 'async' }), domain: D });
+  check('when the AI Overview\'s sources were not loaded the share of voice says so instead of guessing who it cites',
+    asyncV.voice.aio_sources_unknown === true && asyncV.voice.ours < plain, JSON.stringify({ sov: asyncV.voice.ours, unknown: asyncV.voice.aio_sources_unknown }));
+  check('a www address and the bare host are the same site, and a subdomain of ours counts as ours',
+    (await kit({ serp: V.serpRich({ domain: D, position: 1 }), domain: 'www.' + D })).rank.position === 1
+    && (await kit({ serp: V.serpRich({ domain: 'blog.' + D, position: 2 }), domain: D })).rank.position === 2, 'host matching');
+  const Kbig = await kit({ serp: V.serpRich({ domain: D, position: 2 }), domain: D, max: 300 });
+  check('a snapshot that would be too long is trimmed (titles first, then the tail) and never grows past the limit',
+    Kbig.packed.length <= 300 && /"trimmed"/.test(Kbig.packed), Kbig.packed.slice(0, 120));
+});
+
+// ===================================================================================
+// Extended 2026-10-13 (FIX_PLAN §3.9 G18-2): section C2 — the minor band folded into one "Minor items (N)" line in both
+// audit reports and in the callback, with nothing hidden from the score or the stored rows.
+// S48 (2026-10-12, system review FIX_PLAN G7 / G26 / D25b / D25c) — the speed real visitors feel, the order of the fix list, an alert that
+// arrives when the mail server is down, and a test check-in that can never pass as the month's answer.
+await guard('crux, impact priority, alert channels and test check-ins', async () => {
+  reset(); const SN = 'S48 G7 G26 D25b D25c — Core Web Vitals per template from CrUX (phone + desktop, origin fallback, API off), the fix list ordered by likely impact, a second ops alert channel without SMTP, and a test check-in that never counts for the month';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const T = require('./fixtures_tracking'); const TC = require('./table_cols.json');
+  const OW = require('./ops_alert_wiring.json');
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  // ---------- the audit, from the crawl to the scored findings, with the CrUX chain where the workflow has it ----------
+  // (Entity Check hands its payload on unchanged, so the harness mocks it with the Search Console step's output, exactly as it arrives live)
+  const auditToCrux = async (extra) => {
+    mock('Start Form', F.forms.startAudit);
+    const n = await run('Normalize Input', F.forms.pageAuditTech); mock('Route Mode', n);
+    await run('Save Task ID', F.crawlTaskPost); await run('Check Crawl', F.summaryDone, { runIndex: 2 });
+    mock('Get Crawled Pages', F.crawledPagesRes);
+    await run('Crawl Extra Requests', store['Get Crawled Pages']); mock('Run Crawl Extras', F.extrasRes); await run('Collect Crawl Extras', store['Run Crawl Extras']);
+    await run('Build Probes'); await run('Content Probes', store['Collect Crawl Extras']);
+    const all = F.probeResults('apex');
+    mock('Run Probes', [all[0], all[2], all[3], all[4]]);
+    mock('Run Content Probes', [all[0], all[1], all[5], all[6], all[7], all[8], ...all.slice(9)]);
+    const ap = await run('Analyze Probes', store['Run Content Probes']);
+    const gf = await runGscAudit(ap, 'ok');
+    const item = extra ? [{ json: { ...gf[0].json, ...extra } }] : gf;
+    mock('Entity Check', item);
+    return await run('CrUX Targets', item);
+  };
+
+  // a Chrome UX Report answer: p75 values per metric with the 28-day collection period (CLS comes back as a string, as the API sends it)
+  const cruxOk = (lcp, inp, cls, o = {}) => ({ statusCode: 200, headers: {}, body: {
+    record: { key: { formFactor: o.ff || 'PHONE', ...(o.origin ? { origin: o.origin } : { url: o.url || '' }) },
+      metrics: {
+        largest_contentful_paint: { histogram: [{ start: 0, end: 2500, density: lcp <= 2500 ? 0.81 : 0.42 }, { start: 2500, end: 4000, density: 0.3 }, { start: 4000, density: 0.1 }], percentiles: { p75: lcp } },
+        interaction_to_next_paint: { histogram: [{ start: 0, end: 200, density: 0.93 }, { start: 200, end: 500, density: 0.05 }], percentiles: { p75: inp } },
+        cumulative_layout_shift: { histogram: [{ start: '0.00', end: '0.10', density: 0.96 }], percentiles: { p75: String(cls) } } },
+      collectionPeriod: { firstDate: { year: 2026, month: 9, day: 14 }, lastDate: { year: 2026, month: 10, day: 11 } } },
+    urlNormalizationDetails: o.url ? { originalUrl: o.url, normalizedUrl: o.url } : undefined } });
+  const cruxErr = (code, status, message) => ({ statusCode: code, headers: {}, body: { error: { code, message, status } } });
+  const NO_DATA = cruxErr(404, 'NOT_FOUND', 'chrome ux report data not found');
+  const API_OFF = cruxErr(403, 'PERMISSION_DENIED', 'Chrome UX Report API has not been used in project 12345 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/chromeuxreport.googleapis.com/overview');
+
+  // ---------- A. G7: a CrUX fixture gives per-template p75 values on both form factors ----------
+  const t1 = await auditToCrux();
+  const plan = t1[0].json.crux_plan;
+  console.log('   crux plan ->', JSON.stringify(plan));
+  check('G7: the audit asks the Chrome UX Report for three templates — the homepage, a service page and a blog post — on phone and desktop, plus the whole site as the fallback (8 requests, all free)',
+    t1.length === 8 && eq(plan.templates.map(x => x.template), ['homepage', 'service_page', 'blog_post'])
+    && plan.templates[0].url === 'https://northwind-erp.com/' && /\/services\//.test(plan.templates[1].url) && /\/blog\/[^/]+\//.test(plan.templates[2].url)
+    && t1.filter(x => x.json.form_factor === 'phone').length === 4 && t1.filter(x => x.json.form_factor === 'desktop').length === 4
+    && t1.filter(x => x.json.level === 'origin').length === 2 && t1.every(x => x.json.endpoint === 'https://chromeuxreport.googleapis.com/v1/records:queryRecord'),
+    JSON.stringify(t1.map(x => [x.json.template, x.json.form_factor, x.json.level, x.json.body.url || x.json.body.origin])));
+  check('G7: every request names the metrics Google judges page experience on, and the body uses `url` for a page and `origin` for the whole site',
+    t1.every(x => eq(x.json.body.metrics, ['largest_contentful_paint', 'interaction_to_next_paint', 'cumulative_layout_shift']) && (x.json.level === 'origin' ? !!x.json.body.origin && !x.json.body.url : !!x.json.body.url))
+    && t1.every(x => ['PHONE', 'DESKTOP'].includes(x.json.body.formFactor)), JSON.stringify(t1[0].json.body));
+
+  // the service page has too little traffic of its own (404 on both form factors) -> the whole-site figures stand in; the blog post fails LCP
+  const answer = (r) => {
+    const j = r.json;
+    if (j.level === 'origin') return cruxOk(j.form_factor === 'phone' ? 2800 : 1600, j.form_factor === 'phone' ? 160 : 90, 0.07, { ff: j.body.formFactor, origin: j.body.origin });
+    if (j.template === 'service_page') return NO_DATA;
+    if (j.template === 'homepage') return cruxOk(j.form_factor === 'phone' ? 2200 : 1400, 150, 0.05, { ff: j.body.formFactor, url: j.body.url });
+    return cruxOk(j.form_factor === 'phone' ? 4100 : 2300, j.form_factor === 'phone' ? 320 : 140, 0.04, { ff: j.body.formFactor, url: j.body.url });
+  };
+  mock('Fetch CrUX', t1.map(answer));
+  const ac = await run('Analyze CrUX', store['Fetch CrUX']);
+  const cx = ac[0].json.crux;
+  const dev = (tpl, ff) => (cx.templates.find(t => t.template === tpl) || { devices: {} }).devices[ff] || {};
+  console.log('   crux ->', JSON.stringify({ available: cx.available, source: cx.source, period: cx.collection_period, templates: cx.templates.map(t => [t.label, t.devices.phone && t.devices.phone.lcp_ms, t.devices.phone && t.devices.phone.level, t.devices.desktop && t.devices.desktop.lcp_ms]) }));
+  check('G7: both form factors carry the p75 of LCP, INP and CLS per template (the CLS string the API sends is read as a number), with the 28-day collection period and the source named',
+    cx.available === true && cx.source === 'crux_field' && cx.collection_period.first === '2026-09-14' && cx.collection_period.last === '2026-10-11'
+    && dev('homepage', 'phone').lcp_ms === 2200 && dev('homepage', 'phone').inp_ms === 150 && dev('homepage', 'phone').cls === 0.05
+    && dev('homepage', 'desktop').lcp_ms === 1400 && dev('blog_post', 'phone').lcp_ms === 4100 && dev('blog_post', 'desktop').lcp_ms === 2300
+    && dev('homepage', 'phone').verdict.pass === true && dev('blog_post', 'phone').verdict.pass === false && eq(dev('blog_post', 'phone').verdict.failed, ['lcp', 'inp']),
+    JSON.stringify(cx.templates));
+  check('G7: a page with too little field data of its own falls back to the whole-site figures, and the row says so instead of pretending the page was measured',
+    dev('service_page', 'phone').available === true && dev('service_page', 'phone').level === 'origin' && dev('service_page', 'phone').lcp_ms === 2800
+    && dev('service_page', 'desktop').level === 'origin' && dev('homepage', 'phone').level === 'page' && cx.origin_rows.phone.lcp_ms === 2800,
+    JSON.stringify({ service: dev('service_page', 'phone'), origin: cx.origin_rows }));
+  const cf = ac[0].json.extra_findings.filter(f => f.source === 'crux');
+  console.log('   crux findings ->', cf.map(f => '[' + f.severity + (f.scoring === false ? ', unscored' : '') + '] ' + f.title).join(' | '));
+  check('G7: a failing metric at the 75th percentile on phones becomes one finding per metric, in Performance, worded as field data with its date — never a lab guess',
+    cf.length === 2 && cf.every(f => f.category === 'Performance' && f.severity === 'Medium' && f.scope === 'site')
+    && cf.some(f => /Largest Contentful Paint fails for real users on phones/.test(f.title) && /4\.1 s/.test(f.evidence) && /2026-09-14 to 2026-10-11/.test(f.evidence))
+    && cf.some(f => /Interaction to Next Paint fails for real users on phones/.test(f.title) && /320 ms/.test(f.evidence)),
+    JSON.stringify(cf.map(f => [f.severity, f.title, f.evidence])));
+  check('G7: the templates that pass become a "what works" line, so a fast site is told so', ac[0].json.extra_works.some(w => /Core Web Vitals pass for real users on phones on homepage/.test(w)), JSON.stringify(ac[0].json.extra_works.slice(-2)));
+
+  // the audit scores it with a LOW weight: the same audit with and without the field data differs by at most 3 points
+  const bsiWith = await run('Build Site Issues', ac);
+  const aWith = bsiWith[0].json.site_audit;
+  const bsiWithout = await run('Build Site Issues', [{ json: { ...ac[0].json, crux: undefined, extra_findings: ac[0].json.extra_findings.filter(f => f.source !== 'crux') } }]);
+  const aWithout = bsiWithout[0].json.site_audit;
+  console.log('   score with crux ->', aWith.health_score, '/ raw', aWith.raw_score, '| without ->', aWithout.health_score, '/ raw', aWithout.raw_score, '| performance', aWith.category_scores.Performance, 'vs', aWithout.category_scores.Performance, '| crux in site_audit?', !!aWith.crux);
+  check('G7: the field data carries a LOW weight in the health score — two failing metrics at the 75th percentile cost at most 3 points of the overall score (they do move the Performance category) — and it travels inside the scored audit',
+    !!aWith.crux && aWith.crux.available === true && aWith.health_score > 0
+    && Math.abs(aWith.health_score - aWithout.health_score) <= 3 && (aWithout.raw_score - aWith.raw_score) <= 3
+    && aWith.category_scores.Performance < aWithout.category_scores.Performance,
+    JSON.stringify({ with: [aWith.health_score, aWith.raw_score, aWith.category_scores.Performance], without: [aWithout.health_score, aWithout.raw_score, aWithout.category_scores.Performance] }));
+
+  // ---------- B. G7: the API is not enabled in the key's project — "not available", never a failed audit ----------
+  const t2 = await auditToCrux();
+  mock('Fetch CrUX', t2.map(() => API_OFF));
+  const acOff = await run('Analyze CrUX', store['Fetch CrUX']);
+  const cxOff = acOff[0].json.crux;
+  const offF = acOff[0].json.extra_findings.filter(f => f.source === 'crux');
+  const bsiOff = await run('Build Site Issues', acOff);
+  const aOff = bsiOff[0].json.site_audit;
+  console.log('   api off ->', JSON.stringify({ available: cxOff.available, api_enabled: cxOff.api_enabled, reason: cxOff.not_available, fix: cxOff.not_available_fix.slice(0, 80), score: aOff.health_score }));
+  check('G7: with the Chrome UX Report API switched off in the PageSpeed key\'s project the audit reports "not available" with the one step that fixes it, scores as before and never fails',
+    cxOff.available === false && cxOff.api_enabled === false && /not enabled for the Google key/.test(cxOff.not_available) && /Chrome UX Report API/.test(cxOff.not_available_fix)
+    && offF.length === 1 && offF[0].severity === 'Info' && offF[0].scoring === false && aOff.health_score === aWithout.health_score,
+    JSON.stringify({ reason: cxOff.not_available, findings: offF.map(f => [f.severity, f.title, f.scoring]), score: aOff.health_score, base: aWithout.health_score }));
+  check('G7: the audit lists the field data under "not assessed" with the reason, and keeps the lab test as its own separate line (the two sources are never mixed up)',
+    aOff.not_assessed.some(x => /Chrome UX Report, 75th percentile/.test(x) && /not enabled/.test(x)) && aOff.not_assessed.some(x => /lab test \(Google PageSpeed \/ Lighthouse\)/.test(x)),
+    JSON.stringify(aOff.not_assessed));
+
+  // ---------- C. G26: the fix list ordered by likely impact, and the report says why the first item is first ----------
+  // three findings: a noindex that blocks the pages Search Console says earn the traffic, a Critical on one page nobody visits, a cosmetic Low
+  const SC_PAGES = { connected: true, property: 'sc-domain:northwind-erp.com', permission: 'siteOwner',
+    totals: { clicks: 980, impressions: 24000, ctr: 0.04, position: 18.2, period: { start: '2026-09-14', end: '2026-10-11' } },
+    pages_with_impressions: 12, queries_with_impressions: 300, sitemaps: [], coverage: {}, not_indexed: [], canonical_mismatch: [], rich_results: [],
+    top_queries: [], top_pages: [
+      { page: 'https://northwind-erp.com/services/erp-implementation/', clicks: 420, impressions: 9000, position: 7.1 },
+      { page: 'https://northwind-erp.com/services/data-migration/', clicks: 300, impressions: 6400, position: 9.4 },
+      { page: 'https://northwind-erp.com/careers/', clicks: 1, impressions: 40, position: 44 }] };
+  const INJECT = [
+    { category: 'Crawlability & Indexing', severity: 'High', title: 'Key pages are noindex', why: 'Google drops them.', fix: 'Remove the noindex tag.', evidence: '2 of 14 crawled pages', affected_count: 2, affected_pct: 14, scope: 'page', sample_urls: ['https://northwind-erp.com/services/erp-implementation/', 'https://northwind-erp.com/services/data-migration/'] },
+    { category: 'On-Page', severity: 'Critical', title: 'Missing title tag on the careers page', why: 'No title.', fix: 'Write a title.', evidence: '1 of 14 crawled pages', affected_count: 1, affected_pct: 7, scope: 'page', sample_urls: ['https://northwind-erp.com/careers/'] },
+    { category: 'Technical', severity: 'Low', title: 'Missing favicon', why: 'Favicons appear in results.', fix: 'Add a favicon.', evidence: '14 of 14 crawled pages', affected_count: 14, affected_pct: 100, scope: 'site', sample_urls: [] }
+  ];
+  const t3 = await auditToCrux({ search_console: SC_PAGES, extra_findings: [...INJECT] });
+  mock('Fetch CrUX', t3.map(answer));
+  const ac3 = await run('Analyze CrUX', store['Fetch CrUX']);
+  const bsi3 = await run('Build Site Issues', ac3);
+  const a3 = bsi3[0].json.site_audit;
+  const fOf = (re) => a3.findings.find(f => re.test(f.title)) || {};
+  const idxOf = (re) => a3.findings.findIndex(f => re.test(f.title));
+  console.log('   ordered ->', a3.findings.slice(0, 6).map(f => '[' + f.severity + ' ' + f.impact + '] ' + f.title).join(' | '));
+  console.log('   first reason ->', a3.priority_first);
+  check('G26: every finding carries an impact weight and the one line that explains it (pages affected, the clicks and impressions those pages get, severity)',
+    a3.findings.every(f => typeof f.impact === 'number' && f.impact >= 0 && typeof f.impact_basis === 'string' && f.impact_basis.length > 10)
+    && /2 of 14 crawled pages/.test(fOf(/noindex/).impact_basis) && /clicks and 15,400 impressions in the last 28 days/.test(fOf(/noindex/).impact_basis),
+    JSON.stringify(a3.findings.slice(0, 3).map(f => [f.title, f.impact, f.impact_basis])));
+  check('G26: the index blocker on the pages that earn the traffic is first — above a Critical on one page nobody visits (severity alone put it second)',
+    idxOf(/Key pages are noindex/) === 0 && fOf(/Key pages are noindex/).impact_blocker === true
+    && idxOf(/Missing title tag on the careers page/) > 0 && fOf(/Key pages are noindex/).impact > fOf(/Missing title tag on the careers/).impact,
+    JSON.stringify(a3.findings.slice(0, 4).map(f => [f.title, f.severity, f.impact])));
+  check('G26: a cosmetic item can never be at the top, whatever share of pages it touches (the favicon is on all 14), and nothing cosmetic is in the first ten',
+    fOf(/Missing favicon/).impact_cosmetic === true && fOf(/Missing favicon/).impact <= 0.9 && idxOf(/Missing favicon/) >= 10
+    && !a3.findings.slice(0, 10).some(f => f.impact_cosmetic) && a3.findings.slice(0, 3).every(f => f.impact_band >= 2),
+    JSON.stringify({ favicon: [fOf(/Missing favicon/).impact, idxOf(/Missing favicon/)], total: a3.findings.length, top: a3.findings.slice(0, 10).map(f => [f.title, f.impact_band]) }));
+  check('G26: the severity labels are untouched (the order changed, not the grading) and the notes about data that could not be collected stay last',
+    fOf(/Missing title tag on the careers page/).severity === 'Critical' && fOf(/Key pages are noindex/).severity === 'High' && fOf(/Missing favicon/).severity === 'Low'
+    && a3.findings.filter(f => f.severity === 'Info').every((f, i, arr) => idxOf(new RegExp(f.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))) >= a3.findings.length - arr.length),
+    JSON.stringify(a3.findings.map(f => [f.severity, f.impact])));
+  check('G26: the audit explains in one sentence why the first item is first, and states the method it used',
+    /Key pages are noindex/.test(a3.priority_first) && /Google cannot index/.test(a3.priority_first) && /impact score/.test(a3.priority_first)
+    && /severity .* the share of pages it affects .* clicks and impressions/.test(a3.priority_method.replace(/×/g, '.')),
+    JSON.stringify({ first: a3.priority_first, method: a3.priority_method.slice(0, 120) }));
+
+  // both reports: the table per template with its source, and the reason the first fix is first
+  const ah = decode(await run('Build Audit Report', bsi3));
+  save('s48-audit-report-crux-priority.doc.html', ah);
+  scanHtml('audit report (crux + priority)', ah);
+  check('G7: the technical audit report shows the field data per template and device, with its source, its 28-day period and the note that it carries a low weight',
+    /Core Web Vitals per template \(real Chrome users\)/.test(ah) && /Chrome UX Report field data/.test(ah) && /2026-10-11/.test(ah)
+    && /phone/.test(ah) && /desktop/.test(ah) && /whole site \(this page has too little traffic\)/.test(ah) && /low weight in the health score/.test(ah),
+    ah.slice(Math.max(0, ah.indexOf('Core Web Vitals per template')), ah.indexOf('Core Web Vitals per template') + 400));
+  check('G26: the report says the list is ordered by likely impact, names why the first item is first, and keeps the severity badge next to each fix',
+    /Ordered by likely impact/.test(ah) && /Key pages are noindex/.test(ah) && /Why here:/.test(ah) && /How the fix list is ordered/.test(ah),
+    ah.slice(Math.max(0, ah.indexOf('Fix These First')), ah.indexOf('Fix These First') + 500));
+
+  // ---------- C2. G18-2: the minor band folded into one line, in both reports and in the callback ----------
+  const minorA3 = a3.findings.filter(f => f.minor === true);
+  const foldBlock = (html) => (html.match(/<details open class="minorfold">[\s\S]*?<\/details>/g) || []).join('\n');
+  const cardTitles = (html) => html.split('<div class="finding"').slice(1).map(s => (s.match(/class="ftitle">[\s\S]*?<\/div>/) || [''])[0]);
+  const ahFold = foldBlock(ah), ahCards = cardTitles(ah);
+  console.log('   minor band ->', a3.minor_count, 'of', a3.findings.length, ':', minorA3.map(f => '[' + f.severity + ' ' + f.impact + '] ' + f.title).join(' | '));
+  check('G18-2: every finding carries `minor`, and only the lowest-impact Low / Info ones are in the band — the favicon on all 14 pages is, the index blocker and the Critical are not',
+    a3.findings.every(f => typeof f.minor === 'boolean') && minorA3.length === a3.minor_count && a3.minor_count >= 1
+    && minorA3.some(f => /Missing favicon/.test(f.title)) && minorA3.every(f => f.severity === 'Low' || f.severity === 'Info')
+    && !minorA3.some(f => /Key pages are noindex|Missing title tag/.test(f.title)) && /minor item/.test(a3.minor_note),
+    JSON.stringify({ count: a3.minor_count, note: a3.minor_note, minor: minorA3.map(f => [f.severity, f.title, f.impact]) }));
+  check('G18-2: the technical audit report folds them into ONE "Minor items (N)" line with the count and the reason, instead of a section each — the favicon is inside that line and in no finding card',
+    /Minor items \(\d+\)/.test(ahFold) && /Missing favicon/.test(ahFold) && !ahCards.some(c => /Missing favicon/.test(c))
+    && new RegExp('Minor items \\(' + a3.minor_count + '\\)').test(ahFold) && /minor item/.test(ah) && /Nothing is left out of the score/.test(ahFold),
+    JSON.stringify({ fold: ahFold.slice(0, 300), cards: ahCards.length }));
+  check('G18-2: nothing is hidden — the folded items keep their severity, their pages and their fix inside the line, and the Action Plan counts them instead of repeating them',
+    /Missing favicon[\s\S]{0,400}Add a favicon/.test(ahFold) && new RegExp('Plus ' + a3.minor_count + ' minor item').test(ah)
+    && a3.findings.filter(f => f.minor).every(f => f.impact != null && f.impact_basis),
+    JSON.stringify({ action_plan: (ah.match(/Plus \d+ minor item[^<]*/) || [''])[0] }));
+  const fh = decode(await run('Build Full Report', bsi3));
+  const fhFold = foldBlock(fh), fhCards = cardTitles(fh);
+  check('G18-2: the full report folds per area, so each category block shows the findings to act on and one "Minor items (N)" line',
+    /Minor items \(\d+\)/.test(fhFold) && /Missing favicon/.test(fhFold) && !fhCards.some(c => /Missing favicon/.test(c)) && /Key pages are noindex/.test(fh),
+    JSON.stringify({ fold: fhFold.slice(0, 240), cards: fhCards.length }));
+  const ar42 = await run('Build Audit Response', await run('Build Audit Report', bsi3));
+  check('G18-2: the callback carries the count and the note, so the app says the same thing as the report',
+    ar42[0].json.minor_count === a3.minor_count && /minor item/.test(ar42[0].json.minor_note),
+    JSON.stringify({ count: ar42[0].json.minor_count, note: ar42[0].json.minor_note }));
+  // the stored finding rows carry the weight, so the app's lists order the same way
+  mock('Audit Diff', [{ json: { ...bsi3[0].json, site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', audit_id: 'aud_s48', audited_at: '2026-10-12T06:00:00.000Z' } }]);
+  const frows = (await run('Finding Rows', store['Audit Diff'])).map(x => x.json).filter(r => !r.skip);
+  check('G26: every stored seo_audit_findings row carries the impact weight and its basis, with exactly the columns ladder_common.py defines',
+    frows.length > 0 && frows.every(r => eq(Object.keys(r), TC.AUDIT_FINDINGS)) && frows.some(r => /noindex/.test(r.title) && r.impact > 0 && /Google cannot index/.test(r.impact_basis)),
+    JSON.stringify({ cols: Object.keys(frows[0] || {}), expected: TC.AUDIT_FINDINGS, sample: frows[0] }));
+
+  // ---------- D. D25b: the alert is recorded first, then reaches a channel that needs no SMTP ----------
+  const ALERT = { subject: '[SEO Agent] Run failed at "Keyword Data" — SEO Agent v4', html: '<p>Workflow: SEO Agent v4</p>', node: 'Keyword Data',
+    workflow: 'SEO Agent v4', execution_id: '412', execution_url: 'http://localhost:5678/workflow/SEOagentV4Full01/executions/412',
+    message: 'DataForSEO returned 40100 after 30012ms', mode: 'trigger', when: '2026-10-12T07:00:00.000Z' };
+  mock('Format Alert', [{ json: ALERT }]);
+  mock('Load Ops Alerts', [{ json: {} }]);                     // alwaysOutputData: an empty table answers with one empty item
+  const row1 = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  mock('Save Ops Alert', [{ json: { ...row1, id: 1 } }]);
+  const ch1 = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels_Webhook' }))[0].json;
+  console.log('   alert ->', JSON.stringify({ key: row1.alert_key, count: row1.count, delivered: row1.delivered, channels: row1.channels, webhook: ch1.send_webhook, email: ch1.send_email }));
+  check('D25b: the alert is written to seo_ops_alerts before anything is sent, with exactly the columns ladder_common.py defines, so a failure is never lost',
+    eq(Object.keys(row1), TC.OPS_ALERTS) && row1.count === 1 && row1.delivered === 'pending' && row1.severity === 'high'
+    && row1.first_seen_at === row1.last_seen_at && row1.execution_id === '412' && /Keyword Data/.test(row1.alert_key),
+    JSON.stringify({ cols: Object.keys(row1), expected: TC.OPS_ALERTS, row: row1 }));
+  check('D25b: with SEO_ALERT_WEBHOOK_URL set the alert goes to a channel that needs no SMTP at all, and the body fits Slack, Teams and anything else that takes a POST',
+    ch1.send_webhook === true && /^https:\/\//.test(ch1.webhook_url) && /Run failed at/.test(ch1.webhook_body.text) && /Run failed at/.test(ch1.webhook_body.content)
+    && ch1.webhook_body.alert.execution_url === ALERT.execution_url && ch1.webhook_body.alert.severity === 'high' && ch1.webhook_body.alert.seen_count === 1
+    && ch1.channels.includes('webhook') && ch1.channels.includes('data_table'),
+    JSON.stringify({ send: ch1.send_webhook, url: ch1.webhook_url, body: ch1.webhook_body }));
+  check('D25b: the e-mail that failed on 2026-10-10 and 2026-10-12 cannot take the alert down with it — it is a parallel branch, it retries 3x 5 s apart, it reads the alert from Format Alert, and an error no longer fails the run',
+    OW.email.onError === 'continueRegularOutput' && OW.email.retryOnFail === true && OW.email.maxTries === 3 && OW.email.reads_alert_from === true
+    && eq(OW.connections['Alert Channels'][0], ['Send Webhook?', 'Send Email?']) && !(OW.connections['Email Ops'] || []).length
+    && OW.webhook.uses_smtp === false && OW.webhook.retryOnFail === true,
+    JSON.stringify(OW));
+  check('D25b: the row is written before either channel runs (Format Alert -> ensure -> load -> record -> save -> channels), so even both channels failing leaves the failure on record',
+    eq(OW.connections['Format Alert'][0], ['Ensure Ops Alerts Table']) && eq(OW.connections['Alert Record'][0], ['Save Ops Alert'])
+    && eq(OW.connections['Save Ops Alert'][0], ['Alert Channels']) && OW.table === 'seo_ops_alerts' && OW.webhook_setting === 'SEO_ALERT_WEBHOOK_URL',
+    JSON.stringify(OW.connections));
+  // the channel that is not configured is skipped, and nothing fails
+  const chUnset = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels' }))[0].json;   // the generated node: no webhook URL in this worktree's .env
+  check('D25b: an unset channel is simply skipped — the generated node has no webhook URL in this worktree, so no request is built, nothing throws, the other channel still goes out and the row is still written',
+    chUnset.send_webhook === false && chUnset.webhook_url === '' && !chUnset.channels.includes('webhook') && chUnset.channels.includes('data_table')
+    && chUnset.send_email === true && chUnset.recorded === true && chUnset.alert_key === row1.alert_key,
+    JSON.stringify({ send: chUnset.send_webhook, channels: chUnset.channels, note: chUnset.note }));
+  // the same failure again: counted on the row, not re-sent; the same failure after the window: sent again, first_seen_at kept
+  const mins = (n) => new Date(Date.now() - n * 60000).toISOString();
+  mock('Load Ops Alerts', [{ json: { ...row1, count: 1, first_seen_at: mins(90), last_seen_at: mins(4) } }]);
+  const row2 = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  mock('Save Ops Alert', [{ json: row2 }]);
+  const ch2 = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels_Webhook' }))[0].json;
+  mock('Load Ops Alerts', [{ json: { ...row1, count: 4, first_seen_at: mins(600), last_seen_at: mins(45) } }]);
+  const row3 = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  mock('Save Ops Alert', [{ json: row3 }]);
+  const ch3 = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels_Webhook' }))[0].json;
+  check('D25b: the same failure within 30 minutes is counted on its row and not re-sent (one broken credential cannot flood the channels), and after the window it is sent again with the first sighting kept',
+    row2.count === 2 && row2.delivered === 'deduped' && ch2.send_webhook === false && ch2.send_email === false && /repeat within 30 minutes/.test(row2.notes)
+    && row3.count === 5 && row3.delivered === 'pending' && ch3.send_webhook === true && row3.first_seen_at === row3.first_seen_at && new Date(row3.first_seen_at) < new Date(row3.last_seen_at),
+    JSON.stringify({ repeat: [row2.count, row2.delivered, ch2.send_webhook], later: [row3.count, row3.delivered, ch3.send_webhook] }));
+  mock('Format Alert', [{ json: { ...ALERT, message: 'DataForSEO returned 40100 after 31004ms', execution_id: '413' } }]);
+  mock('Load Ops Alerts', [{ json: {} }]);
+  const rowNum = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  mock('Format Alert', [{ json: { ...ALERT, node: 'Read Website' } }]);
+  const rowOther = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record_Webhook' }))[0].json;
+  check('D25b: two timeouts that differ only in their numbers are the same alert (so the dedupe works on real messages), while another node is its own alert',
+    rowNum.alert_key === row1.alert_key && rowOther.alert_key !== row1.alert_key && /Read Website/.test(rowOther.alert_key),
+    JSON.stringify([row1.alert_key, rowNum.alert_key, rowOther.alert_key]));
+  mock('Format Alert', [{ json: ALERT }]);
+
+  // ---------- E. D25c: a test check-in never satisfies the month, and the reminder keeps asking ----------
+  delete store['Start Form'];   // the check-in comes in through the API here, not the form
+  const checkinReq = (o) => ({ headers: {}, body: { mode: 'checkin', domain: 'northwind-erp.com', callback_url: 'https://hooks.example.com/seo', manual_action: 'No', security_issue: 'No', ...o } });
+  const parseCheckin = async (o) => { const n = await run('Normalize Input', checkinReq(o)); mock('Normalize Input', n); return (await run('Parse Check-in', n))[0].json; };
+  const real = await parseCheckin({ notes: 'Pages report exported, 4 pages excluded by noindex' });
+  const flagged = await parseCheckin({ is_test: true, notes: 'checking the form works' });
+  const noted = await parseCheckin({ notes: 'October check-in (test)' });
+  console.log('   check-ins ->', JSON.stringify([[real.checkin_row.is_test, real.checkin_row.month], [flagged.checkin_row.is_test, flagged.checkin_test_reason], [noted.checkin_row.is_test, noted.checkin_test_reason]]));
+  check('D25c: a check-in is marked as a test when the person says so, when a test caller sends it, or when its own note marks it — a real one is never mistaken for a test',
+    real.checkin_row.is_test === false && flagged.checkin_row.is_test === true && noted.checkin_row.is_test === true
+    && /marked as a test/.test(flagged.checkin_test_reason) && /note marks it/.test(noted.checkin_test_reason),
+    JSON.stringify({ real: real.checkin_row.is_test, flagged: flagged.checkin_test_reason, noted: noted.checkin_test_reason }));
+  check('D25c: the row keeps exactly the seo_console_checkins columns (is_test among them) and the answer tells the person a test does not count for the month',
+    eq(Object.keys(real.checkin_row), TC.CHECKIN) && eq(Object.keys(noted.checkin_row), TC.CHECKIN)
+    && noted.summary_lines.some(l => /does not count as the answer for/.test(l) && /keeps asking/.test(l))
+    && real.summary_lines.some(l => /the reminder stops for this month/.test(l)) && noted.checkin_is_test === true,
+    JSON.stringify({ cols: Object.keys(real.checkin_row), expected: TC.CHECKIN, lines: noted.summary_lines.slice(-1) }));
+  const resp = (await run('Build Check-in Response', [{ json: noted }]))[0].json;
+  check('D25c: the API answer says whether the check-in counts for the month, so the app can keep asking too',
+    resp.is_test === true && resp.counts_for_month === false && /note marks it/.test(resp.test_reason), JSON.stringify(resp).slice(0, 220));
+
+  // the Site Tracker's monthly check: a test row never satisfies it (the reminder in the Monday report reads checkin_due)
+  const month = new Date().toISOString().slice(0, 7);
+  const ckRow = (o) => ({ json: { id: 1, site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', month, manual_action: false, security_issue: false, notes: '', coverage_json: '{}', not_indexed_total: 4, csv_kind: 'reasons', submitted_at: month + '-02T09:00:00.000Z', source: 'form', is_test: false, ...o } });
+  const EMPTY48 = [{ json: {} }];
+  const planWith = async (rows) => {
+    mock('Manual Run', {}); mock('Load Sites', T.sitesRows()); mock('Load Ladders', EMPTY48); mock('Load Rank History', EMPTY48);
+    mock('Load Site Metrics', EMPTY48); mock('Load Query History', EMPTY48); mock('Load Content Log', EMPTY48); mock('Load Console Alerts', EMPTY48);
+    mock('Load Check-ins', rows);
+    return (await run('Site Plan', EMPTY48))[0].json;
+  };
+  const pTest = await planWith([ckRow({ is_test: true, notes: 'October check-in (test)' })]);
+  const pReal = await planWith([ckRow({ notes: 'Pages report uploaded' })]);
+  const pNoteOnly = await planWith([ckRow({ notes: 'October check-in (test)' })]);   // the live row: marked only in its note, written before the column existed
+  const pOld = await planWith([ckRow({ is_test: true }), ckRow({ id: 2, month: '2026-09', notes: 'September, real' })]);
+  console.log('   checkin_due ->', JSON.stringify({ test: pTest.checkin_due, real: pReal.checkin_due, note_only: pNoteOnly.checkin_due, test_plus_old_real: pOld.checkin_due }));
+  check('D25c: a test check-in does not satisfy the month — the Monday report keeps asking (checkin_due stays true) and the test row is never reported as the month\'s answer',
+    pTest.checkin_due === true && pTest.last_checkin === null && pNoteOnly.checkin_due === true && pOld.checkin_due === true
+    && pOld.last_checkin && pOld.last_checkin.month === '2026-09',
+    JSON.stringify({ test: [pTest.checkin_due, pTest.last_checkin], note_only: pNoteOnly.checkin_due, old: [pOld.checkin_due, pOld.last_checkin && pOld.last_checkin.month] }));
+  check('D25c: a real check-in still satisfies the month and still reaches the report, so the reminder stops when the owner has answered',
+    pReal.checkin_due === false && pReal.last_checkin && pReal.last_checkin.month === month && pReal.last_checkin.not_indexed_total === 4,
+    JSON.stringify({ due: pReal.checkin_due, last: pReal.last_checkin }));
+  // a test answer of "yes" must not raise a critical alert for a manual action that was never reported
+  const alertGate = /!\$\('Parse Check-in'\)\.first\(\)\.json\.checkin_is_test/.test(OW.checkin_alert_gate);
+  const testYes = await parseCheckin({ is_test: true, manual_action: 'Yes', notes: 'testing the alert path' });
+  const realYes = await parseCheckin({ manual_action: 'Yes', notes: 'Manual action: thin content on 3 pages' });
+  const realAlerts = await run('Alert From Checkin', [{ json: realYes }]);
+  check('D25c: a manual action reported in a TEST check-in raises no critical console alert (the gate reads checkin_is_test), while a real one still becomes one',
+    testYes.checkin_is_test === true && testYes.checkin_row.manual_action === true && realYes.checkin_is_test === false
+    && realAlerts.length === 1 && realAlerts[0].json.kind === 'manual_action' && realAlerts[0].json.severity === 'critical' && alertGate,
+    JSON.stringify({ test: testYes.checkin_is_test, real: realYes.checkin_is_test, gate: OW.checkin_alert_gate.slice(0, 80), alerts: realAlerts.length }));
+});
+
+// ===================================================================================
+// S49 G18 (2026-10-12, system review FIX_PLAN G18) — the labelled accuracy set: real cases with a human label, run through the
+// real node code, scored for precision. `accuracy/findings.json` holds one case per audit decision a customer can check (a
+// site-wide finding, or a finding on one page) for techand.ai and two other public sites captured with free fetches
+// (`accuracy/sites/*.json`, `accuracy/capture.js`); `accuracy/links.json` holds the real referring sites of the 2026-10-12
+// backlink check and of a competitor, labelled spam / genuine. The scorer (`accuracy/score.js`) drives Build Probes / Content
+// Probes / Analyze Probes / Build Site Issues and the real Parse Backlinks node, and must reach 95% precision in both
+// categories. A finding with no case fails this scenario, so a new finding has to be labelled before it ships.
+// Extended 2026-10-13 with the two defects the set itself found (FIX_PLAN §3.9): G18-1 — a search-results page of a host
+// with no topic match is capped as a scraper and is no longer techand.ai's "best link" (best-link precision 50% → 100%),
+// and G18-2 — the minor band is folded into one "Minor items (N)" line, which is measured as the useful precision of the
+// list a customer reads (75% → 95.5%) while precision and recall stay where they were, because nothing is removed.
+// Doc: n8n/seo-agent/ACCURACY_SET.md.
+// ===================================================================================
+await guard('S49', async () => {
+  reset(); const SN = 'S49 G18 — a labelled accuracy set: 95% precision for audit findings and for backlink spam labels, measured over real cases with the real node code';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const ACC = require('./accuracy/score');
+  const r = await ACC.scoreAll(H, (m) => console.log(m));
+  const A = r.audit_findings, L = r.spam_labels;
+  const TARGET = 95;
+  console.log('   audit findings: ' + A.cases + ' cases over ' + ACC.FINDINGS.sites.length + ' sites — precision ' + A.precision + '% (tp ' + A.tp + ' fp ' + A.fp + '), recall ' + A.recall + '% (fn ' + A.fn + '), ' + A.tn + ' false positives correctly suppressed, ' + (A.cosmetic_emitted + A.cosmetic_suppressed) + ' cosmetic (' + A.cosmetic_emitted + ' shown), useful precision ' + A.useful_precision + '%');
+  console.log('   G18-2 the fold: ' + A.folded + ' of the labelled findings shown are folded into the reports\' "Minor items" line (' + A.folded_cosmetic + ' of them cosmetic) — useful precision of the list a customer reads: ' + A.main_useful_precision + '% (was ' + A.useful_precision + '% unfolded)');
+  for (const [site, v] of Object.entries(A.per_site)) console.log('     ' + site + ': health ' + v.health + ', ' + v.emitted + ' findings shown, precision ' + v.precision + '% (tp ' + v.tp + ' fp ' + v.fp + ' cosmetic ' + v.cosmetic_emitted + '), ' + v.tn + ' suppressed, minor items ' + v.minor_count + ' (' + v.folded_keys.length + ' of the keys shown folded), useful precision ' + v.useful_precision + '% -> ' + v.main_useful_precision + '% folded');
+  console.log('   spam labels: ' + L.cases + ' cases — precision ' + L.precision + '% (tp ' + L.tp + ' fp ' + L.fp + '), recall ' + L.recall + '% (fn ' + L.fn + '), ' + L.tn + ' genuine links left alone');
+  check('audit findings: precision >= 95% over the labelled set (every finding the audit shows for a labelled site is true)', A.precision !== null && A.precision >= TARGET, JSON.stringify({ precision: A.precision, tp: A.tp, fp: A.fp, wrong: A.wrong }));
+  check('audit findings: every finding shown is labelled (a new or renamed finding must be judged before it ships)', A.unlabelled.length === 0, JSON.stringify(A.unlabelled));
+  check('audit findings: nothing a human called true is missing (recall over the set)', A.fn === 0 && A.recall === 100, JSON.stringify({ recall: A.recall, missed: A.wrong }));
+  check('audit findings: the set is big enough to mean something (40+ cases over 3 sites, both verdicts represented)', A.cases >= 40 && A.tp >= 25 && (A.fp + A.tn) >= 10 && Object.keys(A.per_site).length === 3, JSON.stringify({ cases: A.cases, tp: A.tp, labelled_fp: A.fp + A.tn, sites: Object.keys(A.per_site) }));
+  check('spam labels: precision >= 95% (nothing genuine is called a link farm)', L.precision !== null && L.precision >= TARGET, JSON.stringify({ precision: L.precision, tp: L.tp, fp: L.fp, wrong: L.wrong }));
+  check('spam labels: every link farm is caught (recall over the set) and every case has a ledger row', L.fn === 0 && L.unlabelled.length === 0, JSON.stringify({ recall: L.recall, wrong: L.wrong, missing: L.unlabelled }));
+  check('spam labels: 30+ cases, 16 of them the real link-farm cluster, 18 genuine links from two targets', L.cases >= 30 && L.tp === 16 && L.tn === 18, JSON.stringify({ cases: L.cases, tp: L.tp, tn: L.tn }));
+  // the regressions the set exists to catch, named one by one
+  const tech = A.per_site['techand.ai'], pep = A.per_site['peppol.org'], azd = A.per_site['azdan.com'];
+  const shows = (site, re) => (A.per_site[site].findings || []).some(k => re.test(k));
+  check('D6 stays fixed: no "www and non-www" finding on any of the three sites (one 308 to www, one 301 to the apex, one 301 to www)', !['techand.ai', 'peppol.org', 'azdan.com'].some(s => shows(s, /www and non-www/)), JSON.stringify([tech.findings, pep.findings, azd.findings].map(f => f.filter(k => /www/.test(k)))));
+  check('D18 stays fixed: the three theme-color tags are not duplicates (techand.ai), while peppol.org\'s two real <meta generator> tags are still named', !shows('techand.ai', /Duplicate meta tags/) && tech.what_works.some(w => /No duplicate meta tags on the homepage/.test(w)) && shows('peppol.org', /Duplicate meta tags/), JSON.stringify({ techand: tech.findings.filter(k => /meta/i.test(k)), peppol: pep.findings.filter(k => /meta/i.test(k)) }));
+  check('the real problems are still reported: placeholder text and the doubled brand on techand.ai, a blocked crawler and missing H1s on peppol.org', shows('techand.ai', /Placeholder \(lorem ipsum\)/) && shows('techand.ai', /Brand name repeated in the title/) && shows('peppol.org', /crawlers are blocked/) && shows('peppol.org', /Missing H1 heading/), JSON.stringify([tech.findings, pep.findings]));
+  check('a site that is technically clean is not padded with findings: azdan.com keeps 7 (1 true, 6 cosmetic) and 8 "what works"', azd.emitted === 7 && azd.tp === 1 && azd.cosmetic_emitted === 6 && azd.what_works.length === 8, JSON.stringify({ findings: azd.findings, works: azd.what_works.length }));
+  check('D3 stays fixed: all 16 farm domains are "spam", none of them is among techand.ai\'s best links, and the one genuine editorial link is', L.farms.filter(f => /^techand\.ai/.test(f)).length === 16 && L.best_seo.includes('peppol.org') && !L.best_seo.some(d => /all\/2835|sahammurah|betulcrime|thedocmag|onvaxs|quotesblom|betwinnermirror|clifflisting|bestnz|cvillico|dupurgeniefr|kernelpanic|fashionclothing|uncledspizza|homesforsale|seonix|^us\.com$/.test(d)), JSON.stringify({ farms: L.farms.length, best: L.best_seo }));
+  // G18-1 (fixed 2026-10-12): the search-results page of an unrelated host is capped as a scraper, so the one genuine editorial link is
+  // the site's best link. Printed every run: this is the number the defect was found by.
+  console.log('   best links: precision ' + L.best_link_precision + '% (' + L.best_seo.join(', ') + ')' + (L.best_link_wrong.length ? ' | KNOWN GAP G18-1: worthless link(s) ranked best: ' + L.best_link_wrong.join(', ') : ''));
+  const robuta = L.rows['techand.ai'] && L.rows['techand.ai']['robuta.com'];
+  const peppol = L.rows['techand.ai'] && L.rows['techand.ai']['peppol.org'];
+  console.log('   G18-1: robuta.com/?q=... -> link_type "' + robuta.link_type + '", seo ' + robuta.seo_value + ', brand ' + robuta.brand_value + ' | peppol.org -> seo ' + peppol.seo_value);
+  check('G18-1: a search-results page on a host with no topic match is capped as a scraper (SEO value <= 5, brand 0) with the reason on the row, and the genuine OpenPeppol members list is the top best link',
+    robuta.link_type === 'scraper' && robuta.seo_value <= 5 && robuta.brand_value === 0 && /search-results page/.test(robuta.note)
+    && L.best_seo[0] === 'peppol.org' && peppol.seo_value >= 35 && !L.best_seo.includes('robuta.com'),
+    JSON.stringify({ robuta: [robuta.link_type, robuta.seo_value, robuta.brand_value, robuta.note], best: L.best_seo }));
+  check('G18-1: the capped search page is NOT treated as a link farm — it stays out of the spam labels, the disavow candidates and the lost list, exactly as the human label says',
+    robuta.link_type !== 'spam' && !(L.farms || []).some(f => /robuta/.test(f)) && !(L.disavow || []).includes('robuta.com') && L.precision >= TARGET,
+    JSON.stringify({ farms: L.farms, disavow: L.disavow }));
+  check('G18-1: best-link precision is 100% — every link the report calls one of the site\'s best is genuine and worth something',
+    L.best_link_precision === 100 && L.best_link_wrong.length === 0 && L.best_seo.length >= 1,
+    JSON.stringify({ precision: L.best_link_precision, wrong: L.best_link_wrong, best: L.best_seo }));
+  // G18-2: the fold, measured — nothing is removed (precision and recall are untouched), and the list a customer reads gets better
+  check('G18-2: the minor band is folded into one "Minor items (N)" line on every site, and every folded finding is still in the audit (precision and recall unchanged, recall 100%)',
+    A.folded >= 8 && A.folded_cosmetic >= 8 && A.recall === 100 && A.precision >= TARGET
+    && Object.values(A.per_site).every(v => v.minor_count >= 1 && v.folded_keys.length >= 1 && v.emitted === v.findings.length),
+    JSON.stringify(Object.entries(A.per_site).map(([s, v]) => [s, v.minor_count, v.folded_keys.length, v.emitted])));
+  check('G18-2: useful precision of the list a customer reads is above 95% and better than the unfolded list (the reason the fold exists)',
+    A.main_useful_precision !== null && A.main_useful_precision >= 95 && A.main_useful_precision > A.useful_precision,
+    JSON.stringify({ main: A.main_useful_precision, all: A.useful_precision, folded: A.folded, cosmetic_shown: A.cosmetic_emitted }));
+  check('the competitor\'s own referring sites are untouched: no farm label among the 14 (a 24-28 index spam score, a listicle host and a .club are all left genuine)', !L.farms.some(f => /^cleartax\.com/.test(f)), JSON.stringify(L.farms));
+  save('accuracy-scores.json', { audit_findings: { cases: A.cases, precision: A.precision, useful_precision: A.useful_precision, main_useful_precision: A.main_useful_precision, recall: A.recall, tp: A.tp, fp: A.fp, fn: A.fn, suppressed: A.tn, cosmetic: A.cosmetic_emitted + A.cosmetic_suppressed, folded: A.folded, folded_cosmetic: A.folded_cosmetic, per_site: Object.fromEntries(Object.entries(A.per_site).map(([k, v]) => [k, { emitted: v.emitted, tp: v.tp, fp: v.fp, cosmetic: v.cosmetic_emitted, suppressed: v.tn, precision: v.precision, minor_count: v.minor_count, folded_keys: v.folded_keys.length, main_useful_precision: v.main_useful_precision }])) }, spam_labels: { cases: L.cases, precision: L.precision, recall: L.recall, tp: L.tp, fp: L.fp, fn: L.fn, genuine: L.tn, best_link_precision: L.best_link_precision, best_links: L.best_seo, best_link_wrong: L.best_link_wrong }, measured_at: r.generated_at });
+});
+
+
+// ===================================================================================
+// S51 P34-1..P34-6 (2026-10-12, docs/system-review-2026-10-11/LIVE_CHECK_phase34_2026-10-12.md §3): the six defects the Phase 3 + 4
+// live check found in features whose harness scenarios were green. Each check here fails against the code of that run:
+//   P34-1 AI Growth reported "8 outreach draft(s) written" and printed the stored pitch to tax.gov.ae of 2026-10-02 — written before
+//         the D12 / D13 gates — because the count and the draft came off the prospect row, not from this run's writer.
+//   P34-2 the brand "Tech&" collapsed to the token "tech", so SaaSHub ("Tech Alternatives", 0x "techand"), AlternativeTo (a 403 bot
+//         wall) and the UAE Ministry of Finance accredited-provider list were all reported "listed".
+//   P34-3 `min_facts: 2` was met by Country + the services read off the site, so with an empty business profile the report still said
+//         "nothing that contradicts your business facts" about a "Dubai-based" description nothing on file could judge.
+//   P34-4 the full SEO report's link gap recommended pitching mof.gov.ae, backlinkcheckers.space and buyhighda.space.
+//   P34-5 two 200-page audits of one site were killed by the task runner and their ledger rows held $0.77 of the budget for ever.
+//   P34-6 the AI Visibility Tracker and the Backlink Monitor called the business "techand.ai": the name came from seo_profiles only.
+// ===================================================================================
+await guard('phase 3+4 live defects', async () => {
+  reset(); const SN = 'S51 P34-1..P34-6 — only this run\'s outreach drafts are counted and offered, a whole brand token (and a readable page) before a listing is claimed, a fact check that needs facts on file, the full report\'s link gap gated like the Link Builder\'s, a released reservation and one heavy crawl per site, the business name from the site model';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 600))); };
+  const M = require('./fixtures_monitors'); const LB = require('./fixtures_lb413'); const TC = require('./table_cols.json');
+  const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+  const J = (x) => { try { return JSON.parse(x || ''); } catch (e) { return null; } };
+  const ago = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  const hoursAgo = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+  const NOW = new Date().toISOString(), TODAY = NOW.slice(0, 10);
+
+  // ---------- P34-1: only the drafts this run wrote are counted, and a pre-gate draft is withdrawn ----------
+  const D = M.DOMAIN, SITE = M.SITE, WWW = 'https://www.' + D;
+  const earnedPage = (title, body) => ({ json: { statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html><head><title>' + title + '</title></head><body>' + body + '</body></html>' } });
+  const LIST = { url: 'https://gulfnews.com/business/best-e-invoicing-providers-uae-2026-1.501', host: 'gulfnews.com', kind: 'list', citations: 3, engines: ['chatgpt', 'gemini', 'ai_mode'], questions: ['Which companies help UAE businesses with e-invoicing?'], title: 'Best e-invoicing providers in the UAE for 2026' };
+  const GOV = { url: 'https://tax.gov.ae/en/content/uae.einvoicing.aspx', host: 'tax.gov.ae', kind: 'article', citations: 2, engines: ['chatgpt', 'ai_mode'], questions: ['Who are the accredited e-invoicing providers in the UAE?'], title: 'UAE e-invoicing' };
+  // the two rows the live run carried: drafts written on 2026-10-02, before the gates, with no `drafted_at` at all
+  const PRE_SUBJECT = 'A resource suggestion for your readers', PRE_BODY = 'Offering practical input on UAE e-invoicing. I work at techand.ai. Your site appears in AI assistant answers (ChatGPT, Perplexity …)';
+  const preRow = (host) => ({ json: { site_id: SITE, domain: D, prospect_domain: host, type: 'ai_source', status: 'new', first_seen: ago(10), last_seen: ago(10), detail: 'AI cites this list 2x', source_url: host === GOV.host ? GOV.url : LIST.url, outreach_subject: PRE_SUBJECT, outreach_body: PRE_BODY, note: 'official source: ask to be listed', origin: 'ai_growth', score: 40, drafted_at: '' } });
+  const growthPlan = (o = {}) => [{ json: { site_id: SITE, domain: D, site_host: 'www.' + D, business_name: 'Tech&', email: '', callback_url: '', request_id: '', on_demand: false, run_id: 'grow_x', checked_at: NOW,
+    country: 'United Arab Emirates', ai_pages_month: 2, link_builder: o.link_builder !== false, brand_names: [D, 'Tech&'], competitors: ['cleartax.com', 'azentio.com'], services: ['e-invoicing integration', 'ERP implementation'],
+    accreditation: '', profile: { business_type: 'ERP and e-invoicing consultancy', city: 'Dubai' }, earned: o.earned || [LIST, GOV], earned_fetch: (o.earned || [LIST, GOV]).map(e => e.url),
+    key_pages: [], stored_pages: [], targets: [], previous: null, previous_entity: null, indexnow_key: 'a'.repeat(32), indexnow_new: false, indexnow_verified_at: '' } }];
+  const growthPass = async (o = {}) => {
+    for (const n of ['AI Readiness', 'Bing Submit Requests', 'Submit to Bing', 'Bing Growth Requests', 'IndexNow Key Requests', 'Fetch IndexNow Key', 'IndexNow Requests', 'Submit IndexNow', 'Entity Requests', 'Fetch Wikidata', 'AI Outreach Writer']) delete store[n];
+    const plan = growthPlan(o);
+    mock('Growth Plan', plan);
+    mock('Load Link Prospects (Growth)', o.prospects || [preRow(LIST.host), preRow(GOV.host)]);
+    const er = await run('Earned Requests', plan);
+    mock('Fetch Cited Pages', er.map(r => /tax\.gov/.test(r.json.url)
+      ? earnedPage('UAE e-invoicing', '<p>The Federal Tax Authority publishes the list of accredited service providers.</p>')
+      : earnedPage('Best e-invoicing providers in the UAE for 2026', '<p>1. ClearTax 2. Zoho Books. <a href="mailto:editor@gulfnews.com">Write to the editor</a></p>')));
+    const em = (await run('Earned Media', store['Fetch Cited Pages']))[0].json;
+    const oi = (await run('AI Outreach Input', store['Earned Media']))[0].json;
+    if (o.writer) mock('AI Outreach Writer', [{ json: { output: { drafts: (em.outreach_jobs || []).map(j => ({ n: j.n, subject: 'A note on "' + String(j.title || j.prospect_domain).slice(0, 40) + '"', body: 'Hello, I read your page this morning. Our guide on the same subject is here: ' + WWW + '/e-invoicing-uae/. Sara Khan, Tech&' })) } } }]);
+    const gm = (await run('Growth Metrics', o.writer ? store['AI Outreach Writer'] : store['Earned Media']))[0].json;
+    mock('Growth Metrics', [{ json: gm }]);
+    const rep = (await run('Growth Report', [{ json: { id: 1, site_id: SITE } }]))[0].json;
+    const rows = (await run('Growth Prospect Rows', [{ json: gm }])).map(r => r.json);
+    return { em, oi, gm, rep, rows, row: (h) => em.prospect_rows.find(r => r.prospect_domain === h) || {}, out: (h) => rows.find(r => r.prospect_domain === h) || {} };
+  };
+  const ON = await growthPass();
+  console.log('   P34-1 hand-over ->', JSON.stringify({ drafts_written: ON.gm.drafts_written, handed_over: ON.gm.handed_over, bodies: ON.em.prospect_rows.map(r => [r.prospect_domain, r.outreach_body.length, r.drafted_at]) }));
+  check('P34-1: a stored draft from before the gates is withdrawn — the row carries no subject, no body and no date, and its note says the pitch was withdrawn (live: a tax.gov.ae pitch signed "techand.ai", written 2026-10-02)',
+    ON.row(GOV.host).outreach_body === '' && ON.row(GOV.host).outreach_subject === '' && ON.row(GOV.host).drafted_at === '' && /Link Builder writes to them/.test(ON.row(GOV.host).note),
+    JSON.stringify([ON.row(GOV.host).outreach_body, ON.row(GOV.host).note]));
+  check('P34-1: with the Link Builder on nothing is drafted here, so the report counts 0 drafts and says the prospects were handed over — never "8 outreach draft(s) written"',
+    ON.gm.drafts_written === 0 && ON.gm.handed_over === 2 && ON.oi.skip === true && !/outreach draft\(s\) written/.test(ON.rep.html) && /handed to the Link Builder/.test(ON.rep.html),
+    JSON.stringify({ drafts: ON.gm.drafts_written, handed: ON.gm.handed_over, done: ON.rep.html.slice(ON.rep.html.indexOf('Done for you'), ON.rep.html.indexOf('Done for you') + 600) }));
+  check('P34-1: the withdrawn pitch is in nothing the owner sees — not in the earned list, not in the actions, not in the report, not in the stored row',
+    !ON.em.earned.some(e => e.draft) && !ON.gm.earned.some(e => e.draft) && !ON.gm.actions.some(a => a.draft) && !ON.rep.html.includes(PRE_SUBJECT) && !ON.rep.html.includes('I work at techand.ai') && !ON.rows.some(r => r.outreach_body),
+    JSON.stringify(ON.gm.earned.map(e => [e.host, !!e.draft])));
+  check('P34-1: the stored rows keep the seo_link_prospects columns exactly, with drafted_at', ON.rows.length >= 2 && ON.rows.every(r => same2(Object.keys(r), TC.PROSPECT)), JSON.stringify(Object.keys(ON.rows[0] || {})));
+  const OFF = await growthPass({ link_builder: false, writer: true });
+  console.log('   P34-1 own writer ->', JSON.stringify({ jobs: OFF.em.outreach_jobs.map(j => j.prospect_domain), drafts_written: OFF.gm.drafts_written }));
+  check('P34-1: with the Link Builder off this run\'s own drafts are counted, stamped with the date they were written, and they are the ones the report prints',
+    OFF.gm.drafts_written >= 1 && OFF.gm.earned.filter(e => e.draft).length === OFF.gm.drafts_written && OFF.out(LIST.host).drafted_at.slice(0, 10) === TODAY
+    && /1 outreach draft\(s\) written|outreach draft\(s\) written/.test(OFF.rep.html) && OFF.rep.html.includes('Sara Khan, Tech&') && !OFF.rep.html.includes(PRE_BODY),
+    JSON.stringify([OFF.gm.drafts_written, OFF.out(LIST.host).drafted_at, OFF.gm.earned.map(e => [e.host, !!e.draft])]));
+  check('P34-1: the government page is never drafted to, with or without the Link Builder (D12 stays fixed), and a withdrawn row is not re-drafted behind the gate',
+    !OFF.em.outreach_jobs.some(j => /\.gov(\.|$)/.test(j.prospect_domain)) && /government site/.test(OFF.row(GOV.host).note) && OFF.row(GOV.host).outreach_body === '',
+    JSON.stringify([OFF.em.outreach_jobs.map(j => j.prospect_domain), OFF.row(GOV.host).note]));
+  const KEPT = await growthPass({ link_builder: false, prospects: [{ json: { ...preRow(LIST.host).json, outreach_subject: 'A note on your list', outreach_body: 'Hello, I read your list this morning. Sara Khan, Tech&', drafted_at: NOW } }, { json: { ...preRow(GOV.host).json, status: 'contacted', contacted_at: ago(9) } }] });
+  check('P34-1: a draft written under the current rules is kept as it is, and a draft that was already sent (the prospect is contacted) is never withdrawn — it is the record the follow-ups build on',
+    KEPT.row(LIST.host).outreach_body === 'Hello, I read your list this morning. Sara Khan, Tech&' && KEPT.row(LIST.host).drafted_at === NOW
+    && KEPT.row(GOV.host).outreach_body === PRE_BODY && KEPT.row(GOV.host).status === 'contacted',
+    JSON.stringify([KEPT.row(LIST.host).drafted_at, KEPT.row(GOV.host).status, KEPT.row(GOV.host).outreach_body.slice(0, 40)]));
+  // the Backlink Monitor carries the same rows (live run 476 re-wrote two government portals with their old subject)
+  reset();
+  const blSite = (o = {}) => [{ json: { site_id: SITE, domain: D, checked_at: NOW, link_builder: false, candidates: [{ prospect_domain: 'gulfnews.com', type: 'mention', origin: 'web', rank: 300, spam_score: 0, score: 55, detail: 'Mentions you without a link', source_url: LIST.url, target_url: WWW + '/' }], ledger_rows: [], refdomains: [], ...o } }];
+  mock('Parse Backlinks', blSite());
+  mock('Load Link Prospects', [{ json: { site_id: SITE, domain: D, prospect_domain: 'gulfnews.com', type: 'mention', status: 'new', outreach_subject: PRE_SUBJECT, outreach_body: PRE_BODY, note: '', first_seen: ago(10), last_seen: ago(10), drafted_at: '' } },
+    { json: { site_id: SITE, domain: D, prospect_domain: 'mof.gov.ae', type: 'gap', status: 'new', outreach_subject: PRE_SUBJECT, outreach_body: PRE_BODY, note: '', first_seen: ago(10), last_seen: ago(10), drafted_at: '' } }]);
+  mock('Outreach Input', [{ json: { skip: true } }]); mock('Outreach Writer', [{ json: {} }]);
+  const blRows = (await run('Prospect Rows', store['Parse Backlinks'])).map(r => r.json);
+  const blRow = (h) => blRows.find(r => r.prospect_domain === h) || {};
+  check('P34-1: the Backlink Monitor withdraws the same pre-gate drafts instead of re-writing the row with their old subject (live run 476 refreshed two government pitches), and the rows keep the exact columns',
+    blRows.length === 2 && blRow('gulfnews.com').outreach_body === '' && blRow('mof.gov.ae').outreach_body === '' && blRow('mof.gov.ae').outreach_subject === ''
+    && /written before the current outreach rules/.test(blRow('mof.gov.ae').note) && blRows.every(r => same2(Object.keys(r), TC.PROSPECT)),
+    JSON.stringify(blRows.map(r => [r.prospect_domain, r.outreach_subject, r.note.slice(0, 50)])));
+
+  // ---------- P34-2: a whole brand token, and a page somebody could read, before a listing is claimed ----------
+  reset();
+  const lbLoads = (o = {}) => { mock('Load Sites', LB.sites()); mock('Load Ladders', LB.ladders()); mock('Load Monitors', LB.monitors()); mock('Load Profiles', o.profiles || [{ json: { ...LB.profiles()[0].json, business_name: 'Tech&' } }]);
+    mock('Load Link Prospects', LB.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', LB.outreachPrev().map(j => ({ json: j }))); mock('Load Listings', o.listings || [{ json: {} }]); mock('Load Link Impact', [{ json: {} }]);
+    mock('Load Backlinks', LB.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', LB.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]); mock('Load AI Targets', LB.targets().map(j => ({ json: j })));
+    mock('Load Query History', LB.queries().map(j => ({ json: j }))); mock('Load Rank History', LB.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', LB.cache().map(j => ({ json: j }))); delete store['Manual Run']; };
+  // the three pages of the live run: a profile and a list full of the word "tech" and no "techand", and a bot wall
+  const SAASHUB = '<html><head><title>Tech Alternatives - SaaSHub</title></head><body><h1>Tech</h1>' + '<p>Tech is a software tool. Tech alternatives and competitors: compare Tech with other tech products. </p>'.repeat(10) + '</body></html>';
+  const WALL = '<html><head><title>Just a moment...</title></head><body>Enable JavaScript and cookies to continue</body></html>';
+  const mofPage = (named) => '<html><head><title>eInvoicing Accredited Service Providers (ASPs) | Ministry of Finance</title></head><body><h1>Accredited service providers</h1>'
+    + '<p>The following providers are accredited: ClearTax, Azentio, Cygnet' + (named ? ', Tech&amp; Information Technology LLC' : '') + '. Each provider has passed the technical onboarding.</p>'
+    + '<p>More tech information for taxpayers using any tech provider.</p></body></html>';
+  const lbPass = async (o = {}) => {
+    lbLoads(o);
+    const P = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+    const SR = (await run('LB Source Requests', [{ json: P }])).map(r => r.json);
+    mock('Fetch LB Sources', SR.map(r => r.kind === 'press' ? LB.bsky([]) : r.kind === 'wayback' ? LB.cdx()
+      : r.kind === 'listing_search' ? LB.searx(r.listing_id === 'alternativeto' ? ['https://alternativeto.net/software/optimizer/'] : []) : LB.searx([])));
+    const DR = (await run('LB DFS Requests', [{ json: P }])).map(r => r.json);
+    mock('Run LB DFS', DR.map(() => LB.dfsBroken()));
+    const PR = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
+    const pageFor = (r) => {
+      if (r.listing_id === 'saashub') return { statusCode: 200, headers: {}, data: SAASHUB };
+      if (r.listing_id === 'alternativeto') return { statusCode: 403, headers: {}, data: WALL };
+      if (r.listing_id === 'mof_asp') return { statusCode: 200, headers: {}, data: mofPage(!!o.named) };
+      if (r.listing_id === 'openpeppol') return { statusCode: 200, headers: {}, data: '<html><head><title>Peppol certified service providers</title></head><body><ul><li><a href="https://www.techand.ai/">Tech&amp;</a></li><li>ClearTax</li></ul></body></html>' };
+      return LB.fetchPage(r.url);
+    };
+    mock('Fetch LB Pages', PR.map(pageFor));
+    const S2 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json);
+    mock('Fetch LB Second', S2.map(r => LB.fetchPage(r.url)));
+    const AS = (await run('LB Assemble', [{ json: {} }]))[0].json;
+    return { P, PR, AS, L: (id) => AS.listing_rows.find(l => l.listing_id === id) || {} };
+  };
+  const T1 = await lbPass();
+  console.log('   P34-2 listings ->', JSON.stringify(T1.AS.listing_rows.map(l => [l.listing_id, l.status, l.why.slice(0, 70)])));
+  check('P34-2: the guessed SaaSHub profile (the slug of "Tech&" is "tech") answers with a page full of the word "tech" and no link to us — it is NOT "listed", and the line says the page may belong to another product',
+    T1.PR.some(r => r.listing_id === 'saashub' && /saashub\.com\/tech$/.test(r.url)) && T1.L('saashub').status !== 'listed' && T1.L('saashub').status === 'unknown' && /does not name you/.test(T1.L('saashub').why),
+    JSON.stringify([T1.PR.filter(r => r.listing_id === 'saashub').map(r => r.url), T1.L('saashub')]));
+  check('P34-2: the UAE Ministry of Finance list is "missing" again — the real page has "tech" 11 times and "techand" never (the live run reported the owner accredited)',
+    T1.L('mof_asp').status === 'missing' && /the list does not name you/.test(T1.L('mof_asp').why),
+    JSON.stringify(T1.L('mof_asp')));
+  check('P34-2: a 403 bot wall stays "unknown" with the URL to open by hand — never "listed", never "missing" (AlternativeTo answered "Just a moment…")',
+    T1.L('alternativeto').status === 'unknown' && /blocks checks \(HTTP 403\)/.test(T1.L('alternativeto').why) && /open it to confirm/.test(T1.L('alternativeto').why) && /not counted as a listing/.test(T1.L('alternativeto').why)
+    && T1.L('alternativeto').profile_url === 'https://alternativeto.net/software/optimizer/',
+    JSON.stringify(T1.L('alternativeto')));
+  check('P34-2: a genuine listing still passes — the OpenPeppol members list links our canonical host, so it is "linked"',
+    T1.L('openpeppol').status === 'linked' && /links to you/.test(T1.L('openpeppol').why), JSON.stringify(T1.L('openpeppol')));
+  const T2 = await lbPass({ named: true });
+  check('P34-2: a list that really names the business passes on the name alone — "Tech& Information Technology LLC" with its ampersand is matched, and the line quotes the name it found',
+    T2.L('mof_asp').status === 'listed' && /names you \("Tech&"\)/.test(T2.L('mof_asp').why), JSON.stringify(T2.L('mof_asp')));
+  const T3 = await lbPass({ listings: [{ json: { site_id: LB.SITE, domain: LB.DOMAIN, listing_id: 'alternativeto', name: 'AlternativeTo', category: 'directory', status: 'missing', profile_url: '', rel: 'unknown', competitors: '', submit_url: '', priority: 3, why: 'no profile found', checked_at: LB.iso(20), submitted_at: '', note: '' } }] });
+  check('P34-2: a platform that blocked this week\'s check keeps its last definite answer with the date, and says the platform blocks checks now (D13 stays fixed)',
+    T3.L('alternativeto').status === 'missing' && /missing \(checked \d{4}-\d{2}-\d{2}\) · the platform blocks checks now/.test(T3.L('alternativeto').why), JSON.stringify(T3.L('alternativeto')));
+  check('P34-2: the brand is still written "Tech&" everywhere the Link Builder uses it (the name is not the problem, the matching was)', T1.P.brand === 'Tech&' && T1.AS.outreach_rows.length > 0, JSON.stringify([T1.P.brand, T1.AS.outreach_rows.length]));
+
+  // ---------- P34-3: the wrong-claim check needs facts the owner put on file ----------
+  reset();
+  const analystPlan = (o = {}) => [{ json: { site_id: SITE, domain: D, business_name: 'Tech&', business_type: o.business_type || '', country: 'United Arab Emirates', competitors: ['cleartax.com'],
+    services: o.services === undefined ? ['e-invoicing integration', 'ERP implementation', 'Business Central support'] : o.services, topics: ['e invoicing in uae'], accreditation: o.accreditation || '',
+    business_facts: o.business_facts || '', brand_names: [D, 'Tech&'], profile: o.profile || {} } }];
+  const answerRows = [{ json: { site_id: SITE, domain: D, prompt_id: 'p_0', prompt: 'Who is Tech&?', kind: 'brand', engine: 'chatgpt', answered: true, mentioned: true, _text: 'Tech& is a Dubai-based Microsoft partner that implements ERP systems.' } },
+    { json: { site_id: SITE, domain: D, prompt_id: 'p_1', prompt: 'Which companies help UAE businesses with e-invoicing?', kind: 'recommend', engine: 'gemini', answered: true, mentioned: false, _text: 'ClearTax, Zoho Books and Cygnet are the main providers.' } }];
+  const analyst = async (o = {}) => { mock('AI Plan', analystPlan(o)); mock('Parse AI Answers', answerRows); return (await run('Analyst Jobs', store['Parse AI Answers'])).map(r => r.json).filter(j => !j.skip); };
+  const A1 = await analyst();
+  console.log('   P34-3 facts ->', JSON.stringify(A1.map(j => [j.fact_check, j.owner_facts, j.located, j.facts.replace(/\n/g, ' | ').slice(0, 120)])));
+  check('P34-3: with an empty business profile the country and the services read off the website are not facts to judge a claim against — the check is off, so the report says "not checked" instead of "no claim was wrong"',
+    A1.length >= 1 && A1[0].facts_ok === false && A1[0].fact_check === 'off' && A1[0].located === false && /Country: United Arab Emirates/.test(A1[0].facts) && /Services on the site/.test(A1[0].facts),
+    JSON.stringify([A1[0].fact_check, A1[0].owner_facts, A1[0].located]));
+  const A2 = await analyst({ profile: { city: 'Dubai', phone: '+971 4 555 0100', street_address: 'Office 1204, Bay Square' }, business_type: 'ERP and e-invoicing consultancy' });
+  check('P34-3: with the business profile filled in (a city, an address, a phone number) the check is on and every answer is read against the sheet',
+    A2.length >= 1 && A2[0].facts_ok === true && A2[0].fact_check === 'on' && A2[0].located === true && /City: Dubai/.test(A2[0].facts) && /Phone: \+971/.test(A2[0].facts),
+    JSON.stringify([A2[0].fact_check, A2[0].owner_facts]));
+  const A3 = await analyst({ profile: { city: 'Dubai' }, business_facts: 'Go-live in 12 weeks; licences from AED 50,000 a year.' });
+  check('P34-3: the facts the owner sends with a run count as well (a city plus the business facts switch the check on)',
+    A3.length >= 1 && A3[0].facts_ok === true && /Other facts: Go-live in 12 weeks/.test(A3[0].facts), JSON.stringify([A3[0].fact_check, A3[0].owner_facts]));
+  const A4 = await analyst({ profile: { price_range: 'AED 20,000 - 120,000' }, services: [] });
+  check('P34-3: facts that cannot locate the business are not enough on their own — a price range with no city, address or phone still reports "not checked"',
+    A4.length >= 1 && A4[0].facts_ok === false && A4[0].located === false, JSON.stringify([A4[0].fact_check, A4[0].owner_facts, A4[0].located]));
+  // P34-6 rides on the same sheet: the live fact sheet had no "Business name" line at all
+  check('P34-6: the fact sheet names the business as the site model has it ("Tech&"), so the analyst can tell our business from another with a similar name',
+    A2[0].business === 'Tech&' && /Business name: Tech&/.test(A2[0].facts), A2[0].facts.split('\n')[0]);
+
+  // ---------- P34-4: the full report's link gap is gated like the Link Builder's prospects ----------
+  reset();
+  const gapTask = (items) => ({ tasks: [{ id: 'x', status_code: 20000, result: [{ items }] }] });
+  const gapItem = (target, o = {}) => ({ domain_intersection: { 1: { target, rank: o.rank ?? 400, backlinks_spam_score: o.spam ?? 0, title: o.title || '' }, 2: { target, rank: o.rank ?? 400 } } });
+  const blBase = (o = {}) => [{ json: { domain: 'techand.ai', country_iso: 'AE', keyword: 'e invoicing in uae', business: 'e-invoicing and ERP consultancy', business_type: 'ERP and e-invoicing consultancy',
+    site_keywords: { seeds: ['e invoicing in uae'], keyword_gap: [{ keyword: 'peppol access point uae' }], easy_wins: [{ keyword: 'e invoicing software uae' }], striking_distance: [{ keyword: 'uae e invoicing deadline' }] },
+    extra_findings: [], extra_works: [], ...o } }];
+  const gapRun = async (items, o = {}) => {
+    mock('Analyze Keywords', blBase(o));
+    mock('BL Targets', [{ json: { domain: 'techand.ai', is_you: true } }, { json: { domain: 'cleartax.com', is_you: false } }]);
+    mock('Backlink Summary', [{ json: { tasks: [{ result: [{ rank: 120, backlinks: 300, referring_domains: 40, referring_domains_nofollow: 10, backlinks_spam_score: 4, broken_backlinks: 0 }] }] } },
+      { json: { tasks: [{ result: [{ rank: 400, backlinks: 9000, referring_domains: 800, referring_domains_nofollow: 100, backlinks_spam_score: 6, broken_backlinks: 2 }] }] } }]);
+    const ab = (await run('Analyze Backlinks', [{ json: gapTask(items) }]))[0].json;
+    return { au: ab.authority, f: ab.extra_findings.find(x => /Link opportunit|link opportunit/i.test(x.title)) || null, gap: (d) => ab.authority.gap.find(g => g.referring_domain === d) || {} };
+  };
+  const G1 = await gapRun([gapItem('mof.gov.ae', { rank: 700 }), gapItem('backlinkcheckers.space'), gapItem('buyhighda.space'), gapItem('websitebacklinksgenerator.store'),
+    gapItem('travelbooker.com', { rank: 500 }), gapItem('einvoicingnews.ae', { rank: 200, title: 'UAE e-invoicing news' })]);
+  console.log('   P34-4 gap ->', JSON.stringify(G1.au.gap.map(g => [g.referring_domain, g.pitch, g.reason.slice(0, 60)])));
+  check('P34-4: the ministry is never pitched — you get on a government list by applying or being accredited (live: "Reach out to these sites with a listing request" to mof.gov.ae)',
+    G1.gap('mof.gov.ae').pitch === false && /government site/.test(G1.gap('mof.gov.ae').reason), JSON.stringify(G1.gap('mof.gov.ae')));
+  check('P34-4: the link sellers are refused by their own names (backlinkcheckers.space, buyhighda.space, websitebacklinksgenerator.store)',
+    ['backlinkcheckers.space', 'buyhighda.space', 'websitebacklinksgenerator.store'].every(d => G1.gap(d).pitch === false && /name offers links/.test(G1.gap(d).reason)),
+    JSON.stringify(['backlinkcheckers.space', 'buyhighda.space', 'websitebacklinksgenerator.store'].map(d => G1.gap(d).reason)));
+  check('P34-4: an off-topic site is refused with the reason, while a site on our subject in our market is the one the finding names',
+    G1.gap('travelbooker.com').pitch === false && /off topic/.test(G1.gap('travelbooker.com').reason) && G1.gap('einvoicingnews.ae').pitch === true
+    && G1.f && G1.f.severity === 'Medium' && /1 of 6 domains are worth a pitch/.test(G1.f.evidence) && /einvoicingnews\.ae/.test(G1.f.evidence) && !/mof\.gov\.ae, |buyhighda\.space, /.test(G1.f.evidence.split('. ')[0]),
+    JSON.stringify([G1.gap('travelbooker.com').reason, G1.f && G1.f.evidence]));
+  check('P34-4: every domain stays in the data with its reason (nothing is hidden), and the finding says how many were left out and why',
+    G1.au.gap.length === 6 && G1.au.gap.every(g => typeof g.pitch === 'boolean' && (g.pitch || g.reason)) && /5 are left out/.test(G1.f.evidence) && /government list is joined by applying/.test(G1.f.fix),
+    JSON.stringify(G1.f));
+  const G2 = await gapRun([gapItem('mof.gov.ae'), gapItem('buyhighda.space'), gapItem('travelbooker.com')]);
+  check('P34-4: when nothing in the gap is worth a pitch the Medium finding is gone — an Info line explains it instead of asking the owner to write to a ministry',
+    G2.f && G2.f.severity === 'Info' && /No link opportunities worth a pitch/.test(G2.f.title) && !G2.au.gap.some(g => g.pitch), JSON.stringify(G2.f));
+  const G3 = await gapRun([gapItem('spamfarm-one.example', { spam: 45 }), gapItem('einvoicing-dubai.ae', { rank: 150 })]);
+  check('P34-4: a spam score of 30+ in the link index is refused too, and the gate does not swallow a genuine local prospect',
+    G3.gap('spamfarm-one.example').pitch === false && /spam score of 45/.test(G3.gap('spamfarm-one.example').reason) && G3.gap('einvoicing-dubai.ae').pitch === true,
+    JSON.stringify(G3.au.gap.map(g => [g.referring_domain, g.pitch, g.reason])));
+
+  // ---------- P34-5: a reservation nobody settles, and one heavy crawl per site ----------
+  reset();
+  const LW = require('./ledger_wiring.json');
+  check('P34-5: the release node sits between the ledger read and the limit check, and marks only the reservations older than the age limit `stale`',
+    LW.release_node === 'Release Stale Runs' && LW.release_from.includes('Load Run Ledger') && LW.release_to.includes('Rate Limit')
+    && LW.release_values.status === 'stale' && LW.release_conditions.some(c => c[0] === 'status' && c[1] === 'eq' && c[2] === 'reserved')
+    && LW.release_conditions.some(c => c[0] === 'created_at' && c[1] === 'lt' && /run_stale_hours/.test(String(c[2]))),
+    JSON.stringify([LW.release_from, LW.release_to, LW.release_conditions, LW.release_values]));
+  const nd = await run('Normalize Input', F.forms.webhookDescribe || F.forms.webhookVerdict);
+  const IN = (o = {}) => [{ json: { ...nd[0].json, mode: 'keyword', email: 'owner@northwind-erp.com', domain: 'northwind-erp.com', ai_budget_usd: 6, ai_budget_period: 'day', run_stale_hours: 2, heavy_audit_pages: 100, include_content: true, ...o } }];
+  const err = (r) => String(r[0].json.validation_error || '');
+  const reserved = (o) => ({ key: 'other@example.com', mode: 'keyword', est_usd: 5.9, created_at: NOW, status: 'reserved', settled_usd: 0, ...o });
+  ledgerReset([reserved({ created_at: new Date(Date.now() - 10 * 60000).toISOString() })]);
+  const r1 = await ledgerRun(IN());
+  check('P34-5: a reservation that is still young holds the budget as before — a $5.90 run started 10 minutes ago refuses the next one',
+    /used up \(estimated \$5\.90 of \$6/.test(err(r1)), err(r1));
+  ledgerReset([reserved({ created_at: hoursAgo(3) })]);
+  const r2 = await ledgerRun(IN());
+  check('P34-5: the same reservation three hours old no longer counts — it is released, the run passes, and the item says how many were released (live: two cancelled audits held $0.77 for ever)',
+    !err(r2) && r2[0].json.ledger_stale_released === 1 && r2[0].json.ai_budget_used_est_usd === r2[0].json.ai_spend_estimate_usd,
+    JSON.stringify([err(r2), r2[0].json.ledger_stale_released, r2[0].json.ai_budget_used_est_usd]));
+  ledgerReset([reserved({ created_at: hoursAgo(3), status: 'stale' })]);
+  const r3 = await ledgerRun(IN());
+  check('P34-5: a row the release node has already marked `stale` is skipped as well, and a settled run from the same day still counts in full',
+    !err(r3) && (await (async () => { ledgerReset([reserved({ created_at: hoursAgo(3), status: 'done', settled_usd: 5.9 })]); const r = await ledgerRun(IN()); return /used up \(estimated \$5\.90/.test(err(r)); })()),
+    err(r3));
+  const AUDIT = (o = {}) => IN({ mode: 'audit', crawl_max_pages: 200, domain: 'techand.ai', include_full_report: false, include_content: false, ...o });
+  ledgerReset([]);
+  const a1 = await ledgerRun(AUDIT());
+  const myRow = LEDGER.rows[LEDGER.rows.length - 1];
+  check('P34-5: a 200-page audit reserves its row with the site it crawls and the heavy flag, with the exact seo_run_ledger columns',
+    !err(a1) && myRow.heavy === true && myRow.domain === 'techand.ai' && same2(Object.keys(myRow).filter(k => k !== 'id'), TC.RUN_LEDGER),
+    JSON.stringify(myRow));
+  ledgerReset([{ key: 'app:co', mode: 'audit', est_usd: 0.25, created_at: new Date(Date.now() - 2 * 60000).toISOString(), status: 'reserved', settled_usd: 0, domain: 'techand.ai', heavy: true }]);
+  const a2 = await ledgerRun(AUDIT({ include_full_report: true }));
+  check('P34-5: a second large crawl of the same site while one is running is refused with the reason and how long to wait (live: both runs were cancelled 90 minutes later)',
+    /A large audit of techand\.ai is already running/.test(err(a2)) && /overload the crawler/.test(err(a2)) && /5 to 15 minutes/.test(err(a2)), err(a2));
+  ledgerReset([{ key: 'app:co', mode: 'audit', est_usd: 0.25, created_at: hoursAgo(3), status: 'reserved', settled_usd: 0, domain: 'techand.ai', heavy: true }]);
+  const a3 = await ledgerRun(AUDIT());
+  check('P34-5: a crashed audit never blocks its site for ever — a heavy reservation past the age limit is released and the next audit starts',
+    !err(a3) && a3[0].json.ledger_stale_released === 1, err(a3));
+  ledgerReset([{ key: 'app:co', mode: 'audit', est_usd: 0.25, created_at: new Date(Date.now() - 2 * 60000).toISOString(), status: 'reserved', settled_usd: 0, domain: 'azdan.com', heavy: true }]);
+  const a4 = await ledgerRun(AUDIT());
+  const a5 = await ledgerRun(AUDIT({ crawl_max_pages: 50 }));
+  check('P34-5: the guard is per site and per size — an audit of another site runs in parallel, and a 50-page audit of the busy site is not heavy',
+    !err(a4) && !err(a5) && LEDGER.rows[LEDGER.rows.length - 1].heavy === false, JSON.stringify([err(a4), err(a5)]));
+
+  // ---------- P34-6: the monitors read the business name through the site model ----------
+  reset();
+  const monLoads = (o = {}) => { mock('Load Sites', M.sites({ business_name: 'Tech&', canonical_host: 'www.' + M.DOMAIN, model_updated_at: ago(2), services_json: JSON.stringify(['e-invoicing integration', 'ERP implementation']) }));
+    mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors()); mock('Load Profiles', o.profiles || []); mock('Load AI Prompts', [{ json: {} }]); mock('Load AI Visibility', [{ json: {} }]);
+    mock('Load AI Daily', [{ json: {} }]); mock('Load Cache (AI)', [{ json: {} }]); mock('Load Query History', [{ json: {} }]); mock('Load Backlink Snapshots', [{ json: {} }]); mock('Load Link Prospects', [{ json: {} }]);
+    mock('Load Content Log', [{ json: {} }]); mock('Load Case Studies', [{ json: {} }]); mock('Load Backlinks', [{ json: {} }]); mock('Load Link Imports', [{ json: {} }]); mock('Load Link Graph', [{ json: {} }]); delete store['Manual Run']; };
+  monLoads();
+  const aiP = (await run('AI Plan', store['Load Query History']))[0].json;
+  const blP = (await run('BL Plan', store['Load Backlinks']))[0].json;
+  console.log('   P34-6 names ->', JSON.stringify([aiP.business_name, aiP.brand_names, blP.business_name, blP.brand_names]));
+  check('P34-6: the AI Visibility Tracker takes the business name from the site model, so its report no longer calls the business "northwind-erp.com" with no profile row on file',
+    aiP.business_name === 'Tech&' && aiP.brand_names.includes('Tech&') && aiP.need_site_text !== true, JSON.stringify([aiP.business_name, aiP.brand_names]));
+  check('P34-6: the Backlink Monitor reads the same name (its report and its outreach used the bare domain), while its mention search still uses the domain for a short brand',
+    blP.business_name === 'Tech&' && blP.brand_query === M.DOMAIN, JSON.stringify([blP.business_name, blP.brand_query, blP.brand_names]));
+  monLoads({ profiles: M.profiles() });
+  const aiP2 = (await run('AI Plan', store['Load Query History']))[0].json;
+  check('P34-6: a filled business profile still comes first — the profile name wins over the model\'s, as it always did',
+    aiP2.business_name === 'Northwind ERP' && aiP2.profile.city === 'Dubai', JSON.stringify([aiP2.business_name, aiP2.profile.business_name]));
+});
+
 
 H.report();
 })();

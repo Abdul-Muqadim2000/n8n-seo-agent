@@ -314,7 +314,7 @@ export function ConnectMockup({ className }: { className?: string }) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-const LIVE_CHECKS = ['Found in your sitemap', 'Title and meta description', 'Author box and expert reviewer', 'Article, Person and FAQ schema', '3 images with alt text', 'Links up the ladder'];
+const LIVE_CHECKS = ['Found in your sitemap', 'Title and meta description', 'Author box and expert reviewer', 'Article, Person and Service schema', '3 images with alt text', 'Links up the ladder'];
 
 /** The live check of a published page (sample data). */
 export function PublishCheckMockup({ className }: { className?: string }) {

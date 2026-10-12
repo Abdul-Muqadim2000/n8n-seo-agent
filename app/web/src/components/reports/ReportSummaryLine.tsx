@@ -66,6 +66,8 @@ export function ReportSummaryLine({ report, className }: { report: Report; class
         nm(s, 'positions') != null && `${nm(s, 'positions')} pages checked`,
         nm(s, 'gains') ? `${nm(s, 'gains')} up` : null,
         nm(s, 'drops') ? `${nm(s, 'drops')} down` : null,
+        nm(s, 'shareOfVoice') != null ? `${nm(s, 'shareOfVoice')}% share of voice` : null,
+        nm(s, 'aiOverviews') ? `AI Overview on ${nm(s, 'aiOverviews')}` : null,
       );
       break;
     case 'site_tracker':

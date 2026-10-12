@@ -12,7 +12,7 @@ for (const p of plans) {
   const m = merged.find(x => x.site_id === p.site_id); if (!m) continue;
   const byDomain = new Map(m.entries.map(e => [e.ref_domain, e]));
   const pick = ver.filter(v => v.site_id === p.site_id).map(v => ({ v, e: byDomain.get(v.ref_domain) || {} }))
-    .filter(({ e, v }) => !(e.prev && e.prev.link_type && e.prev.from_url === v.url))
+    .filter(({ e, v }) => !e.footprint && !(e.prev && e.prev.link_type && e.prev.from_url === v.url))   // link-farm pages are spam by the footprint gate: no tokens on them (D3)
     .sort((a, b) => ((!b.e.prev) - (!a.e.prev)) || ((b.e.visits || 0) - (a.e.visits || 0)) || ((b.e.authority || 0) - (a.e.authority || 0)))
     .filter((x, i, a) => a.findIndex(y => y.v.ref_domain === x.v.ref_domain) === i).slice(0, CONFIG.per_job * CONFIG.max_jobs_per_site);
   for (let i = 0; i < pick.length && out.length < CONFIG.max_jobs_per_run; i += CONFIG.per_job) {

@@ -20,7 +20,17 @@ const LK = (() => {
   const PLATFORM = /\.(blogspot\.[a-z.]+|wordpress\.com|tumblr\.com|medium\.com|substack\.com|github\.io|gitlab\.io|wixsite\.com|weebly\.com|webflow\.io|squarespace\.com|netlify\.app|vercel\.app|pages\.dev|herokuapp\.com|web\.app|firebaseapp\.com|blogger\.com|livejournal\.com|over-blog\.com|jimdosite\.com|site123\.me|webnode\.[a-z]+|strikingly\.com|carrd\.co|notion\.site|super\.site|hashnode\.dev|dev\.to|translate\.goog)$/;
   const refKey = (h) => { const x = String(h || '').toLowerCase().replace(/^www\./, '').replace(/\.$/, ''); return PLATFORM.test(x) ? x : regDomain(x); };
   const sameSite = (host, domain) => { const h = String(host || '').toLowerCase().replace(/^www\./, ''), d = String(domain || '').toLowerCase().replace(/^www\./, ''); return !!h && !!d && (h === d || h.endsWith('.' + d)); };
-  const normUrl = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/#.*$/, '').replace(/[?&](utm_[a-z]+|ref|fbclid|gclid)=[^&]*/g, '').replace(/\?$/, '').replace(/\/+$/, '');
+  // D23 (2026-10-11 system review): one list of tracking parameters, for comparing URLs (normUrl) and for the URLs we store and show
+  // (cleanUrl). `srsltid` (Google Shopping) and `utm_source=chatgpt.com` were kept in stored links before, so the same page counted
+  // twice and outreach quoted a tagged URL.
+  const TRACK = /^(utm_[a-z_]*|srsltid|gclid|gbraid|wbraid|dclid|fbclid|msclkid|yclid|twclid|igshid|mc_cid|mc_eid|ref|ref_src|referrer|_hsenc|_hsmi|hsa_[a-z]+|spm|at_[a-z_]+|mkt_tok)$/i;
+  const dropTrack = (q) => String(q || '').replace(/^\?/, '').split('&').filter(kv => kv && !TRACK.test(kv.split('=')[0])).join('&');
+  const normUrl = (u) => { const s = String(u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/#.*$/, '');
+    const i = s.indexOf('?'); const q = i < 0 ? '' : dropTrack(s.slice(i)); const base = (i < 0 ? s : s.slice(0, i)).replace(/\/+$/, '');
+    return base + (q ? '?' + q : ''); };
+  // the URL as we keep it (scheme and host as they are, the real query kept): for from_url, source_url and anything a person opens
+  const cleanUrl = (u) => { const s = String(u || '').trim().replace(/#.*$/, ''); const i = s.indexOf('?');
+    if (i < 0) return s; const q = dropTrack(s.slice(i)); return s.slice(0, i) + (q ? '?' + q : ''); };
   const decodeAll = (s) => { let x = String(s || ''); for (let i = 0; i < 3; i++) { try { const y = decodeURIComponent(x); if (y === x) break; x = y; } catch (e) { break; } } return x; };
   // where on the page an index sits: the innermost structural element decides (an "aside" inside "main" is a sidebar, a "header" inside "article" is nav)
   // the innermost structural element decides: an "aside" inside "main" is a sidebar, a "header" inside "article" is nav
@@ -133,6 +143,21 @@ const LK = (() => {
   // (live finding 2026-10-08: whois.com came back as an "unlinked mention" of techand.ai)
   const SCRAPER = /(^|[.-])(whois|who\.is|worth|siteprice|sitestats?|site-?info|hypestat|similarsites?|sitelike|sitesimilar|websiteoutlook|statshow|domaintools|robtex|builtwith|urlscan|siteindices|dnslytics|ipaddress|host\.io|domainbigdata|webstatsdomain|siteliner|rank2traffic|websiteinformer|informer|valuation|traffic-?estimate|seo-?analy[sz]er|seositecheckup|sitechecker|webrank|domainstats)/i;
   const isScraper = (d) => SCRAPER.test(String(d || '').toLowerCase().replace(/^www\./, ''));
+  // G18-1 (2026-10-12, the accuracy set): a SEARCH-RESULTS page of someone else's site. Its content is whatever was typed into a search box,
+  // it is noindex or canonicalised away on most sites, and Google passes nothing from it — yet robuta.com/?q=business+impact came back as
+  // techand.ai's best link (SEO value 57, above OpenPeppol's members list at 35) because only whois / stats / valuation hosts counted as
+  // scrapers. The shapes: a path segment "search" / "suche" / "recherche" / "busca" (/search, /en/search/), a search script
+  // (/search.php, /results.aspx), or a query that carries the search term (?q= / ?s= / ?query= / ?search= / ?keyword= / ?term= / ?k=).
+  // Query keys only, never a value, and only on a whole key, so ?qid=, ?src= and ?ref= are not searches. The caller decides what to do with
+  // it (Parse Backlinks labels such a page "scraper" when nothing ties the host to our topics, so LK.values' cap of 5 applies).
+  const SEARCH_PATH = /(^|\/)(search|searchresults|suche|recherche|busca|buscar|zoeken)(\/|\.(php|html?|aspx?|jsp)$|$)/i;   // "results" alone is left out on purpose: /results/ is a real page on plenty of sites
+  const SEARCH_Q = /^(q|s|k|kw|query|search|searchterm|search_term|searchword|keyword|keywords|term|suche|wd)$/i;
+  const isSearchPage = (u) => { const s = String(u || '').trim(); if (!s) return false;
+    const noHost = s.replace(/^[a-z][a-z0-9+.-]*:\/\/[^\/?#]*/i, ''); const i = noHost.indexOf('?');
+    const path = (i < 0 ? noHost : noHost.slice(0, i)).replace(/#.*$/, '');
+    if (SEARCH_PATH.test(path)) return true;
+    if (i < 0) return false;
+    return noHost.slice(i + 1).replace(/#.*$/, '').split('&').some(kv => kv.includes('=') && SEARCH_Q.test(kv.split('=')[0]) && kv.split('=').slice(1).join('=').length > 0); };
   // press-release wires: a competitor's link there is a paid release (usually nofollow), not a site to pitch (live finding 2026-10-08:
   // prnewswire.co.uk and kyodonewsprwire.jp ranked among techand.ai's top gap prospects once Ahrefs DR was on)
   const WIRE = /(^|\.)(prnewswire|businesswire|globenewswire|einpresswire|einnews|accesswire|newswire|prweb|prlog|openpr|newsfilecorp|issuewire|presswire|kyodonewsprwire|marketwired|newsdirect|pressat|24-7pressrelease|prunderground|send2press|realwire|pressebox|presseportal|newsvoir|prfire|cision)\.[a-z.]+$/i;
@@ -177,7 +202,41 @@ const LK = (() => {
     if ((label.length >= 4 && a.replace(/[^a-z0-9]/g, '').includes(label)) || brands.some(b => b && a.includes(String(b).toLowerCase()))) return 'brand';
     if (/^(click here|here|this|read more|more|website|link|source|visit( site| website)?|learn more|this article|this post|view|official site|homepage)$/.test(a)) return 'generic';
     return 'money'; };
-  return { text, attr, hostOf, regDomain, refKey, sameSite, isInfra, isScraper, isWire, normUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind };
+  // ---- footprint gate (D3, 2026-10-11) ----
+  // Link farms sell the same page on many domains: one PBN network linked techand.ai from 16 domains with one path (/all/2835/13.html) and
+  // one anchor ("High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service …"), some on casino hosts; the index flagged 4 and
+  // the other 12 ranked above peppol.org as "best links" (live 2026-10-11). A cluster is: the same page path or the same keyword anchor on 3+
+  // referring sites, an anchor or page title that advertises link selling or gambling, a gambling host, or a page path shared with such a
+  // page. Members get link_type "spam" (SEO and brand value 0), stay out of best links, alerts and impact tracking and go on the disavow
+  // candidates (review-only). Bounds: a path with one plain segment (/partners, /links) or made of generic words (/en/partners) never
+  // clusters, nor do brand / URL / generic anchors or anchors under 4 words (every partner page and every brand mention would); an anchor
+  // that is one of the site's own page titles is a citation, not a footprint. One list of link-selling words for every consumer (SPAM_RE).
+  const SPAM_RE = /\b(?:pbn|private blog network|buy (?:cheap |quality |high[- ]quality )?(?:backlinks?|links?)|backlinks? (?:service|package|for sale|provider)|dofollow (?:backlinks?|links?)|high[- ]quality (?:backlinks?|links?)|link ?farms?|guest post services?|link building services?|da ?\d{1,2}\W{0,3}pa ?\d{1,2}|casinos?|betting|slots?|gambling|poker|jackpot|sportsbook|bookmakers?|porn|xxx|viagra|cialis|payday loans?|escorts?|essay writing)\b/i;
+  const GAMBLING = /casino|poker|gambl|jackpot|sportsbook|bookmaker|roulette|blackjack|baccarat|betwinner|1xbet|mostbet|melbet|parimatch|bet365|betway|unibet|bwin|slotgacor/i;   // unambiguous substrings only ("alphabet" is not a bet)
+  const isGambling = (d) => { const x = String(d || '').toLowerCase().replace(/^www\./, ''); return GAMBLING.test(x) || x.split(/[.-]/).some(t => /^(bets?|betting|slots?|lotto|lottery|toto|togel|judi|gacor)$/.test(t)); };
+  const GENERIC = /^(en|de|fr|es|it|ar|nl|pt|ru|zh|ja|blog|news|partners?|links?|resources?|clients?|about|about-us|directory|members?|sponsors?|vendors?|tools?|category|tag|page|pages|home|contact|sitemap|index|posts?|articles?|press|media|portfolio|services?|products?|solutions?|team|company)$/;
+  const footPath = (u) => { const p = String(u || '').replace(/^https?:\/\/[^\/?#]+/i, '').replace(/[?#].*$/, '').replace(/\/+$/, '').toLowerCase().replace(/\/index\.(html?|php)$/, ''); const seg = p.split('/').filter(Boolean);
+    if (!seg.length || seg.every(x => GENERIC.test(x)) || (seg.length === 1 && !/\d/.test(p))) return ''; return p; };
+  // rows: anything with ref_domain (or from_url), from_url, anchor and page_title / title. Returns Map ref_domain → reason.
+  function footprints(rows, opts = {}) {
+    const out = new Map(); const set = (d, why) => { if (d && !out.has(d)) out.set(d, why); };
+    const titles = (opts.titles || []).map(t => String(t || '').toLowerCase().replace(/\s+/g, ' ').trim()).filter(t => t.length >= 8);
+    const items = []; const byPath = new Map(), byAnchor = new Map();
+    for (const r of rows || []) { if (!r) continue; const d = String(r.ref_domain || refKey(hostOf(r.from_url)) || '').toLowerCase(); if (!d) continue;
+      const path = footPath(r.from_url); const a = String(r.anchor || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const ak = a && a.split(' ').length >= 4 && anchorKind(a, opts.domain || '', opts.brands || []) === 'money' && !titles.some(t => t.includes(a) || a.includes(t)) ? a : '';
+      items.push({ d, path, ak, r });
+      if (path) { if (!byPath.has(path)) byPath.set(path, new Set()); byPath.get(path).add(d); }
+      if (ak) { if (!byAnchor.has(ak)) byAnchor.set(ak, new Set()); byAnchor.get(ak).add(d); } }
+    for (const [p, ds] of byPath) if (ds.size >= 3) for (const d of ds) set(d, 'the same page path on ' + ds.size + ' sites (' + p.slice(0, 60) + ')');
+    for (const [a, ds] of byAnchor) if (ds.size >= 3) for (const d of ds) set(d, 'the same keyword anchor on ' + ds.size + ' sites ("' + a.slice(0, 60) + '")');
+    for (const x of items) { const txt = String(x.r.anchor || '') + ' | ' + String(x.r.page_title || x.r.title || '');
+      if (SPAM_RE.test(txt)) set(x.d, 'the anchor or page title sells links or gambling ("' + String(x.r.anchor || x.r.page_title || x.r.title || '').replace(/\s+/g, ' ').slice(0, 60) + '")');
+      else if (isGambling(x.d)) set(x.d, 'a gambling site'); }
+    for (const [p, ds] of byPath) if (ds.size >= 2 && [...ds].some(d => out.has(d))) for (const d of ds) set(d, 'shares its page path with a link-farm page (' + p.slice(0, 60) + ')');
+    return out;
+  }
+  return { text, attr, hostOf, regDomain, refKey, sameSite, isInfra, isScraper, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
 })();
 
 const plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
@@ -206,7 +265,9 @@ for (const p of plans) {
     if (!M.has(k)) M.set(k, { ref_domain: k, kind, sources: new Set(), from_url: '', to_url: '', anchor: '', rel: '', placement: '', first_seen: '', last_seen: '', authority: 0, page_keywords: 0, spam: 0, original: null, sitewide: 0, links: 0, visits: 0, visits_28d: 0, key_events: 0, dfs_lost: null, pages: [] });
     return M.get(k); };
   const seen = (e, src, d) => { e.sources.add(src); const x = ymd(d) || today; if (!e.first_seen || x < e.first_seen) e.first_seen = x; if (!e.last_seen || x > e.last_seen) e.last_seen = x; };
-  const page = (e, url, src) => { if (url && !e.pages.some(x => x.url === url)) e.pages.push({ url, src }); if (url && !e.from_url) e.from_url = url; };
+  // D23 (2026-10-11): the URL we store carries no tracking parameters (`?utm_source=chatgpt.com` and `srsltid` came in through GA4
+  // referrals and AI citations and were kept in the ledger, in the report and in outreach)
+  const page = (e, url0, src) => { const url = url0 ? LK.cleanUrl(url0) : url0; if (url && !e.pages.some(x => x.url === url)) e.pages.push({ url, src }); if (url && !e.from_url) e.from_url = url; };
   const mine = (arr, list) => list.map((r, i) => [r, arr[i]]).filter(([r]) => r && r.site_id === p.site_id);
   // ---- DataForSEO
   for (const [r, resp] of mine(resps, reqs)) {
@@ -279,6 +340,9 @@ for (const p of plans) {
   const dedupe = (arr) => arr.filter((x, i) => x.url && arr.findIndex(y => y.url === x.url) === i);
   const ai_sources = new Set(prospects.filter(x => x.site_id === p.site_id && x.type === 'ai_source').map(x => LK.refKey(x.prospect_domain)));
   const entries = [...M.values()].map(e => ({ ...e, sources: [...e.sources], prev: prev.get(e.ref_domain) || null, ai_cited: ai_sources.has(e.ref_domain), cc_rank: e.cc_rank || ccRank.get(e.ref_domain) || 0 }));
+  // footprint tags (D3): link-farm clusters seen here already, so the Link Analyst skips them and the link check puts them last; the gate in Parse Backlinks decides
+  const fp = LK.footprints(entries.map(e => ({ ref_domain: e.ref_domain, from_url: e.from_url || (e.prev || {}).from_url || '', anchor: e.anchor || (e.prev || {}).anchor || '', page_title: (e.prev || {}).page_title || '' })), { domain: p.domain, brands: (p.brand_names || []).filter(b => !String(b).includes('.')) });
+  for (const e of entries) if (fp.has(e.ref_domain) || (e.prev && e.prev.link_type === 'spam')) e.footprint = fp.get(e.ref_domain) || 'labelled spam';
   const counts = {}; for (const e of entries) for (const s of e.sources) counts[s] = (counts[s] || 0) + 1;
   out.push({ json: { site_id: p.site_id, domain: p.domain, mode: p.mode, entries, mention_pages: dedupe(mentionPages).filter(m => !linkedDomains.has(m.domain) || m.source === 'news').slice(0, 120), list_pages: dedupe(listPages).slice(0, 20),
     cc_gap: ccGap.filter(g => !linkedDomains.has(g.domain)).sort((a, b) => (b.links_to.length - a.links_to.length) || (a.cc_rank - b.cc_rank)).slice(0, 60), cc_rank: Object.fromEntries([...ccRank].slice(0, 3000)),

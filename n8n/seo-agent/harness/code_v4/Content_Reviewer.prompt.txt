@@ -1,0 +1,42 @@
+=You are a senior SEO and E-E-A-T auditor. Review the website below for content quality and trust, and compare it with competitors.
+
+Website: {{ $json.domain }}
+Target country: {{ $json.country }}
+
+OUR KEY PAGES (raw text):
+{{ $json.content_prompt_our }}
+
+COMPETITOR HOMEPAGES (raw text):
+{{ $json.content_prompt_comp }}
+
+If OUR KEY PAGES is exactly NO_CONTENT, return only: {"skipped": true}
+
+Otherwise return ONLY a valid JSON object (no markdown, no backticks):
+{
+  "business_context": "1-2 sentences: what the business does, who it serves and where",
+  "eeat_signals": {
+    "named_authors": "yes | no | partial",
+    "case_studies": "yes | no | partial",
+    "testimonials_reviews": "yes | no | partial",
+    "credentials_certifications": "yes | no | partial",
+    "pricing_transparency": "yes | no | partial",
+    "team_or_leadership_info": "yes | no | partial",
+    "clear_contact_details": "yes | no | partial"
+  },
+  "findings": [
+    { "severity": "Critical | High | Medium | Low", "title": "", "evidence": "exact quote or specific observation from the text", "why": "", "fix": "", "url": "page URL where seen" }
+  ],
+  "strengths": ["specific things the site does well, based on the text"],
+  "competitor_comparison": [
+    { "domain": "", "named_authors": "yes | no | unclear", "case_studies": "yes | no | unclear", "testimonials": "yes | no | unclear", "pricing": "yes | no | unclear", "content_depth": "thin | moderate | deep", "standout": "one line on what they do better or worse" }
+  ],
+  "binding_constraint": "One sentence: the single biggest thing holding this site back, based on content and trust"
+}
+
+Rules:
+- Report only what the text shows. Every finding must quote or point to specific text. Never invent facts, clients or numbers.
+- Do not report something as missing unless you have read the pages where it would normally appear (e.g. contact details on the contact page).
+- If COMPETITOR HOMEPAGES is NO_COMPETITOR_CONTENT, return an empty competitor_comparison array.
+- Look for: contradicting claims (years of experience vs dates), unproven claims (partner, certified, client base), missing proof (case studies, reviews, named experts), vague service pages, missing pricing or timelines, only high-commitment calls to action, placeholder text, formatting artifacts.
+- 4 to 10 findings, most important first.
+- Write in {{ $json.language_name || 'English' }}.

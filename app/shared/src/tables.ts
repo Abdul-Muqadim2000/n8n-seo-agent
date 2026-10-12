@@ -11,12 +11,24 @@ export interface LadderRow extends DtRow {
   ladder_id: string; domain: string; head_keyword: string; rung: number; page_no: number; keyword: string; supporting: string;
   page_type: string; target_url: string; page_exists: boolean; status: string; months: string; start_date: string; country: string;
   location_code: number; language_code: string; email: string; callback_url: string; request_id: string;
+  /** the word count the ladder's verdict set for this page (0 = unknown); passed to a page run as `ladder_words` (P2-7) */
+  target_words?: number;
 }
 export interface RankHistoryRow extends DtRow {
   /** ladder id, or the site id for Site Tracker live checks */
   ladder_id: string; keyword: string; checked_at: string;
   /** 0 = not in the top 50, -1 = the check failed (check again) */
   position: number; url: string; serp_features: string; domain: string; rung: number;
+  /** G6: everything else the same SERP call showed. Rows written before G6 have none of it (device '' = desktop). */
+  device?: string;
+  /** JSON (v5/code/_rank_serp.js): AI Overview (shown / cites us / sources loaded), snippet, People Also Ask, local pack, video, shopping */
+  features_json?: string;
+  /** JSON: the top-10 domains with positions, who is above us, the tracked competitors' positions and the modelled shares */
+  competitors_json?: string;
+  /** JSON: the top 10 with URLs and trimmed titles, kept as proof of the reading */
+  snapshot_json?: string;
+  /** our modelled share of the clicks page 1 offers; -1 = the check failed */
+  share_of_voice?: number;
 }
 export interface SiteRow extends DtRow {
   site_id: string; domain: string; gsc_property: string; ga4_property_id: string; country: string; location_code: number;
@@ -42,6 +54,10 @@ export interface ContentLogRow extends DtRow {
 export interface TrendRow extends DtRow {
   site_id: string; domain: string; keyword: string; checked_at: string; period_end: string; direction: string; change_pct: number;
   peak_date: string; latest: number; average: number; rising: string; top: string;
+}
+/** v4.15 (D11, SITE_MODEL_SPEC.md): the website's page inventory, written weekly by the Site Tracker — what the site already has */
+export interface SitePageRow extends DtRow {
+  site_id: string; url: string; title: string; h1: string; source: string; lastmod: string; queries_json: string; updated_at: string;
 }
 export interface CadenceRow extends DtRow {
   site_id: string; domain: string; pages_per_week: number; status: string; updated_at: string; request_id: string;
@@ -141,6 +157,9 @@ export interface ProspectRow extends DtRow {
   /** v4.10: value x likelihood, where it came from, a contact found on the site, follow-up drafts, won only after the link was found */
   score: number | null; origin: string; contact_email: string; contact_url: string; contacted_at: string; followup_step: number | null;
   followup_subject: string; followup_body: string; verified_at: string;
+  /** P34-1 (2026-10-12): when the stored draft was written. Empty, or before DRAFT_GATES_AT, means it was written without the current
+   *  outreach gates: it is superseded and must not be offered (see prospectDraft in ./outreach). */
+  drafted_at: string;
 }
 /** v4.10: the link ledger — one row per site and referring site, merged from every source and checked on the linking page */
 export interface BacklinkRow extends DtRow {
@@ -183,6 +202,10 @@ export interface AuditRow extends DtRow {
 export interface AuditFindingRow extends DtRow {
   site_id: string; domain: string; audit_id: string; audited_at: string; finding_key: string; category: string; severity: string;
   title: string; affected_count: number;
+  /** G26 (2026-10-12, FIX_PLAN): the impact weight the audit ordered its fix list by (severity x pages affected x the Search Console
+   * clicks and impressions of those pages x their place in the site) and the one line that explains it. Rows written before this
+   * change have neither, so every reader falls back to the severity order. */
+  impact?: number; impact_basis?: string;
 }
 
 /** v4.8 (PIPELINE_FEATURE_SPEC.md §9.1): one row per keyword ladder; the row with ladder_id '_site' holds the website's defaults
@@ -229,6 +252,7 @@ export const TABLES = {
   consoleAlerts: 'seo_console_alerts',
   checkins: 'seo_console_checkins',
   profiles: 'seo_profiles',
+  pages: 'seo_pages',
   caseStudies: 'seo_case_studies',
   monitors: 'seo_monitors',
   aiPrompts: 'seo_ai_prompts',

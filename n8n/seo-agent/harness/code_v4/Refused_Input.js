@@ -1,0 +1,2 @@
+// v4.14 (D1): the ledger row is marked refused; the refused request (Rate Limit's item) continues to the error path — a Data Table node outputs the row, not its input.
+return [{ json: $('Rate Limit').first().json }];

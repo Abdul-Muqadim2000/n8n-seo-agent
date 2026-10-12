@@ -9,6 +9,7 @@
 //     fetched next to see whether they name the business or its competitors (the strongest lever on AI mentions: earned media);
 //   * the monthly entity check (Wikidata).
 /*__MONITOR_SITES__*/
+/*__SITE_MODEL__*/
 const CONFIG = { audit_per_week: 12, recheck_days: 25, max_key_pages: 40, submit_max: 50, resubmit_days: 30, recent_days: 8, earned_fetch: 10, max_targets: 6, refresh_after_days: 90,
   stage_weight: { decision: 1, consideration: 0.8, awareness: 0.6 } };
 const { list, on_demand, want, total } = monitorSites('ai');
@@ -39,10 +40,13 @@ const kindOf = (host, title, url, comps) => comps.some(c => host === c || host.e
 const out = [];
 for (const s of sites) {
   const dom = s.domain; const ours = (u) => { const h = hostOf(u); return h === dom || h.endsWith('.' + dom); };
-  // the host the site really serves (www or not): Bing and IndexNow refuse addresses on another host than the site's
-  const hostVotes = new Map(); for (const u of [...qh.filter(q => q.site_id === s.site_id && q.page).map(q => q.page), ...logs.filter(l => normD(l.domain) === dom && l.published_url).map(l => l.published_url)]) { const m = String(u).match(/^https?:\/\/([^\/?#:]+)/i); if (m && ours(u)) { const h = m[1].toLowerCase(); hostVotes.set(h, (hostVotes.get(h) || 0) + 1); } }
-  const site_host = [...hostVotes.entries()].sort((a, b) => b[1] - a[1]).map(([h]) => h)[0] || dom;
-  const normU = (u) => { const k = keyOf(u); return k ? 'https://' + site_host + pathOfU(u) : ''; };
+  // D15: the host the site really serves (www or not) comes from the one site model (SITE_MODEL_SPEC.md), which resolved it from the homepage,
+  // its canonical tag and the site's own live URLs. Bing and IndexNow refuse addresses on another host than the site's. With no model yet
+  // (the weekly Site Tracker has not run for this site), the model is built here from the same live URLs the old vote used.
+  const seen_hosts = [...qh.filter(q => q.site_id === s.site_id && q.page).map(q => q.page), ...logs.filter(l => normD(l.domain) === dom && l.published_url).map(l => l.published_url)].filter(u => ours(u));
+  const site_model = SM.stored(s) || SM.from({ site_id: s.site_id, domain: dom }, { seen_hosts });
+  const site_host = site_model.canonical_host || dom;
+  const normU = (u) => { const k = keyOf(u); return k ? SM.siteUrl(site_model, pathOfU(u)) : ''; };
   const v = vis.filter(x => x.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
   const gaps = v ? parse(v.gaps_json, []) : []; const cited = v ? parse(v.pages_json, []) : []; const compRows = v ? parse(v.competitors_json, []) : [];
   const comps = [...new Set([...s.settings.competitors, ...compRows.filter(c => c && /\./.test(c.domain || '')).map(c => c.domain)])];
@@ -59,7 +63,7 @@ for (const s of sites) {
   for (const l of lrows.filter(l => l.target_url && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true'))) addPage(l.target_url, 'ladder', 'keyword ladder page: "' + l.keyword + '"');
   const byPage = new Map(); for (const q of sq) { const u = normU(q.page); if (!u) continue; const same = [...byPage.keys()].find(y => keyOf(y) === keyOf(u)) || u; byPage.set(same, (byPage.get(same) || 0) + (Number(q.impressions) || 0)); }
   [...byPage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([u, imp]) => addPage(u, 'search', imp.toLocaleString('en-GB') + ' Google impressions'));
-  addPage('https://' + dom + '/', 'home', 'homepage');
+  addPage(SM.siteUrl(site_model, '/'), 'home', 'homepage');
   // ---- the questions to win (targets) ----
   const pageFor = (keyword, question, pid) => {
     const fromAi = cited.find(c => answers.some(a => a.site_id === s.site_id && a.prompt_id === pid && String(a.our_urls || '').includes(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))));
@@ -120,7 +124,10 @@ for (const s of sites) {
   // ---- the earned-media list: exact pages AI cited in answers that did not name the business (last 8 days, weekly + daily) ----
   const em = new Map();
   for (const a of answers.filter(a => a.site_id === s.site_id && (a.answered === true || a.answered === 'true') && !(a.mentioned === true || a.mentioned === 'true') && a.kind !== 'brand'))
-    for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u)) continue; const h = hostOf(c.u); const x = em.get(c.u) || { url: c.u, title: c.t || '', host: h, n: 0, engines: new Set(), questions: new Set() }; x.n++; x.engines.add(a.engine); x.questions.add(a.prompt); if (!x.title && c.t) x.title = c.t; em.set(c.u, x); }
+    // G22 (2026-10-11 system review): a source chip sometimes carries only a fragment of the title ("E", "Best e" live). A title that
+    // short is treated as missing, so Earned Media reads the page's own <title> from the copy it fetches anyway; a real title is kept whole.
+    for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u)) continue; const h = hostOf(c.u); const t0 = String(c.t || '').replace(/\s+/g, ' ').trim(); const t = t0.length >= 8 ? t0 : '';
+      const x = em.get(c.u) || { url: c.u, title: t, host: h, n: 0, engines: new Set(), questions: new Set() }; x.n++; x.engines.add(a.engine); x.questions.add(a.prompt); if (!x.title && t) x.title = t; em.set(c.u, x); }
   const perHost = new Map();
   const earned = [...em.values()].map(x => ({ url: x.url, title: x.title, host: x.host, citations: x.n, engines: [...x.engines], questions: [...x.questions].slice(0, 3), kind: kindOf(x.host, x.title, x.url, comps) }))
     .sort((a, b) => b.citations * (1 + b.engines.length) - a.citations * (1 + a.engines.length))
@@ -134,7 +141,13 @@ for (const s of sites) {
   const entity_due = on_demand || !prevEntity || String(prevEntity.checked_at || '').slice(0, 7) !== month;
   const label = dom.split('.')[0];
   const brand_names = [...new Set([dom, ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : []), s.profile.business_name].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
-  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, business_name: s.profile.business_name || '', profile: s.profile,
+  // D12: the name a draft signs with comes from the one site model (profile -> homepage Organization / og:site_name -> what the app sent),
+  // never from the domain label — the earned-media drafts signed "techand" / "techand.ai" (live 2026-10-11). `link_builder` decides who
+  // writes: with it on, these prospects go to the Link Builder's qualification and writer (one writer).
+  const modelName = SM.name(site_model);
+  const business_name = String(s.profile.business_name || '').trim() || (modelName && SM.helpers.bare(modelName) !== dom ? modelName : '');
+  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, business_name, profile: s.profile,
+    link_builder: !!s.settings.link_builder, services: SM.services(site_model), accreditation: SM.facts(site_model).accreditation,
     brand_names, competitors: comps.slice(0, 12), ai_pages_month: s.settings.ai_pages_month, run_id: 'grow_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso,
     vis_checked_at: v ? v.checked_at : '', key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_fetch: earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url),
     indexnow_key, indexnow_new: !kRow, indexnow_verified_at: kv.verified_at || '', entity_due, previous_entity: prevEntity, previous: prevG ? { checked_at: prevG.checked_at, avg_score: Number(prevG.avg_score) || null, earned: parse(prevG.earned_json, []) } : null,

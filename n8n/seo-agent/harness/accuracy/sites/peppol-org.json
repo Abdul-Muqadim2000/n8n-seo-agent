@@ -1,0 +1,435 @@
+{
+ "domain": "peppol.org",
+ "site_host": "peppol.org",
+ "fetched_at": "2026-10-12",
+ "captured_by": "harness/accuracy/capture.js (free public GETs only)",
+ "probes": {
+  "home": {
+   "status": 200,
+   "headers": {
+    "cache-control": "max-age=0, public",
+    "content-type": "text/html; charset=UTF-8",
+    "server": "nginx",
+    "content-encoding": "gzip"
+   },
+   "body_len": 130836
+  },
+  "www_https": {
+   "status": 301,
+   "headers": {
+    "location": "https://peppol.org/",
+    "cache-control": "max-age=3600",
+    "content-type": "text/html; charset=UTF-8",
+    "server": "nginx"
+   },
+   "body_len": 0
+  },
+  "www_http": {
+   "status": 301,
+   "headers": {
+    "location": "https://peppol.org/",
+    "cache-control": "max-age=3600",
+    "content-type": "text/html; charset=UTF-8",
+    "server": "nginx"
+   },
+   "body_len": 0
+  },
+  "apex_http": {
+   "status": 301,
+   "headers": {
+    "location": "https://peppol.org/",
+    "cache-control": "max-age=3600",
+    "content-type": "text/html; charset=UTF-8",
+    "server": "nginx"
+   },
+   "body_len": 0
+  },
+  "home_content": {
+   "status": 200,
+   "headers": {
+    "cache-control": "max-age=0, public",
+    "content-type": "text/html; charset=UTF-8",
+    "server": "nginx",
+    "content-encoding": "gzip"
+   },
+   "body_len": 130836,
+   "head": "<!DOCTYPE html>\n<html class=\"html\" lang=\"en-US\">\n<head>\n\t<meta charset=\"UTF-8\">\n\t<link rel=\"profile\" href=\"https://gmpg.org/xfn/11\">\n\n\t<meta name='robots' content='index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' />\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n\t\n\t<title>The Future Is Open - OpenPeppol</title><link rel=\"preload\" as=\"style\" href=\"https://fonts.googleapis.com/css?family=Montserrat%3A100%2C100italic%2C200%2C200italic%2C300%2C300italic%2C400%2C400italic%2C500%2C500italic%2C600%2C600italic%2C700%2C700italic%2C800%2C800italic%2C900%2C900italic&#038;display=swap\" /><link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css?family=Montserrat%3A100%2C100italic%2C200%2C200italic%2C300%2C300italic%2C400%2C400italic%2C500%2C500italic%2C600%2C600italic%2C700%2C700italic%2C800%2C800italic%2C900%2C900italic&#038;display=swap\" media=\"print\" onload=\"this.media='all'\" /><noscript><link rel=\"stylesheet\" href=\"https://fonts.googleapis.com/css?family=Montserrat%3A100%2C100italic%2C200%2C200italic%2C300%2C300italic%2C400%2C400italic%2C500%2C500italic%2C600%2C600italic%2C700%2C700italic%2C800%2C800italic%2C900%2C900italic&#038;display=swap\" /></noscript>\n\t<meta name=\"description\" content=\"OpenPeppol is a not-for-profit organization that operates behind the Peppol network and the ongoing development of the Peppol format.\" />\n\t<link rel=\"canonical\" href=\"https://peppol.org/\" />\n\t<meta property=\"og:locale\" content=\"en_US\" />\n\t<meta property=\"og:type\" content=\"website\" />\n\t<meta property=\"og:title\" content=\"The Future Is Open - OpenPeppol\" />\n\t<meta property=\"og:description\" content=\"OpenPeppol is a not-for-profit organization that operates behind the Peppol network and the ongoing development of the Peppol format.\" />\n\t<meta property=\"og:url\" content=\"https://peppol.org/\" />\n\t<meta property=\"og:site_name\" content=\"OpenPeppol\" />\n\t<meta property=\"article:modified_time\" content=\"[redacted-phone]T11:13:48+00:00\" />\n\t<meta name=\"twitter:card\" content=\"summary_large_image\" />\n\t\n\t\n\n\n<link href='https://fonts.gstatic.com' crossorigin rel='preconnect' />\n<link rel=\"alternate\" type=\"application/rss+xml\" title=\"OpenPeppol &raquo; Feed\" href=\"https://peppol.org/feed/\" />\n<link rel=\"alternate\" type=\"application/rss+xml\" title=\"OpenPeppol &raquo; Comments Feed\" href=\"https://peppol.org/comments/feed/\" />\n<link rel=\"alternate\" title=\"oEmbed (JSON)\" type=\"application/json+oembed\" href=\"https://peppol.org/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fpeppol.org%2F\" />\n<link rel=\"alternate\" title=\"oEmbed (XML)\" type=\"text/xml+oembed\" href=\"https://peppol.org/wp-json/oembed/1.0/embed?url=https%3A%2F%2Fpeppol.org%2F&#038;format=xml\" />\n\n<link rel='stylesheet' id='wp-event-manager-frontend-css' href='https://peppol.org/wp-content/plugins/wp-event-manager/assets/css/frontend.min.css?ver=7.1.3' media='all' />\n<link rel='stylesheet' id='wp-event-manager-jquery-ui-daterangepicker-css' href='https://peppol.org/wp-content/plugins/wp-event-manager/assets/js/jquery-ui-daterangepicker/jquery.comiseo.daterangepicker.css?ver=7.1.3' media='all' />\n<link rel='stylesheet' id='wp-event-manager-jquery-ui-daterangepicker-style-css' href='https://peppol.org/wp-content/plugins/wp-event-manager/assets/js/jquery-ui-daterangepicker/styles.css?ver=7.1.3' media='all' />\n<link rel='stylesheet' id='wp-event-manager-jquery-ui-css-css' href='https://peppol.org/wp-content/plugins/wp-event-manager/assets/js/jquery-ui/jquery-ui.css?ver=7.1.3' media='all' />\n<link rel='stylesheet' id='wp-event-manager-grid-style-css' href='https://peppol.org/wp-content/plugins/wp-event-manager/assets/css/wpem-grid.min.css?ver=7.1.3' media='all' />\n<link rel='stylesheet' id='wp-event-manager-font-style-css' href='https://peppol.org/wp-content/plugins/wp-event-manager/assets/fonts/style.css?ver=7.1.3' media='all' />\n\n\n\n\n\n\n\n\n\n<link rel='stylesheet' id='wp-event-manager-jquery-timepicker-css-css' href='https://peppol.org/wp-content/plugins/wp-event-manager/assets/js/jquery-timepicker/jquery.timepicker.min.css?ver=7.1.3' media='all' />\n<link rel='stylesheet' id='url-shortify-css' href='https://peppol.org/wp-content/plugins/url-shortify/lite/dist/styles/url-shortify.css?ver=2.4.1' media='all' />\n<link rel='stylesheet' id='oceanwp-style-css' href='https://peppol.org/wp-content/themes/oceanwp/assets/css/style.min.css?ver=1.0' media='all' />\n<link rel='stylesheet' id='child-style-css' href='https://peppol.org/wp-content/themes/oceanwp-child-theme-master/style.css?ver=7.1.3' media='all' />\n<link rel='stylesheet' id='font-awesome-css' href='https://peppol.org/wp-content/themes/oceanwp/assets/fonts/fontawesome/css/all.min.css?ver=6.7.2' media='all' />\n<link rel='stylesheet' id='simple-line-icons-css' href='https://peppol.org/wp-content/themes/oceanwp/assets/css/third/simple-line-icons.min.css?ver=2.4.0' media='all' />\n<link rel='stylesheet' id='oceanwp-google-font-montserrat-css' href='https://peppol.org/wp-content/uploads/oceanwp-webfonts-css/7b1d26ddb75797f9245819cf59fa8557.css?ver=7.1.3' media='all' />\n<link rel='stylesheet' id='tablepress-default-css' href='https://peppol.org/wp-content/tablepress-combined.min.css?ver=115' media='all' />\n<link rel='stylesheet' id='elementor-icons-css' href='https://peppol.org/wp-content/plugins/elementor/assets/lib/eicons/css/elementor-icons.min.css?ver=5.21.0' media='all' />\n<link rel='stylesheet' id='elementor-frontend-legacy-css' href='https://peppol.org/wp-content/plugins/elementor/assets/css/frontend-legacy.min.css?ver=3.15.3' media='all' />\n<link rel='stylesheet' id='elementor-frontend-css' href='https://peppol.org/wp-content/plugins/elementor/assets/css/frontend.min.css?ver=3.15.3' media='all' />\n<link rel='stylesheet' id='swiper-css' href='https://peppol.org/wp-content/plugins/elementor/assets/lib/swiper/css/swiper.min.css?ver=5.3.6' media='all' />\n<link rel='stylesheet' id='elementor-post-308-css' href='https://peppol.org/wp-content/uploads/elementor/css/post-308.css?ver=[redacted-phone]' media='all' />\n<link rel='stylesheet' id='elementor-pro-css' href='https://peppol.org/wp-content/plugins/elementor-pro/assets/css/frontend.min.css?ver=3.15.1' media='all' />\n<link rel='stylesheet' id='elementor-global-css' href='https://peppol.org/wp-content/uploads/elementor/css/global.css?ver=[redacted-phone]' media='all' />\n<link rel='stylesheet' id='elementor-post-709-css' href='https://peppol.org/wp-content/uploads/elementor/css/post-709.css?ver=[redacted-phone]' media='all' />\n<link rel='stylesheet' id='oe-widgets-style-css' href='https://peppol.org/wp-content/plugins/ocean-extra/assets/css/widgets.css?ver=7.1.3' media='all' />\n<link rel='stylesheet' id='osh-styles-css' href='https://peppol.org/wp-content/plugins/ocean-sticky-header/assets/css/style.min.css?ver=7.1.3' media='all' />\n\n<link rel='stylesheet' id='elementor-icons-shared-0-css' href='https://peppol.org/wp-content/plugins/elementor/assets/lib/font-awesome/css/fontawesome.min.css?ver=5.15.3' media='all' />\n<link rel='stylesheet' id='elementor-icons-fa-regular-css' href='https://peppol.org/wp-content/plugins/elementor/assets/lib/font-awesome/css/regular.min.css?ver=5.15.3' media='all' />\n<link rel='stylesheet' id='elementor-icons-fa-solid-css' href='https://peppol.org/wp-content/plugins/elementor/assets/lib/font-awesome/css/solid.min.css?ver=5.15.3' media='all' />\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com/\" crossorigin>\n\n\n\n<link rel=\"https://api.w.org/\" href=\"https://peppol.org/wp-json/\" /><link rel=\"alternate\" title=\"JSON\" type=\"application/json\" href=\"https://peppol.org/wp-json/wp/v2/pages/709\" /><link rel=\"EditURI\" type=\"application/rsd+xml\" title=\"RSD\" href=\"https://peppol.org/xmlrpc.php?rsd\" />\n<meta name=\"generator\" content=\"WordPress 7.1.3\" />\n<link rel='shortlink' href='https://peppol.org/' />\n\r\n\r\n\r\n\n<meta name=\"generator\" content=\"Elementor 3.15.3; features: additional_custom_breakpoints; settings: css_print_method-external, google_font-enabled, font_display-auto\">\n<link rel=\"icon\" href=\"https://peppol.org/wp-content/uploads/2024/01/cropped-Peppol-Logo-32x32.png\" sizes=\"32x32\" />\n<link rel=\"icon\" href=\"https://peppol.org/wp-content/uploads/2024/01/cropped-Peppol-Logo-192x192.png\" sizes=\"192x192\" />\n<link rel=\"apple-touch-icon\" href=\"https://peppol.org/wp-content/uploads/2024/01/cropped-Peppol-Logo-180x180.png\" />\n<meta name=\"msapplication-TileImage\" content=\"https://peppol.org/wp-content/uploads/2024/01/cropped-Peppol-Logo-270x270.png\" />\n\n\n<noscript></noscript><link rel='stylesheet' id='e-animations-css' href='https://peppol.org/wp-content/plugins/elementor/assets/lib/animations/animations.min.css?ver=3.15.3' media='all' />\n\n</head>"
+  },
+  "home_repeat": {
+   "status": 200,
+   "headers": {
+    "cache-control": "max-age=0, public",
+    "content-type": "text/html; charset=UTF-8",
+    "server": "nginx",
+    "content-encoding": "gzip"
+   },
+   "body_len": 130836
+  },
+  "robots": {
+   "status": 200,
+   "headers": {
+    "cache-control": "max-age=2592000",
+    "content-type": "text/plain; charset=utf-8",
+    "server": "nginx",
+    "content-encoding": "gzip"
+   },
+   "body_len": 168,
+   "text": "# START YOAST BLOCK\n# ---------------------------\nUser-agent: *\nDisallow:\n\nSitemap: https://peppol.org/sitemap_index.xml\n# ---------------------------\n# END YOAST BLOCK"
+  },
+  "sitemap": {
+   "status": 200,
+   "headers": {
+    "cache-control": "max-age=0",
+    "content-type": "text/xml; charset=UTF-8",
+    "server": "nginx",
+    "content-encoding": "gzip"
+   },
+   "body_len": 883,
+   "is_index": true,
+   "locs": [
+    "https://peppol.org/post-sitemap.xml",
+    "https://peppol.org/page-sitemap.xml",
+    "https://peppol.org/event_listing-sitemap.xml",
+    "https://peppol.org/category-sitemap.xml",
+    "https://peppol.org/author-sitemap.xml"
+   ]
+  },
+  "llms": {
+   "status": 404,
+   "headers": {
+    "cache-control": "no-cache, must-revalidate, max-age=0, no-store, private",
+    "content-type": "text/html; charset=UTF-8",
+    "server": "nginx",
+    "content-encoding": "gzip"
+   },
+   "body_len": 68639,
+   "has_html": true,
+   "text": ""
+  },
+  "markdown": {
+   "status": 200,
+   "headers": {
+    "cache-control": "max-age=0, public",
+    "content-type": "text/html; charset=UTF-8",
+    "server": "nginx",
+    "content-encoding": "gzip"
+   },
+   "body_len": 130836
+  },
+  "bot:GPTBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  },
+  "bot:OAI-SearchBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  },
+  "bot:ChatGPT-User": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  },
+  "bot:ClaudeBot": {
+   "status": 403,
+   "headers": {
+    "content-type": "text/html"
+   },
+   "body_len": 146
+  },
+  "bot:PerplexityBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  },
+  "bot:Googlebot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  },
+  "bot:Bingbot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  },
+  "bot:CCBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  },
+  "bot:Amazonbot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  },
+  "bot:Applebot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  },
+  "bot:Meta-ExternalAgent": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=UTF-8"
+   },
+   "body_len": 130836
+  }
+ },
+ "pages": [
+  {
+   "url": "https://peppol.org/",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 0,
+   "checks": {
+    "no_h1_tag": true,
+    "duplicate_meta_tags": true
+   },
+   "meta": {
+    "title": "The Future Is Open - OpenPeppol",
+    "description": "OpenPeppol is a not-for-profit organization that operates behind the Peppol network and the ongoing development of the Peppol format.",
+    "canonical": "https://peppol.org/",
+    "htags": {
+     "h1": [],
+     "h2": [
+      "Peppol integrates business processes by standardising the way information is structured and exchanged",
+      "BUYERS & SUPPLIERS",
+      "SERVICE PROVIDERS",
+      "POLICY ENABLERS"
+     ],
+     "h3": [
+      "EVENTS",
+      "Peppol Conference APAC 2026",
+      "Peppol Conference Europe June 2026",
+      "Peppol Day Finland 2026",
+      "LATEST NEWS",
+      "OpenPeppol strengthens security framework for the Peppol Network",
+      "UK Government Announces Peppol as Core Interoperability Network for Future eInvoicing Framework",
+      "More efficient global trade \u2013 Peppol Day Finland 2026 showed the way forward"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "The Future Is Open - OpenPeppol",
+     "og:description": "OpenPeppol is a not-for-profit organization that operates behind the Peppol network and the ongoing development of the Peppol format.",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 133,
+    "external_links_count": 3,
+    "content": {
+     "plain_text_word_count": 890
+    }
+   },
+   "checks_from": [
+    "no_h1_tag: the page has no <h1> element (measured on the fetched HTML)",
+    "duplicate_meta_tags: assumed set, so that our own homepage verification is scored against the real HTML (there is no crawl of this site)"
+   ]
+  },
+  {
+   "url": "https://peppol.org/faqs/",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {
+    "no_description": true
+   },
+   "meta": {
+    "title": "FAQs - OpenPeppol",
+    "description": "",
+    "canonical": "https://peppol.org/faqs/",
+    "htags": {
+     "h1": [
+      "FAQ"
+     ],
+     "h2": [
+      "Frequently Asked Questions"
+     ],
+     "h3": []
+    },
+    "social_media_tags": {
+     "og:title": "FAQs - OpenPeppol",
+     "og:description": "FAQ Frequently Asked Questions Find below here some of the most frequent asked questions within OpenPeppol: What is\u2026 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut elit tellus, luctus nec ullamcorper mattis, pulvinar dapibus leo. How do i\u2026 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Ut elit tellus, luctus nec ullamcorper mattis, pulvinar [&hellip;]",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 110,
+    "external_links_count": 2,
+    "content": {
+     "plain_text_word_count": 366
+    }
+   },
+   "checks_from": [
+    "no_description: the page serves no <meta description> (measured on the fetched HTML)"
+   ]
+  },
+  {
+   "url": "https://peppol.org/about/",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {
+    "no_description": true,
+    "no_h1_tag": true
+   },
+   "meta": {
+    "title": "About - OpenPeppol",
+    "description": "",
+    "canonical": "https://peppol.org/about/",
+    "htags": {
+     "h1": [],
+     "h2": [
+      "CHANGING THE WAY THE WORLD TRADES",
+      "The Peppol Story",
+      "Building an open network",
+      "A democratic, member-led organisation",
+      "Going global",
+      "Peppol is changing",
+      "the way the world trades"
+     ],
+     "h3": []
+    },
+    "social_media_tags": {
+     "og:title": "About - OpenPeppol",
+     "og:description": "CHANGING THE WAY THE WORLD TRADES Peppol is all about fast, efficient, borderless trade. Our network and document specifications integrate global business processes by standardising the way information is structured and exchanged. We enable public and private organisations to send and receive standard format business documents in an open and secure network. And we deliver [&hellip;]",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 110,
+    "external_links_count": 2,
+    "content": {
+     "plain_text_word_count": 816
+    }
+   },
+   "checks_from": [
+    "no_description: the page serves no <meta description> (measured on the fetched HTML)",
+    "no_h1_tag: the page has no <h1> element (measured on the fetched HTML)"
+   ]
+  },
+  {
+   "url": "https://peppol.org/members/",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {
+    "no_description": true
+   },
+   "meta": {
+    "title": "Members - OpenPeppol",
+    "description": "",
+    "canonical": "https://peppol.org/members/",
+    "htags": {
+     "h1": [
+      "Members"
+     ],
+     "h2": [],
+     "h3": []
+    },
+    "social_media_tags": {
+     "og:title": "Members - OpenPeppol",
+     "og:description": "Members You may find all information about members in the menu to the left.\u00a0 If you want to apply for membership, you may do so here.",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 117,
+    "external_links_count": 2,
+    "content": {
+     "plain_text_word_count": 355
+    }
+   },
+   "checks_from": [
+    "no_description: the page serves no <meta description> (measured on the fetched HTML)"
+   ]
+  },
+  {
+   "url": "https://peppol.org/learn-more/",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {
+    "no_description": true
+   },
+   "meta": {
+    "title": "Learn More - OpenPeppol",
+    "description": "",
+    "canonical": "https://peppol.org/learn-more/",
+    "htags": {
+     "h1": [
+      "Learn More"
+     ],
+     "h2": [],
+     "h3": []
+    },
+    "social_media_tags": {
+     "og:title": "Learn More - OpenPeppol",
+     "og:description": "Learn More Please navigate to the subsection of your interest.\u00a0",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 120,
+    "external_links_count": 2,
+    "content": {
+     "plain_text_word_count": 337
+    }
+   },
+   "checks_from": [
+    "no_description: the page serves no <meta description> (measured on the fetched HTML)"
+   ]
+  },
+  {
+   "url": "https://peppol.org/join/",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {
+    "no_description": true
+   },
+   "meta": {
+    "title": "Join - OpenPeppol",
+    "description": "",
+    "canonical": "https://peppol.org/join/",
+    "htags": {
+     "h1": [
+      "Join"
+     ],
+     "h2": [],
+     "h3": []
+    },
+    "social_media_tags": {
+     "og:title": "Join - OpenPeppol",
+     "og:description": "Join",
+     "twitter:card": "summary_large_image"
+    },
+    "internal_links_count": 118,
+    "external_links_count": 2,
+    "content": {
+     "plain_text_word_count": 943
+    }
+   },
+   "checks_from": [
+    "no_description: the page serves no <meta description> (measured on the fetched HTML)"
+   ]
+  }
+ ],
+ "crawl": {
+  "domain_info": {
+   "checks": {},
+   "ssl_info": {}
+  },
+  "page_metrics": {}
+ },
+ "checks_note": "`checks` are the DataForSEO page flags the audit reads. Only flags that can be justified from the saved evidence are set, and each page lists why in `checks_from`; every other flag is left unset, so no finding that depends on the paid crawl alone can fire."
+}

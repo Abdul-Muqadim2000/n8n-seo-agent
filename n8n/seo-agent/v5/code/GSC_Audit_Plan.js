@@ -1,8 +1,13 @@
 // Search Console + site-structure checks for the audit: keeps the incoming audit item, picks the pages to inspect in Search Console
 // (home, shallow and well-linked indexable pages, max 25), lists the crawled URLs for the sitemap comparison, and the 28-day window.
+/*__SITE_MODEL__*/
 const base = $input.first().json || {};
 const crawl = $('Check Crawl').first().json || {};
 const domain = String(crawl.domain || base.domain || '').toLowerCase();
+// D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain
+// 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.
+let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
+const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);
 let items = []; try { items = ($('Get Crawled Pages').first().json.tasks || [])[0].result[0].items || []; } catch (e) { items = []; }
 const norm = (u) => String(u || '').trim().replace(/#.*$/, '');
 const pages = items.filter(p => p && p.url && (p.resource_type || 'html') === 'html').map(p => ({ url: norm(p.url), status: Number(p.status_code) || 0, depth: p.click_depth == null ? null : Number(p.click_depth), inbound: Number((p.meta || {}).inbound_links_count ?? p.inbound_links_count ?? 0) || 0,
@@ -19,4 +24,4 @@ const end = new Date(Date.now() - 3 * 864e5); end.setUTCHours(0, 0, 0, 0);
 const iso = (d) => d.toISOString().slice(0, 10);
 return [{ json: { base, domain, crawl_pages: pages.length, crawl_indexable: indexable.length, crawl_limit: Number(crawl.crawl_max_pages) || 200, crawl_finished: !!crawl.crawl_finished, pages_crawled: Number(crawl.pages_crawled) || pages.length,
   pages: pages.map(p => ({ url: p.url, status: p.status, depth: p.depth, inbound: p.inbound, orphan: p.orphan, indexable: indexable.includes(p) })), sample: sample.map(inspectUrl),
-  sitemap_url: 'https://' + domain + '/sitemap.xml', range: { start: iso(new Date(end.getTime() - 27 * 864e5)), end: iso(end) } } }];
+  sitemap_url: siteUrlOf(domain, '/sitemap.xml'), range: { start: iso(new Date(end.getTime() - 27 * 864e5)), end: iso(end) } } }];

@@ -1,0 +1,687 @@
+{
+ "version": 1,
+ "category": "spam_labels",
+ "doc": "Labelled accuracy set for the backlink spam label (G18). Every row is a REAL referring site with the fields the ledger sees, taken from the runs named in `source`; `label` is the judgement a careful human gives after looking at the referring page. The scorer (score.js) feeds the rows through the real *Parse Backlinks* node (the D3 footprint gate inside it) and scores its `link_type === 'spam'` against the labels. Precision must stay at or above 95% (scenario S49). Nothing here is fetched or invented: the 16 link-farm rows and the three techand.ai referrers are execution 418 of 2026-10-12 (`files/phase1-live-2026-10-12/backlinks-parse-2026-10-12.json`), the PBN anchor and page title are DataForSEO's own (`harness/fixtures_live/bl_new.json`, real response of 2026-10-02), robuta.com is `bl_lost.json` of the same capture, and the competitor's referrers are execution 418's link gap plus the two real pages kept in `harness/fixtures_live/`. A case may also carry `low_value: true`: the link is genuine but worth nothing for SEO (a search-results page, a scraper's listing), so it must never appear among the site's \"best links\". score.js reports that as `best_link_precision` \u2014 measured and printed, not gated.",
+ "targets": [
+  {
+   "target": "techand.ai",
+   "note": "the site under audit: its own ledger of 2026-10-12 (19 rows) plus robuta.com, a referrer DataForSEO reported on 2026-10-02"
+  },
+  {
+   "target": "cleartax.com",
+   "note": "a competitor, so that genuine referring sites of a real e-invoicing vendor are scored too: the pages and domains that really link to it (execution 418's link gap, which is DataForSEO's referring-domain data for cleartax.com / azentio.com)"
+  }
+ ],
+ "cases": [
+  {
+   "id": "LK-01",
+   "target": "techand.ai",
+   "ref_domain": "sahammurah.com",
+   "label": "spam",
+   "reason": "one of 15 sites serving the same sold page path /all/2835/13.html with the anchor \"High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai \u2026\" and the page title \"Boost your Google rankings with Premium PBN & Link Building\": a link-farm page sold per domain",
+   "source": "exec 418 (2026-10-12) farms[2]; anchor and title from bl_new.json (DataForSEO, 2026-10-02)",
+   "entry": {
+    "from_url": "https://sahammurah.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 106,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-10-08",
+    "last_seen": "2026-10-08"
+   }
+  },
+  {
+   "id": "LK-02",
+   "target": "techand.ai",
+   "ref_domain": "dupurgeniefr.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01",
+   "source": "exec 418 farms[4]",
+   "entry": {
+    "from_url": "https://dupurgeniefr.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 14,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-10-01"
+   }
+  },
+  {
+   "id": "LK-03",
+   "target": "techand.ai",
+   "ref_domain": "cvillico.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01",
+   "source": "exec 418 farms[5]",
+   "entry": {
+    "from_url": "https://cvillico.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 0,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-09-27"
+   }
+  },
+  {
+   "id": "LK-04",
+   "target": "techand.ai",
+   "ref_domain": "onvaxs.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01; the index's own rank (262) is high, which is exactly why it ranked above peppol.org as a \"best link\" before D3",
+   "source": "exec 418 farms[6]; bl_new.json item 1",
+   "entry": {
+    "from_url": "https://onvaxs.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 262,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-09-27"
+   }
+  },
+  {
+   "id": "LK-05",
+   "target": "techand.ai",
+   "ref_domain": "thedocmag.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01; the page itself is kept as `fixtures_live/page_thedocmag.html.gz` (the link is gone and the page redirects elsewhere)",
+   "source": "exec 418 farms[7]; bl_new.json item 3",
+   "entry": {
+    "from_url": "https://thedocmag.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 154,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-09-27"
+   }
+  },
+  {
+   "id": "LK-06",
+   "target": "techand.ai",
+   "ref_domain": "kernelpanicpodcast.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01",
+   "source": "exec 418 farms[8]",
+   "entry": {
+    "from_url": "https://kernelpanicpodcast.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 65,
+    "spam": 70,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-09-21"
+   }
+  },
+  {
+   "id": "LK-07",
+   "target": "techand.ai",
+   "ref_domain": "fashionclothingnews.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01, on an unrelated fashion-news host",
+   "source": "exec 418 farms[9]",
+   "entry": {
+    "from_url": "https://fashionclothingnews.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 0,
+    "spam": 70,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-09-01"
+   }
+  },
+  {
+   "id": "LK-08",
+   "target": "techand.ai",
+   "ref_domain": "uncledspizza.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01, on a pizza restaurant's host",
+   "source": "exec 418 farms[10]",
+   "entry": {
+    "from_url": "https://uncledspizza.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 16,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-08-30"
+   }
+  },
+  {
+   "id": "LK-09",
+   "target": "techand.ai",
+   "ref_domain": "quotesblom.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01",
+   "source": "exec 418 farms[11]; bl_new.json item 4",
+   "entry": {
+    "from_url": "https://quotesblom.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 126,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-08-26"
+   }
+  },
+  {
+   "id": "LK-10",
+   "target": "techand.ai",
+   "ref_domain": "betwinnermirror.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01, and a gambling host (a Betwinner mirror) on top",
+   "source": "exec 418 farms[12]; bl_new.json item 5",
+   "entry": {
+    "from_url": "https://www.betwinnermirror.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 125,
+    "spam": 70,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-08-18"
+   }
+  },
+  {
+   "id": "LK-11",
+   "target": "techand.ai",
+   "ref_domain": "betulcrime.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01; the index's rank 193 again made it look valuable",
+   "source": "exec 418 farms[13]; bl_new.json item 2",
+   "entry": {
+    "from_url": "https://betulcrime.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 193,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-08-17"
+   }
+  },
+  {
+   "id": "LK-12",
+   "target": "techand.ai",
+   "ref_domain": "homesforsaleoldgreenwichct.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01, on a real-estate host",
+   "source": "exec 418 farms[14]",
+   "entry": {
+    "from_url": "https://homesforsaleoldgreenwichct.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 18,
+    "spam": 70,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-08-13"
+   }
+  },
+  {
+   "id": "LK-13",
+   "target": "techand.ai",
+   "ref_domain": "us.com",
+   "label": "spam",
+   "reason": "same sold path and PBN anchor as LK-01, served from the subdomain ggmap.us.com (the ledger keys it by its registrable domain, as the index does)",
+   "source": "exec 418 farms[15]",
+   "entry": {
+    "from_url": "https://ggmap.us.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 52,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-08-03"
+   }
+  },
+  {
+   "id": "LK-14",
+   "target": "techand.ai",
+   "ref_domain": "clifflisting.com",
+   "label": "spam",
+   "reason": "the same sold path, still live at the check (status at_risk, not lost): a live link-farm page is spam too",
+   "source": "exec 418 farms[1]",
+   "entry": {
+    "from_url": "https://clifflisting.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 0,
+    "spam": 60,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-10-10"
+   }
+  },
+  {
+   "id": "LK-15",
+   "target": "techand.ai",
+   "ref_domain": "bestnz-poker-casinoslot.com",
+   "label": "spam",
+   "reason": "the same sold path, and a gambling host by its name alone (poker / casino / slot)",
+   "source": "exec 418 farms[3]",
+   "entry": {
+    "from_url": "https://bestnz-poker-casinoslot.com/all/2835/13.html",
+    "anchor": "High Quality Dofollow Backlinks DA 50 PA 40 Premium PBN Network Service techand.ai Rank First Page Google Fast SEO Link Building Buy Backlinks Online Cheap",
+    "page_title": "\ud83c\udfc6\ud83c\udfc6Boost your Google rankings with Premium PBN & Link Building\ud83c\udfc6\ud83c\udfc6",
+    "authority": 0,
+    "spam": 70,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-10-04"
+   }
+  },
+  {
+   "id": "LK-16",
+   "target": "techand.ai",
+   "ref_domain": "seonix.agency",
+   "label": "spam",
+   "reason": "a guest-post / link-building agency page (\"grow your store, guest posts, DA jumped 20 points\"): it sells links, and the Link Analyst labelled it spam in the live run. The row carries that stored label, so the case checks that an analyst label survives into the ledger \u2014 the footprint gate alone would not catch it (the index reported no anchor or page title for it).",
+   "source": "exec 418 farms[0] (reason \"labelled spam by the Link Analyst\")",
+   "entry": {
+    "from_url": "https://seonix.agency/grow-your-store-guest-posts-da-jumped-20-points/",
+    "anchor": "",
+    "page_title": "",
+    "link_type": "spam",
+    "authority": 0,
+    "spam": 70,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-10-11",
+    "rel": "nofollow"
+   }
+  },
+  {
+   "id": "LK-17",
+   "target": "techand.ai",
+   "ref_domain": "peppol.org",
+   "label": "genuine",
+   "reason": "OpenPeppol's own full-members list naming Techand Systems L.L.C as a UAE access point: an authoritative association membership page, on topic, followed, in the content. DataForSEO's rank for it is 594 \u2014 the point of D3 is that this link must outrank the farm pages, not the other way round.",
+   "source": "exec 418 ledger row (verify found, sources ga4+cc); the page is kept as fixtures_live/page_peppol_members.html.gz",
+   "entry": {
+    "from_url": "https://peppol.org/members/full-members-list/",
+    "anchor": "https://techand.ai/",
+    "page_title": "Full members list - OpenPeppol",
+    "link_type": "profile",
+    "relevance": 1,
+    "authority": 594,
+    "spam": 26,
+    "sources": [
+     "ga4",
+     "cc"
+    ],
+    "visits": 12,
+    "cc_rank": 387900,
+    "first_seen": "2026-10-08",
+    "rel": "follow",
+    "placement": "content"
+   }
+  },
+  {
+   "id": "LK-18",
+   "target": "techand.ai",
+   "ref_domain": "linkedin.com",
+   "label": "genuine",
+   "reason": "a real social referral (77 sessions in GA4): a company profile link, worth little for SEO but never spam",
+   "source": "exec 418 ledger row (source ga4)",
+   "entry": {
+    "kind": "social",
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 0,
+    "spam": 0,
+    "sources": [
+     "ga4"
+    ],
+    "visits": 77,
+    "first_seen": "2026-10-08",
+    "rel": ""
+   }
+  },
+  {
+   "id": "LK-19",
+   "target": "techand.ai",
+   "ref_domain": "youtube.com",
+   "label": "genuine",
+   "reason": "a real social referral (1 session in GA4)",
+   "source": "exec 418 ledger row (source ga4)",
+   "entry": {
+    "kind": "social",
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 0,
+    "spam": 0,
+    "sources": [
+     "ga4"
+    ],
+    "visits": 1,
+    "first_seen": "2026-10-08",
+    "rel": ""
+   }
+  },
+  {
+   "id": "LK-20",
+   "target": "techand.ai",
+   "ref_domain": "robuta.com",
+   "label": "genuine",
+   "reason": "a search-engine results page (robuta.com/?q=business+impact) that happens to list the site: worth nothing for SEO, so it must be capped as a scraper link (link_type 'scraper', SEO value at most 5, brand value 0) and must never be ranked among the site's best links. It is not a link farm: it stays genuine, out of the disavow list and out of the lost / reclaim lists. Fixed by G18-1 on 2026-10-12 (Parse_Backlinks.js marks a search / query URL on a host with no topic match); before that it was reported as techand.ai's best link at SEO value 57, above the OpenPeppol members list at 35.",
+   "source": "fixtures_live/bl_lost.json (real DataForSEO response, 2026-10-02)",
+   "entry": {
+    "from_url": "https://robuta.com/?q=business+impact",
+    "anchor": "",
+    "page_title": "business impact - Robuta Search",
+    "authority": 192,
+    "spam": 0,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-05-02",
+    "rel": "follow"
+   },
+   "low_value": true
+  },
+  {
+   "id": "LK-21",
+   "target": "cleartax.com",
+   "ref_domain": "mof.gov.ae",
+   "label": "genuine",
+   "reason": "the UAE Ministry of Finance's list of accredited e-invoicing service providers, linking to the vendor with its URL as the anchor: the most authoritative link in this market",
+   "source": "exec 418 link gap (mof.gov.ae links to cleartax.com and azentio.com); the page is kept as fixtures_live/lb_page_mof_asp_list.html.gz",
+   "entry": {
+    "from_url": "https://mof.gov.ae/en/about-us/initiatives/einvoicing/pre-approved-einvoicing-service-providers/",
+    "anchor": "www.cleartax.com/ae",
+    "page_title": "eInvoicing Accredited Service Providers (ASPs) | Ministry of Finance - United Arab Emirates",
+    "to_url": "https://www.cleartax.com/ae",
+    "authority": 65,
+    "spam": 0,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-06-01",
+    "rel": "follow",
+    "placement": "content"
+   }
+  },
+  {
+   "id": "LK-22",
+   "target": "cleartax.com",
+   "ref_domain": "azdan.com",
+   "label": "genuine",
+   "reason": "a vendor's \"Top 20 UAE E-Invoicing ASP\" blog list that names the brand with a brand anchor: an editorial listicle, not a footprint \u2014 several such lists exist on different sites, which is why the gate must not cluster list pages by shape alone",
+   "source": "exec 418 link gap / prospect list; the page is kept as fixtures_live/lb_page_azdan_top20.html.gz",
+   "entry": {
+    "from_url": "https://www.azdan.com/blog/top-20-uae-einvoicing-service-providers",
+    "anchor": "ClearTax",
+    "page_title": "Top 20 UAE E-Invoicing ASP | Azdan",
+    "to_url": "https://www.cleartax.com/ae",
+    "authority": 120,
+    "spam": 0,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-07-14",
+    "rel": "follow",
+    "placement": "content"
+   }
+  },
+  {
+   "id": "LK-23",
+   "target": "cleartax.com",
+   "ref_domain": "uae-asp.ae",
+   "label": "genuine",
+   "reason": "a UAE accredited-provider directory that links to the vendor; the index reports no spam at all",
+   "source": "exec 418 link gap (rank 25, spam 0)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 25,
+    "spam": 0,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-05-20"
+   }
+  },
+  {
+   "id": "LK-24",
+   "target": "cleartax.com",
+   "ref_domain": "stripe.com",
+   "label": "genuine",
+   "reason": "a payments company's own site: a household name, off the vendor's topic (so never an outreach target, D23), but a real and genuine link",
+   "source": "exec 418 link gap (rank 729, spam 5)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 729,
+    "spam": 5,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-04-02"
+   }
+  },
+  {
+   "id": "LK-25",
+   "target": "cleartax.com",
+   "ref_domain": "weforum.org",
+   "label": "genuine",
+   "reason": "the World Economic Forum: genuine, although the index gives it a spam score of 24 \u2014 a score alone must never set the spam label",
+   "source": "exec 418 link gap (rank 537, spam 24)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 537,
+    "spam": 24,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-03-11"
+   }
+  },
+  {
+   "id": "LK-26",
+   "target": "cleartax.com",
+   "ref_domain": "gulfnews.com",
+   "label": "genuine",
+   "reason": "a UAE newspaper: genuine press coverage, and the highest index spam score in the gap (28)",
+   "source": "exec 418 link gap (rank 482, spam 28)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 482,
+    "spam": 28,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-02-19"
+   }
+  },
+  {
+   "id": "LK-27",
+   "target": "cleartax.com",
+   "ref_domain": "clear.in",
+   "label": "genuine",
+   "reason": "ClearTax's own sister domain: a genuine link (it must not be pitched as a prospect, which is D23, but it is not spam)",
+   "source": "exec 418 link gap (rank 464, spam 1)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 464,
+    "spam": 1,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-01-30"
+   }
+  },
+  {
+   "id": "LK-28",
+   "target": "cleartax.com",
+   "ref_domain": "kirkland.com",
+   "label": "genuine",
+   "reason": "a law firm's site: genuine, off topic for outreach",
+   "source": "exec 418 link gap (rank 389, spam 14)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 389,
+    "spam": 14,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-02-02"
+   }
+  },
+  {
+   "id": "LK-29",
+   "target": "cleartax.com",
+   "ref_domain": "gettoplists.com",
+   "label": "genuine",
+   "reason": "a listicle site (\"get top lists\"): low value and worth watching, but a list site is not a link farm \u2014 the gate must not judge a domain by the words in its name",
+   "source": "exec 418 link gap (rank 279, spam 23)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 279,
+    "spam": 23,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-05-05"
+   }
+  },
+  {
+   "id": "LK-30",
+   "target": "cleartax.com",
+   "ref_domain": "technologycounter.com",
+   "label": "genuine",
+   "reason": "a software-listing directory: a real directory link, the kind the gate must leave alone",
+   "source": "exec 418 link gap (rank 460, spam 1)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 460,
+    "spam": 1,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-04-18"
+   }
+  },
+  {
+   "id": "LK-31",
+   "target": "cleartax.com",
+   "ref_domain": "vatupdate.com",
+   "label": "genuine",
+   "reason": "a VAT news site: squarely on the vendor's topic",
+   "source": "exec 418 link gap (rank 281, spam 17)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 281,
+    "spam": 17,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-06-07"
+   }
+  },
+  {
+   "id": "LK-32",
+   "target": "cleartax.com",
+   "ref_domain": "navan.com",
+   "label": "genuine",
+   "reason": "a travel-and-expense software vendor: a genuine partner-style link",
+   "source": "exec 418 link gap (rank 381, spam 11)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 381,
+    "spam": 11,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-03-28"
+   }
+  },
+  {
+   "id": "LK-33",
+   "target": "cleartax.com",
+   "ref_domain": "humanrightsresearch.org",
+   "label": "genuine",
+   "reason": "a research non-profit: entirely off topic, and still genuine \u2014 being irrelevant is not being spam",
+   "source": "exec 418 link gap (rank 244, spam 16)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 244,
+    "spam": 16,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-07-01"
+   }
+  },
+  {
+   "id": "LK-34",
+   "target": "cleartax.com",
+   "ref_domain": "growthx.club",
+   "label": "genuine",
+   "reason": "a growth-marketing community on a .club domain: the kind of host a name-based rule would punish, with nothing on the page that sells links",
+   "source": "exec 418 link gap (rank 232, spam 15)",
+   "entry": {
+    "from_url": "",
+    "anchor": "",
+    "page_title": "",
+    "authority": 232,
+    "spam": 15,
+    "sources": [
+     "dfs"
+    ],
+    "first_seen": "2026-08-09"
+   }
+  }
+ ]
+}

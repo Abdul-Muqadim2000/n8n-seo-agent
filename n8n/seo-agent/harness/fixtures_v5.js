@@ -58,4 +58,42 @@ const ladderRelevance = (chunk) => ({ output: { items: chunk.keywords_chunk.map(
     topic: kw.replace(/\b(dubai|uae|cost|pricing|best|company|services|partner|consultants|for distributors|software|in)\b/g, '').replace(/\s+/g, ' ').trim().split(' ').slice(0, 2).join(' ') || 'e invoicing' }; }) } });
 // tracker: a SERP with our domain at `position` (0 = absent)
 const serpFor = (keyword, domain, position) => task({ keyword, items: [...Array.from({ length: 30 }, (_, i) => ({ type: 'organic', rank_group: i + 1, rank_absolute: i + 2, domain: i + 1 === position ? 'www.' + domain : 'site' + (i + 1) + '.example', url: i + 1 === position ? 'https://www.' + domain + '/' + keyword.replace(/\s+/g, '-') + '/' : 'https://site' + (i + 1) + '.example/p' })), { type: 'people_also_ask', items: [] }, { type: 'ai_overview', items: [] }] });
-module.exports = { task, kwItem, ideas, suggestions, related, runResearch, runCompetitorKeywords, relevance, aiDemand, factsSerp, critique, briefV5, draftV5, rankedFor, ladderResearch, ladderRelevance, serpFor };
+// G6 (2026-10-12, FIX_PLAN): a whole results page for one rank check, built the way DataForSEO's serp/google/organic/live/advanced
+// answers it (the shapes come from fixtures_live/aio.json, captured on 2026-10-02). Options:
+//   keyword, domain, position (our rank over the whole depth; 0 = absent), top (the domains of positions 1..n),
+//   aio: false | 'cited' | 'uncited' | 'async' (Google loaded it asynchronously: the item is there, its sources are not),
+//   snippet: false | 'ours' | '<domain>', paa: [questions], local: false | true | 'ours', video, shopping, at (the page's datetime),
+//   error: 'task' (DataForSEO's 50000 inside an HTTP 200) | 'http'
+const serpRich = (o = {}) => {
+  const keyword = o.keyword || 'e invoicing software uae';
+  const domain = o.domain || 'techand.ai';
+  const at = o.at || '2026-10-12 08:03:17 +00:00';
+  if (o.error === 'http') return { error: { message: 'connect ETIMEDOUT' } };
+  if (o.error === 'task') return { version: '0.1.2026', status_code: 20000, status_message: 'Ok.', tasks: [{ id: 'x', status_code: 50000, status_message: 'Internal Server Error.', result: null }] };
+  const top = (o.top || ['cleartax.com', 'tax.gov.ae', 'zoho.com', 'complyance.io', 'finline.ae', 'grantthornton.ae', 'hawksford.com', 'pwc.com', 'kpmg.com', 'deloitte.com']).slice(0, 10);
+  const slots = top.slice();
+  if (Number(o.position) > 0 && Number(o.position) <= 10) slots[Number(o.position) - 1] = domain;   // our page takes that position on page 1
+  const items = [];
+  if (o.aio) {
+    const cites = o.cites || (o.aio === 'cited' ? ['tax.gov.ae', domain, 'grantthornton.ae'] : ['tax.gov.ae', 'cleartax.com', 'grantthornton.ae']);
+    const refs = cites.map((d, i) => ({ type: 'ai_overview_reference', position: 'right', source: d, domain: (i % 2 ? 'www.' : '') + d, url: 'https://' + (i % 2 ? 'www.' : '') + d + '/e-invoicing/', title: 'E-invoicing in the UAE', text: 'The UAE e-invoicing mandate applies from July 2026.' }));
+    items.push({ type: 'ai_overview', rank_group: 1, rank_absolute: 1, position: 'left', asynchronous_ai_overview: o.aio === 'async',
+      markdown: o.aio === 'async' ? null : 'The UAE requires e-invoicing through accredited service providers.',
+      items: o.aio === 'async' ? [] : [{ type: 'ai_overview_element', position: 'left', title: null, text: 'The UAE requires e-invoicing through accredited service providers.', references: refs.slice(0, 1), links: [{ type: 'link_element', url: 'https://tax.gov.ae/en/content/uae.einvoicing.aspx' }] }],
+      references: o.aio === 'async' ? [] : refs });
+  }
+  if (o.snippet) items.push({ type: 'featured_snippet', rank_group: 1, rank_absolute: 2, domain: o.snippet === 'ours' ? 'www.' + domain : o.snippet, url: 'https://' + (o.snippet === 'ours' ? 'www.' + domain : o.snippet) + '/guide/', title: 'What is e-invoicing?', description: 'E-invoicing is the structured exchange of invoices between a supplier and a buyer.' });
+  slots.forEach((d, i) => items.push({ type: 'organic', rank_group: i + 1, rank_absolute: i + 3, page: 1, domain: (i % 3 === 0 ? 'www.' : '') + d, title: 'Page about ' + keyword + ' (' + d + ')', url: 'https://' + (i % 3 === 0 ? 'www.' : '') + d + '/' + keyword.replace(/\s+/g, '-') + '/' }));
+  if (o.paa) items.push({ type: 'people_also_ask', rank_group: 1, rank_absolute: 14, items: (Array.isArray(o.paa) ? o.paa : ['Is e-invoicing mandatory in the UAE?', 'Who are the accredited service providers?']).map(q => ({ type: 'people_also_ask_element', title: q })) });
+  if (o.local) items.push({ type: 'local_pack', rank_group: 1, rank_absolute: 15, title: 'E-invoicing providers in Dubai', domain: o.local === 'ours' ? domain : 'maps.google.com', url: o.local === 'ours' ? 'https://' + domain + '/' : 'https://maps.google.com/x',
+    items: [{ type: 'local_pack_element', title: o.local === 'ours' ? 'Tech&' : 'Another provider', domain: o.local === 'ours' ? domain : 'otherprovider.ae', url: 'https://' + (o.local === 'ours' ? domain : 'otherprovider.ae') + '/' }] });
+  if (o.video) items.push({ type: 'video', rank_group: 1, rank_absolute: 16, items: [{ type: 'video_element', source: 'YouTube', title: 'UAE e-invoicing explained', url: 'https://www.youtube.com/watch?v=x' }] });
+  if (o.shopping) items.push({ type: 'shopping', rank_group: 1, rank_absolute: 17, items: [{ type: 'shopping_element', title: 'Invoicing software', domain: 'shop.example' }] });
+  // a position deeper than page 1 (the depth-50 check still finds it)
+  if (Number(o.position) > 10) items.push({ type: 'organic', rank_group: Number(o.position), rank_absolute: Number(o.position) + 3, page: Math.ceil(Number(o.position) / 10), domain: 'www.' + domain, title: 'Our page', url: 'https://www.' + domain + '/' + keyword.replace(/\s+/g, '-') + '/' });
+  if (o.related) items.push({ type: 'related_searches', rank_group: 1, rank_absolute: 18, items: ['e invoicing uae deadline', 'peppol uae'] });
+  return { version: '0.1.2026', status_code: 20000, status_message: 'Ok.', cost: 0.015,
+    tasks: [{ id: 'x', status_code: 20000, status_message: 'Ok.', cost: 0.015, time: at, data: { api: 'serp', function: 'live', se: 'google', se_type: 'organic', keyword, depth: 50, device: o.device || 'desktop', os: (o.device === 'mobile' ? 'android' : 'windows') },
+      result: [{ keyword, type: 'organic', se_domain: 'google.ae', location_code: 2784, language_code: 'en', datetime: at, item_types: [...new Set(items.map(x => x.type))], se_results_count: 1420000, items_count: items.length, items }] }] };
+};
+module.exports = { task, kwItem, ideas, suggestions, related, runResearch, runCompetitorKeywords, relevance, aiDemand, factsSerp, critique, briefV5, draftV5, rankedFor, ladderResearch, ladderRelevance, serpFor, serpRich };

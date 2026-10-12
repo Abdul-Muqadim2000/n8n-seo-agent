@@ -31,6 +31,7 @@ export function AuditReport({ report }: { report: ReportDetail }) {
   const counts = obj(p.issue_counts);
   const diff = obj(p.audit_diff);
   const top = strs(p.top_issues);
+  const minorCount = num(p.minor_count) ?? 0;
   const isFull = report.stage === 'full_report';
   const domain = str(p.domain);
   const tone = scoreTone(score);
@@ -82,7 +83,13 @@ export function AuditReport({ report }: { report: ReportDetail }) {
         }
       />
 
-      <Block title="Issues found" description={`${SEVERITIES.reduce((a, k) => a + c(k), 0)} findings by severity`} icon={<TriangleAlert />} iconTone={c('Critical') ? 'critical' : c('High') ? 'serious' : 'blue'}>
+      {/* G18-2 (2026-10-12): the report folds its minor items into one line and says how many — the same number the technical page folds. */}
+      <Block
+        title="Issues found"
+        description={`${SEVERITIES.reduce((a, k) => a + c(k), 0)} findings by severity${minorCount ? ` · ${minorCount} minor ${minorCount === 1 ? 'item' : 'items'} folded into one line in the report` : ''}`}
+        icon={<TriangleAlert />}
+        iconTone={c('Critical') ? 'critical' : c('High') ? 'serious' : 'blue'}
+      >
         <DistributionBar label="Issues by severity" segments={SEVERITIES.map((k) => ({ label: k, value: c(k), color: SEV_COLOR[k] }))} />
         <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-5">
           {SEVERITIES.map((s) => (

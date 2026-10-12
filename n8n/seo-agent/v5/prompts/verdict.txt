@@ -9,7 +9,7 @@ Website: {{ $json.domain || 'Not provided' }}
 Target Country: {{ $json.country }}
 Intended Page Type: {{ $json.page_type }}
 Business goal: {{ $json.goal || 'leads' }}
-{{ $json.existing_page ? 'The site already has a page on this topic: ' + $json.existing_page.url : 'No existing page on this topic was found on the site.' }}
+{{ $json.existing_page ? 'THE SITE ALREADY HAS A PAGE FOR THIS SEARCH: ' + $json.existing_page.url + ' — the plan is to IMPROVE that page. Never recommend a new page or a second URL for this keyword.' : 'No existing page on this topic was found on the site.' }}
 
 SITE AUTHORITY (the client's site today)
 {{ $json.site_authority ? JSON.stringify($json.site_authority) : 'unknown — no domain given or no data' }}
@@ -46,3 +46,6 @@ RULES
 - Use AVOID only when the fit is clearly poor: unrealistic ranking odds, wrong intent, or dominant competitors with no content gap to exploit.
 - Use GO_WITH_CHANGES when the keyword is workable but the page type, angle, or targeting should change first.
 - reasons and risks must reference the actual numbers/data above, not generic SEO advice.
+- An AI Overview, a featured snippet or any other results-page feature is ONE observation at ONE time (the check time is in the SEARCH RESULTS PAGE FEATURES block). Write "an AI Overview was seen in the check at …" or "no AI Overview was seen in the check at …", never "there is no AI Overview" or "the AI Overview takes the clicks" as a fact; AI Overviews vary between searches, so the verdict and the score must not hinge on that one observation.
+- When a page of the site is named above as already answering this search, every recommendation is about THAT URL: `recommended_page` is the page type that URL should become, `what_must_change` starts with what to change on it (name the URL), and nothing may suggest publishing a new page, a second URL, a "dedicated" or "separate" page for the keyword. Two pages for one search split the signals and neither ranks.
+- time_to_rank_months is a realistic MONTH count for a new page to reach the top 10, judged against the 2025 base rate (Ahrefs: only 1.74% of new pages reach the top 10 within a year, and 40.8% of those do so within a month) and the site's authority — weeks are never realistic for a page without existing rankings.

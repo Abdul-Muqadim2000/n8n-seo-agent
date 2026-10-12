@@ -3,11 +3,11 @@
 /*__DOMAIN_RULES__*/
 // Keyword Check (v4.8, PIPELINE_FEATURE_SPEC §5.2): validates POST /webhook/seo-keyword-assess { keyword, country, domain, business?, services?,
 // existing_keywords? } with the main workflow's own country list and domain rules (copied in by build_api.py). Invalid -> 400 with one message per
-// field; a daily limit per caller (the web app sends X-Forwarded-For app:<company>, 40 a day each; 400 a day in total) -> 429.
+// field. The daily limit per caller (the web app sends X-Forwarded-For app:<company>, 40 a day each; 400 a day in total -> 429) is checked by
+// Assess Limit from the run ledger after this request reserved its row (v4.14, D1).
 const raw = $input.first().json || {};
 const b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};
 const hdr = raw.headers || {};
-const LIMITS = { per_key_per_day: 40, global_per_day: 400 };
 const errors = {};
 const keyword = String(b.keyword == null ? '' : b.keyword).toLowerCase().replace(/\s+/g, ' ').trim();
 if (typeof b.keyword !== 'string' || keyword.length < 2 || keyword.length > 100) errors.keyword = 'keyword must be 2-100 characters';
@@ -21,20 +21,11 @@ if (b.services != null && !Array.isArray(b.services) && typeof b.services !== 's
 if (b.existing_keywords != null && !Array.isArray(b.existing_keywords)) errors.existing_keywords = 'existing_keywords must be an array of strings';
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).trim()).filter(Boolean);
 const bad = Object.keys(errors).length > 0;
-// daily limit (counted only for valid requests; static data persists for production webhook runs)
+// the caller's key for the daily limit (v4.14, D1: counted by Assess Limit from the run ledger once this valid request has reserved its row)
 const client = String(hdr['x-forwarded-for'] || hdr['x-real-ip'] || '').split(',')[0].trim().toLowerCase();
 const key = /^app:[a-z0-9-]{6,64}$/.test(client) ? client : (client || 'anon');
-let limited = '';
-if (!bad) {
-  const store = $getWorkflowStaticData('global'); const today = new Date().toISOString().slice(0, 10);
-  if (!store.assess || store.assess.day !== today) store.assess = { day: today, total: 0, keys: {} };
-  const used = store.assess.keys[key] || 0;
-  if (used >= LIMITS.per_key_per_day) limited = 'The daily limit of ' + LIMITS.per_key_per_day + ' keyword checks is reached. Please try again tomorrow.';
-  else if (store.assess.total >= LIMITS.global_per_day) limited = 'The daily limit of ' + LIMITS.global_per_day + ' keyword checks for all callers is reached. Please try again tomorrow.';
-  else { store.assess.keys[key] = used + 1; store.assess.total += 1; }
-}
 const c = COUNTRIES[countryName] || {};
-return [{ json: { ok: !bad && !limited, status: bad ? 400 : limited ? 429 : 200, errors, error: bad ? Object.values(errors).join('; ') : limited,
+return [{ json: { ok: !bad, status: bad ? 400 : 200, errors, error: bad ? Object.values(errors).join('; ') : '',
   keyword, domain, site_id: domain ? reachSiteId(domain) : '', country: countryName, country_iso: c.iso || '', location_code: c.code || null, language_code: c.lang || 'en',
   business: typeof b.business === 'string' ? b.business.trim().slice(0, 1500) : '', services: listOf(b.services).slice(0, 20).map(s => s.slice(0, 120)),
   existing_keywords: listOf(b.existing_keywords).slice(0, 300).map(s => s.toLowerCase().slice(0, 120)), caller: key, request_id: String(b.request_id || ('assess-' + $execution.id)) } }];

@@ -1,4 +1,7 @@
 /*__REACH__*/
+/*__FIT_GATE__*/
+/*__PAGE_TYPE__*/
+/*__SITE_MODEL__*/
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
 // cluster, maps internal links, matches existing pages, estimates the timeline and picks the pages to write now.
 // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): everything is measured against the site's REACH (stored 30 days in seo_cache, else measured from this
@@ -13,6 +16,10 @@ const chunks = $('Ladder Relevance Chunks').all().map(i => i.json);
 const outs = $input.all().map(i => i.json);
 const head = String(base.keyword || '').toLowerCase().trim();
 const domain = String(base.domain || '').toLowerCase();
+// D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain
+// 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.
+let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
+const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);
 const pagesNow = Math.min(3, Math.max(1, Number(base.pages_now) || 1));
 const ladderId = String(base.ladder_id || ('lad_' + Date.now().toString(36)));
 const parse = (raw) => { if (raw && typeof raw === 'object') return raw; try { return JSON.parse(String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '')); } catch (e) { return {}; } };
@@ -57,7 +64,14 @@ outs.forEach((o, i) => {
 });
 const RELF = { 2: 1, 1: 0.45, 0: 0 };
 const excluded = [];
-const kws = ((pool.research || {}).candidates || []).map(k => {
+// 2026-10-11 (FIX_PLAN D8): the pool already refused other brands / government / portal keywords (research.refused); the gate runs once more here
+// with the AI screen's intent in hand, so a keyword the AI called navigational never reaches a rung either
+const poolRefused = ((pool.research || {}).refused || []).slice();
+let cacheRowsP = []; try { cacheRowsP = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsP = []; }
+const sdP = base.site_description || {};
+const fitCtxP = { own_domain: domain, competitors: (base.competitors || []).map(String), serp_domains: [...new Set((base.competitors_summary || []).map(c => String(c.domain || '')).filter(Boolean))],
+  brands: fitLearnedBrands(cacheRowsP), protect: [head, ...(sdP.products_or_services || []), ...(base.services || []), String(base.business || sdP.business_description || '').slice(0, 400)] };
+const kws = ((pool.research || {}).candidates || []).filter(k => { const g = fitGate(k.keyword, { ...fitCtxP, intent: (rel.get(k.keyword) || {}).intent || k.intent }); if (!g.ok) poolRefused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return g.ok; }).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
@@ -75,24 +89,23 @@ const rungOf = (k) => { const kd = kdOf(k); if (kd <= BAND[1] && k.volume >= 20 
 const byRung = { 1: [], 2: [], 3: [] }; const later = [];
 for (const k of kws) { const r = rungOf(k); if (r) byRung[r].push(k); else later.push(k); }
 
-// ---- existing pages on the site (sitemap tokens or the URL that already ranks) ----
-const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'your', 'our', 'best', 'top', 'services', 'service', 'company', 'how', 'what', 'is', 'are', 'near', 'me', 'vs', 'page', 'pages', 'html', 'php', 'index', 'home']);
-const tok = (s) => String(s || '').toLowerCase().replace(/\.(html?|php|aspx?)$/g, '').split(/[^a-z0-9]+/).filter(t => t.length > 1 && !STOP.has(t));
-const sitePages = (base.site_urls || []).map(u => ({ url: u, tokens: tok(String(u).replace(/^https?:\/\/[^\/]+/i, '')) }));
+// ---- existing pages on the site (the site model's page inventory, this run's sitemap, or the URL that already ranks) ----
+// 2026-10-12 (FIX_PLAN D11): the old rule scored the keyword's words against the slug's with Jaccard >= 0.5, so 3 keyword words in a
+// 9-word slug gave 0.33 and the live page was missed: the 2026-10-01 plan wrote "uae e invoicing penalties" as a NEW page although
+// /insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs had been live since August. SM.matchPage decides now:
+// a page answers the keyword when >= 75% of its meaningful words are in the slug or the title, or when it already gets impressions for
+// the exact query (seo_pages, filled weekly by the Site Tracker). A hit means status 'improve' with the real URL, never a second page.
+const siteModel = (() => { try { const m = $('Site Model').first().json.site_model; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } })();
+const invPages = [...(base.site_urls || []).map(u => ({ url: u, source: 'sitemap' })),
+  ...((base.internal_link_candidates || []).filter(c => c && c.url && c.title).map(c => ({ url: c.url, title: c.title, source: 'sitemap' })))];
+const pageModel = SM.withPages(siteModel || SM.from({ domain }, {}), invPages);
 const findExisting = (keyword, yourUrl) => {
   if (yourUrl) return { url: yourUrl, source: 'ranking' };
-  const kt = new Set(tok(keyword)); if (!kt.size) return null;
-  let best = null;
-  for (const p of sitePages) {
-    const o = p.tokens.filter(t => kt.has(t)).length;
-    if (o < Math.min(2, kt.size)) continue;
-    const j = o / new Set([...p.tokens, ...kt]).size;
-    if (j >= 0.5 && (!best || j > best.j)) best = { url: p.url, j };
-  }
-  return best ? { url: best.url, source: 'sitemap' } : null;
+  const m = SM.matchPage(pageModel, keyword);
+  return m ? { url: m.url, source: m.source === 'gsc' || m.matched_by === 'query' ? 'search console' : 'sitemap', matched_by: m.matched_by, title: m.title || '' } : null;
 };
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const homeUrl = domain ? 'https://' + domain + '/' : '';
+const homeUrl = domain ? siteUrlOf(domain, '/') : '';
 const plannedUrl = (kw) => homeUrl + slug(kw) + '/';
 
 // ---- one page per topic cluster inside each rung ----
@@ -108,7 +121,10 @@ const makePages = (list, rung) => {
     const p = ks[0];
     const ex = findExisting(p.keyword, p.your_url);
     const pos = ks.map(k => k.your_position).filter(Boolean);
-    return { rung, keyword: p.keyword, topic: p.topic, page_type: p.page_type, intent: p.intent, volume: p.volume, kd: p.kd, cpc: p.cpc, opportunity: p.opportunity,
+    // FIX_PLAN D10 (2026-10-12): the AI screen answers in free text ("Comparison Page", "Service Page with a cost section"); the row,
+    // the spawned page run and the brief take one of the form's fixed types, and the sentence itself stays as page_notes.
+    const ptype = PT.of(p.page_type, defaultPage(p.intent));
+    return { rung, keyword: p.keyword, topic: p.topic, page_type: ptype, page_notes: PT.notes(p.page_type, ptype), intent: p.intent, volume: p.volume, kd: p.kd, cpc: p.cpc, opportunity: p.opportunity,
       supporting: ks.slice(1, 7).map(k => k.keyword),
       keywords: ks.slice(0, 8).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, your_position: k.your_position })),
       total_volume: ks.reduce((s, k) => s + k.volume, 0), traffic_potential: ks.reduce((s, k) => s + (k.traffic_potential || 0), 0),
@@ -121,12 +137,26 @@ const rungs = [1, 2, 3].map(r => ({ rung: r, label: bandLabel(r), band_max: BAND
 // ---- the main keyword for this site: difficulty, plan type, months ----
 const kd = base.keyword_data || {}; const headRank = SR.head || null;
 const verdict = base.verdict || 'GO_WITH_CHANGES';
-const navigational = /navigational/i.test(String(kd.google_intent || '')) || (base.verdict_reasons || []).some(r => /navigational|brand (term|name|search)|another company/i.test(String(r)));
-const difficulty_for_you = difficultyForYou(kd.keyword_difficulty ?? null, reach, { navigational, verdict, position: headRank ? headRank.position : null });
+// D8: the main keyword through the same gate, with its own results page in hand (one domain whose label is in the keyword holding 3+ of the
+// top 5 = a brand query); the head term itself is not a protected word here
+const headSerp = (base.competitors_summary || []).slice().sort((a, b) => (Number(a.rank) || 99) - (Number(b.rank) || 99)).map(c => String(c.domain || '')).filter(Boolean);
+const headGate = fitGate(head, { ...fitCtxP, intent: kd.google_intent || '', serp: headSerp, protect: fitCtxP.protect.slice(1) });
+const other_brand = !headGate.ok && headGate.reason === 'other brand';
+const navigational = /navigational/i.test(String(kd.google_intent || '')) || (base.verdict_reasons || []).some(r => /navigational|brand (term|name|search)|another company/i.test(String(r))) || (!headGate.ok && ['navigational', 'own brand', 'government', 'portal'].includes(headGate.reason));
+const difficulty_for_you = difficultyForYou(kd.keyword_difficulty ?? null, reach, { navigational, other_brand, verdict, position: headRank ? headRank.position : null });
 const strongSite = reachStrong(sa, headRank ? headRank.position : null);
 const plan = reachPlan(difficulty_for_you, strongSite);
-const top = { rung: 4, keyword: head, page_type: base.recommended_page || base.page_type || 'Service Page', intent: kd.google_intent || null, volume: kd.search_volume ?? null, kd: kd.keyword_difficulty ?? null, cpc: kd.cpc ?? null,
+const topType = PT.of(base.recommended_page || base.page_type, base.page_type);
+const top = { rung: 4, keyword: head, page_type: topType, page_notes: PT.notes(base.recommended_page || base.page_type, topType), intent: kd.google_intent || null, volume: kd.search_volume ?? null, kd: kd.keyword_difficulty ?? null, cpc: kd.cpc ?? null,
   supporting: (base.secondary_keywords || []).slice(0, 6), traffic_potential: kd.search_volume ? Math.round(kd.search_volume * 0.3) : null, your_position: headRank ? headRank.position : null };
+// P2-7 (2026-10-12, Phase 2 live check §3): the length the verdict asked for is stored with the main page, so a later page run still has a
+// target when *Parse Analysis* does not run (a `force_content` run: the app's "Write now", the Content Cadence). Run 442 wrote 3,864 words
+// for the page the ladder verdict had set at 2,100 — +84% — because nothing remembered that number.
+const verdictWords = (() => { for (const t of (base.verdict_changes || [])) {
+    const m = String(t || '').match(/\b(?:of|about|around|roughly|approximately|target|aim for|at least|up to)\s+(\d[\d,]{2,5})[\s-]*words?\b/i);
+    if (m) { const n = Number(String(m[1]).replace(/,/g, '')); if (n >= 300 && n <= 6000) return n; } } return 0; })();
+const analysisWords = Number((base.competitor_analysis || {}).recommended_word_count) || 0;
+top.target_words = verdictWords || analysisWords || 0;
 const headExisting = (base.existing_page && base.existing_page.url) ? { url: base.existing_page.url, source: base.existing_page.source || 'sitemap' } : findExisting(head, headRank && headRank.url);
 Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExisting.url : plannedUrl(head), existing_source: headExisting ? headExisting.source : null, status: headExisting ? 'improve' : 'new' });
 
@@ -140,7 +170,7 @@ const alternatives = status === 'winnable' ? [] : (altPool.length ? altPool : al
 let refusal = null;
 if (dupHead) refusal = { reason: 'duplicate', ladder_id: dupHead.ladder_id, head: dupHead.head,
   message: 'This website already has a keyword ladder for "' + dupHead.head + '" (' + dupHead.ladder_id + '). One search needs one page, so no second ladder was planned: continue that ladder instead.' };
-else if (plan.plan_type === 'none') refusal = { reason: 'not_realistic', message: '"' + head + '" is not a realistic main keyword for ' + domain + ' (' + (navigational ? 'people searching it look for one particular website or brand' : 'the verdict is AVOID') + '). No ladder pages were planned; pick one of the alternatives as the main keyword instead.' };
+else if (plan.plan_type === 'none') refusal = { reason: 'not_realistic', message: '"' + head + '" is not a realistic main keyword for ' + domain + ' (' + (other_brand ? 'it is another company\'s brand: ' + headGate.detail : navigational ? 'people searching it look for one particular website or brand' + (!headGate.ok ? ': ' + headGate.detail : '') : 'the verdict is AVOID') + '). No ladder pages were planned; pick one of the alternatives as the main keyword instead.' };
 const plan_type = refusal ? 'none' : plan.plan_type;
 const planned = !refusal;
 
@@ -212,14 +242,15 @@ requirements.push({ item: 'Publish on schedule and interlink', detail: 'Each run
 
 // ---- pages to write now, in the plan's order (direct: the main page first; otherwise the supporting pages, the main page waits for support) ----
 const order = !planned ? [] : mainFirst ? [top, ...rungPages] : rungPages;
-const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to }));
+const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to, target_words: Number(p.target_words) || 0 }));
 const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,
   keywords_covered: planned ? rungPages.reduce((s, p) => s + 1 + p.supporting.length, 0) + 1 + top.supporting.length : 0,
   traffic_potential_total: planned ? rungPages.reduce((s, p) => s + (p.traffic_potential || 0), 0) + (top.traffic_potential || 0) : 0,
-  site_rankings_found: SR.count || 0, research_failures: (pool.research || {}).failures || [], excluded_keywords: excluded.length };
+  site_rankings_found: SR.count || 0, research_failures: (pool.research || {}).failures || [], excluded_keywords: excluded.length, refused_keywords: poolRefused.length };
 const notes = [];
 if (refusal) notes.push(refusal.message);
+if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder because they are other companies\' brands, government or portal searches, or navigational: ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' …' : '') + '.');
 if (planned && plan_type === 'full' && rungPages.length && pages_total < 8) notes.push('Only ' + pages_total + ' pages could be planned from the data: the topic is narrow in ' + base.country + '. The ladder is shorter but still valid.');
 if (planned && plan_type === 'full' && rungPages.length) for (const r of rungs) if (!r.pages.length) notes.push('No keywords fell into rung ' + r.rung + '; the ladder skips it.');
 if (planned && plan_type === 'direct' && rungPages.length < 2) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned around the main keyword; add more as the site grows.');
@@ -234,6 +265,7 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   later: later.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, ...(k.held_back ? { held_back: true } : {}) })), requirements, stats, notes,
   plan_type, difficulty_for_you, reach, months: planned ? plan.months : '', months_range: planned ? plan.months_range : null, stretch: planned && plan.stretch, planned, refusal, order: order_text,
   label: planned ? reachLabel(difficulty_for_you, plan) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
+  chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
   reach_info: { reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },
   excluded_keywords: excluded.slice(0, 40),
   tracker: { cadence: base.tracker_cadence || 'weekly', auto_next_rung: !!base.auto_next_rung, stop_rule: 'once the top rung holds the top 3 for 4 checks it is checked monthly (with the published pages)' }, created_at: new Date().toISOString() };

@@ -8,7 +8,10 @@ THEIR REPLY (from {{ $json.reply_from }}, subject "{{ $json.reply_subject }}")
 {{ $json.reply_text }}
 
 LINK CHECK (our own crawler, just now): {{ $json.link_note }}
-{{ $json.facts ? 'WHAT WE KNOW ABOUT THE BUSINESS (use only this; [brackets] for anything else):\n' + $json.facts : '' }}
+
+WHAT WE KNOW ABOUT THE BUSINESS (the only facts you may state about it)
+{{ $json.facts || 'none on file' }}
+Rule: say nothing about the business that is not written above. An accreditation, certification, partnership, licence, registration, award, membership, founding year, location, size, client count, price or any other claim the facts do not state goes to the owner as a question in square brackets, e.g. "[Owner: confirm whether we are accredited with the Ministry of Finance or work through a partner]" — never as a fact, not even hedged ("not directly, but…"). Do not infer anything from the business name, the domain, the signature or the e-mails.
 
 Classes (pick one):
 - says_linked: they say they added or restored the link (the link check above tells whether it is really there)
@@ -25,7 +28,7 @@ Classes (pick one):
 
 Suggested reply (plain text, 30-110 words, signed exactly "{{ $json.signer }}"; empty for unsubscribe, declined and out_of_office):
 - says_linked with the link found: thank them warmly and briefly. Not found: thank them and say politely you could not see it yet on the page, give our URL again.
-- interested / question: answer exactly what they asked from the facts, with [brackets] for anything not in the facts; offer the one thing that makes it easy.
+- interested / question: answer exactly what they asked from the facts; what the facts do not say goes in [Owner: …] (a question to the owner, not a guess); offer the one thing that makes it easy.
 - wants_payment: thank them and decline politely — we do not pay for links (paid links must be marked sponsored and are not what we are after); offer expert input instead.
 - link_swap: decline politely — we link only where it helps our readers; offer something useful instead.
 - not_now: thank them, ask if a later date suits, no pressure.
