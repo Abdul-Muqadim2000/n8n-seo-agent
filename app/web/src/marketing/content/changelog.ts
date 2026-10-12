@@ -15,6 +15,21 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-12',
+    title: 'Only pitches you would be happy to send',
+    summary:
+      'Outreach now refuses the people who could never link to you, and every draft passes an automatic check before it reaches your approval queue.',
+    highlights: [
+      'A competitor selling what you sell, a government portal, a bare homepage, a mailbox provider and a contact database are refused with the reason',
+      'A list of accredited or approved providers is only pitched when your profile says you hold that accreditation',
+      'Every draft is checked: nothing claimed that your profile does not carry, nothing left in brackets, the address on their own domain, something quoted from their page, one link to the page it offers, short, with one clear ask',
+      'A draft that fails waits for your edit with the reasons, and automatic sending skips it',
+      'Your business name comes from your profile or your own homepage, never from your web address',
+      'Before the first e-mail, the recipient\'s domain is checked for a mail server; an address that cannot receive mail is set aside instead of written to',
+    ],
+    features: ['backlinks', 'ai-visibility'],
+  },
+  {
+    date: '2026-10-12',
     title: 'Ascentra knows the pages you already have',
     summary:
       'Every week Ascentra lists the pages your website has. When a search is already answered by one of them, it says to refresh that page instead of publishing a second one that would compete with it.',

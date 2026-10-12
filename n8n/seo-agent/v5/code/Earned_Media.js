@@ -4,6 +4,8 @@
 // offer a quote or data; news: pitch a comment; a review site: build the profile; a forum thread: answer it as yourself; video / LinkedIn: publish
 // there; official list: apply). A page that now names the business is a win. The three most valuable new ones per site get drafts (AI Outreach
 // Writer); they join the Backlink Monitor's prospects (type ai_source), which finds contacts and writes follow-ups.
+/*__LINK_KIT__*/
+/*__OUTREACH_KIT__*/
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let reqs = [], res = []; try { reqs = $('Earned Requests').all().map(i => i.json); res = $('Fetch Cited Pages').all().map(i => i.json); } catch (e) {}
 const prospects = (() => { try { return $('Load Link Prospects (Growth)').all().map(i => i.json).filter(r => r && r.site_id); } catch (e) { return []; } })();
@@ -25,13 +27,15 @@ const ACTION = {
 };
 const out = [];
 for (const p of plans) {
-  const business = p.business_name || p.brand_names.find(b => !/\./.test(b)) || p.domain;
+  const business = p.business_name || p.domain;   // D12: never the domain label ("techand" for Tech&) — the site model's name, else the domain
   const ourRes = p.brand_names.map(wordRe);
+  const sellTerms = ((p.services || []).length ? p.services : [p.profile && p.profile.business_type]).filter(Boolean);
+  const pageText = new Map();   // their page, for the competitor gate (never stored: the earned rows stay small)
   const fetched = new Map(); reqs.forEach((q, i) => { if (q && q.site_id === p.site_id) fetched.set(q.url, res[i] || {}); });
   const items = p.earned.map(e => {
     const r = fetched.get(e.url); let mentions_us = null, named = [], title = e.title, contact_email = '', contact_url = '', fetch_status = 0;
     if (r) { fetch_status = Number(r.statusCode) || 0; const html = String(r.body ?? r.data ?? '');
-      if (fetch_status >= 200 && fetch_status < 300 && html.length > 120) { const text = strip(html).toLowerCase(); mentions_us = ourRes.some(re => re.test(text)); named = p.competitors.filter(c => { const lab = c.split('.')[0]; return wordRe(c).test(text) || (lab.length >= 5 && wordRe(lab).test(text)); }).slice(0, 6);
+      if (fetch_status >= 200 && fetch_status < 300 && html.length > 120) { const text = strip(html).toLowerCase(); pageText.set(e.url, text.slice(0, 20000)); mentions_us = ourRes.some(re => re.test(text)); named = p.competitors.filter(c => { const lab = c.split('.')[0]; return wordRe(c).test(text) || (lab.length >= 5 && wordRe(lab).test(text)); }).slice(0, 6);
         if (!title) title = strip((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').slice(0, 140);
         contact_email = ((html.match(/mailto:([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i) || [])[1] || '').toLowerCase();
         const cu = [...html.matchAll(/href=["']([^"'#]+)["'][^>]*>([^<]{0,40})</gi)].find(m => /contact|write for us|contribute|submit|editor|advertis|get listed|add your/i.test(m[2] + ' ' + m[1]));
@@ -52,8 +56,22 @@ for (const p of plans) {
       note: e.action.slice(0, 300), score: Math.min(100, Math.round(e.value * 8)), origin: 'ai_growth', contact_email: old.contact_email || e.contact_email, contact_url: old.contact_url || e.contact_url, contacted_at: old.contacted_at || '',
       followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' };
     rows.push(row);
-    if (!won && !row.outreach_body && ['outreach', 'reply'].includes(e.action_type) && !['won', 'declined', 'contacted'].includes(String(old.status || '')) && jobs.length < 3)
+    // ---- D12: one writer, and the Link Builder's gates ----
+    // With the Link Builder on, nothing is drafted here: the row above is the hand-over (its detail names the question AI cites them for),
+    // and the Link Builder qualifies it, finds the contacts on their own domain and writes the sequence. With it off, the same gates decide
+    // whether a draft may be written at all (live 2026-10-11: drafts went to two government portals and three competitors).
+    const kindType = e.kind === 'list' ? 'list' : e.kind === 'forum' ? 'mention' : 'ai_source';
+    const outreachKind = ['outreach', 'reply'].includes(e.action_type);   // a review profile, a video or a Wikipedia entry is the owner's own work: no writer is involved
+    const blocked = !outreachKind ? '' : p.link_builder ? 'the Link Builder writes to them (one writer): approve the pitch on the Link building page'
+      : (OK.badHost(e.host)
+        || (OK.isGov(e.host) ? 'government site: you get on its lists by applying or being accredited, not by a pitch' : '')
+        || OK.homepageOnly(kindType, e.url)
+        || OK.sellsSame({ type: kindType, domain: e.host, competitors: p.competitors, title: e.title, text: pageText.get(e.url) || '', terms: sellTerms })
+        || (!OK.accredited(p.accreditation) && OK.accreditedList(e.title + ' ' + e.url) ? 'a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one' : ''));
+    if (blocked) row.note = String(blocked).slice(0, 300);
+    if (!won && !blocked && !row.outreach_body && outreachKind && !['won', 'declined', 'contacted'].includes(String(old.status || '')) && jobs.length < 3)
       jobs.push({ n: jobs.length + 1, prospect_domain: e.host, kind: e.kind, action_type: e.action_type, url: e.url, title: e.title, question: e.questions[0] || '', competitors_named: e.competitors_named, engines: e.engines });
+    if (blocked) e.no_draft = String(blocked).slice(0, 160);
   }
   out.push({ json: { site_id: p.site_id, domain: p.domain, business, earned: items, prospect_rows: rows, outreach_jobs: jobs } });
 }

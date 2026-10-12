@@ -7,7 +7,7 @@ import type { DtRow } from './tables';
 // ---- n8n Data Tables written by the Link Builder workflow (SEOagentLinkBld1) ----
 export interface LinkOutreachRow extends DtRow {
   site_id: string; domain: string; prospect_domain: string; type: string;
-  /** ready (qualified, contact found) | drafted (sequence written) | needs_contact | not_fit | fix (a redirect to add on our own site) */
+  /** ready (qualified, contact found) | drafted (sequence written and every check passed) | needs_edit (written, but the draft gate held it: the reason is in fit_reason) | needs_contact | not_fit | fix (a redirect to add on our own site) */
   status: string; score: number | null; fit: number | null; fit_reason: string; checks_json: string; page_url: string; page_title: string; evidence: string;
   contacts_json: string; contact_email: string; contact_form_url: string; country: string; language: string; target_url: string; target_reason: string;
   anchor_hint: string; sequence_json: string; deadline: string; drafted_at: string; checked_at: string; request_id: string;

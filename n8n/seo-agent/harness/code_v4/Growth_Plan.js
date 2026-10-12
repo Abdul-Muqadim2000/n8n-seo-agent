@@ -365,7 +365,13 @@ for (const s of sites) {
   const entity_due = on_demand || !prevEntity || String(prevEntity.checked_at || '').slice(0, 7) !== month;
   const label = dom.split('.')[0];
   const brand_names = [...new Set([dom, ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : []), s.profile.business_name].map(x => String(x || '').trim()).filter(x => x.length >= 3))];
-  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, business_name: s.profile.business_name || '', profile: s.profile,
+  // D12: the name a draft signs with comes from the one site model (profile -> homepage Organization / og:site_name -> what the app sent),
+  // never from the domain label — the earned-media drafts signed "techand" / "techand.ai" (live 2026-10-11). `link_builder` decides who
+  // writes: with it on, these prospects go to the Link Builder's qualification and writer (one writer).
+  const modelName = SM.name(site_model);
+  const business_name = String(s.profile.business_name || '').trim() || (modelName && SM.helpers.bare(modelName) !== dom ? modelName : '');
+  out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, business_name, profile: s.profile,
+    link_builder: !!s.settings.link_builder, services: SM.services(site_model), accreditation: SM.facts(site_model).accreditation,
     brand_names, competitors: comps.slice(0, 12), ai_pages_month: s.settings.ai_pages_month, run_id: 'grow_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso,
     vis_checked_at: v ? v.checked_at : '', key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_fetch: earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url),
     indexnow_key, indexnow_new: !kRow, indexnow_verified_at: kv.verified_at || '', entity_due, previous_entity: prevEntity, previous: prevG ? { checked_at: prevG.checked_at, avg_score: Number(prevG.avg_score) || null, earned: parse(prevG.earned_json, []) } : null,

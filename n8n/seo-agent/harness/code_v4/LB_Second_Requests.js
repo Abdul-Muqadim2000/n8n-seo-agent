@@ -231,8 +231,8 @@ const OK = (() => {
     const out = []; const seen = new Set(); const add = (e, w, src) => { const x = String(e || '').toLowerCase().trim(); if (seen.has(x) || BAD.test(x)) return; seen.add(x); out.push({ email: x, kind: kindOf(x), own: LK.sameSite(x.split('@')[1], domain), w, source_url: src }); };
     for (const e of LK.emailsIn(html, domain)) add(e, 1, url);
     return out; }
-  // only addresses on the prospect's own domain: a page often lists other companies' addresses (live 2026-10-11: sajid@advintek.ae was stored
-  // as the Ministry of Finance's contact because the Ministry's provider list names Advintek)
+  // only addresses on the prospect's own domain: a page often lists other companies' addresses (live 2026-10-11: an address on a provider's
+  // own site was stored as the Ministry of Finance's contact, because the Ministry's provider list names that provider)
   const rankContacts = (list) => [...list].filter(c => c.own).sort((a, b) => (b.own - a.own) || ({ person: 3, editorial: 2, general: 1, other: 0 }[b.kind] - { person: 3, editorial: 2, general: 1, other: 0 }[a.kind]) || (b.w - a.w)).slice(0, 3);
   // the author's page and the contact form of a prospect page
   function authorUrl(html, base) {
@@ -277,7 +277,66 @@ const OK = (() => {
   }
   // government sites list providers through accreditation or an application, never through a pitch (the listings checklist covers them)
   const isGov = (d) => /(^|\.)(gov|gouv|gob|govt|mil)(\.[a-z]{2})?$/i.test(String(d || '').toLowerCase());
-  return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf };
+  // ---- who is never worth a pitch (D13, live 2026-10-11) ----
+  // a mailbox provider, a generated contact / company database, a CDN or a statistics page: they turn up in link data as hosts, but there is
+  // nobody there who could add a link (outlook.com and zoominfo.com were listed as broken-link prospects)
+  const MAILHOST = /^(gmail\.com|googlemail\.com|outlook\.[a-z.]{2,6}|hotmail\.[a-z.]{2,6}|live\.[a-z.]{2,6}|msn\.com|yahoo\.[a-z.]{2,6}|ymail\.com|aol\.com|icloud\.com|me\.com|gmx\.[a-z.]{2,5}|web\.de|mail\.(com|ru)|email\.com|protonmail\.com|proton\.me|tutanota\.com|yandex\.[a-z.]{2,5}|fastmail\.com|rediffmail\.com|qq\.com|naver\.com|163\.com|office\.com|office365\.com|microsoftonline\.com|sharepoint\.com|mimecast\.com)$/i;
+  const DATABROKER = /^(zoominfo\.[a-z.]+|apollo\.io|lusha\.com|rocketreach\.co|signalhire\.com|leadiq\.com|cognism\.com|seamless\.ai|hunter\.io|snov\.io|clearbit\.com|uplead\.com|datanyze\.com|contactout\.com|anymailfinder\.com|skrapp\.io|getprospect\.com|kaspr\.io|lead411\.com|slintel\.com|6sense\.com|owler\.com|dnb\.com|bizapedia\.com|opencorporates\.com|zaubacorp\.com|tofler\.in|signal\.ai)$/i;
+  function badHost(domain) {
+    const d = String(domain || '').toLowerCase().trim().replace(/^www\./, '');
+    if (!d || !/\./.test(d)) return '';
+    if (MAILHOST.test(d)) return 'a mailbox provider (' + d + '), not a website whose editor could add a link';
+    if (DATABROKER.test(d)) return 'a contact / company database (' + d + '): its pages are generated, nobody there edits them';
+    if (LK.isInfra(d)) return 'infrastructure (' + d + ': a CDN, a hosting platform or a link shortener), not a site to write to';
+    if (LK.isScraper(d)) return 'an automatically generated statistics page (' + d + '), not a site to write to';
+    return '';
+  }
+  // a bare homepage is no place for a link to add: only a listing, a list, a mention or a journalist request is pitched on the front page
+  const HOME_OK = new Set(['mention', 'list', 'listing', 'ai_list', 'press', 'lost', 'reclaim']);
+  const isHomeUrl = (u) => /^https?:\/\/[^\/?#]+\/?([?#]|$)/i.test(String(u || ''));
+  const homepageOnly = (type, url) => (isHomeUrl(url) && !HOME_OK.has(String(type || '')))
+    ? 'only their homepage was found: a front page has no section a link could be added to (find the page on your topic first)' : '';
+  // "accredited / pre-approved / certified provider" lists: a business gets on them by applying with the accreditation, never by a pitch —
+  // and asking to be added without it claims something we cannot stand behind (live 2026-10-11: two ASP lists were asked to add Tech&)
+  const ACCRED_RE = /\b(accredited|accreditation|pre-?approved|approved|certified|licen[cs]ed|authori[sz]ed|registered)\b[^.\n]{0,40}\b(service providers?|providers?|asps?|partners?|vendors?|suppliers?|list|lists|directory|register|registry)\b|\b(service providers?|providers?|asps?|partners?|vendors?)\b[^.\n]{0,25}\b(accredited|pre-?approved|approved|certified|licen[cs]ed)\b/i;
+  const accreditedList = (text) => ACCRED_RE.test(String(text || ''));
+  // the facts on file say the business itself holds an accreditation ("none" / "not accredited" / "applying" do not)
+  const accredited = (fact) => { const f = String(fact || '').trim(); if (!f) return false;
+    if (/^(no\b|none|not\b|non-|never|pending|in progress|planned|applying|applied|n\/?a|unknown|tbc|tbd)/i.test(f)) return false;
+    return /accredit|certif|licen|authoris|authoriz|approved|peppol|iso ?\d|registered|member/i.test(f); };
+  // a prospect that sells what we sell: a declared competitor, or their own page offering our services with the signals of a vendor selling
+  // them. A publisher writing about our topic has the words but not the signals; a list that leaves us out, a mention or a journalist
+  // request is still pitched when the publisher also sells something (the ask there is "add us", not "link to us").
+  const VENDOR_RE = /(book|schedule|request)(?: a| your)? (?:demo|call|consultation)|free trial|start (?:for )?free|talk to (?:sales|an expert|our advisor)|our (?:software|platform|product|products|solution|solutions|services|suite)|request (?:a )?quote|why choose us|our (?:clients|customers) (?:include|trust)|pricing plans?|per user ?\/ ?month|we (?:provide|offer|deliver|implement|build) /gi;
+  const SELL_EXEMPT = new Set(['list', 'listing', 'ai_list', 'mention', 'press', 'lost', 'reclaim']);
+  const THEIRS_RE = /\b(solutions?|services?|software|platform|suite|provider|providers|consultan\w+|implementation|company)\b/i;
+  function sellsSame(o) {
+    const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
+    for (const c of (o.competitors || [])) { const x = String(c || '').toLowerCase().replace(/^www\./, '');
+      if (x && (LK.sameSite(d, x) || LK.sameSite(x, d) || LK.regDomain(d) === LK.regDomain(x))) return 'a competing site of yours (' + x + '): a competitor does not link to you'; }
+    if (SELL_EXEMPT.has(String(o.type || ''))) return '';
+    const terms = [...new Set((o.terms || []).flatMap(t => words(t).map(stem)))];
+    if (terms.length < 2) return '';
+    const title = String(o.title || ''); const text = String(o.text || '').slice(0, 30000);
+    const T = new Set(words(title + ' ' + text).map(stem));
+    const share = terms.filter(t => T.has(t)).length / terms.length;
+    const signals = [...new Set((text.match(VENDOR_RE) || []).map(x => x.toLowerCase().replace(/\s+/g, ' ').trim()))];
+    const theirs = THEIRS_RE.test(title) && words(title).map(stem).some(w => terms.includes(w));
+    return (share >= 0.45 && signals.length >= 2 && theirs)
+      ? 'a competing provider: their page sells what you sell (' + Math.round(share * 100) + '% of your service words, "' + signals.slice(0, 2).join('", "') + '")' : '';
+  }
+  // does a page name the business? Punctuation in a name ("Tech&") breaks \b, so every name is matched by its letter / digit runs with a
+  // little punctuation allowed between them, and the domain counts as a name too
+  function namesUs(text, names) {
+    const t = String(text || '');
+    for (const n of names) { const runs = String(n || '').toLowerCase().match(/[a-z0-9]+/g) || [];
+      if (!runs.length || runs.join('').length < 4) continue;
+      const re = new RegExp('(^|[^a-z0-9])' + runs.join('[^a-z0-9]{0,3}') + '($|[^a-z0-9])', 'i');
+      if (re.test(t)) return String(n); }
+    return '';
+  }
+  return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs };
 })();
 
 let reqs = [], resps = []; try { reqs = $('LB Page Requests').all().map(i => i.json).filter(r => !r.skip); resps = $('Fetch LB Pages').all().map(i => i.json || {}); } catch (e) {}
