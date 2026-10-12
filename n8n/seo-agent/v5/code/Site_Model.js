@@ -18,7 +18,7 @@ const status = Number(res.statusCode) || 0;
 const html = (!plan.skip && status >= 200 && status < 400) ? String(res.body != null ? res.body : (res.data || '')) : '';
 const desc = req.site_description || {};
 const extras = { site_id: plan.site_id, domain: plan.domain || req.domain, profile, request: req, pages: pageRows,
-  services: [...(desc.services || []), ...(desc.main_services || [])], description: desc,
+  services: [...(desc.products_or_services || []), ...(desc.services || []), ...(desc.main_services || [])], description: desc,   // P2-2: the describer's own key is products_or_services
   competitors: req.competitors || [], brand_names: req.brand_names || [] };
 const base = SM.stored(row) || SM.stored(cached || {});
 const model = html

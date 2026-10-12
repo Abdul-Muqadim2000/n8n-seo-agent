@@ -11,6 +11,8 @@ export interface LadderRow extends DtRow {
   ladder_id: string; domain: string; head_keyword: string; rung: number; page_no: number; keyword: string; supporting: string;
   page_type: string; target_url: string; page_exists: boolean; status: string; months: string; start_date: string; country: string;
   location_code: number; language_code: string; email: string; callback_url: string; request_id: string;
+  /** the word count the ladder's verdict set for this page (0 = unknown); passed to a page run as `ladder_words` (P2-7) */
+  target_words?: number;
 }
 export interface RankHistoryRow extends DtRow {
   /** ladder id, or the site id for Site Tracker live checks */

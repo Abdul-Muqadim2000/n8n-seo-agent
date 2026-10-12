@@ -100,7 +100,10 @@ const SM = (() => {
     const stored = jparse(row.nap_json, null);
     if (stored && !nap.street_address && !nap.phone) { Object.assign(nap, stored); nap.source = S(stored.source) || 'stored'; }
 
-    const services = uniq([...listOf(x.services), ...listOf((x.description || {}).services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
+    // P2-2 (2026-10-12): the Site Describer answers with `products_or_services` — reading only `services` left services_json empty on every
+    // site, so the brief's facts said `services: []` although the describer had found nine.
+    const desc0 = x.description || {};
+    const services = uniq([...listOf(x.services), ...listOf(desc0.products_or_services), ...listOf(desc0.services), ...listOf(desc0.main_services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);
     const navStored = jparse(row.nav_pages_json, []) || [];
     const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);
     const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);
@@ -193,6 +196,11 @@ const sites = $('Site Plan').all().map(i => i.json).filter(s => s && s.site_id &
 const siteRows = rowsOf('Load Sites').filter(r => r.site_id);
 const profiles = rowsOf('Load Profiles (Site)').filter(r => r.site_id);
 const monitors = rowsOf('Load Monitors (Site)').filter(r => r.site_id);
+// P2-2 (2026-10-12, Phase 2 live check): the services the describer found live in the stored description (seo_cache 'desc:<domain>'), never in
+// seo_sites — services_json was "[]" on every site and the brief's facts said `services: []`. The weekly model reads them from there.
+const descRows = rowsOf('Load Descriptions (Site)').filter(r => String(r.key || '').indexOf('desc:') === 0);
+const descOf = (dom) => { const r = descRows.find(x => String(x.key) === 'desc:' + String(dom || '').toLowerCase()); if (!r) return {};
+  try { const v = JSON.parse(r.value || 'null'); return (v && typeof v === 'object' && v.description && typeof v.description === 'object') ? v.description : {}; } catch (e) { return {}; } };
 const targets = (() => { try { return $('Model Targets (Site)').all().map(i => i.json).filter(t => t && t.fetch); } catch (e) { return []; } })();
 const answers = (() => { try { return $('Fetch Homepage (Site)').all().map(i => i.json); } catch (e) { return []; } })();
 const bodyOf = (r) => String((r && (r.body != null ? r.body : r.data)) || '');   // responseFormat text + full response: the body sits under `data`
@@ -205,9 +213,15 @@ return sites.map(s => {
   const final_url = res ? String((res.headers || {}).location || '') : '';
   const fresh = idx >= 0 && !!html;
   const seen_hosts = (s.ladder_pages || []).map(p => p.url).filter(Boolean);
-  const extras = { site_id: s.site_id, domain: s.domain, seen_hosts, profile: profiles.find(p => p.site_id === s.site_id) || {}, monitors: monitors.find(m => m.site_id === s.site_id) || {} };
-  const model = fresh
+  const description = descOf(s.domain);
+  const extras = { site_id: s.site_id, domain: s.domain, seen_hosts, profile: profiles.find(p => p.site_id === s.site_id) || {}, monitors: monitors.find(m => m.site_id === s.site_id) || {}, description };
+  const base = fresh
     ? SM.from(row, { ...extras, html, final_url, updated_at: new Date().toISOString() })
     : (SM.stored(row) || SM.from(row, extras));
-  return { json: { site_id: s.site_id, domain: s.domain, model, rebuilt: fresh, homepage_status: status, age_days: Math.round(SM.ageDays(model) * 10) / 10 } };
+  // P2-2: a model that is only reused (no homepage request this week) keeps every stored field, but still gains the services of the stored
+  // description — nothing else ever filled services_json, so the brief's facts stayed empty week after week.
+  const svc = [...(description.products_or_services || []), ...(description.services || [])].map(x => String(x == null ? '' : x).trim()).filter(Boolean);
+  const model = svc.length ? { ...base, services: [...new Set([...SM.services(base), ...svc])].slice(0, 30) } : base;
+  return { json: { site_id: s.site_id, domain: s.domain, model, rebuilt: fresh, homepage_status: status, age_days: Math.round(SM.ageDays(model) * 10) / 10,
+    services_source: (description.products_or_services || []).length ? 'stored description' : (SM.services(model).length ? 'stored site row' : 'none yet') } };
 });

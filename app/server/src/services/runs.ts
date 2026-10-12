@@ -134,7 +134,12 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
     // ENGINE_EMAILS off: n8n gets no address at all, so it e-mails nothing; every result arrives here through the callback
     buildN8nPayload(input, site ? siteContext(site) : null, { callbackUrl: callbackUrl(org), email: config.engineEmails && input.emailCopy ? user.email : '' }),
   );
-  if (input.mode === 'keyword' && input.ladder && site) body.ladder_links = await ladderLinks(site.domain, input.ladder.id, input.ladder.rung, input.keyword);
+  if (input.mode === 'keyword' && input.ladder && site) {
+    // the ladder's links and, since P2-7, the word count its verdict set for this page (the engine clamps the brief to `ladder_words`)
+    const { links, targetWords } = await ladderLinks(site.domain, input.ladder.id, input.ladder.rung, input.keyword);
+    body.ladder_links = links;
+    if (targetWords) body.ladder_words = targetWords;
+  }
   // budget checks and the insert under one lock per company, so parallel requests (runs and keyword checks) cannot all pass the same
   // check; the month counts runs and keyword checks, the platform's daily ceiling every company (spend.ts)
   const run = await db.transaction(async (tx) => {
@@ -254,17 +259,45 @@ export async function plannedLadderPage(domain: string, keyword: string): Promis
   return r ? { keyword: r.keyword, ladder: { id: r.ladder_id, rung: Number(r.rung) || 0, head: r.head_keyword || '', pageNo: Number(r.page_no) || 0 } } : null;
 }
 
-async function ladderLinks(domain: string, ladderId: string, rung: number, keyword: string): Promise<{ url: string; path: string; role: string; keyword: string; planned: boolean }[]> {
-  const rowsOf = await siteRows<LadderRow>('ladders', domain, { extra: [{ columnName: 'ladder_id', condition: 'eq', value: ladderId }], max: 100, fresh: true }).catch(() => [] as LadderRow[]);
-  const top = rowsOf.find((r) => Number(r.rung) === 4);
+export interface LadderPageLink {
+  url: string;
+  path: string;
+  role: string;
+  keyword: string;
+  planned: boolean;
+}
+
+/**
+ * What a ladder page run is given besides the keyword: the internal links (as the Content Cadence builds them — the top page and one
+ * sibling, or every rung page for the top page itself) and the word target the ladder's verdict set for it.
+ *
+ * P2-7 (Phase 2 live check, 2026-10-12): the target used to be lost. A "Write now" run never runs the competitor analysis and has no
+ * verdict of its own, so the writer invented its own length — run 442 wrote 3,864 words for a page the verdict had set at 2,100 (+84%).
+ * `seo_ladders.target_words` stores it; the engine clamps the brief to it (`ladder_words` -> *Parse Brief*).
+ * Pure, so the harness-style situations are unit-tested; `ladderLinks` only fetches the rows.
+ */
+export function ladderPageContext(rows: LadderRow[], rung: number, keyword: string): { links: LadderPageLink[]; targetWords: number } {
+  const top = rows.find((r) => Number(r.rung) === 4);
   const links: { url: string; role: string; keyword: string }[] = [];
-  if (rung === 4) for (const r of rowsOf.filter((x) => Number(x.rung) !== 4 && x.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword });
+  if (rung === 4) for (const r of rows.filter((x) => Number(x.rung) !== 4 && x.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword });
   else {
     if (top?.target_url && top.keyword !== keyword) links.push({ url: top.target_url, role: 'top', keyword: top.keyword });
-    const sib = rowsOf.find((x) => Number(x.rung) === rung && x.keyword !== keyword && x.target_url);
+    const sib = rows.find((x) => Number(x.rung) === rung && x.keyword !== keyword && x.target_url);
     if (sib) links.push({ url: sib.target_url, role: 'sibling', keyword: sib.keyword });
   }
-  return links.map((l) => ({ ...l, path: l.url.replace(/^https?:\/\/[^/]+/i, '') || '/', planned: true }));
+  // this page's own row first (its keyword, else its rung), then the ladder's main page: the verdict's target belongs to the main page
+  const k = normKeyword(keyword);
+  const mine = rows.find((r) => normKeyword(r.keyword) === k) ?? rows.find((r) => Number(r.rung) === rung);
+  const words = Number(mine?.target_words) || Number(top?.target_words) || 0;
+  return {
+    links: links.map((l) => ({ ...l, path: l.url.replace(/^https?:\/\/[^/]+/i, '') || '/', planned: true })),
+    targetWords: words >= 300 && words <= 6000 ? Math.round(words) : 0,
+  };
+}
+
+async function ladderLinks(domain: string, ladderId: string, rung: number, keyword: string): Promise<{ links: LadderPageLink[]; targetWords: number }> {
+  const rowsOf = await siteRows<LadderRow>('ladders', domain, { extra: [{ columnName: 'ladder_id', condition: 'eq', value: ladderId }], max: 100, fresh: true }).catch(() => [] as LadderRow[]);
+  return ladderPageContext(rowsOf, rung, keyword);
 }
 
 /** Points every stored delivery address of the site in n8n (site row, ladders) at this company's callback; clears stored e-mails while engine e-mails are off. */

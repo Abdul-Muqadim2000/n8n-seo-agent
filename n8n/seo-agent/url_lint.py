@@ -22,8 +22,6 @@ ALLOW = {
     'Build Probes': 'host probes: apex and www are requested side by side (no redirects followed) to see which host is canonical',
     'Content Probes': 'robots / sitemap / llms.txt are read on the audited host before Analyze Probes has decided the canonical one',
     'Analyze Probes': 'decides canonical_host and words the www / non-www findings, which have to name both hosts (D6)',
-    # written by D10 (publishable page), which owns Blog_Package.js in parallel work
-    'Blog Package': 'suggested_url for a page that is not published yet; v5/code/Blog_Package.js belongs to D10',
 }
 
 

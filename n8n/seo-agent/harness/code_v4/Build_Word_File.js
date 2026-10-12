@@ -222,6 +222,7 @@ if (wantSeo) {
 if (wantContent) {
   parts.push(h2('Content Quality Check', true) + kv([
     ['Status', qa.passed ? '<span class="ok">Passed</span>' : '<span class="bad">Needs review</span>'],
+    ...(qa.profile_placeholders ? [['Fields only you can fill', '<span class="bad">' + num(qa.profile_placeholders) + ' bracketed field(s) in the byline / author box / Person schema \u2014 set up the business profile</span>']] : []),
     ['Main Content Words', num(qa.main_content_words) + ' (target ' + num(qa.target_word_count) + ')'],
     ['FAQ Words', num(qa.faq_words)],
     ['Keyword Mentions', num(qa.keyword_mentions) + ' (density ' + (qa.keyword_density_pct == null ? 'N/A' : qa.keyword_density_pct) + '%)'],
@@ -351,7 +352,7 @@ return [{
     mode: d.mode,
     brand: d.brand || 'Dev SEO',
     existing_page: d.existing_page || null,
-    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed' : 'Quality check: ' + (qa.warnings || []).length + ' item(s) to review'),
+    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed' : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),
     verdict: d.verdict,
     verdict_score: d.verdict_score,
     verdict_reasons: d.verdict_reasons || [],

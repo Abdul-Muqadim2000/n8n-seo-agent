@@ -78,7 +78,8 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         goal: goalLabel(input.goal),
         features: input.checkPageExists && dom ? ['Check if page exists'] : [],
         receive,
-        // a ladder page: the run marks the ladder row, links to the ladder's top page and siblings (ladder_links are added by the server)
+        // a ladder page: the run marks the ladder row, links to the ladder's top page and siblings, and is clamped to the length the
+        // ladder's verdict set (`ladder_links` and `ladder_words` are added by the server from the stored rows: runs.ts ladderPageContext)
         ...(input.ladder && dom
           ? { ladder_id: input.ladder.id, ladder_rung: input.ladder.rung, ladder_head: input.ladder.head, ladder_page_no: input.ladder.pageNo, force_content: true }
           : {}),

@@ -1,5 +1,6 @@
 /*__SOURCES__*/
 /*__ANCHOR__*/
+/*__SITE_MODEL__*/
 // Framework-agnostic blog package for every content run: the article as clean HTML (with the JSON-LD blocks), as Markdown, and a meta.json
 // (title, slug, meta description, H1, keywords, headings, links, schema, word count, content score, suggested URL, publish checklist).
 // Attached to the e-mail and returned in the API callback next to the PDF / Word report. Runs without content pass through untouched.
@@ -47,6 +48,16 @@ const description = metaLines['meta description'] || '';
 const headings = [...md.matchAll(/^(#{2,3})\s+(.+)$/gm)].map(x => ({ level: x[1].length, text: x[2].trim() }));
 const links = [...md.matchAll(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g)].map(x => ({ text: x[1], url: x[2] }));
 const dom = String(d.domain || '').toLowerCase();
+// P2-3 (2026-10-12, Phase 2 live check; D15): every URL this package hands the owner is on the site's canonical host — the delivered
+// meta.json said "publish at https://techand.ai/erp-software-uae/" while every link and schema URL of the same page was on www (the bare
+// host 308-redirects). `ownUrl` moves a URL of this site onto the canonical host; a URL on another domain is returned unchanged.
+let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
+if (!SITE_MODEL && d.site_model && typeof d.site_model === 'object') SITE_MODEL = d.site_model;
+const modelFor = (domain) => (SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(domain)) ? SITE_MODEL : { domain };
+const siteUrlOf = (domain, path) => SM.siteUrl(modelFor(domain), path);
+const ownUrl = (u) => { const raw = String(u || '').trim(); if (!raw) return raw;
+  const host = SM.helpers.hostOf(raw); if (!host || !dom || SM.helpers.bare(host) !== dom) return raw;
+  return siteUrlOf(dom, raw.replace(/^https?:\/\/[^\/?#]*/i, '') || '/'); };
 const hostOf = (u) => { const m = String(u || '').trim().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };   // no URL constructor in the n8n Code sandbox (live finding 2026-10-02)
 const isInternal = (u) => { const h = hostOf(u); return !!dom && !!h && (h === dom || h.endsWith('.' + dom)); };
 const words = md.replace(/\|/g, ' ').replace(/[#>*_`]/g, '').split(/\s+/).filter(Boolean).length;
@@ -97,7 +108,9 @@ const tocMd = tocHtml ? '**' + (role === 'hub' ? 'In this guide' : 'Contents') +
 // linked — the live run linked twice each to three pages that did not exist — and the anchor is the page's title or its title-cased keyword
 // with the acronyms kept ("Facts erp" became "Facts ERP"). The planned pages travel in meta.json as links_to_add_when_published.
 const HPall = role === 'hub' ? (d.hub_pages || []).filter(p => p && p.url) : [];
-const HP = HPall.filter(p => !p.planned); const HPplanned = HPall.filter(p => p.planned);
+const HP = HPall.filter(p => !p.planned);
+// P2-3: a page that is not published yet has no URL of its own yet either — the one we promise the owner is on the canonical host
+const HPplanned = HPall.filter(p => p.planned).map(p => ({ ...p, url: ownUrl(p.url) }));
 const clusterHtml = HP.length ? '<nav class="cluster" aria-label="Guides in this series"><h2 id="guides-in-this-series">Guides in this series</h2><ul>' + HP.map(p => '<li><a href="' + esc(SRC.clean(p.url)) + '">' + esc(anchorText(p)) + '</a></li>').join('') + '</ul></nav>' : '';
 const clusterMd = HP.length ? '## Guides in this series\n\n' + HP.map(p => '- [' + anchorText(p) + '](' + SRC.clean(p.url) + ')').join('\n') : '';
 // case study: snapshot box from the intake (only the facts given)
@@ -154,7 +167,7 @@ const cluster = () => fmt === 'html' ? clusterHtml : (clusterMd ? '\n' + cluster
 fmt = 'html'; bodyHtml = weave(bodyHtml.split('\n'), (l) => /^<h2[ >]/.test(l), (l) => /^<p><strong>Quick answer:?<\/strong>/i.test(l)).filter(x => x !== '').join('\n');
 fmt = 'md'; mdOut = weave(mdOut.split('\n'), (l) => /^##\s+/.test(l), (l) => /^\*\*Quick answer:?\*\*/i.test(l.trim())).join('\n').replace(/\n{3,}/g, '\n\n');
 const html = '<article>\n<h1>' + inline(h1 || title) + '</h1>\n' + (bylineHtml ? bylineHtml + '\n' : '') + (heroImg ? figure(heroImg, true) + '\n' : '') + (snapshotHtml ? snapshotHtml + '\n' : '') + bodyHtml + (authorBoxHtml ? '\n' + authorBoxHtml : '') + (schema.length ? '\n' + schema.map(b => '<script type="application/ld+json">' + JSON.stringify(b.json || b) + '</script>').join('\n') : '') + '\n</article>';
-const meta = { title, h1: h1 || title, slug, suggested_url: dom ? 'https://' + dom + '/' + slug + '/' : '/' + slug + '/', meta_description: description, meta_description_length: description.length, title_length: title.length,
+const meta = { title, h1: h1 || title, slug, suggested_url: dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/', meta_description: description, meta_description_length: description.length, title_length: title.length,
   primary_keyword: d.keyword || metaLines['primary keyword'] || '', secondary_keywords: (Array.isArray(d.secondary_keywords) && d.secondary_keywords.length) ? d.secondary_keywords : String(metaLines['secondary keywords'] || '').split(/,\s*/).filter(Boolean),
   page_type: d.recommended_page || '', language: d.language_name || 'English', country: d.country || '', domain: dom, word_count: words, content_score: d.content_score == null ? null : d.content_score, qa_summary: d.qa_summary || '',
   headings, internal_links: links.filter(l => isInternal(l.url)), external_links: links.filter(l => !isInternal(l.url)), schema_blocks: schema.map(b => ({ type: b.type || ((b.json || {})['@type']) || '', json: b.json || b })),
