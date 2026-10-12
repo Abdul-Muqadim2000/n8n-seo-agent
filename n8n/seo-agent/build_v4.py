@@ -2522,6 +2522,110 @@ open(os.path.join(OUT_CODE, '_sources.js'), 'w').write("// harness shim (written
 open(os.path.join(OUT_CODE, '_anchor.js'), 'w').write("// harness shim (written by build_v4.py section 32): the anchor kit - { keyword?, title?, url? } -> the words a link uses\n" + ANCHOR_SRC +
     "\nreturn $input.all().map(i => ({ json: { anchor: anchorText(i.json || {}), title_case: titleCaseKeyword((i.json || {}).keyword || '') } }));\n")
 log('Content correctness (2026-10-11, FIX_PLAN D9 / G2 / G4): only a page the site really has is a link target (Collect Site URLs splits the ladder links into live and planned_link_targets; Content QA strips links to planned pages, the hub block and the ItemList list the live ones only, meta.json carries links_to_add_when_published and the Rank Tracker reminds the owner the week one goes live), anchors come from the page title or the title-cased keyword with the acronyms kept (v5/code/_anchor.js); no FAQPage schema and no FAQ block scored anywhere (question headings answered directly instead, in Content QA, AI Readiness and the brief / copywriter / critic / editor prompts); every figure of a cited sentence is looked up in the text that source gave us and marked [Confirm: ...] when it is not there, a source with no independent authority may be cited once, and utm_* / srsltid / gclid / fbclid are stripped from every link in the copy, the package and the schema (v5/code/_sources.js)')
+# 36. THE SITE DESCRIPTION READS THE WHOLE SITE (2026-10-11, system review FIX_PLAN D22): only the homepage was ever read, so most of what a
+#     business sells was invisible. Live on techand.ai: `describe` listed 8 services and left out Business Central, CRM and Power Platform (all
+#     on /whatwedo/), the Keyword Check scored "business central partner uae" at fit 1, and the critic called the site's real delivery stages
+#     ("Assess & Envision", "Run & Optimise") invented. Now Clean Site Text keeps the homepage's own menu links (nav_pages: same host, max 12,
+#     with their link text, taken from the raw Jina markdown before the links are stripped), Nav Pages Plan picks up to 5 service / section
+#     pages, Read Nav Pages fetches them (one request each, 20 s, no retry) and Site Pages hands the describer the homepage plus those pages —
+#     a page that fails or is blocked is skipped. The services and the page list travel with the description (`products_or_services`,
+#     `pages_read`, `nav_pages`, `site_facts`: the headings of every page read), so the 30-day seo_cache row, the Keyword Check (Assess Result)
+#     and the content pipeline all carry the full list; `pages_read` also dates the row, so a homepage-only description stored before this
+#     change is read again instead of trusted (Use Cached Description). The critic is given those facts and may no longer call a claim found on
+#     the website invented (critic.txt + Parse Critique, which drops such claims and renames the rest "unverified").
+#     Cost: the extra pages go through the same free Jina Reader credential; the describer stays one Haiku call with a longer input
+#     (≈ $0.01 instead of ≈ $0.005) and the run grows by roughly 20-35 s, once per site per 30 days.
+# =============================================================================
+_sdp = pos('Site Describer'); _srk = pos('Site Read OK?')
+# a. the homepage's own menu links, from the raw markdown Clean Site Text still holds
+patch('Clean Site Text', """return [{
+  json: {
+    ...input,
+    page_title: pageTitle,
+    site_text: text,
+    read_ok
+  }
+}];""", """// D22 (2026-10-11): the homepage's own header / menu links, so the service pages can be read too (same host, max 12, with their link text).
+// Taken from the raw markdown before the links are stripped; the n8n Code sandbox has no URL constructor, so hosts come from a regex.
+const NAV = { max: 12, header_chars: 3500, text_chars: 80 };
+const navHost = (u) => ((String(u || '').match(/^https?:\\/\\/([^\\/?#]+)/i) || [])[1] || '').toLowerCase().replace(/^www\\./, '').replace(/:\\d+$/, '');
+const navSelf = navHost(((raw.match(/^URL Source:\\s*(\\S+)/m) || [])[1]) || '') || String(input.domain || '').toLowerCase().replace(/^www\\./, '');
+const navBody = raw.replace(/^Title:.*$/m, '').replace(/^URL Source:.*$/m, '').replace(/^Markdown Content:\\s*$/m, '');
+const navFirstH = navBody.search(/^#{1,3}\\s/m);   // the menu sits above the first heading; below it a link is only a nav page if it looks like one
+const NAV_SERVICE = /(service|solution|product|offering|expertise|capabilit|industr|platform|technolog|consult|what-?we-?do|whatwedo)/i;
+const nav_pages = []; const navSeen = new Set();
+for (const [region, inHeader] of [[navBody.slice(0, navFirstH > 0 ? Math.min(navFirstH, NAV.header_chars) : NAV.header_chars), true], [navBody, false]]) {
+  for (const m of region.matchAll(/\\[([^\\]\\n]{1,120})\\]\\((https?:\\/\\/[^)\\s]+)\\)/g)) {
+    if (nav_pages.length >= NAV.max) break;
+    const label = m[1].replace(/[*_`#!]/g, '').replace(/\\s+/g, ' ').trim();
+    const url = m[2].replace(/[.,;]+$/, '').replace(/[?#].*$/, '');
+    if (navHost(url) !== navSelf || !navSelf) continue;
+    const path = url.replace(/^https?:\\/\\/[^\\/?#]*/i, '') || '/';
+    if (path === '/' || /\\.(pdf|jpe?g|png|gif|svg|webp|avif|mp4|mp3|zip|docx?|xlsx?|pptx?|css|js|xml|ico)$/i.test(path)) continue;
+    const key = path.replace(/\\/+$/, '').toLowerCase() || '/';
+    if (navSeen.has(key)) continue;
+    if (!inHeader && !NAV_SERVICE.test(path) && !NAV_SERVICE.test(label)) continue;   // below the header only service-looking links count
+    navSeen.add(key);
+    nav_pages.push({ url, text: label.slice(0, NAV.text_chars), path: key, in_header: inHeader });
+  }
+  if (nav_pages.length >= NAV.max) break;
+}
+
+return [{
+  json: {
+    ...input,
+    page_title: pageTitle,
+    site_text: text,
+    read_ok,
+    nav_pages
+  }
+}];""")
+# b. the menu pages: pick, read, merge
+add_node('Nav Pages Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Nav_Pages_Plan.js')}, [_srk[0] + 180, _srk[1] + 160])
+if_node('Nav Pages To Read?', "{{ !$json.skip }}", [_srk[0] + 360, _srk[1] + 160])
+add_node('Read Nav Pages', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/{{ $json.url }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+    'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Remove-Selector', 'value': 'script, style, form, [class*="cookie"], [id*="cookie"], [class*="consent"], [id*="consent"], [id*="onetrust"]'}, {'name': 'X-Retain-Images', 'value': 'none'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 1500}}, 'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'page_text'}}, 'timeout': 20000}},
+    [_srk[0] + 540, _srk[1] + 160], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+slot('Read Nav Pages', 'jina')
+add_node('Site Pages', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Site_Pages.js')}, [_srk[0] + 720, _srk[1] + 160], {'alwaysOutputData': True})
+disconnect('Site Read OK?', 'Site Describer')
+connect('Site Read OK?', 'Nav Pages Plan', 0)
+connect('Nav Pages Plan', 'Nav Pages To Read?')
+connect('Nav Pages To Read?', 'Read Nav Pages', 0)
+connect('Nav Pages To Read?', 'Site Pages', 1)
+connect('Read Nav Pages', 'Site Pages')
+connect('Site Pages', 'Site Describer')
+# c. the describer reads every page it was given, and names every service
+assert 'Below is the text content of the homepage' in nodes['Site Describer']['parameters']['text'], 'Site Describer: unexpected v3 prompt'
+set_prompt('Site Describer', 'site_describer.txt')
+# d. the services, the pages read and what the site says about itself travel with the description (and into the 30-day cache row)
+patch('Parse Description', "const prev = $('Clean Site Text').first().json;\nconst desc = parseAgentJson($input.first().json.output);",
+      """// D22 (2026-10-11): the description is written from the homepage AND the menu pages that were read (Site Pages). What those pages say stays
+// with it — the pages read, the site's own menu links and the headings the critic may not call invented — and goes into the 30-day seo_cache
+// row, where `pages_read` also marks the description as written by this version (an older, homepage-only row is read again).
+let prev; try { prev = $('Site Pages').first().json; } catch (e) { prev = $('Clean Site Text').first().json; }
+const desc = parseAgentJson($input.first().json.output);
+const homeUrl = 'https://' + String(prev.domain || '').replace(/^https?:\\/\\//, '');
+desc.pages_read = (prev.site_pages && prev.site_pages.length ? prev.site_pages : [{ url: homeUrl, title: prev.page_title || '', kind: 'homepage' }])
+  .map(p => ({ url: p.url, title: String(p.title || '').slice(0, 120), kind: p.kind || 'page' })).slice(0, 8);
+desc.nav_pages = (prev.nav_pages || []).slice(0, 12).map(p => ({ url: p.url, text: String(p.text || '').slice(0, 80) }));
+desc.site_facts = [...new Set([...(desc.products_or_services || []), ...(desc.unique_selling_points || []), ...(prev.site_facts || [])]
+  .map(x => String(x == null ? '' : x).trim()).filter(x => x.length >= 3))].slice(0, 50).map(x => x.slice(0, 120));""")
+patch('Parse Description', "    site_text: undefined,   // lamba text aage nahi chahiye",
+      "    site_text: undefined,   // lamba text aage nahi chahiye\n    pages_text: undefined, site_pages: undefined, site_facts: undefined, nav_pages: undefined,   // D22: kept inside site_description")
+# e. the describe page says which pages were read
+patch('Build Description Page', "      <b>Brand Tone:</b> ${esc(s.tone_of_brand)}</p>",
+      "      <b>Brand Tone:</b> ${esc(s.tone_of_brand)}<br>\n      <b>Pages read:</b> ${(s.pages_read || []).length ? (s.pages_read || []).map(p => esc(p.title || p.url)).join(', ') : 'homepage'}</p>")
+# f. the agents' prompts next to the Code nodes, so the harness can check what a prompt always carries (S42, D22)
+os.makedirs(OUT_CODE, exist_ok=True)
+for _n in nodes.values():
+    if _n['type'] == '@n8n/n8n-nodes-langchain.agent':
+        open(os.path.join(OUT_CODE, re.sub(r'[^A-Za-z0-9_.-]+', '_', _n['name']) + '.prompt.txt'), 'w').write(_n['parameters']['text'])
+assert nodes['Read Nav Pages'].get('credentials'), 'Read Nav Pages: credential slot missing'
+assert 'nav_pages' in code('Clean Site Text') and 'site_facts' in code('Parse Description') and "$('Site Pages')" in code('Parse Description')
+assert conns['Site Read OK?']['main'][0][0]['node'] == 'Nav Pages Plan' and conns['Site Pages']['main'][0][0]['node'] == 'Site Describer'
+log('Site description (2026-10-11, FIX_PLAN D22): the homepage AND up to 5 of its own menu pages are read (Clean Site Text keeps nav_pages -> Nav Pages Plan -> Read Nav Pages (Jina, one request each, no retry) -> Site Pages; a page that fails or is blocked is skipped), the describer must name every service it finds, and the services, the pages read, the menu links and the site\'s headings travel with the description into the 30-day cache (`pages_read` also makes a homepage-only row written before this change stale), so the Keyword Check\'s topic fit (Assess Result) and the content pipeline see the full service list; the critic is given the site facts and may no longer call a claim found on the website invented (critic.txt + Parse Critique: such claims are dropped, the rest renamed "unverified")')
 
 # =============================================================================
 # 9. WRITE

@@ -1,0 +1,100 @@
+=You are a senior SEO content strategist. Create a detailed content brief for a page that will outrank the current competitors, win the answer features, and convert the reader. The brief is the only instruction the writer gets, so be specific.
+
+PAGE DETAILS
+Target Keyword: {{ $json.keyword }} · Country: {{ $json.country }} · Language: {{ $json.language_name || 'English' }} ({{ $json.spelling }} spelling) · Currency: {{ $json.currency }}
+Page Type: {{ $json.page_type }} · Business goal: {{ $json.goal || 'leads' }} · Tone requested: {{ $json.tone || 'professional and direct' }}
+Verdict on this keyword: {{ $json.verdict }} ({{ $json.verdict_score }}/100). {{ ($json.verdict_reasons || []).join(' ') }} {{ $json.recommended_page && $json.recommended_page !== $json.page_type ? 'Recommended page type instead: ' + $json.recommended_page + '.' : '' }}
+Business: {{ $json.business || 'Not provided — write for a generic business of this type and use placeholders like [Your Business Name] and [Your City]' }}
+Customers: {{ $json.audience || 'Not provided' }}
+Website: {{ $json.domain || 'Not provided' }}
+Main call to action: {{ $json.cta || 'not specified — choose the natural one for the goal' }}
+{{ $json.existing_page ? 'EXISTING PAGE ON THIS TOPIC: ' + $json.existing_page.url + ' — this brief is for improving/rewriting that page; keep its URL, keep its real facts, and make the structure clearly better than the competitors.' : 'No existing page found for this keyword — this is a new page.' }}
+
+FACTS ABOUT THE CLIENT (only these may be stated as true; everything else business-specific becomes a placeholder)
+Given by the client: {{ $json.business_facts || 'none' }}
+Site description: {{ JSON.stringify($json.site_description || {}) }}
+Signals found on their pages: {{ JSON.stringify($json.client_signals || {}) }}
+Their pages (excerpts): {{ ($json.client_pages || []).map(p => '[' + p.kind + '] ' + p.url + ': ' + p.text.slice(0, 1800)).join('\n\n') || 'none read' }}
+
+AUTHOR AND TRUST (E-E-A-T)
+{{ $json.eeat_context || 'No author profile on file: plan the experience notes as bracketed prompts for the author.' }}
+Case studies on file (real proof you may cite; link a case study only when it has a URL):
+{{ $json.proof_context || 'none recorded' }}
+{{ $json.role_brief || '' }}
+{{ $json.video_context || '' }}
+
+KEYWORD DATA
+{{ JSON.stringify($json.keyword_data, null, 1) }}
+
+SEARCH RESULTS PAGE FEATURES
+{{ JSON.stringify($json.serp_features, null, 1) }}
+
+COMPETITOR ANALYSIS
+{{ JSON.stringify($json.competitor_analysis, null, 1) }}
+
+COMPETITOR PAGES (title, word count, headings)
+{{ JSON.stringify($json.competitors_summary, null, 1) }}
+
+TERMS THE TOP PAGES SHARE
+{{ $json.term_digest || 'n/a' }}
+
+VERIFIED FACTS WITH SOURCES (the only external numbers the writer may cite)
+{{ ($json.facts_list || $json.facts || []).map(f => '- ' + f.claim + ' — ' + f.source + ' — ' + f.url).join('\n') || 'none found; the writer must use [Statistic] placeholders for any external number' }}
+
+REAL PAGES ON THE USER'S WEBSITE (the ONLY URLs you may use for internal links)
+{{ ($json.ladder_links || []).length ? 'KEYWORD LADDER: this page is rung ' + $json.ladder_rung + ' of a ladder of pages that climb towards "' + $json.ladder_head + '". The pages marked "ladder" in the list below belong to that ladder and are live: link to them with natural, descriptive anchors. Ladder pages that are not published yet are NOT in the list and must never be linked or invented' + (($json.planned_link_targets || []).length ? ' (' + ($json.planned_link_targets || []).map(l => '"' + (l.keyword || l.about || l.url) + '"').join(', ') + ' are still planned)' : '') + '.' : '' }}
+{{ $json.ai_target ? 'AI ANSWER TARGET (plan the page to become the one AI assistants cite): buyers ask ChatGPT, Gemini, Perplexity, Copilot and Google\'s AI: "' + $json.ai_target.question + '". Today the answers do not name ' + ($json.domain || 'this business') + (($json.ai_target.competitors || []).length ? ' and name ' + $json.ai_target.competitors.join(', ') : '') + '. Before answering, the assistants search for: ' + (($json.ai_target.fanout || []).map(f => '"' + f + '"').join(', ') || 'n/a') + '. The pages they cite now: ' + (($json.ai_target.sources || []).map(x => (x.title || x.url) + ' — ' + x.url).join('; ') || 'n/a') + '. Requirements: ' + '(1) the H1 carries the question or its topic and the first 40-60 words after it answer the question directly (an assistant reads the first ~200 characters of a page); ' + '(2) one H2 phrased as a question for each search above that fits the topic, each answered in its first sentence; ' + '(3) a neutral comparison table of the options buyers weigh (criteria, who each option suits) — never rank this business first, show where it fits; ' + '(4) concrete figures with their source, preferring the official sources above; an expert quote placeholder for the author; ' + '(5) the follow-up questions as further question-style headings, each answered in 40-60 words (never an FAQ block: Google stopped showing FAQ rich results in May 2026); plan snippet_targets from the question and the searches.' + ($json.ai_target.kind === 'refresh' ? ' This is a REFRESH of the existing page: keep its URL and every true fact, add what is missing above and update every date and figure.' : '') : '' }}
+{{ ($json.internal_link_candidates || []).length ? JSON.stringify(($json.internal_link_candidates || []).slice(0, 40), null, 1) : 'No sitemap could be read — return an empty internal_link_suggestions array.' }}
+
+Return ONLY a valid JSON object (no markdown, no backticks, no extra text) in this exact structure:
+{
+  "meta_title": "Max 60 characters, keyword near the start, a specific benefit",
+  "title_variants": ["2 alternative titles"],
+  "meta_description": "120-155 characters, keyword + concrete benefit + call to action",
+  "meta_variants": ["1 alternative description"],
+  "slug": "short-url-slug",
+  "h1": "",
+  "primary_keyword": "",
+  "secondary_keywords": ["5-8 related keywords to use naturally"],
+  "target_audience": "who exactly, in one sentence",
+  "audience_pain_points": ["3-5 pains in the reader's words"],
+  "objections": ["3-5 doubts the reader has that the page must answer"],
+  "search_intent": "",
+  "tone": "",
+  "reading_level": "e.g. busy business reader, grade 8-10",
+  "target_word_count": 0,
+  "answer_block": "A 40-70 word direct answer to the main question, written to be quoted by featured snippets and AI answers. No placeholders, no unverifiable numbers.",
+  "information_gain": ["3-5 things this page will provide that no competitor does (from the analysis), each concrete enough to write"],
+  "unique_angle": "",
+  "outline": [
+    { "h2": "", "purpose": "Why this section exists and what the reader can do after it", "key_points": ["", ""], "h3s": ["optional sub-headings"], "target_words": 0, "format": "prose | steps | checklist | table | comparison | example", "evidence": ["which verified fact or client fact to use here, or 'placeholder' if none"], "link_to": "hub pages only: the URL of the cluster page this section summarises and links to, else empty" }
+  ],
+  "snippet_targets": [{ "question": "exact question to use as an H2/H3", "answer": "40-60 word direct answer" }],
+  "terms_to_use": [{ "term": "", "min_count": 1 }],
+  "evidence_plan": [{ "fact": "", "source_url": "" }],
+  "client_facts": ["facts from the client's pages/form the copy must use (name, services, locations, credentials, numbers)"],
+  "experience_notes": ["2-4 first-hand experience passages the page must carry (what the author or the business has seen or done), each tied to a section; from the client facts, case studies or the author's credentials, else a bracketed prompt for the author such as [Author insight: the most common mistake you see when ...]"],
+  "video_placement": "only when the page has a video: 'top' or the exact H2 it belongs under, else empty",
+  "proof_elements": ["proof to show: case study, certification, numbers, testimonials — as placeholders if the client gave none"],
+  "gaps_to_cover": ["Competitor gaps this page must fill"],
+  "entities_to_mention": [""],
+  "comparison_table": { "title": "", "columns": [""], "rows_hint": "what the rows compare; use [Price], [Timeline] for business-specific figures" },
+  "internal_link_suggestions": [{ "anchor": "", "url": "must be one of the REAL PAGES above" }],
+  "image_suggestions": [{ "placement": "hero | the exact H2 text the image belongs under", "purpose": "hero | diagram | screenshot | photo | chart | table", "subject": "what the image must show, specific enough for a designer or a stock search (no faces of real people, no competitor logos)", "alt_text": "what the image shows, naturally including the topic, under 125 characters, no 'image of'", "caption": "one line that adds information, or empty", "filename": "kebab-case-with-the-topic.webp" }],   // exactly 3: one hero (also the featured / Open Graph image) + two in-body images at the sections where a visual explains more than text
+  "faqs": ["6-8 follow-up questions — reuse the People Also Ask questions where relevant; each becomes its own question-style heading answered in 40-60 words inside the section it belongs to, never a separate FAQ block"],
+  "cta": "Main call to action for the page",
+  "voice_rules": ["3-5 concrete style rules for this brand and audience"]
+}
+
+RULES
+- The structure must suit a {{ $json.page_type }}, not a blog post, unless the page type is Blog Post or Guide.
+- target_word_count = the recommended_word_count from the competitor analysis (already clamped: service/landing pages 900-2,400, guides 1,200-3,000). The outline has 6-9 H2 sections whose target_words add up to this number. Depth beats breadth: fewer sections, each complete.
+- Every item in content_gaps and information_gain_opportunities from the competitor analysis must be covered somewhere in the outline.
+- Use question-style H2s where the People Also Ask data shows questions; put those questions in snippet_targets with a direct answer.
+- terms_to_use: 12-20 terms from the shared-terms list that the page must use naturally, with a realistic minimum count.
+- evidence_plan may ONLY contain facts from the VERIFIED FACTS list, copied exactly with their URL. Prefer the official, standards, research and major-press sources; use at most one page per vendor or agency blog on the whole page, and never for a market or compliance figure.
+- internal_link_suggestions may ONLY use URLs from the REAL PAGES list (3-6 links). Never invent a URL.
+- Do not copy competitor headings. Build a better, more complete structure.
+- experience_notes: never invent an experience, client, number or result. Experience is what separates this page from AI-written competitors: tie each note to a real fact when one exists.
+- A HUB PAGE, CASE STUDY or LOCAL PAGE block above overrides the section-count, length and internal-link-count rules where they conflict.
+- Write in {{ $json.language_name || 'English' }} with {{ $json.spelling }} spelling.
