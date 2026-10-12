@@ -152,6 +152,21 @@ const LK = (() => {
   // (live finding 2026-10-08: whois.com came back as an "unlinked mention" of techand.ai)
   const SCRAPER = /(^|[.-])(whois|who\.is|worth|siteprice|sitestats?|site-?info|hypestat|similarsites?|sitelike|sitesimilar|websiteoutlook|statshow|domaintools|robtex|builtwith|urlscan|siteindices|dnslytics|ipaddress|host\.io|domainbigdata|webstatsdomain|siteliner|rank2traffic|websiteinformer|informer|valuation|traffic-?estimate|seo-?analy[sz]er|seositecheckup|sitechecker|webrank|domainstats)/i;
   const isScraper = (d) => SCRAPER.test(String(d || '').toLowerCase().replace(/^www\./, ''));
+  // G18-1 (2026-10-12, the accuracy set): a SEARCH-RESULTS page of someone else's site. Its content is whatever was typed into a search box,
+  // it is noindex or canonicalised away on most sites, and Google passes nothing from it — yet robuta.com/?q=business+impact came back as
+  // techand.ai's best link (SEO value 57, above OpenPeppol's members list at 35) because only whois / stats / valuation hosts counted as
+  // scrapers. The shapes: a path segment "search" / "suche" / "recherche" / "busca" (/search, /en/search/), a search script
+  // (/search.php, /results.aspx), or a query that carries the search term (?q= / ?s= / ?query= / ?search= / ?keyword= / ?term= / ?k=).
+  // Query keys only, never a value, and only on a whole key, so ?qid=, ?src= and ?ref= are not searches. The caller decides what to do with
+  // it (Parse Backlinks labels such a page "scraper" when nothing ties the host to our topics, so LK.values' cap of 5 applies).
+  const SEARCH_PATH = /(^|\/)(search|searchresults|suche|recherche|busca|buscar|zoeken)(\/|\.(php|html?|aspx?|jsp)$|$)/i;   // "results" alone is left out on purpose: /results/ is a real page on plenty of sites
+  const SEARCH_Q = /^(q|s|k|kw|query|search|searchterm|search_term|searchword|keyword|keywords|term|suche|wd)$/i;
+  const isSearchPage = (u) => { const s = String(u || '').trim(); if (!s) return false;
+    const noHost = s.replace(/^[a-z][a-z0-9+.-]*:\/\/[^\/?#]*/i, ''); const i = noHost.indexOf('?');
+    const path = (i < 0 ? noHost : noHost.slice(0, i)).replace(/#.*$/, '');
+    if (SEARCH_PATH.test(path)) return true;
+    if (i < 0) return false;
+    return noHost.slice(i + 1).replace(/#.*$/, '').split('&').some(kv => kv.includes('=') && SEARCH_Q.test(kv.split('=')[0]) && kv.split('=').slice(1).join('=').length > 0); };
   // press-release wires: a competitor's link there is a paid release (usually nofollow), not a site to pitch (live finding 2026-10-08:
   // prnewswire.co.uk and kyodonewsprwire.jp ranked among techand.ai's top gap prospects once Ahrefs DR was on)
   const WIRE = /(^|\.)(prnewswire|businesswire|globenewswire|einpresswire|einnews|accesswire|newswire|prweb|prlog|openpr|newsfilecorp|issuewire|presswire|kyodonewsprwire|marketwired|newsdirect|pressat|24-7pressrelease|prunderground|send2press|realwire|pressebox|presseportal|newsvoir|prfire|cision)\.[a-z.]+$/i;
@@ -230,7 +245,7 @@ const LK = (() => {
     for (const [p, ds] of byPath) if (ds.size >= 2 && [...ds].some(d => out.has(d))) for (const d of ds) set(d, 'shares its page path with a link-farm page (' + p.slice(0, 60) + ')');
     return out;
   }
-  return { text, attr, hostOf, regDomain, refKey, sameSite, isInfra, isScraper, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
+  return { text, attr, hostOf, regDomain, refKey, sameSite, isInfra, isScraper, isSearchPage, isWire, normUrl, cleanUrl, placementAt, anchorPlacements, linksTo, pageFacts, contextAt, challenge, emailsIn, verify, mention, domainKind, quality, values, anchorKind, SPAM_RE, isGambling, footPath, footprints };
 })();
 
 // ---- outreach kit (v4.13 Link Builder, LINK_BUILDER_SPEC.md; inlined after the link kit): contacts, qualification, topic fit, our page and
@@ -649,8 +664,22 @@ return plans.map(p => {
   }
   // ---------------- the footprint gate (D3): link-farm clusters over the whole ledger, before scoring ----------------
   const fp = LK.footprints(ledger, { domain: p.domain, brands, titles: (p.assets || []).map(a => a.title) });
+  // G18-1 (2026-10-12, the accuracy set, ACCURACY_SET.md section 6): a search-results page of an unrelated site is worth nothing in search,
+  // but nothing marked it, so robuta.com/?q=business+impact was reported as techand.ai's BEST link (SEO value 57) above OpenPeppol's real
+  // members list (35). Such a page is labelled 'scraper' here — exactly as the whois / stats hosts already are (LK.isScraper) — and
+  // LK.values' existing cap of 5 then applies, with brand value 0. Two bounds, so a real link is never written off: a host whose own name
+  // or page title ties it to our topics keeps its label (a search page of an industry portal can still be a genuine listing), and a label
+  // the Link Analyst or a source gave (editorial, listing, directory …) is never overwritten. The footprint gate above is untouched: a
+  // search page is low value, not a link farm, so it stays out of the disavow list.
+  const topicText = [...(p.topics || []), ...(p.assets || []).map(x => x && x.title).filter(Boolean)].join(' ');
+  const topicStems = [...new Set(OK.words(topicText).map(OK.stem))].filter(w => w.length >= 3);
+  const hostCarriesTopic = (d) => { const l = String(d || '').toLowerCase().replace(/^www\./, '').replace(/\.[a-z.]{2,}$/, '').replace(/[^a-z0-9]/g, ''); return !!l && topicStems.some(t => l.includes(t)); };
+  const titleCarriesTopic = (t) => { const s = String(t || '').trim(); return s.length > 3 && OK.fit(topicText, s) >= OK.OFF_TOPIC; };
+  const searchPage = (row) => LK.isSearchPage(row.from_url) && (!row.link_type || row.link_type === 'other')
+    && !hostCarriesTopic(row.ref_domain) && !titleCarriesTopic(row.page_title);
   for (const row of ledger) {
     if (fp.has(row.ref_domain)) { row.link_type = 'spam'; row.note = ('link farm: ' + fp.get(row.ref_domain)).slice(0, 140); }
+    else if (searchPage(row)) { row.link_type = 'scraper'; row.note = ('a search-results page on a site unrelated to your topics (' + String(row.from_url).slice(0, 80) + '): no SEO value, nothing to do').slice(0, 140); }
     const val = LK.values({ ...row, spam: row.spam_score, relevance: row.relevance === '' ? null : row.relevance });
     row.seo_value = val.seo; row.referral_value = val.referral; row.brand_value = val.brand;
     if (row._found_new && row.link_type !== 'spam' && (val.seo >= 50 || ['editorial', 'press', 'listing', 'resource'].includes(row.link_type))) wins.push({ ref_domain: row.ref_domain, url: row._url, why: 'new', seo: val.seo, link_type: row.link_type });
@@ -705,18 +734,14 @@ return plans.map(p => {
   // site that links to both UAE competitors is relevant to a UAE business even when its name says nothing). Everything else is listed in
   // the link gap with the reason and never stored as a prospect to pitch -- stripe.com, weforum.org and kirkland.com were waiting in the
   // app as prospects after the live run of 2026-10-11.
-  const topicText = [...(p.topics || []), ...(p.assets || []).map(x => x && x.title).filter(Boolean)].join(' ');
-  const topicStems = [...new Set(OK.words(topicText).map(OK.stem))].filter(w => w.length >= 3);
-  const titleOfD = new Map();
+  const titleOfD = new Map();   // topicText / topicStems are built above, at the footprint gate (G18-1 uses them too)
   const putTitle = (d, t) => { const k = LK.refKey(d); if (k && t && !titleOfD.has(k)) titleOfD.set(k, String(t).slice(0, 200)); };
   for (const r of ledger) putTitle(r.ref_domain, r.page_title);
   for (const x of mentions) putTitle(x.domain, x.title);
   for (const x of lists) putTitle(x.domain, [x.title, x.topic].filter(Boolean).join(' '));
   for (const x of compNew) putTitle(x.domain, [x.title, x.anchor].filter(Boolean).join(' '));
-  const labelWords = (d) => String(d || '').toLowerCase().replace(/^www\./, '').replace(/\.[a-z.]{2,}$/, '').replace(/[^a-z0-9]/g, '');
   const onTopic = (d) => {
-    const l = labelWords(d);
-    if (l && topicStems.some(t => l.includes(t))) return { ok: true, why: 'its name carries your topic' };
+    if (hostCarriesTopic(d)) return { ok: true, why: 'its name carries your topic' };   // the same name rule G18-1 uses above
     const t = titleOfD.get(LK.refKey(d));
     if (t) { const f = OK.fit(topicText, t); if (f >= OK.OFF_TOPIC) return { ok: true, why: 'its page matches your topics (' + Math.round(100 * f) + '%)' }; }
     if (ccTld.length === 2 && ccTld !== 'us' && String(d || '').toLowerCase().endsWith('.' + ccTld)) return { ok: true, why: 'a site in your market (.' + ccTld + ')' };
@@ -744,8 +769,11 @@ return plans.map(p => {
   const kinds = {}; for (const r of liveRows) kinds[r.anchor_kind] = (kinds[r.anchor_kind] || 0) + 1;
   const anchors = { kinds, top: ((one('anchors').res || {}).items || []).slice(0, 15).map(a => ({ anchor: String(a.anchor || '').slice(0, 80), referring_domains: Number(a.referring_domains) || 0, backlinks: Number(a.backlinks) || 0, kind: LK.anchorKind(a.anchor, p.domain, brands) })) };
   const pages = ((one('pages').res || {}).items || []).slice(0, 15).map(x => ({ url: x.page, referring_domains: Number((x.page_summary || {}).referring_domains) || 0, backlinks: Number((x.page_summary || {}).backlinks) || 0, status: (vTarget.find(t => t.url === x.page) || {}).status || Number(x.status_code) || null }));
-  const by = (k) => [...liveRows].sort((a, b) => b[k] - a[k]).filter(r => r[k] > 0).slice(0, 10).map(r => ({ ref_domain: r.ref_domain, from_url: r.from_url, value: r[k], link_type: r.link_type, visits: r.visits }));
-  const values = { best_seo: by('seo_value'), best_referral: by('referral_value'), best_brand: by('brand_value') };
+  // G18-1: a link a cap has written off (link farm, search-results page) is never one of the site's "best links" for SEO, whatever is left
+  // of its score — a capped 5 above nothing is still nothing. Referral keeps every row: the visits it sends are measured, not judged.
+  const CAPPED = ['spam', 'scraper'];
+  const by = (k, seo) => [...liveRows].filter(r => !(seo && CAPPED.includes(r.link_type))).sort((a, b) => b[k] - a[k]).filter(r => r[k] > 0).slice(0, 10).map(r => ({ ref_domain: r.ref_domain, from_url: r.from_url, value: r[k], link_type: r.link_type, visits: r.visits }));
+  const values = { best_seo: by('seo_value', true), best_referral: by('referral_value'), best_brand: by('brand_value', true) };
   const best_links = liveRows.filter(r => r.seo_value >= 50).length;
   const referral = { visits: liveRows.reduce((s, r) => s + (Number(r.visits) || 0), 0), visits_28d: liveRows.reduce((s, r) => s + (Number(r.visits_28d) || 0), 0), key_events: liveRows.reduce((s, r) => s + (Number(r.key_events) || 0), 0) };
   // ---------------- alerts ----------------

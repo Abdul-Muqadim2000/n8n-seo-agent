@@ -14,6 +14,21 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-13',
+    title: 'Shorter fix lists, honest best links, and a word even when your numbers are small',
+    summary:
+      'Three quality fixes measured against real sites: the tiniest audit findings are folded into one line so the list you read is the list to act on, a search-results page can no longer be called one of your best links, and a site with a handful of clicks a month still hears when they halve.',
+    highlights: [
+      'Audit findings of the lowest impact — a title one character too long, the link count of a navigation page, a cosmetic tag — are folded into one “minor items” line with the count',
+      'Nothing is removed by the fold: the items still count in the score, stay with the audit and open with one click',
+      'A search-results page on a site unrelated to your topics is written off like a link farm, so your best links are the ones that really pass value',
+      'Such a page is not called spam either: it stays in the ledger with its reason and is never suggested for disavowal',
+      'On a small site a large drop is reported as something to watch, with both periods’ counts named, instead of staying a quiet note',
+      'A fall is still only called a fall when it is beyond normal week-to-week variation',
+    ],
+    features: ['technical-audits', 'backlinks', 'site-tracking', 'reports'],
+  },
+  {
     date: '2026-10-12',
     title: 'A rank check now reports the whole results page',
     summary:

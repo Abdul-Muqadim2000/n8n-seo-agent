@@ -4496,6 +4496,8 @@ await guard('d11-existing-pages', async () => {
 // top pick ("e invoicing") that overlapped the running ladder head "e invoicing in uae" with no warning, a card claiming an AI Overview its
 // own live check had not found, "+1,200%" from a Google Trends series that is zero most weeks, 500 Search Console rows presented as "the"
 // queries, an audit that never said how much of the site it had crawled, and a traffic alert that fired on a fixed 30%.
+// G28 follow-up (2026-10-13, FIX_PLAN §3.8): a big relative drop that the test cannot confirm is now a medium "Watch" alert with the two
+// periods' counts named as "small numbers", so a site with 20 clicks a month hears about it without being told its traffic fell.
 // ===================================================================================
 await guard('d20-d21-g9-g24-g28', async () => {
   const SN = 'S43 D20 D21 G9 G24 G28 — a keyword one of the site\'s ladders already covers, an AI Overview only from the live check, no percentage for a sparse trend, every Search Console row with its anonymised share and brand split, crawl coverage in the audit, alerts on a statistical test';
@@ -4683,12 +4685,20 @@ await guard('d20-d21-g9-g24-g28', async () => {
   const noise = await metricsWith({ cur: { clicks: 12, impressions: 9000 }, prev: { clicks: 20, impressions: 9200 }, trends: TRENDS });
   const aNoise = noise.alerts.find(a => a.stat === 'clicks') || {};
   console.log('   noise ->', JSON.stringify(noise.significance.clicks), '|', aNoise.text);
-  check('G28: the same 40% fall on 20 clicks is NOT called a fall — it is an "info" line worded "Watch", because that is inside week-to-week variation',
-    noise.significance.clicks.significant === false && noise.significance.clicks.watch === true && aNoise.level === 'info' && /^Watch: search clicks are 40% lower/.test(aNoise.text) && /not a confirmed fall/.test(aNoise.text)
-    && !noise.alerts.some(a => ['high', 'medium'].includes(a.level) && /clicks fell/.test(a.text)), JSON.stringify([aNoise.level, aNoise.text]));
+  // G28 follow-up (2026-10-12, FIX_PLAN section 3.8): a small site still hears about a big relative drop — a MEDIUM alert (so it reaches
+  // seo_site_metrics.alerts and the app) worded "Watch", with the counts of both periods named as "small numbers", and never "high".
+  check('G28: the same 40% fall on 20 clicks is NOT called a fall — it is a "Watch" line, with the small numbers named (32 clicks over both periods) and never in the high band',
+    noise.significance.clicks.significant === false && noise.significance.clicks.watch === true && aNoise.level === 'medium' && aNoise.small_numbers === true
+    && /^Watch: search clicks are 40% lower \(20 → 12 in 28 days\)/.test(aNoise.text) && /Small numbers: 32 search clicks over both periods together/.test(aNoise.text)
+    && /happens by chance \(z -1\.41\)/.test(aNoise.text) && /not a confirmed fall/.test(aNoise.text)
+    && !noise.alerts.some(a => a.level === 'high') && !noise.alerts.some(a => /clicks fell/.test(a.text)), JSON.stringify([aNoise.level, aNoise.text]));
+  check('G28: the small-numbers alert is stored and shown like any other medium one, so an owner with 20 clicks a month is told something moved',
+    /Watch: search clicks are 40% lower/.test(noise.metrics_row.alerts) && noise.metrics_row.alerts.length <= 500, JSON.stringify(noise.metrics_row.alerts.slice(0, 200)));
   const noise2 = await metricsWith({ cur: { clicks: 18, impressions: 9000 }, prev: { clicks: 30, impressions: 9200 }, trends: TRENDS });
-  check('G28: 30 -> 18 clicks (enough events to measure, z -1.73) is still not significant: "Watch", never "fell"',
-    noise2.significance.clicks.measurable === true && noise2.significance.clicks.significant === false && (noise2.alerts.find(a => a.stat === 'clicks') || {}).level === 'info', JSON.stringify(noise2.significance.clicks));
+  check('G28: 30 -> 18 clicks (enough events to measure, z -1.73) is still not significant: a medium "Watch" with its counts, never "fell" and never high',
+    noise2.significance.clicks.measurable === true && noise2.significance.clicks.significant === false
+    && (noise2.alerts.find(a => a.stat === 'clicks') || {}).level === 'medium' && /Small numbers: 48 search clicks/.test((noise2.alerts.find(a => a.stat === 'clicks') || {}).text)
+    && !noise2.alerts.some(a => a.level === 'high'), JSON.stringify(noise2.significance.clicks));
   const big = await metricsWith({ cur: { clicks: 900, impressions: 5000 }, prev: { clicks: 1600, impressions: 9200 }, ga4: [300, 500], trends: TRENDS });
   check('G28: a real fall past alert_drop_pct is "high", and GA4 organic sessions go through the same test',
     (big.alerts.find(a => a.stat === 'clicks') || {}).level === 'high' && (big.alerts.find(a => a.stat === 'impressions') || {}).level === 'high'
@@ -5424,6 +5434,8 @@ await guard('S47 G6 rank tracker depth', async () => {
 });
 
 // ===================================================================================
+// Extended 2026-10-13 (FIX_PLAN §3.9 G18-2): section C2 — the minor band folded into one "Minor items (N)" line in both
+// audit reports and in the callback, with nothing hidden from the score or the stored rows.
 // S48 (2026-10-12, system review FIX_PLAN G7 / G26 / D25b / D25c) — the speed real visitors feel, the order of the fix list, an alert that
 // arrives when the mail server is down, and a test check-in that can never pass as the month's answer.
 await guard('crux, impact priority, alert channels and test check-ins', async () => {
@@ -5596,6 +5608,35 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
   check('G26: the report says the list is ordered by likely impact, names why the first item is first, and keeps the severity badge next to each fix',
     /Ordered by likely impact/.test(ah) && /Key pages are noindex/.test(ah) && /Why here:/.test(ah) && /How the fix list is ordered/.test(ah),
     ah.slice(Math.max(0, ah.indexOf('Fix These First')), ah.indexOf('Fix These First') + 500));
+
+  // ---------- C2. G18-2: the minor band folded into one line, in both reports and in the callback ----------
+  const minorA3 = a3.findings.filter(f => f.minor === true);
+  const foldBlock = (html) => (html.match(/<details open class="minorfold">[\s\S]*?<\/details>/g) || []).join('\n');
+  const cardTitles = (html) => html.split('<div class="finding"').slice(1).map(s => (s.match(/class="ftitle">[\s\S]*?<\/div>/) || [''])[0]);
+  const ahFold = foldBlock(ah), ahCards = cardTitles(ah);
+  console.log('   minor band ->', a3.minor_count, 'of', a3.findings.length, ':', minorA3.map(f => '[' + f.severity + ' ' + f.impact + '] ' + f.title).join(' | '));
+  check('G18-2: every finding carries `minor`, and only the lowest-impact Low / Info ones are in the band — the favicon on all 14 pages is, the index blocker and the Critical are not',
+    a3.findings.every(f => typeof f.minor === 'boolean') && minorA3.length === a3.minor_count && a3.minor_count >= 1
+    && minorA3.some(f => /Missing favicon/.test(f.title)) && minorA3.every(f => f.severity === 'Low' || f.severity === 'Info')
+    && !minorA3.some(f => /Key pages are noindex|Missing title tag/.test(f.title)) && /minor item/.test(a3.minor_note),
+    JSON.stringify({ count: a3.minor_count, note: a3.minor_note, minor: minorA3.map(f => [f.severity, f.title, f.impact]) }));
+  check('G18-2: the technical audit report folds them into ONE "Minor items (N)" line with the count and the reason, instead of a section each — the favicon is inside that line and in no finding card',
+    /Minor items \(\d+\)/.test(ahFold) && /Missing favicon/.test(ahFold) && !ahCards.some(c => /Missing favicon/.test(c))
+    && new RegExp('Minor items \\(' + a3.minor_count + '\\)').test(ahFold) && /minor item/.test(ah) && /Nothing is left out of the score/.test(ahFold),
+    JSON.stringify({ fold: ahFold.slice(0, 300), cards: ahCards.length }));
+  check('G18-2: nothing is hidden — the folded items keep their severity, their pages and their fix inside the line, and the Action Plan counts them instead of repeating them',
+    /Missing favicon[\s\S]{0,400}Add a favicon/.test(ahFold) && new RegExp('Plus ' + a3.minor_count + ' minor item').test(ah)
+    && a3.findings.filter(f => f.minor).every(f => f.impact != null && f.impact_basis),
+    JSON.stringify({ action_plan: (ah.match(/Plus \d+ minor item[^<]*/) || [''])[0] }));
+  const fh = decode(await run('Build Full Report', bsi3));
+  const fhFold = foldBlock(fh), fhCards = cardTitles(fh);
+  check('G18-2: the full report folds per area, so each category block shows the findings to act on and one "Minor items (N)" line',
+    /Minor items \(\d+\)/.test(fhFold) && /Missing favicon/.test(fhFold) && !fhCards.some(c => /Missing favicon/.test(c)) && /Key pages are noindex/.test(fh),
+    JSON.stringify({ fold: fhFold.slice(0, 240), cards: fhCards.length }));
+  const ar42 = await run('Build Audit Response', await run('Build Audit Report', bsi3));
+  check('G18-2: the callback carries the count and the note, so the app says the same thing as the report',
+    ar42[0].json.minor_count === a3.minor_count && /minor item/.test(ar42[0].json.minor_note),
+    JSON.stringify({ count: ar42[0].json.minor_count, note: ar42[0].json.minor_note }));
   // the stored finding rows carry the weight, so the app's lists order the same way
   mock('Audit Diff', [{ json: { ...bsi3[0].json, site_id: 'site_northwind-erp-com', domain: 'northwind-erp.com', audit_id: 'aud_s48', audited_at: '2026-10-12T06:00:00.000Z' } }]);
   const frows = (await run('Finding Rows', store['Audit Diff'])).map(x => x.json).filter(r => !r.skip);
@@ -5723,6 +5764,10 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
 // backlink check and of a competitor, labelled spam / genuine. The scorer (`accuracy/score.js`) drives Build Probes / Content
 // Probes / Analyze Probes / Build Site Issues and the real Parse Backlinks node, and must reach 95% precision in both
 // categories. A finding with no case fails this scenario, so a new finding has to be labelled before it ships.
+// Extended 2026-10-13 with the two defects the set itself found (FIX_PLAN §3.9): G18-1 — a search-results page of a host
+// with no topic match is capped as a scraper and is no longer techand.ai's "best link" (best-link precision 50% → 100%),
+// and G18-2 — the minor band is folded into one "Minor items (N)" line, which is measured as the useful precision of the
+// list a customer reads (75% → 95.5%) while precision and recall stay where they were, because nothing is removed.
 // Doc: n8n/seo-agent/ACCURACY_SET.md.
 // ===================================================================================
 await guard('S49', async () => {
@@ -5734,7 +5779,8 @@ await guard('S49', async () => {
   const A = r.audit_findings, L = r.spam_labels;
   const TARGET = 95;
   console.log('   audit findings: ' + A.cases + ' cases over ' + ACC.FINDINGS.sites.length + ' sites — precision ' + A.precision + '% (tp ' + A.tp + ' fp ' + A.fp + '), recall ' + A.recall + '% (fn ' + A.fn + '), ' + A.tn + ' false positives correctly suppressed, ' + (A.cosmetic_emitted + A.cosmetic_suppressed) + ' cosmetic (' + A.cosmetic_emitted + ' shown), useful precision ' + A.useful_precision + '%');
-  for (const [site, v] of Object.entries(A.per_site)) console.log('     ' + site + ': health ' + v.health + ', ' + v.emitted + ' findings shown, precision ' + v.precision + '% (tp ' + v.tp + ' fp ' + v.fp + ' cosmetic ' + v.cosmetic_emitted + '), ' + v.tn + ' suppressed');
+  console.log('   G18-2 the fold: ' + A.folded + ' of the labelled findings shown are folded into the reports\' "Minor items" line (' + A.folded_cosmetic + ' of them cosmetic) — useful precision of the list a customer reads: ' + A.main_useful_precision + '% (was ' + A.useful_precision + '% unfolded)');
+  for (const [site, v] of Object.entries(A.per_site)) console.log('     ' + site + ': health ' + v.health + ', ' + v.emitted + ' findings shown, precision ' + v.precision + '% (tp ' + v.tp + ' fp ' + v.fp + ' cosmetic ' + v.cosmetic_emitted + '), ' + v.tn + ' suppressed, minor items ' + v.minor_count + ' (' + v.folded_keys.length + ' of the keys shown folded), useful precision ' + v.useful_precision + '% -> ' + v.main_useful_precision + '% folded');
   console.log('   spam labels: ' + L.cases + ' cases — precision ' + L.precision + '% (tp ' + L.tp + ' fp ' + L.fp + '), recall ' + L.recall + '% (fn ' + L.fn + '), ' + L.tn + ' genuine links left alone');
   check('audit findings: precision >= 95% over the labelled set (every finding the audit shows for a labelled site is true)', A.precision !== null && A.precision >= TARGET, JSON.stringify({ precision: A.precision, tp: A.tp, fp: A.fp, wrong: A.wrong }));
   check('audit findings: every finding shown is labelled (a new or renamed finding must be judged before it ships)', A.unlabelled.length === 0, JSON.stringify(A.unlabelled));
@@ -5751,10 +5797,32 @@ await guard('S49', async () => {
   check('the real problems are still reported: placeholder text and the doubled brand on techand.ai, a blocked crawler and missing H1s on peppol.org', shows('techand.ai', /Placeholder \(lorem ipsum\)/) && shows('techand.ai', /Brand name repeated in the title/) && shows('peppol.org', /crawlers are blocked/) && shows('peppol.org', /Missing H1 heading/), JSON.stringify([tech.findings, pep.findings]));
   check('a site that is technically clean is not padded with findings: azdan.com keeps 7 (1 true, 6 cosmetic) and 8 "what works"', azd.emitted === 7 && azd.tp === 1 && azd.cosmetic_emitted === 6 && azd.what_works.length === 8, JSON.stringify({ findings: azd.findings, works: azd.what_works.length }));
   check('D3 stays fixed: all 16 farm domains are "spam", none of them is among techand.ai\'s best links, and the one genuine editorial link is', L.farms.filter(f => /^techand\.ai/.test(f)).length === 16 && L.best_seo.includes('peppol.org') && !L.best_seo.some(d => /all\/2835|sahammurah|betulcrime|thedocmag|onvaxs|quotesblom|betwinnermirror|clifflisting|bestnz|cvillico|dupurgeniefr|kernelpanic|fashionclothing|uncledspizza|homesforsale|seonix|^us\.com$/.test(d)), JSON.stringify({ farms: L.farms.length, best: L.best_seo }));
-  // reported, not gated: G18-1, the defect this set found (ACCURACY_SET.md section 6) — a search-results page outranks the real link
+  // G18-1 (fixed 2026-10-12): the search-results page of an unrelated host is capped as a scraper, so the one genuine editorial link is
+  // the site's best link. Printed every run: this is the number the defect was found by.
   console.log('   best links: precision ' + L.best_link_precision + '% (' + L.best_seo.join(', ') + ')' + (L.best_link_wrong.length ? ' | KNOWN GAP G18-1: worthless link(s) ranked best: ' + L.best_link_wrong.join(', ') : ''));
+  const robuta = L.rows['techand.ai'] && L.rows['techand.ai']['robuta.com'];
+  const peppol = L.rows['techand.ai'] && L.rows['techand.ai']['peppol.org'];
+  console.log('   G18-1: robuta.com/?q=... -> link_type "' + robuta.link_type + '", seo ' + robuta.seo_value + ', brand ' + robuta.brand_value + ' | peppol.org -> seo ' + peppol.seo_value);
+  check('G18-1: a search-results page on a host with no topic match is capped as a scraper (SEO value <= 5, brand 0) with the reason on the row, and the genuine OpenPeppol members list is the top best link',
+    robuta.link_type === 'scraper' && robuta.seo_value <= 5 && robuta.brand_value === 0 && /search-results page/.test(robuta.note)
+    && L.best_seo[0] === 'peppol.org' && peppol.seo_value >= 35 && !L.best_seo.includes('robuta.com'),
+    JSON.stringify({ robuta: [robuta.link_type, robuta.seo_value, robuta.brand_value, robuta.note], best: L.best_seo }));
+  check('G18-1: the capped search page is NOT treated as a link farm — it stays out of the spam labels, the disavow candidates and the lost list, exactly as the human label says',
+    robuta.link_type !== 'spam' && !(L.farms || []).some(f => /robuta/.test(f)) && !(L.disavow || []).includes('robuta.com') && L.precision >= TARGET,
+    JSON.stringify({ farms: L.farms, disavow: L.disavow }));
+  check('G18-1: best-link precision is 100% — every link the report calls one of the site\'s best is genuine and worth something',
+    L.best_link_precision === 100 && L.best_link_wrong.length === 0 && L.best_seo.length >= 1,
+    JSON.stringify({ precision: L.best_link_precision, wrong: L.best_link_wrong, best: L.best_seo }));
+  // G18-2: the fold, measured — nothing is removed (precision and recall are untouched), and the list a customer reads gets better
+  check('G18-2: the minor band is folded into one "Minor items (N)" line on every site, and every folded finding is still in the audit (precision and recall unchanged, recall 100%)',
+    A.folded >= 8 && A.folded_cosmetic >= 8 && A.recall === 100 && A.precision >= TARGET
+    && Object.values(A.per_site).every(v => v.minor_count >= 1 && v.folded_keys.length >= 1 && v.emitted === v.findings.length),
+    JSON.stringify(Object.entries(A.per_site).map(([s, v]) => [s, v.minor_count, v.folded_keys.length, v.emitted])));
+  check('G18-2: useful precision of the list a customer reads is above 95% and better than the unfolded list (the reason the fold exists)',
+    A.main_useful_precision !== null && A.main_useful_precision >= 95 && A.main_useful_precision > A.useful_precision,
+    JSON.stringify({ main: A.main_useful_precision, all: A.useful_precision, folded: A.folded, cosmetic_shown: A.cosmetic_emitted }));
   check('the competitor\'s own referring sites are untouched: no farm label among the 14 (a 24-28 index spam score, a listicle host and a .club are all left genuine)', !L.farms.some(f => /^cleartax\.com/.test(f)), JSON.stringify(L.farms));
-  save('accuracy-scores.json', { audit_findings: { cases: A.cases, precision: A.precision, useful_precision: A.useful_precision, recall: A.recall, tp: A.tp, fp: A.fp, fn: A.fn, suppressed: A.tn, cosmetic: A.cosmetic_emitted + A.cosmetic_suppressed, per_site: Object.fromEntries(Object.entries(A.per_site).map(([k, v]) => [k, { emitted: v.emitted, tp: v.tp, fp: v.fp, cosmetic: v.cosmetic_emitted, suppressed: v.tn, precision: v.precision }])) }, spam_labels: { cases: L.cases, precision: L.precision, recall: L.recall, tp: L.tp, fp: L.fp, fn: L.fn, genuine: L.tn, best_link_precision: L.best_link_precision, best_links: L.best_seo, best_link_wrong: L.best_link_wrong }, measured_at: r.generated_at });
+  save('accuracy-scores.json', { audit_findings: { cases: A.cases, precision: A.precision, useful_precision: A.useful_precision, main_useful_precision: A.main_useful_precision, recall: A.recall, tp: A.tp, fp: A.fp, fn: A.fn, suppressed: A.tn, cosmetic: A.cosmetic_emitted + A.cosmetic_suppressed, folded: A.folded, folded_cosmetic: A.folded_cosmetic, per_site: Object.fromEntries(Object.entries(A.per_site).map(([k, v]) => [k, { emitted: v.emitted, tp: v.tp, fp: v.fp, cosmetic: v.cosmetic_emitted, suppressed: v.tn, precision: v.precision, minor_count: v.minor_count, folded_keys: v.folded_keys.length, main_useful_precision: v.main_useful_precision }])) }, spam_labels: { cases: L.cases, precision: L.precision, recall: L.recall, tp: L.tp, fp: L.fp, fn: L.fn, genuine: L.tn, best_link_precision: L.best_link_precision, best_links: L.best_seo, best_link_wrong: L.best_link_wrong }, measured_at: r.generated_at });
 });
 
 H.report();

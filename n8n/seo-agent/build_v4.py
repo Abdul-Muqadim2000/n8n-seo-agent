@@ -3123,6 +3123,77 @@ Seven defects that passed the harness and failed live. The **menu** the describe
 log('Phase 2 live-check defects (2026-10-12, P2-1 … P2-7): the describer reads the menu from the site model\'s raw-HTML nav pages instead of the markdown links; the services the describer finds are saved back into the model (Model Services Row -> seo_cache model:) and the Site Tracker reads the stored descriptions, so seo_sites.services_json and the brief\'s facts.website.services are filled; the blog package\'s suggested_url and every planned-page URL use SM.siteUrl (Blog Package is no longer on the canonical-host allow-list) while Site Metrics puts the URLs it promises on the canonical host and fix_ladder_hosts.py rewrites the stored ladder rows once; the weekly site report prints the real day count again (the inline comment no longer swallows the map); a verdict for a keyword one of the site\'s pages already answers reads that page, improves it and may not recommend a second URL; Content QA counts the author / reviewer box the package attaches (profile_placeholders: the page does not pass with them, the editor is not sent to fix them); and the word count the ladder verdict set is stored on the ladder row (target_words), passed by the app, the cadence and Spawn Page Runs as ladder_words and clamped in Parse Brief')
 
 # =============================================================================
+# 42. A FIX LIST A CUSTOMER CAN ACT ON (2026-10-12, FIX_PLAN.md §3.9 G18-2; measured in ACCURACY_SET.md §6)
+#     The accuracy set measures a second number next to precision: **useful precision**, the share of the findings shown that are worth a
+#     customer's time. It was 75% — 10 of the 40 findings shown on the three labelled sites were true and still not worth reading: the link
+#     count of nav-heavy pages, a title one character over 60, "light content" on section index pages, a URL whose rename would cost a
+#     published article its rankings, a cosmetic tag. Nothing here is deleted, suppressed or taken out of the score: the minor band
+#     (`IMP.isMinor`, Low / Info severity, never an index blocker, lowest impact or one of the measured low-value rules) is **folded** into
+#     one "Minor items (N)" line in both audit reports and in the app, and both say how many were folded. `f.minor` travels inside
+#     `site_audit.findings`, `minor_count` in the audit payload and the callback; the app derives the same rule from the stored severity and
+#     impact (`app/shared/src/findings.ts` — mirror of `v5/code/_impact.js`), so no Data Table column changes.
+# =============================================================================
+MINOR_SECTION_JS = r"""// ---- the minor band folded into one line (G18-2, 2026-10-12) ----
+const minorOf = (list) => (list || []).filter(f => f && f.minor === true);
+const minorBlock = (list, where) => {
+  const e2 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const m = minorOf(list);
+  if (!m.length) return '';
+  const row = (f) => `<tr><td><b>${e2(f.title)}</b></td><td class="small">${e2(f.category)} · ${e2(f.severity)}</td>`
+    + `<td class="small">${f.scope === 'site' ? 'Whole website' : e2((f.affected_count || 0) + ' page' + ((f.affected_count || 0) === 1 ? '' : 's'))}</td>`
+    + `<td class="small">${e2(f.fix || '')}${f.evidence ? '<br>' + e2(f.evidence) : ''}</td></tr>`;
+  return `<details open class="minorfold"><summary><b>Minor items (${m.length})</b> — true, and the lowest impact of this audit`
+    + `${where ? ' in ' + e2(where) : ''}: one line each instead of a section each, so the list above is the one to act on. Nothing is left out of the score or of the stored findings.</summary>`
+    + `<table class="ct"><tr><th>Item</th><th>Area</th><th>Pages</th><th>What to do</th></tr>${m.map(row).join('')}</table></details>`;
+};
+"""
+for _rn42 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn42, "const findings = a.findings || [];", MINOR_SECTION_JS + "const findings = a.findings || [];")
+# the technical audit: section 4 lists the main findings per severity, the minor ones in one folded line at the end
+patch('Build Audit Report', """for (const sev of SEV) {
+  const list = findings.filter(f => f.severity === sev);
+  if (!list.length) continue;""",
+      """const mainFindings = findings.filter(f => f.minor !== true);
+if (minorOf(findings).length) html += `<p class="small">${esc(a.minor_note || '')}</p>`;
+for (const sev of SEV) {
+  const list = mainFindings.filter(f => f.severity === sev);
+  if (!list.length) continue;""")
+patch('Build Audit Report', "// ---------- 5. Action plan ----------", "html += minorBlock(findings);\n\n// ---------- 5. Action plan ----------")
+# the action plan's polish phase names the main items and counts the folded ones instead of repeating them
+patch('Build Audit Report', """const phase = (title, sevs, when) => {
+  const list = findings.filter(f => sevs.includes(f.severity));""",
+      """const phase = (title, sevs, when) => {
+  const list = findings.filter(f => sevs.includes(f.severity) && f.minor !== true);""")
+patch('Build Audit Report', "  phase('Phase 3 — Polish', ['Low', 'Info'], 'when time allows');",
+      "  phase('Phase 3 — Polish', ['Low', 'Info'], 'when time allows') +\n"
+      "  (minorOf(findings).length ? `<p class=\"small\">Plus ${minorOf(findings).length} minor item(s), folded into one line in section 4.</p>` : '');")
+# the full report: every category block folds its own minor items
+patch('Build Full Report', """const findingsBlock = (list) => list.length
+  ? SEV.map(s => list.filter(f => f.severity === s).map(card).join('')).join('')
+  : '<p class="okline">No issues found in this area.</p>';""",
+      """const findingsBlock = (list, where) => list.length
+  ? (SEV.map(s => list.filter(f => f.severity === s && f.minor !== true).map(card).join('')).join('') + minorBlock(list, where)) || '<p class="okline">Only minor items in this area.</p>'
+  : '<p class="okline">No issues found in this area.</p>';""")
+assert code('Build Full Report').count('findingsBlock(byCat(') >= 5, 'Build Full Report: the findings blocks moved (G18-2)'
+# the scored audit carries the count and the one-line note, for the reports, the callback and the app
+patch('Build Site Issues', "      priority_method: IMP.method,\n      priority_first: IMP.firstReason(findings),\n",
+      "      priority_method: IMP.method,\n      priority_first: IMP.firstReason(findings),\n"
+      "      minor_count: IMP.fold(findings).folded,\n      minor_note: IMP.foldNote(IMP.fold(findings).folded),\n")
+for _rn42b in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn42b, "    priority_first: a.priority_first || '',", "    priority_first: a.priority_first || '',\n    minor_count: a.minor_count || 0,\n    minor_note: a.minor_note || '',")
+patch('Build Audit Response', "top_issues: d.top_issues, crux: d.crux || null,",
+      "top_issues: d.top_issues, minor_count: d.minor_count || 0, minor_note: d.minor_note || '', crux: d.crux || null,")
+assert 'IMP.fold(findings).folded' in code('Build Site Issues') and 'f.minor = isMinor(f)' in code('Build Site Issues'), 'Build Site Issues: the minor band is not computed (G18-2)'
+assert 'minorBlock(findings)' in code('Build Audit Report') and 'minorBlock(list, where)' in code('Build Full Report'), 'the reports do not fold the minor items (G18-2)'
+_bsi42 = pos('Build Site Issues')
+sticky("""### Minor items are folded, not hidden (G18-2, 2026-10-12)
+The accuracy set measured **useful precision 75%**: 10 of the 40 findings shown on the three labelled sites were true and not worth a customer's time (the link count of a navigation page, a title one character over 60, "light content" on an index page, a URL rename that would cost rankings, a cosmetic tag).
+`IMP.isMinor` (`v5/code/_impact.js`) marks the **minor band** — Low / Info, never an index blocker, the lowest impact or one of those measured rules — and every finding carries `minor`. Both audit reports list the main findings as before and fold the minor ones into one **"Minor items (N)"** line with the count and the reason; the Action Plan counts them instead of repeating them; `minor_count` travels in the callback and the app's technical page folds the same rows (`app/shared/src/findings.ts`, the same rule over the stored severity and impact).
+Nothing is suppressed: the findings are scored, stored and listed inside the folded line.""",
+    _bsi42[0] - 40, _bsi42[1] + 240, 1100, 240, 6)
+log('A fix list a customer can act on (2026-10-12, FIX_PLAN G18-2, measured in ACCURACY_SET.md): the minor band (IMP.isMinor in v5/code/_impact.js: Low / Info severity, never an index blocker, the lowest impact or one of the low-value rules the accuracy set measured - nav-heavy link counts, a title one character over 60, light content on index pages, long or messy URLs) is folded into one "Minor items (N)" line in the technical audit report (section 4) and per category in the full report, with the count and the reason, while the Action Plan counts them instead of repeating them; every finding carries f.minor, site_audit carries minor_count / minor_note, the audit callback passes them on, and the app folds the same rows with the same rule over the stored severity and impact (app/shared/src/findings.ts) - nothing is dropped from the score, the stored rows or the folded list')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
