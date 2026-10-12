@@ -32,7 +32,9 @@ for (const p of plans) {
     if (!M.has(k)) M.set(k, { ref_domain: k, kind, sources: new Set(), from_url: '', to_url: '', anchor: '', rel: '', placement: '', first_seen: '', last_seen: '', authority: 0, page_keywords: 0, spam: 0, original: null, sitewide: 0, links: 0, visits: 0, visits_28d: 0, key_events: 0, dfs_lost: null, pages: [] });
     return M.get(k); };
   const seen = (e, src, d) => { e.sources.add(src); const x = ymd(d) || today; if (!e.first_seen || x < e.first_seen) e.first_seen = x; if (!e.last_seen || x > e.last_seen) e.last_seen = x; };
-  const page = (e, url, src) => { if (url && !e.pages.some(x => x.url === url)) e.pages.push({ url, src }); if (url && !e.from_url) e.from_url = url; };
+  // D23 (2026-10-11): the URL we store carries no tracking parameters (`?utm_source=chatgpt.com` and `srsltid` came in through GA4
+  // referrals and AI citations and were kept in the ledger, in the report and in outreach)
+  const page = (e, url0, src) => { const url = url0 ? LK.cleanUrl(url0) : url0; if (url && !e.pages.some(x => x.url === url)) e.pages.push({ url, src }); if (url && !e.from_url) e.from_url = url; };
   const mine = (arr, list) => list.map((r, i) => [r, arr[i]]).filter(([r]) => r && r.site_id === p.site_id);
   // ---- DataForSEO
   for (const [r, resp] of mine(resps, reqs)) {

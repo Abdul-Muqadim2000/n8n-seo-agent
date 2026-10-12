@@ -15,6 +15,21 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-12',
+    title: 'Numbers you can trust when a data source has a bad minute',
+    summary:
+      'Every request Ascentra makes to an outside service is now retried, and a provider error that arrives disguised as a success is sent again by itself. What still fails is named in the report instead of quietly lowering a number.',
+    highlights: [
+      'Every external request is retried three times, five seconds apart',
+      'AI visibility rates count the answers that came back, and the report lists what failed and whether the retry worked',
+      '“What AI gets wrong” says “not checked” until your business profile is filled in — never “nothing wrong”',
+      'A heading an AI answer uses is no longer counted as a competitor, and one page cited under two addresses counts once',
+      'A competitor’s own sister domains and sites off your topics stay out of your link prospects, with the reason shown',
+      'Links we store and show no longer carry tracking parameters',
+    ],
+    features: ['ai-visibility', 'backlinks', 'reports'],
+  },
+  {
+    date: '2026-10-12',
     title: 'Ascentra knows the pages you already have',
     summary:
       'Every week Ascentra lists the pages your website has. When a search is already answered by one of them, it says to refresh that page instead of publishing a second one that would compete with it.',

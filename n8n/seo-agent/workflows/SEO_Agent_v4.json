@@ -923,7 +923,10 @@
             "id": "SEOcredJinaReade",
             "name": "Jina Reader"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -1345,7 +1348,9 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -1410,7 +1415,8 @@
             "id": "SEOcredJinaReade",
             "name": "Jina Reader"
           }
-        }
+        },
+        "maxTries": 3
       },
       {
         "parameters": {
@@ -1469,7 +1475,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -1831,7 +1840,9 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -1882,7 +1893,9 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -1956,7 +1969,9 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2070,7 +2085,10 @@
         ],
         "id": "addb6a07-6d3f-4853-b428-e817a1192eed",
         "name": "Run Probes",
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2164,7 +2182,10 @@
         ],
         "id": "c9ccb339-7ee5-4480-98ed-6748c39bf775",
         "name": "Fetch Page HTML",
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2213,7 +2234,10 @@
         ],
         "id": "d28b570c-e2ab-4b25-a0cf-b0044517ad6d",
         "name": "Check Schema URLs",
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2253,7 +2277,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2293,7 +2320,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2346,7 +2376,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2399,7 +2432,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2427,7 +2463,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2484,7 +2523,10 @@
             "id": "SEOcredPageSpeed",
             "name": "Google PageSpeed"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2560,7 +2602,10 @@
             "id": "SEOcredJinaReade",
             "name": "Jina Reader"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2645,7 +2690,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2745,7 +2793,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2778,7 +2829,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2806,7 +2860,9 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2895,7 +2951,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3310,7 +3369,10 @@
           1328,
           1008
         ],
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3367,7 +3429,10 @@
           1696,
           1008
         ],
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3748,7 +3813,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3853,7 +3921,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -4085,7 +4156,10 @@
         ],
         "id": "05daed15-caa8-594b-bbe0-19c0ec915884",
         "name": "Run Content Probes",
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -4276,7 +4350,10 @@
           6484,
           1488
         ],
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -4365,7 +4442,10 @@
           4884,
           608
         ],
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -4454,7 +4534,10 @@
           4132,
           384
         ],
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -4498,7 +4581,10 @@
           8292,
           1292
         ],
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -4569,8 +4655,8 @@
         ],
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
         "credentials": {
           "httpBasicAuth": {
             "id": "SEOcredDataForSE",
@@ -4624,7 +4710,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -4760,7 +4849,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -4886,7 +4978,8 @@
             "id": "SEOcredJinaReade",
             "name": "Jina Reader"
           }
-        }
+        },
+        "maxTries": 3
       },
       {
         "parameters": {
@@ -4927,7 +5020,9 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -5009,7 +5104,10 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -5230,7 +5328,8 @@
             "id": "SEOcredJinaReade",
             "name": "Jina Reader"
           }
-        }
+        },
+        "maxTries": 3
       },
       {
         "parameters": {
@@ -5680,8 +5779,8 @@
         ],
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
         "credentials": {
           "httpBasicAuth": {
             "id": "SEOcredDataForSE",
@@ -5878,7 +5977,10 @@
           6180,
           2536
         ],
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -7595,7 +7697,10 @@
           1932
         ],
         "onError": "continueRegularOutput",
-        "executeOnce": true
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -8481,8 +8586,8 @@
         "onError": "continueRegularOutput",
         "executeOnce": true,
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -8574,7 +8679,10 @@
           2588,
           1608
         ],
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -8614,8 +8722,8 @@
         "executeOnce": true,
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -8705,8 +8813,8 @@
         },
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -8746,8 +8854,8 @@
         "executeOnce": true,
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -11548,7 +11656,10 @@
           1772
         ],
         "onError": "continueRegularOutput",
-        "executeOnce": true
+        "executeOnce": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -12416,8 +12527,8 @@
         ],
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
         "credentials": {
           "httpBasicAuth": {
             "id": "SEOcredDataForSE",
@@ -14409,8 +14520,8 @@
         ],
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
         "credentials": {
           "httpBasicAuth": {
             "id": "SEOcredDataForSE",
@@ -14647,7 +14758,9 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -14710,7 +14823,9 @@
             "id": "SEOcredDataForSE",
             "name": "DataForSEO"
           }
-        }
+        },
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -15527,8 +15642,8 @@
         "alwaysOutputData": true,
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 2000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -16161,7 +16276,10 @@
             "id": "SEOcredJinaReade",
             "name": "Jina Reader"
           }
-        }
+        },
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {

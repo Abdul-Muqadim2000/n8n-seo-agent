@@ -15,6 +15,7 @@
 // sites, link-selling / gambling anchors, gambling hosts — and makes its members "spam" whatever the index or the analyst said: value 0,
 // out of best links / wins / at-risk / important-lost / prospects, on the disavow candidates (review-only), listed as farms in the report.
 /*__LINK_KIT__*/
+/*__OUTREACH_KIT__*/
 /*__SITE_MODEL__*/
 const plans = $('BL Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const all = (n) => { try { return $(n).all().map(i => i.json || {}); } catch (e) { return []; } };
@@ -147,13 +148,47 @@ return plans.map(p => {
   for (const mp of (m.mention_pages || []).filter(x => x.source === 'dfs_mention' && !fetchedMention.has(x.url))) { if (linking.has(mp.domain) || mentions.some(x => x.domain === mp.domain)) continue; mentions.push({ domain: mp.domain, url: mp.url, title: mp.title, source: mp.source, verified: false, domain_rank: mp.authority || rankOf.get(mp.domain) || 0, dr: drOf.get(mp.domain) || 0 }); }
   mentions.sort((a, b) => (b.verified - a.verified) || ((b.dr || 0) - (a.dr || 0)) || ((b.domain_rank || 0) - (a.domain_rank || 0)));   // checked on the page first, then by authority
   const lists = vList.filter(v => v.verify !== 'gone' && v.verify !== 'error').map(v => ({ domain: v.ref_domain, url: v.url, title: v.title, topic: v.topic, competitors: v.competitors_named || [], named: !!v.named, linked: !!v.linked, domain_rank: rankOf.get(v.ref_domain) || 0, dr: drOf.get(v.ref_domain) || 0 }));
-  const compLabels = (p.competitors || []).map(c => String(c).split('.')[0]).filter(l => l.length >= 4);
-  const sibling = (d) => compLabels.includes(String(d || '').split('.')[0]);   // cleartax.in is ClearTax too (live finding 2026-10-08)
+  // D23 (2026-10-11 system review): a competitor's sister domain is never a prospect. Comparing the first label missed clear.in next to
+  // cleartax.com, so a shared brand stem of at least 5 characters counts too (clear ~ cleartax), and so does a page that canonicalises or
+  // redirects to the competitor (the fetched page's own rel=canonical, which follows redirects). A short label still has to match exactly,
+  // so zoho.com and zohoreviews.com stay apart.
+  const labelOfD = (d) => String(d || '').toLowerCase().replace(/^www\./, '').split('.')[0].replace(/[^a-z0-9]/g, '');
+  const compLabels = (p.competitors || []).map(c => labelOfD(c)).filter(l => l.length >= 4);
+  const canonTo = new Map();
+  for (const v of [...vLink.values(), ...vMention, ...vList]) { const h = LK.refKey(LK.hostOf(v.canonical || '')); if (h && v.ref_domain && h !== v.ref_domain) canonTo.set(v.ref_domain, h); }
+  const sibling = (d) => { const l = labelOfD(d); if (!l) return false;
+    if (compLabels.some(c => c === l || (Math.min(c.length, l.length) >= 5 && (c.startsWith(l) || l.startsWith(c))))) return true;
+    const to = canonTo.get(LK.refKey(d));
+    return !!to && (p.competitors || []).some(c => LK.sameSite(to, String(c).toLowerCase())); };
   const compNew = []; for (const c of get('comp_new')) for (const x of ((c.res || {}).items || [])) { const d = LK.refKey(x.domain_from); if (!d || linking.has(d) || BIG.test(d) || LK.isInfra(d) || LK.isWire(d) || sibling(d) || Number(x.backlink_spam_score) >= 30 || compNew.some(y => y.domain === d)) continue;
     compNew.push({ domain: d, competitor: c.req.competitor, url: x.url_from || '', first_seen: String(x.first_seen || '').slice(0, 10), domain_rank: Number(x.domain_from_rank) || 0, dr: drOf.get(d) || 0, anchor: String(x.anchor || '').slice(0, 100), title: String(x.page_from_title || '').slice(0, 120) }); }
   compNew.sort((a, b) => b.domain_rank - a.domain_rank);
   const ccTld = ({ GB: 'uk' })[p.country_iso] || String(p.country_iso || '').toLowerCase();
   const localOf = (d) => ccTld.length === 2 && ccTld !== 'us' && String(d || '').toLowerCase().endsWith('.' + ccTld) ? 1.25 : 1;   // .ae for a UAE site: a local site is a likelier, more relevant link
+  // D23 (2026-10-11 system review): the topic gate on the cold link gap. The Link Builder refuses a prospect under a 25% topic match on
+  // the page it fetches (OK.OFF_TOPIC, _outreach_kit.js); the monitor never fetches a gap domain, so the evidence here is the domain's own
+  // name, a title we already know for it, and the market's domain ending. A domain passes when a topic word is inside its name
+  // (einvoicingnews.com), when a known title matches our topics by 25% or more, or when it is on the market's own domain ending (a .ae
+  // site that links to both UAE competitors is relevant to a UAE business even when its name says nothing). Everything else is listed in
+  // the link gap with the reason and never stored as a prospect to pitch -- stripe.com, weforum.org and kirkland.com were waiting in the
+  // app as prospects after the live run of 2026-10-11.
+  const topicText = [...(p.topics || []), ...(p.assets || []).map(x => x && x.title).filter(Boolean)].join(' ');
+  const topicStems = [...new Set(OK.words(topicText).map(OK.stem))].filter(w => w.length >= 3);
+  const titleOfD = new Map();
+  const putTitle = (d, t) => { const k = LK.refKey(d); if (k && t && !titleOfD.has(k)) titleOfD.set(k, String(t).slice(0, 200)); };
+  for (const r of ledger) putTitle(r.ref_domain, r.page_title);
+  for (const x of mentions) putTitle(x.domain, x.title);
+  for (const x of lists) putTitle(x.domain, [x.title, x.topic].filter(Boolean).join(' '));
+  for (const x of compNew) putTitle(x.domain, [x.title, x.anchor].filter(Boolean).join(' '));
+  const labelWords = (d) => String(d || '').toLowerCase().replace(/^www\./, '').replace(/\.[a-z.]{2,}$/, '').replace(/[^a-z0-9]/g, '');
+  const onTopic = (d) => {
+    const l = labelWords(d);
+    if (l && topicStems.some(t => l.includes(t))) return { ok: true, why: 'its name carries your topic' };
+    const t = titleOfD.get(LK.refKey(d));
+    if (t) { const f = OK.fit(topicText, t); if (f >= OK.OFF_TOPIC) return { ok: true, why: 'its page matches your topics (' + Math.round(100 * f) + '%)' }; }
+    if (ccTld.length === 2 && ccTld !== 'us' && String(d || '').toLowerCase().endsWith('.' + ccTld)) return { ok: true, why: 'a site in your market (.' + ccTld + ')' };
+    return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + ((p.topics || [])[0] || 'your topics') };
+  };
   const gi = greqs.findIndex(g => g.site_id === p.site_id && !g.skip); const G = gi >= 0 ? result(gresps, gi) : null; const competitors = gi >= 0 ? greqs[gi].competitors : p.competitors;
   const freshGap = ((G && G.res && G.res.items) || []).map(it => { const vals = Object.entries(it.domain_intersection || {}); const f = (vals[0] || [])[1] || {};
     return { domain: LK.refKey(String(f.target || '').replace(/^www\./, '')), rank: Number(f.rank) || 0, spam: Number(f.backlinks_spam_score) || 0, links_to: vals.map(([k]) => competitors[Number(k) - 1]).filter(Boolean), backlinks: vals.reduce((s, [, v]) => s + (Number(v.backlinks) || 0), 0), source: 'dfs' }; })
@@ -162,6 +197,8 @@ return plans.map(p => {
   const gapBase = gi >= 0 ? freshGap : (p.stored_gap || []).filter(g => !linking.has(g.domain) && !LK.isWire(g.domain)).map(g => ({ ...g, source: 'dfs' }));
   const gap = [...gapBase]; for (const g of ccGap) { const x = gap.find(y => y.domain === g.domain); if (x) { x.source = 'both'; x.cc_rank = g.cc_rank; x.links_to = [...new Set([...x.links_to, ...g.links_to])]; } else gap.push(g); }
   gap.sort((a, b) => (b.links_to.length - a.links_to.length) || ((b.source === 'both') - (a.source === 'both')) || (b.rank - a.rank) || ((a.cc_rank || 9e9) - (b.cc_rank || 9e9)));
+  for (const g of gap) { const v = onTopic(g.domain); g.off_topic = !v.ok; g.topic_reason = v.why; }   // D23: shown in the gap table, never pitched
+  const gap_off_topic = gap.filter(g => g.off_topic).length;
   // ---------------- coverage: who sees what ----------------
   const srcNow = (r) => r._sources_now || [];
   const per = {}, only = {}; for (const r of liveRows) { const s = srcNow(r); for (const x of s) per[x] = (per[x] || 0) + 1; if (s.length === 1) only[s[0]] = (only[s[0]] || 0) + 1; }
@@ -214,12 +251,12 @@ return plans.map(p => {
     ...lists.filter(l => !l.named && l.competitors.length).slice(0, 8).map(l => ({ prospect_domain: l.domain, type: 'list', origin: 'web', rank: l.domain_rank, spam_score: 0, score: scoreOf('list', { authority: l.domain_rank, dr: l.dr }, (1 + 0.15 * (l.competitors.length - 1)) * localOf(l.domain)), detail: '"' + String(l.title).slice(0, 90) + '" lists ' + l.competitors.join(', ') + ', not you', source_url: l.url, target_url: target0 })),
     ...lists.filter(l => l.named && !l.linked).slice(0, 4).map(l => ({ prospect_domain: l.domain, type: 'mention', origin: 'web', rank: l.domain_rank, spam_score: 0, score: scoreOf('mention', { authority: l.domain_rank, dr: l.dr }), detail: 'Lists you without a link: ' + String(l.title).slice(0, 100), source_url: l.url, target_url: home })),
     ...compNew.slice(0, 10).map(c => ({ prospect_domain: c.domain, type: 'comp_new', origin: 'dfs', rank: c.domain_rank, spam_score: 0, score: scoreOf('comp_new', { authority: c.domain_rank, dr: c.dr }, localOf(c.domain)), detail: 'Linked to ' + c.competitor + ' on ' + c.first_seen + (c.title ? ': ' + c.title : ''), source_url: c.url, target_url: target0 })),
-    ...gap.filter(g => g.source !== 'cc' ? gi >= 0 : true).slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', origin: g.source, rank: g.rank, spam_score: g.spam, score: scoreOf('gap', { authority: g.rank, dr: drOf.get(g.domain) || 0, cc_rank: g.cc_rank }, (1 + 0.6 * (g.links_to.length - 1)) * localOf(g.domain)),   /* links to several competitors: the strongest intent signal; on the market's own domain ending: more relevant */ detail: 'Links to ' + g.links_to.join(', ') + (g.backlinks ? ' (' + g.backlinks + ' links)' : '') + ', not to you' + (g.source === 'cc' ? ' (Common Crawl)' : ''), source_url: '', target_url: target0 }))];
+    ...gap.filter(g => !g.off_topic && (g.source !== 'cc' ? gi >= 0 : true)).slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', origin: g.source, rank: g.rank, spam_score: g.spam, score: scoreOf('gap', { authority: g.rank, dr: drOf.get(g.domain) || 0, cc_rank: g.cc_rank }, (1 + 0.6 * (g.links_to.length - 1)) * localOf(g.domain)),   /* links to several competitors: the strongest intent signal; on the market's own domain ending: more relevant */ detail: 'Links to ' + g.links_to.join(', ') + (g.backlinks ? ' (' + g.backlinks + ' links)' : '') + ', not to you' + (g.source === 'cc' ? ' (Common Crawl)' : ''), source_url: '', target_url: target0 }))];
   const ledger_rows = ledger.map(({ visits_28d, _prev_status, _new, _dfs_new, _sources_now, _found_new, _url, ...r }) => r);
   const new_links = [...news.map(n => ({ ...n, verified: (vLink.get(LK.refKey(n.from_domain)) || {}).verify || '' })),
     ...ledger.filter(r => r._new && !r._dfs_new && r.kind === 'web' && r.status !== 'lost').map(r => ({ from_domain: r.ref_domain, from_url: r.from_url, to_url: r.to_url, anchor: r.anchor, dofollow: r.rel === 'follow', domain_rank: r.authority, dr: r.dr, page_rank: 0, spam: r.spam_score, first_seen: r.first_seen, last_seen: r.last_seen, title: r.page_title, spammy: r.link_type === 'spam', sources: r.sources, verified: r.verify }))]
     .filter((x, i, a) => a.findIndex(y => LK.refKey(y.from_domain) === LK.refKey(x.from_domain)) === i);
-  return { json: { ...p, competitors, summary, lost, important_lost, new_links, spammy, reclaim, refdomains: [...linking].slice(0, 2000), timeseries: ts, mentions, gap, gap_stored: gi < 0 && gapBase.length > 0, gap_checked: gi < 0 ? ((p.stored_gap || [])[0] || {}).last_seen || '' : p.checked_at.slice(0, 10),
+  return { json: { ...p, competitors, summary, lost, important_lost, new_links, spammy, reclaim, refdomains: [...linking].slice(0, 2000), timeseries: ts, mentions, gap, gap_off_topic, gap_stored: gi < 0 && gapBase.length > 0, gap_checked: gi < 0 ? ((p.stored_gap || [])[0] || {}).last_seen || '' : p.checked_at.slice(0, 10),
     lists, comp_new: compNew.slice(0, 20), coverage, anchors, pages, values, best_links, referral, wins: wins.filter(w => !spamSet.has(w.ref_domain)), at_risk: atRiskOut.map(({ e, v }) => ({ ref_domain: e.ref_domain, url: v.url, verify: v.verify })), rel_changed: relChanged.filter(r => !spamSet.has(r.ref_domain)), farms, dr_enabled: drOf.size > 0, dr_error,
     ledger_rows, alerts, deliver, disavow_text, candidates, gap_error: G && !G.ok ? G.error : null, cost_usd: +cost.toFixed(4) } };
 });

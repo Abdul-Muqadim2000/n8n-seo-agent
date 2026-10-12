@@ -351,7 +351,10 @@ for (const s of sites) {
   // ---- the earned-media list: exact pages AI cited in answers that did not name the business (last 8 days, weekly + daily) ----
   const em = new Map();
   for (const a of answers.filter(a => a.site_id === s.site_id && (a.answered === true || a.answered === 'true') && !(a.mentioned === true || a.mentioned === 'true') && a.kind !== 'brand'))
-    for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u)) continue; const h = hostOf(c.u); const x = em.get(c.u) || { url: c.u, title: c.t || '', host: h, n: 0, engines: new Set(), questions: new Set() }; x.n++; x.engines.add(a.engine); x.questions.add(a.prompt); if (!x.title && c.t) x.title = c.t; em.set(c.u, x); }
+    // G22 (2026-10-11 system review): a source chip sometimes carries only a fragment of the title ("E", "Best e" live). A title that
+    // short is treated as missing, so Earned Media reads the page's own <title> from the copy it fetches anyway; a real title is kept whole.
+    for (const c of parse(a.cited_urls, [])) { if (!c || !c.u || ours(c.u)) continue; const h = hostOf(c.u); const t0 = String(c.t || '').replace(/\s+/g, ' ').trim(); const t = t0.length >= 8 ? t0 : '';
+      const x = em.get(c.u) || { url: c.u, title: t, host: h, n: 0, engines: new Set(), questions: new Set() }; x.n++; x.engines.add(a.engine); x.questions.add(a.prompt); if (!x.title && t) x.title = t; em.set(c.u, x); }
   const perHost = new Map();
   const earned = [...em.values()].map(x => ({ url: x.url, title: x.title, host: x.host, citations: x.n, engines: [...x.engines], questions: [...x.questions].slice(0, 3), kind: kindOf(x.host, x.title, x.url, comps) }))
     .sort((a, b) => b.citations * (1 + b.engines.length) - a.citations * (1 + a.engines.length))

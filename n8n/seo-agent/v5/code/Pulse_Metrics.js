@@ -14,6 +14,13 @@ return plans.map(p => {
   const R = rows.filter(r => r.site_id === p.site_id); const A = R.filter(r => r.answered);
   const n = A.length, m = A.filter(r => r.mentioned).length, c = A.filter(r => r.cited).length;
   const engines = {}; for (const e of p.pulse_engines) { const ea = A.filter(r => r.engine === e); engines[e] = { asked: R.filter(r => r.engine === e).length, answered: ea.length, mentioned: ea.filter(r => r.mentioned).length, cited: ea.filter(r => r.cited).length, errors: R.filter(r => r.engine === e && r.error).length }; }
+  // D19 (2026-10-11): today's rates count answered requests only, and the failures are named (a DataForSEO task error inside an
+  // HTTP 200 was invisible before; the retry gate has already re-sent each failed request once)
+  const errMap = new Map();
+  for (const r of R.filter(x => x.error)) { const k = r.engine + '|' + String(r.error).slice(0, 80); const x = errMap.get(k) || { engine: ENG[r.engine] || r.engine, message: String(r.error).slice(0, 160), count: 0 }; x.count++; errMap.set(k, x); }
+  const error_list = [...errMap.values()].sort((a, b) => b.count - a.count).slice(0, 6);
+  const errors = R.filter(x => x.error).length, error_rate = pct(errors, R.length);
+  const retry = (() => { try { const mg = $('Merge AI Answers').first().json || {}; return { asked: Number(mg.retry_asked) || 0, answered: Number(mg.retry_answered) || 0 }; } catch (e) { return { asked: 0, answered: 0 }; } })();
   const code = (r) => !r.answered ? (r.error ? 'e' : 'n') : r.cited ? (Number(r.rank) === 1 ? 'C' : 'c') : r.mentioned ? (Number(r.rank) === 1 ? 'M' : 'm') : 'a';   // upper case = named first
   const prompts = {}; for (const r of R) { prompts[r.prompt_id] = prompts[r.prompt_id] || {}; prompts[r.prompt_id][r.engine] = code(r); }
   const competitors = {}; for (const r of A) for (const d of list(r.competitors)) competitors[d] = (competitors[d] || 0) + 1;
@@ -35,9 +42,9 @@ return plans.map(p => {
   const [lo, hi] = wilson(m, n);
   const subject = '[AI pulse] ' + p.domain + ' — ' + alerts.length + ' change(s) in today\'s AI answers';
   const html = '<div style="font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#0f172a;max-width:760px"><h2 style="margin:0 0 4px;font-size:18px">AI pulse: ' + esc(p.domain) + ' · ' + esc(p.date) + '</h2>' +
-    '<p style="font-size:13px;color:#475569;margin:0 0 8px">' + n + ' answers from ' + p.pulse_engines.map(e => ENG[e]).join(', ') + ' to your ' + p.prompts.length + ' tracked questions. Named in ' + pct(m, n) + '% (95% range ' + lo + '-' + hi + '%), your pages cited in ' + pct(c, n) + '%.</p>' +
+    '<p style="font-size:13px;color:#475569;margin:0 0 8px">' + n + ' answers from ' + p.pulse_engines.map(e => ENG[e]).join(', ') + ' to your ' + p.prompts.length + ' tracked questions. Named in ' + pct(m, n) + '% (95% range ' + lo + '-' + hi + '%), your pages cited in ' + pct(c, n) + '%.' + (errors ? ' ' + errors + ' of ' + R.length + ' requests failed (' + error_list.map(e => e.engine + ': ' + e.message).join('; ') + ')' + (retry.asked ? ', ' + retry.answered + ' of ' + retry.asked + ' answered when sent again' : '') + '; today\'s figures count the ' + n + ' answers that came back.' : '') + '</p>' +
     '<div style="background:#fef2f2;border-left:4px solid #b91c1c;padding:8px 12px">' + alerts.map(a => '<div style="font-size:13px;margin:2px 0">⚠ ' + esc(a.text) + '</div>').join('') + '</div>' +
     '<p style="font-size:12px;color:#64748b">The weekly AI visibility report (Monday) adds these daily answers to its figures. Answers vary from one ask to the next; an alert is sent only when a change is beyond that noise.</p></div>';
   return { json: { site_id: p.site_id, domain: p.domain, date: p.date, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, alerts, daily_row, answer_rows, subject, html,
-    samples: n, mention_rate: pct(m, n), mention_ci: [lo, hi], citation_rate: pct(c, n), visibility_score: visibility, engines, status: 'progress', stage: 'ai_pulse', checked_at: p.checked_at } };
+    samples: n, mention_rate: pct(m, n), mention_ci: [lo, hi], citation_rate: pct(c, n), visibility_score: visibility, engines, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, status: 'progress', stage: 'ai_pulse', checked_at: p.checked_at } };
 });

@@ -60,6 +60,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
   return { json: { site_id: s.site_id, domain: s.domain, canonical_host: site_model.canonical_host || s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '',
     request_id: s.request_id || '', on_demand, adhoc: !!s.adhoc, business_name: s.profile.business_name || '', business_type: s.profile.business_type || '', city: s.profile.city || '', profile: s.profile,
+    // G10 (2026-10-11 system review): the Answer Analyst can only call a claim wrong against facts on file, so the site model's
+    // services, business facts and accreditation status travel with the profile (SITE_MODEL_SPEC.md; with no sheet the analyst
+    // reports "not checked", never "no wrong claims")
+    services: SM.services(site_model).slice(0, 20), business_facts: SM.facts(site_model).business_facts, accreditation: SM.facts(site_model).accreditation,
     brand_names, competitors, configured_competitors: s.settings.competitors, aliases, topics, engines: s.settings.engines, prompts_max: s.settings.prompts_max, pulse: s.settings.pulse,
     prompts, full_due, run_kind: on_demand ? 'on_demand' : full_due ? 'full' : 'weekly', monthly_engines: CONFIG.monthly_engines.filter(e => s.settings.engines.includes(e)), carried,
     need_prompts: need > 0, prompts_needed: need, need_site_text: need > 0 && !topics.length && !s.profile.business_name, gsc_questions,

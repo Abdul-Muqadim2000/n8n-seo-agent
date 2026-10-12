@@ -5,6 +5,7 @@ All three read the sites from seo_sites + seo_ladders and their settings from se
 ({ domain | site_id, email?, callback_url?, country?, location_code?, competitors? }) and write their Code nodes to harness/code_v4."""
 import json, os, re, uuid
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
+import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_upsert_params_keys,
                            SITES_TABLE, SITES_COLS, LADDER_TABLE, LADDER_COLS, LOG_TABLE, LOG_COLS, PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS, AI_ANSWERS_TABLE, AI_ANSWERS_COLS, AI_VIS_TABLE, AI_VIS_COLS,
@@ -39,7 +40,7 @@ ANTHROPIC = {'anthropicApi': {'id': 'SEOcredAnthropic', 'name': 'Anthropic (SEO 
 GOOGLE = {'googleApi': {'id': 'SEOcredGoogleSvc', 'name': 'Google Service Account (SEO Agent)'}}
 ARR = {'type': 'array', 'items': {'type': 'string'}}
 LOAD = dict(alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput')
-HTTP_X = dict(onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000)
+HTTP_X = dict(onError='continueRegularOutput', **retry_lint.RETRY)   # G1: one retry rule (3 tries, 5 s apart) for every external HTTP node
 
 class WF:
     def __init__(self, wid, name, prefix, timeout, code_prefix=''):   # code_prefix: harness file prefix when node names repeat another workflow's (AI Pulse)
@@ -67,7 +68,7 @@ class WF:
         self.code('Prepare PDF ' + tag, "// Copy of each report HTML named index.html for the PDF renderer (Gotenberg requires that exact file name); one item per site.\nreturn $input.all().map(item => { const doc = (item.binary || {}).data; if (!doc) return item; return { json: item.json, binary: { ...(item.binary || {}), html: { ...doc, fileName: 'index.html', mimeType: 'text/html', fileExtension: 'html' } } }; });", [x, y])
         self.node('Render PDF ' + tag, 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': 'http://gotenberg:3000/forms/chromium/convert/html', 'sendBody': True, 'contentType': 'multipart-form-data',
             'bodyParameters': {'parameters': [{'parameterType': 'formBinaryData', 'name': 'files', 'inputDataFieldName': 'html'}, {'name': 'paperWidth', 'value': '8.27'}, {'name': 'paperHeight', 'value': '11.69'}, {'name': 'marginTop', 'value': '0.5'}, {'name': 'marginBottom', 'value': '0.5'}, {'name': 'marginLeft', 'value': '0.5'}, {'name': 'marginRight', 'value': '0.5'}, {'name': 'printBackground', 'value': 'true'}]},
-            'options': {'timeout': 120000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'pdf'}}}}, [x + 220, y], onError='continueRegularOutput')
+            'options': {'timeout': 120000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'pdf'}}}}, [x + 220, y], onError='continueRegularOutput', **retry_lint.RETRY)
         self.code('Attach PDF ' + tag, "// Attach the PDF (when the renderer succeeded) next to the report's other files, per site; a renderer failure never fails the run.\nconst src = $('Prepare PDF " + tag + "').all(); const got = $input.all();\nreturn src.map((s, i) => { const g = got[i] || {}; const pdf = (g.binary && g.binary.pdf && !(g.json && g.json.error)) ? g.binary.pdf : null;\n  const name = String(s.json.file_name || 'report.html').replace(/\\.html?$/i, '') + '.pdf'; const binary = { ...(s.binary || {}) }; delete binary.html;\n  if (pdf) binary.pdf = { ...pdf, fileName: name, mimeType: 'application/pdf', fileExtension: 'pdf' };\n  return { json: { ...s.json, pdf_ready: !!pdf, pdf_file_name: pdf ? name : null }, binary }; });", [x + 440, y])
     def deliver(self, tag, pos, attach_expr):
         x, y = pos
@@ -76,6 +77,23 @@ class WF:
         self.iff('Has Callback (' + tag + ')?', '{{ !!$json.callback_url }}', [x + 220, y + 200])
         self.node('POST ' + tag + ' Report', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json) }}', 'options': {'timeout': 30000}}, [x + 440, y + 200], onError='continueRegularOutput')
         self.link('Has Email (' + tag + ')?', 'Send ' + tag + ' Report'); self.link('Has Callback (' + tag + ')?', 'POST ' + tag + ' Report')
+    def ai_retry_gate(self, pos, nxt, batch=10, interval=200, timeout=150000):
+        """D19 (2026-10-11 system review): DataForSEO reports a task error inside an HTTP 200 (status_code 40000 / 50000), which n8n's
+        retryOnFail never sees, so 7 of 42 AI requests of execution 362 / 363 were simply missing from the week's figures. Every failed
+        request is re-sent once after a pause and the answers are merged back in order before `nxt` (*Parse AI Answers*). Only the failed
+        requests are re-sent, so the retry costs at most what the failures cost (a failed DataForSEO task is billed 0)."""
+        x, y = pos
+        self.code('AI Retry Requests', 'AI_Retry_Requests.js', [x, y])
+        self.iff('Any AI Retries?', '{{ !$json.skip }}', [x + 220, y])
+        self.node('Wait Before AI Retry', 'n8n-nodes-base.wait', 1.1, {'amount': 20}, [x + 440, y - 110], webhookId=self.nid('Wait Before AI Retry:hook'))
+        self.dfs_http('Run AI Retries', [x + 660, y - 110], batch=batch, interval=interval, timeout=timeout)
+        self.code('Merge AI Answers', 'Merge_AI_Answers.js', [x + 880, y])
+        self.link('Run AI Requests', 'AI Retry Requests'); self.link('AI Retry Requests', 'Any AI Retries?')
+        self.link('Any AI Retries?', 'Wait Before AI Retry', 0); self.link('Any AI Retries?', 'Merge AI Answers', 1)
+        self.chain('Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers')
+        self.link('Merge AI Answers', nxt)
+        retry_lint.record_gate(self.name, ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', nxt])
+
     def sticky(self, content, pos, w, h, color=5): return self.node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': content, 'height': h, 'width': w, 'color': color}, pos)
     def link(self, a, b, out=0):
         outs = self.C.setdefault(a, {}).setdefault('main', [])
@@ -96,6 +114,7 @@ class WF:
             if n['type'] == 'n8n-nodes-base.httpRequest' and n['parameters'].get('authentication') == 'predefinedCredentialType': assert n.get('credentials'), n['name']
         w = {'id': self.wid, 'name': self.name, 'active': False, 'settings': {'executionOrder': 'v1', 'errorWorkflow': 'SEOagentErrHandl', 'executionTimeout': self.timeout, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all'}, 'tags': [], 'nodes': self.N, 'connections': self.C}
         url_lint.check(w, self.name)   # D15: no node builds a site URL by hand (url_lint.py)
+        retry_lint.check(w, self.name)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
         json.dump([w], open(os.path.join(OUT, fname), 'w'), indent=2, ensure_ascii=False)
         os.makedirs(CODE, exist_ok=True)
         for n in self.N:
@@ -122,7 +141,7 @@ A.node('Load Query History', DT_TYPE, DT_VERSION, dt_get_all_where_params(QUERY_
 loads += [('Load AI Daily', None), ('Load Cache (AI)', None), ('Load Query History', None)]
 A.code('AI Plan', 'AI_Plan.js', at(11, 1)); A.iff('Any Sites (AI)?', '{{ !$json.nothing_to_do }}', at(12, 1)); A.node('Nothing To Do (AI)', 'n8n-nodes-base.noOp', 1, {}, at(13, 2))
 A.code('Site Text Jobs', 'Site_Text_Jobs.js', at(13, -2)); A.iff('Need Site Text?', '{{ !$json.skip }}', at(14, -2))
-A.node('Read Site (AI)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/https://{{ $json.domain }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Retain-Images', 'value': 'none'}]}, 'options': {'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'site_text'}}, 'timeout': 30000}}, at(15, -3), credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput')
+A.node('Read Site (AI)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '=https://r.jina.ai/https://{{ $json.domain }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'X-Retain-Images', 'value': 'none'}]}, 'options': {'response': {'response': {'responseFormat': 'text', 'outputPropertyName': 'site_text'}}, 'timeout': 30000}}, at(15, -3), credentials={'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}, onError='continueRegularOutput', **retry_lint.RETRY)
 A.code('Discovery Requests', 'Discovery_Requests.js', at(16, -2)); A.iff('Any Discovery?', '{{ !$json.skip }}', at(17, -2)); A.dfs_http('Run Discovery', at(18, -3), batch=4, interval=300, timeout=120000)
 A.code('Prompt Jobs', 'Prompt_Jobs.js', at(19, -2)); A.iff('Any Prompt Jobs?', '{{ !$json.skip }}', at(20, -2))
 A.agent('Prompt Writer', 'ai_prompts.txt', {'type': 'object', 'properties': {'prompts': {'type': 'array', 'items': {'type': 'object', 'properties': {'prompt': {'type': 'string'}, 'kind': {'type': 'string'}, 'stage': {'type': 'string'}, 'cluster': {'type': 'string'}, 'keyword': {'type': 'string'}, 'origin': {'type': 'string'}}, 'required': ['prompt']}}}, 'required': ['prompts']}, at(21, -3))
@@ -133,7 +152,7 @@ A.node('GA4 AI Report', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'u
     'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}}, at(15, -1), credentials=GOOGLE, **HTTP_X)
 A.code('Access Requests', 'Access_Requests.js', at(16, 0)); A.iff('Any Access?', '{{ !$json.skip }}', at(17, 0))
 A.node('Fetch Access', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': '={{ $json.ua }}'}, {'name': 'Accept', 'value': 'text/html,text/plain,*/*'}]},
-    'options': {'batching': {'batch': {'batchSize': 4, 'batchInterval': 200}}, 'timeout': 20000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(18, -1), onError='continueRegularOutput')
+    'options': {'batching': {'batch': {'batchSize': 4, 'batchInterval': 200}}, 'timeout': 20000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(18, -1), onError='continueRegularOutput', **retry_lint.RETRY)
 A.code('AI Access', 'AI_Access.js', at(19, 0))
 A.code('AI Requests', 'AI_Requests.js', at(20, 0)); A.iff('Any AI Requests?', '{{ !$json.skip }}', at(21, 0))
 A.dfs_http('Run AI Requests', at(22, -1), batch=10, interval=200, timeout=150000)
@@ -160,7 +179,8 @@ A.chain('Prompt Jobs', 'Any Prompt Jobs?'); A.link('Any Prompt Jobs?', 'Prompt W
 A.chain('Prompt Rows', 'Any Prompt Rows?'); A.link('Any Prompt Rows?', 'Save Prompts', 0); A.link('Any Prompt Rows?', 'Traffic Requests', 1); A.link('Save Prompts', 'Traffic Requests')
 A.chain('Traffic Requests', 'Any GA4 (AI)?'); A.link('Any GA4 (AI)?', 'GA4 AI Report', 0); A.link('Any GA4 (AI)?', 'Access Requests', 1); A.link('GA4 AI Report', 'Access Requests')
 A.chain('Access Requests', 'Any Access?'); A.link('Any Access?', 'Fetch Access', 0); A.link('Any Access?', 'AI Access', 1); A.link('Fetch Access', 'AI Access')
-A.chain('AI Access', 'AI Requests', 'Any AI Requests?'); A.link('Any AI Requests?', 'Run AI Requests', 0); A.link('Any AI Requests?', 'Parse AI Answers', 1); A.link('Run AI Requests', 'Parse AI Answers')
+A.chain('AI Access', 'AI Requests', 'Any AI Requests?'); A.link('Any AI Requests?', 'Run AI Requests', 0); A.link('Any AI Requests?', 'Parse AI Answers', 1)
+A.ai_retry_gate(at(22, 1), 'Parse AI Answers')   # D19: task errors inside an HTTP 200 are re-sent once, then merged back in order
 A.chain('Parse AI Answers', 'Analyst Jobs', 'Any Analyst Jobs?'); A.link('Any Analyst Jobs?', 'Answer Analyst', 0); A.link('Any Analyst Jobs?', 'Apply Analysis', 1); A.link('Answer Analyst', 'Apply Analysis')
 A.chain('Apply Analysis', 'Any Answer Rows?'); A.link('Any Answer Rows?', 'Save AI Answers', 0); A.link('Any Answer Rows?', 'AI Metrics', 1); A.link('Save AI Answers', 'AI Metrics')
 A.chain('AI Metrics', 'AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', 'Any AI Prospects?'); A.link('Any AI Prospects?', 'Save AI Prospects', 0); A.link('Any AI Prospects?', 'AI Cache Rows', 1); A.link('Save AI Prospects', 'AI Cache Rows')
@@ -199,7 +219,8 @@ Q.code('Pulse Alerts', "// Sites with something to report (an alert, or an on-de
 Q.iff('Any Pulse Alerts?', '{{ !$json.skip }}', at(24, 0)); Q.deliver('Pulse', at(25, -1), None)
 Q.chain('Daily Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load AI Daily', 'Load Cache (AI)', 'AI Plan', 'Any Sites (Pulse)?'); Q.link('Manual Run', ens[0][0])
 Q.link('Any Sites (Pulse)?', 'AI Requests', 0); Q.link('Any Sites (Pulse)?', 'Nothing To Do (Pulse)', 1)
-Q.chain('AI Requests', 'Any AI Requests?'); Q.link('Any AI Requests?', 'Run AI Requests', 0); Q.link('Any AI Requests?', 'Parse AI Answers', 1); Q.link('Run AI Requests', 'Parse AI Answers')
+Q.chain('AI Requests', 'Any AI Requests?'); Q.link('Any AI Requests?', 'Run AI Requests', 0); Q.link('Any AI Requests?', 'Parse AI Answers', 1)
+Q.ai_retry_gate(at(13, 1), 'Parse AI Answers')   # D19: the pulse re-sends a failed task once too (its figures are the week's samples)
 Q.chain('Parse AI Answers', 'Pulse Metrics', 'Pulse Answer Rows', 'Any Pulse Answers?'); Q.link('Any Pulse Answers?', 'Save AI Answers', 0); Q.link('Any Pulse Answers?', 'AI Daily Rows', 1); Q.link('Save AI Answers', 'AI Daily Rows')
 Q.chain('AI Daily Rows', 'Any Daily Rows?'); Q.link('Any Daily Rows?', 'Save AI Daily', 0); Q.link('Any Daily Rows?', 'Prune Pulse Answers', 1); Q.link('Save AI Daily', 'Prune Pulse Answers')
 Q.chain('Prune Pulse Answers', 'Pulse Alerts', 'Any Pulse Alerts?'); Q.link('Any Pulse Alerts?', 'Has Email (Pulse)?', 0); Q.link('Any Pulse Alerts?', 'Has Callback (Pulse)?', 0)
@@ -234,7 +255,7 @@ def get_http(name, pos, url='={{ $json.url }}', batch=1, interval=300, timeout=3
     if body: params.update({'sendBody': True, 'specifyBody': 'json', 'jsonBody': body})
     extra = {}
     if cred: kind, cid, cname = cred; params.update({'authentication': 'genericCredentialType', 'genericAuthType': kind}); extra['credentials'] = {kind: {'id': cid, 'name': cname}}
-    return B.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **extra)
+    return B.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **retry_lint.RETRY, **extra)   # G1: the one retry rule
 BING = ('httpQueryAuth', 'SEOcredBingWebm', 'Bing Webmaster API')
 AHREFS = ('httpHeaderAuth', 'SEOcredAhrefsDR', 'Ahrefs (free Domain Rating)')
 JINA = ('httpHeaderAuth', 'SEOcredJinaReade', 'Jina Reader')
@@ -318,7 +339,7 @@ for i, (nm, t_) in enumerate(loads): S.load(nm, t_, at(1 + i, 1))
 S.node('Load Cache (Audit)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'sitemap'), at(6, 1), **LOAD)
 S.code('Audit Candidates', 'Audit_Candidates.js', at(7, 1)); S.iff('Any Candidates?', '{{ !$json.nothing_to_do }}', at(8, 1))
 S.node('Fetch Sitemap (Schedule)', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'GET', 'url': '={{ $json.sitemap_url }}', 'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.6)'}, {'name': 'Accept', 'value': 'application/xml,text/xml,*/*'}]},
-    'options': {'timeout': 45000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(9, 0), onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000)
+    'options': {'timeout': 45000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}, at(9, 0), onError='continueRegularOutput', **retry_lint.RETRY)
 S.code('Audit Schedule Plan', 'Audit_Sched_Plan.js', at(10, 1))
 S.code('Fingerprint Rows', "// The sitemap fingerprints to store (seo_cache, upsert by key; exact columns), for started and skipped sites alike.\nconst rows = $('Audit Schedule Plan').all().map(i => i.json.cache_row).filter(Boolean);\nreturn rows.length ? rows.map(r => ({ json: r })) : [{ json: { skip: true } }];", at(11, 1))
 S.iff('Any Fingerprints?', '{{ !$json.skip }}', at(12, 1))
@@ -358,7 +379,7 @@ def g_http(name, pos, url='={{ $json.url }}', batch=1, interval=300, timeout=300
     if body: params.update({'sendBody': True, 'specifyBody': 'json', 'jsonBody': body})
     extra = {}
     if cred: kind, cid, cname = cred; params.update({'authentication': 'genericCredentialType', 'genericAuthType': kind}); extra['credentials'] = {kind: {'id': cid, 'name': cname}}
-    return G.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **extra)
+    return G.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **retry_lint.RETRY, **extra)   # G1: the one retry rule
 WIKI_UA = 'SEOAgentAIGrowth/4.12 (' + BRAND + '; entity check; mailto:' + OPS_EMAIL + ')'
 G.code('Page Requests (Growth)', 'Growth_Page_Requests.js', at(17, 0)); G.iff('Any Pages (Growth)?', '{{ !$json.skip }}', at(18, 0))
 g_http('Fetch Key Pages', at(19, -1), batch=4, interval=300, timeout=20000, text=True, headers={'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'})
@@ -429,7 +450,7 @@ def x_http(W, name, pos, url='={{ $json.url }}', batch=1, interval=300, timeout=
     if body: params.update({'sendBody': True, 'specifyBody': 'json', 'jsonBody': body})
     extra = {}
     if cred: kind, cid, cname = cred; params.update({'authentication': 'genericCredentialType', 'genericAuthType': kind}); extra['credentials'] = {kind: {'id': cid, 'name': cname}}
-    return W.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **extra)
+    return W.node(name, 'n8n-nodes-base.httpRequest', 4.5, params, pos, onError='continueRegularOutput', **retry_lint.RETRY, **extra)   # G1: the one retry rule
 LB_UA = 'SEOAgentLinkBuilder/4.13 (' + BRAND + '; link opportunities; mailto:' + OPS_EMAIL + ')'
 PAGE_H = {'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.8'}
 API_KEY_CRED = {'httpHeaderAuth': {'id': 'SEOcredApiHeader', 'name': 'SEO API Key'}}

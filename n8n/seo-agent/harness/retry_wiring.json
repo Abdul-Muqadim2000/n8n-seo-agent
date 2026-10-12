@@ -1,0 +1,908 @@
+{
+ "ai_gate": {
+  "SEO Agent \u2014 AI Pulse": [
+   "Run AI Requests",
+   "AI Retry Requests",
+   "Any AI Retries?",
+   "Wait Before AI Retry",
+   "Run AI Retries",
+   "Merge AI Answers",
+   "Parse AI Answers"
+  ],
+  "SEO Agent \u2014 AI Visibility Tracker": [
+   "Run AI Requests",
+   "AI Retry Requests",
+   "Any AI Retries?",
+   "Wait Before AI Retry",
+   "Run AI Retries",
+   "Merge AI Answers",
+   "Parse AI Answers"
+  ]
+ },
+ "allow": {
+  "Create WP Draft": "writes to the customer's WordPress: a retry can publish a second draft",
+  "POST AI Report": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST Alert": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST BL Report": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST Cadence Note": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST Callback": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST Growth Report": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST LB Report": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST Progress": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST Pulse Report": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST Rejection": "callback to the customer app: every POST inserts a report (not idempotent)",
+  "POST Site Report": "callback to the customer app: every POST inserts a report (not idempotent)"
+ },
+ "rule": {
+  "maxTries": 3,
+  "retryOnFail": true,
+  "waitBetweenTries": 5000
+ },
+ "selftest": {
+  "flags_node_without_retry": true,
+  "flags_weaker_retry": true,
+  "honours_allow_list": true,
+  "ignores_other_nodes": true
+ },
+ "workflows": {
+  "SEO Agent v4": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Website",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "SERP Top 10",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Competitor Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Keyword Data",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Start Crawl",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Get Crawl Summary",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Get Crawled Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Probes",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Page HTML",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Check Schema URLs",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Find Competitors",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Domain Overview",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Ranked Keywords",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Backlink Summary",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Backlink Gap",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "PageSpeed",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Competitor Homes",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "AI SERP",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fallback SERP",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DataForSEO Whois",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Keyword Ideas",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Candidate SERP",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Sitemap Index",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Sitemaps",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST Callback",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Crawl Extras",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Ask LLMs",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST Rejection",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Content Probes",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render PDF Report",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render PDF Audit",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render PDF Ideas",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "RDAP Lookup",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Research",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Competitor Keywords",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "AI Demand",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Client Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Facts SERP",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Site Authority",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Retry Blocked Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Ladder Research",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render PDF Ladder",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Published Page",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Sitemap (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Sitemap Children (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GSC Sites (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GSC Audit Query",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GSC Sitemaps (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Video Details",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch GBP",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Reach Requests",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "SERP Top 10 (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Facts SERP (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Homepage (Model)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Nav Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
+  "SEO Agent \u2014 AI Growth": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Key Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Cited Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Bing Sites (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Bing Growth",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Submit to Bing",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch IndexNow Key",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Submit IndexNow",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Wikidata",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST Growth Report",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   }
+  ],
+  "SEO Agent \u2014 AI Pulse": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run AI Requests",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST Pulse Report",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run AI Retries",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
+  "SEO Agent \u2014 AI Visibility Tracker": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Read Site (AI)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Discovery",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GA4 AI Report",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Access",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run AI Requests",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render PDF AI",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST AI Report",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run AI Retries",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
+  "SEO Agent \u2014 API": [],
+  "SEO Agent \u2014 Admin API": [],
+  "SEO Agent \u2014 Audit Scheduler": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Sitemap (Schedule)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
+  "SEO Agent \u2014 Backlink Monitor": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run BL Requests",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Gap Requests",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Sources",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch News",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Bing Sites",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Bing Counts",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Bing",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GA4 Referrals",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Locate",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Linking Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Authority",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch DR",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Contacts",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render PDF BL",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST BL Report",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   }
+  ],
+  "SEO Agent \u2014 Console Alerts": [
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST Alert",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   }
+  ],
+  "SEO Agent \u2014 Content Cadence": [
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST Cadence Note",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   }
+  ],
+  "SEO Agent \u2014 Keyword Check": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run Assess Requests",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
+  "SEO Agent \u2014 Link Builder": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch LB Sources",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Run LB DFS",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch LB Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch LB Second",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST LB Report",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   }
+  ],
+  "SEO Agent \u2014 Link Builder API": [],
+  "SEO Agent \u2014 Publish to WordPress": [
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "Create WP Draft",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   }
+  ],
+  "SEO Agent \u2014 Rank Tracker": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "SERP Check",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST Progress",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   }
+  ],
+  "SEO Agent \u2014 Reply Reader": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Reply Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
+  "SEO Agent \u2014 Site Admin": [],
+  "SEO Agent \u2014 Site Tracker": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Sitemap (Detect)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Child Sitemaps (Detect)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Pages (Detect)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Homepage (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GSC Sites",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GSC Query",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GA4 Accounts",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GA4 Streams",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GA4 Report",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Inspect URL",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Google Trends",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "SERP Check (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render PDF Site",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": true,
+    "maxTries": null,
+    "name": "POST Site Report",
+    "retryOnFail": false,
+    "waitBetweenTries": null
+   }
+  ],
+  "SEO Agent \u2014 Test Runner": []
+ }
+}

@@ -1122,7 +1122,14 @@ await guard('ai visibility', async () => {
   // real answers; the client is named + cited by ChatGPT, Gemini and Claude on the recommend questions, Perplexity fails once
   const us = (q) => q.kind === 'recommend' && ['chatgpt', 'claude', 'gemini'].includes(q.engine);
   mock('Run AI Requests', R.map((q, i) => A9.answerFor(q, i, { us, fail: (q2, j) => q2.engine === 'perplexity' && j === R.findIndex(x => x.engine === 'perplexity') })));
-  const pa = await run('Parse AI Answers', store['Run AI Requests']); const AN = pa.map(r => r.json);
+  // D19 (2026-10-11 system review): the retry gate sits between the requests and the parser. The failed Perplexity task is re-sent once;
+  // here it fails again, so its error is kept and counted (S44 covers a retry that works and a 50000 server error).
+  const rt1 = await run('AI Retry Requests', store['Run AI Requests']);
+  check('retry gate: only the failed request is re-sent, with the reason DataForSEO gave inside the HTTP 200', rt1.length === 1 && rt1[0].json.engine === 'perplexity' && rt1[0].json.retry_of === R.findIndex(x => x.engine === 'perplexity') && /40501/.test(rt1[0].json.retry_reason) && rt1[0].json.is_retry === true, JSON.stringify(rt1.map(x => x.json.engine + ': ' + x.json.retry_reason)));
+  mock('Run AI Retries', rt1.map(q => M.answerFor(q.json, 0, { fail: () => true })));
+  const mg1 = await run('Merge AI Answers', store['Run AI Retries']);
+  check('a retry that fails again keeps the first answer, the item order is untouched and both counts are reported', mg1.length === R.length && mg1[0].json.retry_asked === 1 && mg1[0].json.retry_answered === 0 && !mg1.some(x => x.json.retried), JSON.stringify({ n: mg1.length, want: R.length, asked: mg1[0].json.retry_asked, fixed: mg1[0].json.retry_answered }));
+  const pa = await run('Parse AI Answers', mg1); const AN = pa.map(r => r.json);
   const cg = AN.find(a => a.engine === 'chatgpt' && a.mentioned); const gm = AN.find(a => a.engine === 'gemini' && a.mentioned);
   console.log('   chatgpt answer ->', JSON.stringify({ rank: cg.rank, brands: cg.brands, competitors: cg.competitors.split(', ').slice(0, 5), fanout: cg.fanout }));
   check('answers: table columns + the answer text for the analyst; database views not stored; one failed request kept as an error', AN.every(a => same2(Object.keys(a), [...ANS, '_text'])) && !AN.some(a => /^(market|index_)/.test(a.engine)) && AN.filter(a => a.error).length === 1 && AN.every(a => a.run_kind === 'full'), JSON.stringify(Object.keys(AN[0])));
@@ -1181,7 +1188,10 @@ await guard('ai visibility', async () => {
   const rq2 = await run('AI Requests', ac2); const eng2 = rq2.reduce((m, q) => { m[q.json.engine] = (m[q.json.engine] || 0) + 1; return m; }, {});
   check('week 2 requests: the weekly engines incl. Gemini, no Claude, no brand question, no database views', eng2.chatgpt === 6 && eng2.gemini === 6 && !eng2.claude && !eng2.market && !eng2.index_sov && !rq2.some(q => q.json.kind === 'brand') && rq2.every(q => q.json.run_kind === 'weekly'), JSON.stringify(eng2));
   mock('Run AI Requests', rq2.map((q, i) => A9.answerFor(q.json, i, { noAio: true })));
-  await run('Parse AI Answers', store['Run AI Requests']); const aj2 = await run('Analyst Jobs', store['Parse AI Answers']); mock('Answer Analyst', aj2.filter(j => !j.json.skip).map(j => ({ json: A9.analystFor(j.json) })));
+  const rt2 = await run('AI Retry Requests', store['Run AI Requests']);
+  const mg2 = await run('Merge AI Answers', rt2);
+  check('week 2: nothing failed, so nothing is re-sent and every answer passes through the gate unchanged', rt2[0].json.skip === true && /every request answered/.test(rt2[0].json.reason) && mg2.length === rq2.length && !mg2.some(x => x.json.retried), JSON.stringify({ skip: rt2[0].json.reason, n: mg2.length, want: rq2.length }));
+  await run('Parse AI Answers', mg2); const aj2 = await run('Analyst Jobs', store['Parse AI Answers']); mock('Answer Analyst', aj2.filter(j => !j.json.skip).map(j => ({ json: A9.analystFor(j.json) })));
   await run('Apply Analysis', store['Answer Analyst']); const mt2 = await run('AI Metrics', store['Apply Analysis']); const Y = mt2[0].json; const YM = Y.metrics;
   console.log('   week 2 ->', JSON.stringify({ samples: YM.samples, pulse: YM.pulse_samples, mention: YM.mention_rate, ci: YM.mention_ci, delta: YM.delta, alerts: Y.alerts.map(a => a.level + ': ' + a.text.slice(0, 60)) }));
   check('week 2: pulse samples counted (6 x 18), rate = this week\'s answers + pulse, change tested for significance', YM.pulse_samples === 108 && YM.samples === YM.answered + 108 && typeof YM.delta.significant === 'boolean', JSON.stringify(YM.delta));
@@ -2184,7 +2194,12 @@ await guard('ai pulse', async () => {
   check('pulse requests: 7 questions x 3 fast engines (Copilot only when chosen), no database views, about $0.08', R.length === 21 && byE.chatgpt === 7 && byE.gemini === 7 && byE.ai_mode === 7 && !byE.copilot && R.every(r => r.run_kind === 'pulse') && Math.abs(R.reduce((s, r) => s + r.est_cost, 0) - 0.084) < 0.001, JSON.stringify(byE));
   // a bad day: no answer names the client; ChatGPT names Zoho Books (learned name -> zoho.com) in every answer
   mock('Run AI Requests', R.map((q, i) => A9.answerFor(q, i, {})));
-  const pa = await run('Parse AI Answers', store['Run AI Requests'], PP); const AN = pa.map(r => r.json);
+  // D19: the pulse carries the same gate (its figures become the week's samples), run from its own extracted files
+  const RT = { code: 'Pulse__AI_Retry_Requests' }, MG = { code: 'Pulse__Merge_AI_Answers' };
+  const prt = await run('AI Retry Requests', store['Run AI Requests'], RT);
+  const pmg = await run('Merge AI Answers', prt, MG);
+  check('pulse: no failed task, nothing re-sent, the 21 answers pass through the gate in order', prt[0].json.skip === true && pmg.length === R.length, JSON.stringify({ skip: prt[0].json.skip, n: pmg.length }));
+  const pa = await run('Parse AI Answers', pmg, PP); const AN = pa.map(r => r.json);
   // the past week named the same businesses as today except Zoho Books (zoho.com): rebuild the baseline from today's names, then plan again
   seenBefore = {}; for (const a of AN) for (const d of String(a.competitors).split(/,\s*/).filter(Boolean)) if (d !== 'zoho.com') seenBefore[d] = 5;
   mock('Load AI Daily', baseline()); await run('AI Plan', store['Load Cache (AI)'], PN);
@@ -2311,7 +2326,7 @@ await guard('backlinks v4.10', async () => {
   check('reclaim: the most-linked guide answers 404 → 301 suggestion with the referrers Bing reported', R.reclaim.some(r => /old-peppol-guide/.test(r.broken_url) && r.links >= 2), JSON.stringify(R.reclaim));
   check('competitors: fintechnews just linked to complyance.io (spam farm and current referrers dropped); the list page and the CC gap become prospects', R.comp_new.length === 1 && R.comp_new[0].domain === 'fintechnews.ae' && R.candidates.some(c => c.type === 'list' && c.prospect_domain === 'bestof-software.com') && R.candidates.some(c => c.type === 'gap' && c.origin === 'cc' && c.prospect_domain === 'einvoicingnews.com') && R.candidates.some(c => c.type === 'comp_new'), JSON.stringify(R.candidates.map(c => c.type + ':' + c.prospect_domain + ':' + c.score)));
   const sc = (t, d) => (R.candidates.find(c => c.type === t && c.prospect_domain === d) || {}).score || 0;
-  check('gap (live findings): a site linking to both competitors outranks a household name (stripe.com); the competitor\'s sister domain (cleartax.in) is not a prospect; a local .ae site outranks the same site elsewhere', sc('gap', 'einvoicingnews.com') > sc('gap', 'stripe.com') && sc('gap', 'taxhub.ae') > sc('gap', 'taxhub-global.com') && sc('gap', 'taxhub-global.com') > 0 && !R.candidates.some(c => c.prospect_domain === 'cleartax.in') && !R.gap.some(g => g.domain === 'cleartax.in'), JSON.stringify([sc('gap', 'einvoicingnews.com'), sc('gap', 'stripe.com')]));
+  check('gap (live findings): a household name off your topics (stripe.com) is listed with its reason and never pitched (D23); the competitor\'s sister domain (cleartax.in) is not a prospect; a local .ae site outranks the same site elsewhere', sc('gap', 'stripe.com') === 0 && R.gap.find(g => g.domain === 'stripe.com').off_topic === true && /off topic/.test(R.gap.find(g => g.domain === 'stripe.com').topic_reason) && sc('gap', 'einvoicingnews.com') > 0 && sc('gap', 'einvoicing-hub.ae') > sc('gap', 'einvoicing-hub-global.com') && sc('gap', 'einvoicing-hub-global.com') > 0 && !R.candidates.some(c => c.prospect_domain === 'cleartax.in') && !R.gap.some(g => g.domain === 'cleartax.in'), JSON.stringify(R.gap.map(g => g.domain + ':' + (g.off_topic ? 'off' : sc('gap', g.domain)))));
   check('scores: a checked unlinked mention outranks a cold gap site of similar authority', sc('mention', 'gulfbiz.ae') > sc('gap', 'einvoicingnews.com'), JSON.stringify([sc('mention', 'gulfbiz.ae'), sc('gap', 'einvoicingnews.com')]));
   check('anchors: kinds over the live referrers, the money anchor from the anchor list flagged', R.anchors.kinds.brand >= 1 && R.anchors.top.some(a => a.anchor === 'best casino bonus' && a.kind === 'money'), JSON.stringify(R.anchors));
   check('erpnews.ae (a contacted gap prospect) now links: the referrer set includes it', R.refdomains.includes('erpnews.ae'), JSON.stringify(R.refdomains.slice(0, 20)));
@@ -4392,6 +4407,126 @@ await guard('d11-existing-pages', async () => {
   const M0 = await metricsWith([]);
   check('with no inventory the Site Tracker still asks for the written page to be published, exactly as before',
     (M0.sm.actions.find(a => a.keyword === KW) || {}).type === 'publish' && M0.brief.website.pages_known === 0, JSON.stringify(M0.sm.actions.map(a => a.type)));
+});
+
+// ===================================================================================
+// S44 (2026-10-12, system review FIX_PLAN G1 / D19 / D23 / G22 / G10) — the reliability and AI-data items of the fix plan:
+// one retry rule for every external HTTP node with the build-time lint that enforces it and the code-level gate for the task
+// errors DataForSEO reports inside an HTTP 200 (7 of 42 requests of execution 362 / 363 vanished that way), AI visibility that
+// counts answered requests only and names what failed, a brand that has to be a business and not a heading, one URL per cited
+// page, a competitor's sister domain and an off-topic gap domain kept out of the prospects, source titles kept whole, and the
+// wrong-claim check reported as "not checked" when there is no fact sheet to check against.
+await guard('retries, AI data, sister domains and the fact base', async () => {
+  reset(); const SN = 'S44 G1 D19 D23 G22 G10 — one retry rule and a gate for task errors inside an HTTP 200, AI errors / brands / URL variants, sister domains and the off-topic gap, whole source titles, answers checked against a fact base';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const M = require('./fixtures_monitors'); const A9 = require('./fixtures_ai49'); const B = require('./fixtures_bl410');
+  const RW = require('./retry_wiring.json');
+
+  // ---------- A. G1: the one retry rule in every builder, and the lint that fails the build without it ----------
+  const httpNode = (wf, nm) => (RW.workflows[wf] || []).find(x => x.name === nm);
+  const keepsRule = (x) => !!x && x.retryOnFail === true && Number(x.maxTries) >= RW.rule.maxTries && Number(x.waitBetweenTries) >= RW.rule.waitBetweenTries;
+  const broken = Object.entries(RW.workflows).flatMap(([wf, ns]) => ns.filter(x => !x.allowed && !keepsRule(x)).map(x => wf + ' / ' + x.name));
+  console.log('   retry rule ->', Object.keys(RW.workflows).length, 'workflows,', Object.values(RW.workflows).reduce((s, l) => s + l.length, 0), 'HTTP nodes,', Object.values(RW.workflows).reduce((s, l) => s + l.filter(x => x.allowed).length, 0), 'on the allow-list');
+  check('G1: every external HTTP node of every generated workflow retries 3 times, 5 s apart (the rule lives in retry_lint.py and is set in every builder)', Object.keys(RW.workflows).length >= 19 && !broken.length && RW.rule.maxTries === 3 && RW.rule.waitBetweenTries === 5000, broken.join(' | '));
+  check('G1 / D23: the Ahrefs DR lookup is retried after a network error (one EAI_AGAIN lost it live), and so are the free sources, Bing, the linking pages and the PDF renderer', ['Fetch DR', 'Fetch Sources', 'Fetch Bing', 'Fetch Linking Pages', 'Fetch Contacts', 'Render PDF BL'].every(nm => keepsRule(httpNode('SEO Agent — Backlink Monitor', nm))), JSON.stringify(['Fetch DR', 'Fetch Sources', 'Fetch Bing', 'Fetch Linking Pages', 'Fetch Contacts', 'Render PDF BL'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent — Backlink Monitor', nm)))));
+  check('G1: the nodes inherited from v3 keep the same rule (the DataForSEO reads, PageSpeed, RDAP, the probes, the Gotenberg renders)', ['Keyword Data', 'Find Competitors', 'PageSpeed', 'RDAP Lookup', 'Run Probes', 'Render PDF Report', 'Read Website', 'SERP Top 10 (Retry)'].every(nm => keepsRule(httpNode('SEO Agent v4', nm))), JSON.stringify(['Keyword Data', 'PageSpeed', 'RDAP Lookup', 'SERP Top 10 (Retry)'].map(nm => nm + ':' + JSON.stringify(httpNode('SEO Agent v4', nm)))));
+  check('G1: the allow-list holds only what is not idempotent — the report callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 12 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft') && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false, JSON.stringify(Object.keys(RW.allow)));
+  check('G1: the lint bites — it flags an HTTP node with no retry and one with a weaker retry, honours its allow-list and leaves other node types alone (self-test run by build_v4.py section 37)', RW.selftest.flags_node_without_retry === true && RW.selftest.flags_weaker_retry === true && RW.selftest.honours_allow_list === true && RW.selftest.ignores_other_nodes === true, JSON.stringify(RW.selftest));
+  const GATE = ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', 'Parse AI Answers'];
+  check('D19: the retry gate is wired in both AI workflows (the pause is a Wait node, the retry an own DataForSEO call, the answers merged before the parser)', ['SEO Agent — AI Visibility Tracker', 'SEO Agent — AI Pulse'].every(wf => JSON.stringify((RW.ai_gate || {})[wf]) === JSON.stringify(GATE)), JSON.stringify(RW.ai_gate));
+
+  // ---------- B. D19: a 50000 task error inside an HTTP 200 is re-sent once, and the retry's answer is used and counted ----------
+  const qs = [['Which companies help UAE businesses with e-invoicing before 2027?', 'recommend'], ['What should I check before choosing an e-invoicing provider in the UAE?', 'choose'], ['What is Northwind ERP and what does it offer?', 'brand']];
+  const prompts = qs.map(([q, k], i) => ({ json: { prompt_id: 'p_' + i, site_id: M.SITE, domain: M.DOMAIN, prompt: q, kind: k, topic: 'e invoicing in uae', keyword: 'e invoicing uae ' + i, source: 'auto', status: 'active', created_at: '2026-10-01', stage: 'decision', cluster: 'e invoicing', volume: 400, origin: 'writer', updated_at: '' } }));
+  const loadAll = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors()); mock('Load Profiles', o.profiles || M.profiles()); mock('Load AI Prompts', prompts);
+    mock('Load AI Visibility', [{ json: {} }]); mock('Load Link Prospects', [{ json: {} }]); mock('Load AI Daily', [{ json: {} }]); mock('Load Cache (AI)', [{ json: {} }]); mock('Load Query History', [{ json: {} }]); };
+  loadAll();
+  const plan = await run('AI Plan', store['Load Query History']);
+  const rq = await run('AI Requests', plan); const R = rq.map(x => x.json);
+  const iMode = R.findIndex(q => q.engine === 'ai_mode'), iGpt = R.findIndex(q => q.engine === 'chatgpt');
+  const serverErr = { tasks: [{ status_code: 50000, status_message: 'Internal SE Server Error.', cost: 0, result: null }] };   // the exact live answer of exec 362 / 363
+  mock('Run AI Requests', R.map((q, i) => i === iMode ? serverErr : i === iGpt ? { error: { message: 'no response' } } : A9.answerFor(q, i, { us: () => true })));
+  const rt = await run('AI Retry Requests', store['Run AI Requests']); const RT = rt.map(x => x.json);
+  console.log('   retries ->', RT.map(q => q.engine + ': ' + q.retry_reason).join(' | '));
+  check('the server error inside the HTTP 200 and the missing response are the only requests re-sent, each with its reason and its place in the list', RT.length === 2 && RT.some(q => q.retry_of === iMode && /50000: Internal SE Server Error/.test(q.retry_reason)) && RT.some(q => q.retry_of === iGpt && /no response/.test(q.retry_reason)) && RT.every(q => q.is_retry && q.endpoint && q.body) && RT[0].retry_total === 2, JSON.stringify(RT.map(q => [q.engine, q.retry_of, q.retry_reason])));
+  mock('Run AI Retries', RT.map(q => q.engine === 'ai_mode' ? A9.answerFor(q, 0, { us: () => true }) : { error: { message: 'no response' } }));
+  const mg = await run('Merge AI Answers', store['Run AI Retries']); const MG = mg.map(x => x.json);
+  check('the retry that worked takes the failed answer\'s place, the one that failed twice keeps its failure, the order and the count are untouched, and both are reported', MG.length === R.length && MG[iMode].retried === true && !MG[iGpt].retried && MG[0].retry_asked === 2 && MG[0].retry_answered === 1 && MG[0].requests_failed === 2, JSON.stringify({ n: MG.length, want: R.length, mode: !!MG[iMode].retried, gpt: !!MG[iGpt].retried, asked: MG[0].retry_asked, fixed: MG[0].retry_answered }));
+  const pa = await run('Parse AI Answers', mg); const AN = pa.map(x => x.json);
+  const modeRow = AN.find(a => a.engine === 'ai_mode'), gptRow = AN.find(a => a.engine === 'chatgpt');
+  check('the parser uses the retry\'s data: the AI Mode question is answered, the ChatGPT one is the only error left', modeRow.answered === true && !modeRow.error && gptRow.answered === false && /no response/.test(gptRow.error) && AN.filter(a => a.error).length === 1, JSON.stringify({ mode: [modeRow.answered, modeRow.error], gpt: [gptRow.answered, gptRow.error], errors: AN.filter(a => a.error).length }));
+
+  // ---------- C. D19: rates count answered requests only, and the failures are listed ----------
+  const aj = await run('Analyst Jobs', pa); const AJ = aj.map(x => x.json).filter(j => !j.skip);
+  check('G10: with a profile on file the fact sheet is complete and the wrong-claim check is on', AJ.length >= 1 && AJ[0].fact_check === 'on' && AJ[0].facts_ok === true && /City: Dubai/.test(AJ[0].facts) && /Services on the site|Topics/.test(AJ[0].facts), JSON.stringify(AJ.map(j => j.fact_check)).slice(0, 200));
+  mock('Answer Analyst', AJ.map(j => ({ json: A9.analystFor(j) })));
+  const ap = await run('Apply Analysis', store['Answer Analyst']);
+  const mt = await run('AI Metrics', ap); const X = mt[0].json; const XM = X.metrics;
+  console.log('   errors ->', JSON.stringify({ requests: XM.requests, errors: XM.errors, rate: XM.error_rate, retried: XM.retried, answered_on_retry: XM.retry_answered, list: XM.errors_list }));
+  check('every rate counts answered requests only, and the one request that failed twice is listed with its engine, its message and the retry outcome', XM.samples === XM.answered && XM.errors === 1 && XM.error_rate === Math.round(1000 / XM.requests) / 10 && XM.retried === 2 && XM.retry_answered === 1 && XM.errors_list.length === 1 && XM.errors_list[0].engine === 'ChatGPT' && /no response/.test(XM.errors_list[0].message), JSON.stringify(XM).slice(0, 400));
+  check('the failures are an alert of their own, which says how many answers the rates are based on', X.alerts.some(a => /1 of \d+ AI requests failed/.test(a.text) && /1 of 2 answered on the retry/.test(a.text) && /rates below count/.test(a.text)), JSON.stringify(X.alerts.map(a => a.text)));
+  const rp = await run('AI Report', mt); const html = rp[0].json.html;
+  check('the report names the failures above the figures instead of hiding them', /requests failed this run/.test(html) && /answered when they were sent again/.test(html) && /answers that came back/.test(html), html.slice(0, 200));
+
+  // ---------- D. D19 / G22: a heading is not a brand, two URL variants are one page, a title is never cut ----------
+  const PAGE = 'https://gulfnews.com/business/best-e-invoicing-providers-uae-2026-1.501';
+  const chat = (o = {}) => ({ tasks: [{ status_code: 20000, status_message: 'Ok.', cost: 0.004, result: [{ items_count: 1, markdown: 'Tax technology and e-invoicing software\n\nThe providers used most in the UAE are **ClearTax**, **Zoho Books** and Azentio Software.',
+    brand_entities: o.entities || [{ title: 'Tax technology and e-invoicing software' }, { title: 'Zoho Books' }, { title: 'Best e-invoicing providers in the UAE for 2026' }, { title: 'ERP software' }],
+    sources: o.sources || [{ type: 'chat_gpt_source', domain: 'www.gulfnews.com', url: 'https://www.gulfnews.com/business/best-e-invoicing-providers-uae-2026-1.501?utm_source=chatgpt.com#:~:text=best%20providers', title: 'Best e-invoicing providers in the UAE for 2026' },
+      { type: 'chat_gpt_source', domain: 'gulfnews.com', url: PAGE, title: 'E' }, { type: 'chat_gpt_source', domain: 'cleartax.com', url: 'https://cleartax.com/ae/?srsltid=abc', title: 'ClearTax UAE' }], fan_out_queries: [] }] }] });
+  mock('AI Requests', [{ json: { site_id: M.SITE, domain: M.DOMAIN, run_id: 'ai_x', run_kind: 'weekly', prompt_id: 'p_0', prompt: qs[0][0], kind: 'recommend', topic: 'e invoicing in uae', keyword: 'e invoicing uae', engine: 'chatgpt', endpoint: 'x', body: [], est_cost: 0.004 } }]);
+  mock('AI Plan', [{ json: { ...plan[0].json, aliases: { 'Azentio Software': 'azentio.com' } } }]);
+  const one = (await run('Parse AI Answers', [{ json: chat() }]))[0].json;
+  const cited = JSON.parse(one.cited_urls || '[]');
+  console.log('   brands ->', one.brands, '| competitors ->', one.competitors, '| cited ->', JSON.stringify(cited));
+  check('D19: the heading ChatGPT returns in its own brand list is not a business ("Tax technology and e-invoicing software", "Best e-invoicing providers…", "ERP software"), while Zoho Books and the learned Azentio Software are', !/Tax technology|Best e-invoicing|ERP software/i.test(one.competitors + ' ' + one.brands) && /Zoho Books/.test(one.competitors) && /azentio\.com/.test(one.competitors) && /cleartax\.com/.test(one.competitors), JSON.stringify({ b: one.brands, c: one.competitors }));
+  check('D19: the www address with a tracking parameter and a #:~:text= highlight and the bare address are one cited page, and the tracking parameter is gone from what we store', cited.filter(c => /gulfnews\.com/.test(c.u)).length === 1 && cited.some(c => c.u === PAGE) && !/utm_|srsltid|#/.test(one.cited_urls) && !/utm_|srsltid/.test(one.our_urls + one.sources), JSON.stringify(cited));
+  check('G22: the full source title survives, while a one-letter fragment of a title is dropped instead of being kept as "E"', cited.find(c => c.u === PAGE).t === 'Best e-invoicing providers in the UAE for 2026' && !cited.some(c => c.t === 'E' || c.t === 'Best e'), JSON.stringify(cited.map(c => c.t)));
+
+  // ---------- E. G10: without a fact sheet the wrong-claim check is "not checked", never "no wrong claims" ----------
+  reset(); loadAll({ profiles: [{ json: { site_id: M.SITE, domain: M.DOMAIN } }] });
+  const plan2 = await run('AI Plan', store['Load Query History']);
+  const rq2 = await run('AI Requests', plan2); const R2 = rq2.map(x => x.json);
+  mock('Run AI Requests', R2.map((q, i) => A9.answerFor(q, i, { us: () => true })));
+  const rt2 = await run('AI Retry Requests', store['Run AI Requests']); const mg2 = await run('Merge AI Answers', rt2);
+  const pa2 = await run('Parse AI Answers', mg2);
+  const aj2 = (await run('Analyst Jobs', pa2)).map(x => x.json).filter(j => !j.skip);
+  check('G10: a site with nothing but a website on file gets the fact check switched off, and the prompt says so', aj2.length >= 1 && aj2[0].fact_check === 'off' && aj2[0].facts_ok === false, JSON.stringify(aj2.map(j => [j.fact_check, j.facts.slice(0, 60)])));
+  mock('Answer Analyst', aj2.map(j => ({ json: A9.analystFor(j) })));
+  const ap2 = await run('Apply Analysis', store['Answer Analyst']);
+  check('G10: a wrong claim the model volunteered anyway is dropped — nothing contradicts a sheet we do not have', !ap2.some(x => x.json.issues), JSON.stringify(ap2.map(x => x.json.issues).filter(Boolean)));
+  const mt2 = await run('AI Metrics', ap2); const X2 = mt2[0].json;
+  check('G10: the result is "not checked" with the step for the owner, the issue count is not 0 but unknown, and the report says so', X2.perception.fact_check === 'no_facts' && /fill the business profile/.test(X2.perception.fact_check_note) && X2.metrics.accuracy_issues === null && X2.vis_row.accuracy_issues === null, JSON.stringify({ fc: X2.perception.fact_check, n: X2.metrics.accuracy_issues }));
+  const html2 = (await run('AI Report', mt2))[0].json.html;
+  check('G10: the report reads "What AI gets wrong: not checked", never "nothing wrong"', /What AI gets wrong<\/b>: not checked/.test(html2) && /fill the business profile/.test(html2), html2.slice(html2.indexOf('What AI gets wrong') - 20, html2.indexOf('What AI gets wrong') + 200));
+  check('G10: with the profile on file the same report states that the answers were checked', /What AI gets wrong<\/b>: nothing that contradicts your business facts|What AI gets wrong<\/b><\/p>/.test(html), 'first report');
+
+  // ---------- F. D23: a sister domain and an off-topic gap domain are never prospects ----------
+  reset();
+  const gapRow = (d, o = {}) => ({ json: { site_id: B.SITE, domain: B.DOMAIN, release: 'cc-main-2026-jul-aug-sep', kind: 'gap', ref_domain: d, hc_pos: o.hc || 500000, pr_pos: 600000, n_hosts: 2, links_to: o.to || 'cleartax.com,complyance.io', checked_at: new Date(Date.now() - 6 * 864e5).toISOString() } });
+  mock('Load Sites', B.sites()); mock('Load Ladders', B.ladders()); mock('Load Monitors', B.monitors()); mock('Load Profiles', B.profiles());
+  mock('Load Backlink Snapshots', [{ json: {} }]); mock('Load Link Prospects', [{ json: {} }]); mock('Load Content Log', [{ json: {} }]); mock('Load Case Studies', [{ json: {} }]);
+  mock('Load Backlinks', B.ledgerPrev().map(j => ({ json: j }))); mock('Load Link Imports', [{ json: {} }]);
+  mock('Load Link Graph', [gapRow('einvoicing-uae-news.com'), gapRow('clear.in'), gapRow('invoicing-partner.net'), gapRow('stripe.com', { hc: 64 }), gapRow('weforum.org', { hc: 900 }), gapRow('kirkland.com', { hc: 4000 }), gapRow('gulfbiz.ae')]);
+  const bplan = await run('BL Plan', store['Load Link Graph']);
+  const merged = await run('Link Merge', bplan);
+  // invoicing-partner.net is on our topic by its name, but the page we fetched canonicalises to the competitor: a sister domain
+  mock('Verify Links', [{ json: { site_id: B.SITE, purpose: 'mention', ref_domain: 'invoicing-partner.net', url: 'https://invoicing-partner.net/uae', verify: 'missing', named: false, canonical: 'https://www.complyance.io/uae', status: 200, source: 'web' } }]);
+  const pb = (await run('Parse Backlinks', merged))[0].json;
+  const gapOf = (d) => pb.gap.find(g => g.domain === d);
+  const prospect = (d) => pb.candidates.some(c => c.prospect_domain === d);
+  console.log('   gap ->', pb.gap.map(g => g.domain + (g.off_topic ? ' [off topic]' : '')).join(' | '), '| refused as siblings:', ['clear.in', 'invoicing-partner.net'].filter(d => !gapOf(d)).join(', '));
+  check('D23: clear.in is refused as ClearTax\'s sister domain (a shared brand stem of 5 characters; comparing the first label missed it)', !gapOf('clear.in') && !prospect('clear.in'), JSON.stringify(pb.gap.map(g => g.domain)));
+  check('D23: a domain whose page canonicalises to the competitor is a sister domain too, even though its name is on our topic', !gapOf('invoicing-partner.net') && !prospect('invoicing-partner.net'), JSON.stringify(pb.gap.map(g => g.domain)));
+  check('D23: stripe.com, weforum.org and kirkland.com are refused as off topic — listed in the link gap with the reason, never stored as prospects to pitch', ['stripe.com', 'weforum.org', 'kirkland.com'].every(d => gapOf(d) && gapOf(d).off_topic === true && /off topic/.test(gapOf(d).topic_reason) && !prospect(d)) && pb.gap_off_topic === 3, JSON.stringify(pb.gap.map(g => [g.domain, g.off_topic, g.topic_reason])));
+  check('D23: a gap domain whose name carries the topic and a site in the same market are still prospects (the gate refuses, it does not empty the pipeline)', gapOf('einvoicing-uae-news.com') && !gapOf('einvoicing-uae-news.com').off_topic && prospect('einvoicing-uae-news.com') && gapOf('gulfbiz.ae') && !gapOf('gulfbiz.ae').off_topic && /market/.test(gapOf('gulfbiz.ae').topic_reason) && prospect('gulfbiz.ae'), JSON.stringify(pb.gap.map(g => [g.domain, g.topic_reason])));
+  const blHtml = (await run('BL Report', [{ json: pb }]))[0].json.html;
+  check('D23: the report keeps the off-topic gap sites in the table with "not pitched" and the reason', /not pitched: off topic/.test(blHtml) && /stripe\.com/.test(blHtml), blHtml.slice(blHtml.indexOf('Link gap'), blHtml.indexOf('Link gap') + 200));
+
+  // ---------- G. D23: the tracking parameters are gone from the URLs we store ----------
+  const ledger = (await run('Ledger Rows', [{ json: pb }])).map(x => x.json).filter(r => !r.skip);
+  check('D23: no stored URL keeps utm_* or srsltid (they came in with GA4 referrals and AI citations and reached the report and the outreach)', !ledger.some(r => /utm_|srsltid|gclid/.test(String(r.from_url) + String(r.to_url))) && ledger.length > 0, JSON.stringify(ledger.map(r => r.from_url).slice(0, 5)));
 });
 
 H.report();

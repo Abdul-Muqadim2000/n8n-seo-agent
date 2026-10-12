@@ -1,5 +1,6 @@
 import json, uuid
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
+import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 nid = lambda: str(uuid.uuid4())
 webhook = {"httpMethod": "POST", "path": "seo-keyword-check", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
 QV = r"""// Fast validation so callers get an immediate, useful 400. The full validation happens again in the main workflow.
@@ -60,6 +61,7 @@ import os
 _here = os.path.dirname(os.path.abspath(__file__))
 _out = os.path.join(_here, 'workflows', 'SEO_Agent_API.json') if os.path.isdir(os.path.join(_here, 'workflows')) else 'SEO_Agent_API.json'
 url_lint.check(wf)   # D15: no node builds a site URL by hand (url_lint.py)
+retry_lint.check(wf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
 json.dump([wf], open(_out, 'w'), indent=2, ensure_ascii=False)
 print('API workflow written:', len(wf['nodes']), 'nodes')
 # the harness runs Quick Validate too (scenario S23: the web app's request bodies)
@@ -106,6 +108,7 @@ awf = {"id": "SEOagentAdminAPI", "name": "SEO Agent — Admin API", "active": Fa
  }}
 _aout = os.path.join(os.path.dirname(_out), 'SEO_Agent_Admin_API.json')
 url_lint.check(awf)   # D15: no node builds a site URL by hand (url_lint.py)
+retry_lint.check(awf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
 json.dump([awf], open(_aout, 'w'), indent=2, ensure_ascii=False)
 if os.path.isdir(_code):
     open(os.path.join(_code, 'Admin_Validate.js'), 'w').write(AV)
@@ -167,7 +170,7 @@ _AN = [
   _an('Ensure Cache Table (Assess)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [660, -100], onError='continueRegularOutput', executeOnce=True),
   _an('Load Assess Cache', DT_TYPE, DT_VERSION, dt_get_any_params(CACHE_TABLE, [('key', "={{ 'reach:' + $('Assess Validate').first().json.site_id }}"), ('key', "={{ 'desc:' + $('Assess Validate').first().json.domain }}")]), [880, -100], **_LOAD),
   _acode('Assess Requests', 'Assess_Requests.js', [1100, -100]),
-  _an('Run Assess Requests', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 15000}}, [1320, -100], credentials=_DFS_CRED, onError='continueRegularOutput'),
+  _an('Run Assess Requests', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'timeout': 15000}}, [1320, -100], credentials=_DFS_CRED, onError='continueRegularOutput', **retry_lint.RETRY),
   _acode('Assess Result', 'Assess_Result.js', [1540, -100]),
   _aif('DataForSEO OK?', '{{ $json.ok }}', [1760, -100]),
   _arespond('Respond Assess Upstream Error', "={{ JSON.stringify({ ok: false, error: $json.error }) }}", 502, [1980, 60]),
@@ -207,6 +210,7 @@ for _s, _o in _AC.items():
 assert all(n.get('credentials') for n in _AN if n['type'] in ('@n8n/n8n-nodes-langchain.lmChatAnthropic', 'n8n-nodes-base.httpRequest', 'n8n-nodes-base.webhook')), 'keyword check: credential slot missing'
 kwf = {"id": "SEOagentAssess", "name": "SEO Agent — Keyword Check", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl", "executionTimeout": 45}, "tags": [], "nodes": _AN, "connections": _AC}
 url_lint.check(kwf)   # D15: no node builds a site URL by hand (url_lint.py)
+retry_lint.check(kwf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
 json.dump([kwf], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Keyword_Check.json'), 'w'), indent=2, ensure_ascii=False)
 if os.path.isdir(_code):
     for _n in _AN:

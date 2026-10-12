@@ -386,6 +386,8 @@ export const features: Feature[] = [
       'A daily AI Pulse that alerts only on statistically real changes',
       'Visits, key events and revenue from AI referrals in GA4',
       'Answer Analyst for sentiment and wrong claims, plus AI crawler access and llms.txt',
+      'Every rate counts the answers that came back, and the report names any request that failed and was sent again',
+      'Wrong claims are checked against your business facts — with no profile on file the report says “not checked”, never “nothing wrong”',
     ],
     steps: [
       { title: 'Build the panel', body: 'Up to 50 questions your buyers ask, grouped by stage and topic.' },
@@ -434,6 +436,7 @@ export const features: Feature[] = [
       'Lost only after two misses, with the reason',
       'SEO, referral and brand value for every link',
       'Scored prospects with contacts, outreach drafts and follow-ups after 7 and 14 days',
+      'A competitor’s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
       'A free-sources mode that costs nothing to run',
     ],
     steps: [
