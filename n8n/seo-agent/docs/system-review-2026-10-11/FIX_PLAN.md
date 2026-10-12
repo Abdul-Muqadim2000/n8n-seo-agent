@@ -105,7 +105,7 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 | G16 | First approved live outreach send | LB | missing feature | Medium | S | SC 4C.5, 4C.6 (not live-verified) | F32 | 5 | open |
 | G17 | Calibration from 20+ live pages (timelines, reach, QA threshold) | KW, CON | missing feature | Medium | L | SC K1, K10, C9 | F33 | later | open |
 | G18 | Labelled accuracy set: ≥ 95% precision for audit findings and spam labels | TECH, BL | quality | Medium | M | spot-check 5 / 7 (§2.5); SC 1.14, 4B.5 | "To reach 9" #2 | 3C | open |
-| G19 | One site model that every workflow reads | all | quality | High | M | SC §4 "Incoherence"; D5, D10, D11, D15, D22 | F5 / F11; "To reach 9" #3 | 2A | open |
+| G19 | One site model that every workflow reads | all | quality | High | M | SC §4 "Incoherence"; D5, D10, D11, D15, D22 | F5 / F11; "To reach 9" #3 | 2A | fixed 2026-10-12 (harness S35) — `_site_model.js` kit + 12 `seo_sites` columns + `seo_pages`; weekly resolver in the Site Tracker, on-demand in the main workflow (7-day cache); spec `SITE_MODEL_SPEC.md`; deploy runs `sync_tables.py` |
 | G20 | AI question panel of 100+ prompts | AIV | missing feature | Low | M | SC 4A.1 | "To reach 9" #4 | 5 | open |
 | G21 | Delivery rate measured (≥ 99%) | OPS | ops | Medium | M | SC 3.8 | "To reach 9" #5 | 6D | open |
 | G22 | AI Growth source titles cut at a hyphen ("E", "Best e") | AIG | quality | Low | S | exec 376; §2.6 | — | 4A | open |
