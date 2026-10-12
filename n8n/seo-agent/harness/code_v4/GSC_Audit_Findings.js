@@ -1,3 +1,38 @@
+// ---- shared Search Console query rules (2026-10-12, FIX_PLAN G9 + D24 / P1-3): inlined by the build (the GSC_QUERIES placeholder) into
+// Parse GSC (the Site Tracker) and GSC Audit Findings (the audit), so the weekly report and the audit judge a query the same way.
+//   * GQ.isScraper(q)  — a query typed by an SEO tool or a scraper, not by a customer (search operators, capital booleans, quoted groups).
+//   * GQ.brandTest(..) — brand vs non-brand, from seo_monitors.brand_names / the site model's names, with the domain label as the fallback.
+//   * GQ.anonymised(..)— what Search Console withholds: the totals minus the sum of the query rows ("anonymised for privacy").
+// D24 (2026-10-11) found scraper queries among techand.ai's top queries; P1-3 (2026-10-12) added the leading minus ("-site:csc.gov.ae") and
+// the lower-case booleans Search Console reports. Prose alone never counts: "erp software and accounting for distributors" has no quotes,
+// no brackets and no capitals, so it stays a customer query.
+const GQ = (() => {
+  const OPERATOR = /(^|\s)[-+]?(site|inurl|intitle|intext|inanchor|allintitle|allinurl|allintext|filetype|ext|related|cache|link|before|after|daterange):\S/i;
+  const BOOL_CAPS = /(^|[\s")])(AND|OR|\|)([\s("]|$)/;
+  const BOOL_ANY = /(^|[\s")])(and|or|\|)([\s("]|$)/i;
+  const GROUPED = /"[^"]+"|\([^)]+\)/;   // a quoted phrase or a bracketed group
+  const isScraper = (q) => { const s = String(q || ''); return OPERATOR.test(s) || BOOL_CAPS.test(s) || (GROUPED.test(s) && BOOL_ANY.test(s)); };
+  const squash = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  // every brand form worth matching: the monitor / model names, the business name and the domain's label ('techand' matches 'tech and', 'techand ai')
+  const brandKeys = (domain, names) => {
+    const keys = [];
+    const push = (x) => { const k = squash(x); if (k.length >= 4 && !keys.includes(k)) keys.push(k); };
+    push(String(domain || '').split('.')[0]);
+    for (const n of (names || [])) { const s = String(n || '').trim(); if (!s) continue; push(/\./.test(s) ? s.split('.')[0] : s); }
+    return keys;
+  };
+  // a query is a brand query when a brand key appears in it as one run of letters/digits
+  const brandTest = (domain, names) => { const keys = brandKeys(domain, names); const is = (q) => { const s = squash(q); return keys.some(k => s.includes(k)); }; return { keys, is: keys.length ? is : () => false }; };
+  // Search Console never names the queries of rare searches: the dimensionless/date totals hold them, the query rows do not
+  const anonymised = (totals, rows) => {
+    const t = totals || {}; const sum = (rows || []).reduce((a, r) => ({ clicks: a.clicks + (Number(r.clicks) || 0), impressions: a.impressions + (Number(r.impressions) || 0) }), { clicks: 0, impressions: 0 });
+    const ti = Number(t.impressions) || 0, tc = Number(t.clicks) || 0;
+    const im = Math.max(0, ti - sum.impressions), cl = Math.max(0, tc - sum.clicks);
+    return { clicks: cl, impressions: im, clicks_pct: tc ? Math.round(cl / tc * 1000) / 10 : 0, impressions_pct: ti ? Math.round(im / ti * 1000) / 10 : 0,
+      named_clicks: sum.clicks, named_impressions: sum.impressions, note: 'Search Console withholds the queries of rare searches; these clicks and impressions are real but belong to queries it does not name.' };
+  };
+  return { isScraper, brandKeys, brandTest, anonymised };
+})();
 // Turns the Search Console answers (sitemaps, search performance, URL inspections) and the sitemap-vs-crawl comparison into audit findings,
 // a "search_console" block and a "site_structure" block for the report; then hands the audit item on to Build Site Issues.
 const plan = $('GSC Audit Plan').first().json; const base = plan.base || {};
@@ -40,6 +75,7 @@ else works.push('XML sitemap lists ' + sitemapUrls.length + ' URLs' + (isIndex ?
 const reqs = grab('GSC Audit Requests'); const res = grab('GSC Audit Query'); const plan1 = reqs[0] || {};
 const connected = !!plan1.connected; const scErr = plan1.connected ? null : (plan1.error || 'not connected');
 let search_console = { connected, property: plan1.property || '', permission: plan1.permission || '', error: scErr, sitemaps: [], totals: null, top_pages: [], top_queries: [], inspections: [], coverage: {}, not_indexed: [], canonical_mismatch: [], not_in_sitemap_but_shown: [], rich_results: [] };
+let gscPageKeys = [];   // G24: the pages Google reports impressions for — part of the "known URLs" the crawl is measured against
 if (!connected) {
   F('Info', 'Search Console not connected: sitemap status, index coverage and search performance could not be checked', 'Only Search Console tells you which pages Google has indexed, which it rejected and why, and which queries bring impressions.', 'Add the service account e-mail (see the tracking set-up) as a Full user of the property in Search Console → Settings → Users and permissions, then re-run the audit.', scErr, [], null, 100);
   findings[findings.length - 1].scoring = false;   // a note about missing data, never a deduction
@@ -61,20 +97,13 @@ if (!connected) {
   const tot = rowsOf(((byKind.totals || [])[0] || {}).r)[0]; search_console.totals = tot ? { clicks: Number(tot.clicks) || 0, impressions: Number(tot.impressions) || 0, ctr: Number(tot.ctr) || 0, position: +(Number(tot.position) || 0).toFixed(1), period: plan.range } : null;
   const pagesRows = rowsOf(((byKind.pages || [])[0] || {}).r).map(x => ({ page: x.keys[0], clicks: Number(x.clicks) || 0, impressions: Number(x.impressions) || 0, ctr: Number(x.ctr) || 0, position: +(Number(x.position) || 0).toFixed(1) }));
   const allQueryRows = rowsOf(((byKind.queries || [])[0] || {}).r).map(x => ({ query: x.keys[0], clicks: Number(x.clicks) || 0, impressions: Number(x.impressions) || 0, ctr: Number(x.ctr) || 0, position: +(Number(x.position) || 0).toFixed(1) }));
-  // D24 (2026-10-11): queries with search operators (site:, inurl:, intitle:, quoted phrases joined with AND / OR) come from SEO tools and scrapers,
-  // not from customers — they are counted apart as "scraper queries" and never listed among the top queries.
-  // P1-3 (2026-10-12, Phase 1 live check): 4 of techand.ai's 10 top queries were scraper queries and none was caught — an operator may carry a
-  // leading minus ("-site:csc.gov.ae"), and Search Console lowercases what it reports, so the boolean had to be matched case-insensitively.
-  // Rules: an operator (with an optional leading - / +) anywhere; a boolean written in capitals (AND / OR / |), which no customer types; or a
-  // quoted phrase / bracketed group joined by a boolean in any case ("e invoicing" and uae). Prose alone never counts: "erp software and
-  // accounting for distributors" has no quotes, no brackets and no capitals, so it stays a customer query.
-  const OPERATOR = /(^|\s)[-+]?(site|inurl|intitle|intext|inanchor|allintitle|allinurl|allintext|filetype|ext|related|cache|link|before|after|daterange):\S/i;
-  const BOOL_CAPS = /(^|[\s")])(AND|OR|\|)([\s("]|$)/;
-  const BOOL_ANY = /(^|[\s")])(and|or|\|)([\s("]|$)/i;
-  const GROUPED = /"[^"]+"|\([^)]+\)/;   // a quoted phrase or a bracketed group
-  const isScraper = (q) => { const s = String(q || ''); return OPERATOR.test(s) || BOOL_CAPS.test(s) || (GROUPED.test(s) && BOOL_ANY.test(s)); };
+  // D24 (2026-10-11) / P1-3 (2026-10-12): queries with search operators (site:, inurl:, a leading "-site:", capital booleans, quoted groups)
+  // come from SEO tools and scrapers, not from customers — counted apart as "scraper queries", never listed among the top queries.
+  // G9 (2026-10-12): the rule itself now lives in v5/code/_gsc_queries.js (GQ.isScraper), shared with the Site Tracker's Parse GSC.
+  const isScraper = GQ.isScraper;
   const scraperRows = allQueryRows.filter(q => isScraper(q.query)); const queryRows = allQueryRows.filter(q => !isScraper(q.query));
   search_console.top_pages = pagesRows.slice(0, 10); search_console.top_queries = queryRows.slice(0, 10); search_console.pages_with_impressions = pagesRows.length; search_console.queries_with_impressions = queryRows.length;
+  gscPageKeys = [...new Set(pagesRows.map(p => key(p.page)).filter(Boolean))];
   search_console.scraper_queries = { count: scraperRows.length, impressions: scraperRows.reduce((n, q) => n + q.impressions, 0), clicks: scraperRows.reduce((n, q) => n + q.clicks, 0), sample: scraperRows.slice(0, 3).map(q => q.query) };
   const errs = Object.values(byKind).flat().map(x => gErr(x.r)).filter(Boolean); if (errs.length) search_console.request_errors = [...new Set(errs)].slice(0, 3);
   if (search_console.totals) {
@@ -105,5 +134,18 @@ if (!connected) {
     const errCount = insp.length - ok.length; if (errCount) search_console.inspection_errors = errCount;
   }
 }
-const site_structure = { crawled_pages: pages.length, indexable_pages: indexablePages.length, depth_buckets: depthBuckets, within_3_clicks_pct: withDepth ? Math.round(within3 / withDepth * 100) : null, sections: topSections, sitemap: { url: plan.sitemap_url, status: smStatus, urls: sitemapUrls.length, is_index: isIndex, children: childCount }, indexable_not_in_sitemap: notInSitemap.length, sitemap_only: sitemapOnly.length, sitemap_broken: sitemapBroken.length, crawl_complete: crawlComplete };
+// ---- G24 (2026-10-12, FIX_PLAN): crawl coverage — the audit judged a site on the pages it happened to crawl without ever saying how much of
+// the site that was. Known URLs = the sitemap (all child sitemaps read) UNION the pages Search Console reports impressions for, compared
+// host-agnostically with what the crawl reached. Under 90% the audit says so, because every finding's share is then a share of a sample.
+const knownUrls = [...new Set([...sitemapUrls, ...gscPageKeys])];
+const knownCrawled = knownUrls.filter(u => crawled.has(u));
+const notCrawled = knownUrls.filter(u => !crawled.has(u));
+const coveragePct = knownUrls.length ? Math.round(knownCrawled.length / knownUrls.length * 100) : null;
+const crawl_coverage = { known_urls: knownUrls.length, crawled_known: knownCrawled.length, coverage_pct: coveragePct, not_crawled: notCrawled.length,
+  sources: { sitemap: sitemapUrls.length, search_console_pages: gscPageKeys.length }, crawled_pages: pages.length, crawl_limit: plan.crawl_limit || null, crawl_complete: crawlComplete,
+  sample_not_crawled: notCrawled.slice(0, 10).map(u => 'https://' + u),
+  text: knownUrls.length ? 'Crawled ' + knownCrawled.length + ' of ' + knownUrls.length + ' known URLs (' + coveragePct + '%; sitemap ' + sitemapUrls.length + (gscPageKeys.length ? ' + ' + gscPageKeys.length + ' pages with Search Console impressions' : '') + ')' : 'No sitemap and no Search Console pages: the crawl is the only list of URLs, so coverage cannot be measured' };
+if (knownUrls.length >= 10 && coveragePct != null && coveragePct < 90) F('Medium', 'The crawl covered only part of the site', 'Every share and count below is a share of the pages that were crawled, not of the whole site; pages nobody crawled can hide the worst problems.', 'Raise the crawl limit for this site (or fix what blocks the crawler: robots.txt rules, bot protection, pages reachable only through scripts), then audit again.', crawl_coverage.text + '; ' + notCrawled.length + ' known URLs were not reached' + (plan.crawl_limit ? ' (crawl limit ' + plan.crawl_limit + ' pages' + (crawlComplete ? '' : ', the crawl did not finish') + ')' : ''), crawl_coverage.sample_not_crawled, notCrawled.length, 100 - coveragePct);
+else if (knownUrls.length >= 10 && coveragePct != null) works.push(crawl_coverage.text);
+const site_structure = { crawl_coverage, crawled_pages: pages.length, indexable_pages: indexablePages.length, depth_buckets: depthBuckets, within_3_clicks_pct: withDepth ? Math.round(within3 / withDepth * 100) : null, sections: topSections, sitemap: { url: plan.sitemap_url, status: smStatus, urls: sitemapUrls.length, is_index: isIndex, children: childCount }, indexable_not_in_sitemap: notInSitemap.length, sitemap_only: sitemapOnly.length, sitemap_broken: sitemapBroken.length, crawl_complete: crawlComplete };
 return [{ json: { ...base, extra_findings: [...(base.extra_findings || []), ...findings], extra_works: [...(base.extra_works || []), ...works], search_console, site_structure } }];

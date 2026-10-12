@@ -184,24 +184,77 @@ const SM = (() => {
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
 })();
+// ---- site-tracking statistics (2026-10-12, FIX_PLAN G28): an alert must mean "this really changed", not "a number moved by 30%".
+// Clicks, impressions and sessions are counts over two periods of the same length, so the honest test is the two-sample Poisson test
+// (normal approximation, the same idea as the z-tests the AI Pulse uses in v5/code/_ai_stats.js):
+//     z = (cur - prev) / sqrt(cur + prev),  |z| >= 1.96  =  outside 95% sampling noise.
+// 28 clicks against 20 is a 40% "fall" that any week could produce by chance (z = -1.18); 1,400 against 1,600 is a 13% fall that is real
+// (z = -3.65). A change therefore needs three things: enough volume to measure, statistical significance, and a size worth telling the owner.
+// Anything large but not significant is reported as "watch", never as a fall — and Google's update dates are named when one ran in the period.
+const ST = (() => {
+  const num = (v) => Number(v) || 0;
+  const z = (cur, prev) => { const s = num(cur) + num(prev); return s > 0 ? (num(cur) - num(prev)) / Math.sqrt(s) : 0; };
+  // 95% interval for the relative change (log-ratio, Poisson counts); null when either side is zero
+  const band = (cur, prev) => { const c = num(cur), p = num(prev); if (c <= 0 || p <= 0) return null;
+    const se = Math.sqrt(1 / c + 1 / p), lo = Math.log(c / p) - 1.96 * se, hi = Math.log(c / p) + 1.96 * se;
+    return [Math.round((Math.exp(lo) - 1) * 100), Math.round((Math.exp(hi) - 1) * 100)]; };
+  // cur vs prev over equal periods. opts: { min_events, min_pct } — the events both periods must carry together before anything is claimed,
+  // and the size of change worth telling the owner about
+  const change = (cur, prev, opts) => {
+    const o = opts || {}; const c = num(cur), p = num(prev);
+    const minEvents = o.min_events == null ? 0 : o.min_events, minPct = o.min_pct == null ? 0 : o.min_pct;
+    const pct = p > 0 ? Math.round((c - p) / p * 100) : (c > 0 ? null : 0);
+    const zz = Math.round(z(c, p) * 100) / 100;
+    const measurable = (c + p) >= minEvents;                     // both periods together carry enough events to say anything
+    const significant = measurable && Math.abs(zz) >= 1.96;
+    const big = pct != null && Math.abs(pct) >= minPct;
+    return { cur: c, prev: p, pct, z: zz, ci: band(c, p), measurable, significant, big,
+      real: significant && big, watch: !significant && big && p > 0,   // large but inside sampling noise: something to watch, not a fall
+      direction: pct == null ? 'new' : pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat',
+      text: (pct == null ? 'new' : (pct > 0 ? 'up ' : 'down ') + Math.abs(pct) + '%') + ' (' + p + ' → ' + c + (band(c, p) ? ', 95% range ' + band(c, p)[0] + '% to ' + band(c, p)[1] + '%' : '') + ')' };
+  };
+  // Google's confirmed ranking updates: context for a real fall, never a cause ("correlation, not proof"). Add new ones here.
+  const UPDATES = [
+    { name: 'March 2025 core update', start: '2025-03-13', end: '2025-03-27' },
+    { name: 'June 2025 core update', start: '2025-06-30', end: '2025-07-17' },
+    { name: 'August 2025 spam update', start: '2025-08-26', end: '2025-09-22' },
+    { name: 'December 2025 core update', start: '2025-12-02', end: '2025-12-18' },
+    { name: 'March 2026 core update', start: '2026-03-10', end: '2026-03-26' },
+    { name: 'June 2026 core update', start: '2026-06-23', end: '2026-07-08' },
+    { name: 'September 2026 core update', start: '2026-09-15', end: '2026-09-30' }
+  ];
+  const updatesIn = (range) => { const r = range || {}; const a = String(r.start || ''), b = String(r.end || '');
+    if (!a || !b) return []; return UPDATES.filter(u => u.start <= b && u.end >= a); };
+  const updateNote = (range) => { const hits = updatesIn(range); return hits.length ? ' A Google ' + hits.map(u => u.name + ' (' + u.start + ' to ' + u.end + ')').join(' and ') + ' ran inside this period — it may be part of the cause, which cannot be proven from these numbers.' : ''; };
+  return { z, band, change, updatesIn, updateNote, UPDATES };
+})();
 const r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;
 return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A = m.ga4;
   const W = m.site || {};
   const facts = { website: { canonical_host: W.canonical_host || m.domain, home_url: W.home_url || SM.siteUrl({ canonical_host: W.canonical_host, domain: m.domain }, '/'), business_name: W.business_name || m.domain, services: W.services || [], city: (W.nap || {}).city || '', pages_known: W.pages_known || 0, note: 'Call the business by this name and write every URL on the canonical host. pages_known is how many pages of this site the agent knows: never tell the owner to publish a new page for a search a page in the list already answers \u2014 say to refresh that page.' },
     domain: m.domain, period: m.period.current, previous_period: m.period.previous, weeks_tracked: m.weeks_tracked,
-    search_console: G.connected ? { totals: G.totals, deltas: G.deltas, queries_with_impressions: G.query_count, winners: G.winners.slice(0, 5), losers: G.losers.slice(0, 5), new_queries: G.new_queries.slice(0, 5), lost_queries: G.lost_queries.slice(0, 5),
+    search_console: G.connected ? { totals: G.totals, deltas: G.deltas, queries_with_impressions: G.query_count, pages_with_impressions: G.page_count ?? null,
+      // G9 (2026-10-12): every query row was read, not a sample; the queries Google withholds, and brand vs non-brand
+      queries_google_does_not_name: G.anonymised ? { clicks: G.anonymised.current.clicks, impressions: G.anonymised.current.impressions, share_of_impressions_pct: G.anonymised.current.impressions_pct, note: G.anonymised.current.note } : null,
+      brand_vs_non_brand: G.brand_split ? { brand_names: G.brand_split.names, brand: { queries: G.brand_split.brand.queries, clicks: G.brand_split.brand.clicks, impressions: G.brand_split.brand.impressions }, non_brand: { queries: G.brand_split.non_brand.queries, clicks: G.brand_split.non_brand.clicks, impressions: G.brand_split.non_brand.impressions }, previous_non_brand_clicks: G.brand_split.previous.non_brand.clicks, note: G.brand_split.note } : null,
+      tool_and_scraper_queries: G.scraper_queries || null, rows_read: G.rows_read ?? null, ...(((G.truncated || []).length) ? { rows_truncated: G.truncated } : {}), winners: G.winners.slice(0, 5), losers: G.losers.slice(0, 5), new_queries: G.new_queries.slice(0, 5), lost_queries: G.lost_queries.slice(0, 5),
       striking_distance: G.striking.slice(0, 8).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, clicks: q.clicks, page: q.page })), ctr_gaps: G.ctr_gaps.slice(0, 5).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, ctr: r1(q.ctr * 1000) / 10, expected_ctr: Math.round(q.expected_ctr * 100), page: q.page })),
       top_pages: G.top_pages.slice(0, 8), decaying_pages: G.decaying_pages.slice(0, 5), rising_pages: G.rising_pages.slice(0, 5) } : { connected: false, error: G.error },
     analytics: A.connected ? { organic: A.organic, all_channels: A.total, organic_share_pct: A.organic_share, channels: A.channels.slice(0, 6), organic_landing_pages: A.landing.slice(0, 8) } : { connected: false, error: A.error },
     tracked_keywords: m.tracked.map(t => ({ keyword: t.keyword, source: t.source + (t.rung ? ' rung ' + t.rung : ''), search_console_position: G.connected ? (t.gsc_position ? r1(t.gsc_position) : 'no impressions in the period') : 'Search Console not connected', previous_position: G.connected && t.gsc_prev_position ? r1(t.gsc_prev_position) : null, impressions: G.connected ? t.impressions : null, clicks: G.connected ? t.clicks : null,
       live_google_position: t.serp_position == null ? 'not checked' : t.serp_position > 0 ? t.serp_position : t.serp_position === 0 ? 'not in the top 50' : 'check failed', live_check_date: t.serp_checked_at ? String(t.serp_checked_at).slice(0, 10) : null, page: t.page || t.serp_url || null })),
     ladder_pages: m.ladder_pages.map(p => ({ url: p.url, keyword: p.keyword, rung: p.rung, status: p.status, live: !!(p.page_exists || p.status === 'published'), indexed: (p.page_exists || p.status === 'published') ? p.indexed : 'not live yet', coverage: p.coverage || p.inspect_error || '' })),
-    trends: m.trends.map(t => ({ keyword: t.keyword, direction: t.direction, change_pct: t.change_pct, peak: t.peak_date, rising_searches: (t.rising || []).slice(0, 5).map(r => r.query) })),
+    // D21 (2026-10-12): a sparse series gets NO percentage in the facts — the AI quoted "up 1,200%" from a series that is zero most weeks
+    trends: m.trends.map(t => { const thin = t.direction === 'sparse' || t.change_pct == null;
+      return { keyword: t.keyword, direction: t.direction, ...(thin ? { change: 'too little search data for a percentage' } : { change_pct: t.change_pct }), peak: t.peak_date, rising_searches: (t.rising || []).slice(0, 5).map(r => r.query) }; }),
     pages_waiting_for_publish_link: (m.pending_publish || []).map(p => p.keyword + ' (' + p.days + ' days)'),
     ...((m.detected_published || []).length ? { pages_found_live_this_week: m.detected_published.map(f => f.keyword + ' -> ' + f.url + ' (tracking started)') } : {}),   // v4.8 publish detection
     search_console_notices: ((m.console || {}).notices || []).map(x => x.severity + ': ' + x.kind + ' — ' + x.subject + ' (' + String(x.received_at).slice(0, 10) + ')'),
     monthly_checkin: (m.console || {}).last_checkin ? { month: m.console.last_checkin.month, manual_action: m.console.last_checkin.manual_action, security_issue: m.console.last_checkin.security_issue, pages_not_indexed_sitewide: m.console.last_checkin.not_indexed_total >= 0 ? m.console.last_checkin.not_indexed_total : null, top_reasons: ((m.console.last_checkin.coverage || {}).reasons || []).slice(0, 3) } : (m.console && m.console.checkin_due ? 'due (not submitted this month)' : null),
     growth_monitors: (() => { const L = (nm) => { try { return $(nm).all().map(x => x.json).filter(r => r && r.site_id === m.site_id && !r.error).sort((x, y) => String(y.checked_at || y.audited_at).localeCompare(String(x.checked_at || x.audited_at)))[0] || null; } catch (e) { return null; } }; const av = L('Load AI Visibility (Site)'), bl = L('Load Backlink Snapshots (Site)'), au = L('Load Audits (Site)');
       return { ai_answers: av ? { mention_rate_pct: Number(av.mention_rate), citation_rate_pct: Number(av.citation_rate), share_of_voice_pct: Number(av.share_of_voice), alerts: av.alerts || '' } : 'not measured yet', backlinks: bl ? { referring_domains: Number(bl.referring_domains), new: Number(bl.new_links), lost: Number(bl.lost_links), important_lost: Number(bl.important_lost), spam_score: Number(bl.spam_score) } : 'not measured yet', technical: au ? { health: Number(au.health_score), critical: Number(au.critical), high: Number(au.high), audited: String(au.audited_at).slice(0, 10) } : 'not audited yet' }; })(),
+    // G28: the significance of each traffic change — an alert worded "Watch:" is inside sampling noise and must never be called a fall
+    traffic_significance: m.significance ? Object.entries(m.significance).filter(([, v]) => v).map(([k, v]) => ({ metric: k, current: v.cur, previous: v.prev, change_pct: v.pct, confidence_range_pct: v.ci, statistically_real: !!v.real, only_watch: !!v.watch })) : [],
+    google_updates_in_period: ST.updatesIn(m.period.current).map(u => u.name + ' (' + u.start + ' to ' + u.end + ')'),
     alerts: m.alerts.map(a => a.level + ': ' + a.text), computed_actions: m.actions.map(a => ({ priority: a.priority, action: a.action, why: a.why })) };
   return { json: { site_id: m.site_id, domain: m.domain, facts: JSON.stringify(facts) } }; });

@@ -435,12 +435,30 @@ const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors |
 const siteModelD = (() => { try { const m = $('Site Model').first().json.site_model; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } })();
 const pageModelD = SM.withPages(siteModelD || SM.from({ domain: base.domain || '' }, {}), (base.site_urls || []).map(u => ({ url: u, source: 'sitemap' })));
 const coveredBy = (kw) => { if (!SM.pages(pageModelD).length) return null; const m = SM.matchPage(pageModelD, kw); return m ? { url: m.url, title: m.title || '', matched_by: m.matched_by } : null; };
+// 2026-10-12 (FIX_PLAN D20): discovery now loads the site's own keyword ladders too (Load Domain Ladders (Discovery), the archived ones skipped
+// through seo_ladder_settings). A keyword a ladder head or one of its rungs already covers is marked `ladder_covered` instead of being
+// recommended as a new page: the live run offered "e invoicing" as the top pick while the ladder head "e invoicing in uae" was already running.
+// The test is the ladder's own one-search-one-page rule in both directions: the same search (Jaccard >= 0.75, keywordsOverlap) or the keyword's
+// every meaningful word inside the ladder keyword ("e invoicing" in "e invoicing in uae").
+const ladderRowsD = (() => { try { return $('Load Domain Ladders (Discovery)').all().map(i => i.json).filter(r => r && r.ladder_id && r.keyword); } catch (e) { return []; } })();
+const ladderArchivedD = (() => { try { return new Set($('Load Ladder Settings (Discovery)').all().map(i => i.json).filter(r => r && r.ladder_id && String(r.status || '').toLowerCase() === 'archived').map(r => String(r.ladder_id))); } catch (e) { return new Set(); } })();
+const ladderKwsD = (() => { const out = []; const seen = new Set(); const ourD = reachDomain(base.domain || '');
+  for (const r of ladderRowsD) { if (!ourD || reachDomain(r.domain) !== ourD || ladderArchivedD.has(String(r.ladder_id))) continue;
+    for (const [kw, part] of [[r.keyword, Number(r.rung) === 4 ? 'head' : 'rung'], [r.head_keyword, 'head']]) { const k = String(kw || '').toLowerCase().trim(); const sig = r.ladder_id + '|' + k + '|' + part;
+      if (!k || seen.has(sig)) continue; seen.add(sig);
+      out.push({ keyword: k, tokens: overlapTokens(k), part, ladder_id: String(r.ladder_id), head_keyword: String(r.head_keyword || '').toLowerCase().trim(), rung: Number(r.rung) || 0, status: r.status || '', target_url: r.target_url || '' }); } }
+  return out; })();
+const ladderCovers = (kw) => { if (!ladderKwsD.length) return null; const t = overlapTokens(kw); if (!t.length) return null;
+  for (const x of ladderKwsD) { if (!x.tokens.length) continue;
+    const same = overlapScore(t, x.tokens) >= 0.75; const inside = t.every(w => x.tokens.includes(w));
+    if (same || inside) return { ladder_id: x.ladder_id, head_keyword: x.head_keyword || x.keyword, ladder_keyword: x.keyword, part: x.part, rung: x.rung, status: x.status, target_url: x.target_url, how: same ? 'the same search' : 'part of a broader page' }; }
+  return null; };
 const refused = [];
 const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
-  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword), ...forYou(k.kd) };
+  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword), ladder_covered: ladderCovers(k.keyword), ...forYou(k.kd) };
 }).filter(k => k.relevance > 0 && k.intent !== 'navigational').filter(k => {
   const g = fitGate(k.keyword, { ...fitCtx, intent: k.intent });
   if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail });
@@ -460,7 +478,7 @@ const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; return {
   topic: c.topic, primary_keyword: p.keyword, page_type: mode(c.page_types), intent: mode(c.intents), keyword_count: c.keywords.length,
   total_volume: c.total_volume, total_opportunity: +c.total_opportunity.toFixed(1), primary_kd: p.kd, primary_volume: p.volume, primary_cpc: p.cpc,
   supporting: c.keywords.slice(1, 9).map(k => k.keyword), keywords: c.keywords.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, opportunity: k.opportunity })),
-  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ...forYou(p.kd)
+  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ladder_covered: p.ladder_covered || null, ...forYou(p.kd)
 }; }).sort((a, b) => b.total_opportunity - a.total_opportunity);
 // Tiers follow the goal: for leads/sales the first "Now" slots go to commercial/transactional topics; research topics support them
 const goalNow = (base.goal || 'leads');
@@ -489,12 +507,14 @@ if (!priority.length) priority.push(...kws.slice(0, 8));
 const goal = base.goal || 'leads';
 const want = goal === 'traffic' ? ['informational', 'commercial'] : goal === 'brand' ? ['informational', 'commercial', 'transactional'] : ['commercial', 'transactional'];
 const fits = (k) => k.relevance === 2 && want.includes(k.intent) && winnableFor(k.difficulty_for_you, k.kd);
-const pipeline = kws.find(k => fits(k) && !k.covered_by) || kws.find(fits) || priority.find(k => !k.covered_by) || priority[0] || kws[0] || null;   // D11: a keyword a live page answers is not the one to write next
+const free = (k) => !k.covered_by && !k.ladder_covered;   // D11: a live page already answers it; D20: one of the site's ladders already covers it
+const pipeline = kws.find(k => fits(k) && free(k)) || kws.find(k => fits(k) && !k.covered_by) || kws.find(fits) || priority.find(free) || priority.find(k => !k.covered_by) || priority[0] || kws[0] || null;
 
 return [{ json: { ...base, keyword_strategy: {
   goal, pool_size: base.research.pool_size, ai_reviewed, total_relevant: kws.length, keywords: kws.slice(0, 200),
   clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline,
   competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
   covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by })), pages_known: SM.pages(pageModelD).length,
+  ladder_covered: kws.filter(k => k.ladder_covered).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, ladder_id: k.ladder_covered.ladder_id, head_keyword: k.ladder_covered.head_keyword, ladder_keyword: k.ladder_covered.ladder_keyword, part: k.ladder_covered.part, rung: k.ladder_covered.rung, status: k.ladder_covered.status, target_url: k.ladder_covered.target_url, how: k.ladder_covered.how })), ladders_known: [...new Set(ladderKwsD.map(x => x.ladder_id))].length,
   reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR } : null
 } } }];
