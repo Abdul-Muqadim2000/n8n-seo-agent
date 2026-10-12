@@ -1,5 +1,7 @@
 # SEO Agent — handover (state on 2026-10-08, v4.10; sections 1-6 describe v4.6 unless noted)
 
+> **2026-10-12:** fix-plan **Phase 1 (correctness) is built, deployed and live-checked** — `docs/system-review-2026-10-11/FIX_PLAN.md` (statuses) and `LIVE_CHECK_phase1_2026-10-12.md`; harness 2298 / 0 failed; new table `seo_run_ledger`; five small defects P1-1 … P1-5 open (FIX_PLAN §3.7). Phase 2 is next, on the owner's go.
+
 For whoever continues this work (a new Claude Code session or a developer). Read this first, then `CLAUDE.md` (working rules) and `REVIEW.md` (design per feature: §3c ladder, §3d tracking, §3e cadence + blog package, §3f Search Console in the audit, §3g notices + check-in, §3h E-E-A-T and page types, §3i growth monitors, **§3j no repeated work**, §3m AI visibility, **§3n backlinks from every source**; §5c live-test log; §6 roadmap). Feature specs: `LADDER_FEATURE_SPEC.md`, `TRACKING_FEATURE_SPEC.md`, `MONITORS_FEATURE_SPEC.md`, `AI_VISIBILITY_SPEC.md`, **`BACKLINKS_SPEC.md`**.
 
 ## 00. Start here: the 2026-10-11 system review and fix plan

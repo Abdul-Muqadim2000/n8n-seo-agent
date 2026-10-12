@@ -59,37 +59,37 @@ criterion. **SC fix** = the matching row of SCORECARD §3.
 
 | ID | Title | Area | Type | Impact | Effort | Evidence | SC fix | Session | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| D1 | Spend and rate guards undercount under concurrency | OPS | wrong number | High | M | static data after runs 3–21 (execs 347, 352, 354, 356 …); §3 #1 | F1 | 1A | fixed 2026-10-11 (harness S31) — `seo_run_ledger` reservation before Rate Limit (main + Keyword Check), refused / settled rows; live check pending |
-| D2 | Audit diff compares a technical audit with a full report | TECH | wrong number | High | S | exec 385 vs aud_mv40sm450bi (exec 370); §2.5 | F3 | 1B | fixed 2026-10-11 (harness S32) — diff only against the latest audit of the same `report_type`, baseline otherwise, no "fixed" outside the type's categories; live check pending |
-| D3 | Backlinks ranks PBN link-farm pages as the best links | BL, LB | wrong advice | High | M | exec 368, 372; `files/backlinks-…pdf`, `disavow-candidates-…txt`; §2.7 | F2 | 1C | fixed 2026-10-11 (harness S28 +8) — `LK.footprints` cluster gate on the whole ledger (same path / anchor on ≥ 3 sites, link-selling / gambling anchors, gambling hosts): value 0, out of best / at-risk / lost / impact, all on disavow; live check pending |
-| D4 | Full report's keyword gap recommends government navigational queries | KW, TECH | wrong advice | High | S | exec 370; `files/full-seo-report-…`; §2.5 | F4 | 1D | fixed 2026-10-12 (harness S34) — `_fit_gate.js` (navigational intent, government / portal terms, .gov-owned SERPs, other brands incl. learned `ai_brands:`) in Analyze Keywords, Rank Keywords, Ladder Pool; `refused` lists in reports / callbacks; live check pending |
+| D1 | Spend and rate guards undercount under concurrency | OPS | wrong number | High | M | static data after runs 3–21 (execs 347, 352, 354, 356 …); §3 #1 | F1 | 1A | verified live 2026-10-12 (8 ledger rows, run_number_today 1-8; limit-5 refusal = harness only) |
+| D2 | Audit diff compares a technical audit with a full report | TECH | wrong number | High | S | exec 385 vs aud_mv40sm450bi (exec 370); §2.5 | F3 | 1B | verified live 2026-10-12 (execs 411/413/427: same-type diffs) |
+| D3 | Backlinks ranks PBN link-farm pages as the best links | BL, LB | wrong advice | High | M | exec 368, 372; `files/backlinks-…pdf`, `disavow-candidates-…txt`; §2.7 | F2 | 1C | verified live 2026-10-12 (16 farm pages spam, peppol.org top; P1-2 open for the lost table) |
+| D4 | Full report's keyword gap recommends government navigational queries | KW, TECH | wrong advice | High | S | exec 370; `files/full-seo-report-…`; §2.5 | F4 | 1D | verified live 2026-10-12 (40 refused with reasons; P1-4 open for §4a) |
 | D5 | Pile-up guard undercounts unpublished pages | CAD | wrong number | High | S | exec 380; §2.9 | F5 | 2B | open |
-| D6 | "www and non-www not consolidated" (High) is false | TECH | wrong advice | High | S | exec 354, 370, 385; §2.5 | F7 | 1B | fixed 2026-10-11 (harness S32) — finding only from the host probes (both 200, or redirect vs canonical disagree); fix worded after the canonical host; live check pending |
-| D7 | RDAP never parsed, so WHOIS is always paid | OPS | quality | High | S | exec 370 ($0.36 WHOIS); §2.5 | F12 | 1A | fixed 2026-10-11 (harness S31) — `_rdap.js` parses the text answer under `data`; only dateless domains go to WHOIS; live check pending |
-| D8 | Competitor brand ("facts erp") planned as a ladder rung | LAD, KW | wrong advice | Medium | S | exec 352, 365; `files/keyword-ladder-…`; §2.4 | F4 | 1D | fixed 2026-10-12 (harness S34) — fit gate in Ladder Pool / Ladder Plan / Brief Context, SERP dominance (≥ 3 of top 5) = brand query; live check pending |
+| D6 | "www and non-www not consolidated" (High) is false | TECH | wrong advice | High | S | exec 354, 370, 385; §2.5 | F7 | 1B | verified live 2026-10-12 |
+| D7 | RDAP never parsed, so WHOIS is always paid | OPS | quality | High | S | exec 370 ($0.36 WHOIS); §2.5 | F12 | 1A | fixed; live WHOIS $0 via the domain-age cache — RDAP path not exercised live |
+| D8 | Competitor brand ("facts erp") planned as a ladder rung | LAD, KW | wrong advice | Medium | S | exec 352, 365; `files/keyword-ladder-…`; §2.4 | F4 | 1D | verified live 2026-10-12 (ladder lad_mv4vxu3bq0kl, no brand rung) |
 | D9 | Hub page links to unwritten pages; lowercase keyword anchors | LAD, CON | quality | Medium | S | exec 365; `files/erp-software-uae.html`; §2.4 | — (K11) | 2C | open |
 | D10 | Generated page is not publishable (placeholders, NAP, length) | CON | quality | High | M | exec 365; `files/erp-software-uae.{md,html,meta.json}`; §2.4 | F6 | 2E | open |
 | D11 | System is blind to existing pages (advises a cannibalising page) | KW, LAD, CAD, SITE | wrong advice | Medium | M | exec 378, 382; 2026-10-01 ladder; §2.9 | F5 | 2D | open |
 | D12 | AI Growth drafts go to government sites and competitors; second writer | AIG | wrong advice | Medium | S | exec 376; `files/ai-growth-drafts-…txt`; §2.6 | F15 | 4B | open |
 | D13 | Link Builder: "techand", competitor / homepage / accredited-list pitches, webmail prospects, listing status flips | LB | wrong advice | Medium | M | exec 372; `files/link-builder-sequences-…txt`; §2.8 | F15 | 4B | open |
-| D14 | Reply Reader's suggested answer invents a business fact | LB | wrong advice | Medium | S | execs 357–360; `files/reply-reader-tests-…txt`; §2.8 | F9 | 1C | fixed 2026-10-11 (harness S33) — facts block always in the prompt, `_claims.js` brackets unsupported claims → `needs_you`; the app sends business facts + profile; L2 extends it; live check pending |
+| D14 | Reply Reader's suggested answer invents a business fact | LB | wrong advice | Medium | S | execs 357–360; `files/reply-reader-tests-…txt`; §2.8 | F9 | 1C | verified live 2026-10-12 |
 | D15 | No shared canonical host (links to a 308 redirect) | CON, AIG, LB, TECH | quality | Medium | M (SC: S) | execs 365, 372, 376; audits 354 / 370 | F11 | 2B | open |
-| D16 | Rank Tracker's next step is wrong for main-page-only / Direct ladders | LAD, RANK | wrong advice | Medium | S | exec 378; §2.9 | F10 | 1D | fixed 2026-10-12 (harness S34) — next step from the ladder state (write / publish with URL / rung / improve); live check pending |
-| D17 | Fix-pack robots.txt drops /api/, /admin/, /private/ for AI bots | TECH | wrong advice | Medium | S | exec 370; `files/robots.txt` | F8 | 1B | fixed 2026-10-11 (harness S32) — robots.txt edited, AI-bot group only when blocked, `*` Disallows copied in, else "no change needed"; live check pending |
-| D18 | "Duplicate meta tags" on 45/47 pages is Next.js `theme-color` | TECH | wrong advice | Low | S | exec 354, 370, 385; §2.5 | F7 | 1B | fixed 2026-10-11 (harness S32) — duplicate metas verified on the homepage HTML (media-distinct ignored), tags named; live check pending |
+| D16 | Rank Tracker's next step is wrong for main-page-only / Direct ladders | LAD, RANK | wrong advice | Medium | S | exec 378; §2.9 | F10 | 1D | verified live 2026-10-12 |
+| D17 | Fix-pack robots.txt drops /api/, /admin/, /private/ for AI bots | TECH | wrong advice | Medium | S | exec 370; `files/robots.txt` | F8 | 1B | verified live 2026-10-12 ("Changes: none needed") |
+| D18 | "Duplicate meta tags" on 45/47 pages is Next.js `theme-color` | TECH | wrong advice | Low | S | exec 354, 370, 385; §2.5 | F7 | 1B | verified live 2026-10-12 |
 | D19 | AI visibility: 7 of 42 requests errored with no retry; heading counted as a brand; cited URLs not normalised | AIV | wrong number | Medium | S | exec 362 / 363; `files/ai-visibility-…pdf`; §2.6 | F13, F17 | 4A | open |
 | D20 | Discovery: ladder overlap unflagged, contradictory AI Overview text, duplicate domains, float CPCs | KW | quality | Low | S | exec 356, 364; `files/keyword-ideas-…`; §2.3 | F14 | 3A | open |
 | D21 | Sparse Trends % ("+1,200%") quoted in the Site Tracker brief | SITE | wrong number | Low | S | exec 382; §2.9 | F14 | 3A | open |
 | D22 | Site description reads only the homepage (fit 1 for Business Central; critic calls real stages "invented") | KW, CON | wrong number | Low | M | execs 344, 348–350, 365; §2.1, §2.4 | F4 | 2C | open |
 | D23 | Ahrefs DR not retried; sister / off-topic gap domains as prospects; `utm_source` kept | BL | quality | Low | S | exec 367 / 368; §2.7 | F17 | 4A | open |
-| D24 | Full report: duplicate author finding, false "capped at 85", scraper queries in top queries | REP, TECH | wrong number | Low | S | exec 370; `files/full-seo-report-…` | F14 | 1B | fixed 2026-10-11 (harness S32) — findings deduped by title / topic, cap text only when the cap lowered the score, operator queries counted as scraper queries; live check pending |
+| D24 | Full report: duplicate author finding, false "capped at 85", scraper queries in top queries | REP, TECH | wrong number | Low | S | exec 370; `files/full-seo-report-…` | F14 | 1B | partly verified live 2026-10-12: author once, no cap text; scraper queries still shown → P1-3 |
 | D25a | Scheduled runs missed (Mac-hosted n8n) | OPS | ops | High | L | no AI Pulse run 2026-10-10 / 10-11; exec 240, 261 late | F16 | 6B–6C | open |
 | D25b | Ops alerts have one channel, and it failed | OPS | ops | High | M | Error Handler e-mail ECONNREFUSED 2026-10-10 | F16 | 6A | open |
 | D25c | Test check-in row stands in for October's Search Console check-in | OPS | ops | Low | S | `seo_console_checkins` "October check-in (test)" | F16 | 6A | open |
-| D26 | Verdicts state a volatile AI Overview as fact | KW | wrong advice | Low | S | exec 347, 352, 365; §3 #25 | F14 | 1D | fixed 2026-10-12 (harness S34) — `_serp_obs.js`: "seen in the check at HH:MM UTC", "seen in N of M checks" in digest, verdict, reports; live check pending |
+| D26 | Verdicts state a volatile AI Overview as fact | KW | wrong advice | Low | S | exec 347, 352, 365; §3 #25 | F14 | 1D | verified live 2026-10-12 ("seen in the check at 06:27 UTC") |
 | G1 | One retry rule for every external HTTP node (incl. errors inside HTTP 200) | OPS | quality | Medium | S | §2.6, §2.7; SC 3.8 | F17 | 4A | open |
 | G2 | Stop emitting and scoring FAQPage | CON | quality | Low | S | SC C11 | F18 | 2E | open |
-| G3 | Time-to-rank rule with 2025 data and a likelihood per plan | KW, LAD | wrong number | Medium | S | SC K10; criteria K10 | F19 | 1D | fixed 2026-10-12 (harness S34, app test) — Ahrefs 2025 (1.74% / 40.8%), chance bands good / fair / low / slim marked uncalibrated in `_reach.js`, `keywords.ts`, R6 |
+| G3 | Time-to-rank rule with 2025 data and a likelihood per plan | KW, LAD | wrong number | Medium | S | SC K10; criteria K10 | F19 | 1D | verified live 2026-10-12 (ladder report; the verdict shows months only) |
 | G4 | Claim checks: figures against source text, weak sources, tracking parameters | CON | quality | Medium | M | exec 365 (trangotech.com ×3, `?srsltid=`); SC C3 | F20 | 2F | open |
 | G5 | Originality / similarity check | CON | missing feature | Medium | M | SC C5 = 1 | F21 | 5 | open |
 | G6 | Rank tracker depth: SERP features, AI Overview, competitors, mobile, SERP snapshot | RANK | missing feature | Medium | M | SC 2.2–2.6, 2.13 | F22 | 5 | open |
@@ -877,6 +877,18 @@ missing feature 23, ops 4, owner 12. By impact (D, G and L only): High 12, Mediu
 | O11 | Decide what stays from the test: Link Builder on for techand.ai, Reply Reader published and active (paid per reply), ladder `lad_mv40b6s9h5a8` "erp software uae"; `SEOagentTmpTest1` (inactive, older than this test) can be deleted | State left behind (RESULTS §5) | — |
 | O12 | Approve the paid live checks after each phase (§5.1, about $1–2.5 each) and the whole-system re-rating (≈ $4.3, hard cap $15) | Paid runs need explicit approval | §5 |
 
+### 3.7 Defects found by the Phase 1 live check (P1, 2026-10-12)
+
+Evidence and texts: `LIVE_CHECK_phase1_2026-10-12.md`. All small (S); fix them first in the next session, before Phase 2.
+
+| ID | Title | Area | Where | Fix | Status |
+|---|---|---|---|---|---|
+| P1-1 | `describe` / `backlinks` ledger rows never settle (stay `reserved`) | OPS | `build_v4.py` §26: *Settle Run Ledger* is wired after 5 report builders only | wire the settle node after every terminal node (describe, backlinks, ai_visibility, profile, case study, published, checkin …) or settle from the API front door's callback | open |
+| P1-2 | Link-farm pages still fill "Links lost" ("Ask the editor to restore it") and the "referring sites fell 17→4" alert | BL | `v5/code/Parse_Backlinks.js` `lost` / `reclaim` / the drop alert | apply `LK.footprints` before the lost / reclaim lists and the referring-sites drop; farm rows never count as lost | open |
+| P1-3 | Scraper regex misses `-site:` and lowercase `and` / `or`: 4 of 10 top queries are scraper queries | TECH, REP | `v5/code/GSC_Audit_Findings.js` l.66-67 | match operators case-insensitively, with a leading `-`, and quoted phrases; count them as scraper queries | open |
+| P1-4 | Full report §4a "opportunities by intent" still lists fta login, emaratax, fta portal and other brands (character ai, google ai) | KW, REP | *Analyze Keywords* `opportunities_by_intent` (the gate is applied to the gap / easy wins only) | run the fit gate on `opportunities_by_intent` too | open |
+| P1-5 | Raw float CPCs in §4a of the Word file | REP | *Build Full Report* §4a | round CPCs to 2 decimals (the keyword report already does) | open |
+
 ### 3.6 Cross-check: nothing from the inputs is lost
 
 | SCORECARD fix | Register items | | SCORECARD fix | Register items |
@@ -917,7 +929,7 @@ Do the sessions in order: within a session, the items are listed in working orde
 | 1C Backlink and reply trust | D3, D14 | D3 before any impact claims are shown; D14 is the interim fix, and L2 completes it. |
 | 1D Keyword and ladder advice | D4, D8, D16, D26, G3 | D4's fit gate first; D8 reuses it. |
 
-Live checks afterwards: §5.1, Phase 1.
+Live checks afterwards: §5.1, Phase 1. **Done 2026-10-12** (`LIVE_CHECK_phase1_2026-10-12.md`, ≈ $1.9): 12 of 14 pass, D24 partial, D7 via the cache; new P1-1 … P1-5 (§3.7).
 
 ### Phase 2 — Shared site model and content quality (6 sessions, 9 items)
 
