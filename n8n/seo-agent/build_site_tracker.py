@@ -8,10 +8,13 @@ from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, 
                            LOG_TABLE, LOG_COLS, TRENDS_TABLE, TRENDS_COLS, CADENCE_TABLE, CADENCE_COLS, ALERTS_TABLE, ALERTS_COLS, CHECKIN_TABLE, CHECKIN_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_VIS_TABLE, AI_VIS_COLS, BL_SNAP_TABLE, BL_SNAP_COLS, AUDITS_TABLE, AUDITS_COLS, PROSPECT_TABLE, PROSPECT_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS,
                            LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS, CASE_TABLE, CASE_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS,
+                           PROFILE_TABLE, PROFILE_COLS, PAGES_TABLE, PAGES_COLS,
                            DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_get_where_params, dt_upsert_params_keys, dt_update_params, dt_get_recent_params)
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
-rd = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
+_rdt = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
+SITE_MODEL_SRC = _rdt('code/_site_model.js').rstrip('\n')   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
+rd = lambda p: _rdt(p).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC)
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]
@@ -83,6 +86,13 @@ N.append(node('Load AI Visibility (Site)', DT_TYPE, DT_VERSION, dt_get_all_param
 N.append(node('Load Backlink Snapshots (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(BL_SNAP_TABLE), at(9, 3), **LOAD))
 N.append(node('Load Audits (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(AUDITS_TABLE), at(10, 3), **LOAD))
 N.append(node('Load Trends (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(TRENDS_TABLE), at(11, 3), **LOAD))   # v4.6: trends younger than 25 days are reused, not bought again
+# G19 (SITE_MODEL_SPEC.md): what the weekly site-model resolver reads besides the site row - the business profile (name, NAP, logo) and the
+# monitor settings (brand names, competitors). seo_pages (the page inventory D11 fills) is created here so every install has it.
+N.append(node('Ensure Profile Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(PROFILE_TABLE, PROFILE_COLS), at(5, 6), onError='continueRegularOutput'))
+N.append(node('Load Profiles (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(PROFILE_TABLE), at(6, 6), **LOAD))
+N.append(node('Ensure Monitors Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(MONITORS_TABLE, MONITORS_COLS), at(7, 6), onError='continueRegularOutput'))
+N.append(node('Load Monitors (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(MONITORS_TABLE), at(8, 6), **LOAD))
+N.append(node('Ensure Pages Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(PAGES_TABLE, PAGES_COLS), at(9, 6), onError='continueRegularOutput'))
 N.append(node('Load Sites', DT_TYPE, DT_VERSION, dt_get_all_params(SITES_TABLE), at(5, 0), **LOAD))
 N.append(node('Load Ladders', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABLE), at(6, 0), **LOAD))
 N.append(node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_params(HISTORY_TABLE), at(7, 0), **LOAD))
@@ -121,6 +131,13 @@ N.append(node('Mark Case Study Published (Detect)', DT_TYPE, DT_VERSION, dt_upda
 N.append(code('Detected Ladder Rows', dsrc('code/Detected_Ladder_Rows.js'), at(28, -4), **SAFE))
 N.append(iff('Any Ladder Detected?', '{{ !$json.skip && !$json.error }}', at(29, -4)))
 N.append(node('Mark Ladder Published (Detect)', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS, [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}', 'target_url': '={{ $json.target_url }}', 'page_exists': '={{ $json.page_exists }}'}), at(30, -5), onError='continueRegularOutput', alwaysOutputData=True))
+# ---- G19: the weekly site-model resolver (canonical host, name / NAP / logo, services, nav pages) ----
+N.append(code('Model Targets (Site)', rd('code/Model_Targets.js'), at(12, -1), **SAFE))
+N.append(iff('Need Homepage (Site)?', '{{ !$json.skip }}', at(13, -1)))
+N.append(node('Fetch Homepage (Site)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', HTML, 20000, 3), at(14, -1), alwaysOutputData=True, onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000))
+N.append(code('Site Model (Site)', rd('code/Site_Model_Site.js'), at(15, -1), **SAFE))
+N.append(sticky('Note Site Model', """## One site model (G19, v4.15)
+Per site, once a week: the **canonical host** (the homepage as a browser gets it, redirects followed, plus its `rel=canonical` and the site's own live URLs), the business **name / logo / NAP** (`seo_profiles` -> the homepage Organization / LocalBusiness schema -> Google Business Profile -> the app's fields), the **services**, the **nav pages**, the business facts, the brand names and the competitors (`seo_monitors`). *Site Metrics* merges `SM.toRow(model)` into the `seo_sites` row, so every workflow reads the same facts; a model younger than 7 days is kept and no request is made. The page inventory lives in `seo_pages` (D11). Kit: `v5/code/_site_model.js`, spec: `SITE_MODEL_SPEC.md`.""", [12 * 220 - 40, -2 * 220 - 60], 1100, 200, 5))
 N.append(sticky('Note Detection', f"""## Publish detection (v4.8)
 Before the Google part, per site with pages **written but not published** (`{LOG_TABLE}` status started, no URL, last 120 days; `{LADDER_TABLE}` status writing): `/sitemap.xml` is read (an index: its 5 newest child sitemaps) and every URL compared host-agnostically — **slug** (planned path / planned slug / keyword slug) first, then for up to 10 unmatched pages the **title / first H1** of up to 15 pages per site whose slug holds 60%+ of the keyword's words (80%+ needed in the title or H1). A page improving an existing URL counts when its sitemap `lastmod` is after it was written. Found pages are stored like "I published a page" (content log + ladder row + case study), inspected in Search Console in this run, and listed in the report and the callback (`detected_published`). Plain HTTP, no paid call; no waiting page = no request.""", [12 * 220 - 40, -7 * 220], 1500, 260, 4))
 # ---- row 1: Search Console ----
@@ -202,7 +219,7 @@ Runs **every Monday 09:00** (after the Rank Tracker) and on demand through *Manu
 Credential **Google Service Account (SEO Agent)** (`googleApi`, "Set up for use in HTTP Request node" on, scopes `https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/analytics.readonly`). The owner adds the service-account e-mail to Search Console (Full) and GA4 (Viewer); put that e-mail into `CONFIG.service_account_email` in *Site Plan* so the connect instructions name it. Not connected = the report still runs (trends, live checks) and explains the two steps.
 Form: {FORM_URL} · API: {API_URL} (`mode: track`)""", [-40, -560], 1180, 500))
 for a, b in [('Weekly Schedule', 'Ensure Sites Table'), ('Manual Run', 'Ensure Sites Table'), ('Ensure Sites Table', 'Ensure Metrics Table'), ('Ensure Metrics Table', 'Ensure Query Table'), ('Ensure Query Table', 'Ensure History Table (Site)'), ('Ensure History Table (Site)', 'Ensure Trends Table'), ('Ensure Trends Table', 'Ensure Log Table (Site)'), ('Ensure Log Table (Site)', 'Ensure Alerts Table (Site)'), ('Ensure Alerts Table (Site)', 'Ensure Checkin Table (Site)'), ('Ensure Checkin Table (Site)', 'Ensure AI Visibility Table (Site)'), ('Ensure AI Visibility Table (Site)', 'Ensure Snapshots Table (Site)'), ('Ensure Snapshots Table (Site)', 'Ensure Audits Table (Site)'), ('Ensure Audits Table (Site)', 'Load Sites'),
-             ('Load Sites', 'Load Ladders'), ('Load Ladders', 'Load Rank History'), ('Load Rank History', 'Load Site Metrics'), ('Load Site Metrics', 'Load Query History'), ('Load Query History', 'Load Content Log'), ('Load Content Log', 'Load Console Alerts'), ('Load Console Alerts', 'Load Check-ins'), ('Load Check-ins', 'Load AI Visibility (Site)'), ('Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)'), ('Load Backlink Snapshots (Site)', 'Load Audits (Site)'), ('Load Audits (Site)', 'Load Trends (Site)'), ('Load Trends (Site)', 'Site Plan'), ('Site Plan', 'Any Sites?'),
+             ('Load Sites', 'Load Ladders'), ('Load Ladders', 'Load Rank History'), ('Load Rank History', 'Load Site Metrics'), ('Load Site Metrics', 'Load Query History'), ('Load Query History', 'Load Content Log'), ('Load Content Log', 'Load Console Alerts'), ('Load Console Alerts', 'Load Check-ins'), ('Load Check-ins', 'Load AI Visibility (Site)'), ('Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)'), ('Load Backlink Snapshots (Site)', 'Load Audits (Site)'), ('Load Audits (Site)', 'Load Trends (Site)'), ('Load Trends (Site)', 'Ensure Profile Table (Site)'), ('Ensure Profile Table (Site)', 'Load Profiles (Site)'), ('Load Profiles (Site)', 'Ensure Monitors Table (Site)'), ('Ensure Monitors Table (Site)', 'Load Monitors (Site)'), ('Load Monitors (Site)', 'Ensure Pages Table (Site)'), ('Ensure Pages Table (Site)', 'Site Plan'), ('Site Plan', 'Any Sites?'),
              ('GSC Sites', 'Resolve Properties'), ('Resolve Properties', 'GSC Requests'), ('GSC Requests', 'Any GSC?'), ('GSC Query', 'Parse GSC'), ('Parse GSC', 'Need GA4 Detect?'),
              ('GA4 Accounts', 'Stream Requests'), ('Stream Requests', 'Any Streams?'), ('GA4 Streams', 'GA4 Requests'), ('GA4 Requests', 'Any GA4?'), ('GA4 Report', 'Parse GA4'), ('Parse GA4', 'Inspect Requests'),
              ('Inspect Requests', 'Any Inspections?'), ('Inspect URL', 'Parse Inspection'), ('Parse Inspection', 'Trends Requests'), ('Trends Requests', 'Any Trends?'), ('Google Trends', 'Parse Trends'), ('Parse Trends', 'Site SERP Requests'),
@@ -210,7 +227,10 @@ for a, b in [('Weekly Schedule', 'Ensure Sites Table'), ('Manual Run', 'Ensure S
              ('Site Metrics', 'Metrics Rows'), ('Metrics Rows', 'Save Site Metrics'), ('Save Site Metrics', 'Query Rows'), ('Query Rows', 'Any Query Rows?'), ('Save Query Rows', 'Trend Rows'), ('Trend Rows', 'Any Trend Rows?'), ('Save Trends', 'Site Rows'), ('Site Rows', 'Save Sites'), ('Save Sites', 'Brief Input'), ('Brief Input', 'Site Brief'), ('Site Brief', 'Site Report'),
              ('Site Report', 'Prepare PDF Site'), ('Prepare PDF Site', 'Render PDF Site'), ('Render PDF Site', 'Attach PDF Site'), ('Attach PDF Site', 'Has Email (Site)?'), ('Attach PDF Site', 'Build Site Callback'), ('Build Site Callback', 'Has Callback (Site)?')]:
     link(C, a, b)
-link(C, 'Any Sites?', 'Publish Candidates', 0); link(C, 'Any Sites?', 'Nothing To Track (Site)', 1)
+link(C, 'Any Sites?', 'Model Targets (Site)', 0); link(C, 'Any Sites?', 'Nothing To Track (Site)', 1)
+# G19: the site model is resolved first (one homepage read per stale site), then the publish detection runs as before
+link(C, 'Model Targets (Site)', 'Need Homepage (Site)?'); link(C, 'Need Homepage (Site)?', 'Fetch Homepage (Site)', 0); link(C, 'Need Homepage (Site)?', 'Site Model (Site)', 1)
+link(C, 'Fetch Homepage (Site)', 'Site Model (Site)'); link(C, 'Site Model (Site)', 'Publish Candidates')
 # v4.8 publish detection chain; every exit leads to GSC Sites (executeOnce), exactly one fires per run
 link(C, 'Publish Candidates', 'Any Detect Candidates?'); link(C, 'Any Detect Candidates?', 'Fetch Sitemap (Detect)', 0); link(C, 'Any Detect Candidates?', 'GSC Sites', 1)
 link(C, 'Fetch Sitemap (Detect)', 'Sitemap Children (Detect)'); link(C, 'Sitemap Children (Detect)', 'Any Child Sitemaps?')

@@ -4,6 +4,7 @@ Write for the site owner: busy, not an SEO specialist, wants to know what change
 Rules
 - Every statement must come from the facts; quote the numbers (clicks, impressions, positions, percentages, page paths). Never invent a figure or a page.
 - British spelling. Plain words. No praise, no filler, no generic advice ("create quality content").
+- facts.website is the site model every part of the agent uses: call the business by facts.website.business_name and write every URL of this site on facts.website.canonical_host (https). Never use the bare domain when the canonical host is the www one, and never invent a name.
 - If Search Console or GA4 is not connected, say so in one line and work with what exists (tracked keywords, live checks, trends); the headline must then be about connecting Google.
 - actions: at most 5, ordered by expected impact, each concrete: which page or query, what to change, the expected effect. Prefer the computed_actions but reword them for the owner and merge duplicates. Use "keyword" and "url" fields when the action is about one query or one page.
 - Ladder pages with status "planned" or "writing" are not on the site yet: say they are not published yet, never that they are "not indexed".

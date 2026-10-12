@@ -6910,6 +6910,54 @@
               {
                 "name": "request_id",
                 "type": "string"
+              },
+              {
+                "name": "canonical_host",
+                "type": "string"
+              },
+              {
+                "name": "business_name",
+                "type": "string"
+              },
+              {
+                "name": "logo_url",
+                "type": "string"
+              },
+              {
+                "name": "nap_json",
+                "type": "string"
+              },
+              {
+                "name": "services_json",
+                "type": "string"
+              },
+              {
+                "name": "nav_pages_json",
+                "type": "string"
+              },
+              {
+                "name": "business_facts",
+                "type": "string"
+              },
+              {
+                "name": "cta",
+                "type": "string"
+              },
+              {
+                "name": "brand_names",
+                "type": "string"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "accreditation",
+                "type": "string"
+              },
+              {
+                "name": "model_updated_at",
+                "type": "string"
               }
             ]
           },
@@ -7117,6 +7165,126 @@
               {
                 "id": "request_id",
                 "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "canonical_host",
+                "displayName": "canonical_host",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "business_name",
+                "displayName": "business_name",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "logo_url",
+                "displayName": "logo_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "nap_json",
+                "displayName": "nap_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "services_json",
+                "displayName": "services_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "nav_pages_json",
+                "displayName": "nav_pages_json",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "business_facts",
+                "displayName": "business_facts",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cta",
+                "displayName": "cta",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "brand_names",
+                "displayName": "brand_names",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "competitors",
+                "displayName": "competitors",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "accreditation",
+                "displayName": "accreditation",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "model_updated_at",
+                "displayName": "model_updated_at",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -13313,6 +13481,11 @@
                 "keyName": "key",
                 "condition": "eq",
                 "keyValue": "={{ 'ai_brands:site_' + String($('Rate Limit').first().json.domain || 'none').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}"
+              },
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ 'model:site_' + String($('Rate Limit').first().json.domain || 'none').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}"
               }
             ]
           },
@@ -14995,6 +15168,542 @@
         "position": [
           -264,
           164
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_sites",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "gsc_property",
+                "type": "string"
+              },
+              {
+                "name": "ga4_property_id",
+                "type": "string"
+              },
+              {
+                "name": "country",
+                "type": "string"
+              },
+              {
+                "name": "location_code",
+                "type": "number"
+              },
+              {
+                "name": "language_code",
+                "type": "string"
+              },
+              {
+                "name": "email",
+                "type": "string"
+              },
+              {
+                "name": "callback_url",
+                "type": "string"
+              },
+              {
+                "name": "keywords",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "last_run_at",
+                "type": "string"
+              },
+              {
+                "name": "last_status",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "canonical_host",
+                "type": "string"
+              },
+              {
+                "name": "business_name",
+                "type": "string"
+              },
+              {
+                "name": "logo_url",
+                "type": "string"
+              },
+              {
+                "name": "nap_json",
+                "type": "string"
+              },
+              {
+                "name": "services_json",
+                "type": "string"
+              },
+              {
+                "name": "nav_pages_json",
+                "type": "string"
+              },
+              {
+                "name": "business_facts",
+                "type": "string"
+              },
+              {
+                "name": "cta",
+                "type": "string"
+              },
+              {
+                "name": "brand_names",
+                "type": "string"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "accreditation",
+                "type": "string"
+              },
+              {
+                "name": "model_updated_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "828cf73c-95ed-5b70-a29f-88fdb27159d2",
+        "name": "Ensure Sites Table (Model)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          800,
+          104
+        ],
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_pages",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "url",
+                "type": "string"
+              },
+              {
+                "name": "title",
+                "type": "string"
+              },
+              {
+                "name": "h1",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "lastmod",
+                "type": "string"
+              },
+              {
+                "name": "queries_json",
+                "type": "string"
+              },
+              {
+                "name": "updated_at",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "ac2b638f-406e-591c-a587-accc8632f5fa",
+        "name": "Ensure Pages Table (Model)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1020,
+          104
+        ],
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_sites"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ 'site_' + String($('Rate Limit').first().json.domain || 'none').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "f5c74bea-8510-5276-a879-64f87bd56885",
+        "name": "Load Site Row (Model)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1240,
+          104
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_profiles"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ 'site_' + String($('Rate Limit').first().json.domain || 'none').toLowerCase().replace(/^www\\./, '').replace(/[^a-z0-9]+/g, '-') }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "cc60d13f-6b28-5013-8cdb-876a41084293",
+        "name": "Load Profile (Model)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          1460,
+          104
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// G19 (2026-10-12): the on-demand resolver, step 1 (SITE_MODEL_SPEC.md §4) — is there a site model younger than SM.FRESH_DAYS for this\n// domain? The weekly Site Tracker writes it to seo_sites; a run that rebuilt it keeps a copy in seo_cache ('model:<site_id>'). Fresh =\n// nothing to do; stale or missing = read the homepage once (plain GET, redirects followed) for the canonical host, the Organization /\n// LocalBusiness schema and the nav pages.\n// ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----\n// Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->\n// the homepage Organization / LocalBusiness schema -> Google Business Profile -> the fields the web app sent), the services and nav\n// pages, the page inventory (seo_pages), the business facts, the call to action, the brand names, the competitors and the\n// accreditation status. SM.from() builds the model, SM.toRow() writes it back to the seo_sites columns.\nconst SM = (() => {\n  const S = (v) => String(v == null ? '' : v).trim();\n  const normHost = (v) => S(v).toLowerCase().replace(/^https?:\\/\\//, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\n  const bare = (v) => normHost(v).replace(/^www\\./, '');\n  const hostOf = (u) => normHost((S(u).match(/^https?:\\/\\/([^\\/?#]+)/i) || [])[1] || '');   // the n8n Code sandbox has no URL constructor\n  const siteIdFor = (d) => 'site_' + bare(d).replace(/[^a-z0-9]+/g, '-');\n  const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\\n,;|]+/)).map(x => S(x)).filter(Boolean);\n  const uniq = (a) => [...new Set(a)];\n  const jparse = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };\n  const STOP = new Set(['a', 'an', 'and', 'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on', 'or', 'the', 'to', 'vs', 'with', 'your', 'our', 'my']);\n  const tokensOf = (s) => S(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\\s+/).filter(Boolean);\n  // one-letter parts (\"e\" of \"e invoicing\") and stop words never decide a page match: with them \"e invoicing uae penalties\" would\n  // score 3 of 4 against /uae-e-invoicing-fta-rules/ and claim the FTA page (the S26 false-match pair).\n  const termsOf = (s) => uniq(tokensOf(s).filter(t => t.length > 1 && !STOP.has(t)));\n  const pathOf = (u) => { const p = S(u).replace(/^https?:\\/\\/[^\\/]*/i, ''); return p || '/'; };\n  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;|&#\\d+;/gi, ' ').replace(/\\s+/g, ' ').trim();\n\n  // ---- the homepage HTML: canonical host, Organization / LocalBusiness schema, nav pages ----\n  const ldNodes = (html) => {\n    const out = []; const re = /<script\\b[^>]*type\\s*=\\s*[\"']application\\/ld\\+json[\"'][^>]*>([\\s\\S]*?)<\\/script>/gi; let m;\n    const push = (o) => { if (!o || typeof o !== 'object') return; if (Array.isArray(o)) { o.forEach(push); return; } out.push(o); if (Array.isArray(o['@graph'])) o['@graph'].forEach(push); };\n    while ((m = re.exec(S(html)))) push(jparse(m[1], null));\n    return out;\n  };\n  const ORG_TYPE = /(organization|corporation|localbusiness|professionalservice|store|ngo|educationalorganization|governmentorganization|onlinebusiness|softwarecompany|company|consultant|accountingservice)/i;\n  const typesOf = (o) => [].concat((o && o['@type']) || []).map(t => S(t).toLowerCase());\n  const orgFromHtml = (html) => {\n    const nodes = ldNodes(html).filter(o => typesOf(o).some(t => ORG_TYPE.test(t)));\n    const node = nodes.find(o => typesOf(o).some(t => /localbusiness|professionalservice|store/.test(t))) || nodes[0];\n    if (!node) return null;\n    const logo = typeof node.logo === 'string' ? node.logo : ((node.logo || {}).url || '');\n    return { name: S(node.name), type: typesOf(node).join('/'), telephone: S(node.telephone), email: S(node.email), logo: S(logo),\n      sameAs: listOf(node.sameAs), address: (node.address && typeof node.address === 'object') ? node.address : null };\n  };\n  const navFromHtml = (html, host) => {\n    const h = S(html); const zones = [];\n    for (const re of [/<nav\\b[\\s\\S]*?<\\/nav>/gi, /<header\\b[\\s\\S]*?<\\/header>/gi]) { const f = h.match(re); if (f) zones.push(...f); }\n    const out = []; const seen = new Set();\n    for (const zone of zones) {\n      for (const a of (zone.match(/<a\\b[^>]*>[\\s\\S]*?<\\/a>/gi) || [])) {\n        const href = S((a.match(/\\bhref\\s*=\\s*[\"']([^\"']+)[\"']/i) || [])[1]);\n        if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) continue;\n        const abs = /^https?:\\/\\//i.test(href) ? href : (href.charAt(0) === '/' ? 'https://' + host + href : '');\n        if (!abs || bare(hostOf(abs)) !== bare(host)) continue;\n        const p = pathOf(abs); if (p === '/' || seen.has(p)) continue;\n        seen.add(p); out.push({ url: abs, title: strip(a).slice(0, 80), path: p });\n        if (out.length >= 12) return out;\n      }\n    }\n    return out;\n  };\n\n  // ---- precedence: seo_profiles -> homepage schema -> Google Business Profile -> what the app sent ----\n  const pick = (sources, read) => { for (const s of sources) { const v = S(read(s.value) || ''); if (v) return { value: v, source: s.name }; } return { value: '', source: '' }; };\n\n  const from = (siteRow, extras) => {\n    const row = (siteRow && typeof siteRow === 'object') ? siteRow : {};\n    const x = (extras && typeof extras === 'object') ? extras : {};\n    const req = x.request || {};\n    const prof = x.profile || {};\n    const gbp = x.gbp || {};\n    const html = S(x.html || (x.home || {}).html);\n    const domain = bare(row.domain || x.domain || req.domain || (x.home || {}).url || '');\n    const site_id = S(row.site_id) || S(x.site_id) || (domain ? siteIdFor(domain) : '');\n    const org = x.homepage_org || (html ? orgFromHtml(html) : null) || null;\n\n    // canonical host: this run's probe, else the homepage's own canonical tag, else where the homepage request landed, else the stored\n    // value, else the bare domain. A canonical tag on another domain is ignored.\n    const canonTag = (S(html).match(/<link\\b[^>]*>/gi) || []).find(t => /\\brel\\s*=\\s*[\"']?canonical\\b/i.test(t)) || '';\n    const canonHost = hostOf((canonTag.match(/\\bhref\\s*=\\s*[\"']([^\"']+)[\"']/i) || [])[1] || '');\n    const landed = hostOf(x.final_url || (x.home || {}).url || '');\n    const fromProbe = normHost(x.canonical_host || (x.probe || {}).canonical_host || '');\n    // the site's own live URLs (ladder pages, published pages, sitemap) are evidence too: the host most of them use\n    const voted = (() => { const c = {}; for (const u of (x.seen_hosts || [])) { const h = normHost(u.indexOf('/') >= 0 ? hostOf(u) || u : u); if (h && bare(h) === domain) c[h] = (c[h] || 0) + 1; }\n      return Object.keys(c).sort((a, b) => c[b] - c[a] || a.length - b.length)[0] || ''; })();\n    const candidates = [[fromProbe, 'probe'], [bare(canonHost) === domain ? canonHost : '', 'canonical tag'], [bare(landed) === domain ? landed : '', 'redirect'], [voted, 'live urls'], [normHost(row.canonical_host), 'stored'], [domain, 'domain']];\n    const hit = candidates.find(c => c[0]) || [domain, 'domain'];\n    const canonical_host = hit[0], host_source = hit[1];\n\n    const SRC = [{ name: 'profile', value: prof }, { name: 'homepage_schema', value: org || {} }, { name: 'gbp', value: gbp }, { name: 'app', value: req }, { name: 'stored', value: { business_name: row.business_name, logo_url: row.logo_url } }];\n    const nameHit = pick(SRC, (s) => s.business_name || s.name || s.title);\n    const logoHit = pick(SRC, (s) => s.logo_url || s.logo || s.photo_url);\n    const addr = (org && org.address && typeof org.address === 'object') ? org.address : {};\n    const NAP_SRC = [{ name: 'profile', value: prof }, { name: 'homepage_schema', value: { street_address: addr.streetAddress, city: addr.addressLocality, region: addr.addressRegion, postal_code: addr.postalCode, country_code: addr.addressCountry, phone: (org || {}).telephone, public_email: (org || {}).email } },\n      { name: 'gbp', value: { street_address: gbp.address, city: gbp.city, phone: gbp.phone } }, { name: 'app', value: req }];\n    const street = pick(NAP_SRC, (s) => s.street_address), phone = pick(NAP_SRC, (s) => s.phone);\n    const nap = { business_name: nameHit.value, street_address: street.value, city: pick(NAP_SRC, (s) => s.city).value, region: pick(NAP_SRC, (s) => s.region).value,\n      postal_code: pick(NAP_SRC, (s) => s.postal_code).value, country_code: pick(NAP_SRC, (s) => s.country_code || s.country).value,\n      phone: phone.value, public_email: pick(NAP_SRC, (s) => s.public_email || s.email).value, price_range: S(prof.price_range), source: street.source || phone.source || '' };\n    const stored = jparse(row.nap_json, null);\n    if (stored && !nap.street_address && !nap.phone) { Object.assign(nap, stored); nap.source = S(stored.source) || 'stored'; }\n\n    const services = uniq([...listOf(x.services), ...listOf((x.description || {}).services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);\n    const navStored = jparse(row.nav_pages_json, []) || [];\n    const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);\n    const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);\n\n    const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => ({ url: S(p.url), title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod),\n      queries: Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []) })).filter(p => p.url);\n\n    const business_facts = S(req.business_facts || x.business_facts || row.business_facts).slice(0, 2000);\n    const cta = S(req.cta || x.cta || row.cta).slice(0, 200);\n    const mon = x.monitors || {};\n    const brand_names = uniq([...listOf(mon.brand_names), ...listOf(x.brand_names), ...listOf(row.brand_names), nameHit.value].filter(Boolean));\n    const competitors = uniq([...listOf(mon.competitors), ...listOf(x.competitors), ...listOf(row.competitors)].map(bare).filter(d => d && d !== domain)).slice(0, 8);\n    const accreditation = S(x.accreditation || row.accreditation);\n    const updated_at = S(x.updated_at) || S(row.model_updated_at) || new Date().toISOString();\n\n    return { site_id, domain, canonical_host, host_source, home_url: 'https://' + canonical_host + '/',\n      business_name: nameHit.value, name_source: nameHit.source, logo_url: logoHit.value, logo_source: logoHit.source,\n      nap, services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,\n      model_updated_at: updated_at, sources: { profile: !!prof.site_id || !!prof.business_name, homepage_schema: !!org, gbp: !!(gbp.name || gbp.phone), app: !!(req.business_facts || req.cta || req.business_name), html: !!html } };\n  };\n\n  // every URL the agent emits for a site goes through here: https, the canonical host, no double slash\n  const siteUrl = (model, path) => {\n    const p = S(path);\n    if (/^https?:\\/\\//i.test(p)) return p;\n    const host = normHost((model || {}).canonical_host || (model || {}).domain || '');\n    const tail = p ? ('/' + p).replace(/\\/{2,}/g, '/') : '/';\n    return 'https://' + host + tail;\n  };\n  const apiTarget = (model) => bare((model || {}).domain || (model || {}).canonical_host || '');   // DataForSEO and the other APIs keep the bare domain\n  const name = (model) => S((model || {}).business_name) || bare((model || {}).domain || '');\n  const nap = (model) => ((model || {}).nap && typeof model.nap === 'object') ? model.nap : { business_name: '', street_address: '', city: '', region: '', postal_code: '', country_code: '', phone: '', public_email: '', price_range: '', source: '' };\n  const services = (model) => Array.isArray((model || {}).services) ? model.services : [];\n  const pages = (model) => Array.isArray((model || {}).pages) ? model.pages : [];\n  const facts = (model) => {\n    const t = S((model || {}).business_facts) + ' ' + S(((model || {}).nap || {}).price_range);\n    return { business_facts: S((model || {}).business_facts), cta: S((model || {}).cta), accreditation: S((model || {}).accreditation),\n      pricing: /(aed|usd|\\$|€|£|price|pricing|cost|fee|per month|per user|from \\d)/i.test(t),\n      timeline: /(\\d+\\s*(day|week|month|year)|timeline|go.?live|turnaround|within \\d)/i.test(t) };\n  };\n  // a page of the inventory answers a keyword when it already gets impressions for it, or when at least 75% of the keyword's\n  // meaningful words are in its slug or title (D11; keep it even while the inventory is empty).\n  const MATCH_MIN = 0.75;\n  const matchPage = (model, keyword) => {\n    const want = termsOf(keyword); if (!want.length) return null;\n    const key = tokensOf(keyword).join(' ');\n    const inv = pages(model);\n    for (const p of inv) {\n      const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);\n      if (q) return { url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 };\n    }\n    let best = null;\n    for (const p of inv) {\n      const slug = termsOf(pathOf(p.url).replace(/\\.[a-z]{2,5}$/i, ''));\n      const title = termsOf(S(p.title) + ' ' + S(p.h1));\n      const inSlug = want.filter(t => slug.includes(t)).length / want.length;\n      const inTitle = want.filter(t => title.includes(t)).length / want.length;\n      const score = Math.max(inSlug, inTitle);\n      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score)) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };\n    }\n    return best;\n  };\n  const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];\n    for (const p of [...pages(model), ...(Array.isArray(more) ? more : [])]) { const u = S(p.url); if (!u) continue; const k = pathOf(u).replace(/\\/$/, '').toLowerCase();\n      if (seen.has(k)) { const old = out.find(o => pathOf(o.url).replace(/\\/$/, '').toLowerCase() === k); if (old) { old.title = old.title || S(p.title); old.h1 = old.h1 || S(p.h1); old.lastmod = old.lastmod || S(p.lastmod); if ((p.queries || []).length) old.queries = p.queries; } continue; }\n      seen.add(k); out.push({ url: u, title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries: Array.isArray(p.queries) ? p.queries : [] }); }\n    return out; })() });\n  // the model exactly as it was stored (seo_sites row or a seo_cache value), with its own timestamp -- never \"now\", so isFresh() is honest\n  const stored = (row) => { const r = (row && typeof row === 'object') ? row : {}; return (S(r.canonical_host) || S(r.model_updated_at)) ? from(r, {}) : null; };\n  const FRESH_DAYS = 7;\n  const ageDays = (model) => { const t = Date.parse(S((model || {}).model_updated_at)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };\n  const isFresh = (model, days) => !!(model && S(model.canonical_host) && ageDays(model) < (Number(days) > 0 ? Number(days) : FRESH_DAYS));\n  // exactly the seo_sites columns the model owns (plus the two keys), ready to merge into a site row or a cache value\n  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];\n  const toRow = (model) => { const m = model || {};\n    return { site_id: S(m.site_id), domain: S(m.domain), canonical_host: S(m.canonical_host), business_name: S(m.business_name), logo_url: S(m.logo_url),\n      nap_json: JSON.stringify(nap(m)), services_json: JSON.stringify(services(m)), nav_pages_json: JSON.stringify((m.nav_pages || []).map(p => ({ url: p.url, title: p.title }))),\n      business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),\n      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };\n  };\n  const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),\n    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));\n  return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,\n    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };\n})();\nconst req = $('Use Cached Description').first().json;\nconst rowsOf = (nm) => { try { return $(nm).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };\nconst domain = String(req.domain || '').toLowerCase().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst site_id = 'site_' + domain.replace(/[^a-z0-9]+/g, '-');\nif (!domain) return [{ json: { skip: true, reason: 'no website in this request', site_id: '', domain: '' } }];\nconst row = rowsOf('Load Site Row (Model)').find(r => r.site_id === site_id) || {};\nconst cached = (() => { const c = rowsOf('Load Site Cache').find(r => r.key === 'model:' + site_id); if (!c) return null;\n  try { const v = JSON.parse(c.value || 'null'); return (v && typeof v === 'object') ? { ...v, model_updated_at: c.updated_at || v.model_updated_at } : null; } catch (e) { return null; } })();   // the cache row's own timestamp decides the age, not the value's\nconst stored = SM.stored(row) || SM.stored(cached || {});\nif (SM.isFresh(stored)) return [{ json: { skip: true, reason: 'site model is ' + Math.round(SM.ageDays(stored)) + ' days old', site_id, domain, reused: true } }];\nreturn [{ json: { skip: false, site_id, domain, url: 'https://' + domain + '/', reused: false } }];\n"
+        },
+        "id": "7c57466d-c7d1-552f-9110-1092b0366e8d",
+        "name": "Site Model Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1680,
+          104
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "b1dac237-bd8f-538b-b31a-33730af9af72",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "ec5616bb-e9a3-5dcb-a1ee-34743b156999",
+        "name": "Need Homepage (Model)?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1900,
+          104
+        ]
+      },
+      {
+        "parameters": {
+          "url": "={{ $json.url }}",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "User-Agent",
+                "value": "Mozilla/5.0 (compatible; SEO-Agent/4.15)"
+              },
+              {
+                "name": "Accept",
+                "value": "text/html,application/xhtml+xml"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 20000,
+            "redirect": {
+              "redirect": {
+                "followRedirects": true,
+                "maxRedirects": 5
+              }
+            },
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true,
+                "responseFormat": "text"
+              }
+            }
+          }
+        },
+        "id": "8c62aa31-f96b-5f15-b040-1ae89e4a3c4a",
+        "name": "Fetch Homepage (Model)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          2120,
+          -16
+        ],
+        "alwaysOutputData": true,
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 2,
+        "waitBetweenTries": 2000
+      },
+      {
+        "parameters": {
+          "jsCode": "// G19 (2026-10-12): the on-demand resolver, step 2 (SITE_MODEL_SPEC.md §4) — the site model for this run, attached to the request as\n// `site_model` so every later node reads the same facts ($('Site Model').first().json.site_model). Reused when the stored model is\n// younger than SM.FRESH_DAYS, otherwise rebuilt from the homepage just read, the business profile and the business facts / call to\n// action the request carries. The request item itself is passed on unchanged (the Data Table nodes above replaced the item).\n// ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----\n// Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->\n// the homepage Organization / LocalBusiness schema -> Google Business Profile -> the fields the web app sent), the services and nav\n// pages, the page inventory (seo_pages), the business facts, the call to action, the brand names, the competitors and the\n// accreditation status. SM.from() builds the model, SM.toRow() writes it back to the seo_sites columns.\nconst SM = (() => {\n  const S = (v) => String(v == null ? '' : v).trim();\n  const normHost = (v) => S(v).toLowerCase().replace(/^https?:\\/\\//, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\n  const bare = (v) => normHost(v).replace(/^www\\./, '');\n  const hostOf = (u) => normHost((S(u).match(/^https?:\\/\\/([^\\/?#]+)/i) || [])[1] || '');   // the n8n Code sandbox has no URL constructor\n  const siteIdFor = (d) => 'site_' + bare(d).replace(/[^a-z0-9]+/g, '-');\n  const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\\n,;|]+/)).map(x => S(x)).filter(Boolean);\n  const uniq = (a) => [...new Set(a)];\n  const jparse = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };\n  const STOP = new Set(['a', 'an', 'and', 'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on', 'or', 'the', 'to', 'vs', 'with', 'your', 'our', 'my']);\n  const tokensOf = (s) => S(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\\s+/).filter(Boolean);\n  // one-letter parts (\"e\" of \"e invoicing\") and stop words never decide a page match: with them \"e invoicing uae penalties\" would\n  // score 3 of 4 against /uae-e-invoicing-fta-rules/ and claim the FTA page (the S26 false-match pair).\n  const termsOf = (s) => uniq(tokensOf(s).filter(t => t.length > 1 && !STOP.has(t)));\n  const pathOf = (u) => { const p = S(u).replace(/^https?:\\/\\/[^\\/]*/i, ''); return p || '/'; };\n  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;|&#\\d+;/gi, ' ').replace(/\\s+/g, ' ').trim();\n\n  // ---- the homepage HTML: canonical host, Organization / LocalBusiness schema, nav pages ----\n  const ldNodes = (html) => {\n    const out = []; const re = /<script\\b[^>]*type\\s*=\\s*[\"']application\\/ld\\+json[\"'][^>]*>([\\s\\S]*?)<\\/script>/gi; let m;\n    const push = (o) => { if (!o || typeof o !== 'object') return; if (Array.isArray(o)) { o.forEach(push); return; } out.push(o); if (Array.isArray(o['@graph'])) o['@graph'].forEach(push); };\n    while ((m = re.exec(S(html)))) push(jparse(m[1], null));\n    return out;\n  };\n  const ORG_TYPE = /(organization|corporation|localbusiness|professionalservice|store|ngo|educationalorganization|governmentorganization|onlinebusiness|softwarecompany|company|consultant|accountingservice)/i;\n  const typesOf = (o) => [].concat((o && o['@type']) || []).map(t => S(t).toLowerCase());\n  const orgFromHtml = (html) => {\n    const nodes = ldNodes(html).filter(o => typesOf(o).some(t => ORG_TYPE.test(t)));\n    const node = nodes.find(o => typesOf(o).some(t => /localbusiness|professionalservice|store/.test(t))) || nodes[0];\n    if (!node) return null;\n    const logo = typeof node.logo === 'string' ? node.logo : ((node.logo || {}).url || '');\n    return { name: S(node.name), type: typesOf(node).join('/'), telephone: S(node.telephone), email: S(node.email), logo: S(logo),\n      sameAs: listOf(node.sameAs), address: (node.address && typeof node.address === 'object') ? node.address : null };\n  };\n  const navFromHtml = (html, host) => {\n    const h = S(html); const zones = [];\n    for (const re of [/<nav\\b[\\s\\S]*?<\\/nav>/gi, /<header\\b[\\s\\S]*?<\\/header>/gi]) { const f = h.match(re); if (f) zones.push(...f); }\n    const out = []; const seen = new Set();\n    for (const zone of zones) {\n      for (const a of (zone.match(/<a\\b[^>]*>[\\s\\S]*?<\\/a>/gi) || [])) {\n        const href = S((a.match(/\\bhref\\s*=\\s*[\"']([^\"']+)[\"']/i) || [])[1]);\n        if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) continue;\n        const abs = /^https?:\\/\\//i.test(href) ? href : (href.charAt(0) === '/' ? 'https://' + host + href : '');\n        if (!abs || bare(hostOf(abs)) !== bare(host)) continue;\n        const p = pathOf(abs); if (p === '/' || seen.has(p)) continue;\n        seen.add(p); out.push({ url: abs, title: strip(a).slice(0, 80), path: p });\n        if (out.length >= 12) return out;\n      }\n    }\n    return out;\n  };\n\n  // ---- precedence: seo_profiles -> homepage schema -> Google Business Profile -> what the app sent ----\n  const pick = (sources, read) => { for (const s of sources) { const v = S(read(s.value) || ''); if (v) return { value: v, source: s.name }; } return { value: '', source: '' }; };\n\n  const from = (siteRow, extras) => {\n    const row = (siteRow && typeof siteRow === 'object') ? siteRow : {};\n    const x = (extras && typeof extras === 'object') ? extras : {};\n    const req = x.request || {};\n    const prof = x.profile || {};\n    const gbp = x.gbp || {};\n    const html = S(x.html || (x.home || {}).html);\n    const domain = bare(row.domain || x.domain || req.domain || (x.home || {}).url || '');\n    const site_id = S(row.site_id) || S(x.site_id) || (domain ? siteIdFor(domain) : '');\n    const org = x.homepage_org || (html ? orgFromHtml(html) : null) || null;\n\n    // canonical host: this run's probe, else the homepage's own canonical tag, else where the homepage request landed, else the stored\n    // value, else the bare domain. A canonical tag on another domain is ignored.\n    const canonTag = (S(html).match(/<link\\b[^>]*>/gi) || []).find(t => /\\brel\\s*=\\s*[\"']?canonical\\b/i.test(t)) || '';\n    const canonHost = hostOf((canonTag.match(/\\bhref\\s*=\\s*[\"']([^\"']+)[\"']/i) || [])[1] || '');\n    const landed = hostOf(x.final_url || (x.home || {}).url || '');\n    const fromProbe = normHost(x.canonical_host || (x.probe || {}).canonical_host || '');\n    // the site's own live URLs (ladder pages, published pages, sitemap) are evidence too: the host most of them use\n    const voted = (() => { const c = {}; for (const u of (x.seen_hosts || [])) { const h = normHost(u.indexOf('/') >= 0 ? hostOf(u) || u : u); if (h && bare(h) === domain) c[h] = (c[h] || 0) + 1; }\n      return Object.keys(c).sort((a, b) => c[b] - c[a] || a.length - b.length)[0] || ''; })();\n    const candidates = [[fromProbe, 'probe'], [bare(canonHost) === domain ? canonHost : '', 'canonical tag'], [bare(landed) === domain ? landed : '', 'redirect'], [voted, 'live urls'], [normHost(row.canonical_host), 'stored'], [domain, 'domain']];\n    const hit = candidates.find(c => c[0]) || [domain, 'domain'];\n    const canonical_host = hit[0], host_source = hit[1];\n\n    const SRC = [{ name: 'profile', value: prof }, { name: 'homepage_schema', value: org || {} }, { name: 'gbp', value: gbp }, { name: 'app', value: req }, { name: 'stored', value: { business_name: row.business_name, logo_url: row.logo_url } }];\n    const nameHit = pick(SRC, (s) => s.business_name || s.name || s.title);\n    const logoHit = pick(SRC, (s) => s.logo_url || s.logo || s.photo_url);\n    const addr = (org && org.address && typeof org.address === 'object') ? org.address : {};\n    const NAP_SRC = [{ name: 'profile', value: prof }, { name: 'homepage_schema', value: { street_address: addr.streetAddress, city: addr.addressLocality, region: addr.addressRegion, postal_code: addr.postalCode, country_code: addr.addressCountry, phone: (org || {}).telephone, public_email: (org || {}).email } },\n      { name: 'gbp', value: { street_address: gbp.address, city: gbp.city, phone: gbp.phone } }, { name: 'app', value: req }];\n    const street = pick(NAP_SRC, (s) => s.street_address), phone = pick(NAP_SRC, (s) => s.phone);\n    const nap = { business_name: nameHit.value, street_address: street.value, city: pick(NAP_SRC, (s) => s.city).value, region: pick(NAP_SRC, (s) => s.region).value,\n      postal_code: pick(NAP_SRC, (s) => s.postal_code).value, country_code: pick(NAP_SRC, (s) => s.country_code || s.country).value,\n      phone: phone.value, public_email: pick(NAP_SRC, (s) => s.public_email || s.email).value, price_range: S(prof.price_range), source: street.source || phone.source || '' };\n    const stored = jparse(row.nap_json, null);\n    if (stored && !nap.street_address && !nap.phone) { Object.assign(nap, stored); nap.source = S(stored.source) || 'stored'; }\n\n    const services = uniq([...listOf(x.services), ...listOf((x.description || {}).services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);\n    const navStored = jparse(row.nav_pages_json, []) || [];\n    const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);\n    const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);\n\n    const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => ({ url: S(p.url), title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod),\n      queries: Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []) })).filter(p => p.url);\n\n    const business_facts = S(req.business_facts || x.business_facts || row.business_facts).slice(0, 2000);\n    const cta = S(req.cta || x.cta || row.cta).slice(0, 200);\n    const mon = x.monitors || {};\n    const brand_names = uniq([...listOf(mon.brand_names), ...listOf(x.brand_names), ...listOf(row.brand_names), nameHit.value].filter(Boolean));\n    const competitors = uniq([...listOf(mon.competitors), ...listOf(x.competitors), ...listOf(row.competitors)].map(bare).filter(d => d && d !== domain)).slice(0, 8);\n    const accreditation = S(x.accreditation || row.accreditation);\n    const updated_at = S(x.updated_at) || S(row.model_updated_at) || new Date().toISOString();\n\n    return { site_id, domain, canonical_host, host_source, home_url: 'https://' + canonical_host + '/',\n      business_name: nameHit.value, name_source: nameHit.source, logo_url: logoHit.value, logo_source: logoHit.source,\n      nap, services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,\n      model_updated_at: updated_at, sources: { profile: !!prof.site_id || !!prof.business_name, homepage_schema: !!org, gbp: !!(gbp.name || gbp.phone), app: !!(req.business_facts || req.cta || req.business_name), html: !!html } };\n  };\n\n  // every URL the agent emits for a site goes through here: https, the canonical host, no double slash\n  const siteUrl = (model, path) => {\n    const p = S(path);\n    if (/^https?:\\/\\//i.test(p)) return p;\n    const host = normHost((model || {}).canonical_host || (model || {}).domain || '');\n    const tail = p ? ('/' + p).replace(/\\/{2,}/g, '/') : '/';\n    return 'https://' + host + tail;\n  };\n  const apiTarget = (model) => bare((model || {}).domain || (model || {}).canonical_host || '');   // DataForSEO and the other APIs keep the bare domain\n  const name = (model) => S((model || {}).business_name) || bare((model || {}).domain || '');\n  const nap = (model) => ((model || {}).nap && typeof model.nap === 'object') ? model.nap : { business_name: '', street_address: '', city: '', region: '', postal_code: '', country_code: '', phone: '', public_email: '', price_range: '', source: '' };\n  const services = (model) => Array.isArray((model || {}).services) ? model.services : [];\n  const pages = (model) => Array.isArray((model || {}).pages) ? model.pages : [];\n  const facts = (model) => {\n    const t = S((model || {}).business_facts) + ' ' + S(((model || {}).nap || {}).price_range);\n    return { business_facts: S((model || {}).business_facts), cta: S((model || {}).cta), accreditation: S((model || {}).accreditation),\n      pricing: /(aed|usd|\\$|€|£|price|pricing|cost|fee|per month|per user|from \\d)/i.test(t),\n      timeline: /(\\d+\\s*(day|week|month|year)|timeline|go.?live|turnaround|within \\d)/i.test(t) };\n  };\n  // a page of the inventory answers a keyword when it already gets impressions for it, or when at least 75% of the keyword's\n  // meaningful words are in its slug or title (D11; keep it even while the inventory is empty).\n  const MATCH_MIN = 0.75;\n  const matchPage = (model, keyword) => {\n    const want = termsOf(keyword); if (!want.length) return null;\n    const key = tokensOf(keyword).join(' ');\n    const inv = pages(model);\n    for (const p of inv) {\n      const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);\n      if (q) return { url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 };\n    }\n    let best = null;\n    for (const p of inv) {\n      const slug = termsOf(pathOf(p.url).replace(/\\.[a-z]{2,5}$/i, ''));\n      const title = termsOf(S(p.title) + ' ' + S(p.h1));\n      const inSlug = want.filter(t => slug.includes(t)).length / want.length;\n      const inTitle = want.filter(t => title.includes(t)).length / want.length;\n      const score = Math.max(inSlug, inTitle);\n      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score)) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };\n    }\n    return best;\n  };\n  const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];\n    for (const p of [...pages(model), ...(Array.isArray(more) ? more : [])]) { const u = S(p.url); if (!u) continue; const k = pathOf(u).replace(/\\/$/, '').toLowerCase();\n      if (seen.has(k)) { const old = out.find(o => pathOf(o.url).replace(/\\/$/, '').toLowerCase() === k); if (old) { old.title = old.title || S(p.title); old.h1 = old.h1 || S(p.h1); old.lastmod = old.lastmod || S(p.lastmod); if ((p.queries || []).length) old.queries = p.queries; } continue; }\n      seen.add(k); out.push({ url: u, title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries: Array.isArray(p.queries) ? p.queries : [] }); }\n    return out; })() });\n  // the model exactly as it was stored (seo_sites row or a seo_cache value), with its own timestamp -- never \"now\", so isFresh() is honest\n  const stored = (row) => { const r = (row && typeof row === 'object') ? row : {}; return (S(r.canonical_host) || S(r.model_updated_at)) ? from(r, {}) : null; };\n  const FRESH_DAYS = 7;\n  const ageDays = (model) => { const t = Date.parse(S((model || {}).model_updated_at)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };\n  const isFresh = (model, days) => !!(model && S(model.canonical_host) && ageDays(model) < (Number(days) > 0 ? Number(days) : FRESH_DAYS));\n  // exactly the seo_sites columns the model owns (plus the two keys), ready to merge into a site row or a cache value\n  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];\n  const toRow = (model) => { const m = model || {};\n    return { site_id: S(m.site_id), domain: S(m.domain), canonical_host: S(m.canonical_host), business_name: S(m.business_name), logo_url: S(m.logo_url),\n      nap_json: JSON.stringify(nap(m)), services_json: JSON.stringify(services(m)), nav_pages_json: JSON.stringify((m.nav_pages || []).map(p => ({ url: p.url, title: p.title }))),\n      business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),\n      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };\n  };\n  const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),\n    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));\n  return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,\n    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };\n})();\nconst req = $('Use Cached Description').first().json;\nconst plan = $('Site Model Plan').first().json;\nconst rowsOf = (nm) => { try { return $(nm).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error && Object.keys(r).length); } catch (e) { return []; } };\nconst row = plan.site_id ? (rowsOf('Load Site Row (Model)').find(r => r.site_id === plan.site_id) || {}) : {};\nconst cached = (() => { const c = rowsOf('Load Site Cache').find(r => r.key === 'model:' + plan.site_id); if (!c) return null;\n  try { const v = JSON.parse(c.value || 'null'); return (v && typeof v === 'object') ? { ...v, model_updated_at: c.updated_at || v.model_updated_at } : null; } catch (e) { return null; } })();   // the cache row's own timestamp decides the age, not the value's\nconst profile = plan.site_id ? (rowsOf('Load Profile (Model)').find(r => r.site_id === plan.site_id) || {}) : {};\nconst res = (() => { try { return $('Fetch Homepage (Model)').first().json || {}; } catch (e) { return {}; } })();\nconst status = Number(res.statusCode) || 0;\nconst html = (!plan.skip && status >= 200 && status < 400) ? String(res.body != null ? res.body : (res.data || '')) : '';\nconst desc = req.site_description || {};\nconst extras = { site_id: plan.site_id, domain: plan.domain || req.domain, profile, request: req,\n  services: [...(desc.services || []), ...(desc.main_services || [])], description: desc,\n  competitors: req.competitors || [], brand_names: req.brand_names || [] };\nconst base = SM.stored(row) || SM.stored(cached || {});\nconst model = html\n  ? SM.from({ ...(base ? SM.toRow(base) : {}), ...row }, { ...extras, html, updated_at: new Date().toISOString() })\n  : (base ? { ...base, business_facts: extras.request.business_facts || base.business_facts, cta: extras.request.cta || base.cta } : SM.from(row, extras));\nreturn [{ json: { ...req, site_model: model, site_model_reused: !html, site_model_source: html ? 'homepage' : (base ? 'stored' : 'request') } }];\n"
+        },
+        "id": "5db1d43c-3360-5e26-8a08-18c3b3b639fd",
+        "name": "Site Model",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2340,
+          104
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// G19 (2026-10-12): a rebuilt site model is kept in seo_cache ('model:<site_id>', SM.FRESH_DAYS) so the next run on the same site reuses\n// it (exact columns for the upsert). A reused model is not written back: that would keep refreshing its age and it would never be rebuilt.\n// Registered sites get the same model in their seo_sites row every Monday (the Site Tracker); this cache also covers sites that are not\n// tracked, and is never used to register one (a seo_sites row would start the weekly paid runs).\n// ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----\n// Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->\n// the homepage Organization / LocalBusiness schema -> Google Business Profile -> the fields the web app sent), the services and nav\n// pages, the page inventory (seo_pages), the business facts, the call to action, the brand names, the competitors and the\n// accreditation status. SM.from() builds the model, SM.toRow() writes it back to the seo_sites columns.\nconst SM = (() => {\n  const S = (v) => String(v == null ? '' : v).trim();\n  const normHost = (v) => S(v).toLowerCase().replace(/^https?:\\/\\//, '').replace(/[\\/?#].*$/, '').replace(/:\\d+$/, '');\n  const bare = (v) => normHost(v).replace(/^www\\./, '');\n  const hostOf = (u) => normHost((S(u).match(/^https?:\\/\\/([^\\/?#]+)/i) || [])[1] || '');   // the n8n Code sandbox has no URL constructor\n  const siteIdFor = (d) => 'site_' + bare(d).replace(/[^a-z0-9]+/g, '-');\n  const listOf = (v) => (Array.isArray(v) ? v : S(v).split(/[\\n,;|]+/)).map(x => S(x)).filter(Boolean);\n  const uniq = (a) => [...new Set(a)];\n  const jparse = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };\n  const STOP = new Set(['a', 'an', 'and', 'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on', 'or', 'the', 'to', 'vs', 'with', 'your', 'our', 'my']);\n  const tokensOf = (s) => S(s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\\s+/).filter(Boolean);\n  // one-letter parts (\"e\" of \"e invoicing\") and stop words never decide a page match: with them \"e invoicing uae penalties\" would\n  // score 3 of 4 against /uae-e-invoicing-fta-rules/ and claim the FTA page (the S26 false-match pair).\n  const termsOf = (s) => uniq(tokensOf(s).filter(t => t.length > 1 && !STOP.has(t)));\n  const pathOf = (u) => { const p = S(u).replace(/^https?:\\/\\/[^\\/]*/i, ''); return p || '/'; };\n  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&[a-z]+;|&#\\d+;/gi, ' ').replace(/\\s+/g, ' ').trim();\n\n  // ---- the homepage HTML: canonical host, Organization / LocalBusiness schema, nav pages ----\n  const ldNodes = (html) => {\n    const out = []; const re = /<script\\b[^>]*type\\s*=\\s*[\"']application\\/ld\\+json[\"'][^>]*>([\\s\\S]*?)<\\/script>/gi; let m;\n    const push = (o) => { if (!o || typeof o !== 'object') return; if (Array.isArray(o)) { o.forEach(push); return; } out.push(o); if (Array.isArray(o['@graph'])) o['@graph'].forEach(push); };\n    while ((m = re.exec(S(html)))) push(jparse(m[1], null));\n    return out;\n  };\n  const ORG_TYPE = /(organization|corporation|localbusiness|professionalservice|store|ngo|educationalorganization|governmentorganization|onlinebusiness|softwarecompany|company|consultant|accountingservice)/i;\n  const typesOf = (o) => [].concat((o && o['@type']) || []).map(t => S(t).toLowerCase());\n  const orgFromHtml = (html) => {\n    const nodes = ldNodes(html).filter(o => typesOf(o).some(t => ORG_TYPE.test(t)));\n    const node = nodes.find(o => typesOf(o).some(t => /localbusiness|professionalservice|store/.test(t))) || nodes[0];\n    if (!node) return null;\n    const logo = typeof node.logo === 'string' ? node.logo : ((node.logo || {}).url || '');\n    return { name: S(node.name), type: typesOf(node).join('/'), telephone: S(node.telephone), email: S(node.email), logo: S(logo),\n      sameAs: listOf(node.sameAs), address: (node.address && typeof node.address === 'object') ? node.address : null };\n  };\n  const navFromHtml = (html, host) => {\n    const h = S(html); const zones = [];\n    for (const re of [/<nav\\b[\\s\\S]*?<\\/nav>/gi, /<header\\b[\\s\\S]*?<\\/header>/gi]) { const f = h.match(re); if (f) zones.push(...f); }\n    const out = []; const seen = new Set();\n    for (const zone of zones) {\n      for (const a of (zone.match(/<a\\b[^>]*>[\\s\\S]*?<\\/a>/gi) || [])) {\n        const href = S((a.match(/\\bhref\\s*=\\s*[\"']([^\"']+)[\"']/i) || [])[1]);\n        if (!href || /^(#|javascript:|mailto:|tel:)/i.test(href)) continue;\n        const abs = /^https?:\\/\\//i.test(href) ? href : (href.charAt(0) === '/' ? 'https://' + host + href : '');\n        if (!abs || bare(hostOf(abs)) !== bare(host)) continue;\n        const p = pathOf(abs); if (p === '/' || seen.has(p)) continue;\n        seen.add(p); out.push({ url: abs, title: strip(a).slice(0, 80), path: p });\n        if (out.length >= 12) return out;\n      }\n    }\n    return out;\n  };\n\n  // ---- precedence: seo_profiles -> homepage schema -> Google Business Profile -> what the app sent ----\n  const pick = (sources, read) => { for (const s of sources) { const v = S(read(s.value) || ''); if (v) return { value: v, source: s.name }; } return { value: '', source: '' }; };\n\n  const from = (siteRow, extras) => {\n    const row = (siteRow && typeof siteRow === 'object') ? siteRow : {};\n    const x = (extras && typeof extras === 'object') ? extras : {};\n    const req = x.request || {};\n    const prof = x.profile || {};\n    const gbp = x.gbp || {};\n    const html = S(x.html || (x.home || {}).html);\n    const domain = bare(row.domain || x.domain || req.domain || (x.home || {}).url || '');\n    const site_id = S(row.site_id) || S(x.site_id) || (domain ? siteIdFor(domain) : '');\n    const org = x.homepage_org || (html ? orgFromHtml(html) : null) || null;\n\n    // canonical host: this run's probe, else the homepage's own canonical tag, else where the homepage request landed, else the stored\n    // value, else the bare domain. A canonical tag on another domain is ignored.\n    const canonTag = (S(html).match(/<link\\b[^>]*>/gi) || []).find(t => /\\brel\\s*=\\s*[\"']?canonical\\b/i.test(t)) || '';\n    const canonHost = hostOf((canonTag.match(/\\bhref\\s*=\\s*[\"']([^\"']+)[\"']/i) || [])[1] || '');\n    const landed = hostOf(x.final_url || (x.home || {}).url || '');\n    const fromProbe = normHost(x.canonical_host || (x.probe || {}).canonical_host || '');\n    // the site's own live URLs (ladder pages, published pages, sitemap) are evidence too: the host most of them use\n    const voted = (() => { const c = {}; for (const u of (x.seen_hosts || [])) { const h = normHost(u.indexOf('/') >= 0 ? hostOf(u) || u : u); if (h && bare(h) === domain) c[h] = (c[h] || 0) + 1; }\n      return Object.keys(c).sort((a, b) => c[b] - c[a] || a.length - b.length)[0] || ''; })();\n    const candidates = [[fromProbe, 'probe'], [bare(canonHost) === domain ? canonHost : '', 'canonical tag'], [bare(landed) === domain ? landed : '', 'redirect'], [voted, 'live urls'], [normHost(row.canonical_host), 'stored'], [domain, 'domain']];\n    const hit = candidates.find(c => c[0]) || [domain, 'domain'];\n    const canonical_host = hit[0], host_source = hit[1];\n\n    const SRC = [{ name: 'profile', value: prof }, { name: 'homepage_schema', value: org || {} }, { name: 'gbp', value: gbp }, { name: 'app', value: req }, { name: 'stored', value: { business_name: row.business_name, logo_url: row.logo_url } }];\n    const nameHit = pick(SRC, (s) => s.business_name || s.name || s.title);\n    const logoHit = pick(SRC, (s) => s.logo_url || s.logo || s.photo_url);\n    const addr = (org && org.address && typeof org.address === 'object') ? org.address : {};\n    const NAP_SRC = [{ name: 'profile', value: prof }, { name: 'homepage_schema', value: { street_address: addr.streetAddress, city: addr.addressLocality, region: addr.addressRegion, postal_code: addr.postalCode, country_code: addr.addressCountry, phone: (org || {}).telephone, public_email: (org || {}).email } },\n      { name: 'gbp', value: { street_address: gbp.address, city: gbp.city, phone: gbp.phone } }, { name: 'app', value: req }];\n    const street = pick(NAP_SRC, (s) => s.street_address), phone = pick(NAP_SRC, (s) => s.phone);\n    const nap = { business_name: nameHit.value, street_address: street.value, city: pick(NAP_SRC, (s) => s.city).value, region: pick(NAP_SRC, (s) => s.region).value,\n      postal_code: pick(NAP_SRC, (s) => s.postal_code).value, country_code: pick(NAP_SRC, (s) => s.country_code || s.country).value,\n      phone: phone.value, public_email: pick(NAP_SRC, (s) => s.public_email || s.email).value, price_range: S(prof.price_range), source: street.source || phone.source || '' };\n    const stored = jparse(row.nap_json, null);\n    if (stored && !nap.street_address && !nap.phone) { Object.assign(nap, stored); nap.source = S(stored.source) || 'stored'; }\n\n    const services = uniq([...listOf(x.services), ...listOf((x.description || {}).services), ...(jparse(row.services_json, []) || [])].map(s => S(s).slice(0, 80))).filter(Boolean).slice(0, 30);\n    const navStored = jparse(row.nav_pages_json, []) || [];\n    const navFresh = x.nav_pages || (html && canonical_host ? navFromHtml(html, canonical_host) : []);\n    const nav_pages = (navFresh.length ? navFresh : navStored).map(p => ({ url: S(p.url), title: S(p.title), path: S(p.path) || pathOf(p.url) })).filter(p => p.url).slice(0, 12);\n\n    const pages = (Array.isArray(x.pages) ? x.pages : []).map(p => ({ url: S(p.url), title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod),\n      queries: Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []) })).filter(p => p.url);\n\n    const business_facts = S(req.business_facts || x.business_facts || row.business_facts).slice(0, 2000);\n    const cta = S(req.cta || x.cta || row.cta).slice(0, 200);\n    const mon = x.monitors || {};\n    const brand_names = uniq([...listOf(mon.brand_names), ...listOf(x.brand_names), ...listOf(row.brand_names), nameHit.value].filter(Boolean));\n    const competitors = uniq([...listOf(mon.competitors), ...listOf(x.competitors), ...listOf(row.competitors)].map(bare).filter(d => d && d !== domain)).slice(0, 8);\n    const accreditation = S(x.accreditation || row.accreditation);\n    const updated_at = S(x.updated_at) || S(row.model_updated_at) || new Date().toISOString();\n\n    return { site_id, domain, canonical_host, host_source, home_url: 'https://' + canonical_host + '/',\n      business_name: nameHit.value, name_source: nameHit.source, logo_url: logoHit.value, logo_source: logoHit.source,\n      nap, services, nav_pages, pages, business_facts, cta, brand_names, competitors, accreditation,\n      model_updated_at: updated_at, sources: { profile: !!prof.site_id || !!prof.business_name, homepage_schema: !!org, gbp: !!(gbp.name || gbp.phone), app: !!(req.business_facts || req.cta || req.business_name), html: !!html } };\n  };\n\n  // every URL the agent emits for a site goes through here: https, the canonical host, no double slash\n  const siteUrl = (model, path) => {\n    const p = S(path);\n    if (/^https?:\\/\\//i.test(p)) return p;\n    const host = normHost((model || {}).canonical_host || (model || {}).domain || '');\n    const tail = p ? ('/' + p).replace(/\\/{2,}/g, '/') : '/';\n    return 'https://' + host + tail;\n  };\n  const apiTarget = (model) => bare((model || {}).domain || (model || {}).canonical_host || '');   // DataForSEO and the other APIs keep the bare domain\n  const name = (model) => S((model || {}).business_name) || bare((model || {}).domain || '');\n  const nap = (model) => ((model || {}).nap && typeof model.nap === 'object') ? model.nap : { business_name: '', street_address: '', city: '', region: '', postal_code: '', country_code: '', phone: '', public_email: '', price_range: '', source: '' };\n  const services = (model) => Array.isArray((model || {}).services) ? model.services : [];\n  const pages = (model) => Array.isArray((model || {}).pages) ? model.pages : [];\n  const facts = (model) => {\n    const t = S((model || {}).business_facts) + ' ' + S(((model || {}).nap || {}).price_range);\n    return { business_facts: S((model || {}).business_facts), cta: S((model || {}).cta), accreditation: S((model || {}).accreditation),\n      pricing: /(aed|usd|\\$|€|£|price|pricing|cost|fee|per month|per user|from \\d)/i.test(t),\n      timeline: /(\\d+\\s*(day|week|month|year)|timeline|go.?live|turnaround|within \\d)/i.test(t) };\n  };\n  // a page of the inventory answers a keyword when it already gets impressions for it, or when at least 75% of the keyword's\n  // meaningful words are in its slug or title (D11; keep it even while the inventory is empty).\n  const MATCH_MIN = 0.75;\n  const matchPage = (model, keyword) => {\n    const want = termsOf(keyword); if (!want.length) return null;\n    const key = tokensOf(keyword).join(' ');\n    const inv = pages(model);\n    for (const p of inv) {\n      const q = (p.queries || []).find(x => tokensOf(x.query || x.keyword || x).join(' ') === key && (Number((x || {}).impressions) || 0) > 0);\n      if (q) return { url: p.url, title: p.title, source: p.source, matched_by: 'query', score: 1, impressions: Number(q.impressions) || 0 };\n    }\n    let best = null;\n    for (const p of inv) {\n      const slug = termsOf(pathOf(p.url).replace(/\\.[a-z]{2,5}$/i, ''));\n      const title = termsOf(S(p.title) + ' ' + S(p.h1));\n      const inSlug = want.filter(t => slug.includes(t)).length / want.length;\n      const inTitle = want.filter(t => title.includes(t)).length / want.length;\n      const score = Math.max(inSlug, inTitle);\n      if (score + 1e-9 >= MATCH_MIN && (!best || score > best.score)) best = { url: p.url, title: p.title, source: p.source, matched_by: inSlug >= inTitle ? 'slug' : 'title', score: Math.round(score * 100) / 100, impressions: 0 };\n    }\n    return best;\n  };\n  const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];\n    for (const p of [...pages(model), ...(Array.isArray(more) ? more : [])]) { const u = S(p.url); if (!u) continue; const k = pathOf(u).replace(/\\/$/, '').toLowerCase();\n      if (seen.has(k)) { const old = out.find(o => pathOf(o.url).replace(/\\/$/, '').toLowerCase() === k); if (old) { old.title = old.title || S(p.title); old.h1 = old.h1 || S(p.h1); old.lastmod = old.lastmod || S(p.lastmod); if ((p.queries || []).length) old.queries = p.queries; } continue; }\n      seen.add(k); out.push({ url: u, title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries: Array.isArray(p.queries) ? p.queries : [] }); }\n    return out; })() });\n  // the model exactly as it was stored (seo_sites row or a seo_cache value), with its own timestamp -- never \"now\", so isFresh() is honest\n  const stored = (row) => { const r = (row && typeof row === 'object') ? row : {}; return (S(r.canonical_host) || S(r.model_updated_at)) ? from(r, {}) : null; };\n  const FRESH_DAYS = 7;\n  const ageDays = (model) => { const t = Date.parse(S((model || {}).model_updated_at)); return Number.isFinite(t) ? (Date.now() - t) / 864e5 : Infinity; };\n  const isFresh = (model, days) => !!(model && S(model.canonical_host) && ageDays(model) < (Number(days) > 0 ? Number(days) : FRESH_DAYS));\n  // exactly the seo_sites columns the model owns (plus the two keys), ready to merge into a site row or a cache value\n  const COLUMNS = ['site_id', 'domain', 'canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];\n  const toRow = (model) => { const m = model || {};\n    return { site_id: S(m.site_id), domain: S(m.domain), canonical_host: S(m.canonical_host), business_name: S(m.business_name), logo_url: S(m.logo_url),\n      nap_json: JSON.stringify(nap(m)), services_json: JSON.stringify(services(m)), nav_pages_json: JSON.stringify((m.nav_pages || []).map(p => ({ url: p.url, title: p.title }))),\n      business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),\n      competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };\n  };\n  const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),\n    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));\n  return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,\n    helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };\n})();\nconst j = $('Site Model').first().json;\nconst m = j.site_model || {};\nif (j.site_model_reused || !m.site_id || !m.canonical_host) return [{ json: { skip: true } }];\nreturn [{ json: { key: 'model:' + m.site_id, kind: 'model', site_id: m.site_id, value: JSON.stringify(SM.toRow(m)), updated_at: m.model_updated_at || new Date().toISOString() } }];\n"
+        },
+        "id": "c353361c-51ae-5dc4-8f2a-30430282e420",
+        "name": "Model Cache Row",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2560,
+          104
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "37ccd0e9-9d81-5f4e-8f31-40b595cb507d",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "772af96f-fe2e-55d8-be16-46acee821526",
+        "name": "New Site Model?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          2780,
+          104
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_cache"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "key",
+                "condition": "eq",
+                "keyValue": "={{ $json.key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "kind",
+                "displayName": "kind",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "value",
+                "displayName": "value",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "updated_at",
+                "displayName": "updated_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "3475776d-e6bb-514e-841d-68cd9c9eeca4",
+        "name": "Save Site Model",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          3000,
+          -16
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// The run continues with the request item and its site model (a Data Table node outputs the stored row, not the run's item).\nreturn [{ json: $('Site Model').first().json }];"
+        },
+        "id": "8302d296-9b4a-582b-b314-3636d5e46343",
+        "name": "Restore Site Model",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          3220,
+          104
+        ]
+      },
+      {
+        "parameters": {
+          "content": "### One site model (G19, v4.15)\nEvery workflow reads the same facts about a site through **SM** (`v5/code/_site_model.js`): the **canonical host** (every URL we emit), the business **name / logo / NAP** (profile -> homepage Organization / LocalBusiness schema -> Google Business Profile -> what the app sent), the **services** and nav pages, the **page inventory** (`seo_pages`), the **business facts** and call to action, the brand names, the competitors and the accreditation status. Stored in the `seo_sites` model columns, resolved **weekly** by the Site Tracker and **on demand** here (reused for 7 days, else the homepage is read once; the rebuilt model is cached in `seo_cache` `model:`). See `SITE_MODEL_SPEC.md`.",
+          "height": 180,
+          "width": 1100,
+          "color": 5
+        },
+        "id": "35a70c97-c0eb-5f0e-94de-2aff5d412dce",
+        "name": "Note 18",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          800,
+          -116
         ]
       }
     ],
@@ -19030,7 +19739,7 @@
         "main": [
           [
             {
-              "node": "Need Site Read?",
+              "node": "Ensure Sites Table (Model)",
               "type": "main",
               "index": 0
             }
@@ -19421,6 +20130,152 @@
           [
             {
               "node": "Error Via API?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Sites Table (Model)": {
+        "main": [
+          [
+            {
+              "node": "Ensure Pages Table (Model)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Pages Table (Model)": {
+        "main": [
+          [
+            {
+              "node": "Load Site Row (Model)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Site Row (Model)": {
+        "main": [
+          [
+            {
+              "node": "Load Profile (Model)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Profile (Model)": {
+        "main": [
+          [
+            {
+              "node": "Site Model Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Site Model Plan": {
+        "main": [
+          [
+            {
+              "node": "Need Homepage (Model)?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Homepage (Model)": {
+        "main": [
+          [
+            {
+              "node": "Site Model",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Site Model": {
+        "main": [
+          [
+            {
+              "node": "Model Cache Row",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Model Cache Row": {
+        "main": [
+          [
+            {
+              "node": "New Site Model?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Site Model": {
+        "main": [
+          [
+            {
+              "node": "Restore Site Model",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Restore Site Model": {
+        "main": [
+          [
+            {
+              "node": "Need Site Read?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Need Homepage (Model)?": {
+        "main": [
+          [
+            {
+              "node": "Fetch Homepage (Model)",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Site Model",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "New Site Model?": {
+        "main": [
+          [
+            {
+              "node": "Save Site Model",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Restore Site Model",
               "type": "main",
               "index": 0
             }

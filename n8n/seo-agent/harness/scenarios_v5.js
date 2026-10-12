@@ -749,7 +749,7 @@ await guard('site tracker', async () => {
   console.log('   metrics ->', JSON.stringify({ gsc: m.gsc.connected, ga4: m.ga4.connected, ga4_detected: m.ga4.detected, alerts: m.alerts.map(x => x.level + ': ' + x.text.slice(0, 70)), actions: m.actions.map(x => x.priority + ':' + x.type), api_bodies: m.actions.filter(x => x.api_body).length }));
   console.log('   tracked ->', JSON.stringify(m.tracked.map(t => [t.keyword, t.source, t.gsc_position, t.gsc_prev_position, t.serp_position])));
   console.log('   ladder pages ->', JSON.stringify(m.ladder_pages.map(x => [x.url.replace(/^https?:\/\/[^/]+/, ''), x.rung, x.status, x.indexed])));
-  console.log('   rows ->', JSON.stringify({ metrics_cols_exact: same(Object.keys(m.metrics_row), MCOLS), metrics: { clicks: m.metrics_row.clicks, prev: m.metrics_row.prev_clicks, sessions: m.metrics_row.sessions, striking: m.metrics_row.striking, alerts: m.metrics_row.alerts.slice(0, 60) }, query_rows: m.query_rows.length, query_cols_exact: m.query_rows.every(r => same(Object.keys(r), QCOLS)), tracked_rows: m.query_rows.filter(r => r.tracked).length, site_cols_exact: same(Object.keys(m.site_row), SCOLS), site_row: { gsc: m.site_row.gsc_property, ga4: m.site_row.ga4_property_id, last_status: m.site_row.last_status, keywords: m.site_row.keywords } }));
+  console.log('   rows ->', JSON.stringify({ metrics_cols_exact: same(Object.keys(m.metrics_row), MCOLS), metrics: { clicks: m.metrics_row.clicks, prev: m.metrics_row.prev_clicks, sessions: m.metrics_row.sessions, striking: m.metrics_row.striking, alerts: m.metrics_row.alerts.slice(0, 60) }, query_rows: m.query_rows.length, query_cols_exact: m.query_rows.every(r => same(Object.keys(r), QCOLS)), tracked_rows: m.query_rows.filter(r => r.tracked).length, site_cols_exact: same(Object.keys(m.site_row), require('./table_cols.json').SITES), site_row: { gsc: m.site_row.gsc_property, ga4: m.site_row.ga4_property_id, last_status: m.site_row.last_status, keywords: m.site_row.keywords } }));
   const checks2 = { notice_alert: m.alerts.some(x => /Search Console notice/.test(x.text)), manual_action_first: m.actions[0] && m.actions[0].type === 'manual_action', checkin_action: m.actions.some(x => x.type === 'checkin'), coverage_report_action: m.actions.some(x => x.type === 'coverage_report'), old_notice_excluded: m.console.notices.length === 1, index_action: m.actions.some(x => x.type === 'index'), publish_action: m.actions.some(x => x.type === 'publish'), planned_not_inspected: m.ladder_pages.filter(p => p.status === 'planned' && !p.page_exists).every(p => p.indexed === null && /planned/.test(p.inspect_error)), striking_action: m.actions.some(x => x.type === 'striking' && x.api_body && x.api_body.existing_page_url), ctr_action: m.actions.some(x => x.type === 'ctr'), decay_action: m.actions.some(x => x.type === 'decay'), trend_action: m.actions.some(x => x.type === 'trend'), ga4_connected: m.ga4.connected, no_setup_alerts: !m.alerts.some(x => x.level === 'setup'), not_indexed_alert: m.alerts.some(x => /not indexed/.test(x.text)), slip_alert: m.alerts.some(x => /slipped/.test(x.text)), serp_merged: m.tracked.some(t => t.serp_position === 5) };
   console.log('   checks ->', JSON.stringify(checks2), Object.values(checks2).every(Boolean) ? 'ALL OK' : '!! SOME FAILED');
   const qr = await run('Query Rows', sm); const srw = await run('Site Rows', sm); console.log('   query rows ->', qr.length, '| site rows ->', srw.length);
@@ -3220,6 +3220,144 @@ await guard('fix plan phase 1 — keywords and ladders', async () => {
   mock('Assess Result', AR({ intent: 'navigational' })); b = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: true, alternatives: ['e invoicing software uae pricing'] } } }]))[0].json.body;
   check('G3: no ladder → no chance band', b.plan_type === 'none' && b.chance === null && b.chance_text === '', JSON.stringify(b.chance));
 });
+
+// ===================================================================================
+// S35 G19 (2026-10-12, system review FIX_PLAN): one site model that every workflow reads — the kit `v5/code/_site_model.js` (harness shim
+// `code_v4/_site_model.js`, written by build_v4.py section 30), the weekly resolver in the Site Tracker (Model Targets (Site) -> Fetch
+// Homepage (Site) -> Site Model (Site) -> the seo_sites row in Site Metrics) and the on-demand resolver in the main workflow
+// (Site Model Plan -> Site Model -> Model Cache Row, reused for 7 days). D15 / D11 / D10 / D22 build on it: SITE_MODEL_SPEC.md.
+await guard('one site model (FIX_PLAN G19)', async () => {
+  const SN = 'S35 G19 — one site model: canonical host and siteUrl, name / NAP / logo precedence, services, nav pages, matchPage (no S26 false match), the weekly resolver with the exact seo_sites row, 7-day reuse vs rebuild, the Site Tracker brief';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T = require('./fixtures_tracking'), TC = require('./table_cols.json');
+  const D = T.D, SITE = 'site_northwind-erp-com', W = 'https://www.' + D, B = 'https://' + D;
+  const D2 = 'acme.example', SITE2 = 'site_acme-example';
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const EMPTY = [{ json: {} }];
+  const ORG = { '@context': 'https://schema.org', '@type': ['LocalBusiness', 'Organization'], name: 'Northwind ERP LLC', telephone: '+971 4 123 4567', email: 'hello@' + D,
+    logo: { url: W + '/logo.png' }, sameAs: ['https://www.linkedin.com/company/northwind'], address: { '@type': 'PostalAddress', streetAddress: 'Office 1203, DAFZA', addressLocality: 'Dubai', addressRegion: 'Dubai', addressCountry: 'AE' } };
+  const page = (o) => '<!DOCTYPE html><html><head><title>Northwind ERP</title>' + (o && o.canonical === false ? '' : '<link rel="canonical" href="' + ((o && o.canonical) || (W + '/')) + '">') +
+    (o && o.ld === false ? '' : '<scr' + 'ipt type="application/ld+json">' + JSON.stringify((o && o.ld) || ORG) + '</scr' + 'ipt>') +
+    '</head><body><header><nav><a href="/whatwedo/">What we do</a><a href="/erp/">ERP implementation</a><a href="https://twitter.com/northwind">Twitter</a><a href="/">Home</a><a href="#top">Top</a></nav></header><h1>Northwind</h1></body></html>';
+  const kit = async (items) => (await run('_site_model', items.map(j => ({ json: j })))).map(i => i.json);
+
+  // ---- 1. the canonical host and SM.siteUrl ----
+  const [k1] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: '/erp-software-uae/' }]);
+  check('canonical host from the homepage rel=canonical; SM.siteUrl writes https on that host', k1.model.canonical_host === 'www.' + D && k1.model.host_source === 'canonical tag' && k1.site_url === W + '/erp-software-uae/', JSON.stringify([k1.model.canonical_host, k1.model.host_source, k1.site_url]));
+  const paths = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: '' }, { site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: 'erp' },
+    { site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: '//blog//a/' }, { site_row: { site_id: SITE, domain: D }, extras: { html: page() }, path: B + '/already/' }]);
+  check('siteUrl: empty path = the home URL, a bare path gets one slash, a double slash is collapsed, an absolute URL is left alone',
+    eq(paths.map(p => p.site_url), [W + '/', W + '/erp', W + '/blog/a/', B + '/already/']), JSON.stringify(paths.map(p => p.site_url)));
+  const [k2] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ canonical: false, ld: false }) }, path: '/x' }]);
+  check('no canonical tag and no other evidence → the bare domain, and the API target is always the bare domain', k2.model.canonical_host === D && k2.model.host_source === 'domain' && k2.site_url === B + '/x' && k2.api_target === D && k1.api_target === D, JSON.stringify([k2.model.canonical_host, k2.site_url, k1.api_target]));
+  const [k3] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ canonical: false, ld: false }), seen_hosts: [W + '/peppol-uae/', W + '/erp/', B + '/old/'] }, path: '/x' }]);
+  check('no canonical tag → the host the site\'s own live URLs use (www here) decides', k3.model.canonical_host === 'www.' + D && k3.model.host_source === 'live urls', JSON.stringify([k3.model.canonical_host, k3.model.host_source]));
+  const [k4] = await kit([{ site_row: { site_id: SITE, domain: D, canonical_host: 'https://www.' + D + '/', model_updated_at: daysAgo(2) }, path: '/x' }]);
+  check('a stored canonical host is normalised (scheme and trailing slash dropped) and a 2-day-old model counts as fresh', k4.model.canonical_host === 'www.' + D && k4.model.host_source === 'stored' && k4.site_url === W + '/x' && k4.fresh === true, JSON.stringify([k4.model.canonical_host, k4.fresh]));
+  const [k5] = await kit([{ site_row: { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(9) } }]);
+  check('a model older than 7 days is not fresh', k5.fresh === false && Math.round(k5.age_days) === 9, JSON.stringify([k5.fresh, k5.age_days]));
+  const [kx] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ canonical: 'https://cdn.other.example/x/' }), ld: false } }]);
+  check('a canonical tag on another domain is ignored', kx.model.canonical_host === D, kx.model.canonical_host + ' / ' + kx.model.host_source);
+
+  // ---- 2. name, logo and NAP: profile -> homepage schema -> Google Business Profile -> the app's fields ----
+  const PROF = { site_id: SITE, business_name: 'Northwind ERP', street_address: 'Office 1203, DAFZA Building 6', city: 'Dubai', region: 'Dubai', country_code: 'AE', phone: '+971 4 999 0000', public_email: 'hello@' + D, logo_url: W + '/brand/logo.svg', price_range: 'From AED 50,000' };
+  const GBP = { name: 'Northwind ERP Software LLC', phone: '+971 4 555 1111', address: 'Sheikh Zayed Road', city: 'Dubai' };
+  const APP = { business_name: 'Northwind (app)', phone: '+971 4 000 0000', business_facts: 'ERP partner in Dubai since 2016', cta: 'Book a scoping call' };
+  const [p1] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page(), profile: PROF, gbp: GBP, request: APP } }]);
+  check('with a profile: the name, the logo and the NAP come from it', p1.name === 'Northwind ERP' && p1.model.name_source === 'profile' && p1.model.logo_url === W + '/brand/logo.svg' && p1.nap.street_address === 'Office 1203, DAFZA Building 6' && p1.nap.phone === '+971 4 999 0000' && p1.nap.source === 'profile', JSON.stringify([p1.name, p1.model.name_source, p1.nap]));
+  const [p2] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page(), gbp: GBP, request: APP } }]);
+  check('no profile: the homepage Organization / LocalBusiness schema is used (D10: never "[Your Business Name]")', p2.name === 'Northwind ERP LLC' && p2.model.name_source === 'homepage_schema' && p2.nap.street_address === 'Office 1203, DAFZA' && p2.nap.city === 'Dubai' && p2.nap.phone === '+971 4 123 4567' && p2.nap.country_code === 'AE' && p2.model.logo_url === W + '/logo.png' && p2.nap.source === 'homepage_schema', JSON.stringify([p2.name, p2.model.name_source, p2.nap]));
+  const [p3] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ ld: false }), gbp: GBP, request: APP } }]);
+  check('no profile and no homepage schema: the Google Business Profile', p3.name === 'Northwind ERP Software LLC' && p3.model.name_source === 'gbp' && p3.nap.street_address === 'Sheikh Zayed Road' && p3.nap.source === 'gbp', JSON.stringify([p3.name, p3.model.name_source, p3.nap.street_address]));
+  const [p4] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ ld: false }), request: APP } }]);
+  check('nothing but what the app sent: its name, and the business facts / call to action ride in the model (D10)', p4.name === 'Northwind (app)' && p4.model.name_source === 'app' && p4.model.business_facts === APP.business_facts && p4.model.cta === APP.cta && p4.facts.pricing === false && p4.facts.timeline === false, JSON.stringify([p4.name, p4.model.name_source, p4.facts]));
+  const [p5] = await kit([{ site_row: { site_id: SITE, domain: D }, extras: { html: page({ ld: false }), profile: PROF, request: { business_facts: 'Go-live in 12 weeks, licences from AED 50,000' } } }]);
+  check('SM.facts tells D10 whether pricing and timeline facts exist at all', p5.facts.pricing === true && p5.facts.timeline === true && p5.name === 'Northwind ERP', JSON.stringify(p5.facts));
+
+  // ---- 3. services and nav pages (D22 reads them) ----
+  const [s1] = await kit([{ site_row: { site_id: SITE, domain: D, services_json: JSON.stringify(['Power Platform', 'ERP implementation']) }, extras: { html: page(), services: ['ERP implementation', 'Business Central'] } }]);
+  check('services: this run\'s list first, the stored ones merged in, no duplicates', eq(s1.services, ['ERP implementation', 'Business Central', 'Power Platform']), JSON.stringify(s1.services));
+  check('nav pages: same-host links of the header / nav with their text; outside links, the home link and anchors dropped', eq(s1.model.nav_pages.map(p => p.path), ['/whatwedo/', '/erp/']) && s1.model.nav_pages[0].title === 'What we do', JSON.stringify(s1.model.nav_pages));
+
+  // ---- 4. SM.matchPage: the page a keyword already has (D11) ----
+  const INS = W + '/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs';
+  const INV = [{ url: INS, title: 'The cost of non-compliance: UAE e-invoicing penalties and mitigation costs', source: 'sitemap', lastmod: '2026-08-21' },
+    { url: W + '/uae-e-invoicing-fta-rules/', title: 'UAE e-invoicing: FTA rules explained', source: 'sitemap' },
+    { url: W + '/erp-pricing/', title: 'ERP pricing in Dubai', source: 'gsc', queries: [{ query: 'erp cost dubai', impressions: 240 }, { query: 'erp price uae', impressions: 0 }] }];
+  const row4 = { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1) };
+  const [m1, m2, m3, m4] = await kit([{ site_row: row4, extras: { pages: INV }, keyword: 'uae e invoicing penalties' }, { site_row: row4, extras: { pages: INV }, keyword: 'e invoicing uae penalties' },
+    { site_row: row4, extras: { pages: INV }, keyword: 'erp cost dubai' }, { site_row: row4, extras: { pages: INV }, keyword: 'wms implementation dubai' }]);
+  check('D11: "uae e invoicing penalties" finds the live /insights/ page (slug), not "publish it"', m1.match && m1.match.url === INS && m1.match.matched_by === 'slug' && m1.match.score === 1, JSON.stringify(m1.match));
+  check('S26 false-match pair: "e invoicing uae penalties" never claims the FTA rules page ("e" and stop words do not count)', m2.match && m2.match.url === INS && !/fta-rules/.test(m2.match.url), JSON.stringify(m2.match));
+  const [only] = await kit([{ site_row: row4, extras: { pages: [INV[1]] }, keyword: 'e invoicing uae penalties' }]);
+  check('with only the FTA rules page in the inventory the keyword matches nothing (2 of 3 words)', only.match === null, JSON.stringify(only.match));
+  check('a page with impressions for the exact query matches even when the slug does not', m3.match && m3.match.url === W + '/erp-pricing/' && m3.match.matched_by === 'query' && m3.match.impressions === 240, JSON.stringify(m3.match));
+  check('an unrelated keyword matches nothing', m4.match === null, JSON.stringify(m4.match));
+  check('SM.pageRows writes exactly the seo_pages columns', m1.page_rows.length === 3 && m1.page_rows.every(r => eq(Object.keys(r).sort(), [...TC.PAGES].sort())) && m1.page_rows[0].url === INS, JSON.stringify(Object.keys(m1.page_rows[0])));
+
+  // ---- 5. SM.toRow: exactly the seo_sites columns the model owns ----
+  const MODEL_COLS = ['canonical_host', 'business_name', 'logo_url', 'nap_json', 'services_json', 'nav_pages_json', 'business_facts', 'cta', 'brand_names', 'competitors', 'accreditation', 'model_updated_at'];
+  check('SM.toRow writes only seo_sites columns and every model column (sync_tables.py adds them to the live table)',
+    Object.keys(p1.row).every(k => TC.SITES.includes(k)) && MODEL_COLS.every(k => k in p1.row) && eq(p1.columns, ['site_id', 'domain', ...MODEL_COLS]) && JSON.parse(p1.row.nap_json).city === 'Dubai', JSON.stringify(Object.keys(p1.row)));
+
+  // ---- 6. the weekly resolver in the Site Tracker ----
+  const staleRow = T.sitesRows({ services_json: JSON.stringify(['ERP implementation', 'Business Central']), canonical_host: '', model_updated_at: '' })[0];
+  const freshRow = T.sitesRows({ id: 2, site_id: SITE2, domain: D2, keywords: '', canonical_host: 'www.' + D2, business_name: 'Acme Systems', nap_json: JSON.stringify({ city: 'Abu Dhabi', phone: '+971 2 111 2222', source: 'profile' }), model_updated_at: daysAgo(2) })[0];
+  mock('Load Sites', [staleRow, freshRow]); mock('Load Ladders', EMPTY); mock('Load Rank History', EMPTY); mock('Load Site Metrics', EMPTY); mock('Load Query History', EMPTY);
+  mock('Load Content Log', EMPTY); mock('Load Console Alerts', EMPTY); mock('Load Check-ins', EMPTY);
+  mock('Load Profiles (Site)', [{ json: { ...PROF, id: 1 } }]); mock('Load Monitors (Site)', [{ json: { site_id: SITE, domain: D, brand_names: 'Northwind, Northwind ERP', competitors: 'cleartax.com, azentio.com' } }]);
+  const plan = await run('Site Plan', EMPTY);
+  const targets = await run('Model Targets (Site)', plan);
+  check('only the site whose model is older than 7 days is read; the 2-day-old one is reused (no request)', targets.length === 1 && targets[0].json.site_id === SITE && targets[0].json.url === B + '/', JSON.stringify(targets.map(t => t.json)));
+  mock('Fetch Homepage (Site)', [{ statusCode: 200, headers: { 'content-type': 'text/html' }, body: page() }]);
+  const models = await run('Site Model (Site)', store['Fetch Homepage (Site)']);
+  const mm1 = models.find(x => x.json.site_id === SITE).json, mm2 = models.find(x => x.json.site_id === SITE2).json;
+  check('the stale site is rebuilt from its homepage (canonical host, profile name, brand names and competitors from seo_monitors)',
+    mm1.rebuilt === true && mm1.model.canonical_host === 'www.' + D && mm1.model.business_name === 'Northwind ERP' && mm1.model.competitors.includes('cleartax.com') && mm1.model.brand_names.includes('Northwind'), JSON.stringify({ host: mm1.model.canonical_host, name: mm1.model.business_name, comp: mm1.model.competitors }));
+  check('the fresh site keeps its stored model and is not rebuilt', mm2.rebuilt === false && mm2.model.canonical_host === 'www.' + D2 && mm2.model.business_name === 'Acme Systems' && mm2.model.nap.city === 'Abu Dhabi' && Math.round(mm2.age_days) === 2, JSON.stringify({ rebuilt: mm2.rebuilt, host: mm2.model.canonical_host, age: mm2.age_days }));
+  mock('Resolve Properties', plan.map(p => ({ json: { ...p.json, gsc_connected: false, gsc_property: '', gsc_error: 'no property for this account' } })));
+  const sm = await run('Site Metrics', store['Resolve Properties']);
+  const row1 = sm.find(x => x.json.site_id === SITE).json.site_row;
+  check('the weekly seo_sites row carries the model and has exactly the table columns', eq(Object.keys(row1).sort(), [...TC.SITES].sort()) && row1.canonical_host === 'www.' + D && row1.business_name === 'Northwind ERP' && JSON.parse(row1.services_json).includes('Business Central') && row1.model_updated_at, JSON.stringify({ cols: Object.keys(row1).length, host: row1.canonical_host, name: row1.business_name }));
+  check('the site keeps its registration fields (the model never overwrites them)', row1.site_id === SITE && row1.domain === D && row1.keywords === staleRow.json.keywords && row1.callback_url === staleRow.json.callback_url, JSON.stringify([row1.site_id, row1.keywords]));
+  const bi = await run('Brief Input', sm);
+  const facts = JSON.parse(bi.find(x => x.json.site_id === SITE).json.facts);
+  check('the Site Tracker brief is given the canonical host, the home URL and the business name from the model (never the bare domain)',
+    facts.website.canonical_host === 'www.' + D && facts.website.home_url === W + '/' && facts.website.business_name === 'Northwind ERP' && facts.website.city === 'Dubai' && facts.website.services.includes('Business Central'), JSON.stringify(facts.website));
+
+  // ---- 7. the on-demand resolver in the main workflow ----
+  const REQ = { domain: D, mode: 'keyword', keyword: 'erp software uae', business_facts: 'ERP partner in Dubai since 2016', cta: 'Book a scoping call', site_description: { services: ['ERP implementation', 'Business Central'] } };
+  mock('Use Cached Description', [{ json: REQ }]); mock('Load Site Row (Model)', EMPTY); mock('Load Site Cache', EMPTY); mock('Load Profile (Model)', EMPTY);
+  const pl1 = await run('Site Model Plan', EMPTY);
+  check('nothing stored → the homepage is read once', pl1[0].json.skip === false && pl1[0].json.site_id === SITE && pl1[0].json.url === B + '/', JSON.stringify(pl1[0].json));
+  mock('Fetch Homepage (Model)', [{ statusCode: 200, headers: {}, body: page() }]);
+  const od1 = await run('Site Model', store['Fetch Homepage (Model)']);
+  const o1 = od1[0].json;
+  check('the request is passed on unchanged with the model attached (canonical host, homepage schema, the request\'s facts and CTA)',
+    o1.mode === 'keyword' && o1.keyword === 'erp software uae' && o1.site_model.canonical_host === 'www.' + D && o1.site_model.business_name === 'Northwind ERP LLC' && o1.site_model.business_facts === REQ.business_facts && o1.site_model.cta === REQ.cta && o1.site_model.services.includes('Business Central') && o1.site_model_source === 'homepage', JSON.stringify({ host: o1.site_model.canonical_host, name: o1.site_model.business_name, src: o1.site_model_source }));
+  const cr = await run('Model Cache Row', od1);
+  check('a rebuilt model is cached in seo_cache with the exact columns (never in seo_sites: a row there would start the weekly paid runs)',
+    eq(Object.keys(cr[0].json).sort(), [...TC.CACHE].sort()) && cr[0].json.key === 'model:' + SITE && cr[0].json.kind === 'model' && JSON.parse(cr[0].json.value).canonical_host === 'www.' + D, JSON.stringify(cr[0].json).slice(0, 200));
+  mock('Load Site Cache', [{ json: { key: 'model:' + SITE, kind: 'model', site_id: SITE, value: cr[0].json.value, updated_at: daysAgo(3) } }]);
+  const pl2 = await run('Site Model Plan', EMPTY);
+  check('a model from 3 days ago is reused: no homepage request', pl2[0].json.skip === true && pl2[0].json.reused === true && /3 days old/.test(pl2[0].json.reason), JSON.stringify(pl2[0].json));
+  delete store['Fetch Homepage (Model)'];
+  const od2 = await run('Site Model', pl2);
+  check('the reused model still carries the host and the name, and this run\'s business facts', od2[0].json.site_model_reused === true && od2[0].json.site_model_source === 'stored' && od2[0].json.site_model.canonical_host === 'www.' + D && od2[0].json.site_model.business_name === 'Northwind ERP LLC' && od2[0].json.site_model.business_facts === REQ.business_facts, JSON.stringify([od2[0].json.site_model_source, od2[0].json.site_model.canonical_host]));
+  const cr2 = await run('Model Cache Row', od2);
+  check('a reused model is not written back (its age would never grow)', cr2[0].json.skip === true, JSON.stringify(cr2[0].json));
+  const rest = await run('Restore Site Model', [{ json: { key: 'model:' + SITE, kind: 'model' } }]);
+  check('Restore Site Model hands the request item on, not the stored row', rest[0].json.mode === 'keyword' && !!rest[0].json.site_model, JSON.stringify(Object.keys(rest[0].json)));
+  mock('Load Site Cache', [{ json: { key: 'model:' + SITE, kind: 'model', site_id: SITE, value: cr[0].json.value, updated_at: daysAgo(9) } }]);
+  const pl3 = await run('Site Model Plan', EMPTY);
+  check('a model from 9 days ago is rebuilt', pl3[0].json.skip === false && pl3[0].json.url === B + '/', JSON.stringify(pl3[0].json));
+  mock('Use Cached Description', [{ json: { mode: 'discover', keyword: 'erp software uae' } }]);
+  const pl4 = await run('Site Model Plan', EMPTY);
+  check('a request without a website asks for nothing', pl4[0].json.skip === true && /no website/.test(pl4[0].json.reason), JSON.stringify(pl4[0].json));
+});
+
 
 H.report();
 })();

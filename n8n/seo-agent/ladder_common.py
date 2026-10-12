@@ -24,7 +24,18 @@ METRICS_TABLE = 'seo_site_metrics'
 QUERY_TABLE = 'seo_query_history'
 SITES_COLS = [('site_id', 'string'), ('domain', 'string'), ('gsc_property', 'string'), ('ga4_property_id', 'string'), ('country', 'string'), ('location_code', 'number'),
               ('language_code', 'string'), ('email', 'string'), ('callback_url', 'string'), ('keywords', 'string'), ('status', 'string'), ('source', 'string'),
-              ('created_at', 'string'), ('last_run_at', 'string'), ('last_status', 'string'), ('request_id', 'string')]
+              ('created_at', 'string'), ('last_run_at', 'string'), ('last_status', 'string'), ('request_id', 'string'),
+              # v4.15 (G19, SITE_MODEL_SPEC.md): the one site model every workflow reads -- resolved weekly by the Site Tracker, on demand by the
+              # main workflow (v5/code/_site_model.js, SM.toRow). canonical_host = the host every emitted URL uses; nap_json / services_json /
+              # nav_pages_json are JSON strings; brand_names / competitors are comma-separated.
+              ('canonical_host', 'string'), ('business_name', 'string'), ('logo_url', 'string'), ('nap_json', 'string'), ('services_json', 'string'),
+              ('nav_pages_json', 'string'), ('business_facts', 'string'), ('cta', 'string'), ('brand_names', 'string'), ('competitors', 'string'),
+              ('accreditation', 'string'), ('model_updated_at', 'string')]
+# v4.15 (G19): the site's page inventory -- one row per site and URL (sitemap, Search Console, AI Growth key pages, publish detection), filled
+# by D11; `queries_json` holds the Search Console queries the page gets impressions for. SM.matchPage() reads it.
+PAGES_TABLE = 'seo_pages'
+PAGES_COLS = [('site_id', 'string'), ('url', 'string'), ('title', 'string'), ('h1', 'string'), ('source', 'string'), ('lastmod', 'string'),
+              ('queries_json', 'string'), ('updated_at', 'string')]
 METRICS_COLS = [('site_id', 'string'), ('domain', 'string'), ('period_start', 'string'), ('period_end', 'string'), ('checked_at', 'string'), ('gsc_connected', 'boolean'), ('ga4_connected', 'boolean'),
                 ('clicks', 'number'), ('impressions', 'number'), ('ctr', 'number'), ('position', 'number'), ('prev_clicks', 'number'), ('prev_impressions', 'number'), ('prev_ctr', 'number'), ('prev_position', 'number'),
                 ('yoy_clicks', 'number'), ('yoy_impressions', 'number'), ('sessions', 'number'), ('engaged_sessions', 'number'), ('key_events', 'number'), ('prev_sessions', 'number'), ('prev_engaged_sessions', 'number'),
