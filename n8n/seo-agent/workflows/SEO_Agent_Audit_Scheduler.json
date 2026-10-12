@@ -289,6 +289,54 @@
               {
                 "name": "request_id",
                 "type": "string"
+              },
+              {
+                "name": "canonical_host",
+                "type": "string"
+              },
+              {
+                "name": "business_name",
+                "type": "string"
+              },
+              {
+                "name": "logo_url",
+                "type": "string"
+              },
+              {
+                "name": "nap_json",
+                "type": "string"
+              },
+              {
+                "name": "services_json",
+                "type": "string"
+              },
+              {
+                "name": "nav_pages_json",
+                "type": "string"
+              },
+              {
+                "name": "business_facts",
+                "type": "string"
+              },
+              {
+                "name": "cta",
+                "type": "string"
+              },
+              {
+                "name": "brand_names",
+                "type": "string"
+              },
+              {
+                "name": "competitors",
+                "type": "string"
+              },
+              {
+                "name": "accreditation",
+                "type": "string"
+              },
+              {
+                "name": "model_updated_at",
+                "type": "string"
               }
             ]
           },

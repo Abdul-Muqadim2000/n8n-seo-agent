@@ -730,7 +730,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = next(p for p in [os.path.join(HERE, 'v5'), os.path.join(HERE, '..', 'v5')] if os.path.isdir(p))
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
 FIT_GATE_SRC = _rd0('code/_fit_gate.js').rstrip('\n'); SERP_OBS_SRC = _rd0('code/_serp_obs.js').rstrip('\n')   # 2026-10-11: the keyword fit gate (D4 / D8) and the results-page observation rules (D26), one copy each
-rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations), one copy each, inlined where a node asks for them
+SITE_MODEL_SRC = _rd0('code/_site_model.js').rstrip('\n')   # 2026-10-12 (G19, SITE_MODEL_SPEC.md): the one site model (canonical host, name, NAP, services, pages, facts)
+rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -2399,6 +2400,56 @@ json.dump({'settle_node': 'Settle Run Ledger', 'settle_from': sorted(s for s, o 
            'refused_conditions': [[c['keyName'], c['keyValue']] for c in _mr['filters']['conditions']], 'refused_values': _mr['columns']['value'],
            'modes': _mode_settles}, open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), 'w'), indent=1)
 log('Phase 1 live-check defects (2026-10-12, P1-1 … P1-5): every mode settles its run-ledger row (the short modes left it reserved for ever) and the settle update matches status = reserved, so a row settles once and a refused row stays refused; link-farm pages never count as lost, never produce reclaim advice and never drive the referring-sites drop alert (Parse_Backlinks.js); the scraper-query rule catches "-site:", lower-case and / or and quoted or bracketed groups (GSC_Audit_Findings.js); the keyword fit gate runs on the opportunities by intent and the page-2 quick wins as well, and "no rankings for navigational searches" is gone; the full report rounds CPCs to 2 decimals')
+# 30. ONE SITE MODEL (G19, 2026-10-12, system review FIX_PLAN.md; SITE_MODEL_SPEC.md): features shared no canonical host, no business
+#     name / NAP, no page inventory and no business facts, so their advice contradicted itself (D5, D10, D11, D15, D22). One model now
+#     holds them: v5/code/_site_model.js (marker /*__SITE_MODEL__*/) with SM.from / siteUrl / apiTarget / name / nap / services / pages /
+#     facts / matchPage / toRow, stored in the new seo_sites columns (canonical_host, business_name, logo_url, nap_json, services_json,
+#     nav_pages_json, business_facts, cta, brand_names, competitors, accreditation, model_updated_at) and the new table seo_pages.
+#     Resolvers: the Site Tracker weekly (build_site_tracker.py) and, on demand, here before Route Mode - a model younger than
+#     SM.FRESH_DAYS (7) is reused, otherwise the homepage is read once (redirects followed) and the rebuilt model is kept in seo_cache
+#     ('model:<site_id>'); seo_sites is never written here, because a row there would start the weekly paid runs for an untracked site.
+# =============================================================================
+from ladder_common import PAGES_TABLE, PAGES_COLS
+SITE_KEY30 = "={{ 'site_' + " + SITE_ID_EXPR + " }}"
+_ucd30 = pos('Use Cached Description'); MX30, MY30 = _ucd30[0], _ucd30[1] - 260
+disconnect('Use Cached Description', 'Need Site Read?')
+add_node('Ensure Sites Table (Model)', DT_TYPE, DT_VERSION, dt_create_params(SITES_TABLE, SITES_COLS), [MX30 + 220, MY30], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Ensure Pages Table (Model)', DT_TYPE, DT_VERSION, dt_create_params(PAGES_TABLE, PAGES_COLS), [MX30 + 440, MY30], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Site Row (Model)', DT_TYPE, DT_VERSION, dt_get_where_params(SITES_TABLE, 'site_id', 'eq', SITE_KEY30), [MX30 + 660, MY30], LOAD18)
+add_node('Load Profile (Model)', DT_TYPE, DT_VERSION, dt_get_where_params(PROFILE_TABLE, 'site_id', 'eq', SITE_KEY30), [MX30 + 880, MY30], LOAD18)
+add_node('Site Model Plan', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Site_Model_Plan.js')}, [MX30 + 1100, MY30])
+if_node('Need Homepage (Model)?', "{{ !$json.skip }}", [MX30 + 1320, MY30])
+add_node('Fetch Homepage (Model)', 'n8n-nodes-base.httpRequest', 4.5, {'url': '={{ $json.url }}', 'sendHeaders': True,
+    'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.15)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'timeout': 20000, 'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [MX30 + 1540, MY30 - 120], {'alwaysOutputData': True, 'onError': 'continueRegularOutput', 'retryOnFail': True, 'maxTries': 2, 'waitBetweenTries': 2000})
+add_node('Site Model', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Site_Model.js')}, [MX30 + 1760, MY30])
+add_node('Model Cache Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Model_Cache_Row.js')}, [MX30 + 1980, MY30])
+if_node('New Site Model?', "{{ !$json.skip }}", [MX30 + 2200, MY30])
+add_node('Save Site Model', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), [MX30 + 2420, MY30 - 120], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+add_node('Restore Site Model', 'n8n-nodes-base.code', 2, {'jsCode': "// The run continues with the request item and its site model (a Data Table node outputs the stored row, not the run's item).\nreturn [{ json: $('Site Model').first().json }];"}, [MX30 + 2640, MY30])
+for a, b in [('Use Cached Description', 'Ensure Sites Table (Model)'), ('Ensure Sites Table (Model)', 'Ensure Pages Table (Model)'), ('Ensure Pages Table (Model)', 'Load Site Row (Model)'),
+             ('Load Site Row (Model)', 'Load Profile (Model)'), ('Load Profile (Model)', 'Site Model Plan'), ('Site Model Plan', 'Need Homepage (Model)?'),
+             ('Fetch Homepage (Model)', 'Site Model'), ('Site Model', 'Model Cache Row'), ('Model Cache Row', 'New Site Model?'), ('Save Site Model', 'Restore Site Model'), ('Restore Site Model', 'Need Site Read?')]:
+    connect(a, b)
+connect('Need Homepage (Model)?', 'Fetch Homepage (Model)', 0); connect('Need Homepage (Model)?', 'Site Model', 1)
+connect('New Site Model?', 'Save Site Model', 0); connect('New Site Model?', 'Restore Site Model', 1)
+# the stored model comes with the one cache read per run (desc: + reach: + ai_brands: + model:)
+_lsc30 = nodes['Load Site Cache']['parameters']
+assert _lsc30['matchType'] == 'anyCondition' and len(_lsc30['filters']['conditions']) == 3
+_lsc30['filters']['conditions'].append({'keyName': 'key', 'condition': 'eq', 'keyValue': "={{ 'model:site_' + " + SITE_ID_EXPR + " }}"})
+for _n in ('Site Model Plan', 'Site Model', 'Model Cache Row'): assert 'const SM = (() => {' in code(_n), _n + ': site model kit not inlined'
+assert not any('/*__SITE_MODEL__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'site model placeholder left'
+# harness shim (S35): the kit as a runnable script, one call per item
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_site_model.js'), 'w').write("// harness shim (written by build_v4.py section 30): the site model kit - { site_row, extras, path, keyword } -> the model and what SM answers about it\n" + SITE_MODEL_SRC +
+    "\nreturn $input.all().map(i => { const j = i.json || {}; const model = j.model || SM.from(j.site_row || {}, j.extras || {});\n"
+    "  return { json: { model, row: SM.toRow(model), columns: SM.COLUMNS, site_url: SM.siteUrl(model, j.path === undefined ? '/' : j.path), api_target: SM.apiTarget(model), name: SM.name(model),\n"
+    "    nap: SM.nap(model), services: SM.services(model), pages: SM.pages(model), facts: SM.facts(model), match: j.keyword === undefined ? null : SM.matchPage(model, j.keyword),\n"
+    "    page_rows: SM.pageRows(model), fresh: SM.isFresh(model, j.fresh_days), age_days: SM.ageDays(model), stored: SM.stored(j.site_row || {}) } }; });\n")
+sticky("""### One site model (G19, v4.15)
+Every workflow reads the same facts about a site through **SM** (`v5/code/_site_model.js`): the **canonical host** (every URL we emit), the business **name / logo / NAP** (profile -> homepage Organization / LocalBusiness schema -> Google Business Profile -> what the app sent), the **services** and nav pages, the **page inventory** (`seo_pages`), the **business facts** and call to action, the brand names, the competitors and the accreditation status. Stored in the `seo_sites` model columns, resolved **weekly** by the Site Tracker and **on demand** here (reused for 7 days, else the homepage is read once; the rebuilt model is cached in `seo_cache` `model:`). See `SITE_MODEL_SPEC.md`.""", MX30 + 220, MY30 - 220, 1100, 180, 5)
+log('One site model (G19, 2026-10-12): v5/code/_site_model.js (SM.from / siteUrl / apiTarget / name / nap / services / pages / facts / matchPage / toRow) with the new seo_sites columns (canonical_host, business_name, logo_url, nap_json, services_json, nav_pages_json, business_facts, cta, brand_names, competitors, accreditation, model_updated_at) and the new table seo_pages; resolved weekly in the Site Tracker and on demand before Route Mode (reused 7 days, rebuilt from the homepage, cached in seo_cache model:)')
 
 # =============================================================================
 # 9. WRITE

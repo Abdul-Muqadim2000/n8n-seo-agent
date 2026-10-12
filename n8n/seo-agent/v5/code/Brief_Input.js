@@ -1,7 +1,9 @@
 // Compact facts for the AI brief (one item per site): totals, movers, opportunities, tracked keywords, pages, traffic, trends, alerts, actions.
 const r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;
 return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A = m.ga4;
-  const facts = { domain: m.domain, period: m.period.current, previous_period: m.period.previous, weeks_tracked: m.weeks_tracked,
+  const W = m.site || {};
+  const facts = { website: { canonical_host: W.canonical_host || m.domain, home_url: W.home_url || ('https://' + m.domain + '/'), business_name: W.business_name || m.domain, services: W.services || [], city: (W.nap || {}).city || '', note: 'Call the business by this name and write every URL on the canonical host.' },
+    domain: m.domain, period: m.period.current, previous_period: m.period.previous, weeks_tracked: m.weeks_tracked,
     search_console: G.connected ? { totals: G.totals, deltas: G.deltas, queries_with_impressions: G.query_count, winners: G.winners.slice(0, 5), losers: G.losers.slice(0, 5), new_queries: G.new_queries.slice(0, 5), lost_queries: G.lost_queries.slice(0, 5),
       striking_distance: G.striking.slice(0, 8).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, clicks: q.clicks, page: q.page })), ctr_gaps: G.ctr_gaps.slice(0, 5).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, ctr: r1(q.ctr * 1000) / 10, expected_ctr: Math.round(q.expected_ctr * 100), page: q.page })),
       top_pages: G.top_pages.slice(0, 8), decaying_pages: G.decaying_pages.slice(0, 5), rising_pages: G.rising_pages.slice(0, 5) } : { connected: false, error: G.error },
