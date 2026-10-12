@@ -1,5 +1,6 @@
 /*__REACH__*/
 /*__FIT_GATE__*/
+/*__SITE_MODEL__*/
 // Applies the AI relevance verdicts, computes the final opportunity score, builds topic clusters and the content plan,
 // and chooses the priority keywords (live SERP check next) and the keyword for the content pipeline.
 // v4.8: with a website, every keyword is labelled against the site's reach (difficulty_for_you, plan_type, months) and "Now" means easy or
@@ -34,12 +35,18 @@ const winnableFor = (diff, kd) => R ? (diff === 'easy' || diff === 'reachable') 
 let cacheRows = []; try { cacheRows = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRows = []; }
 const fitCtx = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: ((base.research || {}).competitor_domains || []).filter(d => !(base.competitors || []).includes(d)),
   brands: fitLearnedBrands(cacheRows), protect: [...(base.seeds || []), ...(base.services || []), String(base.business || '').slice(0, 400)] };
+// 2026-10-12 (FIX_PLAN D11): a keyword a live page of the site already answers is labelled `covered_by` (page inventory seo_pages +
+// this run's sitemap, SM.matchPage) instead of being recommended as a new page — writing a second page for the same search splits the
+// signals. The keyword stays in the list, so the owner can see it and refresh the page that exists.
+const siteModelD = (() => { try { const m = $('Site Model').first().json.site_model; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } })();
+const pageModelD = SM.withPages(siteModelD || SM.from({ domain: base.domain || '' }, {}), (base.site_urls || []).map(u => ({ url: u, source: 'sitemap' })));
+const coveredBy = (kw) => { if (!SM.pages(pageModelD).length) return null; const m = SM.matchPage(pageModelD, kw); return m ? { url: m.url, title: m.title || '', matched_by: m.matched_by } : null; };
 const refused = [];
 const kws = (base.research.candidates || []).map(k => {
   const r = rel.get(k.keyword) || { relevance: 1, intent: k.intent, page_type: '', topic: '' };
   const intent = INTENTS.includes(r.intent) ? r.intent : k.intent;
   const page_type = PAGES.includes(r.page_type) ? r.page_type : defaultPage(intent);
-  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, ...forYou(k.kd) };
+  return { ...k, intent, relevance: r.relevance, page_type, topic: r.topic || k.keyword.split(' ').slice(0, 3).join(' '), opportunity: +(k.pre_score * (RELF[r.relevance] ?? 0.45)).toFixed(1), competitors_in_top20: k.competitors.length, covered_by: coveredBy(k.keyword), ...forYou(k.kd) };
 }).filter(k => k.relevance > 0 && k.intent !== 'navigational').filter(k => {
   const g = fitGate(k.keyword, { ...fitCtx, intent: k.intent });
   if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail });
@@ -59,7 +66,7 @@ const clusters = [...cl.values()].map(c => { const p = c.keywords[0]; return {
   topic: c.topic, primary_keyword: p.keyword, page_type: mode(c.page_types), intent: mode(c.intents), keyword_count: c.keywords.length,
   total_volume: c.total_volume, total_opportunity: +c.total_opportunity.toFixed(1), primary_kd: p.kd, primary_volume: p.volume, primary_cpc: p.cpc,
   supporting: c.keywords.slice(1, 9).map(k => k.keyword), keywords: c.keywords.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, opportunity: k.opportunity })),
-  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), ...forYou(p.kd)
+  suggested_title: p.keyword.replace(/\b\w/g, m => m.toUpperCase()), covered_by: p.covered_by || null, ...forYou(p.kd)
 }; }).sort((a, b) => b.total_opportunity - a.total_opportunity);
 // Tiers follow the goal: for leads/sales the first "Now" slots go to commercial/transactional topics; research topics support them
 const goalNow = (base.goal || 'leads');
@@ -87,11 +94,13 @@ pickPriority(50); if (priority.length < 8) pickPriority(20); if (priority.length
 if (!priority.length) priority.push(...kws.slice(0, 8));
 const goal = base.goal || 'leads';
 const want = goal === 'traffic' ? ['informational', 'commercial'] : goal === 'brand' ? ['informational', 'commercial', 'transactional'] : ['commercial', 'transactional'];
-const pipeline = kws.find(k => k.relevance === 2 && want.includes(k.intent) && winnableFor(k.difficulty_for_you, k.kd)) || priority[0] || kws[0] || null;
+const fits = (k) => k.relevance === 2 && want.includes(k.intent) && winnableFor(k.difficulty_for_you, k.kd);
+const pipeline = kws.find(k => fits(k) && !k.covered_by) || kws.find(fits) || priority.find(k => !k.covered_by) || priority[0] || kws[0] || null;   // D11: a keyword a live page answers is not the one to write next
 
 return [{ json: { ...base, keyword_strategy: {
   goal, pool_size: base.research.pool_size, ai_reviewed, total_relevant: kws.length, keywords: kws.slice(0, 200),
   clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline,
   competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
+  covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by })), pages_known: SM.pages(pageModelD).length,
   reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR } : null
 } } }];

@@ -1,8 +1,11 @@
 // Publish detection (v4.8, PIPELINE_FEATURE_SPEC §6.5), step 1: per tracked site, the pages written but not published yet — seo_content_log
 // rows not yet published ("started" / "written", no publish link) from the last 120 days, plus seo_ladders rows "writing" (one candidate per keyword) — and the sitemap
-// to read. A site without such pages makes no request at all. A page that improves an EXISTING URL (striking-distance rewrite, ladder page
+// to read. A page that improves an EXISTING URL (striking-distance rewrite, ladder page
 // that already existed) cannot be told apart by its URL, so it is matched only when the sitemap says that URL changed after the page was written.
 /*__SITE_MODEL__*/
+// 2026-10-12 (FIX_PLAN D11): the sitemap is now read for EVERY tracked site, not only for the ones with a page waiting — the same one plain GET
+// also builds the week's page inventory (seo_pages), which is what stops the agent recommending a page the site already has. `detect` says
+// whether this site has anything to match; a site without a waiting page still makes no page fetch (only the sitemap is read).
 const CONFIG = { max_age_days: 120, max_candidates_per_site: 40 };
 // D15: the sitemap is read on the site's canonical host (this run's models, *Site Model (Site)*); with no model the bare domain, as before.
 const siteModels = (() => { try { return $('Site Model (Site)').all().map(i => i.json).filter(x => x && x.model); } catch (e) { return []; } })();
@@ -35,7 +38,6 @@ plan.forEach((s, idx) => {
     const log = L.filter(r => norm(r.keyword) === kw).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;   // an older log row of the same page (kept in the rows)
     cands.set(kw, { key: kw, keyword: l.keyword, source: 'ladder', log, ladder: l, written_at: String((log && log.started_at) || l.start_date || '') });
   }
-  if (!cands.size) return;
   const list = [...cands.values()].map(c => {
     const existing = String((c.log && c.log.existing_page_url) || '').trim() || (c.ladder && isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '');
     const planned = c.ladder && !isTrue(c.ladder.page_exists) ? String(c.ladder.target_url || '').trim() : '';
@@ -43,6 +45,6 @@ plan.forEach((s, idx) => {
   }).sort((a, b) => String(b.written_at).localeCompare(String(a.written_at))).slice(0, CONFIG.max_candidates_per_site);
   // URLs that already belong to other pages of the site (published pages, pages that existed before) are never claimed by a new page
   const known = [...new Set([...L.flatMap(r => [r.published_url, r.existing_page_url]), ...LD.filter(l => l.status === 'published' || isTrue(l.page_exists)).map(l => l.target_url)].map(u => String(u || '').trim()).filter(u => /^https?:\/\//i.test(u)))];
-  out.push({ json: { site_idx: idx, site_id: s.site_id, domain: d, sitemap_url: SM.siteUrl(modelFor(s.site_id, d), '/sitemap.xml'), candidates: list, known } });
+  out.push({ json: { site_idx: idx, site_id: s.site_id, domain: d, sitemap_url: SM.siteUrl(modelFor(s.site_id, d), '/sitemap.xml'), candidates: list, known, detect: list.length > 0 } });
 });
-return out.length ? out : [{ json: { skip: true, reason: 'no written page is waiting for publication', sites: plan.length } }];
+return out.length ? out : [{ json: { skip: true, reason: 'no tracked site to read a sitemap for', sites: plan.length } }];

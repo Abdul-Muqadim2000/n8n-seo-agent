@@ -103,6 +103,7 @@ export const features: Feature[] = [
       'A 4-week calendar and every schedule with its next and last run',
       'Notices when a planned page goes live and moves the plan on',
       'A pile-up guard: no new pages while too many wait to be published — every written page counts, ladder pages included, and they are named',
+      'The queue never offers a page you already have: a search one of your live pages answers is queued as a refresh of that page',
     ],
     steps: [
       { title: 'Set the pace', body: 'Choose blog posts per week, the default mode — Auto or Manual — and how many ladders are written at once.' },
@@ -150,6 +151,7 @@ export const features: Feature[] = [
       'A plan type per keyword: Direct page, Short ladder or Full ladder',
       'Topic fit, so you only chase keywords your business can own',
       'A quick keyword check before you commit to a plan',
+      'Keywords one of your live pages already answers are marked with that page, so you refresh it instead of writing a second one',
     ],
     steps: [
       { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Ascentra looks at.' },
@@ -197,6 +199,7 @@ export const features: Feature[] = [
       'Auto or Manual per ladder, with a priority order',
       'Two active ladders at a time by default, so effort is not spread thin',
       'No keyword overlap between ladders, so your own pages never compete',
+      'A rung you already have a page for is planned as an improvement of that page, with its real address — never as a second page',
     ],
     steps: [
       { title: 'Choose the keyword', body: 'Pick a recommended keyword or type your own. Ascentra shows the reach for your site and the plan type.' },
@@ -246,6 +249,7 @@ export const features: Feature[] = [
       'Links only to pages that are already live, with link text that reads like a title; pages still to come are listed as links to add later',
       'Every figure looked up in the source the page cites, and a source without independent authority cited at most once',
       'A live check of the published page: schema, images, links and metadata',
+      'One search, one page: a search a live page of yours already answers is written as a refresh of that page',
     ],
     steps: [
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile and your case studies.' },
@@ -333,6 +337,7 @@ export const features: Feature[] = [
       'Striking-distance keywords: close to page one and worth a push',
       'A weekly report every Monday with the changes that matter',
       'Notices when you publish a page from the plan',
+      'A weekly list of the pages your site has, so the advice says “refresh this page” instead of “publish another one”',
       'Dashboards per website for search, traffic, rankings and content',
     ],
     steps: [

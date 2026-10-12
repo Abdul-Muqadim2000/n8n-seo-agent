@@ -15,6 +15,20 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-12',
+    title: 'Ascentra knows the pages you already have',
+    summary:
+      'Every week Ascentra lists the pages your website has. When a search is already answered by one of them, it says to refresh that page instead of publishing a second one that would compete with it.',
+    highlights: [
+      'A weekly page list per website, built from your sitemap, your Search Console pages and the pages Ascentra already checks — no extra connection and no extra cost',
+      'A keyword ladder points a rung at the page you already have, with its real address, instead of planning a new one',
+      'Keyword research marks the keywords a live page of yours already answers and names that page',
+      'The weekly posts and the rank-tracking e-mail stop saying “publish it” when a live page already answers the search',
+      'Two pages for one search split the signals and neither ranks — Ascentra now avoids creating that by itself',
+    ],
+    features: ['keyword-research', 'keyword-ladders', 'content', 'autopilot', 'site-tracking'],
+  },
+  {
+    date: '2026-10-12',
     title: 'Every written page counts before the next one is written',
     summary:
       'The pile-up guard now sees every page waiting to be published, keyword-ladder pages included, and tells you which ones they are.',

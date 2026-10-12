@@ -2714,6 +2714,36 @@ url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log("One canonical host for every URL we emit (2026-10-11, FIX_PLAN D15): the ladder's target_url, internal links, the page and home URLs in the schema, the client pages we read, the Search Console sitemap, audit candidates, the IndexNow key file, Bing submissions, Link Builder targets and the profile e-mail are built with SM.siteUrl(model, path) of the one site model (canonical host), while API payloads keep the bare domain; AI Growth no longer votes on site_host; build-time lint url_lint.py (allow-list: Build Probes / Content Probes / Analyze Probes, Blog Package)")
 
 # =============================================================================
+# 34. BLIND TO EXISTING PAGES (2026-10-12, system review FIX_PLAN D11; SITE_MODEL_SPEC.md section 6): the agent recommended writing a page the
+#     website already had. The 2026-10-01 ladder planned "uae e invoicing penalties" as a NEW page although
+#     /insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs had been live since 2026-08-21 (AI readiness 90, known to
+#     AI Growth) - Ladder Plan matched slug tokens with Jaccard >= 0.5, so 3 keyword words in a 9-word slug scored 0.33 and missed it, and the
+#     Rank Tracker and the Site Tracker then said "publish it", which would cannibalise the live page.
+#     The Site Tracker now keeps a weekly page inventory in seo_pages (the sitemap it already reads for every site, the Search Console pages
+#     with the queries they get impressions for, AI Growth's key pages, the pages found live) and the model carries it (SM.withPages).
+#     Every consumer asks SM.matchPage(model, keyword) - a hit means "improve / refresh THAT page", never a second page:
+#       * Ladder Plan: status 'improve' with the real URL (findExisting),
+#       * discovery (Rank Keywords / Keyword Strategy): the keyword is labelled `covered_by` and named in the report,
+#       * Rank Tracker (Tracker Report): the next step names the live page instead of "publish it",
+#       * Site Tracker (Site Metrics + site_brief.txt): "refresh the existing page",
+#       * Content Cadence (Cadence Plan): a ladder page becomes a refresh, an opportunity post is left out.
+#     Here: the inventory is loaded with the on-demand model, so a run on a tracked site sees it before Route Mode.
+# =============================================================================
+_lpm = pos('Load Profile (Model)')
+add_node('Load Pages (Model)', DT_TYPE, DT_VERSION, dt_get_where_params(PAGES_TABLE, 'site_id', 'eq', SITE_KEY30), [_lpm[0] + 110, _lpm[1] + 160], LOAD18)
+disconnect('Load Profile (Model)', 'Site Model Plan')
+connect('Load Profile (Model)', 'Load Pages (Model)'); connect('Load Pages (Model)', 'Site Model Plan')
+assert "'Load Pages (Model)'" in code('Site Model'), 'Site Model does not read the page inventory'
+for _n in ('Ladder Plan', 'Rank Keywords', 'Build Keyword Strategy'):
+    assert 'SM.matchPage' in code(_n) or 'ks.covered' in code(_n), _n + ': the page inventory is not used'
+for _n in ('Ladder Plan', 'Rank Keywords'): assert 'const SM = (() => {' in code(_n), _n + ': site model kit not inlined'
+assert 'j >= 0.5' not in code('Ladder Plan'), 'Ladder Plan still matches existing pages by Jaccard'
+assert not any('/*__SITE_MODEL__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'site model placeholder left'
+sticky("""### The pages the site already has (D11, v4.15)
+The Site Tracker writes a **page inventory** per website into `seo_pages` every Monday (the sitemap, the Search Console pages with the queries they get impressions for, AI Growth's key pages, the pages found live) and *Load Pages (Model)* brings it into this run's site model. **Ladder Plan**, **discovery**, the **Rank Tracker**, the **Site Tracker** and the **Content Cadence** all ask `SM.matchPage(model, keyword)` first: a page answers a search when 75% of the keyword's meaningful words are in its slug or title, or when it already gets impressions for that exact query. A hit means *refresh that page* \u2014 never a second page for the same search.""", _lpm[0] - 220, _lpm[1] + 320, 1100, 180, 4)
+log('Blind to existing pages fixed (2026-10-12, FIX_PLAN D11): the Site Tracker keeps the website\'s page inventory in seo_pages (sitemap read for every site + Search Console pages and their queries + AI Growth key pages + pages found live, only changed rows written), the site model carries it on demand (Load Pages (Model) -> SM.withPages) and Ladder Plan, discovery, the Rank Tracker, the Site Tracker brief and the Content Cadence ask SM.matchPage before recommending a page: a live page that already answers the search means improve / refresh that URL, never "publish it"')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())

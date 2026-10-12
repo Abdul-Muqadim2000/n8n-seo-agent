@@ -1,4 +1,5 @@
 /*__ANCHOR__*/
+/*__SITE_MODEL__*/
 // Rank tracker report: per ladder, positions vs the previous check, rungs reached, drops and the recommended next step.
 const FORM_URL = '__FORM_URL__', API_URL = '__API_URL__';
 const plan = $('Tracker Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do);
@@ -7,6 +8,12 @@ let history = []; try { history = $('Load History').all().map(i => i.json).filte
 // v4.8 display-only flags for the app (nothing in the e-mail changes): won / stuck per ladder; published dates from the content log, page facts from the ladder rows
 let pubLog = []; try { pubLog = $('Load Content Log (Tracker)').all().map(i => i.json).filter(r => r && r.keyword && r.published_url && !r.error); } catch (e) {}
 let ladderRows = []; try { ladderRows = $('Load Ladders').all().map(i => i.json).filter(r => r && r.ladder_id && r.keyword); } catch (e) {}
+// 2026-10-12 (FIX_PLAN D11): the site's page inventory (seo_pages, filled weekly by the Site Tracker). A ladder keyword that a live page
+// already answers is never "write it" or "publish it": the next step names that page and asks for a refresh, because a second page for the
+// same search splits the signals. With no inventory stored nothing changes.
+let pageRows = []; try { pageRows = $('Load Pages (Tracker)').all().map(i => i.json).filter(r => r && r.site_id && r.url && !r.error); } catch (e) {}
+const modelFor = (domain) => SM.from({ site_id: 'site_' + normD(domain).replace(/[^a-z0-9]+/g, '-'), domain: normD(domain) },
+  { pages: pageRows.filter(r => r.site_id === 'site_' + normD(domain).replace(/[^a-z0-9]+/g, '-')) });
 const FLAGS = { won_checks: 4, won_position: 3, stuck_weeks: 8 };
 const normK = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
@@ -41,7 +48,11 @@ for (const [id, items] of byLadder) {
   //   and are all in — then the main page is written, published or improved by its state.
   const isTop = (r) => r.rung === 4;
   const topRow = rowsK.find(isTop) || null;
-  const liveOf = (r) => { const lr = rowOf(r.keyword); return r.status === 'published' || !!logOf(r.keyword) || lr.page_exists === true || lr.page_exists === 'true' || r.current > 0; };
+  const invModel = pageRows.length ? modelFor(head.domain) : null;
+  const ukeyT = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');
+  // D11: the live page that already answers this keyword (never the ladder's own planned URL)
+  const coveredBy = (r) => { if (!invModel) return null; const m = SM.matchPage(invModel, r.keyword); return (m && ukeyT(m.url) !== ukeyT(r.target_url)) ? m : null; };
+  const liveOf = (r) => { const lr = rowOf(r.keyword); return r.status === 'published' || !!logOf(r.keyword) || lr.page_exists === true || lr.page_exists === 'true' || r.current > 0 || !!coveredBy(r); };
   const mainLive = !!topRow && liveOf(topRow), mainWritten = !!topRow && (mainLive || topRow.status === 'writing');
   const mainFirst = !!topRow && (Number(topRow.page_no) === 1 || !rungs.length);
   const allIn = rungs.length > 0 && rungs.every(r => r.reached);
@@ -56,10 +67,13 @@ for (const [id, items] of byLadder) {
   else if (pending) {
     const target = rowsK.filter(x => x.rung === pending.rung);
     next = { action: 'write_rung_' + pending.rung, rung: pending.rung, main_page: mainLive ? 'live' : mainWritten ? 'written' : 'planned',
-      text: 'Work on rung ' + pending.rung + ': ' + (pending.top10 ? pending.top10 + ' of ' + pending.pages + ' pages are in the top 10. ' : 'none of its pages is in the top 10 yet. ') + 'Write or improve: ' + target.map(t => '"' + t.keyword + '"' + (t.status === 'writing' ? ' (already written — publish it)' : '')).join(', ') + '.',
-      pages: target.map(pageOf) };
-  } else next = { action: 'improve_top', rung: 4, main_page: 'live',
-    text: (allIn ? 'Every rung is in the top 10 and the main page is live' : 'The main page is live') + ': improve the main page "' + head.keyword + '" (depth, internal links from the rung pages, links from other sites) and keep it fresh.', pages: topRow ? [pageOf(topRow)] : [] };
+      text: 'Work on rung ' + pending.rung + ': ' + (pending.top10 ? pending.top10 + ' of ' + pending.pages + ' pages are in the top 10. ' : 'none of its pages is in the top 10 yet. ') + 'Write or improve: ' + target.map(t => { const c = coveredBy(t);
+        return '"' + t.keyword + '"' + (c ? ' (' + c.url + ' already answers this search — refresh that page, do not publish a second one)' : t.status === 'writing' ? ' (already written — publish it)' : ''); }).join(', ') + '.',
+      pages: target.map(t => { const c = coveredBy(t); return c ? { ...pageOf(t), status: 'improve', target_url: c.url, covered_by: c.url } : pageOf(t); }) };
+  } else { const cTop = topRow ? coveredBy(topRow) : null;   // D11: the page that answers the main keyword may be one the site already had
+    next = { action: 'improve_top', rung: 4, main_page: 'live',
+      text: (allIn ? 'Every rung is in the top 10 and the main page is live' : 'The main page is live') + ': improve the main page "' + head.keyword + '"' + (cTop ? ' — it is ' + cTop.url + ', the page the site already has for this search' : '') + ' (depth, internal links from the rung pages, links from other sites) and keep it fresh.',
+      pages: topRow ? [cTop ? { ...pageOf(topRow), status: 'improve', target_url: cTop.url, covered_by: cTop.url } : pageOf(topRow)] : [] }; }
   // won: the main keyword in the top 3 in each of the last 4 checks, this one included (failed checks skipped)
   const histOf = (kw) => history.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && validPos(x.position)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
   const headChecks = [...(!head.deferred && validPos(head.result.position) ? [{ position: Number(head.result.position), checked_at: nowCheck }] : []), ...histOf(head.keyword)].slice(0, FLAGS.won_checks);
@@ -80,7 +94,7 @@ for (const [id, items] of byLadder) {
   const remindHtml = links_to_add.length ? '<p><b>Now live — add the links:</b> ' + links_to_add.map(x => '"' + esc(x.anchor) + '" (' + esc(x.url) + ')').join(', ') + '. ' +
     'Each of these pages was published since the last check, so the other ladder pages do not link to it yet: add one link from ' + (links_to_add.some(x => x.rung !== 4) ? 'the main page "' + esc(head.head_keyword) + '"' : 'the pages that cover the same topic') + ' using the anchor shown.</p>' : '';
   const firstPending = (next.pages || []).find(p => p.status !== 'writing') || (next.pages || [])[0];
-  const apiBody = firstPending ? { mode: 'keyword', keyword: firstPending.keyword, page_type: firstPending.page_type || 'Service Page', country: head.country || '', domain: head.domain, existing_page_url: next.action === 'improve_top' ? (firstPending.target_url || '') : '', email: head.email, ladder_id: id, ladder_rung: next.rung, ladder_head: head.head_keyword, force_content: true } : null;
+  const apiBody = firstPending ? { mode: 'keyword', keyword: firstPending.keyword, page_type: firstPending.page_type || 'Service Page', country: head.country || '', domain: head.domain, existing_page_url: (next.action === 'improve_top' || firstPending.covered_by) ? (firstPending.target_url || '') : '', email: head.email, ladder_id: id, ladder_rung: next.rung, ladder_head: head.head_keyword, force_content: true } : null;   // D11: a covered keyword is written as a refresh of the page that exists
   const formLink = FORM_URL + '?' + encodeURIComponent('What do you want?') + '=' + encodeURIComponent('I know my keyword');
   const table = '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Rung</th><th align="left" ' + td + '>Keyword</th><th ' + td + '>Now</th><th ' + td + '>Before</th><th align="left" ' + td + '>Ranking URL</th></tr>' +
     rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + (r.deferred ? ' <span style="color:#64748b;font-size:11px">(not published yet: checked monthly, last ' + esc(String(r.last_checked || '').slice(0, 10)) + ')</span>' : '') + '</td><td align="center" ' + td + '>' + esc(posText(r.current)) + '</td><td align="center" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous))) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';

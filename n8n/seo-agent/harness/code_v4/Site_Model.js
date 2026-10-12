@@ -162,10 +162,12 @@ const SM = (() => {
     }
     return best;
   };
+  // D11: a stored seo_pages row carries its queries as the JSON string `queries_json`, so both shapes are accepted here
+  const queriesOf = (p) => Array.isArray(p.queries) ? p.queries : (jparse(p.queries_json, []) || []);
   const withPages = (model, more) => ({ ...model, pages: (() => { const seen = new Set(); const out = [];
     for (const p of [...pages(model), ...(Array.isArray(more) ? more : [])]) { const u = S(p.url); if (!u) continue; const k = pathOf(u).replace(/\/$/, '').toLowerCase();
-      if (seen.has(k)) { const old = out.find(o => pathOf(o.url).replace(/\/$/, '').toLowerCase() === k); if (old) { old.title = old.title || S(p.title); old.h1 = old.h1 || S(p.h1); old.lastmod = old.lastmod || S(p.lastmod); if ((p.queries || []).length) old.queries = p.queries; } continue; }
-      seen.add(k); out.push({ url: u, title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries: Array.isArray(p.queries) ? p.queries : [] }); }
+      if (seen.has(k)) { const old = out.find(o => pathOf(o.url).replace(/\/$/, '').toLowerCase() === k); if (old) { old.title = old.title || S(p.title); old.h1 = old.h1 || S(p.h1); old.lastmod = old.lastmod || S(p.lastmod); const q = queriesOf(p); if (q.length) old.queries = q; } continue; }
+      seen.add(k); out.push({ url: u, title: S(p.title), h1: S(p.h1), source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries: queriesOf(p) }); }
     return out; })() });
   // the model exactly as it was stored (seo_sites row or a seo_cache value), with its own timestamp -- never "now", so isFresh() is honest
   const stored = (row) => { const r = (row && typeof row === 'object') ? row : {}; return (S(r.canonical_host) || S(r.model_updated_at)) ? from(r, {}) : null; };
@@ -192,15 +194,19 @@ const row = plan.site_id ? (rowsOf('Load Site Row (Model)').find(r => r.site_id 
 const cached = (() => { const c = rowsOf('Load Site Cache').find(r => r.key === 'model:' + plan.site_id); if (!c) return null;
   try { const v = JSON.parse(c.value || 'null'); return (v && typeof v === 'object') ? { ...v, model_updated_at: c.updated_at || v.model_updated_at } : null; } catch (e) { return null; } })();   // the cache row's own timestamp decides the age, not the value's
 const profile = plan.site_id ? (rowsOf('Load Profile (Model)').find(r => r.site_id === plan.site_id) || {}) : {};
+// D11 (SITE_MODEL_SPEC.md §6): the page inventory the Site Tracker keeps in seo_pages rides with the model, so an on-demand run knows
+// which pages the site already has (SM.matchPage) and never plans a second page for a search one of them already answers.
+const pageRows = plan.site_id ? rowsOf('Load Pages (Model)').filter(r => r.site_id === plan.site_id && r.url) : [];
 const res = (() => { try { return $('Fetch Homepage (Model)').first().json || {}; } catch (e) { return {}; } })();
 const status = Number(res.statusCode) || 0;
 const html = (!plan.skip && status >= 200 && status < 400) ? String(res.body != null ? res.body : (res.data || '')) : '';
 const desc = req.site_description || {};
-const extras = { site_id: plan.site_id, domain: plan.domain || req.domain, profile, request: req,
+const extras = { site_id: plan.site_id, domain: plan.domain || req.domain, profile, request: req, pages: pageRows,
   services: [...(desc.services || []), ...(desc.main_services || [])], description: desc,
   competitors: req.competitors || [], brand_names: req.brand_names || [] };
 const base = SM.stored(row) || SM.stored(cached || {});
 const model = html
   ? SM.from({ ...(base ? SM.toRow(base) : {}), ...row }, { ...extras, html, updated_at: new Date().toISOString() })
   : (base ? { ...base, business_facts: extras.request.business_facts || base.business_facts, cta: extras.request.cta || base.cta } : SM.from(row, extras));
-return [{ json: { ...req, site_model: model, site_model_reused: !html, site_model_source: html ? 'homepage' : (base ? 'stored' : 'request') } }];
+const withPages = pageRows.length ? SM.withPages(model, pageRows) : model;
+return [{ json: { ...req, site_model: withPages, site_model_reused: !html, site_model_source: html ? 'homepage' : (base ? 'stored' : 'request') } }];

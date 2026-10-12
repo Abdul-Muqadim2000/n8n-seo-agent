@@ -89,21 +89,20 @@ const rungOf = (k) => { const kd = kdOf(k); if (kd <= BAND[1] && k.volume >= 20 
 const byRung = { 1: [], 2: [], 3: [] }; const later = [];
 for (const k of kws) { const r = rungOf(k); if (r) byRung[r].push(k); else later.push(k); }
 
-// ---- existing pages on the site (sitemap tokens or the URL that already ranks) ----
-const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'your', 'our', 'best', 'top', 'services', 'service', 'company', 'how', 'what', 'is', 'are', 'near', 'me', 'vs', 'page', 'pages', 'html', 'php', 'index', 'home']);
-const tok = (s) => String(s || '').toLowerCase().replace(/\.(html?|php|aspx?)$/g, '').split(/[^a-z0-9]+/).filter(t => t.length > 1 && !STOP.has(t));
-const sitePages = (base.site_urls || []).map(u => ({ url: u, tokens: tok(String(u).replace(/^https?:\/\/[^\/]+/i, '')) }));
+// ---- existing pages on the site (the site model's page inventory, this run's sitemap, or the URL that already ranks) ----
+// 2026-10-12 (FIX_PLAN D11): the old rule scored the keyword's words against the slug's with Jaccard >= 0.5, so 3 keyword words in a
+// 9-word slug gave 0.33 and the live page was missed: the 2026-10-01 plan wrote "uae e invoicing penalties" as a NEW page although
+// /insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs had been live since August. SM.matchPage decides now:
+// a page answers the keyword when >= 75% of its meaningful words are in the slug or the title, or when it already gets impressions for
+// the exact query (seo_pages, filled weekly by the Site Tracker). A hit means status 'improve' with the real URL, never a second page.
+const siteModel = (() => { try { const m = $('Site Model').first().json.site_model; return (m && typeof m === 'object') ? m : null; } catch (e) { return null; } })();
+const invPages = [...(base.site_urls || []).map(u => ({ url: u, source: 'sitemap' })),
+  ...((base.internal_link_candidates || []).filter(c => c && c.url && c.title).map(c => ({ url: c.url, title: c.title, source: 'sitemap' })))];
+const pageModel = SM.withPages(siteModel || SM.from({ domain }, {}), invPages);
 const findExisting = (keyword, yourUrl) => {
   if (yourUrl) return { url: yourUrl, source: 'ranking' };
-  const kt = new Set(tok(keyword)); if (!kt.size) return null;
-  let best = null;
-  for (const p of sitePages) {
-    const o = p.tokens.filter(t => kt.has(t)).length;
-    if (o < Math.min(2, kt.size)) continue;
-    const j = o / new Set([...p.tokens, ...kt]).size;
-    if (j >= 0.5 && (!best || j > best.j)) best = { url: p.url, j };
-  }
-  return best ? { url: best.url, source: 'sitemap' } : null;
+  const m = SM.matchPage(pageModel, keyword);
+  return m ? { url: m.url, source: m.source === 'gsc' || m.matched_by === 'query' ? 'search console' : 'sitemap', matched_by: m.matched_by, title: m.title || '' } : null;
 };
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const homeUrl = domain ? siteUrlOf(domain, '/') : '';

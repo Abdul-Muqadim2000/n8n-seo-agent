@@ -42,6 +42,8 @@ const out = state.map(st => {
     detected.push({ keyword, url: p.url, ladder_id: log_row.ladder_id || (c.ladder ? c.ladder.ladder_id : ''), matched_by: p.matched_by, source: c.source });
   }
   const unmatched = (st.candidates || []).filter(c => !matched.has(c.key)).map(c => ({ keyword: c.keyword, note: (st.notes || {})[c.key] || '' }));
-  return { json: { site_idx: st.site_idx, site_id: st.site_id, domain: st.domain, candidates: (st.candidates || []).length, sitemap: st.sitemap, pages_fetched: (st.fetches || []).length, detected, log_rows, ladder_rows, case_rows, unmatched } };
+  // D11: the sitemap URLs this run read, plus the title / H1 of the pages it fetched, feed the week's page inventory (seo_pages)
+  const titles = (st.fetches || []).map(u => { const pg = pages.get(u); return (pg && pg.ok) ? { url: u, title: pg.title, h1: pg.h1 } : null; }).filter(Boolean);
+  return { json: { site_idx: st.site_idx, site_id: st.site_id, domain: st.domain, candidates: (st.candidates || []).length, sitemap: st.sitemap, pages_fetched: (st.fetches || []).length, detected, log_rows, ladder_rows, case_rows, unmatched, inventory: st.inventory || [], page_titles: titles } };
 });
 return out.length ? out : [{ json: { skip: true, reason: 'nothing to match' } }];   // the chain must reach the Search Console part in every case

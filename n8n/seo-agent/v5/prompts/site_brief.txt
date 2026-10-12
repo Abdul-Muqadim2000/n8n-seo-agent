@@ -8,6 +8,7 @@ Rules
 - If Search Console or GA4 is not connected, say so in one line and work with what exists (tracked keywords, live checks, trends); the headline must then be about connecting Google.
 - actions: at most 5, ordered by expected impact, each concrete: which page or query, what to change, the expected effect. Prefer the computed_actions but reword them for the owner and merge duplicates. Use "keyword" and "url" fields when the action is about one query or one page.
 - Ladder pages with status "planned" or "writing" are not on the site yet: say they are not published yet, never that they are "not indexed".
+- The site already has pages (facts.website.pages_known). When a computed action is of type "refresh_existing", a live page already answers that search: say to refresh that exact page (name its URL), never to publish a second page for the same search — two pages for one search split the signals and neither ranks.
 - A manual action or security issue (from a Search Console notice or the monthly check-in) is always the first action and the headline.
 - highlights: 2-4 one-line facts worth remembering (biggest win, biggest loss, best opportunity, index status).
 - watch: 0-3 things to re-check next week (a page that dropped, a keyword slipping, a trend turning).

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { AiTargetRow, ContentLogRow, LadderRow, LadderSettingsRow, QueryRow, RankHistoryRow, TrendRow } from '@seo/shared';
-import { planCadence, simulateCadence, type CadenceInput } from '../src/services/cadence';
+import type { AiTargetRow, ContentLogRow, LadderRow, LadderSettingsRow, QueryRow, RankHistoryRow, SitePageRow, TrendRow } from '@seo/shared';
+import { matchPage, planCadence, simulateCadence, type CadenceInput } from '../src/services/cadence';
 import { cadenceDetail, cadenceSchedule } from '../src/services/pipeline';
 
 // The app's mirror of Cadence_Plan.js, checked against the same situations as the n8n harness (scenarios_v5.js S24): the expected
@@ -226,5 +226,45 @@ describe('cadence mirror: the AI page of the week', () => {
   it('the simulated Mondays write the targets one after the other (a refresh is not repeated)', () => {
     const weeks = simulateCadence(input({ pagesPerWeek: 0, aiTargets: T, aiPagesPerMonth: 4 }), ['2026-10-05T14:00:00.000Z', '2026-10-12T14:00:00.000Z', '2026-10-19T14:00:00.000Z']);
     expect(weeks.map((w) => w.picks.map((x) => x.source + ':' + x.keyword))).toEqual([['ai_refresh:e invoicing in uae'], ['ai_answer:odoo vs business central uae'], []]);
+  });
+});
+
+// D11 (2026-10-12, system review FIX_PLAN): one search, one page — the website's page inventory (seo_pages, written weekly by the
+// Site Tracker) keeps the queue from offering a page the site already has. Same rules as SM.matchPage in n8n (harness S40).
+describe('cadence mirror: pages the website already has (D11)', () => {
+  const INS = 'https://www.northwind-erp.com/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs';
+  const page = (url: string, o: Partial<SitePageRow> = {}) =>
+    ({ site_id: 'site_northwind-erp-com', url, title: '', h1: '', source: 'sitemap', lastmod: '', queries_json: '[]', updated_at: '', ...o }) as SitePageRow;
+  const INVENTORY = [
+    page(INS, { title: 'The cost of non-compliance: UAE e-invoicing penalties and mitigation costs' }),
+    page('https://www.northwind-erp.com/uae-e-invoicing-fta-rules/', { title: 'UAE e-invoicing: FTA rules explained' }),
+    page('https://www.northwind-erp.com/erp-pricing/', { source: 'gsc', queries_json: JSON.stringify([{ query: 'erp cost dubai', impressions: 240 }, { query: 'erp price uae', impressions: 0 }]) }),
+  ];
+  const rising = (q: string) => [{ domain: D, keyword: 'e invoicing', direction: 'rising', rising: `${q} (+120%)`, change_pct: 120, checked_at: daysAgo(2) } as unknown as TrendRow];
+
+  it('matchPage: the live page for "uae e invoicing penalties", the S26 false-match pair kept apart, a query match, nothing else', () => {
+    expect(matchPage(INVENTORY, 'uae e invoicing penalties')).toMatchObject({ url: INS, matchedBy: 'slug', score: 1 });
+    expect(matchPage(INVENTORY, 'e invoicing uae penalties')?.url).toBe(INS);
+    expect(matchPage([INVENTORY[1]], 'e invoicing uae penalties')).toBeNull();
+    expect(matchPage(INVENTORY, 'erp cost dubai')).toMatchObject({ url: 'https://www.northwind-erp.com/erp-pricing/', matchedBy: 'query' });
+    expect(matchPage(INVENTORY, 'wms implementation dubai')).toBeNull();
+    expect(matchPage([], 'uae e invoicing penalties')).toBeNull();
+  });
+  it('an opportunity post for a search a live page answers is not queued, and says which page answers it', () => {
+    const p = planCadence(input({ pagesPerWeek: 1, trends: rising('uae e invoicing penalties'), pages: INVENTORY }), NOW);
+    expect(p.picks.map((x) => x.keyword)).not.toContain('uae e invoicing penalties');
+    expect(p.coveredByLivePages).toEqual([{ keyword: 'uae e invoicing penalties', source: 'trend', url: INS }]);
+  });
+  it('a ladder page for such a search is still written — as a refresh of that page, never a second URL', () => {
+    const L = ladder('lad_P', 'uae e invoicing', [[1, 1, 'uae e invoicing penalties', undefined]], '2026-07-01T00:00:00.000Z');
+    const p = planCadence(input({ pagesPerWeek: 1, ladders: L, pages: INVENTORY }), NOW);
+    expect(p.picks.map((x) => [x.keyword, x.existingPageUrl])).toEqual([['uae e invoicing penalties', INS]]);
+    expect(p.picks[0].why).toContain('already answers this search, so it is refreshed, not written again');
+    expect(p.coveredByLivePages.map((c) => c.source)).toEqual(['ladder']);
+  });
+  it('without an inventory the queue is exactly what it was before', () => {
+    const p = planCadence(input({ pagesPerWeek: 1, trends: rising('uae e invoicing penalties') }), NOW);
+    expect(p.picks.map((x) => x.keyword)).toEqual(['uae e invoicing penalties']);
+    expect(p.coveredByLivePages).toEqual([]);
   });
 });
