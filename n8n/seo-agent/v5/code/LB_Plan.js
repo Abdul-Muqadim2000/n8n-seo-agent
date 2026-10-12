@@ -6,6 +6,7 @@
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
 /*__LINK_KIT__*/
+/*__SITE_MODEL__*/
 const CONFIG = { max_sites_per_run: 15, sequences_per_week: 10, monthly_days: 25, qualify_per_week: 25 };
 const { list, on_demand, want, total } = monitorSites('links');   // `trigger` comes from the shared snippet
 if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the Link Builder is switched off for every site' : 'no sites yet') } }];
@@ -30,7 +31,8 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const c = countryOf(s.location_code);
   const bn = String(pr.business_name || '').trim(); const brand = bn && bn.toLowerCase() !== 'home' ? bn : s.domain.split('.')[0];
   // our pages: published ladder pages, AI answer pages, written pages, the top Search Console pages, the homepage
-  const home = 'https://' + s.domain + '/';
+  const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };   // D15: our page links are on the canonical host
+  const home = SM.siteUrl(site_model, '/');
   const myQ = queries.filter(q => q.site_id === s.site_id && q.page);
   const lastPeriod = myQ.map(q => String(q.period_end || '')).sort().pop() || '';
   const posOf = new Map(); const imp = new Map();
@@ -60,7 +62,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, free_only, competitors, topics, brand, brand_names: [...new Set([brand, ...s.settings.brand_names].filter(Boolean))],
     profile: { business_name: bn, business_type: pr.business_type || '', author_name: pr.author_name || '', author_job_title: pr.author_job_title || '', street_address: pr.street_address || '', city: pr.city || '', region: pr.region || '',
       postal_code: pr.postal_code || '', country_code: pr.country_code || c.iso || '', phone: pr.phone || '', public_email: pr.public_email || '', logo_url: pr.logo_url || '' },
-    pages, home, budget: CONFIG.sequences_per_week, qualify_max: CONFIG.qualify_per_week,
+    pages, home, canonical_host: site_model.canonical_host || s.domain, budget: CONFIG.sequences_per_week, qualify_max: CONFIG.qualify_per_week,
     due: { listings: due('listings_at'), resources: due('resources_at'), wayback: due('wayback_at'), broken: due('broken_at') && !free_only, press: true },
     state: st, prospects_open: mineP.filter(p => (p.status || 'new') === 'new').length, outreach_rows: mineO.length, checked_at: iso } };
 });

@@ -1,4 +1,5 @@
 import json, uuid
+import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 nid = lambda: str(uuid.uuid4())
 webhook = {"httpMethod": "POST", "path": "seo-keyword-check", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
 QV = r"""// Fast validation so callers get an immediate, useful 400. The full validation happens again in the main workflow.
@@ -58,6 +59,7 @@ wf = {"id": "SEOagentAPIentry", "name": "SEO Agent — API", "active": False, "s
 import os
 _here = os.path.dirname(os.path.abspath(__file__))
 _out = os.path.join(_here, 'workflows', 'SEO_Agent_API.json') if os.path.isdir(os.path.join(_here, 'workflows')) else 'SEO_Agent_API.json'
+url_lint.check(wf)   # D15: no node builds a site URL by hand (url_lint.py)
 json.dump([wf], open(_out, 'w'), indent=2, ensure_ascii=False)
 print('API workflow written:', len(wf['nodes']), 'nodes')
 # the harness runs Quick Validate too (scenario S23: the web app's request bodies)
@@ -103,6 +105,7 @@ awf = {"id": "SEOagentAdminAPI", "name": "SEO Agent — Admin API", "active": Fa
   "Run Site Admin": {"main": [[{"node": "Respond Admin Result", "type": "main", "index": 0}], [{"node": "Respond Admin Failed", "type": "main", "index": 0}]]}
  }}
 _aout = os.path.join(os.path.dirname(_out), 'SEO_Agent_Admin_API.json')
+url_lint.check(awf)   # D15: no node builds a site URL by hand (url_lint.py)
 json.dump([awf], open(_aout, 'w'), indent=2, ensure_ascii=False)
 if os.path.isdir(_code):
     open(os.path.join(_code, 'Admin_Validate.js'), 'w').write(AV)
@@ -203,6 +206,7 @@ for _s, _o in _AC.items():
             for _t in _l: assert _t['node'] in _names, _t['node']
 assert all(n.get('credentials') for n in _AN if n['type'] in ('@n8n/n8n-nodes-langchain.lmChatAnthropic', 'n8n-nodes-base.httpRequest', 'n8n-nodes-base.webhook')), 'keyword check: credential slot missing'
 kwf = {"id": "SEOagentAssess", "name": "SEO Agent — Keyword Check", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl", "executionTimeout": 45}, "tags": [], "nodes": _AN, "connections": _AC}
+url_lint.check(kwf)   # D15: no node builds a site URL by hand (url_lint.py)
 json.dump([kwf], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Keyword_Check.json'), 'w'), indent=2, ensure_ascii=False)
 if os.path.isdir(_code):
     for _n in _AN:

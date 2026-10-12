@@ -4,6 +4,7 @@ queries, CTR gaps, decaying pages, tracked keywords, URL inspection of ladder pa
 property auto-detected), Google Trends (DataForSEO) and live SERP checks for the site's own keywords -> Data Table history -> one Claude
 brief -> HTML e-mail + PDF + callback with ready-to-send API bodies. Code nodes are also written to harness/code_v4 for the offline harness."""
 import json, os, re, uuid, sys
+import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, HISTORY_COLS, SITES_TABLE, METRICS_TABLE, QUERY_TABLE, SITES_COLS, METRICS_COLS, QUERY_COLS,
                            LOG_TABLE, LOG_COLS, TRENDS_TABLE, TRENDS_COLS, CADENCE_TABLE, CADENCE_COLS, ALERTS_TABLE, ALERTS_COLS, CHECKIN_TABLE, CHECKIN_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_VIS_TABLE, AI_VIS_COLS, BL_SNAP_TABLE, BL_SNAP_COLS, AUDITS_TABLE, AUDITS_COLS, PROSPECT_TABLE, PROSPECT_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS,
@@ -41,6 +42,7 @@ def link(conns, a, b, out=0):
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 def write(wfobj, fname):
+    url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
         if _n['type'] == 'n8n-nodes-base.emailSend': _n.update({'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
     names = {n['name'] for n in wfobj['nodes']}

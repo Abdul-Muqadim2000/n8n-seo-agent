@@ -9,6 +9,7 @@
 //     fetched next to see whether they name the business or its competitors (the strongest lever on AI mentions: earned media);
 //   * the monthly entity check (Wikidata).
 /*__MONITOR_SITES__*/
+/*__SITE_MODEL__*/
 const CONFIG = { audit_per_week: 12, recheck_days: 25, max_key_pages: 40, submit_max: 50, resubmit_days: 30, recent_days: 8, earned_fetch: 10, max_targets: 6, refresh_after_days: 90,
   stage_weight: { decision: 1, consideration: 0.8, awareness: 0.6 } };
 const { list, on_demand, want, total } = monitorSites('ai');
@@ -39,10 +40,13 @@ const kindOf = (host, title, url, comps) => comps.some(c => host === c || host.e
 const out = [];
 for (const s of sites) {
   const dom = s.domain; const ours = (u) => { const h = hostOf(u); return h === dom || h.endsWith('.' + dom); };
-  // the host the site really serves (www or not): Bing and IndexNow refuse addresses on another host than the site's
-  const hostVotes = new Map(); for (const u of [...qh.filter(q => q.site_id === s.site_id && q.page).map(q => q.page), ...logs.filter(l => normD(l.domain) === dom && l.published_url).map(l => l.published_url)]) { const m = String(u).match(/^https?:\/\/([^\/?#:]+)/i); if (m && ours(u)) { const h = m[1].toLowerCase(); hostVotes.set(h, (hostVotes.get(h) || 0) + 1); } }
-  const site_host = [...hostVotes.entries()].sort((a, b) => b[1] - a[1]).map(([h]) => h)[0] || dom;
-  const normU = (u) => { const k = keyOf(u); return k ? 'https://' + site_host + pathOfU(u) : ''; };
+  // D15: the host the site really serves (www or not) comes from the one site model (SITE_MODEL_SPEC.md), which resolved it from the homepage,
+  // its canonical tag and the site's own live URLs. Bing and IndexNow refuse addresses on another host than the site's. With no model yet
+  // (the weekly Site Tracker has not run for this site), the model is built here from the same live URLs the old vote used.
+  const seen_hosts = [...qh.filter(q => q.site_id === s.site_id && q.page).map(q => q.page), ...logs.filter(l => normD(l.domain) === dom && l.published_url).map(l => l.published_url)].filter(u => ours(u));
+  const site_model = SM.stored(s) || SM.from({ site_id: s.site_id, domain: dom }, { seen_hosts });
+  const site_host = site_model.canonical_host || dom;
+  const normU = (u) => { const k = keyOf(u); return k ? SM.siteUrl(site_model, pathOfU(u)) : ''; };
   const v = vis.filter(x => x.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
   const gaps = v ? parse(v.gaps_json, []) : []; const cited = v ? parse(v.pages_json, []) : []; const compRows = v ? parse(v.competitors_json, []) : [];
   const comps = [...new Set([...s.settings.competitors, ...compRows.filter(c => c && /\./.test(c.domain || '')).map(c => c.domain)])];
@@ -59,7 +63,7 @@ for (const s of sites) {
   for (const l of lrows.filter(l => l.target_url && (l.status === 'published' || l.page_exists === true || l.page_exists === 'true'))) addPage(l.target_url, 'ladder', 'keyword ladder page: "' + l.keyword + '"');
   const byPage = new Map(); for (const q of sq) { const u = normU(q.page); if (!u) continue; const same = [...byPage.keys()].find(y => keyOf(y) === keyOf(u)) || u; byPage.set(same, (byPage.get(same) || 0) + (Number(q.impressions) || 0)); }
   [...byPage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10).forEach(([u, imp]) => addPage(u, 'search', imp.toLocaleString('en-GB') + ' Google impressions'));
-  addPage('https://' + dom + '/', 'home', 'homepage');
+  addPage(SM.siteUrl(site_model, '/'), 'home', 'homepage');
   // ---- the questions to win (targets) ----
   const pageFor = (keyword, question, pid) => {
     const fromAi = cited.find(c => answers.some(a => a.site_id === s.site_id && a.prompt_id === pid && String(a.our_urls || '').includes(String(c.url || '').replace(/^https?:\/\/(www\.)?/, ''))));

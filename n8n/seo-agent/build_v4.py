@@ -2523,6 +2523,40 @@ open(os.path.join(OUT_CODE, '_anchor.js'), 'w').write("// harness shim (written 
     "\nreturn $input.all().map(i => ({ json: { anchor: anchorText(i.json || {}), title_case: titleCaseKeyword((i.json || {}).keyword || '') } }));\n")
 log('Content correctness (2026-10-11, FIX_PLAN D9 / G2 / G4): only a page the site really has is a link target (Collect Site URLs splits the ladder links into live and planned_link_targets; Content QA strips links to planned pages, the hub block and the ItemList list the live ones only, meta.json carries links_to_add_when_published and the Rank Tracker reminds the owner the week one goes live), anchors come from the page title or the title-cased keyword with the acronyms kept (v5/code/_anchor.js); no FAQPage schema and no FAQ block scored anywhere (question headings answered directly instead, in Content QA, AI Readiness and the brief / copywriter / critic / editor prompts); every figure of a cited sentence is looked up in the text that source gave us and marked [Confirm: ...] when it is not there, a source with no independent authority may be cited once, and utm_* / srsltid / gclid / fbclid are stripped from every link in the copy, the package and the schema (v5/code/_sources.js)')
 
+# 33. ONE CANONICAL HOST FOR EVERY URL WE EMIT (2026-10-11, system review FIX_PLAN.md D15; SITE_MODEL_SPEC.md §6): ladder target URLs,
+#     internal links, schema and canonical URLs, the pages we fetch for the client, the sitemap we look for in Search Console, the IndexNow
+#     key file, Bing submissions, Link Builder targets, audit candidates and the profile e-mail all used to be glued together as
+#     'https://' + domain. On techand.ai that bare host 308-redirects to www, so the agent handed out redirecting URLs and its own audit
+#     flagged "links pointing to redirects". Every one of them now goes through SM.siteUrl(model, path) of the one site model, which knows
+#     the canonical host; API payloads (DataForSEO targets, Bing site names, Search Console properties) keep the bare domain through
+#     SM.apiTarget or their own property form. The v5 Code nodes carry the marker themselves; the nodes inherited from v3 get the kit and
+#     the helper here. Build-time lint: url_lint.py fails the build when a node still builds a host by hand (allow-list: the three probe
+#     nodes that *resolve* the host, and Blog Package, whose file belongs to D10).
+# =============================================================================
+import url_lint
+PRELUDE33 = ("// D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain\n"
+             "// 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.\n"
+             "let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}\n"
+             "const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);\n")
+def with_site_model(name):   # the kit + the helper in front of a node inherited from v3
+    assert 'const SM = (() => {' not in code(name), name + ': site model kit already inlined'
+    setcode(name, SITE_MODEL_SRC + '\n' + PRELUDE33 + code(name))
+for _n33 in ('Collect Site URLs', 'Pick Key Pages', 'URLs To Check', 'PS Targets', 'Analyze PageSpeed', 'Analyze HTML', 'Parse Sitemap Index', 'Competitor Homes'):
+    with_site_model(_n33)
+# the internal links the copywriter may use, and the home page the brief quotes
+patch('Collect Site URLs', "const home = ctx.domain ? 'https://' + ctx.domain + '/' : '';", "const home = ctx.domain ? siteUrlOf(ctx.domain, '/') : '';")
+# the audit: the pages we measure and the URLs the findings name
+patch('Pick Key Pages', "pick.unshift({ url: 'https://' + domain + '/', kind: 'home' });", "pick.unshift({ url: siteUrlOf(domain, '/'), kind: 'home' });")
+patch('URLs To Check', "if (url && url.startsWith('/')) url = 'https://' + d.domain + url;", "if (url && url.startsWith('/')) url = siteUrlOf(d.domain, url);")
+patch('URLs To Check', "out.push({ json: { url: 'https://' + d.domain + '/', purpose: 'none' } });", "out.push({ json: { url: siteUrlOf(d.domain, '/'), purpose: 'none' } });")
+patch('PS Targets', "url: 'https://' + i.json.domain + '/'", "url: siteUrlOf(i.json.domain, '/')")   # your site: the model; a competitor: its own bare domain, as before
+patch('Analyze PageSpeed', "sample_urls: ['https://' + base.domain + '/']", "sample_urls: [siteUrlOf(base.domain, '/')]")
+patch('Analyze HTML', "if (c.startsWith('/')) c = 'https://' + domain + c;", "if (c.startsWith('/')) c = siteUrlOf(domain, c);")
+patch('Parse Sitemap Index', "const base = 'https://' + ctx.domain;", "const base = siteUrlOf(ctx.domain, '/').replace(/[/]$/, '');")
+patch('Competitor Homes', "url: 'https://' + c.domain + '/'", "url: siteUrlOf(c.domain, '/')")   # a competitor's own home page: no model, same URL as before
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log("One canonical host for every URL we emit (2026-10-11, FIX_PLAN D15): the ladder's target_url, internal links, the page and home URLs in the schema, the client pages we read, the Search Console sitemap, audit candidates, the IndexNow key file, Bing submissions, Link Builder targets and the profile e-mail are built with SM.siteUrl(model, path) of the one site model (canonical host), while API payloads keep the bare domain; AI Growth no longer votes on site_host; build-time lint url_lint.py (allow-list: Build Probes / Content Probes / Analyze Probes, Blog Package)")
+
 # =============================================================================
 # 9. WRITE
 # =============================================================================

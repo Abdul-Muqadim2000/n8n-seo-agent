@@ -1,5 +1,6 @@
 /*__SOURCES__*/
 /*__ANCHOR__*/
+/*__SITE_MODEL__*/
 // Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
 // and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.
@@ -15,6 +16,10 @@ const warnings = [];
 const brief = prev.content_brief || {};
 const kw = String(prev.keyword || '').toLowerCase();
 const domain = prev.domain || '';
+// D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain
+// 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.
+let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
+const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);
 const today = new Date().toISOString().slice(0, 10);
 
 const plain = (s) => String(s || '').replace(/\[([^\[\]]+)\]\([^)]*\)/g, '$1').replace(/[*_`>]+/g, '').replace(/\s+/g, ' ').trim();
@@ -78,19 +83,19 @@ const metaTitle = metaOf('Title'), metaDesc = metaOf('Meta Description'), slug =
 // did not exist (exec 365). (FIX_PLAN G4): every link loses its tracking parameters (utm_*, srsltid, gclid, fbclid), and a weak source
 // (vendor or agency blog, listicle, unknown site) may be cited once — the live page cited trangotech.com three times.
 const allowed = new Set();
-const normUrl = (u) => String(u || '').trim().replace(/\/$/, '').toLowerCase();
+const normUrl = (u) => String(u || '').trim().replace(/\/$/, '').toLowerCase().replace(/^(https?:\/\/)www\./, '$1');   // host-agnostic: a crawl reports www. while the canonical may be bare (D15)
 (prev.internal_link_candidates || []).filter(c => c && !c.planned).forEach(c => allowed.add(normUrl(c.url)));
 (prev.site_urls || []).forEach(u => allowed.add(normUrl(u)));
 const plannedTargets = new Set([...(prev.planned_link_targets || []), ...(prev.hub_pages || []).filter(p => p && p.planned)].map(l => normUrl(l && l.url)).filter(Boolean));
 plannedTargets.forEach(u => allowed.delete(u));
 if (prev.existing_page && prev.existing_page.url) allowed.add(normUrl(prev.existing_page.url));
-if (domain) allowed.add(normUrl('https://' + domain));
+if (domain) allowed.add(normUrl(siteUrlOf(domain, '/')));
 const removedLinks = [], plannedLinks = [], weakRepeats = []; const externalUrls = []; const weakSeen = new Map();
 let internalLinks = 0, externalLinks = 0, cleanedLinks = 0;
 md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
   let u = SRC.clean(url.trim()); if (u !== url.trim()) cleanedLinks++;
   const isRelative = u.startsWith('/');
-  if (isRelative) u = domain ? 'https://' + domain + u : u;
+  if (isRelative) u = domain ? siteUrlOf(domain, u) : u;
   const host = u.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[\/?#]/)[0].toLowerCase();
   const internal = !!domain && (host === domain || host.endsWith('.' + domain));
   if (internal || isRelative) { if (allowed.size && allowed.has(normUrl(u))) { internalLinks++; return '[' + text + '](' + u + ')'; }
@@ -306,9 +311,9 @@ const content_score = Math.round(structure_pts + coverage_pts + readability_pts 
 const P = prev.site_profile || {}; const PA = P.address || {}; const AU = prev.author || null; const RV = prev.reviewer || null; const role = prev.page_role || 'standard';
 const bizName = String(P.business_name || ((prev.site_description && prev.site_description.business_name) ? prev.site_description.business_name : '')).trim();
 const biz = bizName || '[Your Business Name]';
-const pageUrl = (prev.existing_page && prev.existing_page.url) || (domain ? 'https://' + domain + '/' + String(slug || '').replace(/^\/|\/$/g, '') : '[Page URL]');
+const pageUrl = (prev.existing_page && prev.existing_page.url) || (domain ? siteUrlOf(domain, String(slug || '').replace(/^\/|\/$/g, '')) : '[Page URL]');
 const h1Text = plain(h1.replace(/^#\s*/, '')) || metaTitle;
-const home = domain ? 'https://' + domain + '/' : '[Website URL]';
+const home = domain ? siteUrlOf(domain, '/') : '[Website URL]';
 const slugId = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const org = { '@type': 'Organization', ...(domain ? { '@id': home + '#organization' } : {}), name: biz, url: home, ...(P.logo_url ? { logo: P.logo_url } : {}) };
 const blocks = [];

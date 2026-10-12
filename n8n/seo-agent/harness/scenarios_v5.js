@@ -3480,7 +3480,8 @@ await guard('one site model (FIX_PLAN G19)', async () => {
   check('Restore Site Model hands the request item on, not the stored row', rest[0].json.mode === 'keyword' && !!rest[0].json.site_model, JSON.stringify(Object.keys(rest[0].json)));
   mock('Load Site Cache', [{ json: { key: 'model:' + SITE, kind: 'model', site_id: SITE, value: cr[0].json.value, updated_at: daysAgo(9) } }]);
   const pl3 = await run('Site Model Plan', EMPTY);
-  check('a model from 9 days ago is rebuilt', pl3[0].json.skip === false && pl3[0].json.url === B + '/', JSON.stringify(pl3[0].json));
+  check('a model from 9 days ago is rebuilt, and read on the canonical host the stale model already knows (D15)',
+    pl3[0].json.skip === false && pl3[0].json.url === W + '/', JSON.stringify(pl3[0].json));
   mock('Use Cached Description', [{ json: { mode: 'discover', keyword: 'erp software uae' } }]);
   const pl4 = await run('Site Model Plan', EMPTY);
   check('a request without a website asks for nothing', pl4[0].json.skip === true && /no website/.test(pl4[0].json.reason), JSON.stringify(pl4[0].json));
@@ -3770,6 +3771,145 @@ await guard('content correctness', async () => {
   const tOld = await trackerWith([logRow('peppol access point uae', 30)]);
   check('D9: a page that was already live at the last check is not reminded again',
     (tOld.links_to_add || []).length === 0 && !/Now live/.test(tOld.html), JSON.stringify(tOld.links_to_add));
+});
+
+// ===================================================================================
+// S39 D15 (2026-10-11, system review) — one canonical host. techand.ai's apex 308-redirects to www, so every URL the agent handed
+// out (the ladder's target_url, internal links, the IndexNow key file, the pages sent to Bing, Link Builder targets, audit
+// candidates, the profile e-mail) pointed at a redirect, and the audit flagged it. All of them now come from
+// SM.siteUrl(model, path) of the one site model (SITE_MODEL_SPEC.md §6), while API payloads keep the bare domain.
+// ===================================================================================
+await guard('one canonical host (FIX_PLAN D15)', async () => {
+  const SN = 'S39 D15 — every URL we emit is on the site\'s canonical host (www or bare), API targets stay bare, no model = today\'s behaviour';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log((ok ? '   ok   ' : '   FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const EMPTY = [{ json: {} }];
+  const MO = require('./fixtures_monitors');
+  const D = MO.DOMAIN, SITE = MO.SITE, W = 'https://www.' + D, B = 'https://' + D;
+  const now = new Date().toISOString(), ago = (d) => new Date(Date.now() - d * 864e5).toISOString();
+
+  // ---------- the two models: the same site, one serving www, one serving the bare host ----------
+  const modelOf = async (host) => (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D, canonical_host: host, business_name: 'Northwind ERP', model_updated_at: now } } }]))[0].json;
+  const WM = await modelOf('www.' + D), BM = await modelOf(D);
+  console.log('   models ->', WM.model.canonical_host, '|', BM.model.canonical_host);
+  check('the kit: a www model emits www URLs, a bare model bare ones, and both keep the bare domain for API payloads',
+    WM.site_url === W + '/' && WM.api_target === D && BM.site_url === B + '/' && BM.api_target === D, JSON.stringify([WM.site_url, WM.api_target, BM.site_url, BM.api_target]));
+
+  // ---------- the main workflow: the nodes read $('Site Model') ----------
+  const mainRun = async (model) => {
+    if (model) mock('Site Model', [{ json: { site_model: model } }]); else delete store['Site Model'];
+    const out = {};
+    out.client = (await run('Client Page Requests', [{ json: { domain: D, internal_link_candidates: [] } }]))[0].json.url;
+    mock('Prepare Keyword Run', { domain: D, keyword: 'e invoicing in uae' });
+    mock('Fetch Sitemaps', [{ statusCode: 200, headers: {}, sitemap_xml: F.urlset(F.siteUrls) }]);
+    const cu = (await run('Collect Site URLs', store['Fetch Sitemaps']))[0].json;
+    out.home_link = (cu.internal_link_candidates.find(c => c.path === '/') || {}).url;
+    mock('Check Crawl', { domain: D });
+    mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items: [] }] }] } }]);
+    out.sitemap = (await run('GSC Audit Plan', [{ json: { domain: D } }]))[0].json.sitemap_url;
+    mock('Normalize Input', [{ json: { domain: D, mode: 'profile' } }]);
+    mock('Profile Row', [{ json: { site_id: SITE, domain: D, business_name: 'Northwind ERP', author_name: 'Sara Khan', author_job_title: 'Head of ERP Delivery', phone: '+971 4 555 0100', street_address: 'Office 1203, Aspect Tower', city: 'Dubai', country_code: 'AE', updated_at: now } }]);
+    mock('Save Profile', store['Profile Row']); mock('Load Profile (Profile)', EMPTY);
+    const pd = (await run('Profile Delivery', store['Profile Row']))[0].json;
+    out.profile = JSON.parse(pd.schema_preview ? JSON.stringify(pd.schema_preview) : '{}');
+    out.profile_urls = JSON.stringify(pd).match(/https?:\/\/[^"'\\ ]*northwind-erp\.com[^"'\\ ]*/g) || [];
+    return out;
+  };
+  const mainW = await mainRun(WM.model);
+  console.log('   main workflow (www) ->', JSON.stringify({ client: mainW.client, home_link: mainW.home_link, sitemap: mainW.sitemap, profile: mainW.profile_urls.slice(0, 3) }));
+  check('main workflow: the client pages we read, the home page offered as an internal link, the sitemap the audit looks for and the profile schema are all on www',
+    mainW.client === W + '/' && mainW.home_link === W + '/' && mainW.sitemap === W + '/sitemap.xml'
+    && mainW.profile_urls.length > 0 && mainW.profile_urls.every(u => u.startsWith(W)), JSON.stringify({ c: mainW.client, h: mainW.home_link, s: mainW.sitemap, p: mainW.profile_urls.slice(0, 4) }));
+  const mainB = await mainRun(BM.model);
+  check('main workflow: a site whose canonical host is the bare domain gets bare URLs',
+    mainB.client === B + '/' && mainB.home_link === B + '/' && mainB.sitemap === B + '/sitemap.xml' && mainB.profile_urls.every(u => !u.startsWith(W)), JSON.stringify({ c: mainB.client, h: mainB.home_link, s: mainB.sitemap }));
+  const mainN = await mainRun(null);
+  check('main workflow: with no site model in the run nothing breaks — the bare domain, exactly as before D15',
+    mainN.client === B + '/' && mainN.home_link === B + '/' && mainN.sitemap === B + '/sitemap.xml', JSON.stringify({ c: mainN.client, h: mainN.home_link, s: mainN.sitemap }));
+
+  // ---------- the ladder: the pages it promises and the links between them ----------
+  const ladderWith = async (model) => {
+    if (model) mock('Site Model', [{ json: { site_model: model } }]); else delete store['Site Model'];
+    mock('Start Form', F.forms.startLadder);
+    const n = await run('Normalize Input', F.forms.pageLadder);   // the same ladder intake S5 uses
+    mock('Route Mode', n); await run('Prepare Keyword Run', n);
+    mock('Fetch Sitemaps', [{ statusCode: 200, headers: {}, sitemap_xml: F.urlset(F.siteUrls) }]);
+    const cu = await run('Collect Site URLs', store['Fetch Sitemaps']);
+    mock('Parse Analysis', { ...cu[0].json, competitor_analysis: F.competitorAnalysis, competitors: [] });
+    mock('Keyword Data', F.keywordOverview); mock('Site Authority', F.rankOverview(F.OUR));
+    await run('Merge Keyword Data', store['Site Authority']);
+    mock('Verdict Agent', { output: { ...F.verdictGo, what_must_change: ['Earn 20+ referring domains'], expected_monthly_visits_top3: 90, time_to_rank_months: 9 } });
+    const pv = await run('Parse Verdict', store['Verdict Agent']);
+    const lr = await run('Ladder Requests', pv);
+    mock('Run Ladder Research', V.ladderResearch(lr.map(r => r.json)));
+    const lp = await run('Ladder Pool', store['Run Ladder Research']);
+    const ch = await run('Ladder Relevance Chunks', lp);
+    mock('Ladder Keyword Relevance', ch.map(c => V.ladderRelevance(c.json)));
+    return (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json.ladder;
+  };
+  const pagesOf = (L) => [L.top, ...L.rungs.flatMap(r => r.pages)];
+  const plannedUrls = (L) => pagesOf(L).filter(p => !p.exists).map(p => p.target_url).filter(Boolean);
+  const existingUrls = (L) => pagesOf(L).filter(p => p.exists).map(p => p.target_url).filter(Boolean);
+  const linkUrls = (L) => L.rungs.flatMap(r => r.pages.flatMap(p => (p.links_to || []).map(l => l.url))).filter(u => u && u !== L.top.target_url);
+  const LW = await ladderWith(WM.model);
+  console.log('   ladder (www) -> planned', JSON.stringify(plannedUrls(LW).slice(0, 3)), '| existing', JSON.stringify(existingUrls(LW)));
+  check('ladder: every page it promises and every link between those pages is on www (target_url, links_to), while a page the site already has keeps the URL it really has',
+    plannedUrls(LW).length > 2 && plannedUrls(LW).every(u => u.startsWith(W + '/')) && linkUrls(LW).length > 0 && linkUrls(LW).every(u => u.startsWith(W + '/'))
+    && existingUrls(LW).every(u => u.startsWith(B + '/')), JSON.stringify({ planned: plannedUrls(LW).slice(0, 4), links: linkUrls(LW).slice(0, 2), existing: existingUrls(LW) }));
+  const LB2 = await ladderWith(BM.model);
+  check('ladder: a bare-host site keeps bare target URLs', plannedUrls(LB2).length > 2 && plannedUrls(LB2).every(u => u.startsWith(B + '/')), JSON.stringify(plannedUrls(LB2).slice(0, 4)));
+  const LN = await ladderWith(null);
+  check('ladder: with no site model the bare domain is used, as before', plannedUrls(LN).length > 2 && plannedUrls(LN).every(u => u.startsWith(B + '/')), JSON.stringify(plannedUrls(LN).slice(0, 4)));
+
+  // ---------- AI Growth: the model decides the host, no more vote on the stored URLs ----------
+  const growthWith = async (host) => {
+    const row = { ...MO.sites()[0].json, business_name: 'Northwind ERP', model_updated_at: host ? now : '', canonical_host: host || '' };
+    mock('Load Sites', [{ json: row }]); mock('Load Ladders', MO.ladders()); mock('Load Monitors', MO.monitors()); mock('Load Profiles', MO.profiles());
+    for (const nm of ['Load AI Visibility', 'Load AI Answers', 'Load AI Prompts', 'Load AI Pages', 'Load AI Targets', 'Load AI Growth', 'Load Link Prospects (Growth)', 'Load Cache (Growth)']) mock(nm, EMPTY);
+    // every stored URL of the site is on www: the old vote followed them even for a site that serves the bare host
+    mock('Load Content Log', [{ json: { site_id: SITE, domain: D, keyword: 'peppol uae', source: 'ladder', status: 'published', published_url: W + '/peppol-uae/', published_at: ago(2), started_at: ago(9) } }]);
+    mock('Load Query History', [{ json: { site_id: SITE, domain: D, period_end: '2026-10-04', query: 'e invoicing in uae', page: W + '/e-invoicing-uae/', impressions: 1200, clicks: 20, position: 8.4 } }]);
+    const g = (await run('Growth Plan', store['Load Cache (Growth)']))[0].json;
+    const ik = await run('IndexNow Key Requests', [{ json: g }]);
+    return { g, key_url: ik[0].json.url };
+  };
+  const GW = await growthWith('www.' + D);
+  console.log('   AI growth (www) ->', JSON.stringify({ host: GW.g.site_host, key: GW.key_url, submit: GW.g.submit.map(x => x.url) }).slice(0, 300));
+  check('AI growth: the key pages, the pages sent to Bing / IndexNow and the IndexNow key file are on the canonical host; the API payload keeps the bare domain',
+    GW.g.site_host === 'www.' + D && GW.g.key_pages.length > 0 && GW.g.key_pages.every(k => k.url.startsWith(W + '/')) && GW.g.submit.every(x => x.url.startsWith(W + '/'))
+    && GW.key_url === W + '/' + GW.g.indexnow_key + '.txt' && GW.g.domain === D, JSON.stringify({ host: GW.g.site_host, key: GW.key_url, domain: GW.g.domain, pages: GW.g.key_pages.map(k => k.url).slice(0, 3) }));
+  const GB = await growthWith(D);
+  check('AI growth: a site whose model says the bare host is canonical gets bare URLs, although every stored URL is on www (the host vote is gone)',
+    GB.g.site_host === D && GB.g.key_pages.every(k => k.url.startsWith(B + '/') && !k.url.startsWith(W)) && GB.key_url === B + '/' + GB.g.indexnow_key + '.txt',
+    JSON.stringify({ host: GB.g.site_host, pages: GB.g.key_pages.map(k => k.url).slice(0, 3) }));
+  const GN = await growthWith('');
+  check('AI growth: with no model yet the site\'s own live URLs still decide the host (www), as before',
+    GN.g.site_host === 'www.' + D && GN.key_url === W + '/' + GN.g.indexnow_key + '.txt', GN.g.site_host);
+
+  // ---------- the Link Builder, the Audit Scheduler and the AI crawler check ----------
+  const monitorWith = async (host) => {
+    const row = { ...MO.sites()[0].json, business_name: 'Northwind ERP', model_updated_at: host ? now : '', canonical_host: host || '' };
+    mock('Load Sites', [{ json: row }]); mock('Load Ladders', MO.ladders()); mock('Load Profiles', MO.profiles());
+    mock('Load Monitors', [{ json: { ...MO.monitors()[0].json, link_builder: true } }]); delete store['Manual Run'];
+    for (const nm of ['Load Link Prospects', 'Load Link Outreach', 'Load Content Log', 'Load Backlink Snapshots', 'Load Cache (Links)', 'Load AI Targets', 'Load Backlinks', 'Load Query History', 'Load Rank History', 'Load Audits']) mock(nm, EMPTY);
+    const lb = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+    const ac = (await run('Audit Candidates', store['Load Audits']))[0].json;
+    mock('AI Plan', [{ json: { site_id: SITE, domain: D, canonical_host: host || D } }]);
+    const acc = (await run('Access Requests', EMPTY)).map(x => x.json);
+    return { lb, ac, acc };
+  };
+  const MW = await monitorWith('www.' + D);
+  console.log('   monitors (www) ->', JSON.stringify({ home: MW.lb.home, sitemap: MW.ac.sitemap_url, access: MW.acc.map(a => a.url).slice(0, 3) }));
+  check('Link Builder: the page we ask for a link to, the audit candidate\'s sitemap and the AI-crawler checks are on the canonical host; the API targets stay bare',
+    MW.lb.home === W + '/' && MW.lb.pages[0].url === W + '/' && MW.lb.domain === D
+    && MW.ac.sitemap_url === W + '/sitemap.xml' && MW.ac.domain === D
+    && MW.acc.length > 0 && MW.acc.every(a => a.url.startsWith(W + '/')), JSON.stringify({ home: MW.lb.home, page: MW.lb.pages[0].url, sitemap: MW.ac.sitemap_url, acc: MW.acc.map(a => a.url).slice(0, 3) }));
+  const MB = await monitorWith(D);
+  check('the same three on a bare-host site are bare', MB.lb.home === B + '/' && MB.ac.sitemap_url === B + '/sitemap.xml' && MB.acc.every(a => a.url.startsWith(B + '/')),
+    JSON.stringify({ home: MB.lb.home, sitemap: MB.ac.sitemap_url }));
+  const MN = await monitorWith('');
+  check('with no model the monitors fall back to the bare domain and nothing breaks',
+    MN.lb.home === B + '/' && MN.ac.sitemap_url === B + '/sitemap.xml' && MN.acc.length > 0, JSON.stringify({ home: MN.lb.home, sitemap: MN.ac.sitemap_url }));
 });
 
 H.report();

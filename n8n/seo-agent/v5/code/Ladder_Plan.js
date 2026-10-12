@@ -1,5 +1,6 @@
 /*__REACH__*/
 /*__FIT_GATE__*/
+/*__SITE_MODEL__*/
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
 // cluster, maps internal links, matches existing pages, estimates the timeline and picks the pages to write now.
 // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): everything is measured against the site's REACH (stored 30 days in seo_cache, else measured from this
@@ -14,6 +15,10 @@ const chunks = $('Ladder Relevance Chunks').all().map(i => i.json);
 const outs = $input.all().map(i => i.json);
 const head = String(base.keyword || '').toLowerCase().trim();
 const domain = String(base.domain || '').toLowerCase();
+// D15 (system review 2026-10-11): every URL we emit uses the site model's canonical host (SITE_MODEL_SPEC.md §6) -- the bare domain
+// 308-redirects on a www site. With no model (an older run) or another site's domain, the bare domain keeps today's behaviour.
+let SITE_MODEL = null; try { SITE_MODEL = $('Site Model').first().json.site_model || null; } catch (e) {}
+const siteUrlOf = (dom, path) => SM.siteUrl(SITE_MODEL && SITE_MODEL.domain && SITE_MODEL.domain === SM.helpers.bare(dom) ? SITE_MODEL : { domain: dom }, path);
 const pagesNow = Math.min(3, Math.max(1, Number(base.pages_now) || 1));
 const ladderId = String(base.ladder_id || ('lad_' + Date.now().toString(36)));
 const parse = (raw) => { if (raw && typeof raw === 'object') return raw; try { return JSON.parse(String(raw || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '')); } catch (e) { return {}; } };
@@ -100,7 +105,7 @@ const findExisting = (keyword, yourUrl) => {
   return best ? { url: best.url, source: 'sitemap' } : null;
 };
 const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const homeUrl = domain ? 'https://' + domain + '/' : '';
+const homeUrl = domain ? siteUrlOf(domain, '/') : '';
 const plannedUrl = (kw) => homeUrl + slug(kw) + '/';
 
 // ---- one page per topic cluster inside each rung ----

@@ -8,6 +8,7 @@
 // On demand with free_only (API): the free sources and the link check only — no DataForSEO, no Claude, $0.
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
+/*__SITE_MODEL__*/
 const CONFIG = { max_sites_per_run: 15, first_lookback_days: 30, gap_every_days: 85, bing: __BING_ENABLED__ };   // v4.6: the link gap changes slowly: refreshed quarterly; bing: set at build time when SEO_BING_WEBMASTER_API_KEY is in n8n/.env
 const { list, on_demand, want, total } = monitorSites('backlinks');   // `trigger` comes from the shared snippet
 if (!list.length) return [{ json: { nothing_to_do: true, reason: on_demand ? 'no site matches "' + want + '"' : (total ? 'the backlink monitor is switched off for every site' : 'no sites yet (register one through "Track my site" or plan a keyword ladder)') } }];
@@ -50,7 +51,10 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const import_info = [...new Set(myImports.map(x => x.source))].map(src => { const rows = myImports.filter(x => x.source === src); const at = rows.map(x => String(x.imported_at || '')).sort().pop() || '';
     return { source: src, rows: rows.filter(x => String(x.imported_at || '') === at).length, imported_at: at, age_days: at ? Math.round((now.getTime() - new Date(at).getTime()) / 864e5) : null }; });
   const myLedger = ledger.filter(x => x.site_id === s.site_id);
-  return { json: { site_id: s.site_id, domain: s.domain, country: s.country || c.name || '', country_name: c.name || s.country || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
+// D15 (system review 2026-10-11): the plan carries the site's canonical host (the site model, SITE_MODEL_SPEC.md §6), so every URL the run
+// emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
+  const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
+  return { json: { site_id: s.site_id, domain: s.domain, canonical_host: site_model.canonical_host || s.domain, country: s.country || c.name || '', country_name: c.name || s.country || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
     on_demand, adhoc: !!s.adhoc, free_only, mode, since, since_full, stored_timeseries, gap_due, stored_gap, competitors, need_competitors: mode === 'full' && !competitors.length && !/^(true|1|yes|on)$/i.test(String(trigger.free_only ?? '')), business_name: s.profile.business_name || '', brand_names: brand, assets,
     brand_query, brand_res, label, topics, ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, ''), gsc_property: s.gsc_property || '', bing: CONFIG.bing, link_builder: !!(s.settings || {}).link_builder, import_info,
     ledger_size: myLedger.length, ledger_live: myLedger.filter(x => x.status !== 'lost').length,
