@@ -39,9 +39,9 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const gapAge = gapRows.length ? Math.min(...gapRows.map(x => (now.getTime() - new Date(x.last_seen || x.first_seen || 0).getTime()) / 864e5)) : 1e9;
   const gap_due = on_demand || gapAge >= CONFIG.gap_every_days;
   const stored_gap = gap_due ? [] : gapRows.filter(x => !['won', 'rejected', 'ignored'].includes(x.status)).sort((a, b) => (Number(b.rank) || 0) - (Number(a.rank) || 0)).slice(0, 30).map(x => ({ domain: x.prospect_domain, rank: Number(x.rank) || 0, spam: Number(x.spam_score) || 0, links_to: ((String(x.detail || '').match(/Links to ([^(]+)/) || [])[1] || '').split(/,\s*/).map(z => z.trim()).filter(Boolean), backlinks: 0, stored: true, last_seen: String(x.last_seen || '').slice(0, 10), status: x.status || 'new' }));
-  const brand = [...new Set([s.domain, s.profile.business_name, ...s.settings.brand_names].filter(b => b && (b.includes('.') || b.split(/\s+/).length >= 2 || b.length >= 8)))];
+  const brand = [...new Set([s.domain, s.business_name, ...s.settings.brand_names].filter(b => b && (b.includes('.') || b.split(/\s+/).length >= 2 || b.length >= 8)))];
   // v4.10: the free sources
-  const bn = String(s.profile.business_name || '').trim(); const label = s.domain.split('.')[0];
+  const bn = String(s.business_name || '').trim(); const label = s.domain.split('.')[0];   // P34-6: the site model's name (monitorSites nameOf), not seo_profiles alone
   const distinctive = bn && (bn.split(/\s+/).length >= 2 || bn.length >= 8) && bn.toLowerCase() !== 'home';
   const brand_query = distinctive ? bn : s.domain;   // news / web mention search: a short label like "techand" matches other companies (CLAUDE.md), the domain does not
   const brand_res = [...new Set([s.domain, ...(distinctive ? [bn] : []), ...s.settings.brand_names.filter(b => String(b).length >= 5)])].map(b => String(b).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'));
@@ -55,7 +55,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
 // emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
   const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
   return { json: { site_id: s.site_id, domain: s.domain, canonical_host: site_model.canonical_host || s.domain, country: s.country || c.name || '', country_name: c.name || s.country || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
-    on_demand, adhoc: !!s.adhoc, free_only, mode, since, since_full, stored_timeseries, gap_due, stored_gap, competitors, need_competitors: mode === 'full' && !competitors.length && !/^(true|1|yes|on)$/i.test(String(trigger.free_only ?? '')), business_name: s.profile.business_name || '', brand_names: brand, assets,
+    on_demand, adhoc: !!s.adhoc, free_only, mode, since, since_full, stored_timeseries, gap_due, stored_gap, competitors, accreditation: SM.facts(site_model).accreditation,   /* P34-1: an accredited-provider list is never pitched without the accreditation on file */ need_competitors: mode === 'full' && !competitors.length && !/^(true|1|yes|on)$/i.test(String(trigger.free_only ?? '')), business_name: s.business_name || '', brand_names: brand, assets,
     brand_query, brand_res, label, topics, ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, ''), gsc_property: s.gsc_property || '', bing: CONFIG.bing, link_builder: !!(s.settings || {}).link_builder, import_info,
     ledger_size: myLedger.length, ledger_live: myLedger.filter(x => x.status !== 'lost').length,
     previous: last ? { checked_at: last.checked_at, mode: last.mode, rank: Number(last.rank) || 0, backlinks: Number(last.backlinks) || 0, referring_domains: Number(last.referring_domains) || 0, spam_score: Number(last.spam_score) || 0, broken_backlinks: Number(last.broken_backlinks) || 0,

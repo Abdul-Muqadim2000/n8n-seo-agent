@@ -364,17 +364,61 @@ const OK = (() => {
       ? 'a competing provider: their page sells what you sell (' + Math.round(share * 100) + '% of your service words, "' + signals.slice(0, 2).join('", "') + '")' : '';
   }
   // does a page name the business? Punctuation in a name ("Tech&") breaks \b, so every name is matched by its letter / digit runs with a
-  // little punctuation allowed between them, and the domain counts as a name too
+  // little punctuation allowed between them, and the domain counts as a name too.
+  // P34-2 (live 2026-10-12): "Tech&" collapses to the four-letter run "tech", which matched the plain word "tech" on three unrelated
+  // pages and claimed listings the site does not have — SaaSHub ("Tech Alternatives", 20x "tech", 0x "techand"), AlternativeTo and the
+  // UAE Ministry of Finance accredited-provider list. A name decides that on its own only when it is distinctive: the domain, or letter /
+  // digit runs of at least MIN_NAME_RUN characters. A shorter name is matched only with its own punctuation in place ("Tech&", "Tech &"),
+  // never as the bare letters, so the stripped-ampersand form is never evidence on its own. (Entities are decoded by LK.text first.)
+  const MIN_NAME_RUN = 5;
+  const reEsc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  function nameRe(n) {
+    const s = String(n || '').trim(); const runs = s.toLowerCase().match(/[a-z0-9]+/g) || [];
+    if (!runs.length) return null;
+    const isDomain = runs.length >= 2 && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(s);
+    if (isDomain || runs.join('').length >= MIN_NAME_RUN) return new RegExp('(^|[^a-z0-9])' + runs.join('[^a-z0-9]{0,3}') + '($|[^a-z0-9])', 'i');
+    if (!/[^a-z0-9\s]/i.test(s)) return null;   // four letters and nothing else: too common a word to claim anything by itself
+    return new RegExp('(^|[^a-z0-9])' + s.toLowerCase().split(/\s+/).map(reEsc).join('\\s*'), 'i');
+  }
   function namesUs(text, names) {
     const t = String(text || '');
-    for (const n of names) { const runs = String(n || '').toLowerCase().match(/[a-z0-9]+/g) || [];
-      if (!runs.length || runs.join('').length < 4) continue;
-      const re = new RegExp('(^|[^a-z0-9])' + runs.join('[^a-z0-9]{0,3}') + '($|[^a-z0-9])', 'i');
-      if (re.test(t)) return String(n); }
+    for (const n of (names || [])) { const re = nameRe(n); if (re && re.test(t)) return String(n); }
     return '';
   }
+  // ---- the cold link gap: who is never pitched when all we know is the domain (P34-4, live 2026-10-12) ----
+  // The full SEO report's "Link opportunities" told the owner to "reach out with a listing request, partnership or useful resource" to
+  // mof.gov.ae (a ministry you join by accreditation), backlinkcheckers.space and buyhighda.space (sites whose business is selling
+  // links). The Backlink Monitor refuses all three on the same data; this is the rule both of them use. The spam score is the link
+  // index's own 0-100 (DataForSEO `backlinks_spam_score`).
+  const SELLWORD = /(backlink|dofollow|link ?building|link ?farm|guest ?post|high ?da|seo ?link|buy ?link|authority ?link|link ?juice|link ?exchange|pbn)/i;
+  function noPitch(domain, o) {
+    const x = o || {}; const d = String(domain || '').toLowerCase().replace(/^www\./, '');
+    if (!d || !/\./.test(d)) return 'not a website';
+    if (isGov(d)) return 'a government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)';
+    const bad = badHost(d); if (bad) return bad;
+    if (LK.isWire(d)) return 'a press-release wire (' + d + '): a link there is a paid release, not an editorial link';
+    if (LK.isGambling(d)) return 'a gambling site (' + d + ')';
+    const name = d.replace(/\.[a-z.]{2,}$/, '').replace(/[.-]+/g, ' ');
+    if (SELLWORD.test(name)) return 'its own name offers links ("' + name.slice(0, 40) + '"): a site that sells links passes nothing on and risks a penalty';
+    if (Number(x.spam) >= 30) return 'a spam score of ' + Math.round(Number(x.spam)) + ' of 100 in the link index';
+    if (!x.accredited && accreditedList(String(x.title || '') + ' ' + name)) return 'a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one';
+    return '';
+  }
+  // and whether anything ties a bare domain to our topics: a topic word inside its own name, a title we know for it, or our own market's
+  // domain ending (the 25% rule the Link Builder applies to the page it fetches, OFF_TOPIC)
+  function gapTopic(domain, o) {
+    const x = o || {}; const d = String(domain || '').toLowerCase().replace(/^www\./, '');
+    const name = d.replace(/\.[a-z.]{2,}$/, '').replace(/[.-]+/g, ' ');
+    const topicStems = new Set(words(x.topics || '').map(stem).filter(w => w.length >= 4));
+    if (words(name).map(stem).some(w => topicStems.has(w))) return { ok: true, why: 'its name carries your topic' };
+    const f = x.title ? fit(x.topics, x.title, x.df, x.docs) : 0;
+    if (f >= OFF_TOPIC) return { ok: true, why: 'its page matches your topics (' + Math.round(100 * f) + '%)' };
+    const tld = String(x.country_tld || '').toLowerCase();
+    if (tld.length === 2 && tld !== 'us' && d.endsWith('.' + tld)) return { ok: true, why: 'a site in your market (.' + tld + ')' };
+    return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
+  }
   return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
@@ -755,7 +799,12 @@ return plans.map(p => {
   const gapBase = gi >= 0 ? freshGap : (p.stored_gap || []).filter(g => !linking.has(g.domain) && !LK.isWire(g.domain)).map(g => ({ ...g, source: 'dfs' }));
   const gap = [...gapBase]; for (const g of ccGap) { const x = gap.find(y => y.domain === g.domain); if (x) { x.source = 'both'; x.cc_rank = g.cc_rank; x.links_to = [...new Set([...x.links_to, ...g.links_to])]; } else gap.push(g); }
   gap.sort((a, b) => (b.links_to.length - a.links_to.length) || ((b.source === 'both') - (a.source === 'both')) || (b.rank - a.rank) || ((a.cc_rank || 9e9) - (b.cc_rank || 9e9)));
-  for (const g of gap) { const v = onTopic(g.domain); g.off_topic = !v.ok; g.topic_reason = v.why; }   // D23: shown in the gap table, never pitched
+  const weAreAccredited = OK.accredited(p.accreditation);
+  for (const g of gap) { const v = onTopic(g.domain); g.off_topic = !v.ok; g.topic_reason = v.why;
+    // P34-1 / P34-4 (live 2026-10-12): a government portal, a mailbox provider, a contact database, infrastructure, a statistics page
+    // or an accredited-provider list is listed in the gap table and never pitched — a ministry's list is joined by applying or being
+    // accredited, not by an e-mail (mof.gov.ae and uae-asp.ae came back as gap prospects carrying a drafted pitch).
+    g.no_pitch = OK.noPitch(g.domain, { spam: g.spam, title: titleOfD.get(LK.refKey(g.domain)) || '', accredited: weAreAccredited }); }   // D23 / P34-4: shown in the gap table with the reason, never pitched
   const gap_off_topic = gap.filter(g => g.off_topic).length;
   // ---------------- coverage: who sees what ----------------
   const srcNow = (r) => r._sources_now || [];
@@ -812,7 +861,7 @@ return plans.map(p => {
     ...lists.filter(l => !l.named && l.competitors.length).slice(0, 8).map(l => ({ prospect_domain: l.domain, type: 'list', origin: 'web', rank: l.domain_rank, spam_score: 0, score: scoreOf('list', { authority: l.domain_rank, dr: l.dr }, (1 + 0.15 * (l.competitors.length - 1)) * localOf(l.domain)), detail: '"' + String(l.title).slice(0, 90) + '" lists ' + l.competitors.join(', ') + ', not you', source_url: l.url, target_url: target0 })),
     ...lists.filter(l => l.named && !l.linked).slice(0, 4).map(l => ({ prospect_domain: l.domain, type: 'mention', origin: 'web', rank: l.domain_rank, spam_score: 0, score: scoreOf('mention', { authority: l.domain_rank, dr: l.dr }), detail: 'Lists you without a link: ' + String(l.title).slice(0, 100), source_url: l.url, target_url: home })),
     ...compNew.slice(0, 10).map(c => ({ prospect_domain: c.domain, type: 'comp_new', origin: 'dfs', rank: c.domain_rank, spam_score: 0, score: scoreOf('comp_new', { authority: c.domain_rank, dr: c.dr }, localOf(c.domain)), detail: 'Linked to ' + c.competitor + ' on ' + c.first_seen + (c.title ? ': ' + c.title : ''), source_url: c.url, target_url: target0 })),
-    ...gap.filter(g => !g.off_topic && (g.source !== 'cc' ? gi >= 0 : true)).slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', origin: g.source, rank: g.rank, spam_score: g.spam, score: scoreOf('gap', { authority: g.rank, dr: drOf.get(g.domain) || 0, cc_rank: g.cc_rank }, (1 + 0.6 * (g.links_to.length - 1)) * localOf(g.domain)),   /* links to several competitors: the strongest intent signal; on the market's own domain ending: more relevant */ detail: 'Links to ' + g.links_to.join(', ') + (g.backlinks ? ' (' + g.backlinks + ' links)' : '') + ', not to you' + (g.source === 'cc' ? ' (Common Crawl)' : ''), source_url: '', target_url: target0 }))];
+    ...gap.filter(g => !g.off_topic && !g.no_pitch && (g.source !== 'cc' ? gi >= 0 : true)).slice(0, 25).map(g => ({ prospect_domain: g.domain, type: 'gap', origin: g.source, rank: g.rank, spam_score: g.spam, score: scoreOf('gap', { authority: g.rank, dr: drOf.get(g.domain) || 0, cc_rank: g.cc_rank }, (1 + 0.6 * (g.links_to.length - 1)) * localOf(g.domain)),   /* links to several competitors: the strongest intent signal; on the market's own domain ending: more relevant */ detail: 'Links to ' + g.links_to.join(', ') + (g.backlinks ? ' (' + g.backlinks + ' links)' : '') + ', not to you' + (g.source === 'cc' ? ' (Common Crawl)' : ''), source_url: '', target_url: target0 }))];
   const ledger_rows = ledger.map(({ visits_28d, _prev_status, _new, _dfs_new, _sources_now, _found_new, _url, ...r }) => r);
   const new_links = [...news.map(n => ({ ...n, verified: (vLink.get(LK.refKey(n.from_domain)) || {}).verify || '' })),
     ...ledger.filter(r => r._new && !r._dfs_new && r.kind === 'web' && r.status !== 'lost').map(r => ({ from_domain: r.ref_domain, from_url: r.from_url, to_url: r.to_url, anchor: r.anchor, dofollow: r.rel === 'follow', domain_rank: r.authority, dr: r.dr, page_rank: 0, spam: r.spam_score, first_seen: r.first_seen, last_seen: r.last_seen, title: r.page_title, spammy: r.link_type === 'spam', sources: r.sources, verified: r.verify }))]

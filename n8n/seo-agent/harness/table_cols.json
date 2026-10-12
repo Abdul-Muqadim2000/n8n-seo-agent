@@ -6,7 +6,9 @@
   "est_usd",
   "created_at",
   "status",
-  "settled_usd"
+  "settled_usd",
+  "domain",
+  "heavy"
  ],
  "AI_PAGES": [
   "site_id",
@@ -95,7 +97,8 @@
   "followup_step",
   "followup_subject",
   "followup_body",
-  "verified_at"
+  "verified_at",
+  "drafted_at"
  ],
  "CACHE": [
   "key",

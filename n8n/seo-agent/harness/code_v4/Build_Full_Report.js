@@ -280,7 +280,7 @@ if (au && au.available) {
   html += `<table class="ct"><tr><th>Domain</th><th>Domain rank</th><th>Backlinks</th><th>Referring domains</th><th>Followed %</th><th>Spam score</th></tr>` +
     au.rows.map(r => `<tr${r.is_you ? ' class="you"' : ''}><td>${youTag(r)}</td><td>${num(r.domain_rank)}</td><td>${num(r.backlinks)}</td><td>${num(r.referring_domains)}</td><td>${r.dofollow_pct == null ? 'N/A' : r.dofollow_pct + '%'}</td><td>${num(r.spam_score)}</td></tr>`).join('') + `</table>`;
   if ((au.gap || []).length) html += `<h3>Link Opportunities (link to competitors, not to you)</h3><table class="ct"><tr><th>Website</th><th>Links to # competitors</th></tr>` +
-    au.gap.slice(0, 20).map(g => `<tr><td>${esc(g.referring_domain)}</td><td>${num(g.links_to_competitors)}</td></tr>`).join('') + `</table>`;
+    au.gap.slice(0, 20).map(g => `<tr><td>${esc(g.referring_domain)}${g.pitch === false ? `<div class="small">not pitched: ${esc(g.reason || 'off topic')}</div>` : ''}</td><td>${num(g.links_to_competitors)}</td></tr>`).join('') + `</table>`;
 } else html += '<div class="note">Backlink data was not available for this run (DataForSEO Backlinks API not active).</div>';
 html += '<h3>Findings</h3>' + findingsBlock(byCat('Authority'));
 

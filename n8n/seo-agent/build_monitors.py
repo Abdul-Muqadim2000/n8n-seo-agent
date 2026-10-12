@@ -29,6 +29,7 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = rd('code/' + p)
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
+    s = s.replace('/*__DRAFTS__*/', rd('code/_drafts.js').rstrip('\n'))   # P34-1: which stored outreach draft may still be offered
     s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('/*__CLAIMS__*/', rd('code/_claims.js')).replace('/*__DRAFT_QA__*/', rd('code/_draft_qa.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'

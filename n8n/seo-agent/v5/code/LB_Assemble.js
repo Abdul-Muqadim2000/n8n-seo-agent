@@ -47,7 +47,7 @@ for (const p of plans) {
     country: o.country || '', language: o.language || '', target_url: o.target_url || '', target_reason: o.target_reason || '', anchor_hint: o.anchor_hint || '', sequence_json: o.sequence_json || '', deadline: o.deadline || '', drafted_at: o.drafted_at || '', checked_at: iso, request_id: p.request_id || '' });
   const newProspect = (o) => ({ site_id: sid, domain: p.domain, prospect_domain: o.prospect_domain, type: o.type, rank: o.rank || 0, spam_score: 0, detail: String(o.detail || '').slice(0, 300), source_url: o.page_url || '', target_url: o.target_url || '',
     status: 'new', first_seen: iso, last_seen: iso, won_at: '', outreach_subject: '', outreach_body: '', note: '', score: o.score || 0, origin: o.origin || 'link_builder', contact_email: (o.contacts || [])[0] ? o.contacts[0].email : '', contact_url: (o.contacts || [])[0] ? o.contacts[0].source_url || '' : '',
-    contacted_at: '', followup_step: 0, followup_subject: '', followup_body: '', verified_at: '' });
+    contacted_at: '', followup_step: 0, followup_subject: '', followup_body: '', verified_at: '', drafted_at: '' });   // the Link Builder's own sequence lives in seo_link_outreach; this row never carries a draft
   // ---- 1. journalist requests (Bluesky #journorequest): recent, on our topics, deadline not obviously past ----
   const press = [...posts.values()].filter(x => (!x.site_id || x.site_id === sid) && (now.getTime() - new Date(x.at).getTime()) / 864e5 <= 10)
     .map(x => ({ ...x, f: OK.fit(x.text, topicText + ' ' + p.topics.join(' '), df, docs.length) })).filter(x => x.f >= 0.34).sort((a, b) => b.f - a.f).slice(0, 3);
@@ -145,7 +145,7 @@ for (const p of plans) {
     const kind = siteKind(p.profile.business_type, p.topics.join(' '));
     for (const l of listingsFor(kind, p.country_iso, topicText, LK.text(selfHtml))) {
       const old = listingRows.find(y => y.site_id === sid && y.listing_id === l.id) || {};
-      let status = 'unknown', profile_url = '', rel = l.link, evidence = '';
+      let status = 'unknown', profile_url = '', rel = l.link, evidence = '', blocked_now = false;
       const led = myLedger.find(y => y.status !== 'lost' && (y.ref_domain === l.host || LK.sameSite(y.ref_domain, l.host) || LK.sameSite(l.host, y.ref_domain)) && (l.list ? LK.normUrl(y.from_url) === LK.normUrl(l.list) : l.re ? l.re.test(y.from_url || '') : true));   // the list page itself, the profile pattern, else the host
       if (led) { status = 'linked'; profile_url = led.from_url || ''; rel = led.rel || rel; evidence = 'their page links to you (link check)'; }
       const selfLink = l.re ? [...selfHtml.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map(m => m[1]).find(u => l.re.test(u)) || (selfHtml.match(new RegExp('"(https?:[^"]*' + l.host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^"]*)"', 'i')) || [])[1] : '';
@@ -153,21 +153,29 @@ for (const p of plans) {
       const comps = [];
       for (const o of pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'comp_home')) { const h = htmlOf(o.x); if (l.re && [...h.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].some(m => l.re.test(m[1]))) comps.push(o.r.competitor); }
       for (const o of pagesRead.filter(o => o.r.site_id === sid && ((o.r.listing_id === l.id && (o.r.kind === 'listing_list' || o.r.kind === 'listing_profile')) || (l.list && o.r.kind === 'prospect' && LK.normUrl(o.r.url) === LK.normUrl(l.list))))) {   // a list page read as a prospect counts too
-        const h = htmlOf(o.x); const st = statusOf(o.x);
-        if (!h || LK.challenge(st, h)) { if (o.r.kind === 'listing_profile' && !o.r.guessed && status === 'unknown') { status = 'listed'; profile_url = o.r.url; evidence = 'found by search; the platform blocks checks: open it to confirm'; } continue; }
-        if (st === 404 || st === 410) { if (status === 'unknown' && o.r.guessed) { status = 'missing'; evidence = 'no profile at ' + o.r.url; } continue; }
-        const asList = o.r.kind === 'listing_list' || o.r.kind === 'prospect';
-        const v = LK.verify(o.x, p.domain, { url: o.r.url });
-        if (v.verify === 'found') { status = 'linked'; profile_url = o.r.url; rel = v.rel; evidence = asList ? 'the list links to you' : 'the profile links to you'; }
-        else if (OK.namesUs(LK.text(h), [p.brand, ...(p.brand_names || []), p.domain]) && status !== 'linked') { status = 'listed'; profile_url = o.r.url; evidence = asList ? 'the list names you without a link' : 'the profile names you'; }   // D13: "Tech&" has no word boundary after the ampersand
-        else if (status === 'unknown' && asList) { status = 'missing'; evidence = 'the list does not name you'; }
+        const h = htmlOf(o.x); const st = statusOf(o.x); const asList = o.r.kind === 'listing_list' || o.r.kind === 'prospect';
+        // P34-2 (live 2026-10-12): a page nobody could read claims nothing. A challenge, any 4xx that is not a 404 / 410 and any 5xx is
+        // "blocked": AlternativeTo answered 403 ("Just a moment…") and was reported "listed" because a search had found the URL.
+        const blocked = !h || LK.challenge(st, h) || (st >= 400 && st !== 404 && st !== 410);
+        const v = blocked ? { verify: 'blocked' } : LK.verify(o.x, p.domain, { url: o.r.url });
+        const claim = listingClaim({ blocked, status: st, links_us: v.verify === 'found', named: blocked ? '' : OK.namesUs(LK.text(h), [p.brand, ...(p.brand_names || []), p.domain]),
+          as_list: asList, guessed: !!o.r.guessed, gone: st === 404 || st === 410, url: o.r.url });   // OK.namesUs: a whole brand token or the domain, never "tech" for "Tech&"
+        if (blocked) { blocked_now = true;   // a URL a search found is still worth opening by hand — but it is not a listing until someone sees it
+          const found = o.r.kind === 'listing_profile' && !o.r.guessed;
+          if (found && !profile_url) profile_url = o.r.url;
+          if (status === 'unknown') evidence = found ? 'a profile was found by search (' + o.r.url + ') but the platform blocks checks' + (st ? ' (HTTP ' + st + ')' : '') + ': open it to confirm — it is not counted as a listing' : claim.evidence;
+          continue; }
+        if (claim.status === 'linked') { status = 'linked'; profile_url = o.r.url; rel = v.rel; evidence = claim.evidence; }
+        else if (claim.status === 'listed' && status !== 'linked') { status = 'listed'; profile_url = o.r.url; evidence = claim.evidence; }
+        else if (status === 'unknown' && claim.status === 'missing') { status = 'missing'; evidence = claim.evidence; }
+        else if (status === 'unknown') { evidence = evidence || claim.evidence; }
         if (asList) for (const c of p.competitors) if (h.toLowerCase().includes(c.toLowerCase()) && !comps.includes(c)) comps.push(c);
       }
       // D13: a platform that blocks this week's check keeps the last definite answer with the date it was checked — never a fresh "unknown"
       // (the Ministry of Finance list flipped from "missing" to "unknown" within one day, live 2026-10-11)
       if (status === 'unknown' && ['linked', 'listed', 'missing'].includes(String(old.status || ''))) {
         status = old.status; profile_url = profile_url || old.profile_url || '';
-        evidence = old.status + ' (checked ' + String(old.checked_at || '').slice(0, 10) + ') · the platform blocks checks now'; }
+        evidence = old.status + ' (checked ' + String(old.checked_at || '').slice(0, 10) + ')' + (blocked_now ? ' · the platform blocks checks now' : ' · nothing new could be read this week'); }
       if (['submitted', 'ignored'].includes(old.status) && !['linked', 'listed'].includes(status)) { status = old.status; }
       listing_rows.push({ site_id: sid, domain: p.domain, listing_id: l.id, name: l.name, category: l.cat, status, profile_url: profile_url || old.profile_url || '', rel: status === 'linked' ? rel : l.link, competitors: comps.join(', '), submit_url: l.submit || '',
         priority: l.prio + (comps.length ? -0.5 : 0), why: (evidence ? evidence + ' · ' : '') + l.why, checked_at: iso, submitted_at: old.submitted_at || '', note: old.note || '' });

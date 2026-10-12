@@ -85,6 +85,13 @@ def dt_update_params(table, cols, conditions, values):
             'filters': {'conditions': [{'keyName': k, 'condition': 'eq', 'keyValue': v} for k, v in conditions]},
             'columns': {'mappingMode': 'defineBelow', 'value': values, 'matchingColumns': [], 'schema': dt_schema(cols), 'attemptToConvertTypes': True, 'convertFieldsToString': False}, 'options': {}}
 
+def dt_update_where_params(table, cols, conditions, values):
+    """Update `values` (col -> expression) on every row matching ALL (column, condition, value) triples — like dt_update_params, but with
+    an operator per condition (P34-5: status = reserved AND created_at < cutoff marks the stale reservations)."""
+    return {'resource': 'row', 'operation': 'update', 'dataTableId': {'__rl': True, 'mode': 'name', 'value': table}, 'matchType': 'allConditions',
+            'filters': {'conditions': [{'keyName': k, 'condition': c, 'keyValue': v} for k, c, v in conditions]},
+            'columns': {'mappingMode': 'defineBelow', 'value': values, 'matchingColumns': [], 'schema': dt_schema(cols), 'attemptToConvertTypes': True, 'convertFieldsToString': False}, 'options': {}}
+
 # ---- Search Console notices (mail watcher) and monthly check-ins (v4.3) ----
 ALERTS_TABLE = 'seo_console_alerts'
 CHECKIN_TABLE = 'seo_console_checkins'
@@ -163,7 +170,8 @@ BL_SNAP_COLS = [('site_id', 'string'), ('domain', 'string'), ('checked_at', 'str
 PROSPECT_COLS = [('site_id', 'string'), ('domain', 'string'), ('prospect_domain', 'string'), ('type', 'string'), ('rank', 'number'), ('spam_score', 'number'), ('detail', 'string'), ('source_url', 'string'), ('target_url', 'string'),
                  ('status', 'string'), ('first_seen', 'string'), ('last_seen', 'string'), ('won_at', 'string'), ('outreach_subject', 'string'), ('outreach_body', 'string'), ('note', 'string'),
                  ('score', 'number'), ('origin', 'string'), ('contact_email', 'string'), ('contact_url', 'string'), ('contacted_at', 'string'), ('followup_step', 'number'),
-                 ('followup_subject', 'string'), ('followup_body', 'string'), ('verified_at', 'string')]   # v4.10: value x likelihood score, where it came from, a contact found on the site, follow-up drafts (1 + 2), won only after the link is verified
+                 ('followup_subject', 'string'), ('followup_body', 'string'), ('verified_at', 'string'),   # v4.10: value x likelihood score, where it came from, a contact found on the site, follow-up drafts (1 + 2), won only after the link is verified
+                 ('drafted_at', 'string')]   # P34-1 (2026-10-12): when the stored draft was written. Empty, or before the D12 / D13 gates = superseded: cleared, never counted, never offered (v5/code/_drafts.js, app/shared/src/outreach.ts)
 # v4.10: the link ledger — one row per site and referring domain, merged from every source (DataForSEO, Bing Webmaster Tools, the Search Console
 # links export, GA4 referrals, Wikipedia / Hacker News / news / web mentions) and verified by fetching the linking page (BACKLINKS_SPEC.md).
 LINKS_TABLE = 'seo_backlinks'
@@ -250,7 +258,11 @@ def dt_delete_where_params(table, conditions):
 # status: reserved -> done (settled_usd written at the end) | refused (the limit refused the run; never counted). Rate Limit / Assess Limit count
 # only rows with a lower id than their own, so row order decides ties. Keyword Check rows carry mode 'assess' and stay out of the main limits.
 RUN_LEDGER_TABLE = 'seo_run_ledger'
-RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), ('est_usd', 'number'), ('created_at', 'string'), ('status', 'string'), ('settled_usd', 'number')]
+RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), ('est_usd', 'number'), ('created_at', 'string'), ('status', 'string'), ('settled_usd', 'number'),
+                   # P34-5 (2026-10-12): which site a run is working on and whether it is a heavy crawl, so a second large audit of the
+                   # same site is refused while one is running (two 200-page audits at once killed the n8n task runner and both were
+                   # cancelled at the 90-minute timeout). status gains `stale`: reserved, never settled, older than the age limit.
+                   ('domain', 'string'), ('heavy', 'boolean')]
 
 # ---- ops alerts (D25b, 2026-10-12, FIX_PLAN): the Error Handler had one channel (e-mail), and on 2026-10-10 and 2026-10-12 it failed with a
 # connection error, so nobody learned that a run had failed. Every alert is now written here first (one row per alert key, the repeats counted)

@@ -19,6 +19,17 @@ const listOf = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\n,;]+/)).
 const flag = (v, dflt) => (v === undefined || v === null || v === '') ? dflt : !(v === false || /^(false|0|no|off)$/i.test(String(v)));
 const DEFAULT_ENGINES = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode'];
 const ALL_ENGINES = [...DEFAULT_ENGINES, 'copilot'];   // v4.12: Copilot (Bing's Copilot Search summary) only when chosen: Bing shows it for few searches (0 of 10 live, 2026-10-10)
+// P34-6 (live 2026-10-12): the AI Visibility Tracker and the Backlink Monitor called the business "techand.ai" in every report and in
+// the analyst's fact sheet, because the name was read from seo_profiles only — while AI Growth and the Link Builder read the site model
+// and say "Tech&". The name now comes through the model (SM.name over the stored seo_sites row, SITE_MODEL_SPEC.md), with the business
+// profile first as before; the bare domain is never a name. The AI Pulse does not inline the model kit, so SM is optional here.
+const nameOf = (row, prof) => {
+  const own = String((prof || {}).business_name || '').trim();
+  if (own) return own;
+  if (typeof SM === 'undefined') return '';
+  const model = SM.stored(row) || null; const nm = model ? SM.name(model) : '';
+  return nm && SM.helpers.bare(nm) !== String(row.domain || '').toLowerCase() ? nm : '';
+};
 function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' (v4.13 Link Builder)
   const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), ladders = rowsOf('Load Ladders').filter(r => r.domain), mons = rowsOf('Load Monitors'), profiles = rowsOf('Load Profiles');
   const byDomain = new Map();
@@ -39,8 +50,8 @@ function monitorSites(kind) {   // kind: 'ai' | 'backlinks' | 'audit' | 'links' 
       prompts_max: Math.min(50, Math.max(3, Number(m.ai_prompts_max) || 20)), pulse: flag(m.ai_pulse, true), growth: flag(m.ai_growth, true), link_builder: flag(m.link_builder, true),
       ai_pages_month: m.ai_pages_month === '' || m.ai_pages_month == null || !Number.isFinite(Number(m.ai_pages_month)) ? 2 : Math.min(8, Math.max(0, Math.round(Number(m.ai_pages_month)))), audit_pages: Math.min(1000, Math.max(50, Number(m.audit_pages) || 200)), audit_js: flag(m.audit_js, false),
       competitors: [...new Set([...listOf(m.competitors), ...listOf(trigger.competitors)].map(normD).filter(d => d && d !== s.domain))].slice(0, 5),
-      brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || ''].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };
-    const o = { ...s, settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '',
+      brand_names: [...new Set([...listOf(m.brand_names), ...listOf(trigger.brand_names), p.business_name || '', nameOf(s, p)].map(x => String(x).trim()).filter(Boolean))], stored: !!m.site_id };
+    const o = { ...s, business_name: nameOf(s, p), settings, profile: { business_name: p.business_name || '', business_type: p.business_type || '', city: p.city || '', phone: p.phone || '', street_address: p.street_address || '', author_name: p.author_name || '',
       region: p.region || '', country_code: p.country_code || '', public_email: p.public_email || '', price_range: p.price_range || '', service_areas: p.service_areas || '', opening_hours: p.opening_hours || '' } };
     if (want) { if (trigger.email) o.email = trigger.email; if (trigger.callback_url) o.callback_url = trigger.callback_url; if (trigger.country) o.country = trigger.country; if (Number(trigger.location_code)) o.location_code = Number(trigger.location_code); if (trigger.language_code) o.language_code = trigger.language_code; }
     o.request_id = String(trigger.request_id || s.request_id || '');
@@ -290,9 +301,9 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const gapAge = gapRows.length ? Math.min(...gapRows.map(x => (now.getTime() - new Date(x.last_seen || x.first_seen || 0).getTime()) / 864e5)) : 1e9;
   const gap_due = on_demand || gapAge >= CONFIG.gap_every_days;
   const stored_gap = gap_due ? [] : gapRows.filter(x => !['won', 'rejected', 'ignored'].includes(x.status)).sort((a, b) => (Number(b.rank) || 0) - (Number(a.rank) || 0)).slice(0, 30).map(x => ({ domain: x.prospect_domain, rank: Number(x.rank) || 0, spam: Number(x.spam_score) || 0, links_to: ((String(x.detail || '').match(/Links to ([^(]+)/) || [])[1] || '').split(/,\s*/).map(z => z.trim()).filter(Boolean), backlinks: 0, stored: true, last_seen: String(x.last_seen || '').slice(0, 10), status: x.status || 'new' }));
-  const brand = [...new Set([s.domain, s.profile.business_name, ...s.settings.brand_names].filter(b => b && (b.includes('.') || b.split(/\s+/).length >= 2 || b.length >= 8)))];
+  const brand = [...new Set([s.domain, s.business_name, ...s.settings.brand_names].filter(b => b && (b.includes('.') || b.split(/\s+/).length >= 2 || b.length >= 8)))];
   // v4.10: the free sources
-  const bn = String(s.profile.business_name || '').trim(); const label = s.domain.split('.')[0];
+  const bn = String(s.business_name || '').trim(); const label = s.domain.split('.')[0];   // P34-6: the site model's name (monitorSites nameOf), not seo_profiles alone
   const distinctive = bn && (bn.split(/\s+/).length >= 2 || bn.length >= 8) && bn.toLowerCase() !== 'home';
   const brand_query = distinctive ? bn : s.domain;   // news / web mention search: a short label like "techand" matches other companies (CLAUDE.md), the domain does not
   const brand_res = [...new Set([s.domain, ...(distinctive ? [bn] : []), ...s.settings.brand_names.filter(b => String(b).length >= 5)])].map(b => String(b).replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'));
@@ -306,7 +317,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
 // emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
   const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
   return { json: { site_id: s.site_id, domain: s.domain, canonical_host: site_model.canonical_host || s.domain, country: s.country || c.name || '', country_name: c.name || s.country || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '',
-    on_demand, adhoc: !!s.adhoc, free_only, mode, since, since_full, stored_timeseries, gap_due, stored_gap, competitors, need_competitors: mode === 'full' && !competitors.length && !/^(true|1|yes|on)$/i.test(String(trigger.free_only ?? '')), business_name: s.profile.business_name || '', brand_names: brand, assets,
+    on_demand, adhoc: !!s.adhoc, free_only, mode, since, since_full, stored_timeseries, gap_due, stored_gap, competitors, accreditation: SM.facts(site_model).accreditation,   /* P34-1: an accredited-provider list is never pitched without the accreditation on file */ need_competitors: mode === 'full' && !competitors.length && !/^(true|1|yes|on)$/i.test(String(trigger.free_only ?? '')), business_name: s.business_name || '', brand_names: brand, assets,
     brand_query, brand_res, label, topics, ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, ''), gsc_property: s.gsc_property || '', bing: CONFIG.bing, link_builder: !!(s.settings || {}).link_builder, import_info,
     ledger_size: myLedger.length, ledger_live: myLedger.filter(x => x.status !== 'lost').length,
     previous: last ? { checked_at: last.checked_at, mode: last.mode, rank: Number(last.rank) || 0, backlinks: Number(last.backlinks) || 0, referring_domains: Number(last.referring_domains) || 0, spam_score: Number(last.spam_score) || 0, broken_backlinks: Number(last.broken_backlinks) || 0,
