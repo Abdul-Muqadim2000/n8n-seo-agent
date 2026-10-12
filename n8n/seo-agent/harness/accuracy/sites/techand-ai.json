@@ -1,0 +1,634 @@
+{
+ "domain": "techand.ai",
+ "site_host": "www.techand.ai",
+ "fetched_at": "2026-10-12",
+ "captured_by": "harness/accuracy/capture.js (free public GETs only)",
+ "probes": {
+  "home": {
+   "status": 308,
+   "headers": {
+    "location": "https://www.techand.ai/",
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-type": "text/html",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000"
+   },
+   "body_len": 137
+  },
+  "www_https": {
+   "status": 200,
+   "headers": {
+    "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate",
+    "content-type": "text/html; charset=utf-8",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "referrer-policy": "origin-when-cross-origin",
+    "x-vercel-cache": "MISS",
+    "content-encoding": "br"
+   },
+   "body_len": 219161
+  },
+  "www_http": {
+   "status": 308,
+   "headers": {
+    "location": "https://www.techand.ai/",
+    "content-type": "text/plain",
+    "server": "Vercel"
+   },
+   "body_len": 14
+  },
+  "apex_http": {
+   "status": 308,
+   "headers": {
+    "location": "https://techand.ai/",
+    "content-type": "text/plain",
+    "server": "Vercel"
+   },
+   "body_len": 14
+  },
+  "home_content": {
+   "status": 200,
+   "headers": {
+    "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate",
+    "content-type": "text/html; charset=utf-8",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "referrer-policy": "origin-when-cross-origin",
+    "x-vercel-cache": "MISS",
+    "content-encoding": "br"
+   },
+   "body_len": 219161,
+   "head": "<!DOCTYPE html><html lang=\"en\" class=\"scroll-smooth\"><head><meta charSet=\"utf-8\"/><meta name=\"viewport\" content=\"width=device-width, initial-scale=1, maximum-scale=5\"/><link rel=\"preload\" as=\"image\" fetchPriority=\"high\" imageSrcSet=\"/Hero-img-828.webp 828w, /Hero-img-1280.webp 1280w, /Hero-img-1920.webp 1920w\" imageSizes=\"100vw\"/><link rel=\"preload\" as=\"image\" href=\"/techand-logo.png?dpl=dpl_93FSv7vnUxYifyLCSYQTkua26DkJ\"/><link rel=\"stylesheet\" href=\"/_next/static/chunks/c84095b88f4d1d45.css?dpl=dpl_93FSv7vnUxYifyLCSYQTkua26DkJ\" data-precedence=\"next\"/><link rel=\"stylesheet\" href=\"/_next/static/chunks/e19f7ab2ebb183f9.css?dpl=dpl_93FSv7vnUxYifyLCSYQTkua26DkJ\" data-precedence=\"next\"/><link rel=\"stylesheet\" href=\"/_next/static/chunks/c649b2f6f50fdc3a.css?dpl=dpl_93FSv7vnUxYifyLCSYQTkua26DkJ\" data-precedence=\"next\"/><link rel=\"stylesheet\" href=\"/_next/static/chunks/c7efa81c61505b71.css?dpl=dpl_93FSv7vnUxYifyLCSYQTkua26DkJ\" data-precedence=\"next\"/><link rel=\"preload\" as=\"script\" fetchPriority=\"low\" href=\"/_next/static/chunks/66a8c16702b8a250.js?dpl=dpl_93FSv7vnUxYifyLCSYQTkua26DkJ\"/><meta name=\"next-size-adjust\" content=\"\"/><meta name=\"theme-color\" media=\"(prefers-color-scheme: light)\" content=\"#5B6FB6\"/><meta name=\"theme-color\" media=\"(prefers-color-scheme: dark)\" content=\"#2B3352\"/><title>Tech&amp; | Turning Technology into measurable Business Impact</title><meta name=\"description\" content=\"Empowering businesses with innovative technology solutions for enterprise automation and digital transformation across UAE and GCC.\"/><link rel=\"author\" href=\"https://www.techand.ai\"/><meta name=\"author\" content=\"Tech&amp;\"/><meta name=\"keywords\" content=\"enterprise automation,digital transformation,technology consulting,UAE technology solutions,GCC digital consulting,business automation,enterprise software,innovation consulting\"/><meta name=\"creator\" content=\"Tech&amp;\"/><meta name=\"publisher\" content=\"Tech&amp;\"/><meta name=\"robots\" content=\"index, follow\"/><meta name=\"googlebot\" content=\"index, follow, max-video-preview:-1, max-image-preview:large, max-snippet:-1\"/><meta name=\"category\" content=\"technology\"/><link rel=\"canonical\" href=\"https://www.techand.ai\"/><meta name=\"format-detection\" content=\"telephone=no, address=no, email=no\"/><meta property=\"og:title\" content=\"Tech&amp; | Turning Technology into measurable Business Impact\"/><meta property=\"og:description\" content=\"Empowering businesses with innovative technology solutions for enterprise automation and digital transformation.\"/><meta property=\"og:url\" content=\"https://www.techand.ai\"/><meta property=\"og:site_name\" content=\"Tech&amp;\"/><meta property=\"og:locale\" content=\"en_US\"/><meta property=\"og:image\" content=\"https://www.techand.ai/opengraph-image.png?opengraph-image.90afa1bd.png\"/><meta property=\"og:image:width\" content=\"500\"/><meta property=\"og:image:height\" content=\"500\"/><meta property=\"og:image:type\" content=\"image/png\"/><meta property=\"og:type\" content=\"website\"/><meta name=\"twitter:card\" content=\"summary_large_image\"/><meta name=\"twitter:creator\" content=\"@Techand\"/><meta name=\"twitter:title\" content=\"Tech&amp; | Turning Technology into measurable Business Impact\"/><meta name=\"twitter:description\" content=\"Empowering businesses with innovative technology solutions.\"/><meta name=\"twitter:image\" content=\"https://www.techand.ai/twitter-image.png?twitter-image.af83a209.png\"/><meta name=\"twitter:image:width\" content=\"109\"/><meta name=\"twitter:image:height\" content=\"71\"/><meta name=\"twitter:image:type\" content=\"image/png\"/><link rel=\"shortcut icon\" href=\"/favicon.ico\"/><link rel=\"icon\" href=\"/favicon.ico?favicon.325a5f12.ico\" sizes=\"64x64\" type=\"image/x-icon\"/><link rel=\"icon\" href=\"/favicon.ico\"/><link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\"/><link rel=\"manifest\" href=\"/manifest.json\"/><link rel=\"preconnect\" href=\"https://res.cloudinary.com\" crossorigin=\"\"/><link rel=\"dns-prefetch\" href=\"https://www.googletagmanager.com\"/><link rel=\"dns-prefetch\" href=\"https://assets.apollo.io\"/><meta name=\"theme-color\" content=\"#5B6FB6\"/></head>"
+  },
+  "home_repeat": {
+   "status": 200,
+   "headers": {
+    "cache-control": "private, no-cache, no-store, max-age=0, must-revalidate",
+    "content-type": "text/html; charset=utf-8",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "referrer-policy": "origin-when-cross-origin",
+    "x-vercel-cache": "MISS",
+    "content-encoding": "br"
+   },
+   "body_len": 219161
+  },
+  "robots": {
+   "status": 200,
+   "headers": {
+    "cache-control": "public, max-age=0, s-maxage=86400, stale-while-revalidate=604800",
+    "content-type": "text/plain",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "referrer-policy": "origin-when-cross-origin",
+    "x-vercel-cache": "HIT"
+   },
+   "body_len": 151,
+   "text": "User-Agent: *\nAllow: /\nDisallow: /api/\nDisallow: /admin/\nDisallow: /private/\n\nHost: https://www.techand.ai\nSitemap: https://www.techand.ai/sitemap.xml\n"
+  },
+  "sitemap": {
+   "status": 200,
+   "headers": {
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-type": "application/xml",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "referrer-policy": "origin-when-cross-origin",
+    "x-vercel-cache": "HIT",
+    "content-encoding": "br"
+   },
+   "body_len": 8424,
+   "is_index": false,
+   "locs": [
+    "https://www.techand.ai",
+    "https://www.techand.ai/whatwedo",
+    "https://www.techand.ai/capabilities",
+    "https://www.techand.ai/industries",
+    "https://www.techand.ai/whatwedo/assess-envision",
+    "https://www.techand.ai/whatwedo/build-implement",
+    "https://www.techand.ai/whatwedo/run-optimize",
+    "https://www.techand.ai/whatwedo/managed-services",
+    "https://www.techand.ai/whatwedo/global-rollouts",
+    "https://www.techand.ai/whatwedo/ai-automation",
+    "https://www.techand.ai/capabilities/business-applications",
+    "https://www.techand.ai/capabilities/cloud-services",
+    "https://www.techand.ai/capabilities/data",
+    "https://www.techand.ai/insights",
+    "https://www.techand.ai/whywith-techand",
+    "https://www.techand.ai/contact-us",
+    "https://www.techand.ai/privacy",
+    "https://www.techand.ai/security",
+    "https://www.techand.ai/cookies",
+    "https://www.techand.ai/ai-agents-copilot-studio-uae",
+    "https://www.techand.ai/ai-copilot-advisory-uae",
+    "https://www.techand.ai/business-central-implementation-uae",
+    "https://www.techand.ai/business-central-post-go-live-support-uae",
+    "https://www.techand.ai/d365-finance-operations-implementation-rollout-uae",
+    "https://www.techand.ai/dynamics-365-business-central-uae",
+    "https://www.techand.ai/dynamics-365-cloud-migration-uae",
+    "https://www.techand.ai/dynamics-365-crm-uae",
+    "https://www.techand.ai/dynamics-365-finance-and-operations-uae",
+    "https://www.techand.ai/dynamics-365-managed-services-uae",
+    "https://www.techand.ai/dynamics-365-project-operations-uae",
+    "https://www.techand.ai/dynamics-ax-to-d365-upgrade-uae",
+    "https://www.techand.ai/nav-gp-migration-to-business-central-uae",
+    "https://www.techand.ai/power-platform-analytics-uae",
+    "https://www.techand.ai/insights/top-peppol-e-invoicing-software-features-every-uae-cfo-must-look-for",
+    "https://www.techand.ai/insights/your-current-pdf-invoices-will-be-illegal-in-the-uae-by-2027-and-how-to-fix-it",
+    "https://www.techand.ai/insights/how-microsoft-dynamics-365-finance-operations-supports-uae-vat-compliance",
+    "https://www.techand.ai/insights/how-microsoft-365-copilot-is-changing-business-productivity",
+    "https://www.techand.ai/insights/microsofts-saudi-arabia-east-datacenter-goes-live-in-november-2026-what-it-means-for-your-d365-roadmap",
+    "https://www.techand.ai/insights/the-financial-reporting-trap-why-d365-fo-users-still-reach-for-excel",
+    "https://www.techand.ai/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs",
+    "https://www.techand.ai/insights/upgrading-your-erp-for-uae-peppol-pint-ae-compliance-a-technical-integration-guide",
+    "https://www.techand.ai/insights/autonomous-ai-customer-service",
+    "https://www.techand.ai/insights/data-sovereign-asset",
+    "https://www.techand.ai/insights/agentic-ai",
+    "https://www.techand.ai/insights/value-driven-innovation-automation"
+   ]
+  },
+  "llms": {
+   "status": 200,
+   "headers": {
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-type": "text/plain; charset=utf-8",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "referrer-policy": "origin-when-cross-origin",
+    "x-vercel-cache": "HIT",
+    "content-encoding": "br"
+   },
+   "body_len": 10659,
+   "has_html": false,
+   "text": ""
+  },
+  "markdown": {
+   "status": 200,
+   "headers": {
+    "cache-control": "public, max-age=0, must-revalidate",
+    "content-type": "text/markdown; charset=utf-8",
+    "server": "Vercel",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "referrer-policy": "origin-when-cross-origin",
+    "x-vercel-cache": "MISS",
+    "content-encoding": "br"
+   },
+   "body_len": 13267
+  },
+  "bot:GPTBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 219161
+  },
+  "bot:OAI-SearchBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 219161
+  },
+  "bot:ChatGPT-User": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 219161
+  },
+  "bot:ClaudeBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 219161
+  },
+  "bot:PerplexityBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 219161
+  },
+  "bot:Googlebot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 219161
+  },
+  "bot:Bingbot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 218897
+  },
+  "bot:CCBot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 219161
+  },
+  "bot:Amazonbot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 219161
+  },
+  "bot:Applebot": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 218897
+  },
+  "bot:Meta-ExternalAgent": {
+   "status": 200,
+   "headers": {
+    "content-type": "text/html; charset=utf-8"
+   },
+   "body_len": 219161
+  }
+ },
+ "pages": [
+  {
+   "url": "https://www.techand.ai/",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 0,
+   "checks": {
+    "duplicate_meta_tags": true
+   },
+   "meta": {
+    "title": "Tech& | Turning Technology into measurable Business Impact",
+    "description": "Empowering businesses with innovative technology solutions for enterprise automation and digital transformation across UAE and GCC.",
+    "canonical": "https://www.techand.ai",
+    "htags": {
+     "h1": [
+      "Value Driven Innovation through Automation"
+     ],
+     "h2": [
+      "Agentic AI is Revolutionizing the Industries",
+      "Data is Going to Be Your New Sovereign Asset",
+      "How Customer Service Teams Are Achieving a 20% to 45% Increase in Productivity with AI",
+      "Empowering enterprise transformation through cutting-edge technology",
+      "20+ Years",
+      "Strong Client Base",
+      "Global Partner",
+      "Industries We Serve",
+      "What We Do",
+      "Microsoft-Aligned Enterprise Excellence",
+      "Tech& Capabilities",
+      "Insights"
+     ],
+     "h3": [
+      "Banking & Financial Services",
+      "AI",
+      "Banking & Financial Services",
+      "Public Sector",
+      "Education & Training",
+      "Tourism & Hospitality",
+      "Trading & Manufacturing",
+      "Retail",
+      "Professional Services",
+      "Non Profit",
+      "Assess & Envision",
+      "Build & Implement"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "Tech& | Turning Technology into measurable Business Impact",
+     "og:description": "Empowering businesses with innovative technology solutions for enterprise automation and digital transformation.",
+     "og:image": "https://www.techand.ai/opengraph-image.png?opengraph-image.90afa1bd.png",
+     "twitter:card": "summary_large_image",
+     "twitter:image": "https://www.techand.ai/twitter-image.png?twitter-image.af83a209.png"
+    },
+    "internal_links_count": 89,
+    "external_links_count": 1,
+    "content": {
+     "plain_text_word_count": 1778
+    }
+   },
+   "checks_from": [
+    "duplicate_meta_tags: the real crawl of 2026-10-12 flagged duplicate_meta_tags on 45 of 47 pages, the homepage among them (LIVE_CHECK_phase1_2026-10-12.md section 2, D18); our own homepage check is what the case scores"
+   ]
+  },
+  {
+   "url": "https://www.techand.ai/power-platform-analytics-uae",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {
+    "no_description": true
+   },
+   "meta": {
+    "title": "Power Platform & Analytics Services in UAE | Tech& | Tech&",
+    "description": "",
+    "canonical": "https://www.techand.ai/power-platform-analytics-uae",
+    "htags": {
+     "h1": [
+      "Power Platform & Analytics Services in UAE"
+     ],
+     "h2": [
+      "What Is Microsoft Power Platform?",
+      "Power Platform Consulting for Smarter Business Decisions",
+      "Core Components of Microsoft Power Platform",
+      "Power Platform Solutions for Business Functions",
+      "Make Your Business More Connected with Power Platform",
+      "Data & Analytics Consulting for Better Business Decisions",
+      "Power Platform Governance & Security",
+      "Power Platform Implementation Process",
+      "Power Platform Support for Reliable Business Solutions",
+      "Why Choose Tech& for Power Platform & Analytics?",
+      "Unlock Smarter Business Solutions with Power Platform",
+      "FAQs"
+     ],
+     "h3": [
+      "Banking & Financial Services",
+      "AI",
+      "WHAT IT IS",
+      "WHO IT&#x27;S FOR",
+      "Plan Your Power Platform Strategy",
+      "Custom Business Applications",
+      "Process Applications",
+      "Dataverse Applications",
+      "Mobile Business Apps",
+      "Low-Code Solutions",
+      "App Integration",
+      "Finance & Approvals"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "Tech& | Enterprise Automation & Digital Transformation Solutions",
+     "og:description": "Empowering enterprise transformation through cutting-edge technology consulting for the UAE & GCC region.",
+     "og:image": "https://www.techand.ai/opengraph-image.png?opengraph-image.90afa1bd.png",
+     "twitter:card": "summary_large_image",
+     "twitter:image": "https://www.techand.ai/twitter-image.png?twitter-image.af83a209.png"
+    },
+    "internal_links_count": 60,
+    "external_links_count": 1,
+    "content": {
+     "plain_text_word_count": 1527
+    }
+   },
+   "checks_from": [
+    "no_description: the page serves no <meta description> (measured on the fetched HTML)"
+   ]
+  },
+  {
+   "url": "https://www.techand.ai/industries",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {
+    "lorem_ipsum": true
+   },
+   "meta": {
+    "title": "Industries We Serve | Tech&",
+    "description": "Industry-specific digital transformation across the UAE & GCC \u2014 Tech& helps organizations improve efficiency and drive measurable business outcomes.",
+    "canonical": "https://www.techand.ai/industries",
+    "htags": {
+     "h1": [
+      "Industries We Serve"
+     ],
+     "h2": [
+      "Industries We Serve",
+      "BFSI (Banking & Financial Services)",
+      "Public Sector",
+      "Tourism & Hospitality",
+      "Trading & Manufacturing",
+      "Turning technology into measurable business impacts",
+      "Retail",
+      "Professional Services",
+      "Non-Profit Organizations",
+      "Education & Training",
+      "Organizations that partner with Tech& achieve measurable business impact."
+     ],
+     "h3": [
+      "Banking & Financial Services",
+      "AI",
+      "BFSI (Banking & Financial Services)",
+      "Public Sector",
+      "Tourism & Hospitality",
+      "Trading & Manufacturing",
+      "Retail",
+      "Professional Services",
+      "Non-Profit Organizations",
+      "Education & Training",
+      "Industry Context",
+      "Common Pain Points"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "Tech& | Enterprise Automation & Digital Transformation Solutions",
+     "og:description": "Empowering enterprise transformation through cutting-edge technology consulting for the UAE & GCC region.",
+     "og:image": "https://www.techand.ai/opengraph-image.png?opengraph-image.90afa1bd.png",
+     "twitter:card": "summary_large_image",
+     "twitter:image": "https://www.techand.ai/twitter-image.png?twitter-image.af83a209.png"
+    },
+    "internal_links_count": 52,
+    "external_links_count": 1,
+    "content": {
+     "plain_text_word_count": 1531
+    }
+   },
+   "checks_from": [
+    "lorem_ipsum: placeholder text seen live on 2026-10-12 (30 matches of \"Lorem ipsum\" / \"dolor sit amet\" in the HTML); first found by the 2026-10-11 review (RESULTS.md section 2.5)"
+   ]
+  },
+  {
+   "url": "https://www.techand.ai/dynamics-365-crm-uae",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {},
+   "meta": {
+    "title": "Dynamics 365 CRM in Dubai & UAE: Sales and Service | Tech&",
+    "description": "Dynamics 365 CRM services in Dubai and the UAE: Sales, Customer Service and Copilot, connected to your ERP and supported by a certified Microsoft partner.",
+    "canonical": "https://www.techand.ai/dynamics-365-crm-uae",
+    "htags": {
+     "h1": [
+      "Dynamics 365 CRM Services in Dubai and the UAE"
+     ],
+     "h2": [
+      "One CRM for Sales, Service and Customer Data",
+      "What Is a CRM System, and What Does Dynamics 365 Add?",
+      "What a CRM Changes for UAE Sales and Service Teams",
+      "Plan Your CRM Rollout in Dubai",
+      "Core Capabilities of Dynamics 365 Sales, Customer Service and Customer Insights",
+      "Spreadsheets and Inboxes vs Dynamics 365 CRM",
+      "Why UAE Companies Connect Their CRM to the ERP",
+      "Copilot, Automation and Power BI for Your CRM",
+      "Keep Your CRM Running After Go-Live",
+      "Dynamics 365 CRM Integrations With Microsoft 365 and Your ERP",
+      "Dynamics 365 CRM Implementation Process",
+      "Why Choose Tech& for Dynamics 365 CRM in the UAE?"
+     ],
+     "h3": [
+      "Banking & Financial Services",
+      "AI",
+      "Run your pipeline in one place",
+      "Dynamics 365 CRM Applications",
+      "One Customer Record",
+      "A Pipeline You Can Trust",
+      "Cases That Don&#x27;t Get Lost",
+      "Lead Management",
+      "Opportunity Pipeline",
+      "Lead Scoring",
+      "Sales Sequences",
+      "Sales Forecasting"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "Tech& | Enterprise Automation & Digital Transformation Solutions",
+     "og:description": "Empowering enterprise transformation through cutting-edge technology consulting for the UAE & GCC region.",
+     "og:image": "https://www.techand.ai/opengraph-image.png?opengraph-image.90afa1bd.png",
+     "twitter:card": "summary_large_image",
+     "twitter:image": "https://www.techand.ai/twitter-image.png?twitter-image.af83a209.png"
+    },
+    "internal_links_count": 59,
+    "external_links_count": 1,
+    "content": {
+     "plain_text_word_count": 2055
+    }
+   }
+  },
+  {
+   "url": "https://www.techand.ai/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {},
+   "meta": {
+    "title": "UAE E-Invoicing Compliance & Mitigation Costs",
+    "description": "Learn the true cost of UAE e-invoicing non-compliance, mitigation costs, ERP readiness, and UAE e-invoicing compliance requirements for businesses.",
+    "canonical": "https://www.techand.ai/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs",
+    "htags": {
+     "h1": [
+      "The Cost of Non-Compliance: UAE E-Invoicing Penalties & Mitigation Costs"
+     ],
+     "h2": [
+      "It Starts with One Rejected Invoice: The Reality of UAE E-Invoicing",
+      "How Small UAE E-Invoicing Compliance Errors Become Costly",
+      "Beyond Penalties: The Hidden Mitigation Costs of UAE E-Invoicing",
+      "Common UAE E-Invoicing Requirements Businesses Overlook",
+      "The 5C Framework for UAE E-Invoicing Compliance: From Readiness to Resilience",
+      "From UAE E-Invoicing Compliance to Competitive Advantage: A Readiness Checklist",
+      "Questions Every Business Leader Should Ask About UAE E-Invoicing Requirements",
+      "Prepare for UAE E-Invoicing Today Before Compliance Costs Rise",
+      "Frequently asked questions",
+      "Related articles",
+      "Organizations that partner with Tech& achieve measurable business impact."
+     ],
+     "h3": [
+      "Banking & Financial Services",
+      "AI",
+      "Yet, regulatory deadlines tell part of the story.",
+      "Non-compliance rarely stems from one major failure. More often, it's the accumulation of small errors that go unnoticed until they disrupt business operations.",
+      "Regulatory Costs",
+      "Operational Costs",
+      "Technology & Mitigation Costs",
+      "Financial Costs",
+      "Strategic Costs",
+      "What compliance actually requires:",
+      "A compliance framework provides direction; Successful compliance depends on execution.",
+      "A trusted implementation partner should help organizations:"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "UAE E-Invoicing Compliance & Mitigation Costs",
+     "og:description": "Learn the true cost of UAE e-invoicing non-compliance, mitigation costs, ERP readiness, and UAE e-invoicing compliance requirements for businesses.",
+     "og:image": "https://res.cloudinary.com/mwfuwzck/image/upload/v[redacted-phone]/techand/insights/ri6ejce4xgfdwffksscy.webp",
+     "twitter:card": "summary_large_image",
+     "twitter:image": "https://www.techand.ai/twitter-image.png?twitter-image.af83a209.png"
+    },
+    "internal_links_count": 57,
+    "external_links_count": 1,
+    "content": {
+     "plain_text_word_count": 2842
+    }
+   }
+  },
+  {
+   "url": "https://www.techand.ai/capabilities",
+   "status_code": 200,
+   "resource_type": "html",
+   "click_depth": 1,
+   "checks": {},
+   "meta": {
+    "title": "Capabilities | Tech&",
+    "description": "Enterprise platforms, AI, cloud, and data services from Tech& \u2014 Microsoft-powered capabilities driving measurable transformation across the UAE & GCC.",
+    "canonical": "https://www.techand.ai/capabilities",
+    "htags": {
+     "h1": [
+      "Tech& Capabilities"
+     ],
+     "h2": [
+      "Artificial Intelligence",
+      "Microsoft Copilot for Microsoft 365",
+      "Dynamics 365 Copilot",
+      "Azure OpenAI Service",
+      "Copilot Studio",
+      "Turning technology into measurable business impacts",
+      "AI Builder",
+      "Azure AI Services",
+      "Intelligent Document Processing",
+      "Predictive Models",
+      "Organizations that partner with Tech& achieve measurable business impact."
+     ],
+     "h3": [
+      "Banking & Financial Services",
+      "AI",
+      "Microsoft Copilot for Microsoft 365",
+      "Dynamics 365 Copilot",
+      "Azure OpenAI Service",
+      "Copilot Studio",
+      "AI Builder",
+      "Azure AI Services",
+      "Intelligent Document Processing",
+      "Predictive Models",
+      "20+ Years",
+      "Strong Client Base"
+     ]
+    },
+    "social_media_tags": {
+     "og:title": "Tech& | Enterprise Automation & Digital Transformation Solutions",
+     "og:description": "Empowering enterprise transformation through cutting-edge technology consulting for the UAE & GCC region.",
+     "og:image": "https://www.techand.ai/opengraph-image.png?opengraph-image.90afa1bd.png",
+     "twitter:card": "summary_large_image",
+     "twitter:image": "https://www.techand.ai/twitter-image.png?twitter-image.af83a209.png"
+    },
+    "internal_links_count": 52,
+    "external_links_count": 1,
+    "content": {
+     "plain_text_word_count": 1205
+    }
+   }
+  }
+ ],
+ "crawl": {
+  "domain_info": {
+   "checks": {},
+   "ssl_info": {}
+  },
+  "page_metrics": {}
+ },
+ "checks_note": "`checks` are the DataForSEO page flags the audit reads. Only flags that can be justified from the saved evidence are set, and each page lists why in `checks_from`; every other flag is left unset, so no finding that depends on the paid crawl alone can fire."
+}

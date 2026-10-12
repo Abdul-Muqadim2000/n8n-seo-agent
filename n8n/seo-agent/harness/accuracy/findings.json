@@ -1,0 +1,448 @@
+{
+ "version": 1,
+ "category": "audit_findings",
+ "doc": "Labelled accuracy set for audit findings (G18). One case per decision a customer can check: a site-wide finding is one case, a page-level finding is one case per page it lists (`finding` is \"category|title\" or \"category|title@url\"). `label` is the judgement a careful human gives after looking at the evidence in `source`: `true_positive` the finding is raised and correct, `false_positive` the finding would be wrong on this site and must not be raised, `cosmetic` the claim is true but not worth reporting (counted and listed, left out of precision). The scorer (score.js) runs the real audit nodes - Build Probes / Content Probes / Analyze Probes / Build Site Issues - over the site fixtures in `sites/` and scores what they emit. Precision = true_positive / (true_positive + false_positive) must stay at or above 95% (scenario S49); a finding with no case here fails the scenario, so a new finding has to be labelled before it can ship. The fixtures are free public fetches of 2026-10-12 (robots.txt, sitemap.xml, llms.txt, the homepage twice, the crawler-access probes and each page once; see capture.js) - no paid API is involved. Read `n8n/seo-agent/ACCURACY_SET.md` first.",
+ "sites": [
+  {
+   "site": "techand.ai",
+   "file": "techand-ai.json",
+   "note": "the customer site of the 2026-10-11 review: a Next.js site on Vercel, apex 308 to www, three theme-color tags (D18), placeholder text live on /industries"
+  },
+  {
+   "site": "peppol.org",
+   "file": "peppol-org.json",
+   "note": "OpenPeppol, a non-profit standards body on WordPress: www 301 to the apex, an empty \"Disallow:\" in robots.txt, no llms.txt, ClaudeBot blocked by the CDN, pages with no description and no H1"
+  },
+  {
+   "site": "azdan.com",
+   "file": "azdan-com.json",
+   "note": "a UAE Oracle NetSuite partner on Webflow behind Cloudflare: apex 301 to www, a full llms.txt, every crawler served, nav-heavy pages"
+  }
+ ],
+ "cases": [
+  {
+   "id": "AF-01",
+   "site": "techand.ai",
+   "finding": "Performance|HTML cannot be cached by the CDN (no-store / private)",
+   "label": "true_positive",
+   "reason": "The homepage really answers with \"Cache-Control: private, no-cache, no-store, max-age=0, must-revalidate\" and x-vercel-cache MISS on both requests, so no CDN copy is ever served.",
+   "source": "fixture probes.home_content headers; the same was checked by hand against the live site in RESULTS.md section 2.5 (\"true\")"
+  },
+  {
+   "id": "AF-02",
+   "site": "techand.ai",
+   "finding": "Content|Placeholder (lorem ipsum) text is live@https://www.techand.ai/industries",
+   "label": "true_positive",
+   "reason": "The live page carries 30 matches of \"Lorem ipsum\" / \"dolor sit amet\" under the \"Industry Context\" headings.",
+   "source": "checked live on 2026-10-12 (free fetch, 30 matches); first found by the review (RESULTS.md section 2.5, \"true\")"
+  },
+  {
+   "id": "AF-03",
+   "site": "techand.ai",
+   "finding": "On-Page|Missing meta description@https://www.techand.ai/power-platform-analytics-uae",
+   "label": "true_positive",
+   "reason": "The page serves no <meta name=\"description\"> at all.",
+   "source": "fixture page meta (description length 0); RESULTS.md section 2.5 found the same live"
+  },
+  {
+   "id": "AF-04",
+   "site": "techand.ai",
+   "finding": "On-Page|Brand name repeated in the title@https://www.techand.ai/power-platform-analytics-uae",
+   "label": "true_positive",
+   "reason": "The title is \"Power Platform & Analytics Services in UAE | Tech& | Tech&\": the brand is appended twice by the template.",
+   "source": "fixture page meta; RESULTS.md section 2.5 found the same live"
+  },
+  {
+   "id": "AF-05",
+   "site": "techand.ai",
+   "finding": "Security|Missing security headers",
+   "label": "true_positive",
+   "reason": "Content-Security-Policy is absent (HSTS, X-Content-Type-Options, X-Frame-Options and Referrer-Policy are present, so the finding is Low and names only what is missing).",
+   "source": "the site fixture of 2026-10-12 (harness/accuracy/sites/techand-ai.json) probes.home_content headers"
+  },
+  {
+   "id": "AF-06",
+   "site": "techand.ai",
+   "finding": "On-Page|Title shorter than 30 characters@https://www.techand.ai/industries",
+   "label": "true_positive",
+   "reason": "\"Industries We Serve | Tech&\" is 27 characters, so about half of the width Google shows is unused.",
+   "source": "fixture page meta (title length 27)"
+  },
+  {
+   "id": "AF-07",
+   "site": "techand.ai",
+   "finding": "On-Page|Title shorter than 30 characters@https://www.techand.ai/capabilities",
+   "label": "true_positive",
+   "reason": "\"Capabilities | Tech&\" is 20 characters and names no service or market.",
+   "source": "fixture page meta (title length 20)"
+  },
+  {
+   "id": "AF-08",
+   "site": "techand.ai",
+   "finding": "On-Page|Long or messy URLs@https://www.techand.ai/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs",
+   "label": "cosmetic",
+   "reason": "The URL really is 118 characters, but it is lowercase, hyphenated and readable, and it belongs to a published article: renaming it would need a redirect and risk the rankings it has. True, not worth doing.",
+   "source": "fixture page meta (URL length 118)"
+  },
+  {
+   "id": "AF-09",
+   "site": "techand.ai",
+   "finding": "Crawlability & Indexing|www and non-www versions are not consolidated",
+   "label": "false_positive",
+   "reason": "https://techand.ai/ answers 308 to https://www.techand.ai/ and the homepage canonical names www.techand.ai: there is exactly one host. The audit raised this as a High finding in every run up to 2026-10-11 (D6), on DataForSEO's test_canonicalization flag alone.",
+   "source": "RESULTS.md section 2.5 (\"false positive (D6)\"); fixed and live-verified in LIVE_CHECK_phase1_2026-10-12.md section 2, D6"
+  },
+  {
+   "id": "AF-10",
+   "site": "techand.ai",
+   "finding": "On-Page|Duplicate meta tags on the same page@https://www.techand.ai/",
+   "label": "false_positive",
+   "reason": "The crawler counts the three Next.js <meta name=\"theme-color\"> tags (light / dark / no media) as duplicates of each other. They differ by their media attribute, so they are correct markup and nothing is duplicated. The audit reported \"Duplicate meta tags, 45/47 pages\" on 2026-10-11 (D18).",
+   "source": "RESULTS.md section 2.5 (\"false positive (D18)\"); fixed and live-verified in LIVE_CHECK_phase1_2026-10-12.md section 2, D18; the three tags are in the fixture's stored <head>"
+  },
+  {
+   "id": "AF-11",
+   "site": "techand.ai",
+   "finding": "Crawlability & Indexing|Indexable pages missing from the sitemap",
+   "label": "false_positive",
+   "reason": "All six crawled pages are listed in sitemap.xml. The sitemap lists them on www.techand.ai while a crawl may report either host, so a host-sensitive comparison would wrongly flag every page.",
+   "source": "fixture probes.sitemap (45 locs) against the six crawled URLs"
+  },
+  {
+   "id": "AF-12",
+   "site": "techand.ai",
+   "finding": "AI Search Readiness|robots.txt blocks some AI crawlers",
+   "label": "false_positive",
+   "reason": "techand.ai's robots.txt has one \"User-Agent: *\" group with Allow: / and three path rules (/api/, /admin/, /private/): no AI crawler is blocked.",
+   "source": "fixture probes.robots text"
+  },
+  {
+   "id": "AF-13",
+   "site": "techand.ai",
+   "finding": "AI Search Readiness|No llms.txt file",
+   "label": "false_positive",
+   "reason": "https://techand.ai/llms.txt answers 200 with 10,659 characters of plain text.",
+   "source": "fixture probes.llms (status 200, 10659 characters, no <html>)"
+  },
+  {
+   "id": "AF-14",
+   "site": "techand.ai",
+   "finding": "AI Search Readiness|Some search and AI crawlers are blocked or get less content",
+   "label": "false_positive",
+   "reason": "All 11 crawler user-agents get HTTP 200 and between 218,854 and 219,161 characters against the browser's 219,161 - differences of a few hundred bytes from A/B markers. A strict length comparison would call Bingbot and Applebot blocked.",
+   "source": "fixture probes bot:* (statuses and lengths)"
+  },
+  {
+   "id": "AF-15",
+   "site": "peppol.org",
+   "finding": "AI Search Readiness|Some search and AI crawlers are blocked or get less content",
+   "label": "true_positive",
+   "reason": "ClaudeBot gets HTTP 403 and a 146-character body where a browser gets 130,836 characters: the CDN blocks that crawler by user-agent, while the other ten are served in full.",
+   "source": "the site fixture of 2026-10-12 (harness/accuracy/sites/peppol-org.json) probes[\"bot:ClaudeBot\"] (403, 146 characters)"
+  },
+  {
+   "id": "AF-16",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing H1 heading@https://peppol.org/",
+   "label": "true_positive",
+   "reason": "The homepage has no <h1> element at all (its visible headline is built from h2 blocks).",
+   "source": "fixture page meta (htags.h1 empty)"
+  },
+  {
+   "id": "AF-17",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing H1 heading@https://peppol.org/about/",
+   "label": "true_positive",
+   "reason": "The About page has no <h1> element.",
+   "source": "fixture page meta (htags.h1 empty)"
+  },
+  {
+   "id": "AF-18",
+   "site": "peppol.org",
+   "finding": "Security|Missing security headers",
+   "label": "true_positive",
+   "reason": "The nginx responses carry none of HSTS, CSP, X-Content-Type-Options, X-Frame-Options or Referrer-Policy; HSTS missing makes it Medium.",
+   "source": "fixture probes.home_content headers"
+  },
+  {
+   "id": "AF-19",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing meta description@https://peppol.org/faqs/",
+   "label": "true_positive",
+   "reason": "The page serves no <meta description>.",
+   "source": "fixture page meta (description length 0)"
+  },
+  {
+   "id": "AF-20",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing meta description@https://peppol.org/about/",
+   "label": "true_positive",
+   "reason": "The page serves no <meta description>.",
+   "source": "fixture page meta (description length 0)"
+  },
+  {
+   "id": "AF-21",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing meta description@https://peppol.org/members/",
+   "label": "true_positive",
+   "reason": "The page serves no <meta description>.",
+   "source": "fixture page meta (description length 0)"
+  },
+  {
+   "id": "AF-22",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing meta description@https://peppol.org/learn-more/",
+   "label": "true_positive",
+   "reason": "The page serves no <meta description>.",
+   "source": "fixture page meta (description length 0)"
+  },
+  {
+   "id": "AF-23",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing meta description@https://peppol.org/join/",
+   "label": "true_positive",
+   "reason": "The page serves no <meta description>.",
+   "source": "fixture page meta (description length 0)"
+  },
+  {
+   "id": "AF-24",
+   "site": "peppol.org",
+   "finding": "On-Page|Duplicate meta tags on the same page@https://peppol.org/",
+   "label": "cosmetic",
+   "reason": "Two <meta name=\"generator\"> tags really are served (WordPress and Elementor each add one), so the claim is true - but generator tags are invisible to search engines and fixing them changes nothing. A better rule would only count tags search engines read (description, robots, canonical, og:*).",
+   "source": "the duplicate is in the fixture's stored <head> (generator x2)"
+  },
+  {
+   "id": "AF-25",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing Open Graph tags@https://peppol.org/",
+   "label": "true_positive",
+   "reason": "og:title and og:description are present, og:image is not, so shared links show no image.",
+   "source": "fixture page meta (social_media_tags without og:image)"
+  },
+  {
+   "id": "AF-26",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing Open Graph tags@https://peppol.org/faqs/",
+   "label": "true_positive",
+   "reason": "No og:image on the page.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-27",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing Open Graph tags@https://peppol.org/about/",
+   "label": "true_positive",
+   "reason": "No og:image on the page.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-28",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing Open Graph tags@https://peppol.org/members/",
+   "label": "true_positive",
+   "reason": "No og:image on the page.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-29",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing Open Graph tags@https://peppol.org/learn-more/",
+   "label": "true_positive",
+   "reason": "No og:image on the page.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-30",
+   "site": "peppol.org",
+   "finding": "On-Page|Missing Open Graph tags@https://peppol.org/join/",
+   "label": "true_positive",
+   "reason": "No og:image on the page.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-31",
+   "site": "peppol.org",
+   "finding": "AI Search Readiness|No llms.txt file",
+   "label": "true_positive",
+   "reason": "https://peppol.org/llms.txt answers 404 (with the site's HTML error page), so there is no llms.txt.",
+   "source": "fixture probes.llms (status 404, HTML body)"
+  },
+  {
+   "id": "AF-32",
+   "site": "peppol.org",
+   "finding": "On-Page|Title shorter than 30 characters@https://peppol.org/faqs/",
+   "label": "true_positive",
+   "reason": "\"FAQs - OpenPeppol\" is 17 characters.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-33",
+   "site": "peppol.org",
+   "finding": "On-Page|Title shorter than 30 characters@https://peppol.org/about/",
+   "label": "true_positive",
+   "reason": "\"About - OpenPeppol\" is 18 characters.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-34",
+   "site": "peppol.org",
+   "finding": "On-Page|Title shorter than 30 characters@https://peppol.org/members/",
+   "label": "true_positive",
+   "reason": "\"Members - OpenPeppol\" is 20 characters.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-35",
+   "site": "peppol.org",
+   "finding": "On-Page|Title shorter than 30 characters@https://peppol.org/learn-more/",
+   "label": "true_positive",
+   "reason": "\"Learn More - OpenPeppol\" is 23 characters.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-36",
+   "site": "peppol.org",
+   "finding": "On-Page|Title shorter than 30 characters@https://peppol.org/join/",
+   "label": "true_positive",
+   "reason": "\"Join - OpenPeppol\" is 17 characters.",
+   "source": "fixture page meta"
+  },
+  {
+   "id": "AF-37",
+   "site": "peppol.org",
+   "finding": "Content|Light content (300-500 words)@https://peppol.org/faqs/",
+   "label": "true_positive",
+   "reason": "366 words on a page whose job is to answer frequently asked questions: genuinely thin for its purpose.",
+   "source": "fixture page meta (plain_text_word_count 366)"
+  },
+  {
+   "id": "AF-38",
+   "site": "peppol.org",
+   "finding": "Content|Light content (300-500 words)@https://peppol.org/members/",
+   "label": "cosmetic",
+   "reason": "355 words, but the page is an index whose job is to link on to the member lists; word count is the wrong measure for it. True, not worth acting on.",
+   "source": "fixture page meta (355 words, 117 internal links)"
+  },
+  {
+   "id": "AF-39",
+   "site": "peppol.org",
+   "finding": "Content|Light content (300-500 words)@https://peppol.org/learn-more/",
+   "label": "cosmetic",
+   "reason": "337 words on a section index that links on to the sub-pages: the same wrong measure as /members/.",
+   "source": "fixture page meta (337 words, 120 internal links)"
+  },
+  {
+   "id": "AF-40",
+   "site": "peppol.org",
+   "finding": "Crawlability & Indexing|www and non-www versions are not consolidated",
+   "label": "false_positive",
+   "reason": "https://www.peppol.org/ answers 301 to https://peppol.org/ and the canonical names the bare host: one host, nothing to consolidate.",
+   "source": "fixture probes.www_https (301 to https://peppol.org/) and the canonical in the stored <head>"
+  },
+  {
+   "id": "AF-41",
+   "site": "peppol.org",
+   "finding": "Crawlability & Indexing|robots.txt blocks all crawlers",
+   "label": "false_positive",
+   "reason": "peppol.org's robots.txt (a Yoast block) has \"User-agent: *\" followed by \"Disallow:\" with an empty value, which allows everything. Reading the line as a block would report a Critical finding on a site that is fully open.",
+   "source": "fixture probes.robots text"
+  },
+  {
+   "id": "AF-42",
+   "site": "azdan.com",
+   "finding": "Security|Missing security headers",
+   "label": "true_positive",
+   "reason": "Only HSTS is set behind Cloudflare; CSP, X-Content-Type-Options, X-Frame-Options and Referrer-Policy are all missing.",
+   "source": "the site fixture of 2026-10-12 (harness/accuracy/sites/azdan-com.json) probes.home_content headers"
+  },
+  {
+   "id": "AF-43",
+   "site": "azdan.com",
+   "finding": "On-Page|Title longer than 60 characters@https://www.azdan.com/",
+   "label": "cosmetic",
+   "reason": "\"Oracle NetSuite Solution Provider in UAE, KSA & Egypt | Azdan\" is 61 characters - one over the rule. Nothing material is cut off, so the claim is true and the advice is noise.",
+   "source": "fixture page meta (title length 61)"
+  },
+  {
+   "id": "AF-44",
+   "site": "azdan.com",
+   "finding": "On-Page|Too many links on one page@https://www.azdan.com/",
+   "label": "cosmetic",
+   "reason": "173 links (156 internal + 17 external), almost all of them the site-wide navigation and footer. Google retired the 100-link guideline, and a modern mega-menu is not a problem. A better rule would count links inside the content only.",
+   "source": "fixture page meta (internal 156, external 17)"
+  },
+  {
+   "id": "AF-45",
+   "site": "azdan.com",
+   "finding": "On-Page|Too many links on one page@https://www.azdan.com/services/oracle-netsuite-implementation",
+   "label": "cosmetic",
+   "reason": "156 links, of which the nav and footer are the bulk: the same nav-driven count as the homepage.",
+   "source": "fixture page meta (internal 140, external 16)"
+  },
+  {
+   "id": "AF-46",
+   "site": "azdan.com",
+   "finding": "On-Page|Too many links on one page@https://www.azdan.com/netsuite-services",
+   "label": "cosmetic",
+   "reason": "157 links, nav and footer again.",
+   "source": "fixture page meta (internal 141, external 16)"
+  },
+  {
+   "id": "AF-47",
+   "site": "azdan.com",
+   "finding": "On-Page|Too many links on one page@https://www.azdan.com/blog",
+   "label": "cosmetic",
+   "reason": "353 links on a blog index that lists every post: exactly what such a page is for.",
+   "source": "fixture page meta (internal 338, external 15)"
+  },
+  {
+   "id": "AF-48",
+   "site": "azdan.com",
+   "finding": "On-Page|Too many links on one page@https://www.azdan.com/industries",
+   "label": "cosmetic",
+   "reason": "193 links on an industries hub that links to each industry page.",
+   "source": "fixture page meta (internal 178, external 15)"
+  },
+  {
+   "id": "AF-49",
+   "site": "azdan.com",
+   "finding": "Crawlability & Indexing|www and non-www versions are not consolidated",
+   "label": "false_positive",
+   "reason": "https://azdan.com/ answers 301 to https://www.azdan.com/ and the canonical names www.azdan.com: one host.",
+   "source": "fixture probes.home (301 to https://www.azdan.com/) and the canonical in the stored <head>"
+  },
+  {
+   "id": "AF-50",
+   "site": "azdan.com",
+   "finding": "On-Page|Duplicate meta tags on the same page@https://www.azdan.com/",
+   "label": "false_positive",
+   "reason": "No meta tag is repeated in the homepage head, so if a crawler reports duplicates the finding must be dropped.",
+   "source": "the fixture's stored <head> (13 meta tags, none repeated)"
+  },
+  {
+   "id": "AF-51",
+   "site": "azdan.com",
+   "finding": "Crawlability & Indexing|Indexable pages missing from the sitemap",
+   "label": "false_positive",
+   "reason": "All six crawled pages are among the 252 URLs in sitemap.xml.",
+   "source": "fixture probes.sitemap (252 locs) against the six crawled URLs"
+  },
+  {
+   "id": "AF-52",
+   "site": "azdan.com",
+   "finding": "AI Search Readiness|No llms.txt file",
+   "label": "false_positive",
+   "reason": "https://azdan.com/llms.txt answers 200 with 28,841 characters of plain text.",
+   "source": "fixture probes.llms (status 200, 28841 characters, no <html>)"
+  },
+  {
+   "id": "AF-53",
+   "site": "azdan.com",
+   "finding": "AI Search Readiness|Some search and AI crawlers are blocked or get less content",
+   "label": "false_positive",
+   "reason": "All 11 crawler user-agents get HTTP 200 and exactly the browser's 117,798 characters.",
+   "source": "fixture probes bot:* (statuses and lengths)"
+  }
+ ]
+}
