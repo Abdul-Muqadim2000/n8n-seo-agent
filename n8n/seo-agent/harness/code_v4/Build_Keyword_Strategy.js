@@ -132,6 +132,175 @@ const aioObserved = (obs) => {
   if (known.length === 1) return { count: 1, seen: seen.length, text: one(known[0]) + ' — AI Overviews vary between searches, so this is one observation, not a fixed feature of the query' };
   return { count: known.length, seen: seen.length, text: 'seen in ' + seen.length + ' of ' + known.length + ' checks (' + known.map(one).join('; ') + ') — AI Overviews vary between searches' };
 };
+// ---- what the keyword research is allowed to use, and what its numbers mean (2026-10-13, FIX_PLAN G8; criteria K2 / K4 / K6 / K7) ----
+// Three inputs the research was missing, all built from data the run already holds (no extra paid call):
+//   * KWI.gscSeeds()     - the site's OWN Search Console queries as discovery seeds: a query that gets impressions while no live page
+//                          answers it (the D11 page inventory decides through SM.matchPage) and a striking-distance query (position
+//                          8-20). Search Console is the only first-party record of what people really type, so it now seeds the paid
+//                          pulls instead of only being read afterwards (K6).
+//   * KWI.calibrate()    - the traffic estimate checked against the site's own measured clicks and impressions where it already
+//                          ranks, labelled `calibrated` or `modelled`. A modelled number is never presented as measured (K2).
+//   * KWI.serpClusters() - keywords grouped when their top-10 results share at least 3 URLs, each cluster named by its head keyword
+//                          and carrying the shared URLs, so one page can target the whole group (K7). Only results pages the run
+//                          already fetched are used: the live checks and the competitors' own ranking URLs.
+// Every function is pure and takes its thresholds as options, so the harness (S52) can drive it directly.
+const KWI = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const num = (v) => { const x = Number(v); return Number.isFinite(x) ? x : null; };
+  const low = (v) => S(v).toLowerCase().replace(/\s+/g, ' ');
+  const yes = (v) => v === true || /^(true|1|yes|on)$/i.test(S(v));
+  const CFG = {
+    min_impressions: 10,        // a query needs this many impressions in the Search Console period before it seeds anything
+    striking_min: 8,            // "striking distance": bottom of page 1 to the end of page 2, where one strong page moves the needle
+    striking_max: 20,
+    max_seeds: 10,              // how many Search Console queries may be handed to the research as seeds
+    period_days: 28,            // the Search Console window the Site Tracker stores (Site_Plan.js ranges.current)
+    month_days: 30,
+    top_share: 0.3,             // the share of a search a page in the top three takes (the modelled estimate uses the same share)
+    min_shared_urls: 3,         // K7: a shared results page means at least this many of the same top-10 URLs
+    min_urls: 3,                // a keyword needs this many known top-10 URLs before it can be compared at all
+    max_cluster_keywords: 12,
+    live_serp_checks: 16,       // K4: how many keywords get a live intent / page-type check (cost-aware cap, see LIVE_MAX)
+    live_serp_max: 25
+  };
+  const bare = (v) => S(v).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/:\d+$/, '');
+  const cap = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  // K4: how many live results-page checks this run may buy. One check is a DataForSEO live-advanced SERP at depth 10 (~$0.002), so the
+  // default 16 costs about $0.032 a run against $0.016 at the old fixed 8; the owner may set it per run and it is hard-capped at 25.
+  const liveChecks = (requested) => { const n = num(requested); return n == null || n <= 0 ? CFG.live_serp_checks : Math.round(cap(n, 1, CFG.live_serp_max)); };
+
+  // ---- K6: the site's own Search Console queries as seeds ----
+  // rows = seo_query_history rows (the Site Tracker writes one per site, query and 28-day period). Only the newest period counts:
+  // the table only grows, so older rows would seed last month's picture.
+  const gscSeeds = (rows, o) => {
+    const c = { ...CFG, ...(o || {}) };
+    const dom = bare(c.domain);
+    const all = (Array.isArray(rows) ? rows : []).filter(r => r && S(r.query) && !r.error && (!dom || bare(r.domain) === dom));
+    const period = all.reduce((m, r) => S(r.period_end) > m ? S(r.period_end) : m, '');
+    const isScraper = typeof c.isScraper === 'function' ? c.isScraper : () => false;
+    const isBrand = typeof c.isBrand === 'function' ? c.isBrand : () => false;
+    const matchPage = typeof c.matchPage === 'function' ? c.matchPage : () => null;
+    const dropped = { scraper: 0, brand: 0, low_impressions: 0, duplicate: 0 };
+    const seen = new Set(); const considered = [];
+    for (const r of all.filter(r => S(r.period_end) === period).sort((a, b) => (num(b.impressions) || 0) - (num(a.impressions) || 0))) {
+      const q = low(r.query); if (!q) continue;
+      if (seen.has(q)) { dropped.duplicate++; continue; }
+      seen.add(q);
+      if (isScraper(q)) { dropped.scraper++; continue; }
+      if (isBrand(q)) { dropped.brand++; continue; }
+      const impressions = num(r.impressions) || 0, clicks = num(r.clicks) || 0, position = num(r.position) || 0;
+      if (impressions < c.min_impressions) { dropped.low_impressions++; continue; }
+      // which page, if any, already answers this search: the page inventory first (D11), the page Search Console reports only when
+      // the inventory is empty (then it is the best evidence we have, and it is labelled as such)
+      const inv = matchPage(q);
+      const row_page = (c.use_row_page && S(r.page)) ? { url: S(r.page), title: '', matched_by: 'search console page' } : null;
+      const answered_by = inv ? { url: S(inv.url), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory' } : row_page;
+      const kinds = [];
+      if (!answered_by) kinds.push('no_page');
+      if (position >= c.striking_min && position <= c.striking_max) kinds.push('striking');
+      considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
+        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: S(r.page), answered_by, kinds,
+        period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
+    }
+    const wanted = considered.filter(q => q.kinds.length);
+    const order = [...wanted].sort((a, b) => (b.kinds.indexOf('no_page') >= 0 ? 1 : 0) - (a.kinds.indexOf('no_page') >= 0 ? 1 : 0) || b.impressions - a.impressions);
+    return { available: all.length > 0, period_end: period, period_days: c.period_days, rows: all.length, considered: considered.length,
+      page_check: (num(c.pages_known) || 0) > 0 ? 'page inventory' : (c.use_row_page ? 'search console page' : 'unavailable'),
+      pages_known: num(c.pages_known) || 0,
+      queries: wanted, no_page: wanted.filter(q => q.kinds.indexOf('no_page') >= 0), striking: wanted.filter(q => q.kinds.indexOf('striking') >= 0),
+      answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 20),
+      seeds: order.slice(0, c.max_seeds).map(q => q.keyword), dropped,
+      min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
+  };
+
+  // the click loss a results page causes (an AI Overview, a snippet, a local pack and so on take clicks off the blue links)
+  const featureLoss = (types) => {
+    const t = (Array.isArray(types) ? types : []).map(x => S(x).toLowerCase());
+    let ctr = 1;
+    if (t.indexOf('ai_overview') >= 0) ctr *= 0.65;
+    if (t.indexOf('featured_snippet') >= 0) ctr *= 0.85;
+    if (t.indexOf('video') >= 0 || t.indexOf('short_videos') >= 0) ctr *= 0.92;
+    if (t.indexOf('local_pack') >= 0 || t.indexOf('map') >= 0) ctr *= 0.85;
+    if (t.indexOf('shopping') >= 0 || t.indexOf('popular_products') >= 0) ctr *= 0.9;
+    return ctr;
+  };
+
+  // ---- K2: the traffic number, and where it comes from ----
+  // `calibrated`: the site's own measured impressions for this exact search (the Search Console period, scaled to a month) through the
+  //               results page's click loss and the share a top-three page takes, never below the clicks the site already gets.
+  // `modelled`:   the provider's monthly volume through the same two factors - an estimate of an estimate, named as one.
+  // `unknown`:    neither a volume nor a measurement, so no number at all (better than a confident zero).
+  const calibrate = (e, o) => {
+    const c = { ...CFG, ...(o || {}) };
+    const k = e || {};
+    const ctr = featureLoss(k.serp_types);
+    const vol = num(k.volume);
+    const modelled = vol == null ? null : Math.round(vol * ctr * c.top_share);
+    const g = (k.gsc && typeof k.gsc === 'object') ? k.gsc : null;
+    const impressions = g ? num(g.impressions) : null;
+    if (impressions != null && impressions > 0) {
+      const clicks = num(g.clicks) || 0;
+      const days = num(g.period_days) > 0 ? num(g.period_days) : c.period_days;
+      const toMonth = c.month_days / days;
+      const traffic_potential = Math.max(Math.round(impressions * toMonth * ctr * c.top_share), Math.round(clicks * toMonth));
+      const pos = num(g.position);
+      return { traffic_potential, traffic_basis: 'calibrated', modelled_traffic_potential: modelled,
+        traffic_note: 'Calibrated with your own Search Console data: ' + Math.round(impressions) + ' impressions and ' + Math.round(clicks)
+          + ' click(s) measured for this exact search on your site in ' + Math.round(days) + ' days'
+          + (pos ? ' at average position ' + (Math.round(pos * 10) / 10) : '') + '. A page in the top three would take about '
+          + traffic_potential + ' visits a month' + (modelled != null ? ' (the modelled estimate from the provider\'s volume is ' + modelled + ').' : '.') };
+    }
+    if (modelled == null) {
+      return { traffic_potential: null, traffic_basis: 'unknown', modelled_traffic_potential: null,
+        traffic_note: 'No monthly volume from the provider and no Search Console measurement for this search, so no traffic estimate is given.' };
+    }
+    return { traffic_potential: modelled, traffic_basis: 'modelled', modelled_traffic_potential: modelled,
+      traffic_note: 'Modelled, not measured: ' + vol + ' searches a month (a provider estimate) through the click loss of this results page and the share a top-three page takes.' };
+  };
+  const BASIS_TEXT = { calibrated: 'calibrated with your Search Console data', modelled: 'modelled from provider volume', unknown: 'no estimate' };
+
+  // ---- K7: clusters by shared results pages ----
+  // entries: [{ keyword, urls: [top-10 urls], weight, volume }]. A head keyword takes every keyword that shares at least
+  // min_shared_urls of its own top-10 URLs; the head is the strongest keyword not already in a cluster, so the cluster can be named
+  // after it. Queries and trailing slashes are ignored when URLs are compared (the same page, written two ways).
+  const urlKey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  const serpClusters = (entries, o) => {
+    const c = { ...CFG, ...(o || {}) };
+    const list = (Array.isArray(entries) ? entries : []).map(e => ({ keyword: low((e || {}).keyword),
+      urls: [...new Set(((e || {}).urls || []).map(urlKey).filter(Boolean))], weight: num((e || {}).weight) || 0, volume: num((e || {}).volume) }))
+      .filter(e => e.keyword && e.urls.length >= c.min_urls);
+    const byKw = new Map(); for (const e of list) if (!byKw.has(e.keyword)) byKw.set(e.keyword, e);
+    const ranked = [...byKw.values()].sort((a, b) => b.weight - a.weight || (b.volume || 0) - (a.volume || 0) || a.keyword.localeCompare(b.keyword));
+    const used = new Set(); const clusters = [];
+    for (const head of ranked) {
+      if (used.has(head.keyword)) continue;
+      const hs = new Set(head.urls); const members = [];
+      for (const other of ranked) {
+        if (other.keyword === head.keyword || used.has(other.keyword)) continue;
+        const shared = other.urls.filter(u => hs.has(u));
+        if (shared.length >= c.min_shared_urls) members.push({ keyword: other.keyword, volume: other.volume, shared_urls: shared.length, shared: shared.slice(0, 3) });
+      }
+      if (!members.length) continue;
+      used.add(head.keyword); members.forEach(m => used.add(m.keyword));
+      members.sort((a, b) => b.shared_urls - a.shared_urls || (b.volume || 0) - (a.volume || 0));
+      clusters.push({ head_keyword: head.keyword, keyword_count: members.length + 1, urls_compared: head.urls.length,
+        min_shared_urls: c.min_shared_urls, total_volume: [head, ...members].reduce((s, m) => s + (num(m.volume) || 0), 0),
+        keywords: [{ keyword: head.keyword, volume: head.volume, shared_urls: head.urls.length, shared: [] }, ...members].slice(0, c.max_cluster_keywords) });
+    }
+    clusters.sort((a, b) => b.keyword_count - a.keyword_count || b.total_volume - a.total_volume);
+    return { clusters, keywords_compared: ranked.length, min_shared_urls: c.min_shared_urls, min_urls: c.min_urls,
+      clustered: clusters.reduce((n, x) => n + x.keyword_count, 0) };
+  };
+  // "one page can serve all three: 'erp software uae' also covers 'erp system uae' (4 of the same top-10 pages), ..."
+  const clusterText = (cl) => {
+    const c = cl || {}; const others = (c.keywords || []).slice(1);
+    if (!others.length) return '';
+    return 'One page can target all ' + c.keyword_count + ': "' + c.head_keyword + '" shares '
+      + others.map(k => k.shared_urls + ' of its top-10 pages with "' + k.keyword + '"').join(', ')
+      + ' - Google answers these searches with the same pages, so a second page would only split the signals.';
+  };
+  return { CFG, gscSeeds, calibrate, serpClusters, clusterText, featureLoss, liveChecks, urlKey, BASIS_TEXT, helpers: { bare, low, num } };
+})();
 // Final keyword strategy: merges AI search demand and the live SERP checks into the ranked keyword set and renders the
 // "Keyword Strategy" report. Also exposes keyword_suggestions for the downstream file/email/content steps.
 // v4.8: with a website the report shows each keyword's difficulty for this site and plan ("Easy for your site · Direct plan · 2-4 months");
@@ -170,6 +339,7 @@ const normD = (d) => String(d || '').toLowerCase().replace(/^www\./, '');
 const serpErr = (s) => { s = s || {}; const t = (Array.isArray(s.tasks) ? s.tasks[0] : null) || {};
   return (s.error || Number(s.status_code) >= 40000 || !Array.isArray(s.tasks) || Number(t.status_code) >= 40000) ? String((s.error && (s.error.message || s.error)) || t.status_message || s.status_message || 'no answer').slice(0, 120) : ''; };
 const liveFailures = [];
+const liveUrlsBy = new Map();   // G8 / K7: the full top 10 of every keyword this run checked live
 prio.forEach((p, i) => {
   const err = serpErr(serps[i]);
   if (err) { const k0 = ks.priority.find(x => x.keyword === p.keyword); if (k0) { k0.live = null; liveFailures.push('Live Google check for "' + p.keyword + '": ' + err); } return; }
@@ -177,12 +347,27 @@ prio.forEach((p, i) => {
   const items = res.items || [];
   const organic = items.filter(x => x.type === 'organic');
   const mine = ours ? organic.find(o => normD(o.domain) === ours || normD(o.domain).endsWith('.' + ours)) : null;
+  liveUrlsBy.set(String(p.keyword || '').toLowerCase(), organic.filter(o => !(Number(o.rank_group) > 10)).map(o => o.url).filter(Boolean));
   const k = ks.priority.find(x => x.keyword === p.keyword);
   if (!k) return;
   k.live = { top_domains: [...new Set(organic.map(o => normD(o.domain)).filter(Boolean))].slice(0, 5), your_position: mine ? mine.rank_group : null, checked_at: serpSeenAt(serps[i]),
     features: [...new Set(items.map(x => x.type))].filter(t => t !== 'organic'), ai_overview: items.some(x => x.type === 'ai_overview'), paa: (items.find(x => x.type === 'people_also_ask') || { items: [] }).items.slice(0, 4).map(q => q.title || q.question).filter(Boolean) };
 });
 if (liveFailures.length) ks.research_failures = [...(ks.research_failures || []), ...liveFailures];
+// ---- G8 / K7 (2026-10-13): the SERP-overlap clusters, recomputed with the live checks' full top 10 ----
+// Rank Keywords could only use the competitors' ranking URLs; here every keyword that was checked live contributes its whole top 10,
+// so the "one page can serve all of these" grouping rests on real results pages. Nothing extra is fetched.
+const serpEntries = (ks.keywords || []).map(k => ({ keyword: k.keyword, weight: k.opportunity, volume: k.volume,
+  urls: [...(liveUrlsBy.get(String(k.keyword || '').toLowerCase()) || []),
+    ...(k.competitors || []).filter(c => c && c.url && Number(c.position) > 0 && Number(c.position) <= 10).map(c => c.url)] }));
+const overlap = KWI.serpClusters(serpEntries, {});
+ks.serp_clusters = overlap.clusters.slice(0, 15);
+ks.serp_overlap = { keywords_compared: overlap.keywords_compared, clustered: overlap.clustered, min_shared_urls: overlap.min_shared_urls,
+  live_checked: liveUrlsBy.size, source: liveUrlsBy.size ? 'live checks + competitor rankings' : 'competitor rankings' };
+const serpHead = new Map();
+for (const cl of ks.serp_clusters) for (const m of cl.keywords) serpHead.set(m.keyword, { head_keyword: cl.head_keyword, shared_urls: m.shared_urls, keyword_count: cl.keyword_count });
+const tagSerp = (k) => { const h = serpHead.get(String(k.keyword || '').toLowerCase()); k.serp_cluster = (h && h.head_keyword !== k.keyword) ? h : null; return k; };
+ks.keywords = (ks.keywords || []).map(tagSerp); ks.priority = (ks.priority || []).map(tagSerp); ks.quick_wins = (ks.quick_wins || []).map(tagSerp);
 const cpcTxt = (c) => String(Math.round(Number(c) * 100) / 100);   // DataForSEO CPCs are float32 (13.65999984741211)
 // D26: the AI Overview observations of a keyword — the stored results page (undated: DataForSEO's database) and, when checked, the live SERP.
 // D20 (2026-10-12): the two are no longer averaged into one claim. The LIVE check speaks for today ("seen on <date>"); the stored Labs value has
@@ -208,6 +393,9 @@ const why = (k) => {
   if (ao.live === true) bits.push('an AI Overview was seen on ' + obsDay(k.live.checked_at) + ' (they vary between searches) — write a quotable answer block');
   else if (ao.live == null && ao.stored === true) bits.push('the stored results page showed an AI Overview (historical, undated — not checked live)');
   if (k.live && k.live.your_position) bits.push('you are already at #' + k.live.your_position);
+  // G8 / K2: say when the traffic number is the site's own measurement rather than a model, and K7: when one page can serve more searches
+  if (k.traffic_basis === 'calibrated' && k.gsc) bits.push('Search Console already measured ' + Math.round(Number(k.gsc.impressions) || 0) + ' impressions for this exact search on your site in ' + (Number(k.gsc.period_days) || 28) + ' days, so the traffic number below is calibrated, not modelled');
+  if (k.serp_cluster) bits.push('the same pages rank for "' + k.serp_cluster.head_keyword + '" (' + k.serp_cluster.shared_urls + ' shared top-10 results), so one page can target both');
   return bits.join('; ') + '.';
 };
 ks.priority.forEach(k => { k.why = why(k); });
@@ -222,7 +410,9 @@ if (pipeline) { const enriched = ks.priority.find(k => k.keyword === pipeline.ke
 const recommended = [];
 if (pipeline) recommended.push({ ...pipeline, reason: 'best fit for the goal "' + ks.goal + '"' });
 ks.priority.forEach(k => { if (!recommended.some(r => r.keyword === k.keyword)) recommended.push(k); });
-const keyword_suggestions = { covered: ks.covered || [], ladder_covered: ks.ladder_covered || [], recommended, easy_wins: ks.quick_wins, by_intent: ks.by_intent, topic_clusters: (ks.clusters || []).map(c => ({ topic: c.topic, total_volume: c.total_volume, keyword_count: c.keyword_count, suggested_page: c.page_type, keywords: (c.keywords || []).map(k => k.keyword) })), total_found: ks.total_relevant };
+const keyword_suggestions = { covered: ks.covered || [], ladder_covered: ks.ladder_covered || [], recommended, easy_wins: ks.quick_wins, by_intent: ks.by_intent, topic_clusters: (ks.clusters || []).map(c => ({ topic: c.topic, total_volume: c.total_volume, keyword_count: c.keyword_count, suggested_page: c.page_type, keywords: (c.keywords || []).map(k => k.keyword) })), total_found: ks.total_relevant,
+  // G8: the searches the site already gets impressions for (K6) and the groups one page can serve (K7)
+  search_console: ks.search_console || null, serp_clusters: (ks.serp_clusters || []).map(c => ({ head_keyword: c.head_keyword, keyword_count: c.keyword_count, keywords: (c.keywords || []).map(k => k.keyword), shared_urls: c.min_shared_urls })) };
 
 // ---- report ----
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -244,6 +434,24 @@ const coveredLine = (ks.covered || []).length ? (ks.covered.length === 1 ? 'One 
 // competes with a ladder that is already running one search, one page.
 const ladderLine = (ks.ladder_covered || []).length ? (ks.ladder_covered.length === 1 ? 'One keyword below is' : ks.ladder_covered.length + ' keywords below are') + ' already covered by a keyword ladder of yours: ' + ks.ladder_covered.slice(0, 5).map(c => '"' + esc(c.keyword) + '" \u2192 ladder "' + esc(c.head_keyword) + '" (' + esc(c.how) + ', ' + (c.part === 'head' ? 'its main page' : 'rung ' + c.rung) + ', ' + esc(c.status || 'planned') + ')').join(', ') + '. Let that ladder finish \u2014 two pages for one search split the signals and neither ranks.' : '';
 const refusedLine = (ks.refused || []).length ? ks.refused.length + ' keyword(s) were left out as government, portal or other companies\' brand searches (e.g. ' + ks.refused.slice(0, 5).map(r => '"' + esc(r.keyword) + '" — ' + esc(r.reason)).join(', ') + ').' : '';
+// ---- G8 (2026-10-13): the three new inputs in the report ----
+// K2: every traffic number says whether the site's own Search Console data could check it
+const tpCell = (k) => '~' + num(k.traffic_potential) + '/mo' + (k.traffic_basis === 'calibrated' ? ' (calibrated with your data)' : k.traffic_basis === 'modelled' ? ' (modelled)' : '');
+const SC = ks.search_console || null;
+const scRows = SC ? (SC.queries || []) : [];
+const scTable = (list) => table(list, [['Search', q => esc(q.keyword)], ['Impressions (' + ((SC && SC.period_days) || 28) + ' days)', q => num(q.impressions)], ['Clicks', q => num(q.clicks)],
+  ['Your position', q => q.position == null ? 'not reported' : '#' + q.position], ['Why it is here', q => q.kinds.includes('no_page') ? 'no page of yours answers this search' + ((SC && SC.page_check) === 'search console page' ? ' (judged on the page Search Console reports, no page list on file yet)' : '') : 'you rank #' + q.position + ' — striking distance'],
+  ['Page that gets the impressions', q => q.page ? '<a href="' + esc(q.page) + '">' + esc(String(q.page).replace(/^https?:\/\/[^/]+/, '') || '/') + '</a>' : '—']]);
+const scLine = !SC ? '' : (SC.available
+  ? (SC.seeded || []).length + ' of your own Search Console searches were used as research seeds (the ' + ((SC.no_page || []).length) + ' with impressions and no page of their own, and the ' + ((SC.striking || []).length) + ' where you rank ' + SC.striking_min + '-' + SC.striking_max + '), measured in the 28 days to ' + esc(String(SC.period_end || '').slice(0, 10)) + '. ' + (SC.dropped ? 'Left out: ' + (SC.dropped.brand || 0) + ' brand searches, ' + (SC.dropped.scraper || 0) + ' typed by SEO tools, ' + (SC.dropped.low_impressions || 0) + ' under ' + SC.min_impressions + ' impressions.' : '')
+  : 'No Search Console history is stored for this website yet, so the research started from the business description and the site itself. Connect Search Console (or let one weekly tracker run finish) and the next research will start from the searches you already appear for.');
+// K7: the searches Google answers with the same pages
+const SO = ks.serp_overlap || null;
+const serpClusterHtml = (ks.serp_clusters || []).length
+  ? '<p class="muted">Google answers these searches with the same pages (at least ' + ((SO && SO.min_shared_urls) || 3) + ' shared top-10 results, from ' + esc((SO && SO.source) || 'the results pages this run read') + '). One page per group: a second page for the same results page only splits the signals.</p>'
+    + (ks.serp_clusters || []).slice(0, 8).map(c => '<div class="card"><div class="kw">' + esc(c.head_keyword) + '</div><p class="muted">' + esc(KWI.clusterText(c)) + '</p><p>'
+      + (c.keywords || []).map(k => '<span class="pill">' + esc(k.keyword) + (k.volume == null ? '' : ' · ' + num(k.volume) + '/mo') + '</span>').join('') + '</p></div>').join('')
+  : '<p class="muted">No two keywords shared ' + ((SO && SO.min_shared_urls) || 3) + ' or more of their top-10 results' + (SO && SO.keywords_compared ? ' among the ' + SO.keywords_compared + ' whose results pages this run read' : '') + ', so every topic below needs its own page.</p>';
 const goalText = { leads: 'enquiries and leads', sales: 'online sales', traffic: 'traffic and authority', brand: 'brand awareness' }[ks.goal] || ks.goal;
 const now = (ks.clusters || []).filter(c => c.tier === 'Now'), next = (ks.clusters || []).filter(c => c.tier === 'Next'), later = (ks.clusters || []).filter(c => c.tier === 'Later');
 const seeds = (base.seeds || []).slice(0, 10);
@@ -270,10 +478,18 @@ const html = `
   ${liveFailures.length ? '<p class="muted">' + liveFailures.length + ' of ' + prio.length + ' live checks could not be made (the search data provider failed): those keywords show the stored SERP features and "not checked".</p>' : ''}
   ${ks.priority.map((k, i) => `<div class="card">
     <div class="kw">${i + 1}. ${esc(k.keyword)}</div>
-    <p><span class="pill">${num(k.volume)} searches/mo</span><span class="pill">Difficulty ${kdLabel(k.kd)}</span>${k.for_you_label ? '<span class="pill ' + (['easy', 'reachable'].includes(k.difficulty_for_you) ? 'now' : 'later') + '">' + esc(k.for_you_label) + '</span>' : ''}<span class="pill">${cap(k.intent)}</span><span class="pill">${esc(k.page_type)}</span>${k.cpc != null ? '<span class="pill">CPC $' + cpcTxt(k.cpc) + '</span>' : ''}${k.ladder_covered ? '<span class="pill later">Already in your ladder "' + esc(k.ladder_covered.head_keyword) + '"</span>' : ''}<span class="pill">Traffic potential ~${num(k.traffic_potential)}/mo</span>${k.ai_search_volume ? '<span class="pill ai">AI search volume ' + num(k.ai_search_volume) + '/mo</span>' : ''}</p>
+    <p>${k.volume == null ? '<span class="pill">No provider volume — measured on your site instead</span>' : '<span class="pill">' + num(k.volume) + ' searches/mo</span>'}<span class="pill">Difficulty ${kdLabel(k.kd)}</span>${k.for_you_label ? '<span class="pill ' + (['easy', 'reachable'].includes(k.difficulty_for_you) ? 'now' : 'later') + '">' + esc(k.for_you_label) + '</span>' : ''}<span class="pill">${cap(k.intent)}</span><span class="pill">${esc(k.page_type)}</span>${k.cpc != null ? '<span class="pill">CPC $' + cpcTxt(k.cpc) + '</span>' : ''}${k.ladder_covered ? '<span class="pill later">Already in your ladder "' + esc(k.ladder_covered.head_keyword) + '"</span>' : ''}${k.serp_cluster ? '<span class="pill">Same results page as "' + esc(k.serp_cluster.head_keyword) + '"</span>' : ''}<span class="pill${k.traffic_basis === 'calibrated' ? ' now' : ''}">Traffic potential ${tpCell(k)}</span>${k.ai_search_volume ? '<span class="pill ai">AI search volume ' + num(k.ai_search_volume) + '/mo</span>' : ''}</p>
     <p>${esc(k.why)}</p>
     <p class="muted"><b>Topic:</b> ${esc(k.topic)} · <b>SERP features:</b> ${esc(k.live ? (k.live.features.join(', ') || 'none') : feat(k))}${k.live ? ' (live check at ' + esc(obsClock(k.live.checked_at)) + ')' : ' (stored results page)'} · <b>AI Overview:</b> ${esc(aioObs(k).text)} · <b>Who ranks now:</b> ${esc(k.live ? (k.live.top_domains.join(', ') || 'unknown') : 'not checked')}${base.domain ? ' · <b>Your position:</b> ' + (k.live && k.live.your_position ? '#' + k.live.your_position : 'not in top 20') : ''}${k.live && k.live.paa.length ? '<br><b>People also ask:</b> ' + esc(k.live.paa.join(' · ')) : ''}</p>
   </div>`).join('') || '<p class="muted">No priority keywords could be determined.</p>'}
+
+  <h2>Searches your website already appears for</h2>
+  <p class="muted">${scLine}</p>
+  ${scRows.length ? scTable(scRows.slice(0, 20)) : ''}
+  ${(SC && SC.answered || []).length ? '<p class="muted">' + (SC.answered.length === 1 ? 'One other search is' : SC.answered.length + ' other searches are') + ' already answered by a page you have, so they were not seeded: ' + SC.answered.slice(0, 5).map(q => '"' + esc(q.keyword) + '" → <a href="' + esc(q.answered_by.url) + '">' + esc(String(q.answered_by.url).replace(/^https?:\/\/[^/]+/, '') || '/') + '</a>').join(', ') + '.</p>' : ''}
+
+  <h2>Searches that share a results page</h2>
+  ${serpClusterHtml}
 
   <h2>Content plan by topic</h2>
   <p class="muted">One strong page per topic. "Now" = highest opportunity and ${RR ? 'easy or reachable for your site' : 'winnable difficulty'}; "Next" = plan for the following months; "Later" = long-term or hard.</p>
@@ -298,7 +514,7 @@ const html = `
   ${['commercial', 'transactional', 'informational'].map(x => `<h2>${cap(x)} keywords</h2>${table((ks.by_intent || {})[x] || [], KW)}`).join('')}
 
   <h2>How this was built</h2>
-  <p class="muted">Seeds: ${esc(seeds.join(', '))}. Sources: ${esc(Object.entries(ks.by_source || {}).map(([k, v]) => k + ' ' + v).join(', '))}. Opportunity = traffic potential (volume after SERP-feature click loss) × winnability (difficulty and top-10 link strength) × commercial value (CPC) × intent weight for your goal × trend, then multiplied by AI relevance (2 = core, 1 = adjacent, 0 = dropped).${(ks.research_failures || []).length ? ' Some data pulls failed: ' + esc(ks.research_failures.join('; ')) + '.' : ''}</p>
+  <p class="muted">Seeds: ${esc(seeds.join(', '))}${SC && (SC.seeded || []).length ? ', plus your own Search Console searches: ' + esc(SC.seeded.slice(0, 10).join(', ')) : ''}. Sources: ${esc(Object.entries(ks.by_source || {}).map(([k, v]) => k + ' ' + v).join(', '))}. Opportunity = traffic potential (volume after SERP-feature click loss) × winnability (difficulty and top-10 link strength) × commercial value (CPC) × intent weight for your goal × trend, then multiplied by AI relevance (2 = core, 1 = adjacent, 0 = dropped). Traffic potential is <b>calibrated</b> where Search Console measured that exact search on your site (its impressions and clicks over 28 days, scaled to a month) and <b>modelled</b> everywhere else (the provider's monthly volume, typically 50-70% off for a single keyword) — the label is on every number. ${prio.length} keyword${prio.length === 1 ? '' : 's'} were checked live on Google for intent and page type${(ks.live_checks || {}).cap ? ' (limit ' + ks.live_checks.cap + ' a run, about $' + ((ks.live_checks.cap * 0.002).toFixed(2)) + ' of search data)' : ''}.${(ks.research_failures || []).length ? ' Some data pulls failed: ' + esc(ks.research_failures.join('; ')) + '.' : ''}</p>
   <p class="by">Prepared by ${esc(base.brand || 'Dev SEO')} · Search volumes, difficulty, CPC and SERP features from DataForSEO for ${esc(base.country)}.</p>
 </div>`;
 

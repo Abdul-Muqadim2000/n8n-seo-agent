@@ -15,6 +15,22 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Keyword research starts from the searches you already appear for',
+    summary:
+      'Your own Search Console data now seeds the keyword research instead of only being reported afterwards, traffic estimates say whether they were measured on your site or modelled, and searches Google answers with the same pages are grouped so one page serves them all.',
+    highlights: [
+      'The searches you get impressions for but have no page for become new page ideas, with their real impressions, clicks and position',
+      'The searches you rank between eighth and twentieth for become pages to strengthen, named with the page that already ranks',
+      'Your own brand searches and queries typed by SEO tools are left out, and a search one of your pages already answers is named instead of seeded',
+      'Traffic potential is calibrated against your measured impressions and clicks where you already rank, and marked “measured”; everywhere else it is marked “modelled”',
+      'A search only your Search Console knows about is still a candidate — with no invented search volume',
+      'Searches that share at least three of the same top-ten results are one group, named after its main keyword, so one page targets them all',
+      'Twice as many keywords get a live results-page check for intent and page type, with the limit and its cost in the report',
+    ],
+    features: ['keyword-research', 'keyword-ladders', 'reports'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Shorter fix lists, honest best links, and a word even when your numbers are small',
     summary:
       'Three quality fixes measured against real sites: the tiniest audit findings are folded into one line so the list you read is the list to act on, a search-results page can no longer be called one of your best links, and a site with a handful of clicks a month still hears when they halve.',

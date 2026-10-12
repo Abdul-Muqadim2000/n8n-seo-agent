@@ -1,8 +1,13 @@
+/*__KW_INPUTS__*/
 // Merges every research response into one keyword pool with metrics, SERP features and competitor positions,
 // then scores each keyword's OPPORTUNITY before the AI relevance pass:
 //   traffic potential (volume x CTR after SERP features) x winnability (difficulty, top-10 link strength)
 //   x commercial value (CPC) x intent weight for the client's goal x trend
-const base = $('Seed List').first().json;
+// 2026-10-13 (FIX_PLAN G8, criteria K2 / K6): every keyword the site's Search Console measured carries that measurement
+// (impressions, clicks, average position, the page that gets them) and its traffic potential is CALIBRATED against it
+// instead of modelled from the provider's volume - and says which of the two it is (KWI.calibrate). Search Console queries
+// the providers never returned join the pool as candidates in their own right, with no invented search volume.
+const base = (() => { try { const x = $('Search Console Seeds (Discovery)').first().json; if (x && Array.isArray(x.seeds) && x.seeds.length) return x; } catch (e) {} return $('Seed List').first().json; })();
 const reqA = $('Research Requests').all().map(i => i.json), resA = $('Run Research').all().map(i => i.json);
 const reqB = $('Competitor Keyword Requests').all().map(i => i.json), resB = $input.all().map(i => i.json);
 const goal = base.goal || 'leads';
@@ -22,6 +27,11 @@ const classify = (kw, intent) => {
   if (/\b(best|top|vs|versus|compare|comparison|review|reviews|alternatives?|services?|company|companies|agency|partner|partners|consultants?|consulting|providers?|firms?)\b/.test(k)) return 'commercial';
   return 'informational';
 };
+// G8: what Search Console measured for this site in the newest 28-day period, by exact query
+const SC = (base.search_console && typeof base.search_console === 'object') ? base.search_console : {};
+const gscBy = new Map(((SC.queries || [])).map(q => [String(q.keyword || '').toLowerCase(), q]));
+const gscFacts = (kw) => { const q = gscBy.get(kw); return q ? { impressions: q.impressions, clicks: q.clicks, position: q.position, ctr: q.ctr,
+  page: q.page || '', answered_by: q.answered_by || null, kinds: q.kinds || [], period_end: q.period_end || SC.period_end || '', period_days: q.period_days || SC.period_days || 28 } : null; };
 const pool = new Map();
 const addItem = (raw, source, extra = {}) => {
   const kd = raw.keyword_data || raw;
@@ -37,8 +47,9 @@ const addItem = (raw, source, extra = {}) => {
       intent: classify(kw, (kd.search_intent_info || {}).main_intent), trend_yearly: trend.yearly ?? null, trend_quarterly: trend.quarterly ?? null,
       monthly: (info.monthly_searches || []).slice(0, 12).map(m => m.search_volume), serp_types: serp.serp_item_types || [],
       se_results_count: serp.se_results_count ?? null, avg_rd: bl.referring_domains != null ? Math.round(bl.referring_domains) : null,
-      words: props.words_count || kw.split(' ').length, sources: [], competitors: [] };
+      words: props.words_count || kw.split(' ').length, sources: [], competitors: [], gsc: gscFacts(kw) };
     pool.set(kw, e);
+    if (e.gsc) e.sources.push('search_console');
   }
   if (!e.sources.includes(source)) e.sources.push(source);
   if (extra.competitor) e.competitors.push(extra.competitor);
@@ -56,21 +67,32 @@ const walk = (req, res) => {
 };
 reqA.forEach((r, i) => walk(r, resA[i]));
 reqB.forEach((r, i) => walk(r, resB[i]));
+// G8 (K6): a search the site already gets impressions for is a candidate even when no provider returned it. It keeps `volume: null`
+// (Search Console impressions are not a search volume: they count only the searches this site was shown in) and is scored from the
+// measured data, so it is never dressed up with a number nobody measured.
+let gsc_only = 0;
+for (const q of (SC.queries || [])) {
+  const kw = String(q.keyword || '').toLowerCase().trim();
+  if (!kw || pool.has(kw)) continue;
+  pool.set(kw, { keyword: kw, volume: null, volume_note: 'no monthly volume from the search-data provider; the numbers below are what Search Console measured on your site',
+    cpc: null, competition: null, kd: null, intent: classify(kw, null), trend_yearly: null, trend_quarterly: null, monthly: [], serp_types: [],
+    se_results_count: null, avg_rd: null, words: kw.split(' ').length, sources: ['search_console'], competitors: [], gsc: gscFacts(kw) });
+  gsc_only++;
+}
 
 const score = (e) => {
-  let ctr = 1; const t = e.serp_types || [];
-  if (t.includes('ai_overview')) ctr *= 0.65;
-  if (t.includes('featured_snippet')) ctr *= 0.85;
-  if (t.includes('video') || t.includes('short_videos')) ctr *= 0.92;
-  if (t.includes('local_pack') || t.includes('map')) ctr *= 0.85;
-  if (t.includes('shopping') || t.includes('popular_products')) ctr *= 0.9;
-  const traffic_potential = Math.round(e.volume * ctr * 0.3);          // roughly what a #1-3 page captures
+  // G8 (K2): the same two factors as before - the results page's click loss and the share a top-three page takes - but applied to the
+  // site's own MEASURED impressions when Search Console has them, and labelled `calibrated` / `modelled` / `unknown` either way.
+  // Without Search Console data the number is exactly what it was: volume x click loss x 0.3.
+  const cal = KWI.calibrate(e, {});
+  const traffic_potential = cal.traffic_potential == null ? 0 : cal.traffic_potential;
   let win = Math.min(1, Math.max(0.05, (100 - (e.kd ?? 50)) / 100));
   if (e.avg_rd != null && e.avg_rd > 300) win *= 0.5; else if (e.avg_rd != null && e.avg_rd > 100) win *= 0.7;
   const value = 1 + Math.log10(1 + (e.cpc || 0));
   const iw = W[e.intent] ?? 1;
   const tr = 1 + Math.min(0.3, Math.max(-0.3, (e.trend_yearly || 0) / 100));
-  return { traffic_potential, winnability: +win.toFixed(2), value_factor: +value.toFixed(2), pre_score: +(traffic_potential * win * value * iw * tr).toFixed(1) };
+  return { traffic_potential, traffic_basis: cal.traffic_basis, traffic_note: cal.traffic_note, modelled_traffic_potential: cal.modelled_traffic_potential,
+    winnability: +win.toFixed(2), value_factor: +value.toFixed(2), pre_score: +(traffic_potential * win * value * iw * tr).toFixed(1) };
 };
 const all = [...pool.values()].map(e => { if (brand.length > 3 && e.keyword.includes(brand)) e.intent = 'navigational'; return { ...e, ...score(e) }; })
   .sort((a, b) => b.pre_score - a.pre_score);
@@ -82,5 +104,8 @@ const failures = pairs.filter(([r, res]) => !res || res.error || Number(res.stat
   .map(([r, res]) => r.label + ': ' + ((res && ((res.error && res.error.message) || ((res.tasks || [])[0] || {}).status_message || res.status_message)) || 'no response'));
 return [{ json: { ...base, research: {
   pool_size: all.length, candidates, long_tail_pool: all.filter(e => e.words >= 4 && e.intent !== 'navigational').slice(0, 300),
-  competitor_domains: [...new Set(reqB.filter(r => r.kind === 'competitor').map(r => r.domain))], by_source: bySource, failures, requests: pairs.length
+  competitor_domains: [...new Set(reqB.filter(r => r.kind === 'competitor').map(r => r.domain))], by_source: bySource, failures, requests: pairs.length,
+  // G8: how much of the pool came from the site's own Search Console, and how many estimates its data could check
+  search_console: { available: !!SC.available, seeded: (base.gsc_seeds || []).length, measured: all.filter(e => e.gsc).length, only_source: gsc_only,
+    calibrated: all.filter(e => e.traffic_basis === 'calibrated').length, modelled: all.filter(e => e.traffic_basis === 'modelled').length, period_end: SC.period_end || '' }
 } } }];

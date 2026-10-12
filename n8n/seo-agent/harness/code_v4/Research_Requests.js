@@ -3,14 +3,18 @@
 //  suggestions  - keyword_suggestions (long-tail phrases that contain the seed) for the 3 main seeds
 //  related      - related_keywords ("searches related to", depth 2) for the 2 main seeds
 //  serp         - live SERP for the primary seed -> who ranks (competitor keywords are pulled next)
-const d = $('Seed List').first().json;   // v4.8: the reach steps run in between
+// 2026-10-13 (FIX_PLAN G8): the seed list after the site's own Search Console queries were added to it (Search Console Seeds
+// (Discovery)); without stored Search Console rows that node passes the Seed List item through unchanged, and in a run that never
+// had the node (an older import) the Seed List item is read directly.
+const d = (() => { try { const x = $('Search Console Seeds (Discovery)').first().json; if (x && Array.isArray(x.seeds) && x.seeds.length) return x; } catch (e) {} return $('Seed List').first().json; })();   // v4.8: the reach steps run in between
 const seeds = (d.seeds || []).slice(0, 30);
+const fromGsc = (d.gsc_seeds || []).filter(k => seeds.indexOf(k) >= 0);
 const primary = d.primary_seed || seeds[0];
 if (!primary) throw new Error('No seed keywords could be built from the business description or website.');
 const loc = d.location_code, lang = d.language_code || 'en';
 const L = 'https://api.dataforseo.com/v3/dataforseo_labs/google/';
 const reqs = [];
-reqs.push({ kind: 'ideas', label: 'keyword ideas for ' + Math.min(20, seeds.length) + ' seeds', endpoint: L + 'keyword_ideas/live',
+reqs.push({ kind: 'ideas', label: 'keyword ideas for ' + Math.min(20, seeds.length) + ' seeds' + (fromGsc.length ? ' (' + fromGsc.length + ' from your Search Console)' : ''), endpoint: L + 'keyword_ideas/live',
   body: [{ keywords: seeds.slice(0, 20), location_code: loc, language_code: lang, limit: 600, include_serp_info: true, ignore_synonyms: true }] });
 const heads = [primary, ...seeds.filter(s => s !== primary)].slice(0, 3);
 heads.forEach(k => reqs.push({ kind: 'suggestions', label: 'long-tail for "' + k + '"', endpoint: L + 'keyword_suggestions/live',

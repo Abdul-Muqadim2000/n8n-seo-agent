@@ -1850,9 +1850,12 @@ await guard('pipeline phase 3', async () => {
 
   // ---------- F. discovery: labels and tiers with and without a website ----------
   const SEEDS = { output: { primary_seed: 'erp implementation services', seed_groups: { services: ['erp implementation services', 'odoo implementation', 'dynamics 365 business central partner', 'erp customisation'], problems: ['inventory software for distributors', 'replace excel stock control'], comparisons: ['best erp for distributors', 'odoo vs dynamics 365'], pricing: ['erp implementation cost', 'odoo pricing uae'], local: ['erp implementation dubai', 'erp company abu dhabi'], audience: ['erp for wholesale distributors', 'northwind erp reviews'] }, services: ['ERP implementation', 'Data migration'] } };
-  const discover = async (withDomain, cacheRows) => {
+  // `o.base` overrides fields of the normalised request (2026-10-13, G8: the frozen v4.7 code checks 8 keywords live, so the
+  // comparison below runs this build with the old limit instead of the new default of 16)
+  const discover = async (withDomain, cacheRows, o = {}) => {
     delete store['Start Form']; mock('Start Form', F.forms.startDiscover);
-    const nD = await run('Normalize Input', withDomain ? F.forms.pageDiscover : { ...F.forms.pageDiscover, 'Website Domain': '', 'Extra Features': [] });
+    const nD0 = await run('Normalize Input', withDomain ? F.forms.pageDiscover : { ...F.forms.pageDiscover, 'Website Domain': '', 'Extra Features': [] });
+    const nD = o.base ? nD0.map(x => ({ json: { ...x.json, ...o.base } })) : nD0;
     mock('Route Mode', nD); mock('Keyword Seeds', SEEDS);
     const sl = await run('Seed List', store['Keyword Seeds']);
     mock('Load Site Cache', cacheRows || EMPTY);
@@ -1899,8 +1902,8 @@ await guard('pipeline phase 3', async () => {
   const nowL = Wl.rk.clusters.filter(c => c.tier === 'Now'), legacyNow = Wl.legacy.clusters.filter(c => c.tier === 'Now').map(c => c.topic);
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
-  const N0 = await discover(false);
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder)
+  const N0 = await discover(false, null, { base: { live_serp_checks: 8 } });
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
@@ -6107,6 +6110,214 @@ await guard('phase 3+4 live defects', async () => {
   const aiP2 = (await run('AI Plan', store['Load Query History']))[0].json;
   check('P34-6: a filled business profile still comes first — the profile name wins over the model\'s, as it always did',
     aiP2.business_name === 'Northwind ERP' && aiP2.profile.city === 'Dubai', JSON.stringify([aiP2.business_name, aiP2.profile.business_name]));
+});
+
+
+// ===================================================================================
+// S52 G8 (2026-10-13, system review FIX_PLAN G8; criteria K2 / K4 / K6 / K7 in CRITERIA_keywords_content.md): the four discovery inputs
+// keyword research was missing. Every check fails against the code of the 2026-10-11 run: the research never read Search Console, the
+// traffic number was always modelled and never labelled, clusters came from the AI's topic label alone, and exactly 8 keywords were
+// checked live on Google.
+// ===================================================================================
+await guard('g8-discovery-inputs', async () => {
+  const SN = 'S52 G8 — the site\'s own Search Console searches seed the research, traffic potential says calibrated or modelled, keywords that share a results page are one cluster, and the live check is a configurable cap instead of a fixed 8';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const D = 'northwind-erp.com', W = 'https://www.' + D, SITE = 'site_northwind-erp-com';
+  const EMPTY = [{ json: {} }];
+  const PERIOD = '2026-10-12', LASTMONTH = '2026-09-14';
+
+  // ---- 1. K6: the site's own Search Console queries become seeds (the research never read them) ----
+  // seo_query_history rows exactly as the Site Tracker writes them (one per site, query and 28-day period)
+  const qrow = (query, impressions, clicks, position, page, period) => ({ json: { id: 1, site_id: SITE, domain: D, period_end: period || PERIOD, checked_at: PERIOD + 'T09:00:00.000Z',
+    query, clicks, impressions, ctr: impressions ? +(clicks / impressions).toFixed(3) : 0, position, prev_clicks: 0, prev_impressions: 0, prev_position: 0, page: page || '', tracked: false, serp_position: -1 } });
+  const QROWS = [
+    qrow('erp implementation dubai', 480, 12, 3.4, W + '/erp-implementation-dubai/'),             // a page answers it and it ranks #3: no seed
+    qrow('warehouse management software uae', 320, 2, 24.1, ''),                                   // impressions, no page of ours: seed
+    qrow('inventory software for distributors', 210, 5, 12.6, W + '/inventory-software-for-distributors/'),   // has a page but ranks #12.6: seed
+    qrow('northwind erp login', 900, 300, 1.2, W + '/'),                                           // our own brand: never a seed
+    qrow('site:northwind-erp.com erp', 50, 0, 18.3, ''),                                           // typed by an SEO tool, not a customer
+    qrow('erp training', 4, 0, 11.0, ''),                                                          // 4 impressions: below the floor
+    qrow('last month only query', 999, 40, 9.1, '', LASTMONTH)                                     // an older period: the table only grows
+  ];
+  const PAGES = [{ url: W + '/erp-implementation-dubai/', title: 'ERP Implementation in Dubai', source: 'sitemap', queries: [] },
+    { url: W + '/inventory-software-for-distributors/', title: 'Inventory Software for Distributors', source: 'sitemap', queries: [] }];
+  const SEED_ITEM = { domain: D, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', goal: 'leads', business: 'ERP and e-invoicing implementation partner in Dubai',
+    seeds: ['erp implementation services', 'odoo implementation dubai'], primary_seed: 'erp implementation services', seed_groups: { local: ['erp implementation dubai'] },
+    services: ['ERP implementation'], competitors: [], site_urls: [], request_id: 'req-g8' };
+  const modelItem = (pages) => [{ json: { site_model: { site_id: SITE, domain: D, canonical_host: 'www.' + D, business_name: 'Northwind ERP', brand_names: ['Northwind ERP'], pages: pages || [] } } }];
+  const seedRun = async (rows, pages) => { mock('Seed List', [{ json: { ...SEED_ITEM } }]); mock('Site Model', modelItem(pages));
+    mock('Load Query History (Discovery)', rows.length ? rows : EMPTY);
+    return (await run('Search Console Seeds (Discovery)', rows.length ? rows : EMPTY))[0].json; };
+  const S = await seedRun(QROWS, PAGES);
+  console.log('   search console seeds ->', JSON.stringify({ seeded: S.gsc_seeds, no_page: S.search_console.no_page.map(q => q.keyword), striking: S.search_console.striking.map(q => q.keyword), dropped: S.search_console.dropped, period: S.search_console.period_end }));
+  check('K6: a search with impressions that no page of the site answers becomes a seed, with its measured impressions, clicks and position',
+    eq(S.search_console.no_page.map(q => q.keyword), ['warehouse management software uae'])
+    && S.search_console.no_page[0].impressions === 320 && S.search_console.no_page[0].clicks === 2 && S.search_console.no_page[0].position === 24.1
+    && S.search_console.no_page[0].period_days === 28, JSON.stringify(S.search_console.no_page));
+  check('K6: a striking-distance search (position 8-20) becomes a seed even though a page already covers it',
+    eq(S.search_console.striking.map(q => q.keyword), ['inventory software for distributors'])
+    && S.search_console.striking[0].position === 12.6 && (S.search_console.striking[0].answered_by || {}).matched_by === 'slug', JSON.stringify(S.search_console.striking));
+  check('K6: a search a live page already answers at #3 is NOT seeded — it is named as answered, with that page',
+    !S.gsc_seeds.includes('erp implementation dubai') && S.search_console.answered.length === 1
+    && S.search_console.answered[0].keyword === 'erp implementation dubai' && S.search_console.answered[0].answered_by.url === W + '/erp-implementation-dubai/', JSON.stringify(S.search_console.answered));
+  check('K6: the brand search, the SEO tool\'s operator query and the 4-impression query are dropped with a count each',
+    eq(S.search_console.dropped, { scraper: 1, brand: 1, low_impressions: 1, duplicate: 0 })
+    && !S.gsc_seeds.some(k => /northwind|site:|training/.test(k)), JSON.stringify(S.search_console.dropped));
+  check('K6: only the newest 28-day period counts (the table only grows, so last month\'s rows must not seed this run)',
+    S.search_console.period_end === PERIOD && !S.gsc_seeds.includes('last month only query') && S.search_console.rows === 7, JSON.stringify([S.search_console.period_end, S.search_console.rows]));
+  check('K6: the measured searches are inserted behind the primary seed, so they also drive the long-tail pulls',
+    eq(S.seeds, ['erp implementation services', 'warehouse management software uae', 'inventory software for distributors', 'odoo implementation dubai'])
+    && S.primary_seed === 'erp implementation services' && S.search_console.page_check === 'page inventory' && S.search_console.pages_known === 2, JSON.stringify(S.seeds));
+  const rr = await run('Research Requests', [{ json: {} }]);
+  const ideasReq = rr.find(r => r.json.kind === 'ideas').json, heads = rr.filter(r => r.json.kind === 'suggestions').map(r => r.json.body[0].keyword);
+  console.log('   research requests ->', rr.length, '|', ideasReq.label, '| heads:', heads.join(' / '));
+  check('K6: the paid keyword pulls carry the Search Console seeds and say so — no extra request, the same 7 pulls as a run without them (1 ideas, 3 long-tail, 2 related, 1 competitor SERP)',
+    rr.length === 7 && ideasReq.body[0].keywords.includes('warehouse management software uae') && ideasReq.body[0].keywords.includes('inventory software for distributors')
+    && /2 from your Search Console/.test(ideasReq.label) && eq(heads, ['erp implementation services', 'warehouse management software uae', 'inventory software for distributors']), JSON.stringify({ n: rr.length, label: ideasReq.label, heads }));
+  const Sfb = await seedRun(QROWS, []);
+  check('K6: with no page list on file yet the page Search Console reports is used instead, and said so — "erp implementation dubai" is still not seeded',
+    Sfb.search_console.page_check === 'search console page' && !Sfb.gsc_seeds.includes('erp implementation dubai')
+    && Sfb.gsc_seeds.includes('warehouse management software uae') && (Sfb.search_console.answered[0] || {}).answered_by.matched_by === 'search console page', JSON.stringify(Sfb.gsc_seeds));
+  const Snone = await seedRun([], PAGES);
+  check('K6: a site with no stored Search Console history is untouched (the seed list, the primary seed and the research are exactly as before)',
+    eq(Snone.seeds, SEED_ITEM.seeds) && eq(Snone.gsc_seeds, []) && Snone.search_console.available === false && Snone.search_console.queries.length === 0, JSON.stringify(Snone.seeds));
+
+  // ---- 2. K2 + K7: the pool, the calibrated numbers and the clusters by shared results page ----
+  const kwItem = (keyword, volume, kd, types, intent) => ({ se_type: 'google', keyword, keyword_info: { search_volume: volume, cpc: 4.5, competition: 0.4, monthly_searches: [], search_volume_trend: { yearly: 5, quarterly: 1 } },
+    keyword_properties: { keyword_difficulty: kd, words_count: keyword.split(' ').length }, search_intent_info: { main_intent: intent || 'commercial' },
+    serp_info: { serp_item_types: types || ['organic'], se_results_count: 120000 }, avg_backlinks_info: { referring_domains: 25 } });
+  const FILLERS = ['abu dhabi', 'sharjah', 'ajman', 'fujairah', 'riyadh', 'jeddah', 'doha', 'muscat', 'manama', 'kuwait city', 'cairo', 'amman', 'beirut', 'karachi', 'mumbai', 'london', 'dublin', 'toronto', 'sydney', 'singapore'];
+  const IDEAS = V.task({ seed_keywords: ['erp implementation services'], items: [
+    kwItem('inventory software for distributors', 210, 25),
+    kwItem('erp software uae', 1900, 40, ['organic', 'local_pack']),
+    kwItem('erp system uae', 880, 38),
+    kwItem('odoo partner dubai', 140, 20),
+    kwItem('emaratax portal', 300, 10, ['organic'], 'informational'),
+    kwItem('northwind erp login', 40, 5, ['organic'], 'navigational'),
+    ...FILLERS.map(c => kwItem('erp software ' + c, 200, 30))
+  ] });
+  // three competitors' own ranking URLs: one page of each ranks for "erp software uae" AND "erp system uae" (3 shared top-10 URLs),
+  // while "odoo partner dubai" shares only one of them
+  const RANKED = { 'gulferp.ae': [['erp software uae', 2, 'https://gulferp.ae/erp-software-uae/'], ['erp system uae', 3, 'https://gulferp.ae/erp-software-uae/'], ['odoo partner dubai', 4, 'https://gulferp.ae/erp-software-uae/']],
+    'erpmasters.com': [['erp software uae', 5, 'https://erpmasters.com/uae-erp/'], ['erp system uae', 6, 'https://erpmasters.com/uae-erp/'], ['odoo partner dubai', 7, 'https://erpmasters.com/odoo-partner/']],
+    'cloudledger.io': [['erp software uae', 8, 'https://cloudledger.io/erp/'], ['erp system uae', 9, 'https://cloudledger.io/erp/'], ['odoo partner dubai', 10, 'https://cloudledger.io/odoo/']] };
+  const rankedRes = (dom) => V.task({ total_count: RANKED[dom].length, items: RANKED[dom].map(([k, pos, url]) => ({ se_type: 'google',
+    keyword_data: kwItem(k, k === 'erp software uae' ? 1900 : k === 'erp system uae' ? 880 : 140, 30), ranked_serp_element: { serp_item: { type: 'organic', rank_group: pos, rank_absolute: pos, url } } })) });
+  const COMPS = Object.keys(RANKED);
+  const collect = async (scItem) => {
+    mock('Search Console Seeds (Discovery)', [{ json: scItem }]);
+    mock('Research Requests', [{ json: { kind: 'ideas', label: 'keyword ideas', body: [{ keywords: scItem.seeds }] } }]);
+    mock('Run Research', [{ json: IDEAS }]);
+    mock('Competitor Keyword Requests', COMPS.map(d => ({ json: { kind: 'competitor', domain: d, body: [{ target: d }] } })));
+    return (await run('Collect Research', COMPS.map(d => ({ json: rankedRes(d) }))))[0].json;
+  };
+  const col = await collect(S);
+  const cand = (k) => col.research.candidates.find(x => x.keyword === k);
+  console.log('   calibration ->', JSON.stringify(col.research.search_console), '| inventory:', JSON.stringify(cand('inventory software for distributors') && [cand('inventory software for distributors').traffic_potential, cand('inventory software for distributors').traffic_basis]));
+  check('K2: a keyword the site already ranks for is CALIBRATED from its own measured impressions and clicks, and says so',
+    cand('inventory software for distributors').traffic_basis === 'calibrated'
+    && cand('inventory software for distributors').traffic_potential === Math.round(210 * (30 / 28) * 0.3)
+    && cand('inventory software for distributors').modelled_traffic_potential === Math.round(210 * 0.3)
+    && /Calibrated with your own Search Console data: 210 impressions and 5 click\(s\)/.test(cand('inventory software for distributors').traffic_note),
+    JSON.stringify(cand('inventory software for distributors') && [cand('inventory software for distributors').traffic_potential, cand('inventory software for distributors').traffic_note]));
+  check('K2: a keyword the site does not rank for is MODELLED — the same number as before this fix, now labelled as an estimate of an estimate',
+    cand('erp software uae').traffic_basis === 'modelled' && cand('erp software uae').traffic_potential === Math.round(1900 * 0.85 * 0.3)
+    && /Modelled, not measured/.test(cand('erp software uae').traffic_note) && cand('erp software uae').gsc === null,
+    JSON.stringify([cand('erp software uae').traffic_potential, cand('erp software uae').traffic_basis]));
+  check('K6: a search only Search Console knows about is a candidate in its own right, with NO invented search volume',
+    cand('warehouse management software uae') && cand('warehouse management software uae').volume === null
+    && cand('warehouse management software uae').traffic_basis === 'calibrated' && cand('warehouse management software uae').traffic_potential === Math.round(320 * (30 / 28) * 0.3)
+    && eq(cand('warehouse management software uae').sources, ['search_console']) && col.research.search_console.only_source === 1
+    && /no monthly volume from the search-data provider/.test(cand('warehouse management software uae').volume_note),
+    JSON.stringify(cand('warehouse management software uae') && [cand('warehouse management software uae').volume, cand('warehouse management software uae').traffic_potential]));
+  const colNone = await collect(Snone);
+  check('K2: without Search Console data every number is modelled and unchanged (back-compatible)',
+    colNone.research.candidates.every(k => k.traffic_basis === 'modelled') && colNone.research.search_console.calibrated === 0
+    && colNone.research.candidates.find(x => x.keyword === 'inventory software for distributors').traffic_potential === Math.round(210 * 0.3),
+    JSON.stringify(colNone.research.search_console));
+
+  // ---- 3. K7 + K4: the clusters and the live-check cap in Rank Keywords ----
+  const rankWith = async (colOut, over) => {
+    mock('Collect Research', [{ json: over ? { ...colOut, ...over } : colOut }]);
+    const cands = colOut.research.candidates;
+    mock('Relevance Chunks', [{ json: { keywords_chunk: cands.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', EMPTY); mock('Site Model', modelItem(PAGES));
+    mock('Load Domain Ladders (Discovery)', EMPTY); mock('Load Ladder Settings (Discovery)', EMPTY);
+    delete store['Reach (Discovery)'];
+    const rel = [{ json: { output: { items: cands.map(c => ({ keyword: c.keyword, relevance: 2, intent: c.intent,
+      page_type: 'Service Page', topic: /erp software uae|erp system uae/.test(c.keyword) ? 'erp software' : c.keyword })) } } }];
+    return (await run('Rank Keywords', rel))[0].json.keyword_strategy;
+  };
+  const KS = await rankWith(col);
+  console.log('   serp clusters ->', JSON.stringify(KS.serp_clusters.map(c => [c.head_keyword, c.keywords.map(k => k.keyword + ':' + k.shared_urls)])), '| live:', JSON.stringify(KS.live_checks));
+  const cl0 = KS.serp_clusters[0] || {};
+  check('K7: two keywords whose top 10 shares 3 URLs form one cluster, named after the head keyword, with the shared count',
+    KS.serp_clusters.length === 1 && cl0.head_keyword === 'erp software uae' && cl0.keyword_count === 2
+    && (cl0.keywords[1] || {}).keyword === 'erp system uae' && cl0.keywords[1].shared_urls === 3 && cl0.min_shared_urls === 3,
+    JSON.stringify(KS.serp_clusters));
+  check('K7: a keyword that shares only ONE of those top-10 URLs is not pulled into the cluster',
+    !cl0.keywords.some(k => k.keyword === 'odoo partner dubai') && KS.keywords.find(k => k.keyword === 'odoo partner dubai').serp_cluster === null
+    && KS.serp_overlap.min_shared_urls === 3 && KS.serp_overlap.source === 'competitor rankings', JSON.stringify(KS.serp_overlap));
+  check('K7: the clustered keyword points at its head keyword, so one page can target both',
+    eq(KS.keywords.find(k => k.keyword === 'erp system uae').serp_cluster, { head_keyword: 'erp software uae', shared_urls: 3, keyword_count: 2 })
+    && KS.keywords.find(k => k.keyword === 'erp software uae').serp_cluster === null, JSON.stringify(KS.keywords.find(k => k.keyword === 'erp system uae').serp_cluster));
+  check('D4 still holds: the government query is refused with its reason and the navigational brand query never reaches the list',
+    KS.refused.some(r => r.keyword === 'emaratax portal' && r.reason === 'government')
+    && !KS.keywords.some(k => /northwind erp login|emaratax/.test(k.keyword)) && !KS.priority.some(k => /northwind|emaratax/.test(k.keyword))
+    && (KS.pipeline_keyword || {}).keyword !== 'emaratax portal', JSON.stringify(KS.refused));
+  check('K4: the live results-page check covers 16 keywords by default, not 8, with at most 4 per topic and its cost named',
+    KS.live_checks.cap === 16 && KS.priority.length === 16 && KS.live_checks.per_topic === 4 && KS.live_checks.est_cost_usd === 0.032,
+    JSON.stringify([KS.live_checks, KS.priority.length]));
+  const pk = await run('Priority Keywords', [{ json: {} }]);
+  check('K4: Priority Keywords buys exactly those checks (it used to slice a hard-coded 8)', pk.length === 16 && pk.every(p => p.json.location_code === 2784), JSON.stringify(pk.length));
+  const KS6 = await rankWith(col, { live_serp_checks: 6 });
+  mock('Rank Keywords', [{ json: { ...SEED_ITEM, live_serp_checks: 6, keyword_strategy: KS6 } }]);
+  const pk6 = await run('Priority Keywords', [{ json: {} }]);
+  check('K4: the limit is configurable per run — 6 gives 6 checks in both the pick and the purchase', KS6.live_checks.cap === 6 && KS6.priority.length === 6 && pk6.length === 6, JSON.stringify([KS6.live_checks.cap, pk6.length]));
+  const KS99 = await rankWith(col, { live_serp_checks: 99 });
+  check('K4: the cap is hard — 99 is clamped to 25 (about $0.05 of search data a run)', KS99.live_checks.cap === 25 && KS99.priority.length <= 25, JSON.stringify(KS99.live_checks));
+
+  // ---- 4. the report and the callback: the live checks sharpen the clusters, every number carries its basis ----
+  const serp10 = (keyword, shared) => V.task({ keyword, datetime: '2026-10-13 09:15:00 +00:00', items: [
+    ...(shared || []).map((u, i) => ({ type: 'organic', rank_group: i + 1, rank_absolute: i + 1, domain: u.replace(/^https?:\/\//, '').split('/')[0], url: u })),
+    ...Array.from({ length: 10 - (shared || []).length }, (_, i) => ({ type: 'organic', rank_group: (shared || []).length + i + 1, rank_absolute: (shared || []).length + i + 1, domain: 'own-' + keyword.replace(/\s+/g, '') + i + '.example', url: 'https://own-' + keyword.replace(/\s+/g, '') + i + '.example/p' })),
+    { type: 'people_also_ask', items: [{ title: 'Which ERP is best for distributors in the UAE?' }] }] });
+  const SHARED4 = ['https://gulferp.ae/erp-software-uae/', 'https://erpmasters.com/uae-erp/', 'https://cloudledger.io/erp/', 'https://clutch.co/ae/erp'];
+  const KSfull = await rankWith(col);
+  mock('Rank Keywords', [{ json: { ...SEED_ITEM, research: { requests: 6 }, keyword_strategy: KSfull } }]);
+  const pkFull = await run('Priority Keywords', [{ json: {} }]);
+  delete store['AI Demand'];
+  const strat = (await run('Build Keyword Strategy', pkFull.map(p => ({ json: serp10(p.json.keyword, /erp software uae|erp system uae/.test(p.json.keyword) ? SHARED4 : []) }))))[0].json;
+  const KSR = strat.keyword_strategy;
+  console.log('   live-fed clusters ->', JSON.stringify(KSR.serp_clusters.map(c => [c.head_keyword, c.keyword_count])), '|', JSON.stringify(KSR.serp_overlap));
+  check('K7: the live checks feed the clustering too — the same two keywords now share 4 top-10 URLs and the source says so',
+    KSR.serp_overlap.source === 'live checks + competitor rankings' && KSR.serp_overlap.live_checked === pkFull.length
+    && (KSR.serp_clusters[0] || {}).head_keyword === 'erp software uae' && KSR.serp_clusters[0].keywords[1].shared_urls === 4, JSON.stringify(KSR.serp_overlap));
+  check('K2: the keyword card says whether its traffic number was calibrated with the site\'s data or modelled',
+    /Traffic potential ~\d+\/mo \(calibrated with your data\)/.test(strat.result_html) && /Traffic potential ~\d+\/mo \(modelled\)/.test(strat.result_html)
+    && /Search Console already measured 210 impressions for this exact search on your site in 28 days/.test(strat.result_html)
+    && /Traffic potential is <b>calibrated<\/b> where Search Console measured/.test(strat.result_html), (strat.result_html.match(/Traffic potential[^<]{0,60}/g) || []).slice(0, 4).join(' | '));
+  check('K6: the report has a section for the searches the site already appears for, with the reason each one is there and the page that gets them',
+    /<h2>Searches your website already appears for<\/h2>/.test(strat.result_html) && /2 of your own Search Console searches were used as research seeds/.test(strat.result_html)
+    && /no page of yours answers this search/.test(strat.result_html) && /striking distance/.test(strat.result_html)
+    && /already answered by a page you have, so they were not seeded/.test(strat.result_html) && /erp-implementation-dubai/.test(strat.result_html), (strat.result_html.match(/Searches your website already appears for[\s\S]{0,400}/) || [''])[0]);
+  check('K7: the report names the group and says one page can serve it',
+    /<h2>Searches that share a results page<\/h2>/.test(strat.result_html) && /One page can target all 2: "erp software uae" shares 4 of its top-10 pages with "erp system uae"/.test(strat.result_html)
+    && /Same results page as "erp software uae"/.test(strat.result_html), (strat.result_html.match(/Searches that share a results page[\s\S]{0,400}/) || [''])[0]);
+  check('K4: the report says how many keywords were checked live and what the limit costs',
+    new RegExp(pkFull.length + ' keywords were checked live on Google for intent and page type \\(limit 16 a run, about \\$0.03 of search data\\)').test(strat.result_html), (strat.result_html.match(/keywords were checked live[^.]{0,120}/) || [''])[0]);
+  scanHtml('keyword strategy with the G8 inputs', strat.result_html); save('keyword-strategy-g8.html', strat.result_html);
+  const cb = (await run('Build Ideas Response', [{ json: strat, binary: {} }]))[0].json;
+  console.log('   callback ->', JSON.stringify({ sc: cb.search_console && cb.search_console.seeded, clusters: cb.serp_clusters.length, live: cb.live_checks, bases: [...new Set(cb.priority.map(k => k.traffic_basis))] }));
+  check('the callback carries all four inputs, so the app and the report renderer can show them',
+    eq(cb.search_console.seeded, S.gsc_seeds) && cb.search_console.no_page.length === 1 && cb.search_console.striking.length === 1
+    && cb.search_console.answered.length === 1 && cb.search_console.period_days === 28 && cb.serp_clusters.length === 1
+    && cb.serp_overlap.min_shared_urls === 3 && cb.live_checks.cap === 16
+    && cb.priority.every(k => ['calibrated', 'modelled', 'unknown'].includes(k.traffic_basis) && typeof k.traffic_note === 'string')
+    && cb.priority.some(k => k.traffic_basis === 'calibrated' && k.gsc && k.gsc.impressions > 0)
+    && cb.priority.some(k => k.serp_cluster && k.serp_cluster.head_keyword === 'erp software uae'), JSON.stringify({ sc: cb.search_console && Object.keys(cb.search_console), clusters: cb.serp_clusters.length, live: cb.live_checks }));
 });
 
 
