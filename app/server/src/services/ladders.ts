@@ -661,10 +661,14 @@ export function ladderNeedsYou(b: LadderBuild): NeedsYouItem[] {
       id: 'pileup',
       kind: 'pileup',
       severity: 'warning',
-      title: pile.now ? `Weekly posts stopped: ${plural(pile.waiting, 'page')} wait to be published` : `Last Monday’s posts were skipped: ${plural(pile.waiting, 'page')} waited to be published`,
+      title: pile.now
+        ? `Weekly posts stopped: ${plural(pile.waiting, 'written page')} waiting for publication`
+        : `Last Monday’s posts were skipped: ${plural(pile.waiting, 'written page')} waited for publication`,
       detail:
         (pile.lastRunAt ? 'Last Monday’s run wrote nothing for this reason. ' : '') +
-        `No new page is written while ${pile.max === 1 ? 'a page waits' : `${pile.max} or more pages wait`} to be published (your limit). Publish them to continue: a page can only rank once it is live, and writing more while these wait only adds cost.`,
+        // D5: ladder pages count too, so say which pages they are
+        (b.waiting.length ? `Waiting: ${b.waiting.slice(0, 4).map((w) => q(w.keyword)).join(', ')}${b.waiting.length > 4 ? ' and more' : ''}. ` : '') +
+        `No new page is written while ${pile.max === 1 ? 'a page waits' : `${pile.max} or more pages wait`} to be published (the pile-up guard, your limit). Publish them to continue: a page can only rank once it is live, and writing more while these wait only adds cost.`,
       action: { label: 'See the pages', page: 'content' },
     });
 

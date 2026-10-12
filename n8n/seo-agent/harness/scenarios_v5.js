@@ -1469,6 +1469,10 @@ await guard('pipeline', async () => {
   };
   const A = (st) => std('lad_A', 'peppol uae', '2026-07-01T00:00:00.000Z', st), B = (st) => std('lad_B', 'vat software uae', '2026-08-01T00:00:00.000Z', st), Cl = (st) => std('lad_C', 'wms dubai', '2026-09-01T00:00:00.000Z', st);
   const W3 = { a: 'writing', b: 'writing', c: 'writing' };
+  // v4.14 (FIX_PLAN D5): ladder rows still 'writing' are pages written and waiting to be published, so a fixture with three or more of
+  // them now trips the pile-up guard. The cases below test something else (focus, the main-page gate), so they raise the website's limit;
+  // the guard itself is case 8 here and S37.
+  const noGuard = [siteSet({ max_waiting: 20 })];
 
   // 1. priority: ladder B (priority 1) before ladder A (priority 2); B's written pages skipped, its main page waits for support
   let p = await plan({ ladders: [...A(), ...B({ a: 'writing', b: 'writing' })], settings: [set('lad_A', { priority: 2 }), set('lad_B', { priority: 1 })] });
@@ -1487,31 +1491,31 @@ await guard('pipeline', async () => {
   const cnm = await run('Cadence Note', [{ json: {} }]); scanHtml('cadence note (manual ladder)', cnm[0].json.html);
   check('cadence note carries the pipeline facts', cnm[0].json.awaiting_approval.length === 1 && /Ready for your approval/.test(cnm[0].json.html) && cnm[0].json.paused_reason === '' && Array.isArray(cnm[0].json.queued_ladders), JSON.stringify(Object.keys(cnm[0].json)));
   // 4. focus: three Auto ladders, max_active 2 (default) -> the newest waits; a fully written ladder frees its slot; max_active 3 writes all
-  p = await plan({ ladders: [...A(W3), ...B(W3), ...Cl()] });
+  p = await plan({ ladders: [...A(W3), ...B(W3), ...Cl()], settings: noGuard });
   console.log('   3 ladders, max 2 ->', p.kws.join(' | '), '| queued:', JSON.stringify(p.first.queued_ladders));
   check('max_active 2: third ladder not written', eq(p.kws, ['peppol uae providers', 'vat software uae providers']), p.kws);
   check('third ladder listed as queued', eq(p.first.queued_ladders, [{ ladder_id: 'lad_C', head: 'wms dubai', priority: null, reason: 'max_active' }]), JSON.stringify(p.first.queued_ladders));
-  p = await plan({ ladders: [...A(W3), ...B(W3), ...Cl()], settings: [siteSet({ max_active: 3 })] });
+  p = await plan({ ladders: [...A(W3), ...B(W3), ...Cl()], settings: [siteSet({ max_active: 3, max_waiting: 20 })] });
   check('max_active 3 from the _site row: third ladder written', eq(p.kws, ['peppol uae providers', 'vat software uae providers', 'wms dubai cost']), p.kws);
-  p = await plan({ ladders: [...A({ ...W3, d: 'writing', top: 'writing' }), ...B(W3), ...Cl()] });
+  p = await plan({ ladders: [...A({ ...W3, d: 'writing', top: 'writing' }), ...B(W3), ...Cl()], settings: noGuard });
   check('fully written ladder frees its slot', eq(p.kws, ['vat software uae providers', 'wms dubai cost', 'wms dubai guide']) && !p.first.queued_ladders.length, p.kws);
   // 5. direct plan: the main page first, linking down to its cluster
   p = await plan({ ladders: A(), settings: [set('lad_A', { plan_type: 'direct' })] });
   console.log('   direct ->', p.kws.join(' | '));
   check('direct ladder: main page first', p.kws[0] === 'peppol uae' && p.picks[0].rung === 4 && p.picks[0].body.ladder_links.every(l => l.role === 'down') && p.picks[0].body.ladder_links.length === 4, p.kws);
   // 6. main-page gate
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }) });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard });
   console.log('   gate blocked ->', JSON.stringify(p.status && { reason: p.status.reason, waiting_for_support: p.status.waiting_for_support }));
   check('gate blocked: 1 of 4 published -> main page not written', !p.picks.length && p.status && eq(p.status.waiting_for_support, [{ ladder_id: 'lad_A', head: 'peppol uae', published: 1, supporting: 4, needed: 2, head_position: null }]), JSON.stringify(p.items.map(x => x.json.keyword || x.json.reason)));
   const cs = await run('Cadence Status', p.items); scanHtml('cadence status (gate)', cs[0].json.html);
   check('status note for a gated main page', cs.length === 1 && /supporting pages/.test(cs[0].json.subject) && eq(cs[0].json.pages, []) && cs[0].json.stage === 'content_cadence', cs[0] && cs[0].json.subject);
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), logs: [logRow('peppol uae guide', { status: 'published', published_url: slug('peppol uae guide'), published_at: daysAgo(5) })] });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard, logs: [logRow('peppol uae guide', { status: 'published', published_url: slug('peppol uae guide'), published_at: daysAgo(5) })] });
   check('gate open: half published (ladder row + content log) -> main page written', eq(p.kws, ['peppol uae']), p.kws);
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), ranks: ranks('lad_A', 'peppol uae', [25, 60]) });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard, ranks: ranks('lad_A', 'peppol uae', [25, 60]) });
   check('gate open: main keyword at #25', eq(p.kws, ['peppol uae']), p.kws);
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), ranks: ranks('lad_A', 'peppol uae', [-1, 25]) });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard, ranks: ranks('lad_A', 'peppol uae', [-1, 25]) });
   check('gate: a failed check (-1) is skipped, #25 still counts', eq(p.kws, ['peppol uae']), p.kws);
-  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), ranks: ranks('lad_A', 'peppol uae', [45, 25]) });
+  p = await plan({ ladders: A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' }), settings: noGuard, ranks: ranks('lad_A', 'peppol uae', [45, 25]) });
   check('gate: the latest check (#45) decides', !p.picks.length, p.kws);
   // 7. won: main keyword top 3 in the last 4 checks -> no more pages, slot freed
   p = await plan({ ladders: [...A(), ...B()], ranks: ranks('lad_A', 'peppol uae', [2, 1, 3, 2]) });
@@ -1525,7 +1529,7 @@ await guard('pipeline', async () => {
   console.log('   pile-up ->', JSON.stringify(p.status && { reason: p.status.reason, paused_reason: p.status.paused_reason, waiting: p.status.waiting_publish, upcoming: p.status.upcoming.length }));
   check('pile-up: 3 waiting -> nothing picked, reason recorded', !p.picks.length && p.status && p.status.paused_reason === 'pileup' && p.status.waiting_publish === 3 && p.status.upcoming.length === 4, JSON.stringify(p.first));
   const csp = await run('Cadence Status', p.items); scanHtml('cadence status (pile-up)', csp[0].json.html); save('cadence-status-pileup.html', csp[0].json.html);
-  check('pile-up status note (subject, callback fields)', /paused, 3 pages wait/.test(csp[0].json.subject) && csp[0].json.paused_reason === 'pileup' && csp[0].json.request_id.endsWith('_0') && csp[0].json.callback_url, csp[0].json.subject);
+  check('pile-up status note (subject, callback fields)', /paused, 3 written pages waiting for publication/.test(csp[0].json.subject) && csp[0].json.paused_reason === 'pileup' && csp[0].json.request_id.endsWith('_0') && csp[0].json.callback_url, csp[0].json.subject);
   const csd = await run('Cadence Status', p.items.map(x => ({ json: { ...x.json, dry_run: true } })));
   check('no status note in a dry run', csd.length === 0, csd.length);
   p = await plan({ ladders: A(), logs: waiting3, trigger: { domain: D } });
@@ -3482,6 +3486,96 @@ await guard('one site model (FIX_PLAN G19)', async () => {
   check('a request without a website asks for nothing', pl4[0].json.skip === true && /no website/.test(pl4[0].json.reason), JSON.stringify(pl4[0].json));
 });
 
+// ===================================================================================
+await guard('d5-content-log', async () => {
+  const SN = 'S37 D5 — every written page waits in the open: one content-log row per content run (ladder / app / cadence) in the main workflow, and the pile-up guard counts the log rows plus the ladder rows still writing';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const T = require('./fixtures_tracking');
+  const LOGCOLS = require('./table_cols.json').LOG;   // seo_content_log's columns, as ladder_common.py defines them
+  const D = 'northwind-erp.com', SITE = 'site_northwind-erp-com', HOST = 'https://www.northwind-erp.com/';
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const slug = (k) => HOST + k.replace(/\s+/g, '-') + '/';
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const ladder = (id, head, pages, start) => pages.map(([rung, page_no, keyword, status]) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: id, domain: D, head_keyword: head, rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: slug(keyword), page_exists: false, status: status || 'planned', months: '', start_date: start, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@example.com', callback_url: 'https://hooks.example.com/x', request_id: 'r-' + id } }));
+  const std = (id, h, start, st = {}) => ladder(id, h, [[1, 1, h + ' cost', st.a], [1, 2, h + ' guide', st.b], [2, 3, h + ' software', st.c], [3, 4, h + ' providers', st.d], [4, 0, h, st.top]], start);
+  const set = (ladder_id, o = {}) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id, site_id: SITE, domain: D, head_keyword: '', mode: 'auto', priority: null, status: 'active', plan_type: '', reach: null, source: 'app', opportunities: '', auto_start: false, max_active: null, max_waiting: null, created_at: '2026-10-01T00:00:00.000Z', updated_at: '2026-10-01T00:00:00.000Z', ...o } });
+  const siteSet = (o) => set('_site', { opportunities: 'auto', max_active: 2, max_waiting: 3, ...o });
+  const logRow = (keyword, o = {}) => ({ json: { site_id: SITE, domain: D, keyword, source: 'cadence', page_type: 'Guide', existing_page_url: '', rung: 0, ladder_id: '', request_id: 'cad_x', started_at: daysAgo(10), status: 'started', published_url: '', published_at: '', week: '2026-09-21', ...o } });
+  const cad = (n) => [{ json: { site_id: SITE, domain: D, pages_per_week: n, status: 'active', updated_at: 'x', request_id: '' } }];
+  const EMPTY = [{ json: {} }];
+  const plan = async (o = {}) => {
+    mock('Manual Run', o.trigger || EMPTY); mock('Load Sites', T.sitesRows()); mock('Load Cadence', cad(o.pages == null ? 2 : o.pages)); mock('Load Ladders', o.ladders || EMPTY);
+    mock('Load Query History', EMPTY); mock('Load Trends', EMPTY); mock('Load Content Log', o.logs || EMPTY);
+    mock('Load Ladder Settings', o.settings || EMPTY); mock('Load Main Keyword Ranks', EMPTY);
+    const r = await run('Cadence Plan', store['Load Main Keyword Ranks']);
+    const picks = r.filter(x => !x.json.nothing_to_do).map(x => x.json);
+    return { items: r, picks, kws: picks.map(p => p.keyword), first: r[0].json, status: (r.find(x => x.json.report_only) || {}).json };
+  };
+  const A = (st) => std('lad_A', 'peppol uae', daysAgo(40), st);
+
+  // ---------- (a) the guard counts the content log AND the ladder rows still writing ----------
+  // exec 380: 2 pages were in the log, 2 more had been written by the ladder (rows 'writing', no log row) — the cadence saw 2 and wrote 2 more
+  let p = await plan({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors')] });
+  console.log('   D5 pile-up ->', JSON.stringify({ paused: p.status && p.status.paused_reason, waiting: p.status && p.status.waiting_publish, kws: p.status && p.status.waiting_keywords }));
+  check('D5: 2 log rows + 2 ladder rows writing = 4 waiting at limit 3 -> pile-up, nothing planned', !p.picks.length && p.status && p.status.paused_reason === 'pileup' && p.status.waiting_publish === 4, JSON.stringify(p.items.map(x => x.json.keyword || x.json.reason)));
+  check('D5: the waiting pages are named (ladder pages included) and the reason uses the agreed wording', eq([...p.status.waiting_keywords].sort(), ['erp for distributors', 'erp pricing uae', 'peppol uae cost', 'peppol uae guide']) && /^4 written pages waiting for publication \(pile-up guard, limit 3\): /.test(p.status.reason) && /"peppol uae cost"/.test(p.status.reason), JSON.stringify({ kws: p.status.waiting_keywords, reason: p.status.reason }));
+  const csn = await run('Cadence Status', p.items); scanHtml('cadence status (D5 pile-up)', csn[0].json.html);
+  check('D5: the status note says "N written pages waiting for publication (pile-up guard, limit L)" and names them', /paused, 4 written pages waiting for publication/.test(csn[0].json.subject) && /4 written pages waiting for publication \(pile-up guard, limit 3\): <b>peppol uae cost<\/b>/.test(csn[0].json.html) && csn[0].json.waiting_keywords.length === 4, JSON.stringify({ s: csn[0].json.subject, w: csn[0].json.waiting_keywords }));
+  const cnote = await run('Cadence Note', [{ json: {} }]);
+  check('D5: nothing was written, so there is no cadence note (only the status note)', cnote.length === 0, cnote.length);
+  // the old behaviour (log rows only) would have counted 2 and written 2 pages
+  p = await plan({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors')], settings: [siteSet({ max_waiting: 5 })] });
+  check('D5: with the limit at 5 the same website is written again (the guard, not the ladder, stops it)', p.kws.length === 2 && p.first.waiting_publish === 4, JSON.stringify({ kws: p.kws, waiting: p.first.waiting_publish }));
+
+  // ---------- (b) a keyword in both counts once ----------
+  p = await plan({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('peppol uae cost', { source: 'ladder', ladder_id: 'lad_A', status: 'written' }), logRow('peppol uae guide', { source: 'ladder', ladder_id: 'lad_A', status: 'written' })] });
+  check('D5: a page in the content log and on its ladder row counts once (2 waiting, not 4)', p.first.waiting_publish === 2 && p.first.paused_reason === '' && eq([...p.first.waiting_keywords].sort(), ['peppol uae cost', 'peppol uae guide']), JSON.stringify({ w: p.first.waiting_publish, kws: p.first.waiting_keywords }));
+  check('D5: status "written" waits like "started" (the main workflow writes it when the page exists)', p.kws.length === 2 && !p.kws.includes('peppol uae cost'), p.kws);
+
+  // ---------- (c) published pages never count ----------
+  p = await plan({ ladders: A({ a: 'published', b: 'published', c: 'published' }), logs: ['peppol uae cost', 'peppol uae guide', 'peppol uae software'].map(k => logRow(k, { status: 'published', published_url: slug(k), published_at: daysAgo(3) })) });
+  check('D5: published log rows and published ladder rows do not count', p.first.waiting_publish === 0 && p.first.paused_reason === '' && p.kws.length === 2, JSON.stringify({ w: p.first.waiting_publish, kws: p.kws }));
+  p = await plan({ ladders: A({ a: 'writing', b: 'writing', c: 'writing' }), logs: ['peppol uae cost', 'peppol uae guide', 'peppol uae software'].map(k => logRow(k, { status: 'published', published_url: slug(k), published_at: daysAgo(3) })) });
+  check('D5: a ladder row left on "writing" whose page is published (content log) does not count', p.first.waiting_publish === 0 && p.first.paused_reason === '', JSON.stringify({ w: p.first.waiting_publish, kws: p.first.waiting_keywords }));
+
+  // ---------- (d) 120 days ----------
+  p = await plan({ ladders: std('lad_O', 'wms dubai', daysAgo(200), { a: 'writing', b: 'writing', c: 'writing' }), logs: [logRow('erp pricing uae', { started_at: daysAgo(130) })] });
+  check('D5: nothing newer than 120 days: no page waits (old log row, old ladder)', p.first.waiting_publish === 0 && p.first.paused_reason === '', JSON.stringify({ w: p.first.waiting_publish, kws: p.first.waiting_keywords }));
+  p = await plan({ ladders: std('lad_O', 'wms dubai', daysAgo(200), { a: 'writing' }), logs: [logRow('wms dubai cost', { started_at: daysAgo(9), source: 'ladder', ladder_id: 'lad_O' })] });
+  check('D5: an old ladder whose page was written 9 days ago still counts (the log row dates it)', p.first.waiting_publish === 1 && eq(p.first.waiting_keywords, ['wms dubai cost']), JSON.stringify(p.first.waiting_keywords));
+
+  // ---------- (e) the row every content run writes in the main workflow ----------
+  const NI = (o = {}) => [{ json: { mode: 'keyword', domain: D, keyword: 'peppol uae cost', page_type: 'Guide', existing_page_url: '', request_id: 'req-1', client_ip: '', ladder_id: '', ladder_rung: null, ...o } }];
+  const logWrite = async (ni, stored, pkg) => { mock('Normalize Input', ni); mock('Blog Package', [{ json: pkg === undefined ? { article_html: '<h1>a page</h1>', page_markdown: '# a page' } : pkg }]); mock('Load Content Log (Run)', stored && stored.length ? stored : EMPTY); return (await run('Content Log Row', store['Load Content Log (Run)']))[0].json; };
+  const exact = (r) => eq(Object.keys(r).sort(), LOGCOLS.slice().sort());
+  let row = await logWrite(NI({ client_ip: 'ladder:lad_A', ladder_id: 'lad_A', ladder_rung: 1 }));
+  console.log('   D5 ladder spawn row ->', JSON.stringify(row));
+  check('D5: a ladder page run writes the row (source ladder, status written, exactly the table columns)', exact(row) && row.source === 'ladder' && row.status === 'written' && row.site_id === SITE && row.ladder_id === 'lad_A' && row.rung === 1 && row.published_url === '' && row.week === new Date().toISOString().slice(0, 10), JSON.stringify({ cols: Object.keys(row), row }));
+  row = await logWrite(NI({ client_ip: 'app:cmp-abc123', keyword: 'erp pricing uae', request_id: 'app-7' }), [logRow('erp pricing uae', { source: 'app', request_id: 'app-7', started_at: daysAgo(0), week: '2026-10-05' })]);
+  check('D5: the app\'s "Write now" updates its own row (same request): source app, start of the week kept, status written', exact(row) && row.source === 'app' && row.status === 'written' && row.week === '2026-10-05' && row.request_id === 'app-7', JSON.stringify(row));
+  row = await logWrite(NI({ client_ip: 'cadence:' + SITE, keyword: 'best e invoicing software uae', request_id: 'cad_20261012_northwind-erp-com_1' }), [logRow('best e invoicing software uae', { source: 'ai_answer', request_id: 'cad_20261012_northwind-erp-com_1' })]);
+  check('D5: a cadence run keeps where the keyword came from (ai_answer survives, so the AI quota still counts it)', exact(row) && row.source === 'ai_answer' && row.status === 'written', JSON.stringify(row));
+  row = await logWrite(NI({ client_ip: '', keyword: 'erp for distributors', request_id: '' }));
+  check('D5: a run started by hand is logged too (source manual), so its page waits like the others', exact(row) && row.source === 'manual' && row.status === 'written' && row.ladder_id === '' && row.rung === 0, JSON.stringify(row));
+  row = await logWrite(NI({ keyword: 'peppol uae cost', existing_page_url: slug('peppol uae cost') }), [logRow('peppol uae cost', { status: 'published', published_url: slug('peppol uae cost'), published_at: daysAgo(30), source: 'ladder', request_id: 'old' })]);
+  check('D5: a page written again keeps its published URL but waits again (status written)', exact(row) && row.status === 'written' && row.published_url === slug('peppol uae cost') && row.published_at !== '' && row.source === 'ladder' && row.request_id === 'req-1', JSON.stringify(row));
+  const skipRow = await logWrite(NI({ domain: '' }));
+  check('D5: a run without a website writes nothing (the IF node stops it)', skipRow.skip === true && /nothing to follow/.test(skipRow.reason), JSON.stringify(skipRow));
+  const reportOnly = await logWrite(NI({}), [], { keyword: 'peppol uae cost' });   // a keyword report / verdict takes the same delivery path, but no page exists
+  check('D5: a report-only run writes nothing (no page was written)', reportOnly.skip === true && /report only/.test(reportOnly.reason), JSON.stringify(reportOnly));
+  // the row the ladder run writes is exactly what the guard reads next Monday
+  const spawned = await logWrite(NI({ client_ip: 'ladder:lad_A', ladder_id: 'lad_A', ladder_rung: 1 }));
+  p = await plan({ ladders: A({ a: 'writing', b: 'writing' }), logs: [{ json: { id: 1, createdAt: 'x', updatedAt: 'x', ...spawned } }, logRow('erp pricing uae'), logRow('erp for distributors')] });
+  check('D5: the row a ladder run writes is counted by the cadence (4 waiting, still one entry for that keyword)', p.status && p.status.waiting_publish === 4 && p.status.paused_reason === 'pileup', JSON.stringify(p.status && p.status.waiting_keywords));
+
+  // ---------- publish detection and the Site Tracker read "written" as waiting ----------
+  mock('Site Plan', [{ json: { site_id: SITE, domain: D, sitemap_url: HOST + 'sitemap.xml' } }]);
+  mock('Load Content Log', [logRow('peppol uae cost', { status: 'written', source: 'ladder', ladder_id: 'lad_A', rung: 1, started_at: daysAgo(6) })]);
+  mock('Load Ladders', A({ a: 'writing' }));
+  const pc = await run('Publish Candidates', store['Load Ladders']);
+  check('D5: publish detection still picks up the page, now that the run logged it as "written"', pc.length === 1 && !pc[0].json.nothing_to_do && (pc[0].json.candidates || []).some(c => c.keyword === 'peppol uae cost'), JSON.stringify(pc.map(x => (x.json.candidates || []).map(c => c.keyword))));
+});
 
 H.report();
 })();

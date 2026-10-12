@@ -15710,6 +15710,359 @@
           800,
           -116
         ]
+      },
+      {
+        "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_content_log",
+          "columns": {
+            "column": [
+              {
+                "name": "site_id",
+                "type": "string"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "keyword",
+                "type": "string"
+              },
+              {
+                "name": "source",
+                "type": "string"
+              },
+              {
+                "name": "page_type",
+                "type": "string"
+              },
+              {
+                "name": "existing_page_url",
+                "type": "string"
+              },
+              {
+                "name": "rung",
+                "type": "number"
+              },
+              {
+                "name": "ladder_id",
+                "type": "string"
+              },
+              {
+                "name": "request_id",
+                "type": "string"
+              },
+              {
+                "name": "started_at",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "published_url",
+                "type": "string"
+              },
+              {
+                "name": "published_at",
+                "type": "string"
+              },
+              {
+                "name": "week",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "224189db-3478-5570-ac22-e0274da02134",
+        "name": "Ensure Log Table (Run)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          7034,
+          808
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_content_log"
+          },
+          "returnAll": true,
+          "options": {}
+        },
+        "id": "ef1ea9e4-1f67-5c47-8c2a-2efad96bf87e",
+        "name": "Load Content Log (Run)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          7254,
+          808
+        ],
+        "alwaysOutputData": true,
+        "executeOnce": true,
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "jsCode": "// One seo_content_log row per content run (v4.14, FIX_PLAN D5). Every page the system writes passes through this workflow — the keyword\n// ladder's own page runs, the app's \"Write now\" and the Content Cadence's Monday pages — so the row is written here, once, for all three.\n// Before this, ladder pages were never logged: the pile-up guard counted 2 pages waiting while 4 were written and unpublished, and planned\n// two more for the Monday after (execution 380).\n// The row is upserted by site_id + keyword and carries exactly the table's columns. Status: started (the cadence / the app at the spawn)\n// -> written (here, when the page exists) -> published (publish detection and \"I published a page\" close it).\n// An existing row keeps what it already knows: its site id and keyword spelling (so the upsert matches it), where the keyword came from\n// (`source` — the cadence's ai_answer / ai_refresh / striking / trend must survive) and the last published URL. A page that is written\n// again (a refresh, a rewrite) goes back to `written`: the new text still waits for the owner to publish it.\nconst d = $('Normalize Input').first().json;\nconst rowsOf = (name) => { try { return $(name).all().map(i => i.json).filter(r => r && typeof r === 'object' && !r.error); } catch (e) { return []; } };\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\n// Report-only runs (a keyword report, a verdict) take the same delivery path, so the article itself has to say that a page exists:\n// the Blog Package passes a run without content through untouched.\nlet page = {}; try { page = (($('Blog Package').first() || {}).json) || {}; } catch (e) { page = {}; }\nif (!String(page.article_html || page.page_markdown || '').trim()) return [{ json: { skip: true, reason: 'no page was written in this run (report only)' } }];\nconst domain = normD(d.domain), keyword = String(d.keyword || '').trim();\nif (!domain || !keyword) return [{ json: { skip: true, reason: 'no website or no keyword: there is nothing to follow to publication' } }];\nconst now = new Date().toISOString();\nconst logs = rowsOf('Load Content Log (Run)').filter(r => r.keyword && normD(r.domain) === domain);\nconst rid = String(d.request_id || '');\n// the row this run already has (the cadence and the app write one when they start the run), else the newest row for the same keyword\nconst prior = (rid ? logs.find(r => String(r.request_id) === rid) : null) ||\n  logs.filter(r => norm(r.keyword) === norm(keyword)).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;\nconst ip = String(d.client_ip || '');\nconst source = (prior && prior.source) || (/^cadence:/i.test(ip) ? 'cadence' : /^app:/i.test(ip) ? 'app' : (/^ladder:/i.test(ip) || d.ladder_id) ? 'ladder' : 'manual');\nconst sameRun = !!prior && !!rid && String(prior.request_id) === rid;   // the run that opened the row: keep when it started\nconst rung = Number(d.ladder_rung != null && d.ladder_rung !== '' ? d.ladder_rung : (prior && prior.rung)) || 0;\nreturn [{ json: {\n  site_id: String((prior && prior.site_id) || ('site_' + domain.replace(/[^a-z0-9]+/g, '-'))),\n  domain,\n  keyword: String((prior && prior.keyword) || keyword),\n  source,\n  page_type: String(d.page_type || (prior && prior.page_type) || ''),\n  existing_page_url: String(d.existing_page_url || (prior && prior.existing_page_url) || ''),\n  rung,\n  ladder_id: String(d.ladder_id || (prior && prior.ladder_id) || ''),\n  request_id: rid || String((prior && prior.request_id) || ''),\n  started_at: sameRun ? String(prior.started_at || now) : now,\n  status: 'written',\n  published_url: String((prior && prior.published_url) || ''),\n  published_at: String((prior && prior.published_at) || ''),\n  week: sameRun ? String(prior.week || now.slice(0, 10)) : now.slice(0, 10)\n} }];\n"
+        },
+        "id": "cbb4edec-6a9d-5c4a-9f48-1c244fc9da2c",
+        "name": "Content Log Row",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          7474,
+          808
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "58c0bc11-2180-5dbf-b22f-a94bfb89299f",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "8edc92db-036a-551d-934b-c7ccfa6387a5",
+        "name": "Log This Page?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          7694,
+          808
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "upsert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_content_log"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "site_id",
+                "condition": "eq",
+                "keyValue": "={{ $json.site_id }}"
+              },
+              {
+                "keyName": "keyword",
+                "condition": "eq",
+                "keyValue": "={{ $json.keyword }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "site_id",
+                "displayName": "site_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "keyword",
+                "displayName": "keyword",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "source",
+                "displayName": "source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "page_type",
+                "displayName": "page_type",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "existing_page_url",
+                "displayName": "existing_page_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "rung",
+                "displayName": "rung",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ladder_id",
+                "displayName": "ladder_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "request_id",
+                "displayName": "request_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "started_at",
+                "displayName": "started_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "published_url",
+                "displayName": "published_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "published_at",
+                "displayName": "published_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "week",
+                "displayName": "week",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "3672fab6-b2ef-52c8-85b0-821914aa000f",
+        "name": "Save Content Log (Run)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          7914,
+          808
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "content": "### Every written page is logged (v4.14, FIX_PLAN D5)\n`Blog Package` -> **Content Log Row** -> **Save Content Log (Run)**: one `seo_content_log` row per content run, upserted by `site_id` + `keyword`, status **written**. Ladder page runs were invisible before (only the Content Cadence and the web app wrote rows), so the **pile-up guard** undercounted the pages waiting to be published. The row keeps what the opening row knows (`source`, the week, the last published URL); \"I published a page\" and the Site Tracker's publish detection set `published`.",
+          "height": 200,
+          "width": 900,
+          "color": 6
+        },
+        "id": "0d66c08f-45e5-522a-90eb-85119e2f9cee",
+        "name": "Note 19",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          6994,
+          568
+        ]
       }
     ],
     "connections": {
@@ -18418,6 +18771,11 @@
               "node": "Deliver Via Download?",
               "type": "main",
               "index": 0
+            },
+            {
+              "node": "Ensure Log Table (Run)",
+              "type": "main",
+              "index": 0
             }
           ]
         ]
@@ -20321,6 +20679,50 @@
           [
             {
               "node": "Restore Site Model",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Log Table (Run)": {
+        "main": [
+          [
+            {
+              "node": "Load Content Log (Run)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Content Log (Run)": {
+        "main": [
+          [
+            {
+              "node": "Content Log Row",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Content Log Row": {
+        "main": [
+          [
+            {
+              "node": "Log This Page?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Log This Page?": {
+        "main": [
+          [
+            {
+              "node": "Save Content Log (Run)",
               "type": "main",
               "index": 0
             }

@@ -145,7 +145,10 @@ every Monday (`Cadence_Plan.js`):
   pure mirror of `Cadence_Plan.js` run Monday by Monday: priority order, max active ladders, Manual and paused ladders skipped, won
   ladders done, the main page after half of its support is live (or the main keyword in the top 30; Direct plans main page first),
   the pile-up guard (waiting pages ≥ the limit → nothing written, shown under Needs you, also when the last cadence report said
-  `paused_reason: 'pileup'`), opportunity posts only when Auto. Unit tests in `server/test/cadence.test.ts` use the n8n harness's S24
+  `paused_reason: 'pileup'`), opportunity posts only when Auto. A page waits when a content-log row of the last 120 days has any
+  status but `published` — every content run writes one in n8n (v4.14, FIX_PLAN D5: the ladder's page runs, the app's "Write now",
+  the cadence) — or a ladder row is still `writing` and its keyword has no published page; each keyword counts once and
+  `waitingKeywords` names them. Unit tests in `server/test/cadence.test.ts` use the n8n harness's S24
   situations; it was also checked against the deployed `Cadence_Plan.js` on techand.ai's live rows.
 
 **New keyword ladder (Phase 3, §5)** — `web/src/pages/site/NewLadderPage.tsx`, `/o/:org/sites/:site/pipeline/new` (from the Pipeline's

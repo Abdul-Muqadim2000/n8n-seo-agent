@@ -14,6 +14,18 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-12',
+    title: 'Every written page counts before the next one is written',
+    summary:
+      'The pile-up guard now sees every page waiting to be published, keyword-ladder pages included, and tells you which ones they are.',
+    highlights: [
+      'Every page Ascentra writes — a ladder page, one you asked for, or a weekly post — is recorded the moment it is written',
+      'The guard counts each waiting keyword once, whether it came from a ladder or from the weekly posts',
+      'When writing pauses, the note and the app name the pages that are waiting',
+    ],
+    features: ['autopilot'],
+  },
+  {
     date: '2026-10-11',
     title: 'Link farms set aside, replies that stick to the facts',
     summary: 'The backlink check now recognises link-farm networks as a whole, and suggested answers to outreach replies never state anything about your business that you did not put on file.',

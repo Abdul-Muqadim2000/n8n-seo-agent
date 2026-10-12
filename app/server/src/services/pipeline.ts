@@ -48,7 +48,7 @@ const norm = normKeyword;
 /** Pages written and not published (the content log; every age), oldest first. */
 export function waitingPages(logs: ContentLogRow[], now = Date.now()): PipelineData['queue']['waiting'] {
   return logs
-    .filter((l) => l.status === 'started' && !l.published_url)
+    .filter((l) => l.status !== 'published' && !l.published_url) // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
     .map((l) => ({ keyword: l.keyword, startedAt: l.started_at, days: Math.max(0, Math.round((now - Date.parse(l.started_at || new Date(now).toISOString())) / 864e5)) }))
     .sort((a, b) => b.days - a.days);
 }
@@ -235,7 +235,11 @@ function thisWeekItems(
 export function cadenceDetail(next: QueueItem[], plan: CadenceWeek, build: Pick<LadderBuild, 'cards'>): string {
   const headOf = (id: string) => build.cards.find((c) => c.id === id)?.head ?? '';
   if (plan.pausedReason === 'pileup')
-    return `Writes nothing: ${plural(plan.waitingPublish, 'page')} wait to be published (your limit is ${plan.config.maxWaiting}). Publish them to continue`;
+    return (
+      `Writes nothing: ${plural(plan.waitingPublish, 'written page')} waiting for publication (pile-up guard, limit ${plan.config.maxWaiting})` +
+      (plan.waitingKeywords.length ? `: ${plan.waitingKeywords.slice(0, 4).map((k) => `“${k}”`).join(', ')}${plan.waitingKeywords.length > 4 ? ' …' : ''}` : '') +
+      '. Publish them to continue'
+    );
   if (next.length) return next.map((q) => (q.ladder ? `“${q.keyword}” for ladder “${q.ladder.head}”` : `“${q.keyword}” (${q.source === 'striking' ? 'close to page one' : 'rising search'})`)).join(' · ');
   const why: string[] = [];
   if (plan.awaitingApproval.length)

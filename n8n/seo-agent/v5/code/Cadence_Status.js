@@ -7,9 +7,10 @@ const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</
 const arr = (v) => Array.isArray(v) ? v : [];
 return $input.all().map(i => i.json).filter(s => s && s.report_only && !s.dry_run && s.site_id).map(s => {
   const paused = s.paused_reason === 'pileup', ap = arr(s.awaiting_approval), sg = arr(s.suggestions), pend = arr(s.pending_publish), ws = arr(s.waiting_for_support);
-  const subject = '[Content] ' + s.domain + ': ' + (paused ? 'paused, ' + s.waiting_publish + ' pages wait to be published' : ap.length ? 'next page ready for your approval' : sg.length ? 'topic suggestions for this week' : 'publish the supporting pages to unlock the main page');
+  const wkw = arr(s.waiting_keywords);   // D5: the pages that wait, by name (ladder pages included)
+  const subject = '[Content] ' + s.domain + ': ' + (paused ? 'paused, ' + s.waiting_publish + ' written pages waiting for publication' : ap.length ? 'next page ready for your approval' : sg.length ? 'topic suggestions for this week' : 'publish the supporting pages to unlock the main page');
   const html = '<p>Hi,</p>' +
-    (paused ? '<p><b>No new page for ' + esc(s.domain) + ' this week.</b> ' + esc(s.waiting_publish) + ' pages are written but not published yet (the limit is ' + esc(s.max_waiting) + '). Publish them and report each link through the <a href="' + esc(FORM_URL) + '">form</a> ("I published a page") or the API (' + esc(API_URL) + ', <code>mode: published</code>); writing continues the Monday after.</p>'
+    (paused ? '<p><b>No new page for ' + esc(s.domain) + ' this week.</b> ' + esc(s.waiting_publish) + ' written pages waiting for publication (pile-up guard, limit ' + esc(s.max_waiting) + ')' + (wkw.length ? ': ' + wkw.slice(0, 10).map(k => '<b>' + esc(k) + '</b>').join(', ') : '') + '. Publish them and report each link through the <a href="' + esc(FORM_URL) + '">form</a> ("I published a page") or the API (' + esc(API_URL) + ', <code>mode: published</code>); writing continues the Monday after.</p>'
       : '<p>Nothing was written automatically for <b>' + esc(s.domain) + '</b> this week.</p>') +
     (pend.length ? '<p style="color:#b45309"><b>Waiting for your publish link:</b> ' + pend.map(p => esc(p.keyword) + ' (written ' + p.days + ' days ago)').join(', ') + '</p>' : '') +
     (ap.length ? '<p><b>Ready for your approval</b> (Manual ladders, about $1.20 each): ' + ap.map(a => esc(a.keyword) + ' (ladder "' + esc(a.head) + '", ' + (Number(a.rung) === 4 ? 'main page' : 'rung ' + esc(a.rung)) + ')').join(', ') + '. Start one through the <a href="' + esc(FORM_URL) + '">form</a> or the app.</p>' : '') +
@@ -18,6 +19,6 @@ return $input.all().map(i => i.json).filter(s => s && s.report_only && !s.dry_ru
     (arr(s.upcoming).length ? '<p><b>Next in line:</b> ' + arr(s.upcoming).map(u => esc(u.keyword) + ' (' + esc(u.source) + ')').join(', ') + '</p>' : '') +
     '<p style="color:#64748b;font-size:12px">Change the posts per week, Auto / Manual and the waiting-page limit in the app, or the posts per week through the Site Admin workflow.</p>';
   return { json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id, subject, html, status: 'progress', stage: 'content_cadence', week: s.week,
-    pages: [], upcoming: arr(s.upcoming), pending_publish: pend, candidates: Number(s.candidates) || 0, paused_reason: s.paused_reason || '', waiting_publish: Number(s.waiting_publish) || 0, max_waiting: Number(s.max_waiting) || 0,
+    pages: [], upcoming: arr(s.upcoming), pending_publish: pend, candidates: Number(s.candidates) || 0, paused_reason: s.paused_reason || '', waiting_publish: Number(s.waiting_publish) || 0, waiting_keywords: wkw, max_waiting: Number(s.max_waiting) || 0,
     awaiting_approval: ap, suggestions: sg, queued_ladders: arr(s.queued_ladders), won_ladders: arr(s.won_ladders), waiting_for_support: arr(s.waiting_for_support) } };
 });

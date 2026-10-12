@@ -299,5 +299,21 @@
   "lastmod",
   "queries_json",
   "updated_at"
+ ],
+ "LOG": [
+  "site_id",
+  "domain",
+  "keyword",
+  "source",
+  "page_type",
+  "existing_page_url",
+  "rung",
+  "ladder_id",
+  "request_id",
+  "started_at",
+  "status",
+  "published_url",
+  "published_at",
+  "week"
  ]
 }
