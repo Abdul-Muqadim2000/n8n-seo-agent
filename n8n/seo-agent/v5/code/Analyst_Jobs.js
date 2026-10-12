@@ -21,12 +21,22 @@ for (const p of plans) {
     ['Price range', P.price_range], ['Areas served', P.service_areas], ['Opening hours', P.opening_hours], ['Services on the site', (p.services || []).join(', ')], ['Topics', (p.topics || []).join(', ')],
     ['Accreditation', p.accreditation], ['Other facts', String(p.business_facts || '').slice(0, 900)], ['Other names', (p.brand_names || []).filter(b => !/\./.test(b)).join(', ')]].filter(([, v]) => v);
   const CHECKABLE = ['City', 'Region', 'Country', 'Address', 'Phone', 'E-mail', 'Price range', 'Areas served', 'Opening hours', 'Services on the site', 'Accreditation', 'Other facts', 'Type'];
-  const facts_ok = sheet.filter(([k]) => CHECKABLE.includes(k)).length >= CONFIG.min_facts;
+  // P34-3 (live 2026-10-12): two checkable entries were met by Country (the site's tracked market) and "Services on the site" (read off
+  // the site by the site model) alone, so with an empty business profile the run still reported "no claim was wrong" about a
+  // "Dubai-based" description that nothing on file could judge. A claim is only checkable against a fact the owner put on file, and a
+  // place has to be among them: without a city, a region, an address or a phone number nothing locates the business, and most wrong
+  // claims are about where it is and what it charges. Country, services and topics stay on the sheet as context — they never switch
+  // the check on by themselves.
+  const OWNER = ['City', 'Region', 'Address', 'Phone', 'E-mail', 'Price range', 'Areas served', 'Opening hours', 'Accreditation', 'Other facts', 'Type'];   // seo_profiles + the business facts the app sends
+  const LOCATING = ['City', 'Region', 'Address', 'Phone'];
+  const owner_facts = sheet.filter(([k]) => OWNER.includes(k)).length;
+  const located = sheet.some(([k]) => LOCATING.includes(k));
+  const facts_ok = sheet.filter(([k]) => CHECKABLE.includes(k)).length >= CONFIG.min_facts && owner_facts >= CONFIG.min_facts && located;
   const facts = sheet.map(([k, v]) => k + ': ' + v).join('\n');
   for (let i = 0; i < sel.length && out.length < CONFIG.max_jobs_per_run; i += CONFIG.per_job) {
     const chunk = sel.slice(i, i + CONFIG.per_job);
     out.push({ json: { site_id: p.site_id, domain: p.domain, business: p.business_name || p.domain, facts: facts || 'Website: ' + p.domain, facts_ok,
-      fact_check: facts_ok ? 'on' : 'off', known_competitors: (p.competitors || []).join(', '),
+      fact_check: facts_ok ? 'on' : 'off', owner_facts, located, known_competitors: (p.competitors || []).join(', '),
       ids: chunk.map(r => r.prompt_id + '|' + r.engine), answers: chunk.map((r, k) => 'ANSWER ' + (k + 1) + ' [' + r.engine + '] Q: ' + r.prompt + '\n' + String(r._text).slice(0, CONFIG.chars)).join('\n\n') } });
   }
 }

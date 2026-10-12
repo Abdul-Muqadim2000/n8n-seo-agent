@@ -6,6 +6,7 @@
 // Writer); they join the Backlink Monitor's prospects (type ai_source), which finds contacts and writes follow-ups.
 /*__LINK_KIT__*/
 /*__OUTREACH_KIT__*/
+/*__DRAFTS__*/
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let reqs = [], res = []; try { reqs = $('Earned Requests').all().map(i => i.json); res = $('Fetch Cited Pages').all().map(i => i.json); } catch (e) {}
 const prospects = (() => { try { return $('Load Link Prospects (Growth)').all().map(i => i.json).filter(r => r && r.site_id); } catch (e) { return []; } })();
@@ -50,9 +51,11 @@ for (const p of plans) {
     if (rows.some(r => r.prospect_domain === e.host)) continue;
     const old0 = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === e.host && x.type === 'ai_source') || {}; const old = old0.status === 'drafted' ? { ...old0, status: 'new' } : old0;   // 'drafted' (2026-10-10 runs) is not an app status
     const won = e.mentions_us === true;
+    const kept = DRAFTS.carry(old, { handover: !!p.link_builder });
     const detail = 'AI cites this ' + e.kind + ' ' + e.citations + 'x (' + e.engines.join(', ') + ') for "' + (e.questions[0] || '').slice(0, 90) + '"' + (e.title ? ' — "' + e.title.slice(0, 80) + '"' : '') + (e.competitors_named.length ? '; it names ' + e.competitors_named.join(', ') : '') + (e.mentions_us === false ? ', not you' : won ? '; it names you now' : '');
     const row = { site_id: p.site_id, domain: p.domain, prospect_domain: e.host, type: 'ai_source', rank: Number(old.rank) || 0, spam_score: Number(old.spam_score) || 0, detail: detail.slice(0, 500), source_url: e.url, target_url: old.target_url || '',
-      status: won ? 'won' : (old.status || 'new'), first_seen: old.first_seen || p.checked_at, last_seen: p.checked_at, won_at: won ? (old.won_at || p.checked_at) : (old.won_at || ''), outreach_subject: old.outreach_subject || '', outreach_body: old.outreach_body || '',
+      status: won ? 'won' : (old.status || 'new'), first_seen: old.first_seen || p.checked_at, last_seen: p.checked_at, won_at: won ? (old.won_at || p.checked_at) : (old.won_at || ''),
+      outreach_subject: kept.outreach_subject, outreach_body: kept.outreach_body, drafted_at: kept.drafted_at,   // P34-1: a draft written before the D12 / D13 gates, or one handed to the Link Builder, is withdrawn — never offered again
       note: e.action.slice(0, 300), score: Math.min(100, Math.round(e.value * 8)), origin: 'ai_growth', contact_email: old.contact_email || e.contact_email, contact_url: old.contact_url || e.contact_url, contacted_at: old.contacted_at || '',
       followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' };
     rows.push(row);
@@ -69,7 +72,8 @@ for (const p of plans) {
         || OK.sellsSame({ type: kindType, domain: e.host, competitors: p.competitors, title: e.title, text: pageText.get(e.url) || '', terms: sellTerms })
         || (!OK.accredited(p.accreditation) && OK.accreditedList(e.title + ' ' + e.url) ? 'a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one' : ''));
     if (blocked) row.note = String(blocked).slice(0, 300);
-    if (!won && !blocked && !row.outreach_body && outreachKind && !['won', 'declined', 'contacted'].includes(String(old.status || '')) && jobs.length < 3)
+    if (kept.superseded && !blocked) row.note = (DRAFTS.reason + '; ' + row.note).slice(0, 300);   // P34-1: the owner is told the old pitch was withdrawn, not shown it again
+    if (!won && !blocked && !kept.outreach_body && outreachKind && !['won', 'declined', 'contacted'].includes(String(old.status || '')) && jobs.length < 3)
       jobs.push({ n: jobs.length + 1, prospect_domain: e.host, kind: e.kind, action_type: e.action_type, url: e.url, title: e.title, question: e.questions[0] || '', competitors_named: e.competitors_named, engines: e.engines });
     if (blocked) e.no_draft = String(blocked).slice(0, 160);
   }

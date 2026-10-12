@@ -80,6 +80,30 @@
    "Monitor Started"
   ]
  },
+ "release_node": "Release Stale Runs",
+ "release_from": [
+  "Load Run Ledger"
+ ],
+ "release_to": [
+  "Rate Limit"
+ ],
+ "release_conditions": [
+  [
+   "status",
+   "eq",
+   "reserved"
+  ],
+  [
+   "created_at",
+   "lt",
+   "={{ new Date(Date.now() - (Number($('Normalize Input').first().json.run_stale_hours) || 2) * 3600000).toISOString() }}"
+  ]
+ ],
+ "release_values": {
+  "status": "stale"
+ },
+ "stale_hours": 2,
+ "heavy_audit_pages": 100,
  "assess": {
   "settle_node": "Settle Run Ledger (Assess)",
   "settle_from": [

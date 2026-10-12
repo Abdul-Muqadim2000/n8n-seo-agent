@@ -351,17 +351,61 @@ const OK = (() => {
       ? 'a competing provider: their page sells what you sell (' + Math.round(share * 100) + '% of your service words, "' + signals.slice(0, 2).join('", "') + '")' : '';
   }
   // does a page name the business? Punctuation in a name ("Tech&") breaks \b, so every name is matched by its letter / digit runs with a
-  // little punctuation allowed between them, and the domain counts as a name too
+  // little punctuation allowed between them, and the domain counts as a name too.
+  // P34-2 (live 2026-10-12): "Tech&" collapses to the four-letter run "tech", which matched the plain word "tech" on three unrelated
+  // pages and claimed listings the site does not have — SaaSHub ("Tech Alternatives", 20x "tech", 0x "techand"), AlternativeTo and the
+  // UAE Ministry of Finance accredited-provider list. A name decides that on its own only when it is distinctive: the domain, or letter /
+  // digit runs of at least MIN_NAME_RUN characters. A shorter name is matched only with its own punctuation in place ("Tech&", "Tech &"),
+  // never as the bare letters, so the stripped-ampersand form is never evidence on its own. (Entities are decoded by LK.text first.)
+  const MIN_NAME_RUN = 5;
+  const reEsc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  function nameRe(n) {
+    const s = String(n || '').trim(); const runs = s.toLowerCase().match(/[a-z0-9]+/g) || [];
+    if (!runs.length) return null;
+    const isDomain = runs.length >= 2 && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(s);
+    if (isDomain || runs.join('').length >= MIN_NAME_RUN) return new RegExp('(^|[^a-z0-9])' + runs.join('[^a-z0-9]{0,3}') + '($|[^a-z0-9])', 'i');
+    if (!/[^a-z0-9\s]/i.test(s)) return null;   // four letters and nothing else: too common a word to claim anything by itself
+    return new RegExp('(^|[^a-z0-9])' + s.toLowerCase().split(/\s+/).map(reEsc).join('\\s*'), 'i');
+  }
   function namesUs(text, names) {
     const t = String(text || '');
-    for (const n of names) { const runs = String(n || '').toLowerCase().match(/[a-z0-9]+/g) || [];
-      if (!runs.length || runs.join('').length < 4) continue;
-      const re = new RegExp('(^|[^a-z0-9])' + runs.join('[^a-z0-9]{0,3}') + '($|[^a-z0-9])', 'i');
-      if (re.test(t)) return String(n); }
+    for (const n of (names || [])) { const re = nameRe(n); if (re && re.test(t)) return String(n); }
     return '';
   }
+  // ---- the cold link gap: who is never pitched when all we know is the domain (P34-4, live 2026-10-12) ----
+  // The full SEO report's "Link opportunities" told the owner to "reach out with a listing request, partnership or useful resource" to
+  // mof.gov.ae (a ministry you join by accreditation), backlinkcheckers.space and buyhighda.space (sites whose business is selling
+  // links). The Backlink Monitor refuses all three on the same data; this is the rule both of them use. The spam score is the link
+  // index's own 0-100 (DataForSEO `backlinks_spam_score`).
+  const SELLWORD = /(backlink|dofollow|link ?building|link ?farm|guest ?post|high ?da|seo ?link|buy ?link|authority ?link|link ?juice|link ?exchange|pbn)/i;
+  function noPitch(domain, o) {
+    const x = o || {}; const d = String(domain || '').toLowerCase().replace(/^www\./, '');
+    if (!d || !/\./.test(d)) return 'not a website';
+    if (isGov(d)) return 'a government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)';
+    const bad = badHost(d); if (bad) return bad;
+    if (LK.isWire(d)) return 'a press-release wire (' + d + '): a link there is a paid release, not an editorial link';
+    if (LK.isGambling(d)) return 'a gambling site (' + d + ')';
+    const name = d.replace(/\.[a-z.]{2,}$/, '').replace(/[.-]+/g, ' ');
+    if (SELLWORD.test(name)) return 'its own name offers links ("' + name.slice(0, 40) + '"): a site that sells links passes nothing on and risks a penalty';
+    if (Number(x.spam) >= 30) return 'a spam score of ' + Math.round(Number(x.spam)) + ' of 100 in the link index';
+    if (!x.accredited && accreditedList(String(x.title || '') + ' ' + name)) return 'a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one';
+    return '';
+  }
+  // and whether anything ties a bare domain to our topics: a topic word inside its own name, a title we know for it, or our own market's
+  // domain ending (the 25% rule the Link Builder applies to the page it fetches, OFF_TOPIC)
+  function gapTopic(domain, o) {
+    const x = o || {}; const d = String(domain || '').toLowerCase().replace(/^www\./, '');
+    const name = d.replace(/\.[a-z.]{2,}$/, '').replace(/[.-]+/g, ' ');
+    const topicStems = new Set(words(x.topics || '').map(stem).filter(w => w.length >= 4));
+    if (words(name).map(stem).some(w => topicStems.has(w))) return { ok: true, why: 'its name carries your topic' };
+    const f = x.title ? fit(x.topics, x.title, x.df, x.docs) : 0;
+    if (f >= OFF_TOPIC) return { ok: true, why: 'its page matches your topics (' + Math.round(100 * f) + '%)' };
+    const tld = String(x.country_tld || '').toLowerCase();
+    if (tld.length === 2 && tld !== 'us' && d.endsWith('.' + tld)) return { ok: true, why: 'a site in your market (.' + tld + ')' };
+    return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
+  }
   return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
 let reqs = [], resps = []; try { reqs = $('LB Page Requests').all().map(i => i.json).filter(r => !r.skip); resps = $('Fetch LB Pages').all().map(i => i.json || {}); } catch (e) {}

@@ -357,17 +357,61 @@ const OK = (() => {
       ? 'a competing provider: their page sells what you sell (' + Math.round(share * 100) + '% of your service words, "' + signals.slice(0, 2).join('", "') + '")' : '';
   }
   // does a page name the business? Punctuation in a name ("Tech&") breaks \b, so every name is matched by its letter / digit runs with a
-  // little punctuation allowed between them, and the domain counts as a name too
+  // little punctuation allowed between them, and the domain counts as a name too.
+  // P34-2 (live 2026-10-12): "Tech&" collapses to the four-letter run "tech", which matched the plain word "tech" on three unrelated
+  // pages and claimed listings the site does not have — SaaSHub ("Tech Alternatives", 20x "tech", 0x "techand"), AlternativeTo and the
+  // UAE Ministry of Finance accredited-provider list. A name decides that on its own only when it is distinctive: the domain, or letter /
+  // digit runs of at least MIN_NAME_RUN characters. A shorter name is matched only with its own punctuation in place ("Tech&", "Tech &"),
+  // never as the bare letters, so the stripped-ampersand form is never evidence on its own. (Entities are decoded by LK.text first.)
+  const MIN_NAME_RUN = 5;
+  const reEsc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  function nameRe(n) {
+    const s = String(n || '').trim(); const runs = s.toLowerCase().match(/[a-z0-9]+/g) || [];
+    if (!runs.length) return null;
+    const isDomain = runs.length >= 2 && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(s);
+    if (isDomain || runs.join('').length >= MIN_NAME_RUN) return new RegExp('(^|[^a-z0-9])' + runs.join('[^a-z0-9]{0,3}') + '($|[^a-z0-9])', 'i');
+    if (!/[^a-z0-9\s]/i.test(s)) return null;   // four letters and nothing else: too common a word to claim anything by itself
+    return new RegExp('(^|[^a-z0-9])' + s.toLowerCase().split(/\s+/).map(reEsc).join('\\s*'), 'i');
+  }
   function namesUs(text, names) {
     const t = String(text || '');
-    for (const n of names) { const runs = String(n || '').toLowerCase().match(/[a-z0-9]+/g) || [];
-      if (!runs.length || runs.join('').length < 4) continue;
-      const re = new RegExp('(^|[^a-z0-9])' + runs.join('[^a-z0-9]{0,3}') + '($|[^a-z0-9])', 'i');
-      if (re.test(t)) return String(n); }
+    for (const n of (names || [])) { const re = nameRe(n); if (re && re.test(t)) return String(n); }
     return '';
   }
+  // ---- the cold link gap: who is never pitched when all we know is the domain (P34-4, live 2026-10-12) ----
+  // The full SEO report's "Link opportunities" told the owner to "reach out with a listing request, partnership or useful resource" to
+  // mof.gov.ae (a ministry you join by accreditation), backlinkcheckers.space and buyhighda.space (sites whose business is selling
+  // links). The Backlink Monitor refuses all three on the same data; this is the rule both of them use. The spam score is the link
+  // index's own 0-100 (DataForSEO `backlinks_spam_score`).
+  const SELLWORD = /(backlink|dofollow|link ?building|link ?farm|guest ?post|high ?da|seo ?link|buy ?link|authority ?link|link ?juice|link ?exchange|pbn)/i;
+  function noPitch(domain, o) {
+    const x = o || {}; const d = String(domain || '').toLowerCase().replace(/^www\./, '');
+    if (!d || !/\./.test(d)) return 'not a website';
+    if (isGov(d)) return 'a government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)';
+    const bad = badHost(d); if (bad) return bad;
+    if (LK.isWire(d)) return 'a press-release wire (' + d + '): a link there is a paid release, not an editorial link';
+    if (LK.isGambling(d)) return 'a gambling site (' + d + ')';
+    const name = d.replace(/\.[a-z.]{2,}$/, '').replace(/[.-]+/g, ' ');
+    if (SELLWORD.test(name)) return 'its own name offers links ("' + name.slice(0, 40) + '"): a site that sells links passes nothing on and risks a penalty';
+    if (Number(x.spam) >= 30) return 'a spam score of ' + Math.round(Number(x.spam)) + ' of 100 in the link index';
+    if (!x.accredited && accreditedList(String(x.title || '') + ' ' + name)) return 'a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one';
+    return '';
+  }
+  // and whether anything ties a bare domain to our topics: a topic word inside its own name, a title we know for it, or our own market's
+  // domain ending (the 25% rule the Link Builder applies to the page it fetches, OFF_TOPIC)
+  function gapTopic(domain, o) {
+    const x = o || {}; const d = String(domain || '').toLowerCase().replace(/^www\./, '');
+    const name = d.replace(/\.[a-z.]{2,}$/, '').replace(/[.-]+/g, ' ');
+    const topicStems = new Set(words(x.topics || '').map(stem).filter(w => w.length >= 4));
+    if (words(name).map(stem).some(w => topicStems.has(w))) return { ok: true, why: 'its name carries your topic' };
+    const f = x.title ? fit(x.topics, x.title, x.df, x.docs) : 0;
+    if (f >= OFF_TOPIC) return { ok: true, why: 'its page matches your topics (' + Math.round(100 * f) + '%)' };
+    const tld = String(x.country_tld || '').toLowerCase();
+    if (tld.length === 2 && tld !== 'us' && d.endsWith('.' + tld)) return { ok: true, why: 'a site in your market (.' + tld + ')' };
+    return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
+  }
   return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
 // ---- the "links you can add yourself" checklist (v4.13, LINK_BUILDER_SPEC.md §4; inlined by the build) ----
@@ -438,6 +482,21 @@ function listingsFor(kinds, iso, topicText, siteText) {
   return LISTINGS.filter(l => (K.some(k => l.kinds.includes(k)) || (l.kinds.includes('any') && !K.includes('local') && l.cat !== 'local')) && (!l.countries || !l.countries.length || l.countries.includes(String(iso || '').toUpperCase()))
     && (!l.topics || l.topics.test(topicText || '')) && (!l.integ || l.integ.test(siteText || '')));
 }
+// What a fetched listing page is allowed to claim (P34-2, live 2026-10-12): three listings came back "listed" when they were not —
+// SaaSHub and the UAE Ministry of Finance list because the brand "Tech&" matched the plain word "tech" (neither page contains
+// "techand"), AlternativeTo because a 403 bot wall was read as a profile found by search. A listing is claimed only on hard evidence:
+// a link to our host (linked), or the page naming us distinctively (listed; OK.namesUs decides what counts as a name). A blocked or
+// challenged page claims nothing — "unknown", never "listed" and never "missing" — and the caller keeps the last definite answer.
+// o: { blocked, status, links_us, rel, named, as_list, guessed, gone, url }
+function listingClaim(o) {
+  const x = o || {}; const where = x.as_list ? 'list' : 'profile';
+  if (x.blocked) return { status: 'unknown', evidence: 'the platform blocked this check' + (x.status ? ' (HTTP ' + x.status + ')' : '') + ': nothing can be read from it' };
+  if (x.links_us) return { status: 'linked', evidence: 'the ' + where + ' links to you' };
+  if (x.named) return { status: 'listed', evidence: 'the ' + where + ' names you ("' + String(x.named).slice(0, 40) + '") without a link' };
+  if (x.gone) return x.guessed ? { status: 'missing', evidence: 'no profile at ' + String(x.url || '') } : { status: 'unknown', evidence: 'the page we found is gone: check the platform' };
+  if (x.as_list) return { status: 'missing', evidence: 'the list does not name you' };
+  return { status: 'unknown', evidence: 'the page at ' + String(x.url || '') + ' does not name you: it may belong to another product, or your profile may use a different name' };
+}
 function siteKind(businessType, topicText) {   // the checklists that apply: a consultancy that also sells software gets both
   const t = String(businessType || '') + ' ' + String(topicText || '');
   if (/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)) return ['local'];
@@ -483,7 +542,7 @@ for (const p of plans) {
     country: o.country || '', language: o.language || '', target_url: o.target_url || '', target_reason: o.target_reason || '', anchor_hint: o.anchor_hint || '', sequence_json: o.sequence_json || '', deadline: o.deadline || '', drafted_at: o.drafted_at || '', checked_at: iso, request_id: p.request_id || '' });
   const newProspect = (o) => ({ site_id: sid, domain: p.domain, prospect_domain: o.prospect_domain, type: o.type, rank: o.rank || 0, spam_score: 0, detail: String(o.detail || '').slice(0, 300), source_url: o.page_url || '', target_url: o.target_url || '',
     status: 'new', first_seen: iso, last_seen: iso, won_at: '', outreach_subject: '', outreach_body: '', note: '', score: o.score || 0, origin: o.origin || 'link_builder', contact_email: (o.contacts || [])[0] ? o.contacts[0].email : '', contact_url: (o.contacts || [])[0] ? o.contacts[0].source_url || '' : '',
-    contacted_at: '', followup_step: 0, followup_subject: '', followup_body: '', verified_at: '' });
+    contacted_at: '', followup_step: 0, followup_subject: '', followup_body: '', verified_at: '', drafted_at: '' });   // the Link Builder's own sequence lives in seo_link_outreach; this row never carries a draft
   // ---- 1. journalist requests (Bluesky #journorequest): recent, on our topics, deadline not obviously past ----
   const press = [...posts.values()].filter(x => (!x.site_id || x.site_id === sid) && (now.getTime() - new Date(x.at).getTime()) / 864e5 <= 10)
     .map(x => ({ ...x, f: OK.fit(x.text, topicText + ' ' + p.topics.join(' '), df, docs.length) })).filter(x => x.f >= 0.34).sort((a, b) => b.f - a.f).slice(0, 3);
@@ -581,7 +640,7 @@ for (const p of plans) {
     const kind = siteKind(p.profile.business_type, p.topics.join(' '));
     for (const l of listingsFor(kind, p.country_iso, topicText, LK.text(selfHtml))) {
       const old = listingRows.find(y => y.site_id === sid && y.listing_id === l.id) || {};
-      let status = 'unknown', profile_url = '', rel = l.link, evidence = '';
+      let status = 'unknown', profile_url = '', rel = l.link, evidence = '', blocked_now = false;
       const led = myLedger.find(y => y.status !== 'lost' && (y.ref_domain === l.host || LK.sameSite(y.ref_domain, l.host) || LK.sameSite(l.host, y.ref_domain)) && (l.list ? LK.normUrl(y.from_url) === LK.normUrl(l.list) : l.re ? l.re.test(y.from_url || '') : true));   // the list page itself, the profile pattern, else the host
       if (led) { status = 'linked'; profile_url = led.from_url || ''; rel = led.rel || rel; evidence = 'their page links to you (link check)'; }
       const selfLink = l.re ? [...selfHtml.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map(m => m[1]).find(u => l.re.test(u)) || (selfHtml.match(new RegExp('"(https?:[^"]*' + l.host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[^"]*)"', 'i')) || [])[1] : '';
@@ -589,21 +648,29 @@ for (const p of plans) {
       const comps = [];
       for (const o of pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'comp_home')) { const h = htmlOf(o.x); if (l.re && [...h.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].some(m => l.re.test(m[1]))) comps.push(o.r.competitor); }
       for (const o of pagesRead.filter(o => o.r.site_id === sid && ((o.r.listing_id === l.id && (o.r.kind === 'listing_list' || o.r.kind === 'listing_profile')) || (l.list && o.r.kind === 'prospect' && LK.normUrl(o.r.url) === LK.normUrl(l.list))))) {   // a list page read as a prospect counts too
-        const h = htmlOf(o.x); const st = statusOf(o.x);
-        if (!h || LK.challenge(st, h)) { if (o.r.kind === 'listing_profile' && !o.r.guessed && status === 'unknown') { status = 'listed'; profile_url = o.r.url; evidence = 'found by search; the platform blocks checks: open it to confirm'; } continue; }
-        if (st === 404 || st === 410) { if (status === 'unknown' && o.r.guessed) { status = 'missing'; evidence = 'no profile at ' + o.r.url; } continue; }
-        const asList = o.r.kind === 'listing_list' || o.r.kind === 'prospect';
-        const v = LK.verify(o.x, p.domain, { url: o.r.url });
-        if (v.verify === 'found') { status = 'linked'; profile_url = o.r.url; rel = v.rel; evidence = asList ? 'the list links to you' : 'the profile links to you'; }
-        else if (OK.namesUs(LK.text(h), [p.brand, ...(p.brand_names || []), p.domain]) && status !== 'linked') { status = 'listed'; profile_url = o.r.url; evidence = asList ? 'the list names you without a link' : 'the profile names you'; }   // D13: "Tech&" has no word boundary after the ampersand
-        else if (status === 'unknown' && asList) { status = 'missing'; evidence = 'the list does not name you'; }
+        const h = htmlOf(o.x); const st = statusOf(o.x); const asList = o.r.kind === 'listing_list' || o.r.kind === 'prospect';
+        // P34-2 (live 2026-10-12): a page nobody could read claims nothing. A challenge, any 4xx that is not a 404 / 410 and any 5xx is
+        // "blocked": AlternativeTo answered 403 ("Just a moment…") and was reported "listed" because a search had found the URL.
+        const blocked = !h || LK.challenge(st, h) || (st >= 400 && st !== 404 && st !== 410);
+        const v = blocked ? { verify: 'blocked' } : LK.verify(o.x, p.domain, { url: o.r.url });
+        const claim = listingClaim({ blocked, status: st, links_us: v.verify === 'found', named: blocked ? '' : OK.namesUs(LK.text(h), [p.brand, ...(p.brand_names || []), p.domain]),
+          as_list: asList, guessed: !!o.r.guessed, gone: st === 404 || st === 410, url: o.r.url });   // OK.namesUs: a whole brand token or the domain, never "tech" for "Tech&"
+        if (blocked) { blocked_now = true;   // a URL a search found is still worth opening by hand — but it is not a listing until someone sees it
+          const found = o.r.kind === 'listing_profile' && !o.r.guessed;
+          if (found && !profile_url) profile_url = o.r.url;
+          if (status === 'unknown') evidence = found ? 'a profile was found by search (' + o.r.url + ') but the platform blocks checks' + (st ? ' (HTTP ' + st + ')' : '') + ': open it to confirm — it is not counted as a listing' : claim.evidence;
+          continue; }
+        if (claim.status === 'linked') { status = 'linked'; profile_url = o.r.url; rel = v.rel; evidence = claim.evidence; }
+        else if (claim.status === 'listed' && status !== 'linked') { status = 'listed'; profile_url = o.r.url; evidence = claim.evidence; }
+        else if (status === 'unknown' && claim.status === 'missing') { status = 'missing'; evidence = claim.evidence; }
+        else if (status === 'unknown') { evidence = evidence || claim.evidence; }
         if (asList) for (const c of p.competitors) if (h.toLowerCase().includes(c.toLowerCase()) && !comps.includes(c)) comps.push(c);
       }
       // D13: a platform that blocks this week's check keeps the last definite answer with the date it was checked — never a fresh "unknown"
       // (the Ministry of Finance list flipped from "missing" to "unknown" within one day, live 2026-10-11)
       if (status === 'unknown' && ['linked', 'listed', 'missing'].includes(String(old.status || ''))) {
         status = old.status; profile_url = profile_url || old.profile_url || '';
-        evidence = old.status + ' (checked ' + String(old.checked_at || '').slice(0, 10) + ') · the platform blocks checks now'; }
+        evidence = old.status + ' (checked ' + String(old.checked_at || '').slice(0, 10) + ')' + (blocked_now ? ' · the platform blocks checks now' : ' · nothing new could be read this week'); }
       if (['submitted', 'ignored'].includes(old.status) && !['linked', 'listed'].includes(status)) { status = old.status; }
       listing_rows.push({ site_id: sid, domain: p.domain, listing_id: l.id, name: l.name, category: l.cat, status, profile_url: profile_url || old.profile_url || '', rel: status === 'linked' ? rel : l.link, competitors: comps.join(', '), submit_url: l.submit || '',
         priority: l.prio + (comps.length ? -0.5 : 0), why: (evidence ? evidence + ' · ' : '') + l.why, checked_at: iso, submitted_at: old.submitted_at || '', note: old.note || '' });

@@ -157,6 +157,9 @@ export interface ProspectRow extends DtRow {
   /** v4.10: value x likelihood, where it came from, a contact found on the site, follow-up drafts, won only after the link was found */
   score: number | null; origin: string; contact_email: string; contact_url: string; contacted_at: string; followup_step: number | null;
   followup_subject: string; followup_body: string; verified_at: string;
+  /** P34-1 (2026-10-12): when the stored draft was written. Empty, or before DRAFT_GATES_AT, means it was written without the current
+   *  outreach gates: it is superseded and must not be offered (see prospectDraft in ./outreach). */
+  drafted_at: string;
 }
 /** v4.10: the link ledger — one row per site and referring site, merged from every source and checked on the linking page */
 export interface BacklinkRow extends DtRow {

@@ -3,6 +3,7 @@
 // follow-ups for prospects marked "contacted" with no link yet — follow-up 1 after 7 days, follow-up 2 (the last) after 14 (one e-mail
 // plus two follow-ups gets about twice the replies of a single e-mail; more than three does worse: Hunter 2026). Prospects that already
 // have a draft are skipped.
+/*__DRAFTS__*/
 const sites = $('Parse Backlinks').all().map(i => i.json);
 let existing = []; try { existing = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}
 const days = (d) => d ? (Date.now() - new Date(d).getTime()) / 864e5 : -1;
@@ -11,9 +12,10 @@ for (const s of sites) {
   if (s.free_only) continue;   // free sources only: no Claude drafts (the prospects are still listed)
   if (s.link_builder) continue;   // v4.13: the Link Builder qualifies, picks our page and drafts the whole sequence (one writer)
   const mine = existing.filter(x => x.site_id === s.site_id);
-  const aiSources = mine.filter(x => x.type === 'ai_source' && !x.outreach_body && (x.status || 'new') === 'new').map(x => ({ prospect_domain: x.prospect_domain, type: 'ai_source', rank: Number(x.rank) || 0, score: Number(x.score) || 20, detail: x.detail, source_url: '', target_url: '' }));
+  const noDraft = (x) => !x.outreach_body || DRAFTS.superseded(x);   // P34-1: a draft withdrawn as superseded may be written again, properly, this run
+  const aiSources = mine.filter(x => x.type === 'ai_source' && noDraft(x) && (x.status || 'new') === 'new').map(x => ({ prospect_domain: x.prospect_domain, type: 'ai_source', rank: Number(x.rank) || 0, score: Number(x.score) || 20, detail: x.detail, source_url: '', target_url: '' }));
   const fresh = s.mode === 'full' ? [...s.candidates.filter(c => c.type !== 'reclaim'), ...aiSources]
-    .filter(c => { const e = mine.find(x => x.prospect_domain === c.prospect_domain && x.type === c.type); return !e || (!e.outreach_body && (e.status || 'new') === 'new'); })
+    .filter(c => { const e = mine.find(x => x.prospect_domain === c.prospect_domain && x.type === c.type); return !e || (noDraft(e) && (e.status || 'new') === 'new'); })
     .filter((c, i, a) => a.findIndex(x => x.prospect_domain === c.prospect_domain) === i)
     .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0)).slice(0, 8) : [];
   const linking = new Set(s.refdomains || []);

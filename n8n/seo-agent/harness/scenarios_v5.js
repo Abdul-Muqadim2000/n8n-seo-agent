@@ -1084,7 +1084,7 @@ await guard('ai visibility', async () => {
     'run_kind', 'samples', 'visibility_score', 'mention_lo', 'mention_hi', 'sentiment_score', 'accuracy_issues', 'ai_sessions', 'ai_conversions', 'ai_revenue', 'index_sov', 'ai_impressions', 'perception_json', 'traffic_json', 'access_json', 'index_json', 'clusters_json'];
   const PRC = ['prompt_id', 'site_id', 'domain', 'prompt', 'kind', 'topic', 'keyword', 'source', 'status', 'created_at', 'stage', 'cluster', 'volume', 'origin', 'updated_at'];
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
-    'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at'];   // v4.10 columns kept by the AI tracker since v4.12
+    'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // v4.10 columns kept by the AI tracker since v4.12; drafted_at since P34-1
   const CACHE = ['key', 'kind', 'site_id', 'value', 'updated_at'];
   const sitesGa4 = () => M.sites().map(s => ({ json: { ...s.json, ga4_property_id: '543096312' } }));
   const gsc = [{ json: { site_id: M.SITE, domain: M.DOMAIN, query: 'which e invoicing provider is best for distributors in the uae', impressions: 120, clicks: 3, position: 14, checked_at: new Date().toISOString() } }, { json: { site_id: M.SITE, domain: M.DOMAIN, query: 'odoo uae', impressions: 900, clicks: 40, position: 4, checked_at: new Date().toISOString() } }];
@@ -1223,7 +1223,7 @@ await guard('backlinks', async () => {
   const SNAP = ['site_id', 'domain', 'checked_at', 'mode', 'rank', 'backlinks', 'referring_domains', 'referring_domains_nofollow', 'spam_score', 'broken_backlinks', 'new_links', 'lost_links', 'important_lost', 'spammy_new', 'lost_json', 'new_json', 'competitors_json', 'timeseries_json', 'cost_usd',
     'union_domains', 'best_links', 'verified_live', 'at_risk', 'confirmed_lost', 'referral_visits', 'referral_key_events', 'coverage_json', 'anchors_json', 'pages_json', 'values_json'];   // v4.10
   const PROS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',
-    'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at'];   // v4.10
+    'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // v4.10; drafted_at since P34-1
   const loadAll = (o = {}) => { mock('Load Sites', M.sites()); mock('Load Ladders', M.ladders()); mock('Load Monitors', o.monitors || M.monitors()); mock('Load Profiles', M.profiles()); mock('Load Backlink Snapshots', o.snaps || [{ json: {} }]); mock('Load Link Prospects', o.prospects || [{ json: {} }]);
     mock('Load Content Log', [{ json: { site_id: M.SITE, domain: M.DOMAIN, keyword: 'erp for distributors', published_url: 'https://northwind-erp.com/erp-for-distributors/', status: 'published' } }]); mock('Load Case Studies', [{ json: { case_id: 'cs_1', site_id: M.SITE, title: 'Gulf Fresh Foods: Odoo', page_url: 'https://northwind-erp.com/case-studies/gulf-fresh/' } }]); };
   // an existing prospect that now links (won) and an AI-source prospect without a draft
@@ -2350,7 +2350,7 @@ await guard('backlinks v4.10', async () => {
   check('contacts: the editor address on the site (noreply skipped)', gp.contact_email === 'editor@gulfbiz.ae', JSON.stringify(gp));
   mock('Outreach Writer', [B.writer(oi[0].json)]);
   const prw = await run('Prospect Rows', store['Outreach Writer']); const PR = prw.map(r => r.json); const PRO = (d, t) => PR.find(r => r.prospect_domain === d && (!t || r.type === t)) || {};
-  const PCOLS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note', 'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at'];
+  const PCOLS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note', 'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];   // drafted_at: P34-1
   check('pipeline rows: exact columns; contact stored; follow-up 1 drafted for the contacted prospect; erpnews.ae won and verified on the page', same2(Object.keys(PR[0]), PCOLS) && PRO('gulfbiz.ae', 'mention').contact_email === 'editor@gulfbiz.ae' && PRO('peppolnews.com').followup_step === 1 && /^Re: /.test(PRO('peppolnews.com').followup_subject) && PRO('erpnews.ae').status === 'won' && !!PRO('erpnews.ae').verified_at && PRO('erpnews.ae').note === 'pitched the guide', JSON.stringify([PRO('peppolnews.com'), PRO('erpnews.ae')].map(r => [r.status, r.followup_step, r.verified_at, r.note])));
   mock('Save Prospects', prw);
   const LCOLS = ['site_id', 'domain', 'ref_domain', 'kind', 'from_url', 'to_url', 'anchor', 'anchor_kind', 'rel', 'placement', 'link_type', 'relevance', 'note', 'sources', 'source_count', 'first_seen', 'last_seen', 'status', 'lost_at', 'lost_reason', 'miss_count', 'verify', 'verified_at', 'noindex', 'canonical_elsewhere', 'outbound', 'page_title', 'context', 'authority', 'dr', 'cc_rank', 'page_keywords', 'spam_score', 'original', 'sitewide', 'links', 'visits', 'key_events', 'ai_cited', 'seo_value', 'referral_value', 'brand_value', 'updated_at'];
@@ -2765,7 +2765,7 @@ await guard('link builder', async () => {
   check("a competitor's dead page (DataForSEO): new prospect, the dead link quoted, our guide on accredited providers as the replacement; the casino site refused", O('erpinsights.ae', 'broken').status === 'ready' && O('erpinsights.ae').target_url === F.GUIDE && /accredited Peppol providers/.test(O('erpinsights.ae').evidence) && O('casino-links.biz').status === 'not_fit' && AS.prospect_rows.some(x => x.prospect_domain === 'erpinsights.ae' && x.type === 'broken' && x.status === 'new') && !AS.prospect_rows.some(x => x.prospect_domain === 'casino-links.biz'), JSON.stringify([O('erpinsights.ae'), O('casino-links.biz').fit_reason]));
   check('our old URL from the Wayback Machine that now answers 404 → a redirect row (one row per URL), to the closest live page', AS.fixes.length === 1 && AS.fixes[0].from === 'https://techand.ai/capabilities/data' && AS.outreach_rows.some(o => o.type === 'redirect' && o.prospect_domain === 'techand.ai/capabilities/data' && o.status === 'fix'), JSON.stringify(AS.fixes));
   const LS = (id) => AS.listing_rows.find(l => l.listing_id === id) || {};
-  check('listings: the MoF list (real page) is missing with ClearTax and Azentio on it; LinkedIn listed (our homepage links it); SaaSHub missing (its page 404s); Crunchbase found by search behind a bot wall = listed, to confirm; G2 stays "submitted"; Azentio is on G2', LS('mof_asp').status === 'missing' && /cleartax\.com/.test(LS('mof_asp').competitors) && /azentio\.com/.test(LS('mof_asp').competitors) && ['listed', 'linked'].includes(LS('linkedin').status) && LS('saashub').status === 'missing' && LS('crunchbase').status === 'listed' && /confirm/.test(LS('crunchbase').why) && LS('g2').status === 'submitted' && /azentio/.test(LS('g2').competitors), JSON.stringify(AS.listing_rows.map(l => [l.listing_id, l.status, l.competitors])));
+  check('listings: the MoF list (real page) is missing with ClearTax and Azentio on it; LinkedIn listed (our homepage links it); SaaSHub missing (its page 404s); Crunchbase found by search behind a bot wall = unknown with the URL to open (P34-2: never "listed"); G2 stays "submitted"; Azentio is on G2', LS('mof_asp').status === 'missing' && /cleartax\.com/.test(LS('mof_asp').competitors) && /azentio\.com/.test(LS('mof_asp').competitors) && ['listed', 'linked'].includes(LS('linkedin').status) && LS('saashub').status === 'missing' && LS('crunchbase').status === 'unknown' && /open it to confirm/.test(LS('crunchbase').why) && /not counted as a listing/.test(LS('crunchbase').why) && LS('g2').status === 'submitted' && /azentio/.test(LS('g2').competitors), JSON.stringify(AS.listing_rows.map(l => [l.listing_id, l.status, l.competitors])));
   check('listings: only what fits — UAE entries for a UAE site, no local-business entries for an e-invoicing consultancy, no marketplace without the integration on the site', LS('yellowpages_uae').listing_id && !LS('google_business').listing_id && !LS('odoo_apps').listing_id, JSON.stringify(AS.listing_rows.map(l => l.listing_id)));
   const IM = (d) => AS.impact_rows.find(x => x.ref_domain === d) || {};
   check('impact: peppol.org (live 80 days) → the homepage moved 9 positions while the other pages moved ~1: "likely helped", with the control; the link found 20 days ago is "too early"', IM('peppol.org').weeks >= 11 && IM('peppol.org').page_change > 8 && Math.abs(IM('peppol.org').control_change) <= 1.5 && IM('peppol.org').verdict === 'likely_helped' && IM('gulfbiz.ae').verdict === 'too_early' && !IM('erpdir.ae').ref_domain && !IM('onvaxs.com').ref_domain, JSON.stringify(AS.impact_rows));   /* erpdir.ae was there when tracking began: no t0; onvaxs.com is a link-farm page (D3): no impact row, and not a link for the links-per-page count (rds above) */
@@ -2844,8 +2844,8 @@ await guard('link builder', async () => {
   check('D13: every target is on the canonical host — the ladder page stored on www is emitted on the bare host, and no page of ours carries www',
     D13.P.pages.some(x => x.url === F.SERVICE) && !D13.P.pages.some(x => /\/\/www\./.test(x.url)) && !D13.AS.outreach_rows.some(o => /\/\/www\.techand/.test(o.target_url)), JSON.stringify(D13.P.pages.map(x => x.url)));
   const LS2 = (id) => D13.AS.listing_rows.find(l => l.listing_id === id) || {};
-  check('D13: a listing that was definitely missing keeps that answer with the date it was checked when the platform now blocks the check (never a fresh "unknown")',
-    LS2('trustradius').status === 'missing' && /missing \(checked \d{4}-\d{2}-\d{2}\)/.test(LS2('trustradius').why) && /blocks checks now/.test(LS2('trustradius').why), JSON.stringify(LS2('trustradius')));
+  check('D13: a listing that was definitely missing keeps that answer with the date it was checked when nothing can be read this week (never a fresh "unknown"; P34-2 says in the line whether the platform blocked the check or nothing new could be read)',
+    LS2('trustradius').status === 'missing' && /missing \(checked \d{4}-\d{2}-\d{2}\)/.test(LS2('trustradius').why) && /nothing new could be read this week/.test(LS2('trustradius').why), JSON.stringify(LS2('trustradius')));
   // the business name: no profile row, the name from the site model (the homepage's og:site_name / Organization name, stored by the Site Tracker)
   const D13b = await pass({ sites: F.sites({ business_name: 'Tech&' }), profiles: [] });
   check('D13: with no business profile the pitches are signed with the name from the site model ("Tech&"), never the domain label ("techand")',
@@ -2906,7 +2906,8 @@ await guard('S31 D1 D7', async () => {
   check('refused reservations do not spend the budget', !err(rB3) && rB3[0].json.ai_budget_used_est_usd === row.est_usd, JSON.stringify([err(rB3), rB3[0].json.ai_budget_used_est_usd]));
   const prior = Number(today.slice(8, 10)) > 1 ? today.slice(0, 8) + '01T00:00:00.000Z' : null;
   if (prior) {
-    ledgerReset(ledgerFixture('other@example.com', 1, 'keyword', 6, prior)); const rM = await ledgerRun(IN({ ai_budget_period: 'month' })); const rD = await ledgerRun(IN({ ai_budget_period: 'day' }));
+    // P34-5: the earlier run has to be a settled row — a reservation from earlier in the month that nobody settled is released as stale (S51)
+    ledgerReset(ledgerFixture('other@example.com', 1, 'keyword', 6, prior).map(r => ({ ...r, status: 'done', settled_usd: 6 }))); const rM = await ledgerRun(IN({ ai_budget_period: 'month' })); const rD = await ledgerRun(IN({ ai_budget_period: 'day' }));
     check('a $6 run earlier this month: refused with a monthly budget, ignored by a daily one', /used up/.test(err(rM)) && !err(rD), JSON.stringify([err(rM), err(rD)]));
   } else console.log('   (1st of the month: the month-vs-day period check needs an earlier day; skipped)');
   // ---------- D. the other keys and caps, unchanged ----------
@@ -5824,6 +5825,290 @@ await guard('S49', async () => {
   check('the competitor\'s own referring sites are untouched: no farm label among the 14 (a 24-28 index spam score, a listicle host and a .club are all left genuine)', !L.farms.some(f => /^cleartax\.com/.test(f)), JSON.stringify(L.farms));
   save('accuracy-scores.json', { audit_findings: { cases: A.cases, precision: A.precision, useful_precision: A.useful_precision, main_useful_precision: A.main_useful_precision, recall: A.recall, tp: A.tp, fp: A.fp, fn: A.fn, suppressed: A.tn, cosmetic: A.cosmetic_emitted + A.cosmetic_suppressed, folded: A.folded, folded_cosmetic: A.folded_cosmetic, per_site: Object.fromEntries(Object.entries(A.per_site).map(([k, v]) => [k, { emitted: v.emitted, tp: v.tp, fp: v.fp, cosmetic: v.cosmetic_emitted, suppressed: v.tn, precision: v.precision, minor_count: v.minor_count, folded_keys: v.folded_keys.length, main_useful_precision: v.main_useful_precision }])) }, spam_labels: { cases: L.cases, precision: L.precision, recall: L.recall, tp: L.tp, fp: L.fp, fn: L.fn, genuine: L.tn, best_link_precision: L.best_link_precision, best_links: L.best_seo, best_link_wrong: L.best_link_wrong }, measured_at: r.generated_at });
 });
+
+
+// ===================================================================================
+// S51 P34-1..P34-6 (2026-10-12, docs/system-review-2026-10-11/LIVE_CHECK_phase34_2026-10-12.md §3): the six defects the Phase 3 + 4
+// live check found in features whose harness scenarios were green. Each check here fails against the code of that run:
+//   P34-1 AI Growth reported "8 outreach draft(s) written" and printed the stored pitch to tax.gov.ae of 2026-10-02 — written before
+//         the D12 / D13 gates — because the count and the draft came off the prospect row, not from this run's writer.
+//   P34-2 the brand "Tech&" collapsed to the token "tech", so SaaSHub ("Tech Alternatives", 0x "techand"), AlternativeTo (a 403 bot
+//         wall) and the UAE Ministry of Finance accredited-provider list were all reported "listed".
+//   P34-3 `min_facts: 2` was met by Country + the services read off the site, so with an empty business profile the report still said
+//         "nothing that contradicts your business facts" about a "Dubai-based" description nothing on file could judge.
+//   P34-4 the full SEO report's link gap recommended pitching mof.gov.ae, backlinkcheckers.space and buyhighda.space.
+//   P34-5 two 200-page audits of one site were killed by the task runner and their ledger rows held $0.77 of the budget for ever.
+//   P34-6 the AI Visibility Tracker and the Backlink Monitor called the business "techand.ai": the name came from seo_profiles only.
+// ===================================================================================
+await guard('phase 3+4 live defects', async () => {
+  reset(); const SN = 'S51 P34-1..P34-6 — only this run\'s outreach drafts are counted and offered, a whole brand token (and a readable page) before a listing is claimed, a fact check that needs facts on file, the full report\'s link gap gated like the Link Builder\'s, a released reservation and one heavy crawl per site, the business name from the site model';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 600))); };
+  const M = require('./fixtures_monitors'); const LB = require('./fixtures_lb413'); const TC = require('./table_cols.json');
+  const same2 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+  const J = (x) => { try { return JSON.parse(x || ''); } catch (e) { return null; } };
+  const ago = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  const hoursAgo = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+  const NOW = new Date().toISOString(), TODAY = NOW.slice(0, 10);
+
+  // ---------- P34-1: only the drafts this run wrote are counted, and a pre-gate draft is withdrawn ----------
+  const D = M.DOMAIN, SITE = M.SITE, WWW = 'https://www.' + D;
+  const earnedPage = (title, body) => ({ json: { statusCode: 200, headers: { 'content-type': 'text/html' }, data: '<html><head><title>' + title + '</title></head><body>' + body + '</body></html>' } });
+  const LIST = { url: 'https://gulfnews.com/business/best-e-invoicing-providers-uae-2026-1.501', host: 'gulfnews.com', kind: 'list', citations: 3, engines: ['chatgpt', 'gemini', 'ai_mode'], questions: ['Which companies help UAE businesses with e-invoicing?'], title: 'Best e-invoicing providers in the UAE for 2026' };
+  const GOV = { url: 'https://tax.gov.ae/en/content/uae.einvoicing.aspx', host: 'tax.gov.ae', kind: 'article', citations: 2, engines: ['chatgpt', 'ai_mode'], questions: ['Who are the accredited e-invoicing providers in the UAE?'], title: 'UAE e-invoicing' };
+  // the two rows the live run carried: drafts written on 2026-10-02, before the gates, with no `drafted_at` at all
+  const PRE_SUBJECT = 'A resource suggestion for your readers', PRE_BODY = 'Offering practical input on UAE e-invoicing. I work at techand.ai. Your site appears in AI assistant answers (ChatGPT, Perplexity …)';
+  const preRow = (host) => ({ json: { site_id: SITE, domain: D, prospect_domain: host, type: 'ai_source', status: 'new', first_seen: ago(10), last_seen: ago(10), detail: 'AI cites this list 2x', source_url: host === GOV.host ? GOV.url : LIST.url, outreach_subject: PRE_SUBJECT, outreach_body: PRE_BODY, note: 'official source: ask to be listed', origin: 'ai_growth', score: 40, drafted_at: '' } });
+  const growthPlan = (o = {}) => [{ json: { site_id: SITE, domain: D, site_host: 'www.' + D, business_name: 'Tech&', email: '', callback_url: '', request_id: '', on_demand: false, run_id: 'grow_x', checked_at: NOW,
+    country: 'United Arab Emirates', ai_pages_month: 2, link_builder: o.link_builder !== false, brand_names: [D, 'Tech&'], competitors: ['cleartax.com', 'azentio.com'], services: ['e-invoicing integration', 'ERP implementation'],
+    accreditation: '', profile: { business_type: 'ERP and e-invoicing consultancy', city: 'Dubai' }, earned: o.earned || [LIST, GOV], earned_fetch: (o.earned || [LIST, GOV]).map(e => e.url),
+    key_pages: [], stored_pages: [], targets: [], previous: null, previous_entity: null, indexnow_key: 'a'.repeat(32), indexnow_new: false, indexnow_verified_at: '' } }];
+  const growthPass = async (o = {}) => {
+    for (const n of ['AI Readiness', 'Bing Submit Requests', 'Submit to Bing', 'Bing Growth Requests', 'IndexNow Key Requests', 'Fetch IndexNow Key', 'IndexNow Requests', 'Submit IndexNow', 'Entity Requests', 'Fetch Wikidata', 'AI Outreach Writer']) delete store[n];
+    const plan = growthPlan(o);
+    mock('Growth Plan', plan);
+    mock('Load Link Prospects (Growth)', o.prospects || [preRow(LIST.host), preRow(GOV.host)]);
+    const er = await run('Earned Requests', plan);
+    mock('Fetch Cited Pages', er.map(r => /tax\.gov/.test(r.json.url)
+      ? earnedPage('UAE e-invoicing', '<p>The Federal Tax Authority publishes the list of accredited service providers.</p>')
+      : earnedPage('Best e-invoicing providers in the UAE for 2026', '<p>1. ClearTax 2. Zoho Books. <a href="mailto:editor@gulfnews.com">Write to the editor</a></p>')));
+    const em = (await run('Earned Media', store['Fetch Cited Pages']))[0].json;
+    const oi = (await run('AI Outreach Input', store['Earned Media']))[0].json;
+    if (o.writer) mock('AI Outreach Writer', [{ json: { output: { drafts: (em.outreach_jobs || []).map(j => ({ n: j.n, subject: 'A note on "' + String(j.title || j.prospect_domain).slice(0, 40) + '"', body: 'Hello, I read your page this morning. Our guide on the same subject is here: ' + WWW + '/e-invoicing-uae/. Sara Khan, Tech&' })) } } }]);
+    const gm = (await run('Growth Metrics', o.writer ? store['AI Outreach Writer'] : store['Earned Media']))[0].json;
+    mock('Growth Metrics', [{ json: gm }]);
+    const rep = (await run('Growth Report', [{ json: { id: 1, site_id: SITE } }]))[0].json;
+    const rows = (await run('Growth Prospect Rows', [{ json: gm }])).map(r => r.json);
+    return { em, oi, gm, rep, rows, row: (h) => em.prospect_rows.find(r => r.prospect_domain === h) || {}, out: (h) => rows.find(r => r.prospect_domain === h) || {} };
+  };
+  const ON = await growthPass();
+  console.log('   P34-1 hand-over ->', JSON.stringify({ drafts_written: ON.gm.drafts_written, handed_over: ON.gm.handed_over, bodies: ON.em.prospect_rows.map(r => [r.prospect_domain, r.outreach_body.length, r.drafted_at]) }));
+  check('P34-1: a stored draft from before the gates is withdrawn — the row carries no subject, no body and no date, and its note says the pitch was withdrawn (live: a tax.gov.ae pitch signed "techand.ai", written 2026-10-02)',
+    ON.row(GOV.host).outreach_body === '' && ON.row(GOV.host).outreach_subject === '' && ON.row(GOV.host).drafted_at === '' && /Link Builder writes to them/.test(ON.row(GOV.host).note),
+    JSON.stringify([ON.row(GOV.host).outreach_body, ON.row(GOV.host).note]));
+  check('P34-1: with the Link Builder on nothing is drafted here, so the report counts 0 drafts and says the prospects were handed over — never "8 outreach draft(s) written"',
+    ON.gm.drafts_written === 0 && ON.gm.handed_over === 2 && ON.oi.skip === true && !/outreach draft\(s\) written/.test(ON.rep.html) && /handed to the Link Builder/.test(ON.rep.html),
+    JSON.stringify({ drafts: ON.gm.drafts_written, handed: ON.gm.handed_over, done: ON.rep.html.slice(ON.rep.html.indexOf('Done for you'), ON.rep.html.indexOf('Done for you') + 600) }));
+  check('P34-1: the withdrawn pitch is in nothing the owner sees — not in the earned list, not in the actions, not in the report, not in the stored row',
+    !ON.em.earned.some(e => e.draft) && !ON.gm.earned.some(e => e.draft) && !ON.gm.actions.some(a => a.draft) && !ON.rep.html.includes(PRE_SUBJECT) && !ON.rep.html.includes('I work at techand.ai') && !ON.rows.some(r => r.outreach_body),
+    JSON.stringify(ON.gm.earned.map(e => [e.host, !!e.draft])));
+  check('P34-1: the stored rows keep the seo_link_prospects columns exactly, with drafted_at', ON.rows.length >= 2 && ON.rows.every(r => same2(Object.keys(r), TC.PROSPECT)), JSON.stringify(Object.keys(ON.rows[0] || {})));
+  const OFF = await growthPass({ link_builder: false, writer: true });
+  console.log('   P34-1 own writer ->', JSON.stringify({ jobs: OFF.em.outreach_jobs.map(j => j.prospect_domain), drafts_written: OFF.gm.drafts_written }));
+  check('P34-1: with the Link Builder off this run\'s own drafts are counted, stamped with the date they were written, and they are the ones the report prints',
+    OFF.gm.drafts_written >= 1 && OFF.gm.earned.filter(e => e.draft).length === OFF.gm.drafts_written && OFF.out(LIST.host).drafted_at.slice(0, 10) === TODAY
+    && /1 outreach draft\(s\) written|outreach draft\(s\) written/.test(OFF.rep.html) && OFF.rep.html.includes('Sara Khan, Tech&') && !OFF.rep.html.includes(PRE_BODY),
+    JSON.stringify([OFF.gm.drafts_written, OFF.out(LIST.host).drafted_at, OFF.gm.earned.map(e => [e.host, !!e.draft])]));
+  check('P34-1: the government page is never drafted to, with or without the Link Builder (D12 stays fixed), and a withdrawn row is not re-drafted behind the gate',
+    !OFF.em.outreach_jobs.some(j => /\.gov(\.|$)/.test(j.prospect_domain)) && /government site/.test(OFF.row(GOV.host).note) && OFF.row(GOV.host).outreach_body === '',
+    JSON.stringify([OFF.em.outreach_jobs.map(j => j.prospect_domain), OFF.row(GOV.host).note]));
+  const KEPT = await growthPass({ link_builder: false, prospects: [{ json: { ...preRow(LIST.host).json, outreach_subject: 'A note on your list', outreach_body: 'Hello, I read your list this morning. Sara Khan, Tech&', drafted_at: NOW } }, { json: { ...preRow(GOV.host).json, status: 'contacted', contacted_at: ago(9) } }] });
+  check('P34-1: a draft written under the current rules is kept as it is, and a draft that was already sent (the prospect is contacted) is never withdrawn — it is the record the follow-ups build on',
+    KEPT.row(LIST.host).outreach_body === 'Hello, I read your list this morning. Sara Khan, Tech&' && KEPT.row(LIST.host).drafted_at === NOW
+    && KEPT.row(GOV.host).outreach_body === PRE_BODY && KEPT.row(GOV.host).status === 'contacted',
+    JSON.stringify([KEPT.row(LIST.host).drafted_at, KEPT.row(GOV.host).status, KEPT.row(GOV.host).outreach_body.slice(0, 40)]));
+  // the Backlink Monitor carries the same rows (live run 476 re-wrote two government portals with their old subject)
+  reset();
+  const blSite = (o = {}) => [{ json: { site_id: SITE, domain: D, checked_at: NOW, link_builder: false, candidates: [{ prospect_domain: 'gulfnews.com', type: 'mention', origin: 'web', rank: 300, spam_score: 0, score: 55, detail: 'Mentions you without a link', source_url: LIST.url, target_url: WWW + '/' }], ledger_rows: [], refdomains: [], ...o } }];
+  mock('Parse Backlinks', blSite());
+  mock('Load Link Prospects', [{ json: { site_id: SITE, domain: D, prospect_domain: 'gulfnews.com', type: 'mention', status: 'new', outreach_subject: PRE_SUBJECT, outreach_body: PRE_BODY, note: '', first_seen: ago(10), last_seen: ago(10), drafted_at: '' } },
+    { json: { site_id: SITE, domain: D, prospect_domain: 'mof.gov.ae', type: 'gap', status: 'new', outreach_subject: PRE_SUBJECT, outreach_body: PRE_BODY, note: '', first_seen: ago(10), last_seen: ago(10), drafted_at: '' } }]);
+  mock('Outreach Input', [{ json: { skip: true } }]); mock('Outreach Writer', [{ json: {} }]);
+  const blRows = (await run('Prospect Rows', store['Parse Backlinks'])).map(r => r.json);
+  const blRow = (h) => blRows.find(r => r.prospect_domain === h) || {};
+  check('P34-1: the Backlink Monitor withdraws the same pre-gate drafts instead of re-writing the row with their old subject (live run 476 refreshed two government pitches), and the rows keep the exact columns',
+    blRows.length === 2 && blRow('gulfnews.com').outreach_body === '' && blRow('mof.gov.ae').outreach_body === '' && blRow('mof.gov.ae').outreach_subject === ''
+    && /written before the current outreach rules/.test(blRow('mof.gov.ae').note) && blRows.every(r => same2(Object.keys(r), TC.PROSPECT)),
+    JSON.stringify(blRows.map(r => [r.prospect_domain, r.outreach_subject, r.note.slice(0, 50)])));
+
+  // ---------- P34-2: a whole brand token, and a page somebody could read, before a listing is claimed ----------
+  reset();
+  const lbLoads = (o = {}) => { mock('Load Sites', LB.sites()); mock('Load Ladders', LB.ladders()); mock('Load Monitors', LB.monitors()); mock('Load Profiles', o.profiles || [{ json: { ...LB.profiles()[0].json, business_name: 'Tech&' } }]);
+    mock('Load Link Prospects', LB.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', LB.outreachPrev().map(j => ({ json: j }))); mock('Load Listings', o.listings || [{ json: {} }]); mock('Load Link Impact', [{ json: {} }]);
+    mock('Load Backlinks', LB.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', LB.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]); mock('Load AI Targets', LB.targets().map(j => ({ json: j })));
+    mock('Load Query History', LB.queries().map(j => ({ json: j }))); mock('Load Rank History', LB.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', LB.cache().map(j => ({ json: j }))); delete store['Manual Run']; };
+  // the three pages of the live run: a profile and a list full of the word "tech" and no "techand", and a bot wall
+  const SAASHUB = '<html><head><title>Tech Alternatives - SaaSHub</title></head><body><h1>Tech</h1>' + '<p>Tech is a software tool. Tech alternatives and competitors: compare Tech with other tech products. </p>'.repeat(10) + '</body></html>';
+  const WALL = '<html><head><title>Just a moment...</title></head><body>Enable JavaScript and cookies to continue</body></html>';
+  const mofPage = (named) => '<html><head><title>eInvoicing Accredited Service Providers (ASPs) | Ministry of Finance</title></head><body><h1>Accredited service providers</h1>'
+    + '<p>The following providers are accredited: ClearTax, Azentio, Cygnet' + (named ? ', Tech&amp; Information Technology LLC' : '') + '. Each provider has passed the technical onboarding.</p>'
+    + '<p>More tech information for taxpayers using any tech provider.</p></body></html>';
+  const lbPass = async (o = {}) => {
+    lbLoads(o);
+    const P = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+    const SR = (await run('LB Source Requests', [{ json: P }])).map(r => r.json);
+    mock('Fetch LB Sources', SR.map(r => r.kind === 'press' ? LB.bsky([]) : r.kind === 'wayback' ? LB.cdx()
+      : r.kind === 'listing_search' ? LB.searx(r.listing_id === 'alternativeto' ? ['https://alternativeto.net/software/optimizer/'] : []) : LB.searx([])));
+    const DR = (await run('LB DFS Requests', [{ json: P }])).map(r => r.json);
+    mock('Run LB DFS', DR.map(() => LB.dfsBroken()));
+    const PR = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
+    const pageFor = (r) => {
+      if (r.listing_id === 'saashub') return { statusCode: 200, headers: {}, data: SAASHUB };
+      if (r.listing_id === 'alternativeto') return { statusCode: 403, headers: {}, data: WALL };
+      if (r.listing_id === 'mof_asp') return { statusCode: 200, headers: {}, data: mofPage(!!o.named) };
+      if (r.listing_id === 'openpeppol') return { statusCode: 200, headers: {}, data: '<html><head><title>Peppol certified service providers</title></head><body><ul><li><a href="https://www.techand.ai/">Tech&amp;</a></li><li>ClearTax</li></ul></body></html>' };
+      return LB.fetchPage(r.url);
+    };
+    mock('Fetch LB Pages', PR.map(pageFor));
+    const S2 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json);
+    mock('Fetch LB Second', S2.map(r => LB.fetchPage(r.url)));
+    const AS = (await run('LB Assemble', [{ json: {} }]))[0].json;
+    return { P, PR, AS, L: (id) => AS.listing_rows.find(l => l.listing_id === id) || {} };
+  };
+  const T1 = await lbPass();
+  console.log('   P34-2 listings ->', JSON.stringify(T1.AS.listing_rows.map(l => [l.listing_id, l.status, l.why.slice(0, 70)])));
+  check('P34-2: the guessed SaaSHub profile (the slug of "Tech&" is "tech") answers with a page full of the word "tech" and no link to us — it is NOT "listed", and the line says the page may belong to another product',
+    T1.PR.some(r => r.listing_id === 'saashub' && /saashub\.com\/tech$/.test(r.url)) && T1.L('saashub').status !== 'listed' && T1.L('saashub').status === 'unknown' && /does not name you/.test(T1.L('saashub').why),
+    JSON.stringify([T1.PR.filter(r => r.listing_id === 'saashub').map(r => r.url), T1.L('saashub')]));
+  check('P34-2: the UAE Ministry of Finance list is "missing" again — the real page has "tech" 11 times and "techand" never (the live run reported the owner accredited)',
+    T1.L('mof_asp').status === 'missing' && /the list does not name you/.test(T1.L('mof_asp').why),
+    JSON.stringify(T1.L('mof_asp')));
+  check('P34-2: a 403 bot wall stays "unknown" with the URL to open by hand — never "listed", never "missing" (AlternativeTo answered "Just a moment…")',
+    T1.L('alternativeto').status === 'unknown' && /blocks checks \(HTTP 403\)/.test(T1.L('alternativeto').why) && /open it to confirm/.test(T1.L('alternativeto').why) && /not counted as a listing/.test(T1.L('alternativeto').why)
+    && T1.L('alternativeto').profile_url === 'https://alternativeto.net/software/optimizer/',
+    JSON.stringify(T1.L('alternativeto')));
+  check('P34-2: a genuine listing still passes — the OpenPeppol members list links our canonical host, so it is "linked"',
+    T1.L('openpeppol').status === 'linked' && /links to you/.test(T1.L('openpeppol').why), JSON.stringify(T1.L('openpeppol')));
+  const T2 = await lbPass({ named: true });
+  check('P34-2: a list that really names the business passes on the name alone — "Tech& Information Technology LLC" with its ampersand is matched, and the line quotes the name it found',
+    T2.L('mof_asp').status === 'listed' && /names you \("Tech&"\)/.test(T2.L('mof_asp').why), JSON.stringify(T2.L('mof_asp')));
+  const T3 = await lbPass({ listings: [{ json: { site_id: LB.SITE, domain: LB.DOMAIN, listing_id: 'alternativeto', name: 'AlternativeTo', category: 'directory', status: 'missing', profile_url: '', rel: 'unknown', competitors: '', submit_url: '', priority: 3, why: 'no profile found', checked_at: LB.iso(20), submitted_at: '', note: '' } }] });
+  check('P34-2: a platform that blocked this week\'s check keeps its last definite answer with the date, and says the platform blocks checks now (D13 stays fixed)',
+    T3.L('alternativeto').status === 'missing' && /missing \(checked \d{4}-\d{2}-\d{2}\) · the platform blocks checks now/.test(T3.L('alternativeto').why), JSON.stringify(T3.L('alternativeto')));
+  check('P34-2: the brand is still written "Tech&" everywhere the Link Builder uses it (the name is not the problem, the matching was)', T1.P.brand === 'Tech&' && T1.AS.outreach_rows.length > 0, JSON.stringify([T1.P.brand, T1.AS.outreach_rows.length]));
+
+  // ---------- P34-3: the wrong-claim check needs facts the owner put on file ----------
+  reset();
+  const analystPlan = (o = {}) => [{ json: { site_id: SITE, domain: D, business_name: 'Tech&', business_type: o.business_type || '', country: 'United Arab Emirates', competitors: ['cleartax.com'],
+    services: o.services === undefined ? ['e-invoicing integration', 'ERP implementation', 'Business Central support'] : o.services, topics: ['e invoicing in uae'], accreditation: o.accreditation || '',
+    business_facts: o.business_facts || '', brand_names: [D, 'Tech&'], profile: o.profile || {} } }];
+  const answerRows = [{ json: { site_id: SITE, domain: D, prompt_id: 'p_0', prompt: 'Who is Tech&?', kind: 'brand', engine: 'chatgpt', answered: true, mentioned: true, _text: 'Tech& is a Dubai-based Microsoft partner that implements ERP systems.' } },
+    { json: { site_id: SITE, domain: D, prompt_id: 'p_1', prompt: 'Which companies help UAE businesses with e-invoicing?', kind: 'recommend', engine: 'gemini', answered: true, mentioned: false, _text: 'ClearTax, Zoho Books and Cygnet are the main providers.' } }];
+  const analyst = async (o = {}) => { mock('AI Plan', analystPlan(o)); mock('Parse AI Answers', answerRows); return (await run('Analyst Jobs', store['Parse AI Answers'])).map(r => r.json).filter(j => !j.skip); };
+  const A1 = await analyst();
+  console.log('   P34-3 facts ->', JSON.stringify(A1.map(j => [j.fact_check, j.owner_facts, j.located, j.facts.replace(/\n/g, ' | ').slice(0, 120)])));
+  check('P34-3: with an empty business profile the country and the services read off the website are not facts to judge a claim against — the check is off, so the report says "not checked" instead of "no claim was wrong"',
+    A1.length >= 1 && A1[0].facts_ok === false && A1[0].fact_check === 'off' && A1[0].located === false && /Country: United Arab Emirates/.test(A1[0].facts) && /Services on the site/.test(A1[0].facts),
+    JSON.stringify([A1[0].fact_check, A1[0].owner_facts, A1[0].located]));
+  const A2 = await analyst({ profile: { city: 'Dubai', phone: '+971 4 555 0100', street_address: 'Office 1204, Bay Square' }, business_type: 'ERP and e-invoicing consultancy' });
+  check('P34-3: with the business profile filled in (a city, an address, a phone number) the check is on and every answer is read against the sheet',
+    A2.length >= 1 && A2[0].facts_ok === true && A2[0].fact_check === 'on' && A2[0].located === true && /City: Dubai/.test(A2[0].facts) && /Phone: \+971/.test(A2[0].facts),
+    JSON.stringify([A2[0].fact_check, A2[0].owner_facts]));
+  const A3 = await analyst({ profile: { city: 'Dubai' }, business_facts: 'Go-live in 12 weeks; licences from AED 50,000 a year.' });
+  check('P34-3: the facts the owner sends with a run count as well (a city plus the business facts switch the check on)',
+    A3.length >= 1 && A3[0].facts_ok === true && /Other facts: Go-live in 12 weeks/.test(A3[0].facts), JSON.stringify([A3[0].fact_check, A3[0].owner_facts]));
+  const A4 = await analyst({ profile: { price_range: 'AED 20,000 - 120,000' }, services: [] });
+  check('P34-3: facts that cannot locate the business are not enough on their own — a price range with no city, address or phone still reports "not checked"',
+    A4.length >= 1 && A4[0].facts_ok === false && A4[0].located === false, JSON.stringify([A4[0].fact_check, A4[0].owner_facts, A4[0].located]));
+  // P34-6 rides on the same sheet: the live fact sheet had no "Business name" line at all
+  check('P34-6: the fact sheet names the business as the site model has it ("Tech&"), so the analyst can tell our business from another with a similar name',
+    A2[0].business === 'Tech&' && /Business name: Tech&/.test(A2[0].facts), A2[0].facts.split('\n')[0]);
+
+  // ---------- P34-4: the full report's link gap is gated like the Link Builder's prospects ----------
+  reset();
+  const gapTask = (items) => ({ tasks: [{ id: 'x', status_code: 20000, result: [{ items }] }] });
+  const gapItem = (target, o = {}) => ({ domain_intersection: { 1: { target, rank: o.rank ?? 400, backlinks_spam_score: o.spam ?? 0, title: o.title || '' }, 2: { target, rank: o.rank ?? 400 } } });
+  const blBase = (o = {}) => [{ json: { domain: 'techand.ai', country_iso: 'AE', keyword: 'e invoicing in uae', business: 'e-invoicing and ERP consultancy', business_type: 'ERP and e-invoicing consultancy',
+    site_keywords: { seeds: ['e invoicing in uae'], keyword_gap: [{ keyword: 'peppol access point uae' }], easy_wins: [{ keyword: 'e invoicing software uae' }], striking_distance: [{ keyword: 'uae e invoicing deadline' }] },
+    extra_findings: [], extra_works: [], ...o } }];
+  const gapRun = async (items, o = {}) => {
+    mock('Analyze Keywords', blBase(o));
+    mock('BL Targets', [{ json: { domain: 'techand.ai', is_you: true } }, { json: { domain: 'cleartax.com', is_you: false } }]);
+    mock('Backlink Summary', [{ json: { tasks: [{ result: [{ rank: 120, backlinks: 300, referring_domains: 40, referring_domains_nofollow: 10, backlinks_spam_score: 4, broken_backlinks: 0 }] }] } },
+      { json: { tasks: [{ result: [{ rank: 400, backlinks: 9000, referring_domains: 800, referring_domains_nofollow: 100, backlinks_spam_score: 6, broken_backlinks: 2 }] }] } }]);
+    const ab = (await run('Analyze Backlinks', [{ json: gapTask(items) }]))[0].json;
+    return { au: ab.authority, f: ab.extra_findings.find(x => /Link opportunit|link opportunit/i.test(x.title)) || null, gap: (d) => ab.authority.gap.find(g => g.referring_domain === d) || {} };
+  };
+  const G1 = await gapRun([gapItem('mof.gov.ae', { rank: 700 }), gapItem('backlinkcheckers.space'), gapItem('buyhighda.space'), gapItem('websitebacklinksgenerator.store'),
+    gapItem('travelbooker.com', { rank: 500 }), gapItem('einvoicingnews.ae', { rank: 200, title: 'UAE e-invoicing news' })]);
+  console.log('   P34-4 gap ->', JSON.stringify(G1.au.gap.map(g => [g.referring_domain, g.pitch, g.reason.slice(0, 60)])));
+  check('P34-4: the ministry is never pitched — you get on a government list by applying or being accredited (live: "Reach out to these sites with a listing request" to mof.gov.ae)',
+    G1.gap('mof.gov.ae').pitch === false && /government site/.test(G1.gap('mof.gov.ae').reason), JSON.stringify(G1.gap('mof.gov.ae')));
+  check('P34-4: the link sellers are refused by their own names (backlinkcheckers.space, buyhighda.space, websitebacklinksgenerator.store)',
+    ['backlinkcheckers.space', 'buyhighda.space', 'websitebacklinksgenerator.store'].every(d => G1.gap(d).pitch === false && /name offers links/.test(G1.gap(d).reason)),
+    JSON.stringify(['backlinkcheckers.space', 'buyhighda.space', 'websitebacklinksgenerator.store'].map(d => G1.gap(d).reason)));
+  check('P34-4: an off-topic site is refused with the reason, while a site on our subject in our market is the one the finding names',
+    G1.gap('travelbooker.com').pitch === false && /off topic/.test(G1.gap('travelbooker.com').reason) && G1.gap('einvoicingnews.ae').pitch === true
+    && G1.f && G1.f.severity === 'Medium' && /1 of 6 domains are worth a pitch/.test(G1.f.evidence) && /einvoicingnews\.ae/.test(G1.f.evidence) && !/mof\.gov\.ae, |buyhighda\.space, /.test(G1.f.evidence.split('. ')[0]),
+    JSON.stringify([G1.gap('travelbooker.com').reason, G1.f && G1.f.evidence]));
+  check('P34-4: every domain stays in the data with its reason (nothing is hidden), and the finding says how many were left out and why',
+    G1.au.gap.length === 6 && G1.au.gap.every(g => typeof g.pitch === 'boolean' && (g.pitch || g.reason)) && /5 are left out/.test(G1.f.evidence) && /government list is joined by applying/.test(G1.f.fix),
+    JSON.stringify(G1.f));
+  const G2 = await gapRun([gapItem('mof.gov.ae'), gapItem('buyhighda.space'), gapItem('travelbooker.com')]);
+  check('P34-4: when nothing in the gap is worth a pitch the Medium finding is gone — an Info line explains it instead of asking the owner to write to a ministry',
+    G2.f && G2.f.severity === 'Info' && /No link opportunities worth a pitch/.test(G2.f.title) && !G2.au.gap.some(g => g.pitch), JSON.stringify(G2.f));
+  const G3 = await gapRun([gapItem('spamfarm-one.example', { spam: 45 }), gapItem('einvoicing-dubai.ae', { rank: 150 })]);
+  check('P34-4: a spam score of 30+ in the link index is refused too, and the gate does not swallow a genuine local prospect',
+    G3.gap('spamfarm-one.example').pitch === false && /spam score of 45/.test(G3.gap('spamfarm-one.example').reason) && G3.gap('einvoicing-dubai.ae').pitch === true,
+    JSON.stringify(G3.au.gap.map(g => [g.referring_domain, g.pitch, g.reason])));
+
+  // ---------- P34-5: a reservation nobody settles, and one heavy crawl per site ----------
+  reset();
+  const LW = require('./ledger_wiring.json');
+  check('P34-5: the release node sits between the ledger read and the limit check, and marks only the reservations older than the age limit `stale`',
+    LW.release_node === 'Release Stale Runs' && LW.release_from.includes('Load Run Ledger') && LW.release_to.includes('Rate Limit')
+    && LW.release_values.status === 'stale' && LW.release_conditions.some(c => c[0] === 'status' && c[1] === 'eq' && c[2] === 'reserved')
+    && LW.release_conditions.some(c => c[0] === 'created_at' && c[1] === 'lt' && /run_stale_hours/.test(String(c[2]))),
+    JSON.stringify([LW.release_from, LW.release_to, LW.release_conditions, LW.release_values]));
+  const nd = await run('Normalize Input', F.forms.webhookDescribe || F.forms.webhookVerdict);
+  const IN = (o = {}) => [{ json: { ...nd[0].json, mode: 'keyword', email: 'owner@northwind-erp.com', domain: 'northwind-erp.com', ai_budget_usd: 6, ai_budget_period: 'day', run_stale_hours: 2, heavy_audit_pages: 100, include_content: true, ...o } }];
+  const err = (r) => String(r[0].json.validation_error || '');
+  const reserved = (o) => ({ key: 'other@example.com', mode: 'keyword', est_usd: 5.9, created_at: NOW, status: 'reserved', settled_usd: 0, ...o });
+  ledgerReset([reserved({ created_at: new Date(Date.now() - 10 * 60000).toISOString() })]);
+  const r1 = await ledgerRun(IN());
+  check('P34-5: a reservation that is still young holds the budget as before — a $5.90 run started 10 minutes ago refuses the next one',
+    /used up \(estimated \$5\.90 of \$6/.test(err(r1)), err(r1));
+  ledgerReset([reserved({ created_at: hoursAgo(3) })]);
+  const r2 = await ledgerRun(IN());
+  check('P34-5: the same reservation three hours old no longer counts — it is released, the run passes, and the item says how many were released (live: two cancelled audits held $0.77 for ever)',
+    !err(r2) && r2[0].json.ledger_stale_released === 1 && r2[0].json.ai_budget_used_est_usd === r2[0].json.ai_spend_estimate_usd,
+    JSON.stringify([err(r2), r2[0].json.ledger_stale_released, r2[0].json.ai_budget_used_est_usd]));
+  ledgerReset([reserved({ created_at: hoursAgo(3), status: 'stale' })]);
+  const r3 = await ledgerRun(IN());
+  check('P34-5: a row the release node has already marked `stale` is skipped as well, and a settled run from the same day still counts in full',
+    !err(r3) && (await (async () => { ledgerReset([reserved({ created_at: hoursAgo(3), status: 'done', settled_usd: 5.9 })]); const r = await ledgerRun(IN()); return /used up \(estimated \$5\.90/.test(err(r)); })()),
+    err(r3));
+  const AUDIT = (o = {}) => IN({ mode: 'audit', crawl_max_pages: 200, domain: 'techand.ai', include_full_report: false, include_content: false, ...o });
+  ledgerReset([]);
+  const a1 = await ledgerRun(AUDIT());
+  const myRow = LEDGER.rows[LEDGER.rows.length - 1];
+  check('P34-5: a 200-page audit reserves its row with the site it crawls and the heavy flag, with the exact seo_run_ledger columns',
+    !err(a1) && myRow.heavy === true && myRow.domain === 'techand.ai' && same2(Object.keys(myRow).filter(k => k !== 'id'), TC.RUN_LEDGER),
+    JSON.stringify(myRow));
+  ledgerReset([{ key: 'app:co', mode: 'audit', est_usd: 0.25, created_at: new Date(Date.now() - 2 * 60000).toISOString(), status: 'reserved', settled_usd: 0, domain: 'techand.ai', heavy: true }]);
+  const a2 = await ledgerRun(AUDIT({ include_full_report: true }));
+  check('P34-5: a second large crawl of the same site while one is running is refused with the reason and how long to wait (live: both runs were cancelled 90 minutes later)',
+    /A large audit of techand\.ai is already running/.test(err(a2)) && /overload the crawler/.test(err(a2)) && /5 to 15 minutes/.test(err(a2)), err(a2));
+  ledgerReset([{ key: 'app:co', mode: 'audit', est_usd: 0.25, created_at: hoursAgo(3), status: 'reserved', settled_usd: 0, domain: 'techand.ai', heavy: true }]);
+  const a3 = await ledgerRun(AUDIT());
+  check('P34-5: a crashed audit never blocks its site for ever — a heavy reservation past the age limit is released and the next audit starts',
+    !err(a3) && a3[0].json.ledger_stale_released === 1, err(a3));
+  ledgerReset([{ key: 'app:co', mode: 'audit', est_usd: 0.25, created_at: new Date(Date.now() - 2 * 60000).toISOString(), status: 'reserved', settled_usd: 0, domain: 'azdan.com', heavy: true }]);
+  const a4 = await ledgerRun(AUDIT());
+  const a5 = await ledgerRun(AUDIT({ crawl_max_pages: 50 }));
+  check('P34-5: the guard is per site and per size — an audit of another site runs in parallel, and a 50-page audit of the busy site is not heavy',
+    !err(a4) && !err(a5) && LEDGER.rows[LEDGER.rows.length - 1].heavy === false, JSON.stringify([err(a4), err(a5)]));
+
+  // ---------- P34-6: the monitors read the business name through the site model ----------
+  reset();
+  const monLoads = (o = {}) => { mock('Load Sites', M.sites({ business_name: 'Tech&', canonical_host: 'www.' + M.DOMAIN, model_updated_at: ago(2), services_json: JSON.stringify(['e-invoicing integration', 'ERP implementation']) }));
+    mock('Load Ladders', M.ladders()); mock('Load Monitors', M.monitors()); mock('Load Profiles', o.profiles || []); mock('Load AI Prompts', [{ json: {} }]); mock('Load AI Visibility', [{ json: {} }]);
+    mock('Load AI Daily', [{ json: {} }]); mock('Load Cache (AI)', [{ json: {} }]); mock('Load Query History', [{ json: {} }]); mock('Load Backlink Snapshots', [{ json: {} }]); mock('Load Link Prospects', [{ json: {} }]);
+    mock('Load Content Log', [{ json: {} }]); mock('Load Case Studies', [{ json: {} }]); mock('Load Backlinks', [{ json: {} }]); mock('Load Link Imports', [{ json: {} }]); mock('Load Link Graph', [{ json: {} }]); delete store['Manual Run']; };
+  monLoads();
+  const aiP = (await run('AI Plan', store['Load Query History']))[0].json;
+  const blP = (await run('BL Plan', store['Load Backlinks']))[0].json;
+  console.log('   P34-6 names ->', JSON.stringify([aiP.business_name, aiP.brand_names, blP.business_name, blP.brand_names]));
+  check('P34-6: the AI Visibility Tracker takes the business name from the site model, so its report no longer calls the business "northwind-erp.com" with no profile row on file',
+    aiP.business_name === 'Tech&' && aiP.brand_names.includes('Tech&') && aiP.need_site_text !== true, JSON.stringify([aiP.business_name, aiP.brand_names]));
+  check('P34-6: the Backlink Monitor reads the same name (its report and its outreach used the bare domain), while its mention search still uses the domain for a short brand',
+    blP.business_name === 'Tech&' && blP.brand_query === M.DOMAIN, JSON.stringify([blP.business_name, blP.brand_query, blP.brand_names]));
+  monLoads({ profiles: M.profiles() });
+  const aiP2 = (await run('AI Plan', store['Load Query History']))[0].json;
+  check('P34-6: a filled business profile still comes first — the profile name wins over the model\'s, as it always did',
+    aiP2.business_name === 'Northwind ERP' && aiP2.profile.city === 'Dubai', JSON.stringify([aiP2.business_name, aiP2.profile.business_name]));
+});
+
 
 H.report();
 })();

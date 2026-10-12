@@ -2,6 +2,7 @@
 // questions queued for an answer page or a refresh (the Content Cadence writes them), the earned-media list with drafts, the entity check, the
 // actions ranked by value, alerts; plus the rows for seo_ai_pages, seo_ai_targets, seo_link_prospects, seo_ai_growth and seo_cache.
 /*__SITE_MODEL__*/
+/*__DRAFTS__*/
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const all = (n) => { try { return $(n).all().map(i => i.json); } catch (e) { return []; } };
 const ready = all('AI Readiness').filter(x => !x.skip), earnedAll = all('Earned Media').filter(x => !x.skip);
@@ -44,9 +45,16 @@ for (const p of plans) {
   const em = earnedAll.find(x => x.site_id === p.site_id) || { earned: [], prospect_rows: [], outreach_jobs: [] };
   const oi = oIn.findIndex(x => x.site_id === p.site_id); const drafts = oi >= 0 && oOut[oi] && !oOut[oi].error ? ((parseJ(oOut[oi].output).drafts) || []) : [];
   const draftFor = (job) => drafts.find(d => Number(d.n) === job.n) || null;
+  // P34-1 (live 2026-10-12): the drafts the report counts and prints are the ones THIS run's writer produced. Reading them off the
+  // stored prospect row brought back the pitches of 2026-10-02 — written before the D12 / D13 gates — as "8 outreach draft(s) written",
+  // including one to tax.gov.ae. A draft written now is stamped (drafted_at); Earned Media has already withdrawn the superseded ones.
+  const wroteNow = new Map();
   const prospect_rows = em.prospect_rows.map(r => { const job = em.outreach_jobs.find(j => j.prospect_domain === r.prospect_domain); const d = job ? draftFor(job) : null;
-    return d && d.body ? { ...r, outreach_subject: String(d.subject || '').slice(0, 200), outreach_body: String(d.body).slice(0, 3000) } : r; });   // status stays new (the app's prospect statuses: new / contacted / won / rejected / ignored); a stored draft = ready to send
-  const earned = em.earned.slice(0, 15).map(e => { const row = prospect_rows.find(r => r.prospect_domain === e.host && r.source_url === e.url); return { ...e, status: row ? row.status : '', contact_email: (row && row.contact_email) || e.contact_email || '', draft: row && row.outreach_body ? { subject: row.outreach_subject, body: row.outreach_body } : null }; });
+    if (!(d && d.body)) return r;
+    const fresh = DRAFTS.fresh(d, now); wroteNow.set(r.prospect_domain, { subject: fresh.outreach_subject, body: fresh.outreach_body });
+    return { ...r, outreach_subject: fresh.outreach_subject, outreach_body: fresh.outreach_body, drafted_at: fresh.drafted_at }; });   // status stays new (the app's prospect statuses: new / contacted / won / rejected / ignored); a stored draft = ready to send
+  const earned = em.earned.slice(0, 15).map(e => { const row = prospect_rows.find(r => r.prospect_domain === e.host && r.source_url === e.url); return { ...e, status: row ? row.status : '', contact_email: (row && row.contact_email) || e.contact_email || '', draft: wroteNow.get(e.host) || null }; });
+  const drafts_written = wroteNow.size, handed_over = p.link_builder ? em.prospect_rows.filter(r => /Link Builder/.test(String(r.note || ''))).length : 0;
   const newlyWon = prospect_rows.filter(r => r.status === 'won' && r.won_at === now);
   // ---- targets ----
   const targets = p.targets; const queued = targets.filter(t => t.status === 'queued').sort((a, b) => b.value - a.value); const wonT = targets.filter(t => t.status === 'won' && t.won_at === now);
@@ -81,6 +89,6 @@ for (const p of plans) {
   out.push({ json: { site_id: p.site_id, domain: p.domain, site_host: p.site_host, business_name: p.business_name, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, run_id: p.run_id, checked_at: now, ai_pages_month: p.ai_pages_month,
     submitted: { bing, indexnow }, pages: pages.map(({ checks, ...r }) => ({ ...r, checks: checks.map(c => ({ key: c.key, ok: c.ok, label: c.label })) })), avg_score, previous_avg_score: p.previous ? p.previous.avg_score : null,
     targets: targets.map(t => ({ target_id: t.target_id, question: t.question, kind: t.kind, page_url: t.page_url, status: t.status, value: t.value, reason: t.reason, engines: t.engines, competitors: t.competitors })),
-    earned, entity, actions: actions.slice(0, 12), alerts, page_rows, target_rows: targets, prospect_rows, growth_row, cache_rows } });
+    earned, entity, actions: actions.slice(0, 12), alerts, drafts_written, handed_over, page_rows, target_rows: targets, prospect_rows, growth_row, cache_rows } });
 }
 return out.length ? out : [{ json: { skip: true } }];

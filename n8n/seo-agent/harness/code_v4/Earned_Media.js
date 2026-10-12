@@ -354,19 +354,88 @@ const OK = (() => {
       ? 'a competing provider: their page sells what you sell (' + Math.round(share * 100) + '% of your service words, "' + signals.slice(0, 2).join('", "') + '")' : '';
   }
   // does a page name the business? Punctuation in a name ("Tech&") breaks \b, so every name is matched by its letter / digit runs with a
-  // little punctuation allowed between them, and the domain counts as a name too
+  // little punctuation allowed between them, and the domain counts as a name too.
+  // P34-2 (live 2026-10-12): "Tech&" collapses to the four-letter run "tech", which matched the plain word "tech" on three unrelated
+  // pages and claimed listings the site does not have — SaaSHub ("Tech Alternatives", 20x "tech", 0x "techand"), AlternativeTo and the
+  // UAE Ministry of Finance accredited-provider list. A name decides that on its own only when it is distinctive: the domain, or letter /
+  // digit runs of at least MIN_NAME_RUN characters. A shorter name is matched only with its own punctuation in place ("Tech&", "Tech &"),
+  // never as the bare letters, so the stripped-ampersand form is never evidence on its own. (Entities are decoded by LK.text first.)
+  const MIN_NAME_RUN = 5;
+  const reEsc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  function nameRe(n) {
+    const s = String(n || '').trim(); const runs = s.toLowerCase().match(/[a-z0-9]+/g) || [];
+    if (!runs.length) return null;
+    const isDomain = runs.length >= 2 && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(s);
+    if (isDomain || runs.join('').length >= MIN_NAME_RUN) return new RegExp('(^|[^a-z0-9])' + runs.join('[^a-z0-9]{0,3}') + '($|[^a-z0-9])', 'i');
+    if (!/[^a-z0-9\s]/i.test(s)) return null;   // four letters and nothing else: too common a word to claim anything by itself
+    return new RegExp('(^|[^a-z0-9])' + s.toLowerCase().split(/\s+/).map(reEsc).join('\\s*'), 'i');
+  }
   function namesUs(text, names) {
     const t = String(text || '');
-    for (const n of names) { const runs = String(n || '').toLowerCase().match(/[a-z0-9]+/g) || [];
-      if (!runs.length || runs.join('').length < 4) continue;
-      const re = new RegExp('(^|[^a-z0-9])' + runs.join('[^a-z0-9]{0,3}') + '($|[^a-z0-9])', 'i');
-      if (re.test(t)) return String(n); }
+    for (const n of (names || [])) { const re = nameRe(n); if (re && re.test(t)) return String(n); }
     return '';
   }
+  // ---- the cold link gap: who is never pitched when all we know is the domain (P34-4, live 2026-10-12) ----
+  // The full SEO report's "Link opportunities" told the owner to "reach out with a listing request, partnership or useful resource" to
+  // mof.gov.ae (a ministry you join by accreditation), backlinkcheckers.space and buyhighda.space (sites whose business is selling
+  // links). The Backlink Monitor refuses all three on the same data; this is the rule both of them use. The spam score is the link
+  // index's own 0-100 (DataForSEO `backlinks_spam_score`).
+  const SELLWORD = /(backlink|dofollow|link ?building|link ?farm|guest ?post|high ?da|seo ?link|buy ?link|authority ?link|link ?juice|link ?exchange|pbn)/i;
+  function noPitch(domain, o) {
+    const x = o || {}; const d = String(domain || '').toLowerCase().replace(/^www\./, '');
+    if (!d || !/\./.test(d)) return 'not a website';
+    if (isGov(d)) return 'a government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)';
+    const bad = badHost(d); if (bad) return bad;
+    if (LK.isWire(d)) return 'a press-release wire (' + d + '): a link there is a paid release, not an editorial link';
+    if (LK.isGambling(d)) return 'a gambling site (' + d + ')';
+    const name = d.replace(/\.[a-z.]{2,}$/, '').replace(/[.-]+/g, ' ');
+    if (SELLWORD.test(name)) return 'its own name offers links ("' + name.slice(0, 40) + '"): a site that sells links passes nothing on and risks a penalty';
+    if (Number(x.spam) >= 30) return 'a spam score of ' + Math.round(Number(x.spam)) + ' of 100 in the link index';
+    if (!x.accredited && accreditedList(String(x.title || '') + ' ' + name)) return 'a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one';
+    return '';
+  }
+  // and whether anything ties a bare domain to our topics: a topic word inside its own name, a title we know for it, or our own market's
+  // domain ending (the 25% rule the Link Builder applies to the page it fetches, OFF_TOPIC)
+  function gapTopic(domain, o) {
+    const x = o || {}; const d = String(domain || '').toLowerCase().replace(/^www\./, '');
+    const name = d.replace(/\.[a-z.]{2,}$/, '').replace(/[.-]+/g, ' ');
+    const topicStems = new Set(words(x.topics || '').map(stem).filter(w => w.length >= 4));
+    if (words(name).map(stem).some(w => topicStems.has(w))) return { ok: true, why: 'its name carries your topic' };
+    const f = x.title ? fit(x.topics, x.title, x.df, x.docs) : 0;
+    if (f >= OFF_TOPIC) return { ok: true, why: 'its page matches your topics (' + Math.round(100 * f) + '%)' };
+    const tld = String(x.country_tld || '').toLowerCase();
+    if (tld.length === 2 && tld !== 'us' && d.endsWith('.' + tld)) return { ok: true, why: 'a site in your market (.' + tld + ')' };
+    return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
+  }
   return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
+// ---- which stored outreach draft may still be offered (P34-1, live 2026-10-12; inlined by build_monitors.py) ----
+// AI Growth's report said "8 outreach draft(s) written" and printed a pitch to tax.gov.ae opening "I work at techand.ai" — a draft
+// written on 2026-10-02, before the D12 / D13 gates (no government portals, no competitors, no bare homepages, the business name from
+// the site model, a quote from their own page). Nothing had written it this week: the counter read the stored prospect row.
+// Every writer now stamps `drafted_at` on the row it drafts for. A stored draft with no stamp, or one from before the gates, is
+// **superseded**: the row is cleared, the draft is never counted as this week's work and never offered to the owner. The same is true
+// when a site hands drafting over to the Link Builder (one writer). The web app applies the identical rule to the rows already in the
+// table (`app/shared/src/outreach.ts`: DRAFT_GATES_AT / prospectDraft).
+const DRAFTS = (() => {
+  const GATES_AT = '2026-10-12';   // the day the D12 / D13 gates were deployed; a draft written before them is not offered again
+  const S = (v) => String(v == null ? '' : v).trim();
+  const reason = 'the draft written for them earlier was withdrawn: it was written before the current outreach rules (no government portals, no competitors, no bare homepages, the business name from the site model)';
+  const handedOver = 'the Link Builder writes to them (one writer): approve the pitch on the Link building page';
+  // a draft that was sent is part of the record (and the follow-ups quote it): it is never withdrawn, whenever it was written
+  const sent = (row) => { const r = row || {}; return !!S(r.contacted_at) || ['contacted', 'won'].includes(S(r.status).toLowerCase()); };
+  const superseded = (row) => { const r = row || {}; if (!S(r.outreach_body) || sent(r)) return false; const at = S(r.drafted_at).slice(0, 10); return !at || at < GATES_AT; };
+  // what this run keeps of a stored row's draft: the draft while it is still valid, else nothing (and `superseded` says why the note changes)
+  const carry = (row, o) => { const r = row || {}; const x = o || {}; const had = !!S(r.outreach_body);
+    if (x.handover && !sent(r)) return { outreach_subject: '', outreach_body: '', drafted_at: '', superseded: had, reason: handedOver };
+    if (superseded(r)) return { outreach_subject: '', outreach_body: '', drafted_at: '', superseded: true, reason };
+    return { outreach_subject: S(r.outreach_subject), outreach_body: S(r.outreach_body), drafted_at: S(r.drafted_at), superseded: false, reason: '' }; };
+  // a draft this run wrote: stamped, so the next run knows it is current
+  const fresh = (d, at) => ({ outreach_subject: S((d || {}).subject).slice(0, 200), outreach_body: S((d || {}).body).slice(0, 3000), drafted_at: S(at), superseded: false, reason: '' });
+  return { GATES_AT, superseded, sent, carry, fresh, reason, handedOver };
+})();
 const plans = $('Growth Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let reqs = [], res = []; try { reqs = $('Earned Requests').all().map(i => i.json); res = $('Fetch Cited Pages').all().map(i => i.json); } catch (e) {}
 const prospects = (() => { try { return $('Load Link Prospects (Growth)').all().map(i => i.json).filter(r => r && r.site_id); } catch (e) { return []; } })();
@@ -411,9 +480,11 @@ for (const p of plans) {
     if (rows.some(r => r.prospect_domain === e.host)) continue;
     const old0 = prospects.find(x => x.site_id === p.site_id && x.prospect_domain === e.host && x.type === 'ai_source') || {}; const old = old0.status === 'drafted' ? { ...old0, status: 'new' } : old0;   // 'drafted' (2026-10-10 runs) is not an app status
     const won = e.mentions_us === true;
+    const kept = DRAFTS.carry(old, { handover: !!p.link_builder });
     const detail = 'AI cites this ' + e.kind + ' ' + e.citations + 'x (' + e.engines.join(', ') + ') for "' + (e.questions[0] || '').slice(0, 90) + '"' + (e.title ? ' — "' + e.title.slice(0, 80) + '"' : '') + (e.competitors_named.length ? '; it names ' + e.competitors_named.join(', ') : '') + (e.mentions_us === false ? ', not you' : won ? '; it names you now' : '');
     const row = { site_id: p.site_id, domain: p.domain, prospect_domain: e.host, type: 'ai_source', rank: Number(old.rank) || 0, spam_score: Number(old.spam_score) || 0, detail: detail.slice(0, 500), source_url: e.url, target_url: old.target_url || '',
-      status: won ? 'won' : (old.status || 'new'), first_seen: old.first_seen || p.checked_at, last_seen: p.checked_at, won_at: won ? (old.won_at || p.checked_at) : (old.won_at || ''), outreach_subject: old.outreach_subject || '', outreach_body: old.outreach_body || '',
+      status: won ? 'won' : (old.status || 'new'), first_seen: old.first_seen || p.checked_at, last_seen: p.checked_at, won_at: won ? (old.won_at || p.checked_at) : (old.won_at || ''),
+      outreach_subject: kept.outreach_subject, outreach_body: kept.outreach_body, drafted_at: kept.drafted_at,   // P34-1: a draft written before the D12 / D13 gates, or one handed to the Link Builder, is withdrawn — never offered again
       note: e.action.slice(0, 300), score: Math.min(100, Math.round(e.value * 8)), origin: 'ai_growth', contact_email: old.contact_email || e.contact_email, contact_url: old.contact_url || e.contact_url, contacted_at: old.contacted_at || '',
       followup_step: Number(old.followup_step) || 0, followup_subject: old.followup_subject || '', followup_body: old.followup_body || '', verified_at: old.verified_at || '' };
     rows.push(row);
@@ -430,7 +501,8 @@ for (const p of plans) {
         || OK.sellsSame({ type: kindType, domain: e.host, competitors: p.competitors, title: e.title, text: pageText.get(e.url) || '', terms: sellTerms })
         || (!OK.accredited(p.accreditation) && OK.accreditedList(e.title + ' ' + e.url) ? 'a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one' : ''));
     if (blocked) row.note = String(blocked).slice(0, 300);
-    if (!won && !blocked && !row.outreach_body && outreachKind && !['won', 'declined', 'contacted'].includes(String(old.status || '')) && jobs.length < 3)
+    if (kept.superseded && !blocked) row.note = (DRAFTS.reason + '; ' + row.note).slice(0, 300);   // P34-1: the owner is told the old pitch was withdrawn, not shown it again
+    if (!won && !blocked && !kept.outreach_body && outreachKind && !['won', 'declined', 'contacted'].includes(String(old.status || '')) && jobs.length < 3)
       jobs.push({ n: jobs.length + 1, prospect_domain: e.host, kind: e.kind, action_type: e.action_type, url: e.url, title: e.title, question: e.questions[0] || '', competitors_named: e.competitors_named, engines: e.engines });
     if (blocked) e.no_draft = String(blocked).slice(0, 160);
   }

@@ -71,6 +71,8 @@ import {
   type TrendPoint,
   type TrendRow,
   type MonitorSettings,
+  prospectDraft,
+  draftSuperseded,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { siteRows } from '../n8n/client';
@@ -1051,9 +1053,12 @@ export async function backlinksData(org: OrgRow, site: SiteRow): Promise<Backlin
         firstSeen: s(p.first_seen),
         lastSeen: s(p.last_seen),
         wonAt: s(p.won_at),
-        outreachSubject: s(p.outreach_subject),
-        outreachBody: s(p.outreach_body),
-        note: s(p.note),
+        // P34-1: a draft written before the current outreach gates (or one with no date) is superseded — never offered again
+        outreachSubject: prospectDraft(p)?.subject ?? '',
+        outreachBody: prospectDraft(p)?.body ?? '',
+        note: draftSuperseded(p)
+          ? [s(p.note), 'The draft written for this site earlier was withdrawn: it dates from before the current outreach rules (no government portals, no competitors, no bare homepages, your business name from the site model). The next run writes a new one.'].filter(Boolean).join(' · ')
+          : s(p.note),
         score: n(p.score),
         origin: s(p.origin),
         contactEmail: s(p.contact_email),
@@ -1120,7 +1125,7 @@ function toGrowth(g: AiGrowthRow | undefined, pages: AiPageRow[], targets: AiTar
     const pr = prospects.find((x) => s(x.prospect_domain) === s(e.host)) ?? null;
     return { url: s(e.url), title: s(e.title), host: s(e.host), kind: s(e.kind), citations: n(e.citations), engines: arr<string>(e.engines).map(String), questions: arr<string>(e.questions).map(String),
       mentionsUs: e.mentions_us == null ? null : b(e.mentions_us), competitorsNamed: arr<string>(e.competitors_named).map(String), action: s(e.action), status: (s(pr?.status) || s(e.status)).replace(/^drafted$/, 'new'),
-      drafted: !!s(pr?.outreach_body), contactEmail: s(pr?.contact_email), draft: pr && s(pr.outreach_body) ? { subject: s(pr.outreach_subject), body: s(pr.outreach_body) } : null };
+      drafted: !!prospectDraft(pr), contactEmail: s(pr?.contact_email), draft: prospectDraft(pr) };   // P34-1: the stale pre-gate drafts are not this week's work and are not offered
   });
   const ent = safeJson<P | null>(g.entity_json, null);
   const month = new Date().toISOString().slice(0, 7);

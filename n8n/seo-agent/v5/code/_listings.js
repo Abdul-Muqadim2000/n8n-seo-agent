@@ -66,6 +66,21 @@ function listingsFor(kinds, iso, topicText, siteText) {
   return LISTINGS.filter(l => (K.some(k => l.kinds.includes(k)) || (l.kinds.includes('any') && !K.includes('local') && l.cat !== 'local')) && (!l.countries || !l.countries.length || l.countries.includes(String(iso || '').toUpperCase()))
     && (!l.topics || l.topics.test(topicText || '')) && (!l.integ || l.integ.test(siteText || '')));
 }
+// What a fetched listing page is allowed to claim (P34-2, live 2026-10-12): three listings came back "listed" when they were not —
+// SaaSHub and the UAE Ministry of Finance list because the brand "Tech&" matched the plain word "tech" (neither page contains
+// "techand"), AlternativeTo because a 403 bot wall was read as a profile found by search. A listing is claimed only on hard evidence:
+// a link to our host (linked), or the page naming us distinctively (listed; OK.namesUs decides what counts as a name). A blocked or
+// challenged page claims nothing — "unknown", never "listed" and never "missing" — and the caller keeps the last definite answer.
+// o: { blocked, status, links_us, rel, named, as_list, guessed, gone, url }
+function listingClaim(o) {
+  const x = o || {}; const where = x.as_list ? 'list' : 'profile';
+  if (x.blocked) return { status: 'unknown', evidence: 'the platform blocked this check' + (x.status ? ' (HTTP ' + x.status + ')' : '') + ': nothing can be read from it' };
+  if (x.links_us) return { status: 'linked', evidence: 'the ' + where + ' links to you' };
+  if (x.named) return { status: 'listed', evidence: 'the ' + where + ' names you ("' + String(x.named).slice(0, 40) + '") without a link' };
+  if (x.gone) return x.guessed ? { status: 'missing', evidence: 'no profile at ' + String(x.url || '') } : { status: 'unknown', evidence: 'the page we found is gone: check the platform' };
+  if (x.as_list) return { status: 'missing', evidence: 'the list does not name you' };
+  return { status: 'unknown', evidence: 'the page at ' + String(x.url || '') + ' does not name you: it may belong to another product, or your profile may use a different name' };
+}
 function siteKind(businessType, topicText) {   // the checklists that apply: a consultancy that also sells software gets both
   const t = String(businessType || '') + ' ' + String(topicText || '');
   if (/restaurant|cafe|clinic|dental|salon|store|shop|hotel|gym|plumb|electric|lawyer|law firm|real estate|local ?business|medical|spa|bakery/i.test(t)) return ['local'];

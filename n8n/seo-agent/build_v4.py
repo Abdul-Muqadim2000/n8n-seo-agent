@@ -3194,6 +3194,168 @@ Nothing is suppressed: the findings are scored, stored and listed inside the fol
 log('A fix list a customer can act on (2026-10-12, FIX_PLAN G18-2, measured in ACCURACY_SET.md): the minor band (IMP.isMinor in v5/code/_impact.js: Low / Info severity, never an index blocker, the lowest impact or one of the low-value rules the accuracy set measured - nav-heavy link counts, a title one character over 60, light content on index pages, long or messy URLs) is folded into one "Minor items (N)" line in the technical audit report (section 4) and per category in the full report, with the count and the reason, while the Action Plan counts them instead of repeating them; every finding carries f.minor, site_audit carries minor_count / minor_note, the audit callback passes them on, and the app folds the same rows with the same rule over the stored severity and impact (app/shared/src/findings.ts) - nothing is dropped from the score, the stored rows or the folded list')
 
 # =============================================================================
+# 43. WHAT THE PHASE 3 + 4 LIVE CHECK FOUND (P34-1 … P34-6, 2026-10-12; docs/system-review-2026-10-11/LIVE_CHECK_phase34_2026-10-12.md
+#     §3). Two of the six live in this builder; the other four are in v5/code (P34-1 drafts: _drafts.js + Earned_Media / Growth_Metrics /
+#     Growth_Report / Prospect_Rows / AI_Metrics / Outreach_Jobs; P34-2 listings: _outreach_kit.js namesUs + _listings.js listingClaim +
+#     LB_Assemble; P34-3 the fact gate: Analyst_Jobs; P34-6 the business name: _monitor_sites.js).
+#     P34-4: the full SEO report's "Link opportunities" list came straight out of DataForSEO's domain_intersection with no gate at all,
+#       so it told the owner to "reach out with a listing request, partnership or useful resource" to **mof.gov.ae** (a ministry you join
+#       by accreditation), **backlinkcheckers.space** and **buyhighda.space** (sites that sell links) — while the Backlink Monitor, on
+#       the same data, refused 39 of 42 with a reason. Analyze Backlinks now reads the same kits (v5/code/_link_kit.js +
+#       _outreach_kit.js): OK.noPitch (government, link sellers, wires, gambling, mailbox providers, data brokers, infrastructure,
+#       statistics pages, a spam score of 30+, an accredited-provider list without the accreditation), LK.footprints over the gap rows
+#       and OK.gapTopic's 25% topic rule. Nothing is hidden: every domain stays in `authority.gap` with `pitch` and `reason`, the report
+#       prints the reason next to it, and the finding names only the domains that may be pitched.
+#     P34-5: executions 459 and 461 (two 200-page audits of the same site, started 2 seconds apart) hung when the n8n JavaScript task
+#       runner stopped answering and were cancelled at the 90-minute execution timeout. Their seo_run_ledger rows stayed `reserved` for
+#       ever, so they kept counting $0.77 against the $6/day budget estimate. Two guards: a reservation older than
+#       CONFIG.run_stale_hours (2) is released — marked `stale` by *Release Stale Runs* and left out of Rate Limit's count and budget —
+#       and a second heavy crawl of the same site while one is running is refused with the reason (the ledger row now carries `domain`
+#       and `heavy`). release_stale_runs.py clears rows left over from before this deploy (--dry-run by default).
+# =============================================================================
+LK_SRC = _rd0('code/_link_kit.js').rstrip('\n'); OK_SRC = _rd0('code/_outreach_kit.js').rstrip('\n')
+assert 'function noPitch' in OK_SRC and 'function gapTopic' in OK_SRC, 'the outreach kit has no gap gate (P34-4)'
+assert 'const LK = (() => {' not in code('Analyze Backlinks'), 'Analyze Backlinks: the link kit is already inlined'
+setcode('Analyze Backlinks', LK_SRC + '\n' + OK_SRC + '\n' + code('Analyze Backlinks'))
+patch('Analyze Backlinks', """const gapItems = gapRes.tasks?.[0]?.result?.[0]?.items || [];
+const gap = gapItems.map(it => {
+  const vals = Object.values(it.domain_intersection || {});
+  const first = vals[0] || {};
+  return { referring_domain: first.target || first.domain || it.domain || it.referring_domain || null, rank: first.rank ?? null, links_to_competitors: vals.length };
+}).filter(g => g.referring_domain).slice(0, 25);""",
+      """// P34-4 (live 2026-10-12): this list used to be DataForSEO's answer, unfiltered, and recommended a ministry and two link sellers.
+// The Link Builder's gates now run on it too (v5/code/_outreach_kit.js, the same rules the Backlink Monitor applies): who is never
+// pitched, and whether anything ties the domain to this site's topics. Every domain stays in the list, with the reason.
+const gapItems = gapRes.tasks?.[0]?.result?.[0]?.items || [];
+const kwOf = (k) => String((k && (k.keyword || k.query)) || k || '');
+const sk0 = base.site_keywords || {};
+const gapTopics = [base.keyword, base.business, base.business_type, String(base.domain || '').split('.')[0].replace(/[^a-z0-9]+/gi, ' '),
+  ...(sk0.seeds || []).slice(0, 10).map(kwOf), ...(sk0.keyword_gap || []).slice(0, 10).map(kwOf), ...(sk0.easy_wins || []).slice(0, 10).map(kwOf),
+  ...(sk0.striking_distance || []).slice(0, 10).map(kwOf)].filter(Boolean).join(' ');
+const gapTld = ({ GB: 'uk' })[base.country_iso] || String(base.country_iso || '').toLowerCase();
+const weAreAccredited = OK.accredited(base.accreditation || ((base.profile || {}).accreditation));
+const gap0 = gapItems.map(it => {
+  const vals = Object.values(it.domain_intersection || {});
+  const first = vals[0] || {};
+  return { referring_domain: first.target || first.domain || it.domain || it.referring_domain || null, rank: first.rank ?? null, links_to_competitors: vals.length,
+    spam_score: first.backlinks_spam_score ?? null, title: String(first.title || '').slice(0, 160) };
+}).filter(g => g.referring_domain).slice(0, 25);
+const gapFarms = LK.footprints(gap0.map(g => ({ ref_domain: LK.refKey(g.referring_domain), from_url: 'https://' + g.referring_domain + '/', anchor: '', page_title: g.title })), { domain: base.domain, brands: [String(base.business || '')] });
+const gap = gap0.map(g => {
+  const farm = gapFarms.get(LK.refKey(g.referring_domain)) || '';
+  const no = farm || OK.noPitch(g.referring_domain, { spam: g.spam_score, title: g.title, accredited: weAreAccredited });
+  const t = no ? { ok: false, why: '' } : OK.gapTopic(g.referring_domain, { topics: gapTopics, title: g.title, country_tld: gapTld, topic_label: String(base.keyword || 'your topics') });
+  return { ...g, pitch: !no && t.ok, reason: no || t.why };
+});
+const gapPitch = gap.filter(g => g.pitch);""")
+patch('Analyze Backlinks', """if (gap.length) {
+  F('Medium', 'Link opportunities: sites that link to competitors but not to you',
+    gap.length + ' domains. Top: ' + gap.slice(0, 5).map(g => g.referring_domain).join(', '),
+    'Sites that already link to your competitors are the most likely to link to you.',
+    'Reach out to these sites with a listing request, partnership or useful resource.');
+}""",
+      """if (gapPitch.length) {
+  F('Medium', 'Link opportunities: sites that link to competitors but not to you',
+    gapPitch.length + ' of ' + gap.length + ' domains are worth a pitch. Top: ' + gapPitch.slice(0, 5).map(g => g.referring_domain).join(', ')
+      + (gap.length > gapPitch.length ? '. ' + (gap.length - gapPitch.length) + ' are left out (e.g. ' + gap.filter(g => !g.pitch).slice(0, 3).map(g => g.referring_domain + ' — ' + g.reason).join('; ') + ')' : ''),
+    'Sites that already link to your competitors are the most likely to link to you.',
+    'Reach out to these sites with a listing request, partnership or useful resource. The ones left out are not worth asking: a government list is joined by applying, and a site that sells links passes nothing on.');
+} else if (gap.length) {
+  F('Info', 'No link opportunities worth a pitch in this gap',
+    'All ' + gap.length + ' sites that link to your competitors are government portals, link sellers or off topic for you (e.g. ' + gap.slice(0, 3).map(g => g.referring_domain + ' — ' + g.reason).join('; ') + ')',
+    'A link is only worth asking for when the site is a real publisher on your subject; the rest pass nothing on or need an application.',
+    'Earn links from partner directories, industry associations, suppliers and press on your own subject instead.');
+}""")
+assert 'OK.noPitch' in code('Analyze Backlinks') and 'LK.footprints' in code('Analyze Backlinks'), 'Analyze Backlinks: the gap gate is not wired (P34-4)'
+# the report prints the reason next to every domain it leaves out
+patch('Build Full Report', """    au.gap.slice(0, 20).map(g => `<tr><td>${esc(g.referring_domain)}</td><td>${num(g.links_to_competitors)}</td></tr>`).join('') + `</table>`;""",
+      """    au.gap.slice(0, 20).map(g => `<tr><td>${esc(g.referring_domain)}${g.pitch === false ? `<div class="small">not pitched: ${esc(g.reason || 'off topic')}</div>` : ''}</td><td>${num(g.links_to_competitors)}</td></tr>`).join('') + `</table>`;""")
+log('The full report\'s link gap is gated like the Link Builder\'s prospects (2026-10-12, P34-4): Analyze Backlinks reads the link and outreach kits and refuses government portals, link sellers ("backlink", "dofollow", "high da" in the name), press wires, gambling, mailbox providers, data brokers, infrastructure, statistics pages, a spam score of 30+, an accredited-provider list without the accreditation on file, link-farm footprints and domains with no tie to the site\'s topics (OK.gapTopic, the 25% rule); every domain stays in the list with its reason, the report prints it, and the Medium finding names only the domains worth a pitch (Info when none is)')
+
+
+# ---- P34-5: a reservation nobody settled is released, and one heavy crawl per site at a time ----
+from ladder_common import dt_update_where_params
+patch('Normalize Input', "  ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)",
+      "  // P34-5 (2026-10-12): how long a run may hold its budget reservation before it is released as `stale` (two audits killed by the\n"
+      "  // task runner held $0.77 of the day's estimate for ever), and the crawl size from which only one audit of a site may run at a time.\n"
+      "  run_stale_hours: 2,\n"
+      "  heavy_audit_pages: 100,\n"
+      "  ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)")
+patch('Normalize Input', "    ai_budget_usd: CONFIG.ai_budget_usd,\n    ai_budget_period: CONFIG.ai_budget_period,\n",
+      "    ai_budget_usd: CONFIG.ai_budget_usd,\n    ai_budget_period: CONFIG.ai_budget_period,\n    run_stale_hours: CONFIG.run_stale_hours,\n    heavy_audit_pages: CONFIG.heavy_audit_pages,\n")
+# the reservation says which site it is working on and whether it is a heavy crawl
+patch('Run Ledger Row', "return [{ json: { run_id: String($execution.id), key, mode: String(d.mode || ''), est_usd: +Number(est || 0).toFixed(4), created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0 } }];",
+      "// P34-5: the row says which site the run is working on and whether it is a heavy crawl, so Rate Limit can refuse a second large\n"
+      "// audit of the same site while one is running (two 200-page audits of techand.ai at once stalled the n8n task runner, 2026-10-12).\n"
+      "const HEAVY_PAGES = Number(d.heavy_audit_pages) > 0 ? Number(d.heavy_audit_pages) : 100;\n"
+      "const heavy = d.mode === 'audit' && (Number(d.crawl_max_pages) || 0) >= HEAVY_PAGES;\n"
+      "return [{ json: { run_id: String($execution.id), key, mode: String(d.mode || ''), est_usd: +Number(est || 0).toFixed(4), created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,\n"
+      "  domain: String(d.domain || '').toLowerCase(), heavy } }];")
+_STALE_EXPR = "={{ new Date(Date.now() - (Number($('Normalize Input').first().json.run_stale_hours) || 2) * 3600000).toISOString() }}"
+_lrp = pos('Load Run Ledger')
+add_node('Release Stale Runs', DT_TYPE, DT_VERSION, dt_update_where_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('status', 'eq', 'reserved'), ('created_at', 'lt', _STALE_EXPR)], {'status': 'stale'}),
+         [_lrp[0] + 110, _lrp[1] + 150], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+disconnect('Load Run Ledger', 'Rate Limit')
+connect('Load Run Ledger', 'Release Stale Runs'); connect('Release Stale Runs', 'Rate Limit')
+patch('Rate Limit', """let mine = {}; try { mine = $('Reserve Run Ledger').first().json || {}; } catch (e) {}
+let ledger = []; try { ledger = $('Load Run Ledger').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) {}
+const myId = Number(mine.id);
+const earlier = ledger.filter(r => r.mode !== 'assess' && r.status !== 'refused' && (myId > 0 ? Number(r.id) < myId : String(r.run_id) !== String($execution.id)));""",
+      """let mine = {}; try { mine = $('Reserve Run Ledger').first().json || {}; } catch (e) {}
+let ledger = []; try { ledger = $('Load Run Ledger').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) {}
+const myId = Number(mine.id);
+// P34-5 (live 2026-10-12): a run that never settles must not hold the budget for ever. Executions 459 and 461 were cancelled at the
+// 90-minute timeout after the n8n task runner stopped answering, and their rows stayed `reserved`, counting $0.77 against the $6/day
+// estimate with nothing running. A reservation older than run_stale_hours is released: *Release Stale Runs* marks it `stale` in the
+// table, and it is left out of the counts and the budget here whether that update got through or not.
+const STALE_H = Number(d.run_stale_hours) > 0 ? Number(d.run_stale_hours) : 2;
+const staleBefore = Date.now() - STALE_H * 3600000;
+const isStale = (r) => { const st = String(r.status || ''); if (st === 'stale') return true;
+  const t = Date.parse(String(r.created_at || '')); return st === 'reserved' && t > 0 && t < staleBefore; };
+const earlier = ledger.filter(r => r.mode !== 'assess' && r.status !== 'refused' && !isStale(r) && (myId > 0 ? Number(r.id) < myId : String(r.run_id) !== String($execution.id)));
+d.ledger_stale_released = ledger.filter(isStale).length;""")
+patch('Rate Limit', """if (used >= perKey && !['published', 'checkin', 'profile'].includes(d.mode)) {   // reporting a published page or a check-in costs nothing and is never blocked
+  return [{ json: { ...d, validation_error: 'You have reached the daily limit of ' + perKey + ' runs. Please try again tomorrow.' } }];
+}""",
+      """if (used >= perKey && !['published', 'checkin', 'profile'].includes(d.mode)) {   // reporting a published page or a check-in costs nothing and is never blocked
+  return [{ json: { ...d, validation_error: 'You have reached the daily limit of ' + perKey + ' runs. Please try again tomorrow.' } }];
+}
+
+// ---- P34-5: one heavy crawl of a site at a time ----
+// Two 200-page audits of the same site, started two seconds apart, stalled the JavaScript task runner and were both cancelled at the
+// execution timeout 90 minutes later; re-run one after the other they finished in 4 and 11 minutes. A second heavy audit of the same
+// site is refused while the first one holds its reservation (a stale one no longer counts, so a crashed run never blocks the site).
+const yesNo = (v) => v === true || /^(true|1|yes|on)$/i.test(String(v == null ? '' : v));
+const myDomain = String(mine.domain || d.domain || '').toLowerCase();
+if (yesNo(mine.heavy) && myDomain) {
+  const busy = earlier.find(r => String(r.status || '') === 'reserved' && yesNo(r.heavy) && String(r.domain || '').toLowerCase() === myDomain);
+  if (busy) {
+    const since = String(busy.created_at || '').slice(11, 16);
+    return [{ json: { ...d, validation_error: 'A large audit of ' + myDomain + ' is already running' + (since ? ' (started ' + since + ' UTC)' : '') + '. Two big crawls of the same website at once overload the crawler and both time out, so this one was not started. Wait for the first to finish — a 200-page audit usually takes 5 to 15 minutes — and start this one again, or ask for fewer pages.' } }];
+  }
+}""")
+assert 'isStale' in code('Rate Limit') and 'A large audit of' in code('Rate Limit'), 'Rate Limit: the P34-5 guards are not wired'
+assert 'heavy' in code('Run Ledger Row') and 'run_stale_hours: CONFIG.run_stale_hours' in code('Normalize Input'), 'P34-5: the ledger row or the config is not wired'
+# the wiring the harness checks (S51), next to the settle / refuse nodes of section 29
+_rel = nodes['Release Stale Runs']['parameters']
+_lw_path = os.path.join(HERE0, 'harness', 'ledger_wiring.json')
+_lw = json.load(open(_lw_path))
+_lw.update({'release_node': 'Release Stale Runs',
+            'release_from': sorted(s for s, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == 'Release Stale Runs'),
+            'release_to': [t['node'] for l in (conns['Release Stale Runs']['main'] or []) for t in (l or [])],
+            'release_conditions': [[c['keyName'], c['condition'], c['keyValue']] for c in _rel['filters']['conditions']],
+            'release_values': _rel['columns']['value'],
+            'stale_hours': 2, 'heavy_audit_pages': 100})
+json.dump(_lw, open(_lw_path, 'w'), indent=1)
+_rlp = pos('Rate Limit')
+sticky("""### A reservation nobody settles, and one heavy crawl per site (P34-5, 2026-10-12)
+Two 200-page audits of the same site started two seconds apart; the n8n **JavaScript task runner** stopped answering, both executions hung and were cancelled at the 90-minute timeout, and their `seo_run_ledger` rows stayed **reserved** — holding $0.77 of the $6/day estimate with nothing running.
+**Released:** *Release Stale Runs* marks every reservation older than `CONFIG.run_stale_hours` (2) as `stale`, and **Rate Limit** leaves stale rows out of the day's count and of the budget whether that update got through or not. `release_stale_runs.py` clears the rows left from before this deploy (`--dry-run` by default).
+**Refused:** the reservation now carries `domain` and `heavy` (mode `audit` from `CONFIG.heavy_audit_pages` pages up), and a second heavy audit of the same site is refused while the first one is still reserved, with the reason and how long to wait.""",
+    _rlp[0] - 40, _rlp[1] + 320, 940, 240, 6)
+log('Runs that never settle and concurrent heavy audits (2026-10-12, P34-5): CONFIG.run_stale_hours (2) releases a seo_run_ledger reservation nobody settled — Release Stale Runs marks it `stale` and Rate Limit leaves stale rows out of the day\'s count and of the AI budget (two cancelled 200-page audits held $0.77 for ever) — and the reservation carries the domain and whether it is a heavy crawl (mode audit from CONFIG.heavy_audit_pages pages up), so a second large audit of the same site while one is running is refused with the reason and the time to wait instead of stalling the task runner; release_stale_runs.py clears rows left from before the deploy (--dry-run by default)')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())

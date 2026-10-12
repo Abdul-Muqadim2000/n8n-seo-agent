@@ -24,4 +24,9 @@ else if (d.mode === 'case_study') est = EST.case_study;
 else if (d.mode === 'ai_visibility') est = EST.ai_visibility;
 else if (d.mode === 'backlinks') est = d.free_only ? 0 : EST.backlinks;   // v4.10: free sources only = no paid call   // the page itself runs as its own execution and is counted there
 if (d.need_site_description) est += EST.describe;
-return [{ json: { run_id: String($execution.id), key, mode: String(d.mode || ''), est_usd: +Number(est || 0).toFixed(4), created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0 } }];
+// P34-5: the row says which site the run is working on and whether it is a heavy crawl, so Rate Limit can refuse a second large
+// audit of the same site while one is running (two 200-page audits of techand.ai at once stalled the n8n task runner, 2026-10-12).
+const HEAVY_PAGES = Number(d.heavy_audit_pages) > 0 ? Number(d.heavy_audit_pages) : 100;
+const heavy = d.mode === 'audit' && (Number(d.crawl_max_pages) || 0) >= HEAVY_PAGES;
+return [{ json: { run_id: String($execution.id), key, mode: String(d.mode || ''), est_usd: +Number(est || 0).toFixed(4), created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,
+  domain: String(d.domain || '').toLowerCase(), heavy } }];
