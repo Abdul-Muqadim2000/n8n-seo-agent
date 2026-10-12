@@ -531,4 +531,5 @@ RR.write('SEO_Agent_Reply_Reader.json')
 # the harness compares rows with the table columns defined here (v4.12): harness/table_cols.json
 from ladder_common import RUN_LEDGER_COLS   # v4.14 (D1)
 json.dump({'RUN_LEDGER': [c for c, _ in RUN_LEDGER_COLS], 'AI_PAGES': [c for c, _ in AI_PAGES_COLS], 'AI_TARGETS': [c for c, _ in AI_TARGETS_COLS], 'AI_GROWTH': [c for c, _ in AI_GROWTH_COLS], 'PROSPECT': [c for c, _ in PROSPECT_COLS],
-           'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)
+           'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS],
+           'LOG': [c for c, _ in LOG_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # D5 (S37): the content-log row every content run writes

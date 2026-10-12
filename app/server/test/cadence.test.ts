@@ -26,6 +26,9 @@ const W3: St = { a: 'writing', b: 'writing', c: 'writing' };
 const set = (ladder_id: string, o: Partial<LadderSettingsRow> = {}) =>
   ({ ladder_id, site_id: 'site_northwind-erp-com', domain: D, head_keyword: '', mode: 'auto', priority: null, status: 'active', plan_type: '', reach: null, source: 'app', opportunities: '', auto_start: false, max_active: null, max_waiting: null, ...o }) as unknown as LadderSettingsRow;
 const siteSet = (o: Partial<LadderSettingsRow>) => set('_site', { opportunities: 'auto', max_active: 2, max_waiting: 3, ...o } as Partial<LadderSettingsRow>);
+// v4.14 (FIX_PLAN D5): ladder rows still 'writing' are pages waiting to be published, so three or more of them trip the pile-up
+// guard. Cases about something else (focus, the main-page gate) raise the website's limit; the guard has its own cases below.
+const noGuard = [siteSet({ max_waiting: 20 })];
 /** newest first, weekly */
 const ranks = (id: string, kw: string, positions: number[]) => positions.map((p, i) => ({ ladder_id: id, keyword: kw, checked_at: daysAgo(7 * i + 2), position: p, domain: D, rung: 4 }) as RankHistoryRow);
 const logRow = (keyword: string, o: Partial<ContentLogRow> = {}) => ({ domain: D, keyword, source: 'ladder', ladder_id: '', request_id: 'cad_x', started_at: daysAgo(10), status: 'started', published_url: '', published_at: '', ...o }) as ContentLogRow;
@@ -56,11 +59,11 @@ describe('cadence mirror: ladder order and focus', () => {
   });
 
   it('at most max_active Auto ladders are written; the next waits as queued; a fully written ladder frees its place', () => {
-    const p = planCadence(input({ ladders: [...A(W3), ...B(W3), ...C()] }), NOW);
+    const p = planCadence(input({ ladders: [...A(W3), ...B(W3), ...C()], settings: noGuard }), NOW);
     expect(p.picks.map((x) => x.keyword)).toEqual(['peppol uae providers', 'vat software uae providers']);
     expect(p.queued).toEqual(['lad_C']);
-    expect(kws({ ladders: [...A(W3), ...B(W3), ...C()], settings: [siteSet({ max_active: 3 })] })).toEqual(['peppol uae providers', 'vat software uae providers', 'wms dubai cost']);
-    const free = planCadence(input({ ladders: [...A({ ...W3, d: 'writing', top: 'writing' }), ...B(W3), ...C()] }), NOW);
+    expect(kws({ ladders: [...A(W3), ...B(W3), ...C()], settings: [siteSet({ max_active: 3, max_waiting: 20 })] })).toEqual(['peppol uae providers', 'vat software uae providers', 'wms dubai cost']);
+    const free = planCadence(input({ ladders: [...A({ ...W3, d: 'writing', top: 'writing' }), ...B(W3), ...C()], settings: noGuard }), NOW);
     expect([free.picks.map((x) => x.keyword), free.queued]).toEqual([['vat software uae providers', 'wms dubai cost', 'wms dubai guide'], []]);
   });
 
@@ -76,18 +79,18 @@ describe('cadence mirror: ladder order and focus', () => {
 describe('cadence mirror: main-page gate and won', () => {
   const gated = A({ a: 'published', b: 'writing', c: 'writing', d: 'writing' });
   it('1 of 4 supporting pages published: the main page is not written, the ladder waits for support', () => {
-    const p = planCadence(input({ ladders: gated }), NOW);
+    const p = planCadence(input({ ladders: gated, settings: noGuard }), NOW);
     expect([p.picks, p.waitingForSupport]).toEqual([[], ['lad_A']]);
     expect(cadenceDetail([], { ...p, at: '' }, { cards: [{ id: 'lad_A', head: 'peppol uae' } as never] })).toBe(
       'Nothing to write automatically: the main page of “peppol uae” waits until half of its supporting pages are live',
     );
   });
   it('half published (ladder row + content log), or the main keyword in the top 30: the main page is written', () => {
-    expect(kws({ ladders: gated, logs: [logRow('peppol uae guide', { status: 'published', published_url: slug('peppol uae guide'), published_at: daysAgo(5) })] })).toEqual(['peppol uae']);
-    expect(kws({ ladders: gated, history: ranks('lad_A', 'peppol uae', [25, 60]) })).toEqual(['peppol uae']);
+    expect(kws({ ladders: gated, settings: noGuard, logs: [logRow('peppol uae guide', { status: 'published', published_url: slug('peppol uae guide'), published_at: daysAgo(5) })] })).toEqual(['peppol uae']);
+    expect(kws({ ladders: gated, settings: noGuard, history: ranks('lad_A', 'peppol uae', [25, 60]) })).toEqual(['peppol uae']);
     // a failed check (-1) is skipped; the latest valid check decides
-    expect(kws({ ladders: gated, history: ranks('lad_A', 'peppol uae', [-1, 25]) })).toEqual(['peppol uae']);
-    expect(kws({ ladders: gated, history: ranks('lad_A', 'peppol uae', [45, 25]) })).toEqual([]);
+    expect(kws({ ladders: gated, settings: noGuard, history: ranks('lad_A', 'peppol uae', [-1, 25]) })).toEqual(['peppol uae']);
+    expect(kws({ ladders: gated, settings: noGuard, history: ranks('lad_A', 'peppol uae', [45, 25]) })).toEqual([]);
   });
   it('won: the main keyword in the top 3 in the last 4 checks (or status won) → no more pages, the place is freed', () => {
     const p = planCadence(input({ ladders: [...A(), ...B()], history: ranks('lad_A', 'peppol uae', [2, 1, 3, 2]) }), NOW);
@@ -105,12 +108,45 @@ describe('cadence mirror: pile-up guard and opportunity posts', () => {
   it('3 pages waiting → nothing is written (paused_reason pileup); older than 120 days does not count; the limit from the _site row', () => {
     const p = planCadence(input({ ladders: A(), logs: waiting3 }), NOW);
     expect([p.picks, p.pausedReason, p.waitingPublish, p.candidates.length]).toEqual([[], 'pileup', 3, 4]);
-    expect(cadenceDetail([], { ...p, at: '' }, { cards: [] })).toBe('Writes nothing: 3 pages wait to be published (your limit is 3). Publish them to continue');
+    expect(cadenceDetail([], { ...p, at: '' }, { cards: [] })).toBe(
+      'Writes nothing: 3 written pages waiting for publication (pile-up guard, limit 3): “x three”, “x two”, “x one”. Publish them to continue',
+    );
     expect(kws({ ladders: A(), logs: [...waiting3.slice(0, 2), logRow('x old', { started_at: daysAgo(130) })] })).toHaveLength(3);
     expect(kws({ ladders: A(), logs: waiting3, settings: [siteSet({ max_waiting: 5 })] })).toHaveLength(3);
     // weekly posts off: the website is skipped, no guard either
     const off = planCadence(input({ ladders: A(), logs: waiting3, pagesPerWeek: 0 }), NOW);
     expect([off.picks, off.pausedReason, off.candidates.length]).toEqual([[], '', 4]);
+  });
+
+  // ---- v4.14 (FIX_PLAN D5): pages written by a keyword ladder count too (they reached the content log only from v4.14 on) ----
+  it('D5: 2 content-log rows + 2 ladder rows “writing” are 4 pages waiting at a limit of 3 → nothing is written, and they are named', () => {
+    const p = planCadence(input({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors')] }), NOW);
+    expect([p.picks, p.pausedReason, p.waitingPublish]).toEqual([[], 'pileup', 4]);
+    expect([...p.waitingKeywords].sort()).toEqual(['erp for distributors', 'erp pricing uae', 'peppol uae cost', 'peppol uae guide']);
+    expect(cadenceDetail([], { ...p, at: '' }, { cards: [] })).toBe(
+      'Writes nothing: 4 written pages waiting for publication (pile-up guard, limit 3): “peppol uae cost”, “peppol uae guide”, “erp pricing uae”, “erp for distributors”. Publish them to continue',
+    );
+    // the same website is written again once its limit allows it: the guard stopped it, not the ladder
+    expect(kws({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors')], settings: [siteSet({ max_waiting: 5 })] })).toEqual([
+      'peppol uae software',
+      'peppol uae providers',
+    ]);
+  });
+
+  it('D5: a page in the content log and on its ladder row counts once; published pages never count; “written” waits like “started”', () => {
+    const both = planCadence(input({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('peppol uae cost', { status: 'written' }), logRow('peppol uae guide', { status: 'written' })] }), NOW);
+    expect([both.waitingPublish, both.pausedReason, [...both.waitingKeywords].sort()]).toEqual([2, '', ['peppol uae cost', 'peppol uae guide']]);
+    const published = ['peppol uae cost', 'peppol uae guide', 'peppol uae software'].map((k) => logRow(k, { status: 'published', published_url: slug(k), published_at: daysAgo(3) }));
+    expect(planCadence(input({ ladders: A({ a: 'published', b: 'published', c: 'published' }), logs: published }), NOW).waitingPublish).toBe(0);
+    // a ladder row left on 'writing' whose page is live (the content log has the address) does not count either
+    expect(planCadence(input({ ladders: A({ a: 'writing', b: 'writing', c: 'writing' }), logs: published }), NOW).waitingPublish).toBe(0);
+  });
+
+  it('D5: nothing older than 120 days waits; a content-log row dates an older ladder’s page', () => {
+    const old = planCadence(input({ ladders: std('lad_O', 'wms dubai', daysAgo(200), { a: 'writing', b: 'writing', c: 'writing' }), logs: [logRow('erp pricing uae', { started_at: daysAgo(130) })] }), NOW);
+    expect([old.waitingPublish, old.pausedReason]).toEqual([0, '']);
+    const dated = planCadence(input({ ladders: std('lad_O', 'wms dubai', daysAgo(200), { a: 'writing' }), logs: [logRow('wms dubai cost', { started_at: daysAgo(9) })] }), NOW);
+    expect([dated.waitingPublish, dated.waitingKeywords]).toEqual([1, ['wms dubai cost']]);
   });
 
   const queries = [

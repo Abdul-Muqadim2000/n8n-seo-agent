@@ -23,8 +23,10 @@ import {
 // - main-page gate (not Direct): the main page waits until half of the supporting pages are published (ladder row 'published' or a
 //   content-log row with a published_url), or the main keyword's latest valid rank check is 1-30;
 // - won: the main keyword in the top 3 in each of the last 4 valid checks (failed checks, -1, skipped), or status 'won';
-// - pile-up guard: max_waiting or more distinct keywords written but not published (content log 'started', no published_url,
-//   started in the last 120 days) -> nothing is written that week;
+// - pile-up guard (v4.14, FIX_PLAN D5): max_waiting or more distinct keywords written but not published -> nothing is written that
+//   week. A keyword waits when a content-log row of the last 120 days has any status but published (every content run writes one:
+//   the ladder's page runs, the app's "Write now", the cadence), or a ladder row is still 'writing' and its keyword has no
+//   published page;
 // - opportunity posts (Search Console striking distance, then rising Google Trends searches) only when opportunities is Auto;
 //   when Manual they are suggestions (the first 5);
 // - Manual ladders are never written: each one's next eligible page waits for approval;
@@ -144,6 +146,8 @@ export interface CadencePlan {
   pausedReason: '' | 'pileup';
   /** distinct keywords written and not published (the pile-up count) */
   waitingPublish: number;
+  /** those keywords, oldest first (v4.14, D5: ladder pages included) */
+  waitingKeywords: string[];
 }
 
 function ladderItem(l: LadderRow): QueueItem {
@@ -274,10 +278,29 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     return true;
   });
 
-  // ---- pile-up guard ----
-  const waitingKw = new Set(
-    logs.filter((l) => l.status === 'started' && !l.published_url && now - ms(l.started_at) < CADENCE.waitingDays * 864e5).map((l) => norm(l.keyword)),
-  );
+  // ---- pile-up guard (v4.14, FIX_PLAN D5: Cadence_Plan.js) ----
+  // Every page written and not published counts, each keyword once: the content log (any status but published, written in the last
+  // 120 days) and the ladder rows still 'writing' whose keyword has no published page — ladder pages reached the content log only
+  // from v4.14 on, so their rows are what the guard sees for everything written before it.
+  const freshW = (t: unknown) => { const x = ms(t); return x > 0 && now - x < CADENCE.waitingDays * 864e5; };
+  const waitingMap = new Map<string, { keyword: string; writtenAt: string }>();
+  for (const l of logs) {
+    if (l.status === 'published' || !freshW(l.started_at)) continue;
+    const k = norm(l.keyword);
+    if (!k || waitingMap.has(k)) continue;
+    waitingMap.set(k, { keyword: l.keyword, writtenAt: String(l.started_at || '') });
+  }
+  for (const l of lrows) {
+    if (l.status !== 'writing') continue;
+    const k = norm(l.keyword);
+    if (!k || waitingMap.has(k) || publishedKw.has(k)) continue;
+    const lg = logs.filter((r) => norm(r.keyword) === k).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] ?? null;
+    const at = String(lg?.started_at || l.start_date || '');
+    if (!freshW(at)) continue;
+    waitingMap.set(k, { keyword: l.keyword, writtenAt: at });
+  }
+  const waitingKw = new Set(waitingMap.keys());
+  const waitingKeywords = [...waitingMap.values()].sort((a, b) => a.writtenAt.localeCompare(b.writtenAt)).map((w) => w.keyword);
   const pausedReason = pages > 0 && waitingKw.size >= cfg.maxWaiting ? 'pileup' : '';
   const picks = pausedReason ? [] : candidates.slice(0, pages);
 
@@ -352,6 +375,7 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     waitingForSupport: info.filter((x) => x.mainWaiting && (x.status === 'active' || x.status === 'queued') && !x.won).map((x) => x.id),
     pausedReason,
     waitingPublish: waitingKw.size,
+    waitingKeywords,
   };
 }
 
@@ -361,7 +385,7 @@ export interface CadenceWeek extends CadencePlan {
 }
 
 /**
- * The coming Monday runs, one after the other: each run's picks are logged as written (content log 'started' at the run), as the
+ * The coming Monday runs, one after the other: each run's picks are logged as written (content log 'written' at the run), as the
  * real runs do, so later runs move on — and stop once the pile-up guard holds. Nothing is assumed to get published or to rank.
  * Without runs (weekly posts off), one plan at `now` shows what would be written.
  */
@@ -376,7 +400,7 @@ export function simulateCadence(input: CadenceInput, runs: string[], now = Date.
     for (const p of plan.picks)
       logs.push({
         keyword: p.keyword,
-        status: 'started',
+        status: 'written',
         started_at: at,
         published_url: '',
         published_at: '',

@@ -1,5 +1,5 @@
 // Publish detection (v4.8, PIPELINE_FEATURE_SPEC §6.5), step 1: per tracked site, the pages written but not published yet — seo_content_log
-// rows "started" without a publish link from the last 120 days, plus seo_ladders rows "writing" (one candidate per keyword) — and the sitemap
+// rows not yet published ("started" / "written", no publish link) from the last 120 days, plus seo_ladders rows "writing" (one candidate per keyword) — and the sitemap
 // to read. A site without such pages makes no request at all. A page that improves an EXISTING URL (striking-distance rewrite, ladder page
 // that already existed) cannot be told apart by its URL, so it is matched only when the sitemap says that URL changed after the page was written.
 const CONFIG = { max_age_days: 120, max_candidates_per_site: 40 };
@@ -19,7 +19,7 @@ plan.forEach((s, idx) => {
   const ladderOf = (kw) => LD.find(l => norm(l.keyword) === kw) || null;   // as Publish Check: the domain's ladder row for this keyword
   const cands = new Map();
   for (const r of L) {
-    if (r.status !== 'started' || String(r.published_url || '').trim()) continue;
+    if (r.status === 'published' || String(r.published_url || '').trim()) continue;   // D5: 'started' (the run was spawned) and 'written' (the page exists) both wait
     const t = Date.parse(r.started_at); if (!(t >= cutoff)) continue;
     const kw = norm(r.keyword); if (!kw || cands.has(kw) || published.has(kw)) continue;
     const ladder = ladderOf(kw); if (ladder && ladder.status === 'published') continue;   // already recorded through the ladder

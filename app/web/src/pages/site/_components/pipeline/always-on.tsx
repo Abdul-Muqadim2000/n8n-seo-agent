@@ -89,7 +89,7 @@ function Capacity({ data, cards }: { data: PipelineData; cards: LadderCard[] }) 
           {perWeek > 0 && data.queue?.paused && (
             <p className="mt-1.5 flex items-start gap-1.5 text-xs font-medium text-warning-text">
               <AlertTriangle className="mt-px size-3.5 shrink-0" aria-hidden />
-              Next Monday writes nothing: {data.queue.paused.waiting} pages wait to be published (your limit is {data.queue.paused.max}).
+              Next Monday writes nothing: {data.queue.paused.waiting} written pages waiting for publication (pile-up guard, limit {data.queue.paused.max}).
             </p>
           )}
         </div>

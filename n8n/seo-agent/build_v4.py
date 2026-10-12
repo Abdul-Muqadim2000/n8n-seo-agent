@@ -2336,6 +2336,33 @@ open(os.path.join(OUT_CODE, '_serp_obs.js'), 'w').write("// harness shim (writte
 log('System review fixes (2026-10-11, FIX_PLAN D4 / D8 / D16 / D26 / G3): one shared keyword fit gate (navigational, government / portal, other brands — competitor and results-page domain labels, learned AI brand names, SERP dominance; v5/code/_fit_gate.js) in Analyze Keywords, Rank Keywords, Ladder Pool, Ladder Plan and Brief Context with a reason per refusal (site_keywords.refused, keyword_strategy.refused, ladder refused_keywords); the relevance prompt is told the brands; the Rank Tracker\'s next step follows the ladder state (write / publish / rungs / improve); an AI Overview is a timed observation ("seen in the check at …", "seen in N of M checks"; v5/code/_serp_obs.js) in the digest, the verdict rules, the keyword report, the keyword strategy and the ladder report; the 2025 Ahrefs base rate (1.74% / 40.8%) with an uncalibrated chance band per plan (_reach.js, app mirror)')
 
 # =============================================================================
+# 31. EVERY WRITTEN PAGE IS LOGGED (v4.14, 2026-10-11, FIX_PLAN D5): the pile-up guard undercounted the pages waiting to be published,
+#     because pages written by a keyword ladder were never in seo_content_log — only the Content Cadence and the web app wrote a row.
+#     The cadence counted 2 pages waiting while 4 were written and unpublished, and planned 2 more for the Monday after (exec 380).
+#     Every content run ends in this workflow, so the row is written here for all three: Blog Package (the article exists) branches into
+#     Content Log Row, which reads the stored rows and upserts one row per site + keyword (status started -> written; "I published a
+#     page" and the Site Tracker's publish detection set published). Delivery is untouched: the branch hangs beside it.
+# =============================================================================
+from ladder_common import LOG_TABLE as LOG31, LOG_COLS as LOGC31
+_bp31 = pos('Blog Package')
+LOAD31 = {'alwaysOutputData': True, 'executeOnce': True, 'onError': 'continueRegularOutput'}
+add_node('Ensure Log Table (Run)', DT_TYPE, DT_VERSION, dt_create_params(LOG31, LOGC31), [_bp31[0] + 220, _bp31[1] - 220], {'onError': 'continueRegularOutput'})
+add_node('Load Content Log (Run)', DT_TYPE, DT_VERSION, dt_get_all_params(LOG31), [_bp31[0] + 440, _bp31[1] - 220], LOAD31)
+add_node('Content Log Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Content_Log_Row.js')}, [_bp31[0] + 660, _bp31[1] - 220])
+if_node('Log This Page?', "{{ !$json.skip }}", [_bp31[0] + 880, _bp31[1] - 220])
+add_node('Save Content Log (Run)', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LOG31, LOGC31, ['site_id', 'keyword']), [_bp31[0] + 1100, _bp31[1] - 220], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+for a, b in [('Blog Package', 'Ensure Log Table (Run)'), ('Ensure Log Table (Run)', 'Load Content Log (Run)'), ('Load Content Log (Run)', 'Content Log Row')]:
+    connect(a, b)
+connect('Content Log Row', 'Log This Page?'); connect('Log This Page?', 'Save Content Log (Run)', 0)
+assert [t['node'] for t in conns['Blog Package']['main'][0]][-1] == 'Ensure Log Table (Run)', 'content log branch not last on Blog Package'
+assert "rowsOf('Load Content Log (Run)')" in code('Content Log Row'), 'Content Log Row must read the stored rows explicitly (a Data Table node outputs the table, not the item)'
+assert "$('Blog Package')" in code('Content Log Row'), 'Content Log Row must check that a page was written (report-only runs take the same delivery path)'
+sticky("""### Every written page is logged (v4.14, FIX_PLAN D5)
+`Blog Package` -> **Content Log Row** -> **Save Content Log (Run)**: one `seo_content_log` row per content run, upserted by `site_id` + `keyword`, status **written**. Ladder page runs were invisible before (only the Content Cadence and the web app wrote rows), so the **pile-up guard** undercounted the pages waiting to be published. The row keeps what the opening row knows (`source`, the week, the last published URL); "I published a page" and the Site Tracker's publish detection set `published`.""",
+    _bp31[0] + 180, _bp31[1] - 460, 900, 200, 6)
+log('Every written page is logged (v4.14, FIX_PLAN D5): the main workflow upserts one seo_content_log row per content run (ladder page runs, the app\'s "Write now", the Content Cadence) by site_id + keyword with status written, so the Content Cadence\'s pile-up guard sees every page that waits to be published')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())

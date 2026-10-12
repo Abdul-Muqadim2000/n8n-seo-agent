@@ -102,7 +102,7 @@ export const features: Feature[] = [
       'A “Needs you” queue for briefs, pages and decisions waiting on a person',
       'A 4-week calendar and every schedule with its next and last run',
       'Notices when a planned page goes live and moves the plan on',
-      'A pile-up guard: no new pages while too many wait to be published',
+      'A pile-up guard: no new pages while too many wait to be published — every written page counts, ladder pages included, and they are named',
     ],
     steps: [
       { title: 'Set the pace', body: 'Choose blog posts per week, the default mode — Auto or Manual — and how many ladders are written at once.' },

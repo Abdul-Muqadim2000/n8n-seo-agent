@@ -327,10 +327,11 @@ describe('cards and Needs you from the cadence mirror', () => {
       ['needs_you', 'publish'],
     ]);
     expect(b.cards.every((c) => !b.details.get(c.id)!.timeline.some((e) => e.future))).toBe(true);
-    expect(ladderNeedsYou(b).find((i) => i.kind === 'pileup')?.title).toBe('Weekly posts stopped: 3 pages wait to be published');
+    expect(ladderNeedsYou(b).find((i) => i.kind === 'pileup')?.title).toBe('Weekly posts stopped: 3 written pages waiting for publication');
+    expect(ladderNeedsYou(b).find((i) => i.kind === 'pileup')?.detail).toContain('Waiting: “x one”, “x two”, “x three”.');
     const last = build({}, MONDAYS.slice(0, 2), { lastRunPileup: { at: ago(5), waiting: 3, max: 3 } });
     const item = ladderNeedsYou(last).find((i) => i.kind === 'pileup')!;
-    expect([item.title, item.detail.startsWith('Last Monday’s run wrote nothing')]).toEqual(['Last Monday’s posts were skipped: 3 pages waited to be published', true]);
+    expect([item.title, item.detail.startsWith('Last Monday’s run wrote nothing')]).toEqual(['Last Monday’s posts were skipped: 3 written pages waited for publication', true]);
     expect(last.cards[0].status).toBe('planning');
   });
 
