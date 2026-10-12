@@ -1,5 +1,6 @@
 /*__REACH__*/
 /*__FIT_GATE__*/
+/*__PAGE_TYPE__*/
 // Ladder mode: applies the AI relevance screen, assigns keywords to rungs by difficulty, builds one page per topic
 // cluster, maps internal links, matches existing pages, estimates the timeline and picks the pages to write now.
 // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): everything is measured against the site's REACH (stored 30 days in seo_cache, else measured from this
@@ -116,7 +117,10 @@ const makePages = (list, rung) => {
     const p = ks[0];
     const ex = findExisting(p.keyword, p.your_url);
     const pos = ks.map(k => k.your_position).filter(Boolean);
-    return { rung, keyword: p.keyword, topic: p.topic, page_type: p.page_type, intent: p.intent, volume: p.volume, kd: p.kd, cpc: p.cpc, opportunity: p.opportunity,
+    // FIX_PLAN D10 (2026-10-12): the AI screen answers in free text ("Comparison Page", "Service Page with a cost section"); the row,
+    // the spawned page run and the brief take one of the form's fixed types, and the sentence itself stays as page_notes.
+    const ptype = PT.of(p.page_type, defaultPage(p.intent));
+    return { rung, keyword: p.keyword, topic: p.topic, page_type: ptype, page_notes: PT.notes(p.page_type, ptype), intent: p.intent, volume: p.volume, kd: p.kd, cpc: p.cpc, opportunity: p.opportunity,
       supporting: ks.slice(1, 7).map(k => k.keyword),
       keywords: ks.slice(0, 8).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, intent: k.intent, your_position: k.your_position })),
       total_volume: ks.reduce((s, k) => s + k.volume, 0), traffic_potential: ks.reduce((s, k) => s + (k.traffic_potential || 0), 0),
@@ -138,7 +142,8 @@ const navigational = /navigational/i.test(String(kd.google_intent || '')) || (ba
 const difficulty_for_you = difficultyForYou(kd.keyword_difficulty ?? null, reach, { navigational, other_brand, verdict, position: headRank ? headRank.position : null });
 const strongSite = reachStrong(sa, headRank ? headRank.position : null);
 const plan = reachPlan(difficulty_for_you, strongSite);
-const top = { rung: 4, keyword: head, page_type: base.recommended_page || base.page_type || 'Service Page', intent: kd.google_intent || null, volume: kd.search_volume ?? null, kd: kd.keyword_difficulty ?? null, cpc: kd.cpc ?? null,
+const topType = PT.of(base.recommended_page || base.page_type, base.page_type);
+const top = { rung: 4, keyword: head, page_type: topType, page_notes: PT.notes(base.recommended_page || base.page_type, topType), intent: kd.google_intent || null, volume: kd.search_volume ?? null, kd: kd.keyword_difficulty ?? null, cpc: kd.cpc ?? null,
   supporting: (base.secondary_keywords || []).slice(0, 6), traffic_potential: kd.search_volume ? Math.round(kd.search_volume * 0.3) : null, your_position: headRank ? headRank.position : null };
 const headExisting = (base.existing_page && base.existing_page.url) ? { url: base.existing_page.url, source: base.existing_page.source || 'sitemap' } : findExisting(head, headRank && headRank.url);
 Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExisting.url : plannedUrl(head), existing_source: headExisting ? headExisting.source : null, status: headExisting ? 'improve' : 'new' });

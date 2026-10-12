@@ -732,7 +732,8 @@ _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
 FIT_GATE_SRC = _rd0('code/_fit_gate.js').rstrip('\n'); SERP_OBS_SRC = _rd0('code/_serp_obs.js').rstrip('\n')   # 2026-10-11: the keyword fit gate (D4 / D8) and the results-page observation rules (D26), one copy each
 SITE_MODEL_SRC = _rd0('code/_site_model.js').rstrip('\n')   # 2026-10-12 (G19, SITE_MODEL_SPEC.md): the one site model (canonical host, name, NAP, services, pages, facts)
 SOURCES_SRC = _rd0('code/_sources.js').rstrip('\n'); ANCHOR_SRC = _rd0('code/_anchor.js').rstrip('\n')   # 2026-10-11: source quality, figure lookup and link cleaning (G4) and the anchor words of a link to our own page (D9)
-rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors), one copy each, inlined where a node asks for them
+PAGE_TYPE_SRC = _rd0('code/_page_type.js').rstrip('\n')   # 2026-10-12 (D10): the page type as one of the form's fixed options, with the verdict's free text kept as page_notes
+rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -2522,6 +2523,57 @@ open(os.path.join(OUT_CODE, '_sources.js'), 'w').write("// harness shim (written
 open(os.path.join(OUT_CODE, '_anchor.js'), 'w').write("// harness shim (written by build_v4.py section 32): the anchor kit - { keyword?, title?, url? } -> the words a link uses\n" + ANCHOR_SRC +
     "\nreturn $input.all().map(i => ({ json: { anchor: anchorText(i.json || {}), title_case: titleCaseKeyword((i.json || {}).keyword || '') } }));\n")
 log('Content correctness (2026-10-11, FIX_PLAN D9 / G2 / G4): only a page the site really has is a link target (Collect Site URLs splits the ladder links into live and planned_link_targets; Content QA strips links to planned pages, the hub block and the ItemList list the live ones only, meta.json carries links_to_add_when_published and the Rank Tracker reminds the owner the week one goes live), anchors come from the page title or the title-cased keyword with the acronyms kept (v5/code/_anchor.js); no FAQPage schema and no FAQ block scored anywhere (question headings answered directly instead, in Content QA, AI Readiness and the brief / copywriter / critic / editor prompts); every figure of a cited sentence is looked up in the text that source gave us and marked [Confirm: ...] when it is not there, a source with no independent authority may be cited once, and utm_* / srsltid / gclid / fbclid are stripped from every link in the copy, the package and the schema (v5/code/_sources.js)')
+
+# 35. A PAGE SOMEONE CAN PUBLISH (2026-10-11 system review, FIX_PLAN D10): the live ladder page of execution 365 held 30 x [Price] and
+#     20 x [Timeline], "[Your Business Name]", [Office address] and [Phone number] in its schema - although techand.ai's homepage states
+#     Tech&, the DAFZA address and the phone number - and ran 3,952 words against the 2,100 the verdict asked for. Content QA scored it 91
+#     and passed it. Five changes, one per cause:
+#       1. Content QA takes the business name, logo and NAP from the site model (G19: profile -> homepage Organization / LocalBusiness
+#          schema -> Google Business Profile) and passes the merged profile on, so the package's NAP block and author box use it too.
+#       2. Brief Context says whether price or timeline facts exist at all (SM.facts), and the brief may only build the page on cost or
+#          timeline when they do (angle_rules in the prompt; *Parse Brief* drops such an angle, information gain and table column when
+#          they do not).
+#       3. *Parse Brief* clamps target_word_count to the verdict's own target when it named one ("a service page of about 2,100 words"),
+#          else to the competitor analysis' recommended count, +/- 10%, and scales the outline's section targets with it.
+#       4. Content QA fails a draft with more than 5 placeholders (review notes with a colon - [Confirm: ...], [Owner: ...],
+#          [Author insight: ...] - do not count) or more than 25% over target, and the editor is told how to fix both.
+#       5. The page type becomes one of the form's fixed options (v5/code/_page_type.js, marker /*__PAGE_TYPE__*/) in *Parse Verdict*,
+#          *Parse Analysis* and the ladder plan; the free text the verdict wrote ("Service Page (ERP implementation UAE) with built-in
+#          vendor-neutral comparison, cost and compliance sections") travels on as page_notes and reaches the brief.
+# =============================================================================
+# 5: the verdict's free-text page type -> one fixed option + page_notes
+patch('Parse Verdict', "const allowed = ['GO', 'GO_WITH_CHANGES', 'AVOID'];",
+      PAGE_TYPE_SRC + "\n// 2026-10-12 (FIX_PLAN D10): the verdict answers in free text; the fixed option decides the length band, the schema and\n// meta.json, and the sentence itself travels on as page_notes so the brief still hears what the verdict asked for.\nconst allowed = ['GO', 'GO_WITH_CHANGES', 'AVOID'];")
+patch('Parse Verdict', "    recommended_page: verdict.recommended_page || prev.page_type,",
+      "    recommended_page: PT.of(verdict.recommended_page || prev.page_type, prev.page_type),\n    page_notes: PT.notes(verdict.recommended_page, PT.of(verdict.recommended_page || prev.page_type, prev.page_type)),")
+assert 'const PT = (() =>' in code('Parse Verdict') and 'PT.notes(' in code('Parse Verdict')
+# 3 + 2: the brief's length and angle are held to what the data supports
+patch('Parse Brief', "// Word count check\nconst totalWords = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);",
+      rd('code/_brief_guard.js').rstrip('\n') + "\n\n// Word count check\nconst totalWords = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);")
+patch('Parse Brief', "    content_brief: brief,\n    brief_outline_words: totalWords",
+      "    content_brief: brief,\n    brief_outline_words: totalWords,\n    brief_adjustments: adjustments")
+assert 'brief_adjustments' in code('Parse Brief') and 'verdictWords' in code('Parse Brief')
+# 5 (b): the length band is read from the fixed option, not from free text
+assert 'PT.of(' in code('Parse Analysis') and 'const PT = (() =>' in code('Parse Analysis'), 'Parse Analysis: page type kit not inlined'
+assert 'PT.of(' in code('Ladder Plan') and 'page_notes' in code('Ladder Plan'), 'Ladder Plan: page type not normalised'
+# 1 + 4: Content QA reads the site model and refuses a page nobody can publish
+for _n35 in ('Content QA', 'Brief Context'):
+    assert 'const SM = (() => {' in code(_n35), _n35 + ': site model kit not inlined (D10)'
+assert "$('Site Model').first().json.site_model" in code('Content QA') and 'placeholder_count > PH_MAX' in code('Content QA'), 'Content QA: D10 gate missing'
+assert 'angle_rules' in code('Brief Context') and 'pricing_facts' in code('Brief Context'), 'Brief Context: angle facts missing'
+assert "{{ $json.angle_rules || '' }}" in nodes['Strategy Brief']['parameters']['text'], 'the brief prompt does not carry the angle rules'
+assert 'at most 5 bracketed placeholders' in nodes['Strategy Brief']['parameters']['text']
+assert 'At most 5 placeholders in the whole page' in nodes['Copywriter']['parameters']['text']
+assert 'Too many placeholders to publish' in nodes['Editor']['parameters']['text']
+# harness shim (S41): the page-type kit as a runnable script, one item in -> one answer out
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_page_type.js'), 'w').write("// harness shim (written by build_v4.py section 35): the page type kit - { page_type?, default? } -> the fixed option and the free text kept as notes\n" + PAGE_TYPE_SRC +
+    "\nreturn $input.all().map(i => { const j = i.json || {}; const type = PT.of(j.page_type, j.default); return { json: { page_type: type, page_notes: PT.notes(j.page_type, type), types: PT.TYPES } }; });\n")
+_cq35 = pos('Content QA')
+sticky("""### A page someone can publish (FIX_PLAN D10)
+The business **name / logo / NAP** come from the **site model** (profile -> homepage `Organization` / `LocalBusiness` schema -> Google Business Profile), not from the business profile alone, and the merged profile travels on to the package's NAP block and author box. A **cost or timeline angle** needs price or timeline facts (`SM.facts`): without them *Parse Brief* drops that angle, its information gain and the table column. *Parse Brief* **clamps the length** to the verdict's own target ("about 2,100 words"), else to the competitor analysis' recommendation, +/-10%, and scales the outline with it. **Content QA fails** a draft with more than **5 placeholders** (notes with a colon do not count) or more than **25% over target**. The **page type** is one of the form's fixed options (`v5/code/_page_type.js`); the verdict's sentence travels as `page_notes`.""",
+    _cq35[0] - 60, _cq35[1] + 320, 1100, 220, 3)
+log('A page someone can publish (2026-10-11 system review, FIX_PLAN D10): Content QA takes the business name, logo and NAP from the site model (profile -> homepage Organization / LocalBusiness schema -> Google Business Profile), passes the merged profile to the package and fails a draft with more than 5 placeholders (review notes with a colon do not count) or more than 25% over target; Brief Context says whether price or timeline facts exist and Parse Brief drops a cost / timeline angle, its information gain and its table column when they do not; Parse Brief clamps target_word_count to the verdict\'s own target, else to the competitor analysis\' recommendation, +/- 10%, and scales the outline with it; the page type is normalised to the form\'s fixed options everywhere (v5/code/_page_type.js) with the verdict\'s free text kept as page_notes')
 
 # =============================================================================
 # 9. WRITE

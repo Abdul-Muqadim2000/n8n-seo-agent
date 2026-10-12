@@ -1,3 +1,4 @@
+/*__PAGE_TYPE__*/
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
   if (raw && typeof raw === 'object') return raw;
@@ -11,7 +12,9 @@ const parseAgentJson = (raw) => {
 const prev = $('Collect Facts').first().json;
 const analysis = parseAgentJson($input.first().json.output);
 // Length discipline: commercial pages convert better short; guides may run longer. Never above 3,000 words.
-const pt = String(prev.page_type || '').toLowerCase();
+// 2026-10-12 (FIX_PLAN D10): the page type can arrive as a whole sentence ("Service Page (…) with built-in comparison, cost and compliance
+// sections"), which picked the band by accident; the fixed option decides it.
+const pt = PT.of(prev.page_type).toLowerCase();
 const isGuide = /blog|guide|article/.test(pt);
 const lo = isGuide ? 1200 : 900, hi = isGuide ? 3000 : 2400;
 const rec = Number(analysis.recommended_word_count) || 1400;

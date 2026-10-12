@@ -1,5 +1,6 @@
 /*__FIT_GATE__*/
 /*__ANCHOR__*/
+/*__SITE_MODEL__*/
 // Content runs (v4.4): what the brief, the copy, the schema and the blog package need beyond the keyword research —
 // the site's business profile (author, reviewer, address / NAP), proof from its case studies, the page role (hub, case study, local,
 // standard), the cluster pages a hub links down to, and the video details (YouTube page / Vimeo oEmbed, read by Fetch Video Details).
@@ -27,6 +28,27 @@ const hasBiz = ['business_name', 'street_address', 'city', 'phone'].some(k => s(
 const site_profile = hasBiz || author ? { business_name: s(P.business_name), business_type: s(P.business_type), logo_url: s(P.logo_url),
   address: { street: s(P.street_address), city: s(P.city), region: s(P.region), postal_code: s(P.postal_code), country_code: s(P.country_code) || s(d.country_iso) },
   phone: s(P.phone), public_email: s(P.public_email), opening_hours: s(P.opening_hours), price_range: s(P.price_range), service_areas: list(P.service_areas), map_url: s(P.map_url), stored: !!stored } : null;
+
+// ---- which angles the facts support (FIX_PLAN D10, 2026-10-12) ----
+// The live page of execution 365 was built on cost and timeline — the gap the competitor analysis found — although the business had given
+// no prices and no timelines, so the copy ended up with 30 × [Price] and 20 × [Timeline]. A cost or timeline angle is allowed only when
+// such facts exist: the site model answers that (profile price range, business facts, call to action), and the case facts count too.
+let site_model = null;
+try { site_model = $('Site Model').first().json.site_model || null; } catch (e) {}
+if (!site_model && d.site_model && typeof d.site_model === 'object') site_model = d.site_model;
+const model = site_model || SM.from({ domain }, { profile: P, request: d, description: d.site_description || {} });
+const mFacts = SM.facts(model);
+const csIn = (d.case_study && typeof d.case_study === 'object') ? d.case_study : {};
+const ownText = [d.business_facts, s(P.price_range), csIn.timeline, csIn.results].map(s).filter(Boolean).join(' ');
+const pricing_facts = !!(mFacts.pricing || (/\d/.test(ownText) && /(\$|£|€|₹|\b(aed|sar|pkr|inr|usd|gbp|eur)\b|\bprice|\bpricing|\bcost|\bfee|per (user|seat|month|hour|day|project))/i.test(ownText)));
+const timeline_facts = !!(mFacts.timeline || /\b\d+\s*(day|week|month|year)s?\b|\btimeline\b|\bgo.?live\b|\bturnaround\b|\bwithin \d/i.test(ownText));
+const angle_rules = (pricing_facts && timeline_facts)
+  ? 'ANGLE: price and timeline facts are on file, so a cost or a timeline angle is allowed — but every figure must come from the facts above, never from the competitors or from an estimate.'
+  : 'ANGLE LIMIT: this business has given no ' + (pricing_facts ? 'timeline facts' : timeline_facts ? 'price facts' : 'price or timeline facts')
+    + ', so the page must NOT be built on ' + (pricing_facts ? 'how long the work takes' : timeline_facts ? 'what it costs' : 'what it costs or how long it takes')
+    + '. Do not make that the unique_angle, do not promise it in information_gain, do not plan a comparison-table column for it and never plan a row that can only be filled with [Price] or [Timeline].'
+    + ' A buyer question about ' + (pricing_facts ? 'duration' : 'cost') + ' may still be answered — qualitatively: what drives it, which choices change it, what to ask a vendor for, with no numbers and no placeholders.'
+    + ' Build the page on something the facts support instead: the compliance or regulatory requirements, a decision framework, the risks and how to avoid them, integration depth, migration effort, local rules, or what separates the options.';
 
 // ---- proof: the site's recorded case studies (anonymised where the client may not be named) ----
 const proof_library = domain ? rowsOf('Load Case Studies (Brief)').filter(r => r.site_id === site_id && r.case_id !== d.case_id)
@@ -133,4 +155,7 @@ const video_context = video ? 'VIDEO: the page has a video ("' + (video.title ||
 const case_facts_text = caseFacts.replace(/\n/g, ' | ') + (proof_library.length ? (caseFacts ? ' | ' : '') + proof_library.map(c => c.results).join(' | ') : '');
 
 return [{ json: { ...d, site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, hub_pages_planned: hub_planned, video, case_study: cs, local_area: area,
-  eeat_context, proof_context, role_brief: ROLE_BRIEF[page_role] || '', role_writer: ROLE_WRITER[page_role] || '', video_context, case_facts_text } }];
+  eeat_context, proof_context, role_brief: ROLE_BRIEF[page_role] || '', role_writer: ROLE_WRITER[page_role] || '', video_context, case_facts_text,
+  // the facts and the call to action the site model holds (what the app sent, what the weekly run stored) when this request carries none
+  business_facts: s(d.business_facts) || mFacts.business_facts, cta: s(d.cta) || mFacts.cta,
+  pricing_facts, timeline_facts, angle_rules, site_model: model } }];
