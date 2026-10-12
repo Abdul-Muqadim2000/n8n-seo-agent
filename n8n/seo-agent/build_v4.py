@@ -2178,10 +2178,19 @@ connect('Input OK?', 'Mark Run Refused', 1); connect('Mark Run Refused', 'Refuse
 _ends = sorted(nm for nm in nodes if 'const run_ledger = {' in nodes[nm]['parameters'].get('jsCode', ''))
 assert {'Build Word File', 'Build Full Report', 'Build Audit Report', 'Build Keyword File', 'Build Ladder Report'} <= set(_ends), _ends
 _bw = pos('Build Word File')
-add_node('Settle Run Ledger', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')], {'status': 'done', 'settled_usd': "={{ Number($('Run Ledger Row').first().json.est_usd) || 0 }}"}), [_bw[0] + 220, _bw[1] + 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
-for nm in _ends: connect(nm, 'Settle Run Ledger')
+# P1-1 (2026-10-12, LIVE_CHECK_phase1_2026-10-12.md §3): the settle node hung off the five report builders only, so every short mode (describe,
+# backlinks / AI visibility, track, published, check-in, profile, case study, and the audit started from the form) left its row `reserved` for
+# ever (live: rows 1-8 and 11). Each of those branches passes through exactly one node on its way out — the node feeding its "Via Webhook (…)?"
+# split, so the API and the form variant are both covered — and that node settles the row too. The update matches `status = reserved`, so a row
+# can be settled only once and a refused row (Mark Run Refused wrote `refused` first) is never turned into a finished one.
+SETTLE_ENDS = {'describe': 'Build Description Page', 'track': 'Start Site Tracker', 'published': 'Published Delivery', 'checkin': 'Check-in Delivery',
+               'profile': 'Profile Delivery', 'case_study': 'Case Study Delivery', 'monitor': 'Monitor Started', 'audit_form': 'Spawn Audit Run'}
+add_node('Settle Run Ledger', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}'), ('status', 'reserved')], {'status': 'done', 'settled_usd': "={{ Number($('Run Ledger Row').first().json.est_usd) || 0 }}"}), [_bw[0] + 220, _bw[1] + 300], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+for nm in _ends + sorted(SETTLE_ENDS.values()):
+    assert nm in nodes, 'settle end missing: ' + nm
+    connect(nm, 'Settle Run Ledger')
 sticky("""### Run ledger (v4.14, D1 — concurrency-safe guards)
-Every execution appends one row to **seo_run_ledger** (run_id, key, mode, est_usd, created_at, status, settled_usd) *before* **Rate Limit** counts, so parallel executions no longer overwrite each other's counters (workflow static data did: 8 runs counted as 5). Rate Limit counts the period's rows with a lower id than its own (row order decides ties), skips refused rows and the Keyword Check's rows, and refuses over the same limits as before (6 / day per e-mail, 40 / day per app company, 150 / day in total, `ai_budget_usd` per period). A refused run marks its row (**Mark Run Refused**); the report nodes settle it (**Settle Run Ledger**: done, settled_usd). One insert + one filtered read per run; the table is created on first use.""", LX26 - 40, LY26 - 300, 940, 240, 6)
+Every execution appends one row to **seo_run_ledger** (run_id, key, mode, est_usd, created_at, status, settled_usd) *before* **Rate Limit** counts, so parallel executions no longer overwrite each other's counters (workflow static data did: 8 runs counted as 5). Rate Limit counts the period's rows with a lower id than its own (row order decides ties), skips refused rows and the Keyword Check's rows, and refuses over the same limits as before (6 / day per e-mail, 40 / day per app company, 150 / day in total, `ai_budget_usd` per period). A refused run marks its row (**Mark Run Refused**); every branch settles it at its own end (**Settle Run Ledger**: done, settled_usd) — P1-1: the short modes used to leave the row `reserved` for ever. The settle update matches `status = reserved`, so a row settles once and a refused row stays refused. One insert + one filtered read per run; the table is created on first use.""", LX26 - 40, LY26 - 300, 940, 240, 6)
 log('Concurrency-safe guards (v4.14, D1): one seo_run_ledger row per execution reserved before Rate Limit; counts and the AI budget come from the ledger rows with a lower id (row order decides ties, refused rows skipped, finished runs count what they settled); the row is marked refused / settled; limits and keys unchanged; the Keyword Check counts the same way')
 log('RDAP parsed (D7): the rdap+json text answer under `data` is read (v5/code/_rdap.js) in RDAP Results and Domain Ages, so paid WHOIS runs only for the domains RDAP cannot date')
 # 27. AUDIT CORRECTNESS (2026-10-11, system review FIX_PLAN.md D2 / D6 / D17 / D18 / D24): the live whole-system test found the audit
@@ -2334,6 +2343,62 @@ open(os.path.join(OUT_CODE, '_fit_gate.js'), 'w').write("// harness shim (writte
 open(os.path.join(OUT_CODE, '_serp_obs.js'), 'w').write("// harness shim (written by build_v4.py section 26): the results-page observation rules — { serp, at, obs } -> { seen_at, clock, count, seen, text }\n" + SERP_OBS_SRC +
     "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { seen_at: j.serp ? serpSeenAt(j.serp) : null, clock: j.at ? obsClock(j.at) : null, ...aioObserved(j.obs || []) } }; });\n")
 log('System review fixes (2026-10-11, FIX_PLAN D4 / D8 / D16 / D26 / G3): one shared keyword fit gate (navigational, government / portal, other brands — competitor and results-page domain labels, learned AI brand names, SERP dominance; v5/code/_fit_gate.js) in Analyze Keywords, Rank Keywords, Ladder Pool, Ladder Plan and Brief Context with a reason per refusal (site_keywords.refused, keyword_strategy.refused, ladder refused_keywords); the relevance prompt is told the brands; the Rank Tracker\'s next step follows the ladder state (write / publish / rungs / improve); an AI Overview is a timed observation ("seen in the check at …", "seen in N of M checks"; v5/code/_serp_obs.js) in the digest, the verdict rules, the keyword report, the keyword strategy and the ladder report; the 2025 Ahrefs base rate (1.74% / 40.8%) with an uncalibrated chance band per plan (_reach.js, app mirror)')
+
+# =============================================================================
+# 29. WHAT THE PHASE 1 LIVE CHECK FOUND (P1-1 … P1-5, 2026-10-12, docs/system-review-2026-10-11/LIVE_CHECK_phase1_2026-10-12.md §3).
+#     P1-1 short runs never settled their ledger row (wired in section 26, above); checked here: every mode reaches Settle Run Ledger, and the
+#          wiring is written to harness/ledger_wiring.json for the harness (S36).
+#     P1-2 link-farm pages still filled "Links lost" and drove the referring-sites drop alert — v5/code/Parse_Backlinks.js.
+#     P1-3 the scraper-query rule missed "-site:…" and lower-case and / or, so 4 of 10 top queries were scrapers — v5/code/GSC_Audit_Findings.js.
+#     P1-4 the full report's §4a still recommended "fta login", "emaratax", "fta portal" and brands such as "character ai": the fit gate ran on
+#          the gap and the easy wins only, the navigational bucket was deliberately left ungated, and the matching finding ("No rankings for
+#          navigational searches") counted the same terms. The gate now runs on every list the customer is shown; a keyword the site itself
+#          ranks for on page 2 keeps its own-brand rows (that is the owner's own name, worth fixing), and the navigational finding is dropped:
+#          no page of this site should chase another company's brand searches.
+#     P1-5 §4a printed DataForSEO's float32 CPCs raw (8.84000015258789) — rounded to 2 decimals, as the keyword strategy already does.
+# =============================================================================
+# ---- P1-4: every keyword list the full report shows runs through the fit gate ----
+patch('Analyze Keywords', "  opportunities_by_intent[x] = (x === 'navigational' ? notWinning : notWinningFit).filter(k => k.intent === x)",
+      "  opportunities_by_intent[x] = notWinningFit.filter(k => k.intent === x)   // P1-4 (2026-10-12): the navigational bucket was ungated and recommended fta login / emaratax / other brands")
+patch('Analyze Keywords', """const striking_distance = you.keywords.filter(k => k.position >= 11 && k.position <= 20)""",
+      """// P1-4: page-2 keywords are shown as "quick wins", so they run through the gate too — but a search for the site's OWN brand stays (ranking
+// 11-20 for your own name is a real problem to fix, not a keyword to drop)
+const fitsOwnAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return false; };
+const striking_distance = you.keywords.filter(k => k.position >= 11 && k.position <= 20).filter(fitsOwnAK)""")
+patch('Analyze Keywords', """INTENTS.forEach(x => {
+  const med = median(comps.map(c => c.by_intent[x]));""",
+      """INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4: "no rankings for navigational searches" counted other companies' brands — never a goal for this site
+  const med = median(comps.map(c => c.by_intent[x]));""")
+patch('Analyze Keywords', "      refused: refused.slice(0, 40)\n", "      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40)\n")
+assert 'fitsOwnAK' in code('Analyze Keywords') and "x === 'navigational' ? notWinning" not in code('Analyze Keywords')
+# ---- P1-5: the intent tables round the CPC (DataForSEO sends float32: 8.84000015258789) ----
+patch('Build Full Report', "const diffLabel = (v) =>", "const cpcTxt = (c) => (c == null || c === '' || isNaN(c)) ? 'N/A' : (Math.round(Number(c) * 100) / 100).toFixed(2);   // P1-5 (2026-10-12): DataForSEO CPCs are float32\nconst diffLabel = (v) =>")
+patch('Build Full Report', "<td>${k.cpc == null ? 'N/A' : k.cpc}</td>", "<td>${cpcTxt(k.cpc)}</td>")
+# ---- P1-1: no mode may leave its ledger row reserved; the wiring goes to the harness (S36) ----
+def _reach(start):
+    seen, stack = set(), [start]
+    while stack:
+        n = stack.pop()
+        if n in seen: continue
+        seen.add(n)
+        for lst in (conns.get(n, {}).get('main') or []):
+            for t in (lst or []): stack.append(t['node'])
+    return seen
+_settle_all = set(_ends) | set(SETTLE_ENDS.values())
+_rm_out = conns['Route Mode']['main']
+_mode_settles = {}
+for _i, _rule in enumerate(nodes['Route Mode']['parameters']['rules']['values']):
+    _mname = _rule.get('outputKey') or ('output' + str(_i))
+    _tg = [t['node'] for t in (_rm_out[_i] if _i < len(_rm_out) else [])]
+    _rc = set().union(*[_reach(t) for t in _tg]) if _tg else set()
+    _mode_settles[_mname] = sorted(_rc & _settle_all)
+    assert _mode_settles[_mname], 'P1-1: mode "' + _mname + '" never reaches Settle Run Ledger'
+_sn, _mr = nodes['Settle Run Ledger']['parameters'], nodes['Mark Run Refused']['parameters']
+json.dump({'settle_node': 'Settle Run Ledger', 'settle_from': sorted(s for s, o in conns.items() for l in (o.get('main') or []) for t in (l or []) if t['node'] == 'Settle Run Ledger'),
+           'settle_conditions': [[c['keyName'], c['keyValue']] for c in _sn['filters']['conditions']], 'settle_values': _sn['columns']['value'],
+           'refused_conditions': [[c['keyName'], c['keyValue']] for c in _mr['filters']['conditions']], 'refused_values': _mr['columns']['value'],
+           'modes': _mode_settles}, open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), 'w'), indent=1)
+log('Phase 1 live-check defects (2026-10-12, P1-1 … P1-5): every mode settles its run-ledger row (the short modes left it reserved for ever) and the settle update matches status = reserved, so a row settles once and a refused row stays refused; link-farm pages never count as lost, never produce reclaim advice and never drive the referring-sites drop alert (Parse_Backlinks.js); the scraper-query rule catches "-site:", lower-case and / or and quoted or bracketed groups (GSC_Audit_Findings.js); the keyword fit gate runs on the opportunities by intent and the page-2 quick wins as well, and "no rankings for navigational searches" is gone; the full report rounds CPCs to 2 decimals')
 
 # =============================================================================
 # 9. WRITE

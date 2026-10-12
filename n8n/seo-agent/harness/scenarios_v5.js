@@ -3221,5 +3221,129 @@ await guard('fix plan phase 1 — keywords and ladders', async () => {
   check('G3: no ladder → no chance band', b.plan_type === 'none' && b.chance === null && b.chance_text === '', JSON.stringify(b.chance));
 });
 
+// ===================================================================================
+// The five defects the Phase 1 live check of 2026-10-12 found on techand.ai
+// (docs/system-review-2026-10-11/LIVE_CHECK_phase1_2026-10-12.md §3).
+await guard('phase 1 live-check defects (P1-1 … P1-5)', async () => {
+  const SN = 'S36 P1-1..P1-5 — every run settles its ledger row once, link farms out of the lost list / reclaim / the referring-sites alert, scraper queries with "-site:" and lower-case and / or, the fit gate on every keyword list shown, CPCs rounded';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  // ---------- P1-1: the run ledger settles exactly once, and never un-refuses a row ----------
+  // The wiring is generated (build_v4.py section 29 / build_api.py) into harness/ledger_wiring.json: which node settles which mode, and the
+  // filter + values of the two Data Table update nodes. The nodes themselves are Data Table nodes, so the harness plays their update here.
+  const LW = require('./ledger_wiring.json');
+  const dtUpdate = (rows, conds, values, ctx) => { let hit = 0;
+    const want = conds.map(([k, v]) => [k, String(v).startsWith('=') ? ctx[k] : v]);
+    for (const r of rows) if (want.every(([k, v]) => String(r[k]) === String(v))) { hit++; for (const [k, v] of Object.entries(values)) r[k] = String(v).startsWith('=') ? ctx[k] : v; }
+    return hit; };
+  const SHORT = { describe: 'Build Description Page', track: 'Start Site Tracker', published: 'Published Delivery', checkin: 'Check-in Delivery', profile: 'Profile Delivery', case_study: 'Case Study Delivery', ai_visibility: 'Monitor Started', backlinks: 'Monitor Started' };
+  check('P1-1: every mode of Route Mode reaches Settle Run Ledger — the short ones through their own last node (they left the row reserved for ever)',
+    Object.entries(SHORT).every(([m, n]) => (LW.modes[m] || []).includes(n) && LW.settle_from.includes(n)) && Object.values(LW.modes).every(l => l.length > 0) && ['keyword', 'discover', 'audit', 'ladder'].every(m => (LW.modes[m] || []).length > 0),
+    JSON.stringify(LW.modes));
+  check('P1-1: the settle update matches status = reserved (so it cannot settle a row twice or a refused one), in the main workflow and in the Keyword Check',
+    eq(LW.settle_conditions, [['run_id', '={{ $execution.id }}'], ['status', 'reserved']]) && eq(LW.assess.settle_conditions, [['run_id', '={{ $execution.id }}'], ['status', 'reserved']]) && LW.settle_values.status === 'done' && /est_usd/.test(String(LW.settle_values.settled_usd)),
+    JSON.stringify([LW.settle_conditions, LW.assess.settle_conditions]));
+  check('P1-1: the Keyword Check settles after the answer AND after an upstream failure (502 left the row reserved)', eq(LW.assess.settle_from, ['Respond Assess', 'Respond Assess Upstream Error']), JSON.stringify(LW.assess.settle_from));
+  // a real describe run: its reserved row, then the settle node, twice
+  const nd = await run('Normalize Input', F.forms.webhookDescribe || F.forms.webhookVerdict);
+  ledgerReset(); const dOut = await ledgerRun([{ json: { ...nd[0].json, mode: 'site_description', email: 'owner@northwind-erp.com', ai_budget_usd: 6, ai_budget_period: 'day' } }]);
+  const dRow = LEDGER.rows[0];
+  check('P1-1: a describe run reserves one row at its estimate (status reserved, nothing settled)', !dOut[0].json.validation_error && dRow.status === 'reserved' && dRow.settled_usd === 0 && dRow.est_usd > 0 && dRow.run_id === 'test-exec', JSON.stringify(dRow));
+  const ctx = { run_id: 'test-exec', settled_usd: dRow.est_usd };
+  const hit1 = dtUpdate(LEDGER.rows, LW.settle_conditions, LW.settle_values, ctx);
+  check('P1-1: the describe run settles its row — status done, settled_usd = the reservation', hit1 === 1 && dRow.status === 'done' && dRow.settled_usd === dRow.est_usd, JSON.stringify(dRow));
+  const hit2 = dtUpdate(LEDGER.rows, LW.settle_conditions, LW.settle_values, { run_id: 'test-exec', settled_usd: 99 });
+  check('P1-1: a second settle (two branches reaching the node) matches no row — a run can never settle twice', hit2 === 0 && dRow.settled_usd === dRow.est_usd, JSON.stringify([hit2, dRow]));
+  ledgerReset(ledgerFixture('owner@northwind-erp.com', 6, 'keyword', 0, new Date().toISOString()));
+  const rOut = await ledgerRun([{ json: { ...nd[0].json, mode: 'site_description', email: 'owner@northwind-erp.com', ai_budget_usd: 6, ai_budget_period: 'day' } }]);
+  const rRow = LEDGER.rows[6];
+  dtUpdate(LEDGER.rows, LW.refused_conditions, LW.refused_values, { run_id: 'test-exec' });
+  const hitR = dtUpdate(LEDGER.rows, LW.settle_conditions, LW.settle_values, { run_id: 'test-exec', settled_usd: 5 });
+  check('P1-1: a refused run stays refused — the settle update does not touch it', /daily limit/.test(rOut[0].json.validation_error || '') && rRow.status === 'refused' && hitR === 0 && rRow.settled_usd === 0, JSON.stringify(rRow));
+
+  // ---------- P1-2: link-farm pages never count as lost, never earn reclaim advice, never drive the drop alert ----------
+  const NOW = new Date().toISOString(), DAY = NOW.slice(0, 10), SITE = 'site_northwind-erp-com', DOM = 'northwind-erp.com';
+  const BROKEN = 'https://' + DOM + '/old-guide/';
+  const FARMS = Array.from({ length: 13 }, (_, i) => 'farmsite' + (i + 1) + '.example');
+  const GOOD = ['goodpartner.com', 'erpnews.ae', 'peppol.org', 'uaedirectory.biz'];
+  const prevRow = (o) => ({ status: 'live', miss_count: 0, verify: 'found', sources: 'dfs', last_seen: DAY, verified_at: NOW, seo_value: 45, rel: 'follow', ...o });
+  const entry = (d, o = {}) => ({ ref_domain: d, kind: 'web', sources: [], from_url: 'https://' + d + '/', to_url: 'https://' + DOM + '/', anchor: 'northwind erp', first_seen: DAY, last_seen: DAY, authority: 120, visits: 0, visits_28d: 0, key_events: 0, pages: [{ url: 'https://' + d + '/' }], prev: prevRow(), ai_cited: false, ...o });
+  const entries = [
+    ...GOOD.map((d, i) => entry(d, { sources: ['dfs'], from_url: 'https://' + d + '/partners/page-' + i, to_url: i === 0 ? BROKEN : 'https://' + DOM + '/' })),
+    ...FARMS.map(d => entry(d, { from_url: 'https://' + d + '/all/2835/13.html', to_url: BROKEN, anchor: 'buy cheap backlinks for erp software uae', prev: prevRow({ status: 'at_risk', miss_count: 1, verify: 'missing' }) }))];
+  const vl = [
+    ...GOOD.map((d, i) => ({ site_id: SITE, purpose: 'link', ref_domain: d, url: 'https://' + d + '/partners/page-' + i, verify: 'found', rel: 'follow', placement: 'content', to_url: i === 0 ? BROKEN : 'https://' + DOM + '/', anchor: 'northwind erp', title: 'Partners', context: 'Our partner Northwind ERP', outbound_domains: 5 })),
+    ...FARMS.map(d => ({ site_id: SITE, purpose: 'link', ref_domain: d, url: 'https://' + d + '/all/2835/13.html', verify: 'missing', why: 'footprint' })),
+    { site_id: SITE, purpose: 'target', url: BROKEN, broken: true, status: 404, referring: 5 }];
+  const plan = (previous) => [{ json: { site_id: SITE, domain: DOM, mode: 'full', on_demand: false, checked_at: NOW, since: new Date(Date.now() - 7 * 864e5).toISOString(), country_iso: 'AE', competitors: [], brand_names: ['Northwind'], assets: [{ url: 'https://' + DOM + '/', title: 'Northwind ERP' }], stored_gap: [], stored_timeseries: [], previous } }];
+  for (const k of ['BL Requests', 'Run BL Requests', 'Gap Requests', 'Run Gap Requests', 'Authority Requests', 'Run Authority', 'DR Requests', 'Fetch DR', 'Link Analyst Jobs', 'Link Analyst']) delete store[k];
+  mock('Link Merge', [{ json: { site_id: SITE, entries, mention_pages: [], list_pages: [], cc_gap: [], sources: {} } }]);
+  mock('Verify Links', vl);
+  mock('BL Plan', plan({ union_domains: 17, referring_domains: 17, spam_score: 0 }));
+  const R = (await run('Parse Backlinks', store['Verify Links']))[0].json;
+  const isFarm = (d) => FARMS.includes(d);
+  console.log('   lost ->', JSON.stringify(R.lost.map(l => l.from_domain)), '| farms', R.farms.length, '| alerts', JSON.stringify(R.alerts.map(a => a.level + ': ' + a.text.slice(0, 80))));
+  check('P1-2: the 13 link-farm pages are labelled spam and set aside, but never appear in "Links lost" or in important_lost (they filled both live)',
+    R.farms.length === 13 && FARMS.every(d => (R.ledger_rows.find(r => r.ref_domain === d) || {}).link_type === 'spam') && !R.lost.some(l => isFarm(l.from_domain)) && !R.important_lost.some(l => isFarm(l.from_domain)) && !R.candidates.some(c => c.type === 'lost' && isFarm(c.prospect_domain)),
+    JSON.stringify({ lost: R.lost.map(l => l.from_domain), farms: R.farms.length }));
+  check('P1-2: no "restore it" advice at all — the only confirmed losses were the farm pages, so there is no lost-link alert', R.lost.length === 0 && !R.alerts.some(a => /link\(s\) lost/.test(a.text)), JSON.stringify(R.alerts.map(a => a.text.slice(0, 90))));
+  check('P1-2: reclaim keeps the broken page but names only the real referrer, never a farm page', R.reclaim.length === 1 && R.reclaim[0].broken_url === BROKEN && eq(R.reclaim[0].domains, ['goodpartner.com']) && !R.candidates.some(c => c.type === 'reclaim' && isFarm(c.prospect_domain)), JSON.stringify(R.reclaim));
+  check('P1-2: the referring-sites drop counts non-spam sites only — 17 of which 13 were farm pages is not a fall to 4', !R.alerts.some(a => /Referring sites \(all sources\) fell/.test(a.text)), JSON.stringify(R.alerts.map(a => a.text)));
+  mock('BL Plan', plan({ union_domains: 30, referring_domains: 30, spam_score: 0 }));
+  const R2 = (await run('Parse Backlinks', store['Verify Links']))[0].json;
+  const drop = (R2.alerts.find(a => /Referring sites \(all sources\) fell/.test(a.text)) || {}).text || '';
+  check('P1-2: a real fall is still reported, with the farm pages taken off both sides of the comparison (30 - 13 = 17 → 4)', /fell from 17 to 4\./.test(drop) && /Link-farm pages are not counted/.test(drop), drop || JSON.stringify(R2.alerts.map(a => a.text)));
+
+  // ---------- P1-3: scraper queries ----------
+  mock('GSC Audit Plan', [{ json: { base: { domain: DOM }, domain: DOM, pages: [], crawl_finished: false, crawl_limit: 200, pages_crawled: 0, range: 'last 28 days', sitemap_url: 'https://' + DOM + '/sitemap.xml' } }]);
+  mock('GSC Audit Requests', [{ json: { site_id: SITE, kind: 'queries', connected: true, property: 'sc-domain:' + DOM, permission: 'siteOwner' } }]);
+  const SCRAPE = ['-site:techand.ai', 'cleartax OR techand', '"e invoicing" and uae', '"uae federal tax authority" -site:csc.gov.ae -site:facebook.com', '"dynamics 365" ("customer" or "client") -webinar -guide', 'site:northwind-erp.com "erp" OR inurl:blog'];
+  const REAL = ['erp software and accounting for distributors', 'e invoicing in uae', 'dynamics 365 business central pricing', 'tax and accounting services dubai'];
+  mock('GSC Audit Query', [{ json: { rows: [...SCRAPE, ...REAL].map((q, i) => ({ keys: [q], clicks: i, impressions: 500 - i * 10, ctr: 0.01, position: 4.2 })) } }]);
+  for (const k of ['Fetch Sitemap (Audit)', 'Fetch Sitemap Children (Audit)', 'GSC Sitemaps (Audit)', 'Sitemap Children (Audit)']) delete store[k];
+  const scQ = (await run('GSC Audit Findings', store['GSC Audit Query']))[0].json.search_console;
+  console.log('   scraper queries ->', JSON.stringify(scQ.scraper_queries), '| top:', scQ.top_queries.map(q => q.query).join(' | '));
+  check('P1-3: "-site:", a capital OR without quotes and a quoted phrase with a lower-case "and" are all scraper queries (live: 4 of the 10 top queries slipped through)',
+    scQ.scraper_queries.count === SCRAPE.length && SCRAPE.every(q => !scQ.top_queries.some(t => t.query === q)) && scQ.queries_with_impressions === REAL.length,
+    JSON.stringify({ count: scQ.scraper_queries.count, top: scQ.top_queries.map(q => q.query) }));
+  check('P1-3: an ordinary query with the word "and" (or "or") in prose is still a customer query', REAL.every(q => scQ.top_queries.some(t => t.query === q)), JSON.stringify(scQ.top_queries.map(q => q.query)));
+
+  // ---------- P1-4 / P1-5: the fit gate on every keyword list shown, and rounded CPCs ----------
+  const rkRow = (dom, [k, v, kd, intent, pos, cpc]) => ({ se_type: 'google', keyword_data: { keyword: k, keyword_info: { search_volume: v, cpc: cpc == null ? 2.5 : cpc, competition_level: 'HIGH' }, keyword_properties: { keyword_difficulty: kd }, search_intent_info: { main_intent: intent } }, ranked_serp_element: { serp_item: { type: 'organic', rank_group: pos, rank_absolute: pos, url: 'https://' + dom + '/' + k.replace(/\s+/g, '-') } } });
+  const ranked = (dom, list) => V.task({ target: dom, items: list.map(l => rkRow(dom, l)) });
+  const GOVFIVE = ['fta login', 'fta', 'emaratax', 'emirates id', 'emirates id status'];
+  const CLEARTAX = [['fta login', 90500, 33, 'navigational', 10], ['fta', 49500, 28, 'informational', 7], ['emaratax', 33100, 14, 'navigational', 6], ['emirates id', 18100, 22, 'informational', 10], ['emirates id status', 18100, 22, 'informational', 3], ['fta portal', 12100, 18, 'navigational', 2], ['cleartax e invoicing', 400, 10, 'navigational', 1], ['e invoicing software uae', 320, 20, 'commercial', 4, 1.2345], ['corporate tax uae', 4400, 32, 'informational', 7]];
+  mock('Competitor Analysis', { domain: 'techand.ai', competitors: ['cleartax.com'], country: 'United Arab Emirates', business: 'ERP, e-invoicing and Microsoft Dynamics 365 partner in the UAE', services: ['ERP implementation', 'E-invoicing'], extra_findings: [], extra_works: [] });
+  mock('KW Targets', [{ domain: 'techand.ai', is_you: true }, { domain: 'cleartax.com', is_you: false }]);
+  mock('Ranked Keywords', [ranked('techand.ai', [['techand', 30, 1, 'navigational', 12], ['fta portal', 12100, 18, 'navigational', 15], ['e invoicing uae', 300, 20, 'commercial', 13]]), ranked('cleartax.com', CLEARTAX)]);
+  mock('Fallback Queries', [{ query: 'e invoicing uae' }, { query: 'erp software uae' }]);
+  delete store['Load Site Cache'];
+  const akItems = await run('Analyze Keywords', V.task({ items: [{ se_type: 'google', keyword: 'e invoicing software uae', keyword_info: { search_volume: 320, cpc: 1.2345 }, keyword_properties: { keyword_difficulty: 20 }, search_intent_info: { main_intent: 'commercial' } }] }));
+  const ak = akItems[0].json.site_keywords; const obi = ak.opportunities_by_intent;
+  const allShown = [...Object.values(obi).flat(), ...ak.easy_wins, ...ak.keyword_gap].map(k => k.keyword);
+  console.log('   opportunities ->', JSON.stringify(Object.fromEntries(Object.entries(obi).map(([i, l]) => [i, l.map(k => k.keyword)]))), '| striking:', ak.striking_distance.map(k => k.keyword).join(', '));
+  check('P1-4: the opportunities by intent no longer recommend the government / portal searches or a competitor brand (live §4a listed fta login 90,500/mo, emaratax, fta portal)',
+    [...GOVFIVE, 'fta portal', 'cleartax e invoicing'].every(k => !allShown.includes(k)) && obi.navigational.length === 0 && allShown.includes('e invoicing software uae'),
+    JSON.stringify({ shown: allShown, navigational: obi.navigational.map(k => k.keyword) }));
+  check('P1-4: the page-2 "quick wins" are gated too, but the site\'s own brand stays (ranking 15th for your own name is a problem to fix, not a keyword to drop)',
+    eq(ak.striking_distance.map(k => k.keyword).sort(), ['e invoicing uae', 'techand']) && ak.refused.some(r => r.keyword === 'fta portal') && ak.refused.every((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i),
+    JSON.stringify({ striking: ak.striking_distance.map(k => k.keyword), refused: ak.refused.map(r => r.keyword + ':' + r.reason) }));
+  check('P1-4: "No rankings for navigational searches" is gone (it counted other companies\' brand searches as a gap)',
+    !akItems[0].json.extra_findings.some(f => /navigational searches/.test(f.title)) && akItems[0].json.extra_findings.some(f => /No rankings for (informational|commercial|transactional) searches/.test(f.title) || /Keyword gap/.test(f.title)),
+    JSON.stringify(akItems[0].json.extra_findings.map(f => f.title)));
+  mock('Normalize Input', [{ json: { domain: 'techand.ai', country: 'United Arab Emirates', started_at: new Date().toISOString() } }]);
+  const fullDoc = decode(await run('Build Full Report', [{ json: { ...akItems[0].json, domain: 'techand.ai', country: 'United Arab Emirates', site_audit: { health_score: 69, raw_score: 69, grade: 'C', findings: [], what_works: [], issue_counts: {}, category_scores: {}, not_assessed: [], notes: [] } } }]));
+  const cpcCell = (fullDoc.match(/<td>1\.2345[0-9]*<\/td>|<td>1\.23<\/td>/g) || []);
+  check('P1-5: §4a prints the CPC rounded to 2 decimals (DataForSEO sends float32: 1.2345 / 8.84000015258789)', fullDoc.includes('<td>1.23</td>') && !/1\.2345/.test(fullDoc) && !/\d\.\d{4,}/.test(fullDoc), JSON.stringify(cpcCell) + ' | ' + (fullDoc.match(/\d\.\d{4,}/g) || []).slice(0, 5).join(','));
+  // §4a is everything from its heading to section 5: the four intent tables, the easy wins, the gap and the page-2 quick wins. The site's OWN
+  // rankings (section 4, above it) are a description of where it stands and stay as they are — "fta portal #15" is a fact, not a recommendation.
+  const s4a = fullDoc.slice(fullDoc.indexOf('4a. Keyword Opportunities'), fullDoc.indexOf('5. Authority'));
+  check('P1-4: §4a of the delivered Word file (intent tables, easy wins, gap, quick wins) holds no government, portal or competitor-brand row',
+    s4a.length > 200 && [...GOVFIVE, 'fta portal', 'cleartax e invoicing'].every(k => !s4a.includes('<td>' + k + '</td>')) && s4a.includes('<td>e invoicing software uae</td>'),
+    String(s4a.length) + ' | ' + [...GOVFIVE, 'fta portal', 'cleartax e invoicing'].filter(k => s4a.includes('<td>' + k + '</td>')).join(', '));
+});
+
 H.report();
 })();

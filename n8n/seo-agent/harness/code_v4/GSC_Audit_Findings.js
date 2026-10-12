@@ -62,9 +62,17 @@ if (!connected) {
   const pagesRows = rowsOf(((byKind.pages || [])[0] || {}).r).map(x => ({ page: x.keys[0], clicks: Number(x.clicks) || 0, impressions: Number(x.impressions) || 0, ctr: Number(x.ctr) || 0, position: +(Number(x.position) || 0).toFixed(1) }));
   const allQueryRows = rowsOf(((byKind.queries || [])[0] || {}).r).map(x => ({ query: x.keys[0], clicks: Number(x.clicks) || 0, impressions: Number(x.impressions) || 0, ctr: Number(x.ctr) || 0, position: +(Number(x.position) || 0).toFixed(1) }));
   // D24 (2026-10-11): queries with search operators (site:, inurl:, intitle:, quoted phrases joined with AND / OR) come from SEO tools and scrapers,
-  // not from customers — they are counted apart as "scraper queries" and never listed among the top queries
-  const OPERATOR = /(^|\s)(site|inurl|intitle|intext|inanchor|allintitle|allinurl|allintext|filetype|ext|related|cache|link|before|after|daterange):\S/i;
-  const isScraper = (q) => { const s = String(q || ''); return OPERATOR.test(s) || (/"[^"]+"/.test(s) && /(^|\s)(AND|OR|\|)(\s|$)/.test(s)); };
+  // not from customers — they are counted apart as "scraper queries" and never listed among the top queries.
+  // P1-3 (2026-10-12, Phase 1 live check): 4 of techand.ai's 10 top queries were scraper queries and none was caught — an operator may carry a
+  // leading minus ("-site:csc.gov.ae"), and Search Console lowercases what it reports, so the boolean had to be matched case-insensitively.
+  // Rules: an operator (with an optional leading - / +) anywhere; a boolean written in capitals (AND / OR / |), which no customer types; or a
+  // quoted phrase / bracketed group joined by a boolean in any case ("e invoicing" and uae). Prose alone never counts: "erp software and
+  // accounting for distributors" has no quotes, no brackets and no capitals, so it stays a customer query.
+  const OPERATOR = /(^|\s)[-+]?(site|inurl|intitle|intext|inanchor|allintitle|allinurl|allintext|filetype|ext|related|cache|link|before|after|daterange):\S/i;
+  const BOOL_CAPS = /(^|[\s")])(AND|OR|\|)([\s("]|$)/;
+  const BOOL_ANY = /(^|[\s")])(and|or|\|)([\s("]|$)/i;
+  const GROUPED = /"[^"]+"|\([^)]+\)/;   // a quoted phrase or a bracketed group
+  const isScraper = (q) => { const s = String(q || ''); return OPERATOR.test(s) || BOOL_CAPS.test(s) || (GROUPED.test(s) && BOOL_ANY.test(s)); };
   const scraperRows = allQueryRows.filter(q => isScraper(q.query)); const queryRows = allQueryRows.filter(q => !isScraper(q.query));
   search_console.top_pages = pagesRows.slice(0, 10); search_console.top_queries = queryRows.slice(0, 10); search_console.pages_with_impressions = pagesRows.length; search_console.queries_with_impressions = queryRows.length;
   search_console.scraper_queries = { count: scraperRows.length, impressions: scraperRows.reduce((n, q) => n + q.impressions, 0), clicks: scraperRows.reduce((n, q) => n + q.clicks, 0), sample: scraperRows.slice(0, 3).map(q => q.query) };

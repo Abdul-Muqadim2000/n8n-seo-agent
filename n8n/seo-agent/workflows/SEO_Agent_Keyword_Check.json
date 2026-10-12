@@ -482,6 +482,11 @@
                 "keyName": "run_id",
                 "condition": "eq",
                 "keyValue": "={{ $execution.id }}"
+              },
+              {
+                "keyName": "status",
+                "condition": "eq",
+                "keyValue": "reserved"
               }
             ]
           },
@@ -1275,6 +1280,17 @@
           [
             {
               "node": "Respond Assess Upstream Error",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Respond Assess Upstream Error": {
+        "main": [
+          [
+            {
+              "node": "Settle Run Ledger (Assess)",
               "type": "main",
               "index": 0
             }
