@@ -192,8 +192,8 @@ export const features: Feature[] = [
     icon: ChartNoAxesColumnIncreasing,
     benefits: [
       'A plan of supporting pages that climbs to your head term',
-      'Pages written in order, each linking up the ladder',
-      'Weekly rank tracking for every rung and for the head term',
+      'Pages written in order, each linking up the ladder — only to rungs that are already live',
+      'Weekly rank tracking for every rung and for the head term, with a reminder the week a rung goes live and its link can be added',
       'Auto or Manual per ladder, with a priority order',
       'Two active ladders at a time by default, so effort is not spread thin',
       'No keyword overlap between ladders, so your own pages never compete',
@@ -243,12 +243,14 @@ export const features: Feature[] = [
       'Page types for hub and pillar pages, case studies, local (city) pages and video pages',
       'A three-image plan with alt text, file names and the social image',
       'A blog package as HTML, Markdown and meta.json, or a WordPress draft',
+      'Links only to pages that are already live, with link text that reads like a title; pages still to come are listed as links to add later',
+      'Every figure looked up in the source the page cites, and a source without independent authority cited at most once',
       'A live check of the published page: schema, images, links and metadata',
     ],
     steps: [
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile and your case studies.' },
       { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
-      { title: 'Check', body: 'SEO checks on every page. Figures that cannot be verified are marked for you to confirm.' },
+      { title: 'Check', body: 'SEO checks on every page. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm.' },
       { title: 'Publish and verify', body: 'Take the package or a WordPress draft; Ascentra checks the page once it is live.' },
     ],
     facts: [

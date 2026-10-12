@@ -18,8 +18,16 @@ QUALITY BAR
 3. Audience fit: speaks to the stated audience and answers their objections.
 4. Trust: no unsupported claims or invented numbers; external numbers carry a source link; client facts are used correctly; placeholders only where facts are missing.
 5. Readability and voice: plain words, varied sentence length, active voice, no filler, none of the banned phrases (delve, unlock, seamless, robust, leverage, cutting-edge, game-changer, elevate, empower, crucial, paramount, realm, embark, foster, streamline, synergy, holistic, best-in-class, world-class, state-of-the-art, top-notch, one-stop shop, "in today's fast-paced world", "ever-evolving", "it's important to note", "in conclusion", "when it comes to", "a wide range of").
-6. Search fit: matches the intent, question headings with direct 40-60 word answers, terms used naturally, primary keyword placed correctly without stuffing, one FAQ section in Q1:/A1: format, internal links only to allowed URLs.
+6. Search fit: matches the intent, at least three headings phrased as the questions buyers ask and answered directly in the 40-60 words under them (no "Frequently Asked Questions" block and no Q1:/A1: list — Google stopped showing FAQ rich results in May 2026), terms used naturally, primary keyword placed correctly without stuffing, internal links only to allowed URLs and never to a page that is not published yet.
 7. Structure: follows the outline order and target lengths, comparison table present, CTA last, meta title ≤60 and description 120-155 characters.
+
+SOURCE QUALITY — what a citation is worth, best first. Judge every external link against this list and say so in "problems" when the draft falls short.
+1. Primary: a government, regulator, standards body or official statistics page (.gov, .gov.<country>, .edu, europa.eu, iso.org, w3.org, peppol.org, u.ae, the WHO / OECD / World Bank / IMF / UN).
+2. Research: a named research house publishing its own data (Statista, Gartner, Forrester, IDC, McKinsey, Deloitte, PwC, KPMG, EY, BCG, Bain, Pew, Nielsen, Grand View, MarketsandMarkets).
+3. Major press: Reuters, Bloomberg, the BBC, the Financial Times, the Wall Street Journal, the New York Times, The Economist, AP, CNBC, Khaleej Times, The National, Gulf News, Zawya.
+4. Vendor documentation: a product's own documentation or release notes (Microsoft Learn, Oracle, SAP, Odoo, Zoho docs) — fine for how the product works, never for a market figure.
+5. Weak: everything else — a vendor's or agency's blog post, a listicle, an unknown site. The page may cite at most ONE page per weak domain; a second citation of the same weak domain is a high-severity problem, and so is a market or compliance figure whose only source is a weak page.
+Also flag: a figure that does not appear in the source it links to, a link with tracking parameters (utm_*, srsltid, gclid, fbclid), and a link to a page of this site that is not published yet.
 
 DRAFT
 {{ $json.output }}

@@ -1,4 +1,5 @@
 /*__FIT_GATE__*/
+/*__ANCHOR__*/
 // Content runs (v4.4): what the brief, the copy, the schema and the blog package need beyond the keyword research —
 // the site's business profile (author, reviewer, address / NAP), proof from its case studies, the page role (hub, case study, local,
 // standard), the cluster pages a hub links down to, and the video details (YouTube page / Vimeo oEmbed, read by Fetch Video Details).
@@ -42,18 +43,27 @@ const page_role = (cs || /case stud/.test(pt)) ? 'case_study' : /local/.test(pt)
 const article_like = /blog|guide|article|pillar|hub|case stud|comparison|faq/.test(pt) || !!(d.ai_target && d.ai_target.question);   // v4.12: these pages show the byline with a visible "Updated" date (AI cites fresh, dated pages)
 const STOP = new Set(['the', 'and', 'for', 'with', 'your', 'our', 'how', 'what', 'best', 'top', 'near', 'from', 'are', 'you', 'www', 'com', 'html', 'php', 'page', 'pages', 'blog', 'services', 'service']);
 const toks = (t) => s(t).toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter(x => x.length > 2 && !STOP.has(x));
+// 2026-10-11 (FIX_PLAN D9): a cluster page counts as live only when the site really has it (sitemap / crawl — Collect Site URLs keeps the
+// ladder pages it found there out of `planned_link_targets`). Everything else is planned: it is described in the brief, but nothing links to
+// it, and the blog package records it as a link to add once it is published. Every page carries the anchor words a link would use.
+const normU = (u) => s(u).toLowerCase().replace(/[#?].*$/, '').replace(/\/+$/, '');
+const liveUrls = new Set([...(d.site_urls || []), ...(d.internal_link_candidates || []).map(c => c && c.url)].map(normU).filter(Boolean));
+const plannedUrls = new Set((d.planned_link_targets || []).map(l => normU(l && l.url)).filter(Boolean));
+const isLive = (u) => { const k = normU(u); return !!k && liveUrls.has(k) && !plannedUrls.has(k); };
 let hub_pages = [];
 if (page_role === 'hub') {
   // ladder top page: its links down to the rung pages (Spawn Page Runs: role "rung N"; Content Cadence: role "down")
-  hub_pages = (d.ladder_links || []).filter(l => l && l.url && !/^(top|sibling)$/i.test(s(l.role))).slice(0, 12)
-    .map(l => ({ url: s(l.url), keyword: s(l.keyword), role: s(l.role) || 'down', planned: !!l.planned }));
+  hub_pages = [...(d.ladder_links || []), ...(d.planned_link_targets || [])].filter(l => l && l.url && !/^(top|sibling)$/i.test(s(l.role || l.ladder)))
+    .filter((l, i, a) => a.findIndex(x => normU(x.url) === normU(l.url)) === i).slice(0, 12)
+    .map(l => ({ url: s(l.url), keyword: s(l.keyword || l.about), title: s(l.title), role: s(l.role || l.ladder) || 'down', planned: !isLive(l.url) }));
   if (!hub_pages.length) {   // a stand-alone pillar page: the site's own pages on the topic
     const kt = new Set(toks(kw));
     hub_pages = (d.internal_link_candidates || []).filter(c => c && c.url && c.path && c.path !== '/')
       .map(c => ({ c, score: toks(c.path + ' ' + (c.title || c.about || '')).filter(t => kt.has(t)).length })).filter(x => x.score > 0)
       .sort((a, b) => b.score - a.score).slice(0, 10)
-      .map(x => ({ url: s(x.c.url), keyword: s(x.c.about || x.c.title) || s(x.c.path).replace(/[\/_-]+/g, ' ').trim(), role: 'cluster', planned: !!x.c.planned }));
+      .map(x => ({ url: s(x.c.url), keyword: s(x.c.about || x.c.title) || s(x.c.path).replace(/[\/_-]+/g, ' ').trim(), title: s(x.c.title), role: 'cluster', planned: !isLive(x.c.url) }));
   }
+  hub_pages = hub_pages.map(p => ({ ...p, anchor: anchorText(p) }));
   const sdB = d.site_description || {};
   const fitCtxB = { own_domain: domain, competitors: (d.competitors || []).map(String), serp_domains: [...new Set((d.competitors_summary || []).map(c => String(c.domain || '')).filter(Boolean))],
     brands: {}, protect: [kw, ...(sdB.products_or_services || []), ...(d.services || []), String(d.business || sdB.business_description || '').slice(0, 400)] };
@@ -97,19 +107,21 @@ if (video) {
 }
 
 // ---- texts for the prompts (built here so the prompts stay readable) ----
-const cluster = hub_pages.map(p => '- ' + (p.keyword || p.url) + ' — ' + p.url + (p.planned ? ' (planned, not live yet)' : '')).join('\n');
+const hub_live = hub_pages.filter(p => !p.planned), hub_planned = hub_pages.filter(p => p.planned);
+const cluster = (hub_live.length ? 'LIVE — link to these, with the anchor shown:\n' + hub_live.map(p => '- ' + (p.keyword || p.url) + ' — ' + p.url + ' — anchor: "' + p.anchor + '"').join('\n') : 'LIVE: none yet')
+  + (hub_planned.length ? '\nPLANNED, NOT PUBLISHED — write the section, set no link_to and never write a link to these:\n' + hub_planned.map(p => '- ' + (p.keyword || p.url)).join('\n') : '');
 const area = s(d.local_area);
 const nap = site_profile ? [site_profile.business_name, [site_profile.address.street, site_profile.address.city, site_profile.address.region, site_profile.address.postal_code].filter(Boolean).join(', '), site_profile.phone, site_profile.opening_hours].filter(Boolean).join(' · ') : '';
 const caseFacts = cs ? [['Client', cs.client_public === false ? (cs.client_name || 'the client') + ' (do NOT name them; describe them as "a ' + (cs.industry ? cs.industry + ' business' : 'client') + (cs.location ? ' in ' + cs.location : '') + '")' : cs.client_name], ['Industry', cs.industry], ['Location', cs.location], ['Service delivered', cs.service], ['Challenge', cs.challenge], ['What was done', cs.solution], ['Timeline', cs.timeline], ['Results', cs.results], ['Client quote (verbatim)', cs.quote ? '"' + cs.quote + '" — ' + (cs.client_public === false ? s(cs.quote_by).replace(/^[^,]+,\s*/, '') : cs.quote_by) : '']]
   .filter(x => s(x[1])).map(x => x[0] + ': ' + s(x[1])).join('\n') : '';
 const ROLE_BRIEF = {
-  hub: 'HUB PAGE (pillar): this page is the complete guide to "' + kw + '" and the hub of a topic cluster. Plan 8-12 H2 sections: the core definition and the decision framework in depth, plus one section per cluster page below (group 2-3 closely related ones) that summarises the subtopic in 120-250 words and sets "link_to" to that page\'s URL. internal_link_suggestions must include every cluster page (up to 12) with a descriptive anchor, in addition to the usual links. The system adds a linked table of contents and a "Guides in this series" block; do not plan them as sections.\nCLUSTER PAGES:\n' + (cluster || '- none found: plan the hub so each section can later link to a detailed page'),
+  hub: 'HUB PAGE (pillar): this page is the complete guide to "' + kw + '" and the hub of a topic cluster. Plan 8-12 H2 sections: the core definition and the decision framework in depth, plus one section per cluster page below (group 2-3 closely related ones) that summarises the subtopic in 120-250 words. Set "link_to" ONLY for a page listed as LIVE, and only to its exact URL; a page listed as PLANNED has no URL yet, so its section carries no link_to and no link. internal_link_suggestions must include every LIVE cluster page with its anchor, in addition to the usual links, and no planned page. The system adds a linked table of contents and a "Guides in this series" block of the live pages only; do not plan them as sections.\nCLUSTER PAGES:\n' + (cluster || '- none found: plan the hub so each section can later link to a detailed page'),
   case_study: 'CASE STUDY: the page tells one real project and proves the service "' + s((cs || {}).service || kw) + '". Use ONLY the case facts below for anything about the project: never invent numbers, names, dates, tools or quotes; anything missing stays a bracketed placeholder. Copy the case facts into client_facts. Outline (6-8 H2s): the challenge; why they chose the business; what was done (approach, steps, timeline); the results (each number from the case facts, before → after where given, plus a results table); in the client\'s words (only when a quote is given, verbatim); what other ' + (s((cs || {}).industry) || 'teams') + ' can learn (3-5 transferable lessons); next step (CTA). Title pattern: client (or the anonymised description) + the headline result + the service. target_word_count 900-1,600. The system renders an "at a glance" snapshot box.\nCASE FACTS:\n' + (caseFacts || 'none given'),
   local: 'LOCAL PAGE for ' + (area || '[City]') + ': written for buyers in ' + (area || 'this area') + '. It must carry genuinely local substance, never a city-name swap of another page: the districts, free zones or neighbourhoods served, local rules, authorities or permits that matter for this service, how the service works on site there (visits, response times, local team), local examples or proof, and local FAQs. Plan one section about reaching the business in ' + (area || 'the area') + ' — the system adds the verified name / address / phone / opening hours block below it. Never invent an address, phone number, office, review or local client.\nBUSINESS DETAILS ON FILE: ' + (nap || 'none — the page must not claim a local office; describe the service area instead') + (site_profile && site_profile.service_areas.length ? '\nAREAS SERVED: ' + site_profile.service_areas.join(', ') : ''),
   standard: ''
 };
 const ROLE_WRITER = {
-  hub: 'HUB PAGE: every outline section with a "link_to" URL ends with one sentence that links to that page with a descriptive anchor ([anchor](url)). Summarise each subtopic; do not repeat the detailed page. Do not write a table of contents or a list of guides (the system adds both).',
+  hub: 'HUB PAGE: every outline section with a "link_to" URL ends with one sentence that links to that page with a descriptive anchor ([anchor](url)). A section without a "link_to" is about a page that is not published yet: summarise the subtopic and write NO link for it — never invent or guess a URL. Summarise each subtopic; do not repeat the detailed page. Do not write a table of contents or a list of guides (the system adds both).',
   case_study: 'CASE STUDY: tell the project as a story with real numbers. These case facts are true and may be stated; nothing else about the project may be:\n' + caseFacts + '\nUse the quote verbatim and only if given. Include a before → after results table. No invented metrics, names, dates or tools.',
   local: 'LOCAL PAGE for ' + (area || '[City]') + ': genuinely local detail in every section (areas served, local rules and authorities, how the service works on site, local examples). Do not write the address, phone number or opening hours (the system inserts the verified block); never claim an office, review or client that is not in the facts.',
   standard: ''
@@ -120,5 +132,5 @@ const proof_context = proof_library.length ? proof_library.map(c => '- ' + (c.ti
 const video_context = video ? 'VIDEO: the page has a video ("' + (video.title || 'untitled') + '"' + (video.minutes ? ', about ' + video.minutes + ' minutes' : '') + '). The system embeds it' + (video.placement ? ' under "' + video.placement + '"' : ' after the quick answer') + ' with its transcript. Refer to it once, naturally (what it shows and why to watch); never transcribe it or invent what it says.' + (video.chapters.length ? ' Key moments: ' + video.chapters.map(c => c.name).join(' · ') + '.' : '') : '';
 const case_facts_text = caseFacts.replace(/\n/g, ' | ') + (proof_library.length ? (caseFacts ? ' | ' : '') + proof_library.map(c => c.results).join(' | ') : '');
 
-return [{ json: { ...d, site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, video, case_study: cs, local_area: area,
+return [{ json: { ...d, site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, hub_pages_planned: hub_planned, video, case_study: cs, local_area: area,
   eeat_context, proof_context, role_brief: ROLE_BRIEF[page_role] || '', role_writer: ROLE_WRITER[page_role] || '', video_context, case_facts_text } }];

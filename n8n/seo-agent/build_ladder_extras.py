@@ -5,7 +5,9 @@ import json, os, re, uuid, sys
 from ladder_common import LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
-rd = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
+_rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
+# shared kits, one copy each, inlined where a node asks for them (2026-10-11, FIX_PLAN D9: the anchor words a link to our own page uses)
+rd = lambda p: _rd0(p).replace('/*__ANCHOR__*/', _rd0('code/_anchor.js').rstrip('\n'))
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'extras:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]
@@ -65,7 +67,7 @@ N.append(iff('Has Report?', '{{ !$json.nothing_to_do }}', [2440, 0]))
 N.append(iff('Has Email (Tracker)?', '{{ !!$json.email }}', [2660, -100]))
 N.append(node('Send Progress Email', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False}}, [2880, -100], credentials=SMTP, onError='continueRegularOutput'))
 N.append(iff('Has Callback (Tracker)?', '{{ !!$json.callback_url }}', [2660, 120]))
-N.append(node('POST Progress', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'rank_tracker', request_id: $json.request_id || null, ladder_id: $json.ladder_id, domain: $json.domain, head_keyword: $json.head_keyword, checked_at: $json.checked_at, positions: $json.positions, rungs: $json.rungs, gains: $json.gains, drops: $json.drops, next_step: $json.next_step, api_body: $json.api_body, done: $json.done, won: !!$json.won, stuck: !!$json.stuck }) }}", 'options': {'timeout': 20000}}, [2880, 120], onError='continueRegularOutput'))
+N.append(node('POST Progress', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.callback_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': "={{ JSON.stringify({ status: 'progress', stage: 'rank_tracker', request_id: $json.request_id || null, ladder_id: $json.ladder_id, domain: $json.domain, head_keyword: $json.head_keyword, checked_at: $json.checked_at, positions: $json.positions, rungs: $json.rungs, gains: $json.gains, drops: $json.drops, next_step: $json.next_step, links_to_add: $json.links_to_add || [], api_body: $json.api_body, done: $json.done, won: !!$json.won, stuck: !!$json.stuck }) }}", 'options': {'timeout': 20000}}, [2880, 120], onError='continueRegularOutput'))
 N.append(node('Nothing To Track', 'n8n-nodes-base.noOp', 1, {}, [1560, 260]))
 N.append(sticky('Note', f"""## SEO Agent — Rank Tracker
 Runs **weekly (Monday 08:00)** and on demand through *Manual Run* (Execute Workflow Trigger). Reads every ladder from the Data Table `{LADDER_TABLE}` (written by the ladder mode of SEO Agent v4; both tables are created on first use), checks the Google top 50 for each page's primary keyword and the head term (DataForSEO SERP live, about $0.015 per keyword; a 9-page ladder costs about $0.60 per month), appends `{HISTORY_TABLE}`, and sends one progress e-mail / callback per ladder: positions vs the previous check, rungs in the top 10 / top 3, drops of 5+ positions, and the **recommended next rung** with a form link and a ready-to-send API body (recommend-only mode).

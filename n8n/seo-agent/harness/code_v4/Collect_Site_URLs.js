@@ -54,9 +54,14 @@ const candidates = pages
   .map(p => ({ url: p.url, path: p.path }));
 
 const home = ctx.domain ? 'https://' + ctx.domain + '/' : '';
-// Ladder page runs: the other ladder pages (top page, sibling) are link targets even when they are planned and not live yet
+// Ladder page runs: the other ladder pages (top page, sibling) are link targets - but only the ones the site really has.
+// 2026-10-11 (FIX_PLAN D9): a page the ladder has only planned is not a link target; it travels as planned_link_targets so the brief can
+// describe it, Content QA can strip any link to it and the blog package can list it as a link to add once it is published.
 const ladderLinks = (ctx.ladder_links || []).filter(l => l && l.url).map(l => ({ url: l.url, path: l.path || (String(l.url).replace(/^https?:\/\/[^\/]+/i, '') || '/'), ladder: l.role || 'ladder', about: l.keyword || '', planned: !!l.planned }));
 const ladderUrls = new Set(ladderLinks.map(l => String(l.url).replace(/\/$/, '')));
+const liveUrls = new Set(pages.map(p => String(p.url).replace(/\/$/, '')));
+const ladderLive = ladderLinks.filter(l => liveUrls.has(String(l.url).replace(/\/$/, ''))).map(l => ({ ...l, planned: false }));
+const ladderPlanned = ladderLinks.filter(l => !liveUrls.has(String(l.url).replace(/\/$/, ''))).map(l => ({ ...l, planned: true }));
 const candidates2 = candidates.filter(c => !ladderUrls.has(String(c.url).replace(/\/$/, '')));
 
 return [{
@@ -65,7 +70,8 @@ return [{
     sitemap_ok: pages.length > 0,
     site_urls_count: pages.length,
     site_urls: pages.slice(0, 300).map(p => p.url),
-    internal_link_candidates: [...(home ? [{ url: home, path: '/' }] : []), ...ladderLinks.filter(l => String(l.url).replace(/\/$/, '') !== home.replace(/\/$/, '')), ...candidates2],
+    internal_link_candidates: [...(home ? [{ url: home, path: '/' }] : []), ...ladderLive.filter(l => String(l.url).replace(/\/$/, '') !== home.replace(/\/$/, '')), ...candidates2],
+    planned_link_targets: ladderPlanned,
     existing_page
   }
 }];

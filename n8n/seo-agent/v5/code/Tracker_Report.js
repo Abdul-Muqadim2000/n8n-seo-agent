@@ -1,3 +1,4 @@
+/*__ANCHOR__*/
 // Rank tracker report: per ladder, positions vs the previous check, rungs reached, drops and the recommended next step.
 const FORM_URL = '__FORM_URL__', API_URL = '__API_URL__';
 const plan = $('Tracker Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do);
@@ -72,6 +73,12 @@ for (const [id, items] of byLadder) {
     const base = hs.find(h => new Date(h.checked_at).getTime() <= cutoff) || hs[hs.length - 1]; if (!base) return false; const b = Number(base.position);
     return cur > 0 && (b === 0 || cur < b); });
   const stuck = !won && pubRows.length > 0 && firstPub != null && firstPub <= cutoff && !improved;
+  // 2026-10-11 (FIX_PLAN D9): pages are written without links to their unpublished siblings, so when one goes live the owner has to add the
+  // link. One reminder line per ladder, only for the pages that went live since the previous check, with the anchor words to use.
+  const lastCheck = history.filter(x => x.ladder_id === id && String(x.checked_at) < nowCheck).map(x => String(x.checked_at)).sort().pop() || '';
+  const links_to_add = lastCheck ? rowsK.map(r => { const l = logOf(r.keyword); const at = l ? String(l.published_at || l.started_at || '') : ''; return (at && at > lastCheck && l.published_url) ? { keyword: r.keyword, url: l.published_url, anchor: anchorText({ title: l.title, keyword: r.keyword, url: l.published_url }), rung: r.rung } : null; }).filter(Boolean) : [];
+  const remindHtml = links_to_add.length ? '<p><b>Now live — add the links:</b> ' + links_to_add.map(x => '"' + esc(x.anchor) + '" (' + esc(x.url) + ')').join(', ') + '. ' +
+    'Each of these pages was published since the last check, so the other ladder pages do not link to it yet: add one link from ' + (links_to_add.some(x => x.rung !== 4) ? 'the main page "' + esc(head.head_keyword) + '"' : 'the pages that cover the same topic') + ' using the anchor shown.</p>' : '';
   const firstPending = (next.pages || []).find(p => p.status !== 'writing') || (next.pages || [])[0];
   const apiBody = firstPending ? { mode: 'keyword', keyword: firstPending.keyword, page_type: firstPending.page_type || 'Service Page', country: head.country || '', domain: head.domain, existing_page_url: next.action === 'improve_top' ? (firstPending.target_url || '') : '', email: head.email, ladder_id: id, ladder_rung: next.rung, ladder_head: head.head_keyword, force_content: true } : null;
   const formLink = FORM_URL + '?' + encodeURIComponent('What do you want?') + '=' + encodeURIComponent('I know my keyword');
@@ -81,11 +88,11 @@ for (const [id, items] of byLadder) {
   const html = '<p>Hi,</p><p>Position check for your keyword ladder towards <b>' + esc(head.head_keyword) + '</b> on <b>' + esc(head.domain) + '</b> (' + rowsK.length + ' keywords, Google top 50).</p>' + table +
     '<p><b>Rungs:</b> ' + (rungs.map(r => 'Rung ' + r.rung + ': ' + r.top10 + '/' + r.pages + ' in top 10, ' + r.top3 + ' in top 3' + (r.reached ? ' ✓ reached' : '')).join(' · ') || 'no rung pages tracked') + '</p>' +
     (gains.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(gains.join('; ')) + '</p>' : '') + (drops.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(drops.join('; ')) + '</p>' : '') +
-    '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
+    remindHtml + '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
     (apiBody ? '<p>Start the next page: open the <a href="' + formLink + '">SEO Assistant form</a> ("I know my keyword", keyword <b>' + esc(apiBody.keyword) + '</b>, domain ' + esc(head.domain) + '), or send this to the API (' + esc(API_URL) + '):</p><pre style="background:#f1f5f9;padding:8px;font-size:12px">' + esc(JSON.stringify(apiBody, null, 2)) + '</pre>' : '') +
     '<p style="color:#64748b;font-size:12px">Checks run weekly; once the top page holds the top 3 for four checks, the main keyword and the published pages are checked monthly. Positions come from DataForSEO live SERPs.</p>';
   out.push({ json: { ladder_id: id, domain: head.domain, head_keyword: head.head_keyword, email: head.email || '', callback_url: head.callback_url || '', request_id: head.request_id || '',
     subject, html, status: 'progress', stage: 'rank_tracker', checked_at: nowCheck,
-    positions: rowsK.map(r => ({ rung: r.rung, keyword: r.keyword, position: r.current, previous: r.previous, delta: r.delta, url: r.url })), rungs, gains, drops, next_step: next, api_body: apiBody, done, won, stuck } });
+    positions: rowsK.map(r => ({ rung: r.rung, keyword: r.keyword, position: r.current, previous: r.previous, delta: r.delta, url: r.url })), rungs, gains, drops, next_step: next, links_to_add, api_body: apiBody, done, won, stuck } });
 }
 return out.length ? out : [{ json: { nothing_to_do: true } }];

@@ -341,7 +341,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
 
       <div className="grid gap-5 lg:grid-cols-2">
         {questions.length > 0 && (
-          <Block title="Questions people ask" description="Good blog posts, FAQ sections and AI-answer targets" icon={<CircleHelp />} flush>
+          <Block title="Questions people ask" description="Good blog posts, question headings and AI-answer targets" icon={<CircleHelp />} flush>
             <ul className="divide-y divide-line">
               {questions.map((q) => (
                 <InsightItem key={q} icon={<CircleHelp />} title={q} action={<WriteLink keyword={q} pageType="Blog Post" country={country} siteId={siteId} />} actionPosition="side" />
