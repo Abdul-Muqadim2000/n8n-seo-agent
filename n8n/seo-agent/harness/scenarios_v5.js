@@ -2592,7 +2592,7 @@ await guard('ai growth', async () => {
   const rGood = rd.find(r => /e-invoicing-uae/.test(r.url)), rShell = rd.find(r => /erp-partner-dubai/.test(r.url)), r404 = rd.find(r => /peppol-uae/.test(r.url)), rNo = rd.find(r => !/e-invoicing-uae|erp-partner-dubai|peppol-uae/.test(r.url));
   console.log('   readiness ->', JSON.stringify(rd.map(r => [r.url.replace(WWW, ''), r.status, r.score, r.updated_on, r.bing_crawled_at.slice(0, 10), r.issues[0] && r.issues[0].slice(0, 50)])));
   const ck = (r, k) => (r.checks.find(c => c.key === k) || {}).ok;
-  check('readiness: a page that answers first, dated 5 days ago (visible), question headings, sourced figures, table, author, FAQ scores 85+', rGood.score >= 85 && ck(rGood, 'answer_first') === true && ck(rGood, 'fresh') === true && rGood.updated_on && ck(rGood, 'question_headings') === true && ck(rGood, 'sourced_figures') === true && ck(rGood, 'author') === true && ck(rGood, 'faq') === true, JSON.stringify(rGood.checks.map(c => c.key + ':' + c.ok)));
+  check('readiness: a page that answers first, dated 5 days ago (visible), question headings, sourced figures, table, author scores 85+; no FAQ check any more (FIX_PLAN G2)', rGood.score >= 85 && ck(rGood, 'answer_first') === true && ck(rGood, 'fresh') === true && rGood.updated_on && ck(rGood, 'question_headings') === true && ck(rGood, 'sourced_figures') === true && ck(rGood, 'author') === true && ck(rGood, 'faq') === undefined && rGood.checks.filter(c => c.weight > 0).reduce((t, c) => t + c.weight, 0) === 100, JSON.stringify(rGood.checks.map(c => c.key + ':' + c.ok)));
   check('readiness: a JavaScript shell (no text in the raw HTML) fails raw_text; a 404 scores 0; noindex is capped at 40; schema is never scored', ck(rShell, 'raw_text') === false && rShell.score < 50 && r404.score === 0 && r404.status === 404 && (!rNo || (ck(rNo, 'indexable') === false && rNo.score <= 40)) && rd.every(r => !r.checks.some(c => c.key === 'schema' && c.weight > 0)), JSON.stringify([rShell.score, r404.score, rNo && rNo.score]));
   check('readiness: Bing\'s crawl state per page (never crawled = empty date)', rd.find(r => r.url === neverPage.page).bing_crawled_at === '' && rGood.bing_crawled_at.startsWith('2025-10-01'), JSON.stringify(rd.map(r => r.bing_crawled_at)));
   // ---- (e) earned media: the cited pages fetched (who they name), prospects with exact columns, at most 3 drafts ----
@@ -3575,6 +3575,201 @@ await guard('d5-content-log', async () => {
   mock('Load Ladders', A({ a: 'writing' }));
   const pc = await run('Publish Candidates', store['Load Ladders']);
   check('D5: publish detection still picks up the page, now that the run logged it as "written"', pc.length === 1 && !pc[0].json.nothing_to_do && (pc[0].json.candidates || []).some(c => c.keyword === 'peppol uae cost'), JSON.stringify(pc.map(x => (x.json.candidates || []).map(c => c.keyword))));
+});
+
+// ===================================================================================
+// S38 D9 / G2 / G4 (2026-10-11, system review) — the three content-quality items of the fix plan, on the shape of the live page of
+// execution 365 (`docs/system-review-2026-10-11/files/erp-software-uae.*`): it linked twice each to three pages that do not exist,
+// wrote "Facts erp" as an anchor, carried FAQPage schema, kept `?srsltid=` on a Statista link and cited one vendor blog three times.
+// ===================================================================================
+await guard('content correctness', async () => {
+  const SN = 'S38 D9 G2 G4 — a hub links only to live pages with title-cased anchors, no FAQPage anywhere, every figure checked against its source, weak sources capped, tracking parameters stripped';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const EMPTY = [{ json: {} }];
+  const D = 'techand.ai';
+
+  // ---------- D9 (a): the anchor kit (code_v4/_anchor.js, a shim written by build_v4.py section 32) ----------
+  const anch = async (list) => (await run('_anchor', list.map(j => ({ json: j })))).map(i => i.json);
+  const A = await anch([{ keyword: 'facts erp' }, { keyword: 'erp software dubai' }, { keyword: 'best erp software in dubai' }, { keyword: 'vat and crm for sme in uae' },
+    { keyword: 'erp software uae', title: 'ERP Software UAE: The 2026 Buyer Guide | Tech&' }, { url: 'https://' + D + '/peppol-access-point/' }, { keyword: 'SAP vs ERP' }]);
+  console.log('   anchors ->', A.map(x => x.anchor).join(' | '));
+  check('D9: anchors are title-cased and keep the acronyms ("Facts erp" became "Facts ERP"); a page title wins and loses the brand tail; a URL falls back to its last path piece; no anchor is all lower-case',
+    eq(A.map(x => x.anchor), ['Facts ERP', 'ERP Software Dubai', 'Best ERP Software in Dubai', 'VAT and CRM for SME in UAE', 'ERP Software UAE: The 2026 Buyer Guide', 'Peppol Access Point', 'SAP vs ERP'])
+    && A.every(x => x.anchor !== x.anchor.toLowerCase()), JSON.stringify(A.map(x => x.anchor)));
+
+  // ---------- G4 (a): the source kit (code_v4/_sources.js) ----------
+  const srcq = async (list) => (await run('_sources', list.map(j => ({ json: j })))).map(i => i.json);
+  const STAT = 'https://www.statista.com/outlook/tmo/software/erp/worldwide/?srsltid=AU7gw4WlnBr0cwotONj2rz1OX8NuhJp4cm';
+  const S = await srcq([{ url: STAT }, { url: 'https://example.com/a?utm_source=news&id=7&utm_medium=email&utm_campaign=x#top' }, { url: 'https://example.com/p?gclid=1&fbclid=2&msclkid=3' }, { url: 'https://example.com/plain' },
+    { url: 'https://tax.gov.ae/en/vendors.aspx' }, { url: 'https://www.statista.com/outlook/erp/' }, { url: 'https://www.reuters.com/tech/x' }, { url: 'https://learn.microsoft.com/dynamics365/finance' },
+    { url: 'https://www.microsoft.com/en/blog/erp-trends' }, { url: 'https://enterprise.trangotech.com/blog/top-erp-systems/' }, { url: 'https://peppol.org/members/' }]);
+  console.log('   sources ->', S.map(x => x.host + ':' + x.tier).join(' | '));
+  check('G4: srsltid, utm_*, gclid, fbclid and msclkid are stripped, the real query and the fragment survive, a plain URL is untouched',
+    S[0].url === 'https://www.statista.com/outlook/tmo/software/erp/worldwide/' && S[1].url === 'https://example.com/a?id=7#top' && S[2].url === 'https://example.com/p' && S[3].url === 'https://example.com/plain', JSON.stringify(S.slice(0, 4).map(x => x.url)));
+  check('G4: the source-quality list — government, research, major press, vendor documentation, a vendor blog and an unknown vendor site (weak), a standards body',
+    eq(S.slice(4).map(x => x.tier), ['primary', 'research', 'press', 'vendor', 'weak', 'weak', 'primary']), JSON.stringify(S.slice(4).map(x => [x.host, x.tier])));
+  const fig = async (list) => (await srcq(list)).map(x => x.found);
+  const MOF = 'The UAE e-invoicing mandate starts in July 2026 for taxpayers with revenue of AED 50 million and above; 1,234 businesses registered and adoption rose 23.5%.';
+  check('G4: a figure is found whatever the formatting — "AED 50m" = "AED 50 million", "1234" = "1,234", "23.5 percent" = "23.5%", the year as written',
+    eq(await fig([{ figure: 'AED 50m', source: MOF }, { figure: '1234', source: MOF }, { figure: '23.5 percent', source: MOF }, { figure: '2026', source: MOF }]), [true, true, true, true]), 'formatting variants');
+  check('G4: a figure the source does not carry is not found (a different number, a different magnitude, another year)',
+    eq(await fig([{ figure: 'USD 1,802 million', source: MOF }, { figure: 'AED 50bn', source: MOF }, { figure: '2027', source: MOF }, { figure: '3,952', source: MOF }]), [false, false, false, false]), 'missing figures');
+  const F1 = (await srcq([{ text: 'We run 8 phases over 3 months and migrate 12 tables. Revenue of AED 50m, 23.5% growth and 1,234 orders in 2025.' }]))[0].figures.map(f => f.raw);
+  console.log('   figures found ->', F1.join(' | '));
+  check('G4: small bare numbers ("8 phases", "3 months", "12 tables") are never treated as claims; amounts, percentages, counts over 1,000 and years are',
+    eq(F1, ['AED 50m', '23.5%', '1,234', '2025']), JSON.stringify(F1));
+
+  // ---------- D9 (b): Collect Site URLs splits the ladder links into live and planned ----------
+  const sitemap = '<?xml version="1.0"?><urlset>' + ['/', '/e-invoicing-software-uae/', '/contact-us'].map(p => '<url><loc>https://' + D + p + '</loc></url>').join('') + '</urlset>';
+  const LADDER = [{ url: 'https://' + D + '/e-invoicing-software-uae/', path: '/e-invoicing-software-uae/', role: 'rung 1', keyword: 'e invoicing software uae', planned: true },
+    { url: 'https://' + D + '/best-erp-software-in-dubai/', path: '/best-erp-software-in-dubai/', role: 'rung 1', keyword: 'best erp software in dubai', planned: true },
+    { url: 'https://' + D + '/erp-software-dubai/', path: '/erp-software-dubai/', role: 'rung 2', keyword: 'erp software dubai', planned: true },
+    { url: 'https://' + D + '/erp-implementation-cost-uae/', path: '/erp-implementation-cost-uae/', role: 'rung 2', keyword: 'erp implementation cost uae', planned: true }];
+  mock('Prepare Keyword Run', { domain: D, keyword: 'erp software uae', ladder_links: LADDER, ladder_id: 'lad_365', ladder_rung: 4 });
+  mock('Fetch Sitemaps', [{ json: { body: sitemap } }]);
+  const cu = (await run('Collect Site URLs', store['Fetch Sitemaps']))[0].json;
+  console.log('   link candidates ->', cu.internal_link_candidates.map(c => c.path).join(' | '), '|| planned ->', (cu.planned_link_targets || []).map(c => c.about).join(' | '));
+  check('D9: only the ladder page the sitemap really has is a link candidate; the three that are not published are planned_link_targets',
+    cu.internal_link_candidates.some(c => c.url === 'https://' + D + '/e-invoicing-software-uae/' && c.planned === false)
+    && !cu.internal_link_candidates.some(c => /best-erp-software-in-dubai|erp-software-dubai|erp-implementation-cost-uae/.test(c.url))
+    && eq((cu.planned_link_targets || []).map(c => c.about), ['best erp software in dubai', 'erp software dubai', 'erp implementation cost uae'])
+    && (cu.planned_link_targets || []).every(c => c.planned === true), JSON.stringify({ cand: cu.internal_link_candidates.map(c => c.url), planned: cu.planned_link_targets }));
+
+  // ---------- D9 (c): Brief Context marks the cluster pages and gives each one its anchor ----------
+  const PV = { ...cu, keyword: 'erp software uae', domain: D, country: 'United Arab Emirates', page_type: 'Pillar Page', recommended_page: 'Pillar Page', ladder_rung: 4, ladder_head: 'erp software uae', ladder_id: 'lad_365',
+    business: 'Enterprise digital transformation and Microsoft Dynamics 365 partner in the UAE', services: ['ERP implementation'], competitors: [], competitors_summary: [], site_description: { business_description: 'ERP and e-invoicing partner', products_or_services: ['ERP implementation'] } };
+  mock('Parse Verdict', PV); delete store['Load Profile (Brief)']; delete store['Load Case Studies (Brief)'];
+  const bc = (await run('Brief Context', EMPTY))[0].json;
+  console.log('   hub pages ->', (bc.hub_pages || []).map(p => p.keyword + (p.planned ? ' (planned)' : ' (live)') + ' = "' + p.anchor + '"').join(' | '));
+  check('D9: the hub has 1 live cluster page and 3 planned ones, each with its anchor; the brief tells the writer to link only to the live one',
+    bc.page_role === 'hub' && bc.hub_pages.filter(p => !p.planned).length === 1 && bc.hub_pages.filter(p => p.planned).length === 3
+    && bc.hub_pages.every(p => p.anchor && p.anchor !== p.anchor.toLowerCase())
+    && /LIVE — link to these, with the anchor shown:\n- e invoicing software uae — https:\/\/techand\.ai\/e-invoicing-software-uae\/ — anchor: "E Invoicing Software UAE"/.test(bc.role_brief)
+    && /PLANNED, NOT PUBLISHED — write the section, set no link_to and never write a link to these:/.test(bc.role_brief)
+    && /A section without a "link_to" is about a page that is not published yet: summarise the subtopic and write NO link for it/.test(bc.role_writer), JSON.stringify({ hub: bc.hub_pages.map(p => [p.keyword, p.planned, p.anchor]), rb: (bc.role_brief || '').slice(-500), rw: bc.role_writer }));
+
+  // ---------- the draft of execution 365, in miniature ----------
+  const FACTS = [
+    { claim: 'The mandate starts in July 2026 for taxpayers with revenue of AED 50 million and above. Adoption rose 23.5% in the first wave.', text: 'UAE e-invoicing — The mandate starts in July 2026 for taxpayers with revenue of AED 50 million and above. Adoption rose 23.5% in the first wave.', url: 'https://mof.gov.ae/e-invoicing/', source: 'mof.gov.ae', title: 'UAE e-invoicing', authority: 'high', tier: 'primary', year: '2026' },
+    { claim: 'Worldwide ERP software revenue reached 1,234 million US dollars in 2025.', text: 'Enterprise resource planning software worldwide — Worldwide ERP software revenue reached 1,234 million US dollars in 2025.', url: 'https://www.statista.com/outlook/tmo/software/erp/worldwide/', source: 'statista.com', title: 'ERP software worldwide', authority: 'high', tier: 'research', year: '2025' }];
+  const BRIEF = { h1: 'ERP software for UAE companies', target_word_count: 300, outline: [], terms_to_use: [{ term: 'data migration', min_count: 1 }], snippet_targets: [], secondary_keywords: ['erp software dubai'],
+    evidence_plan: FACTS.map(f => ({ fact: f.claim, source_url: f.url })) };
+  const PB = { ...bc, content_brief: BRIEF, facts: FACTS, currency: 'AED', business_facts: '', term_model: [], existing_page: null };
+  const QA_BASE = [
+    'Title: ERP Software UAE: The 2026 Buyer Guide',
+    'Meta Description: Choose ERP software in the UAE with a clear comparison, the compliance checklist and the costs that matter before you sign.',
+    'Slug: erp-software-uae', '', '# ERP software for UAE companies', '',
+    'Choosing ERP software for UAE companies is a compliance decision as much as a software decision, and this guide walks through it.', '',
+    '**Quick answer:** Pick the ERP software for UAE companies that already handles VAT, corporate tax and the e-invoicing mandate, then judge it on the data migration effort and the partner behind it. Shortlist three vendors, score them against your own processes and ask each one for a fixed-scope plan.', '',
+    '## What does the e-invoicing mandate change?', '',
+    'The mandate starts in July 2026 ([Ministry of Finance](https://mof.gov.ae/e-invoicing/)). Companies with revenue of AED 50m and above go first ([Ministry of Finance](https://mof.gov.ae/e-invoicing/)), and adoption rose 23.5% in the first wave ([Ministry of Finance](https://mof.gov.ae/e-invoicing/)).', '',
+    'Worldwide ERP revenue reached USD 1,802 million in 2025 ([Statista](' + STAT + ')), which tells you how crowded the market is.', '',
+    '## How big is the market?', '',
+    'Vendor lists differ widely ([TrangoTech](https://enterprise.trangotech.com/blog/top-erp-systems/)), and the categories they use rarely match the way a UAE distributor buys.', '',
+    'Some lists rank by revenue ([TrangoTech](https://enterprise.trangotech.com/blog/top-erp-systems/)); others rank by reviews ([TrangoTech](https://enterprise.trangotech.com/blog/top-erp-systems/)).', '',
+    'Analyst coverage is a better starting point ([Gartner](https://www.gartner.com/en/erp?utm_source=newsletter&utm_medium=email)).', '',
+    '| Option | Suits |', '|---|---|', '| Business Central | Mid-market distributors |', '| Odoo | Lean operations teams |', '',
+    '## Which ERP suits a distributor?', '',
+    'Start from the data migration effort. Our guide to [e invoicing software uae](https://' + D + '/e-invoicing-software-uae/) covers the submission path, our page on [best erp software in dubai](https://' + D + '/best-erp-software-in-dubai/) ranks the shortlist, and [erp software dubai](https://' + D + '/erp-software-dubai/) explains the local partner market.', '',
+    'Read [best erp software in dubai](https://' + D + '/best-erp-software-in-dubai/) before you shortlist, and [erp implementation cost uae](https://' + D + '/erp-implementation-cost-uae/) before you budget.', '',
+    '## How long does an ERP rollout take?', '',
+    'Plan 8 phases over 3 months for a single entity, with 12 tables of master data to clean before go-live, and keep one owner per table.', '',
+    '## Talk to us', '',
+    'Book a scoping call and we will map your ERP software for UAE companies against your data migration plan in one workshop.'].join('\n');
+  // the same draft with the FAQ block the copywriter used to be told to write, in its old place: last section before the CTA
+  const QA_FAQ = QA_BASE.replace('## Talk to us', '## Frequently Asked Questions\n\nQ1: Does the mandate apply to free-zone companies?\nA1: Yes. Free-zone companies that are registered for UAE VAT fall under the same mandate as mainland companies, on the same timetable, and must issue invoices through an accredited service provider rather than by e-mail.\n\nQ2: Can we keep our current accounting system?\nA2: You can, as long as it can produce the required format and connect to an accredited provider. Most teams find the data migration and reporting work easier inside one ERP than across two systems.\n\n## Talk to us');
+  const qaRun = async (md, over) => { mock('Parse Brief', { ...PB, ...(over || {}) }); return (await run('Content QA', [{ json: { output: md, critique: null } }], { runIndex: 0 }))[0].json; };
+
+  const q = await qaRun(QA_BASE);
+  const out = q.output, QA = q.content_qa, types = QA.schema_types;
+  console.log('   QA fixes ->', JSON.stringify(QA.auto_fixes));
+  console.log('   QA schema ->', types.join(', '), '| sources ->', JSON.stringify(QA.source_quality), '| figures ->', JSON.stringify(QA.unverified_figures));
+
+  // D9 in the copy
+  check('D9: the links to the three pages that are not published are gone (their words stay); the link to the page the site really has survives',
+    !/\]\(https:\/\/techand\.ai\/(best-erp-software-in-dubai|erp-software-dubai|erp-implementation-cost-uae)\//.test(out)
+    && /\[e invoicing software uae\]\(https:\/\/techand\.ai\/e-invoicing-software-uae\/\)/.test(out)
+    && /our page on best erp software in dubai ranks the shortlist/.test(out) && QA.internal_links === 1
+    && QA.auto_fixes.some(f => /Removed 4 link\(s\) to pages that are planned but not published yet/.test(f)), JSON.stringify({ internal: QA.internal_links, fixes: QA.auto_fixes }));
+  check('D9: the hub ItemList lists the live page only, with its anchor, and the report names the links to add later',
+    types.includes('ItemList') && eq(q.schema_blocks.find(b => b.type === 'ItemList').json.itemListElement.map(x => x.name), ['E Invoicing Software UAE'])
+    && eq(QA.links_to_add_when_published.map(x => x.anchor), ['Best ERP Software in Dubai', 'ERP Software Dubai', 'ERP Implementation Cost UAE'])
+    && QA.eeat_notes.some(n => /3 cluster page\(s\) are planned and not live yet: this page links to none of them/.test(n)), JSON.stringify({ types, add: QA.links_to_add_when_published }));
+
+  // G2 in the schema and the score
+  check('G2: no FAQPage block is emitted, with or without an FAQ section in the draft',
+    !types.includes('FAQPage') && !(await qaRun(QA_FAQ)).content_qa.schema_types.includes('FAQPage')
+    && !JSON.stringify(q.schema_blocks).includes('FAQPage'), JSON.stringify(types));
+  const qF = await qaRun(QA_FAQ);
+  console.log('   G2 structure points -> without FAQ', QA.score_breakdown.structure, '| with FAQ', qF.content_qa.score_breakdown.structure);
+  check('G2: the structure score is the same with and without an FAQ section (question headings are what counts), and no warning asks for FAQs',
+    QA.score_breakdown.structure === qF.content_qa.score_breakdown.structure && QA.score_breakdown.structure >= 22
+    && QA.question_headings >= 3 && QA.answered_questions >= 3
+    && !QA.warnings.some(w => /complete FAQs/.test(w)) && !qF.content_qa.warnings.some(w => /complete FAQs/.test(w)), JSON.stringify({ a: QA.score_breakdown, b: qF.content_qa.score_breakdown, qh: QA.question_headings, w: QA.warnings }));
+
+  // G4 in the copy
+  check('G4: srsltid and utm_* are stripped from every citation in the copy and the schema',
+    /\[Statista\]\(https:\/\/www\.statista\.com\/outlook\/tmo\/software\/erp\/worldwide\/\)/.test(out) && !/srsltid|utm_/.test(out) && !/srsltid|utm_/.test(JSON.stringify(q.schema_blocks))
+    && QA.auto_fixes.some(f => /Stripped tracking parameters .* from 2 link\(s\)/.test(f)), (out.match(/\[(Statista|Gartner)\]\([^)]*\)/g) || []).join(' | '));
+  check('G4: a figure the cited source does not carry is bracketed [Confirm: …] and reported; the ones the source states (a magnitude variant, a percentage, the year) stay as written',
+    /\[Confirm: USD 1,802 million\]/.test(out) && /revenue of AED 50m and above/.test(out) && /adoption rose 23\.5% in the first wave/.test(out) && /starts in July 2026 \(/.test(out)
+    && eq(QA.unverified_figures.map(f => f.figure), ['USD 1,802 million']) && eq(QA.unverified_figures[0].sources, ['statista.com'])
+    && QA.warnings.some(w => /Figures the cited source does not carry \(now marked \[Confirm: …\]\): "USD 1,802 million" \(statista\.com\)/.test(w)), JSON.stringify({ u: QA.unverified_figures, line: (out.match(/^Worldwide ERP[^\n]*/m) || [])[0] }));
+  check('G4: a weak source is cited once — the second and third links to it are unlinked, with the reason; the strong sources are untouched',
+    (out.match(/\]\(https:\/\/enterprise\.trangotech\.com/g) || []).length === 1 && /Some lists rank by revenue \(TrangoTech\); others rank by reviews \(TrangoTech\)\./.test(out)
+    && eq(QA.weak_sources_unlinked, ['enterprise.trangotech.com']) && eq(QA.source_quality, { primary: 3, research: 2, weak: 1 })
+    && QA.auto_fixes.some(f => /Unlinked 2 repeat citation\(s\) of a source with no independent authority/.test(f))
+    && QA.warnings.some(w => /A source with no independent authority was cited more than once \(enterprise\.trangotech\.com\)/.test(w)), JSON.stringify({ q: QA.source_quality, w: QA.weak_sources_unlinked }));
+  check('G4: a sentence whose source we never read is left alone (nothing to look the figure up in)',
+    /Plan 8 phases over 3 months for a single entity, with 12 tables/.test(out) && !/\[Confirm: 8\]/.test(out), (out.match(/^Plan 8[^\n]*/m) || [])[0]);
+
+  // ---------- D9 (d): the blog package ----------
+  const bp = (await run('Blog Package', [{ json: { ...q, page_markdown: q.output, content_brief_slug: 'erp-software-uae', content_images: [] } }]))[0];
+  const bhtml = Buffer.from(bp.binary.article_html.data, 'base64').toString('utf8');
+  const bmd = Buffer.from(bp.binary.article_md.data, 'base64').toString('utf8');
+  const bmeta = JSON.parse(Buffer.from(bp.binary.meta_json.data, 'base64').toString('utf8'));
+  const clusterHtml = (bhtml.match(/<nav class="cluster"[\s\S]*?<\/nav>/) || [''])[0];
+  const clusterMd = (bmd.match(/## Guides in this series\n\n([\s\S]*?)(\n\n|$)/) || ['', ''])[1];
+  console.log('   guides in this series ->', clusterMd.replace(/\n/g, ' / '), '|| to add ->', JSON.stringify(bmeta.links_to_add_when_published.map(x => x.anchor)));
+  check('D9: "Guides in this series" has exactly one link in the HTML and one in the Markdown — the page that is live — with its anchor, never a lower-case keyword',
+    (clusterHtml.match(/<a href=/g) || []).length === 1 && /<a href="https:\/\/techand\.ai\/e-invoicing-software-uae\/">E Invoicing Software UAE<\/a>/.test(clusterHtml)
+    && clusterMd.split('\n').filter(Boolean).length === 1 && /^- \[E Invoicing Software UAE\]\(https:\/\/techand\.ai\/e-invoicing-software-uae\/\)$/.test(clusterMd.trim())
+    && !/Facts erp|Erp software/.test(bhtml + bmd), JSON.stringify({ html: clusterHtml, md: clusterMd }));
+  check('D9: meta.json carries the three planned pages as links to add when they are published (keyword, planned URL, anchor), and the article links to none of them',
+    bmeta.links_to_add_when_published.length === 3
+    && eq(bmeta.links_to_add_when_published.map(x => [x.keyword, x.planned_url, x.anchor]), [['best erp software in dubai', 'https://techand.ai/best-erp-software-in-dubai/', 'Best ERP Software in Dubai'], ['erp software dubai', 'https://techand.ai/erp-software-dubai/', 'ERP Software Dubai'], ['erp implementation cost uae', 'https://techand.ai/erp-implementation-cost-uae/', 'ERP Implementation Cost UAE']])
+    && bmeta.hub.planned === 3 && bmeta.hub.cluster_pages.length === 1
+    && !/best-erp-software-in-dubai|erp-software-dubai|erp-implementation-cost-uae/.test(bhtml + bmd)
+    && bmeta.publish_checklist.some(x => /links_to_add_when_published" lists 3 page\(s\)/.test(x)), JSON.stringify(bmeta.links_to_add_when_published));
+  check('G2 / G4 in the package: no FAQPage in the article or its schema, and no tracking parameter survives into the HTML or the Markdown',
+    !/FAQPage/.test(bhtml) && !bmeta.schema_blocks.some(b => b.type === 'FAQPage') && !/srsltid|utm_/.test(bhtml + bmd + JSON.stringify(bmeta)), (bhtml.match(/srsltid[^"]*/) || [''])[0]);
+
+  // ---------- D9 (e): the Rank Tracker reminds the owner the week a planned page goes live ----------
+  const DN = 'northwind-erp.com';
+  const slug = (k) => 'https://www.' + DN + '/' + k.replace(/\s+/g, '-') + '/';
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_R', domain: DN, head_keyword: 'peppol uae', rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: slug(keyword), page_exists: false, status, months: '', start_date: daysAgo(40), country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'https://hooks.example.com/x', request_id: 'r-R' } });
+  const ROWS = [lrow(4, 1, 'peppol uae', 'published'), lrow(1, 2, 'peppol access point uae', 'published')];
+  const trackerWith = async (log) => {
+    mock('Load Ladders', ROWS); mock('Load Content Log (Tracker)', log);
+    mock('Load History', ROWS.map(r => ({ json: { ladder_id: 'lad_R', keyword: r.json.keyword, position: 12, checked_at: daysAgo(7), url: '' } })));
+    const tp = await run('Tracker Plan', store['Load History']);
+    mock('SERP Check', tp.map(c => V.serpFor(c.json.keyword, c.json.domain, 0)));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    return (await run('Tracker Report', pp))[0].json;
+  };
+  const logRow = (kw, days) => ({ json: { id: 2, keyword: kw, domain: DN, ladder_id: 'lad_R', published_url: slug(kw), published_at: daysAgo(days), title: '', started_at: daysAgo(days) } });
+  const tNew = await trackerWith([logRow('peppol access point uae', 2)]);
+  console.log('   tracker reminder ->', JSON.stringify(tNew.links_to_add));
+  check('D9: a page published since the last check gives one reminder line with its anchor and URL, in the e-mail and in the callback',
+    eq((tNew.links_to_add || []).map(x => [x.keyword, x.anchor]), [['peppol access point uae', 'Peppol Access Point UAE']])
+    && /<b>Now live — add the links:<\/b> "Peppol Access Point UAE" \(https:\/\/www\.northwind-erp\.com\/peppol-access-point-uae\/\)/.test(tNew.html)
+    && /add one link from the main page "peppol uae" using the anchor shown/.test(tNew.html), JSON.stringify({ l: tNew.links_to_add, h: (tNew.html.match(/Now live[\s\S]{0,260}/) || [''])[0] }));
+  const tOld = await trackerWith([logRow('peppol access point uae', 30)]);
+  check('D9: a page that was already live at the last check is not reminded again',
+    (tOld.links_to_add || []).length === 0 && !/Now live/.test(tOld.html), JSON.stringify(tOld.links_to_add));
 });
 
 H.report();

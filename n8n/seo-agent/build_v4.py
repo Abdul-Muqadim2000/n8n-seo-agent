@@ -731,7 +731,8 @@ V5 = next(p for p in [os.path.join(HERE, 'v5'), os.path.join(HERE, '..', 'v5')] 
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
 FIT_GATE_SRC = _rd0('code/_fit_gate.js').rstrip('\n'); SERP_OBS_SRC = _rd0('code/_serp_obs.js').rstrip('\n')   # 2026-10-11: the keyword fit gate (D4 / D8) and the results-page observation rules (D26), one copy each
 SITE_MODEL_SRC = _rd0('code/_site_model.js').rstrip('\n')   # 2026-10-12 (G19, SITE_MODEL_SPEC.md): the one site model (canonical host, name, NAP, services, pages, facts)
-rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model), one copy each, inlined where a node asks for them
+SOURCES_SRC = _rd0('code/_sources.js').rstrip('\n'); ANCHOR_SRC = _rd0('code/_anchor.js').rstrip('\n')   # 2026-10-11: source quality, figure lookup and link cleaning (G4) and the anchor words of a link to our own page (D9)
+rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -2475,6 +2476,52 @@ sticky("""### Every written page is logged (v4.14, FIX_PLAN D5)
 `Blog Package` -> **Content Log Row** -> **Save Content Log (Run)**: one `seo_content_log` row per content run, upserted by `site_id` + `keyword`, status **written**. Ladder page runs were invisible before (only the Content Cadence and the web app wrote rows), so the **pile-up guard** undercounted the pages waiting to be published. The row keeps what the opening row knows (`source`, the week, the last published URL); "I published a page" and the Site Tracker's publish detection set `published`.""",
     _bp31[0] + 180, _bp31[1] - 460, 900, 200, 6)
 log('Every written page is logged (v4.14, FIX_PLAN D5): the main workflow upserts one seo_content_log row per content run (ladder page runs, the app\'s "Write now", the Content Cadence) by site_id + keyword with status written, so the Content Cadence\'s pile-up guard sees every page that waits to be published')
+# 32. CONTENT CORRECTNESS (2026-10-11, system review FIX_PLAN D9 / G2 / G4):
+#     D9  the Direct-plan main page was published first and linked twice each to 3 pages that do not exist, and "Guides in this series"
+#         used lowercase keyword strings as anchors ("Facts erp") (exec 365). A ladder page is a link target only when the site really has
+#         it (sitemap / crawl); everything else travels as `planned_link_targets`, is described in the brief without a link_to, is stripped
+#         from the copy by Content QA, is left out of the "Guides in this series" block and the ItemList, and is listed in meta.json as
+#         `links_to_add_when_published`. The Rank Tracker reminds the owner, with the anchor, the week a planned page goes live.
+#         Anchors come from v5/code/_anchor.js: the page's title, else the title-cased keyword with the acronyms kept ("Facts ERP").
+#     G2  FAQPage schema is no longer emitted and no FAQ block is scored (Google stopped showing FAQ rich results on 2026-05-07):
+#         Content QA scores question headings answered directly instead, AI Readiness dropped its FAQ check (its weight moved to the
+#         question headings, total still 100) and the brief / copywriter / critic / editor prompts ask for question headings, not an FAQ.
+#     G4  figures were never matched to their sources: a weak source (trangotech.com) was cited 3 times and a Statista link kept
+#         `?srsltid=` (exec 365). v5/code/_sources.js cleans every link (utm_*, srsltid, gclid, fbclid) in the copy, the package and the
+#         schema, ranks a source (primary / research / press / vendor documentation / weak) and looks every figure of a cited sentence up
+#         in the text that source actually gave us (fact snippets, the evidence plan, the competitor pages we read), in any format.
+#         A figure that is not there becomes [Confirm: ...]; a weak domain may be cited once; the critic prompt carries the same list.
+# =============================================================================
+# D9: the writer may only link to a ladder page the site already has; the rest are planned link targets
+patch('Collect Site URLs', "// Ladder page runs: the other ladder pages (top page, sibling) are link targets even when they are planned and not live yet",
+      "// Ladder page runs: the other ladder pages (top page, sibling) are link targets - but only the ones the site really has.\n// 2026-10-11 (FIX_PLAN D9): a page the ladder has only planned is not a link target; it travels as planned_link_targets so the brief can\n// describe it, Content QA can strip any link to it and the blog package can list it as a link to add once it is published.")
+patch('Collect Site URLs', "const candidates2 = candidates.filter(c => !ladderUrls.has(String(c.url).replace(/\\/$/, '')));",
+      "const liveUrls = new Set(pages.map(p => String(p.url).replace(/\\/$/, '')));\n"
+      "const ladderLive = ladderLinks.filter(l => liveUrls.has(String(l.url).replace(/\\/$/, ''))).map(l => ({ ...l, planned: false }));\n"
+      "const ladderPlanned = ladderLinks.filter(l => !liveUrls.has(String(l.url).replace(/\\/$/, ''))).map(l => ({ ...l, planned: true }));\n"
+      "const candidates2 = candidates.filter(c => !ladderUrls.has(String(c.url).replace(/\\/$/, '')));")
+patch('Collect Site URLs', "...ladderLinks.filter(l => String(l.url).replace(/\\/$/, '') !== home.replace(/\\/$/, '')), ...candidates2],",
+      "...ladderLive.filter(l => String(l.url).replace(/\\/$/, '') !== home.replace(/\\/$/, '')), ...candidates2],\n    planned_link_targets: ladderPlanned,")
+assert 'planned_link_targets' in code('Collect Site URLs') and 'ladderLive' in code('Collect Site URLs')
+# the kits reached the nodes that asked for them, and no placeholder is left anywhere
+for _n in ('Content QA', 'Blog Package', 'Collect Facts'): assert 'const SRC = (() =>' in code(_n), _n + ': source kit not inlined'
+for _n in ('Content QA', 'Blog Package', 'Brief Context'): assert 'function anchorText(' in code(_n), _n + ': anchor kit not inlined'
+assert not any('/*__SOURCES__*/' in n['parameters'].get('jsCode', '') or '/*__ANCHOR__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'kit placeholder left'
+# G2: nothing emits or scores FAQPage any more, and no prompt asks for an FAQ section
+for _n in ('Content QA', 'AI Readiness'):
+    if _n in nodes: assert '"FAQPage"' not in code(_n) and "'FAQPage'" not in code(_n), _n + ': FAQPage still emitted'
+assert 'validFaqs.length >= 5' not in code('Content QA') and 'answeredQuestions >= 3' in code('Content QA'), 'Content QA still scores an FAQ block'
+for _p in ('prompts/copywriter.txt', 'prompts/strategy_brief.txt', 'prompts/critic.txt', 'prompts/editor.txt'):
+    assert 'FAQPage' not in rd(_p) and '## Frequently Asked Questions' not in rd(_p), _p + ': still asks for an FAQ section'
+# G4: the critic is told what a usable source is
+assert 'SOURCE QUALITY' in rd('prompts/critic.txt')
+# harness shims (S38): the two kits as runnable scripts, one item in -> one answer out
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_sources.js'), 'w').write("// harness shim (written by build_v4.py section 32): the source kit - { url?, text?, figure?, source? } -> clean / tier / figures / hasFigure\n" + SOURCES_SRC +
+    "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { url: j.url == null ? null : SRC.clean(j.url), host: j.url ? SRC.host(j.url) : '', tier: j.url ? SRC.tier(j.url) : '', figures: SRC.figures(j.text || ''), found: (j.figure != null && j.source != null) ? SRC.hasFigure(SRC.valueOf(j.figure), j.source) : null } }; });\n")
+open(os.path.join(OUT_CODE, '_anchor.js'), 'w').write("// harness shim (written by build_v4.py section 32): the anchor kit - { keyword?, title?, url? } -> the words a link uses\n" + ANCHOR_SRC +
+    "\nreturn $input.all().map(i => ({ json: { anchor: anchorText(i.json || {}), title_case: titleCaseKeyword((i.json || {}).keyword || '') } }));\n")
+log('Content correctness (2026-10-11, FIX_PLAN D9 / G2 / G4): only a page the site really has is a link target (Collect Site URLs splits the ladder links into live and planned_link_targets; Content QA strips links to planned pages, the hub block and the ItemList list the live ones only, meta.json carries links_to_add_when_published and the Rank Tracker reminds the owner the week one goes live), anchors come from the page title or the title-cased keyword with the acronyms kept (v5/code/_anchor.js); no FAQPage schema and no FAQ block scored anywhere (question headings answered directly instead, in Content QA, AI Readiness and the brief / copywriter / critic / editor prompts); every figure of a cited sentence is looked up in the text that source gave us and marked [Confirm: ...] when it is not there, a source with no independent authority may be cited once, and utm_* / srsltid / gclid / fbclid are stripped from every link in the copy, the package and the schema (v5/code/_sources.js)')
 
 # =============================================================================
 # 9. WRITE

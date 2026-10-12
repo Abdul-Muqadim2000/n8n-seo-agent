@@ -1,3 +1,108 @@
+// ---- source kit (G4, 2026-10-11; inlined through the __SOURCES__ marker): what a citation is worth, what a figure says, and clean links.
+// The 2026-10-11 review found a page that cited one vendor blog (trangotech.com) three times and kept Google's `?srsltid=` on a Statista
+// link, with no check that the numbers in the copy are the numbers the source actually carries (RESULTS.md §2.4, exec 365).
+//   SRC.clean(url)      strips the tracking parameters (utm_*, srsltid, gclid, fbclid …) from any link, in the copy and in the schema.
+//   SRC.tier(url)       primary (government, standards, official statistics) > research > press > vendor documentation > weak.
+//                       A vendor's blog or "resources" post is weak, like any unknown site; at most one citation per weak domain.
+//   SRC.figures(text)   every figure with its position: percentages, currency amounts, magnitudes (k / m / bn), years, counts >= 1,000.
+//                       Small bare numbers ("3 steps", "8 phases") are not claims and are never checked.
+//   SRC.hasFigure(f, t) the same figure in the source text, in any format: separators, "m" / "million", "AED 50m" / "AED 50 million".
+// Regex only: the n8n Code sandbox has no URL constructor.
+const SRC = (() => {
+  const TRACK = /^(?:utm_[a-z0-9_]*|srsltid|gclid|gbraid|wbraid|dclid|fbclid|msclkid|yclid|twclid|ttclid|igshid|mc_cid|mc_eid|_hsenc|_hsmi|hsa_[a-z0-9_]*|s_kwcid|vero_id|oly_enc_id|cmpid|mkt_tok|spm|scid|ref_src|pk_campaign|pk_kwd|piwik_campaign|at_medium|at_campaign)$/i;
+  const host = (u) => { const m = String(u == null ? '' : u).trim().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+  const clean = (u) => {
+    const s = String(u == null ? '' : u).trim();
+    if (!s || s.indexOf('?') < 0) return s;
+    const h = s.indexOf('#'); const frag = h >= 0 ? s.slice(h) : ''; const noFrag = h >= 0 ? s.slice(0, h) : s;
+    const q = noFrag.indexOf('?'); if (q < 0) return noFrag + frag;
+    const kept = noFrag.slice(q + 1).split('&').filter(p => p && !TRACK.test(p.split('=')[0]));
+    return noFrag.slice(0, q) + (kept.length ? '?' + kept.join('&') : '') + frag;
+  };
+  const key = (u) => clean(String(u == null ? '' : u)).toLowerCase().replace(/[#?].*$/, '').replace(/\/+$/, '');
+  const PRIMARY = /(^|\.)(gov|edu|mil|int)$|(^|\.)(gov|edu|ac|mil)\.[a-z]{2,3}$|(^|\.)(europa\.eu|who\.int|oecd\.org|worldbank\.org|imf\.org|un\.org|unctad\.org|ilo\.org|wto\.org|iso\.org|w3\.org|ietf\.org|oasis-open\.org|gs1\.org|peppol\.eu|peppol\.org|openpeppol\.org|etsi\.org|cen\.eu|bis\.org|eurostat\.eu|u\.ae)$/i;
+  const RESEARCH = /(^|\.)(statista\.com|gartner\.com|forrester\.com|idc\.com|mckinsey\.com|deloitte\.com|pwc\.com|kpmg\.com|ey\.com|accenture\.com|bcg\.com|bain\.com|hbr\.org|ibisworld\.com|grandviewresearch\.com|marketsandmarkets\.com|mordorintelligence\.com|nielsen\.com|pewresearch\.org|cbinsights\.com|statcounter\.com|similarweb\.com)$/i;
+  const PRESS = /(^|\.)(reuters\.com|bloomberg\.com|bbc\.com|bbc\.co\.uk|nytimes\.com|wsj\.com|ft\.com|economist\.com|apnews\.com|cnbc\.com|theguardian\.com|forbes\.com|techcrunch\.com|zdnet\.com|arstechnica\.com|theregister\.com|gulfnews\.com|khaleejtimes\.com|thenationalnews\.com|arabianbusiness\.com|zawya\.com|bizjournals\.com)$/i;
+  const VENDOR = /(^|\.)(microsoft\.com|oracle\.com|sap\.com|odoo\.com|zoho\.com|salesforce\.com|netsuite\.com|sage\.com|xero\.com|intuit\.com|quickbooks\.intuit\.com|google\.com|adobe\.com|aws\.amazon\.com|amazon\.com|ibm\.com|stripe\.com|shopify\.com|hubspot\.com|atlassian\.com|cloudflare\.com|mozilla\.org|developer\.mozilla\.org)$/i;
+  const BLOGGY = /\/(?:blog|blogs|insights|resources|articles|news|post|posts|guides?)(?:\/|$)/i;
+  const tier = (u) => {
+    const h = host(u); if (!h) return 'weak';
+    if (PRIMARY.test(h)) return 'primary';
+    if (RESEARCH.test(h)) return 'research';
+    if (PRESS.test(h)) return 'press';
+    if (VENDOR.test(h)) return BLOGGY.test(String(u || '')) ? 'weak' : 'vendor';   // a vendor's own documentation is usable; its blog is not
+    return 'weak';
+  };
+  const TIERS = { primary: 'official or standards body', research: 'research house', press: 'major press', vendor: 'vendor documentation', weak: 'no independent authority (vendor or agency blog, listicle, unknown site)' };
+  const strong = (u) => tier(u) !== 'weak';
+  // ---- figures ----
+  const MAG = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, million: 1e6, bn: 1e9, b: 1e9, billion: 1e9, tn: 1e12, trillion: 1e12 };
+  const CUR = '(?:AED|USD|SAR|QAR|KWD|BHD|OMR|EGP|PKR|INR|EUR|GBP|ZAR|Dhs?|SR|Rs\\.?|\\$|€|£|₹)';
+  const NUM = '\\d[\\d,]*(?:\\.\\d+)?';
+  const UNITS = '(?:thousand|trillion|million|billion|mn|bn|tn|k|m|b)';   // longest first: "1,802 million" must not match as "1,802 m"
+  const UNIT = '(?:\\s?' + UNITS + '\\b)?';
+  const FIG_RE = new RegExp('(' + [
+    CUR + '\\s?' + NUM + UNIT,                                     // AED 50m, $1.2 billion
+    NUM + '\\s?' + UNITS + '\\b\\s?' + CUR,                        // 50 million AED
+    NUM + '\\s?(?:%|percent\\b|per cent\\b|percentage points?\\b)',  // 23%, 1.74 percent
+    NUM + '\\s?' + UNITS + '\\b',                                  // 2.4 million
+    '(?:19|20)\\d{2}(?![\\d-])',                                    // a year, not part of a longer number or a date range code
+    '\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?',                             // 1,234 / 12,345.6
+    '\\d{4,}(?:\\.\\d+)?'                                           // 25000
+  ].join('|') + ')', 'gi');
+  const valueOf = (raw) => {
+    const s = String(raw == null ? '' : raw).trim().replace(/[.,;:]+$/, '');
+    if (!s) return null;
+    const low = s.toLowerCase();
+    const digits = (low.match(new RegExp(NUM)) || [''])[0];
+    const n = Number(digits.replace(/,/g, ''));
+    if (!digits || !Number.isFinite(n)) return null;
+    const mm = low.match(/\d\s*(k|mn|m|bn|b|tn)\b/) || low.match(/\b(thousand|million|billion|trillion)s?\b/);
+    const mag = mm ? MAG[mm[1]] : 0;
+    const pct = /%|percent|per cent/.test(low);
+    return { raw: s, n, v: mag ? n * mag : n, pct, year: !mag && !pct && /^(?:19|20)\d{2}$/.test(digits) };
+  };
+  // every figure with where it sits, so the caller can bracket it in place
+  // `raw` is the figure without its trailing punctuation, and `length` matches it, so a caller can replace it in place without eating the full stop
+  const figures = (text) => { const out = []; for (const m of String(text == null ? '' : text).matchAll(FIG_RE)) { const f = valueOf(m[0]); if (f) out.push({ ...f, index: m.index, length: f.raw.length }); } return out; };
+  // the magnitude is part of the figure: "AED 50 million" in the source does not vouch for "AED 50bn" in the draft
+  const valueSet = (text) => { const s = new Set(); for (const f of figures(text)) s.add(f.v); return s; };
+  const hasFigure = (f, text) => !!f && valueSet(text).has(f.v);
+  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, FIG_RE };
+})();
+// ---- anchor kit (D9, 2026-10-11; inlined through the __ANCHOR__ marker): the words a link to one of our own pages is written with.
+// Live, "Guides in this series" linked to "Facts erp" and "Erp software dubai" — a raw keyword string with one capital letter (exec 365).
+// anchorText() uses the page's own title when we have one, else title-cases the keyword and keeps acronyms: a token that is already
+// all-caps and at most 4 letters is left alone, a known acronym (erp, uae, vat, crm, …) is upper-cased, mixed-case names keep their shape,
+// and the small joining words stay lower-case unless they start the anchor. Regex only (no URL constructor in the n8n Code sandbox).
+const ACRONYMS = new Set(['erp', 'uae', 'vat', 'crm', 'seo', 'sem', 'ppc', 'api', 'ai', 'bi', 'hr', 'it', 'ui', 'ux', 'qa', 'b2b', 'b2c', 'd2c', 'ksa', 'gcc', 'eu', 'uk', 'us', 'usa', 'uae', 'pos', 'edi', 'gst', 'trn', 'asp', 'sme', 'smb', 'cms', 'roi', 'kpi', 'sla', 'ocr', 'cfo', 'ceo', 'cto', 'coo', 'cio', 'rfp', 'rfq', 'kyc', 'aml', 'iso', 'xml', 'json', 'csv', 'pdf', 'url', 'sap', 'wps', 'fta', 'llm', 'rpa', 'mrp', 'scm', 'plm', 'eam', 'etl', 'pim', 'epm', 'ocr', 'vpn', 'sso', 'mfa', 'cpa', 'cfa', 'ifrs', 'gaap', 'nda', 'tco', 'sku', 'erp']);
+const ANCHOR_MIXED = { saas: 'SaaS', paas: 'PaaS', iaas: 'IaaS', ecommerce: 'eCommerce', zatca: 'ZATCA', peppol: 'Peppol', emaratax: 'EmaraTax', iphone: 'iPhone', ipad: 'iPad', javascript: 'JavaScript', wordpress: 'WordPress', youtube: 'YouTube', linkedin: 'LinkedIn', chatgpt: 'ChatGPT', openai: 'OpenAI', netsuite: 'NetSuite', quickbooks: 'QuickBooks', powerbi: 'PowerBI' };
+const ANCHOR_SMALL = new Set(['a', 'an', 'and', 'the', 'of', 'for', 'in', 'on', 'to', 'at', 'by', 'or', 'vs', 'via', 'with', 'from', 'into', 'per']);
+function titleCaseKeyword(s) {
+  const words = String(s == null ? '' : s).replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  return words.map((w, i) => {
+    const bare = w.replace(/[^A-Za-z0-9&]/g, '');
+    if (!bare) return w;
+    if (bare === bare.toUpperCase() && bare.length <= 4 && /[A-Z]/.test(bare)) return w;   // already an acronym, e.g. "ERP"
+    const low = bare.toLowerCase();
+    const sub = (rep) => w.replace(bare, rep);
+    if (ACRONYMS.has(low)) return sub(low.toUpperCase());
+    if (ANCHOR_MIXED[low]) return sub(ANCHOR_MIXED[low]);
+    if (i > 0 && ANCHOR_SMALL.has(low)) return sub(low);
+    if (bare !== low && /[A-Z]/.test(bare.slice(1))) return w;   // a name the caller already cased ("McKinsey", "eInvoicing")
+    return sub(low.charAt(0).toUpperCase() + low.slice(1));
+  }).join(' ');
+}
+// a page = { title?, keyword?, url } -> the words to link it with (never an empty string, never a bare URL path in lower case)
+function anchorText(p) {
+  const o = p && typeof p === 'object' ? p : { keyword: p };
+  const t = String(o.title || '').trim();
+  if (t) return t.replace(/\s*\|\s*[^|]{1,40}$/, '').trim() || t;   // "ERP Software UAE | Tech&" -> "ERP Software UAE"
+  const kw = String(o.keyword || '').trim();
+  if (kw) return titleCaseKeyword(kw);
+  const path = String(o.url || '').replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '').split('/').pop().replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[-_]+/g, ' ').trim();
+  return titleCaseKeyword(path) || String(o.url || '');
+}
 // Framework-agnostic blog package for every content run: the article as clean HTML (with the JSON-LD blocks), as Markdown, and a meta.json
 // (title, slug, meta description, H1, keywords, headings, links, schema, word count, content score, suggested URL, publish checklist).
 // Attached to the e-mail and returned in the API callback next to the PDF / Word report. Runs without content pass through untouched.
@@ -9,10 +114,11 @@ if (!md0.trim()) return [item];
 const metaRe = /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):\s*(.+)$/gim;
 const metaLines = {}; let mm; while ((mm = metaRe.exec(md0)) !== null) metaLines[mm[1].toLowerCase()] = mm[2].trim();
 let md = md0.replace(metaRe, '').replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/gi, '').replace(/^\s*(Production Brief|Note|Editor's note):.*$/gim, '').replace(/[ \t]*\[(?:Image|Video)\s*:(?:[^\[\]\n]|\[[^\[\]\n]*\])*\][ \t]*/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+md = md.replace(/\]\((https?:\/\/[^)\s]+)\)/g, (m, u) => '](' + SRC.clean(u) + ')');   // FIX_PLAN G4: utm_*, srsltid, gclid, fbclid never reach the published page
 const h1 = (md.match(/^#\s+(.+)$/m) || [])[1] || '';
 md = md.replace(/^#\s+.+$\n?/m, '').trim();
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const inline = (s) => { let t = esc(s); t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); t = t.replace(/\[([^\[\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>'); return t; };
+const inline = (s) => { let t = esc(s); t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); t = t.replace(/\[([^\[\]]+)\]\(([^)]+)\)/g, (m, a, u) => '<a href="' + SRC.clean(u) + '">' + a + '</a>'); return t; };   // FIX_PLAN G4: no tracking parameters leave the package
 const anchorIds = new Map();   // H2 ids for the table of contents (unique, stable)
 const anchorOf = (h) => { if (anchorIds.has(h)) return anchorIds.get(h); let a = String(h).toLowerCase().replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'section'; let k = a, i = 2; while ([...anchorIds.values()].includes(k)) k = a + '-' + (i++); anchorIds.set(h, k); return k; };
 function mdToHtml(text) {
@@ -36,7 +142,8 @@ function mdToHtml(text) {
   }
   closeList(); closeTable(); return out.join('\n');
 }
-const schema = Array.isArray(d.schema_blocks) ? d.schema_blocks : [];
+const cleanUrls = (x) => Array.isArray(x) ? x.map(cleanUrls) : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
+const schema = (Array.isArray(d.schema_blocks) ? d.schema_blocks : []).map(b => (b && b.json) ? { ...b, json: cleanUrls(b.json) } : cleanUrls(b));
 const title = metaLines.title || h1 || d.keyword || 'New page';
 const slug = (String(d.content_brief_slug || metaLines.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)) || 'page';
 const description = metaLines['meta description'] || '';
@@ -89,11 +196,13 @@ const tocH2 = faqAt >= 0 ? h2List.slice(0, faqAt) : h2List;   // the CTA always 
 const wantToc = role === 'hub' || (articleLike && h2List.length >= 5 && words >= 1500);
 const tocHtml = wantToc && tocH2.length >= 3 ? '<nav class="toc" aria-label="Table of contents"><p class="toc-title">' + (role === 'hub' ? 'In this guide' : 'Contents') + '</p><ol>' + tocH2.map(h => '<li><a href="#' + anchorOf(h) + '">' + inline(h) + '</a></li>').join('') + '</ol></nav>' : '';
 const tocMd = tocHtml ? '**' + (role === 'hub' ? 'In this guide' : 'Contents') + '**\n\n' + tocH2.map((h, i) => (i + 1) + '. [' + h.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') + '](#' + anchorOf(h) + ')').join('\n') : '';
-// hub: "Guides in this series" (the cluster pages the hub links down to)
-const HP = role === 'hub' ? (d.hub_pages || []).filter(p => p && p.url) : [];
-const cap = (s) => String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1);
-const clusterHtml = HP.length ? '<nav class="cluster" aria-label="Guides in this series"><h2 id="guides-in-this-series">Guides in this series</h2><ul>' + HP.map(p => '<li><a href="' + esc(p.url) + '">' + esc(cap(p.keyword) || p.url) + '</a></li>').join('') + '</ul></nav>' : '';
-const clusterMd = HP.length ? '## Guides in this series\n\n' + HP.map(p => '- [' + (cap(p.keyword) || p.url) + '](' + p.url + ')').join('\n') : '';
+// hub: "Guides in this series" (the cluster pages the hub links down to). 2026-10-11 (FIX_PLAN D9): only pages that are live are listed and
+// linked — the live run linked twice each to three pages that did not exist — and the anchor is the page's title or its title-cased keyword
+// with the acronyms kept ("Facts erp" became "Facts ERP"). The planned pages travel in meta.json as links_to_add_when_published.
+const HPall = role === 'hub' ? (d.hub_pages || []).filter(p => p && p.url) : [];
+const HP = HPall.filter(p => !p.planned); const HPplanned = HPall.filter(p => p.planned);
+const clusterHtml = HP.length ? '<nav class="cluster" aria-label="Guides in this series"><h2 id="guides-in-this-series">Guides in this series</h2><ul>' + HP.map(p => '<li><a href="' + esc(SRC.clean(p.url)) + '">' + esc(anchorText(p)) + '</a></li>').join('') + '</ul></nav>' : '';
+const clusterMd = HP.length ? '## Guides in this series\n\n' + HP.map(p => '- [' + anchorText(p) + '](' + SRC.clean(p.url) + ')').join('\n') : '';
 // case study: snapshot box from the intake (only the facts given)
 const csRows = CS ? [['Client', CS.client_public === false ? ('A ' + (CS.industry ? CS.industry + ' business' : 'client') + (CS.location ? ' in ' + CS.location : '')) : CS.client_name], ['Industry', CS.industry], ['Location', CS.location], ['Service', CS.service], ['Timeline', CS.timeline], ['Results', CS.results]].filter(r => String(r[1] || '').trim()) : [];
 const snapshotHtml = csRows.length ? '<aside class="case-snapshot"><p class="snapshot-title">At a glance</p><dl>' + csRows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(String(r[1]).slice(0, 300)) + '</dd>').join('') + '</dl></aside>' : '';
@@ -157,7 +266,8 @@ const meta = { title, h1: h1 || title, slug, suggested_url: dom ? 'https://' + d
   page_role: role, article_like: articleLike,
   author: articleLike ? (AU ? { name: AU.name, job_title: AU.job_title || '', bio: AU.bio || '', credentials: AU.credentials || '', url: AU.url || '', image_url: AU.image_url || '', same_as: AU.same_as || [], knows_about: AU.knows_about || [], placeholder: false } : { name: '[Author Name]', placeholder: true }) : null,
   reviewer: RV || null, updated: today, table_of_contents: tocHtml ? tocH2.map(h => ({ text: h.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'), anchor: '#' + anchorOf(h) })) : [],
-  hub: role === 'hub' ? { cluster_pages: HP, planned: HP.filter(p => p.planned).length } : null,
+  hub: role === 'hub' ? { cluster_pages: HP, planned_pages: HPplanned, planned: HPplanned.length } : null,
+  links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), note: 'Not published yet: add this link from this page once the page is live.' })),
   case_study: CS ? { case_id: d.case_id || '', client_public: CS.client_public !== false, snapshot: Object.fromEntries(csRows) } : null,
   local: role === 'local' ? { area, business_name: (P && P.business_name) || '', address: addr, phone: (P && P.phone) || '', opening_hours: (P && P.opening_hours) || '', map_url: (P && P.map_url) || '', complete: !!(P && P.phone && PA.street) } : null,
   video: V ? { url: V.url, provider: V.provider || '', embed_url: V.embed_url || '', title: vidTitle, upload_date: V.upload_date || '', duration: V.duration_iso || '', thumbnail_url: V.thumbnail_url || '', chapters: V.chapters || [], transcript_included: !!V.transcript, missing: V.missing || [] } : null,
@@ -167,7 +277,8 @@ const meta = { title, h1: h1 || title, slug, suggested_url: dom ? 'https://' + d
 const extra = [];
 if (articleLike) extra.push(AU ? 'Keep the byline (author, updated date' + (RV ? ', reviewer' : '') + ') under the H1 and the author box at the end; link the author name to the author page' : 'Fill in the [Author] byline and author box (name, job title, bio, credentials, LinkedIn) — or set up the business profile once ("Set up my business profile") so every page carries them');
 if (/\[Author insight:/i.test(md)) extra.push('Complete each [Author insight: ...] line with a real first-hand example: this is the experience Google looks for');
-if (HP.length) extra.push('Keep the table of contents and the "Guides in this series" block; publish the cluster pages first' + (HP.some(p => p.planned) ? ' (' + HP.filter(p => p.planned).length + ' are planned, not live: publish them or drop their links)' : ''));
+if (HP.length) extra.push('Keep the table of contents and the "Guides in this series" block (it lists only the pages that are live today)');
+if (HPplanned.length) extra.push('"links_to_add_when_published" lists ' + HPplanned.length + ' page(s) this hub does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');
 if (CS) extra.push('Get the client\'s approval of the text' + (CS.client_public === false ? ' (the client is anonymised)' : ' and the quote') + ' before publishing; link this case study from the matching service page');
 if (role === 'local') extra.push('Name, address and phone must match the Google Business Profile exactly; ' + ((P && P.phone && PA.street) ? 'add the map embed' : 'fill in the [bracketed] NAP details (or complete the business profile)') + '; keep the LocalBusiness schema');
 if (V) extra.push('Keep the video embed and the transcript under it; ' + ((V.missing || []).filter(m => m !== 'transcript').length ? 'fill in the VideoObject ' + V.missing.filter(m => m !== 'transcript').join(', ') : 'the VideoObject details were read from the video page') + (V.transcript ? '' : '; paste the transcript (YouTube Studio → Subtitles)'));

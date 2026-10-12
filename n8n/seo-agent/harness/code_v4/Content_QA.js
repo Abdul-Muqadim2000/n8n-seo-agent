@@ -1,3 +1,108 @@
+// ---- source kit (G4, 2026-10-11; inlined through the __SOURCES__ marker): what a citation is worth, what a figure says, and clean links.
+// The 2026-10-11 review found a page that cited one vendor blog (trangotech.com) three times and kept Google's `?srsltid=` on a Statista
+// link, with no check that the numbers in the copy are the numbers the source actually carries (RESULTS.md §2.4, exec 365).
+//   SRC.clean(url)      strips the tracking parameters (utm_*, srsltid, gclid, fbclid …) from any link, in the copy and in the schema.
+//   SRC.tier(url)       primary (government, standards, official statistics) > research > press > vendor documentation > weak.
+//                       A vendor's blog or "resources" post is weak, like any unknown site; at most one citation per weak domain.
+//   SRC.figures(text)   every figure with its position: percentages, currency amounts, magnitudes (k / m / bn), years, counts >= 1,000.
+//                       Small bare numbers ("3 steps", "8 phases") are not claims and are never checked.
+//   SRC.hasFigure(f, t) the same figure in the source text, in any format: separators, "m" / "million", "AED 50m" / "AED 50 million".
+// Regex only: the n8n Code sandbox has no URL constructor.
+const SRC = (() => {
+  const TRACK = /^(?:utm_[a-z0-9_]*|srsltid|gclid|gbraid|wbraid|dclid|fbclid|msclkid|yclid|twclid|ttclid|igshid|mc_cid|mc_eid|_hsenc|_hsmi|hsa_[a-z0-9_]*|s_kwcid|vero_id|oly_enc_id|cmpid|mkt_tok|spm|scid|ref_src|pk_campaign|pk_kwd|piwik_campaign|at_medium|at_campaign)$/i;
+  const host = (u) => { const m = String(u == null ? '' : u).trim().match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };
+  const clean = (u) => {
+    const s = String(u == null ? '' : u).trim();
+    if (!s || s.indexOf('?') < 0) return s;
+    const h = s.indexOf('#'); const frag = h >= 0 ? s.slice(h) : ''; const noFrag = h >= 0 ? s.slice(0, h) : s;
+    const q = noFrag.indexOf('?'); if (q < 0) return noFrag + frag;
+    const kept = noFrag.slice(q + 1).split('&').filter(p => p && !TRACK.test(p.split('=')[0]));
+    return noFrag.slice(0, q) + (kept.length ? '?' + kept.join('&') : '') + frag;
+  };
+  const key = (u) => clean(String(u == null ? '' : u)).toLowerCase().replace(/[#?].*$/, '').replace(/\/+$/, '');
+  const PRIMARY = /(^|\.)(gov|edu|mil|int)$|(^|\.)(gov|edu|ac|mil)\.[a-z]{2,3}$|(^|\.)(europa\.eu|who\.int|oecd\.org|worldbank\.org|imf\.org|un\.org|unctad\.org|ilo\.org|wto\.org|iso\.org|w3\.org|ietf\.org|oasis-open\.org|gs1\.org|peppol\.eu|peppol\.org|openpeppol\.org|etsi\.org|cen\.eu|bis\.org|eurostat\.eu|u\.ae)$/i;
+  const RESEARCH = /(^|\.)(statista\.com|gartner\.com|forrester\.com|idc\.com|mckinsey\.com|deloitte\.com|pwc\.com|kpmg\.com|ey\.com|accenture\.com|bcg\.com|bain\.com|hbr\.org|ibisworld\.com|grandviewresearch\.com|marketsandmarkets\.com|mordorintelligence\.com|nielsen\.com|pewresearch\.org|cbinsights\.com|statcounter\.com|similarweb\.com)$/i;
+  const PRESS = /(^|\.)(reuters\.com|bloomberg\.com|bbc\.com|bbc\.co\.uk|nytimes\.com|wsj\.com|ft\.com|economist\.com|apnews\.com|cnbc\.com|theguardian\.com|forbes\.com|techcrunch\.com|zdnet\.com|arstechnica\.com|theregister\.com|gulfnews\.com|khaleejtimes\.com|thenationalnews\.com|arabianbusiness\.com|zawya\.com|bizjournals\.com)$/i;
+  const VENDOR = /(^|\.)(microsoft\.com|oracle\.com|sap\.com|odoo\.com|zoho\.com|salesforce\.com|netsuite\.com|sage\.com|xero\.com|intuit\.com|quickbooks\.intuit\.com|google\.com|adobe\.com|aws\.amazon\.com|amazon\.com|ibm\.com|stripe\.com|shopify\.com|hubspot\.com|atlassian\.com|cloudflare\.com|mozilla\.org|developer\.mozilla\.org)$/i;
+  const BLOGGY = /\/(?:blog|blogs|insights|resources|articles|news|post|posts|guides?)(?:\/|$)/i;
+  const tier = (u) => {
+    const h = host(u); if (!h) return 'weak';
+    if (PRIMARY.test(h)) return 'primary';
+    if (RESEARCH.test(h)) return 'research';
+    if (PRESS.test(h)) return 'press';
+    if (VENDOR.test(h)) return BLOGGY.test(String(u || '')) ? 'weak' : 'vendor';   // a vendor's own documentation is usable; its blog is not
+    return 'weak';
+  };
+  const TIERS = { primary: 'official or standards body', research: 'research house', press: 'major press', vendor: 'vendor documentation', weak: 'no independent authority (vendor or agency blog, listicle, unknown site)' };
+  const strong = (u) => tier(u) !== 'weak';
+  // ---- figures ----
+  const MAG = { k: 1e3, thousand: 1e3, m: 1e6, mn: 1e6, million: 1e6, bn: 1e9, b: 1e9, billion: 1e9, tn: 1e12, trillion: 1e12 };
+  const CUR = '(?:AED|USD|SAR|QAR|KWD|BHD|OMR|EGP|PKR|INR|EUR|GBP|ZAR|Dhs?|SR|Rs\\.?|\\$|€|£|₹)';
+  const NUM = '\\d[\\d,]*(?:\\.\\d+)?';
+  const UNITS = '(?:thousand|trillion|million|billion|mn|bn|tn|k|m|b)';   // longest first: "1,802 million" must not match as "1,802 m"
+  const UNIT = '(?:\\s?' + UNITS + '\\b)?';
+  const FIG_RE = new RegExp('(' + [
+    CUR + '\\s?' + NUM + UNIT,                                     // AED 50m, $1.2 billion
+    NUM + '\\s?' + UNITS + '\\b\\s?' + CUR,                        // 50 million AED
+    NUM + '\\s?(?:%|percent\\b|per cent\\b|percentage points?\\b)',  // 23%, 1.74 percent
+    NUM + '\\s?' + UNITS + '\\b',                                  // 2.4 million
+    '(?:19|20)\\d{2}(?![\\d-])',                                    // a year, not part of a longer number or a date range code
+    '\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?',                             // 1,234 / 12,345.6
+    '\\d{4,}(?:\\.\\d+)?'                                           // 25000
+  ].join('|') + ')', 'gi');
+  const valueOf = (raw) => {
+    const s = String(raw == null ? '' : raw).trim().replace(/[.,;:]+$/, '');
+    if (!s) return null;
+    const low = s.toLowerCase();
+    const digits = (low.match(new RegExp(NUM)) || [''])[0];
+    const n = Number(digits.replace(/,/g, ''));
+    if (!digits || !Number.isFinite(n)) return null;
+    const mm = low.match(/\d\s*(k|mn|m|bn|b|tn)\b/) || low.match(/\b(thousand|million|billion|trillion)s?\b/);
+    const mag = mm ? MAG[mm[1]] : 0;
+    const pct = /%|percent|per cent/.test(low);
+    return { raw: s, n, v: mag ? n * mag : n, pct, year: !mag && !pct && /^(?:19|20)\d{2}$/.test(digits) };
+  };
+  // every figure with where it sits, so the caller can bracket it in place
+  // `raw` is the figure without its trailing punctuation, and `length` matches it, so a caller can replace it in place without eating the full stop
+  const figures = (text) => { const out = []; for (const m of String(text == null ? '' : text).matchAll(FIG_RE)) { const f = valueOf(m[0]); if (f) out.push({ ...f, index: m.index, length: f.raw.length }); } return out; };
+  // the magnitude is part of the figure: "AED 50 million" in the source does not vouch for "AED 50bn" in the draft
+  const valueSet = (text) => { const s = new Set(); for (const f of figures(text)) s.add(f.v); return s; };
+  const hasFigure = (f, text) => !!f && valueSet(text).has(f.v);
+  return { TRACK, clean, key, host, tier, TIERS, strong, figures, valueOf, valueSet, hasFigure, FIG_RE };
+})();
+// ---- anchor kit (D9, 2026-10-11; inlined through the __ANCHOR__ marker): the words a link to one of our own pages is written with.
+// Live, "Guides in this series" linked to "Facts erp" and "Erp software dubai" — a raw keyword string with one capital letter (exec 365).
+// anchorText() uses the page's own title when we have one, else title-cases the keyword and keeps acronyms: a token that is already
+// all-caps and at most 4 letters is left alone, a known acronym (erp, uae, vat, crm, …) is upper-cased, mixed-case names keep their shape,
+// and the small joining words stay lower-case unless they start the anchor. Regex only (no URL constructor in the n8n Code sandbox).
+const ACRONYMS = new Set(['erp', 'uae', 'vat', 'crm', 'seo', 'sem', 'ppc', 'api', 'ai', 'bi', 'hr', 'it', 'ui', 'ux', 'qa', 'b2b', 'b2c', 'd2c', 'ksa', 'gcc', 'eu', 'uk', 'us', 'usa', 'uae', 'pos', 'edi', 'gst', 'trn', 'asp', 'sme', 'smb', 'cms', 'roi', 'kpi', 'sla', 'ocr', 'cfo', 'ceo', 'cto', 'coo', 'cio', 'rfp', 'rfq', 'kyc', 'aml', 'iso', 'xml', 'json', 'csv', 'pdf', 'url', 'sap', 'wps', 'fta', 'llm', 'rpa', 'mrp', 'scm', 'plm', 'eam', 'etl', 'pim', 'epm', 'ocr', 'vpn', 'sso', 'mfa', 'cpa', 'cfa', 'ifrs', 'gaap', 'nda', 'tco', 'sku', 'erp']);
+const ANCHOR_MIXED = { saas: 'SaaS', paas: 'PaaS', iaas: 'IaaS', ecommerce: 'eCommerce', zatca: 'ZATCA', peppol: 'Peppol', emaratax: 'EmaraTax', iphone: 'iPhone', ipad: 'iPad', javascript: 'JavaScript', wordpress: 'WordPress', youtube: 'YouTube', linkedin: 'LinkedIn', chatgpt: 'ChatGPT', openai: 'OpenAI', netsuite: 'NetSuite', quickbooks: 'QuickBooks', powerbi: 'PowerBI' };
+const ANCHOR_SMALL = new Set(['a', 'an', 'and', 'the', 'of', 'for', 'in', 'on', 'to', 'at', 'by', 'or', 'vs', 'via', 'with', 'from', 'into', 'per']);
+function titleCaseKeyword(s) {
+  const words = String(s == null ? '' : s).replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  return words.map((w, i) => {
+    const bare = w.replace(/[^A-Za-z0-9&]/g, '');
+    if (!bare) return w;
+    if (bare === bare.toUpperCase() && bare.length <= 4 && /[A-Z]/.test(bare)) return w;   // already an acronym, e.g. "ERP"
+    const low = bare.toLowerCase();
+    const sub = (rep) => w.replace(bare, rep);
+    if (ACRONYMS.has(low)) return sub(low.toUpperCase());
+    if (ANCHOR_MIXED[low]) return sub(ANCHOR_MIXED[low]);
+    if (i > 0 && ANCHOR_SMALL.has(low)) return sub(low);
+    if (bare !== low && /[A-Z]/.test(bare.slice(1))) return w;   // a name the caller already cased ("McKinsey", "eInvoicing")
+    return sub(low.charAt(0).toUpperCase() + low.slice(1));
+  }).join(' ');
+}
+// a page = { title?, keyword?, url } -> the words to link it with (never an empty string, never a bare URL path in lower case)
+function anchorText(p) {
+  const o = p && typeof p === 'object' ? p : { keyword: p };
+  const t = String(o.title || '').trim();
+  if (t) return t.replace(/\s*\|\s*[^|]{1,40}$/, '').trim() || t;   // "ERP Software UAE | Tech&" -> "ERP Software UAE"
+  const kw = String(o.keyword || '').trim();
+  if (kw) return titleCaseKeyword(kw);
+  const path = String(o.url || '').replace(/^https?:\/\/[^\/]+/i, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '').split('/').pop().replace(/\.[a-z0-9]{2,5}$/i, '').replace(/[-_]+/g, ' ').trim();
+  return titleCaseKeyword(path) || String(o.url || '');
+}
 // Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
 // and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.
@@ -72,23 +177,35 @@ const metaTitle = metaOf('Title'), metaDesc = metaOf('Meta Description'), slug =
 }
 
 // 5. Internal links: only real pages on the user's site; external links kept (they are citations)
+// 2026-10-11 (FIX_PLAN D9): a page the ladder has only planned is not a link target — the live hub linked twice each to three pages that
+// did not exist (exec 365). (FIX_PLAN G4): every link loses its tracking parameters (utm_*, srsltid, gclid, fbclid), and a weak source
+// (vendor or agency blog, listicle, unknown site) may be cited once — the live page cited trangotech.com three times.
 const allowed = new Set();
 const normUrl = (u) => String(u || '').trim().replace(/\/$/, '').toLowerCase();
-(prev.internal_link_candidates || []).forEach(c => allowed.add(normUrl(c.url)));
+(prev.internal_link_candidates || []).filter(c => c && !c.planned).forEach(c => allowed.add(normUrl(c.url)));
 (prev.site_urls || []).forEach(u => allowed.add(normUrl(u)));
+const plannedTargets = new Set([...(prev.planned_link_targets || []), ...(prev.hub_pages || []).filter(p => p && p.planned)].map(l => normUrl(l && l.url)).filter(Boolean));
+plannedTargets.forEach(u => allowed.delete(u));
 if (prev.existing_page && prev.existing_page.url) allowed.add(normUrl(prev.existing_page.url));
 if (domain) allowed.add(normUrl('https://' + domain));
-const removedLinks = []; const externalUrls = [];
-let internalLinks = 0, externalLinks = 0;
+const removedLinks = [], plannedLinks = [], weakRepeats = []; const externalUrls = []; const weakSeen = new Map();
+let internalLinks = 0, externalLinks = 0, cleanedLinks = 0;
 md = md.replace(/\[([^\[\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => {
-  let u = url.trim(); const isRelative = u.startsWith('/');
+  let u = SRC.clean(url.trim()); if (u !== url.trim()) cleanedLinks++;
+  const isRelative = u.startsWith('/');
   if (isRelative) u = domain ? 'https://' + domain + u : u;
   const host = u.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split(/[\/?#]/)[0].toLowerCase();
   const internal = !!domain && (host === domain || host.endsWith('.' + domain));
-  if (internal || isRelative) { if (allowed.size && allowed.has(normUrl(u))) { internalLinks++; return '[' + text + '](' + u + ')'; } removedLinks.push(u); return text; }
-  externalLinks++; externalUrls.push({ anchor: text, url: u, host }); return m;
+  if (internal || isRelative) { if (allowed.size && allowed.has(normUrl(u))) { internalLinks++; return '[' + text + '](' + u + ')'; }
+    (plannedTargets.has(normUrl(u)) ? plannedLinks : removedLinks).push(u); return text; }
+  const tier = SRC.tier(u);
+  if (tier === 'weak') { const n = (weakSeen.get(host) || 0) + 1; weakSeen.set(host, n); if (n > 1) { weakRepeats.push(host); return text; } }
+  externalLinks++; externalUrls.push({ anchor: text, url: u, host, tier }); return '[' + text + '](' + u + ')';
 });
 if (removedLinks.length) fixes.push(`Removed ${removedLinks.length} link(s) to pages that do not exist on ${domain || 'the site'}: ` + removedLinks.slice(0, 4).join(', '));
+if (plannedLinks.length) fixes.push(`Removed ${plannedLinks.length} link(s) to pages that are planned but not published yet: ` + [...new Set(plannedLinks)].slice(0, 4).join(', ') + ' — they are listed in the package as links to add once they are live');
+if (cleanedLinks) fixes.push(`Stripped tracking parameters (utm_*, srsltid, gclid, fbclid) from ${cleanedLinks} link(s)`);
+if (weakRepeats.length) fixes.push(`Unlinked ${weakRepeats.length} repeat citation(s) of a source with no independent authority (one per domain): ` + [...new Set(weakRepeats)].join(', '));
 // citations must point at sources the brief allowed (evidence plan) or at least be real-looking hosts
 const allowedSources = new Set(((brief.evidence_plan || []).map(e => String(e.source_url || '').toLowerCase())).concat((prev.facts || []).map(f => String(f.url || '').toLowerCase())));
 const TRUSTED = /(^|\.)(gov|edu|int|mil)(\.|$)|\.gov\.[a-z]{2}$|(^|\.)(microsoft|odoo|sap|oracle|netsuite|google|zoho|sage|xero|quickbooks|intuit|salesforce|hubspot|shopify|stripe|who|oecd|worldbank|imf|un|europa)\.(com|org|eu|int)$/i;
@@ -118,6 +235,11 @@ const h1 = (md.match(/^# .+$/m) || [''])[0];
 const h2s = md.match(/^## .+$/gm) || [];
 const faqHeadings = h2s.filter(h => /faq|frequently asked/i.test(h)).length;
 const lastH2 = h2s[h2s.length - 1] || '';
+// 2026-10-11 (FIX_PLAN G2): Google stopped showing FAQ rich results on 2026-05-07, so no FAQ block is required or scored any more. What AI
+// answers still quote is a question used as a heading with a short, direct answer under it — that is what is counted and scored instead.
+const headingTexts = (md.match(/^#{2,4} .+$/gm) || []).map(h => plain(h.replace(/^#+\s*/, '')));
+const questionHeadings = headingTexts.filter(h => /\?\s*$/.test(h) || /^(how|what|which|why|when|where|who|is|are|can|does|do|should|will)\b/i.test(h)).length;
+const answeredQuestions = questionHeadings + validFaqs.length;
 const qaMatch = withoutMeta.match(/^\**\s*Quick answer:?\**\s*(.+)$/im);
 const answerWords = qaMatch ? countWords(plain(qaMatch[1])) : 0;
 // per-section word counts vs the outline
@@ -146,6 +268,45 @@ for (const s of noBrackets.split(/(?<=[.!?])\s+/)) {
 }
 const clientNums = (String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '')).toLowerCase();   // numbers the client gave (facts, case studies) need no external source
 const stats = [...statHits].filter(s => !/^(19|20)\d\d/.test(s)).filter(s => !clientNums.includes(s.toLowerCase().replace(/^(over|more than|up to|nearly|around|approximately|about)\s+/, ''))).slice(0, 8);
+
+// 9b. Claim check (FIX_PLAN G4, 2026-10-11): a figure in a sentence that cites a source must be IN that source. The only source text we have
+//     is the text the writer was shown — the fact snippets from the live search, the brief's evidence plan and the competitor pages we read —
+//     so a figure that is not there was not read anywhere: it is marked [Confirm: …] in the copy and listed in the report. Formatting does not
+//     matter (separators, "m" / "million", "AED 50m" vs "AED 50 million"); small bare numbers ("3 steps") are never treated as claims; a figure
+//     the client's own facts carry needs no external source; a sentence whose sources we never read is left alone (nothing to check against).
+const srcText = new Map();
+const ownFacts = String(prev.business || '') + ' ' + String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '');   // the client's own numbers vouch for themselves
+const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim()) return; srcText.set(k, ((srcText.get(k) || '') + ' ' + String(t)).slice(0, 12000)); };
+(prev.facts || []).forEach(f => addSrc(f && f.url, [f && f.text, f && f.claim, f && f.title].filter(Boolean).join(' ')));
+(brief.evidence_plan || []).forEach(e => addSrc(e && e.source_url, e && e.fact));
+(prev.competitors || []).forEach(c => addSrc(c && c.url, [c && c.content_full, c && c.content, c && c.snippet].filter(Boolean).join(' ')));
+const unverified_figures = [];
+{
+  const pad = (x) => ' '.repeat(x.length);
+  // a full stop between two digits is a decimal point, not the end of a sentence ("23.5%" must stay whole)
+  const isBreak = (t, i) => { const c = t[i]; if (c === '\n' || c === '|' || c === '!' || c === '?') return true; if (c !== '.') return false; return !(/\d/.test(t[i - 1] || '') && /\d/.test(t[i + 1] || '')); };
+  const bounds = (text, at, len) => { let a = at, b = at + len; while (a > 0 && !isBreak(text, a - 1)) a--; while (b < text.length && !isBreak(text, b)) b++; return [a, b]; };
+  const seen = new Set(); const marks = [];
+  for (const m of [...md.matchAll(/\[[^\[\]]+\]\((https?:\/\/[^)\s]+)\)/g)]) {
+    const [a, b] = bounds(md, m.index, m[0].length); const id = a + ':' + b; if (seen.has(id)) continue; seen.add(id);
+    const sent = md.slice(a, b);
+    const urls = [...sent.matchAll(/\]\((https?:\/\/[^)\s]+)\)/g)].map(x => x[1]);
+    const texts = urls.map(u => srcText.get(SRC.key(u)) || '').filter(Boolean);
+    if (!texts.length) continue;   // the source was never fetched: nothing to look the figure up in
+    const body = sent.replace(/\[[^\[\]]*\]\([^)]*\)/g, pad).replace(/\[[^\[\]]*\]/g, pad);   // anchors, URLs and existing [Confirm: …] / [Price] markers are not claims
+    for (const f of SRC.figures(body)) {
+      if (texts.some(t => SRC.hasFigure(f, t))) continue;
+      if (SRC.hasFigure(f, ownFacts) || clientNums.includes(String(f.raw).toLowerCase())) continue;
+      unverified_figures.push({ figure: f.raw, sources: [...new Set(urls.map(u => SRC.host(u)))] });
+      marks.push({ start: a + f.index, end: a + f.index + f.length, raw: f.raw });
+      if (marks.length >= 12) break;
+    }
+    if (marks.length >= 12) break;
+  }
+  marks.sort((x, y) => y.start - x.start);
+  for (const t of marks) md = md.slice(0, t.start) + '[Confirm: ' + t.raw + ']' + md.slice(t.end);
+  if (marks.length) fixes.push(`Marked ${marks.length} figure(s) that the cited source does not carry as [Confirm: …] for review`);
+}
 
 // 10. Banned phrases (AI clichés and filler)
 const BANNED = ["in today's fast-paced world", 'in the ever-evolving', 'ever-evolving landscape', 'delve', 'dive into', 'unlock', 'unleash', 'seamless', 'seamlessly', 'robust', 'leverage', 'cutting-edge', 'game-changer', 'game-changing', 'revolutioni', 'elevate your', 'empower', 'navigate the complexities', 'look no further', "it's important to note", 'it is important to note', 'at the end of the day', 'in conclusion', 'comprehensive solution', 'tailored solutions', 'harness the power', "whether you're a", 'a testament to', 'crucial', 'paramount', 'realm', 'tapestry', 'embark', 'foster', 'streamline', 'synergy', 'holistic', 'best-in-class', 'world-class', 'state-of-the-art', 'top-notch', 'one-stop shop', 'in this article', 'in this guide, we', 'without further ado', 'unparalleled', 'transformative', 'in the digital age', 'stay ahead of the curve', 'the bottom line is', 'when it comes to', 'a wide range of'];
@@ -197,9 +358,9 @@ if (density > 2) warnings.push(`Keyword density is high (${density}%) — risk o
 if (h2s.length < 4) warnings.push(`Only ${h2s.length} H2 sections (brief expects ${outline.length || 'more'})`);
 if (!qaMatch) warnings.push('Quick answer block missing (a 40-70 word direct answer right after the introduction)');
 else if (answerWords < 35 || answerWords > 90) warnings.push(`Quick answer is ${answerWords} words (aim for 40-70)`);
-if (validFaqs.length < 5) warnings.push(`Only ${validFaqs.length} complete FAQs found (need 5+, answers 40-70 words)`);
+if (answeredQuestions < 3) warnings.push(`Only ${answeredQuestions} question(s) answered as a heading (aim for 3+ question-style headings with a direct 40-60 word answer under each — that is what AI answers quote)`);
 if (faqHeadings > 1) warnings.push('Duplicate FAQ sections found');
-if (/faq|frequently asked/i.test(lastH2)) warnings.push('CTA section should come after the FAQs');
+if (/faq|frequently asked/i.test(lastH2)) warnings.push('The call to action should be the last section');
 if (!/\|.*\|/.test(md)) warnings.push('Comparison table missing');
 // v4.12: an AI answer target — the answer sits where an assistant reads first, and every search the assistants run before answering has a section
 const AT = prev.ai_target && prev.ai_target.question ? prev.ai_target : null;
@@ -220,6 +381,8 @@ if (AT) {
 }
 if (/guarantee/i.test(md) && !prev.business) warnings.push('Contains a guarantee claim — please verify');
 if (stats.length) warnings.push('Unverified statistics that need a linked source or a [Statistic] marker: ' + stats.join('; '));
+if (unverified_figures.length) warnings.push('Figures the cited source does not carry (now marked [Confirm: …]): ' + unverified_figures.slice(0, 5).map(f => '"' + f.figure + '" (' + f.sources.join(', ') + ')').join('; ') + ' — quote the source\'s own number or cite the page that states it');
+if (weakRepeats.length) warnings.push('A source with no independent authority was cited more than once (' + [...new Set(weakRepeats)].join(', ') + '): the repeats were unlinked — cite an official, standards, research or major-press source instead');
 if ((prev.internal_link_candidates || []).length > 1 && internalLinks === 0) warnings.push('No internal links to existing pages on the site');
 if (bannedCount) warnings.push('Filler / AI-cliché phrases to rewrite (' + bannedCount + '): ' + banned_found.slice(0, 8).map(b => '"' + b.phrase + '"' + (b.count > 1 ? ' x' + b.count : '')).join(', '));
 if (flesch != null && flesch < 30) warnings.push(`Hard to read (Flesch ${flesch}, average sentence ${avgSentence} words) — shorten sentences and use plainer words`);
@@ -231,7 +394,8 @@ if (unansweredSnippets.length) warnings.push('Snippet questions from the brief t
 if (critique && Array.isArray(critique.problems)) critique.problems.filter(p => /high|medium/i.test(p.severity || '')).slice(0, 8).forEach(p => warnings.push('Editor review: ' + [p.location ? '"' + String(p.location).slice(0, 80) + '"' : '', p.issue, p.fix ? 'Fix: ' + p.fix : ''].filter(Boolean).join(' — ')));
 
 // 15. Content score (0-100)
-const structuralChecks = [!!metaTitle && metaTitle.length <= 60, !!metaDesc && metaDesc.length <= 155, !!h1, h2s.length >= 4, !!qaMatch, validFaqs.length >= 5, /\|.*\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).length <= 1, kwCount >= 3 && density <= 2];
+// FIX_PLAN G2: an FAQ block is no longer one of the checks (no FAQ rich results since 2026-05-07); question headings answered directly are.
+const structuralChecks = [!!metaTitle && metaTitle.length <= 60, !!metaDesc && metaDesc.length <= 155, !!h1, h2s.length >= 4, !!qaMatch, answeredQuestions >= 3, /\|.*\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).filter(c => c && !c.planned).length <= 1, kwCount >= 3 && density <= 2];
 const structure_pts = 25 * structuralChecks.filter(Boolean).length / structuralChecks.length;
 const coverage_pts = 25 * coverage;
 const readability_pts = flesch == null ? 10 : (flesch >= 40 && avgSentence <= 22 ? 15 : (flesch >= 30 && avgSentence <= 26 ? 10 : 4));   // B2B copy normally scores 30-55
@@ -284,10 +448,15 @@ if (V && V.url) {
   blocks.push({ type: 'VideoObject', note: (V.missing || []).filter(m => m !== 'transcript').length ? 'Fill in: ' + V.missing.filter(m => m !== 'transcript').join(', ') + ' (YouTube Studio shows them).' : 'Video details read from the video page.', json: { '@context': 'https://schema.org', '@type': 'VideoObject', name: V.title || h1Text, description: String(V.description || plain(metaDesc)).slice(0, 2000),
     thumbnailUrl: V.thumbnail_url ? [V.thumbnail_url] : ['[Thumbnail URL]'], uploadDate: V.upload_date || '[Upload date, YYYY-MM-DD]', ...(V.duration_iso ? { duration: V.duration_iso } : {}), ...(V.embed_url ? { embedUrl: V.embed_url } : {}), ...(V.provider === 'file' ? { contentUrl: V.url } : {}), ...(clips.length ? { hasPart: clips } : {}) } });
 }
-const HP = (prev.hub_pages || []).filter(p => p && p.url);
-if (role === 'hub' && HP.length) blocks.push({ type: 'ItemList', note: 'The cluster pages this hub links to' + (HP.some(p => p.planned) ? '; remove planned pages that are not live yet, or publish them first.' : '.'), json: { '@context': 'https://schema.org', '@type': 'ItemList', name: h1Text + ': guides in this series', itemListElement: HP.map((p, i) => ({ '@type': 'ListItem', position: i + 1, name: p.keyword ? p.keyword.charAt(0).toUpperCase() + p.keyword.slice(1) : p.url, url: p.url })) } });
+// FIX_PLAN D9: only the cluster pages that are live are listed and linked; the planned ones go into the package as links to add later.
+const HPall = (prev.hub_pages || []).filter(p => p && p.url);
+const HP = HPall.filter(p => !p.planned); const HPplanned = HPall.filter(p => p.planned);
+if (role === 'hub' && HP.length) blocks.push({ type: 'ItemList', note: 'The cluster pages this hub links to (live pages only).', json: { '@context': 'https://schema.org', '@type': 'ItemList', name: h1Text + ': guides in this series', itemListElement: HP.map((p, i) => ({ '@type': 'ListItem', position: i + 1, name: anchorText(p), url: p.url })) } });
 blocks.push({ type: 'BreadcrumbList', json: { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: home }, { '@type': 'ListItem', position: 2, name: h1Text, item: pageUrl }] } });
-if (validFaqs.length) blocks.push({ type: 'FAQPage', note: 'Google stopped showing FAQ rich results in May 2026; keep for other engines and AI assistants, or drop it.', json: { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: validFaqs.map(f => ({ '@type': 'Question', name: plain(f.q), acceptedAnswer: { '@type': 'Answer', text: plain(f.a) } })) } });
+// FIX_PLAN G2: no FAQPage block any more — Google stopped showing FAQ rich results on 2026-05-07 and no other engine reads the markup.
+// Every URL in the schema is cleaned of tracking parameters, like the links in the copy (FIX_PLAN G4).
+const cleanUrls = (x) => Array.isArray(x) ? x.map(cleanUrls) : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
+blocks.forEach(b => { if (b && b.json) b.json = cleanUrls(b.json); });
 // E-E-A-T notes for the report (not QA warnings: they never trigger an editor round)
 const eeat_notes = [];
 if (articleLike && !AU) eeat_notes.push('No author on file: the byline, author box and Person schema carry [placeholders]. Set up the business profile once (author name, title, credentials, bio, profile links).');
@@ -297,13 +466,13 @@ const insightPrompts = (md.match(/\[Author insight:[^\]]*\]/gi) || []).length;
 if (insightPrompts) eeat_notes.push(insightPrompts + ' [Author insight: ...] line(s) for the author to complete with first-hand experience before publishing.');
 if (role === 'local' && !(P.phone && PA.street)) eeat_notes.push('Local page without a full address and phone on file: fill in the business profile so the NAP block and LocalBusiness schema are complete.');
 if (V && (V.missing || []).length) eeat_notes.push('Video: missing ' + V.missing.join(', ') + (V.missing.includes('transcript') ? ' (paste the transcript from YouTube Studio → Subtitles)' : '') + '.');
-if (role === 'hub' && HP.some(p => p.planned)) eeat_notes.push(HP.filter(p => p.planned).length + ' cluster page(s) are planned and not live yet: publish them before the hub, or drop their links until they are.');
+if (role === 'hub' && HPplanned.length) eeat_notes.push(HPplanned.length + ' cluster page(s) are planned and not live yet: this page links to none of them. They are listed in the package as "links to add when published" — add the link once each one is live.');
 fixes.push('Generated ' + blocks.map(b => b.type).join(' + ') + ' schema');
 
 const passed = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25;
 // v4.6: the editor pass (a full rewrite) runs only when it can still improve the page. It is skipped when the draft already scores 90+, the editorial
 // review rates it 85+ with no high-severity problem, the length is on target and the only open notes are style notes (passive voice, long
-// sentences, medium review remarks). Every SEO check (meta, H1 / keyword, quick answer, FAQs, table, CTA, links, sources, statistics, coverage,
+// sentences, medium review remarks). Every SEO check (meta, H1 / keyword, quick answer, question headings, table, CTA, links, sources, figures, coverage,
 // specificity, fillers, readability, snippet questions) still forces the editor pass; open style notes stay in the report.
 const STYLE_ONLY = /^(Passive voice in about|\d+ sentences longer than 28 words|Editor review: )/;
 const crit = critique || lastCritique || {};
@@ -313,8 +482,9 @@ if (!passed && !editor_needed && round === 1) fixes.push('Editor pass skipped: t
 return [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null,
   content_qa: { ai_ready, round, passed, editor_needed, content_score, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections,
-    keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
-    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats,
+    keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
+    source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', url: p.url, anchor: anchorText(p) })),
+    answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats, unverified_figures,
     trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct }, term_coverage: termCoverage, coverage_pct: Math.round(coverage * 100), missing_terms: missingTerms, specificity_per_100_words: specificity,
     critic_score: (critique || lastCritique || {}).score ?? null, critic_verdict: (critique || lastCritique || {}).verdict || null,
     schema_types: blocks.map(b => b.type), eeat_notes, page_role: role, auto_fixes: fixes, warnings } } }];

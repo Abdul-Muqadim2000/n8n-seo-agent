@@ -54,11 +54,9 @@ Secondary Keywords: <comma separated>
 **Quick answer:** <the answer_block, 40-70 words, one paragraph, no placeholders>
 
 Then every H2 from the outline, in order ("## " for H2, "### " for H3), each covering all its key points in its stated format and close to its target_words. Where the brief suggests an image, add a line: [Image: <alt text>]. Include the comparison table as a Markdown table in the most relevant section; business-specific cells (price, timeline, capacity) contain square-bracket placeholders such as [Price] or [Timeline], never numbers. Place the internal links naturally as [anchor](url).
-Write only ONE FAQ section, "## Frequently Asked Questions", with every FAQ from the brief as:
-Q1: <question>
-A1: <answer in 40-70 words>
-The CTA section is always LAST, after the FAQs, and uses the brief's cta.
-Total main content (excluding FAQs) within 10% of {{ $json.content_brief.target_word_count }} words.
+Every question in the brief's "faqs" list becomes its own question-style heading ("### <the question>") inside the section it belongs to, answered immediately in 40-60 words, then the detail. Do NOT write a "Frequently Asked Questions" block, a Q1:/A1: list or any FAQ markup: Google stopped showing FAQ rich results in May 2026, while AI assistants quote a question heading with a direct answer under it.
+The CTA section is always LAST and uses the brief's cta.
+Total main content within 10% of {{ $json.content_brief.target_word_count }} words.
 
 WRITING RULES — these decide the quality
 1. Specific beats general. Every section contains at least two of: a concrete example, a number with its linked source, a numbered step list, a decision rule ("choose X if…"), a mistake to avoid with its consequence, or a client fact.
@@ -69,4 +67,5 @@ WRITING RULES — these decide the quality
 6. Use the primary keyword in the H1, the first sentence, at least two H2s and the final section; otherwise write naturally and never stuff.
 7. Show expertise: explain the why behind each recommendation, name the trade-offs, and give the reader a way to decide. Give each information-gain item its own full treatment.
 8. No schema, script or HTML. No production notes, layout notes, image briefs or commentary anywhere: after the Secondary Keywords line the next line is the H1. Return only the Markdown, starting with the Title line.
-9. Hard length limit: main content (excluding FAQs) must not exceed the target word count by more than 10%. Finish every section and the FAQ and CTA; if space is tight, shorten sections rather than dropping the ending.
+9. Hard length limit: the main content must not exceed the target word count by more than 10%. Finish every section and the CTA; if space is tight, shorten sections rather than dropping the ending.
+10. Sources: every external number is quoted exactly as its source writes it and carries that source's link. Prefer an official, government, standards or major research / press source; a vendor or agency blog may be used at most once on the whole page. Never add tracking parameters (utm_*, srsltid, gclid, fbclid) to a link. A number you cannot find in the verified facts above does not go on the page.

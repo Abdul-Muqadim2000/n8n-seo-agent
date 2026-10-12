@@ -1,3 +1,5 @@
+/*__SOURCES__*/
+/*__ANCHOR__*/
 // Framework-agnostic blog package for every content run: the article as clean HTML (with the JSON-LD blocks), as Markdown, and a meta.json
 // (title, slug, meta description, H1, keywords, headings, links, schema, word count, content score, suggested URL, publish checklist).
 // Attached to the e-mail and returned in the API callback next to the PDF / Word report. Runs without content pass through untouched.
@@ -9,10 +11,11 @@ if (!md0.trim()) return [item];
 const metaRe = /^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):\s*(.+)$/gim;
 const metaLines = {}; let mm; while ((mm = metaRe.exec(md0)) !== null) metaLines[mm[1].toLowerCase()] = mm[2].trim();
 let md = md0.replace(metaRe, '').replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/gi, '').replace(/^\s*(Production Brief|Note|Editor's note):.*$/gim, '').replace(/[ \t]*\[(?:Image|Video)\s*:(?:[^\[\]\n]|\[[^\[\]\n]*\])*\][ \t]*/gi, '').replace(/\n{3,}/g, '\n\n').trim();
+md = md.replace(/\]\((https?:\/\/[^)\s]+)\)/g, (m, u) => '](' + SRC.clean(u) + ')');   // FIX_PLAN G4: utm_*, srsltid, gclid, fbclid never reach the published page
 const h1 = (md.match(/^#\s+(.+)$/m) || [])[1] || '';
 md = md.replace(/^#\s+.+$\n?/m, '').trim();
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const inline = (s) => { let t = esc(s); t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); t = t.replace(/\[([^\[\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>'); return t; };
+const inline = (s) => { let t = esc(s); t = t.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>'); t = t.replace(/\[([^\[\]]+)\]\(([^)]+)\)/g, (m, a, u) => '<a href="' + SRC.clean(u) + '">' + a + '</a>'); return t; };   // FIX_PLAN G4: no tracking parameters leave the package
 const anchorIds = new Map();   // H2 ids for the table of contents (unique, stable)
 const anchorOf = (h) => { if (anchorIds.has(h)) return anchorIds.get(h); let a = String(h).toLowerCase().replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'section'; let k = a, i = 2; while ([...anchorIds.values()].includes(k)) k = a + '-' + (i++); anchorIds.set(h, k); return k; };
 function mdToHtml(text) {
@@ -36,7 +39,8 @@ function mdToHtml(text) {
   }
   closeList(); closeTable(); return out.join('\n');
 }
-const schema = Array.isArray(d.schema_blocks) ? d.schema_blocks : [];
+const cleanUrls = (x) => Array.isArray(x) ? x.map(cleanUrls) : (x && typeof x === 'object') ? Object.fromEntries(Object.entries(x).map(([k, v]) => [k, cleanUrls(v)])) : (typeof x === 'string' && /^https?:\/\//i.test(x) ? SRC.clean(x) : x);
+const schema = (Array.isArray(d.schema_blocks) ? d.schema_blocks : []).map(b => (b && b.json) ? { ...b, json: cleanUrls(b.json) } : cleanUrls(b));
 const title = metaLines.title || h1 || d.keyword || 'New page';
 const slug = (String(d.content_brief_slug || metaLines.slug || title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 80)) || 'page';
 const description = metaLines['meta description'] || '';
@@ -89,11 +93,13 @@ const tocH2 = faqAt >= 0 ? h2List.slice(0, faqAt) : h2List;   // the CTA always 
 const wantToc = role === 'hub' || (articleLike && h2List.length >= 5 && words >= 1500);
 const tocHtml = wantToc && tocH2.length >= 3 ? '<nav class="toc" aria-label="Table of contents"><p class="toc-title">' + (role === 'hub' ? 'In this guide' : 'Contents') + '</p><ol>' + tocH2.map(h => '<li><a href="#' + anchorOf(h) + '">' + inline(h) + '</a></li>').join('') + '</ol></nav>' : '';
 const tocMd = tocHtml ? '**' + (role === 'hub' ? 'In this guide' : 'Contents') + '**\n\n' + tocH2.map((h, i) => (i + 1) + '. [' + h.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') + '](#' + anchorOf(h) + ')').join('\n') : '';
-// hub: "Guides in this series" (the cluster pages the hub links down to)
-const HP = role === 'hub' ? (d.hub_pages || []).filter(p => p && p.url) : [];
-const cap = (s) => String(s || '').charAt(0).toUpperCase() + String(s || '').slice(1);
-const clusterHtml = HP.length ? '<nav class="cluster" aria-label="Guides in this series"><h2 id="guides-in-this-series">Guides in this series</h2><ul>' + HP.map(p => '<li><a href="' + esc(p.url) + '">' + esc(cap(p.keyword) || p.url) + '</a></li>').join('') + '</ul></nav>' : '';
-const clusterMd = HP.length ? '## Guides in this series\n\n' + HP.map(p => '- [' + (cap(p.keyword) || p.url) + '](' + p.url + ')').join('\n') : '';
+// hub: "Guides in this series" (the cluster pages the hub links down to). 2026-10-11 (FIX_PLAN D9): only pages that are live are listed and
+// linked — the live run linked twice each to three pages that did not exist — and the anchor is the page's title or its title-cased keyword
+// with the acronyms kept ("Facts erp" became "Facts ERP"). The planned pages travel in meta.json as links_to_add_when_published.
+const HPall = role === 'hub' ? (d.hub_pages || []).filter(p => p && p.url) : [];
+const HP = HPall.filter(p => !p.planned); const HPplanned = HPall.filter(p => p.planned);
+const clusterHtml = HP.length ? '<nav class="cluster" aria-label="Guides in this series"><h2 id="guides-in-this-series">Guides in this series</h2><ul>' + HP.map(p => '<li><a href="' + esc(SRC.clean(p.url)) + '">' + esc(anchorText(p)) + '</a></li>').join('') + '</ul></nav>' : '';
+const clusterMd = HP.length ? '## Guides in this series\n\n' + HP.map(p => '- [' + anchorText(p) + '](' + SRC.clean(p.url) + ')').join('\n') : '';
 // case study: snapshot box from the intake (only the facts given)
 const csRows = CS ? [['Client', CS.client_public === false ? ('A ' + (CS.industry ? CS.industry + ' business' : 'client') + (CS.location ? ' in ' + CS.location : '')) : CS.client_name], ['Industry', CS.industry], ['Location', CS.location], ['Service', CS.service], ['Timeline', CS.timeline], ['Results', CS.results]].filter(r => String(r[1] || '').trim()) : [];
 const snapshotHtml = csRows.length ? '<aside class="case-snapshot"><p class="snapshot-title">At a glance</p><dl>' + csRows.map(r => '<dt>' + esc(r[0]) + '</dt><dd>' + esc(String(r[1]).slice(0, 300)) + '</dd>').join('') + '</dl></aside>' : '';
@@ -157,7 +163,8 @@ const meta = { title, h1: h1 || title, slug, suggested_url: dom ? 'https://' + d
   page_role: role, article_like: articleLike,
   author: articleLike ? (AU ? { name: AU.name, job_title: AU.job_title || '', bio: AU.bio || '', credentials: AU.credentials || '', url: AU.url || '', image_url: AU.image_url || '', same_as: AU.same_as || [], knows_about: AU.knows_about || [], placeholder: false } : { name: '[Author Name]', placeholder: true }) : null,
   reviewer: RV || null, updated: today, table_of_contents: tocHtml ? tocH2.map(h => ({ text: h.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'), anchor: '#' + anchorOf(h) })) : [],
-  hub: role === 'hub' ? { cluster_pages: HP, planned: HP.filter(p => p.planned).length } : null,
+  hub: role === 'hub' ? { cluster_pages: HP, planned_pages: HPplanned, planned: HPplanned.length } : null,
+  links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), note: 'Not published yet: add this link from this page once the page is live.' })),
   case_study: CS ? { case_id: d.case_id || '', client_public: CS.client_public !== false, snapshot: Object.fromEntries(csRows) } : null,
   local: role === 'local' ? { area, business_name: (P && P.business_name) || '', address: addr, phone: (P && P.phone) || '', opening_hours: (P && P.opening_hours) || '', map_url: (P && P.map_url) || '', complete: !!(P && P.phone && PA.street) } : null,
   video: V ? { url: V.url, provider: V.provider || '', embed_url: V.embed_url || '', title: vidTitle, upload_date: V.upload_date || '', duration: V.duration_iso || '', thumbnail_url: V.thumbnail_url || '', chapters: V.chapters || [], transcript_included: !!V.transcript, missing: V.missing || [] } : null,
@@ -167,7 +174,8 @@ const meta = { title, h1: h1 || title, slug, suggested_url: dom ? 'https://' + d
 const extra = [];
 if (articleLike) extra.push(AU ? 'Keep the byline (author, updated date' + (RV ? ', reviewer' : '') + ') under the H1 and the author box at the end; link the author name to the author page' : 'Fill in the [Author] byline and author box (name, job title, bio, credentials, LinkedIn) — or set up the business profile once ("Set up my business profile") so every page carries them');
 if (/\[Author insight:/i.test(md)) extra.push('Complete each [Author insight: ...] line with a real first-hand example: this is the experience Google looks for');
-if (HP.length) extra.push('Keep the table of contents and the "Guides in this series" block; publish the cluster pages first' + (HP.some(p => p.planned) ? ' (' + HP.filter(p => p.planned).length + ' are planned, not live: publish them or drop their links)' : ''));
+if (HP.length) extra.push('Keep the table of contents and the "Guides in this series" block (it lists only the pages that are live today)');
+if (HPplanned.length) extra.push('"links_to_add_when_published" lists ' + HPplanned.length + ' page(s) this hub does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');
 if (CS) extra.push('Get the client\'s approval of the text' + (CS.client_public === false ? ' (the client is anonymised)' : ' and the quote') + ' before publishing; link this case study from the matching service page');
 if (role === 'local') extra.push('Name, address and phone must match the Google Business Profile exactly; ' + ((P && P.phone && PA.street) ? 'add the map embed' : 'fill in the [bracketed] NAP details (or complete the business profile)') + '; keep the LocalBusiness schema');
 if (V) extra.push('Keep the video embed and the transcript under it; ' + ((V.missing || []).filter(m => m !== 'transcript').length ? 'fill in the VideoObject ' + V.missing.filter(m => m !== 'transcript').join(', ') : 'the VideoObject details were read from the video page') + (V.transcript ? '' : '; paste the transcript (YouTube Studio → Subtitles)'));
