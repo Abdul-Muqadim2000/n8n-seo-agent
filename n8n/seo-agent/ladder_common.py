@@ -79,7 +79,10 @@ def dt_update_params(table, cols, conditions, values):
 ALERTS_TABLE = 'seo_console_alerts'
 CHECKIN_TABLE = 'seo_console_checkins'
 ALERTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('kind', 'string'), ('severity', 'string'), ('subject', 'string'), ('summary', 'string'), ('received_at', 'string'), ('message_id', 'string'), ('status', 'string'), ('source', 'string')]
-CHECKIN_COLS = [('site_id', 'string'), ('domain', 'string'), ('month', 'string'), ('manual_action', 'boolean'), ('security_issue', 'boolean'), ('notes', 'string'), ('coverage_json', 'string'), ('not_indexed_total', 'number'), ('csv_kind', 'string'), ('submitted_at', 'string'), ('source', 'string'), ('request_id', 'string')]
+CHECKIN_COLS = [('site_id', 'string'), ('domain', 'string'), ('month', 'string'), ('manual_action', 'boolean'), ('security_issue', 'boolean'), ('notes', 'string'), ('coverage_json', 'string'), ('not_indexed_total', 'number'), ('csv_kind', 'string'), ('submitted_at', 'string'), ('source', 'string'), ('request_id', 'string'),
+                # D25c (2026-10-12, FIX_PLAN): a test check-in is stored like any other but never counts as the month's answer
+                # (v5/code/_checkin_test.js: the form's "test" answer, the API's is_test, a test caller, or a note that marks it)
+                ('is_test', 'boolean')]
 
 # ---- E-E-A-T and page types (v4.4): one business profile per site (author, reviewer, address / NAP) and the case-study library ----
 PROFILE_TABLE = 'seo_profiles'
@@ -190,7 +193,10 @@ LINK_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('import_id', 
                      ('anchor', 'string'), ('links', 'number'), ('last_crawled', 'string'), ('imported_at', 'string')]
 AUDITS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('report_type', 'string'), ('health_score', 'number'), ('grade', 'string'), ('pages_crawled', 'number'),
                ('findings', 'number'), ('critical', 'number'), ('high', 'number'), ('medium', 'number'), ('low', 'number'), ('scheduled', 'boolean'), ('request_id', 'string')]
-AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number')]
+AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number'),
+                       # G26 (2026-10-12, FIX_PLAN): the impact weight that ordered the fix list (severity x pages affected x their clicks and
+                       # impressions x their place in the site) and the one sentence that explains it, so the app can order the same way
+                       ('impact', 'number'), ('impact_basis', 'string')]
 
 # ---- reuse instead of repeat (v4.6): one key/value cache for results that do not need to be fetched again ----
 # keys: 'age:<domain>' (registration date, 365 days), 'desc:<domain>' (site description, 30 days), 'sitemap:<site_id>' (sitemap fingerprint)
@@ -235,3 +241,12 @@ def dt_delete_where_params(table, conditions):
 # only rows with a lower id than their own, so row order decides ties. Keyword Check rows carry mode 'assess' and stay out of the main limits.
 RUN_LEDGER_TABLE = 'seo_run_ledger'
 RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), ('est_usd', 'number'), ('created_at', 'string'), ('status', 'string'), ('settled_usd', 'number')]
+
+# ---- ops alerts (D25b, 2026-10-12, FIX_PLAN): the Error Handler had one channel (e-mail), and on 2026-10-10 and 2026-10-12 it failed with a
+# connection error, so nobody learned that a run had failed. Every alert is now written here first (one row per alert key, the repeats counted)
+# and then sent to an independent webhook (SEO_ALERT_WEBHOOK_URL, Slack / Teams / anything that takes a POST) as well as the e-mail. The row is
+# the record of last resort: it survives both channels being down, and the app's failure watcher reads the same failures from n8n.
+OPS_ALERTS_TABLE = 'seo_ops_alerts'
+OPS_ALERTS_COLS = [('alert_key', 'string'), ('workflow', 'string'), ('node', 'string'), ('message', 'string'), ('execution_id', 'string'), ('execution_url', 'string'),
+                   ('mode', 'string'), ('severity', 'string'), ('first_seen_at', 'string'), ('last_seen_at', 'string'), ('count', 'number'),
+                   ('channels', 'string'), ('delivered', 'string'), ('notes', 'string')]

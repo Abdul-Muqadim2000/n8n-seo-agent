@@ -430,6 +430,13 @@
     "name": "Read Nav Pages",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch CrUX",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Growth": [
@@ -719,6 +726,15 @@
     "name": "POST Cadence Note",
     "retryOnFail": false,
     "waitBetweenTries": null
+   }
+  ],
+  "SEO Agent \u2014 Error Handler": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Alert Webhook",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Keyword Check": [

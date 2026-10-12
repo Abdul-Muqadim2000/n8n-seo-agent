@@ -218,14 +218,21 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   const prevAudit = t.audits[t.audits.length - 2];
   if (latestAudit && prevAudit && latestAudit.healthScore < prevAudit.healthScore - 2)
     add({ id: 'tech:score-drop', category: 'technical', priority: 'high', title: `Health score fell from ${prevAudit.healthScore} to ${latestAudit.healthScore}`, detail: 'New issues appeared since the previous audit. Start with the new critical and high findings.', action: { label: 'See what changed', page: 'technical' } });
-  for (const f of t.findings.filter((f) => f.status !== 'fixed' && /^(critical|high)$/i.test(f.severity)).slice(0, 6))
+  // G26 (2026-10-12, FIX_PLAN): the findings arrive in the audit's own impact order (services/data.ts), so these are the six that matter most,
+  // and each one carries the line the audit used to rank it. Where the audit weighted them, its three highest-impact findings are the "high"
+  // ones here too — otherwise a Critical on a page nobody visits would be pushed above the index blocker on the pages that earn the traffic,
+  // and the app would disagree with its own report.
+  const techOpen = t.findings.filter((f) => f.status !== 'fixed' && /^(critical|high)$/i.test(f.severity));
+  const techWeighted = techOpen.filter((f) => f.impact != null);
+  const techTop = new Set(techWeighted.slice(0, 3).map((f) => f.key));
+  for (const f of techOpen.slice(0, 6))
     add({
       id: `tech:${f.key}`,
       category: 'technical',
-      priority: /critical/i.test(f.severity) ? 'high' : f.status === 'new' ? 'high' : 'medium',
+      priority: techTop.has(f.key) ? 'high' : f.impact != null ? 'medium' : /critical/i.test(f.severity) ? 'high' : f.status === 'new' ? 'high' : 'medium',
       title: `Fix: ${f.title}`,
       detail: `${f.category} · ${f.severity}${f.status === 'new' ? ' · new since the last audit' : ''}. The audit report explains the fix; the fix pack has ready files where one applies.`,
-      evidence: f.affectedCount ? `${f.affectedCount} page(s) affected` : undefined,
+      evidence: f.impactBasis || (f.affectedCount ? `${f.affectedCount} page(s) affected` : undefined),
       action: { label: 'Open technical health', page: 'technical' },
     });
   if (latestAudit && Date.now() - Date.parse(latestAudit.auditedAt) > 45 * 864e5)

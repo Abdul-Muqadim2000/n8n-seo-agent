@@ -303,9 +303,14 @@ const SEV_TILE: Record<Sev, IconTileTone> = { critical: 'critical', high: 'serio
 function FixFirst({ findings, hasPrevious, sel }: { findings: Finding[]; hasPrevious: boolean; sel: AuditPoint }) {
   const open = findings.filter((f) => f.status !== 'fixed');
   const urgent = open.filter((f) => SEV_RANK[sevKey(f.severity)] <= 1);
+  // G26: the audit ranks its findings by likely impact (severity x pages affected x the clicks and impressions those pages get), and the
+  // server hands them over in that order. Audits written before 2026-10-12 carry no weight, so they keep the severity order.
   const rows = (urgent.length ? urgent : open.filter((f) => sevKey(f.severity) === 'medium'))
     .slice()
-    .sort((a, b) => SEV_RANK[sevKey(a.severity)] - SEV_RANK[sevKey(b.severity)] || b.affectedCount - a.affectedCount);
+    .sort((a, b) =>
+      a.impact != null && b.impact != null
+        ? b.impact - a.impact || SEV_RANK[sevKey(a.severity)] - SEV_RANK[sevKey(b.severity)]
+        : SEV_RANK[sevKey(a.severity)] - SEV_RANK[sevKey(b.severity)] || b.affectedCount - a.affectedCount);
   if (!rows.length) return null;
   const shown = rows.slice(0, 6);
   return (
@@ -336,9 +341,9 @@ function FixFirst({ findings, hasPrevious, sel }: { findings: Finding[]; hasPrev
               }
               title={f.title}
               description={
-                f.affectedCount > 0 ? (
+                f.affectedCount > 0 || f.impactBasis ? (
                   <span className="inline-flex flex-wrap items-center gap-1.5">
-                    {plural(f.affectedCount, 'page')} affected
+                    {f.impactBasis || `${plural(f.affectedCount, 'page')} affected`}
                     {f.previousCount != null && f.previousCount !== f.affectedCount && <Delta value={f.affectedCount - f.previousCount} suffix="" digits={0} upIsGood={false} label="vs previous audit" />}
                   </span>
                 ) : undefined

@@ -483,6 +483,12 @@ const toAudit = (r: AuditRow): AuditPoint => ({
   scheduled: b(r.scheduled),
 });
 
+/** G26: the impact weight of a stored finding — null for the audits written before the column existed (they keep the severity order). */
+const impactOf = (f: AuditFindingRow): number | null => {
+  const v: unknown = f.impact;
+  return v == null || v === '' ? null : n(v);
+};
+
 export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string): Promise<TechnicalData> {
   const d = site.domain;
   const [audits, reports] = await Promise.all([
@@ -508,13 +514,21 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
       affectedCount: n(f.affected_count),
       previousCount: prevBy.has(f.finding_key) ? n(prevBy.get(f.finding_key)!.affected_count) : null,
       status: (previous ? (prevBy.has(f.finding_key) ? 'open' : 'new') : 'open') as Finding['status'],
+      impact: impactOf(f),
+      impactBasis: s(f.impact_basis),
     })),
     ...prev
       .filter((f) => !curKeys.has(f.finding_key))
-      .map((f) => ({ key: s(f.finding_key), category: s(f.category), severity: s(f.severity), title: s(f.title), affectedCount: 0, previousCount: n(f.affected_count), status: 'fixed' as const })),
+      .map((f) => ({ key: s(f.finding_key), category: s(f.category), severity: s(f.severity), title: s(f.title), affectedCount: 0, previousCount: n(f.affected_count), status: 'fixed' as const, impact: impactOf(f), impactBasis: s(f.impact_basis) })),
   ];
   const sevRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
-  findings.sort((a, c) => (sevRank[a.severity.toLowerCase()] ?? 5) - (sevRank[c.severity.toLowerCase()] ?? 5) || c.affectedCount - a.affectedCount);
+  // G26 (2026-10-12, FIX_PLAN): the audit ranked its findings by likely impact (severity x pages affected x the clicks and impressions
+  // those pages get x their place in the site). Keep that order where it exists, so the app's lists agree with the report; audits written
+  // before this change carry no weight and keep the severity order.
+  findings.sort((a, c) =>
+    a.impact != null && c.impact != null
+      ? c.impact - a.impact || (sevRank[a.severity.toLowerCase()] ?? 5) - (sevRank[c.severity.toLowerCase()] ?? 5)
+      : (sevRank[a.severity.toLowerCase()] ?? 5) - (sevRank[c.severity.toLowerCase()] ?? 5) || c.affectedCount - a.affectedCount);
   const cats = new Map<string, { category: string; critical: number; high: number; medium: number; low: number }>();
   for (const f of findings) {
     if (f.status === 'fixed') continue;

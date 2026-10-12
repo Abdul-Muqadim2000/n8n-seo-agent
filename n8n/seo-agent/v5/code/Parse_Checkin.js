@@ -1,5 +1,6 @@
 // Monthly Search Console check-in: the two yes/no answers plus the optional "Pages" export (Table.csv: Reason, Source, Validation, Trend, Pages;
 // a per-reason URL list: URL, Last crawled; or Chart.csv: Date, Not indexed, Indexed) -> one row per site and month, and the summary shown back.
+/*__CHECKIN_TEST__*/
 const d = $('Normalize Input').first().json;
 const text = String(d.checkin_csv_text || '');
 const parseCsv = (t) => { const rows = []; let row = [], cell = '', q = false;
@@ -20,7 +21,11 @@ else if (rows.length > 1 && col('url') >= 0) { const ui = col('url'), li = col('
 else if (rows.length > 1 && col('date') >= 0) { const ni = header.findIndex(h => /not indexed/.test(h)), ii = header.findIndex(h => /^indexed/.test(h)); const last = rows[rows.length - 1]; coverage.kind = 'chart'; coverage.not_indexed_total = ni >= 0 ? num(last[ni]) : null; coverage.indexed_total = ii >= 0 ? num(last[ii]) : null; }
 const now = new Date().toISOString(); const month = now.slice(0, 7);
 const site_id = 'site_' + String(d.domain || '').replace(/[^a-z0-9]+/g, '-');
-const row = { site_id, domain: String(d.domain || ''), month, manual_action: !!d.checkin_manual_action, security_issue: !!d.checkin_security_issue, notes: String(d.checkin_notes || '').slice(0, 1000), coverage_json: JSON.stringify(coverage).slice(0, 20000), not_indexed_total: coverage.not_indexed_total == null ? -1 : coverage.not_indexed_total, csv_kind: coverage.kind, submitted_at: now, source: d.via_webhook ? 'api' : 'form', request_id: String(d.request_id || '') };
+// D25c (2026-10-12): a test check-in is stored like any other, marked as a test, and never counts as the month's answer. The mark comes from
+// the person (the form's "test" answer / the API's is_test), from a test caller, or from the note itself ("October check-in (test)").
+const row = { site_id, domain: String(d.domain || ''), month, manual_action: !!d.checkin_manual_action, security_issue: !!d.checkin_security_issue, notes: String(d.checkin_notes || '').slice(0, 1000), coverage_json: JSON.stringify(coverage).slice(0, 20000), not_indexed_total: coverage.not_indexed_total == null ? -1 : coverage.not_indexed_total, csv_kind: coverage.kind, submitted_at: now, source: d.via_webhook ? 'api' : 'form', request_id: String(d.request_id || ''), is_test: false };
+row.is_test = CK.isTest({ is_test: d.checkin_is_test, source: row.source, notes: row.notes });
+const test_reason = row.is_test ? CK.testReason({ is_test: d.checkin_is_test, source: row.source, notes: row.notes }) : '';
 const lines = [];
 lines.push(row.manual_action ? 'Manual action reported: rankings stay suppressed until it is fixed. Open Search Console → Security & Manual Actions → Manual actions, fix every page it names, then click Request review.' : 'No manual action reported.');
 lines.push(row.security_issue ? 'Security issue reported: clean the site (malware, injected or deceptive content), update the CMS and plugins, change passwords, then request a review under Security issues.' : 'No security issue reported.');
@@ -29,5 +34,6 @@ else if (coverage.kind === 'urls') lines.push('URL list uploaded: ' + coverage.u
 else if (coverage.kind === 'chart') lines.push('Pages chart: ' + coverage.indexed_total + ' indexed, ' + coverage.not_indexed_total + ' not indexed on the last date.');
 else if (text) lines.push('The uploaded CSV was not recognised as a Search Console Pages export (expected columns Reason / Pages, URL / Last crawled, or Date / Indexed / Not indexed).');
 else lines.push('No Pages report uploaded (optional).');
-lines.push('Recorded for ' + month + '; the Monday report includes it and the reminder stops for this month.');
-return [{ json: { ...d, checkin_row: row, coverage, summary_lines: lines, plain: lines.join('\n'), checkin_month: month, site_id } }];
+if (row.is_test) lines.push('Recorded as a TEST check-in (' + test_reason + '), so it does not count as the answer for ' + month + ': the Monday report keeps asking for the real check-in. Remove the row with the n8n public API (DELETE /api/v1/data-tables/<seo_console_checkins id>/rows/delete?filter=...) when it is no longer needed.');
+else lines.push('Recorded for ' + month + '; the Monday report includes it and the reminder stops for this month.');
+return [{ json: { ...d, checkin_row: row, coverage, summary_lines: lines, plain: lines.join('\n'), checkin_month: month, checkin_is_test: row.is_test, checkin_test_reason: test_reason, site_id } }];

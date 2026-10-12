@@ -1,3 +1,27 @@
+// ---- a check-in that is a test (D25c, 2026-10-12; the builders inline this file where a node asks for the CHECKIN_TEST kit) ----
+// October's Search Console check-in was still the 2026-10-02 test row ("October check-in (test)"), so the reminder stopped asking the owner
+// and the Monday report showed a test as the month's answer. A check-in is a test when the person said so (the form's "test" answer or the
+// API's is_test), when it was written by a test caller (source "test"), or when its own note marks it as one. A test check-in is recorded
+// like any other, but it never satisfies the month: CK.isTest(row) keeps it out of the monthly check, so the reminder keeps asking.
+const CK = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const yes = (v) => /^(y|yes|true|1|on)$/i.test(S(v));
+  // the note marks it as a test: "(test)", "test check-in / submission / entry / row / run / data", or a note that starts with "test"
+  const MARK = /\(\s*test[^)]*\)|\btest\s+(check-?in|submission|entry|row|run|data)\b|^test\b[\s:,-]/i;
+  const isTest = (row) => {
+    const r = row || {};
+    return yes(r.is_test) || S(r.source).toLowerCase() === 'test' || MARK.test(S(r.notes));
+  };
+  // why a stored row counts as a test (for the report and the harness)
+  const testReason = (row) => {
+    const r = row || {};
+    if (yes(r.is_test)) return 'marked as a test when it was submitted';
+    if (S(r.source).toLowerCase() === 'test') return 'written by a test caller (source "test")';
+    if (MARK.test(S(r.notes))) return 'its note marks it as a test';
+    return '';
+  };
+  return { isTest, testReason, yes, MARK };
+})();
 // Site tracker plan: one job per tracked site. Sites come from the Data Table "seo_sites" (registered through the form option
 // "Track my site" / API mode "track") plus every domain that has a keyword ladder (registered automatically, e-mail from the ladder).
 // Google data is read for the last 28 complete days ending 3 days ago (Search Console data is final after about 3 days),
@@ -24,7 +48,7 @@ const ladders = rowsOf('Load Ladders').filter(r => r.ladder_id && r.domain && r.
 const history = rowsOf('Load Rank History').filter(r => r.keyword && r.checked_at);
 const logRows = rowsOf('Load Content Log').filter(r => r.keyword && r.domain);   // pages written by the Content Cadence / reported as published
 const alertRows = rowsOf('Load Console Alerts').filter(r => r.domain && r.kind);     // Search Console notification mails + check-in flags
-const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month);     // monthly owner check-ins (manual action / security / Pages export)
+const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month && !CK.isTest(r));   // D25c: a test check-in is kept out of the monthly check (_checkin_test.js), so the reminder keeps asking     // monthly owner check-ins (manual action / security / Pages export)
 const byDomain = new Map();
 for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: kwList(s.keywords), virtual: false }); }
 for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, gsc_property: '', ga4_property_id: '', country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', created_at: '', last_run_at: '', request_id: l.request_id || '', virtual: true }); }

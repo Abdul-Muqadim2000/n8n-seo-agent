@@ -108,7 +108,16 @@ N.append(node('Load Ladders', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABL
 N.append(node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_params(HISTORY_TABLE), at(7, 0), **LOAD))
 N.append(node('Load Site Metrics', DT_TYPE, DT_VERSION, dt_get_all_params(METRICS_TABLE), at(8, 0), **LOAD))
 N.append(node('Load Query History', DT_TYPE, DT_VERSION, dt_get_where_params(QUERY_TABLE, 'tracked', 'isTrue'), at(9, 0), **LOAD))
-N.append(code('Site Plan', urls(rd('code/Site_Plan.js')), at(10, 0)))
+# D25c (2026-10-12, system review FIX_PLAN): a check-in marked as a test never satisfies the month, so the reminder keeps asking. The rule
+# lives in v5/code/_checkin_test.js and is applied to the row filter here, because v5/code/Site_Plan.js belongs to parallel work this session.
+CHECKIN_TEST_SRC = rd('code/_checkin_test.js').rstrip('\n')
+_SITE_PLAN_SRC = urls(rd('code/Site_Plan.js'))
+_D25C_OLD = "const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month);"
+assert _SITE_PLAN_SRC.count(_D25C_OLD) == 1, 'D25c: the check-in row filter in Site_Plan.js moved'
+_SITE_PLAN_SRC = CHECKIN_TEST_SRC + '\n' + _SITE_PLAN_SRC.replace(
+    _D25C_OLD,
+    "const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month && !CK.isTest(r));   // D25c: a test check-in is kept out of the monthly check (_checkin_test.js), so the reminder keeps asking")
+N.append(code('Site Plan', _SITE_PLAN_SRC, at(10, 0)))
 N.append(iff('Any Sites?', '{{ !$json.nothing_to_do }}', at(11, 0)))
 N.append(node('Nothing To Track (Site)', 'n8n-nodes-base.noOp', 1, {}, at(12, 1)))
 # ---- v4.8 publish detection (PIPELINE_FEATURE_SPEC §6.5, phase 4): pages written but not published are looked for in the site's sitemap
