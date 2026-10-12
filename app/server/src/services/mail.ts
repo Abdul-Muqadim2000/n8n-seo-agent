@@ -3,6 +3,7 @@ import { ImapFlow } from 'imapflow';
 import { simpleParser, type AddressObject } from 'mailparser';
 import nodemailer from 'nodemailer';
 import { emailDomain, footerLines, isAutoReply, isBounce, replySubject, type DnsCheck } from '@seo/shared';
+import { config } from '../config';
 import type { MailboxRow } from '../db/schema';
 import { randomToken } from '../lib/crypto';
 import { unseal } from '../lib/secretBox';
@@ -59,7 +60,7 @@ const short = (e: unknown) => String((e as Error)?.message || e).replace(/\s+/g,
 // network) never blocks a send.
 export interface MxLookup { mx: (domain: string) => Promise<{ exchange: string; priority: number }[]>; a: (domain: string) => Promise<string[]> }
 let mxLookup: MxLookup = { mx: (d) => resolveMx(d), a: (d) => resolve4(d) };
-export interface MxResult { ok: boolean; reason: string; via: 'mx' | 'a' | 'none' | 'invalid' | 'error' }
+export interface MxResult { ok: boolean; reason: string; via: 'mx' | 'a' | 'none' | 'invalid' | 'error' | 'off' }
 const mxCache = new Map<string, { at: number; res: MxResult }>();
 const MX_TTL = 864e5;
 export const clearMxCache = () => mxCache.clear();
@@ -67,6 +68,7 @@ export const clearMxCache = () => mxCache.clear();
 export const setMxLookup = (l: Partial<MxLookup>) => { mxLookup = { ...mxLookup, ...l }; clearMxCache(); };
 export async function mxCheck(email: string): Promise<MxResult> {
   const e = String(email ?? '').trim().toLowerCase();
+  if (!config.outreachMxCheck) return { ok: true, reason: '', via: 'off' };   // a local mail test with made-up domains (app/scripts/outreach_e2e.py)
   if (!/^[^@\s,;:<>"]+@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(e)) return { ok: false, reason: `${e || 'the address'} is not a valid e-mail address`, via: 'invalid' };
   const domain = emailDomain(e);
   const hit = mxCache.get(domain);
