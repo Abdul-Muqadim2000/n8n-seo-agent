@@ -4,7 +4,15 @@ HISTORY_TABLE = 'seo_rank_history'
 LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('rung', 'number'), ('page_no', 'number'), ('keyword', 'string'),
                ('supporting', 'string'), ('page_type', 'string'), ('target_url', 'string'), ('page_exists', 'boolean'), ('status', 'string'), ('months', 'string'),
                ('start_date', 'string'), ('country', 'string'), ('location_code', 'number'), ('language_code', 'string'), ('email', 'string'), ('callback_url', 'string'), ('request_id', 'string')]
-HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number')]
+HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number'),
+                # v4.16 (G6, 2026-10-12 system review): the whole results page of the same SERP call, so a reading can be read back and
+                # trended. `device` = 'desktop' (every check so far) or 'mobile' (the ladder's main keywords); an empty value in a row
+                # written before G6 means desktop. The three JSON columns are written by _rank_serp.js (RS.pack keeps them small):
+                # features_json = AI Overview (shown / cites us / sources loaded), snippet, People Also Ask, local pack, video, shopping;
+                # competitors_json = the top-10 domains with positions, who is above us and the tracked competitors' positions;
+                # snapshot_json = the top 10 with URLs and trimmed titles, kept as proof of the reading (criterion 2.2).
+                # share_of_voice = our modelled share of the clicks page 1 offers (RS.METHOD), -1 when the check could not be read.
+                ('device', 'string'), ('features_json', 'string'), ('competitors_json', 'string'), ('snapshot_json', 'string'), ('share_of_voice', 'number')]
 DT_TYPE, DT_VERSION = 'n8n-nodes-base.dataTable', 1.1
 
 def dt_schema(cols):

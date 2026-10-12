@@ -96,7 +96,9 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Keyword research and verdicts', hint: 'A verdict per keyword, with its topic fit', values: [true, true, true] },
       { label: 'Difficulty for your site', hint: 'Reach, with a Direct, Short or Full plan', values: [true, true, true] },
       { label: 'Keyword ladders', values: ['1 active', 'Several', 'Several'] }, // PLACEHOLDER — confirm
-      { label: 'Weekly rank tracking', hint: 'Every rung and the head term', values: [true, true, true] },
+      { label: 'Weekly rank tracking', hint: 'Every rung and the head term, desktop and phone', values: [true, true, true] },
+      { label: 'Search features per keyword', hint: 'AI Overview, snippet, People Also Ask, local pack, video', values: [true, true, true] },
+      { label: 'Competitor positions and share of voice', hint: 'The sites above you on page one, per keyword', values: [true, true, true] },
     ],
   },
   {

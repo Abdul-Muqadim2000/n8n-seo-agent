@@ -590,7 +590,7 @@ await guard('tracker', async () => {
   const posOf = (c, i) => c.json.rung === 4 ? 0 : (i % 3 === 0 ? 7 : i % 3 === 1 ? 2 : 0);
   mock('SERP Check', tp.map((c, i) => i === 2 ? { error: { message: 'timeout' } } : V.serpFor(c.json.keyword, c.json.domain, posOf(c, i))));
   const pp = await run('Parse Positions', store['SERP Check']);
-  const HCOLS = ['ladder_id', 'keyword', 'checked_at', 'position', 'url', 'serp_features', 'domain', 'rung'];
+  const HCOLS = require('./table_cols.json').HISTORY;   // G6: the seo_rank_history columns as ladder_common.py defines them
   console.log('   positions ->', pp.map(p => p.json.position).join(','), '| columns exact?', pp.every(p => JSON.stringify(Object.keys(p.json).sort()) === JSON.stringify(HCOLS.slice().sort())), '| failed check = -1?', pp[2].json.position === -1, '| url for #7:', pp[0].json.url);
   mock('Save History', pp);
   const tr = await run('Tracker Report', store['Save History']);
@@ -615,7 +615,9 @@ await guard('tracker', async () => {
   console.log('   unpublished pages ->', JSON.stringify({ checked_now: tp5.length, deferred: dfr.length, first_deferred: dfr[0] && { kw: dfr[0].keyword, last: dfr[0].last_position, at: String(dfr[0].last_checked).slice(0, 10) } }));
   mock('SERP Check', tp5.map(c => V.serpFor(c.json.keyword, c.json.domain, 5))); const pp5 = await run('Parse Positions', store['SERP Check']); mock('Save History', pp5);
   const tr5 = await run('Tracker Report', store['Save History']); console.log('   report keeps the deferred pages ->', tr5[0].json.positions.length, '| label', /not published yet: checked monthly/.test(tr5[0].json.html));
-  if (!dfr.length || tp5.length + dfr.length !== mixed.length) throw new Error('rank tracker deferral lost pages');
+  const desk5 = tp5.filter(c => c.json.device === 'desktop'), dfrD = dfr.filter(d => d.device !== 'mobile');
+  if (!dfrD.length || desk5.length + dfrD.length !== mixed.length) throw new Error('rank tracker deferral lost pages');
+  console.log('   G6 mobile ->', tp5.filter(c => c.json.device === 'mobile').length, 'mobile check(s) for the main keywords, on top of', desk5.length, 'desktop checks');
   mock('Load Ladders', ladderRows);
   // stop rule: the head term has held the top 3 for 4 checks -> ladder skipped; nothing to do when no ladders
   const headKw = ladderRows[ladderRows.length - 1].json.keyword;
@@ -739,7 +741,7 @@ await guard('site tracker', async () => {
   store['Resolve Properties'] = savedRP; if (savedGsc) store['Parse GSC'] = savedGsc; else delete store['Parse GSC'];
   mock('SERP Check (Site)', sq.map((q, i) => i === 2 ? { error: { message: 'timeout' } } : V.serpFor(q.json.keyword, q.json.domain, [5, 0, 1][i])));
   const ps = await run('Parse Site SERP', store['SERP Check (Site)']);
-  const HCOLS = ['ladder_id', 'keyword', 'checked_at', 'position', 'url', 'serp_features', 'domain', 'rung'];
+  const HCOLS = require('./table_cols.json').HISTORY;   // G6: the same columns the Rank Tracker writes
   console.log('   serp rows ->', ps.map(x => x.json.keyword + '=' + x.json.position).join(', '), '| cols exact?', ps.every(x => same(Object.keys(x.json), HCOLS)), '| ladder_id = site id?', ps[0].json.ladder_id === 'site_northwind-erp-com');
   mock('Save Site Rank History', ps);
   // --- metrics, rows, brief input, report ---
@@ -1995,7 +1997,8 @@ await guard('pipeline phase 3', async () => {
   check('won ladder checked 7 days ago: nothing this week (monthly)', tp.length === 1 && tp[0].json.nothing_to_do && tp[0].json.skipped[0].won === true && /checked monthly, next after/.test(tp[0].json.skipped[0].reason), JSON.stringify(tp[0].json));
   mock('Load History', [hW(2, 29), hW(1, 36), hW(3, 43), hW(2, 50)]);
   tp = await run('Tracker Plan', store['Load History']);
-  check('won ladder, last check 29 days ago: the main keyword and the published pages are checked (not the planned page)', eq(tp.map(c => c.json.keyword).sort(), ['peppol uae', 'peppol uae cost', 'peppol uae software']) && tp.every(c => c.json.won_monthly === true), JSON.stringify(tp.map(c => c.json.keyword)));
+  check('won ladder, last check 29 days ago: the main keyword and the published pages are checked (not the planned page)', eq(tp.filter(c => c.json.device === 'desktop').map(c => c.json.keyword).sort(), ['peppol uae', 'peppol uae cost', 'peppol uae software']) && tp.every(c => c.json.won_monthly === true), JSON.stringify(tp.map(c => [c.json.keyword, c.json.device])));
+  check('G6: a won ladder\'s mobile check follows the same monthly rhythm (the main keywords only, never the planned page)', eq(tp.filter(c => c.json.device === 'mobile').map(c => c.json.keyword).sort(), ['peppol uae', 'peppol uae cost']), JSON.stringify(tp.filter(c => c.json.device === 'mobile').map(c => c.json.keyword)));
   mock('SERP Check', tp.map(c => V.serpFor(c.json.keyword, D, c.json.keyword === 'peppol uae' ? 2 : 5)));
   let pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
   let tr = await run('Tracker Report', pp);
@@ -2005,7 +2008,7 @@ await guard('pipeline phase 3', async () => {
   check('a failed check (-1) does not break a won ladder', tp[0].json.nothing_to_do && tp[0].json.skipped.length === 1 && tp[0].json.skipped[0].won === true, JSON.stringify(tp[0].json));
   mock('Load History', [hW(8, 7), hW(2, 14), hW(1, 21), hW(3, 28)]);
   tp = await run('Tracker Plan', store['Load History']);
-  check('a drop out of the top 3 brings the ladder back to weekly checks of every page', tp.length === 4 && tp.every(c => c.json.won_monthly === false), JSON.stringify(tp.map(c => c.json.keyword)));
+  check('a drop out of the top 3 brings the ladder back to weekly checks of every page', tp.filter(c => c.json.device === 'desktop').length === 4 && tp.every(c => c.json.won_monthly === false), JSON.stringify(tp.map(c => [c.json.keyword, c.json.device])));
 });
 
 // ===================================================================================
@@ -4794,6 +4797,188 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   // ---------- G. D23: the tracking parameters are gone from the URLs we store ----------
   const ledger = (await run('Ledger Rows', [{ json: pb }])).map(x => x.json).filter(r => !r.skip);
   check('D23: no stored URL keeps utm_* or srsltid (they came in with GA4 referrals and AI citations and reached the report and the outreach)', !ledger.some(r => /utm_|srsltid|gclid/.test(String(r.from_url) + String(r.to_url))) && ledger.length > 0, JSON.stringify(ledger.map(r => r.from_url).slice(0, 5)));
+});
+
+// ===================================================================================
+// S47 G6 (2026-10-12, system review FIX_PLAN): rank tracking was the weakest area (3/10 against AccuRanker and Semrush Position
+// Tracking) — one SERP call per keyword was paid for and only the position, the ranking URL and a list of item types were kept.
+// It now records the whole results page from that same answer, adds a weekly mobile check for the ladder's main keywords, and says
+// what is modelled and what was measured.
+// ===================================================================================
+await guard('S47 G6 rank tracker depth', async () => {
+  reset();
+  const SN = 'S47 G6 — the whole results page of a rank check: AI Overview (shown / cites us), snippet, People Also Ask, local pack, video, the top-10 domains with competitor positions, the share of voice, the stored snapshot, and a mobile check for the main keywords';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const HCOLS = require('./table_cols.json').HISTORY;
+  const EMPTY = [{ json: {} }];
+  const D = 'techand.ai', SITE = 'site_techand-ai', HEAD = 'e invoicing software uae';
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_G6', domain: D, head_keyword: HEAD, rung, page_no, keyword, supporting: '',
+    page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: 'https://' + D + '/' + keyword.replace(/\s+/g, '-') + '/', page_exists: false, status, months: '', start_date: daysAgo(60),
+    country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@techand.ai', callback_url: 'https://hooks.example.com/x', request_id: 'r-G6' } });
+  const ROWS = [lrow(4, 1, HEAD, 'published'), lrow(1, 2, 'uae e invoicing penalties', 'published'), lrow(2, 3, 'peppol access point uae', 'planned')];
+  const SITES = [{ json: { id: 1, site_id: SITE, domain: D, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', status: 'active', competitors: 'cleartax.com, zoho.com' } }];
+  const MONS = [{ json: { id: 1, site_id: SITE, domain: D, competitors: 'complyance.io', brand_names: 'Tech&' } }];
+  // the plan: every check carries the device and the competitor list; the main keywords also get a mobile check
+  const plan = async (history, opts = {}) => {
+    reset();
+    mock('Load Ladders', opts.ladders || ROWS); mock('Load Content Log (Tracker)', EMPTY); mock('Load Pages (Tracker)', EMPTY);
+    mock('Load Sites (Tracker)', opts.sites === null ? EMPTY : (opts.sites || SITES)); mock('Load Monitors (Tracker)', opts.monitors === null ? EMPTY : (opts.monitors || MONS));
+    mock('Load History', history && history.length ? history : EMPTY);
+    return (await run('Tracker Plan', store['Load History'])).map(x => x.json);
+  };
+  const P1 = await plan([]);
+  console.log('   plan ->', JSON.stringify(P1.map(c => [c.keyword, c.device, c.body[0].device, c.body[0].os])));
+  check('every check names its device and the ladder\'s main keyword also gets a MOBILE check (desktop was never set before G6)',
+    P1.filter(c => c.device === 'desktop').length === 3 && P1.filter(c => c.device === 'mobile').length === 1
+    && P1.every(c => c.body[0].device === c.device && c.body[0].os === (c.device === 'mobile' ? 'android' : 'windows'))
+    && P1.find(c => c.device === 'mobile').keyword === HEAD && P1.every(c => c.body[0].depth === 50), JSON.stringify(P1.map(c => [c.keyword, c.device])));
+  check('the desktop checks come first, so the per-run cap is spent on the series before the extra device',
+    P1.findIndex(c => c.device === 'mobile') === P1.length - 1, JSON.stringify(P1.map(c => c.device)));
+  check('G6: the competitor list of the site model (seo_monitors + the seo_sites column) travels with every check',
+    P1.every(c => JSON.stringify(c.competitors) === JSON.stringify(['complyance.io', 'cleartax.com', 'zoho.com'])), JSON.stringify(P1[0].competitors));
+  const Pnone = await plan([], { sites: null, monitors: null });
+  check('with no site and no monitor rows stored the competitor list is empty and the plan is otherwise unchanged',
+    Pnone.every(c => c.competitors.length === 0) && Pnone.length === P1.length, JSON.stringify(Pnone[0].competitors));
+  // the mobile check is weekly, not per run: a run started by hand the same day reuses the last reading
+  const mobHist = [{ json: { ladder_id: 'lad_G6', keyword: HEAD, checked_at: daysAgo(2), position: 9, url: '', serp_features: '', domain: D, rung: 4, device: 'mobile' } }];
+  const P2 = await plan(mobHist);
+  check('a mobile check 2 days old is not bought again: it is carried as a deferred mobile reading, the desktop checks still run',
+    !P2.some(c => c.device === 'mobile') && P2.length === 3 && (P2[0].deferred_pages || []).some(d => d.device === 'mobile' && d.keyword === HEAD && d.last_position === 9), JSON.stringify((P2[0].deferred_pages || []).map(d => [d.keyword, d.device])));
+  const P3 = await plan([{ json: { ...mobHist[0].json, checked_at: daysAgo(8) } }]);
+  check('a mobile check 8 days old is bought again', P3.some(c => c.device === 'mobile'), JSON.stringify(P3.map(c => [c.keyword, c.device])));
+  check('a MOBILE row never counts in the desktop series: the "not published yet" deferral and the won rule read desktop rows only',
+    P3.filter(c => c.device === 'desktop').length === 3, JSON.stringify(P3.map(c => [c.keyword, c.device])));
+
+  // ---------- the reading itself ----------
+  const answers = {
+    [HEAD]: V.serpRich({ keyword: HEAD, domain: D, position: 7, aio: 'cited', snippet: 'cleartax.com', paa: true, local: true, video: true, shopping: true, related: true }),
+    'uae e invoicing penalties': V.serpRich({ keyword: 'uae e invoicing penalties', domain: D, position: 3, aio: 'uncited', snippet: 'ours', paa: ['What are the fines?'] }),
+    'peppol access point uae': V.serpRich({ keyword: 'peppol access point uae', domain: D, position: 0 }),
+  };
+  const PL = await plan([]);
+  mock('SERP Check', PL.map(c => c.device === 'mobile' ? V.serpRich({ keyword: c.keyword, domain: D, position: 14, aio: 'async', device: 'mobile' }) : answers[c.keyword]));
+  const rowsOut = (await run('Parse Positions', store['SERP Check'])).map(x => x.json);
+  const rowOf = (kw, device) => rowsOut.find(r => r.keyword === kw && r.device === (device || 'desktop'));
+  const jsonOf = (kw, col, device) => JSON.parse(rowOf(kw, device)[col]);
+  const row = rowOf(HEAD), feats = jsonOf(HEAD, 'features_json'), comps = jsonOf(HEAD, 'competitors_json'), snap = jsonOf(HEAD, 'snapshot_json');
+  const PEN = 'uae e invoicing penalties', PEP = 'peppol access point uae';
+  console.log('   row ->', JSON.stringify({ position: row.position, device: row.device, sov: row.share_of_voice, features: feats.types, snapshot_chars: row.snapshot_json.length }));
+  check('the history row is exactly the seo_rank_history columns (table_cols.json HISTORY), for every check of the run',
+    rowsOut.every(r => JSON.stringify(Object.keys(r).sort()) === JSON.stringify(HCOLS.slice().sort())), JSON.stringify(Object.keys(row)));
+  check('G6: the AI Overview is recorded as shown AND as citing us, with the domains it cited and the moment the page was read',
+    feats.ai_overview.shown === true && feats.ai_overview.cites_us === true && feats.ai_overview.content_loaded === true
+    && feats.ai_overview.cited_domains.includes(D) && feats.ai_overview.cited_domains.includes('tax.gov.ae')
+    && String(feats.checked_at).slice(0, 10) === '2026-10-12', JSON.stringify(feats.ai_overview));
+  check('an AI Overview that does not cite us is recorded as shown with cites_us false (the keyword that holds the snippet)',
+    (() => { const f = jsonOf(PEN, 'features_json'); return f.ai_overview.shown === true && f.ai_overview.cites_us === false && f.featured_snippet.ours === true && f.featured_snippet.shown === true; })(), rowOf(PEN).features_json.slice(0, 200));
+  check('the featured snippet, People Also Ask (with its questions), the local pack, video and shopping blocks are all recorded',
+    feats.featured_snippet.shown === true && feats.featured_snippet.ours === false && feats.featured_snippet.domain === 'cleartax.com'
+    && feats.people_also_ask.shown === true && feats.people_also_ask.count === 2 && /mandatory/.test(feats.people_also_ask.questions[0])
+    && feats.local_pack.shown === true && feats.local_pack.ours === false && feats.video.shown === true && feats.shopping.shown === true, JSON.stringify(feats));
+  check('a keyword with a plain results page records every flag as false, not as unknown', (() => { const f = jsonOf(PEP, 'features_json');
+    return f.unavailable === false && f.ai_overview.shown === false && f.ai_overview.cites_us === false && f.featured_snippet.shown === false && f.people_also_ask.shown === false && f.video.shown === false; })(), rowOf(PEP).features_json.slice(0, 200));
+  check('the serp_features column still holds the comma list it always held (nothing that reads it changes)',
+    row.serp_features.split(',').includes('ai_overview') && row.serp_features.split(',').includes('people_also_ask') && !row.serp_features.split(',').includes('organic'), row.serp_features);
+  check('G6: the top-10 domains give our competitors\' positions — the ones on the list are marked, page-1 domains nobody named are kept too',
+    comps.competitors.find(c => c.d === 'cleartax.com').p === 1 && comps.competitors.find(c => c.d === 'cleartax.com').t === true
+    && comps.competitors.find(c => c.d === 'zoho.com').p === 3 && comps.competitors.find(c => c.d === 'complyance.io').p === 4
+    && comps.competitors.some(c => c.d === 'pwc.com' && c.t === false), JSON.stringify(comps.competitors));
+  check('a tracked competitor whose place on the page our own page took is reported as not on it (null), never as 0 — that would read as "not in the top 50"',
+    (() => { const c2 = jsonOf(PEN, 'competitors_json'); const z = c2.competitors.find(x => x.d === 'zoho.com'); return z && z.p === null && c2.tracked.length === 3 && c2.our_position === 3; })(), rowOf(PEN).competitors_json.slice(0, 260));
+  check('the domains above us are listed with their positions (we are #7, so six domains are above us)',
+    comps.our_position === 7 && comps.above.length === 6 && comps.above[0].d === 'cleartax.com' && comps.above.every(a => a.p < 7), JSON.stringify(comps.above));
+  check('G6: the share of voice is CTR- and feature-weighted, between 0 and 100, and travels with the sentence that says it is a model',
+    row.share_of_voice > 0 && row.share_of_voice < 100 && /modelled/.test(comps.method) && /Not measured clicks/.test(comps.method)
+    && comps.shares[0].domain === 'cleartax.com' && comps.shares.find(s => s.domain === D).pct === row.share_of_voice, JSON.stringify({ sov: row.share_of_voice, shares: comps.shares.slice(0, 3) }));
+  check('a keyword we do not rank for at all has a share of voice of 0, and #3 has more than #7',
+    rowOf(PEP).share_of_voice === 0 && rowOf(PEN).share_of_voice > row.share_of_voice && row.share_of_voice > 0, JSON.stringify(rowsOut.map(r => [r.keyword, r.device, r.share_of_voice])));
+  check('G6: the snapshot kept as proof carries the top 10 with their URLs and trimmed titles, when it was read and on which device — and stays small',
+    snap.top.length === 10 && snap.top[0].p === 1 && /^https:\/\//.test(snap.top[0].u) && snap.top.every(t => String(t.t || '').length <= 80)
+    && String(snap.at).slice(0, 10) === '2026-10-12' && snap.device === 'desktop' && row.snapshot_json.length <= 1800
+    && row.features_json.length <= 1600 && row.competitors_json.length <= 1800, JSON.stringify({ chars: row.snapshot_json.length, at: snap.at, top0: snap.top[0] }));
+  check('the mobile reading is its own row for the same keyword, with the mobile device and its own position',
+    (() => { const m = rowOf(HEAD, 'mobile'); return m && m.position === 14 && JSON.parse(m.snapshot_json).device === 'mobile' && rowsOut.filter(r => r.keyword === HEAD).length === 2; })(), JSON.stringify(rowsOut.map(r => [r.keyword, r.device, r.position])));
+  check('G6: an AI Overview Google loaded asynchronously is "shown" with cites_us UNKNOWN (null), never false — loading its sources costs extra',
+    (() => { const f = jsonOf(HEAD, 'features_json', 'mobile'); return f.ai_overview.shown === true && f.ai_overview.cites_us === null && f.ai_overview.content_loaded === false; })(), rowOf(HEAD, 'mobile').features_json.slice(0, 200));
+
+  // a failed check: "check again", never a fact about the page
+  const PF = await plan([]);
+  mock('SERP Check', PF.map((c, i) => i === 0 ? V.serpRich({ error: 'task' }) : (i === 1 ? V.serpRich({ error: 'http' }) : answers[c.keyword])));
+  const failRows = (await run('Parse Positions', store['SERP Check'])).map(x => x.json);
+  const ff = JSON.parse(failRows[0].features_json);
+  check('G6: a DataForSEO task error inside an HTTP 200 and a transport error both mean "check again" — position -1, share of voice -1, every flag null',
+    failRows[0].position === -1 && failRows[1].position === -1 && failRows[0].share_of_voice === -1 && failRows[1].share_of_voice === -1
+    && ff.unavailable === true && ff.ai_overview.shown === null && ff.ai_overview.cites_us === null && ff.featured_snippet.shown === null
+    && failRows[0].serp_features === '' && JSON.parse(failRows[0].snapshot_json).unavailable === true, JSON.stringify({ p: failRows[0].position, sov: failRows[0].share_of_voice, f: ff.ai_overview }));
+  check('a failed check keeps the row\'s columns exactly, so it still stores', failRows.every(r => JSON.stringify(Object.keys(r).sort()) === JSON.stringify(HCOLS.slice().sort())), JSON.stringify(Object.keys(failRows[0])));
+
+  // ---------- the report and the callback ----------
+  const reportWith = async (history) => {
+    const pl = await plan(history);
+    mock('SERP Check', pl.map(c => c.device === 'mobile' ? V.serpRich({ keyword: c.keyword, domain: D, position: 14, aio: 'async', device: 'mobile' }) : answers[c.keyword]));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    return (await run('Tracker Report', pp))[0].json;
+  };
+  const R = await reportWith([]);
+  console.log('   report ->', JSON.stringify({ positions: R.positions.length, sov: R.serp_summary.share_of_voice, above: R.serp_summary.competitors_above.slice(0, 2), features: R.serp_summary.features }));
+  check('G6: the report has one row per keyword — the mobile reading never becomes a fourth ladder row, it sits on the keyword\'s row',
+    R.positions.length === 3 && R.positions.every(p => p.device === 'desktop') && R.positions.find(p => p.keyword === HEAD).mobile_position === 14
+    && R.positions.find(p => p.keyword === HEAD).position === 7 && R.serp_summary.mobile_checked === 1, JSON.stringify(R.positions.map(p => [p.keyword, p.position, p.mobile_position])));
+  const pOf = (kw) => R.positions.find(p => p.keyword === kw);
+  check('the callback carries the features, the share of voice, the domains above us and the competitors per keyword',
+    pOf(HEAD).features.ai_overview.cites_us === true && pOf(HEAD).share_of_voice > 0 && pOf(HEAD).above.length === 6
+    && pOf(HEAD).above[0].domain === 'cleartax.com' && pOf(HEAD).competitors.some(c => c.domain === 'cleartax.com' && c.tracked)
+    && pOf(HEAD).feature_labels.includes('AI Overview (cites you)') && pOf(PEN).feature_labels.includes('Snippet (yours)'), JSON.stringify({ labels: pOf(HEAD).feature_labels, sov: pOf(HEAD).share_of_voice }));
+  check('G6: the ladder summary counts the features, averages the share of voice and ranks the competitors above us by how many keywords they beat us for',
+    R.serp_summary.features.ai_overview === 2 && R.serp_summary.features.ai_overview_cites_us === 1 && R.serp_summary.features.featured_snippet === 2
+    && R.serp_summary.features.snippet_ours === 1 && R.serp_summary.features.people_also_ask === 2 && R.serp_summary.features.local_pack === 1
+    && R.serp_summary.share_of_voice > 0 && R.serp_summary.head_share_of_voice === R.positions.find(p => p.keyword === HEAD).share_of_voice
+    && R.serp_summary.competitors_above[0].keywords >= 1 && R.serp_summary.competitors_above.some(c => c.tracked), JSON.stringify(R.serp_summary.competitors_above));
+  check('G6: the e-mail shows the results page, the share of voice, the mobile position and who is above us, and says the share is an estimate',
+    /The results page itself/.test(R.html) && /AI Overview \(cites you\)/.test(R.html) && /Share of voice/.test(R.html) && /Mobile/.test(R.html)
+    && /cleartax\.com \(#1\)/.test(R.html) && /not measured clicks/.test(R.html) && /13% of sites hold the same position on both devices/.test(R.html), (R.html.match(/The results page itself[\s\S]{0,300}/) || [''])[0]);
+  check('D26 is kept: the AI Overview line in the report is an observation with its time, never "there is no AI Overview"',
+    /AI Overview seen in the check at \d\d:\d\d UTC on 2026-10-12/.test(R.serp_summary.head_line) && /vary between searches/.test(R.serp_summary.head_line)
+    && !/there is no AI Overview/.test(R.html), R.serp_summary.head_line);
+  scanHtml('G6 tracker email', R.html);
+  // the second week: the stored readings make it "seen in N of M checks", and the next step is untouched by G6
+  const week1 = (await run('Parse Positions', store['SERP Check'])).map(x => ({ json: { ...x.json, checked_at: daysAgo(7) } }));
+  const R2 = await reportWith(week1);
+  check('with a stored reading the AI Overview becomes "seen in 2 of 2 checks" (one search at one moment, counted, never a fact)',
+    /seen in 2 of 2 checks/.test(R2.serp_summary.head_line), R2.serp_summary.head_line);
+  check('D16 / D11 are untouched: the next step still follows the ladder state and the previous positions still come from the desktop series',
+    R2.next_step.action === 'write_rung_2' && R2.positions.find(p => p.keyword === HEAD).previous === 7 && R2.won === false, JSON.stringify({ next: R2.next_step.action, prev: R2.positions.map(p => p.previous) }));
+  const Rfail = await (async () => { const pl = await plan([]); mock('SERP Check', pl.map(() => V.serpRich({ error: 'task' })));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp); return (await run('Tracker Report', pp))[0].json; })();
+  check('when every check failed the report claims nothing about the pages and no share of voice',
+    Rfail.serp_summary.share_of_voice === null && Rfail.serp_summary.features.not_read === 3 && /could not be read/.test(Rfail.serp_summary.head_line)
+    && !/AI Overview \(/.test(Rfail.html), Rfail.serp_summary.head_line);
+
+  // ---------- the kit itself (the shim the build writes next to the Code nodes) ----------
+  const kit = async (input) => (await run('_rank_serp', [{ json: input }], { code: '_rank_serp' }))[0].json;
+  const K = await kit({ serp: answers[HEAD], domain: D, competitors: ['cleartax.com'], device: 'desktop' });
+  check('the kit\'s CTR curve is the one the Search Console report uses, and page 1 is deduplicated by domain before the top 10 is taken',
+    JSON.stringify(K.ctr) === JSON.stringify([0.28, 0.15, 0.11, 0.08, 0.07, 0.05, 0.04, 0.035, 0.03, 0.025])
+    && K.landscape.top.length === 10 && new Set(K.landscape.top.map(t => t.domain)).size === 10, JSON.stringify(K.landscape.top.map(t => t.domain)));
+  const Kdup = await kit({ serp: V.serpRich({ domain: D, position: 4, top: ['a.com', 'a.com', 'b.com', D, 'b.com', 'c.com', 'c.com', 'd.com', 'e.com', 'f.com'] }), domain: D });
+  check('a domain that holds several places on page 1 is one row, at its best position', Kdup.landscape.top.filter(t => t.domain === 'a.com').length === 1
+    && Kdup.landscape.top.find(t => t.domain === 'a.com').position === 1 && Kdup.landscape.top.length === 7, JSON.stringify(Kdup.landscape.top.map(t => [t.domain, t.position])));
+  const plain = (await kit({ serp: V.serpRich({ domain: D, position: 1 }), domain: D })).voice.ours;
+  const uncited = (await kit({ serp: V.serpRich({ domain: D, position: 1, aio: 'uncited' }), domain: D })).voice.ours;
+  const cited = (await kit({ serp: V.serpRich({ domain: D, position: 1, aio: 'cited' }), domain: D })).voice.ours;
+  check('an AI Overview that does not cite us costs us organic share (R3), and being cited in it gives some of that share back',
+    uncited < plain && cited > uncited, JSON.stringify({ plain, uncited, cited }));
+  const asyncV = await kit({ serp: V.serpRich({ domain: D, position: 1, aio: 'async' }), domain: D });
+  check('when the AI Overview\'s sources were not loaded the share of voice says so instead of guessing who it cites',
+    asyncV.voice.aio_sources_unknown === true && asyncV.voice.ours < plain, JSON.stringify({ sov: asyncV.voice.ours, unknown: asyncV.voice.aio_sources_unknown }));
+  check('a www address and the bare host are the same site, and a subdomain of ours counts as ours',
+    (await kit({ serp: V.serpRich({ domain: D, position: 1 }), domain: 'www.' + D })).rank.position === 1
+    && (await kit({ serp: V.serpRich({ domain: 'blog.' + D, position: 2 }), domain: D })).rank.position === 2, 'host matching');
+  const Kbig = await kit({ serp: V.serpRich({ domain: D, position: 2 }), domain: D, max: 300 });
+  check('a snapshot that would be too long is trimmed (titles first, then the tail) and never grows past the limit',
+    Kbig.packed.length <= 300 && /"trimmed"/.test(Kbig.packed), Kbig.packed.slice(0, 120));
 });
 
 H.report();

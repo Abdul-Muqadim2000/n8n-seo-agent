@@ -17,6 +17,16 @@ export interface RankHistoryRow extends DtRow {
   ladder_id: string; keyword: string; checked_at: string;
   /** 0 = not in the top 50, -1 = the check failed (check again) */
   position: number; url: string; serp_features: string; domain: string; rung: number;
+  /** G6: everything else the same SERP call showed. Rows written before G6 have none of it (device '' = desktop). */
+  device?: string;
+  /** JSON (v5/code/_rank_serp.js): AI Overview (shown / cites us / sources loaded), snippet, People Also Ask, local pack, video, shopping */
+  features_json?: string;
+  /** JSON: the top-10 domains with positions, who is above us, the tracked competitors' positions and the modelled shares */
+  competitors_json?: string;
+  /** JSON: the top 10 with URLs and trimmed titles, kept as proof of the reading */
+  snapshot_json?: string;
+  /** our modelled share of the clicks page 1 offers; -1 = the check failed */
+  share_of_voice?: number;
 }
 export interface SiteRow extends DtRow {
   site_id: string; domain: string; gsc_property: string; ga4_property_id: string; country: string; location_code: number;

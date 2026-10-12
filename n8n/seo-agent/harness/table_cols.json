@@ -315,5 +315,20 @@
   "published_url",
   "published_at",
   "week"
+ ],
+ "HISTORY": [
+  "ladder_id",
+  "keyword",
+  "checked_at",
+  "position",
+  "url",
+  "serp_features",
+  "domain",
+  "rung",
+  "device",
+  "features_json",
+  "competitors_json",
+  "snapshot_json",
+  "share_of_voice"
  ]
 }

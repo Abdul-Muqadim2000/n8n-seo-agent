@@ -72,6 +72,9 @@ export function summarize(stage: string, p: P): Summary {
       put('gains', len(p.gains));
       put('drops', len(p.drops));
       put('next', str(obj(p.next_step).text));
+      // G6: the results pages read in the same check
+      put('shareOfVoice', num(obj(p.serp_summary).share_of_voice));
+      put('aiOverviews', num(obj(obj(p.serp_summary).features).ai_overview) || null);
       break;
     }
     case 'site_tracker': {
