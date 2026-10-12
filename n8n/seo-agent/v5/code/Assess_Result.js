@@ -25,8 +25,13 @@ if (!reach_info) {
 let desc = null; const drow = rows.find(r => r.key === 'desc:' + v.domain);
 try { desc = drow && (Date.now() - new Date(drow.updated_at).getTime()) < 30 * 864e5 ? (JSON.parse(drow.value).description || null) : null; } catch (e) { desc = null; }
 const business = v.business || (desc && desc.business_description) || '';
-const services = v.services.length ? v.services : ((desc && desc.products_or_services) || []).map(String).slice(0, 12);
+// D22 (2026-10-11): the stored description now covers the homepage AND the site's menu pages, so the topic check sees the full service list
+// ("business central partner uae" scored fit 1 live while Business Central was on /whatwedo/). `pages_read` marks such a row; a row written
+// before that change is homepage-only and the answer says so (Assess Response).
+const descPages = (desc && Array.isArray(desc.pages_read) ? desc.pages_read.length : 0);
+const services = v.services.length ? v.services : ((desc && desc.products_or_services) || []).map(String).slice(0, 20);
+const services_source = v.services.length ? 'request' : (desc ? (descPages > 1 ? 'stored description (' + descPages + ' pages read)' : 'stored description (homepage only)') : 'none');
 return [{ json: { ok: true, keyword: v.keyword, domain: v.domain, country: v.country, location_code: v.location_code, language_code: v.language_code,
   volume: info.search_volume ?? null, kd: props.keyword_difficulty ?? null, cpc: info.cpc ?? null, intent: (it && (it.search_intent_info || {}).main_intent) || null, known: !!it,
-  position, position_url, reach_info, reach_errors, cache_row, dfs_cost, business, services, existing_keywords: v.existing_keywords,
+  position, position_url, reach_info, reach_errors, cache_row, dfs_cost, business, services, services_source, existing_keywords: v.existing_keywords,
   business_source: v.business ? 'request' : (desc ? 'stored description' : 'none') } }];

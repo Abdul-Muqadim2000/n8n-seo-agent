@@ -129,6 +129,9 @@ const warnings = [];
 if (!aiOk) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
 if (!a.known) warnings.push('DataForSEO has no data for this keyword in ' + a.country + ' (volume and difficulty unknown)');
+// D22 (2026-10-11): a stored description written before the site's menu pages were read lists only the homepage's services, which is how
+// "business central partner uae" came back as fit 1. Say so whenever that list is what decided a less-than-core fit.
+if (fit !== null && fit < 2 && /homepage only/.test(String(a.services_source || ''))) warnings.push('the topic check used a stored description written from the homepage only, so a service named elsewhere on the site may be missing: run "Describe my website" to refresh it');
 const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volume, kd: a.kd, intent: a.intent, cpc: a.cpc, position: a.position, reach,
   difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives,
   cost_usd: +(Number(a.dfs_cost || 0) + (aiOk ? CONFIG.ai_cost_usd : 0)).toFixed(4),

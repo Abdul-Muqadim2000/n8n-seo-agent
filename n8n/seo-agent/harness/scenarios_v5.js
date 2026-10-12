@@ -94,7 +94,10 @@ await guard('keyword', async () => {
   store['Normalize Input'] = n;
   mock('Read Website', { site_text: F.jinaSite });
   const cs = await run('Clean Site Text', store['Read Website']);
-  console.log('   clean site ->', JSON.stringify({ page_title: cs[0].json.page_title, read_ok: cs[0].json.read_ok, len: cs[0].json.site_text.length }));
+  console.log('   clean site ->', JSON.stringify({ page_title: cs[0].json.page_title, read_ok: cs[0].json.read_ok, len: cs[0].json.site_text.length, nav_pages: (cs[0].json.nav_pages || []).map(p => p.path) }));
+  const npp1 = await run('Nav Pages Plan', cs);   // D22: this homepage links only to /contact/ — nothing to read, the IF sends the item straight to Site Pages
+  console.log('   nav pages plan ->', npp1[0].json.skip ? 'skip: ' + npp1[0].json.reason : npp1.map(p => p.json.path).join(', '));
+  await run('Site Pages', npp1);
   mock('Site Describer', { output: { business_name: 'Northwind ERP', one_line_summary: 'ERP partner for distributors', business_description: 'Northwind ERP implements and customises Odoo and Dynamics 365 for distributors in the UAE.', industry: 'IT services', products_or_services: ['ERP implementation', 'Data migration'], target_audience: ['Distributors', 'Wholesalers'], unique_selling_points: ['Bilingual consultants'], location_served: 'UAE', tone_of_brand: 'Professional', suggested_meta_title: 'Northwind ERP | ERP Implementation Dubai', suggested_meta_description: 'ERP implementation for UAE distributors. Book a call.', seed_keywords: ['erp implementation dubai', 'odoo partner uae', 'erp for distributors', 'northwind erp'] } });
   await run('Parse Description', store['Site Describer']);
   mock('Route Mode', store['Parse Description']);
@@ -3219,6 +3222,112 @@ await guard('fix plan phase 1 — keywords and ladders', async () => {
   check('G3: very hard → full ladder (stretch) → slim 5-15%', b.stretch === true && eq(b.chance, { band: 'slim', range: [5, 15], label: 'estimated chance slim (5-15%, uncalibrated)' }), JSON.stringify(b.chance));
   mock('Assess Result', AR({ intent: 'navigational' })); b = (await run('Assess Response', [{ json: { output: { fit: 2, navigational: true, alternatives: ['e invoicing software uae pricing'] } } }]))[0].json.body;
   check('G3: no ladder → no chance band', b.plan_type === 'none' && b.chance === null && b.chance_text === '', JSON.stringify(b.chance));
+});
+
+// ===================================================================================
+// S42 (2026-10-11, system review FIX_PLAN D22) — the site description reads the whole site, not only the homepage
+// ===================================================================================
+await guard('site description from the whole site', async () => {
+  reset();
+  const SN = 'S42 D22 — the site description reads the homepage AND its menu pages (services, keyword fit, the critic)';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fs = require('fs'), path = require('path'), CD = process.env.CODE_DIR || path.join(__dirname, 'code_v4');
+  const D = 'techand.ai', SITE = 'site_techand-ai', LOC = 2784;
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const EMPTY = [{ json: {} }];
+  // ---------- the real shape of the live defect: the services live on /whatwedo/, not on the homepage ----------
+  const home = `Title: Tech& | Enterprise technology partner in the UAE\n\nURL Source: https://techand.ai/\n\nMarkdown Content:\n[Home](https://techand.ai/)\n[What we do](https://techand.ai/whatwedo/)\n[Solutions](https://techand.ai/solutions/)\n[Platforms](https://techand.ai/platforms/)\n[Industries](https://techand.ai/industries/)\n[Our approach](https://techand.ai/approach/)\n[Partners](https://techand.ai/partners/)\n[Insights](https://techand.ai/insights/)\n[Careers](https://techand.ai/careers/)\n[Contact us](https://techand.ai/contact/)\n[العربية](https://techand.ai/ar/)\n[LinkedIn](https://www.linkedin.com/company/techand)\n\n# Technology that moves your business forward\n\nTech& is an enterprise technology partner working with organisations across the UAE and Saudi Arabia. ${F.words(140)}\n\n## How we help\n\n- Digital transformation consulting\n- Data and analytics\n- Managed services and support\n\n[Privacy policy](https://techand.ai/privacy/)\n[Download our brochure](https://techand.ai/download/brochure.pdf)\n`;
+  const whatwedo = `Title: What we do | Tech&\n\nURL Source: https://techand.ai/whatwedo/\n\nMarkdown Content:\n# What we do\n\n## Microsoft Dynamics 365 Business Central\n\nWe implement, migrate and support Microsoft Dynamics 365 Business Central for finance and distribution teams in the UAE. ${F.words(70)}\n\n## Dynamics 365 Customer Engagement (CRM)\n\nSales, service and marketing on Dynamics 365 CRM, integrated with finance. ${F.words(60)}\n\n## Microsoft Power Platform\n\nPower BI, Power Apps and Power Automate for teams that want to build their own tools. ${F.words(60)}\n\n## Assess & Envision\n\nEvery engagement starts with an Assess & Envision workshop: we map the processes, the data and the decisions before anything is configured. ${F.words(50)}\n\n## Run & Optimise\n\nAfter go-live we Run & Optimise the platform with a named team, a monthly service review and a backlog of improvements. ${F.words(50)}\n`;
+  const solutions = `Title: Solutions | Tech&\n\nURL Source: https://techand.ai/solutions/\n\nMarkdown Content:\n# Solutions\n\n## E-invoicing for the UAE\n\nPeppol-ready e-invoicing connected to Business Central. ${F.words(70)}\n\n## Data and AI\n\nFabric, Power BI and Azure OpenAI for reporting and forecasting. ${F.words(60)}\n`;
+  mock('Normalize Input', [{ json: { mode: 'keyword', domain: D, keyword: 'business central partner uae', country: 'United Arab Emirates', business: '', audience: '', need_site_description: true } }]);
+  mock('Read Website', { site_text: home });
+  const cs = await run('Clean Site Text', store['Read Website']);
+  const nav = cs[0].json.nav_pages || [];
+  console.log('   nav pages ->', nav.map(p => p.path + (p.in_header ? '' : ' (below)')).join(', '));
+  check('D22: the homepage\'s own menu links are kept (same host only, no root, no file, no duplicate), with their link text', nav.length === 10 && nav.every(p => /^\/[a-z؀-ۿ]/i.test(p.path) && p.in_header) && nav.find(p => p.path === '/whatwedo').text === 'What we do' && !nav.some(p => /linkedin|brochure/.test(p.url)) && !nav.some(p => p.path === '/'), JSON.stringify(nav.map(p => p.path)));
+
+  const npp = await run('Nav Pages Plan', cs);
+  const picked = npp.map(p => p.json.path);
+  console.log('   nav pages plan ->', npp.map(p => p.json.path + ' (' + p.json.score + ')').join(', '));
+  check('D22: at most 5 pages are read, service and section pages first; blog, careers, contact and the Arabic copy are never read', picked.length === 5 && eq(picked, ['/whatwedo', '/solutions', '/platforms', '/industries', '/approach']) && !picked.some(p => /insight|career|contact|^\/ar/.test(p)), JSON.stringify(picked));
+
+  // one page answers, one times out, one is behind a bot wall, one is nearly empty: the run carries on with what it has
+  mock('Read Nav Pages', [{ page_text: whatwedo }, { page_text: solutions }, { error: { message: 'timeout of 20000ms exceeded' } }, { page_text: 'Just a moment...\nEnable JavaScript and cookies to continue' }, { page_text: 'Title: Our approach\n\nMarkdown Content:\n# Our approach\n' }]);
+  const sp = await run('Site Pages', store['Read Nav Pages']);
+  const SP = sp[0].json;
+  console.log('   site pages ->', SP.site_pages.map(p => p.kind + ':' + p.url).join(' | '), '| failed:', SP.pages_failed.map(f => f.url + ' (' + f.reason + ')').join(', '));
+  check('D22: a page that fails, is blocked or is nearly empty is skipped, never an error; the homepage is always page 1', SP.site_pages.length === 3 && SP.site_pages[0].kind === 'homepage' && SP.site_pages.slice(1).every(p => p.kind === 'nav') && SP.pages_failed.length === 3 && /timeout/.test(SP.pages_failed[0].reason) && SP.pages_failed.slice(1).every(f => /blocked or too little text/.test(f.reason)), JSON.stringify(SP.pages_failed));
+  check('D22: the describer is given the homepage plus the pages read, each trimmed, with its own heading line', /--- PAGE: What we do \| Tech& \(https:\/\/techand\.ai\/whatwedo\/\) ---/.test(SP.pages_text) && /Microsoft Dynamics 365 Business Central/.test(SP.pages_text) && /--- PAGE: Solutions/.test(SP.pages_text) && !/Just a moment/.test(SP.pages_text) && SP.pages_text.length < 11000, SP.pages_text.slice(0, 200));
+  check('D22: what the site says about itself is collected as site_facts (the headings of every page read)', SP.site_facts.includes('Assess & Envision') && SP.site_facts.includes('Run & Optimise') && SP.site_facts.includes('Microsoft Power Platform') && SP.site_facts.includes('How we help'), JSON.stringify(SP.site_facts));
+  const prompt = fs.readFileSync(path.join(CD, 'Site_Describer.prompt.txt'), 'utf8');   // written by build_v4.py section 36 next to the Code nodes
+  check('D22: the describer prompt carries the extra pages and must name every service it finds', /\$json\.pages_text/.test(prompt) && /list EVERY distinct service, product, platform or named software/.test(prompt) && /belongs to this same website/.test(prompt), prompt.slice(0, 200));
+
+  const DESC = { business_name: 'Tech&', one_line_summary: 'Enterprise technology partner in the UAE', business_description: 'Tech& implements and supports Microsoft business platforms for enterprises in the UAE and Saudi Arabia.', industry: 'IT services',
+    products_or_services: ['Digital transformation consulting', 'Data and analytics', 'Managed services and support', 'Microsoft Dynamics 365 Business Central', 'Dynamics 365 Customer Engagement (CRM)', 'Microsoft Power Platform', 'E-invoicing for the UAE', 'Data and AI'],
+    target_audience: ['Finance teams', 'Operations leaders'], unique_selling_points: ['Assess & Envision workshop', 'Run & Optimise service reviews'], location_served: 'UAE and Saudi Arabia', tone_of_brand: 'Professional',
+    suggested_meta_title: 'Tech& | Microsoft partner in the UAE', suggested_meta_description: 'Business Central, CRM and Power Platform, delivered in the UAE. Talk to us.', seed_keywords: ['business central partner uae', 'dynamics 365 uae', 'power platform dubai'] };
+  mock('Site Describer', { output: DESC });
+  const pd = await run('Parse Description', store['Site Describer']);
+  const sd = pd[0].json.site_description;
+  console.log('   description ->', sd.products_or_services.length, 'services |', sd.pages_read.length, 'pages read |', sd.site_facts.length, 'site facts');
+  check('D22: Business Central, CRM and Power Platform are in the services (they are on /whatwedo/, never on the homepage)', ['Microsoft Dynamics 365 Business Central', 'Dynamics 365 Customer Engagement (CRM)', 'Microsoft Power Platform'].every(s => sd.products_or_services.includes(s)), JSON.stringify(sd.products_or_services));
+  check('D22: the pages read, the menu links and the site facts travel with the description; the long page text does not', sd.pages_read.length === 3 && sd.pages_read[0].kind === 'homepage' && sd.pages_read[1].url === 'https://techand.ai/whatwedo/' && sd.nav_pages.length === 10 && sd.site_facts.includes('Assess & Envision') && pd[0].json.site_text === undefined && pd[0].json.pages_text === undefined && pd[0].json.site_pages === undefined, JSON.stringify({ pages: sd.pages_read, nav: sd.nav_pages.length }));
+  const dcr = await run('Description Cache Row', pd);
+  const cached = JSON.parse(dcr[0].json.value);
+  check('D22: the 30-day cache row carries the full description, the pages read and the site facts', dcr[0].json.key === 'desc:' + D && cached.description.products_or_services.length === 8 && cached.description.pages_read.length === 3 && cached.description.site_facts.includes('Run & Optimise'), JSON.stringify(dcr[0].json).slice(0, 220));
+  const dp = await run('Build Description Page', pd);
+  check('D22: the describe page tells the customer which pages were read', /<b>Pages read:<\/b> Tech&amp;[^<]*What we do[^<]*Solutions/.test(dp[0].json.result_html), (dp[0].json.result_html.match(/Pages read:[\s\S]{0,160}/) || [''])[0]);
+
+  // ---------- the 30-day cache: this description is reused, a homepage-only one written before D22 is not ----------
+  const row = (desc, days) => [{ json: { key: 'desc:' + D, kind: 'desc', site_id: SITE, value: JSON.stringify({ description: desc, page_title: 'Tech&' }), updated_at: daysAgo(days) } }];
+  mock('Rate Limit', [{ json: { mode: 'keyword', domain: D, need_site_description: true, business: '', audience: '' } }]);
+  const fresh = (await run('Use Cached Description', row(cached.description, 5)))[0].json;
+  check('D22: a description written from the site\'s pages is still reused for 30 days', fresh.need_site_description === false && fresh.site_description.products_or_services.includes('Microsoft Power Platform') && fresh.site_description_cached === daysAgo(5).slice(0, 10), JSON.stringify({ need: fresh.need_site_description, cached: fresh.site_description_cached }));
+  const STALE = { business_description: 'Tech& is an enterprise technology partner in the UAE.', products_or_services: ['Digital transformation consulting', 'Data and analytics', 'Managed services and support'], target_audience: ['Finance teams'] };
+  const stale = (await run('Use Cached Description', row(STALE, 5)))[0].json;
+  check('D22: a stored description with no pages_read (written from the homepage alone, before this change) is read again, not trusted', stale.need_site_description === true && !stale.site_description, JSON.stringify({ need: stale.need_site_description, has: !!stale.site_description }));
+
+  // ---------- the Keyword Check: "business central partner uae" ----------
+  const V = { ok: true, keyword: 'business central partner uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', business: '', services: [], existing_keywords: [] };
+  const dfsAssess = (reqs) => reqs.map(r => r.json.kind === 'overview'
+    ? { tasks: [{ status_code: 20000, cost: 0.01, result: [{ items: [{ keyword_info: { search_volume: 140, cpc: 9.1 }, keyword_properties: { keyword_difficulty: 34 }, search_intent_info: { main_intent: 'commercial' } }] }] }] }
+    : { tasks: [{ status_code: 20000, cost: 0.01, result: [{ items: [] }] }] });
+  // the model decides the fit from the services the prompt carries (v5/prompts/keyword_fit.txt); this stand-in applies that rule offline:
+  // core (2) when the keyword's product name is one of the services, neighbouring (1) when it is not
+  const fitFromServices = (keyword, services) => { const k = String(keyword).toLowerCase(); const w = k.split(' ').filter(x => x.length > 2);
+    const pairs = w.slice(0, -1).map((x, i) => x + ' ' + w[i + 1]); const blob = services.join(' | ').toLowerCase();
+    return pairs.some(p => blob.includes(p)) ? 2 : 1; };
+  const assess = async (cacheDesc) => {
+    mock('Assess Validate', [{ json: V }]);
+    const aq = await run('Assess Requests', EMPTY);
+    mock('Load Assess Cache', [{ json: { key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 30, method: 'size', p75: null, size_reach: 30, sample: 0, top10: 20, organic_keywords: 300, location_code: LOC }), updated_at: daysAgo(3) } }, ...row(cacheDesc, 5)]);
+    mock('Run Assess Requests', dfsAssess(aq.filter(r => !r.json.skip)));
+    const ar = (await run('Assess Result', store['Run Assess Requests']))[0].json;
+    const fit = fitFromServices(V.keyword, ar.services);
+    return { ar, body: (await run('Assess Response', [{ json: { output: { fit, navigational: false, alternatives: [] } } }]))[0].json.body };
+  };
+  const now = await assess(cached.description);
+  console.log('   keyword check (site read) ->', JSON.stringify({ services: now.ar.services.length, source: now.ar.services_source, fit: now.body.fit }));
+  check('D22: the Keyword Check sees the full service list and gives "business central partner uae" fit 2', now.ar.services.includes('Microsoft Dynamics 365 Business Central') && now.ar.services_source === 'stored description (3 pages read)' && now.body.fit === 2 && !now.body.warnings.some(w => /homepage only/.test(w)), JSON.stringify({ services: now.ar.services, fit: now.body.fit }));
+  const before = await assess(STALE);
+  check('D22 (the live defect): with the old homepage-only description the same keyword was fit 1, and the answer now says why', before.body.fit === 1 && before.ar.services_source === 'stored description (homepage only)' && before.body.warnings.some(w => /homepage only.*Describe my website/.test(w)), JSON.stringify({ fit: before.body.fit, warnings: before.body.warnings }));
+
+  // ---------- the critic: a claim found on the site is not "invented" ----------
+  const critPrompt = fs.readFileSync(path.join(CD, 'Critic.prompt.txt'), 'utf8');
+  check('D22: the critic prompt carries the facts from the client\'s own website and the rule that follows from them', /Facts from the client's own website/.test(critPrompt) && /site_facts/.test(critPrompt) && /never call it invented/.test(critPrompt) && /the word is "unverified"/.test(critPrompt), critPrompt.slice(0, 120));
+  mock('Parse Brief', [{ json: { keyword: 'business central partner uae', domain: D, site_description: sd, business: '', business_facts: '', case_facts_text: '', content_brief: { client_facts: [], target_word_count: 1600 } } }]);
+  mock('Copywriter', [{ json: { output: '## How we work\n\nEvery project starts with an Assess & Envision workshop, then we Run & Optimise the platform after go-live. We have delivered 400+ Business Central projects.' } }]);
+  const CRIT = { score: 72, verdict: 'revise', strengths: ['Clear structure'],
+    problems: [{ severity: 'high', location: 'Assess & Envision workshop', issue: 'The draft invents a delivery stage called "Assess & Envision" that this business does not use.', fix: 'Remove the invented stage names.' },
+      { severity: 'medium', location: '400+ Business Central projects', issue: 'Invented number: no source is given for "400+".', fix: 'Add a source or a bracketed placeholder.' }],
+    banned_phrases_found: [], unsupported_claims: ['our "Assess & Envision" stage', 'we Run & Optimise the platform', 'we have delivered 400+ Business Central projects', 'our Assess & Envision workshop cuts go-live time by 30%'],
+    missing_brief_items: [], revision_instructions: '1. Remove the invented delivery stages. 2. Source the invented 400+ figure.' };
+  const pc = (await run('Parse Critique', [{ json: { output: CRIT } }]))[0].json.critique;
+  console.log('   critique ->', JSON.stringify({ on_site: pc.claims_on_site, unsupported: pc.unsupported_claims, problems: pc.problems.map(p => p.issue) }));
+  check('D22: the site\'s own delivery stages are no longer "invented" — the claims are recognised and the problem is dropped', pc.claims_on_site.length === 2 && pc.claims_on_site.every(c => /Assess & Envision|Run & Optimise/.test(c)) && !pc.unsupported_claims.includes('our "Assess & Envision" stage') && !pc.unsupported_claims.includes('we Run & Optimise the platform') && pc.problems.length === 1 && pc.site_pages_read === 3, JSON.stringify({ on_site: pc.claims_on_site, problems: pc.problems.length }));
+  check('D22: a claim that is nowhere on the site stays, and is called unverified, never invented; a figure the site never states is not excused by the words around it', pc.unsupported_claims.length === 2 && /400\+/.test(pc.unsupported_claims[0]) && /30%/.test(pc.unsupported_claims[1]) && /unverified number/.test(pc.problems[0].issue) && !/invent/i.test(pc.problems[0].issue) && !/invent/i.test(pc.revision_instructions) && /unverified/.test(pc.revision_instructions), JSON.stringify({ claims: pc.unsupported_claims, issue: pc.problems[0].issue, ri: pc.revision_instructions }));
 });
 
 H.report();

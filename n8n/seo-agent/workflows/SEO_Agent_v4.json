@@ -927,7 +927,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const input = $('Normalize Input').first().json;\nlet raw = String($input.first().json.site_text || '');\n\n// Title nikal lo\nconst titleMatch = raw.match(/^Title:\\s*(.+)$/m);\nconst pageTitle = titleMatch ? titleMatch[1].trim() : '';\n\nlet text = raw\n  .replace(/^Title:.*$/m, '')\n  .replace(/^URL Source:.*$/m, '')\n  .replace(/^Markdown Content:\\s*$/m, '')\n  .replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '')        // images hatao\n  .replace(/\\[\\s*\\]\\([^)]*\\)/g, '')            // khaali links hatao\n  .replace(/\\[([^\\]]+)\\]\\([^)]*\\)/g, '$1')     // [text](url) → text\n  .replace(/\\*\\*/g, '')                        // bold marks\n  .replace(/[ \\t]+/g, ' ')\n  .replace(/\\n\\s*\\n+/g, '\\n\\n')\n  .trim()\n  .slice(0, 12000);\n\n// Site padhi gayi ya block hui?\nconst blocked = /access denied|forbidden|captcha|cloudflare|403|just a moment/i.test(text.slice(0, 500));\nconst read_ok = text.length > 200 && !blocked;\n\nreturn [{\n  json: {\n    ...input,\n    page_title: pageTitle,\n    site_text: text,\n    read_ok\n  }\n}];"
+          "jsCode": "const input = $('Normalize Input').first().json;\nlet raw = String($input.first().json.site_text || '');\n\n// Title nikal lo\nconst titleMatch = raw.match(/^Title:\\s*(.+)$/m);\nconst pageTitle = titleMatch ? titleMatch[1].trim() : '';\n\nlet text = raw\n  .replace(/^Title:.*$/m, '')\n  .replace(/^URL Source:.*$/m, '')\n  .replace(/^Markdown Content:\\s*$/m, '')\n  .replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '')        // images hatao\n  .replace(/\\[\\s*\\]\\([^)]*\\)/g, '')            // khaali links hatao\n  .replace(/\\[([^\\]]+)\\]\\([^)]*\\)/g, '$1')     // [text](url) → text\n  .replace(/\\*\\*/g, '')                        // bold marks\n  .replace(/[ \\t]+/g, ' ')\n  .replace(/\\n\\s*\\n+/g, '\\n\\n')\n  .trim()\n  .slice(0, 12000);\n\n// Site padhi gayi ya block hui?\nconst blocked = /access denied|forbidden|captcha|cloudflare|403|just a moment/i.test(text.slice(0, 500));\nconst read_ok = text.length > 200 && !blocked;\n\n// D22 (2026-10-11): the homepage's own header / menu links, so the service pages can be read too (same host, max 12, with their link text).\n// Taken from the raw markdown before the links are stripped; the n8n Code sandbox has no URL constructor, so hosts come from a regex.\nconst NAV = { max: 12, header_chars: 3500, text_chars: 80 };\nconst navHost = (u) => ((String(u || '').match(/^https?:\\/\\/([^\\/?#]+)/i) || [])[1] || '').toLowerCase().replace(/^www\\./, '').replace(/:\\d+$/, '');\nconst navSelf = navHost(((raw.match(/^URL Source:\\s*(\\S+)/m) || [])[1]) || '') || String(input.domain || '').toLowerCase().replace(/^www\\./, '');\nconst navBody = raw.replace(/^Title:.*$/m, '').replace(/^URL Source:.*$/m, '').replace(/^Markdown Content:\\s*$/m, '');\nconst navFirstH = navBody.search(/^#{1,3}\\s/m);   // the menu sits above the first heading; below it a link is only a nav page if it looks like one\nconst NAV_SERVICE = /(service|solution|product|offering|expertise|capabilit|industr|platform|technolog|consult|what-?we-?do|whatwedo)/i;\nconst nav_pages = []; const navSeen = new Set();\nfor (const [region, inHeader] of [[navBody.slice(0, navFirstH > 0 ? Math.min(navFirstH, NAV.header_chars) : NAV.header_chars), true], [navBody, false]]) {\n  for (const m of region.matchAll(/\\[([^\\]\\n]{1,120})\\]\\((https?:\\/\\/[^)\\s]+)\\)/g)) {\n    if (nav_pages.length >= NAV.max) break;\n    const label = m[1].replace(/[*_`#!]/g, '').replace(/\\s+/g, ' ').trim();\n    const url = m[2].replace(/[.,;]+$/, '').replace(/[?#].*$/, '');\n    if (navHost(url) !== navSelf || !navSelf) continue;\n    const path = url.replace(/^https?:\\/\\/[^\\/?#]*/i, '') || '/';\n    if (path === '/' || /\\.(pdf|jpe?g|png|gif|svg|webp|avif|mp4|mp3|zip|docx?|xlsx?|pptx?|css|js|xml|ico)$/i.test(path)) continue;\n    const key = path.replace(/\\/+$/, '').toLowerCase() || '/';\n    if (navSeen.has(key)) continue;\n    if (!inHeader && !NAV_SERVICE.test(path) && !NAV_SERVICE.test(label)) continue;   // below the header only service-looking links count\n    navSeen.add(key);\n    nav_pages.push({ url, text: label.slice(0, NAV.text_chars), path: key, in_header: inHeader });\n  }\n  if (nav_pages.length >= NAV.max) break;\n}\n\nreturn [{\n  json: {\n    ...input,\n    page_title: pageTitle,\n    site_text: text,\n    read_ok,\n    nav_pages\n  }\n}];"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -941,7 +941,7 @@
       {
         "parameters": {
           "promptType": "define",
-          "text": "=You are a senior business analyst and SEO strategist.\n\nBelow is the text content of the homepage of the website: {{ $json.domain }}\nPage title: {{ $json.page_title }}\n\n---\n{{ $json.site_text }}\n---\n\nAnalyze this website and return ONLY a valid JSON object (no markdown, no backticks, no extra text) in this exact structure:\n\n{\n  \"business_name\": \"\",\n  \"one_line_summary\": \"\",\n  \"business_description\": \"A clear 80-120 word description of what this business does\",\n  \"industry\": \"\",\n  \"products_or_services\": [\"\", \"\", \"\"],\n  \"target_audience\": [\"\", \"\"],\n  \"unique_selling_points\": [\"\", \"\"],\n  \"location_served\": \"\",\n  \"tone_of_brand\": \"\",\n  \"suggested_meta_title\": \"Max 60 characters\",\n  \"suggested_meta_description\": \"Max 155 characters, includes a call to action\",\n  \"seed_keywords\": [\"8 to 10 keywords a customer would search on Google to find this business\"]\n}\n\nRules:\n- Write entirely in English.\n- Only use facts found in the website text. Do not invent products, services, or claims.\n- If something is not clear from the text, write \"Not clear from website\".",
+          "text": "=You are a senior business analyst and SEO strategist.\n\nBelow is the text of the website {{ $json.domain }}: its homepage first, then {{ Math.max(0, (($json.site_pages || []).length || 1) - 1) }} more page(s) from the same website (the pages its own menu links to).\nHomepage title: {{ $json.page_title }}\n\n--- HOMEPAGE ---\n{{ $json.site_text }}\n--- END HOMEPAGE ---\n{{ $json.pages_text || '' }}\n\nAnalyze this website and return ONLY a valid JSON object (no markdown, no backticks, no extra text) in this exact structure:\n\n{\n  \"business_name\": \"\",\n  \"one_line_summary\": \"\",\n  \"business_description\": \"A clear 80-120 word description of what this business does\",\n  \"industry\": \"\",\n  \"products_or_services\": [\"\", \"\", \"\"],\n  \"target_audience\": [\"\", \"\"],\n  \"unique_selling_points\": [\"\", \"\"],\n  \"location_served\": \"\",\n  \"tone_of_brand\": \"\",\n  \"suggested_meta_title\": \"Max 60 characters\",\n  \"suggested_meta_description\": \"Max 155 characters, includes a call to action\",\n  \"seed_keywords\": [\"8 to 10 keywords a customer would search on Google to find this business\"]\n}\n\nRules:\n- Write entirely in English.\n- Only use facts found in the website text above. Do not invent products, services, or claims.\n- Every page above belongs to this same website: what those pages say is true of this business, exactly as the homepage is.\n- products_or_services: list EVERY distinct service, product, platform or named software this website says it sells, implements or supports — read the other pages, not only the homepage, and keep each one's own name (up to 25 items). Never merge two named products into one line, and never leave one out because the homepage does not mention it.\n- unique_selling_points: include the business's own named method, process or delivery stages when the pages name them, in their exact wording.\n- If something is not clear from the text, write \"Not clear from website\".\n",
           "hasOutputParser": true,
           "options": {}
         },
@@ -959,7 +959,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text\nconst parseAgentJson = (raw) => {\n  if (raw && typeof raw === 'object') return raw;\n  let s = String(raw || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/i, '').trim();\n  try { return JSON.parse(s); } catch (e) {}\n  const a = s.indexOf('{'), b = s.lastIndexOf('}');\n  if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e) {} }\n  throw new Error('AI did not return valid JSON. Output was: ' + s.slice(0, 300));\n};\n\nconst prev = $('Clean Site Text').first().json;\nconst desc = parseAgentJson($input.first().json.output);\n\nreturn [{\n  json: {\n    ...prev,\n    site_text: undefined,   // lamba text aage nahi chahiye\n    site_description: desc,\n    business: prev.business || desc.business_description,\n    audience: prev.audience || (desc.target_audience || []).join(', ')\n  }\n}];"
+          "jsCode": "// Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text\nconst parseAgentJson = (raw) => {\n  if (raw && typeof raw === 'object') return raw;\n  let s = String(raw || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/i, '').trim();\n  try { return JSON.parse(s); } catch (e) {}\n  const a = s.indexOf('{'), b = s.lastIndexOf('}');\n  if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e) {} }\n  throw new Error('AI did not return valid JSON. Output was: ' + s.slice(0, 300));\n};\n\n// D22 (2026-10-11): the description is written from the homepage AND the menu pages that were read (Site Pages). What those pages say stays\n// with it — the pages read, the site's own menu links and the headings the critic may not call invented — and goes into the 30-day seo_cache\n// row, where `pages_read` also marks the description as written by this version (an older, homepage-only row is read again).\nlet prev; try { prev = $('Site Pages').first().json; } catch (e) { prev = $('Clean Site Text').first().json; }\nconst desc = parseAgentJson($input.first().json.output);\nconst homeUrl = 'https://' + String(prev.domain || '').replace(/^https?:\\/\\//, '');\ndesc.pages_read = (prev.site_pages && prev.site_pages.length ? prev.site_pages : [{ url: homeUrl, title: prev.page_title || '', kind: 'homepage' }])\n  .map(p => ({ url: p.url, title: String(p.title || '').slice(0, 120), kind: p.kind || 'page' })).slice(0, 8);\ndesc.nav_pages = (prev.nav_pages || []).slice(0, 12).map(p => ({ url: p.url, text: String(p.text || '').slice(0, 80) }));\ndesc.site_facts = [...new Set([...(desc.products_or_services || []), ...(desc.unique_selling_points || []), ...(prev.site_facts || [])]\n  .map(x => String(x == null ? '' : x).trim()).filter(x => x.length >= 3))].slice(0, 50).map(x => x.slice(0, 120));\n\nreturn [{\n  json: {\n    ...prev,\n    site_text: undefined,   // lamba text aage nahi chahiye\n    pages_text: undefined, site_pages: undefined, site_facts: undefined, nav_pages: undefined,   // D22: kept inside site_description\n    site_description: desc,\n    business: prev.business || desc.business_description,\n    audience: prev.audience || (desc.target_audience || []).join(', ')\n  }\n}];"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -1292,7 +1292,7 @@
       },
       {
         "parameters": {
-          "jsCode": "const d = $input.first().json;\nconst s = d.site_description || {};\n\nconst esc = (t) => String(t ?? '')\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst list = (arr) => (arr || []).map(i => `<li>${esc(i)}</li>`).join('');\nconst tags = (arr) => (arr || []).map(i => `<span class=\"tag\">${esc(i)}</span>`).join('');\n\nconst html = `\n<style>\n  .wrap{font-family:Arial,sans-serif;max-width:720px;margin:0 auto;color:#1e293b;text-align:left;line-height:1.6}\n  h1{font-size:24px;margin:0 0 4px;color:#0f172a}\n  .sub{color:#64748b;margin-bottom:20px}\n  .card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;margin-bottom:14px}\n  .card h2{font-size:15px;margin:0 0 8px;color:#1e3a8a;text-transform:uppercase;letter-spacing:.5px}\n  ul{margin:0;padding-left:18px}\n  .tag{display:inline-block;background:#e0e7ff;color:#1e3a8a;border-radius:20px;padding:4px 10px;margin:3px 4px 3px 0;font-size:13px}\n  .meta{background:#fff;border:1px dashed #94a3b8;border-radius:8px;padding:10px;font-size:14px;margin-top:6px}\n  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}\n  @media(max-width:600px){.grid{grid-template-columns:1fr}}\n</style>\n<div class=\"wrap\">\n  ${d.site_read_failed ? '<div class=\"card\" style=\"border-color:#f59e0b;background:#fffbeb\"><b>We could not read ' + esc(d.domain) + ' automatically.</b> The site may block automated readers or was too slow to respond. The details below are limited to what you told us.</div>' : ''}\n  <h1>${esc(s.business_name || d.domain)}</h1>\n  <div class=\"sub\">${esc(s.one_line_summary)}</div>\n\n  <div class=\"card\">\n    <h2>What Your Business Does</h2>\n    <p>${esc(s.business_description)}</p>\n  </div>\n\n  <div class=\"grid\">\n    <div class=\"card\"><h2>Products / Services</h2><ul>${list(s.products_or_services)}</ul></div>\n    <div class=\"card\"><h2>Target Audience</h2><ul>${list(s.target_audience)}</ul></div>\n    <div class=\"card\"><h2>Why Customers Choose You</h2><ul>${list(s.unique_selling_points)}</ul></div>\n    <div class=\"card\"><h2>Details</h2>\n      <p><b>Industry:</b> ${esc(s.industry)}<br>\n      <b>Serves:</b> ${esc(s.location_served)}<br>\n      <b>Brand Tone:</b> ${esc(s.tone_of_brand)}</p>\n    </div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Suggested SEO Meta Tags</h2>\n    <div class=\"meta\"><b>Title:</b> ${esc(s.suggested_meta_title)}</div>\n    <div class=\"meta\"><b>Description:</b> ${esc(s.suggested_meta_description)}</div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Keywords Customers Might Search</h2>\n    ${tags(s.seed_keywords)}\n  </div>\n</div>`;\n\nreturn [{ json: { ...d, result_html: html } }];"
+          "jsCode": "const d = $input.first().json;\nconst s = d.site_description || {};\n\nconst esc = (t) => String(t ?? '')\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst list = (arr) => (arr || []).map(i => `<li>${esc(i)}</li>`).join('');\nconst tags = (arr) => (arr || []).map(i => `<span class=\"tag\">${esc(i)}</span>`).join('');\n\nconst html = `\n<style>\n  .wrap{font-family:Arial,sans-serif;max-width:720px;margin:0 auto;color:#1e293b;text-align:left;line-height:1.6}\n  h1{font-size:24px;margin:0 0 4px;color:#0f172a}\n  .sub{color:#64748b;margin-bottom:20px}\n  .card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 18px;margin-bottom:14px}\n  .card h2{font-size:15px;margin:0 0 8px;color:#1e3a8a;text-transform:uppercase;letter-spacing:.5px}\n  ul{margin:0;padding-left:18px}\n  .tag{display:inline-block;background:#e0e7ff;color:#1e3a8a;border-radius:20px;padding:4px 10px;margin:3px 4px 3px 0;font-size:13px}\n  .meta{background:#fff;border:1px dashed #94a3b8;border-radius:8px;padding:10px;font-size:14px;margin-top:6px}\n  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}\n  @media(max-width:600px){.grid{grid-template-columns:1fr}}\n</style>\n<div class=\"wrap\">\n  ${d.site_read_failed ? '<div class=\"card\" style=\"border-color:#f59e0b;background:#fffbeb\"><b>We could not read ' + esc(d.domain) + ' automatically.</b> The site may block automated readers or was too slow to respond. The details below are limited to what you told us.</div>' : ''}\n  <h1>${esc(s.business_name || d.domain)}</h1>\n  <div class=\"sub\">${esc(s.one_line_summary)}</div>\n\n  <div class=\"card\">\n    <h2>What Your Business Does</h2>\n    <p>${esc(s.business_description)}</p>\n  </div>\n\n  <div class=\"grid\">\n    <div class=\"card\"><h2>Products / Services</h2><ul>${list(s.products_or_services)}</ul></div>\n    <div class=\"card\"><h2>Target Audience</h2><ul>${list(s.target_audience)}</ul></div>\n    <div class=\"card\"><h2>Why Customers Choose You</h2><ul>${list(s.unique_selling_points)}</ul></div>\n    <div class=\"card\"><h2>Details</h2>\n      <p><b>Industry:</b> ${esc(s.industry)}<br>\n      <b>Serves:</b> ${esc(s.location_served)}<br>\n      <b>Brand Tone:</b> ${esc(s.tone_of_brand)}<br>\n      <b>Pages read:</b> ${(s.pages_read || []).length ? (s.pages_read || []).map(p => esc(p.title || p.url)).join(', ') : 'homepage'}</p>\n    </div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Suggested SEO Meta Tags</h2>\n    <div class=\"meta\"><b>Title:</b> ${esc(s.suggested_meta_title)}</div>\n    <div class=\"meta\"><b>Description:</b> ${esc(s.suggested_meta_description)}</div>\n  </div>\n\n  <div class=\"card\">\n    <h2>Keywords Customers Might Search</h2>\n    ${tags(s.seed_keywords)}\n  </div>\n</div>`;\n\nreturn [{ json: { ...d, result_html: html } }];"
         },
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -5014,7 +5014,7 @@
       {
         "parameters": {
           "promptType": "define",
-          "text": "=You are a demanding editor-in-chief and SEO lead reviewing a draft before it goes to a client. Judge it against the brief and the quality bar below. Be concrete: quote the exact sentence or heading for every problem, and give the fix.\n\nTARGET\nKeyword: {{ $('Parse Brief').first().json.keyword }} · Page type: {{ $('Parse Brief').first().json.page_type }} · Audience: {{ $('Parse Brief').first().json.content_brief.target_audience || $('Parse Brief').first().json.audience }} · Goal: {{ $('Parse Brief').first().json.goal || 'leads' }} · Target words: {{ $('Parse Brief').first().json.content_brief.target_word_count }}\n\nBRIEF ESSENTIALS\nUnique angle: {{ $('Parse Brief').first().json.content_brief.unique_angle }}\nInformation gain items: {{ ($('Parse Brief').first().json.content_brief.information_gain || []).join(' · ') }}\nObjections to answer: {{ ($('Parse Brief').first().json.content_brief.objections || []).join(' · ') }}\nSnippet targets: {{ ($('Parse Brief').first().json.content_brief.snippet_targets || []).map(s => s.question).join(' | ') }}\nTerms to use: {{ ($('Parse Brief').first().json.content_brief.terms_to_use || []).map(t => t.term).join(', ') }}\nAllowed external facts: {{ ($('Parse Brief').first().json.content_brief.evidence_plan || []).map(e => e.fact).join(' | ') || 'none' }}\nClient facts (true, may be stated): {{ [...($('Parse Brief').first().json.content_brief.client_facts || []), $('Parse Brief').first().json.business_facts || '', $('Parse Brief').first().json.case_facts_text || ''].filter(Boolean).join(' | ') || 'none' }}\n\nQUALITY BAR\n1. Specificity: examples, numbers with linked sources, decision rules, steps — not generic advice.\n2. Originality and information gain: every information-gain item is covered fully; the page says something competitors do not.\n3. Audience fit: speaks to the stated audience and answers their objections.\n4. Trust: no unsupported claims or invented numbers; external numbers carry a source link; client facts are used correctly; placeholders only where facts are missing.\n5. Readability and voice: plain words, varied sentence length, active voice, no filler, none of the banned phrases (delve, unlock, seamless, robust, leverage, cutting-edge, game-changer, elevate, empower, crucial, paramount, realm, embark, foster, streamline, synergy, holistic, best-in-class, world-class, state-of-the-art, top-notch, one-stop shop, \"in today's fast-paced world\", \"ever-evolving\", \"it's important to note\", \"in conclusion\", \"when it comes to\", \"a wide range of\").\n6. Search fit: matches the intent, question headings with direct 40-60 word answers, terms used naturally, primary keyword placed correctly without stuffing, one FAQ section in Q1:/A1: format, internal links only to allowed URLs.\n7. Structure: follows the outline order and target lengths, comparison table present, CTA last, meta title ≤60 and description 120-155 characters.\n\nDRAFT\n{{ $json.output }}\n\nReturn ONLY valid JSON (no markdown, no backticks):\n{\n  \"score\": 0-100,\n  \"verdict\": \"publish | revise | rewrite\",\n  \"strengths\": [\"2-4 specific strengths\"],\n  \"problems\": [{ \"severity\": \"high | medium | low\", \"location\": \"quoted text or heading (max 15 words)\", \"issue\": \"what is wrong\", \"fix\": \"exactly what to write or change\" }],\n  \"banned_phrases_found\": [\"phrases from the banned list that appear\"],\n  \"unsupported_claims\": [\"quoted claims with numbers or superlatives that have no source and no placeholder\"],\n  \"missing_brief_items\": [\"outline sections, information-gain items, snippet targets or terms that are missing\"],\n  \"revision_instructions\": \"Numbered, specific instructions the editor can apply without re-reading this review (max 12 items)\"\n}\nList at most 12 problems, most damaging first. Score 85+ only if you would publish it under your own name.\n",
+          "text": "=You are a demanding editor-in-chief and SEO lead reviewing a draft before it goes to a client. Judge it against the brief and the quality bar below. Be concrete: quote the exact sentence or heading for every problem, and give the fix.\n\nTARGET\nKeyword: {{ $('Parse Brief').first().json.keyword }} · Page type: {{ $('Parse Brief').first().json.page_type }} · Audience: {{ $('Parse Brief').first().json.content_brief.target_audience || $('Parse Brief').first().json.audience }} · Goal: {{ $('Parse Brief').first().json.goal || 'leads' }} · Target words: {{ $('Parse Brief').first().json.content_brief.target_word_count }}\n\nBRIEF ESSENTIALS\nUnique angle: {{ $('Parse Brief').first().json.content_brief.unique_angle }}\nInformation gain items: {{ ($('Parse Brief').first().json.content_brief.information_gain || []).join(' · ') }}\nObjections to answer: {{ ($('Parse Brief').first().json.content_brief.objections || []).join(' · ') }}\nSnippet targets: {{ ($('Parse Brief').first().json.content_brief.snippet_targets || []).map(s => s.question).join(' | ') }}\nTerms to use: {{ ($('Parse Brief').first().json.content_brief.terms_to_use || []).map(t => t.term).join(', ') }}\nAllowed external facts: {{ ($('Parse Brief').first().json.content_brief.evidence_plan || []).map(e => e.fact).join(' | ') || 'none' }}\nClient facts (true, may be stated): {{ [...($('Parse Brief').first().json.content_brief.client_facts || []), $('Parse Brief').first().json.business_facts || '', $('Parse Brief').first().json.case_facts_text || ''].filter(Boolean).join(' | ') || 'none' }}\nFacts from the client's own website ({{ (($('Parse Brief').first().json.site_description || {}).pages_read || []).length || 1 }} page(s) read — its services, sections and headings; all of this is true and may be stated): {{ ((($('Parse Brief').first().json.site_description || {}).site_facts) || ($('Parse Brief').first().json.site_description || {}).products_or_services || []).join(' · ') || 'none read' }}\n\nQUALITY BAR\n1. Specificity: examples, numbers with linked sources, decision rules, steps — not generic advice.\n2. Originality and information gain: every information-gain item is covered fully; the page says something competitors do not.\n3. Audience fit: speaks to the stated audience and answers their objections.\n4. Trust: no unsupported claims or invented numbers; external numbers carry a source link; client facts are used correctly; placeholders only where facts are missing. Anything that appears in the client facts or in the facts from the client's own website above is TRUE: never call it invented, made up or unsupported, whatever wording the draft uses for it. For anything else that cannot be checked, the word is \"unverified\" — say what would verify it (a source link or a bracketed placeholder); never \"invented\".\n5. Readability and voice: plain words, varied sentence length, active voice, no filler, none of the banned phrases (delve, unlock, seamless, robust, leverage, cutting-edge, game-changer, elevate, empower, crucial, paramount, realm, embark, foster, streamline, synergy, holistic, best-in-class, world-class, state-of-the-art, top-notch, one-stop shop, \"in today's fast-paced world\", \"ever-evolving\", \"it's important to note\", \"in conclusion\", \"when it comes to\", \"a wide range of\").\n6. Search fit: matches the intent, question headings with direct 40-60 word answers, terms used naturally, primary keyword placed correctly without stuffing, one FAQ section in Q1:/A1: format, internal links only to allowed URLs.\n7. Structure: follows the outline order and target lengths, comparison table present, CTA last, meta title ≤60 and description 120-155 characters.\n\nDRAFT\n{{ $json.output }}\n\nReturn ONLY valid JSON (no markdown, no backticks):\n{\n  \"score\": 0-100,\n  \"verdict\": \"publish | revise | rewrite\",\n  \"strengths\": [\"2-4 specific strengths\"],\n  \"problems\": [{ \"severity\": \"high | medium | low\", \"location\": \"quoted text or heading (max 15 words)\", \"issue\": \"what is wrong\", \"fix\": \"exactly what to write or change\" }],\n  \"banned_phrases_found\": [\"phrases from the banned list that appear\"],\n  \"unsupported_claims\": [\"quoted claims with numbers or superlatives that have no source, no placeholder and no match in the client facts or the website facts above — these are unverified, not invented\"],\n  \"missing_brief_items\": [\"outline sections, information-gain items, snippet targets or terms that are missing\"],\n  \"revision_instructions\": \"Numbered, specific instructions the editor can apply without re-reading this review (max 12 items)\"\n}\nList at most 12 problems, most damaging first. Score 85+ only if you would publish it under your own name.\n",
           "hasOutputParser": true,
           "options": {}
         },
@@ -5076,7 +5076,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Accepts an object (from the Structured Output Parser) or a string; attaches the critique to the draft for Content QA.\nconst parseAgentJson = (raw) => {\n  if (raw && typeof raw === 'object') return raw;\n  let s = String(raw || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/i, '').trim();\n  try { return JSON.parse(s); } catch (e) {}\n  const a = s.indexOf('{'), b = s.lastIndexOf('}');\n  if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e) {} }\n  return null;\n};\nconst prev = $('Parse Brief').first().json;\nconst draft = $('Copywriter').first().json.output;\nlet cr = parseAgentJson($input.first().json.output);\nif (!cr || typeof cr !== 'object') cr = { score: null, verdict: 'unknown', problems: [], revision_instructions: '', strengths: [], banned_phrases_found: [], unsupported_claims: [], missing_brief_items: [], parse_failed: true };\ncr.problems = Array.isArray(cr.problems) ? cr.problems.slice(0, 12) : [];\nreturn [{ json: { ...prev, output: draft, critique: cr } }];\n"
+          "jsCode": "// Accepts an object (from the Structured Output Parser) or a string; attaches the critique to the draft for Content QA.\nconst parseAgentJson = (raw) => {\n  if (raw && typeof raw === 'object') return raw;\n  let s = String(raw || '').trim().replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```\\s*$/i, '').trim();\n  try { return JSON.parse(s); } catch (e) {}\n  const a = s.indexOf('{'), b = s.lastIndexOf('}');\n  if (a >= 0 && b > a) { try { return JSON.parse(s.slice(a, b + 1)); } catch (e) {} }\n  return null;\n};\nconst prev = $('Parse Brief').first().json;\nconst draft = $('Copywriter').first().json.output;\nlet cr = parseAgentJson($input.first().json.output);\nif (!cr || typeof cr !== 'object') cr = { score: null, verdict: 'unknown', problems: [], revision_instructions: '', strengths: [], banned_phrases_found: [], unsupported_claims: [], missing_brief_items: [], parse_failed: true };\ncr.problems = Array.isArray(cr.problems) ? cr.problems.slice(0, 12) : [];\n\n// ---- D22 (2026-10-11, system review FIX_PLAN): a claim found on the client's own website is not \"invented\" ----\n// Live (exec 365) the critic called Tech&'s real delivery stages (\"Assess & Envision\", \"Run & Optimise\") invented, because only the homepage\n// was ever read. The site facts (services, sections and headings of every page the describer read, kept in site_description by Parse\n// Description) are checked here as well as in the prompt: a claim that quotes something the website itself says is dropped from\n// unsupported_claims and from the problems, and everything the critic still calls invented is renamed \"unverified\" — the honest word for a\n// statement nobody has checked.\nconst sd = prev.site_description || {};\nconst norm = (s) => String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\\s+/g, ' ').trim();\nconst facts = [...(sd.site_facts || []), ...(sd.products_or_services || []), ...(sd.unique_selling_points || []), sd.business_description, sd.one_line_summary,\n  ...(prev.content_brief && prev.content_brief.client_facts || []), prev.business_facts, prev.case_facts_text, prev.business]\n  .map(norm).filter(f => f.length >= 4);\nconst factBlob = ' ' + facts.join(' || ') + ' ';\nconst figures = (s) => (String(s == null ? '' : s).match(/\\d[\\d,.]*/g) || []).map(x => x.replace(/[,.]+$/, ''));\nconst onSite = (q) => {\n  const t = norm(q); if (t.length < 4) return false;\n  if (figures(q).some(f => !factBlob.includes(f))) return false;                            // a figure the website never states is not \"on the site\", whatever words surround it\n  if (factBlob.includes(' ' + t + ' ')) return true;                                        // the claim is one of the facts\n  return facts.some(f => f.split(' ').length >= 2 && (t.includes(f) || (t.split(' ').length >= 2 && f.includes(t))));   // a 2+ word fact inside the claim, or the other way round\n};\nconst unverified = (s) => String(s == null ? '' : s).replace(/\\binvent(ed|s|ing)?\\b/gi, 'unverified').replace(/\\bmade[- ]up\\b/gi, 'unverified').replace(/\\bfabricat(ed|es|ing|ion)\\b/gi, 'unverified');\nconst claims = Array.isArray(cr.unsupported_claims) ? cr.unsupported_claims.map(c => (c && typeof c === 'object' ? JSON.stringify(c) : String(c))) : [];\ncr.claims_on_site = claims.filter(onSite);\ncr.unsupported_claims = claims.filter(c => !onSite(c));\nconst INVENTION = /\\binvent|made[- ]up|fabricat|unsupported|no source|not supported|unsubstantiated\\b/i;\ncr.problems = cr.problems.filter(p => !(p && typeof p === 'object' && INVENTION.test(String(p.issue || '')) && (onSite(p.location) || onSite(p.issue))))\n  .map(p => (p && typeof p === 'object' ? { ...p, issue: unverified(p.issue), fix: unverified(p.fix) } : p));\ncr.revision_instructions = unverified(cr.revision_instructions);\ncr.site_facts_checked = facts.length;\ncr.site_pages_read = (sd.pages_read || []).length;\n\nreturn [{ json: { ...prev, output: draft, critique: cr } }];\n"
         },
         "id": "23081561-ad45-5179-a0b9-fe4a00c0c7c2",
         "name": "Parse Critique",
@@ -13332,7 +13332,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// v4.6: the homepage description is reused for 30 days (seo_cache 'desc:<domain>'), so keyword, ladder and cadence runs for the same site do not\n// read and re-describe the homepage every time. \"Just describe my website\" always reads the site fresh, and what the user typed always wins.\nconst CONFIG = { ttl_days: 30 };\nconst d = $('Rate Limit').first().json;\nconst dom = String(d.domain || '').toLowerCase();\nconst row = $input.all().map(i => i.json || {}).find(r => r.key && r.key === 'desc:' + dom) || null;\nlet v = null; try { v = row ? JSON.parse(row.value) : null; } catch (e) {}\nconst desc = v && v.description;\nconst days = row ? (Date.now() - new Date(row.updated_at).getTime()) / 864e5 : Infinity;\nif (!d.need_site_description || d.mode === 'site_description' || !desc || !desc.business_description || !(days < CONFIG.ttl_days)) return [{ json: d }];\nreturn [{ json: { ...d, need_site_description: false, page_title: v.page_title || '', site_description: desc, site_description_cached: String(row.updated_at).slice(0, 10),\n  business: d.business || desc.business_description, audience: d.audience || (desc.target_audience || []).join(', ') } }];\n"
+          "jsCode": "// v4.6: the site description is reused for 30 days (seo_cache 'desc:<domain>'), so keyword, ladder and cadence runs for the same site do not\n// read and re-describe it every time. \"Just describe my website\" always reads the site fresh, and what the user typed always wins.\n// D22 (2026-10-11): a stored description is only reused when it was written from the site's pages, not from the homepage alone — rows without\n// `pages_read` were written before the menu pages were read, so their service list is incomplete and the site is read again.\nconst CONFIG = { ttl_days: 30 };\nconst d = $('Rate Limit').first().json;\nconst dom = String(d.domain || '').toLowerCase();\nconst row = $input.all().map(i => i.json || {}).find(r => r.key && r.key === 'desc:' + dom) || null;\nlet v = null; try { v = row ? JSON.parse(row.value) : null; } catch (e) {}\nconst desc = v && v.description;\nconst days = row ? (Date.now() - new Date(row.updated_at).getTime()) / 864e5 : Infinity;\nconst readsPages = !!(desc && Array.isArray(desc.pages_read) && desc.pages_read.length);\nif (!d.need_site_description || d.mode === 'site_description' || !desc || !desc.business_description || !readsPages || !(days < CONFIG.ttl_days)) return [{ json: d }];\nreturn [{ json: { ...d, need_site_description: false, page_title: v.page_title || '', site_description: desc, site_description_cached: String(row.updated_at).slice(0, 10),\n  business: d.business || desc.business_description, audience: d.audience || (desc.target_audience || []).join(', ') } }];\n"
         },
         "id": "32ae6e08-308c-58c7-86f0-2414fb331f17",
         "name": "Use Cached Description",
@@ -14996,6 +14996,119 @@
           -264,
           164
         ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// D22 (2026-10-11, system review FIX_PLAN): the site description was written from the homepage alone, so most of what a business sells was\n// never seen (live: techand.ai's describe listed 8 services and left out Business Central, CRM and Power Platform — all of them on /whatwedo/;\n// the Keyword Check then scored \"business central partner uae\" at fit 1 and the critic called the site's real process stages \"invented\").\n// This node picks up to CONFIG.max_pages of the homepage's OWN menu links (Clean Site Text -> nav_pages: same host, max 12, with link text)\n// to be read beside the homepage: service and section pages first, never the blog, legal, contact, careers or a language copy. One request\n// each, no retry — a page that fails is simply skipped (Site Pages). With nothing worth reading the item is { skip: true } and the IF\n// \"Nav Pages To Read?\" sends it straight to Site Pages.\nconst CONFIG = { max_pages: 5, max_depth: 3, max_text: 60 };\nconst d = $input.first().json;\n// what a service / section page looks like, and what is never one\nconst SERVICE = /(service|services|what[-_ ]?we[-_ ]?do|whatwedo|solution|solutions|product|products|offering|offerings|expertise|capabilit|industr|platform|technolog|consult|software|module|erp|crm|training|support|pricing|plans)/i;\nconst ABOUT = /(about|company|who[-_ ]?we[-_ ]?are|our[-_ ]?story|team|approach|method|process|how[-_ ]?we[-_ ]?work)/i;\nconst SKIP_PATH = /^\\/(ar|fr|de|es|ru|zh|hi|ur|tr|it|pt|ja|ko|nl|pl|fa)(\\/|$)|(blog|news|insight|article|stor(y|ies)|event|webinar|press|media|career|job|vacanc|privacy|terms|cookie|legal|disclaimer|sitemap|login|sign[-_]?in|sign[-_]?up|register|account|cart|checkout|basket|search|wishlist|\\/tag\\/|\\/category\\/|\\/author\\/|contact|book[-_ ]?a[-_ ]?(demo|call)|download|brochure)/i;\nconst SKIP_TEXT = /^(blog|news|insights?|careers?|jobs|contact( us)?|privacy|terms|cookies?|login|log in|sign in|sign up|register|search|cart|menu|home|english|arabic|العربية)$/i;\nconst depth = (p) => String(p || '').split('/').filter(Boolean).length;\nconst pages = (d.nav_pages || []).filter(p => p && p.url && !SKIP_PATH.test(String(p.path || '')) && !SKIP_TEXT.test(String(p.text || '').trim()) && depth(p.path) <= CONFIG.max_depth);\n// a page the menu calls a service beats one the path only hints at; a header link beats a link further down; a shallow path beats a deep one\nconst score = (p) => (SERVICE.test(String(p.path)) ? 4 : 0) + (SERVICE.test(String(p.text)) ? 3 : 0) + (p.in_header ? 2 : 0)\n  + (ABOUT.test(String(p.path)) || ABOUT.test(String(p.text)) ? 1 : 0) - depth(p.path) * 0.1;\nconst picked = pages.map(p => ({ ...p, score: score(p) })).filter(p => p.score > 0)\n  .sort((a, b) => b.score - a.score || depth(a.path) - depth(b.path)).slice(0, CONFIG.max_pages);\nreturn picked.length\n  ? picked.map(p => ({ json: { url: p.url, text: String(p.text || '').slice(0, CONFIG.max_text), path: p.path, in_header: !!p.in_header, score: +p.score.toFixed(2), domain: d.domain } }))\n  : [{ json: { skip: true, domain: d.domain, reason: (d.nav_pages || []).length ? 'no service or section page in the menu' : 'no menu links found on the homepage' } }];\n"
+        },
+        "id": "91af224a-56b6-5bc6-8e8c-d0442a13eed0",
+        "name": "Nav Pages Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1628,
+          688
+        ]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "12f1ae90-4abe-56c3-8a13-ae19b4789745",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "054c8dab-9bb8-5793-beb2-059b0bfde14e",
+        "name": "Nav Pages To Read?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          1808,
+          688
+        ]
+      },
+      {
+        "parameters": {
+          "url": "=https://r.jina.ai/{{ $json.url }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "X-Remove-Selector",
+                "value": "script, style, form, [class*=\"cookie\"], [id*=\"cookie\"], [class*=\"consent\"], [id*=\"consent\"], [id*=\"onetrust\"]"
+              },
+              {
+                "name": "X-Retain-Images",
+                "value": "none"
+              }
+            ]
+          },
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 1,
+                "batchInterval": 1500
+              }
+            },
+            "response": {
+              "response": {
+                "responseFormat": "text",
+                "outputPropertyName": "page_text"
+              }
+            },
+            "timeout": 20000
+          }
+        },
+        "id": "a0011208-e99d-5597-a0da-0af0ef900a66",
+        "name": "Read Nav Pages",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1988,
+          688
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true,
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "SEOcredJinaReade",
+            "name": "Jina Reader"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// D22 (2026-10-11, system review FIX_PLAN): the homepage AND the menu pages that were read, as one input for the Site Describer. A page that\n// failed, was blocked, redirected to something empty or came back nearly text-free is skipped (never an error, never a half-read page in the\n// prompt). Each page is trimmed to CONFIG.chars and the whole extra block to CONFIG.total, so the describer stays a cheap Haiku call. The\n// headings of every page read become `site_facts`: what this website says about itself, which the critic may not call invented (Parse Critique).\n// Both branches of \"Nav Pages To Read?\" end here, so the homepage path still works when there was nothing to read.\nconst CONFIG = { chars: 2600, total: 11000, min_words: 25, max_facts: 60, fact_chars: 120 };\nconst home = $('Clean Site Text').first().json;\nlet plan = []; try { plan = $('Nav Pages Plan').all().map(i => i.json).filter(p => p && p.url); } catch (e) { plan = []; }\nlet res = []; try { res = $('Read Nav Pages').all().map(i => i.json); } catch (e) { res = []; }\n\nconst stripMd = (s) => String(s || '')\n  .replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, '').replace(/\\[\\s*\\]\\([^)]*\\)/g, '').replace(/\\[([^\\]]+)\\]\\([^)]*\\)/g, '$1')\n  .replace(/\\*\\*/g, '').replace(/[`_]+/g, '').replace(/[ \\t]+/g, ' ').trim();\nconst headingsOf = (text) => [...new Set(String(text || '').split('\\n')\n  .filter(l => /^#{1,3}\\s/.test(l.trim()))\n  .map(l => stripMd(l.replace(/^#+\\s*/, '')).replace(/\\s+/g, ' ').trim())\n  .filter(h => h.length >= 3 && h.length <= CONFIG.fact_chars))];\n// the raw Jina answer of one page -> clean text, or null when there is nothing usable\nconst clean = (raw) => {\n  let t = String(raw || '');\n  const title = (t.match(/^Title:\\s*(.+)$/m) || [])[1] || '';\n  if (/access denied|forbidden|captcha|cloudflare|just a moment|enable javascript/i.test(t.slice(0, 500))) return null;\n  t = stripMd(t.replace(/^Title:.*$/m, '').replace(/^URL Source:.*$/m, '').replace(/^Markdown Content:\\s*$/m, ''))\n    .replace(/\\n\\s*\\n+/g, '\\n\\n').trim();\n  if (t.split(/\\s+/).filter(Boolean).length < CONFIG.min_words) return null;\n  return { title: title.trim(), text: t };\n};\n\nconst site_pages = [{ url: 'https://' + String(home.domain || '').replace(/^https?:\\/\\//, ''), title: home.page_title || '', kind: 'homepage', words: String(home.site_text || '').split(/\\s+/).filter(Boolean).length }];\nconst site_facts = headingsOf(home.site_text);\nconst pages_failed = [];\nlet block = '', used = 0;\nplan.forEach((p, i) => {\n  const r = res[i] || {};\n  const raw = r.page_text != null ? r.page_text : (r.data != null ? r.data : r.body);   // responseFormat text: the body arrives under the named property, else data\n  if (r.error || !raw) { pages_failed.push({ url: p.url, reason: r.error ? String(r.error.message || r.error).slice(0, 120) : 'empty response' }); return; }\n  const c = clean(raw);\n  if (!c) { pages_failed.push({ url: p.url, reason: 'blocked or too little text' }); return; }\n  if (used >= CONFIG.total) { pages_failed.push({ url: p.url, reason: 'skipped: enough text already' }); return; }\n  const body = c.text.slice(0, Math.min(CONFIG.chars, CONFIG.total - used));\n  used += body.length;\n  block += '\\n--- PAGE: ' + (c.title || p.text || p.path) + ' (' + p.url + ') ---\\n' + body + '\\n';\n  site_pages.push({ url: p.url, title: c.title || String(p.text || ''), kind: 'nav', words: body.split(/\\s+/).filter(Boolean).length });\n  for (const h of headingsOf(c.text)) if (!site_facts.includes(h)) site_facts.push(h);\n});\n\nreturn [{ json: { ...home, site_text: home.site_text, pages_text: block.trim(), site_pages, site_facts: site_facts.slice(0, CONFIG.max_facts),\n  pages_failed, pages_read_count: site_pages.length } }];\n"
+        },
+        "id": "53990188-412e-54a4-9199-d0162654d3ae",
+        "name": "Site Pages",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2168,
+          688
+        ],
+        "alwaysOutputData": true
       }
     ],
     "connections": {
@@ -16573,7 +16686,7 @@
         "main": [
           [
             {
-              "node": "Site Describer",
+              "node": "Nav Pages Plan",
               "type": "main",
               "index": 0
             }
@@ -19421,6 +19534,57 @@
           [
             {
               "node": "Error Via API?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Nav Pages Plan": {
+        "main": [
+          [
+            {
+              "node": "Nav Pages To Read?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Nav Pages To Read?": {
+        "main": [
+          [
+            {
+              "node": "Read Nav Pages",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Site Pages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Read Nav Pages": {
+        "main": [
+          [
+            {
+              "node": "Site Pages",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Site Pages": {
+        "main": [
+          [
+            {
+              "node": "Site Describer",
               "type": "main",
               "index": 0
             }
