@@ -1885,7 +1885,7 @@ await guard('pipeline phase 3', async () => {
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
   const N0 = await discover(false);
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains)
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
@@ -2108,11 +2108,13 @@ await guard('publish detection', async () => {
   check('case study found live -> its proof row (site_id, keyword, page_url)', cr.length === 1 && eq(cr[0].json, { site_id: SITE, keyword: 'ifrs 17 case study', page_url: W + '/case-studies/ifrs-17-case-study/' }), JSON.stringify(cr.map(x => x.json)));
   const lrr = await run('Detected Ladder Rows', cr); const LRR = lrr.map(x => x.json);
   check('ladder rows: the 3 ladder pages found (fta, requirements, distributors), status published + live URL + page_exists', LRR.length === 3 && LRR.every(r => keysAre(r, ['ladder_id', 'keyword', 'status', 'target_url', 'page_exists']) && r.status === 'published' && r.page_exists === true && r.ladder_id === 'lad_D') && eq(LRR.map(r => r.keyword).sort(), ['e invoicing uae fta', 'erp for distributors', 'uae e invoicing requirements']), JSON.stringify(LRR));
-  // ---- 5. no candidates -> no requests ----
+  // ---- 5. no candidates -> nothing to match (the sitemap is still read: D11 builds the page inventory from it) ----
   const savedLogs = store['Load Content Log'], savedLad = store['Load Ladders'];
   mock('Load Content Log', LOGS.filter(l => l.json.status === 'published')); mock('Load Ladders', LADDERS.map(l => ({ json: { ...l.json, status: l.json.status === 'writing' ? 'planned' : l.json.status } })));
   const pc0 = await run('Publish Candidates', plan);
-  check('nothing written and waiting -> one skip item, no sitemap request', pc0.length === 1 && pc0[0].json.skip === true && !pc0[0].json.sitemap_url, JSON.stringify(pc0[0].json));
+  check('nothing written and waiting -> no candidate to match, and no page is fetched (the sitemap read stays, D11)', pc0.every(x => x.json.skip || (!x.json.candidates.length && x.json.detect === false && !!x.json.sitemap_url)), JSON.stringify(pc0.map(x => x.json.skip ? 'skip' : [x.json.domain, x.json.candidates.length, x.json.detect])));
+  const ms0 = await run('Match Slugs (Detect)', pc0);
+  check('and with no candidate nothing is fetched, while the sitemap URLs still become the page inventory', ms0.length === 1 && ms0[0].json.skip === true && (ms0[0].json.sites || []).every(st => !st.fetches.length && !st.slug_matches.length), JSON.stringify((ms0[0].json.sites || []).map(st => [st.domain, st.fetches.length, (st.inventory || []).length])));
   store['Load Content Log'] = savedLogs; store['Load Ladders'] = savedLad; await run('Publish Candidates', plan);
   // ---- 6. the rest of the run: inspection of the pages found, metrics, report, callback ----
   mock('GSC Sites', T.gscSites()); const rp = await run('Resolve Properties', store['GSC Sites']);
@@ -3770,6 +3772,189 @@ await guard('content correctness', async () => {
   const tOld = await trackerWith([logRow('peppol access point uae', 30)]);
   check('D9: a page that was already live at the last check is not reminded again',
     (tOld.links_to_add || []).length === 0 && !/Now live/.test(tOld.html), JSON.stringify(tOld.links_to_add));
+});
+
+// ===================================================================================
+// S40 D11 (2026-10-12, system review FIX_PLAN): the agent was blind to the pages the website already has. The 2026-10-01 ladder planned
+// "uae e invoicing penalties" as a NEW page although /insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs had
+// been live since August, and the Rank Tracker / Site Tracker then said "publish it" — which would cannibalise the live page.
+// The Site Tracker now keeps a weekly page inventory in seo_pages (SITE_MODEL_SPEC.md §6) and every consumer asks SM.matchPage first.
+await guard('d11-existing-pages', async () => {
+  const SN = 'S40 D11 — the pages the site already has: the weekly inventory in seo_pages (sitemap + Search Console queries + AI pages, only changed rows), and Ladder Plan / discovery / the Rank Tracker / the Site Tracker / the Content Cadence refreshing that page instead of publishing a second one';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T = require('./fixtures_tracking'), TC = require('./table_cols.json');
+  const D = T.D, SITE = 'site_northwind-erp-com', W = 'https://www.' + D, EMPTY = [{ json: {} }];
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  // the live page of the system review, with its real path and title
+  const INS = W + '/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs';
+  const INS_T = 'The cost of non-compliance: UAE e-invoicing penalties and mitigation costs';
+  const FTA = W + '/uae-e-invoicing-fta-rules/';
+  const PRICING = W + '/erp-pricing/';
+  const KW = 'uae e invoicing penalties';                 // the keyword the 2026-10-01 ladder planned as a new page
+  const FALSE_PAIR = 'e invoicing uae penalties';         // S26's false-match pair: must never claim the FTA rules page
+
+  // ---- 1. the weekly inventory: the Site Tracker turns what it already read into seo_pages rows ----
+  const modelOf = async (row) => (await run('_site_model', [{ json: { site_row: row } }]))[0].json.model;
+  const model = await modelOf({ site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1) });
+  mock('Resolve Properties', [{ json: { site_id: SITE, domain: D } }]);
+  mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model } }]);
+  mock('Detect Published', [{ json: { site_idx: 0, site_id: SITE, domain: D, candidates: 1, sitemap: { ok: true, urls: 3 }, detected: [{ keyword: 'peppol uae', url: W + '/peppol-uae/', matched_by: 'slug' }],
+    inventory: [{ url: INS, lastmod: '2026-08-21' }, { url: FTA, lastmod: '2026-07-02' }, { url: W + '/about/', lastmod: '' }], page_titles: [{ url: INS, title: INS_T, h1: 'UAE e-invoicing penalties' }] } }]);
+  mock('Parse GSC', [{ json: { site_idx: 0, site_id: SITE, pages: [{ page: PRICING, clicks: 12, impressions: 300 }],
+    queries: [{ query: 'erp cost dubai', page: PRICING, impressions: 240, clicks: 9, position: 7.4 }, { query: 'erp price uae', page: PRICING, impressions: 0, clicks: 0, position: 44 }] } }]);
+  mock('Load AI Pages (Site)', [{ json: { site_id: SITE, url: 'https://' + D + '/about/', title: 'About Northwind ERP' } }]);   // bare host: the same page as the sitemap's /about/
+  mock('Load Pages (Site)', EMPTY);
+  const inv1 = (await run('Page Inventory (Site)', store['Resolve Properties']))[0].json;
+  console.log('   inventory ->', JSON.stringify({ total: inv1.total, by_source: inv1.by_source, changed: inv1.changed }));
+  check('the inventory merges the sitemap, the Search Console pages, AI Growth\'s key pages and the pages found live, host-agnostically (the bare-host /about/ is not a second page)',
+    inv1.total === 5 && inv1.pages.filter(p => /\/about\/?$/.test(p.url)).length === 1 && inv1.by_source.sitemap === 3 && inv1.by_source.gsc === 1 && inv1.by_source.detected === 1, JSON.stringify(inv1.pages.map(p => [p.url.replace(W, ''), p.source])));
+  check('the page the detection read keeps its title and H1, and the Search Console page keeps the queries it gets impressions for (0 impressions are left out)',
+    (inv1.pages.find(p => p.url === INS) || {}).title === INS_T && (inv1.pages.find(p => p.url === INS) || {}).h1 === 'UAE e-invoicing penalties'
+    && eq(((inv1.pages.find(p => p.url === PRICING) || {}).queries || []).map(q => q.query), ['erp cost dubai']) && inv1.with_queries === 1, JSON.stringify(inv1.pages.map(p => [p.url.replace(W, ''), p.title, (p.queries || []).length])));
+  const prow = await run('Page Rows (Site)', store['Page Inventory (Site)']);
+  check('the seo_pages rows carry exactly the table\'s columns (table_cols.json PAGES) and one row per page',
+    prow.length === 5 && prow.every(r => eq(Object.keys(r.json).sort(), [...TC.PAGES].sort())) && prow.every(r => r.json.site_id === SITE) && prow.some(r => r.json.url === INS && r.json.title === INS_T), JSON.stringify(Object.keys(prow[0].json)));
+  mock('Load Pages (Site)', prow.map(r => ({ json: { ...r.json, id: 1 } })));
+  const inv2 = (await run('Page Inventory (Site)', store['Resolve Properties']))[0].json;
+  check('next week nothing changed: the same pages, no row written again (the upsert keys are site_id + url)', inv2.total === 5 && inv2.changed === 0 && inv2.stored === 5, JSON.stringify({ total: inv2.total, changed: inv2.changed }));
+  const prow2 = await run('Page Rows (Site)', store['Page Inventory (Site)']);
+  check('and Page Rows (Site) then has nothing to save', prow2.length === 1 && prow2[0].json.skip === true, JSON.stringify(prow2[0].json));
+
+  // ---- 2. SM.matchPage on that inventory: the live page, the false-match pair, a query match ----
+  const kit = async (keyword, pages) => (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1) }, extras: { pages }, keyword } }]))[0].json.match;
+  const INV = inv1.pages;
+  const mHit = await kit(KW, INV), mPair = await kit(FALSE_PAIR, INV), mQuery = await kit('erp cost dubai', INV), mNone = await kit('wms implementation dubai', INV);
+  check('D11: "uae e invoicing penalties" maps to the live /insights/ page (3 of 3 meaningful words in the slug)', mHit && mHit.url === INS && mHit.matched_by === 'slug' && mHit.score === 1, JSON.stringify(mHit));
+  check('S26\'s false-match pair still does not claim the FTA rules page', mPair && mPair.url === INS && !/fta-rules/.test(mPair.url) && (await kit(FALSE_PAIR, INV.filter(p => p.url === FTA))) === null, JSON.stringify(mPair));
+  check('a keyword with impressions on a page matches even though the slug says nothing about it', mQuery && mQuery.url === PRICING && mQuery.matched_by === 'query' && mQuery.impressions === 240, JSON.stringify(mQuery));
+  check('an unrelated keyword matches nothing, and an empty inventory matches nothing', mNone === null && (await kit(KW, [])) === null, JSON.stringify(mNone));
+  const invPages = INV.map(p => ({ url: p.url, title: p.title, h1: p.h1, source: p.source, lastmod: p.lastmod, queries_json: JSON.stringify(p.queries || []) }));   // as seo_pages stores them
+
+  // ---- 3. Ladder Plan: status 'improve' with the real URL instead of a new page ----
+  const siteModel = { ...model, pages: INV };
+  const cand = (keyword, kd, volume) => ({ keyword, volume, kd, cpc: 2.5, intent: 'commercial', words: keyword.split(' ').length, pre_score: 50 + volume / 10, traffic_potential: volume, competitors: [], your_position: null, your_url: '' });
+  const CANDS = [cand(KW, 18, 140), cand('e invoicing penalty calculator uae', 14, 60), cand('uae e invoicing fines', 16, 90)];
+  const PV = { keyword: 'e invoicing software uae', domain: D, country: 'United Arab Emirates', location_code: 2784, goal: 'leads', ladder_id: 'lad_D11', pages_now: 1,
+    keyword_data: { keyword_difficulty: 22, search_volume: 300, cpc: 4, google_intent: 'commercial' }, verdict: 'GO', verdict_reasons: [], verdict_changes: [], secondary_keywords: [],
+    competitors: [], competitors_summary: [], site_authority: { organic_keywords: 400, top10: 30, top3: 6 }, recommended_page: 'Service Page', services: ['ERP implementation'], business: 'ERP partner in Dubai',
+    site_description: { products_or_services: ['ERP implementation'] }, site_urls: [W + '/', FTA, W + '/about/'] };   // this run's sitemap does NOT contain the /insights/ page
+  const ladderWith = async (o = {}) => {
+    mock('Parse Verdict', [{ json: { ...PV, ...(o.pv || {}) } }]);
+    mock('Ladder Pool', [{ json: { research: { candidates: CANDS, refused: [], pool_size: 3, failures: [] }, site_rankings: { available: true, top10: [{ keyword: 'erp dubai', kd: 20, position: 6 }], head: null, count: 1 }, head_geo: [] } }]);
+    mock('Ladder Relevance Chunks', [{ json: { keywords_chunk: CANDS.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', EMPTY); mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+    if (o.model === null) delete store['Site Model']; else mock('Site Model', [{ json: { site_model: o.model || siteModel } }]);
+    const rel = [{ json: { output: { items: CANDS.map(c => ({ keyword: c.keyword, relevance: 2, intent: 'commercial', page_type: 'Guide', topic: c.keyword })) } } }];
+    return (await run('Ladder Plan', rel))[0].json.ladder;
+  };
+  const LD = await ladderWith();
+  const pageFor = (L, kw) => L.rungs.flatMap(r => r.pages).find(p => p.keyword === kw) || null;
+  const pD11 = pageFor(LD, KW);
+  console.log('   ladder page ->', JSON.stringify(pD11 && { keyword: pD11.keyword, status: pD11.status, target_url: pD11.target_url, source: pD11.existing_source }));
+  check('D11: the ladder plans "uae e invoicing penalties" as improve of the live /insights/ page, not as a new URL',
+    !!pD11 && pD11.status === 'improve' && pD11.exists === true && pD11.target_url === INS && pD11.existing_source === 'sitemap', JSON.stringify(pD11 && [pD11.status, pD11.target_url]));
+  check('a keyword the site has no page for is still planned as a new page on its own slug',
+    (pageFor(LD, 'e invoicing penalty calculator uae') || {}).status === 'new' && /e-invoicing-penalty-calculator-uae/.test((pageFor(LD, 'e invoicing penalty calculator uae') || {}).target_url || ''), JSON.stringify(LD.rungs.flatMap(r => r.pages).map(p => [p.keyword, p.status])));
+  const LD0 = await ladderWith({ model: null });
+  check('with no page inventory and no model the ladder behaves exactly as before: every page new, on its planned slug',
+    LD0.rungs.flatMap(r => r.pages).every(p => p.status === 'new' && !p.exists) && LD0.top.status === 'new', JSON.stringify(LD0.rungs.flatMap(r => r.pages).map(p => [p.keyword, p.status])));
+  const LDh = await ladderWith({ pv: { keyword: KW } });
+  check('and when the MAIN keyword is the one the live page answers, the main page is that page (improve), never a second URL',
+    LDh.top.status === 'improve' && LDh.top.target_url === INS, JSON.stringify([LDh.top.status, LDh.top.target_url]));
+
+  // ---- 4. discovery: the keyword is labelled "covered by a live page" and is not what the pipeline writes ----
+  const discWith = async (o = {}) => {
+    mock('Collect Research', [{ json: { domain: D, goal: 'leads', seeds: ['e invoicing'], services: ['ERP implementation'], business: 'ERP partner in Dubai', competitors: [], site_urls: PV.site_urls,
+      research: { candidates: CANDS, pool_size: 3, competitor_domains: [], by_source: {}, failures: [] } } }]);
+    mock('Relevance Chunks', [{ json: { keywords_chunk: CANDS.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', EMPTY); delete store['Reach (Discovery)'];
+    if (o.model === null) delete store['Site Model']; else mock('Site Model', [{ json: { site_model: o.model || siteModel } }]);
+    const rel = [{ json: { output: { items: CANDS.map(c => ({ keyword: c.keyword, relevance: 2, intent: 'commercial', page_type: 'Guide', topic: c.keyword })) } } }];
+    return (await run('Rank Keywords', rel))[0].json.keyword_strategy;
+  };
+  const KS = await discWith();
+  const kHit = KS.keywords.find(k => k.keyword === KW);
+  console.log('   discovery ->', JSON.stringify({ covered: KS.covered, pipeline: KS.pipeline_keyword && KS.pipeline_keyword.keyword }));
+  check('D11: the keyword is labelled with the live page that already answers it, and listed in keyword_strategy.covered',
+    kHit && kHit.covered_by && kHit.covered_by.url === INS && KS.covered.length === 1 && KS.covered[0].keyword === KW && KS.pages_known === 6, JSON.stringify({ c: kHit && kHit.covered_by, known: KS.pages_known }));   // 6 = the 5 stored pages + the homepage of this run's sitemap
+  check('the keyword the pipeline writes next is one the site has no page for', KS.pipeline_keyword && KS.pipeline_keyword.keyword !== KW && !KS.pipeline_keyword.covered_by, JSON.stringify(KS.pipeline_keyword && KS.pipeline_keyword.keyword));
+  mock('Rank Keywords', [{ json: { domain: D, keyword_strategy: KS } }]); mock('Priority Keywords', EMPTY); delete store['AI Demand'];
+  const KSR = (await run('Build Keyword Strategy', EMPTY))[0].json;
+  check('the keyword strategy report names the page and says to refresh it instead of writing a new one',
+    /already answered by a page you have/.test(KSR.result_html) && KSR.result_html.includes(INS) && /Refresh those pages instead of writing new ones/.test(KSR.result_html) && KSR.keyword_suggestions.covered.length === 1, (KSR.result_html.match(/already answered[\s\S]{0,220}/) || [''])[0]);
+  const KS0 = await discWith({ model: null });
+  check('with no inventory every keyword is uncovered and the list is exactly as before', KS0.keywords.every(k => k.covered_by === null) && KS0.covered.length === 0 && KS0.pages_known === 3, JSON.stringify(KS0.covered));
+
+  // ---- 5. the Rank Tracker: never "publish it" for a search a live page already answers ----
+  const slugU = (k) => W + '/' + k.replace(/\s+/g, '-') + '/';
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_D11', domain: D, head_keyword: 'e invoicing software uae', rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: slugU(keyword), page_exists: false, status, months: '', start_date: daysAgo(40), country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: '', callback_url: 'https://hooks.example.com/x', request_id: 'r-D11' } });
+  const ROWS = [lrow(4, 3, 'e invoicing software uae', 'published'), lrow(1, 1, KW, 'writing'), lrow(1, 2, 'uae e invoicing fines', 'planned')];
+  const trackerWith = async (pages) => {
+    reset(); mock('Load Ladders', ROWS); mock('Load Content Log (Tracker)', EMPTY);
+    mock('Load Pages (Tracker)', pages.length ? pages.map(p => ({ json: { ...p, site_id: SITE, id: 1 } })) : EMPTY);
+    mock('Load History', ROWS.map(r => ({ json: { ladder_id: 'lad_D11', keyword: r.json.keyword, position: 12, checked_at: daysAgo(7), url: '' } })));
+    const tp = await run('Tracker Plan', store['Load History']);
+    mock('SERP Check', tp.map(c => V.serpFor(c.json.keyword, c.json.domain, 0)));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    return (await run('Tracker Report', pp))[0].json;
+  };
+  const tr = await trackerWith(invPages);
+  console.log('   tracker next ->', tr.next_step.text);
+  check('D11: the next step names the live page and asks for a refresh — the words "publish it" never appear for that keyword',
+    tr.next_step.text.includes(INS) && /already answers this search — refresh that page, do not publish a second one/.test(tr.next_step.text) && !/publish it/.test(tr.next_step.text) && !/publish it/.test(tr.html), tr.next_step.text);
+  check('the page of the next step points at the live URL, and the ready-made run is a refresh of it (existing_page_url)',
+    (tr.next_step.pages.find(p => p.keyword === KW) || {}).target_url === INS && (tr.next_step.pages.find(p => p.keyword === KW) || {}).covered_by === INS
+    && tr.api_body && tr.api_body.keyword === KW && tr.api_body.existing_page_url === INS, JSON.stringify({ p: tr.next_step.pages, b: tr.api_body }));
+  const tr0 = await trackerWith([]);
+  check('with no inventory the Rank Tracker says exactly what it said before ("already written — publish it")',
+    /\(already written — publish it\)/.test(tr0.next_step.text) && !/refresh that page/.test(tr0.next_step.text), tr0.next_step.text);
+
+  // ---- 6. the Content Cadence: a ladder page becomes a refresh, an opportunity post is left out ----
+  const cadWith = async (pages) => {
+    reset(); mock('Manual Run', EMPTY); mock('Load Sites', T.sitesRows()); mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: 2, status: 'active', updated_at: 'x', request_id: '' } }]);
+    mock('Load Ladders', [lrow(1, 1, 'uae e invoicing fines', 'planned')]);
+    mock('Load Query History', EMPTY);
+    mock('Load Trends', [{ json: { site_id: SITE, domain: D, keyword: 'e invoicing', direction: 'rising', rising: KW + ' (+120%)', change_pct: 120, checked_at: daysAgo(2) } }]);
+    mock('Load Content Log', EMPTY); mock('Load Ladder Settings', EMPTY); mock('Load Main Keyword Ranks', EMPTY);
+    mock('Load Pages (Cadence)', pages.length ? pages.map(p => ({ json: { ...p, site_id: SITE, id: 1 } })) : EMPTY);
+    const r = await run('Cadence Plan', store['Load Pages (Cadence)']);
+    return { picks: r.filter(x => !x.json.nothing_to_do).map(x => x.json), first: r[0].json };
+  };
+  const cad = await cadWith(invPages);
+  console.log('   cadence picks ->', JSON.stringify(cad.picks.map(p => [p.keyword, p.source, p.existing_page_url])));
+  check('D11: the rising search "uae e invoicing penalties" is not written as a new blog post — a live page already answers it',
+    !cad.picks.some(p => p.keyword === KW) && (cad.first.covered_by_live_pages || []).some(c => c.keyword === KW && c.url === INS), JSON.stringify(cad.first.covered_by_live_pages));
+  const cadL = await cadWith(invPages.map(p => (p.url === INS ? { ...p, url: W + '/uae-e-invoicing-fines/' } : p)));
+  check('a LADDER page whose search a live page answers is still written, but as a refresh of that page (never a second URL)',
+    cadL.picks.some(p => p.keyword === 'uae e invoicing fines' && p.existing_page_url === W + '/uae-e-invoicing-fines/'), JSON.stringify(cadL.picks.map(p => [p.keyword, p.existing_page_url])));
+  const cad0 = await cadWith([]);
+  check('with no inventory the cadence picks exactly what it picked before (the rising search is written)',
+    cad0.picks.some(p => p.keyword === KW && p.source === 'trend') && !(cad0.first.covered_by_live_pages || []).length, JSON.stringify(cad0.picks.map(p => p.keyword)));
+
+  // ---- 7. the Site Tracker's advice: refresh the existing page, never "publish" a second one ----
+  const metricsWith = async (pages) => {
+    reset();
+    mock('Load Sites', T.sitesRows()); mock('Load Ladders', [lrow(1, 1, KW, 'writing')]); mock('Load Rank History', EMPTY); mock('Load Site Metrics', EMPTY); mock('Load Query History', EMPTY);
+    mock('Load Content Log', EMPTY); mock('Load Console Alerts', EMPTY); mock('Load Check-ins', EMPTY); mock('Load Profiles (Site)', EMPTY); mock('Load Monitors (Site)', EMPTY);
+    const plan = await run('Site Plan', EMPTY);
+    mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model } }]);
+    mock('Resolve Properties', plan.map(p => ({ json: { ...p.json, gsc_connected: false, gsc_property: '', gsc_error: 'no property for this account' } })));
+    mock('Page Inventory (Site)', [{ json: { site_id: SITE, domain: D, pages, total: pages.length, changed: 0, stored: pages.length, by_source: {}, sitemap_read: true, with_queries: 0 } }]);
+    const sm = (await run('Site Metrics', store['Resolve Properties']))[0].json;
+    return { sm, brief: JSON.parse((await run('Brief Input', [{ json: sm }]))[0].json.facts) };
+  };
+  const M1 = await metricsWith(INV);
+  const act1 = M1.sm.actions.find(a => a.keyword === KW) || {};
+  console.log('   site action ->', JSON.stringify([act1.type, act1.url]));
+  check('D11: the written page is not told to go live as a second URL — the action is to refresh the page that answers the search',
+    act1.type === 'refresh_existing' && act1.url === INS && /Do not publish the new page/.test(act1.action) && !M1.sm.actions.some(a => a.type === 'publish' && a.keyword === KW), JSON.stringify(act1));
+  check('the brief is told how many pages the site has and never to publish a second page for the same search',
+    M1.brief.website.pages_known === 5 && /never tell the owner to publish a new page for a search a page in the list already answers/.test(M1.brief.website.note) && M1.sm.page_inventory.pages === 5, JSON.stringify(M1.brief.website.pages_known));
+  const M0 = await metricsWith([]);
+  check('with no inventory the Site Tracker still asks for the written page to be published, exactly as before',
+    (M0.sm.actions.find(a => a.keyword === KW) || {}).type === 'publish' && M0.brief.website.pages_known === 0, JSON.stringify(M0.sm.actions.map(a => a.type)));
 });
 
 H.report();

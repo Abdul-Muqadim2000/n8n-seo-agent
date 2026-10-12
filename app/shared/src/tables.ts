@@ -43,6 +43,10 @@ export interface TrendRow extends DtRow {
   site_id: string; domain: string; keyword: string; checked_at: string; period_end: string; direction: string; change_pct: number;
   peak_date: string; latest: number; average: number; rising: string; top: string;
 }
+/** v4.15 (D11, SITE_MODEL_SPEC.md): the website's page inventory, written weekly by the Site Tracker — what the site already has */
+export interface SitePageRow extends DtRow {
+  site_id: string; url: string; title: string; h1: string; source: string; lastmod: string; queries_json: string; updated_at: string;
+}
 export interface CadenceRow extends DtRow {
   site_id: string; domain: string; pages_per_week: number; status: string; updated_at: string; request_id: string;
 }
@@ -229,6 +233,7 @@ export const TABLES = {
   consoleAlerts: 'seo_console_alerts',
   checkins: 'seo_console_checkins',
   profiles: 'seo_profiles',
+  pages: 'seo_pages',
   caseStudies: 'seo_case_studies',
   monitors: 'seo_monitors',
   aiPrompts: 'seo_ai_prompts',

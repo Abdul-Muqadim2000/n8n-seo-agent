@@ -2,12 +2,12 @@
 """Builds the ladder extras: SEO Agent — Rank Tracker (weekly), SEO Agent — Publish to WordPress (optional, inactive),
 SEO Agent — Test Runner (local testing only). Code nodes are also written to harness/code_v4 for the offline harness."""
 import json, os, re, uuid, sys
-from ladder_common import LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params
+from ladder_common import LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, PAGES_TABLE, PAGES_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
 # shared kits, one copy each, inlined where a node asks for them (2026-10-11, FIX_PLAN D9: the anchor words a link to our own page uses)
-rd = lambda p: _rd0(p).replace('/*__ANCHOR__*/', _rd0('code/_anchor.js').rstrip('\n'))
+rd = lambda p: _rd0(p).replace('/*__ANCHOR__*/', _rd0('code/_anchor.js').rstrip('\n')).replace('/*__SITE_MODEL__*/', _rd0('code/_site_model.js').rstrip('\n'))
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'extras:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]
@@ -57,6 +57,9 @@ N.append(node('Ensure History Table', DT_TYPE, DT_VERSION, dt_create_params(HIST
 N.append(node('Load Ladders', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABLE), [680, 100], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(node('Load History', DT_TYPE, DT_VERSION, dt_get_all_params(HISTORY_TABLE), [900, 100], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(node('Load Content Log (Tracker)', DT_TYPE, DT_VERSION, dt_get_where_params(LOG_TABLE, 'status', 'eq', 'published'), [1010, 260], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))   # v4.8: publish dates for the Stuck flag
+# D11 (2026-10-12, FIX_PLAN): the site's page inventory, so the next step never says "publish it" for a search a live page already answers
+N.append(node('Ensure Pages Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(PAGES_TABLE, PAGES_COLS), [1010, 400], onError='continueRegularOutput'))
+N.append(node('Load Pages (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(PAGES_TABLE), [1120, 400], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(code('Tracker Plan', rd('code/Tracker_Plan.js'), [1120, 100]))
 N.append(iff('Any Checks?', '{{ !$json.nothing_to_do }}', [1340, 100]))
 N.append(node('SERP Check', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, [1560, 0], credentials=DFS, onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000))
@@ -74,7 +77,7 @@ Runs **weekly (Monday 08:00)** and on demand through *Manual Run* (Execute Workf
 Guardrails: at most 15 keywords per ladder and 120 checks per run; once its top page has held the top 3 for 4 consecutive checks (failed checks skipped) a ladder is **won** and checked **monthly** (main keyword + published pages, v4.8) so a drop is noticed; a drop below the top 3 brings it back to weekly checks.
 v4.8: the callback carries display-only flags per ladder for the web app (the e-mail is unchanged): `won` (main keyword in the top 3 in each of the last 4 checks, this one included) and `stuck` (pages published, the first 8+ weeks ago — dates from `{LOG_TABLE}` — and none improved its position over the last 8 weeks).
 Form: {FORM_URL} · API: {API_URL}""", [-40, -500], 900, 410))
-for a, b in [('Weekly Schedule', 'Ensure Ladder Table'), ('Manual Run', 'Ensure Ladder Table'), ('Ensure Ladder Table', 'Ensure History Table'), ('Ensure History Table', 'Load Ladders'), ('Load Ladders', 'Load History'), ('Load History', 'Load Content Log (Tracker)'), ('Load Content Log (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
+for a, b in [('Weekly Schedule', 'Ensure Ladder Table'), ('Manual Run', 'Ensure Ladder Table'), ('Ensure Ladder Table', 'Ensure History Table'), ('Ensure History Table', 'Load Ladders'), ('Load Ladders', 'Load History'), ('Load History', 'Load Content Log (Tracker)'), ('Load Content Log (Tracker)', 'Ensure Pages Table (Tracker)'), ('Ensure Pages Table (Tracker)', 'Load Pages (Tracker)'), ('Load Pages (Tracker)', 'Tracker Plan'), ('Tracker Plan', 'Any Checks?'), ('SERP Check', 'Parse Positions'), ('Parse Positions', 'Save History'), ('Save History', 'Tracker Report'), ('Tracker Report', 'Has Report?')]:
     link(C, a, b)
 link(C, 'Any Checks?', 'SERP Check', 0); link(C, 'Any Checks?', 'Nothing To Track', 1)
 link(C, 'Has Report?', 'Has Email (Tracker)?', 0); link(C, 'Has Report?', 'Has Callback (Tracker)?', 0)

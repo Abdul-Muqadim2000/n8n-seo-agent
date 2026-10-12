@@ -8,7 +8,9 @@
 //       fetched next — at most 5 per candidate, 15 per site, 100 per run — and Detect Published accepts a <title> or first <h1> holding >= 80%.
 //   Never claimed: URLs of other pages of the site (published, or existing before), URLs last changed before the page was written (lastmod;
 //   one day of slack for time zones). One URL per candidate and one candidate per URL, best score first.
-const CONFIG = { max_urls_per_site: 20000, max_body_chars: 5000000, title_candidates: 10, options_per_candidate: 5, max_fetches_per_site: 15, max_fetches_per_run: 100, slug_share: 0.6 };
+const CONFIG = { max_urls_per_site: 20000, max_body_chars: 5000000, title_candidates: 10, options_per_candidate: 5, max_fetches_per_site: 15, max_fetches_per_run: 100, slug_share: 0.6, max_inventory: 2000 };
+// 2026-10-12 (FIX_PLAN D11): the same sitemap read also yields the week's page inventory (`inventory`), which Page Inventory (Site)
+// turns into seo_pages rows. It is the whole URL list of the site, not only the pages this detection is matching.
 // rule R1 "one search, one page" — the same words as the web app (app/shared/src/ladders.ts): lower case, one-letter and stop words out, a light
 // stem, place names kept; two keywords are the same search when their word sets are equal or 75%+ the same (Jaccard)
 const OVERLAP_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my']);
@@ -88,7 +90,8 @@ const state = sites.map((s, i) => {
     if (fetches.length >= CONFIG.max_fetches_per_site || runFetches >= CONFIG.max_fetches_per_run) break;
     fset.add(o.ukey); fetches.push(o.url); runFetches++;
   }
-  return { site_idx: s.site_idx, site_id: s.site_id, domain: d, candidates: s.candidates || [], sitemap, slug_matches: [...matched.values()], title_checks, fetches, notes };
+  const inventory = list.slice(0, CONFIG.max_inventory).map(u => ({ url: u.url, lastmod: u.lastmod || '' }));
+  return { site_idx: s.site_idx, site_id: s.site_id, domain: d, candidates: s.candidates || [], sitemap, slug_matches: [...matched.values()], title_checks, fetches, notes, inventory };
 });
 const items = state.flatMap(st => st.fetches.map(url => ({ fetch: true, site_idx: st.site_idx, site_id: st.site_id, url })));
 // the per-site state rides on the first item for Detect Published (the HTTP node only reads `url`)
