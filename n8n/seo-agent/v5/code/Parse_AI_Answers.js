@@ -12,7 +12,7 @@ if (!reqs.length || reqs[0].skip) return [{ json: { skip: true } }];
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const now = new Date().toISOString();
 const hostOf = (u) => { const m = String(u || '').match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase().replace(/^www\./, '') : ''; };   // no URL constructor in the n8n sandbox
-const cleanUrl = (u) => String(u || '').replace(/[?&](utm_[a-z]+|srsltid)=[^&#]*/gi, '').replace(/\?&/, '?').replace(/\?$/, '');
+const cleanUrl = cleanCiteUrl;   // D19: one page one URL (host without www., no fragment, no tracking parameters) -- _ai_stats.js
 const DOMAIN_RE = /\b((?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(?:com|net|org|io|ai|co|ae|sa|qa|om|kw|bh|eg|uk|de|fr|es|it|nl|in|pk|sg|au|ca|nz|za|br|mx|us|biz|info|tech|app|cloud|global|digital|solutions|consulting|agency|me))\b/gi;
 // sources AI cites that are not businesses competing for the client's buyers (they are PR / listing targets instead)
 const GENERIC = /(^|\.)(wikipedia\.org|wikimedia\.org|youtube\.com|youtu\.be|linkedin\.com|facebook\.com|instagram\.com|x\.com|twitter\.com|tiktok\.com|reddit\.com|quora\.com|medium\.com|github\.com|google\.com|goo\.gl|bing\.com|apple\.com|amazon\.com|forbes\.com|reuters\.com|bloomberg\.com|gulfnews\.com|khaleejtimes\.com|thenationalnews\.com|zawya\.com|arabianbusiness\.com|gartner\.com|g2\.com|capterra\.com|trustpilot\.com|clutch\.co|glassdoor\.com|indeed\.com|statista\.com|pwc\.com|kpmg\.com|deloitte\.com|ey\.com|vertexaisearch\.cloud\.google\.com|chatgpt\.com|openai\.com|perplexity\.ai|anthropic\.com|claude\.ai|gemini\.google\.com|gstatic\.com)$|\.gov(\.[a-z]{2})?$|\.edu(\.[a-z]{2})?$|\.ac\.[a-z]{2}$|(^|\.)u\.ae$|\.int$/i;
@@ -60,15 +60,15 @@ reqs.forEach((q, i) => {
   const put = (d, at) => { if (!d || isOurs(d)) return; if (!named.has(d) || at < named.get(d)) named.set(d, at); };
   for (const c of plan.competitors) { const lab = c.split('.')[0]; const at = firstAt([wordRe(c), ...(lab.length >= 5 ? [wordRe(lab)] : [])]); if (at >= 0 || cites.some(x => x.host === c || x.host.endsWith('.' + c))) put(c, at >= 0 ? at : 1e9); }
   const ourNames = new Set(plan.brand_names.map(b => String(b).toLowerCase()));
-  for (const [name, dom] of Object.entries(plan.aliases || {})) { if (String(name).length < 4 || ourNames.has(String(name).toLowerCase())) continue; const at = firstAt([wordRe(name)]); if (at >= 0) put(dom && /\./.test(dom) ? dom : String(name), at); }
-  for (const e of entities) { if (ourNames.has(e.toLowerCase()) || brandRes.some(re => re.test(e.toLowerCase()))) continue; const dom = Object.entries(plan.aliases || {}).find(([n]) => n.toLowerCase() === e.toLowerCase()); const at = firstAt([wordRe(e)]); put(dom && /\./.test(dom[1]) ? dom[1] : e, at >= 0 ? at : 1e8); }
+  for (const [name, dom] of Object.entries(plan.aliases || {})) { if (String(name).length < 4 || ourNames.has(String(name).toLowerCase())) continue; const hasDom = !!(dom && /\./.test(dom)); if (!hasDom && !brandish(name)) continue; const at = firstAt([wordRe(name)]); if (at >= 0) put(hasDom ? dom : String(name), at); }   // D19: a name without a website must read like a business name
+  for (const e of entities) { if (ourNames.has(e.toLowerCase()) || brandRes.some(re => re.test(e.toLowerCase()))) continue; const dom = Object.entries(plan.aliases || {}).find(([n]) => n.toLowerCase() === e.toLowerCase()); const known = !!(dom && /\./.test(dom[1])); if (!known && !brandish(e)) continue; const at = firstAt([wordRe(e)]); put(known ? dom[1] : e, at >= 0 ? at : 1e8); }   // D19: the engine's brand list also carries headings ("Tax technology and e-invoicing software"): only names count
   for (const m of low.matchAll(DOMAIN_RE)) { const d = m[1].replace(/^www\./, ''); if (isOurs(d) || GENERIC.test(d)) continue; put(d, m.index); }
   for (const c of cites) { const d = c.host; if (!d || isOurs(d) || GENERIC.test(d) || named.has(d)) continue; const lab = d.split('.')[0]; const at2 = lab.length >= 4 ? low.indexOf(lab) : -1; put(d, at2 >= 0 ? at2 : 1e9); }   // businesses cited as sources
   const others = [...mergeBrands([...named.entries()], plan.aliases).entries()].map(([k, v]) => [k, Math.min(...v)]).sort((a, b) => a[1] - b[1]);   // a brand name and its website are one business
   const rank = ourAt >= 0 ? 1 + others.filter(([, at]) => at < ourAt).length : 0;   // position among the businesses the answer names; 0 = not named (a citation alone is not a recommendation)
   const sources = [...new Set(cites.map(c => c.host).filter(Boolean))];
   // the exact third-party pages cited (not yours, not search engines): where to be named so the next answer names you
-  const seenU = new Set(); const cited_urls = cites.filter(c => c.url && c.host && !isOurs(c.host) && !/(^|\.)(google|bing|vertexaisearch\.cloud\.google)\.com$/.test(c.host)).map(c => ({ u: cleanUrl(c.url).slice(0, 300), t: String(c.title || '').replace(/\s+/g, ' ').trim().slice(0, 120) })).filter(c => !seenU.has(c.u) && seenU.add(c.u)).slice(0, 8);
+  const seenU = new Set(); const cited_urls = cites.filter(c => c.url && c.host && !isOurs(c.host) && !/(^|\.)(google|bing|vertexaisearch\.cloud\.google)\.com$/.test(c.host)).map(c => ({ u: cleanUrl(c.url).slice(0, 300), t: citeTitle(c.title) })).filter(c => !seenU.has(c.u) && seenU.add(c.u)).slice(0, 8);
   const at = ourAt >= 0 ? ourAt : 0;
   const short = q.run_kind === 'pulse';
   const excerpt = text ? text.slice(Math.max(0, at - 160), at + (short ? 200 : 340)).replace(/\s+/g, ' ').trim() : '';

@@ -2793,6 +2793,38 @@ sticky("""### What the numbers are allowed to say (D20 / D21 / G9 / G24 / G28, v
 **Audit:** *GSC Audit Findings* reports **crawl coverage** — crawled X of Y known URLs (sitemap ∪ the Search Console pages) — and flags under 90%, so nobody reads a finding's share as a share of the whole site.
 **Site Tracker** (built in `build_site_tracker.py`): every Search Console row is read (25,000 per request + further pages), the withheld queries are reported as the **anonymised share**, **brand / non-brand** is split with the known brand names, scraper queries are counted apart with the audit's own rule (`_gsc_queries.js`), a **sparse** Trends series carries no percentage, and a traffic alert needs a **statistically real** change (`_site_stats.js`, two-sample Poisson z, 95%) — a big move at low volume is a "Watch", not a fall.""", DX36 - 40, DY36 + 160, 1180, 260, 3)
 log('What the numbers are allowed to say (2026-10-12, FIX_PLAN D20 / D21 / G9 / G24 / G28): discovery loads the site\'s own ladders and marks every keyword a ladder head or rung covers (one search, one page), the AI Overview line comes from the live check with its date while the undated Labs value is labelled historical, the live top domains are deduplicated before the first five and callback CPCs are rounded to 2 decimals; a sparse Google Trends series carries no percentage anywhere (Parse Trends -> Brief Input -> prompt); Search Console is read in full (25,000 rows per request plus further pages) with the anonymised share, a brand / non-brand split and the audit\'s own scraper-query rule as the shared kit v5/code/_gsc_queries.js; the audit reports crawl coverage (sitemap union Search Console pages) and flags under 90%; site-tracking alerts fire on a two-sample Poisson z-test with minimum volumes and Google update dates as context (v5/code/_site_stats.js), a large move inside sampling noise is reported as "Watch"')
+# 37. ONE RETRY RULE FOR EVERY EXTERNAL HTTP NODE (2026-10-12, system review FIX_PLAN G1, with D19 and D23 as its live cases).
+#     Retries differed by builder and by node: build_monitors.py's `get_http` had none (the Ahrefs DR lookup died on a single
+#     EAI_AGAIN and was never retried - D23), `HTTP_X` allowed 2 tries 3 s apart, and the nodes inherited from the v3 export
+#     carried `retryOnFail` with n8n's defaults or nothing at all (`Keyword Data`, `PageSpeed`, `Find Competitors`, `AI Demand`,
+#     the probes, the sitemap reads, the Gotenberg renders ...). Now every `httpRequest` node that calls something outside this
+#     machine and can be repeated without a side effect retries 3 times, 5 s apart (retry_lint.RETRY, set in the HTTP helpers of
+#     every builder and applied here to the nodes this build inherits or adds by hand). The allow-list (retry_lint.ALLOW) holds
+#     the nodes that must NOT be retried, each with its reason: the callbacks that deliver a report to the customer's app insert
+#     a report row per POST, and the WordPress draft writes content. Outreach e-mail is never sent from n8n (the app's sender
+#     owns it), so no node here needs that exception.
+#     n8n fires `retryOnFail` only when a node *fails*, so the rule covers DNS blips, resets, timeouts and 5xx answers but never
+#     an error inside an HTTP 200 - DataForSEO answers 40000 / 50000 that way. Those need a code-level retry gate: section 25
+#     has one for the two SERP paths, and build_monitors.py now has one for the paid AI paths (*AI Retry Requests* ->
+#     *Wait Before AI Retry* -> *Run AI Retries* -> *Merge AI Answers*, D19) in the AI Visibility Tracker and the AI Pulse. The
+#     backlink DataForSEO paths keep the node-level rule plus the two-miss loss rule for now (a gate there has to move the
+#     response-reading nodes onto a merged node: left as a follow-up in FIX_PLAN G1).
+#     Build-time lint: retry_lint.check runs at the end of every builder (next to url_lint) and fails the build when an external
+#     HTTP node carries no retry, or a weaker one than the rule, and is not on the allow-list.
+# =============================================================================
+import retry_lint
+_g1_changed = retry_lint.apply_rule(nodes.values())
+for _g1 in ('Read Website', 'SERP Top 10', 'Keyword Data', 'PageSpeed', 'RDAP Lookup', 'Fetch GBP', 'Read Nav Pages', 'Render PDF Report', 'Fetch Published Page', 'Run Reach Requests'):
+    assert _g1 in nodes, _g1 + ': node missing (G1 retry rule)'
+    assert nodes[_g1].get('maxTries') == 3 and nodes[_g1].get('waitBetweenTries') == 5000, _g1 + ': the retry rule did not reach it'
+assert len(_g1_changed) >= 45, 'G1: only %d HTTP nodes were normalised - the retry rule should reach every external call' % len(_g1_changed)
+for _g1 in ('POST Callback', 'POST Rejection'):   # the two report callbacks stay without a retry, on purpose
+    assert _g1 in retry_lint.ALLOW and not nodes[_g1].get('retryOnFail'), _g1 + ': a report callback must not be retried'
+# the lint has to bite: a new HTTP node without a retry is a finding, an allow-listed one is not
+assert retry_lint.findings([{'type': 'n8n-nodes-base.httpRequest', 'name': 'Lint Self Test'}], 'self test'), 'the retry lint does not bite'
+assert not retry_lint.findings([{'type': 'n8n-nodes-base.httpRequest', 'name': 'POST Callback'}], 'self test'), 'the retry lint ignores its allow-list'
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('One retry rule for every external HTTP node (2026-10-12, FIX_PLAN G1): every httpRequest node that reads from outside retries 3 times, 5 s apart (%d nodes normalised in the main workflow, the HTTP helpers of every builder changed), the report callbacks and the WordPress draft are on the documented allow-list because they are not idempotent, the paid AI paths get a code-level retry gate for task errors inside an HTTP 200 (AI Retry Requests -> Wait Before AI Retry -> Run AI Retries -> Merge AI Answers, in the AI Visibility Tracker and the AI Pulse) next to the SERP gates of section 25, and the build fails when a new external HTTP node has no retry (retry_lint.py)' % len(_g1_changed))
 
 # =============================================================================
 # 9. WRITE

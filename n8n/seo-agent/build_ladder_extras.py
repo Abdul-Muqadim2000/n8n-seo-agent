@@ -3,6 +3,7 @@
 SEO Agent — Test Runner (local testing only). Code nodes are also written to harness/code_v4 for the offline harness."""
 import json, os, re, uuid, sys
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
+import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 from ladder_common import LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, PAGES_TABLE, PAGES_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
@@ -33,6 +34,7 @@ def link(conns, a, b, out=0):
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 def write(wfobj, fname):
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
+    retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
         if _n['type'] == 'n8n-nodes-base.emailSend': _n.update({'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
     names = {n['name'] for n in wfobj['nodes']}
@@ -64,7 +66,7 @@ N.append(node('Ensure Pages Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_par
 N.append(node('Load Pages (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(PAGES_TABLE), [1120, 400], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(code('Tracker Plan', rd('code/Tracker_Plan.js'), [1120, 100]))
 N.append(iff('Any Checks?', '{{ !$json.nothing_to_do }}', [1340, 100]))
-N.append(node('SERP Check', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, [1560, 0], credentials=DFS, onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000))
+N.append(node('SERP Check', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, [1560, 0], credentials=DFS, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Parse Positions', rd('code/Parse_Positions.js'), [1780, 0]))
 N.append(node('Save History', DT_TYPE, DT_VERSION, dt_insert_params(HISTORY_TABLE, HISTORY_COLS), [2000, 0], onError='continueRegularOutput'))
 N.append(code('Tracker Report', tracker_report, [2220, 0], executeOnce=True))

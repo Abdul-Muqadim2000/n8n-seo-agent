@@ -2071,8 +2071,8 @@
         "alwaysOutputData": true,
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2174,8 +2174,8 @@
         "alwaysOutputData": true,
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -2275,7 +2275,10 @@
           -880
         ],
         "alwaysOutputData": true,
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3213,8 +3216,8 @@
         "alwaysOutputData": true,
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3300,8 +3303,8 @@
         "executeOnce": true,
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3404,8 +3407,8 @@
         },
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3495,8 +3498,8 @@
         },
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3584,8 +3587,8 @@
         "executeOnce": true,
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3672,8 +3675,8 @@
         },
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3763,8 +3766,8 @@
         },
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3867,8 +3870,8 @@
         },
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -3966,8 +3969,8 @@
         },
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -4065,8 +4068,8 @@
         },
         "onError": "continueRegularOutput",
         "retryOnFail": true,
-        "maxTries": 2,
-        "waitBetweenTries": 3000
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {
@@ -5629,7 +5632,10 @@
           3520,
           1100
         ],
-        "onError": "continueRegularOutput"
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
       },
       {
         "parameters": {

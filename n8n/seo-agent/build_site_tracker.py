@@ -5,6 +5,7 @@ property auto-detected), Google Trends (DataForSEO) and live SERP checks for the
 brief -> HTML e-mail + PDF + callback with ready-to-send API bodies. Code nodes are also written to harness/code_v4 for the offline harness."""
 import json, os, re, uuid, sys
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
+import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, HISTORY_COLS, SITES_TABLE, METRICS_TABLE, QUERY_TABLE, SITES_COLS, METRICS_COLS, QUERY_COLS,
                            LOG_TABLE, LOG_COLS, TRENDS_TABLE, TRENDS_COLS, CADENCE_TABLE, CADENCE_COLS, ALERTS_TABLE, ALERTS_COLS, CHECKIN_TABLE, CHECKIN_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_VIS_TABLE, AI_VIS_COLS, BL_SNAP_TABLE, BL_SNAP_COLS, AUDITS_TABLE, AUDITS_COLS, PROSPECT_TABLE, PROSPECT_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS,
@@ -45,6 +46,7 @@ def link(conns, a, b, out=0):
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 def write(wfobj, fname):
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
+    retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
         if _n['type'] == 'n8n-nodes-base.emailSend': _n.update({'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
     names = {n['name'] for n in wfobj['nodes']}
@@ -62,7 +64,7 @@ def write(wfobj, fname):
 GOOGLE_GET = lambda url: {'method': 'GET', 'url': url, 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi', 'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}}
 GOOGLE_POST = lambda url: {'method': 'POST', 'url': url, 'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'googleApi', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 150}}, 'timeout': 60000, 'response': {'response': {'neverError': True}}}}
 DFS_HTTP = {'method': 'POST', 'url': '={{ $json.endpoint }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.body) }}', 'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 300}}, 'timeout': 90000}}
-HTTP_X = dict(onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000)
+HTTP_X = dict(onError='continueRegularOutput', **retry_lint.RETRY)   # G1: one retry rule (3 tries, 5 s apart) for every external HTTP node
 at = lambda c, r: [c * 220, r * 220]
 urls = lambda s: s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL).replace('__SA_EMAIL__', SA_EMAIL or 'devai-seo@techand-site.iam.gserviceaccount.com')
 
@@ -122,13 +124,13 @@ XML, HTML = 'application/xml,text/xml,*/*', 'text/html,application/xhtml+xml'
 SAFE = dict(onError='continueRegularOutput')   # a failing detection step never stops the weekly report (Site Metrics reads the errors)
 N.append(code('Publish Candidates', dsrc('code/Publish_Candidates.js'), at(12, -2), **SAFE))
 N.append(iff('Any Detect Candidates?', '{{ !$json.skip && !$json.error }}', at(13, -2)))
-N.append(node('Fetch Sitemap (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.sitemap_url }}', XML, 30000, 5), at(14, -3), alwaysOutputData=True, onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000))
+N.append(node('Fetch Sitemap (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.sitemap_url }}', XML, 30000, 5), at(14, -3), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Sitemap Children (Detect)', dsrc('code/Sitemap_Children_Detect.js'), at(15, -3), **SAFE))
 N.append(iff('Any Child Sitemaps?', '{{ !$json.skip && !$json.error }}', at(16, -3)))
-N.append(node('Fetch Child Sitemaps (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', XML, 30000, 5), at(17, -4), alwaysOutputData=True, onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000))
+N.append(node('Fetch Child Sitemaps (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', XML, 30000, 5), at(17, -4), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Match Slugs (Detect)', dsrc('code/Match_Slugs_Detect.js'), at(18, -3), **SAFE))
 N.append(iff('Any Page Fetches?', '{{ !!$json.fetch }}', at(19, -3)))
-N.append(node('Fetch Pages (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', HTML, 20000, 5), at(20, -4), alwaysOutputData=True, onError='continueRegularOutput'))
+N.append(node('Fetch Pages (Detect)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', HTML, 20000, 5), at(20, -4), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Detect Published', dsrc('code/Detect_Published.js'), at(21, -3), **SAFE))
 N.append(code('Detected Log Rows', dsrc('code/Detected_Log_Rows.js'), at(22, -3), **SAFE))
 N.append(iff('Any Detected?', '{{ !$json.skip && !$json.error }}', at(23, -3)))
@@ -142,7 +144,7 @@ N.append(node('Mark Ladder Published (Detect)', DT_TYPE, DT_VERSION, dt_update_p
 # ---- G19: the weekly site-model resolver (canonical host, name / NAP / logo, services, nav pages) ----
 N.append(code('Model Targets (Site)', rd('code/Model_Targets.js'), at(12, -1), **SAFE))
 N.append(iff('Need Homepage (Site)?', '{{ !$json.skip }}', at(13, -1)))
-N.append(node('Fetch Homepage (Site)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', HTML, 20000, 3), at(14, -1), alwaysOutputData=True, onError='continueRegularOutput', retryOnFail=True, maxTries=2, waitBetweenTries=3000))
+N.append(node('Fetch Homepage (Site)', 'n8n-nodes-base.httpRequest', 4.5, PLAIN_GET('={{ $json.url }}', HTML, 20000, 3), at(14, -1), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Site Model (Site)', rd('code/Site_Model_Site.js'), at(15, -1), **SAFE))
 N.append(sticky('Note Site Model', """## One site model (G19, v4.15)
 Per site, once a week: the **canonical host** (the homepage as a browser gets it, redirects followed, plus its `rel=canonical` and the site's own live URLs), the business **name / logo / NAP** (`seo_profiles` -> the homepage Organization / LocalBusiness schema -> Google Business Profile -> the app's fields), the **services**, the **nav pages**, the business facts, the brand names and the competitors (`seo_monitors`). *Site Metrics* merges `SM.toRow(model)` into the `seo_sites` row, so every workflow reads the same facts; a model younger than 7 days is kept and no request is made. The page inventory lives in `seo_pages` (D11). Kit: `v5/code/_site_model.js`, spec: `SITE_MODEL_SPEC.md`.""", [12 * 220 - 40, -2 * 220 - 60], 1100, 200, 5))
@@ -223,7 +225,7 @@ return src.map((s, i) => { const g = got[i] || {}; const pdf = (g.binary && g.bi
 N.append(code('Prepare PDF Site', PREP, at(15, 5)))
 N.append(node('Render PDF Site', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': 'http://gotenberg:3000/forms/chromium/convert/html', 'sendBody': True, 'contentType': 'multipart-form-data',
     'bodyParameters': {'parameters': [{'parameterType': 'formBinaryData', 'name': 'files', 'inputDataFieldName': 'html'}, {'name': 'paperWidth', 'value': '8.27'}, {'name': 'paperHeight', 'value': '11.69'}, {'name': 'marginTop', 'value': '0.5'}, {'name': 'marginBottom', 'value': '0.5'}, {'name': 'marginLeft', 'value': '0.5'}, {'name': 'marginRight', 'value': '0.5'}, {'name': 'printBackground', 'value': 'true'}]},
-    'options': {'timeout': 120000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'pdf'}}}}, at(16, 5), onError='continueRegularOutput'))
+    'options': {'timeout': 120000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'pdf'}}}}, at(16, 5), onError='continueRegularOutput', **retry_lint.RETRY))
 N.append(code('Attach PDF Site', ATTACH, at(17, 5)))
 N.append(iff('Has Email (Site)?', '{{ !!$json.email }}', at(18, 5)))
 N.append(node('Send Site Report', 'n8n-nodes-base.emailSend', 2.1, {'fromEmail': SENDER, 'toEmail': '={{ $json.email }}', 'subject': '={{ $json.subject }}', 'emailFormat': 'html', 'html': '={{ $json.html }}', 'options': {'appendAttribution': False, 'fileAttachments': "={{ $binary.pdf ? 'pdf' : 'data' }}"}}, at(19, 5), credentials=SMTP, onError='continueRegularOutput'))
