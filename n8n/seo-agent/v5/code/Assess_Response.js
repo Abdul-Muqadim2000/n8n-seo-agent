@@ -26,6 +26,7 @@ const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volum
   difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives,
   cost_usd: +(Number(a.dfs_cost || 0) + (aiOk ? CONFIG.ai_cost_usd : 0)).toFixed(4),
   label: reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you], stretch: plan.stretch, position_url: a.position_url,
+  chance: plan.plan_type === 'none' ? null : plan.chance, chance_text: plan.plan_type === 'none' ? '' : reachChanceText(plan), base_rate: REACH_BASE_RATE,   // G3 (2026-10-11): the estimated chance band (uncalibrated) and the 2025 base rate
   reach_info: { method: a.reach_info.method, p75: a.reach_info.p75 ?? null, size_reach: a.reach_info.size_reach ?? null, sample: a.reach_info.sample ?? null, top10: a.reach_info.top10 ?? null, cached: !!a.reach_info.cached, cached_at: a.reach_info.cached_at || null },
   business_source: a.business_source, warnings };
 return [{ json: { status: 200, body } }];

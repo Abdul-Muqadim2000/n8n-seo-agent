@@ -1,6 +1,34 @@
+// ---- results-page observations (2026-10-11, FIX_PLAN D26): an AI Overview (and every other SERP feature) is what ONE Google query showed at
+// ONE moment — live, the ladder plan said "no AI Overview" and the page run minutes later "cites 11 domains". Inlined by the build
+// (the SERP_OBS placeholder) into Analyze Competitor Pages (the digest the verdict reads), Build Keyword Strategy (stored vs live checks) and Build
+// Ladder Report; the keyword report's row is patched by build_v4.py. Every text says WHEN it was seen ("seen in the check at 15:58 UTC on
+// 2026-10-11") or "seen in N of M checks", and that AI Overviews vary between searches — never "there is no AI Overview".
+// the time of a DataForSEO SERP answer (result datetime "2026-10-11 15:58:12 +00:00", else the task time, else now) as ISO
+const serpSeenAt = (res) => {
+  try {
+    const t0 = ((res || {}).tasks || [])[0] || {}; const r0 = (t0.result || [])[0] || {};
+    const raw = String(r0.datetime || t0.time || r0.check_url_time || '');
+    const m = raw.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})(?::(\d{2}))?(?:\.\d+)?\s*(?:Z|([+-]\d{2}):?(\d{2}))?/);
+    if (m) { const d = new Date(m[1] + 'T' + m[2] + ':' + (m[3] || '00') + (m[4] ? m[4] + ':' + m[5] : 'Z')); if (!isNaN(d.getTime())) return d.toISOString(); }
+  } catch (e) {}
+  return new Date().toISOString();
+};
+// "15:58 UTC on 2026-10-11"
+const obsClock = (iso) => { const d = iso ? new Date(iso) : null; if (!d || isNaN(d.getTime())) return 'an unknown time'; const z = d.toISOString(); return z.slice(11, 16) + ' UTC on ' + z.slice(0, 10); };
+// obs: [{ seen: true | false | null, at: iso, source }] -> { count, seen, text }; null = that check could not read the results page (not counted)
+const aioObserved = (obs) => {
+  const known = (obs || []).filter(o => o && o.seen != null);
+  if (!known.length) return { count: 0, seen: 0, text: 'unknown — the results page could not be read' };
+  const seen = known.filter(o => o.seen);
+  const one = (o) => (o.seen ? 'seen' : 'not seen') + ' in the check at ' + obsClock(o.at) + (o.source ? ' (' + o.source + ')' : '');
+  if (known.length === 1) return { count: 1, seen: seen.length, text: one(known[0]) + ' — AI Overviews vary between searches, so this is one observation, not a fixed feature of the query' };
+  return { count: known.length, seen: seen.length, text: 'seen in ' + seen.length + ' of ' + known.length + ' checks (' + known.map(one).join('; ') + ') — AI Overviews vary between searches' };
+};
 // Turns the raw competitor pages into (1) a per-competitor digest for the analyst, (2) a TERM MODEL — the words and
 // phrases most top pages share (what the topic is "made of"), (3) the questions competitors answer, (4) the statistics
 // they cite, plus the SERP features from the same search. Longer excerpts than v3 (9,000 chars kept per page).
+// 2026-10-11 (FIX_PLAN D26): the AI Overview is reported as an observation with its time ("seen in the check at 15:58 UTC on …; AI Overviews
+// vary between searches"), never as a fact about the query (serp_features.ai_overview.seen_at, serp_features.checked_at).
 let input;
 try { input = $('Collect Client Pages').first().json; } catch (e) { input = $('Collect Site URLs').first().json; }
 const meta = $('Pick Top 6').all();
@@ -96,13 +124,13 @@ for (const c of competitors) {
 // ---------- SERP features (from the same SERP call) ----------
 // 2026-10-09: the answer of the retry when the first call failed; a failed call (DataForSEO 50000 "Internal Server Error." with
 // HTTP 200, or an HTTP error) is "unavailable", never "no featured snippet / no AI Overview" (the verdict used to claim that).
-let serpItems = []; let seCount = null; let serpError = '';
+let serpItems = []; let seCount = null; let serpError = ''; let seenAt = new Date().toISOString();
 try {
   let sj; try { sj = $('SERP Top 10 (Retry)').first().json; } catch (e) { sj = $('SERP Top 10').first().json; }
   sj = sj || {}; const t0 = (Array.isArray(sj.tasks) ? sj.tasks[0] : null) || {};
   if (sj.error || Number(sj.status_code) >= 40000 || !Array.isArray(sj.tasks) || Number(t0.status_code) >= 40000)
     serpError = String((sj.error && (sj.error.message || sj.error)) || t0.status_message || sj.status_message || 'no answer').slice(0, 120);
-  const res = (t0.result || [])[0] || {}; serpItems = res.items || []; seCount = res.se_results_count ?? null;
+  const res = (t0.result || [])[0] || {}; serpItems = res.items || []; seCount = res.se_results_count ?? null; seenAt = serpSeenAt(sj);
 } catch (e) { serpItems = []; serpError = 'no answer'; }
 const norm = (d) => String(d || '').toLowerCase().replace(/^www\./, '');
 const paa = [], related = [], forum = []; let featured = null, aio = null; const featureTypes = new Set();
@@ -116,18 +144,19 @@ for (const it of serpItems) {
     const texts = []; (it.items || []).forEach(x => { if (x.text) texts.push(x.text); if (x.title) texts.push(x.title); });
     const refs = []; (it.references || []).forEach(r => refs.push(norm(r.domain || String(r.url || '').replace(/^https?:\/\//, '').split('/')[0])));
     (it.items || []).forEach(x => (x.references || []).forEach(r => refs.push(norm(r.domain || String(r.url || '').replace(/^https?:\/\//, '').split('/')[0]))));
-    aio = { present: true, text: texts.join(' ').slice(0, 800), cited_domains: [...new Set(refs.filter(Boolean))].slice(0, 12) };
+    aio = { present: true, text: texts.join(' ').slice(0, 800), cited_domains: [...new Set(refs.filter(Boolean))].slice(0, 12), seen_at: seenAt };
   }
 }
-const serp_features = { se_results_count: seCount, people_also_ask: paa.slice(0, 12), related_searches: related.slice(0, 10), forum_threads: forum.slice(0, 6),
-  featured_snippet: featured, ai_overview: aio || { present: false, text: '', cited_domains: [] }, features_present: [...featureTypes].filter(t => t !== 'organic'),
+const serp_features = { se_results_count: seCount, checked_at: seenAt, people_also_ask: paa.slice(0, 12), related_searches: related.slice(0, 10), forum_threads: forum.slice(0, 6),
+  featured_snippet: featured, ai_overview: aio || { present: false, text: '', cited_domains: [], seen_at: seenAt }, features_present: [...featureTypes].filter(t => t !== 'organic'),
   video_results: featureTypes.has('video'), shopping_results: featureTypes.has('shopping') || featureTypes.has('popular_products'), local_pack: featureTypes.has('local_pack') || featureTypes.has('map') };
-if (serpError) Object.assign(serp_features, { unavailable: true, error: serpError, ai_overview: { present: null, text: '', cited_domains: [] } });
+if (serpError) Object.assign(serp_features, { unavailable: true, error: serpError, ai_overview: { present: null, text: '', cited_domains: [], seen_at: null } });
+const aioText = aioObserved([{ seen: serp_features.ai_overview.present, at: seenAt, source: 'live Google results' }]).text;
 
 const digest = competitors.map(c => `\n=== COMPETITOR #${c.rank}: ${c.domain} ===\nURL: ${c.url}\nTitle: ${c.title}\nMeta Description: ${c.snippet}\nUseful Word Count: ${c.word_count} · Named author: ${c.has_author ? 'yes' : 'no'} · Dated: ${c.has_date ? 'yes' : 'no'} · Lists: ${c.lists} · Tables: ${c.tables}\nHeadings:\n${c.headings.join('\n')}\n\nContent Excerpt:\n${c.content}\n`).join('\n');
 const serpDigest = serpError ? 'LIVE GOOGLE RESULTS: unavailable for this run (the search data provider failed: ' + serpError + '). There is no information about the pages in the top 10, a featured snippet, People Also Ask or an AI Overview for this query: do not state or assume whether any of them appear, and say that the results page could not be checked.' : [
   featured ? `FEATURED SNIPPET (held by ${featured.domain}): "${featured.text}"` : 'FEATURED SNIPPET: none',
-  serp_features.ai_overview.present ? `AI OVERVIEW: present, cites ${serp_features.ai_overview.cited_domains.join(', ') || 'unknown sources'}. Summary: ${serp_features.ai_overview.text.slice(0, 500)}` : 'AI OVERVIEW: not shown for this query',
+  'AI OVERVIEW: ' + aioText + (serp_features.ai_overview.present ? `. In that check it cited ${serp_features.ai_overview.cited_domains.join(', ') || 'unknown sources'}. Summary: ${serp_features.ai_overview.text.slice(0, 500)}` : '') + ' Do not write "there is no AI Overview" or "an AI Overview takes the clicks" as a fact: say what was seen and when.',
   paa.length ? 'PEOPLE ALSO ASK:\n- ' + paa.slice(0, 12).join('\n- ') : 'PEOPLE ALSO ASK: none',
   related.length ? 'RELATED SEARCHES: ' + related.slice(0, 10).join(' | ') : '',
   forum.length ? 'FORUM THREADS ON PAGE 1: ' + forum.map(f => f.title + ' (' + f.source + ')').join(' | ') : '',

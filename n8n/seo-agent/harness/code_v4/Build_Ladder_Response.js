@@ -14,6 +14,7 @@ return [{ json: {
   // v4.8 (PIPELINE_FEATURE_SPEC §5.3-5.5): the plan for this site
   plan_type: L.plan_type || null, difficulty_for_you: L.difficulty_for_you || null, reach: L.reach ?? null, months: L.months || '', months_range: L.months_range || null, stretch: !!L.stretch,
   label: L.label || '', order: L.order || '', planned: L.planned !== false, refusal: L.refusal || null, reach_info: L.reach_info || null, excluded_keywords: L.excluded_keywords || [],
+  chance: L.chance || null, chance_text: L.chance_text || '', base_rate: L.base_rate || null, refused_keywords: L.refused_keywords || [],   // 2026-10-11: G3 chance band (uncalibrated) + base rate, D8 refused brands
   settings_registered: !!d.settings_registered, settings_error: d.settings_error || null,
   tracking_registered: !!d.tracking_registered, stored_rows: d.stored_rows || 0, store_error: d.store_error || null, run_ledger: d.run_ledger || null, emailed_to: d.email || null,
   pdf: pdfData ? { data: pdfData, fileName: bin.pdf.fileName || d.pdf_file_name, mimeType: 'application/pdf' } : null,

@@ -1,5 +1,43 @@
 import { describe, expect, it } from 'vitest';
-import { chooseForMe, forYouLabel, ladderOverlapsOf, recommendedFromStrategy, toAssessment, type LadderKeywords } from './keywords';
+import { baseRateText, chanceLabel, chanceText, chooseForMe, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, recommendedFromStrategy, toAssessment, toChance, type LadderKeywords } from './keywords';
+
+// FIX_PLAN G3 (2026-10-11): the 2025 base rate and the chance band per plan, the same words as n8n's _reach.js (reachChance / reachBaseRateText /
+// reachChanceText); the band is marked uncalibrated everywhere until the system has measured its own ladders.
+describe('time to rank: 2025 base rate and the chance band per plan', () => {
+  it('cites the 2025 Ahrefs figures, never the 2017 one', () => {
+    expect(REACH_BASE_RATE.year).toBe(2025);
+    expect(REACH_BASE_RATE.top10WithinYearPct).toBe(1.74);
+    expect(REACH_BASE_RATE.ofThoseWithinMonthPct).toBe(40.8);
+    expect(baseRateText()).toBe("Base rate (Ahrefs, 2025): only 1.74% of new pages reach Google's top 10 within a year, and 40.8% of those do so within a month — the rest take months.");
+    expect(baseRateText()).not.toContain('5.7');
+  });
+  it('one band per plan type, a stretch band for very hard keywords, none without a ladder', () => {
+    expect(planChance('direct')).toEqual({ band: 'good', range: [50, 70] });
+    expect(planChance('short')).toEqual({ band: 'fair', range: [30, 50] });
+    expect(planChance('full')).toEqual({ band: 'low', range: [15, 30] });
+    expect(planChance('full', true)).toEqual({ band: 'slim', range: [5, 15] });
+    expect(planChance('none')).toEqual({ band: 'none', range: [0, 0] });
+    expect(planChance(null)).toEqual(PLAN_CHANCE.none);
+  });
+  it('chanceLabel matches n8n’s reachChance().label and says uncalibrated', () => {
+    expect(chanceLabel('direct')).toBe('estimated chance good (50-70%, uncalibrated)');
+    expect(chanceLabel('full', true)).toBe('estimated chance slim (5-15%, uncalibrated)');
+    expect(chanceLabel('none')).toBe('');
+    expect(chanceLabel(null)).toBe('');
+  });
+  it('chanceText matches n8n’s reachChanceText: band, uncalibrated, base rate', () => {
+    expect(chanceText('short', '4-8')).toBe(
+      "Estimated chance of reaching the top 10 within 4-8 months: fair (30-50%) — an uncalibrated estimate until this system has measured its own ladders. Base rate (Ahrefs, 2025): only 1.74% of new pages reach Google's top 10 within a year, and 40.8% of those do so within a month — the rest take months.",
+    );
+    expect(chanceText('none', '')).toBe('');
+    expect(chanceText('direct', '')).toBe('');
+  });
+  it('toChance reads the engine’s object and falls back to the plan’s band', () => {
+    expect(toChance({ band: 'fair', range: [30, 50], label: 'x' }, 'full')).toEqual({ band: 'fair', range: [30, 50] });
+    expect(toChance(null, 'full', true)).toEqual({ band: 'slim', range: [5, 15] });
+    expect(toChance({ band: 'great' }, 'direct')).toEqual({ band: 'good', range: [50, 70] });
+  });
+});
 import { keywordAssessSchema, siteAutomationFormSchema, siteAutomationSchema } from './schemas';
 
 // The keyword_strategy callback as n8n's Build_Ideas_Response.js sends it (v4.8: labels for the website).

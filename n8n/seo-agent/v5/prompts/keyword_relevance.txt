@@ -4,6 +4,7 @@ Business: {{ $json.business }}
 Customers: {{ $json.audience }}
 Services/products: {{ $json.services }}
 Country: {{ $json.country }} · SEO goal: {{ $json.goal }}
+Other companies' brands in this market (competitors, and the vendors or sites on the results page): {{ $json.other_brands || 'none known' }}
 Chunk {{ $json.chunk_index }} of {{ $json.chunk_total }} ({{ $json.chunk_size }} keywords)
 
 KEYWORDS
@@ -11,7 +12,7 @@ KEYWORDS
 
 For EVERY keyword, in the same order, return:
 - relevance: 2 = a buyer or user of this business would search it and a page from this business can genuinely be the best answer; 1 = adjacent (useful for a guide, glossary or supporting article that leads to the services); 0 = irrelevant — other industry or product category, job seekers, students or homework, consumers when the business sells to businesses (or the reverse), tools or software the business does not sell, people, places or other meanings of the words.
-- intent: informational | commercial | transactional | navigational (navigational = a specific brand, login, app or website).
+- intent: informational | commercial | transactional | navigational (navigational = a specific brand, login, app or website). A keyword that is another company's name or product ("facts erp", "zoho books", a brand from the list above, or one you recognise) is navigational and relevance 0 — this business cannot be the best page for someone looking for that brand; a keyword about a service AROUND a vendor's product ("sap implementation dubai", "dynamics 365 partner uae") or a comparison ("odoo vs sap") is not.
 - page_type: Service Page | Product Page | Landing Page | Comparison Page | Blog Post | Guide | FAQ Page | Location Page | Category Page.
 - topic: a short label (2-4 words) for the page that would target this keyword. Reuse the exact same label for keywords that belong on the same page, so labels form clusters.
 
