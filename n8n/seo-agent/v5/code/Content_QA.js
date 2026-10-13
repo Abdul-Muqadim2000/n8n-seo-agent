@@ -1,6 +1,7 @@
 /*__SOURCES__*/
 /*__ANCHOR__*/
 /*__SITE_MODEL__*/
+/*__COVERAGE__*/
 // Deterministic quality gate for the generated page. v5 adds: banned-phrase (AI cliché) detection, readability (Flesch),
 // term coverage against the competitor term model / brief, specificity, section-length checks, the editor's critique,
 // and a 0-100 CONTENT SCORE. Schema is generated here (page-type aware), never by the model.
@@ -150,7 +151,9 @@ const outline = brief.outline || [];
 const thinSections = sections.filter(s => { const o = outline.find(x => x.h2 && plain(x.h2).toLowerCase() === s.h2.toLowerCase()); const target = o ? Number(o.target_words) || 0 : 0; return target >= 150 && s.words < target * 0.6; }).map(s => s.h2 + ' (' + s.words + ' words)');
 
 // 8. Keyword checks — natural variants count ("erp systems in the uae", "ERP system in UAE", hyphens)
-const flexRe = (phrase, flags) => new RegExp('\\b' + phrase.toLowerCase().split(/[\s-]+/).filter(Boolean).map(w => escRe(w.replace(/(?:ies|es|s)$/, '')) + '(?:ies|es|s)?').join('[\\s-]+(?:(?:the|a|an|of|for|in|to|and)\\s+)?') + '\\b', flags);
+// 2026-10-13 (FIX_PLAN G33): the same matcher now lives in the coverage kit (CVG.termRe), so a term counted on this draft is counted
+// the same way on the competitor pages the target comes from — identical expression, one place to change it.
+const flexRe = CVG.termRe;
 const kwRe = kw ? flexRe(kw, 'gi') : null;
 const kwCount = kwRe ? (withoutMeta.match(kwRe) || []).length : 0;
 const density = totalWords ? +(kwCount / totalWords * 100).toFixed(2) : 0;
@@ -236,6 +239,44 @@ const termCoverage = termList.map(t => ({ term: t.term, target: t.min, found: (b
 const coverage = termCoverage.length ? termCoverage.filter(t => t.ok).length / termCoverage.length : 1;
 const missingTerms = termCoverage.filter(t => !t.ok).slice(0, 10).map(t => t.term);
 
+// 12b. Coverage against the BEST competitor (FIX_PLAN G33, 2026-10-13)
+// The score used to give 25 points for the share of the term list the page uses, with 100% as the silent bar and no statement of what the
+// pages that already rank cover. *Parse Analysis* picked the page to beat (the highest term coverage of the pages read); here that same
+// page is measured on exactly this list, so draft and benchmark are comparable, and the target is its coverage kept inside 60-90%
+// (CVG.target: a weak results page must not lower the bar, a term-stuffed one must not force stuffing). Everything is reported with its
+// basis — it is a target read off competitor pages, not a promise about rankings.
+const covPlan = prev.coverage_target && typeof prev.coverage_target === 'object' ? prev.coverage_target : null;
+let benchText = '';
+if (covPlan && covPlan.best) {
+  let pool = [];
+  try { pool = ($('Analyze Competitor Pages').first().json || {}).competitors || []; } catch (e) { pool = prev.competitors || []; }
+  if (!pool.length) pool = prev.competitors || [];
+  const hit = pool.find(c => c && (c.url === covPlan.best.url || (covPlan.best.domain && c.domain === covPlan.best.domain)));
+  benchText = String((hit && (hit.content_full || hit.content)) || '');
+}
+const benchCov = benchText ? CVG.coverageOf(benchText, termList) : null;
+const bestPct = benchCov && benchCov.pct != null ? benchCov.pct : (covPlan && covPlan.best ? covPlan.best.coverage_pct : null);
+const coverage_target_pct = CVG.target(bestPct);
+const coverage_pct = Math.round(coverage * 100);
+const coverage_ratio = coverage_target_pct ? Math.min(1, coverage / (coverage_target_pct / 100)) : coverage;
+const missingSubtopics = covPlan && Array.isArray(covPlan.subtopics) && covPlan.subtopics.length
+  ? CVG.subtopicGap(covPlan.subtopics, { headings: h2s.concat(md.match(/^###\s+.+$/gm) || []), text: bodyPlain }).filter(x => x.state === 'missing').map(x => x.subtopic)
+  : [];
+const coverage_report = {
+  pct: coverage_pct, terms_found: termCoverage.filter(t => t.ok).length, terms_total: termCoverage.length,
+  target_pct: coverage_target_pct, best_competitor_pct: bestPct == null ? null : bestPct,
+  best_competitor: covPlan && covPlan.best ? { domain: covPlan.best.domain || '', url: covPlan.best.url || '', rank: covPlan.best.rank ?? null, word_count: covPlan.best.word_count ?? null, sections: covPlan.best.sections ?? null } : null,
+  average_competitor_pct: covPlan ? (covPlan.average_pct ?? null) : null,
+  measured_on: benchCov ? 'this page\'s own term list, on both the draft and that competitor page' : (covPlan ? 'the draft on its term list; the competitor figure comes from the brief\'s shared-term list' : 'the draft only'),
+  missing_terms: missingTerms, subtopics_total: covPlan && covPlan.subtopics ? covPlan.subtopics.length : 0,
+  subtopics_missing: missingSubtopics, pages_compared: covPlan ? (covPlan.pages_compared ?? null) : null,
+  basis: coverage_target_pct
+    ? coverage_pct + '% of the ' + termCoverage.length + ' terms the top pages share, against a target of ' + coverage_target_pct + '% taken from '
+      + ((covPlan.best.domain || 'the best page') + (covPlan.best.rank ? ' (position ' + covPlan.best.rank + ')' : '')) + ', which covers ' + bestPct + '%'
+      + (covPlan.average_pct != null ? ' (average of the ' + (covPlan.pages_compared || 0) + ' pages read: ' + covPlan.average_pct + '%)' : '')
+    : coverage_pct + '% of the ' + termCoverage.length + ' terms the top pages share; no competitor page could be read, so there is no target to compare with'
+};
+
 // 13. Specificity: numbers, examples, steps, decision rules per 100 words
 const specHits = (bodyPlain.match(/\b\d[\d,.%]*\b/g) || []).length + (lower.match(/\b(for example|for instance|such as|e\.g\.|step \d|case study|in practice|choose .* if|rule of thumb)\b/g) || []).length;
 const specificity = wordsArr.length ? +(specHits / wordsArr.length * 100).toFixed(2) : 0;
@@ -290,7 +331,10 @@ if (bannedCount) warnings.push('Filler / AI-cliché phrases to rewrite (' + bann
 if (flesch != null && flesch < 30) warnings.push(`Hard to read (Flesch ${flesch}, average sentence ${avgSentence} words) — shorten sentences and use plainer words`);
 if (longSentences > Math.max(3, sentences.length * 0.12)) warnings.push(`${longSentences} sentences longer than 28 words — split them`);
 if (passive_pct > 25) warnings.push(`Passive voice in about ${passive_pct}% of sentences — rewrite in active voice`);
-if (termCoverage.length >= 8 && coverage < 0.6) warnings.push('Topic coverage is thin — competitors cover these terms and this page does not: ' + missingTerms.join(', '));
+if (termCoverage.length >= 8 && coverage_target_pct && coverage_pct < coverage_target_pct)
+  warnings.push('Topic coverage ' + coverage_pct + '% against a target of ' + coverage_target_pct + '% (' + (coverage_report.best_competitor ? (coverage_report.best_competitor.domain || 'the best page') + ' covers ' + coverage_report.best_competitor_pct + '%' : 'the best page in the results') + ') — work these terms in where they belong: ' + missingTerms.join(', '));
+else if (termCoverage.length >= 8 && !coverage_target_pct && coverage < 0.6) warnings.push('Topic coverage is thin — competitors cover these terms and this page does not: ' + missingTerms.join(', '));
+if (missingSubtopics.length) warnings.push('Subtopics the best competitor page covers and this draft does not: ' + missingSubtopics.slice(0, 4).map(x => '"' + x + '"').join(', ') + ' — add each one where it belongs (our own heading and words, never theirs), or the page is thinner than the one it has to beat');
 if (wordsArr.length > 400 && specificity < 0.6) warnings.push(`Too generic (${specificity} specifics per 100 words) — add concrete examples, numbers with sources, steps or decision rules`);
 if (unansweredSnippets.length) warnings.push('Snippet questions from the brief that have no matching heading: ' + unansweredSnippets.join(' | '));
 if (critique && Array.isArray(critique.problems)) critique.problems.filter(p => /high|medium/i.test(p.severity || '')).slice(0, 8).forEach(p => warnings.push('Editor review: ' + [p.location ? '"' + String(p.location).slice(0, 80) + '"' : '', p.issue, p.fix ? 'Fix: ' + p.fix : ''].filter(Boolean).join(' — ')));
@@ -315,7 +359,9 @@ if (placeholder_count > PH_MAX) warnings.push(`Too many placeholders to publish 
 // FIX_PLAN G2: an FAQ block is no longer one of the checks (no FAQ rich results since 2026-05-07); question headings answered directly are.
 const structuralChecks = [!!metaTitle && metaTitle.length <= 60, !!metaDesc && metaDesc.length <= 155, !!h1, h2s.length >= 4, !!qaMatch, answeredQuestions >= 3, /\|.*\|/.test(md), !/faq|frequently asked/i.test(lastH2), internalLinks > 0 || (prev.internal_link_candidates || []).filter(c => c && !c.planned).length <= 1, kwCount >= 3 && density <= 2];
 const structure_pts = 25 * structuralChecks.filter(Boolean).length / structuralChecks.length;
-const coverage_pts = 25 * coverage;
+// FIX_PLAN G33: the 25 coverage points are measured against the best competitor's coverage (clamped 60-90%), not against a silent 100%.
+// With no competitor page read, coverage_ratio is the plain share, exactly as before.
+const coverage_pts = 25 * coverage_ratio;
 const readability_pts = flesch == null ? 10 : (flesch >= 40 && avgSentence <= 22 ? 15 : (flesch >= 30 && avgSentence <= 26 ? 10 : 4));   // B2B copy normally scores 30-55
 const specificity_pts = 10 * Math.min(1, specificity / 0.8);
 const banned_pts = Math.max(0, 10 - 2 * bannedCount);
@@ -445,6 +491,6 @@ return [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', url: p.url, anchor: anchorText(p) })),
     answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats, unverified_figures,
-    trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct }, term_coverage: termCoverage, coverage_pct: Math.round(coverage * 100), missing_terms: missingTerms, specificity_per_100_words: specificity,
+    trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct }, term_coverage: termCoverage, coverage_pct, coverage: coverage_report, coverage_target_pct, missing_terms: missingTerms, missing_subtopics: missingSubtopics, specificity_per_100_words: specificity,
     critic_score: (critique || lastCritique || {}).score ?? null, critic_verdict: (critique || lastCritique || {}).verdict || null,
     schema_types: blocks.map(b => b.type), eeat_notes, page_role: role, auto_fixes: fixes, warnings } } }];

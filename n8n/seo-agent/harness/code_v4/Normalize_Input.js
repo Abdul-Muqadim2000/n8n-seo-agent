@@ -14,6 +14,9 @@ const CONFIG = {
   ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap
   // P34-5 (2026-10-12): how long a run may hold its budget reservation before it is released as `stale` (two audits killed by the
   // task runner held $0.77 of the day's estimate for ever), and the crawl size from which only one audit of a site may run at a time.
+  // G5 (2026-10-13): how much of a draft may be word for word the same as ONE page it was written from (the 10-15% convention of
+  // the similarity checkers). Over this, *Originality Check* fails the quality check and the editor rewrites those passages.
+  originality_max_overlap_pct: 15,
   run_stale_hours: 2,
   heavy_audit_pages: 100,
   ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)
@@ -360,6 +363,7 @@ return [{
     qa_max_rounds: CONFIG.qa_max_rounds,
     ai_budget_usd: CONFIG.ai_budget_usd,
     ai_budget_period: CONFIG.ai_budget_period,
+    originality_max_overlap_pct: CONFIG.originality_max_overlap_pct,
     run_stale_hours: CONFIG.run_stale_hours,
     heavy_audit_pages: CONFIG.heavy_audit_pages,
     started_at: new Date().toISOString(),

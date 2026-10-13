@@ -15,6 +15,23 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Pages that are yours: an originality check, three real images and a coverage target',
+    summary:
+      'Every finished page is now compared with the pages it was researched from and with your own pages, arrives with its three images already made, and is measured against the best page in the results instead of a silent ideal.',
+    highlights: [
+      'More than 15% of a page matching one competitor page, word for word, fails the quality check and goes back to the editor — with the page named and the passage shown',
+      'The same check catches two of your own pages saying the same thing, so a new page never competes with one you already have',
+      'Rewriting a page you already have is not copying: the page being improved is exempt, and its overlap is reported either way',
+      'A page of yours aimed at the same search is flagged as a duplicate target before you publish a second one',
+      'The three planned images are produced with the page — a title card and two cards built from its own sections — as WebP files under the planned names, with the alt text and the social image',
+      'Swap any image for your own photo: the file name and the alt text stay',
+      'The coverage target is read off the best page in the results, not an average, with the subtopics that page covers and your draft does not',
+      'Coverage is reported as a figure with what it was measured against, in the report, the page files and the app',
+    ],
+    features: ['content', 'reports'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Shorter fix lists, honest best links, and a word even when your numbers are small',
     summary:
       'Three quality fixes measured against real sites: the tiniest audit findings are folded into one line so the list you read is the list to act on, a search-results page can no longer be called one of your best links, and a site with a handful of clicks a month still hears when they halve.',

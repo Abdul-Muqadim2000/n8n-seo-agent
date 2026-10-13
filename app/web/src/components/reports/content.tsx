@@ -259,6 +259,17 @@ function PageChecks({ html, meta, qa, qaOk, ledger }: { html: string; meta: P; q
   const schema = objs(meta.schema_blocks).length;
   const images = objs(meta.images);
   const withAlt = images.filter((i) => str(i.alt_text)).length;
+  // FIX_PLAN G30 / G5 / G33 (2026-10-13): the images the run produced, how much of the draft matches another page, and the coverage
+  // target taken from the best competitor page. Each one is shown with the number the engine measured and what it measured it against.
+  const produced = images.filter((i) => i.produced === true).length;
+  const orig = obj(meta.originality);
+  const origPct = num(orig.highest_pct);
+  const origLimit = num(orig.threshold_pct);
+  const cov = obj(meta.coverage);
+  const covPct = num(cov.pct);
+  const covTarget = num(cov.target_pct);
+  const covBest = obj(cov.best_competitor);
+  const covMissing = strs(cov.subtopics_missing);
   const items = [
     { ok: titleLen == null ? null : titleLen >= 30 && titleLen <= 60, label: 'Title tag length', detail: titleLen != null ? `${titleLen} characters (aim for 30-60)` : 'No title in meta.json' },
     { ok: descLen == null ? null : descLen >= 120 && descLen <= 160, label: 'Meta description length', detail: descLen != null ? `${descLen} characters (aim for 120-160)` : 'No description in meta.json' },
@@ -266,7 +277,34 @@ function PageChecks({ html, meta, qa, qaOk, ledger }: { html: string; meta: P; q
     { ok: schema > 0 ? true : null, label: 'Structured data', detail: schema ? `${schema} JSON-LD block${schema === 1 ? '' : 's'} (${objs(meta.schema_blocks).map((b) => str(b.type)).filter(Boolean).join(', ') || 'see Meta'})` : 'No JSON-LD blocks' },
     { ok: internal > 0 ? true : null, label: 'Internal links', detail: `${internal} in the article` },
     { ok: external > 0 ? true : null, label: 'Sources cited', detail: `${external} external source${external === 1 ? '' : 's'}` },
-    ...(images.length ? [{ ok: withAlt === images.length, label: 'Image plan with alt text', detail: `${withAlt} of ${images.length} images` }] : []),
+    ...(images.length
+      ? [
+          produced
+            ? { ok: produced === images.length, label: 'Images produced', detail: `${produced} of ${images.length} attached as WebP under the planned file names, ${withAlt} with alt text` }
+            : { ok: withAlt === images.length ? null : false, label: 'Image plan with alt text', detail: `${withAlt} of ${images.length} images planned; none could be produced in this run` },
+        ]
+      : []),
+    ...(origLimit != null
+      ? [
+          {
+            ok: orig.passed === true ? true : orig.passed === false ? false : null,
+            label: 'Originality',
+            detail:
+              orig.passed == null
+                ? 'Could not be checked: no competitor or own page text was available in this run'
+                : `${origPct ?? 0}% of the page matches ${str(orig.highest_source) || 'another page'} word for word (limit ${origLimit}%, measured in ${num(orig.window_words) ?? 8}-word runs over ${num(orig.pages_compared) ?? 0} page(s) this run read)`,
+          },
+        ]
+      : []),
+    ...(covTarget != null && covPct != null
+      ? [
+          {
+            ok: covPct >= covTarget,
+            label: 'Topic coverage vs the best competitor',
+            detail: `${covPct}% of the ${num(cov.terms_total) ?? 0} terms the top pages share, target ${covTarget}% from ${str(covBest.domain) || 'the best page'}${num(covBest.rank) != null ? ` (position ${num(covBest.rank)})` : ''}${covMissing.length ? ` · subtopics still missing: ${covMissing.slice(0, 2).join('; ')}` : ''}`,
+          },
+        ]
+      : []),
     { ok: phCount === 0, label: 'Placeholders to fill', detail: phCount ? `${phCount} left (see the preview)` : 'None' },
     ...(qa ? [{ ok: qaOk, label: 'Quality check', detail: qa.replace(/^Quality check:\s*/i, '') }] : []),
   ];

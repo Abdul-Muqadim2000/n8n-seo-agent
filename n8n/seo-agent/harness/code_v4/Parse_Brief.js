@@ -70,6 +70,28 @@ if (prev.pricing_facts !== undefined || prev.timeline_facts !== undefined) {
   }
 }
 
+// 3. the coverage target is the best competitor's, measured in Parse Analysis (FIX_PLAN G33, 2026-10-13): it is written into the brief
+//    here rather than taken from the model's answer, so Content QA judges the page against a number nobody could talk away. The target
+//    is what that one page covers (clamped 60-90%), not an average, and it is a target read off competitor pages -- not a promise.
+const covT = prev.coverage_target && typeof prev.coverage_target === 'object' ? prev.coverage_target : null;
+if (covT && covT.target_pct) {
+  brief.coverage_target = { target_pct: covT.target_pct, best_competitor: covT.best || null, average_pct: covT.average_pct ?? null,
+    terms_total: covT.terms_total ?? null, subtopics: covT.subtopics || [], basis: covT.basis || '' };
+  const have = new Set((brief.terms_to_use || []).map(t => String((t && t.term) || t || '').toLowerCase().trim()).filter(Boolean));
+  const want = Math.ceil((covT.terms_total || 0) * covT.target_pct / 100);
+  if (have.size < want) {   // the writer cannot reach the target with a shorter list than the target itself needs
+    const add = (covT.terms || []).filter(t => !have.has(String(t).toLowerCase())).slice(0, Math.min(10, want - have.size));
+    if (add.length) { brief.terms_to_use = [...(brief.terms_to_use || []), ...add.map(t => ({ term: t, min_count: 1 }))];
+      adjustments.push('Added ' + add.length + ' shared term(s) to terms_to_use: the coverage target of ' + covT.target_pct + '% needs at least ' + want + ' of the ' + covT.terms_total + ' terms'); }
+  }
+  const missing = (covT.subtopics || []).filter(s => !(brief.outline || []).some(o => {
+    const h = String((o && (o.h2 + ' ' + (o.key_points || []).join(' '))) || '').toLowerCase();
+    const T = String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w.length > 3);
+    return T.length ? T.filter(w => h.includes(w)).length / T.length >= 0.6 : true; }));
+  if (missing.length) { brief.coverage_target.subtopics_not_in_outline = missing.slice(0, 8);
+    adjustments.push(missing.length + ' subtopic(s) of the best competitor page are not in the outline: ' + missing.slice(0, 4).join('; ')); }
+}
+
 // Word count check
 const totalWords = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);
 

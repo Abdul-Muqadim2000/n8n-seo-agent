@@ -32,7 +32,7 @@ export const pricingTiers: PricingTier[] = [
       '1 website', // PLACEHOLDER — confirm
       'Keyword research and verdicts',
       'One active keyword ladder', // PLACEHOLDER — confirm
-      'Content engine with SEO QA and the blog package',
+      'Content engine with SEO QA, the originality check and the blog package',
       'Monthly technical audits with a fix pack',
       'Search Console, GA4 and Trends tracking',
       'Monday report',
@@ -107,7 +107,10 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Content engine with SEO QA', hint: 'Written, critiqued and edited, then checked', values: [true, true, true] },
       { label: 'Author byline, author box and expert reviewer', values: [true, true, true] },
       { label: 'Hub, case study, local and video pages', values: [true, true, true] },
-      { label: 'Blog package and WordPress drafts', hint: 'HTML, Markdown and meta.json', values: [true, true, true] },
+      { label: 'Originality check on every page', hint: 'Against the competitor pages researched and your own pages', values: [true, true, true] },
+      { label: 'Coverage target from the best competitor', hint: 'With the subtopics that page covers', values: [true, true, true] },
+      { label: 'Three images made with every page', hint: 'WebP, with the alt text and file names', values: [true, true, true] },
+      { label: 'Blog package and WordPress drafts', hint: 'HTML, Markdown, meta.json and the images', values: [true, true, true] },
       { label: 'Live publish check', hint: 'Verifies the page once it is live', values: [true, true, true] },
     ],
   },
