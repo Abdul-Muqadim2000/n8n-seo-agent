@@ -3418,6 +3418,145 @@ sticky("""### What the keyword research is allowed to use (G8, criteria K2 / K4 
 **Live results-page checks**: `CONFIG.live_serp_checks` (**16**, hard cap 25, ~$0.002 each → ~$0.032 a run) instead of a fixed 8, with the per-topic cap growing with it.""",
     QX44 - 40, QY44 + 160, 1180, 260, 3)
 log('What the keyword research is allowed to use (2026-10-13, FIX_PLAN G8, criteria K2 / K4 / K6 / K7): the site\'s own Search Console queries seed discovery (Load Query History (Discovery) -> Search Console Seeds (Discovery): the newest period, brand and scraper queries dropped with the weekly report\'s rules, the searches no live page answers (SM.matchPage page inventory, the Search Console page as the fallback) and the striking-distance ones at position 8-20, inserted behind the primary seed with their measured impressions, clicks and position -- no new API call); traffic potential is calibrated against those measurements where they exist, never below the clicks the site already gets, and every number is labelled calibrated / modelled / unknown in the report, the callback and the app (v5/code/_kw_inputs.js KWI.calibrate); keywords that share at least 3 of a head keyword\'s top-10 URLs form one SERP-overlap cluster named after it, from the live checks plus the competitors\' ranking URLs the run already fetched (KWI.serpClusters), so one page can target the group; and the live intent / page-type check is CONFIG.live_serp_checks (16 by default, hard cap 25, about $0.002 a check) instead of a fixed 8, with the per-topic cap growing with the limit')
+# 46. ORIGINAL WORDS, REAL IMAGES, AND A COVERAGE TARGET SOMEBODY SET (2026-10-13, system review FIX_PLAN.md G5 / G30 / G33;
+#     CRITERIA_keywords_content.md C5 / C13 / C1). Content scored 5/10 against Surfer and Clearscope, and originality 1/10.
+#     G5: nothing ever compared the finished draft with the pages it was written from. Semrush does it with Copyleaks and the convention
+#       is 10-15% overlap, so *Originality Check* (between *Content QA* and *Needs Revision?*) measures the share of the draft's 8-word
+#       windows that one single page also carries (v5/code/_shingle.js) against every competitor page this run read (*Analyze Competitor
+#       Pages*) and the site's own pages it read (*Collect Client Pages* -- the inventory page that matches the keyword is read as the
+#       "existing" page, P2-5). Over CONFIG.originality_max_overlap_pct (15) the quality check fails, the editor is sent in with the
+#       passage quoted and the source named, and the report and meta.json say against which page and by how much. The page this run is
+#       improving is the exception: a rewrite is meant to keep that page's text, so its overlap is reported, never counted. The rest of
+#       the inventory (D11) has no text in hand, so a page aimed at the same search is reported as a duplicate target, by title and slug.
+#     G30: the package only described three images ("no images produced"), leaving every page with three gaps before publishing. *Image
+#       Cards* builds one HTML card per planned image from the page's own content (hero: the H1 over the business name; in-body: the
+#       section's heading with the three to five points that section makes), *Render Images* turns each into WebP through the Gotenberg
+#       service already in compose.override.yml (`/forms/chromium/screenshot/html`, free, local, ~0.3 s a card, no JavaScript, no
+#       licence) and *Attach Images* attaches them under the planned file names with the planned alt text, dimensions and Open Graph
+#       image, lists them in meta.json and rewrites the "create the three images" checklist step. A card the renderer cannot produce
+#       keeps its place in the plan with the reason: the run never fails over a picture.
+#     G33: the coverage bar was a silent 100% of the term list. *Parse Analysis* now picks the page to beat -- the competitor page that
+#       uses most of the shared terms -- and publishes the target (its coverage, kept inside 60-90% by CVG.target), its own headings as
+#       the subtopics to cover and its depth; the brief states it, and *Content QA* measures that same page on its own term list, scores
+#       the 25 coverage points against the target, warns about the subtopics it covers and we do not, and reports coverage as a figure
+#       with its basis. A target read off competitor pages, never a promise about rankings.
+# =============================================================================
+COVERAGE_SRC = _rd0('code/_coverage.js').rstrip('\n'); SHINGLE_SRC = _rd0('code/_shingle.js').rstrip('\n')
+assert 'const CVG = (() => {' in COVERAGE_SRC and 'const SHG = (() => {' in SHINGLE_SRC, 'the coverage / originality kits are missing'
+rd46 = lambda p: rd(p).replace('/*__COVERAGE__*/', COVERAGE_SRC).replace('/*__SHINGLE__*/', SHINGLE_SRC)
+
+# ---------- G33: the coverage target travels from Parse Analysis to the brief and the quality check ----------
+setcode('Parse Analysis', rd46('code/Parse_Analysis.js'))
+setcode('Content QA', rd46('code/Content_QA.js'))
+set_prompt('Strategy Brief', 'strategy_brief.txt')
+set_prompt('Copywriter', 'copywriter.txt')
+assert 'const CVG = (() => {' in code('Parse Analysis') and 'const CVG = (() => {' in code('Content QA'), 'the coverage kit is not inlined'
+assert 'coverage_digest' in nodes['Strategy Brief']['parameters']['text'], 'the brief prompt carries no coverage target (G33)'
+# the brief keeps the target even when the model ignores it: the number and the subtopics are set here, not asked for
+patch('Parse Brief', """// Word count check
+const totalWords = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);""",
+      """// 3. the coverage target is the best competitor's, measured in Parse Analysis (FIX_PLAN G33, 2026-10-13): it is written into the brief
+//    here rather than taken from the model's answer, so Content QA judges the page against a number nobody could talk away. The target
+//    is what that one page covers (clamped 60-90%), not an average, and it is a target read off competitor pages -- not a promise.
+const covT = prev.coverage_target && typeof prev.coverage_target === 'object' ? prev.coverage_target : null;
+if (covT && covT.target_pct) {
+  brief.coverage_target = { target_pct: covT.target_pct, best_competitor: covT.best || null, average_pct: covT.average_pct ?? null,
+    terms_total: covT.terms_total ?? null, subtopics: covT.subtopics || [], basis: covT.basis || '' };
+  const have = new Set((brief.terms_to_use || []).map(t => String((t && t.term) || t || '').toLowerCase().trim()).filter(Boolean));
+  const want = Math.ceil((covT.terms_total || 0) * covT.target_pct / 100);
+  if (have.size < want) {   // the writer cannot reach the target with a shorter list than the target itself needs
+    const add = (covT.terms || []).filter(t => !have.has(String(t).toLowerCase())).slice(0, Math.min(10, want - have.size));
+    if (add.length) { brief.terms_to_use = [...(brief.terms_to_use || []), ...add.map(t => ({ term: t, min_count: 1 }))];
+      adjustments.push('Added ' + add.length + ' shared term(s) to terms_to_use: the coverage target of ' + covT.target_pct + '% needs at least ' + want + ' of the ' + covT.terms_total + ' terms'); }
+  }
+  const missing = (covT.subtopics || []).filter(s => !(brief.outline || []).some(o => {
+    const h = String((o && (o.h2 + ' ' + (o.key_points || []).join(' '))) || '').toLowerCase();
+    const T = String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\\s+/).filter(w => w.length > 3);
+    return T.length ? T.filter(w => h.includes(w)).length / T.length >= 0.6 : true; }));
+  if (missing.length) { brief.coverage_target.subtopics_not_in_outline = missing.slice(0, 8);
+    adjustments.push(missing.length + ' subtopic(s) of the best competitor page are not in the outline: ' + missing.slice(0, 4).join('; ')); }
+}
+
+// Word count check
+const totalWords = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);""")
+assert 'coverage_target' in code('Parse Brief'), 'Parse Brief does not carry the coverage target (G33)'
+
+# ---------- G5: the originality check, between Content QA and Needs Revision? ----------
+patch('Normalize Input', "  run_stale_hours: 2,",
+      "  // G5 (2026-10-13): how much of a draft may be word for word the same as ONE page it was written from (the 10-15% convention of\n"
+      "  // the similarity checkers). Over this, *Originality Check* fails the quality check and the editor rewrites those passages.\n"
+      "  originality_max_overlap_pct: 15,\n"
+      "  run_stale_hours: 2,")
+patch('Normalize Input', "    run_stale_hours: CONFIG.run_stale_hours,", "    originality_max_overlap_pct: CONFIG.originality_max_overlap_pct,\n    run_stale_hours: CONFIG.run_stale_hours,")
+_cqa = pos('Content QA')
+add_node('Originality Check', 'n8n-nodes-base.code', 2, {'jsCode': rd46('code/Originality_Check.js')}, [_cqa[0] + 110, _cqa[1] + 180])
+disconnect('Content QA', 'Needs Revision?')
+connect('Content QA', 'Originality Check'); connect('Originality Check', 'Needs Revision?')
+assert 'const SHG = (() => {' in code('Originality Check') and 'const SM = (() =>' in code('Originality Check'), 'the originality node is missing a kit'
+# the report and the package say what was measured
+patch('Build Word File', """    ['Topic coverage', qa.coverage_pct != null ? qa.coverage_pct + '% of the terms top-ranking pages share' : 'N/A'],""",
+      """    ['Topic coverage', qa.coverage && qa.coverage.basis ? esc(qa.coverage.basis) + (qa.coverage.subtopics_missing && qa.coverage.subtopics_missing.length ? ' · subtopics still missing: ' + esc(qa.coverage.subtopics_missing.slice(0, 3).join('; ')) : '') : (qa.coverage_pct != null ? qa.coverage_pct + '% of the terms top-ranking pages share' : 'N/A')],
+    ['Originality', qa.originality ? (qa.originality.passed === null ? 'Could not be checked: no competitor or own page text was available in this run'
+      : (qa.originality.highest_pct != null ? qa.originality.highest_pct + '% of the page matches ' + esc(qa.originality.highest_source || 'another page') + ' word for word (limit ' + qa.originality.threshold_pct + '%' + (qa.originality.passed ? '' : ' — EXCEEDED') + ')' : 'No overlap found')
+        + ' · ' + esc(qa.originality.basis)) : 'N/A'],""")
+patch('Build Word File', "    page_markdown: md || undefined, content_brief_slug: brief.slug || '',",
+      "    content_originality: qa.originality || null, content_coverage: qa.coverage || null,\n    page_markdown: md || undefined, content_brief_slug: brief.slug || '',")
+setcode('Blog Package', rd46('code/Blog_Package.js'))
+assert "originality: d.content_originality" in code('Blog Package'), 'the package does not carry the originality figure (G5)'
+
+# ---------- G30: the three planned images are produced ----------
+# Gotenberg's screenshot route answers with the image file itself; the service is already in n8n/compose.override.yml for the PDF
+# reports and is reachable only from inside this machine. One request per card, each a few hundred milliseconds, no cost at all.
+_bpp = pos('Blog Package')
+_bp_targets = [t['node'] for t in conns['Blog Package']['main'][0]]
+if_node('Make Images?', "{{ !!$json.article_meta && ($json.article_meta.images || []).length > 0 }}", [_bpp[0] + 170, _bpp[1] + 170])
+add_node('Image Cards', 'n8n-nodes-base.code', 2, {'jsCode': rd46('code/Image_Cards.js')}, [_bpp[0] + 340, _bpp[1] + 170])
+add_node('Render Images', 'n8n-nodes-base.httpRequest', 4.5,
+         {'method': 'POST', 'url': 'http://gotenberg:3000/forms/chromium/screenshot/html', 'sendBody': True, 'contentType': 'multipart-form-data',
+          'bodyParameters': {'parameters': [{'parameterType': 'formBinaryData', 'name': 'files', 'inputDataFieldName': 'html'},
+                                            {'name': 'format', 'value': 'webp'},
+                                            {'name': 'width', 'value': '={{ $json.width }}'},
+                                            {'name': 'height', 'value': '={{ $json.height }}'},
+                                            {'name': 'clip', 'value': 'true'},
+                                            {'name': 'optimizeForSpeed', 'value': 'true'},
+                                            {'name': 'skipNetworkIdleEvent', 'value': 'true'}]},
+          'options': {'timeout': 60000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'image'}}}},
+         [_bpp[0] + 510, _bpp[1] + 170], {'onError': 'continueRegularOutput', **retry_lint.RETRY})
+add_node('Attach Images', 'n8n-nodes-base.code', 2, {'jsCode': rd46('code/Attach_Images.js')}, [_bpp[0] + 680, _bpp[1] + 170])
+for _t in _bp_targets: disconnect('Blog Package', _t)
+connect('Blog Package', 'Make Images?')
+connect('Make Images?', 'Image Cards', 0)
+connect('Image Cards', 'Render Images'); connect('Render Images', 'Attach Images')
+for _t in _bp_targets:
+    connect('Attach Images', _t)          # with images
+    connect('Make Images?', _t, 1)        # a report-only run passes through untouched
+# the images travel with everything else the customer gets: the e-mail, the API callback and the app's report files
+_sr46 = nodes['Send Report']['parameters']['options']
+assert _sr46['fileAttachments'] == "={{ ['pdf', 'data', 'article_html', 'article_md', 'meta_json'].filter(k => $binary[k]).join(',') }}", 'Send Report: unexpected attachment list'
+_sr46['fileAttachments'] = "={{ ['pdf', 'data', 'article_html', 'article_md', 'meta_json'].concat(Object.keys($binary).filter(k => /^image_\\d+$/.test(k)).sort()).filter(k => $binary[k]).join(',') }}"
+patch('Build Webhook Response', """const docData = bin ? await b64('data', bin) : null;""",
+      """const docData = bin ? await b64('data', bin) : null;
+// G30 (2026-10-13): the produced images (WebP cards built from this page) travel in the callback like the PDF; the app stores every
+// embedded file of a callback and offers it for download next to the article.
+const imgPlan = ((d.article_meta || {}).images) || [];
+const images = [];
+for (const k of Object.keys(item.binary || {}).filter(x => /^image_\\d+$/.test(x)).sort()) {
+  const b = item.binary[k]; const data = await b64(k, b);
+  const plan = imgPlan.find(p => p && p.binary_key === k) || {};
+  if (data) images.push({ data, fileName: b.fileName || (k + '.webp'), mimeType: b.mimeType || 'image/webp',
+    alt_text: plan.alt_text || '', caption: plan.caption || '', width: plan.width ?? null, height: plan.height ?? null, purpose: plan.purpose || '' });
+}""")
+patch('Build Webhook Response', "    meta: d.article_meta || null,", "    meta: d.article_meta || null,\n    images: images.length ? images : null,")
+assert 'images.length ? images : null' in code('Build Webhook Response'), 'the callback carries no images (G30)'
+
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+sticky("""### Original words, real images, a coverage target (G5 / G30 / G33, 2026-10-13)
+**Originality (G5).** *Originality Check* sits between *Content QA* and *Needs Revision?* and measures the share of the draft's **8-word windows** that one single page also carries, against every competitor page this run read and the site's own pages it read. Over **`originality_max_overlap_pct` (15)** the quality check fails: the editor gets the passage quoted and the page named. The page being improved is exempt (a rewrite keeps its text); other inventory pages are reported as **duplicate targets** by title and slug.
+**Images (G30).** *Image Cards* → *Render Images* (Gotenberg `/forms/chromium/screenshot/html`, local and free) → *Attach Images*: the hero and the two in-body figures are produced as **WebP** from the page's own content, under the planned file names, alt text and sizes, listed in `meta.json`, attached to the e-mail and sent in the callback. A card that cannot be rendered stays a plan with its reason.
+**Coverage (G33).** The target is the **best** competitor's term coverage (clamped 60-90%), with its subtopics and depth: stated in the brief, scored in the quality check, reported with its basis.""",
+    _bpp[0] + 150, _bpp[1] + 330, 940, 250, 4)
+log('Original words, produced images and a coverage target from the best competitor (2026-10-13, FIX_PLAN G5 / G30 / G33): the new Originality Check node measures 8-word shingle overlap between the finished draft and every competitor page and own page the run read (v5/code/_shingle.js), fails the quality check over CONFIG.originality_max_overlap_pct (15) against any single page with the passage quoted and the source named, exempts the page the run is improving and reports the rest of the inventory as duplicate targets by title; Image Cards / Render Images / Attach Images produce the hero and the two in-body images as WebP cards from the page\'s own content through the local Gotenberg screenshot route (free, no API, no licence), attach them under the planned file names with the planned alt text and dimensions, list them in meta.json and in the callback and rewrite the publish checklist, while a failed render leaves the plan in place; and the coverage target is now the best competitor page\'s term coverage (v5/code/_coverage.js, clamped 60-90%) with its subtopics and depth, written into the brief by Parse Brief, scored by Content QA\'s 25 coverage points and reported with its basis in the report, meta.json and the app')
 
 # =============================================================================
 # 9. WRITE

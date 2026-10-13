@@ -174,6 +174,8 @@ const meta = { title, h1: h1 || title, slug, suggested_url: dom ? siteUrlOf(dom,
   images, featured_image: heroImg || images[0] || null, open_graph: { 'og:title': title, 'og:description': description, 'og:image': (heroImg || images[0] || {}).path || '', 'og:image:width': 1200, 'og:image:height': 630, 'twitter:card': 'summary_large_image' },
   ladder: d.ladder_id ? { ladder_id: d.ladder_id, rung: d.ladder_rung == null ? null : d.ladder_rung, head_keyword: d.ladder_head || '' } : null, request_id: d.request_id || null, generated_at: new Date().toISOString(),
   page_role: role, article_like: articleLike,
+  // FIX_PLAN G5 / G33 (2026-10-13): what the quality check measured, with its basis, so the customer sees it next to the page it judges
+  originality: d.content_originality || null, coverage: d.content_coverage || null,
   author: articleLike ? (AU ? { name: AU.name, job_title: AU.job_title || '', bio: AU.bio || '', credentials: AU.credentials || '', url: AU.url || '', image_url: AU.image_url || '', same_as: AU.same_as || [], knows_about: AU.knows_about || [], placeholder: false } : { name: '[Author Name]', placeholder: true }) : null,
   reviewer: RV || null, updated: today, table_of_contents: tocHtml ? tocH2.map(h => ({ text: h.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1'), anchor: '#' + anchorOf(h) })) : [],
   hub: role === 'hub' ? { cluster_pages: HP, planned_pages: HPplanned, planned: HPplanned.length } : null,

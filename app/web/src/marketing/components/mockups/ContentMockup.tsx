@@ -6,7 +6,9 @@ const CHECKS: { t: string; ok: boolean }[] = [
   { t: 'Title and meta description', ok: true },
   { t: 'Author box and Person schema', ok: true },
   { t: 'Expert reviewer', ok: true },
-  { t: '3 images with alt text', ok: true },
+  { t: '3 images made, with alt text', ok: true },
+  { t: 'Original: 2% matches another page', ok: true },
+  { t: 'Covers 82% of the terms (target 78%)', ok: true },
   { t: 'Links up the ladder', ok: true },
   { t: '1 figure to confirm', ok: false },
 ];
@@ -15,7 +17,7 @@ const CHECKS: { t: string; ok: boolean }[] = [
 export function ContentMockup({ className }: { className?: string }) {
   return (
     <Drawn
-      label="A written article with sample data next to its quality checklist: title and meta description, author box, expert reviewer, three images with alt text, internal links, and one figure to confirm; delivered as HTML, Markdown and meta.json."
+      label="A written article with sample data next to its quality checklist: title and meta description, author box, expert reviewer, three images made with alt text, an originality figure, topic coverage against the best competitor, internal links, and one figure to confirm; delivered as HTML, Markdown and meta.json."
       className={cn('grid grid-cols-1 gap-3 rounded-xl border border-line bg-surface p-4 text-ink shadow-overlay sm:grid-cols-[minmax(0,1fr)_220px] sm:p-5', className)}
     >
       <div className="mk-pop rounded-lg border border-line bg-page p-4" style={{ ['--mk-i' as string]: 0 }}>
@@ -29,7 +31,7 @@ export function ContentMockup({ className }: { className?: string }) {
         </span>
         <span className="mt-4 flex aspect-[16/7] items-center justify-center gap-1.5 rounded-md border border-dashed border-line-strong bg-surface text-[10.5px] text-ink-3">
           <Image className="size-3.5" />
-          Hero image · alt text planned
+          Hero image · made with the page
         </span>
         <span className="mt-4 block space-y-2">
           <MockLine w="96%" />

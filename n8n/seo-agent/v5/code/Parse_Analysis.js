@@ -1,4 +1,5 @@
 /*__PAGE_TYPE__*/
+/*__COVERAGE__*/
 // Accepts an object (from the Structured Output Parser) or a string with/without code fences or surrounding text
 const parseAgentJson = (raw) => {
   if (raw && typeof raw === 'object') return raw;
@@ -20,10 +21,39 @@ const lo = isGuide ? 1200 : 900, hi = isGuide ? 3000 : 2400;
 const rec = Number(analysis.recommended_word_count) || 1400;
 analysis.recommended_word_count = Math.min(hi, Math.max(lo, Math.round(rec / 100) * 100));
 
+// ---- the coverage target: the BEST competitor, not the average (FIX_PLAN G33, 2026-10-13) ----
+// Until now the brief carried the shared terms and the content score gave 25 points for using them, with no statement of how much of that
+// topic the pages that already rank actually cover. Surfer measured the best articles at 0.74 coverage against a results-page average of
+// 0.44 (n = 100), so the page to beat is the best one: its term coverage becomes the target, its own headings become the subtopics to
+// cover, and its length and section count say how deep it goes. It is read off competitor pages -- a target, never a promise about rank.
+const covTerms = (prev.term_model || []).slice(0, 25);
+const bestCov = covTerms.length ? CVG.best(prev.competitors || [], covTerms) : null;
+const coverage_target = bestCov && bestCov.coverage_pct != null ? {
+  terms_total: bestCov.terms_total,
+  terms: covTerms.map(t => t.term),
+  best: { domain: bestCov.domain, url: bestCov.url, rank: bestCov.rank, coverage_pct: bestCov.coverage_pct, terms_used: bestCov.terms_used,
+    word_count: bestCov.word_count, sections: bestCov.sections },
+  average_pct: bestCov.average_pct,
+  pages_compared: bestCov.pages_compared,
+  target_pct: CVG.target(bestCov.coverage_pct),
+  subtopics: CVG.subtopics((prev.competitors || []).find(c => c && c.url === bestCov.url) || null, 12),
+  basis: 'the ' + bestCov.pages_compared + ' competitor page(s) read for this keyword: ' + (bestCov.domain || 'the best page')
+    + (bestCov.rank ? ' (position ' + bestCov.rank + ')' : '') + ' uses ' + bestCov.terms_used + ' of the ' + bestCov.terms_total
+    + ' terms they share (' + bestCov.coverage_pct + '%), against an average of ' + bestCov.average_pct + '%'
+} : null;
+const coverage_digest = coverage_target ? 'TARGET: use at least ' + coverage_target.target_pct + '% of the shared terms above (the best page in the results, '
+  + (coverage_target.best.domain || 'the leader') + (coverage_target.best.rank ? ' at position ' + coverage_target.best.rank : '') + ', uses '
+  + coverage_target.best.coverage_pct + '%; the average of the pages read is ' + coverage_target.average_pct + '%). Its depth: '
+  + (coverage_target.best.word_count ? coverage_target.best.word_count + ' useful words' : 'length unknown') + ' in ' + (coverage_target.best.sections || 0) + ' sections.'
+  + (coverage_target.subtopics.length ? '\nSUBTOPICS THAT PAGE COVERS (cover each one, in our own structure and words — do not copy its headings):\n- ' + coverage_target.subtopics.join('\n- ') : '')
+  : '';
+
 return [{
   json: {
     ...prev,
     competitor_digest: undefined,
-    competitor_analysis: analysis
+    competitor_analysis: analysis,
+    coverage_target,
+    coverage_digest
   }
 }];

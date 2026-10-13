@@ -266,13 +266,15 @@ export const features: Feature[] = [
     shortName: 'Content',
     tagline: 'Long-form pages written, critiqued and edited by AI, with SEO QA before you see them.',
     summary:
-      'Every page goes through a writer, a critic and an editor, then an SEO check. Pages carry real expertise signals — an author byline, an expert reviewer, your experience notes and schema — and arrive as a publish-ready package with a three-image plan.',
+      'Every page goes through a writer, a critic and an editor, then an SEO check that measures it against the best page in the results and compares it, word for word, with the pages it was researched from and with your own. Pages carry real expertise signals — an author byline, an expert reviewer, your experience notes and schema — and arrive as a publish-ready package with their three images already made.',
     icon: PenLine,
     benefits: [
       'Writer, critic and editor passes, then an SEO quality check',
       'E-E-A-T built in: author byline and box, expert reviewer, experience notes and schema',
       'Page types for hub and pillar pages, case studies, local (city) pages and video pages',
-      'A three-image plan with alt text, file names and the social image',
+      'Three images produced with every page — a title card and two section cards made from the page itself, with the alt text, file names and the social image',
+      'An originality check against every competitor page the research read and against your own pages: more than 15% of a page matching one of them comes back for a rewrite, with the passage shown',
+      'A coverage target taken from the best page in the results, not an average, with the subtopics it covers and yours still missing',
       'A blog package as HTML, Markdown and meta.json, or a WordPress draft',
       'Links only to pages that are already live, with link text that reads like a title; pages still to come are listed as links to add later',
       'Every figure looked up in the source the page cites, and a source without independent authority cited at most once',
@@ -282,13 +284,13 @@ export const features: Feature[] = [
     steps: [
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile and your case studies.' },
       { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
-      { title: 'Check', body: 'SEO checks on every page. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm.' },
+      { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
       { title: 'Publish and verify', body: 'Take the package or a WordPress draft; Ascentra checks the page once it is live.' },
     ],
     facts: [
       { value: 3, label: 'passes: writer, critic and editor' },
       { value: 4, label: 'special page types' },
-      { value: 3, label: 'images planned per article' },
+      { value: 3, label: 'images produced per article' },
     ],
     faqs: [
       {
@@ -297,14 +299,22 @@ export const features: Feature[] = [
       },
       { q: 'Who is shown as the author?', a: 'The author and expert reviewer from your business profile, with a byline, an author box and Person schema.' },
       { q: 'Can Ascentra publish to WordPress?', a: 'It creates WordPress drafts for your team to review. Publishing stays with you.' },
-      { q: 'What is the blog package?', a: 'The article as HTML and Markdown, plus a meta.json file with the title, description, slug, schema and image plan — ready for any CMS.' },
+      { q: 'What is the blog package?', a: 'The article as HTML and Markdown, the three images as WebP files, plus a meta.json file with the title, description, slug, schema and the image list — ready for any CMS.' },
+      {
+        q: 'How do you know the page is not copied?',
+        a: 'Every finished draft is compared with the competitor pages the research read and with your own pages, in runs of eight words. More than 15% matching a single page fails the quality check and the page is rewritten; the report tells you which page, by how much and which passage.',
+      },
+      {
+        q: 'Where do the images come from?',
+        a: 'They are generated from the page itself — a title card with your business name and two cards that lay out the points of a section — at the planned sizes and file names, with the alt text. Swap any of them for a photo of your own; the file name and alt text stay.',
+      },
     ],
     related: ['keyword-ladders', 'autopilot', 'technical-audits'],
     image: 'colleaguesReview',
     visual: 'content',
     story: {
       title: 'Pages that show real expertise.',
-      body: 'Readers and search engines look for experience, expertise and trust. Ascentra writes from your business profile, names a real author and reviewer, cites your own case studies and marks every figure it cannot verify for you to confirm.',
+      body: 'Readers and search engines look for experience, expertise and trust. Ascentra writes from your business profile, names a real author and reviewer, cites your own case studies, marks every figure it cannot verify for you to confirm — and checks that the finished page is not a rewording of the pages it researched or of a page you already have.',
     },
   },
   {

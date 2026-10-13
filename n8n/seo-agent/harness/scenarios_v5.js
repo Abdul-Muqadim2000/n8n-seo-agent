@@ -6320,6 +6320,274 @@ await guard('g8-discovery-inputs', async () => {
     && cb.priority.some(k => k.serp_cluster && k.serp_cluster.head_keyword === 'erp software uae'), JSON.stringify({ sc: cb.search_console && Object.keys(cb.search_console), clusters: cb.serp_clusters.length, live: cb.live_checks }));
 });
 
+// ===================================================================================
+// S54 (2026-10-13, docs/system-review-2026-10-11/FIX_PLAN.md G5 / G30 / G33; CRITERIA_keywords_content.md C5 / C13 / C1)
+//   G5  nothing ever compared the finished draft with the pages it was written from (originality scored 1/10).
+//   G30 the package described three images and produced none, so every page left three gaps before publishing.
+//   G33 the coverage bar was a silent 100% of the term list: nobody said what the page that already ranks covers.
+// ===================================================================================
+await guard('originality, produced images, coverage target', async () => {
+  reset(); const SN = 'S54 G5 G30 G33 — a draft checked for copied passages against the pages it was written from, three images actually produced, and a coverage target taken from the best competitor';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 600))); };
+  const D = 'techand.ai', WWW = 'https://www.' + D;
+  const words = (t) => String(t).split(/\s+/).filter(Boolean).length;
+
+  // ---------- the pages this run read: two competitor pages and two pages of the site itself ----------
+  // The paragraph below is what a copying draft lifts word for word; nothing else in the fixtures repeats it.
+  const COMP_PARA = 'Every accredited service provider validates the structure of an invoice before it moves, signs it with its own certificate and forwards it over the Peppol network to the provider the buyer has chosen, while a reporting copy of the same document reaches the Federal Tax Authority inside twenty four hours, which is exactly why the five corner model is described as continuous transaction control rather than as periodic reporting, and why neither side of the transaction may skip the checks that go with it.';
+  const BEST_TEXT = [
+    'Who must comply in the first wave of the UAE mandate, and what the free zone rules mean for them.',
+    COMP_PARA,
+    'An implementation partner usually starts from the invoice format, because the XML the federal tax authority expects is stricter than the PDF layouts most finance teams keep today.',
+    'Corporate tax reporting and customs data sit in the same master records, so the clean-up work pays for itself twice.',
+    'A free zone entity that invoices a mainland customer is inside the mandate from the same date as everyone else.',
+  ].join('\n\n');
+  const SECOND_TEXT = [
+    'A short vendor page about invoicing software, written for buyers who have already chosen their accredited service provider.',
+    'It mentions the peppol network once, lists three products and spends the rest of the page on a contact form and a newsletter box.',
+    'The corporate tax section is two sentences long and the way invoices are structured is never explained at all.',
+  ].join('\n\n');
+  const BEST = { rank: 2, url: 'https://cleartax.ae/uae-e-invoicing-guide/', domain: 'cleartax.ae', title: 'UAE e-invoicing guide', word_count: 1850,
+    headings: ['H2: Who must comply in the first wave', 'H2: How the five corner model works', 'H2: What an accredited service provider does', 'H2: Penalties for late reporting', 'H2: Related reading'], content_full: BEST_TEXT };
+  const SECOND = { rank: 4, url: 'https://invoicevendor.com/uae/', domain: 'invoicevendor.com', title: 'Invoicing software for the UAE', word_count: 540,
+    headings: ['H2: Our products', 'H2: Contact us'], content_full: SECOND_TEXT };
+  const TERMS = ['accredited service provider', 'peppol network', 'federal tax authority', 'five corner model', 'free zone', 'corporate tax', 'invoice format', 'implementation partner', 'vat registration', 'clearance step']
+    .map(t => ({ term: t, docs: 2, avg_count: 2, words: t.split(' ').length }));
+  // a passage of this site's own page, which draft C repeats (cannibalisation)
+  const OWN_PARA = 'Our team maps every invoice flow in your finance system against the mandate before a single line of code is written, so you know which documents move through the network, which ones stay inside your own books, and what the first reporting month will actually look like for the people who close it.';
+  const OWN_PAGE = { url: WWW + '/e-invoicing-services/', kind: 'related', words: 120, text: 'E-invoicing services in the UAE.\n\n' + OWN_PARA + '\n\nWe work with distributors, contractors and free zone entities across the Emirates and hand over a tested integration.' };
+  const HOME = { url: WWW + '/', kind: 'home', words: 90, text: 'Tech& builds ERP and invoicing integrations in Dubai for mid-sized distributors, contractors and service businesses across the Gulf region, with a team that has delivered more than forty projects since 2016. '
+  + 'We start every engagement with a workshop, agree the scope in writing and hand over a tested integration with the documentation your auditor will ask for.' };
+  const modelPages = [
+    { url: WWW + '/e-invoicing-uae-guide/', title: 'E invoicing UAE: the complete guide', h1: '', source: 'sitemap', lastmod: '', queries: [] },
+    { url: WWW + '/erp-software-uae/', title: 'ERP software UAE', h1: '', source: 'sitemap', lastmod: '', queries: [] },
+  ];
+  const setPages = (pages) => mock('Site Model', [{ json: { site_model: { domain: D, canonical_host: 'www.' + D, business_name: 'Tech&', pages } } }]);
+  mock('Analyze Competitor Pages', [{ json: { competitors: [BEST, SECOND], competitors_read: 2, term_model: TERMS } }]);
+  setPages([]);
+
+  // ---------- G5 (a): a draft that copies a competitor paragraph fails, with the page named and the percentage ----------
+  const OWN_SENTENCES = [
+    '# E-invoicing in the UAE', '',
+    'Finance teams in Dubai ask us one question before any other: what has to change in the system we already run?', '',
+    'The answer is rarely the whole stack. Most teams keep their ledger, add a connector and rebuild two or three report layouts that nobody has touched since the VAT years.', '',
+    'Plan the work around your close. Nobody wants a first live invoice on the day the month ends, and the finance calendar decides the go-live date more often than the IT calendar does.', '',
+    'Ask your provider for a test run with your own data, not with their demo set, and keep the results.',
+  ].join('\n');
+  const DRAFT_COPY = OWN_SENTENCES + '\n\n' + COMP_PARA + '\n';
+  const DRAFT_CLEAN = OWN_SENTENCES + '\n\nAn accredited service provider checks each invoice, then the Peppol network carries it to whichever provider the buyer uses, and the Federal Tax Authority receives its own copy. That is the shape of the rules; how fast your team gets there depends on how clean the master data is.\n';
+  const DRAFT_OWN = OWN_SENTENCES + '\n\n' + OWN_PARA + '\n';
+  const qaIn = (md, over) => [{ json: { output: md, keyword: 'e invoicing uae', domain: D, originality_max_overlap_pct: 15,
+    content_qa: { passed: true, passed_copy: true, editor_needed: false, content_score: 88, warnings: ['Passive voice in about 12% of sentences — rewrite in active voice'] }, ...(over || {}) } }];
+  mock('Collect Client Pages', [{ json: { client_pages: [OWN_PAGE, HOME] } }]);
+
+  const copied = (await run('Originality Check', qaIn(DRAFT_COPY)))[0].json.content_qa;
+  const O1 = copied.originality;
+  console.log('   copied draft ->', JSON.stringify({ pct: O1.highest_pct, source: O1.highest_source, longest: O1.top_overlaps[0].longest_passage_words, pages: O1.pages_compared }));
+  check('G5: a draft that copies a competitor paragraph fails the quality check, names that page and says by how much',
+    O1.passed === false && copied.passed === false && copied.editor_needed === true && O1.highest_source === 'cleartax.ae'
+    && O1.highest_pct > 15 && O1.top_overlaps[0].kind === 'competitor' && O1.top_overlaps[0].longest_passage_words >= 60
+    && copied.warnings.some(w => /^Originality: \d+(\.\d+)?% of this draft is word for word the same as the competitor page cleartax\.ae/.test(w) && /longest identical run \d+ words: "every accredited service provider validates/.test(w))
+    && copied.warnings[0] === 'Passive voice in about 12% of sentences — rewrite in active voice',
+    JSON.stringify({ o: O1, w: copied.warnings }));
+  check('G5: the figure says what it measured — 8-word windows, against the pages this run read, the competitor and own pages counted separately',
+    O1.window_words === 8 && O1.threshold_pct === 15 && O1.competitor_pages === 2 && O1.own_pages === 2 && O1.draft_windows > 100
+    && /share of the draft's 8-word windows found on one page, measured against 4 page\(s\) this run read \(2 competitor, 2 of this site\)/.test(O1.basis),
+    JSON.stringify(O1.basis));
+
+  // ---------- G5 (b): a draft that only shares the ordinary phrases of the subject passes ----------
+  const cleanRun = (await run('Originality Check', qaIn(DRAFT_CLEAN)))[0].json.content_qa;
+  const O2 = cleanRun.originality;
+  console.log('   clean draft ->', JSON.stringify({ pct: O2.highest_pct, source: O2.highest_source, passed: O2.passed }));
+  check('G5: a draft that merely uses the same terms as the competitors passes, and the quality check is left exactly as Content QA set it',
+    O2.passed === true && O2.highest_pct <= 5 && cleanRun.passed === true && cleanRun.editor_needed === false
+    && !cleanRun.warnings.some(w => /^Originality/.test(w)) && cleanRun.warnings.length === 1,
+    JSON.stringify({ pct: O2.highest_pct, w: cleanRun.warnings }));
+
+  // ---------- G5 (c): the same text on one of our own pages is caught too (cannibalisation) ----------
+  const ownRun = (await run('Originality Check', qaIn(DRAFT_OWN)))[0].json.content_qa;
+  const O3 = ownRun.originality;
+  console.log('   own-page draft ->', JSON.stringify({ pct: O3.highest_pct, source: O3.highest_source, kind: O3.top_overlaps[0].kind }));
+  check('G5: a draft that repeats one of the site\'s own pages fails as cannibalisation, with that page named and the advice to improve it instead',
+    O3.passed === false && ownRun.passed === false && O3.highest_source === WWW + '/e-invoicing-services/' && O3.top_overlaps[0].kind === 'own'
+    && ownRun.warnings.some(w => /this site's own page https:\/\/www\.techand\.ai\/e-invoicing-services\//.test(w) && /compete with each other/.test(w)),
+    JSON.stringify({ o: O3, w: ownRun.warnings }));
+
+  // the page this run is improving is the exception: a rewrite is meant to keep its text
+  mock('Collect Client Pages', [{ json: { client_pages: [{ ...OWN_PAGE, kind: 'existing' }, HOME] } }]);
+  const rewrite = (await run('Originality Check', qaIn(DRAFT_OWN, { existing_page: { url: OWN_PAGE.url }, existing_page_url: OWN_PAGE.url })))[0].json.content_qa;
+  console.log('   rewrite of that page ->', JSON.stringify({ passed: rewrite.originality.passed, improved: rewrite.originality.improved_page }));
+  check('G5: rewriting the page the run is improving is not copying — its overlap is reported, the quality check still passes',
+    rewrite.originality.passed === true && rewrite.passed === true && rewrite.originality.improved_page
+    && rewrite.originality.improved_page.overlap_pct > 15 && !rewrite.warnings.some(w => /^Originality: /.test(w)),
+    JSON.stringify(rewrite.originality));
+  mock('Collect Client Pages', [{ json: { client_pages: [OWN_PAGE, HOME] } }]);
+
+  // ---------- G5 (d): the threshold is configurable, and the rest of the page inventory is checked by title ----------
+  const loose = (await run('Originality Check', qaIn(DRAFT_OWN, { originality_max_overlap_pct: 60 })))[0].json.content_qa;
+  check('G5: the limit is a setting (CONFIG.originality_max_overlap_pct) — at 60% the same draft passes and the figure is reported either way',
+    loose.originality.threshold_pct === 60 && loose.originality.passed === true && loose.passed === true
+    && loose.originality.highest_pct === O3.highest_pct, JSON.stringify({ t: loose.originality.threshold_pct, pct: loose.originality.highest_pct }));
+  setPages(modelPages);
+  const dupe = (await run('Originality Check', qaIn(DRAFT_CLEAN)))[0].json.content_qa;
+  console.log('   duplicate targets ->', JSON.stringify(dupe.originality.duplicate_targets));
+  check('G5: a page of the inventory aimed at the same search is reported as a duplicate target (its text was not read, so it is never counted as overlap)',
+    dupe.originality.duplicate_targets.length === 1 && dupe.originality.duplicate_targets[0].url === WWW + '/e-invoicing-uae-guide/'
+    && dupe.originality.passed === true && dupe.warnings.some(w => /already has a page aimed at the same search/.test(w)),
+    JSON.stringify(dupe.originality.duplicate_targets));
+  setPages([]);
+  // with no page text in hand the answer is "not checked", never "clean"
+  delete store['Analyze Competitor Pages']; delete store['Collect Client Pages'];
+  const blind = (await run('Originality Check', [{ json: { output: DRAFT_COPY, keyword: 'e invoicing uae', domain: D, content_qa: { passed: true, warnings: [] } } }]))[0].json.content_qa;
+  check('G5: with no page text in this run the check says so (passed: null) instead of claiming the draft is original, and never fails the run',
+    blind.originality.passed === null && blind.originality.pages_compared === 0 && blind.passed === true
+    && /no page text was available in this run/.test(blind.originality.basis),
+    JSON.stringify(blind.originality));
+  mock('Analyze Competitor Pages', [{ json: { competitors: [BEST, SECOND], competitors_read: 2, term_model: TERMS } }]);
+  mock('Collect Client Pages', [{ json: { client_pages: [OWN_PAGE, HOME] } }]);
+
+  // ---------- G33: the coverage target comes from the best competitor, not the average ----------
+  mock('Collect Facts', [{ json: { keyword: 'e invoicing uae', domain: D, country: 'United Arab Emirates', page_type: 'Blog Post / Guide',
+    competitors: [BEST, SECOND], term_model: TERMS, competitors_read: 2, avg_competitor_words: 1195 } }]);
+  const pa = (await run('Parse Analysis', [{ json: { output: { recommended_word_count: 1600, content_gaps: [], information_gain_opportunities: [] } } }]))[0].json;
+  const CT = pa.coverage_target;
+  console.log('   coverage target ->', JSON.stringify({ best: CT.best, target: CT.target_pct, avg: CT.average_pct, subs: CT.subtopics }));
+  check('G33: the target is the best competitor page\'s term coverage (not the average), with its position, depth and the basis spelled out',
+    CT && CT.best.domain === 'cleartax.ae' && CT.best.rank === 2 && CT.best.coverage_pct === 80 && CT.average_pct === 55
+    && CT.target_pct === 80 && CT.terms_total === 10 && CT.best.word_count === 1850
+    && /cleartax\.ae \(position 2\) uses 8 of the 10 terms they share \(80%\), against an average of 55%/.test(CT.basis),
+    JSON.stringify(CT));
+  check('G33: the subtopics are that page\'s own headings, cleaned of navigation, and the brief prompt is told to cover each one in our own words',
+    CT.subtopics.length === 4 && CT.subtopics[0] === 'Who must comply in the first wave' && !CT.subtopics.some(s => /Related reading/.test(s))
+    && /TARGET: use at least 80% of the shared terms above/.test(pa.coverage_digest) && /SUBTOPICS THAT PAGE COVERS/.test(pa.coverage_digest),
+    JSON.stringify({ subs: CT.subtopics, digest: pa.coverage_digest.slice(0, 400) }));
+
+  // the brief carries the target even when the model's answer leaves it out
+  mock('Brief Context', [{ json: { ...pa, keyword: 'e invoicing uae', domain: D, page_role: 'standard', article_like: true, content_brief: null } }]);
+  const brief = { h1: 'E-invoicing in the UAE', target_word_count: 1600, slug: 'e-invoicing-uae', terms_to_use: [{ term: 'peppol network', min_count: 2 }],
+    outline: [{ h2: 'How the five corner model works', key_points: ['the clearance step'], target_words: 400 }, { h2: 'What an accredited service provider does', key_points: [], target_words: 400 }], snippet_targets: [], evidence_plan: [] };
+  const pb = (await run('Parse Brief', [{ json: { output: brief } }]))[0].json;
+  console.log('   brief coverage ->', JSON.stringify({ ct: pb.content_brief.coverage_target && pb.content_brief.coverage_target.target_pct, terms: pb.content_brief.terms_to_use.length, adj: pb.brief_adjustments }));
+  check('G33: the brief states the target, its subtopics and the subtopics the outline misses, and holds enough terms to be able to reach it',
+    pb.content_brief.coverage_target.target_pct === 80 && pb.content_brief.coverage_target.best_competitor.domain === 'cleartax.ae'
+    && pb.content_brief.terms_to_use.length >= 8 && pb.brief_adjustments.some(a => /coverage target of 80% needs at least 8 of the 10 terms/.test(a))
+    && pb.content_brief.coverage_target.subtopics_not_in_outline.includes('Who must comply in the first wave')
+    && pb.brief_adjustments.some(a => /subtopic\(s\) of the best competitor page are not in the outline/.test(a)),
+    JSON.stringify({ ct: pb.content_brief.coverage_target, adj: pb.brief_adjustments }));
+
+  // ---------- G33 + G5 in the real quality check ----------
+  const QA_MD = [
+    'Title: E-invoicing in the UAE: what changes in 2026',
+    'Meta Description: What the UAE e-invoicing mandate changes for finance teams, who is in the first wave and how to be ready without stopping the month-end close.',
+    'Slug: e-invoicing-uae', '', '# E-invoicing in the UAE', '',
+    'Finance teams in Dubai ask one question first: what has to change in the system we already run today?', '',
+    '**Quick answer:** From July 2026 the first wave of UAE businesses must issue structured invoices through an accredited service provider and send a reporting copy to the Federal Tax Authority, so plan the connector work around your month-end close and test it with your own data.', '',
+    '## How does the five corner model work?', '',
+    'Your system creates the document, your provider checks it and the peppol network carries it to the provider your buyer uses. The clearance step happens in the same minute, not at the end of the quarter, and that is the part most finance calendars have to absorb.', '',
+    '| Step | Who does it |', '|---|---|', '| Validation | Your provider |', '| Delivery | The buyer\'s provider |', '',
+    '## What does an accredited service provider do?', '',
+    'It checks the document against the rules, signs it and keeps the audit trail your auditor will ask for. Choose one whose support hours match your close, and ask for a test run on your own master data before you sign anything at all.', '',
+    '## When should you start?', '',
+    'Start a quarter before your wave. Your own team needs time for the data clean-up, and corporate tax and vat registration records sit in the same master files, so the work pays for itself twice over.', '',
+    '## Talk to us', '',
+    'Book a scoping call and we will map your invoice flows against the mandate in one workshop with your finance team.'].join('\n');
+  mock('Parse Brief', [{ json: { ...pb, keyword: 'e invoicing uae', domain: D, term_model: TERMS, coverage_target: CT, currency: 'AED',
+    business: 'ERP and e-invoicing partner in the UAE', content_brief: { ...brief, terms_to_use: [], target_word_count: 230 }, facts: [], competitors: [BEST, SECOND] } }]);
+  const qa = (await run('Content QA', [{ json: { output: QA_MD, critique: null } }], { runIndex: 0 }))[0];
+  const CQ = qa.json.content_qa;
+  console.log('   QA coverage ->', JSON.stringify({ cov: CQ.coverage.pct, target: CQ.coverage.target_pct, best: CQ.coverage.best_competitor_pct, pts: CQ.score_breakdown.coverage, missing: CQ.coverage.subtopics_missing }));
+  check('G33: the quality check reports coverage as a figure with its basis — this page against the best competitor page, measured on the same term list',
+    CQ.coverage.target_pct === 80 && CQ.coverage.best_competitor_pct === 80 && CQ.coverage.best_competitor.domain === 'cleartax.ae'
+    && CQ.coverage.pct === CQ.coverage_pct && CQ.coverage.terms_total === 10
+    && /against a target of 80% taken from cleartax\.ae \(position 2\), which covers 80%/.test(CQ.coverage.basis)
+    && /average of the 2 pages read: 55%/.test(CQ.coverage.basis)
+    && CQ.coverage.measured_on === 'this page\'s own term list, on both the draft and that competitor page',
+    JSON.stringify(CQ.coverage));
+  check('G33: the 25 coverage points are scored against that target, and the warning names the subtopics the best page covers and this draft does not',
+    CQ.score_breakdown.coverage === Math.round(25 * Math.min(1, (CQ.coverage.pct / 100) / 0.8))
+    && CQ.coverage.subtopics_missing.includes('Who must comply in the first wave')
+    && CQ.warnings.some(w => /^Subtopics the best competitor page covers and this draft does not: "Who must comply in the first wave"/.test(w))
+    && (CQ.coverage.pct >= 80 || CQ.warnings.some(w => /^Topic coverage \d+% against a target of 80% \(cleartax\.ae covers 80%\)/.test(w))),
+    JSON.stringify({ pts: CQ.score_breakdown.coverage, pct: CQ.coverage.pct, w: CQ.warnings.filter(w => /coverage|Subtopic/i.test(w)) }));
+  const oc = (await run('Originality Check', qa))[0].json.content_qa;
+  check('G5: the check runs on the real quality check\'s output — this draft is original, every warning Content QA raised is kept and the verdict is unchanged',
+    oc.originality.passed === true && oc.originality.highest_pct <= 5 && oc.passed === CQ.passed && oc.content_score === CQ.content_score
+    && CQ.warnings.every(w => oc.warnings.includes(w)), JSON.stringify({ o: oc.originality, added: oc.warnings.filter(w => !CQ.warnings.includes(w)) }));
+
+  // ---------- G30: the three planned images are produced, attached and listed ----------
+  const pkgIn = [{ json: { ...qa.json, page_markdown: qa.json.output, keyword: 'e invoicing uae', domain: D, content_brief_slug: 'e-invoicing-uae',
+    content_images: [], content_score: CQ.content_score, content_originality: oc.originality, content_coverage: CQ.coverage, site_profile: { business_name: 'Tech&' },
+    language_name: 'English', language_code: 'en' }, binary: { data: { data: Buffer.from('<html>report</html>', 'utf8').toString('base64'), mimeType: 'text/html', fileName: 'report.doc' } } }];
+  const pkg = await run('Blog Package', pkgIn);
+  const PM = pkg[0].json.article_meta;
+  console.log('   package images ->', JSON.stringify(PM.images.map(i => [i.purpose, i.filename, i.width + 'x' + i.height])));
+  check('G5 / G33 in the package: meta.json carries the originality figure and the coverage figure with their basis, next to the page they judge',
+    PM.originality && PM.originality.threshold_pct === 15 && PM.coverage && PM.coverage.target_pct === 80 && /taken from cleartax\.ae/.test(PM.coverage.basis),
+    JSON.stringify({ o: PM.originality && PM.originality.highest_pct, c: PM.coverage && PM.coverage.basis }));
+  const cards = await run('Image Cards', pkg);
+  const cardHtml = cards.map(c => Buffer.from(c.binary.html.data, 'base64').toString('utf8'));
+  save('image-card-hero.html', cardHtml[0]); save('image-card-body.html', cardHtml[1]);
+  console.log('   image cards ->', JSON.stringify(cards.map(c => [c.json.kind, c.json.filename, c.json.width + 'x' + c.json.height])));
+  check('G30: one card per planned image, at the planned size, built from the page itself — the H1 on the hero, the section\'s own heading and points on the others',
+    cards.length === 3 && cards[0].json.kind === 'title card' && cards[0].json.width === 1200 && cards[0].json.height === 675
+    && cards[1].json.kind === 'section summary card' && cards[1].json.width === 1000
+    && /<h1>E-invoicing in the UAE<\/h1>/.test(cardHtml[0]) && /Tech&amp;/.test(cardHtml[0])
+    && /<h2>How does the five corner model work\?<\/h2>/.test(cardHtml[1])
+    && /the clearance step happens in the same minute/i.test(cardHtml[1])
+    && cardHtml.every(h => /^<!doctype html>/i.test(h) && !/<script/i.test(h) && !/https?:\/\//.test(h.replace(/techand\.ai/g, ''))),
+    JSON.stringify({ n: cards.length, head: cardHtml[1].slice(-400) }));
+  const webp = (n) => Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBPVP8 '), Buffer.alloc(n)]).toString('base64');
+  mock('Render Images', cards.map((c, i) => ({ json: {}, binary: { image: { data: webp(1200 + i * 400), mimeType: 'image/webp', fileName: 'index.webp' } } })));
+  const att = await run('Attach Images', store['Render Images']);
+  const AM = att[0].json.article_meta, AB = att[0].binary;
+  const metaFile = JSON.parse(Buffer.from(AB.meta_json.data, 'base64').toString('utf8'));
+  console.log('   produced ->', JSON.stringify({ binaries: Object.keys(AB), produced: AM.images_produced, kb: AM.images.map(i => i.kb) }));
+  check('G30: the three images are attached as WebP under the planned file names, with the planned alt text, size and Open Graph image kept',
+    att[0].json.images_produced === 3 && AM.images_produced === 3 && AM.images_planned === 3
+    && ['image_1', 'image_2', 'image_3'].every(k => AB[k] && AB[k].mimeType === 'image/webp')
+    && AB.image_1.fileName === PM.images[0].filename && AB.image_2.fileName === PM.images[1].filename
+    && AM.images.every((i, k) => i.produced === true && i.bytes > 500 && i.format === 'webp' && i.alt_text === PM.images[k].alt_text && i.width === PM.images[k].width)
+    && AM.open_graph['og:image'] === PM.open_graph['og:image'] && AB.article_html && AB.article_md,
+    JSON.stringify({ bin: Object.keys(AB), imgs: AM.images.map(i => [i.filename, i.produced, i.bytes]) }));
+  check('G30: meta.json lists the produced files and the publish checklist asks the owner to save them instead of to create three images',
+    metaFile.images_produced === 3 && metaFile.images.every(i => i.produced === true && i.binary_key)
+    && /3 of 3 images are attached as WebP/.test(metaFile.image_notes)
+    && metaFile.publish_checklist.some(s => /^Save the 3 attached image file\(s\)/.test(s))
+    && !metaFile.publish_checklist.some(s => /^Create the three images/.test(s)),
+    JSON.stringify({ notes: metaFile.image_notes, checklist: metaFile.publish_checklist.filter(s => /image/i.test(s)) }));
+  const wr = (await run('Build Webhook Response', att))[0].json;
+  check('G30: the produced images travel in the API callback, with their alt text, so the app can offer them next to the article',
+    Array.isArray(wr.images) && wr.images.length === 3 && wr.images[0].mimeType === 'image/webp'
+    && wr.images[0].fileName === PM.images[0].filename && wr.images[0].alt_text === PM.images[0].alt_text && wr.images[0].data.length > 100
+    && wr.meta.images_produced === 3, JSON.stringify((wr.images || []).map(i => [i.fileName, i.alt_text, (i.data || '').length])));
+
+  // a render that fails leaves the plan in place and never breaks the run
+  mock('Render Images', cards.map((c, i) => i === 1 ? { json: { error: { message: 'connect ECONNREFUSED gotenberg:3000' } } } : { json: {}, binary: { image: { data: webp(1500), mimeType: 'image/webp', fileName: 'index.webp' } } }));
+  const partial = (await run('Attach Images', store['Render Images']))[0];
+  check('G30: a card the renderer could not produce keeps its place in the plan with the reason, the others are still attached',
+    partial.json.images_produced === 2 && partial.json.images_failed === 1
+    && partial.json.article_meta.images[1].produced === false && /ECONNREFUSED/.test(partial.json.article_meta.images[1].produce_error)
+    && partial.json.article_meta.images[1].alt_text === PM.images[1].alt_text && !partial.binary.image_2 && partial.binary.image_1 && partial.binary.image_3,
+    JSON.stringify(partial.json.article_meta.images.map(i => [i.filename, i.produced, i.produce_error || ''])));
+  mock('Render Images', cards.map(() => ({ json: { error: { message: 'service unavailable' } } })));
+  const none = (await run('Attach Images', store['Render Images']))[0];
+  check('G30: with the renderer down nothing is produced, the plan and the package are untouched and the checklist still asks for the three images',
+    none.json.images_produced === 0 && none.json.article_meta.images.every(i => i.produced === false)
+    && /No image could be produced in this run/.test(none.json.article_meta.image_notes)
+    && none.json.article_meta.publish_checklist.some(s => /^Create the three images/.test(s))
+    && none.binary.article_html && none.binary.article_md && none.binary.meta_json && !none.binary.image_1,
+    JSON.stringify({ notes: none.json.article_meta.image_notes, bin: Object.keys(none.binary) }));
+  // a report-only run has no article: the chain passes it through untouched
+  const noArticle = await run('Image Cards', [{ json: { keyword: 'e invoicing uae', verdict: 'AVOID' }, binary: {} }]);
+  mock('Blog Package', [{ json: { keyword: 'e invoicing uae', verdict: 'AVOID' }, binary: { data: { data: 'AA==', mimeType: 'text/html', fileName: 'report.doc' } } }]);
+  mock('Render Images', [{ json: { error: { message: 'no binary html' } } }]);
+  const through = (await run('Attach Images', store['Render Images']))[0];
+  check('G30: a run that wrote no page emits exactly one item and reaches delivery unchanged (no branch is ever left empty)',
+    noArticle.length === 1 && noArticle[0].json.skip === true && !through.json.article_meta && through.binary.data,
+    JSON.stringify({ cards: noArticle.map(c => c.json), out: Object.keys(through.binary) }));
+});
+
 
 H.report();
 })();

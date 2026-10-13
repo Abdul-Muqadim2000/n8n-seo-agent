@@ -21,7 +21,9 @@ HOW TO FIX
 - "Unverified statistics": link the number to one of the verified facts' URLs, or replace it with [Statistic] / [Number], or remove the claim.
 - "Filler / AI-cliché phrases": rewrite each sentence that contains them in plain, specific language; do not simply delete the word.
 - "Hard to read" / "long sentences" / "passive voice": split long sentences, use active voice, keep sentences 8-22 words.
-- "Topic coverage is thin": work the missing terms into the relevant sections naturally, with substance around them.
+- "Topic coverage is thin" / "Topic coverage N% against a target": work the missing terms into the relevant sections naturally, with substance around them; the target is what the best page in the results covers.
+- "Subtopics the best competitor page covers and this draft does not": give each named subtopic its place — a new H2 where it deserves one, otherwise a paragraph inside the section it belongs to. Our own heading and our own words, never theirs.
+- "Originality: …% of this draft is word for word the same as …": rewrite exactly those passages from scratch. Keep the facts, drop the sentences: change the order, the examples and the sentence shapes so nothing of the other page's wording is left. Never shorten the section to get under the limit, and never replace it with filler.
 - "Too generic": add a concrete example, a number with a linked source, a step list or a decision rule to the weakest sections.
 - "Quick answer block missing": add a line starting with **Quick answer:** right after the introduction, 40-70 words, no placeholders.
 - "Snippet questions have no matching heading": add the question as an H2/H3 with a 40-60 word direct answer under it.

@@ -234,7 +234,10 @@ if (wantContent) {
     ['Editing rounds', num(qa.round || d.qa_round || 1)],
     ['Schema generated', esc((qa.schema_types || []).join(', ') || 'None')],
     ['Content score', qa.content_score != null ? '<b>' + qa.content_score + '/100</b>' + (qa.score_breakdown ? ' (structure ' + qa.score_breakdown.structure + '/25, topic coverage ' + qa.score_breakdown.coverage + '/25, readability ' + qa.score_breakdown.readability + '/15, specificity ' + qa.score_breakdown.specificity + '/10, clean language ' + qa.score_breakdown.clean_language + '/10, length ' + qa.score_breakdown.length + '/15)' : '') : 'N/A'],
-    ['Topic coverage', qa.coverage_pct != null ? qa.coverage_pct + '% of the terms top-ranking pages share' : 'N/A'],
+    ['Topic coverage', qa.coverage && qa.coverage.basis ? esc(qa.coverage.basis) + (qa.coverage.subtopics_missing && qa.coverage.subtopics_missing.length ? ' · subtopics still missing: ' + esc(qa.coverage.subtopics_missing.slice(0, 3).join('; ')) : '') : (qa.coverage_pct != null ? qa.coverage_pct + '% of the terms top-ranking pages share' : 'N/A')],
+    ['Originality', qa.originality ? (qa.originality.passed === null ? 'Could not be checked: no competitor or own page text was available in this run'
+      : (qa.originality.highest_pct != null ? qa.originality.highest_pct + '% of the page matches ' + esc(qa.originality.highest_source || 'another page') + ' word for word (limit ' + qa.originality.threshold_pct + '%' + (qa.originality.passed ? '' : ' — EXCEEDED') + ')' : 'No overlap found')
+        + ' · ' + esc(qa.originality.basis)) : 'N/A'],
     ['Readability', qa.readability ? 'Flesch ' + qa.readability.flesch + ' · ' + qa.readability.avg_sentence_words + ' words per sentence · passive voice ' + qa.readability.passive_pct + '%' : 'N/A'],
     ['Filler phrases left', (qa.banned_phrases || []).length ? esc(qa.banned_phrases.map(b => b.phrase).slice(0, 6).join(', ')) : 'none'],
     ['Editorial review', qa.critic_score != null ? qa.critic_score + '/100 — ' + esc(qa.critic_verdict || '') : 'N/A']
@@ -362,6 +365,7 @@ return [{
     keyword_data: d.keyword_data || null,
     ladder_id: d.ladder_id || '', ladder_rung: d.ladder_rung ?? null, ladder_head: d.ladder_head || '',
     publish_wordpress: !!d.publish_wordpress, wordpress_url: d.wordpress_url || '',
+    content_originality: qa.originality || null, content_coverage: qa.coverage || null,
     page_markdown: md || undefined, content_brief_slug: brief.slug || '', schema_blocks: schemaBlocks, content_score: qa.content_score == null ? null : qa.content_score, language_name: d.language_name || 'English', language_code: d.language_code || 'en', content_images: Array.isArray(brief.image_suggestions) ? brief.image_suggestions : [],
     page_role: d.page_role || 'standard', article_like: d.article_like == null ? null : !!d.article_like, author: d.author || null, reviewer: d.reviewer || null, site_profile: d.site_profile || null, hub_pages: d.hub_pages || [], video: d.video || null, case_study: d.case_study || null, case_id: d.case_id || '', local_area: d.local_area || '', content_brief_video_placement: brief.video_placement || '', eeat_notes: qa.eeat_notes || [], page_type: d.page_type || ''
   },
