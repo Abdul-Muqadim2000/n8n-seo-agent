@@ -569,6 +569,11 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
       reports: [],
       costSoFarUsd,
       expectedVisitsTop3: samePlan?.expectedVisitsTop3 ?? null,
+      // G12 / G29 (2026-10-13): the chart marks, the page-change readings and the lineage are added by ladderDetailData, which holds
+      // the content log, the query history and the audits this build does not
+      annotations: [],
+      changeTests: [],
+      lineage: [],
     });
   });
 

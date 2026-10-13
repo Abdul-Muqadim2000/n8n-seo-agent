@@ -17,7 +17,7 @@
           "responseMode": "responseNode",
           "options": {}
         },
-        "id": "ce2986bb-15b4-48ae-97b3-cb93163a36c5",
+        "id": "a3240a1e-3d9c-424c-9c35-392faf619059",
         "name": "Admin Webhook",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 2,
@@ -37,7 +37,7 @@
         "parameters": {
           "jsCode": "// Same rules as Admin Action (Site Admin), answered as a 400 instead of a failed execution.\nconst raw = $input.first().json || {};\nconst b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};\nconst action = String(b.action || '').toLowerCase();\nconst errors = [];\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts'].includes(action)) errors.push('action must be delete, pause, resume, cadence, unpublish, monitors, prospect or ai_prompts');\nif (!b.site_id && !b.domain) errors.push('site_id or domain is required');\nif (action === 'cadence' && b.pages_per_week == null && b.blogs_per_week == null) errors.push('pages_per_week (0-3) is required for action cadence');\nif (action === 'unpublish' && !b.keyword) errors.push('keyword is required for action unpublish');\nif (action === 'prospect' && !b.prospect_domain) errors.push('prospect_domain is required for action prospect');\nif (action === 'prospect' && b.status && !['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'].includes(String(b.status).toLowerCase())) errors.push('status must be new, contacted, replied, won, rejected or ignored');\nif (action === 'ai_prompts' && !(Array.isArray(b.add) && b.add.length) && !(Array.isArray(b.remove) && b.remove.length)) errors.push('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');\nreturn [{ json: { ok: errors.length === 0, error: errors.join('; '), action, forward: { ...b, action, request_id: String(b.request_id || ('admin-' + $execution.id)) } } }];"
         },
-        "id": "63500973-1fac-4bab-9d4e-642f8c1dcd94",
+        "id": "8f67575d-42fd-4a16-bce0-a03cdc903604",
         "name": "Admin Validate",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -57,7 +57,7 @@
             },
             "conditions": [
               {
-                "id": "07a8e869-efaf-419c-8662-b0c26aa4e6b0",
+                "id": "5c0e4041-f028-42e8-95ce-d27b3c9c4dd1",
                 "leftValue": "={{ $json.ok }}",
                 "rightValue": "",
                 "operator": {
@@ -72,7 +72,7 @@
           "looseTypeValidation": true,
           "options": {}
         },
-        "id": "6b9c2b73-bc5f-47e2-b758-307697a332cf",
+        "id": "5bbd29e3-1ddd-409a-b44b-87ae8174264e",
         "name": "Admin Valid?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.3,
@@ -85,7 +85,7 @@
         "parameters": {
           "jsCode": "return [{ json: $input.first().json.forward }];"
         },
-        "id": "9f77b51c-4e06-416c-96eb-a53a5d6a8ccb",
+        "id": "d7b4ce86-f8ad-49e3-9b24-973510e9a246",
         "name": "Admin Payload",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -107,7 +107,7 @@
             "waitForSubWorkflow": true
           }
         },
-        "id": "39a73ccf-db22-4d56-8148-43a4df903875",
+        "id": "b48dfcf0-696a-4cb4-a40f-d6695e9a9019",
         "name": "Run Site Admin",
         "type": "n8n-nodes-base.executeWorkflow",
         "typeVersion": 1.2,
@@ -125,7 +125,7 @@
             "responseCode": 200
           }
         },
-        "id": "027393a4-d277-4cab-b0c3-99ae99b6e00a",
+        "id": "58fb474d-34f0-4a67-b786-199fde63fd8c",
         "name": "Respond Admin Result",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -142,7 +142,7 @@
             "responseCode": 500
           }
         },
-        "id": "02bd7885-3377-4c3a-9473-98474e46fcbd",
+        "id": "6c0e4b4c-c063-4b12-9b54-259c771d5a67",
         "name": "Respond Admin Failed",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -159,7 +159,7 @@
             "responseCode": 400
           }
         },
-        "id": "b3d07b96-0bec-439c-909a-6601e1db6d9c",
+        "id": "c15f787d-aca9-4127-825c-dd798cf4bfd2",
         "name": "Respond Admin Bad Request",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -175,7 +175,7 @@
           "width": 640,
           "color": 4
         },
-        "id": "653c0b61-eb93-4f63-97b2-dc7c2364da40",
+        "id": "7810be50-462b-4e0b-9a18-7727a15e5d5a",
         "name": "Note",
         "type": "n8n-nodes-base.stickyNote",
         "typeVersion": 1,

@@ -74,6 +74,19 @@ import {
   type MonitorSettings,
   prospectDraft,
   draftSuperseded,
+  // G12 / G29 (2026-10-13, FIX_PLAN): the chart marks, the control-group change test and the lineage every figure carries
+  buildAnnotations,
+  dataBreaksIn,
+  pageChangeTests,
+  CHANGE_TEST_METHOD,
+  lineage,
+  lineageAsOf,
+  lineagePeriod,
+  lineageSample,
+  lineageUnknown,
+  type ChartAnnotation,
+  type Lineage,
+  type PagePeriodPoint,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { siteRows } from '../n8n/client';
@@ -275,14 +288,51 @@ export async function trackerSnapshot(org: OrgRow, site: SiteRow): Promise<Track
   };
 }
 
+// ---------------- G12 / G29: chart annotations, change tests and lineage ----------------
+
+/**
+ * G12 (2026-10-13, FIX_PLAN; criteria 3.5 / 2.12): the events a chart is marked with, from rows the app already stores — pages that
+ * went live, technical audits with the findings they cleared, and the dated registry of Google updates and data breaks
+ * (`shared/src/annotations.ts`, generated from `n8n/seo-agent/v5/data/seo_events.json`). A window where nothing happened gets none.
+ */
+export function chartAnnotations(input: { from?: string | null; to?: string | null; log?: ContentLogRow[]; audits?: AuditRow[] }): ChartAnnotation[] {
+  return buildAnnotations({
+    from: input.from,
+    to: input.to,
+    published: (input.log ?? [])
+      .filter((r) => s(r.published_at))
+      .map((r) => ({ publishedAt: s(r.published_at), keyword: s(r.keyword), url: s(r.published_url), source: s(r.source) })),
+    audits: (input.audits ?? []).map((a) => ({ auditedAt: s(a.audited_at), healthScore: nn(a.health_score), findings: nn(a.findings) })),
+  });
+}
+
+/** the stored query rows as the change test wants them: one point per query × page × period */
+const changePoints = (rows: QueryRow[]): PagePeriodPoint[] =>
+  rows
+    .filter((q) => s(q.page) && n(q.position) > 0)
+    .map((q) => ({ periodEnd: s(q.period_end), page: s(q.page), query: s(q.query), position: n(q.position), impressions: n(q.impressions), clicks: n(q.clicks) }));
+
+/** the dated page changes the app knows about: a page that went live (and, when it replaced one, was rewritten) */
+const changesOf = (log: ContentLogRow[]): { url: string; t0: string; change: string; keyword: string }[] =>
+  log
+    .filter((r) => s(r.published_at) && s(r.published_url))
+    .map((r) => ({
+      url: s(r.published_url),
+      t0: s(r.published_at).slice(0, 10),
+      change: s(r.existing_page_url) && s(r.existing_page_url).replace(/\/+$/, '') === s(r.published_url).replace(/\/+$/, '') ? 'rewritten' : 'published',
+      keyword: s(r.keyword),
+    }));
+
 export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData> {
   const d = site.domain;
-  const [siteRow, metrics, queries, trends, snapshot] = await Promise.all([
+  const [siteRow, metrics, queries, trends, snapshot, log, audits] = await Promise.all([
     n8nSite(site),
     siteRows<SiteMetricsRow>('siteMetrics', d, { sortBy: 'period_end:asc', max: 300 }),
     siteRows<QueryRow>('queryHistory', d, { sortBy: 'period_end:desc', max: 4000 }),
     siteRows<TrendRow>('trends', d, { sortBy: 'checked_at:desc', max: 300 }),
     trackerSnapshot(org, site),
+    siteRows<ContentLogRow>('contentLog', d, { sortBy: 'started_at:desc', max: 500 }),
+    siteRows<AuditRow>('audits', d, { sortBy: 'audited_at:asc', max: 60 }),
   ]);
   const seen = new Set<string>();
   const latestTrends = trends.filter((t) => (seen.has(t.keyword) ? false : (seen.add(t.keyword), true))).map(toTrend);
@@ -290,7 +340,55 @@ export async function searchData(org: OrgRow, site: SiteRow): Promise<SearchData
   const qs = latestPer(queries, (q) => `${s(q.query).toLowerCase()}|${s(q.period_end)}`);
   const ms = latestPer(metrics, (m) => s(m.period_end)).sort(byDate((m) => s(m.period_end)));
   const periods = [...new Set(qs.map((q) => s(q.period_end)))].filter(Boolean).sort().reverse();
-  return { connection: connection(siteRow, org), snapshot, metrics: ms.map(toMetrics), queries: qs.map(toQuery), periods, trends: latestTrends };
+  // the window the charts cover: the whole weekly history, or the daily series of the latest report when there is no history yet
+  const from = ms[0]?.period_start || snapshot?.period?.previous.start || snapshot?.gsc.daily[0]?.date || '';
+  const to = ms[ms.length - 1]?.period_end || snapshot?.period?.current.end || '';
+  const annotations = chartAnnotations({ from, to, log, audits });
+  const changeTests = pageChangeTests({ points: changePoints(qs), changes: changesOf(log) });
+  const cur = snapshot?.period?.current ?? (ms.length ? { start: s(ms[ms.length - 1]!.period_start), end: s(ms[ms.length - 1]!.period_end) } : null);
+  const curImpressions = snapshot?.gsc.current?.impressions ?? (ms.length ? n(ms[ms.length - 1]!.impressions) : null);
+  const curSessions = snapshot?.ga4.organic?.sessions ?? (ms.length ? n(ms[ms.length - 1]!.sessions) : null);
+  const gscOn = snapshot?.gsc.connected ?? !!ms[ms.length - 1]?.gsc_connected;
+  const gaOn = snapshot?.ga4.connected ?? !!ms[ms.length - 1]?.ga4_connected;
+  const period28 = cur ? lineagePeriod(cur.start, cur.end) : '';
+  const lineageList: Lineage[] = [
+    gscOn
+      ? lineage('Clicks, impressions, click-through rate and average position', 'gsc', {
+          period: period28,
+          sample: lineageSample(curImpressions, `impressions across ${qs.filter((q) => s(q.period_end) === periods[0]).length} named queries`),
+          basis: 'measured',
+          note: snapshot?.period?.previous ? `compared with ${lineagePeriod(snapshot.period.previous.start, snapshot.period.previous.end)}` : '',
+        })
+      : lineageUnknown('Clicks, impressions and positions', 'Search Console is not connected for this website, so there is no measured search data'),
+    gaOn
+      ? lineage('Organic sessions, engaged sessions and key events', 'ga4', { period: period28, sample: lineageSample(curSessions, 'organic sessions'), basis: 'measured' })
+      : lineageUnknown('Visits, engagement and key events', 'Google Analytics is not connected for this website'),
+    lineage('Weekly history', 'gsc', { period: lineagePeriod(from, to), sample: lineageSample(ms.length, ms.length === 1 ? 'weekly report' : 'weekly reports'), basis: 'measured', note: 'each point is a rolling 28-day total, not one week' }),
+    lineage('Live Google position per tracked keyword', 'serp', {
+      period: lineageAsOf(qs.find((q) => n(q.serp_position) >= 0)?.checked_at),
+      sample: lineageSample(qs.filter((q) => s(q.period_end) === periods[0] && n(q.serp_position) >= 0).length, 'keywords, one results page each'),
+      basis: 'one_sample',
+      note: 'one country and one device, so it will differ from the Search Console average',
+    }),
+    latestTrends.length
+      ? lineage('Search interest', 'trends', { period: 'the last 12 months', sample: lineageSample(latestTrends.length, 'keywords'), basis: 'reported', note: 'a relative index (100 = the peak of the period), not a count of searches' })
+      : lineageUnknown('Search interest', 'no Google Trends reading is stored for this website yet'),
+    changeTests.length
+      ? lineage('Did this change help?', 'gsc_history', { period: lineagePeriod(from, to), sample: lineageSample(changeTests.length, 'page changes read'), basis: 'measured', note: CHANGE_TEST_METHOD })
+      : lineageUnknown('Did this change help?', 'no page of this website has a recorded publish date yet'),
+  ];
+  return {
+    connection: connection(siteRow, org),
+    snapshot,
+    metrics: ms.map(toMetrics),
+    queries: qs.map(toQuery),
+    periods,
+    trends: latestTrends,
+    annotations,
+    dataBreaks: dataBreaksIn(from, to).map((b) => ({ name: b.name, start: b.start, end: b.end, detail: b.detail ?? '' })),
+    changeTests,
+    lineage: lineageList,
+  };
 }
 
 // ---------------- rankings ----------------
@@ -486,7 +584,28 @@ export async function rankingsData(site: SiteRow): Promise<RankingsData> {
     };
   });
   keywords.sort((a, c) => (a.latestPosition || 999) - (c.latestPosition || 999));
-  return { ladders: out, keywords };
+  // G29: a position is one results page at one moment and the share of voice is modelled — the page says so next to the numbers
+  const desk = desktopRows(history);
+  const lineageList: Lineage[] = [
+    desk.length
+      ? lineage('Position per keyword', 'serp', {
+          period: lineagePeriod(s(desk[0]?.checked_at), s(desk[desk.length - 1]?.checked_at)),
+          sample: lineageSample(desk.length, 'checks, one results page each'),
+          basis: 'one_sample',
+          note: 'one country and one device at one moment: it will differ from a Search Console average',
+        })
+      : lineageUnknown('Position per keyword', 'no rank check is stored for this website yet'),
+    lineage('Share of voice', 'model', {
+      period: lineageAsOf(s(desk[desk.length - 1]?.checked_at)),
+      sample: lineageSample(desk.filter((r) => sov(r) != null).length, 'checks with a reading'),
+      basis: 'modelled',
+      note: 'our share of the clicks page one offers, modelled from the position and the results-page features — not measured clicks',
+    }),
+    history.some((r) => isMobile(r))
+      ? lineage('Mobile position', 'serp', { period: lineageAsOf(s(history.filter(isMobile).pop()?.checked_at)), sample: lineageSample(history.filter(isMobile).length, 'mobile checks'), basis: 'one_sample' })
+      : lineageUnknown('Mobile position', 'no mobile check was bought for this website yet'),
+  ];
+  return { ladders: out, keywords, lineage: lineageList };
 }
 
 // ---------------- content & profile ----------------

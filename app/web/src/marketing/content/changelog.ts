@@ -15,6 +15,23 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Charts that say what happened, and numbers that say where they came from',
+    summary:
+      'Every chart is now marked with the events behind its moves — the pages you published, the technical fixes you made, Google’s ranking updates and the week Google changed its own data. After a page goes live, its trend is compared with the rest of your website. And every number in a report or on a dashboard says its source, its period and its sample size.',
+    highlights: [
+      'Pages you published and technical fixes are marked on the search, overview and keyword-ladder charts, each with its date',
+      'Google’s ranking updates are marked as context, never as a cause',
+      'Mid-September 2025, when Google stopped serving a hundred results on one page, is marked as a break in its own data: figures either side are not comparable, and reports say so',
+      'A page that changed is compared with the rest of your website over the same weeks, so the season and Google’s updates are taken out of the reading',
+      'The verdict stays honest: “likely helped”, “possibly helped”, “no clear effect yet”, “too early to tell” or “can’t tell” — never “this caused that”',
+      'The same reading that measured a won link now measures a page you published or rewrote',
+      'Every figure carries its source, the period it covers and the sample behind it, with a “Where these numbers come from” table at the end of each report',
+      'A number that was calculated rather than counted says “modelled, not measured”; if one ever arrives without its source it says “source not recorded”',
+    ],
+    features: ['site-tracking', 'reports', 'keyword-ladders', 'backlinks'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Keyword research starts from the searches you already appear for',
     summary:
       'Your own Search Console data now seeds the keyword research instead of only being reported afterwards, traffic estimates say whether they were measured on your site or modelled, and searches Google answers with the same pages are grouped so one page serves them all.',

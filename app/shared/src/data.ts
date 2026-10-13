@@ -3,6 +3,9 @@
 import type { ModeId } from './constants';
 import type { MonitorSettings, ProfileFields } from './schemas';
 import type { Report } from './api';
+import type { ChartAnnotation } from './annotations';
+import type { PageChangeTest } from './change-test';
+import type { Lineage } from './lineage';
 
 export interface MetricsPoint {
   periodStart: string;
@@ -149,6 +152,14 @@ export interface SearchData {
   queries: QueryPoint[];
   periods: string[];
   trends: TrendPoint[];
+  /** G12: what to mark on the charts — pages published, audit fixes, Google updates, data breaks (oldest first) */
+  annotations: ChartAnnotation[];
+  /** G12: the data breaks this window straddles, so a before / after comparison can say it is not comparable */
+  dataBreaks: { name: string; start: string; end: string; detail: string }[];
+  /** G12: did a page change help? Each change read against the site's other pages over the same weeks */
+  changeTests: PageChangeTest[];
+  /** G29: where each figure on this page came from, over what period, from how big a sample */
+  lineage: Lineage[];
 }
 
 export interface RankPoint {
@@ -244,6 +255,8 @@ export interface TrackedKeyword {
 export interface RankingsData {
   ladders: Ladder[];
   keywords: TrackedKeyword[];
+  /** G29: where the positions and the share of voice come from */
+  lineage: Lineage[];
 }
 
 export interface ContentItem {
@@ -912,6 +925,10 @@ export interface OverviewData {
     series: { periodEnd: string; clicks: number; impressions: number; position: number; sessions: number }[];
     /** 'weekly': rolling 28-day totals per weekly run; 'daily': the latest report's daily Search Console values (before the weekly history exists) */
     seriesKind: 'weekly' | 'daily';
+    /** G12: the events marked on this chart */
+    annotations: ChartAnnotation[];
+    /** G29: where these figures come from */
+    lineage: Lineage[];
   };
   health: { latest: AuditPoint | null; series: { auditedAt: string; healthScore: number }[] };
   ai: { latest: AiRun | null; series: { checkedAt: string; mentionRate: number; citationRate: number; shareOfVoice: number }[] };
@@ -1127,6 +1144,12 @@ export interface LadderDetail extends LadderCard {
   reports: Report[];
   costSoFarUsd: number;
   expectedVisitsTop3: number | null;
+  /** G12: the events marked on this ladder's charts — its pages going live, audit fixes, Google updates, data breaks */
+  annotations: ChartAnnotation[];
+  /** G12: what each of this ladder's page changes did, against the site's other pages */
+  changeTests: PageChangeTest[];
+  /** G29: where the positions, the traffic and the expected visits come from */
+  lineage: Lineage[];
 }
 
 export interface NeedsYouItem {

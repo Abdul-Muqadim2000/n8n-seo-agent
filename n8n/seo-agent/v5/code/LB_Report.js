@@ -1,11 +1,16 @@
 // Link Builder report per site (e-mail / callback stage link_builder; v4.13): pitches drafted and waiting for approval in the app, journalist
 // requests on your topics, links you can add yourself (the listings checklist), redirects to add, and what won links did for their pages.
+// G12 / G29 (2026-10-13, FIX_PLAN): "What your page changes did" reads a published or rewritten page against the same control group
+// as a won link (one implementation, CT), and every figure carries its source, period and sample (LN).
 /*__REPORT_KIT__*/
+/*__LINEAGE__*/
+/*__CHANGE_TEST__*/
 // reads LB Assemble and LB Rows explicitly: the node before this one saves Data Table rows and outputs those rows
 const A = $('LB Assemble').all().map(i => i.json).filter(s => !s.skip); const R = $('LB Rows').all().map(i => i.json);
 const parse = (t, d) => { try { return JSON.parse(t || ''); } catch (e) { return d; } };
 const ANGLE = { broken: 'Dead link on their page', lost: 'Link to restore', mention: 'Mention without a link', list: 'List that leaves you out', ai_source: 'Page AI cites', resource: 'Resource page', gap: 'Links to competitors', comp_new: 'Just linked to a competitor', press: 'Journalist request' };
-const VERDICT = { likely_helped: 'Likely helped', possibly_helped: 'Possibly helped', no_effect_yet: 'No measurable effect yet', too_early: 'Too early', cant_tell: "Can't tell" };
+const VERDICT = CT.LABELS;   // G12: one set of graded verdicts for links and page changes
+const CHANGE = { published: 'Published', rewritten: 'Rewritten' };
 const STATUS = { linked: 'Linked', listed: 'Listed (no link seen)', missing: 'Not listed', submitted: 'Submitted', unknown: 'Not checked (the site blocks checks)', ignored: 'Not relevant' };
 return A.map(s => {
   const r = R.find(x => x.site_id === s.site_id) || { outreach_rows: s.outreach_rows, drafted: 0, skipped: 0 };
@@ -15,7 +20,8 @@ return A.map(s => {
   const press = rows.filter(o => o.type === 'press');
   const fixes = rows.filter(o => o.type === 'redirect');
   const listings = (s.listing_rows || []).slice().sort((a, b) => (a.status === 'linked') - (b.status === 'linked') || a.priority - b.priority);
-  const reads = (s.impact_rows || []);
+  const reads = (s.impact_rows || []).filter(x => x.kind !== 'page_change');
+  const changeReads = (s.impact_rows || []).filter(x => x.kind === 'page_change');
   const sm = s.summary;
   let html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:860px;color:#0f172a">';
   html += '<h2 style="margin:0 0 4px">Link building — ' + esc(s.domain) + '</h2>' + p_(esc(s.checked_at.slice(0, 10)) + ' · new link opportunities, pitches ready for your approval, and what your links did', true);
@@ -31,11 +37,25 @@ return A.map(s => {
   if (listings.length) html += h3('Links you can add yourself') + table(['Where', 'Status', 'Competitors there', 'Why'], listings.slice(0, 20).map(l => [l.submit_url && l.status !== 'linked' ? link(l.submit_url, l.name) : esc(l.name), esc(STATUS[l.status] || l.status) + (l.profile_url ? ' · ' + link(l.profile_url, 'profile') : ''), esc(l.competitors || '—'), esc(String(l.why).slice(0, 200))]), '');
   if (fixes.length) html += h3('Redirects to add (old URLs that now answer 404)') + table(['Old URL', 'Redirect to', ''], fixes.slice(0, 20).map(f => [esc(f.page_url), link(f.target_url), esc(f.target_reason)]), '');
   if (reads.length) html += h3('What your links did') + table(['Link from', 'Your page', 'Weeks', 'Position', 'Verdict'], reads.slice(0, 15).map(x => [esc(x.ref_domain), link(x.target_url), n(x.weeks), x.base_position ? x.base_position + ' → ' + x.position : '—', esc(VERDICT[x.verdict] || x.verdict) + (x.note ? '<div style="font-size:12px;color:#64748b">' + esc(x.note) + '</div>' : '')]), '');
-  html += p_('Nothing is sent for you: every pitch waits for your approval in the app and goes out from your own mailbox. Listings are never submitted automatically.', true) + '</div>';
+  if (changeReads.length) html += h3('What your page changes did') + table(['Page', 'Change', 'Since', 'Weeks', 'Position', 'Verdict'], changeReads.slice(0, 15).map(x => [link(x.target_url), esc(CHANGE[x.change] || x.change || 'changed'), esc(x.t0), n(x.weeks),
+    x.base_position ? x.base_position + ' → ' + x.position : '—', esc(VERDICT[x.verdict] || x.verdict) + (x.note ? '<div style="font-size:12px;color:#64748b">' + esc(x.note) + '</div>' : '')]), '')
+    + p_(esc(CT.method), true);
+  html += p_('Nothing is sent for you: every pitch waits for your approval in the app and goes out from your own mailbox. Listings are never submitted automatically.', true);
+  // G29: where the figures in this report come from
+  const lineage = [
+    LN.of('Position before and after, for links and page changes', 'gsc_history', { basis: 'measured', period: 'the stored 28-day periods, the last one ending ' + esc(s.checked_at.slice(0, 10)),
+      sample: LN.sample(reads.length + changeReads.length, 'readings (' + reads.length + ' links, ' + changeReads.length + ' page changes)'), note: 'impression-weighted average position per page; the control group is the site\'s other pages over the same weeks' }),
+    LN.of('New opportunities, journalist requests and listings', 'web', { basis: 'measured', period: LN.asOf(s.checked_at), sample: LN.sample(rows.length, 'prospects read this run'), note: 'pages we fetched ourselves; a page behind a bot wall is reported as "not checked", never as "missing"' }),
+    s.free_only ? LN.unknown('Competitors\' broken backlinks', 'this was a free check: the DataForSEO backlink index was not asked')
+      : LN.of('Competitors\' broken backlinks', 'backlink_index', { basis: 'reported', period: 'read monthly, last ' + LN.asOf(s.checked_at), sample: LN.sample(rows.filter(o => o.type === 'broken').length, 'broken links found'), note: 'one crawler\'s index of the web' }),
+  ];
+  html += LN.block(lineage) + '</div>';
   const subject = '[Link building] ' + s.domain + ' — ' + (r.drafted ? r.drafted + ' pitch(es) ready' : 'weekly opportunities') + (sm.press ? ' · ' + sm.press + ' journalist request(s)' : '');
   const file_name = 'link-building-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + s.checked_at.slice(0, 10) + '.html';
   return { json: { site_id: s.site_id, domain: s.domain, email: s.email, callback_url: s.callback_url, request_id: s.request_id, checked_at: s.checked_at, free_only: s.free_only, summary: { ...sm, drafted: r.drafted || 0, held: r.held || 0, writer_skipped: r.skipped || 0, writer_error: r.writer_error || '' },
     drafted: drafted.map(o => ({ prospect_domain: o.prospect_domain, type: o.type, target_url: o.target_url })), listings: listings.map(l => ({ listing_id: l.listing_id, name: l.name, status: l.status })), redirects: fixes.map(f => ({ from: f.page_url, to: f.target_url })),
-    impact: reads.map(x => ({ ref_domain: x.ref_domain, target_url: x.target_url, weeks: x.weeks, verdict: x.verdict })), subject, html, file_name, status: 'progress', stage: 'link_builder' },
+    impact: reads.map(x => ({ ref_domain: x.ref_domain, target_url: x.target_url, weeks: x.weeks, verdict: x.verdict })),
+    page_changes: changeReads.map(x => ({ target_url: x.target_url, change: x.change, t0: x.t0, weeks: x.weeks, effect: x.effect, verdict: x.verdict, verdict_label: CT.label(x.verdict), note: x.note })),
+    change_method: CT.method, lineage, subject, html, file_name, status: 'progress', stage: 'link_builder' },
     binary: { data: { data: b64(wrapDoc(subject, html)), mimeType: 'text/html', fileName: file_name, fileExtension: 'html' } } };
 });

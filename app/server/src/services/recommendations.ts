@@ -358,7 +358,8 @@ export async function overviewData(org: OrgRow, site: SiteRow): Promise<Overview
   const lastBl = [...bl].reverse().find((b) => b.mode !== 'free') ?? bl[bl.length - 1] ?? null;
   return {
     site: { domain: site.domain, trackingStatus: site.trackingStatus, verified: !!site.verifiedAt },
-    search: { latest, series, seriesKind: m.length ? 'weekly' : 'daily' },
+    // G12 / G29: the overview chart carries the same event marks and the same lineage as the search page (computed once, in searchData)
+    search: { latest, series, seriesKind: m.length ? 'weekly' : 'daily', annotations: x.search.annotations, lineage: x.search.lineage },
     health: { latest: audits[audits.length - 1] ?? null, series: audits.map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore })) },
     ai: { latest: aiRuns[aiRuns.length - 1] ?? null, series: aiRuns.map((r) => ({ checkedAt: r.checkedAt, mentionRate: r.mentionRate, citationRate: r.citationRate, shareOfVoice: r.shareOfVoice })) },
     backlinks: {

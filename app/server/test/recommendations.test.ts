@@ -6,8 +6,8 @@ const site = { id: 's1', domain: 'northwind-erp.com', trackingStatus: 'active', 
 
 function bundle(over: Partial<SiteBundle> = {}): SiteBundle {
   return {
-    search: { connection: { tracked: true, status: 'active', gscProperty: 'sc-domain:northwind-erp.com', ga4PropertyId: '1', lastRunAt: null, lastStatus: null, keywords: [], reportsToThisApp: true }, snapshot: null, metrics: [], queries: [], periods: [], trends: [] },
-    rankings: { ladders: [], keywords: [] },
+    search: { connection: { tracked: true, status: 'active', gscProperty: 'sc-domain:northwind-erp.com', ga4PropertyId: '1', lastRunAt: null, lastStatus: null, keywords: [], reportsToThisApp: true }, snapshot: null, metrics: [], queries: [], periods: [], trends: [], annotations: [], dataBreaks: [], changeTests: [], lineage: [] },
+    rankings: { ladders: [], keywords: [], lineage: [] },
     content: { items: [], cadence: { pagesPerWeek: 1, status: 'active' }, caseStudies: [], profile: null, readiness: { score: 100, missing: [] }, generated: [] },
     technical: { audits: [{ auditId: 'a1', auditedAt: new Date().toISOString(), reportType: 'site_audit', healthScore: 90, grade: 'Good', pagesCrawled: 10, findings: 0, critical: 0, high: 0, medium: 0, low: 0, scheduled: false }], selectedAuditId: 'a1', previousAuditId: null, findings: [], byCategory: [], reports: [], watch: null, indexCoverage: null },
     ai: { runs: [{ runId: 'r', checkedAt: '', prompts: 5, answers: 20, mentionRate: 50, citationRate: 10, shareOfVoice: 30, avgRank: 2, aioPresence: 0, aioCitationRate: 0, costUsd: 0, alerts: [], runKind: 'weekly', samples: 20, visibilityScore: 40, mentionLo: 30, mentionHi: 70, sentimentScore: null, accuracyIssues: 0, aiSessions: null, aiConversions: null, aiRevenue: null, indexSov: null, aiImpressions: null }], latest: null, daily: [], prompts: [], answers: [], growth: null, report: null },
@@ -94,7 +94,7 @@ describe('recommend', () => {
 
   it('the next ladder rung opens the ladder on the Pipeline page', () => {
     const rung = (keyword: string, status: string, pageNo: number) => ({ rung: 1, pageNo, keyword, supporting: [], pageType: 'Guide', targetUrl: '', pageExists: false, status, months: '1-2', latestPosition: null, previousPosition: null, bestPosition: null, lastChecked: null, history: [] });
-    const recs = recommend(site, bundle({ rankings: { keywords: [], ladders: [{ ladderId: 'lad_1', headKeyword: 'erp dubai', country: 'United Arab Emirates', startDate: '', pages: 2, published: 0, rungs: [rung('erp cost dubai', 'writing', 1), rung('erp vendors dubai', 'planned', 2)] }] } }));
+    const recs = recommend(site, bundle({ rankings: { keywords: [], lineage: [], ladders: [{ ladderId: 'lad_1', headKeyword: 'erp dubai', country: 'United Arab Emirates', startDate: '', pages: 2, published: 0, rungs: [rung('erp cost dubai', 'writing', 1), rung('erp vendors dubai', 'planned', 2)] }] } }));
     expect(recs.find((r) => r.id === 'rank:next:lad_1')?.action).toEqual({ label: 'Open the ladder', page: 'pipeline/ladders/lad_1' });
   });
 

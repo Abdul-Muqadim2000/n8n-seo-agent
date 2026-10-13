@@ -735,7 +735,8 @@ SOURCES_SRC = _rd0('code/_sources.js').rstrip('\n'); ANCHOR_SRC = _rd0('code/_an
 PAGE_TYPE_SRC = _rd0('code/_page_type.js').rstrip('\n')   # 2026-10-12 (D10): the page type as one of the form's fixed options, with the verdict's free text kept as page_notes
 GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 / D24): the Search Console query rules (scraper queries, brand split, anonymised share)
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
-rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -3701,6 +3702,87 @@ sticky("""### Google's own view of every key page, and a fix checked in days (G2
     _gp45[0] - 40, _gp45[1] - 420, 1180, 320, 5)
 log('Google\'s own view of every key page, inside the quota (2026-10-13, FIX_PLAN G25): the audit inspects up to 100 of its indexable pages and the weekly Site Tracker rotates through every key page oldest-inspection-first (up to 150 a run, stored per page in seo_page_watch) inside Google\'s 2,000-a-day / 600-a-minute URL Inspection quota; both reports print per page whether it is in Google\'s index, the canonical Google chose against ours, the last crawl, mobile usability (a new High finding when Google reports issues) and the rich results, and everything the budget, a failure or missing access left out is printed as "not checked" with its reason instead of being hidden inside the word "sample"')
 log('A daily key-page watch and a fix re-checked in days (2026-10-13, FIX_PLAN G11): the new workflow SEO Agent — Page Watch (build_site_tracker.py, every morning 05:45, free — one plain GET per key page plus robots.txt, max 25 pages a site) compares status, a redirect that appeared, noindex, the canonical, the title and the robots.txt fingerprint (seo_cache `watch:<site_id>`) with the stored reading and alerts the same day in seo_console_alerts plus, for the serious ones, seo_ops_alerts and the alert webhook (D25b\'s path, deduped); a failed fetch is "not checked" and never overwrites the stored reading; "I fixed this" in the app marks the finding (seo_audit_findings.recheck_state) and the next watch answers that one finding on those pages — fixed, still open, or not checkable without the full audit — and both audit reports say so where the fix list starts')
+
+# =============================================================================
+# 47. ANNOTATIONS, CHANGE TESTS AND LINEAGE ON EVERY NUMBER (2026-10-13, system review FIX_PLAN.md G12 + G29; criteria 3.4 / 3.5 /
+#     2.12 / 3.11 in docs/system-review-2026-10-11/CRITERIA_technical_tracking_reporting_ai_links.md). Reporting scored 4.5/10 and
+#     change tests scored 0:
+#       * G12 annotations: a chart that falls in mid-September 2025 looks like a ranking disaster until you know that is the week
+#         Google stopped serving 100 results on one page. Rank Ranger and Search Console both mark such events; we marked nothing.
+#         `v5/data/seo_events.json` is now THE dated place for Google updates and data breaks — inlined into `_annotations.js` (the
+#         marks), into `_site_stats.js` (the alert context G28 already printed) and written out as
+#         `app/shared/src/seo-events.generated.ts` for the app's charts, so engine and dashboards mark the same dates. AN.marks()
+#         computes a mark per published page (seo_content_log.published_at), per technical audit with the findings it cleared
+#         (seo_audits), and per registry event overlapping the window; a date with no event produces nothing.
+#       * G12 change tests: the Link Builder measured what a won link did against a control group of the site's other pages. That
+#         comparison is now `_change_test.js` (CT) and measures a PAGE CHANGE the same way — LB Assemble writes `kind: page_change`
+#         rows into seo_link_impact from the content log's publish dates, and the Link Builder report reads them under "What your
+#         page changes did". Verdicts stay graded and weak: likely helped / possibly helped / no clear effect yet / too early to
+#         tell / can't tell. Nothing says a change caused a move.
+#       * G29 lineage: the AI-visibility report stated its sample sizes and ranges; everywhere else "1,240 impressions" and "#8" sat
+#         side by side with no hint that one is a 28-day Google count and the other one live sample. `_lineage.js` (LN) carries
+#         source / period / sample / basis as structured fields beside every figure group, renders one short note under the figures
+#         and a "Where these numbers come from" table at the end of the weekly, AI-visibility, AI-growth, backlink, link-building,
+#         rank-tracker, ladder-plan and full reports, and travels in the callbacks so the app shows the same words. The vocabulary is
+#         the one already in use (G6 "modelled, not measured", G8 calibrated / modelled / unknown, G28 ranges, G26 impact_basis).
+#         Where lineage is genuinely unknown the note reads "source not recorded" — never a borrowed source.
+# =============================================================================
+LINEAGE_SRC47 = seo_events.LINEAGE_SRC
+# ---------- A. the full SEO report: a figure-level lineage table before the methodology section ----
+setcode('Build Full Report', LINEAGE_SRC47 + '\n' + code('Build Full Report'))
+_LIN47 = """// G29 (2026-10-13): every figure group of this report with its source, period and sample (LN, v5/code/_lineage.js)
+const _sc47 = a.search_console || {};
+const lineage = [
+  LN.of('Health score and the findings', 'crawl', { basis: 'modelled', period: LN.asOf(a.audited_at || today), sample: LN.sample(a.pages_crawled, 'pages crawled'),
+    note: 'our own 0-100 score: points off per finding by severity (the table below), not a Google figure' }),
+  _sc47.connected
+    ? LN.of('Clicks, impressions and index coverage', 'gsc', { basis: 'measured', period: 'the last 28 days', sample: LN.sample((_sc47.totals || {}).impressions, 'impressions'), note: 'property ' + String(_sc47.property || '') })
+    : LN.unknown('Clicks, impressions and index coverage', String(_sc47.error || 'Search Console is not connected for this site')),
+  LN.of('Searches per month, difficulty, cost per click and traffic estimates', 'kwdata', { basis: 'estimated', period: 'the provider\\'s latest 12-month average',
+    sample: LN.sample((a.keyword_ideas || a.keywords || []).length, 'keywords'), note: 'provider estimates for ' + String(d.country || '') + ', not measurements of your site' }),
+  LN.of('Backlinks and referring domains', 'backlink_index', { basis: 'reported', period: LN.asOf(today), sample: LN.sample((a.backlinks || {}).referring_domains, 'referring domains'),
+    note: 'one crawler\\'s index of the web: it finds much of the web, never all of it' }),
+  LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate',
+    note: 'where a page or template has too few visits the report says so instead of showing a figure' }),
+  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
+  LN.of('Domain age', 'rdap', { basis: 'reported', period: LN.asOf(today), sample: LN.sample(((a.domain_ages || {}).rows || []).length || undefined, 'domains looked up'), note: 'the registry record, cached for a year' }),
+];
+html += '<h2 class="pb">' + '16a. Where these numbers come from</h2>'
+  + '<table class="ct"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
+  + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '—') + '</td><td>' + esc(l.sample || '—') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+  + '</table><p class="small">A figure marked "modelled, not measured" is computed, not counted; "source not recorded" means the figure reached this report without its source and should be treated as unverified.</p>';
+"""
+patch('Build Full Report', '// ---------- 16. Methodology ----------', _LIN47 + '// ---------- 16. Methodology ----------')
+patch('Build Full Report', "    health_score: a.health_score,", "    health_score: a.health_score,\n    lineage,")
+assert 'const LN = (() => {' in code('Build Full Report') and 'Where these numbers come from' in code('Build Full Report'), 'G29: the full report has no lineage'
+# ---------- B. nothing left unresolved, and the kits really reached the nodes that ask for them ----------
+for _m47 in ('/*__LINEAGE__*/', '/*__ANNOTATIONS__*/', '/*__CHANGE_TEST__*/', '/*__SEO_EVENTS__*/', '/*__GOOGLE_UPDATES__*/'):
+    assert not any(_m47 in n['parameters'].get('jsCode', '') for n in nodes.values()), 'G12 / G29: placeholder left: ' + _m47
+assert 'const LN = (() => {' in code('Build Ladder Report') and 'Where these numbers come from' in code('Build Ladder Report'), 'G29: the ladder plan has no lineage'
+# ---------- C. harness shims (S56): each kit as a runnable script, one call per item ----------
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_lineage.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 47): the lineage kit — { figure, source, period, sample, basis, note } -> the structured fields, the one-line note and the report block\n"
+    + LINEAGE_SRC47 + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  const l = j.unknown ? LN.unknown(j.figure, j.why) : LN.of(j.figure, j.source, j);\n"
+    "  return { json: { ...l, line: LN.note(l), html: LN.html(l), block: LN.block([l]), sources: Object.keys(LN.SOURCES), bases: Object.keys(LN.BASIS), missing: LN.MISSING,\n"
+    "    range: j.range === undefined ? null : LN.range(j.range), as_of: j.as_of === undefined ? null : LN.asOf(j.as_of), sample_text: j.sample_n === undefined ? null : LN.sample(j.sample_n, j.sample_unit) } }; });\n")
+open(os.path.join(OUT_CODE, '_annotations.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 47): the annotation kit — { from, to, published, audits, links } -> the dated marks of that window\n"
+    + seo_events.ANNOTATIONS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; const marks = AN.marks(j);\n"
+    "  return { json: { marks, html: AN.html(marks), breaks: AN.breakBetween(j.from, j.to), updates: AN.UPDATES, data_breaks: AN.BREAKS, registry_updated: AN.EVENTS.updated } }; });\n")
+open(os.path.join(OUT_CODE, '_change_test.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 47): the change test — { weeks, base, now, others, joint, kind } -> the control-group reading and its graded verdict\n"
+    + seo_events.CHANGE_TEST_SRC + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  return { json: { ...CT.compare(j), labels: CT.LABELS, method: CT.method, min_weeks: CT.MIN_WEEKS, min_others: CT.MIN_OTHERS } }; });\n")
+# ---------- D. the same dated registry for the app's charts (generated, committed) ----------
+seo_events.write_app_ts()
+sticky("""### Annotations, change tests and lineage (G12 + G29)
+**Every chart is marked** with what happened: pages that went live (`seo_content_log.published_at`), technical audits with the findings they cleared (`seo_audits`), **Google updates** and **data breaks** (the num=100 break of September 2025) — from one dated file, `v5/data/seo_events.json`, inlined into `_annotations.js`, `_site_stats.js` and the app (`seo-events.generated.ts`). Add an update there and rebuild; a date with no event produces no mark.
+**A page change is read like a won link**: `_change_test.js` (CT) compares the page's own move with the site's **other pages** over the same weeks (`seo_link_impact`, `kind: page_change`). Verdicts stay graded — *likely helped · possibly helped · no clear effect yet · too early to tell · can't tell* — and nothing ever says a change **caused** a move.
+**Every figure carries its lineage** (`_lineage.js`): source, period, sample and how it was arrived at, as fields beside the value, one short note under the figures and a **"Where these numbers come from"** table in the weekly, AI-visibility, AI-growth, backlink, link-building, rank-tracker, ladder-plan and full reports. Modelled numbers say so; where the source was never recorded it reads **"source not recorded"**.""",
+    pos('Build Full Report')[0] - 40, pos('Build Full Report')[1] + 360, 1180, 280, 4)
+log('Annotations, change tests and lineage on every number (2026-10-13, FIX_PLAN G12 + G29; criteria 3.4 / 3.5 / 2.12 / 3.11): one dated event registry (v5/data/seo_events.json) feeds the chart marks (v5/code/_annotations.js: published pages from seo_content_log, audit fixes from seo_audits, Google updates and the September 2025 num=100 data break), the G28 alert context (_site_stats.js) and the app (app/shared/src/seo-events.generated.ts); the Link Builder\'s control-group impact became the shared change test (v5/code/_change_test.js) and now also reads what a PAGE CHANGE did (seo_link_impact kind=page_change + change columns, "What your page changes did" in the Link Builder report) with graded verdicts and no causal wording; and every figure group in the weekly, AI-visibility, AI-growth, backlink, link-building, rank-tracker, ladder-plan and full reports carries its source, period, sample and basis (v5/code/_lineage.js) inline and in a "Where these numbers come from" table, with "source not recorded" where the lineage is genuinely unknown')
 
 # =============================================================================
 # 9. WRITE

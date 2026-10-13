@@ -1,5 +1,10 @@
 // Weekly performance report per site: e-mail HTML (KPI tiles, actions, tracked keywords, ladder pages, movers, opportunities, traffic, trends),
 // the same document as a file for the PDF renderer, and the fields for the callback. Uses the AI brief when present, the facts otherwise.
+// G12 / G29 (2026-10-13, FIX_PLAN): the period's events are listed with their dates (pages published, audit fixes, Google updates, the
+// num=100 data break) so a move in the numbers can be read against what happened, and every figure group carries its source, period and
+// sample — inline under the tiles and in full in "Where these numbers come from".
+/*__LINEAGE__*/
+/*__ANNOTATIONS__*/
 const metrics = $('Site Metrics').all().map(i => i.json);
 let briefs = []; try { briefs = $('Site Brief').all().map(i => (i.json && i.json.output && typeof i.json.output === 'object') ? i.json.output : null); } catch (e) { briefs = []; }
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -33,6 +38,17 @@ return metrics.map((m, i) => {
   if (G.connected) tiles += tile('Clicks', n(G.totals.cur.clicks), pctS(G.deltas.clicks_pct) + (G.deltas.yoy_clicks_pct != null ? ' · ' + pctS(G.deltas.yoy_clicks_pct) + ' YoY' : ''), dcol(G.deltas.clicks_pct)) + tile('Impressions', n(G.totals.cur.impressions), pctS(G.deltas.impressions_pct), dcol(G.deltas.impressions_pct)) + tile('CTR', (G.totals.cur.ctr * 100).toFixed(1) + '%', (G.deltas.ctr_pts > 0 ? '+' : '') + G.deltas.ctr_pts + ' pts', dcol(G.deltas.ctr_pts)) + tile('Avg position', posS(G.totals.cur.position), G.deltas.position == null ? '—' : (G.deltas.position > 0 ? '▲ ' : G.deltas.position < 0 ? '▼ ' : '') + Math.abs(G.deltas.position) + ' places', dcol(G.deltas.position));
   if (A.connected) { const ps = pct(A.organic.cur.sessions, A.organic.prev.sessions), pk = pct(A.organic.cur.key_events, A.organic.prev.key_events); tiles += tile('Organic sessions', n(A.organic.cur.sessions), pctS(ps) + ' · ' + A.organic_share + '% of all sessions', dcol(ps)) + tile('Key events (organic)', n(A.organic.cur.key_events), pctS(pk) + ' · ' + n(A.organic.cur.engaged) + ' engaged sessions', dcol(pk)); }
   if (tiles) html += '<table cellspacing="6" style="border-collapse:separate;margin:8px 0"><tr>' + tiles + '</tr></table>';
+  // G29: the figures above, with their source, period and sample, right under them (the full list is at the end of the report)
+  const LIN = m.lineage || [];
+  const linOf = (re) => LIN.find(l => re.test(l.figure)) || null;
+  if (LIN.length) { const top = linOf(/^Clicks, impressions/) || LIN[0];
+    html += '<p style="margin:2px 0 8px;font-size:11px;color:#64748b">' + esc(LN.note(top)) + (linOf(/^Organic sessions/) ? ' · ' + esc(LN.note(linOf(/^Organic sessions/))) : '') + '</p>'; }
+  // G12: what happened inside the two periods this report compares — the marks the dashboard charts carry, as a dated list here
+  const MK = m.annotations || [], BRK = m.data_breaks || [];
+  if (BRK.length) html += '<div style="background:#fffbeb;border-left:4px solid #d97706;padding:8px 12px;margin:8px 0;font-size:13px"><b>These two periods are not directly comparable</b><ul style="margin:4px 0 0;padding-left:18px">'
+    + BRK.map(b => '<li>' + esc(b.name) + ' (' + esc(b.start) + ' to ' + esc(b.end) + '): ' + esc(b.detail) + '</li>').join('') + '</ul></div>';
+  if (MK.length) html += h3('What happened in this period') + AN.html(MK, { empty: false })
+    + '<p style="font-size:12px;color:#64748b">Every chart in your dashboard is marked with these dates. A Google update inside the period may be part of the cause of a move, which cannot be proven from these numbers.</p>';
   const acts = (b && Array.isArray(b.actions) && b.actions.length) ? b.actions.slice(0, 6).map(a => ({ action: a.action, why: a.why, keyword: a.keyword, url: a.url })) : m.actions.slice(0, 6);
   const withBody = m.actions.filter(a => a.api_body);
   html += h3('Do this week') + (acts.length ? '<ol style="margin:4px 0;padding-left:20px;font-size:14px">' + acts.map(a => '<li style="margin:4px 0"><b>' + esc(a.action) + '</b>' + (a.why ? '<br><span style="color:#475569;font-size:13px">' + esc(a.why) + '</span>' : '') + '</li>').join('') + '</ol>' : '<p style="font-size:13px;color:#64748b">Nothing urgent this week.</p>');
@@ -50,6 +66,8 @@ return metrics.map((m, i) => {
   }
   if (m.tracked.length) html += h3('Tracked keywords') + table(['Keyword', 'Source', 'Search Console avg', 'Before', 'Live Google check', 'Clicks', 'Impr.', 'Ranking page'], m.tracked.map(t => [esc(t.keyword), esc(t.source === 'ladder' ? (t.rung === 4 ? 'ladder top' : 'ladder rung ' + t.rung) : t.source === 'blog' ? 'blog page' : 'your list'),
     G.connected ? posS(t.gsc_position) : '<span style="color:#94a3b8">connect GSC</span>', G.connected ? posS(t.gsc_prev_position) : '—', t.serp_position == null ? '—' : (t.serp_position > 0 ? '#' + t.serp_position : t.serp_position === 0 ? 'not in top 50' : 'check failed') + (t.serp_checked_at ? '<br><span style="color:#94a3b8;font-size:11px">' + esc(String(t.serp_checked_at).slice(0, 10)) + '</span>' : ''), n(t.clicks), n(t.impressions), link(t.page || t.serp_url)]));
+  const linLine = (re) => { const l = linOf(re); return l ? '<p style="margin:2px 0 8px;font-size:11px;color:#64748b">' + esc(LN.note(l)) + '</p>' : ''; };
+  if (m.tracked.length) html += linLine(/^Live Google check/) || linLine(/^Clicks, impressions/);
   const C = m.console || { notices: [], last_checkin: null, checkin_due: false };
   if (C.notices.length || C.last_checkin || C.checkin_due) {
     html += h3('Search Console notices and monthly check-in');
@@ -80,6 +98,8 @@ return metrics.map((m, i) => {
   }
   if (A.connected) html += h3('Traffic (GA4, organic search)') + '<p style="font-size:13px">Organic: <b>' + n(A.organic.cur.sessions) + '</b> sessions (' + pctS(pct(A.organic.cur.sessions, A.organic.prev.sessions)) + '), ' + n(A.organic.cur.engaged) + ' engaged, ' + n(A.organic.cur.key_events) + ' key events, ' + n(A.organic.cur.users) + ' users · all channels: ' + n(A.total.cur.sessions) + ' sessions' + (A.channels.length ? ' (' + A.channels.slice(0, 4).map(c => esc(c.channel) + ' ' + n(c.sessions)).join(', ') + ')' : '') + (A.detected ? ' · property ' + esc(A.property_id) + ' detected automatically' : '') + '</p>' + table(['Landing page', 'Organic sessions', 'Change', 'Engaged', 'Key events'], A.landing.slice(0, 8).map(l => [link(l.page), n(l.sessions), deltaS(l.sessions, l.prev_sessions), n(l.engaged), n(l.key_events)]));
   if (m.trends.length) html += h3('Search interest (Google Trends, 12 months)') + table(['Keyword', 'Direction', 'Last 4 weeks vs average', 'Peak', 'Rising related searches'], m.trends.map(t => [esc(t.keyword), t.error ? '<span style="color:#94a3b8">' + esc(t.error) + '</span>' : t.direction === 'sparse' ? '<span style="color:#94a3b8">too little search volume for a trend</span>' : esc(t.direction), (t.change_pct == null || t.direction === 'sparse') ? '—' : (t.change_pct > 0 ? '+' : '') + t.change_pct + '%', esc(t.peak_date ? String(t.peak_date).slice(0, 7) : '—'), esc((t.rising || []).slice(0, 4).map(r => r.query + ' (' + r.value + ')').join(', ') || '—')]));
+  if (m.trends.length) html += linLine(/^Search interest/);
+  if (LIN.length) html += LN.block(LIN);
   if (b && (b.watch || []).length) html += h3('Watch') + '<ul style="font-size:13px;margin:4px 0;padding-left:18px">' + b.watch.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>';
   html += '<p style="color:#64748b;font-size:12px;margin-top:16px">' + (G.connected ? 'A fall in clicks, impressions or sessions is only called a fall when it is beyond normal week-to-week variation (two-sample Poisson test, 95%); a larger move at low volume is shown as "Watch". ' : '') + 'Search Console figures are final up to 3 days ago and are averages across devices and locations; the live Google check is one SERP sample from DataForSEO. Trends are a relative index (100 = peak of the year). Reports run every Monday' + (m.tracked.some(t => t.source === 'ladder') ? '; the keyword ladder gets its own progress e-mail' : '') + '. Reply to this e-mail to pause tracking.</p></div>';
   const hi = m.alerts.filter(a => a.level === 'high').length; const parts = [];

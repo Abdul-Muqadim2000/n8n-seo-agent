@@ -22,6 +22,11 @@ export interface LinkImpactRow extends DtRow {
   position: number | null; clicks: number | null; page_change: number | null; control_change: number | null; control_spread: number | null; effect: number | null;
   /** likely_helped | possibly_helped | no_effect_yet | too_early | cant_tell */
   verdict: string; note: string; keyword: string; updated_at: string;
+  /** G12 (2026-10-13): what was read — `link` (a won link; ref_domain set) or `page_change` (a page that went live or was rewritten).
+   * Rows written before this change have neither, and are link readings. */
+  kind?: string;
+  /** G12: a page change says what changed — published | rewritten */
+  change?: string;
 }
 export const LINK_OUTREACH_TABLE_COLUMNS = ['site_id', 'domain', 'prospect_domain', 'type', 'status', 'score', 'fit', 'fit_reason', 'checks_json', 'page_url', 'page_title', 'evidence', 'contacts_json',
   'contact_email', 'contact_form_url', 'country', 'language', 'target_url', 'target_reason', 'anchor_hint', 'sequence_json', 'deadline', 'drafted_at', 'checked_at', 'request_id'] as const;
@@ -72,6 +77,8 @@ export interface LinkBuildingData {
   listings: { id: string; name: string; category: string; status: string; profileUrl: string; rel: string; competitors: string[]; submitUrl: string; priority: number; why: string; checkedAt: string; submittedAt: string; note: string }[];
   redirects: { from: string; to: string; reason: string }[];
   impact: { refDomain: string; fromUrl: string; targetUrl: string; t0: string; weeks: number; basePosition: number | null; position: number | null; pageChange: number | null; controlChange: number | null; effect: number | null; verdict: string; note: string; keyword: string }[];
+  /** G12 (2026-10-13): the same control-group reading for a page that went live or was rewritten (never mixed into the link readings) */
+  pageChanges: { targetUrl: string; change: string; t0: string; weeks: number; basePosition: number | null; position: number | null; pageChange: number | null; controlChange: number | null; effect: number | null; verdict: string; note: string; keyword: string }[];
   lastRun: string | null; suppressed: number; canSend: { ok: boolean; why: string };
 }
 

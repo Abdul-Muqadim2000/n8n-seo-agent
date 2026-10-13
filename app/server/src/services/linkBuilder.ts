@@ -145,9 +145,14 @@ export async function linkBuildingData(org: OrgRow, site: SiteRow, role: Role): 
     listings: listings.map((l) => ({ id: s(l.listing_id), name: s(l.name), category: s(l.category), status: s(l.status), profileUrl: s(l.profile_url), rel: s(l.rel), competitors: s(l.competitors).split(/,\s*/).filter(Boolean), submitUrl: s(l.submit_url),
       priority: n(l.priority), why: s(l.why), checkedAt: s(l.checked_at), submittedAt: s(l.submitted_at), note: s(l.note) })).sort((a, b) => a.priority - b.priority),
     redirects: outreach.filter((r) => s(r.type) === 'redirect').map((r) => ({ from: s(r.page_url), to: s(r.target_url), reason: s(r.target_reason) })),
-    impact: impact.map((r) => ({ refDomain: s(r.ref_domain), fromUrl: s(r.from_url), targetUrl: s(r.target_url), t0: s(r.t0), weeks: n(r.weeks), basePosition: r.base_position == null ? null : n(r.base_position), position: r.position == null ? null : n(r.position),
+    // G12 (2026-10-13): the table now holds two kinds of reading — won links and page changes. They are never mixed: a page that went
+    // live is not a link. Rows written before the `kind` column exist are link readings (they all had a linking site).
+    impact: impact.filter((r) => s(r.kind) !== 'page_change').map((r) => ({ refDomain: s(r.ref_domain), fromUrl: s(r.from_url), targetUrl: s(r.target_url), t0: s(r.t0), weeks: n(r.weeks), basePosition: r.base_position == null ? null : n(r.base_position), position: r.position == null ? null : n(r.position),
       pageChange: r.page_change == null ? null : n(r.page_change), controlChange: r.control_change == null ? null : n(r.control_change), effect: r.effect == null ? null : n(r.effect), verdict: s(r.verdict), note: s(r.note), keyword: s(r.keyword) }))
       .sort((a, b) => b.weeks - a.weeks),
+    pageChanges: impact.filter((r) => s(r.kind) === 'page_change').map((r) => ({ targetUrl: s(r.target_url), change: s(r.change) || 'published', t0: s(r.t0), weeks: n(r.weeks), basePosition: r.base_position == null ? null : n(r.base_position), position: r.position == null ? null : n(r.position),
+      pageChange: r.page_change == null ? null : n(r.page_change), controlChange: r.control_change == null ? null : n(r.control_change), effect: r.effect == null ? null : n(r.effect), verdict: s(r.verdict), note: s(r.note), keyword: s(r.keyword) }))
+      .sort((a, b) => b.t0.localeCompare(a.t0)),
     lastRun: outreach.map((r) => s(r.checked_at)).sort().pop() || null, suppressed: supp[0]?.c ?? 0, canSend,
   };
 }

@@ -221,16 +221,10 @@ const ST = (() => {
       direction: pct == null ? 'new' : pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat',
       text: (pct == null ? 'new' : (pct > 0 ? 'up ' : 'down ') + Math.abs(pct) + '%') + ' (' + p + ' → ' + c + (band(c, p) ? ', 95% range ' + band(c, p)[0] + '% to ' + band(c, p)[1] + '%' : '') + ')' };
   };
-  // Google's confirmed ranking updates: context for a real fall, never a cause ("correlation, not proof"). Add new ones here.
-  const UPDATES = [
-    { name: 'March 2025 core update', start: '2025-03-13', end: '2025-03-27' },
-    { name: 'June 2025 core update', start: '2025-06-30', end: '2025-07-17' },
-    { name: 'August 2025 spam update', start: '2025-08-26', end: '2025-09-22' },
-    { name: 'December 2025 core update', start: '2025-12-02', end: '2025-12-18' },
-    { name: 'March 2026 core update', start: '2026-03-10', end: '2026-03-26' },
-    { name: 'June 2026 core update', start: '2026-06-23', end: '2026-07-08' },
-    { name: 'September 2026 core update', start: '2026-09-15', end: '2026-09-30' }
-  ];
+  // Google's confirmed ranking updates: context for a real fall, never a cause ("correlation, not proof").
+  // G12 (2026-10-13): the list is no longer written here. It is inlined from `v5/data/seo_events.json` — the one dated place to add
+  // an update, shared with the chart annotations (`_annotations.js`) and with the app (`app/shared/src/seo-events.generated.ts`).
+  const UPDATES = [].concat([{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-27"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-17"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-22"}, {"name": "December 2025 core update", "start": "2025-12-02", "end": "2025-12-18"}, {"name": "March 2026 core update", "start": "2026-03-10", "end": "2026-03-26"}, {"name": "June 2026 core update", "start": "2026-06-23", "end": "2026-07-08"}, {"name": "September 2026 core update", "start": "2026-09-15", "end": "2026-09-30"}]);
   const updatesIn = (range) => { const r = range || {}; const a = String(r.start || ''), b = String(r.end || '');
     if (!a || !b) return []; return UPDATES.filter(u => u.start <= b && u.end >= a); };
   const updateNote = (range) => { const hits = updatesIn(range); return hits.length ? ' A Google ' + hits.map(u => u.name + ' (' + u.start + ' to ' + u.end + ')').join(' and ') + ' ran inside this period — it may be part of the cause, which cannot be proven from these numbers.' : ''; };
@@ -514,6 +508,240 @@ const PW = (() => {
     CODES, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT,
     helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0 } };
 })();
+// G12 / G29 (2026-10-13, FIX_PLAN): the events of the period are marked for every chart (pages published, audit fixes, Google
+// updates, data breaks — AN, from v5/data/seo_events.json and the stored rows), and every figure group carries its source, period
+// and sample (LN). A figure whose source nobody recorded says "source not recorded" instead of borrowing one.
+// ---- chart annotations (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.5 / 2.12) ----
+// A line that falls in mid-September 2025 is not a ranking problem: that is the week Google stopped serving 100 results on one page.
+// A line that climbs two weeks after a page went live is the page. Rank Ranger and Search Console both mark such events on their
+// charts; we marked nothing, so every chart had to be read without its context. These marks are computed from data already stored -
+// published pages (`seo_content_log.published_at`), the technical audits (`seo_audits`), and the dated registry in
+// `v5/data/seo_events.json` (Google updates and data breaks) - and never from a guess. A date with no event produces no mark.
+// The registry is THE one place to add a new Google update: the build inlines the same file here, into _site_stats.js and into the
+// app (app/shared/src/seo-events.generated.ts), so the engine and the dashboards mark the same dates.
+const AN = (() => {
+  const EVENTS = Object.assign({ updated: '', google_updates: [], data_breaks: [] }, {"updated": "2026-10-13", "google_updates": [{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-27"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-17"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-22"}, {"name": "December 2025 core update", "start": "2025-12-02", "end": "2025-12-18"}, {"name": "March 2026 core update", "start": "2026-03-10", "end": "2026-03-26"}, {"name": "June 2026 core update", "start": "2026-06-23", "end": "2026-07-08"}, {"name": "September 2026 core update", "start": "2026-09-15", "end": "2026-09-30"}], "data_breaks": [{"name": "num=100 stopped working", "start": "2025-09-10", "end": "2025-09-19", "affects": ["impressions", "position"], "detail": "Google stopped serving 100 results on one page in mid-September 2025, so the SEO tools that read 100 results at a time disappeared from the counts. Impressions fell and average position improved on most sites without anything changing on the site: figures from before and after this break are not comparable."}]});
+  const KINDS = {
+    publish: { label: 'Page published', tone: 'good' },
+    fix: { label: 'Audit fixes', tone: 'good' },
+    google_update: { label: 'Google update', tone: 'warning' },
+    data_break: { label: 'Data break', tone: 'warning' },
+    link: { label: 'Link won', tone: 'good' },
+  };
+  const S = (v) => String(v == null ? '' : v);
+  const day = (v) => S(v).slice(0, 10);
+  const esc1 = (s) => S(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // a point event is in the window when its day is inside it; a dated range is in when it overlaps it. An open end means "no limit".
+  const inRange = (from, to, start, end) => { const a = day(from), b = day(to), s0 = day(start), e0 = day(end) || day(start);
+    if (!s0) return false;
+    if (a && e0 < a) return false;
+    if (b && s0 > b) return false;
+    return true; };
+  const mark = (kind, date, label, o) => { const x = o || {};
+    return { kind, date: day(date), date_end: day(x.date_end) || day(date), label: S(label), detail: S(x.detail), url: S(x.url), source: S(x.source),
+      tone: (KINDS[kind] || {}).tone || 'neutral', kind_label: (KINDS[kind] || {}).label || kind }; };
+  // every event inside [from, to]. `published`: seo_content_log rows; `audits`: seo_audits rows (oldest first or any order);
+  // `links`: won links with their first sighting. Everything optional - what is missing simply produces no marks.
+  const marks = (o) => {
+    const x = o || {}; const from = day(x.from), to = day(x.to); const out = [];
+    for (const p of (x.published || [])) {
+      const d = day(p.published_at || p.publishedAt || p.date);
+      if (!d || !inRange(from, to, d, d)) continue;
+      const kw = S(p.keyword).trim();
+      out.push(mark('publish', d, kw ? 'Published: "' + kw + '"' : 'Page published', { url: S(p.published_url || p.publishedUrl || p.url), source: 'seo_content_log',
+        detail: S(p.source) === 'ladder' ? 'a keyword-ladder page' : S(p.source) === 'cadence' ? 'a page of the weekly cadence' : S(p.source) ? 'source: ' + S(p.source) : '' }));
+    }
+    const audits = (x.audits || []).filter(a => day(a.audited_at || a.auditedAt)).slice()
+      .sort((a, b) => day(a.audited_at || a.auditedAt).localeCompare(day(b.audited_at || b.auditedAt)));
+    for (let i = 0; i < audits.length; i++) {
+      const a = audits[i], prev = audits[i - 1];
+      const d = day(a.audited_at || a.auditedAt);
+      if (!inRange(from, to, d, d)) continue;
+      const nFind = Number(a.findings == null ? a.findingsCount : a.findings), pFind = prev ? Number(prev.findings == null ? prev.findingsCount : prev.findings) : NaN;
+      const hs = Number(a.health_score == null ? a.healthScore : a.health_score), ps = prev ? Number(prev.health_score == null ? prev.healthScore : prev.health_score) : NaN;
+      const fixed = (Number.isFinite(nFind) && Number.isFinite(pFind)) ? pFind - nFind : null;
+      const detail = [Number.isFinite(hs) ? (Number.isFinite(ps) ? 'health ' + ps + ' → ' + hs : 'health ' + hs + '/100') : '',
+        fixed == null ? '' : fixed > 0 ? fixed + ' fewer finding' + (fixed === 1 ? '' : 's') + ' than the audit before'
+          : fixed < 0 ? Math.abs(fixed) + ' more finding' + (fixed === -1 ? '' : 's') + ' than the audit before' : 'the same findings as the audit before'].filter(Boolean).join(' · ');
+      out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' : 'Technical audit', { detail, source: 'seo_audits' }));
+    }
+    for (const l of (x.links || [])) {
+      const d = day(l.t0 || l.first_seen || l.date);
+      if (!d || !inRange(from, to, d, d)) continue;
+      out.push(mark('link', d, 'Link won: ' + S(l.ref_domain || l.refDomain), { url: S(l.target_url || l.targetUrl), source: 'seo_backlinks' }));
+    }
+    for (const u of (EVENTS.google_updates || [])) {
+      if (!inRange(from, to, u.start, u.end)) continue;
+      out.push(mark('google_update', u.start, 'Google: ' + S(u.name), { date_end: u.end, source: 'v5/data/seo_events.json',
+        detail: 'Google changed its ranking systems between ' + day(u.start) + ' and ' + day(u.end) + '. A move in this window may be part of the cause, which cannot be proven from these numbers.' }));
+    }
+    for (const b of (EVENTS.data_breaks || [])) {
+      if (!inRange(from, to, b.start, b.end)) continue;
+      out.push(mark('data_break', b.start, 'Data break: ' + S(b.name), { date_end: b.end, source: 'v5/data/seo_events.json', detail: S(b.detail) }));
+    }
+    out.sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label));
+    return out;
+  };
+  // does a before / after comparison straddle a data break? Then the two sides are not comparable and the report says so.
+  const breakBetween = (from, to) => (EVENTS.data_breaks || []).filter(b => inRange(from, to, b.start, b.end))
+    .map(b => ({ name: S(b.name), start: day(b.start), end: day(b.end), detail: S(b.detail), affects: (b.affects || []).map(S) }));
+  const html = (list, o) => { const rows = (list || []); const x = o || {};
+    if (!rows.length) return x.empty === false ? '' : '<p style="color:#64748b;font-size:13px">Nothing happened in this period that would explain a move in the charts.</p>';
+    const td = 'style="padding:4px 8px;border:1px solid #cbd5e1;font-size:12px;vertical-align:top"';
+    const th = 'style="padding:4px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:11px"';
+    return '<table style="border-collapse:collapse;margin:6px 0;max-width:100%"><tr><th ' + th + '>Date</th><th ' + th + '>Event</th><th ' + th + '>What it was</th></tr>'
+      + rows.map(m => '<tr><td ' + td + '>' + esc1(m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '')) + '</td><td ' + td + '>'
+        + esc1(m.label) + '</td><td ' + td + '>' + esc1(m.detail || m.kind_label) + '</td></tr>').join('') + '</table>';
+  };
+  return { marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
+})();
+// ---- lineage (G29, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.11) ----
+// Every number a customer reads has to say where it came from, over what period, and how big the sample was. Before this, the AI
+// visibility report said it (sample sizes, Wilson ranges) and the others did not: the weekly report printed "1,240 impressions" and
+// "#8" side by side without saying that one is a 28-day Search Console count and the other one live sample of one results page.
+// LN.of() carries that as structured fields next to the value (`source`, `period`, `sample`, `basis`), LN.note() turns them into one
+// short line for a tooltip or a footnote, and LN.block() prints the whole list under a report as "Where these numbers come from".
+// Rules: the vocabulary is the one the rest of the system already uses (G6 "modelled, not measured clicks", G8 `calibrated` /
+// `modelled` / `unknown`, G28 statistical ranges, G26 `impact_basis`) - this kit makes it universal, it does not invent a second
+// scheme. A modelled or uncalibrated number must say so. Where lineage is genuinely unknown the note reads "source not recorded":
+// never a guessed source.
+const LN = (() => {
+  const MISSING = 'source not recorded';
+  // where numbers come from. `label` is what a customer reads, `how` the one sentence about what that source can and cannot see.
+  const SOURCES = {
+    gsc: { label: 'Google Search Console', how: 'Google\'s own count of the impressions and clicks it served; the last 3 days are not final, and figures are averages across devices and locations' },
+    gsc_history: { label: 'your stored Search Console history', how: 'the weekly Search Console readings we have kept for this site' },
+    inspection: { label: 'Search Console URL Inspection', how: 'Google\'s own answer about one URL at the moment it was asked' },
+    gsc_links: { label: 'your Search Console link export', how: 'the sample of links Google shows you; it is a sample, not the whole list' },
+    ga4: { label: 'Google Analytics 4', how: 'visits measured on your site by your own GA4 property' },
+    serp: { label: 'a live Google results page', how: 'one results page read through DataForSEO at that moment, from one country and one device' },
+    kwdata: { label: 'Google Ads keyword data (through DataForSEO)', how: 'the provider\'s monthly search volume and cost per click; a provider estimate for a single keyword, not a measurement of your site' },
+    backlink_index: { label: 'the DataForSEO backlink index', how: 'one crawler\'s index of the web: it finds much of the web, never all of it' },
+    bing: { label: 'Bing Webmaster Tools', how: 'Bing\'s own figures for the site it has verified' },
+    link_graph: { label: 'the Common Crawl web graph', how: 'a public crawl of the web, released every few months' },
+    ahrefs: { label: 'the Ahrefs Domain Rating API', how: 'Ahrefs\' own 0-100 rating of a domain' },
+    trends: { label: 'Google Trends', how: 'a relative index of search interest (100 = the peak of the period), not a count of searches' },
+    ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
+    ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
+    own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
+    crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
+    pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },
+    rdap: { label: 'the domain registry (RDAP, else WHOIS)', how: 'the registry\'s own record of when a domain was registered' },
+    gbp: { label: 'Google Business Profile', how: 'the public listing Google holds for the business' },
+    wikidata: { label: 'Wikidata', how: 'the public knowledge base search engines read' },
+    web: { label: 'public web pages we read', how: 'pages we fetched and quoted; nothing behind a login' },
+    you: { label: 'what you told us', how: 'the business profile, the monthly check-in or the forms you filled in' },
+    model: { label: 'a model on top of measured data', how: 'computed from measured numbers with a published formula, not measured itself' },
+    none: { label: MISSING, how: 'this figure reached the report without its source: treat it as unverified' },
+  };
+  // how the figure was arrived at. The words are the ones G6 / G8 / G28 already use.
+  const BASIS = {
+    measured: 'measured',
+    calibrated: 'calibrated against your own measured data',
+    modelled: 'modelled, not measured',
+    one_sample: 'one sample, not an average',
+    estimated: 'estimated',
+    reported: 'reported by the source',
+    unknown: MISSING,
+  };
+  const S = (v) => String(v == null ? '' : v);
+  const fmt = (v) => (Number(v) || 0).toLocaleString('en-GB');
+  const esc1 = (s) => S(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const src = (k) => SOURCES[k] || SOURCES.none;
+  // "2026-09-15 to 2026-10-12 (28 days)" - the period a figure covers, never an empty string
+  const range = (r, label) => { const o = r || {}; const a = S(o.start), b = S(o.end);
+    if (!a && !b) return label ? S(label) : 'period not recorded';
+    if (a && b) { const d = Math.round((new Date(b + 'T00:00:00Z').getTime() - new Date(a + 'T00:00:00Z').getTime()) / 864e5) + 1;
+      return a + ' to ' + b + (Number.isFinite(d) && d > 0 ? ' (' + d + ' day' + (d === 1 ? '' : 's') + ')' : ''); }
+    return 'to ' + (b || a); };
+  const asOf = (at) => { const d = S(at).slice(0, 10); return d ? 'as of ' + d : 'date not recorded'; };
+  const days = (n, end) => (Number(n) || 0) + ' days' + (S(end).slice(0, 10) ? ' to ' + S(end).slice(0, 10) : '');
+  const sample = (n, unit) => (n == null || n === '' || !Number.isFinite(Number(n))) ? 'sample not recorded' : fmt(n) + (unit ? ' ' + S(unit) : '');
+  // one figure's lineage, as structured fields beside the value
+  const of = (figure, source, o) => { const x = o || {}; const key = SOURCES[source] ? source : 'none';
+    const basis = BASIS[x.basis] ? x.basis : (key === 'none' ? 'unknown' : 'measured');
+    return { figure: S(figure), source: key, source_label: src(key).label, source_how: src(key).how,
+      period: S(x.period) || 'period not recorded', sample: x.sample == null ? 'sample not recorded' : S(x.sample),
+      basis, basis_label: BASIS[basis], note: S(x.note) };
+  };
+  // a figure whose source nobody recorded: say exactly that instead of inventing one
+  const unknown = (figure, why) => ({ figure: S(figure), source: 'none', source_label: MISSING, source_how: src('none').how,
+    period: '', sample: '', basis: 'unknown', basis_label: MISSING, note: S(why) });
+  // "Google Search Console · 2026-09-15 to 2026-10-12 (28 days) · 1,240 impressions · measured"
+  const note = (l) => { const x = l || {}; const lbl = x.source_label || MISSING;
+    return [lbl, x.period, x.sample, x.basis_label === lbl ? '' : x.basis_label, x.note].filter(Boolean).join(' · '); };
+  const isHonest = (l) => !!l && (l.basis !== 'unknown' || note(l).indexOf(MISSING) >= 0);
+  const html = (l) => '<span style="color:#64748b;font-size:11px">' + esc1(note(l)) + '</span>';
+  const line = (l) => '<div style="color:#64748b;font-size:11px;margin-top:2px">' + esc1(note(l)) + '</div>';
+  // the block under a report: one row per figure, so no number is left without a source, a period and a sample
+  const block = (list, o) => { const rows = (list || []).filter(Boolean); const x = o || {};
+    const td = 'style="padding:3px 8px;border:1px solid #cbd5e1;font-size:11px;vertical-align:top;color:#334155"';
+    const th = 'style="padding:3px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:11px"';
+    if (!rows.length) return '';
+    return '<h3 style="margin:18px 0 4px;font-size:13px;color:#0f172a">' + esc1(x.title || 'Where these numbers come from') + '</h3>'
+      + '<table style="border-collapse:collapse;margin:4px 0;max-width:100%">'
+      + '<tr><th ' + th + '>Figure</th><th ' + th + '>Source</th><th ' + th + '>Period</th><th ' + th + '>Sample</th><th ' + th + '>How it was arrived at</th></tr>'
+      + rows.map(l => '<tr><td ' + td + '>' + esc1(l.figure) + '</td><td ' + td + '>' + esc1(l.source_label) + '</td><td ' + td + '>' + esc1(l.period || '—')
+        + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+      + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
+  };
+  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, SOURCES, BASIS, MISSING };
+})();
+// ---- change test (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.4) ----
+// "We changed the page and clicks went up" is not a result: seasonality and Google's own updates move every page on a site at once
+// (P1: CausalImpact, Brodersen et al. 2015 - measuring a change needs a control or a counterfactual; P2: even the most reliable test
+// type SearchPilot publishes wins only about 2 times in 3). The Link Builder already measured a won link against a control group of
+// the site's OTHER pages over the same weeks; this kit is that same comparison, lifted out so a PAGE CHANGE can be read the same way.
+// The verdicts are graded and deliberately weak: "likely helped" / "possibly helped" / "no clear effect yet" / "too early to tell" /
+// "can't tell". Nothing here ever says a change CAUSED anything - a control group narrows the alternatives, it does not prove a cause.
+const CT = (() => {
+  const LABELS = { likely_helped: 'Likely helped', possibly_helped: 'Possibly helped', no_effect_yet: 'No clear effect yet', too_early: 'Too early to tell', cant_tell: 'Can\'t tell' };
+  const MIN_WEEKS = 6;          // a change read before 6 weeks says "too early": Google needs weeks to settle (P2: ~10 weeks per position for a link)
+  const MIN_OTHERS = 3;         // fewer than 3 other pages to compare with = no usable control group, so the verdict can only be "possibly"
+  const r1 = (n) => Math.round(10 * n) / 10;
+  const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };
+  const S = (v) => String(v == null ? '' : v);
+  const NOTES = {
+    link: { early: 'read at 6, 10 and 16 weeks after the link went live', no_data: 'the page had no search impressions before or after the link' },
+    page: { early: 'read at 6, 10 and 16 weeks after the change', no_data: 'the page had no search impressions before or after the change' },
+  };
+  const label = (v) => LABELS[v] || S(v);
+  /**
+   * One change, against the control group of the site's other pages over the same window. Positions: lower is better, so a positive
+   * `page_change` means the page moved UP. `others` are the control pages' own moves (before - after), unrounded.
+   * o: { weeks, base, now, others, joint, kind, min_weeks, min_others, no_data, early }
+   */
+  const compare = (o) => {
+    const x = o || {}; const kind = NOTES[x.kind] ? x.kind : 'page';
+    const minWeeks = x.min_weeks == null ? MIN_WEEKS : x.min_weeks, minOthers = x.min_others == null ? MIN_OTHERS : x.min_others;
+    const weeks = Math.max(0, Math.floor(Number(x.weeks) || 0));
+    const out = { weeks, base_position: 0, position: 0, page_change: 0, control_change: 0, control_spread: 0, control_pages: 0, effect: 0, verdict: '', verdict_label: '', note: '' };
+    if (weeks < minWeeks) { out.verdict = 'too_early'; out.note = S(x.early) || NOTES[kind].early; out.verdict_label = label(out.verdict); return out; }
+    const base = x.base == null || x.base === '' ? null : Number(x.base), now = x.now == null || x.now === '' ? null : Number(x.now);
+    if (!Number.isFinite(base) || !Number.isFinite(now) || base <= 0 || now <= 0) {
+      out.verdict = 'cant_tell'; out.note = S(x.no_data) || NOTES[kind].no_data; out.verdict_label = label(out.verdict); return out; }
+    const others = (x.others || []).map(Number).filter(Number.isFinite);
+    out.base_position = r1(base); out.position = r1(now); out.page_change = r1(out.base_position - out.position);
+    const mid = median(others);
+    out.control_change = r1(mid); out.control_spread = r1(median(others.map(d => Math.abs(d - mid)))); out.control_pages = others.length;
+    out.effect = r1(out.page_change - out.control_change);
+    const joint = Number(x.joint) || 0;
+    out.verdict = others.length < minOthers ? (out.effect > 1 ? 'possibly_helped' : 'no_effect_yet')
+      : out.effect > Math.max(1, 2 * out.control_spread) && !joint ? 'likely_helped'
+      : out.effect > Math.max(0.5, out.control_spread) ? 'possibly_helped' : 'no_effect_yet';
+    out.verdict_label = label(out.verdict);
+    out.note = (joint ? (kind === 'link' ? 'another link to this page within 4 weeks (credit shared); ' : 'another change to this page within 4 weeks (credit shared); ') : '')
+      + (others.length < minOthers ? 'few other pages to compare with; ' : '')
+      + 'position ' + out.base_position + ' → ' + out.position + ' vs the site\'s other pages ' + (out.control_change >= 0 ? '+' : '') + out.control_change;
+    return out;
+  };
+  const method = 'Each change is dated and read against a control group: the same page\'s average Google position before and after, minus what the site\'s OTHER pages did over the same weeks. That removes the part of the move that was the season, the market or a Google update. "Likely helped" means the page beat its control group by more than twice the spread of the control group itself and nothing else changed on that page in the same four weeks; "possibly helped" means it beat the control group by less than that; "no clear effect yet" means it did not. A control group narrows the alternatives: it is never proof of cause.';
+  const summary = (rows) => { const list = (rows || []); const by = (v) => list.filter(r => r.verdict === v).length;
+    return { total: list.length, likely_helped: by('likely_helped'), possibly_helped: by('possibly_helped'), no_effect_yet: by('no_effect_yet'), too_early: by('too_early'), cant_tell: by('cant_tell'),
+      read: list.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length }; };
+  return { compare, label, summary, method, LABELS, NOTES, MIN_WEEKS, MIN_OTHERS, r1, median };
+})();
 // G28 (2026-10-12, FIX_PLAN): a traffic alert fires on a STATISTICAL change, not on a fixed 30%. ST.change (two-sample Poisson z, 95% range)
 // decides; a large move that is still inside sampling noise is reported as "watch". Google's own update dates are added as context.
 const FORM_URL = 'http://localhost:5678/form/54f85234-172e-43e6-a84d-b5ecaa140e7d', API_URL = 'http://localhost:5678/webhook/seo-keyword-check';
@@ -529,6 +757,9 @@ const metricsHist = (() => { try { return $('Load Site Metrics').all().map(i => 
 // the same picture (the watch runs in its own workflow, SEO Agent — Page Watch, every morning)
 const watchRows = grab('Load Page Watch (Site)').filter(r => r.site_id && r.url);
 const watchCacheRows = grab('Load Watch Cache (Site)').filter(r => String(r.key || '').indexOf('watch:') === 0);
+// G12: the stored rows the chart marks are computed from — pages that went live (seo_content_log) and the technical audits (seo_audits)
+const logRowsAll = (() => { try { return $('Load Content Log').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();
+const auditRowsAll = (() => { try { return $('Load Audits (Site)').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();
 const queryHist = (() => { try { return $('Load Query History').all().map(i => i.json).filter(r => r && r.site_id && r.tracked && !r.error); } catch (e) { return []; } })();
 const now = new Date().toISOString();
 const pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? null : 0);
@@ -637,6 +868,41 @@ return sites.map((s, idx) => {
   // ---- rows for the Data Tables ----
   const T = gsc ? gsc.totals : null; const G = ga4;
   const prevRuns = metricsHist.filter(m => m.site_id === s.site_id).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).slice(-12).map(m => ({ period_end: m.period_end, clicks: Number(m.clicks) || 0, impressions: Number(m.impressions) || 0, position: r1(m.position), sessions: Number(m.sessions) || 0 }));
+  // ---- G12 (2026-10-13): the events of the two periods this report compares, marked on every chart ----
+  const myLogs = logRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain);
+  const publishedLogs = myLogs.filter(r => String(r.published_at || '').slice(0, 10));
+  const loggedKw = new Set(publishedLogs.map(r => kwKey(r.keyword)));
+  const annotations = AN.marks({ from: R.previous.start, to: R.current.end,
+    published: [...publishedLogs.map(r => ({ published_at: r.published_at, keyword: r.keyword, published_url: r.published_url, source: r.source })),
+      ...found.filter(f => !loggedKw.has(kwKey(f.keyword))).map(f => ({ published_at: (det && det.checked_at) || now, keyword: f.keyword, published_url: f.url, source: f.ladder_id ? 'ladder' : 'detected' }))],
+    audits: auditRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain) });
+  const data_breaks = AN.breakBetween(R.previous.start, R.current.end);
+  // ---- G29 (2026-10-13): where every figure in this report came from, over what period, from how big a sample ----
+  const lineage = [];
+  const curRange = LN.range(R.current), prevRange = LN.range(R.previous);
+  if (gsc) {
+    lineage.push(LN.of('Clicks, impressions, CTR and average position', 'gsc', { period: curRange, basis: 'measured',
+      sample: LN.sample(gsc.totals.cur.impressions, 'impressions across ' + (gsc.query_count || 0) + ' named queries'), note: 'compared with ' + prevRange }));
+    if (gsc.totals.yoy) lineage.push(LN.of('Year-on-year clicks', 'gsc', { period: LN.range(R.yoy), sample: LN.sample(gsc.totals.yoy.impressions, 'impressions'), basis: 'measured' }));
+    lineage.push(LN.of('Queries, quick wins, click-through gaps and page lists', 'gsc', { period: curRange, basis: 'measured',
+      sample: LN.sample(gsc.rows_read, 'rows read') + ((gsc.truncated || []).length ? ' — Search Console held more rows than this run read (' + gsc.truncated.join(', ') + ')' : ''),
+      note: 'the queries Google withholds are reported apart, never spread over the named ones' }));
+    lineage.push(LN.of('Expected click-through rate for a position', 'model', { period: 'industry averages, not dated', sample: 'positions 1-10', basis: 'modelled',
+      note: 'a published industry curve, not your own measured click-through rate' }));
+  } else lineage.push(LN.unknown('Search clicks, impressions and positions', 'Search Console is not connected for this site, so this report carries no measured search data'));
+  if (ga4) lineage.push(LN.of('Organic sessions, engaged sessions and key events', 'ga4', { period: curRange, basis: 'measured',
+    sample: LN.sample(ga4.organic.cur.sessions, 'organic sessions of ' + (ga4.total && ga4.total.cur ? ga4.total.cur.sessions : 0) + ' from all channels'), note: 'property ' + ga4.ga4_property_id }));
+  else lineage.push(LN.unknown('Visits, engagement and key events', 'Google Analytics is not connected for this site'));
+  if (tracked.some(t => t.serp_position != null)) lineage.push(LN.of('Live Google check per tracked keyword', 'serp', { basis: 'one_sample',
+    period: LN.asOf((tracked.find(t => t.serp_checked_at) || {}).serp_checked_at), sample: LN.sample(tracked.filter(t => t.serp_position != null).length, 'keywords, one results page each'),
+    note: 'one country and one device, so it will differ from the Search Console average' }));
+  if (pages.some(p => p.inspected)) lineage.push(LN.of('Index status of your pages', 'inspection', { basis: 'measured',
+    period: LN.asOf(now), sample: LN.sample(pages.filter(p => p.inspected).length, 'pages inspected') }));
+  if (trends.length) lineage.push(LN.of('Search interest', 'trends', { period: 'the last 12 months', basis: 'reported',
+    sample: LN.sample(trends.length, 'keywords'), note: 'a relative index (100 = the peak of the period), not a count of searches' }));
+  if (notices.length) lineage.push(LN.of('Search Console notices', 'gsc', { period: 'the last 35 days', sample: LN.sample(notices.length, 'notification e-mails'), basis: 'reported' }));
+  if (ck) lineage.push(LN.of('Manual actions, security issues and site-wide index coverage', 'you', { period: 'check-in of ' + String(ck.month || ''), sample: 'one check-in', basis: 'reported',
+    note: 'Google offers no API for these, so they come from your monthly check-in' }));
   const metrics_row = { site_id: s.site_id, domain: s.domain, period_start: R.current.start, period_end: R.current.end, checked_at: now, gsc_connected: !!gsc, ga4_connected: !!ga4,
     clicks: T ? T.cur.clicks : 0, impressions: T ? T.cur.impressions : 0, ctr: T ? T.cur.ctr : 0, position: T ? T.cur.position : 0, prev_clicks: T ? T.prev.clicks : 0, prev_impressions: T ? T.prev.impressions : 0, prev_ctr: T ? T.prev.ctr : 0, prev_position: T ? T.prev.position : 0,
     yoy_clicks: T && T.yoy ? T.yoy.clicks : 0, yoy_impressions: T && T.yoy ? T.yoy.impressions : 0, sessions: G ? G.organic.cur.sessions : 0, engaged_sessions: G ? G.organic.cur.engaged : 0, key_events: G ? G.organic.cur.key_events : 0,
@@ -680,6 +946,8 @@ return sites.map((s, idx) => {
     significance: stat,   // G28: the Poisson z-test behind every traffic alert (clicks / impressions / sessions)
     index_coverage,       // G25: Google's own view of every key page (URL Inspection within the 2,000-a-day quota, oldest first)
     page_watch: watch,    // G11: the daily key-page watch — what it checks, what changed this week, what it could not read
+    annotations, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
+    change_method: CT.method,   // G12: how a page change is read against the site's other pages (the Link Builder measures it; the wording is shared)
     tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
     detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),
     publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,
