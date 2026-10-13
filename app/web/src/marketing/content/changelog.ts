@@ -15,6 +15,22 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Tell it how you write, once',
+    summary:
+      'Your website profile now holds a style guide: exactly how your name is written, British or American spelling, the words you never want used and the tone. Every page is written to it, and the finished draft is read back against it.',
+    highlights: [
+      'Write your name once — Tech&, never “Tech and” or “techand” — and every page uses that form, including the title and the meta description',
+      'Your own name written the wrong way is a real quality finding and is corrected before the page reaches you',
+      '“tech and finance teams” in an ordinary sentence is not your name, and your name inside a link or a slug is not prose: neither is reported',
+      'Choose British or American spelling and it wins over the country the page targets; leave it on “follow the market” and each page uses the spelling of its own country',
+      'Words you ban are counted and listed; so are the exclamation marks, when your tone says no hype',
+      'Spellings that mean two different things, or where both forms are correct, are never “corrected”',
+      'The style notes are advice next to the page, never a reason to hold it back — and the report shows the rules on file beside what the draft did with them',
+    ],
+    features: ['content', 'autopilot', 'reports'],
+  },
+  {
+    date: '2026-10-13',
     title: 'What crawlers see before JavaScript runs',
     summary:
       'Every technical audit now reads your key pages twice — once exactly as a crawler receives them, before any script runs, and once after — and names anything only a browser can see. AI crawlers do not run JavaScript, so content that appears only after it is invisible to the answers they write.',

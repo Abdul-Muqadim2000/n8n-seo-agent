@@ -55,11 +55,29 @@ export function completeProfile(p: ProfileFields | null | undefined): ProfileFie
     serviceAreas: list(p.serviceAreas),
     mapUrl: str(p.mapUrl),
     logoUrl: str(p.logoUrl),
+    style: {
+      brandForm: str(p.style?.brandForm),
+      brandWrong: list(p.style?.brandWrong),
+      spelling: p.style?.spelling === 'British English' || p.style?.spelling === 'American English' ? p.style.spelling : '',
+      avoid: list(p.style?.avoid),
+      tone: str(p.style?.tone),
+      notes: str(p.style?.notes),
+    },
   };
 }
 
 export function isEmptyProfile(v: ProfileFields): boolean {
-  return !(v.author.name || v.businessName || v.address.street || v.phone || v.reviewer.name);
+  return !(
+    v.author.name ||
+    v.businessName ||
+    v.address.street ||
+    v.phone ||
+    v.reviewer.name ||
+    v.style.brandForm ||
+    v.style.spelling ||
+    v.style.avoid.length ||
+    v.style.tone
+  );
 }
 
 /** The server's readiness checks (@seo/shared PROFILE_CHECKS), evaluated live while typing. */
@@ -346,6 +364,82 @@ export function ProfileForm({
             </Field>
           )}
         />
+      </Group>
+
+      <Group
+        title="How you write"
+        description="Your house style. Every page we write follows it, and the quality check reports a draft that breaks it — your own name written the wrong way is corrected before delivery, the rest is advice next to the page."
+      >
+        <Field
+          label="How your brand name is written"
+          optional
+          hint="Exactly as it must appear, for example Tech& — never “Tech and” or “techand”."
+          error={errors.style?.brandForm?.message}
+        >
+          {(p) => <Input {...p} placeholder="Tech&" {...register('style.brandForm')} />}
+        </Field>
+        <Controller
+          control={control}
+          name="style.brandWrong"
+          render={({ field, fieldState }) => (
+            <Field
+              label="Other spellings of your name to catch"
+              optional
+              hint="“Tech and”, “techand” and “Tech-and” are caught already. Add anything else people get wrong."
+              error={errorText(fieldState.error)}
+            >
+              {(p) => (
+                <TagInput
+                  id={p.id}
+                  invalid={p['aria-invalid']}
+                  describedBy={p['aria-describedby']}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  max={12}
+                  normalize={(s) => s.trim().slice(0, 80)}
+                  placeholder="Tech & Co, then Enter"
+                />
+              )}
+            </Field>
+          )}
+        />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Spelling" optional hint="Leave on “Follow the market” and each page uses the spelling of the country it targets." error={errors.style?.spelling?.message}>
+            {(p) => (
+              <Select {...p} {...register('style.spelling')}>
+                <option value="">Follow the market the page targets</option>
+                <option value="British English">British English</option>
+                <option value="American English">American English</option>
+              </Select>
+            )}
+          </Field>
+          <Field label="How you want to sound" optional hint="For example: plain and direct, no hype, never an exclamation mark." error={errors.style?.tone?.message}>
+            {(p) => <Input {...p} placeholder="plain and direct, no hype" {...register('style.tone')} />}
+          </Field>
+        </div>
+        <Controller
+          control={control}
+          name="style.avoid"
+          render={({ field, fieldState }) => (
+            <Field label="Words to avoid" optional hint="Up to 40 words or phrases that must never appear." error={errorText(fieldState.error)}>
+              {(p) => (
+                <TagInput
+                  id={p.id}
+                  invalid={p['aria-invalid']}
+                  describedBy={p['aria-describedby']}
+                  value={field.value ?? []}
+                  onChange={field.onChange}
+                  max={40}
+                  normalize={(s) => s.trim().slice(0, 60)}
+                  placeholder="cutting-edge, then Enter"
+                />
+              )}
+            </Field>
+          )}
+        />
+        <Field label="Other style rules" optional hint="Anything else every page must follow." error={errors.style?.notes?.message}>
+          {(p) => <Textarea {...p} rows={3} placeholder="Write dates as 14 March 2026. Never call customers “clients”." {...register('style.notes')} />}
+        </Field>
       </Group>
     </fieldset>
   );

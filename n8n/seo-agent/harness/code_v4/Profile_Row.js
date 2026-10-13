@@ -4,7 +4,8 @@ const d = $('Normalize Input').first().json;
 const site_id = 'site_' + String(d.domain || '').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 let old = {}; try { old = $('Load Profile (Profile)').all().map(i => i.json).find(x => x && x.site_id === site_id) || {}; } catch (e) {}
 const COLS = ['business_name', 'business_type', 'logo_url', 'street_address', 'city', 'region', 'postal_code', 'country_code', 'phone', 'public_email', 'opening_hours', 'price_range', 'service_areas', 'map_url',
-  'author_name', 'author_job_title', 'author_credentials', 'author_bio', 'author_url', 'author_image_url', 'author_same_as', 'author_knows_about', 'reviewer_name', 'reviewer_job_title', 'reviewer_url'];
+  'author_name', 'author_job_title', 'author_credentials', 'author_bio', 'author_url', 'author_image_url', 'author_same_as', 'author_knows_about', 'reviewer_name', 'reviewer_job_title', 'reviewer_url',
+  'style_brand_form', 'style_brand_wrong', 'style_spelling', 'style_avoid', 'style_tone', 'style_notes'];   // G31 (2026-10-13): the stored style guide
 const inp = d.profile_input || {};
 const row = { site_id, domain: d.domain };
 for (const k of COLS) { const v = inp[k] == null ? '' : String(inp[k]).trim(); const was = old[k] == null ? '' : String(old[k]); row[k] = v === '-' ? '' : (v || was); }

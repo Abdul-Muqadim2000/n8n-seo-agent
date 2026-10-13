@@ -176,7 +176,7 @@ const lab = (label) => { const v = p2[label]; return v == null ? '' : String(v).
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
 const s0 = (v, n) => String(v == null ? '' : v).trim().slice(0, n || 400);
 const urlOk = (u) => /^https?:\/\/\S+$/i.test(String(u || ''));
-const A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video);
+const A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video), STY = obj(p2.style);   // G31: the stored style guide
 const authorLinks = (Array.isArray(A.same_as) ? A.same_as : String(A.same_as || A.links || lab('Author profile links (one per line)')).split(/[\s,]+/)).map(x => String(x).trim()).filter(urlOk).slice(0, 8);
 const authorUrl = s0(A.url, 400) || authorLinks.find(u => cleanDomain(u) === domain) || '';   // the author page on the site; LinkedIn & co. go to sameAs (an update without a page link keeps the stored one)
 const revText = lab('Expert reviewer (optional)'); const revUrl = (revText.match(/https?:\/\/\S+/) || [''])[0]; const revParts = revText.replace(/https?:\/\/\S+/, '').split(',').map(x => x.trim()).filter(Boolean);
@@ -190,7 +190,14 @@ const profile_input = {
   author_name: s0(A.name || p2.author_name || lab('Author name'), 120), author_job_title: s0(A.job_title || A.title || lab('Author job title'), 160), author_credentials: s0(A.credentials || lab('Author credentials and experience'), 600),
   author_bio: s0(A.bio || lab('Author bio'), 1200), author_url: authorUrl, author_image_url: s0(A.image_url || A.image || lab('Author photo URL (optional)'), 400),
   author_same_as: authorLinks.filter(u => u !== authorUrl).join(' '), author_knows_about: asArray(A.knows_about || lab('Topics the author knows best')).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),
-  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400)
+  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400),
+  // G31 (2026-10-13): how this customer writes. The spelling variant is empty unless they chose one, and then it beats the market default.
+  style_brand_form: s0(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written'), 160),
+  style_brand_wrong: asArray(STY.brand_wrong || STY.brandWrong || p2.style_brand_wrong).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),
+  style_spelling: s0(STY.spelling || p2.style_spelling || lab('Spelling'), 40),
+  style_avoid: asArray(STY.avoid || STY.avoid_words || STY.avoidWords || p2.style_avoid || lab('Words to avoid')).map(x => s0(x, 60)).filter(Boolean).slice(0, 40).join(', '),
+  style_tone: s0(STY.tone || p2.style_tone || lab('How you want to sound'), 300),
+  style_notes: s0(STY.notes || p2.style_notes || lab('Other style rules'), 600)
 };
 for (const k of ['logo_url', 'author_url', 'author_image_url', 'reviewer_url', 'map_url']) if (profile_input[k] && profile_input[k] !== '-' && !urlOk(profile_input[k])) throw new Error('Please enter full links (https://...) for the logo, author page, photo, reviewer and map.');
 const csIn = mode === 'case_study' || Object.keys(CS).length > 0;
@@ -272,7 +279,7 @@ if (mode === 'track' && !domain) throw new Error('Website Domain is required: tr
 if (mode === 'track' && !deliverable) throw new Error('Please add your email — the weekly tracking report is sent by email.');
 if (mode === 'checkin' && !domain) throw new Error('Website Domain is required.');
 if (mode === 'profile' && !domain) throw new Error('Website Domain is required: the profile belongs to your site.');
-if (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name or the business details.');
+if (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name', 'style_brand_form', 'style_spelling', 'style_avoid', 'style_tone'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name, the business details or your style guide.');
 if (mode === 'case_study' && !domain) throw new Error('Website Domain is required: the case study is written for your site.');
 if ((mode === 'ai_visibility' || mode === 'backlinks') && !domain) throw new Error('Website Domain is required.');
 if ((mode === 'ai_visibility' || mode === 'backlinks') && !deliverable) throw new Error('Please add your email — the report is sent by email.');
@@ -341,7 +348,7 @@ return [{
     checkin_notes,
     checkin_is_test,
     checkin_csv_text,
-    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name) ? profile_input : null,
+    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name || profile_input.style_brand_form) ? profile_input : null,
     case_study,
     case_id,
     local_area,

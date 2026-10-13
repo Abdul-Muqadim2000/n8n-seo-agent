@@ -3890,6 +3890,118 @@ url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 log('What exists only after JavaScript (2026-10-13, FIX_PLAN G14): every audit reads up to CONFIG.render_diff_pages (5) key pages twice — the raw first response (Fetch Raw Pages, a plain GET) and the page after its scripts ran (Render Key Pages, the Jina render path, with the JavaScript crawl standing in only when it really rendered) — and Render Diff compares title, main heading, canonical link, robots meta, link count and text length with one parser, flags what exists only after JavaScript as a High / Medium finding plus an AI Search Readiness finding, and prints which of the two readings every figure came from in both audit reports and in the callback; URLs are compared host-agnostically (a www. crawl URL against a bare canonical is not a mismatch) and a reading that failed is "not checked" with the reason (bot challenge, HTTP error, DNS, empty body), never "no difference"')
 
+# ---------- G31: a style guide that is stored, used in every writing prompt and checked (FIX_PLAN.md G31; criterion CAD C17) ----------
+#     Nothing stored how the customer writes. The brand's own written form ("Tech&", never "Tech and" or "techand"), the spelling variant
+#     (the market the page targets decided it, so a UAE site writing American English was corrected into British English on every page),
+#     the words they do not want used and the tone existed nowhere, so no prompt carried them and no check caught a draft that broke them.
+#     **Where it is stored: the site's business profile row (`seo_profiles.style_*`)** — not app site settings — for three reasons: every
+#     content run, the Content Cadence and the AI pages already load that row (*Load Profile (Brief)*), so the guide costs no new read, node
+#     or API call; it is already the one "how we present ourselves" record (author, reviewer, NAP), editable through the existing `profile`
+#     mode and the app's profile form; and Content QA can only score a rule that lives in the engine's own store (the app's `sites.tone` is
+#     a free-text prompt hint that reaches content runs only and cannot be checked).
+#     v5/code/_style_guide.js (ST) holds all of it: ST.from(row, defaults) builds the guide (spelling and tone fall back to the market /
+#     the request), ST.block(guide) is the HOUSE STYLE paragraph the brief, copywriter and editor prompts print, and ST.check(markdown)
+#     runs the mechanical checks. The brand's own name written wrongly is a real quality finding (a warning, so the editor corrects it and
+#     the page does not pass as it is); the spelling variant, the words to avoid and the tone are **advice** — reported beside the page like
+#     the other notes, never a reason on their own for a page to be "not ready".
+STYLE_SRC = _rd0('code/_style_guide.js').rstrip('\n')
+assert 'const ST = (() => {' in STYLE_SRC and 'function check(' in STYLE_SRC, 'the style kit has no check (G31)'
+for _sn54 in ('Brief Context', 'Content QA', 'Profile Delivery'):
+    assert 'const ST = (() => {' not in code(_sn54), _sn54 + ': the style kit is already inlined'
+    setcode(_sn54, STYLE_SRC + '\n' + code(_sn54))
+
+# A. the intake: the six fields on the profile form / `style` in the API body, and a style guide alone is enough to submit the form
+insert_fields('Page Profile', 'Logo URL (optional)', [
+    {'fieldLabel': 'How your brand name is written', 'placeholder': 'exactly as it must appear, e.g. Tech& (never "Tech and" or "techand")'},
+    {'fieldLabel': 'Spelling', 'placeholder': 'British English or American English - leave empty to follow the market you target'},
+    {'fieldLabel': 'Words to avoid', 'placeholder': 'comma separated, e.g. cutting-edge, synergy, solutions provider'},
+    {'fieldLabel': 'How you want to sound', 'placeholder': 'e.g. plain and direct, no hype, never an exclamation mark'},
+    {'fieldLabel': 'Other style rules', 'fieldType': 'textarea', 'placeholder': 'anything else every page must follow'}])
+nodes['Page Profile']['parameters']['options']['formDescription'] = nodes['Page Profile']['parameters']['options']['formDescription'].replace(
+    'and local pages carry your verified name, address, phone and hours (LocalBusiness schema).',
+    'and local pages carry your verified name, address, phone and hours (LocalBusiness schema). The style guide at the bottom is followed by every page we write and checked before delivery.')
+patch('Normalize Input', "const A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video);",
+      "const A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video), STY = obj(p2.style);   // G31: the stored style guide")
+patch('Normalize Input', "  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400)\n};",
+      "  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400),\n"
+      "  // G31 (2026-10-13): how this customer writes. The spelling variant is empty unless they chose one, and then it beats the market default.\n"
+      "  style_brand_form: s0(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written'), 160),\n"
+      "  style_brand_wrong: asArray(STY.brand_wrong || STY.brandWrong || p2.style_brand_wrong).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),\n"
+      "  style_spelling: s0(STY.spelling || p2.style_spelling || lab('Spelling'), 40),\n"
+      "  style_avoid: asArray(STY.avoid || STY.avoid_words || STY.avoidWords || p2.style_avoid || lab('Words to avoid')).map(x => s0(x, 60)).filter(Boolean).slice(0, 40).join(', '),\n"
+      "  style_tone: s0(STY.tone || p2.style_tone || lab('How you want to sound'), 300),\n"
+      "  style_notes: s0(STY.notes || p2.style_notes || lab('Other style rules'), 600)\n};")
+patch('Normalize Input', "if (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name or the business details.');",
+      "if (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name', 'style_brand_form', 'style_spelling', 'style_avoid', 'style_tone'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name, the business details or your style guide.');")
+patch('Normalize Input', "    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name) ? profile_input : null,",
+      "    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name || profile_input.style_brand_form) ? profile_input : null,")
+
+# B. the row that is stored (the upsert maps exactly the table columns)
+patch('Profile Row', "'reviewer_name', 'reviewer_job_title', 'reviewer_url'];",
+      "'reviewer_name', 'reviewer_job_title', 'reviewer_url',\n  'style_brand_form', 'style_brand_wrong', 'style_spelling', 'style_avoid', 'style_tone', 'style_notes'];   // G31 (2026-10-13): the stored style guide")
+patch('Profile Delivery', "const summary = (stored ?", "const style_guide = ST.from(r, {});   // G31: what is on file about how they write\nconst summary = (stored ?")
+patch('Profile Delivery', "const plain = summary + (missE.length ?",
+      "const style_line = style_guide.on_file\n"
+      "  ? 'House style on file: ' + [style_guide.brand_form ? 'the name written \"' + style_guide.brand_form + '\"' : '', style_guide.spelling ? style_guide.spelling + ' spelling' : '', style_guide.avoid.length ? style_guide.avoid.length + ' word(s) to avoid' : '', style_guide.tone ? 'tone \"' + style_guide.tone + '\"' : ''].filter(Boolean).join(', ') + '. Every new page follows it and the quality check reports a draft that breaks it.'\n"
+      "  : 'No style guide on file yet: how your name is written, the spelling variant, words to avoid and the tone. Fill it in once and every page follows it.';\n"
+      "const plain = summary + '\\n\\n' + style_line + (missE.length ?")
+patch('Profile Delivery', "eeat_score: score(eeat), local_score: score(local), schema_preview: { person, local_business: localBusiness }, stored, store_error, summary, plain, status: 'completed', stage: 'profile' } }];",
+      "eeat_score: score(eeat), local_score: score(local), schema_preview: { person, local_business: localBusiness }, style_guide, style_line, stored, store_error, summary, plain, status: 'completed', stage: 'profile' } }];")
+patch('Build Profile Response', "schema_preview: p.schema_preview,", "schema_preview: p.schema_preview, style_guide: p.style_guide || null, style_line: p.style_line || '',")
+
+# C. the guide reaches every writing prompt (the brief, the copywriter and the editor already print $json.spelling / $json.tone)
+patch('Brief Context', "return [{ json: { ...d, site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, hub_pages_planned: hub_planned, video, case_study: cs, local_area: area,",
+      "// G31 (2026-10-13): the stored style guide. A spelling variant the customer chose beats the one the target market implies, and their\n"
+      "// own tone beats the request's; both travel as `spelling` / `tone`, which the brief, copywriter and editor prompts already print.\n"
+      "const style_guide = ST.from(P, { spelling: s(d.spelling), tone: s(d.tone) });\n"
+      "return [{ json: { ...d, style_guide, spelling: style_guide.spelling_effective || s(d.spelling), tone: style_guide.tone || s(d.tone),\n"
+      "  site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, hub_pages_planned: hub_planned, video, case_study: cs, local_area: area,")
+for _pn54, _anchor54 in (('Strategy Brief', 'PAGE DETAILS\nTarget Keyword:'), ('Copywriter', 'PAGE\nTarget Keyword:'), ('Editor', 'TARGET\nPrimary keyword:')):
+    _t54 = nodes[_pn54]['parameters']['text']
+    assert _t54.count(_anchor54) == 1, _pn54 + ': prompt anchor moved (G31)'
+    nodes[_pn54]['parameters']['text'] = _t54.replace(_anchor54, "{{ ($json.style_guide || {}).prompt_block || '' }}\n\n" + _anchor54)
+    assert 'style_guide' in nodes[_pn54]['parameters']['text'], _pn54 + ': the house style block is missing (G31)'
+
+# D. the mechanical check, next to the other quality checks: the brand's name is a warning, the rest is advice
+patch('Content QA', "// FIX_PLAN D10: a page nobody can publish never passes — more than PH_MAX placeholders, or more than 25% over the brief's target (which is",
+      "// G31 (2026-10-13): the customer's stored style guide, checked mechanically (v5/code/_style_guide.js). The brand's own name written\n"
+      "// wrongly is a real quality finding and goes into `warnings`, so the editor corrects it and the page does not pass as it is. The\n"
+      "// spelling variant, the words to avoid and the tone are advice: they are reported beside the page and never make it \"not ready\".\n"
+      "const style_guide = prev.style_guide || null;\n"
+      "const style = ST.check(md, style_guide);\n"
+      "for (const e of style.errors) warnings.push(e);\n"
+      "const style_notes = [...style.notes];\n"
+      "\n"
+      "// FIX_PLAN D10: a page nobody can publish never passes — more than PH_MAX placeholders, or more than 25% over the brief's target (which is")
+patch('Content QA', "schema_types: blocks.map(b => b.type), eeat_notes, page_role: role, auto_fixes: fixes, warnings } } }];",
+      "schema_types: blocks.map(b => b.type), eeat_notes, style, style_notes, style_guide: style_guide && style_guide.on_file ? style_guide : null, page_role: role, auto_fixes: fixes, warnings } } }];")
+
+# E. the report and the package say what the style guide asked for and what the draft did with it
+patch('Build Word File', "  parts.push(h2('Author, Trust & Page Extras') + kv(extraRows) + ((qa.eeat_notes || []).length ? '<h3>Before publishing</h3>' + ul(qa.eeat_notes) : ''));",
+      """  parts.push(h2('Author, Trust & Page Extras') + kv(extraRows) + ((qa.eeat_notes || []).length ? '<h3>Before publishing</h3>' + ul(qa.eeat_notes) : ''));
+  // ---- G31: the customer's own style guide, and what the draft did with it ----
+  const sg = qa.style_guide || null, st = qa.style || null;
+  if (sg || (st && (st.notes || []).length)) {
+    const sgRows = [];
+    if (sg && sg.brand_form) sgRows.push(['Brand name is written', esc(sg.brand_form) + ((sg.wrong_forms || []).length ? ' <span class="small">(never ' + sg.wrong_forms.map(w => esc(w)).join(', ') + ')</span>' : '')]);
+    if (sg && sg.spelling_effective) sgRows.push(['Spelling', esc(sg.spelling_effective) + ' <span class="small">(' + esc(sg.spelling_source || 'house style') + ')</span>']);
+    if (sg && (sg.avoid || []).length) sgRows.push(['Words to avoid', esc(sg.avoid.join(', '))]);
+    if (sg && sg.tone) sgRows.push(['Tone', esc(sg.tone)]);
+    if (sg && sg.notes) sgRows.push(['Other rules', esc(sg.notes)]);
+    const brandErr = st && (st.brand || []).length ? st.brand.map(b => 'The name was written "' + b.found + '" ' + b.count + ' time(s)') : [];
+    parts.push(h2('Your Style Guide') + (sgRows.length ? kv(sgRows) : '<p>No style guide on file: set the brand\\'s written form, the spelling variant, words to avoid and the tone once, and every page follows them.</p>')
+      + (brandErr.length ? '<h3>Corrected before delivery</h3>' + ul(brandErr) : '')
+      + ((st && (st.notes || []).length) ? '<h3>Style notes (advice, not blockers)</h3>' + ul(st.notes) : (sgRows.length ? '<p class="ok">The draft matches every mechanical rule of your style guide.</p>' : '')));
+  }""")
+patch('Build Word File', "content_brief_video_placement: brief.video_placement || '', eeat_notes: qa.eeat_notes || [], page_type: d.page_type || ''",
+      "content_brief_video_placement: brief.video_placement || '', eeat_notes: qa.eeat_notes || [], style_notes: qa.style_notes || [], style_guide: qa.style_guide || null, page_type: d.page_type || ''")
+patch('Blog Package', "eeat_notes: Array.isArray(d.eeat_notes) ? d.eeat_notes : [],", "eeat_notes: Array.isArray(d.eeat_notes) ? d.eeat_notes : [],\n  style_notes: Array.isArray(d.style_notes) ? d.style_notes : [],   // G31: the style advice travels with the package (meta.json)")
+
+assert "ST.check(md, style_guide)" in code('Content QA') and 'ST.from(P,' in code('Brief Context'), 'the style guide is not wired into the content run (G31)'
+assert 'style_brand_form' in code('Profile Row') and 'style_brand_form' in code('Normalize Input'), 'the style guide is not stored (G31)'
+log('A style guide that is stored, used and checked (2026-10-13, FIX_PLAN G31): the brand\'s written form ("Tech&"), extra wrong forms, the spelling variant, the words to avoid, the tone and any further rule live on the site\'s business profile row (seo_profiles.style_*, filled through the profile form / API `style`), so every run that already loads the profile carries them at no extra cost; v5/code/_style_guide.js (ST) turns the row into the HOUSE STYLE paragraph the Strategy Brief, Copywriter and Editor prompts print and overrides the market-derived spelling and the requested tone, and Content QA checks it mechanically — the brand\'s own name written wrongly is a quality warning the editor must fix, while the spelling variant, the words to avoid and exclamation marks against a stated tone are advice printed in the report and the package (meta.json) that can never on its own make a page "not ready"')
+
+
 # =============================================================================
 # 9. WRITE
 # =============================================================================

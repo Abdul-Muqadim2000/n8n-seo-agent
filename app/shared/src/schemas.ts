@@ -313,15 +313,40 @@ export const profileFields = z.object({
   serviceAreas: stringList(20, 80),
   mapUrl: optUrl,
   logoUrl: optUrl,
+  // G31: the house style every page follows — stored on the same profile row, applied in the writing prompts and checked before delivery
+  style: z
+    .object({
+      brandForm: opt(160),
+      brandWrong: stringList(12, 80),
+      spelling: z.enum(['', 'British English', 'American English']).default(''),
+      avoid: stringList(40, 60),
+      tone: opt(300),
+      notes: opt(600),
+    })
+    .default({ brandForm: '', brandWrong: [], spelling: '', avoid: [], tone: '', notes: '' }),
 });
 export type ProfileFields = z.output<typeof profileFields>;
 
 export const profileInput = profileFields
   .extend({ mode: z.literal('profile'), siteId, emailCopy: z.boolean().default(false) })
-  .refine((v) => !!(v.author.name || v.businessName || v.address.street || v.phone || v.reviewer.name), {
-    path: ['author', 'name'],
-    message: 'Fill in at least the author name or the business details',
-  });
+  .refine(
+    (v) =>
+      !!(
+        v.author.name ||
+        v.businessName ||
+        v.address.street ||
+        v.phone ||
+        v.reviewer.name ||
+        v.style.brandForm ||
+        v.style.spelling ||
+        v.style.avoid.length ||
+        v.style.tone
+      ),
+    {
+      path: ['author', 'name'],
+      message: 'Fill in at least the author name, the business details or your style guide',
+    },
+  );
 
 export const aiVisibilityInput = z.object({
   mode: z.literal('ai_visibility'),

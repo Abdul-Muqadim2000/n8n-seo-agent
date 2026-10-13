@@ -271,6 +271,7 @@ export const features: Feature[] = [
     benefits: [
       'Writer, critic and editor passes, then an SEO quality check',
       'E-E-A-T built in: author byline and box, expert reviewer, experience notes and schema',
+      'Your house style, stored once and followed: how your name is written, British or American spelling, words to avoid and the tone — your own name written the wrong way is corrected before delivery',
       'Page types for hub and pillar pages, case studies, local (city) pages and video pages',
       'Three images produced with every page — a title card and two section cards made from the page itself, with the alt text, file names and the social image',
       'An originality check against every competitor page the research read and against your own pages: more than 15% of a page matching one of them comes back for a rewrite, with the passage shown',
@@ -282,7 +283,7 @@ export const features: Feature[] = [
       'One search, one page: a search a live page of yours already answers is written as a refresh of that page',
     ],
     steps: [
-      { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile and your case studies.' },
+      { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile, your case studies and your style guide.' },
       { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
       { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
       { title: 'Publish and verify', body: 'Take the package or a WordPress draft; Ascentra checks the page once it is live.' },
@@ -298,6 +299,14 @@ export const features: Feature[] = [
         a: 'Each page is written from a brief built on your business profile, your experience notes and your case studies, then reviewed by a critic and an editor. Figures that cannot be verified are marked for you to confirm instead of being made up.',
       },
       { q: 'Who is shown as the author?', a: 'The author and expert reviewer from your business profile, with a byline, an author box and Person schema.' },
+      {
+        q: 'Can I tell it how we write?',
+        a: 'Yes. Your profile holds a style guide: exactly how your name is written (Tech&, never “Tech and” or “techand”), British or American spelling, the words you never want used and the tone. Every page is written to it, and the quality check reads the finished draft against it. Your own name written the wrong way is a real finding and is corrected before you see the page; the spelling variant, the banned words and the tone are reported beside the page as advice, and never hold a page back on their own.',
+      },
+      {
+        q: 'Which spelling do the pages use?',
+        a: 'The spelling of the country each page targets, unless your style guide names one — then that wins everywhere. The report says which rule was used.',
+      },
       { q: 'Can Ascentra publish to WordPress?', a: 'It creates WordPress drafts for your team to review. Publishing stays with you.' },
       { q: 'What is the blog package?', a: 'The article as HTML and Markdown, the three images as WebP files, plus a meta.json file with the title, description, slug, schema and the image list — ready for any CMS.' },
       {

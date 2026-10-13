@@ -194,6 +194,15 @@ export function buildN8nPayload(input: RunInput, site: SiteContext | null, d: De
         service_areas: input.serviceAreas,
         map_url: input.mapUrl,
         logo_url: input.logoUrl,
+        // G31: the house style — stored on the same profile row (style_*), applied in the writing prompts and checked before delivery
+        style: {
+          brand_form: input.style.brandForm,
+          brand_wrong: input.style.brandWrong,
+          spelling: input.style.spelling,
+          avoid: input.style.avoid,
+          tone: input.style.tone,
+          notes: input.style.notes,
+        },
       };
 
     case 'ai_visibility':

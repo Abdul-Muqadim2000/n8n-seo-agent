@@ -7264,9 +7264,141 @@ await guard('response-vs-render diff and the stored style guide', async () => {
   console.log('   crawl as the rendered reading ->', JSON.stringify({ source: RD3.render_diff.rendered_source, checked: RD3.render_diff.pages_checked, js: RD3.render_diff.pages_with_js_only, works: RD3.extra_works.slice(-1) }));
   check('G14: when the render service refuses but the crawl did render JavaScript, the crawl stands in and the source says so',
     RD3.render_diff.available === true && RD3.render_diff.rendered_source === 'crawl_js' && RD3.render_diff.pages_checked === 2, JSON.stringify(RD3.render_diff.pages.map(p => [p.path, p.rendered_source])));
+
+
   check('G14: a site that serves everything in the first response gets a "what works" line and no finding at all',
     RD3.render_diff.pages_with_js_only === 0 && RD3.extra_findings.filter(f => f.source === 'render_diff').length === 0
     && RD3.extra_works.some(w => /serves its title, heading, canonical, robots rule, links and text in the first response/.test(w)), JSON.stringify(RD3.extra_works));
+
+  // ---------- G31: the stored style guide ----------
+  reset();
+  const TC63 = require('./table_cols.json');
+  const sameKeys = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+  const DOM63 = 'techand.ai';
+  const STYLE_IN = { author_name: 'Sara Khan', style_brand_form: 'Tech&', style_brand_wrong: 'Tech & Co',
+    style_spelling: 'British English', style_avoid: 'solutions provider, turnkey', style_tone: 'plain and direct, no hype',
+    style_notes: 'Write dates as 14 March 2026.' };
+
+  // ---------- D. it is stored on the business profile row, as exactly the table columns ----------
+  mock('Normalize Input', [{ json: { domain: DOM63, request_id: 'req_s63', profile_input: { ...STYLE_IN } } }]);
+  mock('Load Profile (Profile)', [{ json: {} }]);
+  mock('Site Model', [{ json: { site_model: { domain: DOM63, canonical_host: 'www.' + DOM63, pages: [] } } }]);
+  const PR63 = (await run('Profile Row', [{ json: {} }]))[0].json;
+  console.log('   profile row style ->', JSON.stringify({ form: PR63.style_brand_form, spelling: PR63.style_spelling, avoid: PR63.style_avoid, tone: PR63.style_tone }));
+  check('G31: the style guide is stored on the site\'s business profile row (seo_profiles.style_*), as exactly the table columns the upsert maps',
+    TC63.PROFILE.includes('style_brand_form') && TC63.PROFILE.includes('style_spelling') && TC63.PROFILE.includes('style_avoid') && TC63.PROFILE.includes('style_tone')
+    && sameKeys(Object.keys(PR63), TC63.PROFILE) && PR63.style_brand_form === 'Tech&' && PR63.style_spelling === 'British English'
+    && PR63.style_avoid === 'solutions provider, turnkey' && PR63.style_tone === 'plain and direct, no hype',
+    JSON.stringify({ extra: Object.keys(PR63).filter(k => !TC63.PROFILE.includes(k)), missing: TC63.PROFILE.filter(k => !(k in PR63)) }));
+  mock('Save Profile', [{ json: { ...PR63 } }]);
+  const PD63 = (await run('Profile Delivery', [{ json: { ...PR63 } }]))[0].json;
+  check('G31: the answer tells the customer what is on file and what it does',
+    /House style on file: the name written "Tech&", British English spelling, 2 word\(s\) to avoid, tone "plain and direct, no hype"/.test(PD63.style_line)
+    && /the quality check reports a draft that breaks it/.test(PD63.style_line) && PD63.plain.includes(PD63.style_line) && PD63.style_guide.on_file === true,
+    JSON.stringify(PD63.style_line));
+
+  // ---------- E. it reaches every writing prompt, and beats the spelling the target market implies ----------
+  reset();
+  mock('Parse Verdict', [{ json: { domain: DOM63, keyword: 'e invoicing uae', country: 'United Arab Emirates', spelling: 'American English',
+    tone: 'Professional and direct', page_type: 'Blog Post', business: 'E-invoicing and ERP partner in Dubai', site_description: {} } }]);
+  mock('Load Profile (Brief)', [{ json: { site_id: 'site_techand-ai', domain: DOM63, ...STYLE_IN } }]);
+  mock('Load Case Studies (Brief)', [{ json: {} }]);
+  const BC63 = (await run('Brief Context', [{ json: {} }]))[0].json;
+  const SG = BC63.style_guide;
+  console.log('   style guide ->', JSON.stringify({ spelling: SG.spelling_effective, source: SG.spelling_source, tone: SG.tone, wrong: SG.wrong_forms }));
+  check('G31: a spelling variant the customer chose beats the one their target market implies, and the source is named',
+    SG.on_file === true && SG.spelling_effective === 'British English' && SG.spelling_source === 'the style guide'
+    && BC63.spelling === 'British English' && BC63.tone === 'plain and direct, no hype',
+    JSON.stringify({ guide: SG.spelling_effective, out: BC63.spelling, tone: BC63.tone }));
+  check('G31: the wrong forms of the name are derived from the one correct form ("Tech and", "Techand", "Tech-and") plus anything the customer added',
+    SG.wrong_forms.includes('Tech and') && SG.wrong_forms.includes('Techand') && SG.wrong_forms.includes('Tech-and') && SG.wrong_forms.includes('Tech & Co'),
+    JSON.stringify(SG.wrong_forms));
+  check('G31: the prompts are handed one HOUSE STYLE paragraph with the name, the spelling, the words to avoid, the tone and the extra rules',
+    /^HOUSE STYLE/.test(SG.prompt_block) && /Write the business name exactly as "Tech&" everywhere/.test(SG.prompt_block)
+    && /never "Tech and" or "Techand" or "Tech-and" or "Tech & Co"/.test(SG.prompt_block)
+    && /Use British English spelling throughout \(the style guide\)/.test(SG.prompt_block)
+    && /Never use these words or phrases: "solutions provider", "turnkey"/.test(SG.prompt_block)
+    && /Tone: plain and direct, no hype/.test(SG.prompt_block) && /Write dates as 14 March 2026/.test(SG.prompt_block),
+    JSON.stringify(SG.prompt_block));
+  mock('Load Profile (Brief)', [{ json: {} }]);
+  const BC63e = (await run('Brief Context', [{ json: {} }]))[0].json;
+  check('G31: with nothing on file the prompts get no paragraph at all and the market still decides the spelling',
+    BC63e.style_guide.on_file === false && BC63e.style_guide.prompt_block === '' && BC63e.spelling === 'American English'
+    && BC63e.style_guide.spelling_source === 'the market this page targets', JSON.stringify(BC63e.style_guide));
+
+  // ---------- F. Content QA checks it: the brand's own name is a quality finding, the rest is advice ----------
+  const PB63 = { keyword: 'e invoicing uae', domain: DOM63, country: 'United Arab Emirates', page_type: 'Blog Post', page_role: 'standard', article_like: false,
+    content_brief: { h1: 'E-invoicing in the UAE', target_word_count: 260, outline: [], terms_to_use: [], snippet_targets: [], secondary_keywords: [], evidence_plan: [] },
+    facts: [], currency: 'AED', business: 'E-invoicing and ERP partner in Dubai', business_facts: '', term_model: [], existing_page: null, hub_pages: [], site_profile: null,
+    include_content: true, include_seo_report: false };   // the report the customer gets for a content run
+  const draft63 = (o = {}) => [
+    'Title: E-invoicing in the UAE: what changes in 2026',
+    'Meta Description: What the UAE e-invoicing mandate changes for finance teams, when it starts, and the three steps to take before the first reporting month.',
+    'Slug: e-invoicing-uae', '', '# E-invoicing in the UAE', '',
+    '**Quick answer:** From July 2026 UAE taxpayers above the revenue threshold must issue invoices through an accredited service provider, which reports a copy to the Federal Tax Authority within a day. Start with your invoice format and your master data.', '',
+    '## What the mandate changes' + (o.bang ? '!' : ''), '',
+    (o.brand || 'Tech&') + ' maps every invoice flow in your finance system before a line of code is written, so you know which documents move through the network and which stay in your own books' + (o.bang ? '!' : '.'), '',
+    'We work with distributors, contractors and free zone entities, and most teams keep their ledger and add a connector rather than replace the stack.', '',
+    '## Where teams lose time', '',
+    'Master data is the work nobody budgets for. Clean the customer and supplier records first, then the tax codes, then the item master, and keep one owner per table.', '',
+    o.spell ? 'Plan the project so your team can optimize the invoice format and check the color of every report template before go-live.'
+      : 'Plan the project so your team can standardise the invoice format and check every report template before go-live.', '',
+    o.avoid ? 'A turnkey rollout from one solutions provider rarely survives the first month-end close.'
+      : 'A rollout handed over in one piece rarely survives the first month-end close.', '',
+    ...(o.amb ? ['Keep the provider licence, the gray-area entities and the training program in one register, and practise the first submission twice.', ''] : []),
+    '## What to do first', '',
+    'Ask your provider for a test run with your own data, not their demo set, and keep the results. Read our guide at [e-invoicing in the UAE](https://' + DOM63 + '/e-invoicing-uae/) for the full timetable.', '',
+    '## Talk to us', '',
+    'Book a scoping call and we will map your invoice flows against the mandate in one workshop.'].join('\n');
+  const qa63 = async (md, guide) => { mock('Parse Brief', [{ json: { ...PB63, style_guide: guide || null } }]); return (await run('Content QA', [{ json: { output: md, critique: null } }], { runIndex: 0 }))[0].json.content_qa; };
+
+  const BAD = await qa63(draft63({ brand: 'Tech and' }), SG);
+  console.log('   brand written wrongly ->', JSON.stringify({ brand: BAD.style.brand, warning: BAD.warnings.find(w => /^Brand name/.test(w)), passed_copy: BAD.passed_copy }));
+  check('G31: a draft that writes the brand as "Tech and" is reported like the other quality findings — a warning the editor must fix, and the page does not pass as it is',
+    BAD.style.brand.length === 1 && BAD.style.brand[0].found === 'Tech and' && BAD.style.brand[0].count === 1
+    && BAD.warnings.some(w => w === 'Brand name: "Tech and" (1) — this business writes its name "Tech&". Correct every one.')
+    && BAD.passed_copy === false && BAD.style_notes.every(n => !/^Brand name/.test(n)),
+    JSON.stringify({ brand: BAD.style.brand, warnings: BAD.warnings }));
+  const OKMD = draft63().replace('We work with distributors', 'We work with tech and finance teams, with distributors');
+  const OKG = await qa63(OKMD, SG), OK0 = await qa63(OKMD, null);
+  check('G31: the same page written correctly raises nothing — "tech and finance teams" in prose is not the brand, and the name inside a link is not read as prose',
+    OKG.style.brand.length === 0 && !OKG.warnings.some(w => /^Brand name/.test(w)) && OKG.warnings.length === OK0.warnings.length && OKG.passed_copy === OK0.passed_copy,
+    JSON.stringify({ brand: OKG.style.brand, w: OKG.warnings.length, w0: OK0.warnings.length }));
+
+  const TONE = await qa63(draft63({ bang: true }), SG), TONE0 = await qa63(draft63({ bang: true }), null);
+  console.log('   tone only ->', JSON.stringify({ notes: TONE.style_notes, passed: TONE.passed, passed_copy: TONE.passed_copy, same_warnings: TONE.warnings.length === TONE0.warnings.length }));
+  check('G31: a draft that only breaks the tone advice is reported and nothing more — the same warnings and the same verdict as with no style guide on file, so a style note can never make a page "not ready"',
+    TONE.style.tone.exclamations === 2 && TONE.style_notes.some(n => /^Tone: 2 exclamation mark\(s\) in the page; the style guide asks for "plain and direct, no hype"/.test(n))
+    && !TONE.warnings.some(w => /^Tone:/.test(w)) && TONE.warnings.length === TONE0.warnings.length
+    && TONE.passed_copy === TONE0.passed_copy && TONE.passed === TONE0.passed,
+    JSON.stringify({ notes: TONE.style_notes, w: TONE.warnings.length, w0: TONE0.warnings.length, p: [TONE.passed_copy, TONE0.passed_copy] }));
+
+  const SPELL = await qa63(draft63({ spell: true, avoid: true }), SG), SPELL0 = await qa63(draft63({ spell: true, avoid: true }), null);
+  console.log('   spelling + avoid ->', JSON.stringify({ spelling: SPELL.style.spelling.wrong, avoid: SPELL.style.avoid, notes: SPELL.style_notes }));
+  check('G31: the wrong spelling variant and the words the customer banned are reported with their counts and the word to use instead — still advice, never a blocker',
+    SPELL.style.spelling.checked === true && SPELL.style.spelling.count === 2
+    && SPELL.style.spelling.wrong.some(w => w.found === 'optimize' && w.wanted === 'optimise') && SPELL.style.spelling.wrong.some(w => w.found === 'color' && w.wanted === 'colour')
+    && SPELL.style_notes.some(n => /^Spelling: 2 word\(s\) use American spelling/.test(n) && /where the style guide says British English/.test(n))
+    && SPELL.style.avoid.length === 2 && SPELL.style_notes.some(n => /^Words to avoid: "solutions provider" \(1\), "turnkey" \(1\)/.test(n))
+    && SPELL.warnings.length === SPELL0.warnings.length && SPELL.passed === SPELL0.passed,
+    JSON.stringify({ sp: SPELL.style.spelling, av: SPELL.style.avoid, notes: SPELL.style_notes }));
+  const AMB = await qa63(draft63({ amb: true }), SG);
+  check('G31: a spelling pair that means two different things in British English, or where both forms are correct (licence, practise, program, gray), is never "corrected" — the check cannot invent an error',
+    AMB.style.spelling.checked === true && AMB.style.spelling.count === 0 && AMB.style_notes.every(n => !/^Spelling/.test(n)),
+    JSON.stringify(AMB.style.spelling));
+
+  // ---------- G. the customer sees the guide and what the draft did with it ----------
+  mock('Parse Brief', [{ json: { ...PB63, style_guide: SG } }]);
+  const QAITEM = await run('Content QA', [{ json: { output: draft63({ spell: true, avoid: true, brand: 'Tech and' }), critique: null } }], { runIndex: 0 });
+  const WF63 = await run('Build Word File', QAITEM);
+  const DOC63 = decode(WF63);
+  check('G31: the content report has a "Your Style Guide" section with the rules on file, what was corrected and the advice left for the writer',
+    /Your Style Guide/.test(DOC63) && /Brand name is written/.test(DOC63) && /Tech&/.test(DOC63) && /British English/.test(DOC63)
+    && /Words to avoid/.test(DOC63) && /The name was written/.test(DOC63) && /Tech and/.test(DOC63) && /Style notes \(advice, not blockers\)/.test(DOC63),
+    (DOC63.match(/Your Style Guide[\s\S]{0,700}/) || [''])[0].slice(0, 600));
+  check('G31: the style advice travels on to the blog package, so whoever publishes the page sees it',
+    Array.isArray(WF63[0].json.style_notes) && WF63[0].json.style_notes.length > 0 && !!WF63[0].json.style_guide
+    && WF63[0].json.style_guide.brand_form === 'Tech&', JSON.stringify({ notes: WF63[0].json.style_notes, guide: !!WF63[0].json.style_guide }));
 });
 
 
