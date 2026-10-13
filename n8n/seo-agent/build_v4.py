@@ -3785,6 +3785,146 @@ sticky("""### Annotations, change tests and lineage (G12 + G29)
 log('Annotations, change tests and lineage on every number (2026-10-13, FIX_PLAN G12 + G29; criteria 3.4 / 3.5 / 2.12 / 3.11): one dated event registry (v5/data/seo_events.json) feeds the chart marks (v5/code/_annotations.js: published pages from seo_content_log, audit fixes from seo_audits, Google updates and the September 2025 num=100 data break), the G28 alert context (_site_stats.js) and the app (app/shared/src/seo-events.generated.ts); the Link Builder\'s control-group impact became the shared change test (v5/code/_change_test.js) and now also reads what a PAGE CHANGE did (seo_link_impact kind=page_change + change columns, "What your page changes did" in the Link Builder report) with graded verdicts and no causal wording; and every figure group in the weekly, AI-visibility, AI-growth, backlink, link-building, rank-tracker, ladder-plan and full reports carries its source, period, sample and basis (v5/code/_lineage.js) inline and in a "Where these numbers come from" table, with "source not recorded" where the lineage is genuinely unknown')
 
 # =============================================================================
+# 48. WHAT THE RE-RATING RUN FOUND (R1 … R9, 2026-10-13; docs/system-review-2026-10-13/RESULTS.md §3.2).
+#     R1 (High) a page run the day's AI budget guard refused left its seo_ladders row saying "writing", and within 90 seconds the ladder plan
+#         promised the page, the Rank Tracker said "already written — publish it" and the Content Cadence counted it among 6 pages waiting and
+#         paused the site (exec 500, row 19 "service industry erp software"). The refusal path now sets the row back to `planned` with the
+#         reason (*Refused Ladder Row* -> *Release Ladder Row*), the plan says "started now" instead of promising a delivered page, and the
+#         cadence / Rank Tracker / Site Tracker count a page as written only when seo_content_log says `written`.
+#         fix_phantom_pages.py repairs the rows left from before this fix (--dry-run by default).
+#     R2  *Audit Diff* filtered only the PREVIOUS findings through the categories the audit type scores, so a Schema finding — which a
+#         technical audit declares "not assessed" — was reported **new** at every audit and never moved the score (exec 513 vs 497).
+#     R3  the Keyword Check's topic fit failed twice on "business central partner uae" and shipped `fit: null` with the money spent.
+#     R4  the Link Builder's competitor gate read only the prospect's page, so flick.network (#1 for the ladder head that same run) passed.
+#     R5  the Error Handler could not read a trigger-mode failure: node, message and execution were all lost (exec 516).
+#     R6  no ops alert had ever recorded a delivery: all three rows sat at `delivered: pending`, two of them already accepted by Gmail.
+#     R7  the verdict and the ladder still asked for FAQPage schema, which G2 removed from everything we write.
+#     R8  rung pages carried `target_words: 0`, so P2-7's clamp protected only the page the verdict measured.
+#     R9  the ledger counted Claude money only and knew nothing of the schedules: the monitors now reserve and settle their own rows
+#         (build_monitors.py / build_site_tracker.py / build_ladder_extras.py) and every row carries a DataForSEO estimate — the audits
+#         carried est_usd 0 although each crawl cost $0.09.
+#     Also: the guard's refusal text shown in the app was developer language ("Raise ai_budget_usd in Normalize Input").
+# =============================================================================
+# ---- R1: a refused ladder page run gives its row back ----
+_r48 = pos('Refused Input')
+add_node('Refused Ladder Row', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Refused_Ladder_Row.js')}, [_r48[0] + 220, _r48[1] + 200])
+if_node('Ladder Row To Reset?', "{{ !$json.skip }}", [_r48[0] + 440, _r48[1] + 200])
+add_node('Release Ladder Row', DT_TYPE, DT_VERSION, dt_update_params(LADDER_TABLE, LADDER_COLS,
+    [('ladder_id', '={{ $json.ladder_id }}'), ('keyword', '={{ $json.keyword }}')], {'status': '={{ $json.status }}', 'status_note': '={{ $json.status_note }}'}),
+    [_r48[0] + 660, _r48[1] + 200], {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+connect('Refused Input', 'Refused Ladder Row'); connect('Refused Ladder Row', 'Ladder Row To Reset?'); connect('Ladder Row To Reset?', 'Release Ladder Row', 0)
+assert [t['node'] for t in conns['Refused Input']['main'][0]] == ['Error Via API?', 'Refused Ladder Row'], conns['Refused Input']['main'][0]
+# the cadence mark clears an earlier refusal note (one source: v5/code/Ladder_Marks.js writes status_note: '')
+assert "status_note: ''" in rd('code/Ladder_Marks.js') and 'status_note' in rd('code/Ladder_Rows.js'), 'R1: the ladder rows carry no status_note'
+assert ('status_note', 'string') in LADDER_COLS, 'R1: seo_ladders has no status_note column (run sync_tables.py after deploying)'
+
+# the harness reads the wiring (S57): the refusal path really reaches the seo_ladders update, on ladder_id + keyword
+_lw48p = os.path.join(HERE0, 'harness', 'ledger_wiring.json')
+_lw48 = json.load(open(_lw48p)) if os.path.exists(_lw48p) else {}
+_rlr48 = nodes['Release Ladder Row']['parameters']
+_lw48['ladder_release'] = {'from': 'Refused Input', 'code': 'Refused Ladder Row', 'gate': 'Ladder Row To Reset?', 'update': 'Release Ladder Row',
+                           'table': LADDER_TABLE, 'conditions': [c['keyName'] for c in _rlr48['filters']['conditions']],
+                           'values': sorted(_rlr48['columns']['value'].keys())}
+json.dump(_lw48, open(_lw48p, 'w'), indent=1, sort_keys=True)
+
+# ---- R9: every ledger row carries this run's DataForSEO estimate, beside the Claude one ----
+DFS_EST_JS = """
+
+// ---- estimated DataForSEO spend (R9, 2026-10-13) ----
+// The ledger counted Claude money only: both technical audits of the re-rating run carried est_usd 0 although each 200-page crawl cost $0.09
+// measured, and nothing recorded what a run spends at DataForSEO. Measured on techand.ai (2026-10-11 and 2026-10-13): a 200-page crawl $0.09,
+// a full report about $1.00 (crawl + Labs + competitors + domain ages), a content run $0.08, a verdict $0.06, discovery $0.15, a ladder $0.12,
+// an on-demand AI check $0.60, a paid backlink check $0.50 (free_only: nothing). `ai_budget_usd` still guards Claude money only — this is
+// carried on the row, settled with the measured run_ledger.dataforseo_usd and reported, so the real spend per day is finally countable.
+const DFS_EST = { crawl: 0.09, full: 1.0, content: 0.08, verdict: 0.06, discover: 0.15, ladder: 0.12, ai_visibility: 0.6, backlinks: 0.5 };
+let dfs_est = 0;
+if (d.mode === 'audit') dfs_est = d.include_full_report ? DFS_EST.full : DFS_EST.crawl;
+else if (d.mode === 'discover') dfs_est = DFS_EST.discover + (d.include_full_report ? DFS_EST.full : 0);
+else if (d.mode === 'keyword') dfs_est = d.verdict_only ? DFS_EST.verdict : DFS_EST.content;
+else if (d.mode === 'ladder') dfs_est = DFS_EST.ladder;
+else if (d.mode === 'ai_visibility') dfs_est = DFS_EST.ai_visibility;
+else if (d.mode === 'backlinks') dfs_est = d.free_only ? 0 : DFS_EST.backlinks;
+dfs_est = +Number(dfs_est).toFixed(4);
+"""
+for _n48 in ('Rate Limit', 'Run Ledger Row'):
+    patch(_n48, "if (d.need_site_description) est += EST.describe;\n", "if (d.need_site_description) est += EST.describe;\n" + DFS_EST_JS)
+# the row's keys stay in the table's own order (the harness compares them with table_cols.json)
+# the new columns go at the end, so the row's keys stay in seo_run_ledger's own order (the harness compares them with table_cols.json)
+patch('Run Ledger Row', "  domain: String(d.domain || '').toLowerCase(), heavy } }];", "  domain: String(d.domain || '').toLowerCase(), heavy, dfs_est_usd: dfs_est, dfs_usd: 0 } }];")
+# the period's DataForSEO estimate travels with the run (the reports and the app show what a day really costs)
+patch('Rate Limit', "d.ai_spend_estimate_usd = est;", "d.ai_spend_estimate_usd = est;\nd.dfs_spend_estimate_usd = dfs_est;\nd.dfs_budget_used_est_usd = +(earlier.filter(r => String(r.created_at || '').startsWith(period)).reduce((s, r) => s + (Number(r.dfs_usd) || Number(r.dfs_est_usd) || 0), 0) + dfs_est).toFixed(2);")
+nodes['Settle Run Ledger']['parameters']['columns']['value']['dfs_usd'] = "={{ Number($('Run Ledger Row').first().json.dfs_est_usd) || 0 }}"
+assert 'dfs_est_usd' in code('Run Ledger Row') and 'dfs_usd' in nodes['Settle Run Ledger']['parameters']['columns']['value'], 'R9: the DataForSEO estimate is not on the ledger row'
+assert 'dfs_est_usd' in rd('code/Assess_Ledger_Row.js'), "R9: the Keyword Check's reservation has no DataForSEO estimate"
+assert ('dfs_est_usd', 'number') in RUN_LEDGER_COLS and ('dfs_usd', 'number') in RUN_LEDGER_COLS, 'R9: seo_run_ledger has no DataForSEO columns'
+
+# ---- the refusal the customer reads (RESULTS §3.2, "also seen") ----
+patch('Rate Limit', "Raise ai_budget_usd in Normalize Input when you are ready to continue.' } }];",
+      "Nothing was charged and nothing was started: this analysis can run again ' + (d.ai_budget_period === 'day' ? 'tomorrow' : 'next month') + ', or the daily limit for this website can be raised first.' } }];")
+assert 'ai_budget_usd in Normalize Input' not in code('Rate Limit'), 'the refusal still speaks to developers'
+
+# ---- R2: the diff's summary ends in one full stop ----
+patch('Build Audit Report', "${e2(D.summary)}.</p>`;", "${e2(D.summary).replace(/\\.$/, '')}.</p>`;")
+patch('Build Full Report', "${e2(D.summary)}.</p>`;", "${e2(D.summary).replace(/\\.$/, '')}.</p>`;")
+assert 'const inScope = (f) =>' in code('Audit Diff') and '.filter(inScope);' in code('Audit Diff'), 'R2: the current findings are not filtered through the audit type\'s categories'
+assert 'not_compared' in code('Audit Diff'), 'R2: the diff does not say which categories it did not compare'
+
+# ---- R6: the delivery result goes back on the alert row ----
+_eh_add('Alert Delivery', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src('code/Alert_Delivery.js')}, [2020, _EHY])
+_eh_add('Save Alert Delivery', DT_TYPE, DT_VERSION, dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
+    {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'notes': '={{ $json.notes }}'}), [2240, _EHY],
+    {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+# every path through the two channel gates reaches it, so a row never stays "pending" for a delivery that can never come. It may run more
+# than once (one branch each); data only accumulates inside an execution, so the last run is the one that saw both channels.
+for _a48, _b48, _o48x in [('Post Alert Webhook', 'Alert Delivery', 0), ('Send Webhook?', 'Alert Delivery', 1),
+                          ('Email Ops', 'Alert Delivery', 0), ('Send Email?', 'Alert Delivery', 1), ('Alert Delivery', 'Save Alert Delivery', 0)]:
+    _eh_link(_a48, _b48, _o48x)
+assert 'R5' in _ehn['Format Alert']['parameters']['jsCode'] and 'tr.error' in _ehn['Format Alert']['parameters']['jsCode'], 'R5: Format Alert cannot read a trigger-mode failure'
+_ehwf['nodes'] = list(_ehn.values())
+_ehnames48 = set(_ehn)
+for _s48, _o48 in _ehc.items():
+    assert _s48 in _ehnames48, _s48
+    for _l48 in _o48.get('main', []):
+        for _t48 in _l48: assert _t48['node'] in _ehnames48, _t48['node']
+_rl41.check(_ehwf, _ehwf.get('name') or 'SEO Agent — Error Handler')
+_ul41.check(_ehwf, _ehwf.get('name') or 'SEO Agent — Error Handler')
+json.dump(_ehw41, open(_eh41, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+for _n48 in _ehwf['nodes']:
+    if _n48['type'] == 'n8n-nodes-base.code':
+        open(os.path.join(OUT_CODE, 'EH__' + re.sub(r'[^A-Za-z0-9_.-]+', '_', _n48['name']) + '.js'), 'w').write(_n48['parameters']['jsCode'])
+open(os.path.join(OUT_CODE, 'EH__Alert_Delivery_Webhook.js'), 'w').write(
+    rd('code/Alert_Delivery.js').replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', 'https://hooks.example.test/seo-agent-alerts').replace('__OPS_EMAIL__', OPS_EMAIL))
+_ops48 = json.load(open(os.path.join(HERE0, 'harness', 'ops_alert_wiring.json')))
+_ops48['nodes'] = [_n48['name'] for _n48 in _ehwf['nodes'] if _n48['type'] != 'n8n-nodes-base.stickyNote']
+_ops48['connections'] = {_s48: [[_t48['node'] for _t48 in _l48] for _l48 in _o48.get('main', [])] for _s48, _o48 in _ehc.items()}
+_ops48['delivery'] = {'code': 'Alert Delivery', 'row_update': 'Save Alert Delivery', 'writes': ['delivered', 'channels', 'notes'],
+                      'from': sorted(_s48 for _s48, _o48 in _ehc.items() for _l48 in _o48.get('main', []) for _t48 in _l48 if _t48['node'] == 'Alert Delivery')}
+json.dump(_ops48, open(os.path.join(HERE0, 'harness', 'ops_alert_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+# ---- R4: the competitor gate as a runnable shim (S57): one item in, the refusal and the rival it matched out ----
+open(os.path.join(OUT_CODE, '_outreach_gate.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 48, R4): the Link Builder's competitor gate - { type, domain, competitors, serp_rivals, title, text, terms } -> the refusal and the rival it matched\n"
+    + LK_SRC + '\n' + OK_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; return { json: { refusal: OK.sellsSame(j), rival: OK.rivalOf(j) } }; });\n")
+
+# ---- R3 / R4 / R7 / R8: the asserts on the code and prompts the other builders and kits carry ----
+assert 'FIT_UNKNOWN' in rd('code/Assess_Response.js') and 'plainRan' in rd('code/Assess_Response.js'), 'R3: an unknown fit is still only a warning'
+assert 'rivalOf' in rd('code/_outreach_kit.js') and 'serp_rivals' in rd('code/LB_Plan.js') and 'serp_rivals: p.serp_rivals' in rd('code/LB_Assemble.js'), 'R4: the competitor gate does not see the SERP rivals'
+_v48 = rd('prompts/verdict.txt')
+assert 'Never ask for FAQ schema' in _v48 and all('Never ask for FAQ schema' in _l for _l in _v48.splitlines() if 'FAQPage' in _l), 'R7: verdict.txt may name FAQPage only in the line that forbids it'
+assert 'noFaqSchema' in code('Parse Verdict'), 'R7: Parse Verdict does not strip FAQPage advice'
+assert 'rungWordTarget' in code('Ladder Plan') and 'pg.target_words = rungWordTarget' in code('Ladder Plan'), 'R8: the rung pages carry no word target'
+# R1's consumers: a page counts as written only when the content log says so
+assert "l.status !== 'written'" in rd('code/Cadence_Plan.js') and 'writtenOf' in rd('code/Cadence_Plan.js'), 'R1: the cadence still counts unwritten pages'
+assert 'writtenLog' in rd('code/Tracker_Report.js') and 'writtenKw' in rd('code/Site_Plan.js') and 'p.written' in rd('code/Site_Metrics.js'), 'R1: a tracker still reports an unwritten page'
+_rr48 = pos('Release Ladder Row')
+sticky("""### What the re-rating run found (R1 … R9, 2026-10-13)
+**R1 (High):** a page run the day's AI budget refused left its `seo_ladders` row at **writing**, and the ladder plan, the Rank Tracker and the Content Cadence then all reported a page that does not exist (exec 500 / row 19). **Refused Ladder Row → Release Ladder Row** puts the row back to `planned` with the reason, the plan promises nothing before the run is accepted, and all three features count a page as written only when `seo_content_log` says **written**. `fix_phantom_pages.py` repairs the rows left from before (dry run by default).
+**R9:** every scheduled run now reserves and settles its own `seo_run_ledger` row (AI Visibility, AI Pulse, AI Growth, Backlink Monitor, Audit Scheduler, Link Builder, Rank Tracker, Site Tracker, Content Cadence), and every row carries a **DataForSEO estimate** beside the Claude one — both audits used to carry `est_usd: 0` while each crawl cost $0.09.
+**R2** same category set on both sides of the audit diff · **R3** the topic fit retries in plain text and an unknown fit is in the label · **R4** a prospect on a competitor's or a SERP rival's registrable domain is refused (a "best X" list still passes) · **R5** a trigger-mode failure keeps its node, message and workflow · **R6** `seo_ops_alerts.delivered` records the channel that carried the alert · **R7** an FAQ section, never FAQPage schema · **R8** a rung page gets its length from the pages that rank for its ladder.""",
+    _rr48[0] - 120, _rr48[1] + 180, 1120, 260, 3)
+log('What the re-rating run found (2026-10-13, R1 … R9): a budget-refused ladder page run sets its row back to planned with the reason (Refused Ladder Row -> Release Ladder Row) and the cadence, Rank Tracker and Site Tracker count a page as written only when seo_content_log says written, so no feature promises a page nobody wrote (R1, repair script fix_phantom_pages.py); the audit diff filters current and previous findings through the same category set and names what it did not compare, with Schema deliberately out of a technical audit\'s weights (R2); the Keyword Check\'s topic fit has a 1,200-token budget, a three-scalar schema and a plain-text retry, and an unknown fit is in the label, not only in the warnings (R3); the Link Builder refuses a prospect whose registrable domain is a declared competitor or a SERP rival of ours while a "best X" list stays pitchable (R4); the Error Handler reads a trigger-mode failure (trigger.error message / description / cause and the node it names) (R5); the delivery result and the carrying channel go back on the seo_ops_alerts row (R6); no verdict asks for FAQPage schema any more, only an FAQ section (R7); a rung page takes its word target from the pages that rank for its ladder\'s topic (R8); every scheduled run reserves and settles a seo_run_ledger row and every row carries a DataForSEO estimate, settled with the measured amount where the run knows it (R9); and the budget refusal the customer reads is no longer "Raise ai_budget_usd in Normalize Input"')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())

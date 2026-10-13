@@ -327,13 +327,16 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
   });
 
   // ---- pile-up guard (v4.14, FIX_PLAN D5: Cadence_Plan.js) ----
-  // Every page written and not published counts, each keyword once: the content log (any status but published, written in the last
-  // 120 days) and the ladder rows still 'writing' whose keyword has no published page — ladder pages reached the content log only
-  // from v4.14 on, so their rows are what the guard sees for everything written before it.
+  // Every page written and not published counts, each keyword once: the content-log rows that say `written` (in the last 120 days) and
+  // the ladder rows still 'writing' whose keyword has such a row and no published page.
+  // R1 (2026-10-13, the re-rating run): `written` in the content log is the only proof that a page exists. A `started` row is a run that
+  // opened the row and never finished, and a ladder row saying `writing` is a promise, not a page — live, a page run the budget guard
+  // refused left row 19 "writing" with a `started` log row, and this guard counted it among 6 pages waiting and paused the site.
   const freshW = (t: unknown) => { const x = ms(t); return x > 0 && now - x < CADENCE.waitingDays * 864e5; };
+  const isWritten = (l: ContentLogRow) => l.status === 'written' || l.status === 'published' || !!String(l.published_url ?? '').trim();
   const waitingMap = new Map<string, { keyword: string; writtenAt: string }>();
   for (const l of logs) {
-    if (l.status === 'published' || !freshW(l.started_at)) continue;
+    if (l.status !== 'written' || !freshW(l.started_at)) continue;
     const k = norm(l.keyword);
     if (!k || waitingMap.has(k)) continue;
     waitingMap.set(k, { keyword: l.keyword, writtenAt: String(l.started_at || '') });
@@ -342,8 +345,10 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
     if (l.status !== 'writing') continue;
     const k = norm(l.keyword);
     if (!k || waitingMap.has(k) || publishedKw.has(k)) continue;
-    const lg = logs.filter((r) => norm(r.keyword) === k).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] ?? null;
-    const at = String(lg?.started_at || l.start_date || '');
+    // R1: no `written` log row = the page was never written (the engine's refusal path resets such a row to `planned`)
+    const lg = logs.filter((r) => norm(r.keyword) === k && isWritten(r)).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] ?? null;
+    if (!lg) continue;
+    const at = String(lg.started_at || l.start_date || '');
     if (!freshW(at)) continue;
     waitingMap.set(k, { keyword: l.keyword, writtenAt: at });
   }

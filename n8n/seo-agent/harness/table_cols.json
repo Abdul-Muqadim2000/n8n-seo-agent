@@ -8,7 +8,9 @@
   "status",
   "settled_usd",
   "domain",
-  "heavy"
+  "heavy",
+  "dfs_est_usd",
+  "dfs_usd"
  ],
  "AI_PAGES": [
   "site_id",
@@ -341,7 +343,8 @@
   "email",
   "callback_url",
   "request_id",
-  "target_words"
+  "target_words",
+  "status_note"
  ],
  "HISTORY": [
   "ladder_id",

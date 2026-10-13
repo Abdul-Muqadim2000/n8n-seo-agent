@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { baseRateText, chanceLabel, chanceText, chooseForMe, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, recommendedFromStrategy, toAssessment, toChance, type LadderKeywords } from './keywords';
+import { baseRateText, chanceLabel, chanceText, chooseForMe, FIT_UNKNOWN_NOTE, forYouLabel, ladderOverlapsOf, PLAN_CHANCE, planChance, REACH_BASE_RATE, recommendedFromStrategy, toAssessment, toChance, type LadderKeywords } from './keywords';
 
 // FIX_PLAN G3 (2026-10-11): the 2025 base rate and the chance band per plan, the same words as n8n's _reach.js (reachChance / reachBaseRateText /
 // reachChanceText); the band is marked uncalibrated everywhere until the system has measured its own ladders.
@@ -139,7 +139,12 @@ describe('the keyword check’s answer', () => {
   });
   it('not realistic: no months, alternatives kept; unknown values are null', () => {
     const a = toAssessment({ keyword: 'cleartax login', difficulty_for_you: 'not_realistic', plan_type: 'none', months: '', fit: 'x', navigational: true, alternatives: ['E invoicing software UAE', 'e invoicing software uae', 'fta e invoicing'], position: 0 });
-    expect(a).toMatchObject({ difficultyForYou: 'not_realistic', planType: 'none', months: '', fit: null, position: null, navigational: true, label: 'Not realistic for your site' });
+    expect(a).toMatchObject({ difficultyForYou: 'not_realistic', planType: 'none', months: '', fit: null, position: null, navigational: true });
+    // R3 (2026-10-13, the re-rating run): a topic check that could not be read has to show in the label, not only in `warnings` — live, the
+    // Keyword Check shipped `fit: null` for "business central partner uae" and the app displayed the difficulty as if the topic had been checked
+    expect(a.label).toBe('Not realistic for your site \u00b7 ' + FIT_UNKNOWN_NOTE);
+    expect(toAssessment({ keyword: 'x', fit: 2, difficulty_for_you: 'reachable', plan_type: 'short', months: '4-8' }).label).not.toContain(FIT_UNKNOWN_NOTE);
+    expect(toAssessment({ keyword: 'x', label: 'Reachable for your site \u00b7 ' + FIT_UNKNOWN_NOTE }).label).toBe('Reachable for your site \u00b7 ' + FIT_UNKNOWN_NOTE);
     expect(a.alternatives).toEqual(['e invoicing software uae', 'fta e invoicing']);
     expect(toAssessment({})).toMatchObject({ keyword: '', volume: null, difficultyForYou: null, planType: null, label: '' });
   });

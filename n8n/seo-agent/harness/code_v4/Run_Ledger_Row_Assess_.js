@@ -3,4 +3,7 @@
 const v = $('Assess Validate').first().json || {};
 // P34-5: the row carries the site it is about (`heavy` is false: a keyword check crawls nothing), so every seo_run_ledger row has the same shape.
 return [{ json: { run_id: String($execution.id), key: String(v.caller || 'anon').toLowerCase(), mode: 'assess', est_usd: 0.002, created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,
-  domain: String(v.domain || '').toLowerCase(), heavy: false } }];
+  domain: String(v.domain || '').toLowerCase(), heavy: false,
+  // R9 (2026-10-13): the DataForSEO estimate beside the AI one -- a keyword check pays for the overview, the site's position and (without a
+  // stored reach) the reach measurement, about $0.024 measured live on 2026-10-13.
+  dfs_est_usd: 0.024, dfs_usd: 0 } }];
