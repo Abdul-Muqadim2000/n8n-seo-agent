@@ -53,7 +53,7 @@ export const pricingTiers: PricingTier[] = [
       'Autopilot pipeline with several keyword ladders',
       'AI search visibility: up to 50 questions and the daily AI Pulse',
       'Backlinks from every source with Ascentra’s own link checks',
-      'Prospects, contacts and outreach drafts',
+      'Prospects, contacts and outreach drafts from your own mailbox',
       'Full SEO reports as PDF or Word',
     ],
   },
@@ -133,7 +133,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews', values: [false, 'Up to 50 questions', 'Up to 50 questions'] }, // PLACEHOLDER — confirm
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
       { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Ascentra', values: [false, true, true] }, // PLACEHOLDER — confirm
-      { label: 'Prospects, contacts and outreach drafts', values: [false, true, true] },
+      { label: 'Prospects, contacts and outreach drafts from your own mailbox', values: [false, true, true] },
     ],
   },
   {

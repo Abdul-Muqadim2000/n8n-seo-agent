@@ -1,6 +1,7 @@
 // Report of the weekly Link Builder (callback stage `link_builder`, v4.13, n8n/seo-agent/LINK_BUILDER_SPEC.md): pitches drafted for approval,
-// journalist requests, listings to add, redirects for old URLs that 404, and what won links did. The work itself happens on the Link building page.
-import { ArrowRight, BarChart3, ClipboardList, CornerDownRight, Handshake, Mail } from 'lucide-react';
+// journalist requests (on Bluesky and from the digests in your own mailbox), podcast shows that take guests, the kinds of page that earn
+// links in your market, listings to add, redirects for old URLs that 404, and what won links did. The work happens on the Link building page.
+import { ArrowRight, BarChart3, ClipboardList, CornerDownRight, Handshake, Lightbulb, Mail, Mic } from 'lucide-react';
 import { OPPORTUNITY_LABEL, titleCase, type ReportDetail } from '@seo/shared';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -37,6 +38,8 @@ export function LinkBuilderReport({ report }: { report: ReportDetail }) {
   const listings = objs(p.listings);
   const redirects = objs(p.redirects);
   const impact = objs(p.impact);
+  const podcasts = objs(p.podcasts);   // L5
+  const ideas = objs(p.asset_ideas);   // L6
   const free = p.free_only === true;
   const n = (k: string) => num(s[k]) ?? 0;
   const pitches = num(s.drafted) ?? drafted.length;
@@ -60,7 +63,7 @@ export function LinkBuilderReport({ report }: { report: ReportDetail }) {
         stats={
           <>
             <HeroStat label="Pitches drafted" value={<CountUp value={pitches} />} hint={n('needs_contact') ? `${n('needs_contact')} more without an e-mail address` : 'waiting for approval'} />
-            <HeroStat label="Journalist requests" value={<CountUp value={n('press')} />} hint="on your topics" />
+            <HeroStat label="Journalist requests" value={<CountUp value={n('press') + n('digests')} />} hint={n('digests') ? `${n('digests')} from the digests in your mailbox` : 'on your topics'} />
             <HeroStat label="Not listed yet" value={<CountUp value={missing} />} hint={n('listings_linked') ? `${n('listings_linked')} linked already` : 'places to add yourself'} />
             <HeroStat label="Redirects to add" value={<CountUp value={num(s.redirects) ?? redirects.length} />} hint="old URLs that 404" />
           </>
@@ -95,6 +98,47 @@ export function LinkBuilderReport({ report }: { report: ReportDetail }) {
           </div>
         )}
       </Block>
+
+      {podcasts.length > 0 && (
+        <Block title="Podcast shows that take guests" icon={<Mic />} description="Shows on your topics that say they take guests and publish a contact on their own website" info="A guest appearance earns a link from the show's own page. Only you can accept an invitation: the pitch offers you as a guest and waits for your approval." flush>
+          <ul className="divide-y divide-line text-[13px]">
+            {podcasts.map((s2, i) => (
+              <li key={i} className="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5">
+                <span className="min-w-0 text-ink [overflow-wrap:anywhere]">{str(s2.show) || str(s2.prospect_domain)}</span>
+                {str(s2.page_url) ? <ExternalLink href={str(s2.page_url)}>{shortUrl(str(s2.page_url))}</ExternalLink> : null}
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
+
+      {ideas.length > 0 && (
+        <Block
+          title="Assets that earn links in your market"
+          icon={<Lightbulb />}
+          description="The kinds of page your competitors have earned links with, with the pages that prove it"
+          info="Read from the pages of your competitors that have the most websites linking to them. Making one of these is real work, and no asset is a promise of links — it is the best-evidenced bet in your market."
+          flush
+        >
+          <ul className="divide-y divide-line text-[13px]">
+            {ideas.map((it, i) => (
+              <li key={i} className="flex flex-col gap-1 px-5 py-2.5">
+                <span className="font-medium text-ink">{str(it.idea)}</span>
+                <span className="text-ink-3">{str(it.how)}</span>
+                <span className="text-xs text-ink-3">{str(it.basis)}</span>
+                <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
+                  {objs(it.examples).map((x, j) => (
+                    <span key={j} className="flex min-w-0 items-center gap-1">
+                      <ExternalLink href={str(x.url)}>{str(x.title) ? str(x.title).slice(0, 60) : shortUrl(str(x.url))}</ExternalLink>
+                      <span className="tabular text-ink-3">{num(x.rds) ?? 0}</span>
+                    </span>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Block>
+      )}
 
       {listings.length > 0 && (
         <Block title="Links you can add yourself" icon={<ClipboardList />} description="Directories and platforms worth being on; we check every week whether your listing is live" flush>

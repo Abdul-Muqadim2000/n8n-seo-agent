@@ -15,6 +15,36 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Connect your mailbox without handing over a password',
+    summary:
+      'Microsoft 365 and Gmail can now be connected on their own sign-in screen. You grant sending (and, with Microsoft 365, reading the replies to your own pitches); nothing but a renewable permission is stored, encrypted, and it is withdrawn the moment you disconnect the mailbox.',
+    highlights: [
+      'One click to connect Microsoft 365: pitches go out from your address and replies come back into the app',
+      'One click to connect Gmail or Google Workspace for sending; Google treats inbox access as a restricted scope, so you read those replies in Gmail — the app says so before you connect',
+      'No password is stored for either, and the permission renews itself before it expires',
+      'Disconnecting withdraws our access; where a provider has no way to do that for us, the app tells you exactly where to remove it',
+      'App passwords still work for any mail host, and Microsoft is retiring theirs — so the old way keeps working while it lasts',
+    ],
+    features: ['backlinks'],
+  },
+  {
+    date: '2026-10-13',
+    title: 'Two more free sources of links, the assets worth building, and subject lines you can trust',
+    summary:
+      'Link building now also finds podcast shows that take guests and reads the journalist digests that arrive in your own mailbox. Each month it tells you which kind of page earns links in your market, with the competitor pages that prove it. And every batch of pitches goes out with two subject lines so you can see which one people answer.',
+    highlights: [
+      'Podcast shows on your topics that say they take guests, with a contact on the show’s own website — a show that is off topic, has stopped publishing or publishes no address of its own is set aside with the reason',
+      'Journalist requests from the HARO and Source of Sources digests in your own mailbox, matched to your topics, kept to their deadline and answered from your address',
+      'Every new opportunity passes the same checks as the rest: on topic, not a competitor, nothing claimed that your business profile does not carry',
+      'Each month: which kind of page earns links in your market — a data study, a free tool, a template or a definitive guide — with the competitor pages behind it and the number of websites linking to each',
+      'An asset idea says what it is based on and what the work is; it is never presented as a promise of links',
+      'Two subject lines per batch, in different styles, going out in equal numbers, with the e-mails sent and the replies for each',
+      'Under thirty sends per line the page says “not enough sends yet” instead of naming a winner: at that size a few points of difference is noise',
+    ],
+    features: ['backlinks'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Charts that say what happened, and numbers that say where they came from',
     summary:
       'Every chart is now marked with the events behind its moves — the pages you published, the technical fixes you made, Google’s ranking updates and the week Google changed its own data. After a page goes live, its trend is compared with the rest of your website. And every number in a report or on a dashboard says its source, its period and its sample size.',
