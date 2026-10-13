@@ -5,7 +5,8 @@ import json, os, re, uuid, sys
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 from ladder_common import (LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, PAGES_TABLE, PAGES_COLS, SITES_TABLE, SITES_COLS,
-                           MONITORS_TABLE, MONITORS_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params)
+                           MONITORS_TABLE, MONITORS_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params,
+                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST)   # R9 (2026-10-13)
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
@@ -65,7 +66,9 @@ N.append(node('Ensure Ladder Table', DT_TYPE, DT_VERSION, dt_create_params(LADDE
 N.append(node('Ensure History Table', DT_TYPE, DT_VERSION, dt_create_params(HISTORY_TABLE, HISTORY_COLS), [460, 100], onError='continueRegularOutput'))
 N.append(node('Load Ladders', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABLE), [680, 100], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 N.append(node('Load History', DT_TYPE, DT_VERSION, dt_get_all_params(HISTORY_TABLE), [900, 100], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
-N.append(node('Load Content Log (Tracker)', DT_TYPE, DT_VERSION, dt_get_where_params(LOG_TABLE, 'status', 'eq', 'published'), [1010, 260], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))   # v4.8: publish dates for the Stuck flag
+# v4.8: publish dates for the Stuck flag. R1 (2026-10-13): every row, not only the published ones — the report must be able to tell a page that
+# was really written (`written`) from a ladder row that only says `writing` (live: it told the owner to publish a page nobody had written).
+N.append(node('Load Content Log (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(LOG_TABLE), [1010, 260], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
 # D11 (2026-10-12, FIX_PLAN): the site's page inventory, so the next step never says "publish it" for a search a live page already answers
 N.append(node('Ensure Pages Table (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(PAGES_TABLE, PAGES_COLS), [1010, 400], onError='continueRegularOutput'))
 N.append(node('Load Pages (Tracker)', DT_TYPE, DT_VERSION, dt_get_all_params(PAGES_TABLE), [1120, 400], alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput'))
@@ -113,6 +116,25 @@ assert 'const SM = (() => {' in _tracker_nodes['Tracker Plan'], 'Tracker Plan: t
 assert not any(m in src for src in _tracker_nodes.values() for m in ('/*__RANK_SERP__*/', '/*__SERP_OBS__*/', '/*__SITE_MODEL__*/', '/*__ANCHOR__*/')), 'kit placeholder left in the Rank Tracker'
 for _c, _t in HISTORY_COLS:
     assert _c + ':' in _tracker_nodes['Parse Positions'], 'Parse Positions does not write the seo_rank_history column ' + _c
+# ---- R9 (2026-10-13, re-rating): the Rank Tracker reserves and settles a seo_run_ledger row too (exec 505 had none, although the week's SERP
+# checks are paid DataForSEO calls). Hung BESIDE *Tracker Plan*: a Data Table node answers with the row it wrote, not with its input. ----
+_lrr, _lrs = monitor_ledger_js(V5, 'rank_tracker', 'Tracker Plan', 'Run Ledger Row (Tracker)', '')
+N.append(node('Ensure Run Ledger (Tracker)', DT_TYPE, DT_VERSION, dt_create_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [1230, 480], onError='continueRegularOutput', executeOnce=True))
+N.append(node('Run Ledger Row (Tracker)', 'n8n-nodes-base.code', 2, {'jsCode': _lrr}, [1450, 480], executeOnce=True))
+N.append(node('Reserve Run Ledger (Tracker)', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [1670, 480], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
+N.append(node('Ledger Settle (Tracker)', 'n8n-nodes-base.code', 2, {'jsCode': _lrs}, [1450, 640], executeOnce=True))
+N.append(node('Settle Run Ledger (Tracker)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
+    [('run_id', '={{ $execution.id }}'), ('status', 'reserved')], {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}'}),
+    [1670, 640], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
+for a, b in [('Tracker Plan', 'Ensure Run Ledger (Tracker)'), ('Ensure Run Ledger (Tracker)', 'Run Ledger Row (Tracker)'), ('Run Ledger Row (Tracker)', 'Reserve Run Ledger (Tracker)'),
+             ('Tracker Report', 'Ledger Settle (Tracker)'), ('Ledger Settle (Tracker)', 'Settle Run Ledger (Tracker)')]:
+    link(C, a, b)
+LEDGER_WIRING = {'SEO Agent — Rank Tracker': {'mode': 'rank_tracker', 'plan': 'Tracker Plan', 'reserve': 'Run Ledger Row (Tracker)',
+                                              'settle': 'Settle Run Ledger (Tracker)', 'settle_from': ['Tracker Report'], 'measured': '', 'est': LEDGER_EST['rank_tracker']}}
+_lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
+_lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}
+_lwj.setdefault('monitors', {}).update(LEDGER_WIRING)
+json.dump(_lwj, open(_lw9, 'w'), indent=1, sort_keys=True)
 write(wf('SEOagentTracker1', 'SEO Agent — Rank Tracker', N, C), 'SEO_Agent_Rank_Tracker.json')
 # harness shim (S47): the results-page kit as a runnable script, one call per item
 os.makedirs(CODE, exist_ok=True)

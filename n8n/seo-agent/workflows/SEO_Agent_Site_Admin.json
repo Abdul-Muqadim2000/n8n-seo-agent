@@ -2537,6 +2537,16 @@
                 "type": "number",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "status_note",
+                "displayName": "status_note",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,

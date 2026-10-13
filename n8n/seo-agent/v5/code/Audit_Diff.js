@@ -15,10 +15,19 @@ const audits = rowsOf('Load Audit History').filter(r => r.site_id === site_id).s
 const curType = a.audit_level || 'site_audit'; const LABEL = { site_audit: 'technical audit', full: 'full SEO report' }; const labelOf = (t) => LABEL[t] || String(t || 'audit');
 const prev = audits.find(r => String(r.report_type || '') === curType) || null;
 const otherType = !prev ? (audits.find(r => r.report_type && r.report_type !== curType) || null) : null;
-const assessed = new Set(Object.keys(a.weights || {}));   // the categories this audit type scores: a finding outside them is "not checked", never "fixed"
-const prevF = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id).filter(r => !assessed.size || assessed.has(r.category)) : [];
+// R2 (2026-10-13, re-rating): the previous findings were filtered through the categories this audit type scores, the current ones were not, so a
+// finding in a category the audit itself declares "not assessed" was reported **new** at every audit and never moved the score. Live: exec 513
+// listed `new: ["Structured data with errors", Schema, Medium]` five minutes after exec 497 stored that exact finding.
+//   The decision on Schema: a technical audit does NOT get a Schema weight. It only reads DataForSEO's `has_micromarkup_errors` flag per page --
+//   it never validates a single property, which is why its own `not_assessed` list says "Structured data (schema) and HTML-level checks". A flag
+//   with no detail cannot carry a score, so Schema stays in the full report's weights only; a technical audit keeps showing the finding as an
+//   observation and the diff leaves it out of fixed / new / still-open on BOTH sides.
+const assessed = new Set(Object.keys(a.weights || {}));   // the categories this audit type scores: a finding outside them is "not checked", never "fixed" or "new"
+const inScope = (f) => !assessed.size || assessed.has(f.category);
+const prevF = prev ? rowsOf('Load Audit Findings').filter(r => r.audit_id === prev.audit_id).filter(inScope) : [];
 const keyOf = (f) => String(f.category || '') + '|' + String(f.title || '').toLowerCase().replace(/\d[\d,.%]*/g, '#').replace(/["'“”‘’]/g, '').replace(/\s+/g, ' ').trim();
-const cur = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info');
+const cur = (a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info').filter(inScope);
+const not_compared = [...new Set((a.findings || []).filter(f => f.scoring !== false && f.severity !== 'Info' && !inScope(f)).map(f => String(f.category || '')))].filter(Boolean);
 const curKeys = new Map(cur.map(f => [keyOf(f), f])); const prevKeys = new Map(prevF.map(f => [f.finding_key, f]));
 const SEV = { Critical: 0, High: 1, Medium: 2, Low: 3, Info: 4 };
 const fixed = [...prevKeys.entries()].filter(([k]) => !curKeys.has(k)).map(([, f]) => ({ title: f.title, category: f.category, severity: f.severity })).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
@@ -28,8 +37,10 @@ const audit_id = 'aud_' + Date.now().toString(36) + Math.random().toString(36).s
 const audited_at = new Date().toISOString();
 const days = prev ? Math.round((Date.now() - new Date(prev.audited_at).getTime()) / 864e5) : null;
 const audit_diff = prev ? { baseline: false, report_type: curType, previous: { audit_id: prev.audit_id, audited_at: prev.audited_at, report_type: prev.report_type, health_score: Number(prev.health_score), grade: prev.grade, findings: Number(prev.findings) || prevF.length }, days_since: days,
-  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')' }
-  : { baseline: true, report_type: curType, summary: 'First ' + labelOf(curType) + ' stored: the next one shows what was fixed, what is new and what is still open.' + (otherType ? ' The ' + labelOf(otherType.report_type) + ' of ' + String(otherType.audited_at).slice(0, 10) + ' is a different report type and is not compared.' : '') };
+  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, not_compared,
+  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
+    + (not_compared.length ? '. ' + not_compared.join(', ') + ' ' + (not_compared.length === 1 ? 'is' : 'are') + ' not assessed by a ' + labelOf(curType) + ', so those findings are shown but not compared.' : '') }
+  : { baseline: true, report_type: curType, not_compared, summary: 'First ' + labelOf(curType) + ' stored: the next one shows what was fixed, what is new and what is still open.' + (otherType ? ' The ' + labelOf(otherType.report_type) + ' of ' + String(otherType.audited_at).slice(0, 10) + ' is a different report type and is not compared.' : '') };
 // ---- internal links: targets that need links, sources on the same topic that already carry authority ----
 const pages = ($('Get Crawled Pages').first().json.tasks?.[0]?.result?.[0]?.items || []).filter(p => p && p.status_code === 200 && p.resource_type === 'html' && !(p.checks || {}).is_redirect && !/(\?|\/(tag|category|author|page)\/|\/feed\/?$)/i.test(p.url));
 const norm = (u) => String(u || '').toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');

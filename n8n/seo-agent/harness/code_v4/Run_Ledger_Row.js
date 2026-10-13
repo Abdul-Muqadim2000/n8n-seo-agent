@@ -24,9 +24,26 @@ else if (d.mode === 'case_study') est = EST.case_study;
 else if (d.mode === 'ai_visibility') est = EST.ai_visibility;
 else if (d.mode === 'backlinks') est = d.free_only ? 0 : EST.backlinks;   // v4.10: free sources only = no paid call   // the page itself runs as its own execution and is counted there
 if (d.need_site_description) est += EST.describe;
+
+
+// ---- estimated DataForSEO spend (R9, 2026-10-13) ----
+// The ledger counted Claude money only: both technical audits of the re-rating run carried est_usd 0 although each 200-page crawl cost $0.09
+// measured, and nothing recorded what a run spends at DataForSEO. Measured on techand.ai (2026-10-11 and 2026-10-13): a 200-page crawl $0.09,
+// a full report about $1.00 (crawl + Labs + competitors + domain ages), a content run $0.08, a verdict $0.06, discovery $0.15, a ladder $0.12,
+// an on-demand AI check $0.60, a paid backlink check $0.50 (free_only: nothing). `ai_budget_usd` still guards Claude money only — this is
+// carried on the row, settled with the measured run_ledger.dataforseo_usd and reported, so the real spend per day is finally countable.
+const DFS_EST = { crawl: 0.09, full: 1.0, content: 0.08, verdict: 0.06, discover: 0.15, ladder: 0.12, ai_visibility: 0.6, backlinks: 0.5 };
+let dfs_est = 0;
+if (d.mode === 'audit') dfs_est = d.include_full_report ? DFS_EST.full : DFS_EST.crawl;
+else if (d.mode === 'discover') dfs_est = DFS_EST.discover + (d.include_full_report ? DFS_EST.full : 0);
+else if (d.mode === 'keyword') dfs_est = d.verdict_only ? DFS_EST.verdict : DFS_EST.content;
+else if (d.mode === 'ladder') dfs_est = DFS_EST.ladder;
+else if (d.mode === 'ai_visibility') dfs_est = DFS_EST.ai_visibility;
+else if (d.mode === 'backlinks') dfs_est = d.free_only ? 0 : DFS_EST.backlinks;
+dfs_est = +Number(dfs_est).toFixed(4);
 // P34-5: the row says which site the run is working on and whether it is a heavy crawl, so Rate Limit can refuse a second large
 // audit of the same site while one is running (two 200-page audits of techand.ai at once stalled the n8n task runner, 2026-10-12).
 const HEAVY_PAGES = Number(d.heavy_audit_pages) > 0 ? Number(d.heavy_audit_pages) : 100;
 const heavy = d.mode === 'audit' && (Number(d.crawl_max_pages) || 0) >= HEAVY_PAGES;
 return [{ json: { run_id: String($execution.id), key, mode: String(d.mode || ''), est_usd: +Number(est || 0).toFixed(4), created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,
-  domain: String(d.domain || '').toLowerCase(), heavy } }];
+  domain: String(d.domain || '').toLowerCase(), heavy, dfs_est_usd: dfs_est, dfs_usd: 0 } }];

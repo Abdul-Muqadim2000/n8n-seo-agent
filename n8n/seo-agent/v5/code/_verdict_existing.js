@@ -3,8 +3,30 @@
 // answered since 2026-08-21 — and the answer was "Build an informational penalty guide", recommended_page "Guide": the owner was told to
 // create a second URL for a search their page already answers (the exact D11 harm). *Collect Client Pages* now sets `existing_page` from
 // the page inventory (SM.matchPage) and `v5/prompts/verdict.txt` forbids a new page; this is the deterministic half of it.
+// ---- R7 (2026-10-13, re-rating): no verdict may ask for FAQPage schema (G2 removed it from everything we write) ----
+// Live: exec 486 `verdict_changes[3]` said "add … an FAQ with schema matching the People Also Ask questions" and the ladder's exec 495
+// `what_must_change[3]` said "Add an FAQ section that mirrors the People Also Ask questions, with FAQ and Service schema". Google stopped
+// showing FAQ rich results on 2026-05-07, so the owner would spend time on markup that shows nothing. The prompt now forbids it; this
+// rewrites the schema part out of any line that still asks for it and keeps the FAQ *section*, which is what AI assistants quote.
+const FAQ_SCHEMA_RE = /\b(?:faq\s*page|faqpage)\b(?:\s+(?:schema|markup|structured\s+data))?|\bfaq\b[^.;]{0,20}?\b(?:schema|markup|structured\s+data)\b|\b(?:schema|markup|structured\s+data)\b[^.;]{0,20}?\bfaq\b/gi;
+const noFaqSchema = (line) => {
+  let t = String(line == null ? '' : line);
+  if (!FAQ_SCHEMA_RE.test(t)) return t;
+  FAQ_SCHEMA_RE.lastIndex = 0;
+  t = t.replace(/\b(an?\s+)?FAQ\s+with\s+(?:its\s+own\s+)?(?:schema|markup|structured data)\b/gi, '$1FAQ section (question headings answered directly)')
+       .replace(/\bwith\s+FAQ\s+and\s+([A-Z][A-Za-z]*)\s+schema\b/g, 'with $1 schema')
+       .replace(/\bFAQ\s+and\s+([A-Z][A-Za-z]*)\s+schema\b/g, '$1 schema')
+       .replace(/\b(?:an?\s+)?FAQ\s*(?:page)?\s+(?:schema|markup|structured data)\b/gi, 'an FAQ section (question headings answered directly)')
+       .replace(/\bFAQPage\b/gi, 'an FAQ section (question headings answered directly)')
+       .replace(/\bwith\s+(?:FAQ|FAQPage)\s+(?:schema|markup|structured data)\b/gi, '')
+       .replace(/\s{2,}/g, ' ').replace(/\s+([,.;])/g, '$1').replace(/,\s*\./g, '.').trim();
+  return t;
+};
+verdict.risks = (Array.isArray(verdict.risks) ? verdict.risks : []).map(noFaqSchema);
+verdict.reasons = (Array.isArray(verdict.reasons) ? verdict.reasons : []).map(noFaqSchema);
+
 const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;
-let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => String(x == null ? '' : x)).filter(Boolean) : [];
+let verdict_changes = Array.isArray(verdict.what_must_change) ? verdict.what_must_change.map(x => noFaqSchema(x)).filter(Boolean) : [];   // R7: never FAQPage schema
 let existing_page_action = null;
 if (EXP) {
   existing_page_action = 'improve';

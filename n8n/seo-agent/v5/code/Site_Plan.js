@@ -50,13 +50,19 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   for (const k of s.keywords) if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'site', rung: 0, ladder_id: '', head_keyword: '' }); }
   for (const l of lrows) { const k = String(l.keyword).toLowerCase().trim(); if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'ladder', rung: Number(l.rung) || 0, ladder_id: l.ladder_id, head_keyword: String(l.head_keyword || '').toLowerCase() }); } }
   const pages = []; const seenU = new Set();
-  for (const l of lrows) { const u = String(l.target_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); pages.push({ url: u, keyword: l.keyword, rung: Number(l.rung) || 0, status: l.status || '', ladder_id: l.ladder_id, page_exists: !!l.page_exists }); } }
   const blogs = logRows.filter(r => normD(r.domain) === s.domain);
+  // R1 (2026-10-13, re-rating): `written` in seo_content_log is the only proof that a page exists. A ladder row saying `writing` is a promise:
+  // live, a page run the budget guard refused left row 19 "writing", and the weekly report then called it "written, not published yet" and
+  // asked the owner to publish it. A `started` row is a run that opened the row and never finished.
+  const normKw = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const writtenKw = new Set(blogs.filter(b => b.status === 'written' || b.status === 'published' || String(b.published_url || '').trim()).map(b => normKw(b.keyword)));
+  for (const l of lrows) { const u = String(l.target_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); pages.push({ url: u, keyword: l.keyword, rung: Number(l.rung) || 0, status: l.status || '', ladder_id: l.ladder_id, page_exists: !!l.page_exists, written: writtenKw.has(normKw(l.keyword)), status_note: String(l.status_note || '') }); } }
   for (const b of blogs) { const k = String(b.keyword).toLowerCase().trim(); if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'blog', rung: 0, ladder_id: b.ladder_id || '', head_keyword: '' }); } }
-  for (const b of blogs) { const u = String(b.published_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); pages.push({ url: u, keyword: b.keyword, rung: 0, status: 'published', ladder_id: b.ladder_id || '', page_exists: true, published_at: b.published_at || '' }); } }
-  // D5: 'started' and 'written' both wait for the owner's publish link. P2-4 (2026-10-12): the comment used to sit before the .map(),
-  // which an inline // swallows, so every row kept the raw content-log shape and the report said "(undefined days ago)".
-  const pending_publish = blogs.filter(b => b.status !== 'published' && !b.published_url)
+  for (const b of blogs) { const u = String(b.published_url || '').trim(); if (u && /^https?:\/\//.test(u) && !seenU.has(u)) { seenU.add(u); pages.push({ url: u, keyword: b.keyword, rung: 0, status: 'published', ladder_id: b.ladder_id || '', page_exists: true, written: true, status_note: '', published_at: b.published_at || '' }); } }
+  // R1 (2026-10-13): only a row that says `written` waits for the owner's publish link — a `started` row is a run that never finished, and
+  // asking the owner to publish a page that was never written is the harm R1 describes. P2-4 (2026-10-12): the comment used to sit before the
+  // .map(), which an inline // swallows, so every row kept the raw content-log shape and the report said "(undefined days ago)".
+  const pending_publish = blogs.filter(b => b.status === 'written' && !b.published_url)
     .map(b => ({ keyword: b.keyword, started_at: b.started_at || '', days: Math.round((Date.now() - new Date(b.started_at || now).getTime()) / 864e5) }));
   const cutoff = new Date(Date.now() - 35 * 864e5).toISOString();
   const console_alerts = alertRows.filter(a => normD(a.domain) === s.domain && String(a.received_at) >= cutoff).sort((a, b) => String(b.received_at).localeCompare(String(a.received_at))).slice(0, 10).map(a => ({ kind: a.kind, severity: a.severity, subject: a.subject, summary: a.summary, received_at: a.received_at, source: a.source || 'mail' }));

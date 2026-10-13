@@ -13,7 +13,8 @@
 //   * won: the main keyword in the top 3 in each of the last 4 rank checks (failed checks skipped) -> no more pages (won_ladders).
 //   * pile-up guard (v4.14, FIX_PLAN D5): max_waiting or more distinct keywords written but not published -> nothing is written for the
 //     site (paused_reason 'pileup'; waiting_keywords names them); an on-demand run may bypass it only with force: true. A keyword waits
-//     when a content-log row of the last 120 days has any status but published, or a ladder row is still 'writing' and its keyword has no
+//     when a content-log row of the last 120 days says `written` (R1: `started` is a run that never finished), or a ladder row is still 'writing',
+//     its keyword has a `written` content-log row and no
 //     published page (ladder pages reach the content log only from v4.14 on).
 //   * opportunity posts (striking / trend) only when opportunities is auto; when manual they are listed as suggestions.
 //   * Manual ladders are never written: each one's next eligible page is listed in awaiting_approval.
@@ -127,15 +128,19 @@ for (const s of list) {
     if (x.source !== 'ladder') return false;   // an opportunity post would be a second page for the same search
     x.existing_page_url = c.url; x.covered_by = c.url; x.why += ' \u2014 ' + c.url + ' already answers this search, so it is refreshed, not written again';
     return true; });
-  // pile-up guard (v4.14, FIX_PLAN D5): every page written and not published counts, each keyword once — the content log (any status
-  // but published, written in the last 120 days) AND the ladder rows still 'writing' whose keyword has no published page. Ladder pages
-  // were logged only from v4.14 on, so the ladder rows are what the guard sees for everything written before it.
+  // pile-up guard (v4.14, FIX_PLAN D5): every page written and not published counts, each keyword once — the content log rows that say
+  // `written` (in the last 120 days) AND the ladder rows still 'writing' whose keyword has such a row and no published page.
   const freshW = (t) => { const x = Date.parse(String(t || '')); return Number.isFinite(x) && (now - x) < CONFIG.waiting_days * 864e5; };
   const waitingMap = new Map();   // keyword key -> { keyword, written_at, source }
-  for (const l of slog) { if (l.status === 'published' || !freshW(l.started_at)) continue; const k = norm(l.keyword); if (!k || waitingMap.has(k)) continue; waitingMap.set(k, { keyword: l.keyword, written_at: String(l.started_at || ''), source: String(l.source || '') }); }
+  // R1 (2026-10-13, re-rating): `written` in the content log is the only proof that a page exists. A `started` row is a run that opened the
+  // row and never finished, and a ladder row saying `writing` is a promise, not a page: live, a page run the budget guard refused left row 19
+  // "writing" with a `started` log row, and this guard counted it as one of 6 pages waiting and paused the site's writing for a week.
+  const writtenOf = (k) => slog.filter(r => norm(r.keyword) === k && (r.status === 'written' || r.status === 'published' || String(r.published_url || '').trim()))
+    .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;
+  for (const l of slog) { if (l.status !== 'written' || !freshW(l.started_at)) continue; const k = norm(l.keyword); if (!k || waitingMap.has(k)) continue; waitingMap.set(k, { keyword: l.keyword, written_at: String(l.started_at || ''), source: String(l.source || '') }); }
   for (const l of lrows) { if (l.status !== 'writing') continue; const k = norm(l.keyword); if (!k || waitingMap.has(k) || publishedKw.has(k)) continue;
-    const lg = slog.filter(r => norm(r.keyword) === k).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;
-    const at = String((lg && lg.started_at) || l.start_date || ''); if (!freshW(at)) continue;
+    const lg = writtenOf(k); if (!lg) continue;   // R1: no `written` log row = the page was never written (the refusal path resets such a row to `planned`)
+    const at = String(lg.started_at || l.start_date || ''); if (!freshW(at)) continue;
     waitingMap.set(k, { keyword: l.keyword, written_at: at, source: 'ladder' }); }
   const waiting = [...waitingMap.values()].sort((a, b) => String(a.written_at).localeCompare(String(b.written_at)));
   const waitingKw = new Set(waitingMap.keys());
