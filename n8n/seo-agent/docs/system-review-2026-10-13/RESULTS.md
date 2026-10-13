@@ -1,4 +1,4 @@
-# Whole-system re-rating — live runs on techand.ai, 2026-10-12 (written up 2026-10-13)
+# Whole-system re-rating — live runs on techand.ai, 2026-10-12 and 2026-10-13
 
 The re-rating run of the protocol in `../system-review-2026-10-11/FIX_PLAN.md` §5.2, after Phases 1–4, session 6A, G6, G7, G18 and
 the P34 fixes. Real runs on the owner's site (country United Arab Emirates), **started 20:28:46 UTC and finished 20:42:01 UTC**
@@ -18,8 +18,32 @@ check 1.2 hours earlier.**
 | DataForSEO | **$0.5781** | Balance $18.865792 at 2026-10-12 20:28:46 UTC (`files/spend-before.json`) and $18.287684 at 2026-10-13 06:08 UTC, both probed with `appendix/user_data` from inside the n8n container. Nothing but the free Error Handler (exec 516) ran in between. Per step: verdict $0.0221, ladder $0.1162, the two audits $0.09 each, the three keyword checks $0.0761 (each run's own `run_ledger`), AI Pulse $0.084 (its `cost_usd`) — $0.4784 in all; the remaining **$0.0997** belongs to the Rank Tracker, Link Builder and Site Tracker, which report no cost at all (see R9). |
 | Claude | **$0.33** | Reported token usage of every `Claude — …` node of the 35 executions (`files/claude-tokens.json`): **80,830 in / 20,496 out**, all Sonnet 5.5 and Haiku 4.5, × the baseline prices (Opus $4/$20, Sonnet $2/$10, Haiku $1/$5 per million). **No streaming Opus node ran** — the only content run was refused — so this figure has no hidden part, unlike the baseline's $1.6–3.0 range (G23). The guard's own estimates for the same runs total $1.07. |
 
-**Headline.** Every run that started finished; there was no failed execution and no bad data in a delivered report. The run is
-dominated by three facts:
+## 0b. The five completion runs of 2026-10-13
+
+**The five runs this window could not do were run a day later, after the engine's own daily budget guard reset.** The guard that
+refused `discover` and the ladder's page run counts estimates per day; at **2026-10-13 06:41 UTC the ledger counted $0 of $6 used**,
+so the five missing runs — `discover` with its follow-up keyword report, the ladder page the guard had refused, the full SEO report,
+`ai_visibility` and a full backlink check — were sent **06:47:51 to 07:18:12 UTC** as **executions 517–529**. Nothing was changed to
+make them run: no code, workflow, prompt, limit or table column, and in particular `ai_budget_usd` stays at $6. They went through the
+same front door with the same app header and the same company callback, so all six reports landed in the app's `reports` table.
+All 13 executions succeeded.
+
+**Their own spend: $2.88** (hard cap $4.00, estimate ≈ $3.4).
+
+| | Amount | How it was measured |
+|---|---|---|
+| DataForSEO | **$1.8761** | Balance $18.287684 at 06:46:28 UTC and $16.411543 at 07:18:12 UTC, probed with `appendix/user_data` from inside the n8n container before and after every run (`files/spend-2026-10-13.json`); nothing else ran in the window. Per run, by balance delta: `discover` + its keyword report **$0.2773**, the ladder page **$0.0221**, the full SEO report **$0.4094**, `ai_visibility` **$0.7946**, backlinks full **$0.3727**. The runs' own figures agree to the cent for the page and backlinks, and the discover pair matches exactly ($0.2552 + $0.0221); the full report reports $0.4674, **$0.058 above** what the balance moved, and `ai_visibility` reports $0.7866, $0.008 below. |
+| Claude | **≈ $1.00** | `files/claude-tokens-2026-10-13.json`. Ten Sonnet 5.5 calls report real usage: **119,060 in / 32,563 out** = $0.564 at the baseline prices (Sonnet $2/$10 per million). The page run's three **Opus 5.5 streaming** nodes (Strategy Brief, Copywriter, Editor) report only `tokenUsageEstimate`, not usage — 27,365 in / 16,426 out ≈ $0.438 at Opus $4/$20 — so **this figure has an estimated part again** (G23), unlike the 2026-10-12 window where no content run happened. |
+
+**Both windows together: $3.79** ($0.91 on 2026-10-12 + $2.88 on 2026-10-13), against the re-rating's $4.3 budget.
+
+The guard never came close this time: the day's six ledger rows total **$2.26 of $6** in estimates, all `done` and settled. The same
+rows show how far those estimates are from the money actually spent — `ai_visibility` was reserved at **$0.06** and cost **$0.79**,
+backlinks at $0.04 for $0.37, the full report at $0.25 for $0.41, while the written page was reserved at $1.23 and cost about $0.46.
+That is R9 measured from the other side: the guard watches an AI estimate, not the spend.
+
+**Headline.** Every run that started finished; there was no failed execution and no bad data in a delivered report. The 2026-10-12
+window is dominated by three facts:
 
 - **The guards now work, and they bit.** The new run ledger counts reservations across concurrent runs, so the day's estimate
   ($5.74 of the $6 daily cap, mostly from the earlier Phase 3+4 check) **refused the `discover` run and the ladder's page run**
@@ -36,6 +60,17 @@ dominated by three facts:
   features then report a page that does not exist (R1); a finding in a category the audit declares "not assessed" is reported as
   "new" at every audit (R2); one of three keyword checks lost its topic fit to a parser error and shipped anyway (R3); and no ops
   alert has ever actually been delivered (R5, R6).
+
+**Headline of the completion runs (2026-10-13).** The five runs close 15 of the 16 "not exercised" items, and almost everything the
+fix plan built for them works in the open: the discovery run now seeds itself from Search Console, clusters keywords by their shared
+results page and labels every traffic figure measured or modelled (G8); the written page is compared with the best competitor page
+rather than the average (G33), checked for copied passages (G5) and delivered with **three real WebP images** rendered on this
+machine (G30); the full report pays nothing for WHOIS (D7), keeps the site's robots rules byte for byte (D17), inspects all 45 key
+pages (G25) and refuses to pitch a ministry or a link seller (P34-4); the AI visibility run now says its fact check was **"not
+checked"** instead of "no claim was wrong" (P34-3) and names the business "Tech&" (P34-6, on that workflow); the backlink run sets 17
+farm links aside, reports no false "lost" and puts the one real link on top (D3, P1-2, G18-1). Six new defects came with them, and
+two are serious: the audit raises a **High "pages are not mobile-friendly" finding on every page out of Google's "no data" answer**
+(R10), and the **written page ships with 12 placeholders although its own quality gate failed it twice** (R11).
 
 ---
 
@@ -67,7 +102,28 @@ call count, because those workflows report no cost (R9). Claude is from the toke
 | — | Balance after | — | — | 2026-10-13 06:08 | — | — | — | $18.287684 |
 | — | Error Handler (unplanned, Console Alerts IMAP trigger) | — | 516 | 2026-10-13 03:07:36–03:07:49 | 13 s | 0 | 0 | alert recorded, e-mail failed (R5, R6) |
 
-**35 executions in the window (481–515), all 35 succeeded**, plus the unplanned Error Handler run 516 the next morning. 14 callbacks
+**The completion runs of 2026-10-13** (same method, same app header and callback; all times UTC, 2026-10-13; DataForSEO measured by
+balance delta per run):
+
+| # (protocol) | What | Request id | Executions (API → run) | Start–end | Duration | DataForSEO | Claude | Status |
+|---|---|---|---|---|---|---|---|---|
+| — | Balance before | — | — | 06:46:28 | — | — | — | $18.287684, ledger **$0 of $6** used today |
+| 9 | `discover` (with "Keyword Report") | 517 | 517 → 518 | 06:47:51–06:49:46 | 1.9 min | 0.2552 | 0.084 | completed, 662 keywords, 131 relevant |
+| 10 | → the follow-up keyword report "erp systems in uae" (spawned) | 517 | 519 | 06:49:43–06:52:11 | 2.5 min | 0.0221 | 0.075 | completed, GO_WITH_CHANGES **58** |
+| 7 | the ladder's rung-2 page "service industry erp software" (`lad_mv5pjt5y4aoa`, app "Write now") | 520 | 520 → 521 | 06:52:34–07:04:51 | 12.2 min | 0.0221 | 0.52 (0.44 estimated) | completed, 2,891 words, 3 images, **QA failed and shipped** (R11) |
+| 14 | full SEO report, 200 pages | 522 | 522 → 523 | 07:05:13–07:12:06 | 6.9 min | 0.4094 | 0.049 | completed, health **70 "Needs Improvement"**, 60 findings |
+| 12 | `ai_visibility` | 524 | 524 → 525 → 526 | 07:12:17–07:14:43 | 2.5 min | 0.7946 | 0.073 | completed, 8 questions × 6 engines, 1 of 47 requests failed |
+| 13 | `backlinks`, full | 527 | 527 → 528 → 529 | 07:16:02–07:17:00 | 58 s | 0.3727 | 0 | completed, mode `full`, 17 farm links set aside |
+| — | Balance after | — | — | 07:18:12 | — | — | — | $16.411543 (**−$1.8761**) |
+
+**13 executions (517–529), all 13 succeeded**, none running or in error afterwards. Six callbacks reached the app
+(`keyword_strategy`, `content` = the keyword report, `content` = the page, `full_report`, `ai_visibility`, `backlinks`) plus the two
+`…_started` acknowledgements, with their files: the keyword-ideas Word file and PDF, the page as Word / PDF / HTML / Markdown /
+`meta.json` **and three WebP images**, the full report as Word / PDF with the 7-file fix pack, and the AI-visibility and backlink PDFs.
+Durations against the last comparable runs: `discover` 1.8 → 1.9 min, the keyword report 2.1 → 2.5 min, a content run 10.3 min
+(2026-10-01) → 12.2 min, the full report 10.8 → 6.9 min, `ai_visibility` 2.5 min (same), backlinks 40 → 58 s.
+
+**35 executions in the 2026-10-12 window (481–515), all 35 succeeded**, plus the unplanned Error Handler run 516 the next morning. 14 callbacks
 reached the app (`site_description`, `content` = the verdict, `ladder_plan`,
 `site_audit` ×2, `ai_pulse`, `rank_tracker` ×5, `link_builder`, `ai_growth`, `site_tracker`) plus **2 rejection reports** for the two
 refused runs, each with the guard's text. Durations against the baseline of 2026-10-11: describe 15 s → 32 s (it now reads 6 pages),
@@ -76,17 +132,17 @@ instead of 6), Link Builder 1.7 min → 89 s, AI Growth 53 → 20 s, Site Tracke
 
 **Not run (and why) — read this before scoring:**
 
-| Protocol run | Why not | Latest live evidence instead |
+| Protocol run | 2026-10-12 | Done on 2026-10-13 |
 |---|---|---|
-| 9 `discover` + 10 its follow-up keyword report | **refused** by the daily AI budget guard (exec 499) | Phase 3+4 check, execs 455–457 (2026-10-12 17:00) |
-| 7 the ladder's page (content) | **refused** by the same guard (exec 500) | Phase 2 check (2026-10-12 10:20, exec 442) |
-| 14 full SEO report | not repeated in this window | Phase 3+4 check, execs 469–470 (18:55), health 70 |
-| 12 `ai_visibility` | not repeated | Phase 3+4 check, execs 471–473 (19:07), $0.803 |
-| 13 `backlinks` (full) | not repeated | Phase 3+4 check, execs 474–476 (19:11), $0.373 |
-| `published`, `checkin`, `profile` write, a second full report (domain-age cache), case study / local / video pages, the app UI in an owner session | none was attempted: the first three would write false rows, the rest need a paid content run or an owner session | — |
+| 9 `discover` + 10 its follow-up keyword report | **refused** by the daily AI budget guard (exec 499) | **yes** — execs 518, 519 |
+| 7 the ladder's page (content) | **refused** by the same guard (exec 500) | **yes** — exec 521, the same rung the guard refused |
+| 14 full SEO report | not repeated in that window | **yes** — exec 523 |
+| 12 `ai_visibility` | not repeated | **yes** — exec 526 |
+| 13 `backlinks` (full) | not repeated | **yes** — exec 529 |
+| `published`, `checkin`, `profile` write, a second full report (domain-age cache), case study / local / video pages, the app UI in an owner session | none was attempted: the first three would write false rows, the rest need a paid content run or an owner session | still not attempted (same reasons) |
 
-Everything the protocol asked to *add* to the baseline therefore remains unrun, except the error path, which fired by itself
-(exec 516) and exposed R5/R6.
+With the completion runs, **every protocol run of the re-rating has live evidence of its own** except the six left out on purpose in
+the last row. The error path fired by itself (exec 516) and exposed R5/R6.
 
 ---
 

@@ -47,3 +47,27 @@ tests → commit path-scoped on its branch, no push, no deploy.
 Enable the **Chrome UX Report API** for the PageSpeed key's project · fill **techand.ai's business profile** (unblocks 6 held outreach
 drafts and the AI fact check) · set **`SEO_ALERT_WEBHOOK_URL`** in `n8n/.env` · **rotate `SEO_API_KEY`** · upload the **IndexNow key
 file** · publish or discard the **5 written pages** (the weekly cadence pauses itself until then).
+
+---
+
+## Update — 2026-10-13 07:30 UTC (paused here)
+
+**The five refused runs were re-run and they all succeeded** (the daily guard had reset to $0 of $6; no limit was changed):
+discovery + follow-up, the ladder's rung page, the full report, `ai_visibility` and the full backlink check — executions up to **529**,
+with 76 artefacts now in `files/`. **`RESULTS.md` holds their partial write-up only** (the agent was stopped mid-document, +70 lines):
+its §1 table, the §2 subsections, the §3.1 "not exercised" rows and §5 still need finishing from the executions and artefacts.
+Read the uncommitted diff of `RESULTS.md` first — it shows how far the write-up got.
+
+**Also paused:** the fixes for **R1–R9** (`FIX_PLAN.md` §3.11). That worktree is
+`.claude/worktrees/agent-a7747a19d88aa8de5` (branch `worktree-agent-a7747a19d88aa8de5`), stopped while writing harness scenario
+**S57**; resume it by messaging that agent. R1 is the High one: a budget-refused run leaves a ladder row saying `writing`, so the
+ladder plan, Rank Tracker and cadence all report a page that does not exist. Its brief also asked for `fix_phantom_pages.py`
+(`--dry-run` by default) to repair the live rows — check whether that script exists in the worktree before writing another.
+
+**Then:** give the finished `RESULTS.md`, the unchanged `../system-review-2026-10-11/CRITERIA_*.md` and the scorer rules in
+`../system-review-2026-10-11/FIX_PLAN.md` §5.2 to an **independent scorer** (a fresh session with no fixing context) to write
+`SCORECARD.md` here; then fill the "After fixes" column in FIX_PLAN §2 and add a dated row to its §6 scores history.
+
+**State:** branch tip pushed, working tree clean apart from `RESULTS.md`; **72 fix-plan items done**; harness **3520 passed, 0 failed**;
+app 305 unit tests; 20 workflows active and the Test Runner inactive. **The code merged since the last deploy is not applied yet** —
+run `python3 apply_env.py` (it runs `sync_tables.py` for G12's two `seo_link_impact` columns) before the next live run.
