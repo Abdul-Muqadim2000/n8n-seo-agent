@@ -4,7 +4,12 @@
 /*__RANK_SERP__*/
 /*__ANNOTATIONS__*/
 /*__LINEAGE__*/
+/*__REPLAN__*/
 // Rank tracker report: per ladder, positions vs the previous check, rungs reached, drops and the recommended next step.
+// G32 (2026-10-13, FIX_PLAN): a ladder that has not moved for the configured number of weeks (`seo_monitors.stuck_weeks`, empty = 8)
+// no longer only says "stuck": RP (v5/code/_replan.js) turns the same facts into a re-plan PROPOSAL — a different rung order, an easier
+// supporting keyword, improving the page that exists instead of writing another, or stopping — with the reason and the evidence. It is
+// a proposal: no row is rewritten and nothing the owner approved is changed.
 // v4.16 (G6, 2026-10-12 system review): also the results page itself — the features it showed (AI Overview, snippet, People Also Ask,
 // local pack, video), who is above us with their positions, our modelled share of voice, and the mobile position of the main keywords.
 // Anything volatile is worded as an observation of one search at one moment (_serp_obs.js, D26), never as a fact about the query.
@@ -21,7 +26,9 @@ let ladderRows = []; try { ladderRows = $('Load Ladders').all().map(i => i.json)
 let pageRows = []; try { pageRows = $('Load Pages (Tracker)').all().map(i => i.json).filter(r => r && r.site_id && r.url && !r.error); } catch (e) {}
 const modelFor = (domain) => SM.from({ site_id: 'site_' + normD(domain).replace(/[^a-z0-9]+/g, '-'), domain: normD(domain) },
   { pages: pageRows.filter(r => r.site_id === 'site_' + normD(domain).replace(/[^a-z0-9]+/g, '-')) });
-const FLAGS = { won_checks: 4, won_position: 3, stuck_weeks: 8 };
+const FLAGS = { won_checks: 4, won_position: 3, stuck_weeks: RP.WEEKS };
+// G32: how many weeks without a gain make a ladder stuck, per site (seo_monitors.stuck_weeks; empty = 8, kept between 2 and 26 by RP.weeks)
+let monRowsT = []; try { monRowsT = $('Load Monitors (Tracker)').all().map(i => i.json).filter(r => r && (r.site_id || r.domain) && !r.error); } catch (e) {}
 const normK = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
 const validPos = (v) => v !== '' && v != null && Number.isFinite(Number(v)) && Number(v) >= 0;   // -1 = failed check: "check again", never a position
@@ -114,8 +121,11 @@ for (const [id, items] of byLadder) {
   const histOf = (kw) => deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && validPos(x.position)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
   const headChecks = [...(!head.deferred && validPos(head.result.position) ? [{ position: Number(head.result.position), checked_at: nowCheck }] : []), ...histOf(head.keyword)].slice(0, FLAGS.won_checks);
   const won = rowsK.some(r => r.rung === 4) && headChecks.length >= FLAGS.won_checks && headChecks.every(h => Number(h.position) >= 1 && Number(h.position) <= FLAGS.won_position);
-  // stuck: pages published, the first one 8+ weeks ago, and none of them improved its position over the last 8 weeks
-  const nowMs = new Date(nowCheck).getTime(), cutoff = nowMs - FLAGS.stuck_weeks * 7 * 864e5;
+  // stuck: pages published, the first one `stuck_weeks`+ weeks ago, and none of them improved its position over those weeks (G32: the
+  // threshold is the site's own setting, and the same facts become the re-plan proposal below)
+  const sidT = 'site_' + normD(head.domain).replace(/[^a-z0-9]+/g, '-');
+  const stuckWeeks = RP.weeks((monRowsT.find(m => m.site_id === sidT || normD(m.domain) === normD(head.domain)) || {}).stuck_weeks);
+  const nowMs = new Date(nowCheck).getTime(), cutoff = nowMs - stuckWeeks * 7 * 864e5;
   const pubRows = rowsK.filter(r => r.status === 'published' || !!logOf(r.keyword));
   const pubDates = pubRows.map(r => { const l = logOf(r.keyword), lr = rowOf(r.keyword); const d = (l && (l.published_at || l.started_at)) || ((lr.page_exists === true || lr.page_exists === 'true') ? lr.start_date : ''); const t = d ? new Date(d).getTime() : NaN; return Number.isFinite(t) ? t : null; }).filter(t => t != null);
   const firstPub = pubDates.length ? Math.min(...pubDates) : null;
@@ -123,6 +133,15 @@ for (const [id, items] of byLadder) {
     const base = hs.find(h => new Date(h.checked_at).getTime() <= cutoff) || hs[hs.length - 1]; if (!base) return false; const b = Number(base.position);
     return cur > 0 && (b === 0 || cur < b); });
   const stuck = !won && pubRows.length > 0 && firstPub != null && firstPub <= cutoff && !improved;
+  // G32: the same facts turned into a re-plan proposal (RP decides nothing about the data — it only reads what is above). A ladder that
+  // is moving gets no proposal, and an accepted one is applied by a person in the app: nothing here rewrites the plan.
+  const baseAt = (kw) => { const hs = histOf(kw); const b = hs.find(h => new Date(h.checked_at).getTime() <= cutoff) || hs[hs.length - 1]; return b ? Number(b.position) : null; };
+  const replan = RP.propose({ ladder_id: id, head_keyword: head.head_keyword || head.keyword, domain: head.domain, checked_at: nowCheck,
+    weeks: firstPub == null ? null : Math.floor((nowMs - firstPub) / (7 * 864e5)), stuck_weeks: stuckWeeks, won, improved, reach: null,
+    head: { keyword: head.keyword, position: head.current, base_position: baseAt(head.keyword), live: mainLive },
+    pages: rowsK.map(r => { const c = coveredBy(r); const lr = rowOf(r.keyword);
+      return { keyword: r.keyword, rung: Number(r.rung), page_no: Number(r.page_no), status: r.status || '', live: liveOf(r), position: r.current,
+        base_position: baseAt(r.keyword), target_url: r.url || lr.target_url || r.target_url || '', covered_by: c ? c.url : '' }; }) });
   // 2026-10-11 (FIX_PLAN D9): pages are written without links to their unpublished siblings, so when one goes live the owner has to add the
   // link. One reminder line per ladder, only for the pages that went live since the previous check, with the anchor words to use.
   const lastCheck = deskHist.filter(x => x.ladder_id === id && String(x.checked_at) < nowCheck).map(x => String(x.checked_at)).sort().pop() || '';
@@ -165,7 +184,7 @@ for (const [id, items] of byLadder) {
   const html = '<p>Hi,</p><p>Position check for your keyword ladder towards <b>' + esc(head.head_keyword) + '</b> on <b>' + esc(head.domain) + '</b> (' + rowsK.length + ' keywords, Google top 50).</p>' + table +
     '<p><b>Rungs:</b> ' + (rungs.map(r => 'Rung ' + r.rung + ': ' + r.top10 + '/' + r.pages + ' in top 10, ' + r.top3 + ' in top 3' + (r.reached ? ' ✓ reached' : '')).join(' · ') || 'no rung pages tracked') + '</p>' +
     (gains.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(gains.join('; ')) + '</p>' : '') + (drops.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(drops.join('; ')) + '</p>' : '') +
-    serpHtml + remindHtml + '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
+    serpHtml + remindHtml + RP.block(replan) + '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
     (apiBody ? '<p>Start the next page: open the <a href="' + formLink + '">SEO Assistant form</a> ("I know my keyword", keyword <b>' + esc(apiBody.keyword) + '</b>, domain ' + esc(head.domain) + '), or send this to the API (' + esc(API_URL) + '):</p><pre style="background:#f1f5f9;padding:8px;font-size:12px">' + esc(JSON.stringify(apiBody, null, 2)) + '</pre>' : '') +
     '<p style="color:#64748b;font-size:12px">Checks run weekly; once the top page holds the top 3 for four checks, the main keyword and the published pages are checked monthly. Positions come from DataForSEO live SERPs.</p>'
     // G12 / G29 (2026-10-13): the events of the tracked window, and where each figure came from
@@ -195,6 +214,7 @@ for (const [id, items] of byLadder) {
         mobile_position: m ? m.position : null, mobile_checked_at: m ? m.checked_at : null,
         features: s ? s.features : null, feature_labels: s ? s.chips : [], results_page: s ? s.line : '',
         share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null }; }),
-    rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, api_body: apiBody, done, won, stuck } });
+    rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, api_body: apiBody, done, won, stuck,
+    stuck_weeks: stuckWeeks, replan } });   // G32: the proposal, never applied here
 }
 return out.length ? out : [{ json: { nothing_to_do: true } }];

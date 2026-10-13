@@ -1616,13 +1616,17 @@ await guard('pipeline', async () => {
   const htmlStuck = t.tr[0].json.html, subjStuck = t.tr[0].json.subject;
   t = await trk(LS, sHist, flat, []);
   // G12 (2026-10-13): the publish dates DO change the e-mail now — they are marked as events at the end of it, with the lineage block.
-  // Everything above those two sections must still be identical, and the marks must appear only when a publish date is recorded.
-  const beforeMarks = (h) => String(h).split('<p style="margin-top:14px"><b>What happened while this ladder was tracked')[0].split('Where these numbers come from')[0];
-  check('tracker: the e-mail above the event marks does not change with the flags (G12 adds the publish dates and the lineage at the end)',
+  // G32 (2026-10-13): a stuck ladder also carries its re-plan proposal, so that block is cut out of the comparison too (S58 checks it).
+  // Everything else must still be identical, and each block must appear only when its own facts are there.
+  const beforeMarks = (h) => String(h).replace(/<!--replan-->[\s\S]*?<!--\/replan-->/, '')
+    .split('<p style="margin-top:14px"><b>What happened while this ladder was tracked')[0].split('Where these numbers come from')[0];
+  check('tracker: the e-mail outside the event marks and the re-plan block does not change with the flags (G12 adds the publish dates and the lineage, G32 the proposal for a stuck ladder)',
     beforeMarks(t.tr[0].json.html) === beforeMarks(htmlStuck) && t.tr[0].json.subject === subjStuck
-    && /Published: "vat software uae cost"/.test(htmlStuck) && !/Published: /.test(t.tr[0].json.html),
+    && /Published: "vat software uae cost"/.test(htmlStuck) && !/Published: /.test(t.tr[0].json.html)
+    && /here is what we would change/.test(htmlStuck) && !/here is what we would change/.test(t.tr[0].json.html),
     JSON.stringify({ prefix_same: beforeMarks(t.tr[0].json.html) === beforeMarks(htmlStuck), subject_same: t.tr[0].json.subject === subjStuck,
-      pub_marked: /Published: "vat software uae cost"/.test(htmlStuck), pub_absent: !/Published: /.test(t.tr[0].json.html) }));
+      pub_marked: /Published: "vat software uae cost"/.test(htmlStuck), pub_absent: !/Published: /.test(t.tr[0].json.html),
+      replan_in_stuck: /here is what we would change/.test(htmlStuck), replan_absent: !/here is what we would change/.test(t.tr[0].json.html) }));
   t = await trk(LS, sHist, (k) => k === 'vat software uae cost' ? 9 : 0, pubLog(75));
   check('tracker: not stuck when a published page improved (#12 -> #9)', t.tr[0].json.stuck === false, t.tr[0].json.stuck);
   t = await trk(LS, sHist, flat, pubLog(30));
@@ -1910,7 +1914,7 @@ await guard('pipeline phase 3', async () => {
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
   const N0 = await discover(false, null, { base: { live_serp_checks: 8 } });
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks', 'topic_radius', 'radius', 'radius_reason'].includes(k) ? undefined : v));   // 2026-10-13: topic_radius / radius / radius_reason are G32's block (drawn from the reach, so empty verdicts without a website); 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
@@ -7098,6 +7102,263 @@ await guard('g12-g29-annotations-change-tests-lineage', async () => {
     && RP56.lineage.some(l => /Position before and after/.test(l.figure) && l.source === 'gsc_history'), JSON.stringify(RP56.lineage.map(l => [l.figure, l.source])));
 });
 
+// ===================================================================================
+// S58 G15 + L3 + G32 (2026-10-13, system review FIX_PLAN.md G15 / L3 / G32; criteria REP 3.6 / 3.7 in
+// CRITERIA_technical_tracking_reporting_ai_links.md and KW K12 / K13 in CRITERIA_keywords_content.md).
+// The engine side of the three items (G15's expiring share links live in the app: app/server/test/shareLinks.test.ts):
+//   * L3 — the Link Builder's week as one printable document with every section and its lineage notes, the PDF path through Gotenberg,
+//     and a renderer failure that leaves the run intact with its reason;
+//   * G32 — the topic radius (within reach / a stretch / out of reach for now, each with its evidence) in the keyword research and in
+//     the ladder plan, and the re-plan proposal a stuck ladder gets, while a ladder that is moving gets none and nothing is rewritten.
+// Every check fails against the code of the 2026-10-11 run: the Link Builder had no document and no PDF, no output drew a topic radius,
+// and a stuck ladder was a flag with nothing behind it.
+// ===================================================================================
+await guard('share-links-lb-pdf-topic-radius-replan', async () => {
+  const SN = 'S58 G15 L3 G32 — the Link Builder\'s week as a PDF with every section and its lineage, a topic radius that names what is within reach and what is a stretch with the evidence, and a stuck ladder that gets a re-plan proposal (a moving one gets none, and nothing is rewritten)';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 500))); };
+  const EMPTY = [{ json: {} }];
+
+  // ---- 1. L3: the Link Builder's whole week as one document, then the PDF ----
+  const F = require('./fixtures_lb413');
+  const loadAll = () => { mock('Load Sites', F.sites()); mock('Load Ladders', F.ladders()); mock('Load Monitors', F.monitors()); mock('Load Profiles', F.profiles());
+    mock('Load Link Prospects', F.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', F.outreachPrev().map(j => ({ json: j })));
+    mock('Load Listings', F.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', EMPTY);
+    mock('Load Backlinks', F.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F.snaps().map(j => ({ json: j })));
+    mock('Load Content Log', EMPTY); mock('Load AI Targets', F.targets().map(j => ({ json: j })));
+    mock('Load Query History', F.queries().map(j => ({ json: j }))); mock('Load Rank History', F.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', F.cache().map(j => ({ json: j }))); };
+  const sourceFor = (r) => r.kind === 'press' ? F.bsky(r.topic ? [] : [F.onTopicPost()]) : r.kind === 'wayback' ? F.cdx()
+    : r.kind === 'listing_search' ? F.searx(r.listing_id === 'crunchbase' ? ['https://www.crunchbase.com/organization/techand'] : [])
+    : r.kind === 'resource_search' ? F.searx(['https://www.einvoicingbasics.co.uk/resources/']) : {};
+  loadAll(); delete store['Manual Run'];
+  const P58 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  const SR58 = (await run('LB Source Requests', [{ json: P58 }])).map(r => r.json);
+  mock('Fetch LB Sources', SR58.map(r => sourceFor(r)));
+  const DR58 = (await run('LB DFS Requests', [{ json: P58 }])).map(r => r.json);
+  mock('Run LB DFS', DR58.map(() => F.dfsBroken()));
+  const PR58 = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
+  mock('Fetch LB Pages', PR58.map(r => F.fetchPage(r.url)));
+  const S258 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json);
+  mock('Fetch LB Second', S258.map(r => F.fetchPage(r.url)));
+  await run('LB Assemble', [{ json: {} }]);
+  const WI58 = (await run('LB Writer Input', [{ json: {} }]))[0].json;
+  // one draft the quality gate must hold: hype plus a bracket the owner would have to fill in
+  const W58 = F.writer(WI58.jobs);
+  const heldJob = WI58.jobs.find(j => j.prospect_domain === 'azdan.com') || WI58.jobs[0];
+  W58.output.sequences = W58.output.sequences.map(s => s.n !== heldJob.n ? s
+    : { ...s, steps: s.steps.map((st, i) => i ? st : { ...st, body: st.body + ' We are the leading provider of e-invoicing in [city].' }) });
+  mock('Outreach Sequence Writer', [W58]);
+  const QA58 = (await run('LB Draft QA', [{ json: {} }]))[0].json;
+  const RW58 = (await run('LB Rows', [{ json: {} }]))[0].json;
+  check('L3 setup: this week has drafted pitches and one the quality gate held, so the document has both to show',
+    RW58.drafted >= 2 && RW58.held === 1 && RW58.outreach_rows.some(o => o.status === 'needs_edit'), JSON.stringify({ drafted: RW58.drafted, held: RW58.held, qa: QA58.verdicts.map(v => [v.prospect_domain, v.ok]) }));
+  const RP58 = (await run('LB Report', [{ json: {} }]))[0].json;
+  const DOC58 = await run('LB Doc');
+  const doc = decode(DOC58); save('link-builder-document-l3.html', doc); scanHtml('link builder document (L3)', doc);
+  const SECTIONS = ['What to do this week', 'Every opportunity and how it was qualified', 'Contacts found on the prospect\'s own site',
+    'The page we would ask them to link to, and the link text', 'The pitches drafted this week, exactly as they would be sent',
+    'Links you can add yourself (the listings checklist)', 'Redirects to add (old URLs of yours that now answer 404)',
+    'What your links did', 'What your page changes did', 'Where these numbers come from'];
+  check('L3: the document carries every section of the week — what to do, the opportunities with their qualification, the contacts, our page and link text, the drafted pitches, the listings, the redirects, the impact and the lineage',
+    SECTIONS.every(s => doc.includes(s)), JSON.stringify(SECTIONS.filter(s => !doc.includes(s))));
+  check('L3: every opportunity is in it with what we decided and why — the qualified ones and the ones turned down with their reason',
+    /azdan\.com/.test(doc) && /Qualified, waiting for a slot|Pitch ready for your approval/.test(doc) && /Not a fit/.test(doc)
+    && /sells posts or links/.test(doc) && /another language \(de\)/.test(doc), (doc.match(/Not a fit[\s\S]{0,160}/) || [''])[0]);
+  check('L3: the contacts are the ones on the prospect\'s own domain, with where they were found, and the document says why',
+    /sales@azdan\.com/.test(doc) && /layla\.haddad@erpdaily\.ae/.test(doc) && !/sajid@advintek\.ae/.test(doc)
+    && /only used when it sits on the prospect/.test(doc), (doc.match(/Contacts found[\s\S]{0,200}/) || [''])[0]);
+  check('L3: our page and the link text are named per prospect, with why that page was chosen',
+    /The page we would ask them to link to/.test(doc) && /your business name|the page title|the page URL/.test(doc)
+    && RW58.outreach_rows.filter(o => o.target_url && o.type !== 'redirect').every(o => doc.includes(o.target_url)), JSON.stringify(RW58.outreach_rows.filter(o => o.target_url).map(o => [o.prospect_domain, o.target_url, o.anchor_hint]).slice(0, 4)));
+  check('L3: each drafted sequence is shown as it would be sent (first e-mail + follow-ups with their working-day waits), and the held one carries the reasons it was held',
+    /First e-mail/.test(doc) && /Follow-up 1 — after 4 working day\(s\)/.test(doc) && /Held for your edit/.test(doc) && /Held because:/.test(doc)
+    && /hype|needs you: \[city\]/.test(doc), (doc.match(/Held because:[\s\S]{0,200}/) || [''])[0]);
+  check('L3: the listings checklist, the redirects and the impact readings keep their graded wording and the control group',
+    /Ministry of Finance/.test(doc) && /Not listed/.test(doc) && /capabilities\/data/.test(doc) && /Likely helped|Too early to tell/.test(doc)
+    && /control group/.test(doc) && /never proof of cause/.test(doc), (doc.match(/What your links did[\s\S]{0,200}/) || [''])[0]);
+  check('L3 / 3.11: the document carries the report\'s lineage notes unchanged — every figure with its source, period and sample',
+    /Where these numbers come from/.test(doc) && RP58.lineage.every(l => doc.includes(l.figure)) && RP58.lineage.length >= 3, JSON.stringify(RP58.lineage.map(l => l.figure)));
+  check('L3: the e-mail keeps its short summary (json.html) while the document is the file, and the document counts every section it filled',
+    DOC58[0].json.html === RP58.html && DOC58[0].json.doc_sections.drafted === RW58.drafted && DOC58[0].json.doc_sections.held === RW58.held
+    && DOC58[0].json.doc_sections.listings > 0 && DOC58[0].json.doc_sections.contacts > 0, JSON.stringify(DOC58[0].json.doc_sections));
+  const PREP58 = await run('Prepare PDF LB', DOC58);
+  check('L3: the renderer gets the document as index.html (the name Gotenberg requires), one item per site',
+    PREP58.length === 1 && PREP58[0].binary.html.fileName === 'index.html' && PREP58[0].binary.html.mimeType === 'text/html'
+    && Buffer.from(PREP58[0].binary.html.data, 'base64').toString('utf8') === doc, JSON.stringify(Object.keys(PREP58[0].binary || {})));
+  mock('Render PDF LB', [{ json: {}, binary: { pdf: { data: 'JVBERi0xLjQKJSVFT0Y=', mimeType: 'application/pdf', fileName: 'index.pdf' } } }]);
+  const ATT58 = await run('Attach PDF LB', store['Render PDF LB']);
+  check('L3: the PDF is attached next to the report\'s own file, named after the report, and the copy the renderer needed is dropped',
+    ATT58[0].json.pdf_ready === true && /^link-building-techand-ai-.*\.pdf$/.test(ATT58[0].json.pdf_file_name)
+    && ATT58[0].binary.pdf.mimeType === 'application/pdf' && !ATT58[0].binary.html && !!ATT58[0].binary.data, JSON.stringify({ ready: ATT58[0].json.pdf_ready, name: ATT58[0].json.pdf_file_name, keys: Object.keys(ATT58[0].binary) }));
+  const CB58 = (await run('Build LB Callback', ATT58))[0].json;
+  check('L3: the callback carries the PDF (bytes and name) so the app can offer it, and leaves the report HTML out',
+    !!CB58.pdf && CB58.pdf.mimeType === 'application/pdf' && CB58.pdf.data === 'JVBERi0xLjQKJSVFT0Y=' && !!CB58.files.pdf && !CB58.html
+    && CB58.stage === 'link_builder' && CB58.summary.drafted === RW58.drafted, JSON.stringify({ pdf: CB58.pdf && CB58.pdf.fileName, stage: CB58.stage, html: !!CB58.html }));
+  // a Gotenberg failure: n8n hands the node an error item (continueRegularOutput) — the run must carry on with the reason
+  mock('Render PDF LB', [{ json: { error: { message: 'connect ECONNREFUSED gotenberg:3000' } } }]);
+  const FAIL58 = await run('Attach PDF LB', store['Render PDF LB']);
+  const CBF58 = (await run('Build LB Callback', FAIL58))[0].json;
+  check('L3: a renderer failure never fails the run — no PDF is claimed, the HTML document still goes out, and the summary and the stage are untouched',
+    FAIL58[0].json.pdf_ready === false && FAIL58[0].json.pdf_file_name === null && !FAIL58[0].binary.pdf && !!FAIL58[0].binary.data
+    && CBF58.pdf === null && CBF58.stage === 'link_builder' && CBF58.summary.drafted === RW58.drafted && FAIL58[0].json.doc_sections.opportunities > 0,
+    JSON.stringify({ ready: FAIL58[0].json.pdf_ready, keys: Object.keys(FAIL58[0].binary), pdf: CBF58.pdf }));
+
+  // ---- 2. G32 / K12: the topic radius, as the one kit draws it ----
+  reset();
+  const RADof = async (o) => (await run('_radius', [{ json: o }]))[0].json;
+  const RADIN = { reach: 28, reach_method: 'percentile', domain: 'northwind-erp.com',
+    services: ['ERP implementation', 'e-invoicing compliance'], pages: [{ url: 'https://www.northwind-erp.com/vat-return-filing/', title: 'VAT return filing in the UAE' }],
+    site_topics: ['erp software uae'],
+    topics: [{ topic: 'erp implementation dubai', primary_keyword: 'erp implementation dubai', kd: 26, volume: 320, keyword_count: 4 },
+      { topic: 'vat return filing uae', primary_keyword: 'vat return filing uae', kd: 24, volume: 180, keyword_count: 2 },
+      { topic: 'e invoicing compliance uae', primary_keyword: 'uae e invoicing penalties', kd: 55, volume: 210, keyword_count: 3 },
+      { topic: 'accounting software reviews', primary_keyword: 'best accounting software', kd: 30, volume: 900, keyword_count: 5 },
+      { topic: 'enterprise resource planning courses', primary_keyword: 'erp training course', kd: 95, volume: 1200, keyword_count: 2 },
+      { topic: 'erp software uae', primary_keyword: 'erp software uae', kd: 61, volume: 500, keyword_count: 6, your_position: 6 }],
+    pick: 'erp implementation in dubai' };
+  const rad = await RADof(RADIN);
+  const topicOf = (t) => rad.topics.find(x => x.topic === t) || {};
+  console.log('   topic radius ->', JSON.stringify(rad.topics.map(t => [t.topic, t.verdict, t.evidence[0]])));
+  check('K12: a topic inside the measured reach that matches what the site sells is "Within reach", and the evidence names the difficulty against the reach and the service',
+    topicOf('erp implementation dubai').verdict === 'in_reach' && topicOf('erp implementation dubai').verdict_label === 'Within reach'
+    && topicOf('erp implementation dubai').evidence.some(e => /difficulty 26 against your reach 28/.test(e))
+    && topicOf('erp implementation dubai').evidence.some(e => /matches what you sell: "ERP implementation"/.test(e)), JSON.stringify(topicOf('erp implementation dubai')));
+  check('K12: a topic the site already ranks in the top 20 for is within reach whatever its difficulty, and says so first',
+    topicOf('erp software uae').verdict === 'in_reach' && /you already rank #6 for "erp software uae"/.test(topicOf('erp software uae').evidence[0]), JSON.stringify(topicOf('erp software uae').evidence));
+  check('K12: a topic above the reach is "A stretch" with the difficulty as its reason, not a refusal',
+    topicOf('e invoicing compliance uae').verdict === 'stretch' && /above your reach today, but within sight/.test(topicOf('e invoicing compliance uae').reason)
+    && topicOf('e invoicing compliance uae').evidence.some(e => /difficulty 55 against your reach 28/.test(e)), JSON.stringify(topicOf('e invoicing compliance uae')));
+  check('K12: a topic whose difficulty is inside the reach but which nothing the site sells or has a page about names is a stretch, with exactly that reason',
+    topicOf('accounting software reviews').verdict === 'stretch' && /nothing you sell or write about names this topic/.test(topicOf('accounting software reviews').reason)
+    && topicOf('accounting software reviews').difficulty_for_you === 'easy', JSON.stringify(topicOf('accounting software reviews')));
+  check('K12: a topic the site already has a page about is within reach, and the evidence names that page',
+    topicOf('vat return filing uae').verdict === 'in_reach' && topicOf('vat return filing uae').basis === 'page'
+    && topicOf('vat return filing uae').evidence.some(e => /you already have a page on it: https:\/\/www\.northwind-erp\.com\/vat-return-filing\//.test(e)), JSON.stringify(topicOf('vat return filing uae')));
+  check('K12: a topic far above the reach is "Out of reach for now" (never "impossible"), and the summary names what is within reach and what is a stretch',
+    topicOf('enterprise resource planning courses').verdict === 'far' && rad.in_reach.length === 3 && rad.stretch.length === 2 && rad.far.length === 1
+    && /3 topic\(s\) are within reach for northwind-erp\.com today/.test(rad.summary) && /are a stretch/.test(rad.summary)
+    && rad.rows.length === 6 && rad.rows[0].verdict === 'in_reach', JSON.stringify({ summary: rad.summary, counts: [rad.in_reach.length, rad.stretch.length, rad.far.length] }));
+  check('K12: every row carries its basis, and a topic can be looked up by its words (what a plan or a pick asks for)',
+    rad.topics.every(t => t.evidence.length >= 2 && ['service', 'page', 'topic', 'none'].includes(t.basis)) && rad.measured === true
+    && rad.picked && rad.picked.topic === 'erp implementation dubai' && /^Within reach — /.test(rad.picked_line), JSON.stringify({ picked: rad.picked && rad.picked.topic, line: rad.picked_line.slice(0, 120) }));
+  const radNo = await RADof({ reach: null, topics: RADIN.topics.slice(0, 2), services: RADIN.services });
+  check('K12: with no measured reach the radius says its verdicts are provisional instead of inventing one',
+    radNo.measured === false && radNo.reach === null && /could not be measured this run/.test(radNo.note), JSON.stringify(radNo.note));
+
+  // the two outputs that must carry the block: the keyword research and the ladder plan
+  const D58 = 'northwind-erp.com', W58u = 'https://www.' + D58;
+  const cand58 = (keyword, kd, volume) => ({ keyword, volume, kd, cpc: 2.5, intent: 'commercial', words: keyword.split(' ').length, pre_score: 60 + volume / 10, traffic_potential: volume, competitors: [], your_position: null, your_url: '' });
+  const CANDS58 = [cand58('erp implementation dubai', 26, 320), cand58('uae e invoicing penalties', 55, 210), cand58('best accounting software', 30, 900)];
+  const relOf = (cands) => [{ json: { output: { items: cands.map(c => ({ keyword: c.keyword, relevance: 2, intent: 'commercial', page_type: 'Guide', topic: c.keyword })) } } }];
+  mock('Collect Research', [{ json: { domain: D58, country: 'United Arab Emirates', goal: 'leads', seeds: ['erp software uae'], services: ['ERP implementation', 'e-invoicing compliance'],
+    business: 'ERP and e-invoicing partner in Dubai', competitors: [], site_urls: [W58u + '/erp-implementation/'], research: { candidates: CANDS58, pool_size: 3, competitor_domains: [], by_source: {}, failures: [] } } }]);
+  mock('Relevance Chunks', [{ json: { keywords_chunk: CANDS58.map(c => ({ keyword: c.keyword })) } }]);
+  mock('Load Site Cache', EMPTY); delete store['Site Model']; mock('Load Domain Ladders (Discovery)', EMPTY); mock('Load Ladder Settings (Discovery)', EMPTY);
+  mock('Reach (Discovery)', [{ json: { reach: 28, method: 'percentile', p75: 28, size_reach: 20, sample: 12, top10: 14, organic_keywords: 300, cached: false } }]);
+  const KS58 = (await run('Rank Keywords', relOf(CANDS58)))[0].json.keyword_strategy;
+  check('K12: the keyword research carries the site\'s topic radius, drawn by the same kit, and labels every cluster with its verdict',
+    !!KS58.topic_radius && KS58.topic_radius.reach === 28 && KS58.topic_radius.in_reach.length >= 1 && KS58.topic_radius.stretch.length >= 1
+    && (KS58.clusters || []).every(c => ['in_reach', 'stretch', 'far'].includes(c.radius)), JSON.stringify((KS58.clusters || []).map(c => [c.topic, c.radius])));
+  mock('Priority Keywords', KS58.priority.map(k => ({ keyword: k.keyword }))); delete store['AI Demand'];
+  const KSR58 = (await run('Build Keyword Strategy', KS58.priority.map(() => ({ json: {} }))))[0].json;
+  save('keyword-strategy-topic-radius.html', KSR58.result_html); scanHtml('keyword strategy (topic radius)', KSR58.result_html);
+  check('K12: the keyword report prints the radius as its own block — in-reach and stretch topics, each with its verdict, its reason and the evidence behind it',
+    /Your topic radius: what is within reach and what is a stretch/.test(KSR58.result_html) && /Within reach/.test(KSR58.result_html) && /A stretch/.test(KSR58.result_html)
+    && /On what evidence/.test(KSR58.result_html) && /difficulty 26 against your reach 28/.test(KSR58.result_html)
+    && KSR58.keyword_suggestions.topic_radius && KSR58.keyword_suggestions.topic_radius.summary === KS58.topic_radius.summary,
+    (KSR58.result_html.match(/Your topic radius[\s\S]{0,320}/) || [''])[0].slice(0, 300));
+  const PV58 = { keyword: 'uae e invoicing penalties', domain: D58, country: 'United Arab Emirates', location_code: 2784, goal: 'leads', ladder_id: 'lad_G32', pages_now: 1,
+    keyword_data: { keyword_difficulty: 55, search_volume: 210, cpc: 4, google_intent: 'commercial' }, verdict: 'GO_WITH_CHANGES', verdict_reasons: [], verdict_changes: [], secondary_keywords: ['e invoicing fines uae'],
+    competitors: [], competitors_summary: [], site_authority: { organic_keywords: 300, top10: 14, top3: 3 }, recommended_page: 'Guide', services: ['ERP implementation', 'e-invoicing compliance'],
+    business: 'ERP and e-invoicing partner in Dubai', site_description: { products_or_services: ['e-invoicing compliance'] }, site_urls: [W58u + '/', W58u + '/erp-implementation/'] };
+  mock('Parse Verdict', [{ json: PV58 }]);
+  mock('Ladder Pool', [{ json: { research: { candidates: CANDS58, refused: [], pool_size: 3, failures: [] }, site_rankings: { available: true, top10: [{ keyword: 'erp software uae', kd: 26, position: 6 }], head: null, count: 1 }, head_geo: [] } }]);
+  mock('Ladder Relevance Chunks', [{ json: { keywords_chunk: CANDS58.map(c => ({ keyword: c.keyword })) } }]);
+  mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY); mock('Load Site Cache', EMPTY);
+  const L58 = (await run('Ladder Plan', relOf(CANDS58)))[0].json.ladder;
+  check('K12: the ladder plan carries the same radius block and a note on the main keyword\'s own topic, with the evidence',
+    !!L58.topic_radius && L58.topic_radius.reach === L58.reach && !!L58.head_radius && ['in_reach', 'stretch', 'far'].includes(L58.head_radius.verdict)
+    && L58.notes.some(n => /^Topic radius — /.test(n) && /(Within reach|A stretch|Out of reach for now) — /.test(n) && /difficulty/.test(n)),
+    JSON.stringify({ head: L58.head_radius && [L58.head_radius.topic, L58.head_radius.verdict], note: L58.notes.find(n => /^Topic radius/.test(n)) }));
+  const LREP58 = decode(await run('Build Ladder Report', EMPTY)); save('ladder-plan-topic-radius.doc.html', LREP58); scanHtml('ladder plan (topic radius)', LREP58);
+  check('K12: the ladder plan report prints the block too, and the plan itself is unchanged by it (it is shown, never enforced)',
+    /Your topic radius: what is within reach and what is a stretch/.test(LREP58) && /On what evidence/.test(LREP58)
+    && L58.write_now.length >= 1 && L58.planned === true && !L58.refusal, (LREP58.match(/Your topic radius[\s\S]{0,260}/) || [''])[0].slice(0, 240));
+
+  // ---- 3. G32 / K13: the re-plan proposal of a stuck ladder ----
+  const RPof = async (o) => (await run('_replan', [{ json: o }]))[0].json;
+  const STUCK = { ladder_id: 'lad_G32', head_keyword: 'vat software uae', domain: D58, weeks: 11, stuck_weeks: 8, won: false, improved: false, reach: 28,
+    head: { keyword: 'vat software uae', position: 0, base_position: 0, live: true },
+    pages: [{ keyword: 'vat software uae cost', rung: 1, page_no: 1, status: 'published', live: true, position: 18, base_position: 18, target_url: W58u + '/vat-software-uae-cost/' },
+      { keyword: 'vat software uae guide', rung: 1, page_no: 2, status: 'published', live: true, position: 0, base_position: 0, target_url: W58u + '/vat-software-uae-guide/', covered_by: W58u + '/insights/uae-vat-software-guide/' },
+      { keyword: 'vat software uae providers', rung: 2, page_no: 3, status: 'planned', live: false, position: 0, base_position: null, target_url: W58u + '/vat-software-uae-providers/' },
+      { keyword: 'vat software uae', rung: 4, page_no: 4, status: 'published', live: true, position: 0, base_position: 0, target_url: W58u + '/vat-software-uae/' }],
+    later: [{ keyword: 'vat return filing software uae', kd: 22, volume: 90 }] };
+  const rp = await RPof(STUCK);
+  console.log('   re-plan ->', JSON.stringify({ stuck: rp.stuck, actions: rp.actions, weeks: rp.weeks }));
+  check('K13: a ladder with pages live and no gain for the configured weeks gets a proposal with its reason and its evidence',
+    rp.stuck === true && /has not moved in 11 weeks/.test(rp.headline) && /found no page of this ladder in a better position/.test(rp.reason)
+    && rp.evidence.some(e => /3 page\(s\) of this ladder are live, the first of them 11 weeks ago/.test(e))
+    && rp.evidence.some(e => /no page of this ladder has improved its position in the last 8 weeks/.test(e))
+    && rp.evidence.some(e => /"vat software uae cost": #18 → #18/.test(e)), JSON.stringify({ headline: rp.headline, evidence: rp.evidence }));
+  check('K13: it proposes concrete changes — improve the page that already answers the search, write the easier supporting keyword, change the order, or stop — each with its own evidence',
+    rp.actions.join() === 'improve_page,easier_keyword,reorder,stop' && rp.options.every(o => o.title && o.detail && (o.evidence || []).length)
+    && /insights\/uae-vat-software-guide/.test(rp.options[0].detail) && /splits the signals/.test(rp.options[0].detail)
+    && /"vat software uae providers" next \(rung 2, the easiest step still unwritten\)/.test(rp.options[1].detail)
+    && /only 2 of 3 supporting pages are/.test(rp.options[2].detail) && /stopping is a real option/.test(rp.options[3].detail), JSON.stringify(rp.options.map(o => [o.action, o.detail.slice(0, 120)])));
+  check('K13: the proposal says plainly that nothing was changed — it is never applied for the owner',
+    rp.applied === false && /proposal, not a change/.test(rp.note) && /nothing in your plan was rewritten/.test(rp.note), JSON.stringify(rp.note));
+  const moving = await RPof({ ...STUCK, improved: true });
+  const early = await RPof({ ...STUCK, weeks: 4 });
+  const wonL = await RPof({ ...STUCK, won: true });
+  const nothingLive = await RPof({ ...STUCK, pages: STUCK.pages.map(p => ({ ...p, live: false })) });
+  check('K13: a ladder that is moving, one too young to judge, a won one and one with nothing published get no proposal at all',
+    [moving, early, wonL, nothingLive].every(x => x.stuck === false && x.options.length === 0 && x.headline === '' && x.applied === false)
+    && /ladder is won/.test(wonL.reason), JSON.stringify([moving.stuck, early.stuck, wonL.stuck, nothingLive.stuck]));
+  const sooner = await RPof({ ...STUCK, weeks: 4, stuck_weeks: 4 });
+  check('K13: the number of weeks is a setting — the same ladder is stuck at 4 weeks when the site asks for 4, and the threshold stays inside sane bounds',
+    sooner.stuck === true && sooner.stuck_weeks === 4 && /no gain in 4 weeks/.test(sooner.options[sooner.options.length - 1].evidence[0])
+    && (await RPof({ ...STUCK, stuck_weeks: 0 })).stuck_weeks === 2 && (await RPof({ ...STUCK, stuck_weeks: 99 })).stuck_weeks === 26
+    && (await RPof({ ...STUCK, stuck_weeks: '' })).stuck_weeks === 8, JSON.stringify({ sooner: sooner.stuck_weeks }));
+
+  // the Rank Tracker itself: the proposal in the weekly e-mail and in the callback, and nothing rewritten
+  reset();
+  const daysAgo58 = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const slug58 = (k) => W58u + '/' + k.replace(/\s+/g, '-') + '/';
+  const lrow58 = (rung, page_no, keyword, status) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_T32', domain: D58, head_keyword: 'vat software uae', rung, page_no, keyword, supporting: '', page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: slug58(keyword), page_exists: false, status, months: '', start_date: daysAgo58(150), country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@example.com', callback_url: 'https://hooks.example.com/x', request_id: 'r-T32', target_words: 0 } });
+  const LAD58 = [lrow58(1, 1, 'vat software uae cost', 'published'), lrow58(1, 2, 'vat software uae guide', 'published'), lrow58(2, 3, 'vat software uae providers', 'planned'), lrow58(4, 4, 'vat software uae', 'published')];
+  const h58 = (kw, pos, days, rung) => ({ json: { ladder_id: 'lad_T32', keyword: kw, checked_at: daysAgo58(days), position: pos, url: pos > 0 ? slug58(kw) : '', serp_features: '', domain: D58, rung: rung || 1 } });
+  const HIST58 = [h58('vat software uae cost', 18, 70), h58('vat software uae cost', 18, 35), h58('vat software uae guide', 0, 63), h58('vat software uae guide', 0, 28), h58('vat software uae', 0, 70, 4), h58('vat software uae', 0, 35, 4)];
+  const log58 = (days) => ['vat software uae cost', 'vat software uae guide', 'vat software uae'].map(k => ({ json: { site_id: 'site_northwind-erp-com', domain: D58, keyword: k, source: 'ladder', page_type: 'Guide', existing_page_url: '', rung: 1, ladder_id: 'lad_T32', request_id: 'cad_x', started_at: daysAgo58(days + 10), status: 'published', published_url: slug58(k), published_at: daysAgo58(days), week: '2026-08-03' } }));
+  const trackerRun = async (o = {}) => {
+    mock('Load Ladders', LAD58); mock('Load History', HIST58); mock('Load Content Log (Tracker)', (o.log || []).length ? o.log : EMPTY);
+    if (o.monitors) mock('Load Monitors (Tracker)', o.monitors); else delete store['Load Monitors (Tracker)'];
+    const tp = await run('Tracker Plan', store['Load History']);
+    mock('SERP Check', tp.map(c => V.serpFor(c.json.keyword, D58, (o.positions || {})[c.json.keyword] || 0)));
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    return (await run('Tracker Report', pp))[0].json;
+  };
+  const POS58 = { 'vat software uae cost': 18 };
+  const TRs = await trackerRun({ log: log58(80), positions: POS58 });
+  save('rank-tracker-replan.html', TRs.html);
+  check('K13: the Rank Tracker turns the stuck flag into the proposal, in the weekly e-mail and in the callback, with the reason and the evidence',
+    TRs.stuck === true && TRs.replan.stuck === true && TRs.stuck_weeks === 8 && TRs.replan.options.length >= 2
+    && /This ladder has not moved in \d+ weeks — here is what we would change/.test(TRs.html) && /Why we think so:/.test(TRs.html)
+    && /proposal, not a change/.test(TRs.html), JSON.stringify({ stuck: TRs.stuck, actions: (TRs.replan.options || []).map(o => o.action), weeks: TRs.replan.weeks }));
+  const TRnot = await trackerRun({ log: log58(20), positions: POS58 });
+  check('K13: the proposal changes nothing — it is marked not applied, and the recommended next step and the ready-to-send request are exactly what they were without it',
+    TRs.replan.applied === false && TRs.replan.options.every(o => o.action !== 'apply')
+    && JSON.stringify(TRs.next_step) === JSON.stringify(TRnot.next_step) && JSON.stringify(TRs.api_body) === JSON.stringify(TRnot.api_body)
+    && TRnot.replan.options.length === 0, JSON.stringify({ stuck_next: TRs.next_step.action, plain_next: TRnot.next_step.action }));
+  const TRm = await trackerRun({ log: log58(80), positions: { 'vat software uae cost': 9 } });
+  check('K13: a ladder where a page improved gets no proposal and no block in the e-mail',
+    TRm.stuck === false && TRm.replan.stuck === false && TRm.replan.options.length === 0 && !/here is what we would change/.test(TRm.html), JSON.stringify({ stuck: TRm.stuck, options: TRm.replan.options.length }));
+  const TRc = await trackerRun({ log: log58(40), positions: POS58, monitors: [{ json: { site_id: 'site_northwind-erp-com', domain: D58, stuck_weeks: 4 } }] });
+  const TRd = await trackerRun({ log: log58(40), positions: POS58 });
+  check('K13: the site\'s own setting decides when a ladder counts as stuck — 4 weeks for this site, the default 8 without it',
+    TRc.stuck === true && TRc.stuck_weeks === 4 && TRc.replan.stuck === true && TRd.stuck === false && TRd.stuck_weeks === 8 && TRd.replan.options.length === 0,
+    JSON.stringify({ set: [TRc.stuck, TRc.stuck_weeks], unset: [TRd.stuck, TRd.stuck_weeks] }));
+});
 
 H.report();
 })();

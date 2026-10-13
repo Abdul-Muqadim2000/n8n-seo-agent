@@ -1,4 +1,5 @@
 /*__REACH__*/
+/*__RADIUS__*/
 /*__FIT_GATE__*/
 /*__PAGE_TYPE__*/
 /*__SITE_MODEL__*/
@@ -248,8 +249,18 @@ const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: re
   keywords_covered: planned ? rungPages.reduce((s, p) => s + 1 + p.supporting.length, 0) + 1 + top.supporting.length : 0,
   traffic_potential_total: planned ? rungPages.reduce((s, p) => s + (p.traffic_potential || 0), 0) + (top.traffic_potential || 0) : 0,
   site_rankings_found: SR.count || 0, research_failures: (pool.research || {}).failures || [], excluded_keywords: excluded.length, refused_keywords: poolRefused.length };
+// ---- G32 / K12: the site's topic radius around this ladder — in reach, a stretch, or out of reach for now, with the evidence ----
+// (v5/code/_radius.js; the same kit draws discovery's radius, so the two never disagree). It is shown, not enforced: a plan the owner
+// approved is never changed by it.
+const topic_radius = RAD.of({ reach, reach_method: reachInfo.method, domain,
+  services: [...(base.services || []), ...((sdP.products_or_services) || [])], site_topics: [head, ...(base.secondary_keywords || []).slice(0, 8)],
+  pages: invPages.map(p => ({ url: p.url, title: p.title || '' })),
+  topics: [{ topic: top.topic || head, primary_keyword: head, kd: top.kd, volume: top.volume, keyword_count: 1 + (top.supporting || []).length, your_position: top.your_position, keywords: (top.supporting || []).map(k => ({ keyword: k })) },
+    ...rungPages.map(p => ({ topic: p.topic || p.keyword, primary_keyword: p.keyword, kd: p.kd, volume: p.total_volume, keyword_count: (p.keywords || []).length, your_position: p.your_position, keywords: p.keywords }))] });
+const head_radius = RAD.pick(topic_radius, head);
 const notes = [];
 if (refusal) notes.push(refusal.message);
+if (head_radius) notes.push('Topic radius — "' + head_radius.topic + '": ' + RAD.line(head_radius) + '.');
 if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder because they are other companies\' brands, government or portal searches, or navigational: ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' …' : '') + '.');
 if (planned && plan_type === 'full' && rungPages.length && pages_total < 8) notes.push('Only ' + pages_total + ' pages could be planned from the data: the topic is narrow in ' + base.country + '. The ladder is shorter but still valid.');
 if (planned && plan_type === 'full' && rungPages.length) for (const r of rungs) if (!r.pages.length) notes.push('No keywords fell into rung ' + r.rung + '; the ladder skips it.');
@@ -267,6 +278,6 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   label: planned ? reachLabel(difficulty_for_you, plan) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
   reach_info: { reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },
-  excluded_keywords: excluded.slice(0, 40),
+  excluded_keywords: excluded.slice(0, 40), topic_radius, head_radius,   // G32: shown with the plan, never enforced on it
   tracker: { cadence: base.tracker_cadence || 'weekly', auto_next_rung: !!base.auto_next_rung, stop_rule: 'once the top rung holds the top 3 for 4 checks it is checked monthly (with the published pages)' }, created_at: new Date().toISOString() };
 return [{ json: { ...base, ladder, site_rankings: pool.site_rankings || null, reach_cache_row } }];

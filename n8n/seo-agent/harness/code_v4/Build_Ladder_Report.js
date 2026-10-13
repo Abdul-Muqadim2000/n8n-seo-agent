@@ -339,6 +339,16 @@ ladderHtml += '<h3>Top — ' + esc(top.keyword) + ' — ' + months(top.months) +
 ]);
 parts.push(ladderHtml);
 
+// G32 / K12 (2026-10-13, FIX_PLAN): the site's topic radius — the topics of this ladder that are within reach today, the ones that are a
+// stretch and the ones that are out of reach for now, each with the evidence behind the verdict (v5/code/_radius.js, built in Ladder Plan).
+// It is shown, not enforced: the plan above is unchanged by it.
+const radL = L.topic_radius || null;
+const radRowsL = radL ? [...(radL.in_reach || []), ...(radL.stretch || []), ...(radL.far || [])] : [];
+if (radRowsL.length) parts.push(h2('Your topic radius: what is within reach and what is a stretch') + '<p class="small">' + esc(radL.summary) + '</p>'
+  + '<table class="ct"><tr><th>Topic</th><th>Verdict</th><th>Why</th><th>On what evidence</th></tr>'
+  + radRowsL.slice(0, 20).map(t => '<tr><td><b>' + esc(t.topic) + '</b><br>' + esc(t.primary_keyword) + '</td><td>' + esc(t.verdict_label) + '</td><td>' + esc(t.reason) + '</td><td>' + esc((t.evidence || []).join('; ')) + '</td></tr>').join('')
+  + '</table><p class="small">' + esc(radL.note) + '</p>');
+
 // 5. Internal link map
 parts.push(h2('Internal link map') + '<p class="small">Every rung page links up to the top page and sideways to one sibling; the top page links down to every rung page.</p>' +
   '<table class="ct"><tr><th>From</th><th>Links to</th><th>Type</th></tr>' + (L.link_map || []).slice(0, 60).map(l => '<tr><td>' + esc(l.from) + '</td><td>' + esc(l.to) + '</td><td>' + esc(l.type) + '</td></tr>').join('') + '</table>');

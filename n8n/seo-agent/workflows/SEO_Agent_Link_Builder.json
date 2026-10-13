@@ -124,6 +124,10 @@
               {
                 "name": "link_builder",
                 "type": "boolean"
+              },
+              {
+                "name": "stuck_weeks",
+                "type": "number"
               }
             ]
           },
@@ -2996,14 +3000,119 @@
       },
       {
         "parameters": {
-          "jsCode": "// Callback payload per site (stage link_builder): the summary; the rows stay in n8n (the app reads them).\nreturn $input.all().map(i => { const { html, ...rest } = i.json; return { json: rest }; });"
+          "jsCode": "// Link Builder — the full weekly document (L3, 2026-10-13, system review FIX_PLAN.md L3; criterion REP 3.6 \"Formats\"). The weekly e-mail\n// stays a summary; THIS is the whole week in one printable document, rendered to PDF by the next nodes (Prepare / Render / Attach PDF LB,\n// Gotenberg) and delivered with the callback so the app can offer it like the other reports' PDFs.\n// It only READS what *LB Assemble* and *LB Rows* decided (qualification, contacts, our page, link text, sequences, listings, redirects,\n// impact) — no decision is taken here — and it carries G29's lineage notes (LN) and G12's control-group wording (CT) unchanged.\n// Sections: what to do this week · every opportunity with its qualification · the contacts found on the prospect's own domain · our page\n// and the link text per prospect · each drafted sequence with its status (including the ones the quality gate held, with the reasons) ·\n// the listings checklist · redirects to reclaim · what the links and the page changes did · where these numbers come from.\n// ---- shared report helpers (inlined by the build): the same look as the Site Tracker report ----\nconst esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst n = (v) => (Number(v) || 0).toLocaleString('en-GB');\nconst td = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;font-size:13px;vertical-align:top\"', th = 'style=\"padding:4px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:12px\"';\nconst table = (headers, rows, empty) => rows.length ? '<table style=\"border-collapse:collapse;margin:6px 0;max-width:100%\">' + '<tr>' + headers.map(h => '<th ' + th + '>' + esc(h) + '</th>').join('') + '</tr>' + rows.map(r => '<tr>' + r.map(c => '<td ' + td + '>' + c + '</td>').join('') + '</tr>').join('') + '</table>' : '<p style=\"color:#64748b;font-size:13px\">' + esc(empty || 'nothing to show') + '</p>';\nconst tile = (label, value, delta, color) => '<td style=\"padding:8px 12px;border:1px solid #e2e8f0;min-width:110px;vertical-align:top\"><div style=\"font-size:11px;color:#64748b;text-transform:uppercase\">' + esc(label) + '</div><div style=\"font-size:20px;font-weight:700\">' + value + '</div><div style=\"font-size:12px;color:' + (color || '#475569') + '\">' + delta + '</div></td>';\nconst h3 = (t) => '<h3 style=\"margin:18px 0 4px;font-size:15px;color:#0f172a\">' + esc(t) + '</h3>';\nconst p_ = (t, muted) => '<p style=\"margin:4px 0;font-size:13px' + (muted ? ';color:#64748b' : '') + '\">' + t + '</p>';\nconst pathOf = (u) => { const p = String(u || '').replace(/^https?:\\/\\/[^\\/]+/i, ''); return p || '/'; };\nconst link = (u, label) => u ? '<a href=\"' + esc(u) + '\" style=\"color:#1d4ed8\">' + esc(label || pathOf(u)) + '</a>' : '—';\nconst dpts = (v) => v == null ? '' : (v > 0 ? '<span style=\"color:#15803d\">▲ ' + v + ' pts</span>' : v < 0 ? '<span style=\"color:#b91c1c\">▼ ' + Math.abs(v) + ' pts</span>' : 'no change');\nconst briefBox = (b) => b ? '<div style=\"background:#f8fafc;border-left:4px solid #1d4ed8;padding:10px 12px;margin:8px 0\"><div style=\"font-weight:700;font-size:15px\">' + esc(b.headline) + '</div><p style=\"margin:6px 0 0;font-size:13px\">' + esc(b.summary) + '</p></div>' : '';\nconst alertBox = (alerts) => (alerts || []).length ? '<div style=\"background:#fef2f2;border-left:4px solid #b91c1c;padding:8px 12px;margin:8px 0\">' + alerts.map(a => '<div style=\"font-size:13px\">⚠ ' + esc(a.text || a) + '</div>').join('') + '</div>' : '';\nconst wrapDoc = (title, body) => '<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>' + esc(title) + '</title></head><body style=\"margin:24px\">' + body + '</body></html>';\nconst b64 = (s) => Buffer.from(String(s), 'utf8').toString('base64');\n\n// ---- lineage (G29, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.11) ----\n// Every number a customer reads has to say where it came from, over what period, and how big the sample was. Before this, the AI\n// visibility report said it (sample sizes, Wilson ranges) and the others did not: the weekly report printed \"1,240 impressions\" and\n// \"#8\" side by side without saying that one is a 28-day Search Console count and the other one live sample of one results page.\n// LN.of() carries that as structured fields next to the value (`source`, `period`, `sample`, `basis`), LN.note() turns them into one\n// short line for a tooltip or a footnote, and LN.block() prints the whole list under a report as \"Where these numbers come from\".\n// Rules: the vocabulary is the one the rest of the system already uses (G6 \"modelled, not measured clicks\", G8 `calibrated` /\n// `modelled` / `unknown`, G28 statistical ranges, G26 `impact_basis`) - this kit makes it universal, it does not invent a second\n// scheme. A modelled or uncalibrated number must say so. Where lineage is genuinely unknown the note reads \"source not recorded\":\n// never a guessed source.\nconst LN = (() => {\n  const MISSING = 'source not recorded';\n  // where numbers come from. `label` is what a customer reads, `how` the one sentence about what that source can and cannot see.\n  const SOURCES = {\n    gsc: { label: 'Google Search Console', how: 'Google\\'s own count of the impressions and clicks it served; the last 3 days are not final, and figures are averages across devices and locations' },\n    gsc_history: { label: 'your stored Search Console history', how: 'the weekly Search Console readings we have kept for this site' },\n    inspection: { label: 'Search Console URL Inspection', how: 'Google\\'s own answer about one URL at the moment it was asked' },\n    gsc_links: { label: 'your Search Console link export', how: 'the sample of links Google shows you; it is a sample, not the whole list' },\n    ga4: { label: 'Google Analytics 4', how: 'visits measured on your site by your own GA4 property' },\n    serp: { label: 'a live Google results page', how: 'one results page read through DataForSEO at that moment, from one country and one device' },\n    kwdata: { label: 'Google Ads keyword data (through DataForSEO)', how: 'the provider\\'s monthly search volume and cost per click; a provider estimate for a single keyword, not a measurement of your site' },\n    backlink_index: { label: 'the DataForSEO backlink index', how: 'one crawler\\'s index of the web: it finds much of the web, never all of it' },\n    bing: { label: 'Bing Webmaster Tools', how: 'Bing\\'s own figures for the site it has verified' },\n    link_graph: { label: 'the Common Crawl web graph', how: 'a public crawl of the web, released every few months' },\n    ahrefs: { label: 'the Ahrefs Domain Rating API', how: 'Ahrefs\\' own 0-100 rating of a domain' },\n    trends: { label: 'Google Trends', how: 'a relative index of search interest (100 = the peak of the period), not a count of searches' },\n    ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },\n    ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },\n    own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },\n    crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },\n    crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },\n    pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },\n    rdap: { label: 'the domain registry (RDAP, else WHOIS)', how: 'the registry\\'s own record of when a domain was registered' },\n    gbp: { label: 'Google Business Profile', how: 'the public listing Google holds for the business' },\n    wikidata: { label: 'Wikidata', how: 'the public knowledge base search engines read' },\n    web: { label: 'public web pages we read', how: 'pages we fetched and quoted; nothing behind a login' },\n    you: { label: 'what you told us', how: 'the business profile, the monthly check-in or the forms you filled in' },\n    model: { label: 'a model on top of measured data', how: 'computed from measured numbers with a published formula, not measured itself' },\n    none: { label: MISSING, how: 'this figure reached the report without its source: treat it as unverified' },\n  };\n  // how the figure was arrived at. The words are the ones G6 / G8 / G28 already use.\n  const BASIS = {\n    measured: 'measured',\n    calibrated: 'calibrated against your own measured data',\n    modelled: 'modelled, not measured',\n    one_sample: 'one sample, not an average',\n    estimated: 'estimated',\n    reported: 'reported by the source',\n    unknown: MISSING,\n  };\n  const S = (v) => String(v == null ? '' : v);\n  const fmt = (v) => (Number(v) || 0).toLocaleString('en-GB');\n  const esc1 = (s) => S(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n  const src = (k) => SOURCES[k] || SOURCES.none;\n  // \"2026-09-15 to 2026-10-12 (28 days)\" - the period a figure covers, never an empty string\n  const range = (r, label) => { const o = r || {}; const a = S(o.start), b = S(o.end);\n    if (!a && !b) return label ? S(label) : 'period not recorded';\n    if (a && b) { const d = Math.round((new Date(b + 'T00:00:00Z').getTime() - new Date(a + 'T00:00:00Z').getTime()) / 864e5) + 1;\n      return a + ' to ' + b + (Number.isFinite(d) && d > 0 ? ' (' + d + ' day' + (d === 1 ? '' : 's') + ')' : ''); }\n    return 'to ' + (b || a); };\n  const asOf = (at) => { const d = S(at).slice(0, 10); return d ? 'as of ' + d : 'date not recorded'; };\n  const days = (n, end) => (Number(n) || 0) + ' days' + (S(end).slice(0, 10) ? ' to ' + S(end).slice(0, 10) : '');\n  const sample = (n, unit) => (n == null || n === '' || !Number.isFinite(Number(n))) ? 'sample not recorded' : fmt(n) + (unit ? ' ' + S(unit) : '');\n  // one figure's lineage, as structured fields beside the value\n  const of = (figure, source, o) => { const x = o || {}; const key = SOURCES[source] ? source : 'none';\n    const basis = BASIS[x.basis] ? x.basis : (key === 'none' ? 'unknown' : 'measured');\n    return { figure: S(figure), source: key, source_label: src(key).label, source_how: src(key).how,\n      period: S(x.period) || 'period not recorded', sample: x.sample == null ? 'sample not recorded' : S(x.sample),\n      basis, basis_label: BASIS[basis], note: S(x.note) };\n  };\n  // a figure whose source nobody recorded: say exactly that instead of inventing one\n  const unknown = (figure, why) => ({ figure: S(figure), source: 'none', source_label: MISSING, source_how: src('none').how,\n    period: '', sample: '', basis: 'unknown', basis_label: MISSING, note: S(why) });\n  // \"Google Search Console · 2026-09-15 to 2026-10-12 (28 days) · 1,240 impressions · measured\"\n  const note = (l) => { const x = l || {}; const lbl = x.source_label || MISSING;\n    return [lbl, x.period, x.sample, x.basis_label === lbl ? '' : x.basis_label, x.note].filter(Boolean).join(' · '); };\n  const isHonest = (l) => !!l && (l.basis !== 'unknown' || note(l).indexOf(MISSING) >= 0);\n  const html = (l) => '<span style=\"color:#64748b;font-size:11px\">' + esc1(note(l)) + '</span>';\n  const line = (l) => '<div style=\"color:#64748b;font-size:11px;margin-top:2px\">' + esc1(note(l)) + '</div>';\n  // the block under a report: one row per figure, so no number is left without a source, a period and a sample\n  const block = (list, o) => { const rows = (list || []).filter(Boolean); const x = o || {};\n    const td = 'style=\"padding:3px 8px;border:1px solid #cbd5e1;font-size:11px;vertical-align:top;color:#334155\"';\n    const th = 'style=\"padding:3px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:11px\"';\n    if (!rows.length) return '';\n    return '<h3 style=\"margin:18px 0 4px;font-size:13px;color:#0f172a\">' + esc1(x.title || 'Where these numbers come from') + '</h3>'\n      + '<table style=\"border-collapse:collapse;margin:4px 0;max-width:100%\">'\n      + '<tr><th ' + th + '>Figure</th><th ' + th + '>Source</th><th ' + th + '>Period</th><th ' + th + '>Sample</th><th ' + th + '>How it was arrived at</th></tr>'\n      + rows.map(l => '<tr><td ' + td + '>' + esc1(l.figure) + '</td><td ' + td + '>' + esc1(l.source_label) + '</td><td ' + td + '>' + esc1(l.period || '—')\n        + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')\n      + '</table><p style=\"color:#64748b;font-size:11px;margin:4px 0\">' + esc1(x.footer || 'A figure marked \"' + BASIS.modelled + '\" is computed, not counted; \"' + MISSING + '\" means the figure reached this report without its source and should be treated as unverified.') + '</p>';\n  };\n  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, SOURCES, BASIS, MISSING };\n})();\n// ---- change test (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.4) ----\n// \"We changed the page and clicks went up\" is not a result: seasonality and Google's own updates move every page on a site at once\n// (P1: CausalImpact, Brodersen et al. 2015 - measuring a change needs a control or a counterfactual; P2: even the most reliable test\n// type SearchPilot publishes wins only about 2 times in 3). The Link Builder already measured a won link against a control group of\n// the site's OTHER pages over the same weeks; this kit is that same comparison, lifted out so a PAGE CHANGE can be read the same way.\n// The verdicts are graded and deliberately weak: \"likely helped\" / \"possibly helped\" / \"no clear effect yet\" / \"too early to tell\" /\n// \"can't tell\". Nothing here ever says a change CAUSED anything - a control group narrows the alternatives, it does not prove a cause.\nconst CT = (() => {\n  const LABELS = { likely_helped: 'Likely helped', possibly_helped: 'Possibly helped', no_effect_yet: 'No clear effect yet', too_early: 'Too early to tell', cant_tell: 'Can\\'t tell' };\n  const MIN_WEEKS = 6;          // a change read before 6 weeks says \"too early\": Google needs weeks to settle (P2: ~10 weeks per position for a link)\n  const MIN_OTHERS = 3;         // fewer than 3 other pages to compare with = no usable control group, so the verdict can only be \"possibly\"\n  const r1 = (n) => Math.round(10 * n) / 10;\n  const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };\n  const S = (v) => String(v == null ? '' : v);\n  const NOTES = {\n    link: { early: 'read at 6, 10 and 16 weeks after the link went live', no_data: 'the page had no search impressions before or after the link' },\n    page: { early: 'read at 6, 10 and 16 weeks after the change', no_data: 'the page had no search impressions before or after the change' },\n  };\n  const label = (v) => LABELS[v] || S(v);\n  /**\n   * One change, against the control group of the site's other pages over the same window. Positions: lower is better, so a positive\n   * `page_change` means the page moved UP. `others` are the control pages' own moves (before - after), unrounded.\n   * o: { weeks, base, now, others, joint, kind, min_weeks, min_others, no_data, early }\n   */\n  const compare = (o) => {\n    const x = o || {}; const kind = NOTES[x.kind] ? x.kind : 'page';\n    const minWeeks = x.min_weeks == null ? MIN_WEEKS : x.min_weeks, minOthers = x.min_others == null ? MIN_OTHERS : x.min_others;\n    const weeks = Math.max(0, Math.floor(Number(x.weeks) || 0));\n    const out = { weeks, base_position: 0, position: 0, page_change: 0, control_change: 0, control_spread: 0, control_pages: 0, effect: 0, verdict: '', verdict_label: '', note: '' };\n    if (weeks < minWeeks) { out.verdict = 'too_early'; out.note = S(x.early) || NOTES[kind].early; out.verdict_label = label(out.verdict); return out; }\n    const base = x.base == null || x.base === '' ? null : Number(x.base), now = x.now == null || x.now === '' ? null : Number(x.now);\n    if (!Number.isFinite(base) || !Number.isFinite(now) || base <= 0 || now <= 0) {\n      out.verdict = 'cant_tell'; out.note = S(x.no_data) || NOTES[kind].no_data; out.verdict_label = label(out.verdict); return out; }\n    const others = (x.others || []).map(Number).filter(Number.isFinite);\n    out.base_position = r1(base); out.position = r1(now); out.page_change = r1(out.base_position - out.position);\n    const mid = median(others);\n    out.control_change = r1(mid); out.control_spread = r1(median(others.map(d => Math.abs(d - mid)))); out.control_pages = others.length;\n    out.effect = r1(out.page_change - out.control_change);\n    const joint = Number(x.joint) || 0;\n    out.verdict = others.length < minOthers ? (out.effect > 1 ? 'possibly_helped' : 'no_effect_yet')\n      : out.effect > Math.max(1, 2 * out.control_spread) && !joint ? 'likely_helped'\n      : out.effect > Math.max(0.5, out.control_spread) ? 'possibly_helped' : 'no_effect_yet';\n    out.verdict_label = label(out.verdict);\n    out.note = (joint ? (kind === 'link' ? 'another link to this page within 4 weeks (credit shared); ' : 'another change to this page within 4 weeks (credit shared); ') : '')\n      + (others.length < minOthers ? 'few other pages to compare with; ' : '')\n      + 'position ' + out.base_position + ' → ' + out.position + ' vs the site\\'s other pages ' + (out.control_change >= 0 ? '+' : '') + out.control_change;\n    return out;\n  };\n  const method = 'Each change is dated and read against a control group: the same page\\'s average Google position before and after, minus what the site\\'s OTHER pages did over the same weeks. That removes the part of the move that was the season, the market or a Google update. \"Likely helped\" means the page beat its control group by more than twice the spread of the control group itself and nothing else changed on that page in the same four weeks; \"possibly helped\" means it beat the control group by less than that; \"no clear effect yet\" means it did not. A control group narrows the alternatives: it is never proof of cause.';\n  const summary = (rows) => { const list = (rows || []); const by = (v) => list.filter(r => r.verdict === v).length;\n    return { total: list.length, likely_helped: by('likely_helped'), possibly_helped: by('possibly_helped'), no_effect_yet: by('no_effect_yet'), too_early: by('too_early'), cant_tell: by('cant_tell'),\n      read: list.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length }; };\n  return { compare, label, summary, method, LABELS, NOTES, MIN_WEEKS, MIN_OTHERS, r1, median };\n})();\nconst A = $('LB Assemble').all().map(i => i.json).filter(s => !s.skip);\nconst R = $('LB Rows').all().map(i => i.json);\nconst parse = (t, d) => { try { const v = JSON.parse(t || ''); return v == null ? d : v; } catch (e) { return d; } };\nconst ANGLE = { broken: 'Dead link on their page', lost: 'Link to restore', mention: 'Mention without a link', list: 'List that leaves you out', ai_source: 'Page AI cites', resource: 'Resource page', gap: 'Links to competitors', comp_new: 'Just linked to a competitor', press: 'Journalist request', redirect: 'Old URL of yours' };\nconst ROW_STATUS = { drafted: 'Pitch ready for your approval', needs_edit: 'Held for your edit', ready: 'Qualified, waiting for a slot', needs_contact: 'No address on their site', not_fit: 'Not a fit', fix: 'Fix on your own site', won: 'Link live', sent: 'Sent', queued: 'Queued' };\nconst LIST_STATUS = { linked: 'Listed and linking to you', listed: 'Listed (no link seen)', missing: 'Not listed', submitted: 'Submitted, waiting', unknown: 'Not checked (the site blocks checks)', ignored: 'Not relevant' };\nconst CHANGE = { published: 'Published', rewritten: 'Rewritten' };\nconst VERDICT = CT.LABELS;\nconst ANCHOR = { brand: 'your business name', title: 'the page title', url: 'the page URL' };\nconst DOC_CSS = '<style>h2,h3{page-break-after:avoid}table{page-break-inside:auto}tr{page-break-inside:avoid}.seq{page-break-inside:avoid;border:1px solid #e2e8f0;padding:8px 10px;margin:6px 0}.step{white-space:pre-wrap;font-size:12px;color:#334155;margin:4px 0 0}</style>';\nconst cut = (s, n) => { const t = String(s == null ? '' : s); return t.length > n ? t.slice(0, n - 1) + '…' : t; };\nconst pct = (v) => v == null || v === '' ? '—' : Math.round(Number(v) * 100) + '%';\nreturn $input.all().map(item => {\n  const d = item.json || {};\n  const s = A.find(x => x.site_id === d.site_id) || A[0] || {};\n  const r = R.find(x => x.site_id === d.site_id) || {};\n  const rows = (r.outreach_rows && r.outreach_rows.length ? r.outreach_rows : (s.outreach_rows || []));\n  const day = String(d.checked_at || s.checked_at || new Date().toISOString()).slice(0, 10);\n  const sm = d.summary || s.summary || {};\n  const pitch = rows.filter(o => ['drafted', 'needs_edit'].includes(o.status) && String(o.drafted_at || '') === String(s.checked_at || d.checked_at));\n  const drafted = pitch.filter(o => o.status === 'drafted');\n  const held = pitch.filter(o => o.status === 'needs_edit');\n  const opportunities = rows.filter(o => o.type !== 'redirect').slice().sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));\n  const fixes = rows.filter(o => o.type === 'redirect');\n  const listings = (s.listing_rows || []).slice().sort((a, b) => (a.status === 'linked') - (b.status === 'linked') || (Number(a.priority) || 0) - (Number(b.priority) || 0));\n  const impacts = s.impact_rows || [];\n  const reads = impacts.filter(x => x.kind !== 'page_change');\n  const changeReads = impacts.filter(x => x.kind === 'page_change');\n  const contactRows = [];\n  for (const o of opportunities) for (const c of (parse(o.contacts_json, []) || []))\n    if (c && c.email) contactRows.push({ prospect: o.prospect_domain, email: c.email, kind: c.kind || c.role || 'contact', name: c.name || '', source: c.source_url || '' });\n\n  let html = '<div style=\"font-family:Arial,Helvetica,sans-serif;max-width:860px;color:#0f172a\">' + DOC_CSS;\n  html += '<h2 style=\"margin:0 0 4px\">Link building — the full week for ' + esc(s.domain || d.domain) + '</h2>'\n    + p_(esc(day) + ' · every opportunity found this week, how each was qualified, the contacts on their own sites, the page and link text we would ask for, the pitches drafted for your approval, the places you can list yourself, the redirects to add, and what your links and page changes did', true);\n  if (d.free_only || s.free_only) html += p_('<b>Free check</b>: opportunities, contacts, listings and redirects only — no e-mails were drafted and no paid backlink data was read.', true);\n  html += '<table style=\"border-collapse:collapse;margin:8px 0\"><tr>'\n    + tile('Pitches ready', n(drafted.length), held.length ? held.length + ' more need your edit' : 'approve them in the app')\n    + tile('Opportunities qualified', n(sm.qualified), n(sm.not_fit) + ' turned down with a reason')\n    + tile('Not listed yet', n(sm.listings_missing), 'places to add yourself')\n    + tile('Redirects to add', n(fixes.length), 'old URLs of yours that 404')\n    + '</tr></table>';\n\n  // ---- 1. what to do this week ----\n  const todo = [];\n  if (drafted.length) todo.push('Approve ' + n(drafted.length) + ' drafted pitch(es) in the app — they go out from your own mailbox, one by one, after you approve them.');\n  if (held.length) todo.push('Edit ' + n(held.length) + ' pitch(es) the quality gate held (the reasons are with each one below), or leave them: nothing is sent until you approve it.');\n  if (sm.press) todo.push('Answer ' + n(sm.press) + ' journalist request(s) on your topics before their deadlines.');\n  if (sm.listings_missing) todo.push('Add your business to ' + n(sm.listings_missing) + ' list(s) you are missing from — these are links you place yourself, no outreach needed.');\n  if (fixes.length) todo.push('Add ' + n(fixes.length) + ' redirect(s) so the links and bookmarks pointing at your old URLs keep working.');\n  if (rows.some(o => o.status === 'needs_contact')) todo.push(n(rows.filter(o => o.status === 'needs_contact').length) + ' good prospect(s) publish no e-mail address: their contact forms are listed in the app.');\n  html += h3('What to do this week') + (todo.length ? '<ol style=\"font-size:13px;margin:6px 0 0;padding-left:20px\">' + todo.map(t => '<li style=\"margin:3px 0\">' + esc(t) + '</li>').join('') + '</ol>' : p_('Nothing needs you this week.', true));\n\n  // ---- 2. every opportunity with its qualification ----\n  html += h3('Every opportunity and how it was qualified')\n    + p_('Each site was fetched and read before it was offered. A page behind a bot wall is never called \"not a fit\" — it is kept for a person to look at.', true)\n    + table(['Site / page', 'Why them', 'What we decided', 'Topic match', 'Evidence we would quote'], opportunities.slice(0, 60).map(o => [\n      link(o.page_url || '', o.prospect_domain) + (o.page_title ? '<div style=\"font-size:12px;color:#64748b\">' + esc(cut(o.page_title, 90)) + '</div>' : ''),\n      esc(ANGLE[o.type] || o.type) + (o.deadline ? '<div style=\"font-size:12px;color:#64748b\">deadline ' + esc(o.deadline) + '</div>' : ''),\n      esc(ROW_STATUS[o.status] || o.status) + (o.fit_reason ? '<div style=\"font-size:12px;color:#64748b\">' + esc(cut(String(o.fit_reason).replace(/^held for your edit: /, 'held: '), 200)) + '</div>' : ''),\n      pct(o.fit),\n      esc(cut(o.evidence, 240)),\n    ]), 'no opportunities this week');\n\n  // ---- 3. contacts, only on the prospect's own domain ----\n  html += h3('Contacts found on the prospect\\'s own site')\n    + p_('An address is only used when it sits on the prospect\\'s own domain: an agency or a partner address printed on their page is never taken as their contact.', true)\n    + table(['Site', 'Address', 'Who', 'Where we found it'], contactRows.slice(0, 60).map(c => [esc(c.prospect), esc(c.email), esc([c.name, c.kind].filter(Boolean).join(' · ')), link(c.source, c.source ? undefined : '—')]),\n      'no addresses on their own domains this week');\n\n  // ---- 4. our page and the link text per prospect ----\n  html += h3('The page we would ask them to link to, and the link text')\n    + p_('One page per prospect, chosen by topic match, how close that page is to the first results page, and how many links it still needs — spread across your pages so one page is not asked for every time. The link text is your business name, the page title or the page URL, never a keyword.', true)\n    + table(['Site', 'Our page', 'Why this page', 'Link text to ask for'], opportunities.filter(o => o.target_url).slice(0, 60).map(o => [\n      esc(o.prospect_domain), link(o.target_url), esc(cut(o.target_reason, 180)), esc(ANCHOR[o.anchor_hint] || o.anchor_hint || '—')]),\n      'no page was matched this week');\n\n  // ---- 5. the drafted sequences and their status ----\n  html += h3('The pitches drafted this week, exactly as they would be sent');\n  if (!pitch.length) html += p_((d.free_only || s.free_only) ? 'This was a free check: nothing was drafted.' : 'Nothing was drafted this week.', true);\n  for (const o of pitch) {\n    const seq = parse(o.sequence_json, []) || [];\n    const okRow = o.status === 'drafted';\n    html += '<div class=\"seq\"><div style=\"font-size:13px\"><b>' + esc(o.prospect_domain) + '</b> · ' + esc(ANGLE[o.type] || o.type)\n      + ' · <span style=\"color:' + (okRow ? '#15803d' : '#b45309') + '\">' + esc(ROW_STATUS[o.status] || o.status) + '</span>'\n      + (o.contact_email ? ' · ' + esc(o.contact_email) : o.contact_form_url ? ' · ' + link(o.contact_form_url, 'contact form') : '')\n      + (o.country ? ' · ' + esc(o.country) : '') + '</div>'\n      + (okRow ? '' : '<div style=\"font-size:12px;color:#b45309;margin-top:2px\">Held because: ' + esc(cut(String(o.fit_reason || '').replace(/^held for your edit: /, ''), 400)) + '</div>')\n      + (o.target_url ? '<div style=\"font-size:12px;color:#64748b;margin-top:2px\">Links to ' + link(o.target_url) + ' as ' + esc(ANCHOR[o.anchor_hint] || o.anchor_hint || 'the page title') + '</div>' : '')\n      + seq.map((st, i) => '<div class=\"step\"><b>' + esc(i === 0 ? 'First e-mail' : 'Follow-up ' + i) + (st.wait_days ? ' — after ' + n(st.wait_days) + ' working day(s)' : ' — now') + '</b>'\n        + (st.subject ? '<br>Subject: ' + esc(st.subject) : '<br>Subject: (keeps the first e-mail\\'s subject, same thread)') + '<br>' + esc(cut(st.body, 1200)) + '</div>').join('')\n      + '</div>';\n  }\n  if (pitch.length) html += p_('Every pitch is checked before it is offered: nothing is claimed about your business that your profile does not carry, the address is on their own domain, something from their page is quoted, there is one link to the page we chose, and the e-mail is short with one clear ask. A pitch that fails a check is held with its reasons instead of being offered.', true);\n\n  // ---- 6. the listings checklist ----\n  html += h3('Links you can add yourself (the listings checklist)')\n    + table(['Where', 'Status', 'Competitors there', 'Why it is worth it', 'Where to add yourself'], listings.map(l => [\n      esc(l.name), esc(LIST_STATUS[l.status] || l.status) + (l.profile_url ? '<div style=\"font-size:12px\">' + link(l.profile_url, 'profile') + '</div>' : ''),\n      esc(l.competitors || '—'), esc(cut(l.why, 220)), l.submit_url && l.status !== 'linked' ? link(l.submit_url, 'open') : '—']), 'no listings checked this week');\n\n  // ---- 7. redirects to reclaim ----\n  html += h3('Redirects to add (old URLs of yours that now answer 404)')\n    + table(['Old URL', 'Redirect to', 'What we saw'], fixes.slice(0, 40).map(f => [esc(f.page_url), link(f.target_url), esc(cut(f.target_reason, 160))]),\n      'no old URLs of yours are answering 404');\n\n  // ---- 8. what the links and the page changes did (G12 wording, control group) ----\n  html += h3('What your links did') + table(['Link from', 'Your page', 'Weeks', 'Position', 'Reading'], reads.slice(0, 40).map(x => [\n    esc(x.ref_domain), link(x.target_url), n(x.weeks), x.base_position ? esc(x.base_position + ' → ' + x.position) : '—',\n    esc(VERDICT[x.verdict] || x.verdict) + (x.note ? '<div style=\"font-size:12px;color:#64748b\">' + esc(cut(x.note, 200)) + '</div>' : '')]), 'no link has been live long enough to read yet');\n  html += h3('What your page changes did') + table(['Page', 'Change', 'Since', 'Weeks', 'Position', 'Reading'], changeReads.slice(0, 40).map(x => [\n    link(x.target_url), esc(CHANGE[x.change] || x.change || 'changed'), esc(x.t0), n(x.weeks), x.base_position ? esc(x.base_position + ' → ' + x.position) : '—',\n    esc(VERDICT[x.verdict] || x.verdict) + (x.note ? '<div style=\"font-size:12px;color:#64748b\">' + esc(cut(x.note, 200)) + '</div>' : '')]), 'no page change is old enough to read yet');\n  html += p_(esc(CT.method), true);\n\n  // ---- 9. where these numbers come from (G29) ----\n  const lineage = (d.lineage && d.lineage.length ? d.lineage : [LN.unknown('The figures in this document', 'the report that builds them did not record their sources')]);\n  html += LN.block(lineage);\n  html += p_('Nothing is sent for you: every pitch waits for your approval in the app and goes out from your own mailbox. Listings are never submitted automatically, and no link is ever placed on a site we do not own.', true) + '</div>';\n\n  const title = 'Link building — ' + (s.domain || d.domain) + ' — ' + day;\n  return { json: { ...d, doc_sections: { opportunities: opportunities.length, contacts: contactRows.length, drafted: drafted.length, held: held.length, listings: listings.length, redirects: fixes.length, impact: reads.length, page_changes: changeReads.length }, doc_title: title },\n    binary: { ...(item.binary || {}), data: { data: b64(wrapDoc(title, html)), mimeType: 'text/html', fileName: d.file_name || ('link-building-' + String(s.domain || d.domain).replace(/[^a-z0-9]+/gi, '-') + '-' + day + '.html'), fileExtension: 'html' } } };\n});\n"
+        },
+        "id": "cb14b39f-b64a-541b-9454-8c44d2fc65fe",
+        "name": "LB Doc",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          11000,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Copy of each report HTML named index.html for the PDF renderer (Gotenberg requires that exact file name); one item per site.\nreturn $input.all().map(item => { const doc = (item.binary || {}).data; if (!doc) return item; return { json: item.json, binary: { ...(item.binary || {}), html: { ...doc, fileName: 'index.html', mimeType: 'text/html', fileExtension: 'html' } } }; });"
+        },
+        "id": "5854f3e1-7d4c-58d3-8c13-79efbc8bf5bc",
+        "name": "Prepare PDF LB",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          11220,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://gotenberg:3000/forms/chromium/convert/html",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              {
+                "parameterType": "formBinaryData",
+                "name": "files",
+                "inputDataFieldName": "html"
+              },
+              {
+                "name": "paperWidth",
+                "value": "8.27"
+              },
+              {
+                "name": "paperHeight",
+                "value": "11.69"
+              },
+              {
+                "name": "marginTop",
+                "value": "0.5"
+              },
+              {
+                "name": "marginBottom",
+                "value": "0.5"
+              },
+              {
+                "name": "marginLeft",
+                "value": "0.5"
+              },
+              {
+                "name": "marginRight",
+                "value": "0.5"
+              },
+              {
+                "name": "printBackground",
+                "value": "true"
+              }
+            ]
+          },
+          "options": {
+            "timeout": 120000,
+            "response": {
+              "response": {
+                "responseFormat": "file",
+                "outputPropertyName": "pdf"
+              }
+            }
+          }
+        },
+        "id": "70e39296-4f54-5cfa-b0e0-ce232db6595a",
+        "name": "Render PDF LB",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          11440,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "// Attach the PDF (when the renderer succeeded) next to the report's other files, per site; a renderer failure never fails the run.\nconst src = $('Prepare PDF LB').all(); const got = $input.all();\nreturn src.map((s, i) => { const g = got[i] || {}; const pdf = (g.binary && g.binary.pdf && !(g.json && g.json.error)) ? g.binary.pdf : null;\n  const name = String(s.json.file_name || 'report.html').replace(/\\.html?$/i, '') + '.pdf'; const binary = { ...(s.binary || {}) }; delete binary.html;\n  if (pdf) binary.pdf = { ...pdf, fileName: name, mimeType: 'application/pdf', fileExtension: 'pdf' };\n  return { json: { ...s.json, pdf_ready: !!pdf, pdf_file_name: pdf ? name : null }, binary }; });"
+        },
+        "id": "6a76d9f7-ac62-508c-85da-8372c1616d40",
+        "name": "Attach PDF LB",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          11660,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Callback payload per site (stage link_builder): the summary plus the full week as a PDF (L3; bytes from n8n's binary store, as the AI and\n// backlink callbacks do). The rows stay in n8n — the app reads them from the Data Tables. The report HTML and the document's internals are\n// dropped: the PDF carries them.\nconst items = $input.all(); const out = [];\nfor (let i = 0; i < items.length; i++) {\n  const it = items[i]; const d = it.json || {}; const bin = it.binary || {}; let pdf = null;\n  if (bin.pdf) {\n    try { const buf = await this.helpers.getBinaryDataBuffer(i, 'pdf'); if (buf && buf.length) pdf = { data: buf.toString('base64'), fileName: bin.pdf.fileName || d.pdf_file_name, mimeType: 'application/pdf' }; }\n    catch (e) { if (bin.pdf.data && String(bin.pdf.data).length > 100) pdf = { data: bin.pdf.data, fileName: bin.pdf.fileName || d.pdf_file_name, mimeType: 'application/pdf' }; }\n  }\n  const { html, doc_title, ...rest } = d;\n  out.push({ json: { ...rest, pdf, files: pdf ? { pdf } : {} } });\n}\nreturn out;\n"
         },
         "id": "8ae8e9d3-9709-54a9-b634-c7171bc07f91",
         "name": "Build LB Callback",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          11000,
+          11880,
           220
         ]
       },
@@ -3038,7 +3147,7 @@
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.3,
         "position": [
-          11000,
+          11880,
           0
         ]
       },
@@ -3050,7 +3159,8 @@
           "emailFormat": "html",
           "html": "={{ $json.html }}",
           "options": {
-            "appendAttribution": false
+            "appendAttribution": false,
+            "fileAttachments": "={{ $binary.pdf ? 'pdf' : 'data' }}"
           }
         },
         "id": "55d12a9f-83be-5313-a0ae-1209725f6176",
@@ -3058,7 +3168,7 @@
         "type": "n8n-nodes-base.emailSend",
         "typeVersion": 2.1,
         "position": [
-          11220,
+          12100,
           0
         ],
         "credentials": {
@@ -3103,7 +3213,7 @@
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.3,
         "position": [
-          11220,
+          12100,
           200
         ]
       },
@@ -3123,15 +3233,15 @@
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4.5,
         "position": [
-          11440,
+          12320,
           200
         ],
         "onError": "continueRegularOutput"
       },
       {
         "parameters": {
-          "content": "## SEO Agent — Link Builder (v4.13, LINK_BUILDER_SPEC.md)\n**Every Monday 11:00** (after the Backlink Monitor 07:30 and AI Growth 09:30) and on demand (*Manual Run* `{{ domain | site_id, free_only?, callback_url?, request_id? }}`, started by **SEO Agent — Link Builder API** `POST /webhook/seo-link-builder`). Per site with `link_builder` on (`seo_monitors`, default on).\n**New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** (DataForSEO, ≈ $0.07). **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1), then the **draft gate** (*LB Draft QA*, L2): claims against the facts on file, no bracket left to fill, the address on their own domain, a real quote from their page, one link to the page we chose on the canonical host, length and one clear ask, the words we never use, the business name as the site model has it — a draft that fails is held as `needs_edit` with its reasons. Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.\nRows: `seo_link_outreach`, `seo_link_prospects` (new kinds), `seo_listings`, `seo_link_impact` (what each won link did, vs the site's other pages), `seo_cache` linkbld:; report + callback `link_builder`.",
-          "height": 300,
+          "content": "## SEO Agent — Link Builder (v4.13, LINK_BUILDER_SPEC.md)\n**Every Monday 11:00** (after the Backlink Monitor 07:30 and AI Growth 09:30) and on demand (*Manual Run* `{{ domain | site_id, free_only?, callback_url?, request_id? }}`, started by **SEO Agent — Link Builder API** `POST /webhook/seo-link-builder`). Per site with `link_builder` on (`seo_monitors`, default on).\n**New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** (DataForSEO, ≈ $0.07). **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1), then the **draft gate** (*LB Draft QA*, L2): claims against the facts on file, no bracket left to fill, the address on their own domain, a real quote from their page, one link to the page we chose on the canonical host, length and one clear ask, the words we never use, the business name as the site model has it — a draft that fails is held as `needs_edit` with its reasons. Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.\nRows: `seo_link_outreach`, `seo_link_prospects` (new kinds), `seo_listings`, `seo_link_impact` (what each won link did, vs the site's other pages), `seo_cache` linkbld:; report + callback `link_builder`.\n**The week as a PDF** (L3): *LB Doc* writes the whole week as one printable document — what to do this week, every opportunity with its qualification, the contacts found on the prospects' own domains, our page and the link text per prospect, each drafted sequence with its status (a held one with the reasons), the listings checklist, the redirects, what the links and the page changes did, and where every figure came from — and *Render PDF LB* turns it into a PDF through Gotenberg: attached to the e-mail and carried in the callback, so the app offers it like the other reports' PDFs. A renderer failure never fails the run (the HTML document goes out instead).",
+          "height": 320,
           "width": 1100,
           "color": 6
         },
@@ -3888,6 +3998,50 @@
         ]
       },
       "LB Report": {
+        "main": [
+          [
+            {
+              "node": "LB Doc",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "LB Doc": {
+        "main": [
+          [
+            {
+              "node": "Prepare PDF LB",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Prepare PDF LB": {
+        "main": [
+          [
+            {
+              "node": "Render PDF LB",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Render PDF LB": {
+        "main": [
+          [
+            {
+              "node": "Attach PDF LB",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Attach PDF LB": {
         "main": [
           [
             {

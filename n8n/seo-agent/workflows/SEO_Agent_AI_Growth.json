@@ -124,6 +124,10 @@
               {
                 "name": "link_builder",
                 "type": "boolean"
+              },
+              {
+                "name": "stuck_weeks",
+                "type": "number"
               }
             ]
           },

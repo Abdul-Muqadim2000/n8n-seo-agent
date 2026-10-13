@@ -8,6 +8,9 @@ const comps = (d.competitors || []).length ? d.competitors.join(', ') : pick('co
 const __row = { site_id, domain: d.domain, ai_visibility: !!pick('ai_visibility', true) && pick('ai_visibility', true) !== 'false', ai_engines: String(pick('ai_engines', '')), ai_prompts_max: Math.min(50, Math.max(3, Number(pick('ai_prompts_max', 20)) || 20)), ai_pulse: pick('ai_pulse', true) !== false && pick('ai_pulse', true) !== 'false',
   ai_growth: pick('ai_growth', true) !== false && pick('ai_growth', true) !== 'false', ai_pages_month: pick('ai_pages_month', '') === '' ? null : Math.min(8, Math.max(0, Number(pick('ai_pages_month', 2)) || 0)),
   backlinks: !!pick('backlinks', true) && pick('backlinks', true) !== 'false', link_builder: pick('link_builder', true) !== false && pick('link_builder', true) !== 'false', audit_monthly: !!pick('audit_monthly', true) && pick('audit_monthly', true) !== 'false', audit_pages: Number(pick('audit_pages', 200)) || 200,
-  audit_js: pick('audit_js', false) === true || pick('audit_js', false) === 'true', competitors: String(comps), brand_names: String(pick('brand_names', '')), updated_at: new Date().toISOString(), request_id: d.request_id || '' };
+  audit_js: pick('audit_js', false) === true || pick('audit_js', false) === 'true', competitors: String(comps), brand_names: String(pick('brand_names', '')),
+  // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)
+  stuck_weeks: pick('stuck_weeks', '') === '' ? null : Math.min(26, Math.max(2, Number(pick('stuck_weeks', 8)) || 8)),
+  updated_at: new Date().toISOString(), request_id: d.request_id || '' };
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

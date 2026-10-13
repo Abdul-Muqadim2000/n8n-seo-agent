@@ -735,8 +735,9 @@ SOURCES_SRC = _rd0('code/_sources.js').rstrip('\n'); ANCHOR_SRC = _rd0('code/_an
 PAGE_TYPE_SRC = _rd0('code/_page_type.js').rstrip('\n')   # 2026-10-12 (D10): the page type as one of the form's fixed options, with the verdict's free text kept as page_notes
 GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 / D24): the Search Console query rules (scraper queries, brand split, anonymised share)
 KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
+RADIUS_SRC = _rd0('code/_radius.js').rstrip('\n')   # 2026-10-13 (G32): the topic radius -- which topics are within reach, which are a stretch, on what evidence (needs the reach kit in the same node)
 import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
-rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC).replace('/*__RADIUS__*/', RADIUS_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -3783,6 +3784,46 @@ sticky("""### Annotations, change tests and lineage (G12 + G29)
 **Every figure carries its lineage** (`_lineage.js`): source, period, sample and how it was arrived at, as fields beside the value, one short note under the figures and a **"Where these numbers come from"** table in the weekly, AI-visibility, AI-growth, backlink, link-building, rank-tracker, ladder-plan and full reports. Modelled numbers say so; where the source was never recorded it reads **"source not recorded"**.""",
     pos('Build Full Report')[0] - 40, pos('Build Full Report')[1] + 360, 1180, 280, 4)
 log('Annotations, change tests and lineage on every number (2026-10-13, FIX_PLAN G12 + G29; criteria 3.4 / 3.5 / 2.12 / 3.11): one dated event registry (v5/data/seo_events.json) feeds the chart marks (v5/code/_annotations.js: published pages from seo_content_log, audit fixes from seo_audits, Google updates and the September 2025 num=100 data break), the G28 alert context (_site_stats.js) and the app (app/shared/src/seo-events.generated.ts); the Link Builder\'s control-group impact became the shared change test (v5/code/_change_test.js) and now also reads what a PAGE CHANGE did (seo_link_impact kind=page_change + change columns, "What your page changes did" in the Link Builder report) with graded verdicts and no causal wording; and every figure group in the weekly, AI-visibility, AI-growth, backlink, link-building, rank-tracker, ladder-plan and full reports carries its source, period, sample and basis (v5/code/_lineage.js) inline and in a "Where these numbers come from" table, with "source not recorded" where the lineage is genuinely unknown')
+
+# =============================================================================
+# 49. A TOPIC RADIUS SOMEBODY CAN SEE, AND A STUCK LADDER THAT GETS RE-PLANNED (2026-10-13, system review FIX_PLAN.md G32 and L3;
+#     criteria K12 / K13 in CRITERIA_keywords_content.md, REP 3.6 in CRITERIA_technical_tracking_reporting_ai_links.md)
+#     * G32 topic radius: the research and the ladder plan now carry a RADIUS block (v5/code/_radius.js, one kit for both, on top of the
+#       reach kit): every topic is "within reach" / "a stretch" / "out of reach for now" with the evidence behind the verdict — the
+#       difficulty against the measured reach, a position the site already holds, a page it already has, a service it sells. It is
+#       SHOWN, never enforced: `Rank Keywords` -> `keyword_strategy.topic_radius` + a section in the Keyword Strategy report,
+#       `Ladder Plan` -> `ladder.topic_radius` / `head_radius` + a note and a section in the ladder plan report.
+#     * G32 re-plan: a ladder that has not moved for the configured number of weeks (`seo_monitors.stuck_weeks`, empty = 8, 2-26) gets a
+#       re-plan PROPOSAL in the Rank Tracker (v5/code/_replan.js, wired in build_ladder_extras.py): improve the page that exists instead
+#       of writing another, write the easier supporting keyword, change the rung order, or stop — each with its reason and evidence, and
+#       `applied: false` on every one of them. Nothing the owner approved is rewritten anywhere.
+#     * L3 Link Builder PDF: wired in build_monitors.py (LB Doc -> Prepare / Render / Attach PDF LB -> the e-mail attachment and the
+#       callback), so the weekly Link Builder result is a document like the other reports'.
+# =============================================================================
+for _n49 in ('Rank Keywords', 'Ladder Plan'):
+    assert 'const RAD = (() => {' in code(_n49), _n49 + ': the topic-radius kit (_radius.js) is not inlined'
+    assert 'function difficultyForYou(' in code(_n49), _n49 + ': the radius kit needs the reach kit in the same node'
+    assert 'RAD.of({' in code(_n49), _n49 + ': the topic radius is not built'
+assert 'topic_radius' in code('Build Keyword Strategy') and 'Your topic radius' in code('Build Keyword Strategy'), 'G32: the keyword strategy report has no topic-radius block'
+assert 'topic_radius' in code('Build Ladder Report') and 'Your topic radius' in code('Build Ladder Report'), 'G32: the ladder plan report has no topic-radius block'
+assert not any('/*__RADIUS__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'G32: radius placeholder left'
+# harness shims (S58): the two kits as runnable scripts, one call per item (the radius kit needs the reach kit beside it)
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_radius.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 49, G32): the topic radius — { reach, topics, services, pages, site_topics } -> every topic's verdict with its evidence\n"
+    + _rd0('code/_reach.js').rstrip('\n') + '\n' + RADIUS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; const rad = RAD.of(j);\n"
+    "  return { json: { ...rad, rows: RAD.rows(rad), labels: RAD.LABEL, picked: j.pick === undefined ? null : RAD.pick(rad, j.pick),\n"
+    "    picked_line: j.pick === undefined ? '' : RAD.line(RAD.pick(rad, j.pick)) } }; });\n")
+open(os.path.join(OUT_CODE, '_replan.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 49, G32): the re-plan proposal — { weeks, stuck_weeks, won, improved, head, pages, later, reach } -> the proposal, its reason and its evidence\n"
+    + _rd0('code/_replan.js').rstrip('\n') + "\nreturn $input.all().map(i => { const j = i.json || {}; const rp = RP.propose(j);\n"
+    "  return { json: { ...rp, html: RP.block(rp), actions: (rp.options || []).map(o => o.action), weeks_setting: RP.weeks(j.stuck_weeks), default_weeks: RP.WEEKS } }; });\n")
+sticky("""### Topic radius and the re-plan of a stuck ladder (G32) · the Link Builder's PDF (L3)
+**Topic radius** (`_radius.js`, one kit for the research and the ladder): every topic is **within reach**, **a stretch** or **out of reach for now**, with the evidence printed next to the verdict — its difficulty against your measured reach, a position you already hold, a page you already have, a service you sell. A topic whose difficulty is inside the reach but which nothing you sell or write about names is a **stretch**, not a "now". It is shown with the plan and never enforced on it.
+**A stuck ladder gets a proposal** (`_replan.js`, in the Rank Tracker): after the configured weeks without a position gain (`seo_monitors.stuck_weeks`, empty = 8) the weekly e-mail and the callback carry a re-plan — improve the page that already answers the search, write the easier supporting keyword, change the rung order, or stop — each with its reason and its evidence, and each marked **not applied**: a person accepts one in the app, nothing is rewritten for them.
+**The Link Builder's week as a PDF** (L3): *LB Doc* + Gotenberg, attached to the e-mail and carried in the callback.""",
+    pos('Build Keyword Strategy')[0] - 40, pos('Build Keyword Strategy')[1] + 420, 1180, 280, 6)
+log('Topic radius and stuck-ladder re-plan (2026-10-13, FIX_PLAN G32; criteria K12 / K13): one radius kit (v5/code/_radius.js) draws the site\'s topic radius in the keyword research (keyword_strategy.topic_radius + a report section) and in the ladder plan (ladder.topic_radius, head_radius, a plan note and a report section) — within reach / a stretch / out of reach for now, with the evidence behind each verdict, shown and never enforced; the Rank Tracker turns a stuck ladder (seo_monitors.stuck_weeks, empty = 8, 2-26) into a re-plan proposal (v5/code/_replan.js: improve the existing page, the easier keyword, a different order, or stop) with reasons, evidence and applied: false; and the Link Builder\'s weekly result is now a PDF (L3, build_monitors.py: LB Doc -> Gotenberg -> e-mail attachment + callback)')
 
 # =============================================================================
 # 9. WRITE

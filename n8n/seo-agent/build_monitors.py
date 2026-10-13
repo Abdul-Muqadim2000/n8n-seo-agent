@@ -491,8 +491,12 @@ L.node('Save Link Impact', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LINK_IMPAC
 l_rows('LB Cache Rows', 'When the monthly searches last ran (seo_cache linkbld:<site>)', 'cache_rows', CACHE_COLS, at(46, 0)); L.iff('Any LB Cache?', '{{ !$json.skip }}', at(47, 0))
 L.node('Save LB Cache', DT_TYPE, DT_VERSION, dt_upsert_params_keys(CACHE_TABLE, CACHE_COLS, ['key']), at(48, -1), onError='continueRegularOutput')
 L.code('LB Report', 'LB_Report.js', at(49, 0))
-L.code('Build LB Callback', "// Callback payload per site (stage link_builder): the summary; the rows stay in n8n (the app reads them).\nreturn $input.all().map(i => { const { html, ...rest } = i.json; return { json: rest }; });", at(50, 1))
-L.deliver('LB', at(50, 0), None)
+# L3 (2026-10-13, FIX_PLAN.md L3; criterion REP 3.6): the whole week as one printable document -> PDF through Gotenberg, as the AI (l.164)
+# and backlink (l.296) reports do. The e-mail keeps its summary HTML (json.html) and attaches the PDF; a renderer failure leaves the run
+# intact (Render PDF LB is continueRegularOutput) and the HTML document goes out instead. The callback carries the PDF for the app.
+L.code('LB Doc', 'LB_Doc.js', at(50, 0)); L.pdf_chain('LB', at(51, 0))
+L.code('Build LB Callback', 'Build_LB_Callback.js', at(54, 1))
+L.deliver('LB', at(54, 0), "={{ $binary.pdf ? 'pdf' : 'data' }}")
 L.chain('Weekly Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load Query History', 'Load Rank History', 'Load Cache (Links)', 'LB Plan', 'Any Sites (LB)?'); L.link('Manual Run', ens[0][0])
 L.link('Any Sites (LB)?', 'LB Source Requests', 0); L.link('Any Sites (LB)?', 'Nothing To Do (LB)', 1)
 L.chain('LB Source Requests', 'Fetch LB Sources', 'LB DFS Requests')
@@ -509,11 +513,13 @@ lstep('LB Prospect Rows', 'Any LB Prospects?', 'Save LB Prospects', 'Listing Row
 lstep('Listing Rows', 'Any Listing Rows?', 'Save Listings', 'Impact Rows')
 lstep('Impact Rows', 'Any Impact Rows?', 'Save Link Impact', 'LB Cache Rows')
 lstep('LB Cache Rows', 'Any LB Cache?', 'Save LB Cache', 'LB Report')
-L.link('LB Report', 'Has Email (LB)?'); L.link('LB Report', 'Build LB Callback'); L.link('Build LB Callback', 'Has Callback (LB)?')
+L.chain('LB Report', 'LB Doc', 'Prepare PDF LB', 'Render PDF LB', 'Attach PDF LB')   # L3
+L.link('Attach PDF LB', 'Has Email (LB)?'); L.link('Attach PDF LB', 'Build LB Callback'); L.link('Build LB Callback', 'Has Callback (LB)?')
 L.sticky(f"""## SEO Agent — Link Builder (v4.13, LINK_BUILDER_SPEC.md)
 **Every Monday 11:00** (after the Backlink Monitor 07:30 and AI Growth 09:30) and on demand (*Manual Run* `{{{{ domain | site_id, free_only?, callback_url?, request_id? }}}}`, started by **SEO Agent — Link Builder API** `POST /webhook/seo-link-builder`). Per site with `link_builder` on (`{MONITORS_TABLE}`, default on).
 **New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** (DataForSEO, ≈ $0.07). **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1), then the **draft gate** (*LB Draft QA*, L2): claims against the facts on file, no bracket left to fill, the address on their own domain, a real quote from their page, one link to the page we chose on the canonical host, length and one clear ask, the words we never use, the business name as the site model has it — a draft that fails is held as `needs_edit` with its reasons. Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.
-Rows: `{LINK_OUTREACH_TABLE}`, `{PROSPECT_TABLE}` (new kinds), `{LISTINGS_TABLE}`, `{LINK_IMPACT_TABLE}` (what each won link did, vs the site's other pages), `{CACHE_TABLE}` linkbld:; report + callback `link_builder`.""", [-40, -420], 1100, 300, 6)
+Rows: `{LINK_OUTREACH_TABLE}`, `{PROSPECT_TABLE}` (new kinds), `{LISTINGS_TABLE}`, `{LINK_IMPACT_TABLE}` (what each won link did, vs the site's other pages), `{CACHE_TABLE}` linkbld:; report + callback `link_builder`.
+**The week as a PDF** (L3): *LB Doc* writes the whole week as one printable document — what to do this week, every opportunity with its qualification, the contacts found on the prospects' own domains, our page and the link text per prospect, each drafted sequence with its status (a held one with the reasons), the listings checklist, the redirects, what the links and the page changes did, and where every figure came from — and *Render PDF LB* turns it into a PDF through Gotenberg: attached to the e-mail and carried in the callback, so the app offers it like the other reports' PDFs. A renderer failure never fails the run (the HTML document goes out instead).""", [-40, -420], 1100, 320, 6)
 L.write('SEO_Agent_Link_Builder.json')
 
 # =============================================================================

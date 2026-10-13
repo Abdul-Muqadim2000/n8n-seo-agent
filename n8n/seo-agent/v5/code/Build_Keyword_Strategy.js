@@ -112,7 +112,9 @@ if (pipeline) recommended.push({ ...pipeline, reason: 'best fit for the goal "' 
 ks.priority.forEach(k => { if (!recommended.some(r => r.keyword === k.keyword)) recommended.push(k); });
 const keyword_suggestions = { covered: ks.covered || [], ladder_covered: ks.ladder_covered || [], recommended, easy_wins: ks.quick_wins, by_intent: ks.by_intent, topic_clusters: (ks.clusters || []).map(c => ({ topic: c.topic, total_volume: c.total_volume, keyword_count: c.keyword_count, suggested_page: c.page_type, keywords: (c.keywords || []).map(k => k.keyword) })), total_found: ks.total_relevant,
   // G8: the searches the site already gets impressions for (K6) and the groups one page can serve (K7)
-  search_console: ks.search_console || null, serp_clusters: (ks.serp_clusters || []).map(c => ({ head_keyword: c.head_keyword, keyword_count: c.keyword_count, keywords: (c.keywords || []).map(k => k.keyword), shared_urls: c.min_shared_urls })) };
+  search_console: ks.search_console || null, serp_clusters: (ks.serp_clusters || []).map(c => ({ head_keyword: c.head_keyword, keyword_count: c.keyword_count, keywords: (c.keywords || []).map(k => k.keyword), shared_urls: c.min_shared_urls })),
+  // G32: the topic radius, so the app and the content steps see the same verdicts as the report
+  topic_radius: ks.topic_radius || null };
 
 // ---- report ----
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -152,6 +154,18 @@ const serpClusterHtml = (ks.serp_clusters || []).length
     + (ks.serp_clusters || []).slice(0, 8).map(c => '<div class="card"><div class="kw">' + esc(c.head_keyword) + '</div><p class="muted">' + esc(KWI.clusterText(c)) + '</p><p>'
       + (c.keywords || []).map(k => '<span class="pill">' + esc(k.keyword) + (k.volume == null ? '' : ' · ' + num(k.volume) + '/mo') + '</span>').join('') + '</p></div>').join('')
   : '<p class="muted">No two keywords shared ' + ((SO && SO.min_shared_urls) || 3) + ' or more of their top-10 results' + (SO && SO.keywords_compared ? ' among the ' + SO.keywords_compared + ' whose results pages this run read' : '') + ', so every topic below needs its own page.</p>';
+// G32 / K12: the site's topic radius — which topics are within reach today, which are a stretch, and the evidence behind each verdict
+// (built in Rank Keywords by v5/code/_radius.js; every row carries its own label, so this only lays the data out)
+const RAD_PILL = { in_reach: 'now', stretch: 'next', far: 'later' };
+const rad = ks.topic_radius || null;
+const radRows = rad ? [...(rad.in_reach || []), ...(rad.stretch || []), ...(rad.far || [])] : [];
+const radiusHtml = !radRows.length ? '' : '<h2>Your topic radius: what is within reach and what is a stretch</h2>'
+  + '<p class="muted">' + esc(rad.summary) + '</p>'
+  + '<table class="t"><tr><th>Topic</th><th>Verdict</th><th>Why</th><th>On what evidence</th></tr>'
+  + radRows.slice(0, 25).map(t => '<tr><td><b>' + esc(cap(t.topic)) + '</b><br><span class="muted">' + esc(t.primary_keyword) + '</span></td>'
+    + '<td><span class="pill ' + (RAD_PILL[t.verdict] || 'later') + '">' + esc(t.verdict_label) + '</span></td><td>' + esc(t.reason) + '</td>'
+    + '<td class="muted">' + esc((t.evidence || []).join('; ')) + '</td></tr>').join('')
+  + '</table><p class="muted">' + esc(rad.note) + '</p>';
 const goalText = { leads: 'enquiries and leads', sales: 'online sales', traffic: 'traffic and authority', brand: 'brand awareness' }[ks.goal] || ks.goal;
 const now = (ks.clusters || []).filter(c => c.tier === 'Now'), next = (ks.clusters || []).filter(c => c.tier === 'Next'), later = (ks.clusters || []).filter(c => c.tier === 'Later');
 const seeds = (base.seeds || []).slice(0, 10);
@@ -190,6 +204,8 @@ const html = `
 
   <h2>Searches that share a results page</h2>
   ${serpClusterHtml}
+
+  ${radiusHtml}
 
   <h2>Content plan by topic</h2>
   <p class="muted">One strong page per topic. "Now" = highest opportunity and ${RR ? 'easy or reachable for your site' : 'winnable difficulty'}; "Next" = plan for the following months; "Later" = long-term or hard.</p>
