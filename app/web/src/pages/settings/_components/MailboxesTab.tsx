@@ -1,12 +1,15 @@
 // Company settings → Mailboxes (v4.13 Link Builder): the mailboxes link-building pitches go out from (status, today's counts and the warm-up,
 // SPF / DMARC / DKIM, replies read, errors; test, change, pause, remove) and the company's opt-out list. Admins change, members read.
-import { useState } from 'react';
+// L4 (2026-10-13): a mailbox can also be connected with Microsoft 365 (sends and reads replies) or Gmail (sends; Google classes inbox
+// access as a restricted scope, so those replies are read in Gmail itself) — no password is stored for either.
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
-import { Mail, Pause, Pencil, Play, Plus, ShieldBan, ShieldCheck, Trash2, Wifi } from 'lucide-react';
-import type { DnsCheck, MailboxView } from '@seo/shared';
+import { KeyRound, Mail, Pause, Pencil, Play, Plus, ShieldBan, ShieldCheck, Trash2, Wifi } from 'lucide-react';
+import type { DnsCheck, MailboxView, MailProviderInfo } from '@seo/shared';
 import { errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
-import { useAddSuppression, useDeleteMailbox, useDeleteSuppression, useMailboxAction, useMailboxes, useSuppressions, useTestMailbox, type MailboxTestResult, type Suppression } from '@/lib/queries';
+import { useAddSuppression, useDeleteMailbox, useDeleteSuppression, useMailboxAction, useMailboxes, useMailProviders, useStartMailboxOauth, useSuppressions, useTestMailbox, type MailboxTestResult, type Suppression } from '@/lib/queries';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import { IconTile, ProgressBar, Stagger } from '@/components/insight';
 import { Badge, StatusBadge, type Tone } from '@/components/ui/badge';
@@ -26,12 +29,54 @@ const STATUS: Record<MailboxView['status'], { tone: Tone; label: string }> = {
 };
 const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
+// L4: the two providers that need no password. Shown only when this installation has the provider's OAuth app; otherwise the button is
+// disabled with the reason, never half-offered.
+function ConnectOauth({ admin }: { admin: boolean }) {
+  const { org } = useOrgCtx();
+  const q = useMailProviders(org.id, admin);
+  const start = useStartMailboxOauth(org.id);
+  const [going, setGoing] = useState('');
+  if (!admin || !q.data?.length) return null;
+  const go = (id: string) => {
+    setGoing(id);
+    start.mutate(
+      { provider: id },
+      { onSuccess: (r) => { window.location.href = r.url; }, onError: (e) => { setGoing(''); toast.error(errorMessage(e)); } },
+    );
+  };
+  return (
+    <div className="mt-4 space-y-2 border-t border-line pt-4">
+      <p className="text-xs font-medium text-ink-2">Or connect without a password</p>
+      {q.data.map((p) => (
+        <div key={p.id} className="flex flex-wrap items-start gap-2">
+          <Button size="sm" variant="secondary" icon={<KeyRound className="size-3.5" />} disabled={!p.enabled} loading={going === p.id} onClick={() => go(p.id)}>
+            Connect {p.label}
+          </Button>
+          <p className="min-w-[14rem] flex-1 text-xs text-ink-3">{p.enabled ? p.note : p.disabledWhy}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function MailboxesTab() {
   const { org, can } = useOrgCtx();
   const admin = can('admin');
   const q = useMailboxes(org.id);
   const [edit, setEdit] = useState<MailboxView | 'new' | null>(null);
   const [remove, setRemove] = useState<MailboxView | null>(null);
+  // L4: back from the provider's consent screen
+  const [params, setParams] = useSearchParams();
+  const back = params.get('mailbox');
+  useEffect(() => {
+    if (!back) return;
+    if (back === 'connected')
+      toast.success(`${params.get('address') ?? 'The mailbox'} is connected`, { description: params.get('reads') === '0' ? 'Pitches will be sent from it. Replies are not read automatically for this provider — read them in your own mailbox.' : 'Pitches will be sent from it and replies read.' });
+    else toast.error('The mailbox was not connected', { description: params.get('why') ?? undefined });
+    const next = new URLSearchParams(params);
+    for (const k of ['mailbox', 'address', 'why', 'reads']) next.delete(k);
+    setParams(next, { replace: true });
+  }, [back, params, setParams]);
 
   return (
     <Stagger className="max-w-4xl space-y-5">
@@ -54,22 +99,28 @@ export function MailboxesTab() {
           ) : q.isError ? (
             <ErrorState error={q.error} onRetry={() => void q.refetch()} title="Could not load the mailboxes" />
           ) : q.data.length ? (
-            <ul className="space-y-3">
-              {q.data.map((m) => (
-                <MailboxCard key={m.id} m={m} admin={admin} onEdit={() => setEdit(m)} onRemove={() => setRemove(m)} />
-              ))}
-            </ul>
+            <>
+              <ul className="space-y-3">
+                {q.data.map((m) => (
+                  <MailboxCard key={m.id} m={m} admin={admin} onEdit={() => setEdit(m)} onRemove={() => setRemove(m)} />
+                ))}
+              </ul>
+              <ConnectOauth admin={admin} />
+            </>
           ) : (
             <EmptyState
               className="py-8"
               icon={<Mail className="size-5" />}
               title="No mailbox connected"
-              description="Pitches go out from your own address so replies come back to you. Connect Gmail, Google Workspace, Microsoft 365, Zoho, Fastmail or any mail host with an app password."
+              description="Pitches go out from your own address so replies come back to you. Connect Microsoft 365 or Gmail with one click and no password, or any mail host with an app password."
               action={
                 admin ? (
-                  <Button icon={<Plus className="size-4" />} onClick={() => setEdit('new')}>
-                    Connect a mailbox
-                  </Button>
+                  <div className="flex flex-col items-center gap-1">
+                    <Button icon={<Plus className="size-4" />} onClick={() => setEdit('new')}>
+                      Connect with an app password
+                    </Button>
+                    <ConnectOauth admin={admin} />
+                  </div>
                 ) : (
                   <span className="text-sm text-ink-3">An admin of your company connects it.</span>
                 )
@@ -119,6 +170,8 @@ function MailboxCard({ m, admin, onEdit, onRemove }: { m: MailboxView; admin: bo
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-ink">{m.label || m.fromName}</span>
             <StatusBadge tone={st.tone}>{st.label}</StatusBadge>
+            {m.authType === 'oauth' && <Badge>{m.provider === 'ms_graph' ? 'Microsoft 365' : 'Gmail'} · no password stored</Badge>}
+            {m.authType === 'oauth' && !m.readsReplies && <Badge>replies read in your mailbox</Badge>}
           </div>
           <p className="mt-0.5 text-[13px] break-all text-ink-2">{m.fromEmail}</p>
           {m.statusReason && m.status !== 'active' && <p className="mt-1 text-[13px] text-warning-text">{m.statusReason}</p>}
@@ -131,16 +184,21 @@ function MailboxCard({ m, admin, onEdit, onRemove }: { m: MailboxView; admin: bo
       </div>
       <p className="mt-2 text-xs text-ink-3">
         {warming ? `Warming up since ${fmtDate(m.startedAt)}: ${m.today.firstCap} first e-mails a day now (5 → 10 → your limit of ${m.dailyFirstMax}). ` : ''}
-        Sends Mon–Fri {hh(m.windowStart)}–{hh(m.windowEnd)} ({m.timezone}) · replies checked {m.lastPollAt ? fmtAgo(m.lastPollAt) : 'not yet'} · last sent {m.lastSendAt ? fmtAgo(m.lastSendAt) : 'never'}
+        Sends Mon–Fri {hh(m.windowStart)}–{hh(m.windowEnd)} ({m.timezone}) · {m.readsReplies ? `replies checked ${m.lastPollAt ? fmtAgo(m.lastPollAt) : 'not yet'}` : 'replies are not read automatically'} · last sent{' '}
+        {m.lastSendAt ? fmtAgo(m.lastSendAt) : 'never'}
       </p>
       {m.lastError && <p className="mt-1.5 text-xs font-medium text-critical-text [overflow-wrap:anywhere]">Last error: {m.lastError}</p>}
 
       <DnsChecks dns={result?.dns ?? m.dns} />
 
       {result && (
-        <Callout className="mt-3" tone={result.ok ? 'good' : 'critical'} title={result.ok ? 'Both logins work' : 'The test failed'}>
-          <span className="block">Sending (SMTP): {result.smtp.ok ? 'works' : result.smtp.error || 'failed'}</span>
-          <span className="block">Reading replies (IMAP): {result.imap.ok ? 'works' : result.imap.error || 'failed'}</span>
+        <Callout className="mt-3" tone={result.ok ? 'good' : 'critical'} title={result.ok ? 'The connection works' : 'The test failed'}>
+          <span className="block">
+            Sending ({m.authType === 'oauth' ? (m.provider === 'ms_graph' ? 'Microsoft Graph' : 'Gmail API') : 'SMTP'}): {result.smtp.ok ? 'works' : result.smtp.error || 'failed'}
+          </span>
+          <span className="block">
+            Reading replies ({m.authType === 'oauth' ? (m.provider === 'ms_graph' ? 'Microsoft Graph' : 'not available') : 'IMAP'}): {result.imap.ok ? 'works' : result.imap.error || 'failed'}
+          </span>
         </Callout>
       )}
 
@@ -149,11 +207,17 @@ function MailboxCard({ m, admin, onEdit, onRemove }: { m: MailboxView; admin: bo
         <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-[max-content_minmax(0,1fr)]">
           <dt className="text-ink-3">Sending</dt>
           <dd className="break-all">
-            {m.smtpHost}:{m.smtpPort} · {m.smtpSecure ? 'SSL' : 'STARTTLS'}
+            {m.authType === 'oauth'
+              ? `${m.provider === 'ms_graph' ? 'Microsoft Graph' : 'Gmail API'} · permission granted by you${m.oauthExpiresAt ? ', renewed automatically' : ''}`
+              : `${m.smtpHost}:${m.smtpPort} · ${m.smtpSecure ? 'SSL' : 'STARTTLS'}`}
           </dd>
           <dt className="text-ink-3">Replies</dt>
           <dd className="break-all">
-            {m.imapHost}:{m.imapPort} · {m.imapSecure ? 'SSL' : 'plain'}
+            {m.authType === 'oauth'
+              ? m.readsReplies
+                ? 'Microsoft Graph · read every few minutes'
+                : 'not read automatically (Google classes inbox access as a restricted scope)'
+              : `${m.imapHost}:${m.imapPort} · ${m.imapSecure ? 'SSL' : 'plain'}`}
           </dd>
           <dt className="text-ink-3">Username</dt>
           <dd className="break-all">{m.username}</dd>
