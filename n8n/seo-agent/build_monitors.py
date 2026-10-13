@@ -25,8 +25,9 @@ BASE_URL = os.environ.get('N8N_PUBLIC_URL', 'http://localhost:5678').rstrip('/')
 FORM_URL, API_URL = BASE_URL + '/form/' + FORM_PATH, BASE_URL + '/webhook/seo-keyword-check'
 _NI = next(n for n in MAIN_WF['nodes'] if n['name'] == 'Normalize Input')['parameters']['jsCode']
 _COUNTRIES = re.search(r"\nconst COUNTRIES = \{.*?\n\};", _NI, re.S); assert _COUNTRIES, 'Normalize Input: COUNTRIES not found'
+import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits
 def src(p):   # a Code node source with the shared snippets inlined
-    s = rd('code/' + p)
+    s = seo_events.inline(rd('code/' + p))
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
     s = s.replace('/*__DRAFTS__*/', rd('code/_drafts.js').rstrip('\n'))   # P34-1: which stored outreach draft may still be offered
@@ -485,7 +486,7 @@ l_rows('LB Prospect Rows', 'New prospects of the new kinds (journalist requests,
 L.node('Save LB Prospects', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PROSPECT_TABLE, PROSPECT_COLS, ['site_id', 'prospect_domain', 'type']), at(39, -1), onError='continueRegularOutput')
 l_rows('Listing Rows', 'The listings checklist (seo_listings, upsert by site + listing)', 'listing_rows', LISTINGS_COLS, at(40, 0)); L.iff('Any Listing Rows?', '{{ !$json.skip }}', at(41, 0))
 L.node('Save Listings', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LISTINGS_TABLE, LISTINGS_COLS, ['site_id', 'listing_id']), at(42, -1), onError='continueRegularOutput')
-l_rows('Impact Rows', 'What each won link did for its page (seo_link_impact, upsert by site + linking site + page)', 'impact_rows', LINK_IMPACT_COLS, at(43, 0)); L.iff('Any Impact Rows?', '{{ !$json.skip }}', at(44, 0))
+l_rows('Impact Rows', 'What each won link and each page change did for its page (seo_link_impact, kind link | page_change, upsert by site + linking site + page)', 'impact_rows', LINK_IMPACT_COLS, at(43, 0)); L.iff('Any Impact Rows?', '{{ !$json.skip }}', at(44, 0))
 L.node('Save Link Impact', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LINK_IMPACT_TABLE, LINK_IMPACT_COLS, ['site_id', 'ref_domain', 'target_url']), at(45, -1), onError='continueRegularOutput')
 l_rows('LB Cache Rows', 'When the monthly searches last ran (seo_cache linkbld:<site>)', 'cache_rows', CACHE_COLS, at(46, 0)); L.iff('Any LB Cache?', '{{ !$json.skip }}', at(47, 0))
 L.node('Save LB Cache', DT_TYPE, DT_VERSION, dt_upsert_params_keys(CACHE_TABLE, CACHE_COLS, ['key']), at(48, -1), onError='continueRegularOutput')

@@ -6,6 +6,12 @@
 // workflow read the same facts; the brief is given the host and the name (never the bare domain).
 /*__SITE_MODEL__*/
 /*__SITE_STATS__*/
+// G12 / G29 (2026-10-13, FIX_PLAN): the events of the period are marked for every chart (pages published, audit fixes, Google
+// updates, data breaks — AN, from v5/data/seo_events.json and the stored rows), and every figure group carries its source, period
+// and sample (LN). A figure whose source nobody recorded says "source not recorded" instead of borrowing one.
+/*__ANNOTATIONS__*/
+/*__LINEAGE__*/
+/*__CHANGE_TEST__*/
 // G28 (2026-10-12, FIX_PLAN): a traffic alert fires on a STATISTICAL change, not on a fixed 30%. ST.change (two-sample Poisson z, 95% range)
 // decides; a large move that is still inside sampling noise is reported as "watch". Google's own update dates are added as context.
 const FORM_URL = '__FORM_URL__', API_URL = '__API_URL__';
@@ -17,6 +23,9 @@ let ga4Reason = ''; try { const r = ($('GA4 Requests').first() || {}).json; if (
 const gErr = (r) => { if (!r) return 'no response'; const e = r.error; if (!e) return null; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return String((inner && inner.message) || (ctx.error_description ? String(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };   // Google errors: the useful text sits in context.data (invalid_grant: account not found) or in error.message (PERMISSION_DENIED)
 let acctErr = ''; try { const a = ($('GA4 Accounts').first() || {}).json || {}; if (a.error) acctErr = gErr(a); } catch (e) {}
 const metricsHist = (() => { try { return $('Load Site Metrics').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();
+// G12: the stored rows the chart marks are computed from — pages that went live (seo_content_log) and the technical audits (seo_audits)
+const logRowsAll = (() => { try { return $('Load Content Log').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();
+const auditRowsAll = (() => { try { return $('Load Audits (Site)').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();
 const queryHist = (() => { try { return $('Load Query History').all().map(i => i.json).filter(r => r && r.site_id && r.tracked && !r.error); } catch (e) { return []; } })();
 const now = new Date().toISOString();
 const pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? null : 0);
@@ -121,6 +130,41 @@ return sites.map((s, idx) => {
   // ---- rows for the Data Tables ----
   const T = gsc ? gsc.totals : null; const G = ga4;
   const prevRuns = metricsHist.filter(m => m.site_id === s.site_id).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).slice(-12).map(m => ({ period_end: m.period_end, clicks: Number(m.clicks) || 0, impressions: Number(m.impressions) || 0, position: r1(m.position), sessions: Number(m.sessions) || 0 }));
+  // ---- G12 (2026-10-13): the events of the two periods this report compares, marked on every chart ----
+  const myLogs = logRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain);
+  const publishedLogs = myLogs.filter(r => String(r.published_at || '').slice(0, 10));
+  const loggedKw = new Set(publishedLogs.map(r => kwKey(r.keyword)));
+  const annotations = AN.marks({ from: R.previous.start, to: R.current.end,
+    published: [...publishedLogs.map(r => ({ published_at: r.published_at, keyword: r.keyword, published_url: r.published_url, source: r.source })),
+      ...found.filter(f => !loggedKw.has(kwKey(f.keyword))).map(f => ({ published_at: (det && det.checked_at) || now, keyword: f.keyword, published_url: f.url, source: f.ladder_id ? 'ladder' : 'detected' }))],
+    audits: auditRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain) });
+  const data_breaks = AN.breakBetween(R.previous.start, R.current.end);
+  // ---- G29 (2026-10-13): where every figure in this report came from, over what period, from how big a sample ----
+  const lineage = [];
+  const curRange = LN.range(R.current), prevRange = LN.range(R.previous);
+  if (gsc) {
+    lineage.push(LN.of('Clicks, impressions, CTR and average position', 'gsc', { period: curRange, basis: 'measured',
+      sample: LN.sample(gsc.totals.cur.impressions, 'impressions across ' + (gsc.query_count || 0) + ' named queries'), note: 'compared with ' + prevRange }));
+    if (gsc.totals.yoy) lineage.push(LN.of('Year-on-year clicks', 'gsc', { period: LN.range(R.yoy), sample: LN.sample(gsc.totals.yoy.impressions, 'impressions'), basis: 'measured' }));
+    lineage.push(LN.of('Queries, quick wins, click-through gaps and page lists', 'gsc', { period: curRange, basis: 'measured',
+      sample: LN.sample(gsc.rows_read, 'rows read') + ((gsc.truncated || []).length ? ' — Search Console held more rows than this run read (' + gsc.truncated.join(', ') + ')' : ''),
+      note: 'the queries Google withholds are reported apart, never spread over the named ones' }));
+    lineage.push(LN.of('Expected click-through rate for a position', 'model', { period: 'industry averages, not dated', sample: 'positions 1-10', basis: 'modelled',
+      note: 'a published industry curve, not your own measured click-through rate' }));
+  } else lineage.push(LN.unknown('Search clicks, impressions and positions', 'Search Console is not connected for this site, so this report carries no measured search data'));
+  if (ga4) lineage.push(LN.of('Organic sessions, engaged sessions and key events', 'ga4', { period: curRange, basis: 'measured',
+    sample: LN.sample(ga4.organic.cur.sessions, 'organic sessions of ' + (ga4.total && ga4.total.cur ? ga4.total.cur.sessions : 0) + ' from all channels'), note: 'property ' + ga4.ga4_property_id }));
+  else lineage.push(LN.unknown('Visits, engagement and key events', 'Google Analytics is not connected for this site'));
+  if (tracked.some(t => t.serp_position != null)) lineage.push(LN.of('Live Google check per tracked keyword', 'serp', { basis: 'one_sample',
+    period: LN.asOf((tracked.find(t => t.serp_checked_at) || {}).serp_checked_at), sample: LN.sample(tracked.filter(t => t.serp_position != null).length, 'keywords, one results page each'),
+    note: 'one country and one device, so it will differ from the Search Console average' }));
+  if (pages.some(p => p.inspected)) lineage.push(LN.of('Index status of your pages', 'inspection', { basis: 'measured',
+    period: LN.asOf(now), sample: LN.sample(pages.filter(p => p.inspected).length, 'pages inspected') }));
+  if (trends.length) lineage.push(LN.of('Search interest', 'trends', { period: 'the last 12 months', basis: 'reported',
+    sample: LN.sample(trends.length, 'keywords'), note: 'a relative index (100 = the peak of the period), not a count of searches' }));
+  if (notices.length) lineage.push(LN.of('Search Console notices', 'gsc', { period: 'the last 35 days', sample: LN.sample(notices.length, 'notification e-mails'), basis: 'reported' }));
+  if (ck) lineage.push(LN.of('Manual actions, security issues and site-wide index coverage', 'you', { period: 'check-in of ' + String(ck.month || ''), sample: 'one check-in', basis: 'reported',
+    note: 'Google offers no API for these, so they come from your monthly check-in' }));
   const metrics_row = { site_id: s.site_id, domain: s.domain, period_start: R.current.start, period_end: R.current.end, checked_at: now, gsc_connected: !!gsc, ga4_connected: !!ga4,
     clicks: T ? T.cur.clicks : 0, impressions: T ? T.cur.impressions : 0, ctr: T ? T.cur.ctr : 0, position: T ? T.cur.position : 0, prev_clicks: T ? T.prev.clicks : 0, prev_impressions: T ? T.prev.impressions : 0, prev_ctr: T ? T.prev.ctr : 0, prev_position: T ? T.prev.position : 0,
     yoy_clicks: T && T.yoy ? T.yoy.clicks : 0, yoy_impressions: T && T.yoy ? T.yoy.impressions : 0, sessions: G ? G.organic.cur.sessions : 0, engaged_sessions: G ? G.organic.cur.engaged : 0, key_events: G ? G.organic.cur.key_events : 0,
@@ -139,6 +183,8 @@ return sites.map((s, idx) => {
     ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },
     console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },
     significance: stat,   // G28: the Poisson z-test behind every traffic alert (clicks / impressions / sessions)
+    annotations, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
+    change_method: CT.method,   // G12: how a page change is read against the site's other pages (the Link Builder measures it; the wording is shared)
     tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
     detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),
     publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,

@@ -1,0 +1,84 @@
+// ---- chart annotations (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.5 / 2.12) ----
+// A line that falls in mid-September 2025 is not a ranking problem: that is the week Google stopped serving 100 results on one page.
+// A line that climbs two weeks after a page went live is the page. Rank Ranger and Search Console both mark such events on their
+// charts; we marked nothing, so every chart had to be read without its context. These marks are computed from data already stored -
+// published pages (`seo_content_log.published_at`), the technical audits (`seo_audits`), and the dated registry in
+// `v5/data/seo_events.json` (Google updates and data breaks) - and never from a guess. A date with no event produces no mark.
+// The registry is THE one place to add a new Google update: the build inlines the same file here, into _site_stats.js and into the
+// app (app/shared/src/seo-events.generated.ts), so the engine and the dashboards mark the same dates.
+const AN = (() => {
+  const EVENTS = Object.assign({ updated: '', google_updates: [], data_breaks: [] }, /*__SEO_EVENTS__*/);
+  const KINDS = {
+    publish: { label: 'Page published', tone: 'good' },
+    fix: { label: 'Audit fixes', tone: 'good' },
+    google_update: { label: 'Google update', tone: 'warning' },
+    data_break: { label: 'Data break', tone: 'warning' },
+    link: { label: 'Link won', tone: 'good' },
+  };
+  const S = (v) => String(v == null ? '' : v);
+  const day = (v) => S(v).slice(0, 10);
+  const esc1 = (s) => S(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // a point event is in the window when its day is inside it; a dated range is in when it overlaps it. An open end means "no limit".
+  const inRange = (from, to, start, end) => { const a = day(from), b = day(to), s0 = day(start), e0 = day(end) || day(start);
+    if (!s0) return false;
+    if (a && e0 < a) return false;
+    if (b && s0 > b) return false;
+    return true; };
+  const mark = (kind, date, label, o) => { const x = o || {};
+    return { kind, date: day(date), date_end: day(x.date_end) || day(date), label: S(label), detail: S(x.detail), url: S(x.url), source: S(x.source),
+      tone: (KINDS[kind] || {}).tone || 'neutral', kind_label: (KINDS[kind] || {}).label || kind }; };
+  // every event inside [from, to]. `published`: seo_content_log rows; `audits`: seo_audits rows (oldest first or any order);
+  // `links`: won links with their first sighting. Everything optional - what is missing simply produces no marks.
+  const marks = (o) => {
+    const x = o || {}; const from = day(x.from), to = day(x.to); const out = [];
+    for (const p of (x.published || [])) {
+      const d = day(p.published_at || p.publishedAt || p.date);
+      if (!d || !inRange(from, to, d, d)) continue;
+      const kw = S(p.keyword).trim();
+      out.push(mark('publish', d, kw ? 'Published: "' + kw + '"' : 'Page published', { url: S(p.published_url || p.publishedUrl || p.url), source: 'seo_content_log',
+        detail: S(p.source) === 'ladder' ? 'a keyword-ladder page' : S(p.source) === 'cadence' ? 'a page of the weekly cadence' : S(p.source) ? 'source: ' + S(p.source) : '' }));
+    }
+    const audits = (x.audits || []).filter(a => day(a.audited_at || a.auditedAt)).slice()
+      .sort((a, b) => day(a.audited_at || a.auditedAt).localeCompare(day(b.audited_at || b.auditedAt)));
+    for (let i = 0; i < audits.length; i++) {
+      const a = audits[i], prev = audits[i - 1];
+      const d = day(a.audited_at || a.auditedAt);
+      if (!inRange(from, to, d, d)) continue;
+      const nFind = Number(a.findings == null ? a.findingsCount : a.findings), pFind = prev ? Number(prev.findings == null ? prev.findingsCount : prev.findings) : NaN;
+      const hs = Number(a.health_score == null ? a.healthScore : a.health_score), ps = prev ? Number(prev.health_score == null ? prev.healthScore : prev.health_score) : NaN;
+      const fixed = (Number.isFinite(nFind) && Number.isFinite(pFind)) ? pFind - nFind : null;
+      const detail = [Number.isFinite(hs) ? (Number.isFinite(ps) ? 'health ' + ps + ' → ' + hs : 'health ' + hs + '/100') : '',
+        fixed == null ? '' : fixed > 0 ? fixed + ' fewer finding' + (fixed === 1 ? '' : 's') + ' than the audit before'
+          : fixed < 0 ? Math.abs(fixed) + ' more finding' + (fixed === -1 ? '' : 's') + ' than the audit before' : 'the same findings as the audit before'].filter(Boolean).join(' · ');
+      out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' : 'Technical audit', { detail, source: 'seo_audits' }));
+    }
+    for (const l of (x.links || [])) {
+      const d = day(l.t0 || l.first_seen || l.date);
+      if (!d || !inRange(from, to, d, d)) continue;
+      out.push(mark('link', d, 'Link won: ' + S(l.ref_domain || l.refDomain), { url: S(l.target_url || l.targetUrl), source: 'seo_backlinks' }));
+    }
+    for (const u of (EVENTS.google_updates || [])) {
+      if (!inRange(from, to, u.start, u.end)) continue;
+      out.push(mark('google_update', u.start, 'Google: ' + S(u.name), { date_end: u.end, source: 'v5/data/seo_events.json',
+        detail: 'Google changed its ranking systems between ' + day(u.start) + ' and ' + day(u.end) + '. A move in this window may be part of the cause, which cannot be proven from these numbers.' }));
+    }
+    for (const b of (EVENTS.data_breaks || [])) {
+      if (!inRange(from, to, b.start, b.end)) continue;
+      out.push(mark('data_break', b.start, 'Data break: ' + S(b.name), { date_end: b.end, source: 'v5/data/seo_events.json', detail: S(b.detail) }));
+    }
+    out.sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label));
+    return out;
+  };
+  // does a before / after comparison straddle a data break? Then the two sides are not comparable and the report says so.
+  const breakBetween = (from, to) => (EVENTS.data_breaks || []).filter(b => inRange(from, to, b.start, b.end))
+    .map(b => ({ name: S(b.name), start: day(b.start), end: day(b.end), detail: S(b.detail), affects: (b.affects || []).map(S) }));
+  const html = (list, o) => { const rows = (list || []); const x = o || {};
+    if (!rows.length) return x.empty === false ? '' : '<p style="color:#64748b;font-size:13px">Nothing happened in this period that would explain a move in the charts.</p>';
+    const td = 'style="padding:4px 8px;border:1px solid #cbd5e1;font-size:12px;vertical-align:top"';
+    const th = 'style="padding:4px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:11px"';
+    return '<table style="border-collapse:collapse;margin:6px 0;max-width:100%"><tr><th ' + th + '>Date</th><th ' + th + '>Event</th><th ' + th + '>What it was</th></tr>'
+      + rows.map(m => '<tr><td ' + td + '>' + esc1(m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '')) + '</td><td ' + td + '>'
+        + esc1(m.label) + '</td><td ' + td + '>' + esc1(m.detail || m.kind_label) + '</td></tr>').join('') + '</table>';
+  };
+  return { marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
+})();

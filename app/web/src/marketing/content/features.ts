@@ -381,6 +381,8 @@ export const features: Feature[] = [
       'A weekly report every Monday with the changes that matter',
       'Notices when you publish a page from the plan',
       'A weekly list of the pages your site has, so the advice says “refresh this page” instead of “publish another one”',
+      'Every chart marked with what happened: pages you published, technical fixes, Google updates and breaks in Google’s own data',
+      'After a page goes live, its trend is compared with the rest of your website, so you hear whether the change likely helped',
       'Dashboards per website for search, traffic, rankings and content',
     ],
     steps: [
@@ -408,6 +410,14 @@ export const features: Feature[] = [
       {
         q: 'How does Ascentra know I published a planned page?',
         a: 'Each week it looks for the page in your sitemap by its slug and title. Once found, the page is checked live and its ranking is tracked from then on.',
+      },
+      {
+        q: 'Why is my chart marked in mid-September 2025?',
+        a: 'That is when Google stopped serving a hundred results on one page, which removed most SEO tools from the counts. Impressions fell and average positions improved on nearly every website without anything changing on the site, so figures either side of that week are not comparable. Charts mark it, along with Google’s ranking updates, the pages you published and the technical fixes you made.',
+      },
+      {
+        q: 'Can Ascentra tell me whether a change worked?',
+        a: 'It compares the page you changed with the rest of your website over the same weeks, which removes the part of the move that was the season or a Google update, and reports “likely helped”, “possibly helped”, “no clear effect yet” or “can’t tell”. It never claims a change caused a move: a comparison like this narrows the alternatives, it does not prove a cause.',
       },
     ],
     related: ['reports', 'keyword-ladders', 'technical-audits'],
@@ -545,11 +555,12 @@ export const features: Feature[] = [
       'A Search Console alert watcher for Google’s notification e-mails',
       'A monthly check-in for manual actions and security issues',
       'Prioritised recommendations you can start with one click',
+      'Every number says where it came from, over what period and from how big a sample',
       'Every run kept with its report and files',
     ],
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
-      { title: 'Explain', body: 'What changed, why it matters and how sure Ascentra is.' },
+      { title: 'Explain', body: 'What changed, why it matters, how sure Ascentra is — and where each number came from.' },
       { title: 'Recommend', body: 'A prioritised list of next steps, each one ready to run.' },
       { title: 'Share', body: 'Export the full report as PDF or Word, or open any past run with its report and files.' },
     ],
@@ -565,6 +576,10 @@ export const features: Feature[] = [
       {
         q: 'Are recommendations ranked?',
         a: 'Yes. Recommendations are listed in priority order, and each one can be started as a run with its cost shown first.',
+      },
+      {
+        q: 'Can I see where a number came from?',
+        a: 'Yes. Every figure in a report and on a dashboard carries its source, the period it covers and the size of the sample behind it, with a “Where these numbers come from” table at the end of each report. A number that was calculated rather than counted says “modelled, not measured”, and if a figure ever reaches a report without its source it says “source not recorded” instead of borrowing one.',
       },
     ],
     related: ['site-tracking', 'technical-audits', 'enterprise'],

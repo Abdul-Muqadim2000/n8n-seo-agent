@@ -216,7 +216,9 @@
   "verdict",
   "note",
   "keyword",
-  "updated_at"
+  "updated_at",
+  "kind",
+  "change"
  ],
  "LINKS": [
   "site_id",

@@ -15,3 +15,6 @@ export * from './link-import';
 export * from './outreach';
 export * from './draft-qa';
 export * from './findings';
+export * from './lineage';
+export * from './annotations';
+export * from './change-test';

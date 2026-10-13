@@ -1615,7 +1615,14 @@ await guard('pipeline', async () => {
   check('tracker: stuck (published 75 days ago, no page improved in 8 weeks)', t.tr[0].json.stuck === true && t.tr[0].json.won === false, JSON.stringify({ stuck: t.tr[0].json.stuck }));
   const htmlStuck = t.tr[0].json.html, subjStuck = t.tr[0].json.subject;
   t = await trk(LS, sHist, flat, []);
-  check('tracker: the e-mail does not change with the flags', t.tr[0].json.html === htmlStuck && t.tr[0].json.subject === subjStuck, 'html differs');
+  // G12 (2026-10-13): the publish dates DO change the e-mail now — they are marked as events at the end of it, with the lineage block.
+  // Everything above those two sections must still be identical, and the marks must appear only when a publish date is recorded.
+  const beforeMarks = (h) => String(h).split('<p style="margin-top:14px"><b>What happened while this ladder was tracked')[0].split('Where these numbers come from')[0];
+  check('tracker: the e-mail above the event marks does not change with the flags (G12 adds the publish dates and the lineage at the end)',
+    beforeMarks(t.tr[0].json.html) === beforeMarks(htmlStuck) && t.tr[0].json.subject === subjStuck
+    && /Published: "vat software uae cost"/.test(htmlStuck) && !/Published: /.test(t.tr[0].json.html),
+    JSON.stringify({ prefix_same: beforeMarks(t.tr[0].json.html) === beforeMarks(htmlStuck), subject_same: t.tr[0].json.subject === subjStuck,
+      pub_marked: /Published: "vat software uae cost"/.test(htmlStuck), pub_absent: !/Published: /.test(t.tr[0].json.html) }));
   t = await trk(LS, sHist, (k) => k === 'vat software uae cost' ? 9 : 0, pubLog(75));
   check('tracker: not stuck when a published page improved (#12 -> #9)', t.tr[0].json.stuck === false, t.tr[0].json.stuck);
   t = await trk(LS, sHist, flat, pubLog(30));
@@ -6318,6 +6325,197 @@ await guard('g8-discovery-inputs', async () => {
     && cb.priority.every(k => ['calibrated', 'modelled', 'unknown'].includes(k.traffic_basis) && typeof k.traffic_note === 'string')
     && cb.priority.some(k => k.traffic_basis === 'calibrated' && k.gsc && k.gsc.impressions > 0)
     && cb.priority.some(k => k.serp_cluster && k.serp_cluster.head_keyword === 'erp software uae'), JSON.stringify({ sc: cb.search_console && Object.keys(cb.search_console), clusters: cb.serp_clusters.length, live: cb.live_checks }));
+});
+
+
+// ===================================================================================
+// S56 G12 + G29 (2026-10-13, system review FIX_PLAN G12 / G29; criteria 3.4 / 3.5 / 2.12 / 3.11 in
+// CRITERIA_technical_tracking_reporting_ai_links.md): what the charts are marked with, how a change is read against a control group,
+// and the lineage every figure carries. Every check fails against the code of the 2026-10-11 run: nothing was marked on any chart,
+// only won links were ever measured against a control group, and outside the AI-visibility report no figure said where it came from.
+// ===================================================================================
+await guard('g12-g29-annotations-change-tests-lineage', async () => {
+  const SN = 'S56 G12 G29 — pages published, audit fixes, Google updates and the num=100 break are marked with their dates; a page change is read against the site\'s other pages with graded wording; and every figure in a report carries its source, period and sample';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const EMPTY = [{ json: {} }];
+  const T = require('./fixtures_tracking');
+  const day = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  const CAUSAL = /\bcaused\b|\bbecause of\b|\bproves\b|\bguarantee/i;   // a change test may never claim a cause
+
+  // ---- 1. G12 / 3.5 + 2.12: the marks, from the stored rows and the dated registry (v5/data/seo_events.json) ----
+  const AM = async (input) => (await run('_annotations', [{ json: input }]))[0].json;
+  const marked = await AM({ from: '2026-09-01', to: '2026-10-13',
+    published: [{ published_at: '2026-09-25T10:00:00.000Z', keyword: 'peppol uae', published_url: 'https://northwind-erp.com/peppol-uae/', source: 'ladder' },
+      { published_at: '2026-07-02T10:00:00.000Z', keyword: 'too old to be in this window', published_url: 'https://northwind-erp.com/old/' }],
+    audits: [{ audited_at: '2026-08-01T06:00:00Z', health_score: 64, findings: 40 }, { audited_at: '2026-09-18T06:00:00Z', health_score: 81, findings: 34 }] });
+  const mk = (k) => marked.marks.filter(m => m.kind === k);
+  console.log('   marks ->', JSON.stringify(marked.marks.map(m => [m.date + (m.date_end !== m.date ? '→' + m.date_end : ''), m.kind, m.label])));
+  check('G12: a published page is marked on its own date with the keyword, and a page published before the window is not',
+    mk('publish').length === 1 && mk('publish')[0].date === '2026-09-25' && mk('publish')[0].label === 'Published: "peppol uae"'
+    && /keyword-ladder page/.test(mk('publish')[0].detail) && mk('publish')[0].url === 'https://northwind-erp.com/peppol-uae/', JSON.stringify(mk('publish')));
+  check('G12: an audit is marked with the findings it cleared since the audit before and with the health score either side',
+    mk('fix').length === 1 && mk('fix')[0].date === '2026-09-18' && mk('fix')[0].label === 'Audit fixes: 6 findings gone'
+    && /health 64 → 81/.test(mk('fix')[0].detail) && /6 fewer findings than the audit before/.test(mk('fix')[0].detail), JSON.stringify(mk('fix')));
+  check('G12: a Google update that ran inside the window is marked with its start and end from the dated registry, and says a move may be part of its cause without claiming proof',
+    mk('google_update').length === 1 && mk('google_update')[0].label === 'Google: September 2026 core update' && mk('google_update')[0].date === '2026-09-15'
+    && mk('google_update')[0].date_end === '2026-09-30' && /cannot be proven from these numbers/.test(mk('google_update')[0].detail)
+    && mk('google_update')[0].source === 'v5/data/seo_events.json', JSON.stringify(mk('google_update')));
+  check('G12 / 2.12: the num=100 break of September 2025 is in the same registry and is marked when a chart covers it, with what it did to the numbers',
+    marked.data_breaks.length === 1 && marked.data_breaks[0].name === 'num=100 stopped working' && marked.updates.length >= 7 && !!marked.registry_updated, JSON.stringify({ breaks: marked.data_breaks.length, updates: marked.updates.length }));
+  const br = await AM({ from: '2025-08-15', to: '2025-10-15' });
+  const brk = br.marks.find(m => m.kind === 'data_break') || {};
+  check('G12 / 2.12: a window over the num=100 break carries the break mark and the warning that the two sides are not comparable',
+    br.marks.filter(m => m.kind === 'data_break').length === 1 && brk.date === '2025-09-10' && brk.date_end === '2025-09-19'
+    && /not comparable/.test(brk.detail) && br.breaks.length === 1 && br.breaks[0].affects.join() === 'impressions,position', JSON.stringify(br.marks.map(m => m.label)));
+  const quiet = await AM({ from: '2026-11-01', to: '2026-11-20', published: [], audits: [] });
+  check('G12: a window where nothing happened produces no marks at all (never an invented one), and says so',
+    quiet.marks.length === 0 && quiet.breaks.length === 0 && /Nothing happened in this period/.test(quiet.html), JSON.stringify(quiet.marks));
+
+  // ---- 2. G12 / 3.4: the change test — the same control-group reading for a page change as for a won link ----
+  const CTR = async (input) => (await run('_change_test', [{ json: input }]))[0].json;
+  const helped = await CTR({ kind: 'page', weeks: 11, base: 35, now: 12, others: [1, 0.5, 1.2, -0.3, 0.8] });
+  console.log('   change test ->', JSON.stringify({ v: helped.verdict, effect: helped.effect, control: helped.control_change, spread: helped.control_spread }));
+  check('3.4: a page that moved 23 places while the site\'s other pages moved about 1 reads "Likely helped", with the effect over the control group',
+    helped.verdict === 'likely_helped' && helped.verdict_label === 'Likely helped' && helped.page_change === 23 && helped.control_change === 0.8
+    && helped.effect === 22.2 && helped.control_pages === 5 && /vs the site's other pages \+0\.8/.test(helped.note), JSON.stringify(helped));
+  const noData = await CTR({ kind: 'page', weeks: 11, base: null, now: null, others: [] });
+  check('3.4: a page with no search impressions before or after the change reads "Can\'t tell" — never "no effect"',
+    noData.verdict === 'cant_tell' && noData.verdict_label === 'Can\'t tell' && /no search impressions before or after the change/.test(noData.note)
+    && noData.page_change === 0 && noData.effect === 0, JSON.stringify(noData));
+  const flat = await CTR({ kind: 'page', weeks: 11, base: 20, now: 19.4, others: [1, 0.7, 1.1, 0.9] });
+  check('3.4: a page that moved less than the site\'s other pages reads "No clear effect yet"', flat.verdict === 'no_effect_yet' && flat.verdict_label === 'No clear effect yet', JSON.stringify(flat));
+  const early = await CTR({ kind: 'page', weeks: 3, base: 35, now: 12, others: [1, 1, 1, 1] });
+  check('3.4: a change read before 6 weeks reads "Too early to tell" and claims nothing, however big the move',
+    early.verdict === 'too_early' && early.verdict_label === 'Too early to tell' && /read at 6, 10 and 16 weeks after the change/.test(early.note) && early.page_change === 0, JSON.stringify(early));
+  const thin = await CTR({ kind: 'page', weeks: 11, base: 35, now: 12, others: [1, 0.5] });
+  check('3.4: with fewer than 3 other pages to compare with, the best it can say is "Possibly helped", and it says why',
+    thin.verdict === 'possibly_helped' && /few other pages to compare with/.test(thin.note), JSON.stringify(thin));
+  const joint = await CTR({ kind: 'page', weeks: 11, base: 35, now: 12, others: [1, 0.5, 1.2, -0.3, 0.8], joint: 1 });
+  check('3.4: when something else changed on the same page inside four weeks the credit is shared, so it can never read "Likely helped"',
+    joint.verdict === 'possibly_helped' && /credit shared/.test(joint.note), JSON.stringify(joint));
+  check('3.4: the five verdicts are graded and none of them, nor the method, claims a cause',
+    JSON.stringify(helped.labels) === JSON.stringify({ likely_helped: 'Likely helped', possibly_helped: 'Possibly helped', no_effect_yet: 'No clear effect yet', too_early: 'Too early to tell', cant_tell: 'Can\'t tell' })
+    && Object.values(helped.labels).every(l => !CAUSAL.test(l)) && [helped, noData, flat, early, thin, joint].every(r => !CAUSAL.test(r.note))
+    && !CAUSAL.test(helped.method) && /never proof of cause/.test(helped.method) && /control group/.test(helped.method), JSON.stringify(helped.labels));
+
+  // ---- 3. G29 / 3.11: the weekly report — every figure group with its source, period and sample ----
+  reset();
+  const SITE = 'site_northwind-erp-com', WWW = 'https://www.northwind-erp.com';
+  const LOGS = [{ json: { id: 1, site_id: SITE, domain: 'northwind-erp.com', keyword: 'erp for distributors', source: 'cadence', page_type: 'Service Page', existing_page_url: '', rung: 0, ladder_id: '', request_id: 'c1', started_at: day(30) + 'T10:00:00.000Z', status: 'published', published_url: WWW + '/erp-for-distributors/', published_at: day(12) + 'T10:00:00.000Z', week: day(30) } }];
+  const AUDITS = [{ json: { site_id: SITE, domain: 'northwind-erp.com', audit_id: 'a2', audited_at: day(20) + 'T06:00:00Z', health_score: 81, grade: 'B', findings: 34, critical: 0, high: 3, medium: 6, pages_crawled: 58 } },
+    { json: { site_id: SITE, domain: 'northwind-erp.com', audit_id: 'a1', audited_at: day(80) + 'T06:00:00Z', health_score: 64, grade: 'C', findings: 40 } }];
+  mock('Manual Run', { site_id: SITE, on_demand: true, request_id: 'g29' });
+  mock('Load Sites', T.sitesRows()); mock('Load Ladders', EMPTY); mock('Load Rank History', EMPTY); mock('Load Site Metrics', EMPTY); mock('Load Query History', EMPTY);
+  mock('Load Content Log', LOGS); mock('Load Console Alerts', EMPTY); mock('Load Check-ins', EMPTY); mock('Load Audits (Site)', AUDITS);
+  mock('Load AI Visibility (Site)', EMPTY); mock('Load Backlink Snapshots (Site)', EMPTY);
+  await run('Site Plan', store['Load Query History']);
+  mock('GSC Sites', T.gscSites()); await run('Resolve Properties', store['GSC Sites']);
+  const gq56 = await run('GSC Requests', store['Resolve Properties']);
+  mock('GSC Query', gq56.map(q => T.gscResponse(q.json))); await run('Parse GSC', store['GSC Query']);
+  mock('GA4 Accounts', T.ga4Accounts()); const sr56 = await run('Stream Requests', store['GA4 Accounts']);
+  mock('GA4 Streams', sr56.map(r => T.ga4Streams(r.json))); const gr56 = await run('GA4 Requests', store['GA4 Streams']);
+  mock('GA4 Report', gr56.map(r => T.ga4Report(r.json))); await run('Parse GA4', store['GA4 Report']);
+  const ir56 = await run('Inspect Requests', store['Resolve Properties']);
+  mock('Inspect URL', ir56.map(r => T.inspection(r.json))); await run('Parse Inspection', store['Inspect URL']);
+  const tq56 = await run('Trends Requests', store['Resolve Properties']);
+  mock('Google Trends', tq56.map(r => T.trends(r.json))); await run('Parse Trends', store['Google Trends']);
+  const sq56 = await run('Site SERP Requests', store['Resolve Properties']);
+  mock('SERP Check (Site)', sq56.map(q => V.serpFor(q.json.keyword, q.json.domain, 5))); await run('Parse Site SERP', store['SERP Check (Site)']);
+  const m56 = (await run('Site Metrics', store['Resolve Properties']))[0].json;
+  const lin = (re) => m56.lineage.find(l => re.test(l.figure)) || null;
+  console.log('   lineage ->', JSON.stringify(m56.lineage.map(l => [l.figure, l.source, l.basis])));
+  check('3.11: every figure group of the weekly report carries a source, a period, a sample and how it was arrived at — nothing is left blank',
+    m56.lineage.length >= 6 && m56.lineage.every(l => l.figure && l.source && l.source_label && l.basis && l.basis_label
+      && (l.basis === 'unknown' ? l.note : (l.period && l.sample))), JSON.stringify(m56.lineage.filter(l => !(l.period && l.sample)).map(l => [l.figure, l.basis])));
+  check('3.11: the Search Console figures name Search Console, the 28-day range with both dates, and the impressions they rest on',
+    lin(/^Clicks, impressions/) && lin(/^Clicks, impressions/).source === 'gsc' && lin(/^Clicks, impressions/).basis === 'measured'
+    && /^\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} \(28 days\)$/.test(lin(/^Clicks, impressions/).period)
+    && /impressions across \d+ named queries$/.test(lin(/^Clicks, impressions/).sample), JSON.stringify(lin(/^Clicks, impressions/)));
+  check('3.11: a modelled number says it is modelled, and a live Google check says it is one sample, not an average',
+    lin(/^Expected click-through/).basis === 'modelled' && lin(/^Expected click-through/).basis_label === 'modelled, not measured'
+    && lin(/^Live Google check/).basis === 'one_sample' && /one country and one device/.test(lin(/^Live Google check/).note)
+    && lin(/^Search interest/).basis === 'reported' && /relative index/.test(lin(/^Search interest/).note), JSON.stringify([lin(/^Expected click-through/), lin(/^Live Google check/)]));
+  const bi56 = await run('Brief Input', [{ json: m56 }]);
+  mock('Site Brief', [{ json: { error: 'no model in this test' } }]);
+  const rep56 = (await run('Site Report', bi56))[0].json;
+  save('weekly-report-g12-g29.html', rep56.html); scanHtml('weekly report, G12 + G29', rep56.html);
+  check('3.11: the report shows a "Where these numbers come from" table with a row per figure (figure, source, period, sample, how)',
+    /Where these numbers come from/.test(rep56.html) && /<th[^>]*>Figure<\/th>/.test(rep56.html) && /<th[^>]*>Period<\/th>/.test(rep56.html) && /<th[^>]*>Sample<\/th>/.test(rep56.html)
+    && m56.lineage.every(l => rep56.html.includes(l.figure)) && /modelled, not measured/.test(rep56.html), (rep56.html.match(/Where these numbers come from[\s\S]{0,300}/) || [''])[0].slice(0, 260));
+  check('3.11: the headline figures carry their source and period right under them, not only in the table at the end',
+    /Google Search Console · \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} \(28 days\)/.test(rep56.html) && /Google Analytics 4 · /.test(rep56.html), (rep56.html.match(/Google Search Console · [^<]{0,160}/) || [''])[0]);
+  check('G12 / 3.5: the weekly report lists what happened in the period — the page that went live, the audit fixes and the Google update — each with its date',
+    /What happened in this period/.test(rep56.html) && /Published: "erp for distributors"/.test(rep56.html) && /Audit fixes: 6 findings gone/.test(rep56.html)
+    && m56.annotations.some(a => a.kind === 'google_update') && /Every chart in your dashboard is marked with these dates/.test(rep56.html)
+    && m56.annotations.every(a => !CAUSAL.test(a.label)), JSON.stringify(m56.annotations.map(a => [a.date, a.label])));
+  // the same run without Google Analytics: the figure says "source not recorded", it does not borrow Search Console's
+  delete store['Parse GA4'];
+  const noGa = (await run('Site Metrics', store['Resolve Properties']))[0].json;
+  const unk = noGa.lineage.find(l => l.basis === 'unknown');
+  check('3.11: where the lineage is genuinely unknown the figure reads "source not recorded" with the reason, never a borrowed source',
+    !!unk && unk.source === 'none' && unk.source_label === 'source not recorded' && unk.basis_label === 'source not recorded' && /not connected/.test(unk.note)
+    && !noGa.lineage.some(l => l.figure === unk.figure && l.source === 'gsc'), JSON.stringify(unk));
+  const repU = (await run('Site Report', await run('Brief Input', [{ json: noGa }])))[0].json;
+  check('3.11: that "source not recorded" reaches the report\'s table, so a figure without a source is visible as one',
+    /source not recorded/.test(repU.html), (repU.html.match(/source not recorded[^<]{0,120}/) || [''])[0]);
+
+  // ---- 4. G12 / 3.4 in the engine: LB Assemble reads a page change with the same machinery as a won link ----
+  reset();
+  const F56 = require('./fixtures_lb413'); const TC56 = require('./table_cols.json');
+  const same56 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+  const CHANGED = F56.H + '/insights/peppol-accredited-service-providers-uae';   // 35 → 12 in the stored query history
+  const NOQ = F56.H + '/insights/no-impressions-page';
+  mock('Load Sites', F56.sites()); mock('Load Ladders', F56.ladders()); mock('Load Monitors', F56.monitors()); mock('Load Profiles', F56.profiles());
+  mock('Load Link Prospects', F56.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', F56.outreachPrev().map(j => ({ json: j })));
+  mock('Load Listings', F56.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', EMPTY);
+  mock('Load Backlinks', F56.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F56.snaps().map(j => ({ json: j })));
+  mock('Load AI Targets', F56.targets().map(j => ({ json: j }))); mock('Load Query History', F56.queries().map(j => ({ json: j })));
+  mock('Load Rank History', F56.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', F56.cache().map(j => ({ json: j })));
+  mock('Load Content Log', [{ json: { site_id: F56.SITE, domain: F56.DOMAIN, keyword: 'peppol accredited service providers uae', source: 'ladder', status: 'published', published_url: CHANGED, published_at: day(80) + 'T09:00:00.000Z', started_at: day(95) + 'T09:00:00.000Z' } },
+    { json: { site_id: F56.SITE, domain: F56.DOMAIN, keyword: 'no impressions yet', source: 'cadence', status: 'published', published_url: NOQ, published_at: day(80) + 'T09:00:00.000Z', started_at: day(95) + 'T09:00:00.000Z' } },
+    { json: { site_id: F56.SITE, domain: F56.DOMAIN, keyword: 'published this week', source: 'cadence', status: 'published', published_url: F56.H + '/insights/brand-new/', published_at: day(4) + 'T09:00:00.000Z', started_at: day(10) + 'T09:00:00.000Z' } }]);
+  delete store['Manual Run'];
+  const P56 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  const SR56 = (await run('LB Source Requests', [{ json: P56 }])).map(r => r.json);
+  mock('Fetch LB Sources', SR56.map(() => ({})));
+  const DR56 = (await run('LB DFS Requests', [{ json: P56 }])).map(r => r.json);
+  mock('Run LB DFS', DR56.map(() => ({})));
+  const PR56 = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
+  mock('Fetch LB Pages', PR56.map(r => F56.fetchPage(r.url)));
+  const S256 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json);
+  mock('Fetch LB Second', S256.map(r => F56.fetchPage(r.url)));
+  const AS56 = (await run('LB Assemble', [{ json: {} }]))[0].json;
+  const pageRows = AS56.impact_rows.filter(r => r.kind === 'page_change'), linkRows = AS56.impact_rows.filter(r => r.kind === 'link');
+  const PCH = (u) => pageRows.find(r => r.target_url === u) || {};
+  console.log('   page changes ->', JSON.stringify(pageRows.map(r => [r.target_url.replace(F56.H, ''), r.change, r.weeks, r.page_change, r.control_change, r.effect, r.verdict])));
+  check('3.4: a page published 80 days ago that moved 23 places while the site\'s other pages moved about 1 reads "likely_helped", with the control group and no linking site',
+    PCH(CHANGED).verdict === 'likely_helped' && PCH(CHANGED).change === 'published' && PCH(CHANGED).ref_domain === '' && PCH(CHANGED).base_position === 35
+    && PCH(CHANGED).position === 12 && PCH(CHANGED).page_change === 23 && Math.abs(PCH(CHANGED).control_change) <= 2 && PCH(CHANGED).effect > 20, JSON.stringify(PCH(CHANGED)));
+  check('3.4: a published page Search Console never reported reads "cant_tell", and one published 4 days ago reads "too_early"',
+    PCH(NOQ).verdict === 'cant_tell' && /no search impressions before or after the change/.test(PCH(NOQ).note)
+    && PCH(F56.H + '/insights/brand-new/').verdict === 'too_early', JSON.stringify([PCH(NOQ).verdict, PCH(F56.H + '/insights/brand-new/').verdict]));
+  check('3.4: the won-link readings are unchanged by the shared implementation (peppol.org still "likely_helped", the 20-day-old link still "too_early")',
+    (linkRows.find(r => r.ref_domain === 'peppol.org') || {}).verdict === 'likely_helped' && (linkRows.find(r => r.ref_domain === 'gulfbiz.ae') || {}).verdict === 'too_early'
+    && linkRows.every(r => r.kind === 'link' && r.change === ''), JSON.stringify(linkRows.map(r => [r.ref_domain, r.verdict])));
+  check('3.4: the summary counts link readings and page-change readings apart',
+    AS56.summary.page_changes === pageRows.length && AS56.summary.change_reads === pageRows.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length
+    && AS56.summary.impact_reads === linkRows.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length, JSON.stringify(AS56.summary));
+  mock('LB Rows', [{ json: { site_id: F56.SITE, outreach_rows: AS56.outreach_rows, impact_rows: AS56.impact_rows, drafted: 0, held: 0, skipped: 0 } }]);
+  const IR56 = (await run('Impact Rows', [{ json: {} }])).map(r => r.json);
+  check('G12: the rows stored in seo_link_impact carry exactly the table columns, including the new kind and change',
+    IR56.length === AS56.impact_rows.length && IR56.every(r => same56(Object.keys(r), TC56.LINK_IMPACT)) && TC56.LINK_IMPACT.includes('kind') && TC56.LINK_IMPACT.includes('change'), JSON.stringify(Object.keys(IR56[0] || {})));
+  const RP56 = (await run('LB Report', [{ json: {} }]))[0].json;
+  save('link-builder-g12-g29.html', RP56.html); scanHtml('link builder report, G12 + G29', RP56.html);
+  check('3.4: the Link Builder report has its own "What your page changes did" section with the graded verdict, the date and the method, and keeps the links in theirs',
+    /What your page changes did/.test(RP56.html) && /What your links did/.test(RP56.html) && /Likely helped/.test(RP56.html) && /No clear effect yet|Can.t tell|Too early to tell/.test(RP56.html)
+    && /control group/.test(RP56.html) && /never proof of cause/.test(RP56.html), (RP56.html.match(/What your page changes did[\s\S]{0,400}/) || [''])[0].slice(0, 300));
+  check('3.4: nothing in that report claims a change caused a move, and the callback carries the graded verdicts for the app',
+    !CAUSAL.test(RP56.html) && RP56.page_changes.length === pageRows.length && RP56.page_changes.every(x => ['Likely helped', 'Possibly helped', 'No clear effect yet', 'Too early to tell', 'Can\'t tell'].includes(x.verdict_label))
+    && /never proof of cause/.test(RP56.change_method), JSON.stringify(RP56.page_changes.map(x => [x.change, x.verdict_label])));
+  check('3.11: the Link Builder report says where its figures come from, and a free check says the backlink index was not asked',
+    /Where these numbers come from/.test(RP56.html) && RP56.lineage.length >= 3 && RP56.lineage.every(l => l.figure && l.source_label)
+    && RP56.lineage.some(l => /Position before and after/.test(l.figure) && l.source === 'gsc_history'), JSON.stringify(RP56.lineage.map(l => [l.figure, l.source])));
 });
 
 

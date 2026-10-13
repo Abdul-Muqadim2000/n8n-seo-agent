@@ -4,7 +4,10 @@
 // v4.10: every source merged (coverage per source and against Google's own sample), our own link check (verified / at risk / lost with the
 // reason), the best links by SEO / referral / brand value, links that send visits, anchors, competitors' new links, "best X" lists that name
 // competitors and not you, the gap from DataForSEO and Common Crawl, follow-up drafts, contacts, and the data credits the sources ask for.
+// G29 (2026-10-13, FIX_PLAN): every figure group also says where it came from, over what period and from how big a sample (LN),
+// because a backlink count is only ever one index's view of the web and the values are modelled, not measured.
 /*__REPORT_KIT__*/
+/*__LINEAGE__*/
 const sites = $('Parse Backlinks').all().map(i => i.json);
 let rows = []; try { rows = $('Prospect Rows').all().map(i => i.json).filter(r => !r.skip); } catch (e) {}
 let stored = []; try { stored = $('Load Link Prospects').all().map(i => i.json).filter(x => x && x.prospect_domain); } catch (e) {}
@@ -73,7 +76,23 @@ return sites.filter(s => s.deliver).map(s => {
   if (follows.length) html += h3('Follow-ups due') + follows.map(r => draftBox(r, r.followup_subject, r.followup_body, 'follow-up ' + r.followup_step)).join('');
   if (full) html += h3('Prospect pipeline') + p_(esc(counts) + (won.length ? ' · <b>won this month: ' + esc(won.map(w => w.prospect_domain).join(', ')) + '</b>' : '')) + p_('Mark a prospect as contacted / won / rejected in the app (Backlinks → Outreach) or with Site Admin action "prospect". Contacted prospects get follow-up drafts after 7 and 14 days; "won" is set when the link is found on the page. Full list: prospects.csv.', true);
   html += h3('How this works') + p_('Every Monday the monitor checks for lost and new links and re-checks the valuable ones on their pages (alert e-mail only when something important happened); the first run of each month is the full report. Cost this run: $' + s.cost_usd.toFixed(2) + '.', true) +
-    p_('Data: DataForSEO Backlinks; Bing Webmaster Tools; Google Search Console (your upload); Google Analytics 4; the <a href="https://commoncrawl.org/web-graphs" style="color:#1d4ed8">Common Crawl web graph</a>; Wikipedia; Hacker News (Algolia); news from the <a href="https://www.gdeltproject.org/" style="color:#1d4ed8">GDELT Project</a>' + (drCol ? '; <a href="https://ahrefs.com/" style="color:#1d4ed8">Domain Rating by Ahrefs</a>' : '') + '.', true) + '</div>';
+    p_('Data: DataForSEO Backlinks; Bing Webmaster Tools; Google Search Console (your upload); Google Analytics 4; the <a href="https://commoncrawl.org/web-graphs" style="color:#1d4ed8">Common Crawl web graph</a>; Wikipedia; Hacker News (Algolia); news from the <a href="https://www.gdeltproject.org/" style="color:#1d4ed8">GDELT Project</a>' + (drCol ? '; <a href="https://ahrefs.com/" style="color:#1d4ed8">Domain Rating by Ahrefs</a>' : '') + '.', true);
+  // G29: the same figures with their source, period and sample
+  const srcNames = SRC.filter(([k]) => (C.per_source || {})[k]).map(([, label]) => label);
+  const lineage = [
+    LN.of('Referring sites (all sources)', 'link_graph', { basis: 'measured', period: 'everything seen up to ' + esc(s.checked_at.slice(0, 10)) + ', changes since ' + esc(s.since.slice(0, 10)),
+      sample: LN.sample(C.union, 'referring sites in the ledger'), note: srcNames.length ? 'merged from ' + srcNames.join(', ') + '; every source sees part of the web, none sees all of it' : 'no source returned links yet' }),
+    s.free_only || !S.available
+      ? LN.unknown('Authority (0-1000) and spam score', s.free_only ? 'this was a free check: the DataForSEO index was not asked' : 'the DataForSEO Backlinks API returned no summary (' + String(S.error || 'no data') + ')')
+      : LN.of('Authority (0-1000) and spam score', 'backlink_index', { basis: 'reported', period: LN.asOf(s.checked_at), sample: LN.sample(S.referring_domains, 'referring domains in that index'), note: 'DataForSEO\'s own rating of the domain, not a Google figure' }),
+    LN.of('Links checked on their page (found / at risk / lost)', 'own_check', { basis: 'measured', period: LN.asOf(s.checked_at),
+      sample: LN.sample(C.verified, 'links confirmed on the page' + (C.checked_now ? ', ' + C.checked_now + ' fetched this run' : '')), note: 'lost needs two misses with a reason, never one index saying so' }),
+    LN.of('SEO, referral and brand value per link', 'model', { basis: 'modelled', period: LN.asOf(s.checked_at), sample: LN.sample(L.length, 'links scored'),
+      note: 'computed from authority, placement, rel, topic and visits — not a measurement of ranking value' }),
+    LN.of('Visits from links', 'ga4', { basis: 'measured', period: 'the past year, with the last 28 days apart', sample: LN.sample(s.referral.visits, 'referral visits') }),
+  ];
+  if (drCol) lineage.push(LN.of('Domain Rating (DR)', 'ahrefs', { basis: 'reported', period: LN.asOf(s.checked_at), sample: LN.sample(L.filter(r => Number(r.dr) > 0).length, 'domains rated'), note: 'Ahrefs\' own 0-100 rating' }));
+  html += LN.block(lineage) + '</div>';
   const csv = ['site,prospect_domain,type,status,score,authority,spam,detail,source_url,target_url,contact_email,first_seen,last_seen,won_at,outreach_subject,outreach_body,followup_subject,followup_body,note'].concat(pipe.map(r => [r.domain, r.prospect_domain, r.type, r.status, r.score, r.rank, r.spam_score, r.detail, r.source_url, r.target_url, r.contact_email, r.first_seen, r.last_seen, r.won_at, r.outreach_subject, r.outreach_body, r.followup_subject, r.followup_body, r.note].map(csvCell).join(','))).join('\n');
   const subject = (full ? '[Backlinks] ' : '[Backlink alert] ') + s.domain + ' — ' + n(C.union || S.referring_domains) + ' referring sites' + (s.important_lost.length ? ' · ' + s.important_lost.length + ' important link(s) lost' : '') + (s.spammy.length >= 3 ? ' · ' + s.spammy.length + ' spammy' : '') + (won.length ? ' · ' + won.length + ' won' : '');
   const file_name = 'backlinks-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '-' + s.checked_at.slice(0, 10) + '.html';
@@ -81,5 +100,5 @@ return sites.filter(s => s.deliver).map(s => {
   if (full && pipe.length) binary.prospects_csv = { data: b64(csv), mimeType: 'text/csv', fileName: 'prospects-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '.csv', fileExtension: 'csv' };
   if (s.disavow_text) binary.disavow_txt = { data: b64(s.disavow_text), mimeType: 'text/plain', fileName: 'disavow-candidates-' + s.domain.replace(/[^a-z0-9]+/gi, '-') + '.txt', fileExtension: 'txt' };
   const best = L.filter(r => r.status !== 'lost' && r.kind === 'web' && r.link_type !== 'spam').sort((a, b) => b.seo_value - a.seo_value).slice(0, 25).map(r => ({ ref_domain: r.ref_domain, from_url: r.from_url, seo_value: r.seo_value, referral_value: r.referral_value, brand_value: r.brand_value, link_type: r.link_type, rel: r.rel, placement: r.placement, authority: r.authority, dr: r.dr, verify: r.verify, visits: r.visits, sources: r.sources }));
-  return { json: { ...s, refdomains: undefined, ledger_rows: undefined, best, pipeline: { counts, won: won.map(w => w.prospect_domain), total: pipe.length }, prospects: pipe.slice(0, 60), subject, html, file_name, status: 'progress', stage: 'backlinks' }, binary };
+  return { json: { ...s, refdomains: undefined, ledger_rows: undefined, lineage, best, pipeline: { counts, won: won.map(w => w.prospect_domain), total: pipe.length }, prospects: pipe.slice(0, 60), subject, html, file_name, status: 'progress', stage: 'backlinks' }, binary };
 });

@@ -11,7 +11,8 @@ V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
 # shared kits, one copy each, inlined where a node asks for them (2026-10-11, FIX_PLAN D9: the anchor words a link to our own page uses;
 # G6: _serp_obs.js carries the observation rules a results-page reading must be worded with, _rank_serp.js reads the page itself)
-rd = lambda p: (_rd0(p).replace('/*__ANCHOR__*/', _rd0('code/_anchor.js').rstrip('\n'))
+import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits
+rd = lambda p: (seo_events.inline(_rd0(p)).replace('/*__ANCHOR__*/', _rd0('code/_anchor.js').rstrip('\n'))
                 .replace('/*__SITE_MODEL__*/', _rd0('code/_site_model.js').rstrip('\n'))
                 .replace('/*__SERP_OBS__*/', _rd0('code/_serp_obs.js').rstrip('\n'))
                 .replace('/*__RANK_SERP__*/', _rd0('code/_rank_serp.js').rstrip('\n')))

@@ -202,7 +202,11 @@ LINK_IMPACT_TABLE = 'seo_link_impact'
 LINK_IMPACT_COLS = [('site_id', 'string'), ('domain', 'string'), ('ref_domain', 'string'), ('from_url', 'string'), ('target_url', 'string'), ('t0', 'string'),
                     ('weeks', 'number'), ('base_position', 'number'), ('base_clicks', 'number'), ('position', 'number'), ('clicks', 'number'),
                     ('page_change', 'number'), ('control_change', 'number'), ('control_spread', 'number'), ('effect', 'number'), ('verdict', 'string'),
-                    ('note', 'string'), ('keyword', 'string'), ('updated_at', 'string')]
+                    ('note', 'string'), ('keyword', 'string'), ('updated_at', 'string'),
+                    # G12 (2026-10-13, FIX_PLAN): the same control-group reading now also measures a PAGE CHANGE, so each row says
+                    # which it is — kind `link` (a won link, ref_domain set) or `page_change` (a page that went live or was rewritten,
+                    # ref_domain empty), and `change` names the change (published | rewritten).
+                    ('kind', 'string'), ('change', 'string')]
 LINK_GRAPH_TABLE = 'seo_link_graph'
 LINK_GRAPH_COLS = [('site_id', 'string'), ('domain', 'string'), ('release', 'string'), ('kind', 'string'), ('ref_domain', 'string'), ('hc_pos', 'number'), ('pr_pos', 'number'),
                    ('n_hosts', 'number'), ('links_to', 'string'), ('checked_at', 'string')]

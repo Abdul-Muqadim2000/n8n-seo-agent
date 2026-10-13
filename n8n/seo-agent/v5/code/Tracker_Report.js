@@ -2,6 +2,8 @@
 /*__SITE_MODEL__*/
 /*__SERP_OBS__*/
 /*__RANK_SERP__*/
+/*__ANNOTATIONS__*/
+/*__LINEAGE__*/
 // Rank tracker report: per ladder, positions vs the previous check, rungs reached, drops and the recommended next step.
 // v4.16 (G6, 2026-10-12 system review): also the results page itself — the features it showed (AI Overview, snippet, People Also Ask,
 // local pack, video), who is above us with their positions, our modelled share of voice, and the mobile position of the main keywords.
@@ -143,13 +145,32 @@ for (const [id, items] of byLadder) {
   const serpHtml = serpTable ? '<p style="margin-top:14px"><b>The results page itself</b> (the same check, no extra cost):</p>' + serpTable +
     (headSerp ? '<p style="font-size:12px;color:#334155">' + esc(headSerp.line) + '</p>' : '') +
     '<p style="color:#64748b;font-size:12px">Share of voice is an estimate of the clicks page 1 offers, not measured clicks: ' + esc(RS.METHOD) + ' Domains marked * are the competitors on your list. Mobile is checked weekly for the main keywords (only about 13% of sites hold the same position on both devices).</p>' : '';
+  // ---- G12 (2026-10-13): the events of the tracked window (pages that went live, Google updates, data breaks), for the charts ----
+  const firstCheck = [...deskHist.filter(x => x.ladder_id === id).map(x => String(x.checked_at)), nowCheck].sort()[0];
+  const windowFrom = (String((rowOf(head.keyword) || {}).start_date || head.start_date || '').slice(0, 10) || String(firstCheck).slice(0, 10));
+  const myPub = pubLog.filter(r => (r.ladder_id ? r.ladder_id === id : rowsK.some(x => x.keyword === r.keyword)) && String(r.published_at || '').slice(0, 10));
+  const marks = AN.marks({ from: windowFrom, to: String(nowCheck).slice(0, 10), published: myPub });
+  // ---- G29 (2026-10-13): where each figure in this report came from ----
+  const mobileChecked = rowsK.filter(r => (mobiles.get(r.keyword) || {}).fresh).length;
+  const lineage = [
+    LN.of('Position per keyword', 'serp', { basis: 'one_sample', period: LN.asOf(nowCheck), sample: LN.sample(rowsK.length, 'keywords, one results page each (top 50, desktop)'),
+      note: 'one country and one device at one moment: it will differ from a Search Console average' }),
+    LN.of('Share of voice', 'model', { basis: 'modelled', period: LN.asOf(nowCheck), sample: LN.sample(rowsK.map(r => serps.get(r.keyword)).filter(s => s && s.share_of_voice != null).length, 'results pages read'), note: RS.METHOD }),
+    mobileChecked ? LN.of('Mobile position', 'serp', { basis: 'one_sample', period: LN.asOf(nowCheck), sample: LN.sample(mobileChecked, 'main keywords checked on mobile') })
+      : LN.unknown('Mobile position', 'no mobile check was bought for this ladder this week'),
+    myPub.length ? LN.of('The dates your pages went live', 'own_check', { basis: 'measured', period: windowFrom + ' onwards', sample: LN.sample(myPub.length, 'published pages recorded') })
+      : LN.unknown('The dates your pages went live', 'no publish date is recorded for this ladder yet — report one with "I published a page"'),
+  ];
   const subject = '[Keyword ladder] ' + head.head_keyword + ' — ' + head.domain + ': ' + (head.current > 0 ? 'top page at #' + head.current : 'top page not yet in the top 100') + (drops.length ? ' · ' + drops.length + ' drop(s)' : '');
   const html = '<p>Hi,</p><p>Position check for your keyword ladder towards <b>' + esc(head.head_keyword) + '</b> on <b>' + esc(head.domain) + '</b> (' + rowsK.length + ' keywords, Google top 50).</p>' + table +
     '<p><b>Rungs:</b> ' + (rungs.map(r => 'Rung ' + r.rung + ': ' + r.top10 + '/' + r.pages + ' in top 10, ' + r.top3 + ' in top 3' + (r.reached ? ' ✓ reached' : '')).join(' · ') || 'no rung pages tracked') + '</p>' +
     (gains.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(gains.join('; ')) + '</p>' : '') + (drops.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(drops.join('; ')) + '</p>' : '') +
     serpHtml + remindHtml + '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
     (apiBody ? '<p>Start the next page: open the <a href="' + formLink + '">SEO Assistant form</a> ("I know my keyword", keyword <b>' + esc(apiBody.keyword) + '</b>, domain ' + esc(head.domain) + '), or send this to the API (' + esc(API_URL) + '):</p><pre style="background:#f1f5f9;padding:8px;font-size:12px">' + esc(JSON.stringify(apiBody, null, 2)) + '</pre>' : '') +
-    '<p style="color:#64748b;font-size:12px">Checks run weekly; once the top page holds the top 3 for four checks, the main keyword and the published pages are checked monthly. Positions come from DataForSEO live SERPs.</p>';
+    '<p style="color:#64748b;font-size:12px">Checks run weekly; once the top page holds the top 3 for four checks, the main keyword and the published pages are checked monthly. Positions come from DataForSEO live SERPs.</p>'
+    // G12 / G29 (2026-10-13): the events of the tracked window, and where each figure came from
+    + (marks.length ? '<p style="margin-top:14px"><b>What happened while this ladder was tracked</b> (these dates are marked on the ladder\'s charts):</p>' + AN.html(marks, { empty: false }) : '')
+    + LN.block(lineage);
   // G6: the ladder's own picture of the results pages — our share of voice (the main keyword, and the average over the keywords that
   // were checked), the competitors above us anywhere on the ladder with how many keywords they beat us for, and what the pages showed.
   const sovs = rowsK.map(r => serps.get(r.keyword)).filter(s => s && s.share_of_voice != null).map(s => s.share_of_voice);
@@ -174,6 +195,6 @@ for (const [id, items] of byLadder) {
         mobile_position: m ? m.position : null, mobile_checked_at: m ? m.checked_at : null,
         features: s ? s.features : null, feature_labels: s ? s.chips : [], results_page: s ? s.line : '',
         share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null }; }),
-    rungs, gains, drops, serp_summary, next_step: next, links_to_add, api_body: apiBody, done, won, stuck } });
+    rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, api_body: apiBody, done, won, stuck } });
 }
 return out.length ? out : [{ json: { nothing_to_do: true } }];
