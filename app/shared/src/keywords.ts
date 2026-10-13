@@ -155,6 +155,15 @@ export interface KeywordAssessment {
   warnings: string[];
 }
 
+/**
+ * R3 (2026-10-13, the re-rating run): a topic check that could not be read has to show in the label, not only in `warnings` — live, the
+ * Keyword Check shipped `fit: null` for "business central partner uae" and the app displayed "Reachable for your site" as if the topic
+ * had been checked. The engine already appends this note; the app adds it when an older engine did not.
+ */
+export const FIT_UNKNOWN_NOTE = 'topic check unavailable';
+const fitLabel = (label: string, fit: number | null) =>
+  (!label || fit === 0 || fit === 1 || fit === 2 || label.includes(FIT_UNKNOWN_NOTE) ? label : `${label} \u00b7 ${FIT_UNKNOWN_NOTE}`);
+
 /** The engine's snake_case answer as the app's assessment (tolerant: missing fields are null / empty). */
 export function toAssessment(raw: Record<string, unknown>): KeywordAssessment {
   const difficultyForYou = asDifficulty(raw.difficulty_for_you);
@@ -180,7 +189,7 @@ export function toAssessment(raw: Record<string, unknown>): KeywordAssessment {
     fit: fitN === 0 || fitN === 1 || fitN === 2 ? fitN : null,
     navigational: raw.navigational === true,
     alternatives: [...new Set(strs(raw.alternatives).map((a) => a.toLowerCase()))].slice(0, 5),
-    label: str(raw.label) || forYouLabel(difficultyForYou, planType, months, stretch),
+    label: fitLabel(str(raw.label) || forYouLabel(difficultyForYou, planType, months, stretch), fitN),
     warnings: strs(raw.warnings).slice(0, 5),
   };
 }

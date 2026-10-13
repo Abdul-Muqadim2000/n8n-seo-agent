@@ -1034,6 +1034,405 @@
       },
       {
         "parameters": {
+          "resource": "table",
+          "operation": "create",
+          "tableName": "seo_run_ledger",
+          "columns": {
+            "column": [
+              {
+                "name": "run_id",
+                "type": "string"
+              },
+              {
+                "name": "key",
+                "type": "string"
+              },
+              {
+                "name": "mode",
+                "type": "string"
+              },
+              {
+                "name": "est_usd",
+                "type": "number"
+              },
+              {
+                "name": "created_at",
+                "type": "string"
+              },
+              {
+                "name": "status",
+                "type": "string"
+              },
+              {
+                "name": "settled_usd",
+                "type": "number"
+              },
+              {
+                "name": "domain",
+                "type": "string"
+              },
+              {
+                "name": "heavy",
+                "type": "boolean"
+              },
+              {
+                "name": "dfs_est_usd",
+                "type": "number"
+              },
+              {
+                "name": "dfs_usd",
+                "type": "number"
+              }
+            ]
+          },
+          "options": {
+            "createIfNotExists": true
+          }
+        },
+        "id": "1af5707b-94f6-5520-b87c-713bc2c751aa",
+        "name": "Ensure Run Ledger (Audit)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2200,
+          880
+        ],
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// R9 (2026-10-13, re-rating RESULTS §3.2): the daily spend guard saw only the main workflow and the Keyword Check. seo_run_ledger had no row at\n// all for the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker (execs 502, 505, 506, 508, 511,\n// 515), although the pulse alone cost $0.084 and the monitors accounted for about $0.18 of that run's $0.578 of DataForSEO — so two\n// customer-facing runs were refused for AI estimates while the measured money went out unguarded.\n// This is the same reservation the main workflow makes (one appended row per execution, settled at the end), hung BESIDE the plan node: a Data\n// Table node answers with the row it wrote, not with its input, so the ledger must never sit in the monitor's own data path. The row is for the\n// record and for the main workflow's guard, which now sees what the schedules spend; a monitor is never refused by it.\n// MODE / EST / HEAVY are written in by the builder at build time (one source: build_monitors.py's WF.run_ledger).\nconst PLAN = 'Audit Schedule Plan';\nconst MODE = 'audit_schedule';\nconst EST = {\"ai\": 0.0, \"dfs\": 0.09};   // { ai: <usd per site>, dfs: <usd per site>, dfs_full?: <usd per site for a full run> }\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\nlet rows = [];\ntry { rows = $(PLAN).all().map(i => i.json || {}).filter(r => !r.nothing_to_do && !r.skip && (r.domain || r.site_id)); } catch (e) { rows = []; }\nconst full = (r) => EST.dfs_full != null && (String(r.mode || '') === 'full' || r.full === true || r.full_report === true);\nconst ai = +(n0(EST.ai) * rows.length).toFixed(4);\nconst dfs = +rows.reduce((s, r) => s + (full(r) ? n0(EST.dfs_full) : n0(EST.dfs)), 0).toFixed(4);\n// one site in the run: name it, as the main workflow's reservation does (P34-5 reads `domain` to refuse a second heavy crawl of the same site)\nconst domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : '';\nreturn [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),\n  status: 'reserved', settled_usd: 0, domain, heavy: false, dfs_est_usd: dfs, dfs_usd: 0 } }];\n"
+        },
+        "id": "f5df21bf-0073-580c-afaa-5117c3cad7ec",
+        "name": "Run Ledger Row (Audit)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2420,
+          880
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "insert",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_run_ledger"
+          },
+          "columns": {
+            "mappingMode": "autoMapInputData",
+            "value": null,
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "run_id",
+                "displayName": "run_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mode",
+                "displayName": "mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "est_usd",
+                "displayName": "est_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "settled_usd",
+                "displayName": "settled_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "heavy",
+                "displayName": "heavy",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_est_usd",
+                "displayName": "dfs_est_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_usd",
+                "displayName": "dfs_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "b5def287-83cb-514e-849b-2d1f81188387",
+        "name": "Reserve Run Ledger (Audit)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2640,
+          880
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true,
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// R9 (2026-10-13): settles this monitor run's seo_run_ledger reservation. `settled_usd` is the AI estimate the row reserved (Claude streams and\n// reports no usage — G23), and `dfs_usd` is the DataForSEO cost the run really measured where it knows it: the monitors add up the `cost` of\n// every DataForSEO task they sent (AI Metrics / Pulse Metrics / Growth Metrics / Parse Backlinks all carry it as `cost_usd`). A run that\n// measures nothing settles its own estimate, and says so, so the figure is never silently invented.\n// MEASURED / ROW are written in by the builder at build time.\nconst ROW = 'Run Ledger Row (Audit)';\nconst MEASURED = '';   // '' when this workflow has no measured figure\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };\nlet row = {}; try { row = $(ROW).first().json || {}; } catch (e) { row = {}; }\nconst costOf = (x) => {\n  if (!x || typeof x !== 'object') return null;\n  const direct = n0(x.cost_usd); if (direct != null) return direct;\n  for (const k of Object.keys(x)) { const v = x[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { const n = n0(v.cost_usd); if (n != null) return n; } }\n  return null;\n};\nlet measured = null;\nif (MEASURED) {\n  try {\n    const vals = $(MEASURED).all().map(i => costOf(i.json)).filter(v => v != null);\n    if (vals.length) measured = +vals.reduce((s, v) => s + v, 0).toFixed(4);\n  } catch (e) { measured = null; }\n}\nreturn [{ json: { run_id: String($execution.id), mode: String(row.mode || ''), status: 'done',\n  settled_usd: +Number(row.est_usd || 0).toFixed(4),\n  dfs_usd: measured == null ? +Number(row.dfs_est_usd || 0).toFixed(4) : measured,\n  dfs_measured: measured != null, dfs_est_usd: +Number(row.dfs_est_usd || 0).toFixed(4) } }];\n"
+        },
+        "id": "66f789de-3e6c-503d-9ae5-a3fbc5187db3",
+        "name": "Ledger Settle (Audit)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2420,
+          1040
+        ],
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_run_ledger"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "run_id",
+                "condition": "eq",
+                "keyValue": "={{ $execution.id }}"
+              },
+              {
+                "keyName": "status",
+                "condition": "eq",
+                "keyValue": "reserved"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "status": "done",
+              "settled_usd": "={{ $json.settled_usd }}",
+              "dfs_usd": "={{ $json.dfs_usd }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "run_id",
+                "displayName": "run_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "key",
+                "displayName": "key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mode",
+                "displayName": "mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "est_usd",
+                "displayName": "est_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "created_at",
+                "displayName": "created_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "status",
+                "displayName": "status",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "settled_usd",
+                "displayName": "settled_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "domain",
+                "displayName": "domain",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "heavy",
+                "displayName": "heavy",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "boolean",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_est_usd",
+                "displayName": "dfs_est_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_usd",
+                "displayName": "dfs_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "8fe0612d-31f9-57a8-874f-b42bec47f7c5",
+        "name": "Settle Run Ledger (Audit)",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2640,
+          1040
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true,
+        "executeOnce": true
+      },
+      {
+        "parameters": {
           "content": "## SEO Agent — Audit Scheduler (v4.6: no repeated audits)\n**1st of every month, 06:00** (cron `0 6 1 * *`) and on demand (*Manual Run* `{ domain | site_id }` always audits). Per site with `audit_monthly` on (`seo_monitors`): the sitemap is read (free) and its fingerprint (URLs + lastmod dates, or the sitemap index entries) compared with the one stored at the last check (`seo_cache`, key `sitemap:<site>`). **Audit only when** the site changed, 60+ days passed since the last audit (safety net for theme / plugin / server changes a sitemap does not show), the site was never audited, or no sitemap (or an index without dates) is readable (then monthly as before). Unchanged sites are skipped — the weekly Site Tracker keeps watching indexing in Search Console. Started audits run as their own executions (internal key `audit:`), compare themselves with the previous audit and deliver the report with the **fix pack**.",
           "height": 240,
           "width": 1150,
@@ -1240,6 +1639,11 @@
               "node": "Fingerprint Rows",
               "type": "main",
               "index": 0
+            },
+            {
+              "node": "Ensure Run Ledger (Audit)",
+              "type": "main",
+              "index": 0
             }
           ]
         ]
@@ -1318,6 +1722,50 @@
           [
             {
               "node": "Audits Started",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ensure Run Ledger (Audit)": {
+        "main": [
+          [
+            {
+              "node": "Run Ledger Row (Audit)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Run Ledger Row (Audit)": {
+        "main": [
+          [
+            {
+              "node": "Reserve Run Ledger (Audit)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Audits Started": {
+        "main": [
+          [
+            {
+              "node": "Ledger Settle (Audit)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Ledger Settle (Audit)": {
+        "main": [
+          [
+            {
+              "node": "Settle Run Ledger (Audit)",
               "type": "main",
               "index": 0
             }

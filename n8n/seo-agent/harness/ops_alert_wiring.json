@@ -7,9 +7,19 @@
     "Send Email?"
    ]
   ],
+  "Alert Delivery": [
+   [
+    "Save Alert Delivery"
+   ]
+  ],
   "Alert Record": [
    [
     "Save Ops Alert"
+   ]
+  ],
+  "Email Ops": [
+   [
+    "Alert Delivery"
    ]
   ],
   "Ensure Ops Alerts Table": [
@@ -32,6 +42,11 @@
     "Alert Record"
    ]
   ],
+  "Post Alert Webhook": [
+   [
+    "Alert Delivery"
+   ]
+  ],
   "Save Ops Alert": [
    [
     "Alert Channels"
@@ -40,12 +55,33 @@
   "Send Email?": [
    [
     "Email Ops"
+   ],
+   [
+    "Alert Delivery"
    ]
   ],
   "Send Webhook?": [
    [
     "Post Alert Webhook"
+   ],
+   [
+    "Alert Delivery"
    ]
+  ]
+ },
+ "delivery": {
+  "code": "Alert Delivery",
+  "from": [
+   "Email Ops",
+   "Post Alert Webhook",
+   "Send Email?",
+   "Send Webhook?"
+  ],
+  "row_update": "Save Alert Delivery",
+  "writes": [
+   "delivered",
+   "channels",
+   "notes"
   ]
  },
  "email": {
@@ -66,7 +102,9 @@
   "Alert Channels",
   "Send Webhook?",
   "Post Alert Webhook",
-  "Send Email?"
+  "Send Email?",
+  "Alert Delivery",
+  "Save Alert Delivery"
  ],
  "table": "seo_ops_alerts",
  "webhook": {

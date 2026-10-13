@@ -19,7 +19,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// Turns the Error Trigger payload into a readable ops alert.\nconst e = $input.first().json;\nconst ex = e.execution || {};\nconst err = ex.error || {};\nconst wfName = (e.workflow || {}).name || 'unknown workflow';\nconst node = ex.lastNodeExecuted || (err.node && err.node.name) || 'unknown node';\nconst msg = String(err.message || err.description || 'no message').slice(0, 800);\nconst url = ex.url || '';\nconst mode = ex.mode || '';\nconst when = new Date().toISOString();\nconst subject = `[SEO Agent] Run failed at \"${node}\" — ${wfName}`;\nconst html = `<p><b>Workflow:</b> ${wfName}<br><b>Execution:</b> ${ex.id || '?'} (${mode}) ${url ? '— <a href=\"' + url + '\">open</a>' : ''}<br><b>Failed node:</b> ${node}<br><b>When:</b> ${when}</p>\n<pre style=\"background:#f1f5f9;padding:10px;white-space:pre-wrap\">${msg.replace(/</g, '&lt;')}</pre>\n<p>Typical causes: DataForSEO/Jina credentials or credits, a site that blocks readers, an AI response that was not valid JSON, or a crawl that never finished.<br>\nIf a customer is waiting for an emailed report, re-run the execution from the failed node or tell them what happened.</p>`;\nreturn [{ json: { subject, html, node, workflow: wfName, execution_id: ex.id || null, execution_url: url, message: msg, mode, when } }];"
+          "jsCode": "// Turns the Error Trigger payload into a readable ops alert.\n// R5 (2026-10-13, re-rating RESULTS §3.2): a TRIGGER-mode failure has no `execution` object at all -- it arrives as\n// `{ trigger: { error: { message, description, cause, … } } }`. Live, execution 516 (the Console Alerts IMAP trigger failing at runtime and\n// being deactivated) produced node \"unknown node\", message \"no message\" and an empty execution id, so the real cause never reached anybody.\n// Both shapes are read here: the execution's error first, then the trigger's, and the failed node's name is taken from the trigger message\n// when n8n only names it there (\"The trigger node \\\"Mailbox Trigger\\\" failed at runtime …\").\nconst e = $input.first().json;\nconst ex = e.execution || {};\nconst tr = e.trigger || {};\nconst err = ex.error || tr.error || {};\nconst wfName = (e.workflow || {}).name || 'unknown workflow';\nconst causeOf = (c, depth) => { if (!c || depth > 3) return ''; const m = String(c.message || c.description || '').trim(); return m || causeOf(c.cause, depth + 1); };\nconst named = String(err.message || err.description || '').match(/(?:trigger )?node [\"'“”]([^\"'“”]{1,120})[\"'“”]/i);\nconst node = ex.lastNodeExecuted || (err.node && (err.node.name || err.node)) || (named && named[1]) || (e.trigger ? 'trigger node' : 'unknown node');\nconst parts = [String(err.message || '').trim(), String(err.description || '').trim(), causeOf(err.cause, 0)].filter(Boolean);\nconst msg = ([...new Set(parts)].join(' — ') || 'no message').slice(0, 800);\nconst url = ex.url || tr.url || '';\nconst mode = ex.mode || (e.trigger ? 'trigger' : '');\nconst when = new Date().toISOString();\nconst subject = `[SEO Agent] ${mode === 'trigger' ? 'Trigger failed' : 'Run failed'} at \"${node}\" — ${wfName}`;\nconst html = `<p><b>Workflow:</b> ${wfName}<br><b>Execution:</b> ${ex.id || (mode === 'trigger' ? 'none (the trigger itself failed)' : '?')} (${mode}) ${url ? '— <a href=\"' + url + '\">open</a>' : ''}<br><b>Failed node:</b> ${node}<br><b>When:</b> ${when}</p>\n<pre style=\"background:#f1f5f9;padding:10px;white-space:pre-wrap\">${msg.replace(/</g, '&lt;')}</pre>\n<p>Typical causes: DataForSEO/Jina credentials or credits, a site that blocks readers, an AI response that was not valid JSON, a crawl that never finished, or — in trigger mode — a mailbox or schedule trigger n8n has deactivated after a runtime failure (re-activate it once the cause is fixed).<br>\nIf a customer is waiting for an emailed report, re-run the execution from the failed node or tell them what happened.</p>`;\nreturn [{ json: { subject, html, node, workflow: wfName, execution_id: ex.id || null, execution_url: url, message: msg, mode, when } }];"
         },
         "id": "6dcbf3af-f989-409c-a8c8-8f3518465ec9",
         "name": "Format Alert",
@@ -483,6 +483,204 @@
           1580,
           140
         ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// R6 (2026-10-13, re-rating RESULTS §3.2): no ops alert had ever recorded a delivery. All three rows in seo_ops_alerts sat at\n// `delivered: \"pending\"` — including the two of 2026-10-12 18:34 whose e-mail Gmail had **accepted** (execs 464/465) — because nothing wrote\n// the result back after *Post Alert Webhook* / *Email Ops*. A delivery rate (G21) cannot be measured from rows that never leave \"pending\".\n// This node runs after whichever channel branch finished (both have onError: continueRegularOutput, so a failure arrives as an item with\n// `error`) and writes back what carried the alert. It may run twice — once per branch — and the later run sees both channels, so the last\n// write is the complete one; the update matches on alert_key, so repeating it is harmless.\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = S(c.webhook_url);\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      delivered: notify ? 'pending' : 'deduped',\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, DEDUPE_MINUTES };\n})();\nconst alert = $('Format Alert').first().json;\nlet rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}\nconst CFG = { webhook_url: '', email_to: 'kinnngahmed@gmail.com' };   // baked from n8n/.env at build time ($env is blocked in nodes)\nconst p = OA.plan(alert, rows, CFG);\n// a node that did not run in this execution throws when it is referenced\nconst state = (name) => {\n  let items = null;\n  try { items = ($(name).all() || []).map(i => (i && i.json) || {}); } catch (e) { return { ran: false, ok: null, detail: 'not attempted' }; }\n  if (!items.length) return { ran: false, ok: null, detail: 'not attempted' };\n  const bad = items.find(x => x && x.error);\n  if (bad) return { ran: true, ok: false, detail: String((bad.error && (bad.error.message || bad.error.description)) || bad.error).replace(/\\s+/g, ' ').slice(0, 200) };\n  const accepted = items.flatMap(x => Array.isArray(x.accepted) ? x.accepted : []);\n  return { ran: true, ok: true, detail: accepted.length ? 'accepted by ' + accepted.length + ' recipient(s)' : 'sent' };\n};\nconst wh = state('Post Alert Webhook'), em = state('Email Ops');\nconst carried = [wh.ok ? 'webhook' : '', em.ok ? 'email' : ''].filter(Boolean);\nconst failed = [wh.ran && !wh.ok ? 'webhook failed (' + wh.detail + ')' : '', em.ran && !em.ok ? 'email failed (' + em.detail + ')' : ''].filter(Boolean);\nconst delivered = carried.length ? carried.join(',') : failed.length ? 'failed' : p.notify ? 'not_sent' : 'deduped';\nconst notes = [carried.length ? 'delivered by ' + carried.map(c => c + ' (' + (c === 'webhook' ? wh.detail : em.detail) + ')').join(' and ') : '', ...failed,\n  carried.length || failed.length ? '' : 'no channel ran: the alert is only on record in ' + 'seo_ops_alerts',\n  'recorded in seo_ops_alerts (attempt ' + p.row.count + ')'].filter(Boolean).join('; ').slice(0, 500);\nreturn [{ json: { alert_key: p.alert_key, delivered, channels: p.channels.join(','), notes,\n  // not written to the table, but visible in the execution and useful to a person reading it\n  carried_by: carried, failed_channels: failed, severity: p.severity, workflow: p.row.workflow, node: p.row.node } }];\n"
+        },
+        "id": "4aeb7cd1-9007-573f-90a0-abf1dae58698",
+        "name": "Alert Delivery",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2020,
+          0
+        ]
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ops_alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "alert_key",
+                "condition": "eq",
+                "keyValue": "={{ $json.alert_key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "delivered": "={{ $json.delivered }}",
+              "channels": "={{ $json.channels }}",
+              "notes": "={{ $json.notes }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "alert_key",
+                "displayName": "alert_key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "workflow",
+                "displayName": "workflow",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "node",
+                "displayName": "node",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "message",
+                "displayName": "message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "execution_id",
+                "displayName": "execution_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "execution_url",
+                "displayName": "execution_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mode",
+                "displayName": "mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "severity",
+                "displayName": "severity",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "first_seen_at",
+                "displayName": "first_seen_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_seen_at",
+                "displayName": "last_seen_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "count",
+                "displayName": "count",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "channels",
+                "displayName": "channels",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "delivered",
+                "displayName": "delivered",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "notes",
+                "displayName": "notes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "4c391255-3580-5ca0-9f38-92d975a51f22",
+        "name": "Save Alert Delivery",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2240,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
       }
     ],
     "connections": {
@@ -565,6 +763,13 @@
               "type": "main",
               "index": 0
             }
+          ],
+          [
+            {
+              "node": "Alert Delivery",
+              "type": "main",
+              "index": 0
+            }
           ]
         ]
       },
@@ -573,6 +778,46 @@
           [
             {
               "node": "Email Ops",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "Alert Delivery",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Post Alert Webhook": {
+        "main": [
+          [
+            {
+              "node": "Alert Delivery",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Email Ops": {
+        "main": [
+          [
+            {
+              "node": "Alert Delivery",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert Delivery": {
+        "main": [
+          [
+            {
+              "node": "Save Alert Delivery",
               "type": "main",
               "index": 0
             }

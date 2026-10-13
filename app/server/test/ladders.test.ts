@@ -11,7 +11,7 @@ const MONDAYS = ['2026-10-05T14:00:00.000Z', '2026-10-12T14:00:00.000Z', '2026-1
 
 const lad = (o: Partial<LadderRow>) =>
   ({ ladder_id: 'l1', head_keyword: 'e invoicing in uae', keyword: '', status: 'planned', rung: 1, page_no: 1, page_type: 'Guide', target_url: '', page_exists: false, months: '1-2', start_date: ago(60), country: 'United Arab Emirates', supporting: '', ...o }) as LadderRow;
-const log = (o: Partial<ContentLogRow>) => ({ keyword: '', status: 'started', started_at: ago(5), published_url: '', published_at: '', request_id: '', ladder_id: '', source: 'app', ...o }) as ContentLogRow;
+const log = (o: Partial<ContentLogRow>) => ({ keyword: '', status: 'written', started_at: ago(5), published_url: '', published_at: '', request_id: '', ladder_id: '', source: 'app', ...o }) as ContentLogRow;   // R1 (2026-10-13): a page waits for publication only once the log row says `written`
 /** weekly checks, oldest first, the last one `end` days ago */
 const ranks = (ladder: string, keyword: string, positions: number[], end = 1) =>
   positions.map((position, i) => ({ ladder_id: ladder, keyword, position, checked_at: ago(end + (positions.length - 1 - i) * 7) }) as RankHistoryRow);

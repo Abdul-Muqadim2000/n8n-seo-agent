@@ -102,7 +102,7 @@ for (const p of plans) {
     // ---- D13: who is never pitched (live 2026-10-11: competitors, bare homepages, mailbox providers and contact databases were) ----
     const bad = OK.badHost(r.prospect_domain); if (bad) reasons.push(bad);
     const onlyHome = OK.homepageOnly(r.type, r.url); if (onlyHome) reasons.push(onlyHome);
-    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, title: o.page_title, text: t, terms: sellTerms });
+    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: o.page_title, text: t, terms: sellTerms });   // R4: a SERP rival counts as a competitor
     if (competing) reasons.push(competing);
     if (!weAreAccredited && OK.accreditedList(o.page_title + ' ' + r.url))   // the page IS such a list (its title / address says so); a page that merely names accredited providers is fine
       reasons.push('a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one (asking to be added claims it)');
@@ -130,7 +130,7 @@ for (const p of plans) {
       && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type && o.status === 'drafted'))) {
     const why = OK.badHost(x.prospect_domain)
       || (OK.isGov(x.prospect_domain) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '')
-      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors });
+      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals });   // R4
     if (!why) continue;
     outreach_rows.push(base({ prospect_domain: x.prospect_domain, type: x.type, status: 'not_fit', score: Number(x.score) || 0, fit: 0, fit_reason: why,
       page_url: x.source_url || '', page_title: String(x.detail || '').slice(0, 140), evidence: String(x.detail || ''), country: OK.countryOf(x.prospect_domain), checks: { reasons: [why], read: false } }));

@@ -33,7 +33,7 @@ All 13 executions succeeded.
 | | Amount | How it was measured |
 |---|---|---|
 | DataForSEO | **$1.8761** | Balance $18.287684 at 06:46:28 UTC and $16.411543 at 07:18:12 UTC, probed with `appendix/user_data` from inside the n8n container before and after every run (`files/spend-2026-10-13.json`); nothing else ran in the window. Per run, by balance delta: `discover` + its keyword report **$0.2773**, the ladder page **$0.0221**, the full SEO report **$0.4094**, `ai_visibility` **$0.7946**, backlinks full **$0.3727**. The runs' own figures agree to the cent for the page and backlinks, and the discover pair matches exactly ($0.2552 + $0.0221); the full report reports $0.4674, **$0.058 above** what the balance moved, and `ai_visibility` reports $0.7866, $0.008 below. |
-| Claude | **≈ $1.00** | `files/claude-tokens-2026-10-13.json`. Ten Sonnet 5.5 calls report real usage: **119,060 in / 32,563 out** = $0.564 at the baseline prices (Sonnet $2/$10 per million). The page run's three **Opus 5.5 streaming** nodes (Strategy Brief, Copywriter, Editor) report only `tokenUsageEstimate`, not usage — 27,365 in / 16,426 out ≈ $0.438 at Opus $4/$20 — so **this figure has an estimated part again** (G23), unlike the 2026-10-12 window where no content run happened. |
+| Claude | **≈ $1.00** | `files/claude-tokens-2026-10-13.json`. Ten Sonnet 5.5 nodes (14 calls) report real usage: **119,060 in / 32,563 out** = $0.564 at the baseline prices (Sonnet $2/$10 per million). The page run's three **Opus 5.5 streaming** nodes (Strategy Brief, Copywriter, Editor) report only `tokenUsageEstimate`, not usage — 27,365 in / 16,426 out ≈ $0.438 at Opus $4/$20 — so **this figure has an estimated part again** (G23), unlike the 2026-10-12 window where no content run happened. |
 
 **Both windows together: $3.79** ($0.91 on 2026-10-12 + $2.88 on 2026-10-13), against the re-rating's $4.3 budget.
 
@@ -108,11 +108,11 @@ balance delta per run):
 | # (protocol) | What | Request id | Executions (API → run) | Start–end | Duration | DataForSEO | Claude | Status |
 |---|---|---|---|---|---|---|---|---|
 | — | Balance before | — | — | 06:46:28 | — | — | — | $18.287684, ledger **$0 of $6** used today |
-| 9 | `discover` (with "Keyword Report") | 517 | 517 → 518 | 06:47:51–06:49:46 | 1.9 min | 0.2552 | 0.084 | completed, 662 keywords, 131 relevant |
-| 10 | → the follow-up keyword report "erp systems in uae" (spawned) | 517 | 519 | 06:49:43–06:52:11 | 2.5 min | 0.0221 | 0.075 | completed, GO_WITH_CHANGES **58** |
-| 7 | the ladder's rung-2 page "service industry erp software" (`lad_mv5pjt5y4aoa`, app "Write now") | 520 | 520 → 521 | 06:52:34–07:04:51 | 12.2 min | 0.0221 | 0.52 (0.44 estimated) | completed, 2,891 words, 3 images, **QA failed and shipped** (R11) |
+| 9 | `discover` (with "Keyword Report") | 517 | 517 → 518 | 06:47:51–06:49:46 | 1.9 min | 0.2552 | 0.165 | completed, 662 keywords, 131 relevant |
+| 10 | → the follow-up keyword report "erp systems in uae" (spawned) | 517 | 519 | 06:49:43–06:52:11 | 2.5 min | 0.0221 | 0.105 | completed, GO_WITH_CHANGES **58** |
+| 7 | the ladder's rung-2 page "service industry erp software" (`lad_mv5pjt5y4aoa`, app "Write now") | 520 | 520 → 521 | 06:52:34–07:04:51 | 12.2 min | 0.0221 | 0.587 (0.438 of it estimated) | completed, 2,891 words, 3 images, **QA failed and shipped** (R11) |
 | 14 | full SEO report, 200 pages | 522 | 522 → 523 | 07:05:13–07:12:06 | 6.9 min | 0.4094 | 0.049 | completed, health **70 "Needs Improvement"**, 60 findings |
-| 12 | `ai_visibility` | 524 | 524 → 525 → 526 | 07:12:17–07:14:43 | 2.5 min | 0.7946 | 0.073 | completed, 8 questions × 6 engines, 1 of 47 requests failed |
+| 12 | `ai_visibility` | 524 | 524 → 525 → 526 | 07:12:17–07:14:43 | 2.5 min | 0.7946 | 0.095 | completed, 8 questions × 6 engines, 1 of 47 requests failed |
 | 13 | `backlinks`, full | 527 | 527 → 528 → 529 | 07:16:02–07:17:00 | 58 s | 0.3727 | 0 | completed, mode `full`, 17 farm links set aside |
 | — | Balance after | — | — | 07:18:12 | — | — | — | $16.411543 (**−$1.8761**) |
 
@@ -403,80 +403,323 @@ existing article instead… That page already answers the search; two pages woul
   `delivered: "pending"` and `channels: "email,data_table"` — including the two from 18:34 whose e-mail Gmail **accepted** (execs
   464/465) — so no alert has a recorded delivery and no webhook channel is configured (R6).
 
+### 2.11 Keyword discovery and its follow-up report (completion runs 9, 10 — execs 518, 519)
+
+**What it produced.** 662 keywords from 10 data pulls, 240 screened by Claude for relevance, **131 relevant**, 43 clusters, 15 live
+SERP checks, a Word file and a PDF (`files/keyword-ideas-techand-ai-2026-10-13.doc`, `files/ideas-518.txt`). "Where to start" is
+*"erp systems in uae"* — 260 searches/mo, KD 6, *Easy for your site · Direct plan · 2-4 months*, chance "good (50-70%, uncalibrated)"
+— and the run spawned its keyword report for exactly that keyword (exec 519, GO_WITH_CHANGES **58**).
+
+**G8 is live and is the clearest new capability in this set.**
+
+- **Search Console seeds.** *"10 of your own Search Console searches were used as research seeds (the 25 with impressions and no page
+  of their own, and the 16 where you rank 8-20), measured in the 28 days to 2026-10-09. Left out: 9 brand searches, 0 typed by SEO
+  tools, 26 under 10 impressions."* 300 stored rows were read, 108 considered, 157 duplicates dropped — **no new API call**.
+- **Striking distance** is a label of its own in the table ("you rank #12.2 — striking distance"), 16 rows.
+- **Traffic measured vs modelled, with the label on every number.** `from_research` = 36 keywords calibrated against measured
+  impressions, 626 modelled; every card prints "Traffic potential ~195/mo (**modelled**)" and the method says *"Traffic potential is
+  **calibrated** where Search Console measured that exact search on your site (its impressions and clicks over 28 days, scaled to a
+  month) and **modelled** everywhere else (the provider's monthly volume, typically 50-70% off for a single keyword)"*.
+- **SERP-overlap clusters.** 5 clusters at ≥ 3 shared top-10 URLs, from the 15 live checks: *"the same pages rank for 'erp software
+  uae' (5 shared top-10 results), so one page can target both"*, and a section *"Google answers these searches with the same pages …
+  One page per group: a second page for the same results page only splits the signals."*
+- **The live-check cap is raised and priced:** `live_checks {planned: 15, cap: 16, per_topic: 4, est_cost_usd: 0.03}`, stated in the
+  report ("15 keywords were checked live on Google for intent and page type (limit 16 a run, about $0.03 of search data)").
+
+**D20 is fixed in all four of its parts.** 11 keywords are flagged as ladder-covered with the ladder, the part, the rung and the
+status (*"'erp software' → ladder 'erp software uae' (part of a broader page, rung 1, planned) … Let that ladder finish"*); every AI
+Overview claim is dated (*"an AI Overview was seen on 2026-10-13 (they vary between searches)"*, and per card *"seen in the check at
+06:49 UTC … one observation, not a fixed feature of the query; the stored results page showed one (historical, undated)"*); "Who
+ranks now" lists 5 distinct domains in every card; and **all 12 CPC values in the callback carry 2 decimals** — the payload contains
+no number with more than two decimal places at all (P1-5 on this path).
+
+**D11 holds here too:** *"7 keywords below are already answered by a page you have … Refresh those pages instead of writing new ones
+— two pages for one search split the signals and neither ranks."*
+
+**D4 holds for the lists:** `refused: []` with nothing to refuse — no competitor brand (facts.ae, sowaanerp, ClearTax, Zoho, Odoo,
+SAP, Tally) and no login/portal query reaches any of the 131 keywords, and the `navigational` bucket of the opportunities by intent
+is **empty**. The only brands present are the site's own stack (Microsoft, Dynamics 365).
+
+***Problem (R12).*** The one wrong sentence is in the Search Console table: **11 of 25 rows say "no page of yours answers this
+search" while the next column names the live page that earns the impressions** — including *"which dynamics 365 finance partner can
+help migrate a retail business in the uae"* (16 impressions, **position 6.2**, `/dynamics-365-finance-and-operations-uae`) and
+*"dynamics 365 finance and operations pricing dubai"* (**#9.6**, the same page). Both pages are in the 45-page inventory and both
+return **200** on a free check. The same page is recognised two rows later ("you rank #15.4 — striking distance").
+
+**The follow-up keyword report** (exec 519) is clean: verdict 58 with four reasons, the competitors' word counts and gaps named,
+*"An AI Overview was seen at 06:50 UTC on 2026-10-13 citing vendors and directories; this is one observation, so it doesn't drive the
+score"* (D26), CPC $13.61 at 2 dp, risks that name the site's own weakness ("Tech& is a Microsoft partner serving BFSI/public sector,
+while the SERP is SMB-oriented local ERP vendors"), `existing_page: null` and no ladder claim. It is a report-only run, so no page,
+no images and no QA.
+
+### 2.12 The ladder's rung page, written (completion run 7 — exec 521)
+
+The page the budget guard refused on 2026-10-12 was written through the app's **"Write now"** path exactly as the app sends it
+(`ladder_id lad_mv5pjt5y4aoa`, `ladder_rung 2`, `ladder_page_no 1`, `force_content true`, `ladder_links` = the main page and one
+sibling, `ladder_words 1900`). 12.2 minutes, $0.0221 of search data and about $0.59 of Claude, $0.438 of it the estimate for the
+three Opus streaming nodes.
+
+**What works, with the numbers.**
+
+- **G30 — images are produced, not only planned.** `images_planned: 3`, `images_produced: 3`: a 1200×675 hero (20 KB) and two
+  1000×600 diagrams (38 KB, 37 KB), all **WebP rendered by the local Gotenberg container**, each with its planned file name, alt
+  text, caption, placement and `made_by: "generated from this page by the local renderer"`. All three arrived in the app as real
+  files, are listed in `meta.images` and in the publish checklist ("save them into your media library under those exact file names"),
+  and the hero is named as the Open Graph image.
+- **G5 — originality is measured.** `Originality Check` compared the draft's **2,762 eight-word windows** against the 8 pages this
+  run already read (6 competitors + 2 of the site), `passed: true`, highest overlap **0.1%** against the site's own Peppol article
+  (one 10-word passage), threshold 15%, no extra fetch and $0.
+- **G33 — the target is the best competitor, not the average.** `coverage_target` = **68% from cubesoftware.com (position 5,
+  9,436 words, 30 sections)**, with the average of the 6 pages read (61%) printed next to it; QA re-measured the draft at **40% of
+  the 25 shared terms** and named the 10 missing terms and 3 missing subtopics.
+- **G2 — no FAQPage.** `faq_count: 0`; the schema blocks are `Service` and `BreadcrumbList` only, while 15 question headings are
+  answered in the body.
+- **G4 — sources are graded.** `sources_cited` carries a tier per link (3 primary: tax.gov.ae ×2, peppol.org; 3 vendor; 1 weak),
+  `unverified_statistics: []` in the final round (round 1 had flagged "20+ years", "70%", "75%"), and the page contains no `utm_*`
+  and no `srsltid`.
+- **D15 / P2-3 — one host.** **0 bare-host URLs anywhere in the delivered payload**; `suggested_url` is
+  `https://www.techand.ai/service-industry-erp-software-uae/` and the schema's `provider` is `https://www.techand.ai/#organization`.
+- **D9 — links only to live pages.** All 4 internal links (`/contact-us` and two `/insights/…` articles) return **200**; neither of
+  the two planned ladder URLs is in the body (both answer 308 → 404).
+- **D10's identity half — the real name and NAP come from the model.** `business_name: "Tech&"`, `nap_source: "homepage_schema"`;
+  the title is "Service Industry ERP Software for UAE Firms | Tech&" (51 characters) and the meta description 137.
+
+**What fails.**
+
+- **D10 is still broken where it matters (R11).** Content QA ran **twice** and failed **both** times: round 1
+  `placeholder_count 6 / max 5, passed false`; the editor then ran and round 2 reported `placeholder_count 12`
+  (**11 × `[Price]`**, 1 × `[Number]`), `passed false`, `editor_needed true` — and because `qa_max_rounds: 2` was reached the page was
+  **delivered anyway**. The worked example is unusable: *"40 fee-earners at an average rate of [Price] per hour"*, *"billings of
+  [Price] a week (40 × 22.5 × [Price])"*, *"[Price] of work done but not billed"*, and the proof section says *"- [Number] years of
+  industry experience"*. Two owner-fill markers were added on top (`[Microsoft partner designation and certifications held by
+  Tech&]`, `[typical Tech& timeline for Business Central services project]`). The owner is told only **"Quality check: 6 item(s) to
+  review"** — round 1's number — and nothing says the gate failed.
+- **Length.** The brief's target was **2,200 words** and the delivered page is **2,891** by QA's own count (+31%) or 2,727 by
+  `meta.word_count` (+24%) — the two counters disagree. The app passed `ladder_words: 1900`, but *Parse Brief* clamped Claude's 2,400
+  to 2,200 citing *"the verdict asked for about 2000, within 10%"*, so **the number that bound the page was the verdict's, not the
+  ladder's**. The 1,900 itself came from the ladder's **main page**: the rung row still has `target_words: 0` (R8).
+- **The ladder's own URL and links are lost (R15).** The ladder row's `target_url` is
+  `https://www.techand.ai/service-industry-erp-software/` while the page's `suggested_url` adds `-uae`, and
+  `meta.links_to_add_when_published` is **`[]`** although the app sent two planned ladder links.
+- 7 external links point at Oracle NetSuite, SAP, Odoo and Workday — defensible on a "which ERP fits you" page, but they are the
+  vendors the verdict calls competitors, and nothing flags that.
+
+**R1's instance is resolved by this run, the defect is not.** `seo_content_log` now holds row 4 — keyword "service industry erp
+software", **`status: "written"`, `request_id: 520`** — so the page the three features promised on 2026-10-12 now exists, and ladder
+row 19's `status: "writing"` is from now on the correct state (written, not yet published). The defect itself stands: the refusal path
+never reset the row, and `seo_content_log` rows 1 and 2 ("e invoicing uae fta", "peppol uae") are still `started` from runs that never
+finished.
+
+### 2.13 Full SEO report (completion run 14 — exec 523)
+
+**Health 70 "Needs Improvement"** (same as 2026-10-12), 60 findings (Critical 0, High 17, Medium 21, Low 19, Info 3), audit
+`aud_mv6cf3ru39g`, 6.9 minutes, $0.4094 of search data.
+
+- **D7 is fixed and free again:** `Domain Ages` reports `whois_requests: 0`, `looked_up: 0` and all three ages from the cache
+  (`techand.ai 2026-02-19`, `cleartax.com 2000-01-01`, `azentio.com 2020-11-19`, each `source: "whois, stored 2026-10-11"`) — **$0**
+  where the baseline paid $0.36. The RDAP code path is still not exercised, because the cache answers first.
+- **D17 is fixed, verified byte for byte:** the fix pack's `robots.txt` says *"# Changes: none needed"* and its rules are identical to
+  the live `/robots.txt` fetched in the same minute (`files/fixpack-robots-523.txt`).
+- **The fix pack's schema is clean (D15 / G19):** Organization / LocalBusiness / WebSite with "Tech&", the real DAFZA street address,
+  the site's phone, `https://www.techand.ai/` — no placeholder.
+- **G24:** *"Crawled 45 of 45 known URLs (100%; sitemap 45 + 43 pages with Search Console impressions)"*, `crawl_complete: true`.
+- **G25:** **45 of 45 key pages inspected** with the quota stated (*"quota 2000 pages a day per property"*): 15 indexed, 30 not
+  (21 unknown to Google, 6 discovered-not-indexed, 3 duplicate-with-another-canonical), `canonical_mismatch: []`, rich results
+  ["Breadcrumbs"].
+- **G26:** *"'A large share of important pages is not indexed by Google' is first because Google cannot index or follow these pages,
+  30 of 47 crawled pages, an estimated 23 clicks and 3,242 impressions in the last 28 days, High severity — impact score 53.3"*, with
+  the full ordering rule in the Methodology and `minor_count: 6` folded into one line (G18-2).
+- **G7 is still only the fallback:** `crux.available: false`, `reason: "api_off"` for 3 templates × 2 devices (8 requests), the report
+  prints the "not available" text with the enabling step, and the score is computed anyway.
+- **D2 is fixed on this path too:** the diff is *"1 fixed · 1 new · 49 still open (compared with the **full SEO report** of
+  2026-10-12)"*, `report_type: "full"`, `previous {audit_id aud_mv5mhvt21pp, report_type full, findings 50}`, `days_since 1`,
+  `score_delta 0`. **R2 does not reproduce here:** "Structured data with errors" is stored in both audits and the diff correctly keeps
+  it under `open` — the full report weights the `Schema` category, so R2's cause (a category outside the weights) needs the technical
+  audit to show, and no technical audit ran in this window.
+- **D24 is fixed:** exactly **one** author finding, no "capped at 85" claim anywhere (only the rule in the Methodology, at score 70),
+  and *"2 scraper queries (search operators such as site: or inurl:, 4 impressions) left out of the top queries"* (P1-3).
+- **P34-4 is fixed:** *"1 of 25 domains are worth a pitch. Top: uae-asp.ae. 24 are left out (e.g. mof.gov.ae — a government site: you
+  get on its lists by applying or being accredited …; buydofollow.site — its own name offers links …)"*, and the closing line says
+  *"a government list is joined by applying, and a site that sells links passes nothing on"*. The baseline's table of
+  `buyhighda.space` / `freedofollow.website` / `relevantbacklinks.website` is gone.
+- **P1-4 is fixed in its own place:** *"Navigational Keywords — No keywords with measurable search volume found for this intent."*
+  and the gap table closes with *"Left out of the gap on purpose: 40 searches for government portals, logins or other companies'
+  brands (e.g. runway ai — navigational, rockwell automation — navigational …)"*. Every CPC in §4a has 2 decimals (P1-5).
+
+***Problems.***
+
+- **A High finding invented out of "no data" (R10).** All 45 URL Inspection responses return
+  `mobileUsabilityResult: {"verdict": "VERDICT_UNSPECIFIED"}` — Google retired the Mobile Usability report and the API returns no
+  verdict — and the report raises **"Pages Google reports as not mobile-friendly", High, 45 of 47 pages (100%)** with **empty
+  evidence** (*"/:  | /whatwedo/ai-automation:  | /whatwedo/assess-envision: "*), ranks it **second by impact (41.6)** and the diff
+  presents it as the run's only **new** finding. Its impact basis claims *"about 720 clicks and 22,860 impressions in the last 28
+  days"* while the whole site measured **38 clicks and 5,295 impressions** in that window.
+- **The fit gate reaches only the navigational class (R13).** §4a's Informational list offers **"google ai" (40,500/mo), "character
+  ai" (110,000), "meta ai" (22,200), "blackbox ai" (14,800)**, the Commercial list **"mh enterprises uae"** and "microsoft ai", and
+  the Transactional list "ai image generator", "ai video generator free", "face swap ai", "magic light ai" — consumer AI-tool
+  searches and other companies' brands, for a UAE enterprise Microsoft partner. The gap table keeps "attestation", "mofa attestation
+  dubai" and "how to check emirates id status with passport number", and the High finding tells the owner to *"create or improve a
+  dedicated page for the highest-volume, lowest-difficulty gap keywords first"*.
+- The run's own `dataforseo_usd` (0.4674) is **$0.058 above** the measured balance delta (0.4094) — the crawl is charged at its
+  estimate, not its cost (G23 / R9).
+
+### 2.14 AI search visibility (completion run 12 — exec 526)
+
+8 questions × 6 engines, **47 requests, 33 answers, 54 samples** (21 of them the pulse's), 2.5 minutes, **$0.7946**.
+
+- **G1 / D19 are fixed, every half of them.** `errors: 1`, `error_rate: 2.1` (under 5%), `retried: 3`, `retry_answered: 2`, and the
+  alert names the engine: *"1 of 47 AI requests failed (2 of 3 answered on the retry): Google AI Overview — Internal SE Server Error.
+  The rates below count the 33 answers that came back."* `engines[].errors` is 0 for every other engine. The 8 counted competitors
+  are all real domains (tallysolutions.com 20.5%, oracle.com 17.4%, zoho.com 16.7%, microsoft.com 14.4%, odoo.com 11.4%,
+  cleartax.com 9.1%, wafeq.com 7.6%, azentio.com 3%) — no heading, no generic phrase. Of **30 cited URLs, 30 distinct, 0** carry
+  `www.`, a fragment or a tracking parameter.
+- **G10 / P34-3 are fixed, in the exact words the brief asked for.** With `seo_profiles` still empty the gate switched the check
+  **off**: `fact_check: "no_facts"`, and the report reads *"**What AI gets wrong: not checked** — What AI says about you was not
+  checked: nothing on file can judge what the answers claim — fill the business profile (city, address, phone, price range) and the
+  next run checks every answer against it. Your country and the services read off your website are context, not facts to check a
+  claim against."* The baseline's "no claim was wrong" is gone.
+- **P34-6 is fixed on this workflow:** `business_name: "Tech&"`, `canonical_host: "www.techand.ai"`,
+  `brand_names: ["techand.ai", "Tech&", "Techand", "techand"]` (no bare "tech"), and the report names "Tech&" in its actions
+  (*"State whether Tech& is an accredited provider or works with one"*).
+- The measurement itself: named in **0%** of 54 samples, pages cited 0%, AI Overview present on **85.7%** of the searches and citing
+  the site in 0%, brand recognised by **4 of 4** assistants, **8 of 8** answer crawlers allowed, GA4 connected with 0 AI-assistant
+  sessions. The accredited-provider question is named as a lost one (comarch.com, cleartax.com, edicomgroup.com win it).
+
+***Problem (R14).*** The market-wide table credits the owner with a number from a loose name match: `index.brands[0]` is
+`{key: "name:Tech&", you: true, domain: "", mentions: 19579, ai_search_volume: 16421600}`, and the delivered report prints
+**`"Tech&" by name (you) | 19,579 | — | 16,421,600`** directly under its own headline *"Market-wide share 0% — 0 AI answers cite
+you"*. The next row is microsoft.com with 1,897. It is the same 4-character collapse as P34-2, now in the market index.
+
+### 2.15 Backlinks, full check (completion run 13 — exec 529)
+
+Mode `full`, 58 seconds, **$0.3727**; ledger 20 rows, 5 live; 19 backlinks from 18 referring domains in the DataForSEO index.
+
+- **D3 and P1-2 are fixed, and the report leads with the honest version.** `best_links: 0` as a counter with the banner *"⚠ 17
+  link(s) from link farms / PBN pages set aside (no value, on the disavow candidates for review): archive-hu.com, seonix.agency,
+  clifflisting.com …. Google ignores them unless you get a manual action."*, each farm row carrying its evidence (*"the same page path
+  on 16 sites (/all/2835/13.html)"*, *"labelled spam by the Link Analyst"*). **`lost: []`, `at_risk: []`, `important_lost: []`,
+  `rel_changed: []`** — no false "lost" alert, and the single alert is low and informational.
+- **G18-1 is fixed where it can be observed:** the "Best links" table holds **one** row — `peppol.org/members/full-members-list/`,
+  SEO 35 / visits 25 / brand 44, `rel: follow`, placement `content`, authority 594 · DR 77, *"✓ on the page"* — and
+  `robuta.com/?q=business+impact`, the baseline's "best link", appears only as a stored `lost`/reclaim prospect with **score 0**.
+- **D23 is fixed (the sister-domain half still unexercised):** `dr_enabled: true`, `dr_error: ""`; of **42 gap domains 39 are flagged
+  `off_topic` with a reason** (*"off topic for you: neither its name, its page nor its country ties it to dynamics 365 partner uae"*),
+  and the three on topic are mof.gov.ae (with `no_pitch` set), uae-asp.ae and nationalbonds.ae. No `utm_*` or `srsltid` in any URL,
+  and no `clear.in`-style sibling in this run's data.
+- **The Link-Builder hand-over holds:** with `link_builder: true` both *Outreach Jobs* and *Outreach Input* return `{skip: true}`,
+  **0 of 60 prospect rows carry a draft body**, and the stale pre-fix rows say so themselves: *"the draft written for them earlier was
+  withdrawn: it was written before the current outreach rules (no government portals, no competitors, no bare homepages, the business
+  name from the site model)"* (P34-1's cleanup).
+- Coverage is reported per source with its reason: DataForSEO 1 referring site, Bing Webmaster 0 (*"connected; Bing reports no links
+  to this site yet"*), Search Console upload 0 (*"upload the Links export in the app"*), GA4 referrals 1 (*"not links:
+  teams.public.onecdn.static.microsoft"*), Common Crawl 1 (release `cc-main-2026-jul-aug-sep`), social 2 (not counted).
+
+***Problem.*** **P34-6 is only half fixed:** the payload now carries `business_name: "Tech&"`, but the delivered report never uses it
+— it is headed *"Backlinks: techand.ai"* and contains **0 occurrences of "Tech&"** — and `brand_names` is still `["techand.ai"]`
+alone, so mention matching for this workflow still rests on the domain. One stored prospect row also still carries the bare-host
+target `https://techand.ai/` (a 2026-10-02 row, P2-3's stored residual).
+
 ---
 
 ## 3. Defect status
 
 ### 3.1 The 2026-10-11 defects (D) and the later live defects (P1, P2, G18, P34)
 
-"Gone" means this run's evidence shows the fixed behaviour; "partly" means part of the item was exercised and passed while another
-part failed or could not be tested; "not exercised" means this run has no evidence either way (see §1 "Not run"). Execution ids are
-from this run unless stated. **Totals over the 48 items: 26 gone, 6 partly, 16 not exercised** (D1–D26 + D25a/b/c: 16 / 3 / 9;
-P1, P2, G18, P34: 10 / 3 / 7).
+"Gone" means the evidence of these runs shows the fixed behaviour; "partly" means part of the item was exercised and passed while
+another part failed or could not be tested; "still present" means the defect was reproduced; "not exercised" means neither window has
+evidence either way. Execution ids 481–516 are the 2026-10-12 window, **517–529 the completion runs of 2026-10-13**.
+
+**Totals over the 48 items, both windows: 38 gone, 7 partly, 1 still present (D10, through R11), 2 not exercised** (D1–D26 +
+D25a/b/c: 22 gone, 4 partly, 1 still present, 1 not exercised; P1, P2, G18, P34: 16 gone, 3 partly, 1 not exercised). Before the completion runs
+the same table read 26 gone, 6 partly, 16 not exercised: **14 of the 16 unexercised items now have evidence**, and the two that
+remain (D25a's missed schedules, P2-6's author box) need a week of schedules and a filled business profile, neither of which a run can
+supply.
 
 | ID | This run | Evidence |
 |---|---|---|
 | D1 guards undercount | **gone** | Ledger rows 32–40; `run_number_today` 14/15 and `ai_budget_used_est_usd` 4.93/5.16 read from the table; execs 499/500 refused at "$5.74 of $6", which only adds up if the mid-flight ladder reservation ($0.58) counts |
-| D2 audit diff compares unlike types | **gone** (new wrinkle R2) | Exec 513 diff: `report_type site_audit` vs `previous site_audit`, `days_since 0`, `fixed []`, `score_delta 0` |
-| D3 PBN pages as best links | **not exercised** | No backlinks run. The stored ledger is consistent with the fix: peppol.org SEO value 35 at the top, all 16 farm domains at 0 |
-| D4 navigational keyword gap | **not exercised** | No full SEO report |
+| D2 audit diff compares unlike types | **gone** (R2 unexercised on this path) | Exec 513 diff: `report_type site_audit` vs `previous site_audit`, `days_since 0`, `score_delta 0`. Exec 523: "1 fixed · 1 new · 49 still open (compared with the **full SEO report** of 2026-10-12)", `previous {aud_mv5mhvt21pp, full, 50 findings}`, `days_since 1`; the Schema finding is kept under `open` in both, because the full report weights Schema — R2 needs a technical audit |
+| D3 PBN pages as best links | **gone** | Exec 529: banner "17 link(s) from link farms / PBN pages set aside (no value, on the disavow candidates for review)" with the evidence per cluster; "Best links" holds one row, peppol.org (35 / 25 / 44, DR 77, "✓ on the page") |
+| D4 navigational keyword gap | **partly** (R13) | Exec 523: "Navigational Keywords — No keywords with measurable search volume found for this intent" and "Left out of the gap on purpose: 40 searches for government portals, logins or other companies' brands". But the other three intent buckets still carry other companies' brands and consumer AI searches, and the gap keeps "mofa attestation dubai" / "how to check emirates id status with passport number" (R13) |
 | D5 pile-up guard undercounts | **gone** | Exec 506: "6 written pages waiting for publication (pile-up guard, limit 3)", every keyword named, nothing written |
 | D6 false "www not consolidated" | **gone** | Execs 497/513 *What Works*: "One canonical host: https://techand.ai redirects (308) to https://www.techand.ai…"; live `curl` 308 |
-| D7 RDAP never parsed | **not exercised** | No full report, so no domain-age lookup ran |
+| D7 RDAP never parsed | **gone** (cache, again) | Exec 523 `Domain Ages`: `whois_requests 0`, `looked_up 0`, three ages from `seo_cache` ("whois, stored 2026-10-11") — **$0** against the baseline's $0.36. The RDAP code path is still never reached, because the cache answers first |
 | D8 competitor brand as a rung | **gone** | Exec 495: 4 generic rung keywords, `refused_keywords []`, `excluded_keywords []` |
-| D9 hub links to unwritten pages | **not exercised** | No page was written |
-| D10 page not publishable | **not exercised** | The page run was refused (exec 500) |
-| D11 blind to existing pages | **gone** | Exec 486 `existing_page_action "improve"` + "do not publish a second page"; exec 505 "already answers this search — refresh that page"; exec 515 action 1 |
+| D9 hub links to unwritten pages | **partly** (R15) | Exec 521: all 4 internal links return 200 on a free check, neither planned ladder URL is in the body, anchors are sentence-cased phrases, not keywords. But `meta.links_to_add_when_published` is `[]` although the app sent two planned ladder links (R15) |
+| D10 page not publishable | **still present** (R11) | Exec 521: Content QA failed **twice** (`placeholder_count` 6 then **12**, max 5, `passed false` both times) and the page was delivered anyway at `qa_max_rounds`; 11 × `[Price]` break the worked example's arithmetic, `[Number]` years of experience in the proof list; 2,891 words against a 2,200 target (+31%). Fixed halves: name and NAP from the model ("Tech&", `nap_source homepage_schema`), 0 bare-host URLs, no FAQPage, originality 0.1%, 3 images produced |
+| D11 blind to existing pages | **gone** (R12 is the counter-case) | Exec 486 `existing_page_action "improve"` + "do not publish a second page"; exec 505 "already answers this search — refresh that page"; exec 515 action 1; exec 518 "7 keywords below are already answered by a page you have … Refresh those pages instead of writing new ones". The discovery table's own "no page of yours answers this search" contradicts it in 11 rows (R12) |
 | D12 AI Growth drafts to .gov / competitors | **gone** | Exec 511 `drafts_written 0`, `handed_over 9`; government pages get "apply … or cite it" |
 | D13 Link Builder pitches | **gone** (residuals R4, P34-2) | Exec 508: 25 refusals with reasons, brand "Tech&", all 15 targets on www |
 | D14 Reply Reader invents a fact | **gone** | Exec 490: "[Owner: confirm whether we are accredited with the Ministry of Finance or work through a partner]" |
-| D15 no shared canonical host | **gone** | Every URL in the ladder plan, the fix-pack schema, the LB targets and AI Growth is `www.techand.ai`; `canonical_host` in the site model |
+| D15 no shared canonical host | **gone** | Every URL in the ladder plan, the fix-pack schema, the LB targets and AI Growth is `www.techand.ai`; exec 521: **0 bare-host URLs in the whole page payload**, `suggested_url` on www; exec 523 fix-pack schema on www with the real DAFZA address. One stored 2026-10-02 prospect row still carries `https://techand.ai/` |
 | D16 wrong next step | **gone** | Exec 505: five ladder-specific next steps (§2.7) |
-| D17 fix-pack robots drops Disallows | **gone** | `files/robots.txt`: "# Changes: none needed" + the three Disallow rules, identical to the live file |
+| D17 fix-pack robots drops Disallows | **gone** | `files/robots.txt` (exec 497) and `files/fixpack-robots-523.txt` (exec 523): "# Changes: none needed" + the three Disallow rules, byte-identical to the live `/robots.txt` fetched in the same minute |
 | D18 "duplicate meta tags" false positive | **gone** | Execs 497/513 *What Works* explains the `theme-color` media pair |
-| D19 AI request errors, brand/URL noise | **partly** | AI Pulse 21/21, `errors 0`, `error_rate 0`, `retried 0`. The brand-name and cited-URL halves need an `ai_visibility` run — not exercised |
-| D20 discovery inconsistencies | **not exercised** | `discover` refused |
+| D19 AI request errors, brand/URL noise | **gone** | AI Pulse 21/21, `errors 0`. Exec 526: `errors 1` of 47 = **2.1%**, `retried 3`, `retry_answered 2`, the alert names the engine ("Google AI Overview — Internal SE Server Error. The rates below count the 33 answers that came back"), `engines[].errors` 0 elsewhere; 8 competitor brands all real domains; **30 of 30** cited URLs distinct with no `www.`, fragment or tracking parameter |
+| D20 discovery inconsistencies | **gone** | Exec 518: 11 keywords flagged ladder-covered with ladder, part, rung and status; every AI Overview claim dated ("seen in the check at 06:49 UTC on 2026-10-13 … one observation"); 5 distinct domains in every "Who ranks now"; all 12 CPCs at 2 dp and no number over 2 decimals anywhere in the payload |
 | D21 sparse Trends percentage | **gone** | Exec 515: four keywords `direction "sparse"`, `change_pct null`, "too little search data to read" |
 | D22 description reads only the homepage | **partly** | Describe side gone (6 pages, 28 services incl. Business Central, `services_json` filled). The fit side regressed in this run: the same keyword returned `fit: null` (R3) |
-| D23 Ahrefs DR retry, sister/off-topic prospects | **not exercised** | No backlinks run |
-| D24 full-report inconsistencies | **not exercised** (P1-3 half gone) | No full report; the technical audit's scraper-query half is fixed (4 excluded) |
+| D23 Ahrefs DR retry, sister/off-topic prospects | **gone** (sister half still unexercised) | Exec 529: `dr_enabled true`, `dr_error ""`; **39 of 42** gap domains flagged `off_topic` with a reason; no `utm_*` / `srsltid`; no `clear.in`-style sibling in this run's data |
+| D24 full-report inconsistencies | **gone** | Exec 523: exactly one author finding, no "capped at 85" claim at score 70 (the rule only in the Methodology), "2 scraper queries … left out of the top queries". Exec 497 had already fixed the scraper half (P1-3) |
 | D25a missed schedules | **not exercised / open** | No week of schedules in scope; the n8n container had restarted again before this write-up (workflow re-imported 2026-10-13 06:02 UTC) |
 | D25b one ops channel | **partly** | Exec 516 recorded the alert before sending (fix works), but the message is unreadable (R5), the e-mail failed, and all 3 rows stay `delivered: pending` with no webhook channel (R6) |
 | D25c test check-in satisfies the month | **gone** | Exec 515 action 5 asks for October's check-in although the 2026-10-02 "(test)" row is still the only one |
 | D26 AI Overview stated as fact | **gone** | Execs 486/495: "An AI Overview was seen in the check at 20:29/20:32 UTC on 2026-10-12 … one observation" |
 | P1-1 ledger rows never settle | **gone** | `seo_run_ledger` rows 32–41: every mode `done`, refusals `refused` |
-| P1-2 farm pages in "links lost" | **not exercised** | No backlinks run |
+| P1-2 farm pages in "links lost" | **gone** | Exec 529: `lost []`, `at_risk []`, `important_lost []`, `rel_changed []`; the 17 farm links are listed as "set aside", carry no value and raise one low informational alert |
 | P1-3 scraper regex misses `-site:` / lowercase booleans | **gone** | Exec 497 `scraper_queries` 4/6 impressions incl. a `-site:` chain; clean top-10 queries |
-| P1-4 §4a lists navigational brands | **not exercised** | No full report |
-| P1-5 float CPCs in §4a | **not exercised** | No full report; the verdict and ladder Word files carry no long-decimal values |
+| P1-4 §4a lists navigational brands | **gone** (R13 is the wider hole) | Exec 523: "Navigational Keywords — No keywords with measurable search volume found for this intent." The brands that remain are classed informational / commercial (R13) |
+| P1-5 float CPCs in §4a | **gone** | Exec 523 §4a: 0.49, 0.07, 3.10, 10.79 …, every value at 2 dp; exec 518's callback has no number with more than 2 decimals |
 | P2-1 nav list from the wrong node | **gone** | Exec 485 `Nav Pages Plan` 5 items with `nav_source "site model"`, `pages_read_count 6` |
 | P2-2 `services_json` always empty | **gone** | Site model `services` = 28 entries (execs 485, 497) |
 | P2-3 bare-host URLs reach the owner | **gone** | No bare host in any delivered artefact; the 5 new ladder rows are all www |
 | P2-4 "(undefined days)" | **gone** | Exec 515: "waiting 11 days", "(11 days ago)"; no "undefined" in the report |
 | P2-5 verdict blind to the inventory | **gone** | Exec 486 `existing_page.source "page inventory"`, action `improve` |
-| P2-6 placeholder gate misses the author box | **not exercised** | No page written |
-| P2-7 no word-count target in a Write-now run | **partly** | Main page `target_words 1900` on the ladder row; the 4 rung rows are 0 (R8) |
-| G18-1 search page ranked best link | **not exercised** | No backlinks run; robuta.com appears only as a reclaim prospect with score 0 |
+| P2-6 placeholder gate misses the author box | **not exercised** | Exec 521 wrote a page, but `seo_profiles` is empty, so no author box was attached (`author null`, `reviewer null`, `profile_placeholders 0`, `eeat_notes []`) — the gate had nothing to count. Needs owner item O1 |
+| P2-7 no word-count target in a Write-now run | **partly** | Exec 521: the app did pass a target (`ladder_words 1900`) and *Parse Brief* did clamp ("Target length 2400 -> 2200 words"), but it clamped to **the verdict's ~2,000**, not to the ladder's 1,900 — and the 1,900 itself is the ladder's **main-page** figure, because the rung row is still `target_words: 0` (R8). The page then shipped at 2,891 words (+31%) |
+| G18-1 search page ranked best link | **gone** (observed) | Exec 529: "Best links" holds only peppol.org; `robuta.com/?q=business+impact` appears solely as a stored lost/reclaim prospect with score 0 |
 | G18-2 cosmetic findings reported | **gone** | Execs 497/513: `minor_count 6` folded into one line, counted in the score |
 | P34-1 stale drafts counted as new | **gone** | Exec 511 `drafts_written 0`, `handed_over 9`; the report claims no drafts |
 | P34-2 "Tech&" matches as "tech" | **partly** | New claims gated, but the pre-fix "listed" rows for SaaSHub (`/tech`) and AlternativeTo survive and are reported; free re-check: 302 and 403 |
-| P34-3 "no claim was wrong" with an empty profile | **not exercised** | No `ai_visibility` run |
-| P34-4 gap list recommends .gov / spam | **not exercised** | No full report |
+| P34-3 "no claim was wrong" with an empty profile | **gone** | Exec 526: `fact_check "no_facts"`; the report says "**What AI gets wrong: not checked** … nothing on file can judge what the answers claim … Your country and the services read off your website are context, not facts to check a claim against" |
+| P34-4 gap list recommends .gov / spam | **gone** | Exec 523: "1 of 25 domains are worth a pitch. Top: uae-asp.ae. 24 are left out (e.g. mof.gov.ae — a government site …; buydofollow.site — its own name offers links …)"; the baseline's buyhighda.space / freedofollow.website table is gone |
 | P34-5 stale reservations, heavy audits | **gone** (half) | Exec 485 `ledger_stale_released: 11`; `heavy: true` on both audit rows. The concurrent-heavy refusal was not exercised |
-| P34-6 monitors call the business "techand.ai" | **partly** | AI Growth `business_name "Tech&"`, Link Builder "Tech&". The AI Visibility Tracker and Backlink Monitor were not run |
+| P34-6 monitors call the business "techand.ai" | **partly** | AI Growth and the Link Builder say "Tech&"; exec 526 (AI Visibility Tracker) now carries `business_name "Tech&"` with 4 brand names and uses it in the report. Exec 529 (Backlink Monitor) has the name in its payload but its **report is headed "Backlinks: techand.ai" with 0 occurrences of "Tech&"**, and `brand_names` is still `["techand.ai"]` |
 
 **Criteria gaps with live evidence in this run:** G1 (1 retry gate, 0 of 21 pulse requests failed), G3 (chance bands with the
 Ahrefs 2025 base rate, marked uncalibrated), G6 (SERP features, competitors, modelled share of voice, mobile), G9 (862 rows,
 anonymised share, brand split), G18-2, G19 (the site-model kit is inlined in 9 of the 10 workflows that ran — 25 nodes of the main
 workflow, 6 of the Site Tracker, 4 of AI Growth, 2 of the Rank Tracker, 1 each in the Pulse, Cadence and Link Builder; not in the
 Keyword Check, which reads the stored description instead), G22, G24 (100% crawl coverage), G25 (25 URL
-inspections), G26, G28 (z-tests, core-update context), L2 (8 of 8 drafts held). **G7 could not be exercised** — the Chrome UX Report
-API is still not enabled, and both audits print the honest "not available" with the enabling step. G2, G4, G5, G30, G33 and L1 were
-not exercised (no content run, no mailbox).
+inspections), G26, G28 (z-tests, core-update context), L2 (8 of 8 drafts held).
 
-### 3.2 New defects this run reveals
+**The completion runs add the criteria gaps that needed a discovery, content, report, AI or backlink run:**
 
-Numbered **R1–R9** (re-rating of 2026-10-13), ranked by impact.
+| Gap | Live evidence (2026-10-13) |
+|---|---|
+| **G8** discovery inputs | Exec 518: 10 Search Console seeds from 300 stored rows with no new API call (of "the 25 with impressions and no page of their own, and the 16 where you rank 8-20"), 16 striking-distance rows labelled as such, 36 keywords calibrated against measured impressions against 626 modelled with the label on every number, **5 SERP-overlap clusters** at ≥ 3 shared top-10 URLs, 15 live checks of a cap of 16 (≈ $0.03). One wrong sentence: R12 |
+| **G5** originality | Exec 521: 2,762 eight-word windows against 8 pages already read (6 competitors + 2 own), `passed true`, highest overlap **0.1%** (one 10-word passage on the site's own Peppol article), threshold 15%, $0 |
+| **G30** images produced | Exec 521: `images_planned 3`, `images_produced 3` — 1200×675 hero (20 KB) + two 1000×600 diagrams (38 / 37 KB), all WebP from the local Gotenberg container, planned file names, alt text and captions kept, all three delivered to the app as files and named in the publish checklist |
+| **G33** coverage target | Exec 521: target **68% from the best competitor page** (cubesoftware.com, position 5, 9,436 words, 30 sections), the 6-page average (61%) shown beside it, the draft re-measured at 40% of 25 shared terms with the 10 missing terms and 3 missing subtopics named — and shipped below target |
+| **G2** no FAQPage | Exec 521: `faq_count 0`, schema `Service` + `BreadcrumbList` only, 15 question headings answered in the body |
+| **G4** claim checks | Exec 521: `sources_cited` graded per link (3 primary, 3 vendor, 1 weak), `unverified_statistics []` in the final round, no `utm_*` / `srsltid` |
+| **G9** Search Console depth | Exec 523: 28-day totals, index coverage per state, 10 top queries with 2 scraper queries excluded (on top of the Site Tracker's 862 paged rows) |
+| **G24** crawl coverage | Exec 523: "Crawled 45 of 45 known URLs (100%; sitemap 45 + 43 pages with Search Console impressions)", `crawl_complete true` |
+| **G25** URL Inspection | Exec 523: **45 of 45** key pages inspected with the quota stated, 15 indexed / 30 not with Google's own reason, `canonical_mismatch []`, rich results. Its mobile-usability half produced R10 |
+| **G26** priority order | Exec 523: the impact sentence (53.3 against 41.6) and the full ordering rule; `minor_count 6` folded into one line (G18-2) |
+| **G1** retries | Exec 526: 1 of 47 requests failed (2.1%), the retry gate re-sent 3 and 2 answered |
+| **G10** fact base | Exec 526: the gate switched **off** on an empty profile — `fact_check "no_facts"` and "not checked" in the report (P34-3) |
+| **G23** Claude spend | Exec 521's three Opus streaming nodes report only `tokenUsageEstimate`, so the $0.44 Opus part of this window is an estimate; the ledger settles every run at its **estimate** ($2.26) against $2.88 actually spent |
+
+**G7 could not be exercised** — the Chrome UX Report API is still not enabled, and all three reports (execs 497, 513, 523) print the
+honest "not available" with the enabling step and score anyway. **G19** is inlined in 9 of the 10 workflows that ran (not in the
+Keyword Check, which reads the stored description); **L1** is still unexercised (no mailbox).
+
+### 3.2 New defects these runs reveal
+
+Numbered **R1–R9** from the 2026-10-12 window and **R10–R16** from the completion runs of 2026-10-13, each group ranked by impact.
+
+#### R1–R9 (2026-10-12 window)
 
 **High**
 
@@ -555,64 +798,197 @@ repeats the site's own `sameAs` LinkedIn URL, which differs from the profile the
 0 bytes (an artefact-capture slip; the audit HTML is in `files/tech-audit-497.txt`). The guard's refusal text shown to the app
 ("Raise `ai_budget_usd` in Normalize Input when you are ready to continue") is developer language in a customer-facing report.
 
+#### R10–R16 (the completion runs of 2026-10-13)
+
+**High**
+
+10. **R10. The audit turns Google's "no data" into a High finding: every page is reported as not mobile-friendly.**
+    - *Evidence:* exec 523 — all **45** URL Inspection responses return `mobileUsabilityResult: {"verdict": "VERDICT_UNSPECIFIED"}`
+      (`files/full-report-523-url-inspection.json`); Google retired the Mobile Usability report and the API returns no verdict at all.
+      The full report nevertheless raises **"Pages Google reports as not mobile-friendly", High, 45 of 47 pages (100%)** with **empty
+      evidence** (*"/:  | /whatwedo/ai-automation:  | /whatwedo/assess-envision: "* — the issue list behind each colon is blank),
+      ranks it **second of 60 findings by impact (41.6)**, and the audit diff presents it as the run's only **new** finding, so it
+      will re-appear as "new" against the 2026-10-12 report for ever. Its impact basis claims *"about 720 clicks and 22,860
+      impressions in the last 28 days"* while the whole site measured **38 clicks and 5,295 impressions** in that period: the
+      site-average-per-page is multiplied by the pages affected with no cap.
+    - *Where to fix:* the URL Inspection parser added for G25 (`GSC Audit Findings` in `build_v4.py`) — `VERDICT_UNSPECIFIED`, a
+      missing `mobileUsabilityResult` or `VERDICT_UNSPECIFIED` for every page must read "not checked" and raise nothing (Google's
+      field is deprecated; drop it or state that Search Console no longer answers it). Separately, cap a finding's clicks /
+      impressions basis at the property's measured totals.
+11. **R11. The written page is delivered with 12 placeholders although its own quality gate failed it twice.**
+    - *Evidence:* exec 521 (`files/page-521-content-qa.json`) — Content QA round 1: `placeholder_count 6`, `placeholder_max 5`,
+      `passed false`, `editor_needed true`; the editor ran; round 2: `placeholder_count 12` (**11 × `[Price]`**, 1 × `[Number]`),
+      `passed false`, `editor_needed true`, `coverage_pct 40` against `coverage_target_pct 68` — and because `qa_max_rounds: 2` was
+      reached the page went out. The delivered Markdown (`files/page-521.md`) reads *"40 fee-earners at an average rate of [Price]
+      per hour"*, *"billings of [Price] a week (40 × 22.5 × [Price])"*, *"| Unlogged hours | 40 × 2 hours × 46 weeks = 3,680 hours ×
+      [Price] | [Price] of work done but not billed |"* and *"- [Number] years of industry experience"*, plus two owner-fill markers
+      the editor added (`[Microsoft partner designation and certifications held by Tech&]`, `[typical Tech& timeline for Business
+      Central services project]`). The owner is told only **"Quality check: 6 item(s) to review"** — round 1's count — and nothing in
+      the callback says the gate failed. The price mask was applied to an hourly rate the draft itself labels illustrative ("All
+      figures are illustrative assumptions for a hypothetical firm"), which breaks the arithmetic of the whole worked example.
+    - *Where to fix:* the QA loop and the delivery branch (`Content QA` / `Needs Revision?` / `Build Word File` in `build_v4.py`) — a
+      run that exhausts `qa_max_rounds` with `passed: false` must report the **last** round's counts and say the page did not pass;
+      and the `[Price]` / `[Number]` mask must leave figures inside a block the draft declares illustrative (or the editor must be
+      asked to remove the example rather than the numbers).
+
+**Medium**
+
+12. **R12. Discovery says "no page of yours answers this search" in the same row where it names the page that earns the impressions.**
+    - *Evidence:* exec 518, the report's "Searches your website already appears for" table (`files/ideas-518.txt`): **11 of 25 rows**
+      carry the reason *"no page of yours answers this search"* while the last column names a live page of the site — including
+      *"which dynamics 365 finance partner can help migrate a retail business in the uae"* (16 impressions, **position 6.2**,
+      `/dynamics-365-finance-and-operations-uae`), *"dynamics 365 finance and operations pricing dubai"* (**#9.6**, same page) and
+      *"pdf vs e-invoice uae"* (#20.4, `/insights/your-current-pdf-invoices-will-be-illegal-in-the-uae-by-2027-and-how-to-fix-it`).
+      All of those pages are in the 45-page inventory and all return **200**; the same page is accepted two rows later ("dynamics 365
+      finance and operations for retail uae … you rank #15.4 — striking distance"). Cause: `gscSeeds` decides only with
+      `SM.matchPage` (slug / title term overlap above `MATCH_MIN`, or an exact stored query) and `use_row_page` is off while the
+      inventory is non-empty, so the page Search Console itself reports is ignored. It is D11's cannibalisation risk in the discovery
+      path: the owner is pointed at a new page for searches an existing page already ranks for.
+    - *Where to fix:* `v5/code/_kw_inputs.js` (`gscSeeds`) — when the row names a URL on the site, use it as `answered_by` with its
+      own label ("the page that gets the impressions does not target this search"), and never print "no page of yours answers this
+      search" for a query the site already ranks for; the report's wording in the discovery file builder follows.
+13. **R13. The full report's intent lists and keyword gap still recommend other companies' brands and off-topic searches — only the
+    navigational class is gated.**
+    - *Evidence:* exec 523 (`files/full-report-523.txt`) — §4a Informational offers **"ai" (165,000/mo), "character ai" (110,000),
+      "google ai" (40,500), "humanize ai" (40,500), "meta ai" (22,200), "blackbox ai" (14,800)**; Commercial offers **"mh enterprises
+      uae"**, "microsoft ai", "flow ai", "presentation ai"; Transactional offers "ai image generator", "ai video generator free",
+      "face swap ai", "magic light ai", "ai photo generator". The gap table keeps "attestation", **"mofa attestation dubai"** and
+      **"how to check emirates id status with passport number"**, and the High finding says *"Create or improve a dedicated page for
+      the highest-volume, lowest-difficulty gap keywords first"*. The gate works for the class it is given — "Navigational Keywords:
+      No keywords with measurable search volume found for this intent" and 40 queries left out of the gap with reasons — so the hole
+      is that it is applied to intent only, not to brand ownership or topic distance.
+    - *Where to fix:* *Analyze Keywords* in `build_v4.py` — run `_fit_gate.js` (already used for the gap's navigational class) over
+      every intent bucket and over the gap list: refuse another company's brand whoever owns the SERP, and refuse a keyword whose
+      topic distance from the site's services is beyond the same 25% bar the outreach gate uses.
+14. **R14. The AI visibility market table credits the owner with 19,579 citing answers from a loose name match, beside its own "0 AI
+    answers cite you".**
+    - *Evidence:* exec 526 — `index.brands[0] = {key: "name:Tech&", you: true, name: "Tech&", domain: "", mentions: 19579,
+      share: null, ai_search_volume: 16421600}`, and the delivered report prints **`"Tech&" by name (you) | 19,579 | — |
+      16,421,600`** as the first row of *"Market-wide: every AI answer in the database"*, under the headline KPI *"Market-wide share
+      0% — 0 AI answers cite you"*. The next row is microsoft.com with 1,897 answers. The run's own 54 samples named the business
+      **0** times, and the site has 19 backlinks: the index matched the name "Tech&" against the whole "tech" family — the same
+      4-character collapse as P34-2.
+    - *Where to fix:* the market-index builder (`v5/code/_ai_stats.js` / `AI_Metrics.js`) — the owner's own row must come from a
+      domain match; a name-only row has to be dropped, or labelled "not matched to your website", when the name is shorter than the
+      brand-token bar or its mentions are orders of magnitude above the measured sample.
+15. **R15. A write-now ladder page ignores the ladder row's planned URL and drops the ladder's planned links.**
+    - *Evidence:* exec 521 — the ladder row's `target_url` is `https://www.techand.ai/service-industry-erp-software/` (and the
+      ladder's link map, the sibling pages' up-links and the Rank Tracker's check all use it), while the delivered page's
+      `suggested_url` is `https://www.techand.ai/service-industry-erp-software-uae/` and its slug is
+      `service-industry-erp-software-uae`. Nothing reconciles the two, so publishing at the suggested URL leaves every stored link
+      pointing at a URL that will never exist. In the same page, `meta.links_to_add_when_published` is **`[]`** although the app sent
+      two planned ladder links (`ladder_links`: the main page `role: top` and one sibling, both `planned: true`) — the Phase 2 check
+      had the planned links listed in `meta.json`.
+    - *Where to fix:* *Parse Brief* / *Blog Package* in `build_v4.py` — for a run with a `ladder_id`, keep the ladder row's slug (or
+      write the new slug back to `seo_ladders.target_url` in the same run), and put every `planned` ladder link into
+      `links_to_add_when_published` instead of discarding it.
+
+**Low**
+
+16. **R16. A pre-fix ladder rung that is a competitor's brand is still planned, and still in the owner's reports.**
+    - *Evidence:* `seo_ladders` for `lad_mv40b6s9h5a8` (created 2026-10-11, before D8's fix) still holds rung 2 **"facts erp"** →
+      `https://www.techand.ai/facts-erp/`, `status: "planned"` — facts.ae is a competing UAE ERP vendor and was D8's original
+      example. The Rank Tracker's delivered report of 2026-10-12 (exec 505, `files/rank-505-reports.json`) lists it among that
+      ladder's pages. D8 stops new ones; nothing revisits the stored rows, the same residual pattern as P34-2's "listed" rows and
+      P2-3's stored hosts.
+    - *Where to fix:* a one-off cleanup of the stored ladder rows (as `fix_ladder_hosts.py` did for hosts), plus the fit gate on the
+      read path the cadence and the Rank Tracker use, so a stored brand rung is dropped rather than written.
+
+**Also seen in the completion runs (not numbered).** The guard's per-mode estimates are far from the money: `ai_visibility` was
+reserved at **$0.06** and cost **$0.79**, backlinks at $0.04 for $0.37, the full report at $0.25 for $0.41, while the page was
+reserved at $1.23 and cost about $0.46 — R9 from the other side. The full report's own `dataforseo_usd` (0.4674) is $0.058 above the
+measured balance delta, while the page and the backlink run match to the cent. The page's two word counters disagree (Content QA
+2,891 words, `meta.word_count` 2,727). The "measured" traffic label exists in the discovery data (36 calibrated keywords) but none of
+the 15 keywords actually shown carries it, so every printed traffic figure reads "modelled". The written page links out to Oracle
+NetSuite, SAP, Odoo and Workday — defensible on a "which ERP fits you" page, but they are the vendors the verdict calls competitors
+and nothing flags it.
+
 ---
 
 ## 4. Owner items surfaced (not defects)
 
 - **No business profile and no business facts.** `seo_profiles` is empty for techand.ai and the entity check reports
-  `profile_set: false`, so 8 outreach drafts are held on "[Your name]" / "[Owner: confirm …]" and the AI fact check cannot run
-  (O1, O2). This is now the single biggest blocker in the run: the Link Builder did everything except the one thing only the owner
-  can supply.
+  `profile_set: false`, so 8 outreach drafts are held on "[Your name]" / "[Owner: confirm …]", the AI fact check switched itself off
+  (`fact_check: "no_facts"`, exec 526) and the written page carries no author box at all (exec 521: `author: null`) (O1, O2). This is
+  the single biggest blocker in both windows: four features did everything except the one thing only the owner can supply.
 - **The IndexNow key file is still missing** — `https://www.techand.ai/e474f67e21841570c3de6d7624391652.txt` returns **404** on a
   free check, so AI Growth reports `indexnow: "key_missing"` and submits nothing (O6).
-- **The Chrome UX Report API is not enabled** for the PageSpeed key's project, so both audits print "not available" for Core Web
-  Vitals per template (G7's live check).
+- **The Chrome UX Report API is not enabled** for the PageSpeed key's project, so all three reports — the two audits and the full
+  report of 2026-10-13 (exec 523: `crux.available false`, `reason "api_off"`, 8 requests) — print "not available" for Core Web Vitals
+  per template with the enabling step, and G7 still has no live values.
 - **`SEO_ALERT_WEBHOOK_URL` is unset** and the SMTP host could not be resolved at 03:07 UTC, so the ops alert of that run reached
   nobody (R5, R6).
 - **The Console Alerts IMAP trigger fails at runtime** ("IMAP connection closed unexpectedly") and n8n deactivated and retried it;
   the Gmail app-password credential for the watcher is still the open item it has been since v4.3.
 - **Six written pages wait to be published** (the cadence names them), one of which would duplicate a live article
-  (…/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs) and one of which (`service industry erp
-  software`) was never actually written (R1). The weekly cadence stays paused until the owner acts (O9).
+  (…/insights/the-cost-of-non-compliance-uae-e-invoicing-penalties-mitigation-costs). Since exec 521 the sixth, "service industry erp
+  software", really exists — but it is the page R11 describes, so it needs the `[Price]` / `[Number]` placeholders filled or the
+  worked example removed before it can go live. The weekly cadence stays paused until the owner acts (O9).
 - **October's Search Console check-in is unanswered** (the only row is the 2026-10-02 test row); the Site Tracker now asks for it
   (O5).
 - **Accreditation positioning (O3)** decides the quality of several features at once: the verdict's risks, the AI questions to win,
   the MoF and OpenPeppol listings (both "missing") and the held outreach drafts all hang on whether Tech& is an accredited ASP, a
   partner of one, or neither.
 - **The AI question panel is still 7 asked of 8 stored** (O8), so the pulse's 95% range stays wide (0–15.5%).
-- **True audit findings to fix on the site:** lorem ipsum live on /industries (verified), 15 of 47 pages not indexed, 6 orphan pages,
-  HTML not cacheable, a missing meta description and a doubled brand in one title, schema errors on 26 pages (O10).
+- **True audit findings to fix on the site:** lorem ipsum live on /industries (verified), **30 of 45 key pages not indexed** by
+  Google (21 unknown to it, 6 discovered-not-indexed, 3 with another canonical — the full report of 2026-10-13 asked Search Console
+  about all 45), 6 orphan pages, HTML not cacheable, a missing meta description and a doubled brand in one title, schema errors on
+  26 pages (O10). The "not mobile-friendly" finding in the same report is **not** one of them (R10).
+- **A competitor's brand is still queued as a ladder page:** rung 2 of `lad_mv40b6s9h5a8` is "facts erp" → /facts-erp/ (R16).
+  Delete the row or let the owner confirm it before the cadence reaches it.
 - **Rotate the app hook token and `SEO_API_KEY`.** The company's callback token appears in plain text inside the stored execution
-  data of this run and in a subagent's tool output while this document was written (no file carries it).
+  data of both windows, and both the token and the company id appeared once each in tool output while these documents were written
+  (no file in the repository carries either; the saved artefacts are redacted).
 
 ## 5. State left behind
 
-**Changed for the run, left in place**
-- **The Test Runner (`SEOagentTestRun1`) is still active.** The protocol says to deactivate it afterwards; the n8n API shows
-  `active: true`. Deactivate it.
+**Changed for the runs, left in place**
+- **The Test Runner (`SEOagentTestRun1`) is inactive again** (`active: false`, verified after the completion runs). None of the five
+  completion runs needed it: all five went through the API front door.
 - Link Builder **on** for techand.ai (`seo_monitors.link_builder = true`, set by exec 482 — it was already on from 2026-10-11).
 - The Reply Reader stays published and active; no mailbox is connected.
+- 20 workflows published, the main workflow at **448 nodes** — which is the build the completion runs exercised (the 2026-10-12
+  window ran on 437; see "Outside this run" below).
 
 **Real outputs**
 - A new ladder **`lad_mv5pjt5y4aoa` "erp implementation dubai"**: 5 `seo_ladders` rows (4 rung-2 + the main page) and a
-  `seo_ladder_settings` row (Auto, priority 5, active). **Row 19 is stuck at `status: "writing"`** after the refused page run (R1) —
-  reset it to `planned` or delete the ladder if it was only for the test. Nothing was written, so no new page exists; the three written-page URLs spot-checked on the live site
-  (/erp-software-uae, /service-industry-erp-software, /e-invoicing-uae-fta) all return 404, as expected.
+  `seo_ladder_settings` row (Auto, priority 5, active). **Row 19 ("service industry erp software") is `status: "writing"` — and since
+  exec 521 that is the correct state, not R1's stuck one:** `seo_content_log` row 4 now holds that keyword as **`status: "written"`,
+  `request_id: 520`**, so the page the 2026-10-12 reports promised really exists (as a document, unpublished). R1 itself is unfixed —
+  the refusal path never reset the row, and `seo_content_log` rows 1 and 2 ("e invoicing uae fta", "peppol uae") are still `started`
+  from runs that never finished. The ladder's other four target URLs (/dynamics-365-erp-system/, /ms-dynamics-implementation-
+  partners/, /erp-customer-relationship-management/, /erp-implementation-dubai/) are still unwritten and answer 308 → 404.
+- **The written page itself** (exec 521, delivered to the app, nothing published): Word, PDF, HTML, Markdown, `meta.json` and **three
+  WebP images** (20 / 38 / 37 KB). It carries the 12 placeholders of R11, so it is not publishable as delivered.
+- 1 new `seo_audits` row from the full report (**`aud_mv6cf3ru39g`**, `report_type full`, health 70, 2026-10-13 07:11:59) with 50
+  `seo_audit_findings`; the table now holds **14 audits and 487 findings**.
+- 1 new `seo_ai_visibility` row (`ai_20261013_techand-ai`, 54 samples, mention rate 0, visibility score 0) with its
+  `seo_ai_answers` (473 in total), and 1 new `seo_backlink_snapshots` row (id 13, mode `full`, 18 referring domains / 19 backlinks);
+  `seo_backlinks` holds 20 ledger rows (5 live), `seo_link_prospects` 144.
 - 2 new `seo_audits` rows (`aud_mv5poznfsvy` 20:35:49 and `aud_mv5pvm4puiu` 20:40:58, both health 83 / 27 stored findings) and 54 new
   `seo_audit_findings` rows; `seo_audits` now holds 13 audits and 437 findings.
 - 15 new `seo_rank_history` rows (72 total), 1 `seo_ai_daily` row (5 total), 1 `seo_site_metrics` row (6 total), 1 `seo_ai_growth`
   row (7 total), refreshed `seo_link_outreach` (148), `seo_link_prospects` (143), `seo_listings` (16), `seo_pages` (45),
   `seo_cache` sitemap fingerprint.
-- 9 new `seo_run_ledger` rows (7 `done`, 2 `refused`) and **11 pre-existing stale reservations released** ($0.77 freed).
-- 16 reports in the app (14 callbacks + 2 rejections).
+- 9 new `seo_run_ledger` rows (7 `done`, 2 `refused`) and **11 pre-existing stale reservations released** ($0.77 freed) on
+  2026-10-12, plus **6 more rows on 2026-10-13 (ids 42–47, all `done` and settled, $2.26 of estimates)** — 47 rows in all
+  (`files/run-ledger-2026-10-13.json`).
+- 16 reports in the app from the first window (14 callbacks + 2 rejections) and **8 more from the completion runs** (6 reports with
+  their files + 2 `…_started` acknowledgements). `seo_pages` stays at 45 rows, `seo_content_log` at 4, `seo_query_history` at 1,397.
 - 3 rows in `seo_ops_alerts`, all `delivered: pending`.
 
-**Not changed:** no code, workflow, prompt or table column; no page published; no profile, check-in or `published` row written; no
-e-mail to a third party; no Data Table row deleted. `SEOagentTmpTest1` no longer exists in n8n.
+**Not changed, in either window:** no code, workflow, prompt, limit or table column — in particular `ai_budget_usd` is still $6 and
+the completion runs were made possible only by the day boundary; no `apply_env.py`, no import, no `sync_tables.py`; no page
+published; no profile, check-in or `published` row written; no Site Admin action; no temporary workflow; no e-mail to a third party
+(the Link Builder was not re-run and nothing was approved); no Data Table row deleted or edited by hand. `SEOagentTmpTest1` no longer
+exists in n8n and the Test Runner ends inactive.
 
-**Outside this run:** the main workflow in n8n was re-imported at 441 nodes on 2026-10-13 06:02 UTC (G8's three discovery nodes),
-after the runs described here, and a Page Watch workflow was deployed at 11:16 local the same day. The evidence above is from the
-437-node build.
+**Which build each window exercised.** The 2026-10-12 window ran on the **437-node** main workflow. It was re-imported at 441 nodes
+at 06:02 UTC on 2026-10-13 (G8's three discovery nodes) and the Page Watch workflow (G11 / G25) was deployed the same morning; by the
+time the completion runs started the main workflow stood at **448 nodes** and carried, besides G8, the `Originality Check` (G5) and
+`Image Cards` → `Render Images` → `Attach Images` (G30) nodes, which is why those gaps have live evidence for the first time.
+Everything in §2.11–§2.15 and R10–R16 is from that 448-node build; §2.1–§2.10 and R1–R9 are from the 437-node one. Code merged
+**after** the completion runs (G12 annotations and change tests, G29 lineage) is in neither build and has no live evidence here.
 
 ## 6. Artefacts (`files/`, git-ignored)
 
@@ -624,6 +1000,12 @@ after the runs described here, and a Page Watch workflow was deployed at 11:16 l
 | Audits | `tech-audit-497-{report,diff,site-issues}.json`, `tech-audit-497.txt` (the delivered HTML), `site-audit-techand-ai-…{pdf,doc}`, `auditsched-513-{site-audit,diff}.json`, fix pack (`robots.txt`, `llms.txt`, `organization.jsonld`, `localbusiness.jsonld`, `website.jsonld`, `internal-links.csv`, `README.txt`) |
 | Monitors | `pulse-502-{metrics,alerts}.json`, `pulse-502.{html,txt}`, `ai-pulse.html`, `rank-505-{Tracker_Plan,report,reports}.json`, `rank-report-505.{html,txt}`, `cadence-dry-506.json`, `growth-511-metrics.json`, `growth-report-511.{html,txt}`, `site-tracker-515-{brief,metrics}.json`, `site-report-515.{html,txt}` |
 | Link building and replies | `lb-508-{assemble,draft-qa,report}.json`, `lb-report-508.{html,txt}`, `seo-listings.json`, `reply-reader-tests.json` |
+| **Completion runs — spend and ledger** | `spend-2026-10-13.json` (the six balance probes and the per-run deltas), `claude-tokens-2026-10-13.json` (per node, with the three `tokenUsageEstimate` nodes marked), `run-ledger-2026-10-13.json` |
+| **Completion runs — discovery** | `discover-518-strategy.json`, `callback-518-keyword-strategy.json`, `ideas-518.txt` (the delivered document as text), `keyword-ideas-techand-ai-2026-10-13.doc`, `callback-519-keyword-report.json` |
+| **Completion runs — the written page** | `callback-521-page.json`, `page-521.md`, `page-521.html`, `page-521-content-qa.json` (both QA rounds), `page-521-originality.json` |
+| **Completion runs — full report** | `callback-523-full-report.json`, `full-report-523.txt` (the delivered document as text), `full-report-523-url-inspection.json` (45 index / mobile verdicts — R10's evidence), `fixpack-robots-523.txt` |
+| **Completion runs — AI and backlinks** | `callback-526-ai-visibility.json`, `ai-report-526.txt`, `callback-529-backlinks.json`, `bl-report-529.txt` |
 
-Callback tokens, the company id and e-mail addresses are redacted in the saved artefacts. The prospects CSV was not saved: it holds
-third-party contact data and this repository is public.
+Callback tokens, the company id and e-mail addresses are redacted in the saved artefacts. The prospects CSV was not saved and the
+completion runs' backlink / outreach artefacts have their contact fields replaced with `<redacted>`: they hold third-party contact
+data and this repository is public.

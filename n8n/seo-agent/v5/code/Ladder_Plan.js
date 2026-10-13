@@ -157,6 +157,22 @@ const verdictWords = (() => { for (const t of (base.verdict_changes || [])) {
     if (m) { const n = Number(String(m[1]).replace(/,/g, '')); if (n >= 300 && n <= 6000) return n; } } return 0; })();
 const analysisWords = Number((base.competitor_analysis || {}).recommended_word_count) || 0;
 top.target_words = verdictWords || analysisWords || 0;
+// R8 (2026-10-13, re-rating): the rung pages carried `target_words: 0` (seo_ladders rows 19-22 live), so P2-7's clamp protected only the page
+// the verdict measured and the spawn body for exec 500 carried `ladder_words: 0`. The target comes from the word counts of the pages that
+// actually rank for this ladder's topic (`competitors_summary[].word_count` — the pages this run read with Jina): the MEDIAN of the field for a
+// rung page, because a rung keyword is an easier search than the head term and its pages are shorter, while the main page keeps the verdict's
+// own number (usually the best page's length). No per-rung results page is read: that would be one paid SERP call per rung keyword.
+const serpWordCounts = (base.competitors_summary || []).map(c => Number(c.word_count) || 0).filter(w => w >= 200 && w <= 12000).sort((a, b) => a - b);
+const rungWordTarget = (() => {
+  if (!serpWordCounts.length) return 0;
+  const mid = serpWordCounts.length >> 1;
+  const med = serpWordCounts.length % 2 ? serpWordCounts[mid] : (serpWordCounts[mid - 1] + serpWordCounts[mid]) / 2;
+  const cap = top.target_words || Math.round(med / 100) * 100;   // never longer than the main page of the same ladder
+  return Math.min(Math.max(cap, 700), Math.max(700, Math.round(med / 100) * 100));
+})();
+for (const r of rungs) for (const pg of (r.pages || [])) if (!pg.target_words) pg.target_words = rungWordTarget;
+top.target_words_source = verdictWords ? 'the verdict' : analysisWords ? 'the competitor analysis' : 'not measured';
+const rung_words_source = rungWordTarget ? 'the median length of the ' + serpWordCounts.length + ' page(s) read on this topic\'s results page' : 'not measured';
 const headExisting = (base.existing_page && base.existing_page.url) ? { url: base.existing_page.url, source: base.existing_page.source || 'sitemap' } : findExisting(head, headRank && headRank.url);
 Object.assign(top, { exists: !!headExisting, target_url: headExisting ? headExisting.url : plannedUrl(head), existing_source: headExisting ? headExisting.source : null, status: headExisting ? 'improve' : 'new' });
 
@@ -242,7 +258,7 @@ requirements.push({ item: 'Publish on schedule and interlink', detail: 'Each run
 
 // ---- pages to write now, in the plan's order (direct: the main page first; otherwise the supporting pages, the main page waits for support) ----
 const order = !planned ? [] : mainFirst ? [top, ...rungPages] : rungPages;
-const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to, target_words: Number(p.target_words) || 0 }));
+const write_now = order.slice(0, pagesNow).map(p => ({ page_no: p.page_no, rung: p.rung, keyword: p.keyword, page_type: p.page_type, target_url: p.target_url, exists: p.exists, supporting: p.supporting, links_to: p.links_to, target_words: Number(p.target_words) || 0 }));   // R8: a rung page carries its own measured target now, not 0
 const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,
   keywords_covered: planned ? rungPages.reduce((s, p) => s + 1 + p.supporting.length, 0) + 1 + top.supporting.length : 0,
@@ -268,5 +284,6 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
   reach_info: { reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },
   excluded_keywords: excluded.slice(0, 40),
+  words: { main: top.target_words, rung: rungWordTarget, main_source: top.target_words_source, rung_source: rung_words_source },   // R8: where each page's length target came from
   tracker: { cadence: base.tracker_cadence || 'weekly', auto_next_rung: !!base.auto_next_rung, stop_rule: 'once the top rung holds the top 3 for 4 checks it is checked monthly (with the published pages)' }, created_at: new Date().toISOString() };
 return [{ json: { ...base, ladder, site_rankings: pool.site_rankings || null, reach_cache_row } }];

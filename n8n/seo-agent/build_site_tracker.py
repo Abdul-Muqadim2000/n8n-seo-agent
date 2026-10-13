@@ -13,6 +13,27 @@ from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, 
                            PROFILE_TABLE, PROFILE_COLS, PAGES_TABLE, PAGES_COLS, AI_PAGES_TABLE, AI_PAGES_COLS, CACHE_TABLE, CACHE_COLS,
                            DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_get_where_params, dt_upsert_params_keys, dt_update_params, dt_get_recent_params)
 from ladder_common import PAGE_WATCH_TABLE, PAGE_WATCH_COLS, AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS, OPS_ALERTS_TABLE, OPS_ALERTS_COLS   # G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch
+from ladder_common import RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
+
+# R9 (2026-10-13, re-rating): the reserve / settle side branch, the same one build_monitors.py's WF.run_ledger builds. It hangs BESIDE the plan
+# node, never in the data path, because a Data Table node answers with the row it wrote rather than with its input.
+def ledger_nodes(N_, C_, mode, tag, plan, ends, pos):
+    x, y = pos
+    row = 'Run Ledger Row (' + tag + ')'
+    res_js, set_js = monitor_ledger_js(V5, mode, plan, row, '')
+    N_.append(node('Ensure Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_create_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x, y], onError='continueRegularOutput', executeOnce=True))
+    N_.append(node(row, 'n8n-nodes-base.code', 2, {'jsCode': res_js}, [x + 220, y], executeOnce=True))
+    N_.append(node('Reserve Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x + 440, y], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
+    N_.append(node('Ledger Settle (' + tag + ')', 'n8n-nodes-base.code', 2, {'jsCode': set_js}, [x + 220, y + 160], executeOnce=True))
+    N_.append(node('Settle Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
+        [('run_id', '={{ $execution.id }}'), ('status', 'reserved')], {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}'}),
+        [x + 440, y + 160], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
+    for a_, b_ in ([(plan, 'Ensure Run Ledger (' + tag + ')'), ('Ensure Run Ledger (' + tag + ')', row), (row, 'Reserve Run Ledger (' + tag + ')'),
+                    ('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')] + [(e, 'Ledger Settle (' + tag + ')') for e in ends]):
+        link(C_, a_, b_)
+    return {'mode': mode, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + tag + ')', 'settle_from': list(ends), 'measured': '', 'est': LEDGER_EST[mode]}
+
+LEDGER_WIRING = {}   # R9: merged into harness/ledger_wiring.json after the last workflow is written
 from env_settings import ENV as _ENV_PW
 ALERT_WEBHOOK_URL = _ENV_PW.get('SEO_ALERT_WEBHOOK_URL') or ''   # D25b's channel: the watch pushes the serious changes to it as well
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -322,6 +343,7 @@ for _n in ('Inspect Requests', 'Parse Inspection', 'Inspect Rows (Site)', 'Site 
 assert not any('/*__PAGE_WATCH__*/' in c_ for c_ in _code.values()), 'page-watch placeholder left in the Site Tracker'
 assert 'PW.inspectBudget(' in _code['Inspect Requests'] and 'inspect_at' in _code['Inspect Requests'], 'G25: the inspections do not rotate within the quota'
 assert 'index_coverage' in _code['Site Metrics'] and 'page_watch: watch' in _code['Site Metrics'], 'G11 / G25: the weekly item carries neither the index view nor the watch'
+LEDGER_WIRING['SEO Agent — Site Tracker'] = ledger_nodes(N, C, 'site_tracker', 'Site', 'Site Plan', ['Site Report'], at(11, 9))
 write(wf(WF_ID, 'SEO Agent — Site Tracker', N, C), 'SEO_Agent_Site_Tracker.json')
 
 # =============================================================================
@@ -430,6 +452,11 @@ link(C, 'Dry Run?', 'Planned Only', 0); link(C, 'Dry Run?', 'Start Content Runs'
 link(C, 'Any Ladder Marks?', 'Mark Ladder Writing', 0); link(C, 'Any Ladder Marks?', 'AI Target Marks', 1)
 link(C, 'Any AI Marks?', 'Mark AI Target Writing', 0); link(C, 'Any AI Marks?', 'Cadence Note', 1)
 link(C, 'Has Email (Cadence)?', 'Send Cadence Note', 0); link(C, 'Has Callback (Cadence)?', 'POST Cadence Note', 0)
+LEDGER_WIRING['SEO Agent — Content Cadence'] = ledger_nodes(N, C, 'content_cadence', 'Cadence', 'Cadence Plan', ['Cadence Note'], at(11, 4))
+_lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
+_lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}
+_lwj.setdefault('monitors', {}).update(LEDGER_WIRING)
+json.dump(_lwj, open(_lw9, 'w'), indent=1, sort_keys=True)
 write(wf('SEOagentCadence1', 'SEO Agent — Content Cadence', N, C), 'SEO_Agent_Content_Cadence.json')
 
 # =============================================================================
