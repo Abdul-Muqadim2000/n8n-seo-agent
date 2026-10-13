@@ -4,7 +4,11 @@
 // against the 28 days before and the same 28 days a year earlier.
 const CONFIG = {
   service_account_email: '__SA_EMAIL__',   // filled from n8n/.env (SEO_GOOGLE_SA_EMAIL) at build time; shown in the connect instructions
-  max_sites_per_run: 25, max_tracked_keywords: 40, max_gsc_keyword_requests: 30, max_inspections: 20, max_trend_keywords: 4, max_serp_checks: 20,
+  max_sites_per_run: 25, max_tracked_keywords: 40, max_gsc_keyword_requests: 30, max_trend_keywords: 4, max_serp_checks: 20,
+  // G25 (2026-10-13, FIX_PLAN): URL Inspection used to see 20 ladder pages a week. Google allows 2,000 inspections a day and 600 a minute
+  // per property, so one weekly run asks about up to 150 key pages (7.5% of a day's quota, free) and the pages rotate oldest-first;
+  // whatever the budget does not reach is reported as "not checked". The audit spends its own 100 (GSC Audit Plan).
+  max_inspections: 150,
   max_gsc_pages: 4,                 // G9: Search Console serves 25,000 rows per request; up to 4 pages per kind = 100,000 query / page rows
   striking_min_impressions: 30,     // "striking distance": position 4-20 with at least this many impressions in 28 days
   ctr_gap_min_impressions: 100,     // CTR gap: top-10 position, at least this many impressions, CTR under half the expected rate for the position

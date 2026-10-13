@@ -9,7 +9,7 @@ function bundle(over: Partial<SiteBundle> = {}): SiteBundle {
     search: { connection: { tracked: true, status: 'active', gscProperty: 'sc-domain:northwind-erp.com', ga4PropertyId: '1', lastRunAt: null, lastStatus: null, keywords: [], reportsToThisApp: true }, snapshot: null, metrics: [], queries: [], periods: [], trends: [] },
     rankings: { ladders: [], keywords: [] },
     content: { items: [], cadence: { pagesPerWeek: 1, status: 'active' }, caseStudies: [], profile: null, readiness: { score: 100, missing: [] }, generated: [] },
-    technical: { audits: [{ auditId: 'a1', auditedAt: new Date().toISOString(), reportType: 'site_audit', healthScore: 90, grade: 'Good', pagesCrawled: 10, findings: 0, critical: 0, high: 0, medium: 0, low: 0, scheduled: false }], selectedAuditId: 'a1', previousAuditId: null, findings: [], byCategory: [], reports: [] },
+    technical: { audits: [{ auditId: 'a1', auditedAt: new Date().toISOString(), reportType: 'site_audit', healthScore: 90, grade: 'Good', pagesCrawled: 10, findings: 0, critical: 0, high: 0, medium: 0, low: 0, scheduled: false }], selectedAuditId: 'a1', previousAuditId: null, findings: [], byCategory: [], reports: [], watch: null, indexCoverage: null },
     ai: { runs: [{ runId: 'r', checkedAt: '', prompts: 5, answers: 20, mentionRate: 50, citationRate: 10, shareOfVoice: 30, avgRank: 2, aioPresence: 0, aioCitationRate: 0, costUsd: 0, alerts: [], runKind: 'weekly', samples: 20, visibilityScore: 40, mentionLo: 30, mentionHi: 70, sentimentScore: null, accuracyIssues: 0, aiSessions: null, aiConversions: null, aiRevenue: null, indexSov: null, aiImpressions: null }], latest: null, daily: [], prompts: [], answers: [], growth: null, report: null },
     backlinks: { snapshots: [{ checkedAt: '', mode: 'full', rank: 1, backlinks: 1, referringDomains: 1, referringDomainsNofollow: 0, spamScore: 0, brokenBacklinks: 0, newLinks: 0, lostLinks: 0, importantLost: 0, spammyNew: 0, costUsd: 0, unionDomains: null, bestLinks: null, verifiedLive: null, atRisk: null, confirmedLost: null, referralVisits: null }], latest: null, refs: [], imports: [], linkGraph: null, prospects: [], report: null },
     alerts: { alerts: [], checkins: [], checkinDue: false },
@@ -24,7 +24,7 @@ describe('recommend', () => {
   // G26 (2026-10-12, FIX_PLAN): the audit ranks its findings by likely impact and says why; the recommendation quotes that reason and keeps
   // the audit's order, so the app never tells the owner to start somewhere else than the report does.
   it('a technical recommendation keeps the audit order and quotes why the finding ranks there', () => {
-    const finding = (over: Record<string, unknown>) => ({ key: 'k', category: 'Crawlability & Indexing', severity: 'High', title: 't', affectedCount: 2, previousCount: null, status: 'open' as const, impact: null as number | null, impactBasis: '', ...over });
+    const finding = (over: Record<string, unknown>) => ({ key: 'k', category: 'Crawlability & Indexing', severity: 'High', title: 't', affectedCount: 2, previousCount: null, status: 'open' as const, impact: null as number | null, impactBasis: '', recheck: null, ...over });
     const recs = recommend(
       site,
       bundle({
@@ -48,7 +48,7 @@ describe('recommend', () => {
       bundle({
         technical: {
           ...bundle().technical,
-          findings: [{ key: 'old', category: 'On-Page', severity: 'High', title: 'Missing meta description', affectedCount: 4, previousCount: null, status: 'open', impact: null, impactBasis: '' }],
+          findings: [{ key: 'old', category: 'On-Page', severity: 'High', title: 'Missing meta description', affectedCount: 4, previousCount: null, status: 'open', impact: null, impactBasis: '', recheck: null }],
         },
       }),
     ).filter((r) => r.id.startsWith('tech:'));

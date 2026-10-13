@@ -1,0 +1,270 @@
+{
+ "cache_kind": "watch",
+ "connections": {
+  "Any Ops Alerts (Watch)?": [
+   [
+    "Save Watch Ops Alert"
+   ],
+   [
+    "Watched"
+   ]
+  ],
+  "Any Rechecks?": [
+   [
+    "Save Finding Recheck"
+   ],
+   [
+    "Watch Alerts"
+   ]
+  ],
+  "Any Watch Alerts?": [
+   [
+    "Save Watch Alerts"
+   ],
+   [
+    "Watch Ops Alert"
+   ]
+  ],
+  "Any Watch Rows?": [
+   [
+    "Save Page Watch"
+   ],
+   [
+    "Watch Cache Rows"
+   ]
+  ],
+  "Any Watch Targets?": [
+   [
+    "Fetch Watch Page"
+   ],
+   [
+    "Nothing To Watch"
+   ]
+  ],
+  "Daily Schedule": [
+   [
+    "Ensure Sites Table (Watch)"
+   ]
+  ],
+  "Ensure Alerts Table (Watch)": [
+   [
+    "Ensure Findings Table (Watch)"
+   ]
+  ],
+  "Ensure Cache Table (Watch)": [
+   [
+    "Ensure Alerts Table (Watch)"
+   ]
+  ],
+  "Ensure Findings Table (Watch)": [
+   [
+    "Ensure Ops Alerts Table (Watch)"
+   ]
+  ],
+  "Ensure Ops Alerts Table (Watch)": [
+   [
+    "Load Sites (Watch)"
+   ]
+  ],
+  "Ensure Page Watch Table": [
+   [
+    "Ensure Cache Table (Watch)"
+   ]
+  ],
+  "Ensure Pages Table (Watch)": [
+   [
+    "Ensure Page Watch Table"
+   ]
+  ],
+  "Ensure Sites Table (Watch)": [
+   [
+    "Ensure Pages Table (Watch)"
+   ]
+  ],
+  "Fetch Watch Page": [
+   [
+    "Watch Read"
+   ]
+  ],
+  "Load Ladders (Watch)": [
+   [
+    "Load Pages (Watch)"
+   ]
+  ],
+  "Load Ops Alerts (Watch)": [
+   [
+    "Watch Plan"
+   ]
+  ],
+  "Load Page Watch": [
+   [
+    "Load Watch Cache"
+   ]
+  ],
+  "Load Pages (Watch)": [
+   [
+    "Load Page Watch"
+   ]
+  ],
+  "Load Recheck Requests": [
+   [
+    "Load Ops Alerts (Watch)"
+   ]
+  ],
+  "Load Sites (Watch)": [
+   [
+    "Load Ladders (Watch)"
+   ]
+  ],
+  "Load Watch Cache": [
+   [
+    "Load Recheck Requests"
+   ]
+  ],
+  "Save Finding Recheck": [
+   [
+    "Watch Alerts"
+   ]
+  ],
+  "Save Page Watch": [
+   [
+    "Watch Cache Rows"
+   ]
+  ],
+  "Save Watch Alerts": [
+   [
+    "Watch Ops Alert"
+   ]
+  ],
+  "Save Watch Cache": [
+   [
+    "Watch Recheck Rows"
+   ]
+  ],
+  "Save Watch Ops Alert": [
+   [
+    "Watch Ops Channels"
+   ]
+  ],
+  "Send Watch Webhook?": [
+   [
+    "Post Watch Alert"
+   ],
+   [
+    "Watched"
+   ]
+  ],
+  "Watch Alerts": [
+   [
+    "Any Watch Alerts?"
+   ]
+  ],
+  "Watch Cache Rows": [
+   [
+    "Save Watch Cache"
+   ]
+  ],
+  "Watch Compare": [
+   [
+    "Watch Rows"
+   ]
+  ],
+  "Watch Ops Alert": [
+   [
+    "Any Ops Alerts (Watch)?"
+   ]
+  ],
+  "Watch Ops Channels": [
+   [
+    "Send Watch Webhook?"
+   ]
+  ],
+  "Watch Plan": [
+   [
+    "Any Watch Targets?"
+   ]
+  ],
+  "Watch Read": [
+   [
+    "Watch Compare"
+   ]
+  ],
+  "Watch Recheck Rows": [
+   [
+    "Any Rechecks?"
+   ]
+  ],
+  "Watch Rows": [
+   [
+    "Any Watch Rows?"
+   ]
+  ],
+  "Watch Run": [
+   [
+    "Ensure Sites Table (Watch)"
+   ]
+  ]
+ },
+ "fetch": {
+  "follows_redirects": false,
+  "name": "Fetch Watch Page",
+  "response_format": "text",
+  "retries": 3
+ },
+ "nodes": [
+  "Daily Schedule",
+  "Watch Run",
+  "Ensure Sites Table (Watch)",
+  "Ensure Pages Table (Watch)",
+  "Ensure Page Watch Table",
+  "Ensure Cache Table (Watch)",
+  "Ensure Alerts Table (Watch)",
+  "Ensure Findings Table (Watch)",
+  "Ensure Ops Alerts Table (Watch)",
+  "Load Sites (Watch)",
+  "Load Ladders (Watch)",
+  "Load Pages (Watch)",
+  "Load Page Watch",
+  "Load Watch Cache",
+  "Load Recheck Requests",
+  "Load Ops Alerts (Watch)",
+  "Watch Plan",
+  "Any Watch Targets?",
+  "Nothing To Watch",
+  "Fetch Watch Page",
+  "Watch Read",
+  "Watch Compare",
+  "Watch Rows",
+  "Any Watch Rows?",
+  "Save Page Watch",
+  "Watch Cache Rows",
+  "Save Watch Cache",
+  "Watch Recheck Rows",
+  "Any Rechecks?",
+  "Save Finding Recheck",
+  "Watch Alerts",
+  "Any Watch Alerts?",
+  "Save Watch Alerts",
+  "Watch Ops Alert",
+  "Any Ops Alerts (Watch)?",
+  "Save Watch Ops Alert",
+  "Watch Ops Channels",
+  "Send Watch Webhook?",
+  "Post Watch Alert",
+  "Watched"
+ ],
+ "schedule": {
+  "every": "day",
+  "hour": 5,
+  "minute": 45
+ },
+ "site_tracker_inspections": {
+  "cap": 150,
+  "quota_per_day": 2000,
+  "rotation": "oldest inspection first"
+ },
+ "table": "seo_page_watch",
+ "webhook_configured": false,
+ "webhook_setting": "SEO_ALERT_WEBHOOK_URL",
+ "workflow": "SEOagentPageWch1"
+}

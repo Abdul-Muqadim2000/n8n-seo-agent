@@ -12,6 +12,9 @@ from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, 
                            LADDER_SETTINGS_TABLE, LADDER_SETTINGS_COLS, CASE_TABLE, CASE_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS,
                            PROFILE_TABLE, PROFILE_COLS, PAGES_TABLE, PAGES_COLS, AI_PAGES_TABLE, AI_PAGES_COLS, CACHE_TABLE, CACHE_COLS,
                            DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_get_where_params, dt_upsert_params_keys, dt_update_params, dt_get_recent_params)
+from ladder_common import PAGE_WATCH_TABLE, PAGE_WATCH_COLS, AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS, OPS_ALERTS_TABLE, OPS_ALERTS_COLS   # G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch
+from env_settings import ENV as _ENV_PW
+ALERT_WEBHOOK_URL = _ENV_PW.get('SEO_ALERT_WEBHOOK_URL') or ''   # D25b's channel: the watch pushes the serious changes to it as well
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 _rdt = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
@@ -20,8 +23,9 @@ SITE_STATS_SRC = _rdt('code/_site_stats.js').rstrip('\n')     # G28 (FIX_PLAN 20
 GSC_QUERIES_SRC = _rdt('code/_gsc_queries.js').rstrip('\n')   # G9 / D24: scraper queries, the brand split and the anonymised share, shared with the audit
 SERP_OBS_SRC = _rdt('code/_serp_obs.js').rstrip('\n')        # D26: a results-page feature is one observation at one moment, never a fact about the query
 RANK_SERP_SRC = _rdt('code/_rank_serp.js').rstrip('\n')      # G6 (FIX_PLAN 2026-10-12): the whole results page of one rank check (features, page 1, share of voice, snapshot)
+PAGE_WATCH_SRC = _rdt('code/_page_watch.js').rstrip('\n')    # G11 + G25 (FIX_PLAN 2026-10-13): the daily key-page watch and URL Inspection within Google's quota
 rd = lambda p: (_rdt(p).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SITE_STATS__*/', SITE_STATS_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)
-                .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC))
+                .replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__RANK_SERP__*/', RANK_SERP_SRC).replace('/*__PAGE_WATCH__*/', PAGE_WATCH_SRC))
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 nid = lambda name: str(uuid.uuid5(NS, 'sitetracker:' + name))
 MAIN_WF = json.load(open(os.path.join(OUT, 'SEO_Agent_v4.json')))[0]
@@ -110,6 +114,9 @@ N.append(node('Load AI Pages (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(AI_
 # the only place the services live, so the weekly model takes them from here -> seo_sites.services_json -> the brief's facts.website.services.
 N.append(node('Ensure Cache Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), at(13, 6), onError='continueRegularOutput'))
 N.append(node('Load Descriptions (Site)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'desc'), at(14, 6), **LOAD))
+N.append(node('Ensure Page Watch Table (Site)', DT_TYPE, DT_VERSION, dt_create_params(PAGE_WATCH_TABLE, PAGE_WATCH_COLS), at(15, 6), onError='continueRegularOutput'))
+N.append(node('Load Page Watch (Site)', DT_TYPE, DT_VERSION, dt_get_all_params(PAGE_WATCH_TABLE), at(16, 6), **LOAD))   # G25: each key page's last inspection decides the rotation order
+N.append(node('Load Watch Cache (Site)', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'watch'), at(17, 6), **LOAD))   # G11: the daily watch's own fingerprint per site
 N.append(node('Load Sites', DT_TYPE, DT_VERSION, dt_get_all_params(SITES_TABLE), at(5, 0), **LOAD))
 N.append(node('Load Ladders', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABLE), at(6, 0), **LOAD))
 N.append(node('Load Rank History', DT_TYPE, DT_VERSION, dt_get_all_params(HISTORY_TABLE), at(7, 0), **LOAD))
@@ -193,6 +200,9 @@ N.append(code('Inspect Requests', rd('code/Inspect_Requests.js'), at(12, 3)))
 N.append(iff('Any Inspections?', '{{ !$json.skip }}', at(13, 3)))
 N.append(node('Inspect URL', 'n8n-nodes-base.httpRequest', 4.5, GOOGLE_POST('https://searchconsole.googleapis.com/v1/urlInspection/index:inspect'), at(14, 3), credentials=GOOGLE, **HTTP_X))
 N.append(code('Parse Inspection', rd('code/Parse_Inspection.js'), at(15, 3)))
+N.append(code('Inspect Rows (Site)', rd('code/Inspect_Rows_Site.js'), at(15, 2), **SAFE))   # G25: what Google said, on the page's own seo_page_watch row
+N.append(iff('Any Inspect Rows?', '{{ !$json.skip }}', at(16, 2)))
+N.append(node('Save Page Watch (Site)', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PAGE_WATCH_TABLE, PAGE_WATCH_COLS, ['site_id', 'url']), at(17, 2), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(code('Trends Requests', rd('code/Trends_Requests.js'), at(16, 3)))
 N.append(iff('Any Trends?', '{{ !$json.skip }}', at(17, 3)))
 N.append(node('Google Trends', 'n8n-nodes-base.httpRequest', 4.5, DFS_HTTP, at(18, 3), credentials=DFS, **HTTP_X))
@@ -256,10 +266,10 @@ Runs **every Monday 09:00** (after the Rank Tracker) and on demand through *Manu
 Credential **Google Service Account (SEO Agent)** (`googleApi`, "Set up for use in HTTP Request node" on, scopes `https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/analytics.readonly`). The owner adds the service-account e-mail to Search Console (Full) and GA4 (Viewer); put that e-mail into `CONFIG.service_account_email` in *Site Plan* so the connect instructions name it. Not connected = the report still runs (trends, live checks) and explains the two steps.
 Form: {FORM_URL} · API: {API_URL} (`mode: track`)""", [-40, -560], 1180, 500))
 for a, b in [('Weekly Schedule', 'Ensure Sites Table'), ('Manual Run', 'Ensure Sites Table'), ('Ensure Sites Table', 'Ensure Metrics Table'), ('Ensure Metrics Table', 'Ensure Query Table'), ('Ensure Query Table', 'Ensure History Table (Site)'), ('Ensure History Table (Site)', 'Ensure Trends Table'), ('Ensure Trends Table', 'Ensure Log Table (Site)'), ('Ensure Log Table (Site)', 'Ensure Alerts Table (Site)'), ('Ensure Alerts Table (Site)', 'Ensure Checkin Table (Site)'), ('Ensure Checkin Table (Site)', 'Ensure AI Visibility Table (Site)'), ('Ensure AI Visibility Table (Site)', 'Ensure Snapshots Table (Site)'), ('Ensure Snapshots Table (Site)', 'Ensure Audits Table (Site)'), ('Ensure Audits Table (Site)', 'Load Sites'),
-             ('Load Sites', 'Load Ladders'), ('Load Ladders', 'Load Rank History'), ('Load Rank History', 'Load Site Metrics'), ('Load Site Metrics', 'Load Query History'), ('Load Query History', 'Load Content Log'), ('Load Content Log', 'Load Console Alerts'), ('Load Console Alerts', 'Load Check-ins'), ('Load Check-ins', 'Load AI Visibility (Site)'), ('Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)'), ('Load Backlink Snapshots (Site)', 'Load Audits (Site)'), ('Load Audits (Site)', 'Load Trends (Site)'), ('Load Trends (Site)', 'Ensure Profile Table (Site)'), ('Ensure Profile Table (Site)', 'Load Profiles (Site)'), ('Load Profiles (Site)', 'Ensure Monitors Table (Site)'), ('Ensure Monitors Table (Site)', 'Load Monitors (Site)'), ('Load Monitors (Site)', 'Ensure Pages Table (Site)'), ('Ensure Pages Table (Site)', 'Load Pages (Site)'), ('Load Pages (Site)', 'Ensure AI Pages Table (Site)'), ('Ensure AI Pages Table (Site)', 'Load AI Pages (Site)'), ('Load AI Pages (Site)', 'Ensure Cache Table (Site)'), ('Ensure Cache Table (Site)', 'Load Descriptions (Site)'), ('Load Descriptions (Site)', 'Site Plan'), ('Site Plan', 'Any Sites?'),
+             ('Load Sites', 'Load Ladders'), ('Load Ladders', 'Load Rank History'), ('Load Rank History', 'Load Site Metrics'), ('Load Site Metrics', 'Load Query History'), ('Load Query History', 'Load Content Log'), ('Load Content Log', 'Load Console Alerts'), ('Load Console Alerts', 'Load Check-ins'), ('Load Check-ins', 'Load AI Visibility (Site)'), ('Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)'), ('Load Backlink Snapshots (Site)', 'Load Audits (Site)'), ('Load Audits (Site)', 'Load Trends (Site)'), ('Load Trends (Site)', 'Ensure Profile Table (Site)'), ('Ensure Profile Table (Site)', 'Load Profiles (Site)'), ('Load Profiles (Site)', 'Ensure Monitors Table (Site)'), ('Ensure Monitors Table (Site)', 'Load Monitors (Site)'), ('Load Monitors (Site)', 'Ensure Pages Table (Site)'), ('Ensure Pages Table (Site)', 'Load Pages (Site)'), ('Load Pages (Site)', 'Ensure AI Pages Table (Site)'), ('Ensure AI Pages Table (Site)', 'Load AI Pages (Site)'), ('Load AI Pages (Site)', 'Ensure Cache Table (Site)'), ('Ensure Cache Table (Site)', 'Load Descriptions (Site)'), ('Load Descriptions (Site)', 'Ensure Page Watch Table (Site)'), ('Ensure Page Watch Table (Site)', 'Load Page Watch (Site)'), ('Load Page Watch (Site)', 'Load Watch Cache (Site)'), ('Load Watch Cache (Site)', 'Site Plan'), ('Site Plan', 'Any Sites?'),
              ('GSC Sites', 'Resolve Properties'), ('Resolve Properties', 'GSC Requests'), ('GSC Requests', 'Any GSC?'), ('GSC Query', 'GSC More Requests'), ('GSC More Requests', 'Any More GSC?'), ('GSC Query (More)', 'Parse GSC'), ('Parse GSC', 'Need GA4 Detect?'),
              ('GA4 Accounts', 'Stream Requests'), ('Stream Requests', 'Any Streams?'), ('GA4 Streams', 'GA4 Requests'), ('GA4 Requests', 'Any GA4?'), ('GA4 Report', 'Parse GA4'), ('Parse GA4', 'Inspect Requests'),
-             ('Inspect Requests', 'Any Inspections?'), ('Inspect URL', 'Parse Inspection'), ('Parse Inspection', 'Trends Requests'), ('Trends Requests', 'Any Trends?'), ('Google Trends', 'Parse Trends'), ('Parse Trends', 'Site SERP Requests'),
+             ('Inspect Requests', 'Any Inspections?'), ('Inspect URL', 'Parse Inspection'), ('Parse Inspection', 'Inspect Rows (Site)'), ('Inspect Rows (Site)', 'Any Inspect Rows?'), ('Save Page Watch (Site)', 'Trends Requests'), ('Trends Requests', 'Any Trends?'), ('Google Trends', 'Parse Trends'), ('Parse Trends', 'Site SERP Requests'),
              ('Site SERP Requests', 'Any SERP?'), ('SERP Check (Site)', 'Parse Site SERP'), ('Parse Site SERP', 'Save Site Rank History'), ('Save Site Rank History', 'Page Inventory (Site)'),
              ('Page Inventory (Site)', 'Page Rows (Site)'), ('Page Rows (Site)', 'Any Page Rows?'), ('Save Pages (Site)', 'Site Metrics'),
              ('Site Metrics', 'Metrics Rows'), ('Metrics Rows', 'Save Site Metrics'), ('Save Site Metrics', 'Query Rows'), ('Query Rows', 'Any Query Rows?'), ('Save Query Rows', 'Trend Rows'), ('Trend Rows', 'Any Trend Rows?'), ('Save Trends', 'Site Rows'), ('Site Rows', 'Save Sites'), ('Save Sites', 'Brief Input'), ('Brief Input', 'Site Brief'), ('Site Brief', 'Site Report'),
@@ -284,6 +294,7 @@ link(C, 'Need GA4 Detect?', 'GA4 Accounts', 0); link(C, 'Need GA4 Detect?', 'GA4
 link(C, 'Any Streams?', 'GA4 Streams', 0); link(C, 'Any Streams?', 'GA4 Requests', 1)
 link(C, 'Any GA4?', 'GA4 Report', 0); link(C, 'Any GA4?', 'Inspect Requests', 1)
 link(C, 'Any Inspections?', 'Inspect URL', 0); link(C, 'Any Inspections?', 'Trends Requests', 1)
+link(C, 'Any Inspect Rows?', 'Save Page Watch (Site)', 0); link(C, 'Any Inspect Rows?', 'Trends Requests', 1)
 link(C, 'Any Trends?', 'Google Trends', 0); link(C, 'Any Trends?', 'Parse Trends', 1)   # all trends stored -> Parse Trends returns them from seo_trends
 link(C, 'Any SERP?', 'SERP Check (Site)', 0); link(C, 'Any SERP?', 'Page Inventory (Site)', 1)
 link(C, 'Any Page Rows?', 'Save Pages (Site)', 0); link(C, 'Any Page Rows?', 'Site Metrics', 1)
@@ -306,6 +317,10 @@ assert 'startRow' in _code['GSC More Requests'] and "$('GSC Query (More)')" in _
 assert 'ST.change(' in _code['Site Metrics'] and 'alert_min_click_events' in _code['Site Metrics'], 'G28: the alerts do not use the statistical test'
 assert 'too little search data' in _code['Brief Input'] and 'sparse ? null : change' in _code['Parse Trends'], 'D21: a sparse trend can still reach the brief as a percentage'
 assert not any(('/*__SITE_STATS__*/' in c_) or ('/*__GSC_QUERIES__*/' in c_) for c_ in _code.values()), 'statistics / query-rule placeholder left in the Site Tracker'
+for _n in ('Inspect Requests', 'Parse Inspection', 'Inspect Rows (Site)', 'Site Metrics'): assert 'const PW = (() => {' in _code[_n], _n + ': the page-watch kit is not inlined'
+assert not any('/*__PAGE_WATCH__*/' in c_ for c_ in _code.values()), 'page-watch placeholder left in the Site Tracker'
+assert 'PW.inspectBudget(' in _code['Inspect Requests'] and 'inspect_at' in _code['Inspect Requests'], 'G25: the inspections do not rotate within the quota'
+assert 'index_coverage' in _code['Site Metrics'] and 'page_watch: watch' in _code['Site Metrics'], 'G11 / G25: the weekly item carries neither the index view nor the watch'
 write(wf(WF_ID, 'SEO Agent — Site Tracker', N, C), 'SEO_Agent_Site_Tracker.json')
 
 # =============================================================================
@@ -448,3 +463,119 @@ link(C, 'Relevant?', 'Ensure Alerts Table', 0); link(C, 'Relevant?', 'Ignore', 1
 link(C, 'Urgent?', 'Alert Target', 0); link(C, 'Urgent?', 'Stored', 1)
 link(C, 'Has Email (Alert)?', 'Email Owner (Alert)', 0); link(C, 'Has Callback (Alert)?', 'POST Alert', 0)
 write(wf('SEOagentConsole1', 'SEO Agent — Console Alerts', N, C), 'SEO_Agent_Console_Alerts.json')
+
+# =============================================================================
+# SEO Agent — Page Watch (G11, 2026-10-13, system review FIX_PLAN.md): the daily key-page watch, and the re-check behind "I fixed this".
+#     A monthly audit cannot see a page that went noindex on the 3rd — the leaders (ContentKing / Conductor Website Monitoring) check the
+#     key pages continuously and alert within hours. This workflow does the same for free: every morning it fetches each site's key pages
+#     raw (one plain GET per page, no JavaScript, no paid API) plus /robots.txt, compares status, a redirect that appeared, `noindex`, the
+#     canonical, the title and the robots.txt fingerprint with what was stored, and raises an alert the same day when something that matters
+#     changed. An unchanged page says nothing. A page whose fetch failed is "not checked": its stored reading is kept, so one timeout can
+#     never erase the baseline (and never fake a change the next day).
+#     It is its own workflow, not a branch of the Site Tracker: the Site Tracker is weekly, loads twenty Data Tables, calls Claude and costs
+#     money per run, while this has to run every day, touch a handful of tables and cost nothing. Its own schedule also means a day that
+#     fails retries tomorrow without touching the weekly report.
+#     The second half of G11 (criterion 1.10, fix verification): "I fixed this" in the app sets seo_audit_findings.recheck_state to
+#     `requested`; this run answers that one finding on the pages it just read (`fixed` / `still_open` / `not_checked` with the reason) and
+#     writes the answer back on the finding row — days instead of waiting for the next monthly audit.
+#     Alerts take the path D25b built: recorded first (seo_console_alerts for the customer, seo_ops_alerts for the serious ones), then
+#     pushed to SEO_ALERT_WEBHOOK_URL (Slack / Teams / any POST endpoint, no SMTP). The same change inside the dedupe window is counted, not
+#     re-sent. The app shows it on the Alerts page and on the technical page (seo_page_watch), and the Monday report lists the week's changes.
+# =============================================================================
+OPS_ALERT_SRC = _rdt('code/_ops_alert.js').rstrip('\n')
+wsrc = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_URL)
+WATCH_GET = {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
+             'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.16; +page-watch)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml,text/plain,*/*'}]},
+             # redirects are NOT followed: a key page that starts redirecting is itself the change we are watching for
+             'options': {'batching': {'batch': {'batchSize': 5, 'batchInterval': 250}}, 'timeout': 20000,
+                         'redirect': {'redirect': {'followRedirects': False}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}
+N = []; C = {}
+N.append(node('Daily Schedule', 'n8n-nodes-base.scheduleTrigger', 1.2, {'rule': {'interval': [{'field': 'days', 'daysInterval': 1, 'triggerAtHour': 5, 'triggerAtMinute': 45}]}}, at(0, 0)))
+N.append(node('Watch Run', 'n8n-nodes-base.executeWorkflowTrigger', 1.2, {'inputSource': 'passthrough'}, at(0, 1)))
+N.append(node('Ensure Sites Table (Watch)', DT_TYPE, DT_VERSION, dt_create_params(SITES_TABLE, SITES_COLS), at(1, 0), onError='continueRegularOutput'))
+N.append(node('Ensure Pages Table (Watch)', DT_TYPE, DT_VERSION, dt_create_params(PAGES_TABLE, PAGES_COLS), at(2, 0), onError='continueRegularOutput'))
+N.append(node('Ensure Page Watch Table', DT_TYPE, DT_VERSION, dt_create_params(PAGE_WATCH_TABLE, PAGE_WATCH_COLS), at(3, 0), onError='continueRegularOutput'))
+N.append(node('Ensure Cache Table (Watch)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), at(4, 0), onError='continueRegularOutput'))
+N.append(node('Ensure Alerts Table (Watch)', DT_TYPE, DT_VERSION, dt_create_params(ALERTS_TABLE, ALERTS_COLS), at(5, 0), onError='continueRegularOutput'))
+N.append(node('Ensure Findings Table (Watch)', DT_TYPE, DT_VERSION, dt_create_params(AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS), at(6, 0), onError='continueRegularOutput'))
+N.append(node('Ensure Ops Alerts Table (Watch)', DT_TYPE, DT_VERSION, dt_create_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS), at(7, 0), onError='continueRegularOutput'))
+WLOAD = dict(alwaysOutputData=True, executeOnce=True, onError='continueRegularOutput')
+N.append(node('Load Sites (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(SITES_TABLE), at(8, 0), **WLOAD))
+N.append(node('Load Ladders (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(LADDER_TABLE), at(9, 0), **WLOAD))
+N.append(node('Load Pages (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(PAGES_TABLE), at(10, 0), **WLOAD))
+N.append(node('Load Page Watch', DT_TYPE, DT_VERSION, dt_get_all_params(PAGE_WATCH_TABLE), at(11, 0), **WLOAD))
+N.append(node('Load Watch Cache', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'watch'), at(12, 0), **WLOAD))
+# only the findings somebody asked about: the filter runs in n8n, so a big findings table costs nothing here
+N.append(node('Load Recheck Requests', DT_TYPE, DT_VERSION, dt_get_where_params(AUDIT_FINDINGS_TABLE, 'recheck_state', 'eq', 'requested'), at(13, 0), **WLOAD))
+N.append(node('Load Ops Alerts (Watch)', DT_TYPE, DT_VERSION, dt_get_all_params(OPS_ALERTS_TABLE), at(14, 0), **WLOAD))
+N.append(code('Watch Plan', rd('code/Watch_Plan.js'), at(15, 0)))
+N.append(iff('Any Watch Targets?', '{{ !$json.skip }}', at(16, 0)))
+N.append(node('Nothing To Watch', 'n8n-nodes-base.noOp', 1, {}, at(17, 1)))
+N.append(node('Fetch Watch Page', 'n8n-nodes-base.httpRequest', 4.5, WATCH_GET, at(17, 0), alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY))
+N.append(code('Watch Read', rd('code/Watch_Read.js'), at(18, 0)))
+N.append(code('Watch Compare', rd('code/Watch_Compare.js'), at(19, 0)))
+N.append(code('Watch Rows', rd('code/Watch_Rows.js'), at(20, 0), **SAFE))
+N.append(iff('Any Watch Rows?', '{{ !$json.skip }}', at(21, 0)))
+N.append(node('Save Page Watch', DT_TYPE, DT_VERSION, dt_upsert_params_keys(PAGE_WATCH_TABLE, PAGE_WATCH_COLS, ['site_id', 'url']), at(22, 0), onError='continueRegularOutput', alwaysOutputData=True))
+N.append(code('Watch Cache Rows', rd('code/Watch_Cache_Rows.js'), at(23, 0), **SAFE))
+N.append(node('Save Watch Cache', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE, CACHE_COLS, 'key'), at(24, 0), onError='continueRegularOutput', alwaysOutputData=True))
+N.append(code('Watch Recheck Rows', rd('code/Watch_Recheck_Rows.js'), at(25, 0), **SAFE))
+N.append(iff('Any Rechecks?', '{{ !$json.skip }}', at(26, 0)))
+N.append(node('Save Finding Recheck', DT_TYPE, DT_VERSION, dt_update_params(AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS,
+    [('site_id', '={{ $json.site_id }}'), ('audit_id', '={{ $json.audit_id }}'), ('finding_key', '={{ $json.finding_key }}')],
+    {'recheck_state': '={{ $json.recheck_state }}', 'recheck_at': '={{ $json.recheck_at }}', 'recheck_rule': '={{ $json.recheck_rule }}', 'recheck_note': '={{ $json.recheck_note }}'}),
+    at(27, 0), onError='continueRegularOutput', alwaysOutputData=True))
+N.append(code('Watch Alerts', rd('code/Watch_Alerts.js'), at(28, 0), **SAFE))
+N.append(iff('Any Watch Alerts?', '{{ !$json.skip }}', at(29, 0)))
+N.append(node('Save Watch Alerts', DT_TYPE, DT_VERSION, dt_upsert_params(ALERTS_TABLE, ALERTS_COLS, 'message_id'), at(30, 0), onError='continueRegularOutput', alwaysOutputData=True))
+N.append(code('Watch Ops Alert', wsrc('code/Watch_Ops_Alert.js'), at(31, 0), **SAFE))
+N.append(iff('Any Ops Alerts (Watch)?', '{{ !$json.skip }}', at(32, 0)))
+N.append(node('Save Watch Ops Alert', DT_TYPE, DT_VERSION, dt_upsert_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, 'alert_key'), at(33, 0), onError='continueRegularOutput', alwaysOutputData=True))
+N.append(code('Watch Ops Channels', wsrc('code/Watch_Ops_Channels.js'), at(34, 0), **SAFE))
+N.append(iff('Send Watch Webhook?', '{{ $json.send_webhook }}', at(35, 0)))
+N.append(node('Post Watch Alert', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.webhook_url }}', 'sendBody': True, 'specifyBody': 'json',
+    'jsonBody': '={{ JSON.stringify($json.webhook_body) }}', 'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+    at(36, 0), onError='continueRegularOutput', **retry_lint.RETRY))
+N.append(node('Watched', 'n8n-nodes-base.noOp', 1, {}, at(36, 1)))
+N.append(sticky('Note Watch', f"""## SEO Agent — Page Watch (G11, v4.16)
+Runs **every day at 05:45** (n8n's clock) and on demand through *Watch Run* (`{{ domain | site_id, finding_key? }}`; the web app uses it for a single re-check). Free: one plain **GET** per key page plus `/robots.txt`, no JavaScript, no paid API, at most 25 pages a site.
+**The key pages** come from the one site model and the page inventory `{PAGES_TABLE}` (home page, the menu, the pages Search Console brings impressions for, the published ladder pages, the AI pages) — never a fresh crawl.
+**What is watched:** HTTP status, a redirect that appeared, `noindex` (meta or `X-Robots-Tag`), the canonical, the `<title>`, and the fingerprint of `/robots.txt` (`{CACHE_TABLE}` key `watch:<site_id>`, beside the sitemap fingerprints). Also stored for the re-checks: the meta description and the H1s. A change that matters raises an alert **the same day** in `{ALERTS_TABLE}` (`kind: page_watch` — the app's Alerts page and the Monday report read it); a page gone, noindexed, blocked or re-canonicalised also goes to `{OPS_ALERTS_TABLE}` and to `SEO_ALERT_WEBHOOK_URL` (Slack / Teams, no SMTP), deduped as D25b dedupes. A fetch that failed is **not checked**: the stored reading stays, nothing is claimed.
+**"I fixed this"** (criterion 1.10): the app sets `{AUDIT_FINDINGS_TABLE}.recheck_state = requested`; the next run judges that finding on the pages it just read and writes back `fixed`, `still_open`, or `not_checked` with the reason it needs the full audit. Rules: `v5/code/_page_watch.js`.
+**Google's view** of the same pages (`{PAGE_WATCH_TABLE}.inspect_*`) is written by the weekly Site Tracker: URL Inspection rotates through every key page, oldest first, inside Google's 2,000-a-day quota (G25).""", [15 * 220 - 40, -620], 1400, 520, 4))
+for a, b in [('Daily Schedule', 'Ensure Sites Table (Watch)'), ('Watch Run', 'Ensure Sites Table (Watch)'),
+             ('Ensure Sites Table (Watch)', 'Ensure Pages Table (Watch)'), ('Ensure Pages Table (Watch)', 'Ensure Page Watch Table'),
+             ('Ensure Page Watch Table', 'Ensure Cache Table (Watch)'), ('Ensure Cache Table (Watch)', 'Ensure Alerts Table (Watch)'),
+             ('Ensure Alerts Table (Watch)', 'Ensure Findings Table (Watch)'), ('Ensure Findings Table (Watch)', 'Ensure Ops Alerts Table (Watch)'),
+             ('Ensure Ops Alerts Table (Watch)', 'Load Sites (Watch)'), ('Load Sites (Watch)', 'Load Ladders (Watch)'), ('Load Ladders (Watch)', 'Load Pages (Watch)'),
+             ('Load Pages (Watch)', 'Load Page Watch'), ('Load Page Watch', 'Load Watch Cache'), ('Load Watch Cache', 'Load Recheck Requests'),
+             ('Load Recheck Requests', 'Load Ops Alerts (Watch)'), ('Load Ops Alerts (Watch)', 'Watch Plan'), ('Watch Plan', 'Any Watch Targets?'),
+             ('Fetch Watch Page', 'Watch Read'), ('Watch Read', 'Watch Compare'), ('Watch Compare', 'Watch Rows'), ('Watch Rows', 'Any Watch Rows?'),
+             ('Save Page Watch', 'Watch Cache Rows'), ('Watch Cache Rows', 'Save Watch Cache'), ('Save Watch Cache', 'Watch Recheck Rows'),
+             ('Watch Recheck Rows', 'Any Rechecks?'), ('Save Finding Recheck', 'Watch Alerts'), ('Watch Alerts', 'Any Watch Alerts?'),
+             ('Save Watch Alerts', 'Watch Ops Alert'), ('Watch Ops Alert', 'Any Ops Alerts (Watch)?'), ('Save Watch Ops Alert', 'Watch Ops Channels'),
+             ('Watch Ops Channels', 'Send Watch Webhook?')]:
+    link(C, a, b)
+link(C, 'Any Watch Targets?', 'Fetch Watch Page', 0); link(C, 'Any Watch Targets?', 'Nothing To Watch', 1)
+link(C, 'Any Watch Rows?', 'Save Page Watch', 0); link(C, 'Any Watch Rows?', 'Watch Cache Rows', 1)
+link(C, 'Any Rechecks?', 'Save Finding Recheck', 0); link(C, 'Any Rechecks?', 'Watch Alerts', 1)
+link(C, 'Any Watch Alerts?', 'Save Watch Alerts', 0); link(C, 'Any Watch Alerts?', 'Watch Ops Alert', 1)
+link(C, 'Any Ops Alerts (Watch)?', 'Save Watch Ops Alert', 0); link(C, 'Any Ops Alerts (Watch)?', 'Watched', 1)
+link(C, 'Send Watch Webhook?', 'Post Watch Alert', 0); link(C, 'Send Watch Webhook?', 'Watched', 1)
+_wcode = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 'n8n-nodes-base.code'}
+for _n in ('Watch Plan', 'Watch Read', 'Watch Compare', 'Watch Rows', 'Watch Alerts'):
+    assert 'const PW = (() => {' in _wcode[_n], _n + ': the page-watch kit is not inlined'
+assert 'const SM = (() => {' in _wcode['Watch Plan'], 'Watch Plan: the site model kit is not inlined'
+for _n in ('Watch Ops Alert', 'Watch Ops Channels'):
+    assert 'const OA = (() => {' in _wcode[_n], _n + ': the ops-alert kit is not inlined'
+assert not any(('/*__PAGE_WATCH__*/' in c_) or ('/*__OPS_ALERT__*/' in c_) for c_ in _wcode.values()), 'placeholder left in the Page Watch'
+write(wf('SEOagentPageWch1', 'SEO Agent — Page Watch', N, C), 'SEO_Agent_Page_Watch.json')
+
+# what the harness checks (S53): the watch's wiring, its schedule and the quota the inspections live inside
+json.dump({'workflow': 'SEOagentPageWch1', 'table': PAGE_WATCH_TABLE, 'cache_kind': 'watch', 'schedule': {'hour': 5, 'minute': 45, 'every': 'day'},
+           'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_configured': bool(ALERT_WEBHOOK_URL),
+           'nodes': [n['name'] for n in N if n['type'] != 'n8n-nodes-base.stickyNote'],
+           'connections': {s_: [[t_['node'] for t_ in l_] for l_ in o_.get('main', [])] for s_, o_ in C.items()},
+           'fetch': {'name': 'Fetch Watch Page', 'follows_redirects': False, 'response_format': 'text', 'retries': retry_lint.RETRY['maxTries']},
+           'site_tracker_inspections': {'cap': 150, 'quota_per_day': 2000, 'rotation': 'oldest inspection first'}},
+          open(os.path.join(HERE, 'harness', 'page_watch_wiring.json'), 'w'), indent=1, sort_keys=True)

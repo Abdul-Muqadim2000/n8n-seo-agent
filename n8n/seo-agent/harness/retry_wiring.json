@@ -784,6 +784,22 @@
    }
   ],
   "SEO Agent \u2014 Link Builder API": [],
+  "SEO Agent \u2014 Page Watch": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Watch Page",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Post Watch Alert",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
   "SEO Agent \u2014 Publish to WordPress": [
    {
     "allowed": true,

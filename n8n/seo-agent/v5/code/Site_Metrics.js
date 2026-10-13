@@ -6,6 +6,7 @@
 // workflow read the same facts; the brief is given the host and the name (never the bare domain).
 /*__SITE_MODEL__*/
 /*__SITE_STATS__*/
+/*__PAGE_WATCH__*/
 // G28 (2026-10-12, FIX_PLAN): a traffic alert fires on a STATISTICAL change, not on a fixed 30%. ST.change (two-sample Poisson z, 95% range)
 // decides; a large move that is still inside sampling noise is reported as "watch". Google's own update dates are added as context.
 const FORM_URL = '__FORM_URL__', API_URL = '__API_URL__';
@@ -17,6 +18,10 @@ let ga4Reason = ''; try { const r = ($('GA4 Requests').first() || {}).json; if (
 const gErr = (r) => { if (!r) return 'no response'; const e = r.error; if (!e) return null; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return String((inner && inner.message) || (ctx.error_description ? String(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };   // Google errors: the useful text sits in context.data (invalid_grant: account not found) or in error.message (PERMISSION_DENIED)
 let acctErr = ''; try { const a = ($('GA4 Accounts').first() || {}).json || {}; if (a.error) acctErr = gErr(a); } catch (e) {}
 const metricsHist = (() => { try { return $('Load Site Metrics').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();
+// G11 / G25 (2026-10-13): the daily key-page watch's rows and its site fingerprint, so the weekly report and the app's technical page show
+// the same picture (the watch runs in its own workflow, SEO Agent — Page Watch, every morning)
+const watchRows = grab('Load Page Watch (Site)').filter(r => r.site_id && r.url);
+const watchCacheRows = grab('Load Watch Cache (Site)').filter(r => String(r.key || '').indexOf('watch:') === 0);
 const queryHist = (() => { try { return $('Load Query History').all().map(i => i.json).filter(r => r && r.site_id && r.tracked && !r.error); } catch (e) { return []; } })();
 const now = new Date().toISOString();
 const pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? null : 0);
@@ -59,7 +64,11 @@ return sites.map((s, idx) => {
   const det = detAll.find(x => x.site_id === s.site_id) || null; const found = det ? det.detected : [];
   const basePages = (s.ladder_pages || []).map(p => { const f = found.find(f => kwKey(f.keyword) === kwKey(p.keyword) && (!f.ladder_id || !p.ladder_id || f.ladder_id === p.ladder_id)); return f ? { ...p, url: f.url, status: 'published', page_exists: true, detected: true } : promised(p); });
   for (const f of found) if (!basePages.some(p => ukey(p.url) === ukey(f.url))) basePages.push({ url: f.url, keyword: f.keyword, rung: 0, status: 'published', ladder_id: f.ladder_id || '', page_exists: true, detected: true });
-  const pages = basePages.map(p => { const i = insp.find(x => x.url === p.url); return { ...p, inspected: !!i && !i.error, indexed: (i && !i.error) ? !!i.indexed : null, verdict: i ? i.verdict : '', coverage: i ? i.coverage : '', last_crawl: i ? i.last_crawl : '', canonical_ok: i ? i.canonical_ok : null, inspect_error: i ? i.error : (s.gsc_connected ? 'not inspected' : 'Search Console not connected') }; });
+  // G25 (2026-10-13): an inspection the quota did not reach, or one that failed, is "not checked" — never "not indexed" (`skipped` / `not_checked`)
+  const pages = basePages.map(p => { const i = insp.find(x => x.url === p.url && !x.skipped && !x.inspect_error) || insp.find(x => x.url === p.url); const asked = !!i && !i.skipped && !i.inspect_error;
+    return { ...p, inspected: asked, indexed: asked ? !!i.indexed : null, verdict: asked ? i.verdict : '', coverage: asked ? i.coverage : '', last_crawl: asked ? i.last_crawl : '', canonical_ok: asked ? i.canonical_ok : null,
+      google_canonical: asked ? i.google_canonical : '', mobile_usable: asked ? i.mobile_usable : null, rich_results: asked ? i.rich_results : [],
+      inspect_error: asked ? null : (i ? (i.not_checked || i.inspect_error) : (s.gsc_connected ? 'not inspected' : 'Search Console not connected')) }; });
   // pages not live yet are reported as such, never as 'not indexed'
   for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = p.status === 'writing' ? 'written, not published yet' : 'planned, not written yet'; p.indexed = null; }
   // ---- alerts ----
@@ -132,6 +141,29 @@ return sites.map((s, idx) => {
     ...((gsc && gsc.queries) || []).filter(q => !trackedSet.has(q.query)).slice(0, 100).map(q => qrow(q, false, null))];
   const site_row = { ...SM.toRow(model), site_id: s.site_id, domain: s.domain, gsc_property: s.gsc_property || s.gsc_property_hint || '', ga4_property_id: ga4 ? String(ga4.ga4_property_id) : (s.ga4_property_id || ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '',
     keywords: (s.keywords || []).join(', '), status: s.status || 'active', source: s.source || 'form', created_at: s.created_at || now, last_run_at: now, last_status: (gsc ? 'gsc:ok' : 'gsc:off') + ' ' + (ga4 ? 'ga4:ok' : 'ga4:off') + (alerts.some(a => a.level === 'high') ? ' alerts' : ''), request_id: s.request_id || '' };
+  // ---- G25: what Google thinks of the key pages, with what was not checked said out loud ----
+  const mine = insp.filter(x => x.site_id === s.site_id || x.site_idx === idx);
+  const askedIns = mine.filter(x => !x.skipped);
+  const budget = (mine.find(x => x.budget) || {}).budget || null;
+  const index_coverage = s.gsc_connected
+    ? { ...PW.coverage(askedIns.map(x => ({ ok: !x.inspect_error, error: x.inspect_error || '', indexed: x.indexed, verdict: x.verdict, coverage: x.coverage, canonical_ok: x.canonical_ok, mobile_usable: x.mobile_usable, rich_results: x.rich_results, not_checked: x.not_checked || '' })),
+        { not_checked: mine.filter(x => x.skipped).length, not_checked_reason: mine.filter(x => x.skipped).length ? 'the run\'s share of Google\'s daily quota was used up; they are inspected in the next run, oldest first' : '', quota_note: budget ? budget.note : '' }),
+        connected: true, candidates: budget ? budget.candidates : askedIns.length, cap: budget ? budget.cap : null,
+        pages: askedIns.filter(x => !x.inspect_error).slice(0, 50).map(x => ({ url: x.url, indexed: x.indexed, verdict: x.verdict, coverage: x.coverage, last_crawl: x.last_crawl, canonical_ok: x.canonical_ok, google_canonical: x.google_canonical, mobile_usable: x.mobile_usable, rich_results: x.rich_results, kind: x.kind })),
+        not_checked_pages: mine.filter(x => x.skipped || x.inspect_error).slice(0, 25).map(x => ({ url: x.url, reason: x.not_checked || x.inspect_error || 'not checked' })) }
+    : { connected: false, checked: 0, indexed: 0, not_indexed: 0, not_checked: 0, pages: [], not_checked_pages: [], text: 'Search Console is not connected, so Google\'s index view could not be read (not checked).' };
+  // ---- G11: the daily key-page watch, as the weekly report sees it ----
+  const wmine = watchRows.filter(r => r.site_id === s.site_id);
+  const wcache = (() => { try { return JSON.parse(String((watchCacheRows.find(c => String(c.key) === 'watch:' + s.site_id) || {}).value || '') || 'null') || null; } catch (e) { return null; } })();
+  const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
+  const watch = wmine.length || wcache
+    ? { running: !!wcache, last_checked_at: wcache ? String(wcache.checked_at || '') : wmine.map(r => String(r.checked_at || '')).sort().slice(-1)[0] || '',
+        pages_watched: wcache ? Number(wcache.pages_watched) || wmine.length : wmine.length, pages_not_checked: wcache ? Number(wcache.pages_not_checked) || 0 : 0,
+        robots_hash: wcache ? String(wcache.robots_hash || '') : '', changed_this_week: wmine.filter(r => String(r.last_change_at || '') >= weekAgo).length,
+        changes: wmine.filter(r => String(r.last_change_at || '') >= weekAgo).slice(0, 10).map(r => ({ url: r.url, changes: String(r.changes || ''), at: String(r.last_change_at || '') })),
+        noindex: wmine.filter(r => r.noindex === true).map(r => r.url).slice(0, 10), broken: wmine.filter(r => Number(r.status) >= 400).map(r => r.url).slice(0, 10),
+        cost_usd: 0 }
+    : { running: false, pages_watched: 0, last_checked_at: '', changed_this_week: 0, changes: [], noindex: [], broken: [], pages_not_checked: 0, cost_usd: 0 };
   return { json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', period: R, checked_at: now, first_run: !!s.first_run, on_demand: !!s.on_demand, source: s.source, country: s.country || '',
     site: { canonical_host: model.canonical_host, home_url: SM.siteUrl(model, '/'), business_name: SM.name(model), name_source: model.name_source || '', services: SM.services(model).slice(0, 12), nav_pages: (model.nav_pages || []).slice(0, 8), nap: SM.nap(model), pages_known: SM.pages(model).length, model_updated_at: model.model_updated_at || '' },
     page_inventory: inv ? { pages: inv.total, with_queries: inv.with_queries, changed: inv.changed, by_source: inv.by_source, sitemap_read: inv.sitemap_read } : null,
@@ -139,6 +171,8 @@ return sites.map((s, idx) => {
     ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },
     console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },
     significance: stat,   // G28: the Poisson z-test behind every traffic alert (clicks / impressions / sessions)
+    index_coverage,       // G25: Google's own view of every key page (URL Inspection within the 2,000-a-day quota, oldest first)
+    page_watch: watch,    // G11: the daily key-page watch — what it checks, what changed this week, what it could not read
     tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
     detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),
     publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,

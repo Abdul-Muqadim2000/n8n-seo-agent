@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { requireVerified, siteAccess } from '../auth/access';
 import { notFound } from '../lib/errors';
 import { aiData, alertsData, backlinksData, contentData, rankingsData, searchData, settingsData, technicalData } from '../services/data';
+import { requestRecheck } from '../services/pageWatch';
 import { ladderDetailData, pipelineData } from '../services/pipeline';
 import { loadBundle, overviewData, recommend } from '../services/recommendations';
 
@@ -37,6 +38,17 @@ export async function dataRoutes(app: FastifyInstance) {
     const auditId = (req.query as { auditId?: string }).auditId;
     return technicalData(a.org, a.site, auditId && auditId.length < 80 ? auditId : undefined);
   });
+  // G11 (2026-10-13, FIX_PLAN): "I fixed this" on a technical finding. The engine's daily key-page watch judges that one finding again on
+  // the website's key pages the next morning and writes the answer back on the finding row — days instead of waiting for the next monthly
+  // audit. Nothing is claimed here: the app only records the request.
+  app.post('/api/orgs/:orgId/sites/:siteId/technical/findings/recheck', { config: { rateLimit: { max: 60, timeWindow: '10 minutes' } } }, async (req) => {
+    const p = req.params as P;
+    const a = await siteAccess(req, p.orgId, p.siteId, 'member');
+    requireVerified(a.site);
+    const b = (req.body ?? {}) as { auditId?: unknown; findingKey?: unknown };
+    return requestRecheck(a.site.domain, String(b.auditId ?? ''), String(b.findingKey ?? ''));
+  });
+
   app.get('/api/orgs/:orgId/sites/:siteId/data/ai', async (req) => {
     const a = await guard(req);
     return aiData(a.org, a.site);

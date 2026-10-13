@@ -1,0 +1,334 @@
+// G11 (2026-10-13): today's reading against the stored one, per site. What counts as a change: the page is gone or answers 5xx, it started
+// redirecting, it asks not to be indexed, robots.txt started blocking it, its canonical moved or was removed, its title changed — and
+// robots.txt itself changed (its fingerprint lives in seo_cache, as the sitemap fingerprints do). An unchanged page says nothing and costs
+// one GET. A page whose fetch failed is "not checked": no alert, and its stored reading is kept exactly as it was.
+// The same reading answers the re-check queue ("I fixed this"), so a finding the watch can judge is answered within a day instead of at the
+// next monthly audit; one it cannot judge says so (PW.recheck).
+// ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13; system review FIX_PLAN.md) ----
+// G11: a monthly audit cannot see a page that went noindex on the 3rd. Every day the key pages are fetched raw and cheaply (one plain GET
+// each, no JavaScript, no paid API) and compared with what we stored: HTTP status, a redirect that appeared, `noindex`, the canonical, the
+// title - plus a hash of robots.txt per site. A change that matters raises an alert the same day; an unchanged page raises none.
+// G11's second half: when somebody presses "I fixed this" in the app on an audit finding, that one finding is re-checked on these pages
+// within a day instead of waiting for the next monthly audit (PW.recheck).
+// G25: Search Console's URL Inspection API says what *Google* thinks of a page - indexed or not, which canonical it chose, when it last
+// crawled it, mobile usability and rich results. Its quota is 2,000 queries a day and 600 a minute per property, so the pages rotate
+// (never inspected first, then the oldest inspection) and whatever the budget does not reach is reported as "not checked", never as fine.
+const PW = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  // the n8n Code sandbox has no URL constructor (live finding 2026-10-02), so hosts and paths are read with regexes
+  const hostOf = (u) => { const m = S(u).match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase() : ''; };
+  const bare = (h) => S(h).toLowerCase().replace(/^www\./, '');
+  const pathOf = (u) => { const p = S(u).replace(/^https?:\/\/[^\/]*/i, '').replace(/#.*$/, ''); return p || '/'; };
+  // host-agnostic identity of a URL: crawls, sitemaps and canonicals disagree about www and the trailing slash
+  const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '') || S(u).toLowerCase();
+  const same = (a, b) => !!a && !!b && ukey(a) === ukey(b);
+  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
+
+  // ---- a small, stable fingerprint (FNV-1a, 32 bit): no crypto module is available in the sandbox ----
+  const hash = (text) => {
+    const t = S(text); let h = 0x811c9dc5;
+    for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; }
+    return ('0000000' + h.toString(16)).slice(-8);
+  };
+
+  // ---- what one raw fetch tells us about a page ----
+  // `res` is an n8n HTTP Request answer with fullResponse + responseFormat text (so the body is under `data`, not `body`) and redirects NOT
+  // followed: a key page that starts redirecting is itself a change worth knowing about.
+  const signals = (res) => {
+    const r = res || {};
+    const status = n0(r.statusCode ?? r.status);
+    const headers = r.headers || {};
+    const hdr = (name) => { const k = Object.keys(headers).find(x => x.toLowerCase() === name); return k ? S(Array.isArray(headers[k]) ? headers[k].join(', ') : headers[k]) : ''; };
+    const body = S(r.body ?? r.data);
+    const failed = !status && (r.error || !body);
+    if (failed) return { ok: false, error: S((r.error && (r.error.message || r.error.description)) || r.error || 'no answer').slice(0, 200), status: 0 };
+    const xrobots = hdr('x-robots-tag');
+    const head = body.slice(0, 200000);
+    const metas = head.match(/<meta\b[^>]*>/gi) || [];
+    const metaOf = (name) => {
+      for (const m of metas) {
+        if (!new RegExp('\\b(?:name|property)\\s*=\\s*["\']?' + name + '["\']?', 'i').test(m)) continue;
+        const c = m.match(/\bcontent\s*=\s*"([^"]*)"/i) || m.match(/\bcontent\s*=\s*'([^']*)'/i) || m.match(/\bcontent\s*=\s*([^\s>]+)/i);
+        if (c) return S(c[1]);
+      }
+      return '';
+    };
+    const robotsMeta = metaOf('robots') || metaOf('googlebot');
+    const noindex = /\bnone\b|\bnoindex\b/i.test(robotsMeta) || /\bnone\b|\bnoindex\b/i.test(xrobots);
+    const titles = (head.match(/<title[^>]*>[\s\S]*?<\/title>/gi) || []).map(t => strip(t.replace(/<\/?title[^>]*>/gi, '')));
+    const canonRe = /<link\b[^>]*\brel\s*=\s*["']?canonical["']?[^>]*>/gi;
+    const canons = (head.match(canonRe) || []).map(l => { const h = l.match(/\bhref\s*=\s*"([^"]*)"/i) || l.match(/\bhref\s*=\s*'([^']*)'/i); return h ? S(h[1]) : ''; }).filter(Boolean);
+    const h1s = (body.match(/<h1\b[^>]*>[\s\S]*?<\/h1>/gi) || []).map(x => strip(x).slice(0, 200)).filter(Boolean);
+    return {
+      ok: true, status,
+      location: status >= 300 && status < 400 ? S(hdr('location')).slice(0, 500) : '',
+      noindex, noindex_source: noindex ? (/\bnone\b|\bnoindex\b/i.test(robotsMeta) ? 'meta robots' : 'X-Robots-Tag header') : '',
+      robots_meta: robotsMeta.slice(0, 120), canonical: (canons[0] || '').slice(0, 500), canonicals: canons.length,
+      title: (titles[0] || '').slice(0, 300), titles: titles.length, description: metaOf('description').slice(0, 400),
+      h1: (h1s[0] || ''), h1s: h1s.length, bytes: body.length, error: '',
+    };
+  };
+
+  // ---- robots.txt: the fingerprint (seo_cache) plus the rules that decide whether a key page is crawlable ----
+  const robotsRead = (res) => {
+    const r = res || {}; const status = n0(r.statusCode ?? r.status); const text = S(r.body ?? r.data);
+    if (!status) return { ok: false, status: 0, error: S((r.error && (r.error.message || r.error.description)) || r.error || 'no answer').slice(0, 200), hash: '', rules: [] };
+    const clean = text.replace(/\r/g, '').split('\n').map(l => l.replace(/#.*$/, '').trim()).filter(Boolean).join('\n');
+    const rules = []; let groups = [];
+    for (const line of clean.split('\n')) {
+      const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/); if (!m) continue;
+      const field = m[1].toLowerCase(), value = S(m[2]);
+      if (field === 'user-agent') { if (rules.length && rules[rules.length - 1].touched) { groups = []; } groups.push(value.toLowerCase()); rules.push({ agents: groups.slice(), touched: false }); continue; }
+      if (field !== 'disallow' && field !== 'allow') continue;
+      if (!rules.length) { groups = ['*']; rules.push({ agents: ['*'], touched: false }); }
+      const g = rules[rules.length - 1]; g.touched = true; g.agents = groups.slice();
+      (g.lines = g.lines || []).push({ allow: field === 'allow', path: value });
+    }
+    // which groups apply to Googlebot (its own group wins over `*`, as Google's parser does)
+    const forGoogle = rules.filter(g => g.agents.some(a => a === 'googlebot'));
+    const applies = (forGoogle.length ? forGoogle : rules.filter(g => g.agents.includes('*'))).flatMap(g => g.lines || []);
+    const blocks = (url) => {
+      if (status === 404 || status >= 500 || !applies.length) return null;   // no file, or nothing that applies: nothing is blocked by it
+      const p = pathOf(url);
+      let best = null;
+      for (const l of applies) {
+        if (!l.path) continue;                                              // `Disallow:` with no path allows everything
+        const pat = l.path.replace(/\*+/g, '*');
+        const rx = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
+        if (!rx.test(p)) continue;
+        if (!best || l.path.length > best.path.length) best = l;
+      }
+      return best ? !best.allow : false;
+    };
+    return { ok: true, status, hash: hash(clean), length: clean.length, rules: applies, blocks, error: '' };
+  };
+
+  // ---- what changed since the stored reading, and how loudly to say it ----
+  // `prev` is the stored seo_page_watch row (or null for a page nobody has watched yet), `now` the signals of this run.
+  const CODES = {
+    page_gone: { severity: 'critical', label: 'page gone' },
+    page_error: { severity: 'critical', label: 'server error' },
+    noindex_added: { severity: 'critical', label: 'noindex added' },
+    robots_blocked: { severity: 'critical', label: 'blocked by robots.txt' },
+    page_redirects: { severity: 'high', label: 'page now redirects' },
+    canonical_moved: { severity: 'high', label: 'canonical moved' },
+    canonical_removed: { severity: 'high', label: 'canonical removed' },
+    robots_changed: { severity: 'high', label: 'robots.txt changed' },
+    title_changed: { severity: 'medium', label: 'title changed' },
+    page_back: { severity: 'info', label: 'page answers again' },
+    noindex_removed: { severity: 'info', label: 'noindex gone' },
+  };
+  const compare = (prev, now, o) => {
+    const opts = o || {}; const out = [];
+    const add = (code, text, from, to) => out.push({ code, severity: CODES[code].severity, label: CODES[code].label, text, from: S(from), to: S(to) });
+    if (!now || now.ok === false) return out;                                 // a failed fetch is "not checked", never a change
+    const first = !prev || !S(prev.checked_at);
+    const was = prev || {};
+    const wasStatus = n0(was.status), nowStatus = n0(now.status);
+    const url = S(opts.url);
+    if (!first) {
+      if (wasStatus >= 200 && wasStatus < 400 && nowStatus >= 500) add('page_error', 'The page answers ' + nowStatus + ' (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
+      else if (wasStatus >= 200 && wasStatus < 400 && nowStatus >= 400) add('page_gone', 'The page is gone: it answers ' + nowStatus + ' (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
+      else if (wasStatus >= 400 && nowStatus >= 200 && nowStatus < 300) add('page_back', 'The page answers ' + nowStatus + ' again (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
+      if (nowStatus >= 300 && nowStatus < 400 && !(wasStatus >= 300 && wasStatus < 400)) add('page_redirects', 'The page now redirects (' + nowStatus + ' to ' + (S(now.location) || 'an address it does not name') + ')', wasStatus, nowStatus + ' ' + S(now.location));
+      if (now.noindex && !was.noindex) add('noindex_added', 'The page tells search engines not to index it (' + S(now.noindex_source) + ': "' + S(now.robots_meta || 'noindex') + '")', '', S(now.noindex_source));
+      if (!now.noindex && was.noindex) add('noindex_removed', 'The page no longer tells search engines to leave it out', S(was.noindex_source), '');
+      // the title and the canonical are only compared between two readings of a page that was answering: the title of yesterday's 404
+      // ("Not found") is not a baseline, so a page that comes back is "answers again", never "the title changed".
+      const wasOk = wasStatus >= 200 && wasStatus < 300;
+      if (wasOk && nowStatus >= 200 && nowStatus < 300) {
+        if (S(was.canonical) && !S(now.canonical)) add('canonical_removed', 'The canonical tag is gone (it pointed at ' + S(was.canonical) + ')', S(was.canonical), '');
+        else if (S(now.canonical) && S(was.canonical) && !same(now.canonical, was.canonical)) add('canonical_moved', 'The canonical now points at ' + S(now.canonical) + ' (it pointed at ' + S(was.canonical) + ')', S(was.canonical), S(now.canonical));
+        if (S(was.title) && S(now.title) && S(was.title) !== S(now.title)) add('title_changed', 'The title changed to "' + S(now.title) + '" (it was "' + S(was.title) + '")', S(was.title), S(now.title));
+      }
+    }
+    // a page we are seeing for the first time is a baseline, never a change — that includes one robots.txt already blocked before we looked
+    if (!first && opts.robots_blocked === true && opts.robots_blocked_before !== true) add('robots_blocked', 'robots.txt now stops Google crawling ' + (url || 'this page'), '', 'disallowed');
+    return out;
+  };
+  // the site's robots.txt as a change of its own (one per site, compared with the stored seo_cache fingerprint)
+  const robotsChange = (prevHash, robots) => {
+    if (!robots || robots.ok === false) return null;
+    const before = S(prevHash);
+    if (!before || before === S(robots.hash)) return null;
+    return { code: 'robots_changed', severity: CODES.robots_changed.severity, label: CODES.robots_changed.label,
+      text: 'robots.txt changed (' + robots.status + ', ' + n0(robots.length) + ' characters of rules). Read it before the next crawl: one wrong Disallow line can take the whole site out of Google.',
+      from: before, to: S(robots.hash) };
+  };
+  const state = (changes, now) => (!now || now.ok === false) ? 'not_checked' : ((changes || []).some(c => c.severity !== 'info') ? 'changed' : 'ok');
+  const worst = (changes) => { const order = ['critical', 'high', 'medium', 'info']; return (changes || []).map(c => c.severity).sort((a, b) => order.indexOf(a) - order.indexOf(b))[0] || ''; };
+
+  // ---- "I fixed this": one audit finding, re-checked on the key pages we just fetched ----
+  // Only what a raw fetch of the key pages can honestly answer is answered. Anything else (a crawl of the whole site, Search Console,
+  // speed data) says so and waits for the audit - it never comes back "fixed" on a guess.
+  const RULES = [
+    { rule: 'broken_pages', re: /broken pages|do not return 200|not return 200|4xx|5xx/i, label: 'a key page that does not answer 200',
+      test: (p) => n0(p.status) >= 400 },
+    { rule: 'redirecting_pages', re: /internal urls that redirect|meta refresh/i, label: 'a key page that redirects',
+      test: (p) => n0(p.status) >= 300 && n0(p.status) < 400 },
+    { rule: 'noindex', re: /noindex|not indexable/i, label: 'a key page that asks not to be indexed', test: (p) => !!p.noindex },
+    { rule: 'robots_blocked', re: /blocked by robots\.txt/i, label: 'a key page robots.txt blocks', test: (p) => p.robots_blocked === true },
+    { rule: 'missing_title', re: /missing title tag/i, label: 'a key page with no title', test: (p) => n0(p.status) < 300 && !S(p.title) },
+    { rule: 'multiple_titles', re: /more than one title tag/i, label: 'a key page with more than one title tag', test: (p) => n0(p.titles) > 1 },
+    { rule: 'title_short', re: /title shorter than/i, label: 'a key page title under 30 characters', test: (p) => n0(p.status) < 300 && S(p.title) && S(p.title).length < 30 },
+    { rule: 'title_long', re: /title longer than/i, label: 'a key page title over 60 characters', test: (p) => S(p.title).length > 60 },
+    { rule: 'missing_description', re: /missing meta description/i, label: 'a key page with no meta description', test: (p) => n0(p.status) < 300 && !S(p.description) },
+    { rule: 'description_short', re: /meta description shorter than/i, label: 'a key page description under 70 characters', test: (p) => n0(p.status) < 300 && S(p.description) && S(p.description).length < 70 },
+    { rule: 'description_long', re: /meta description longer than/i, label: 'a key page description over 160 characters', test: (p) => S(p.description).length > 160 },
+    { rule: 'missing_h1', re: /missing h1/i, label: 'a key page with no H1', test: (p) => n0(p.status) < 300 && !S(p.h1) },
+    { rule: 'multiple_h1', re: /more than one h1/i, label: 'a key page with more than one H1', test: (p) => n0(p.h1s) > 1 },
+    { rule: 'missing_canonical', re: /missing canonical tag/i, label: 'a key page with no canonical tag', test: (p) => n0(p.status) < 300 && !S(p.canonical) },
+    { rule: 'canonical_other', re: /canonical points to a different page/i, label: 'a key page whose canonical points elsewhere',
+      test: (p) => n0(p.status) < 300 && S(p.canonical) && !same(p.canonical, p.url) },
+    { rule: 'http_pages', re: /served over http\b|link to http urls/i, label: 'a key page on http', test: (p) => /^http:\/\//i.test(S(p.url)) },
+  ];
+  const recheckRule = (finding) => {
+    const text = S((finding || {}).title) || S((finding || {}).finding_key).split('|').slice(1).join('|');
+    if (!text) return null;
+    return RULES.find(r => r.re.test(text)) || null;
+  };
+  /** finding + the pages this run read -> { state: 'fixed' | 'still_open' | 'not_checked', note, checked, hits } */
+  const recheck = (finding, pages) => {
+    const list = (pages || []).filter(p => p && p.ok !== false && S(p.url) && S(p.kind) !== 'robots');
+    const r = recheckRule(finding);
+    const title = S((finding || {}).title) || S((finding || {}).finding_key);
+    if (!r) return { state: 'not_checked', rule: '', checked: list.length, hits: [],
+      note: 'The daily key-page watch cannot judge "' + title + '" on its own (it needs the full crawl, Search Console or speed data). The next audit decides it.' };
+    if (!list.length) return { state: 'not_checked', rule: r.rule, checked: 0, hits: [],
+      note: 'No key page could be read in this check, so nothing was judged. It is tried again with the next daily watch.' };
+    const hits = list.filter(p => { try { return !!r.test(p); } catch (e) { return false; } }).map(p => S(p.url));
+    return hits.length
+      ? { state: 'still_open', rule: r.rule, checked: list.length, hits: hits.slice(0, 10),
+          note: 'Still open on ' + hits.length + ' of the ' + list.length + ' key pages checked (' + r.label + '): ' + hits.slice(0, 3).join(', ') + (hits.length > 3 ? ' …' : '') + '.' }
+      : { state: 'fixed', rule: r.rule, checked: list.length, hits: [],
+          note: 'Fixed on the ' + list.length + ' key pages checked (no ' + r.label + ' left). The next full audit checks the rest of the site.' };
+  };
+
+  // ---- G25: URL Inspection within the quota ----
+  const QUOTA_PER_DAY = 2000;        // Search Console URL Inspection API, per property (developers.google.com/webmaster-tools/limits)
+  const QUOTA_PER_MINUTE = 600;      // the same page, per property
+  const PER_RUN = 150;               // what one weekly Site Tracker run spends per property: 7.5% of the day's quota
+  const PER_AUDIT = 100;             // what one audit spends (it also runs on demand, several times a day on a bad day)
+  /**
+   * Chooses which pages to inspect now: never inspected first, then the oldest inspection, importance breaking ties. Everything the
+   * budget does not reach comes back under `skipped` so the report can say "not checked" instead of implying the page is fine.
+   * pages: [{ url, weight, inspect_at }]; cap: how many this run may spend.
+   */
+  const inspectBudget = (pages, cap, o) => {
+    const opts = o || {};
+    const limit = Math.max(0, Math.min(n0(cap) || PER_RUN, QUOTA_PER_DAY - n0(opts.used)));
+    const seen = new Set(); const list = [];
+    for (const p of (pages || [])) { const k = ukey(p.url); if (!S(p.url) || seen.has(k)) continue; seen.add(k); list.push(p); }
+    const ts = (p) => { const t = Date.parse(S(p.inspect_at)); return Number.isFinite(t) ? t : 0; };   // 0 = never inspected, so it goes first
+    const ordered = list.slice().sort((a, b) => ts(a) - ts(b) || n0(b.weight) - n0(a.weight) || S(a.url).localeCompare(S(b.url)));
+    const take = ordered.slice(0, limit), skipped = ordered.slice(limit);
+    return { take, skipped, limit, quota: QUOTA_PER_DAY,
+      note: 'URL Inspection is capped at ' + QUOTA_PER_DAY + ' pages a day per Search Console property (Google\'s quota); this run asked about '
+        + take.length + ' of ' + ordered.length + ' key pages, oldest inspection first'
+        + (skipped.length ? ', so ' + skipped.length + ' are reported as "not checked" until the next run.' : '.') };
+  };
+  /** One URL Inspection answer -> what Google thinks. A permission or quota error is an error, never "not indexed". */
+  const inspection = (res) => {
+    const r = res || {};
+    const ir = (r.inspectionResult || {});
+    const idx = ir.indexStatusResult || null;
+    const mob = ir.mobileUsabilityResult || null;
+    const rich = ir.richResultsResult || null;
+    const gErr = () => { const e = r.error; if (!e) return ''; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return S((inner && inner.message) || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };
+    const err = r.error ? gErr() : (idx ? '' : 'no inspection result');
+    const quota = /quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(err);
+    const denied = /permission|forbidden|403|unauthor|invalid_grant/i.test(err);
+    if (err) return { ok: false, error: err, error_kind: quota ? 'quota' : denied ? 'access' : 'error', indexed: null, verdict: '', coverage: '',
+      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], rich_results: [], rich_verdict: '',
+      not_checked: quota ? 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' : denied ? 'Search Console access is missing for this property: not checked.' : 'The inspection failed: not checked (' + err + ').' };
+    return {
+      ok: true, error: '', error_kind: '', verdict: S(idx.verdict), indexed: S(idx.verdict) === 'PASS', coverage: S(idx.coverageState),
+      indexing_state: S(idx.indexingState), robots: S(idx.robotsTxtState), last_crawl: S(idx.lastCrawlTime),
+      google_canonical: S(idx.googleCanonical), user_canonical: S(idx.userCanonical),
+      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : same(idx.googleCanonical, idx.userCanonical),
+      mobile_usable: mob ? (S(mob.verdict) === 'PASS' ? true : S(mob.verdict) === 'NEUTRAL' || !S(mob.verdict) ? null : false) : null,
+      mobile_issues: mob && Array.isArray(mob.issues) ? mob.issues.map(i => S(i.message) || S(i.issueType)).filter(Boolean).slice(0, 5) : [],
+      rich_verdict: rich ? S(rich.verdict) : '',
+      rich_results: rich && rich.detectedItems ? rich.detectedItems.map(d => S(d.richResultType)).filter(Boolean) : [],
+      not_checked: '',
+    };
+  };
+  /** The index picture over a set of inspections, with what was not checked said out loud (G25). */
+  const coverage = (inspections, o) => {
+    const opts = o || {};
+    const list = (inspections || []).filter(Boolean);
+    const ok = list.filter(i => i.ok !== false && !i.error);
+    const by = {}; for (const i of ok) { const k = S(i.coverage) || S(i.verdict) || 'unknown'; by[k] = (by[k] || 0) + 1; }
+    const failed = list.filter(i => i.ok === false || i.error);
+    const indexed = ok.filter(i => i.indexed === true).length;
+    const notIndexed = ok.filter(i => i.indexed === false);
+    const canonMismatch = ok.filter(i => i.canonical_ok === false);
+    const mobileBad = ok.filter(i => i.mobile_usable === false);
+    const richTypes = [...new Set(ok.flatMap(i => i.rich_results || []))];
+    const notChecked = n0(opts.not_checked) + failed.length;
+    return { checked: ok.length, indexed, not_indexed: notIndexed.length, by_state: by, failed: failed.length, not_checked: notChecked,
+      not_checked_reason: notChecked ? (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'not checked in this run') : '',
+      canonical_mismatch: canonMismatch.length, mobile_bad: mobileBad.length, mobile_checked: ok.filter(i => i.mobile_usable !== null).length,
+      rich_results: richTypes, quota: QUOTA_PER_DAY, quota_note: S(opts.quota_note),
+      // never "fine": a page nobody inspected is counted apart from the ones Google answered about
+      text: ok.length
+        ? indexed + ' of ' + ok.length + ' key pages are indexed' + (notIndexed.length ? ', ' + notIndexed.length + ' are not' : '')
+          + (notChecked ? ', ' + notChecked + ' were not checked' : '') + ' (Search Console URL Inspection; quota ' + QUOTA_PER_DAY + ' pages a day per property)'
+        : 'No page could be inspected in Search Console' + (notChecked ? ' (' + notChecked + ' not checked: ' + (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'no access') + ')' : '') };
+  };
+
+  return { signals, robotsRead, compare, robotsChange, state, worst, recheck, recheckRule, inspectBudget, inspection, coverage, hash,
+    CODES, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT,
+    helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0 } };
+})();
+const reads = $input.all().map(i => i.json).filter(r => r && r.site_id);
+const bySite = new Map();
+for (const r of reads) { if (!bySite.has(r.site_idx)) bySite.set(r.site_idx, []); bySite.get(r.site_idx).push(r); }
+const S = (v) => String(v == null ? '' : v).trim();
+const nowIso = new Date().toISOString();
+const out = [];
+for (const [site_idx, items] of bySite) {
+  const site = (items.find(i => i.site) || {}).site || {};
+  const robotsItem = items.find(i => i.kind === 'robots') || null;
+  const robots = (robotsItem && robotsItem.robots) || { ok: false, status: 0, hash: '', error: 'robots.txt was not read' };
+  const robotsChange = PW.robotsChange(site.robots_hash_prev, robots);
+  const pages = items.filter(i => i.kind !== 'robots');
+  const checked = pages.filter(p => p.ok !== false);
+  const notChecked = pages.filter(p => p.ok === false);
+  const changes = [];
+  const pageStates = pages.map(p => {
+    const prev = p.prev || null;
+    const ch = PW.compare(prev, p, { url: p.url, robots_blocked: p.robots_blocked, robots_blocked_before: prev ? prev.robots_blocked === true : false });
+    for (const c of ch) changes.push({ ...c, url: p.url, kind: p.kind });
+    const first = !prev || !S(prev.checked_at);
+    return { url: p.url, kind: p.kind, weight: p.weight, ok: p.ok !== false, status: p.status, location: S(p.location), noindex: !!p.noindex, noindex_source: S(p.noindex_source),
+      canonical: S(p.canonical), canonical_ok: p.ok === false ? null : (!S(p.canonical) ? null : PW.helpers.same(p.canonical, p.url)),
+      title: S(p.title), titles: p.titles || 0, description: S(p.description), h1: S(p.h1), h1s: p.h1s || 0, robots_blocked: p.robots_blocked,
+      error: S(p.error), first_seen: first, state: PW.state(ch, p), changes: ch,
+      // the Google view of this page as it was stored (written by the weekly URL Inspection, G25): carried, never re-claimed here
+      inspect: prev ? { inspect_at: S(prev.inspect_at), index_state: S(prev.index_state), indexed: S(prev.indexed), coverage: S(prev.coverage),
+        google_canonical: S(prev.google_canonical), last_crawl: S(prev.last_crawl), mobile: S(prev.mobile), rich_results: S(prev.rich_results), inspect_error: S(prev.inspect_error) } : null,
+      prev: prev ? { checked_at: S(prev.checked_at), status: Number(prev.status) || 0, noindex: prev.noindex === true, canonical: S(prev.canonical), title: S(prev.title),
+        state: S(prev.state), last_change_at: S(prev.last_change_at), changed_count: Number(prev.changed_count) || 0, robots_hash: S(prev.robots_hash) } : null };
+  });
+  if (robotsChange) changes.push({ ...robotsChange, url: robotsItem ? robotsItem.url : '', kind: 'robots' });
+  // the re-checks this site asked for, answered on the pages that were just read
+  const rechecks = (site.rechecks || []).map(f => { const r = PW.recheck(f, pageStates.filter(p => p.ok).map(p => ({ ...p, url: p.url }))); return { ...f, ...r, checked_at: nowIso }; });
+  const real = changes.filter(c => c.severity !== 'info');
+  const indexable = pageStates.filter(p => p.ok && Number(p.status) >= 200 && Number(p.status) < 300 && !p.noindex && p.robots_blocked !== true).length;
+  out.push({ json: {
+    site_idx, site_id: site.site_id || items[0].site_id, domain: site.domain || items[0].domain, checked_at: nowIso, on_demand: !!site.on_demand,
+    email: S(site.email), callback_url: S(site.callback_url), last_checked_at: S(site.last_checked_at),
+    pages: pageStates, changes, alerts: changes, rechecks,
+    robots: { ok: robots.ok !== false, status: robots.status || 0, hash: S(robots.hash), prev_hash: S(site.robots_hash_prev), length: robots.length || 0, error: S(robots.error), changed: !!robotsChange,
+      blocks_key_pages: pageStates.filter(p => p.robots_blocked === true).map(p => p.url) },
+    summary: { pages_watched: pages.length, pages_checked: checked.length, pages_not_checked: notChecked.length, pages_known: Number(site.pages_known) || 0,
+      indexable, changed: real.length, critical: changes.filter(c => c.severity === 'critical').length, high: changes.filter(c => c.severity === 'high').length,
+      first_run: pageStates.every(p => p.first_seen), worst: PW.worst(changes), rechecks: rechecks.length, cap: Number(site.max_watch_pages) || PW.helpers.n0(site.pages_watched),
+      cost_usd: 0, requests: items.length },
+    not_checked: notChecked.map(p => ({ url: p.url, error: S(p.error) })),
+    stage: 'page_watch',
+  } });
+}
+return out.length ? out : [{ json: { skip: true, reason: 'nothing was read in this watch' } }];

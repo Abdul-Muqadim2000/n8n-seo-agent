@@ -62,7 +62,8 @@ const scSection = (a, num) => {
     if (t) h += `<p>Last 28 days (${e2(t.period.start)} to ${e2(t.period.end)}): <b>${n2(t.clicks)}</b> clicks, <b>${n2(t.impressions)}</b> impressions, CTR ${(t.ctr * 100).toFixed(2)}%, average position ${t.position}; ${n2(sc.pages_with_impressions)} pages and ${n2(sc.queries_with_impressions)} queries with impressions.</p>`;
     h += `<table class="ct"><tr><th>Submitted sitemap</th><th>URLs</th><th>Last read</th><th>Errors</th><th>Warnings</th></tr>` + ((sc.sitemaps || []).length ? sc.sitemaps.map(s => `<tr><td>${e2(s.path)}</td><td>${n2(s.urls)}</td><td>${e2(String(s.downloaded || '').slice(0, 10) || (s.pending ? 'pending' : '—'))}</td><td>${n2(s.errors)}</td><td>${n2(s.warnings)}</td></tr>`).join('') : `<tr><td colspan="5">none submitted${sc.sitemaps_error ? ' (' + e2(sc.sitemaps_error) + ')' : ''}</td></tr>`) + `</table>`;
     const covRows = Object.entries(sc.coverage || {});
-    if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} sampled pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
+    if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} inspected pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
+    h += indexSection(sc);   // G25: page by page — in Google's index, the canonical it chose, its last crawl, mobile usability, rich results
     if ((sc.not_indexed || []).length) h += `<table class="ct"><tr><th>Not indexed</th><th>Reason</th></tr>` + sc.not_indexed.slice(0, 10).map(x => `<tr><td>${e2(p2(x.url))}</td><td>${e2(x.reason)}</td></tr>`).join('') + `</table>`;
     if ((sc.top_queries || []).length) h += `<table class="ct"><tr><th>Top query</th><th>Clicks</th><th>Impressions</th><th>Position</th></tr>` + sc.top_queries.slice(0, 10).map(q => `<tr><td>${e2(q.query)}</td><td>${n2(q.clicks)}</td><td>${n2(q.impressions)}</td><td>${q.position}</td></tr>`).join('') + `</table>`;
     if ((sc.scraper_queries || {}).count) h += `<p class="small">${n2(sc.scraper_queries.count)} scraper ${sc.scraper_queries.count === 1 ? 'query' : 'queries'} (search operators such as site: or inurl:, ${n2(sc.scraper_queries.impressions)} impressions) left out of the top queries: they come from SEO tools and scrapers, not from customers.</p>`;
@@ -137,6 +138,28 @@ const minorBlock = (list, where) => {
     + `${where ? ' in ' + e2(where) : ''}: one line each instead of a section each, so the list above is the one to act on. Nothing is left out of the score or of the stored findings.</summary>`
     + `<table class="ct"><tr><th>Item</th><th>Area</th><th>Pages</th><th>What to do</th></tr>${m.map(row).join('')}</table></details>`;
 };
+// ---- what Google says about each key page (G25, 2026-10-13) ----
+const indexSection = (sc) => {
+  const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const p3 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  const ic = sc.index_coverage || null;
+  if (!ic) return '';
+  let h = `<h3>Google's index view of the key pages (URL Inspection)</h3><p>${e3(ic.text)}.</p>`;
+  if ((ic.pages || []).length) {
+    h += `<table class="ct"><tr><th>Page</th><th>In Google</th><th>State</th><th>Google's canonical</th><th>Last crawl</th><th>Mobile</th><th>Rich results</th></tr>`
+      + ic.pages.slice(0, 25).map(p => `<tr><td>${e3(p3(p.url))}</td><td>${p.indexed === true ? '<span class="ok">yes</span>' : p.indexed === false ? '<span class="bad">no</span>' : '—'}</td><td>${e3(p.coverage || p.verdict || '—')}</td>`
+        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3(p.google_canonical)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
+        + `<td>${e3(String(p.last_crawl || '').slice(0, 10) || '—')}</td><td>${p.mobile_usable === true ? 'ok' : p.mobile_usable === false ? '<span class="bad">issues</span>' : '—'}</td>`
+        + `<td>${e3((p.rich_results || []).join(', ') || '—')}</td></tr>`).join('') + `</table>`;
+    if (ic.pages.length > 25) h += `<p class="small">${ic.pages.length - 25} more inspected pages are in the data behind this report.</p>`;
+  }
+  if ((ic.not_checked_pages || []).length) h += `<p class="small"><b>Not checked (${ic.not_checked}):</b> ` + ic.not_checked_pages.slice(0, 8).map(x => e3(p3(x.url))).join(', ')
+    + (ic.not_checked_pages.length > 8 ? ' …' : '') + ` — ${e3(ic.not_checked_reason || ic.not_checked_pages[0].reason)}. Nothing is claimed about these pages.</p>`;
+  if (ic.quota_note) h += `<p class="small">${e3(ic.quota_note)}</p>`;
+  return h;
+};
+// ---- how a fix is verified (G11, 2026-10-13) ----
+const fixWatchNote = () => `<p class="small"><b>After you fix something:</b> mark it done in the dashboard and the daily key-page watch re-checks that exact item on your key pages within a day (status, noindex, canonical, title, robots.txt) and shows the result — it does not wait for the next monthly audit.</p>`;
 const findings = a.findings || [];
 const counts = a.issue_counts || {};
 const byCat = (cat) => findings.filter(f => f.category === cat);
@@ -207,7 +230,7 @@ ${a.score_cap_reason ? `<div class="note"><b>Score limit applied:</b> ${esc(a.sc
 <tr><td>Referring domains</td><td>${num(you.rd)}</td><td>${num(au && au.medians && au.medians.referring_domains)}</td></tr>
 <tr><td>Mobile PageSpeed</td><td>${num(you.speed)}</td><td>${num(ps && ps.medians && ps.medians.score)}</td></tr>
 <tr><td>Domain age (years)</td><td>${num(you.age)}</td><td>${num(cb.medians && cb.medians.domain_age_years)}</td></tr></table>
-${top.length ? '<h3>Fix These First</h3>' + prioNote(a) + '<ol>' + top.map(f => `<li><b>${esc(f.title)}</b> <span class="badge" style="background:${SEV_COLOR[f.severity]}">${esc(f.severity)}</span>${f.evidence ? ' <span class="small">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}${f.impact_basis ? '<br><span class="small">Why here: ' + esc(f.impact_basis) + ' · impact score ' + esc(f.impact) + '</span>' : ''}</li>`).join('') + '</ol>' : ''}`;
+${top.length ? '<h3>Fix These First</h3>' + prioNote(a) + fixWatchNote() + '<ol>' + top.map(f => `<li><b>${esc(f.title)}</b> <span class="badge" style="background:${SEV_COLOR[f.severity]}">${esc(f.severity)}</span>${f.evidence ? ' <span class="small">(' + esc(f.evidence) + ')</span>' : ''}<br>${esc(f.fix)}${f.impact_basis ? '<br><span class="small">Why here: ' + esc(f.impact_basis) + ' · impact score ' + esc(f.impact) + '</span>' : ''}</li>`).join('') + '</ol>' : ''}`;
 
 // ---------- 2. Scorecard ----------
 html += `<h2>2. Scorecard</h2><table class="ct"><tr><th>Category</th><th style="width:60px">Score</th><th style="width:60px">Weight</th><th style="width:45%"></th></tr>` +
