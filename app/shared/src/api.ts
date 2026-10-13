@@ -236,6 +236,63 @@ export interface AdminOrg {
   monthRuns: number;
 }
 
+// ---------- G21 (2026-10-13): the delivery rate — did what should have run, run, and did it reach the customer? ----------
+/** One side of a week: runs that started, runs that were delivered, and everything in between. */
+export interface DeliveryCount {
+  started: number;
+  /** finished AND something reached the customer (at least one report) */
+  delivered: number;
+  failed: number;
+  /** finished with no report at all: nothing reached the customer, so it does not count as delivered */
+  noReport: number;
+  /** never finished and never will (older than the engine's own execution timeout) */
+  stuck: number;
+  /** still going: left out of the rate rather than counted against it */
+  inFlight: number;
+  /** delivered + failed + noReport + stuck — what the rate is taken over */
+  settled: number;
+  ratePct: number | null;
+}
+/** A schedule that should have fired and left no execution behind (D25a: this stack is Mac-hosted and sleeps). */
+export interface MissedSchedule {
+  automation: string;
+  title: string;
+  workflow: string;
+  /** when it should have fired, in n8n's own clock */
+  expectedAt: string;
+}
+export interface DeliveryWeek {
+  /** the Monday the week starts on (UTC, YYYY-MM-DD) */
+  week: string;
+  onDemand: DeliveryCount;
+  scheduled: DeliveryCount;
+  overallPct: number | null;
+  belowTarget: boolean;
+  missed: MissedSchedule[];
+}
+/** Ops alerts and the channel that carried each one (R6 writes `delivered` back on the row). */
+export interface AlertDelivery {
+  total: number;
+  delivered: number;
+  pending: number;
+  failed: number;
+  /** the same failure inside the dedupe window: deliberately not re-sent, so it is left out of the rate */
+  deduped: number;
+  notSent: number;
+  ratePct: number | null;
+  byChannel: Record<string, number>;
+}
+export interface DeliveryReport {
+  generatedAt: string;
+  /** n8n's own clock, which the schedules fire on (GENERIC_TIMEZONE) */
+  timezone: string;
+  targetPct: number;
+  weeks: DeliveryWeek[];
+  alerts: AlertDelivery;
+  /** what could not be measured, in words, instead of a figure that looks complete */
+  notes: string[];
+}
+
 /** v4.10: the result of a link upload (POST …/backlinks/import) */
 export interface LinkImportSummary {
   source: string;

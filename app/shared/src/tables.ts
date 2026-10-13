@@ -287,6 +287,10 @@ export const TABLES = {
   /** G11 + G25 (2026-10-13): one row per site and key page — the daily raw watch and what Search Console's URL Inspection said about it */
   pageWatch: 'seo_page_watch',
   ladderSettings: 'seo_ladder_settings',
+  /** D25b + R6 (2026-10-12/13): every ops alert, with the channel that carried it — what G21's alert delivery rate is measured from */
+  opsAlerts: 'seo_ops_alerts',
+  /** D1 + R9 + G23: one row per run, with its reservation and what it settled (which part measured, which estimated) */
+  runLedger: 'seo_run_ledger',
   /** v4.13 Link Builder */
   linkOutreach: 'seo_link_outreach',
   listings: 'seo_listings',
