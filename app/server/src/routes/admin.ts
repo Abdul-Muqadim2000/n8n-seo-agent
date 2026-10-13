@@ -9,6 +9,7 @@ import { emailField } from '@seo/shared';
 import { issueToken } from '../auth/tokens';
 import { config } from '../config';
 import { monthStart } from '../services/runs';
+import { loadDeliveryReport } from '../services/delivery';
 
 /** Platform administration (operators listed in PLATFORM_ADMIN_EMAILS): every company, its usage, budget and status. */
 export async function adminRoutes(app: FastifyInstance) {
@@ -66,6 +67,14 @@ export async function adminRoutes(app: FastifyInstance) {
       .returning({ id: schema.organizations.id });
     if (!rows.length) throw notFound('Company not found');
     return (await list(orgId))[0];
+  });
+
+  // G21 (2026-10-13): runs delivered / runs started per week, for the app's own runs and for the nine schedules, with the schedule
+  // fires that left no execution behind (D25a: a Mac-hosted stack misses a Monday whenever the machine sleeps through it) and the
+  // channel that carried each ops alert (R6). Internal: operators read it, customers never see it.
+  app.get('/api/admin/delivery', async (req) => {
+    guard(req);
+    return loadDeliveryReport();
   });
 
   // without account e-mails, a forgotten password is reset with a link the platform admin creates and hands over

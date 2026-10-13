@@ -216,4 +216,5 @@ usual and read by the Pipeline (`detected`), the ladder detail and the site-repo
 |---|---|---|---|
 | GET | /api/admin/orgs | | `AdminOrg[]` |
 | PATCH | /api/admin/orgs/:orgId | `orgBudgetSchema` | `AdminOrg` |
+| GET | /api/admin/delivery | | `DeliveryReport` — runs delivered / runs started per week (app runs and the nine schedules), the schedule fires that left no execution behind (D25a) and how every ops alert went out (G21) |
 | POST | /api/admin/users/reset-link | `{ email }` | `{ url, expiresInHours, name }` — a password reset link to hand over (no e-mails on the platform) |

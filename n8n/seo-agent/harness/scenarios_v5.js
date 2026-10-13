@@ -7423,11 +7423,12 @@ await guard('the re-rating defects R1..R9', async () => {
     && eq(LW.ladder_release.conditions, ['ladder_id', 'keyword']) && eq(LW.ladder_release.values, ['status', 'status_note']) && LW.ladder_release.table === 'seo_ladders',
     JSON.stringify(LW.ladder_release));
   // the guard's own refusal, as the app shows it: the numbers stay, the developer instruction is gone
+  // (G23, 2026-10-13: a page run now reserves the recalibrated $0.80 instead of the $1.20 nobody had checked against the $0.587 it measured)
   ledgerReset([{ key: 'app:co_1', mode: 'keyword', est_usd: 5.9, created_at: new Date().toISOString(), status: 'done', settled_usd: 5.9 }]);
   const refused = (await ledgerRun([{ json: { mode: 'keyword', domain: D, keyword: KW, include_content: true, ai_budget_usd: 6, ai_budget_period: 'day', client_ip: 'ladder:' + LADDER_ID, email: '' } }]))[0].json;
   console.log('   refusal text ->', refused.validation_error);
   check('R1 / the refusal a customer reads: the numbers stay and "Raise ai_budget_usd in Normalize Input" is gone',
-    /used up \(estimated \$5\.90 of \$6; this run would add about \$1\.20\)/.test(refused.validation_error) && /can run again tomorrow/.test(refused.validation_error)
+    /used up \(estimated \$5\.90 of \$6; this run would add about \$0\.80\)/.test(refused.validation_error) && /can run again tomorrow/.test(refused.validation_error)
     && !/ai_budget_usd|Normalize Input/.test(refused.validation_error), refused.validation_error);
   // the plan no longer promises a delivered page before the run is accepted
   const lrep = srcOf('Build_Ladder_Report.js');
@@ -7677,8 +7678,10 @@ await guard('the re-rating defects R1..R9', async () => {
   const settledEst = (await run('Ledger Settle (Audit)', [{ json: { ...oneSite, id: 8 } }], { code: 'Ledger_Settle_Audit_' }))[0].json;
   check('R9: a workflow with no measured figure settles its own estimate and says so, instead of inventing a number',
     settledEst.dfs_usd === 0.09 && settledEst.dfs_measured === false && settledEst.status === 'done', JSON.stringify(settledEst));
+  // G23 (2026-10-13) moved the two estimate tables into the shared cost kit (one source for the guard, the settle, the self-correcting
+  // figure and the reconciliation) and raised the Keyword Check's DataForSEO reservation to the $0.0254 a check really measured.
   check('R9: the main workflow\'s and the Keyword Check\'s own reservations carry the same two columns',
-    /dfs_est_usd: dfs_est/.test(srcOf('Run_Ledger_Row.js')) && /DFS_EST = \{ crawl: 0\.09/.test(srcOf('Run_Ledger_Row.js')) && /dfs_est_usd: 0\.024/.test(srcOf('Run_Ledger_Row_Assess_.js')), 'Run Ledger Row');
+    /dfs_est_usd: dfs_est/.test(srcOf('Run_Ledger_Row.js')) && /DFS_EST = \{[\s\S]*?crawl: 0\.09/.test(srcOf('_cost_cal.js')) && /dfs_est_usd: 0\.034/.test(srcOf('Run_Ledger_Row_Assess_.js')), 'Run Ledger Row');
   ledgerReset([]);
   const auditRun = (await ledgerRun([{ json: { mode: 'audit', domain: D, crawl_max_pages: 200, include_full_report: false, ai_budget_usd: 6, ai_budget_period: 'day', client_ip: '1.2.3.4', email: 'owner@example.com' } }]))[0].json;
   const auditRow = LEDGER.rows[LEDGER.rows.length - 1];
@@ -8014,5 +8017,210 @@ await guard('r10-r15-rerating-completion-defects', async () => {
 });
 
 
+// ===================================================================================
+// S60 (2026-10-13, system review FIX_PLAN G23 + G21 and the estimate recalibration the re-rating measured:
+// docs/system-review-2026-10-13/RESULTS.md §0b / §1 / §2.10) — what this engine's own money is allowed to say.
+// Every check below fails on the build of that morning: Strategy Brief, Copywriter and Editor stream, so no token usage was reported
+// and Claude's spend was a range ("$1.6-3.0"; "$0.44 of $1.00 estimated"); `seo_run_ledger.settled_usd` stored the per-mode
+// RESERVATION while the guard, the app and the review all read it as a measured cost; and the per-mode estimates were up to 13x away
+// from the money, which is why the day's guard refused five customer runs that each cost a fraction of what it held back.
+// ===================================================================================
+await guard('G23 cost and G21 delivery', async () => {
+  reset(); const SN = 'S60 G23 G21 — a streaming call is priced from what the run can see and is labelled estimated, a settled ledger row keeps measured and estimated money apart, and the per-mode estimates come from the measured runs and correct themselves';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fs = require('fs'), path = require('path');
+  const CODE = process.env.CODE_DIR || path.join(__dirname, 'code');
+  const srcOf = (f) => fs.readFileSync(path.join(CODE, f), 'utf8');
+  const TC = require('./table_cols.json');
+  const CW = require('./cost_wiring.json');
+  const kit = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+  const cacheRow = (key, v) => ({ id: 1, key, kind: 'cost', site_id: '', value: JSON.stringify(v), updated_at: new Date().toISOString() });
+
+  // ---------- 1. the recalibration: every shipped estimate comes from a measured run and is never below it ----------
+  const T = await kit({ call: 'tables' });
+  console.log('   EST  ->', JSON.stringify(T.EST));
+  console.log('   DFS  ->', JSON.stringify(T.DFS_EST));
+  // the money each mode really cost, from RESULTS.md §0b / §1 (execution ids in the comments of _cost_cal.js)
+  const MEASURED_AI = { content: 0.587, report: 0.105, verdict: 0.108, discover: 0.165, ladder: 0.115, full: 0.049, site_audit: 0, describe: 0.012, ai_visibility: 0.095, backlinks: 0 };
+  const MEASURED_DFS = { crawl: 0.09, full: 0.4094, content: 0.0221, verdict: 0.0221, report: 0.0221, discover: 0.2552, ladder: 0.1162, ai_visibility: 0.7946, backlinks: 0.3727, assess: 0.0254 };
+  const under = [...Object.keys(MEASURED_AI).filter(k => T.EST[k] < MEASURED_AI[k]).map(k => 'ai:' + k),
+                 ...Object.keys(MEASURED_DFS).filter(k => T.DFS_EST[k] < MEASURED_DFS[k]).map(k => 'dfs:' + k)];
+  check('G23: no shipped per-mode estimate sits below what that mode has actually cost (the whole reason the guard refused five runs that were cheap)',
+    under.length === 0, 'below the measured money: ' + under.join(', '));
+  check('G23: the ai_visibility estimates are no longer the $0.06 / $0.60 that a $0.79 run blew through, and the page is no longer reserved at $1.20 for $0.587',
+    T.EST.ai_visibility === 0.14 && T.DFS_EST.ai_visibility === 0.95 && T.EST.content === 0.8 && T.EST.ladder === 0.18 && T.DFS_EST.discover === 0.34,
+    JSON.stringify({ ai_vis: [T.EST.ai_visibility, T.DFS_EST.ai_visibility], content: T.EST.content, ladder: T.EST.ladder, discover: T.DFS_EST.discover }));
+  check('G23: no estimate is wildly ABOVE the money either — nothing reserves more than three times what it measured (the full report reserved $1.00 for $0.41)',
+    Object.keys(MEASURED_DFS).every(k => !MEASURED_DFS[k] || T.DFS_EST[k] <= MEASURED_DFS[k] * 3) && T.DFS_EST.full === 0.55,
+    JSON.stringify(Object.keys(MEASURED_DFS).filter(k => MEASURED_DFS[k] && T.DFS_EST[k] > MEASURED_DFS[k] * 3)));
+  check('G23: the prices are the Anthropic list prices per million tokens, and an unknown model is priced at the dearest one we use',
+    eq(T.PRICES['claude-opus-5-5'], { in: 4, out: 20 }) && eq(T.PRICES['claude-sonnet-5-5'], { in: 2, out: 10 })
+    && eq(T.PRICES['claude-haiku-4-5-20251001'], { in: 1, out: 5 }) && eq(T.UNKNOWN, { in: 4, out: 20 }), JSON.stringify(T.PRICES));
+
+  // ---------- 2. a streaming call is priced from what the run can see, and says it is an estimate ----------
+  // exec 521: Strategy Brief, Copywriter and Editor are Opus with streaming on. n8n reports no usage for them at all — only
+  // `tokenUsageEstimate`, which a Code node cannot read — so the only honest figure comes from the characters and the thinking budget.
+  const stream = CW.ai_calls.filter(c => c.streaming);
+  check('G23: the call table is baked from the real model nodes, so exactly the three streaming Opus nodes are known to be unmeasurable',
+    stream.length === 3 && eq(stream.map(c => c.node).sort(), ['Copywriter', 'Editor', 'Strategy Brief'])
+    && stream.every(c => c.model === 'claude-opus-5-5' && c.max_tokens >= 24576 && c.effort === 'medium' && c.template_chars > 1000 && c.input && c.fields.length),
+    JSON.stringify(stream.map(c => ({ n: c.node, m: c.model, t: c.max_tokens, f: c.fields.length }))));
+  const cw = stream.find(c => c.node === 'Copywriter');
+  const one = await kit({ call: 'callCost', call_spec: { node: 'Copywriter', model: cw.model, max_tokens: cw.max_tokens, effort: cw.effort, streaming: true, prompt_chars: 40000, output_chars: 19000, calls: 1 } });
+  console.log('   copywriter call ->', JSON.stringify(one));
+  check('G23: a streaming call is priced from its prompt characters, its answer characters AND its thinking budget, and comes back measured: false',
+    one.measured === false && one.streaming === true && one.family === 'opus' && one.think_tokens > 0
+    && one.in_tokens === Math.ceil(40000 / T.CHARS_PER_TOKEN) && one.out_tokens === Math.ceil(19000 / T.CHARS_PER_TOKEN) + one.think_tokens && one.usd > 0,
+    JSON.stringify(one));
+  const measuredCall = await kit({ call: 'callCost', call_spec: { node: 'Verdict Agent', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', prompt_chars: 999999, output_chars: 999999, calls: 1, usage: { promptTokens: 20000, completionTokens: 4000 } } });
+  check('G23: a call that DOES report token usage is measured, and its characters are ignored — a measured figure is never replaced by an estimate',
+    measuredCall.measured === true && measuredCall.in_tokens === 20000 && measuredCall.out_tokens === 4000 && measuredCall.think_tokens === 0
+    && measuredCall.usd === +((20000 / 1e6) * 2 + (4000 / 1e6) * 10).toFixed(4), JSON.stringify(measuredCall));
+
+  // the page run of exec 521: three Opus streaming nodes (no usage) beside the Sonnet ones (usage reported)
+  const pageRun = await kit({ call: 'runCost', calls: [
+    { node: 'Strategy Brief', model: 'claude-opus-5-5', max_tokens: 24576, effort: 'medium', streaming: true, prompt_chars: 36000, output_chars: 6000, calls: 1 },
+    { node: 'Copywriter', model: 'claude-opus-5-5', max_tokens: 32768, effort: 'medium', streaming: true, prompt_chars: 40000, output_chars: 19000, calls: 1 },
+    { node: 'Editor', model: 'claude-opus-5-5', max_tokens: 32768, effort: 'medium', streaming: true, prompt_chars: 44000, output_chars: 19000, calls: 1 },
+    { node: 'Critic', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', prompt_chars: 30000, output_chars: 4000, calls: 1, usage: { promptTokens: 9000, completionTokens: 1200 } },
+  ] });
+  console.log('   page run cost ->', JSON.stringify({ usd: pageRun.usd, measured: pageRun.measured_usd, estimated: pageRun.estimated_usd, models: pageRun.models, streaming: pageRun.streaming_nodes }));
+  check('G23: the run figure keeps measured and estimated money APART and is flagged estimated as long as one cent of it is an estimate',
+    pageRun.estimated === true && pageRun.estimated_usd > 0 && pageRun.measured_usd > 0
+    && +(pageRun.measured_usd + pageRun.estimated_usd).toFixed(4) === pageRun.usd && pageRun.calls === 4,
+    JSON.stringify({ u: pageRun.usd, m: pageRun.measured_usd, e: pageRun.estimated_usd }));
+  check('G23: the basis says in words that it is an estimate and names the streaming nodes that report nothing',
+    /^estimated:/.test(pageRun.basis) && /characters a token/.test(pageRun.basis) && /3 streaming node\(s\) report no token usage/.test(pageRun.basis)
+    && /Strategy Brief/.test(pageRun.basis) && /is measured token usage/.test(pageRun.basis), pageRun.basis);
+  check('G23: the estimate lands in the same ballpark as the $0.438 the re-rating reconstructed for those three Opus nodes, on the conservative side',
+    pageRun.models.opus >= 0.438 && pageRun.models.opus <= 0.438 * 2, 'opus part $' + pageRun.models.opus);
+  const nothing = await kit({ call: 'runCost', calls: [] });
+  check('G23: a run with no model call says so instead of reporting $0 as a measured cost',
+    nothing.usd === 0 && nothing.estimated === false && nothing.basis === 'no Claude call ran', JSON.stringify(nothing));
+
+  // the monthly reconciliation's half inside the engine: the factors it writes change every price
+  const withFactor = await kit({ call: 'callCost', rows: [cacheRow(T.FACTOR_KEY, { opus: 1.5, sonnet: 1, month: '2026-10', note: 'test' })],
+    call_spec: { node: 'Copywriter', model: 'claude-opus-5-5', max_tokens: cw.max_tokens, effort: cw.effort, streaming: true, prompt_chars: 40000, output_chars: 19000, calls: 1 } });
+  check('G23: the per-model correction factor the monthly reconciliation writes into seo_cache is applied to every price from the next run on',
+    withFactor.factor === 1.5 && Math.abs(withFactor.usd - one.usd * 1.5) < 0.001 && withFactor.usd > one.usd, JSON.stringify({ with: withFactor.usd, without: one.usd }));
+
+  // ---------- 3. a settled ledger row says which half of its money was measured ----------
+  const LED = { run_id: 'test-exec', key: 'app:co_1', mode: 'keyword', est_usd: 0.8, created_at: new Date().toISOString(), status: 'reserved',
+    settled_usd: 0, domain: 'northwind-erp.com', heavy: false, dfs_est_usd: 0.04, dfs_usd: 0, cost_mode: 'content|content',
+    ai_usd: 0, measured_usd: 0, estimated_usd: 0.84, cost_basis: 'reserved: ...' };
+  mock('Run Ledger Row', [{ json: LED }]);
+  mock('Rate Limit', [{ json: { mode: 'keyword', include_content: true, domain: 'northwind-erp.com' } }]);
+  mock('Build Word File', [{ json: { run_ledger: { dataforseo_usd: 0.0221, dataforseo_calls: 7, ai_calls: 7, ai_cost: pageRun, ai_usd: pageRun.usd, ai_cost_estimated: true } } }]);
+  const st = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   settle ->', JSON.stringify({ settled: st.settled_usd, ai: st.ai_usd, dfs: st.dfs_usd, m: st.measured_usd, e: st.estimated_usd, basis: st.cost_basis }));
+  check('G23: the settle writes the run\'s OWN Claude figure (not the flat reservation it started with) and the DataForSEO money it really measured',
+    st.status === 'done' && st.settled_usd === pageRun.usd && st.ai_usd === pageRun.usd && st.ai_estimated === true
+    && st.dfs_usd === 0.0221 && st.dfs_measured === true, JSON.stringify(st));
+  check('G23: measured and estimated money add up to the whole cost and neither is folded into the other — the Sonnet calls that DID report usage stay measured, the three streaming nodes stay an estimate',
+    st.measured_usd === +(0.0221 + pageRun.measured_usd).toFixed(4) && st.estimated_usd === pageRun.estimated_usd
+    && +(st.measured_usd + st.estimated_usd).toFixed(4) === +(st.ai_usd + st.dfs_usd).toFixed(4) && st.estimated_usd > st.measured_usd,
+    JSON.stringify({ m: st.measured_usd, e: st.estimated_usd, total: +(st.ai_usd + st.dfs_usd).toFixed(4) }));
+  check('G23: cost_basis says in words which part is which, so nobody can read settled_usd as a measured cost again',
+    /Claude \$[\d.]+ PARTLY ESTIMATED: \$[\d.]+ measured, \$[\d.]+ estimated/.test(st.cost_basis) && /DataForSEO \$[\d.]+ measured/.test(st.cost_basis), st.cost_basis);
+  check('G23: the row carries the estimate keys it was priced on, so the settle can teach the right rolling figures',
+    st.cost_mode === 'content|content', st.cost_mode);
+  // a short branch that wrote no report node falls back to its reservation and says so, instead of claiming $0 was measured
+  delete store['Build Word File'];
+  const shortRun = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  check('G23: a branch that priced no model call settles its reservation and says that is what it is — never a measured $0',
+    shortRun.ai_usd === 0.8 && shortRun.ai_measured === false && shortRun.dfs_measured === false && shortRun.measured_usd === 0
+    && shortRun.estimated_usd === 0.84 && /priced no model call/.test(shortRun.ai_basis), JSON.stringify(shortRun));
+  check('G23: seo_run_ledger really has the columns that split a cost (they reach the live table through ladder_common.py + sync_tables.py)',
+    ['cost_mode', 'ai_usd', 'measured_usd', 'estimated_usd', 'cost_basis'].every(c => TC.RUN_LEDGER.includes(c)), TC.RUN_LEDGER.join(','));
+
+  // ---------- 4. the estimate corrects itself on every settle, and never falls below what the mode cost ----------
+  mock('Run Ledger Settle', [{ json: { ...st, cost_mode: 'content|content' } }]);
+  mock('Load Cost Calibration', [{ json: {} }]);
+  const calRows = (await run('Cost Calibration Row', [{ json: {} }])).map(i => i.json);
+  console.log('   calibration rows ->', calRows.map(r => r.key).join(', '));
+  check('G23: a settle writes the mode\'s rolling Claude figure, the measured DataForSEO figure and the month\'s per-model total, with the exact seo_cache columns',
+    calRows.length === 4 && eq(calRows.map(r => r.key).sort(), ['cost:ai:content', 'cost:dfs:content', 'cost:model:opus', 'cost:model:sonnet'])
+    && calRows.every(r => eq(Object.keys(r), ['key', 'kind', 'site_id', 'value', 'updated_at']) && r.kind === 'cost'),
+    JSON.stringify(calRows.map(r => Object.keys(r))));
+  const aiStat = JSON.parse(calRows.find(r => r.key === 'cost:ai:content').value);
+  check('G23: the first settle of a mode stores exactly what it cost, with the window the floor is taken from',
+    aiStat.n === 1 && aiStat.last === st.ai_usd && aiStat.mean === st.ai_usd && aiStat.max === st.ai_usd && eq(aiStat.recent, [st.ai_usd]),
+    JSON.stringify(aiStat));
+  const monthStat = JSON.parse(calRows.find(r => r.key === 'cost:model:opus').value);
+  check('G23: the month\'s per-model total is what reconcile_claude_cost.py compares the Anthropic export with, and it is labelled an estimate',
+    monthStat.month === new Date().toISOString().slice(0, 7) && monthStat.usd === pageRun.models.opus && monthStat.runs === 1 && monthStat.estimated === true,
+    JSON.stringify(monthStat));
+  // nothing measurable to learn from: the row is not written, so a reservation can never confirm itself for ever
+  mock('Run Ledger Settle', [{ json: { cost_mode: 'describe|', ai_calls: 0, ai_usd: 0.03, dfs_measured: false, dfs_usd: 0.0 } }]);
+  const noLearn = (await run('Cost Calibration Row', [{ json: {} }]))[0].json;
+  check('G23: a run that measured nothing teaches the estimate nothing — a reservation may not confirm itself',
+    noLearn.skip === true && /nothing measurable/.test(noLearn.reason), JSON.stringify(noLearn));
+
+  // the stored figure in the guard's hands
+  const calm = async (stat, mode = 'ai_visibility', kind = 'ai') => kit({ call: 'estOf', kind, key: mode, rows: [cacheRow('cost:' + kind + ':' + mode, stat)] });
+  const fresh = await kit({ call: 'estOf', kind: 'ai', key: 'ai_visibility', rows: [] });
+  check('G23: with no history the guard reserves the shipped figure and says so',
+    fresh.usd === 0.14 && fresh.source === 'default', JSON.stringify(fresh));
+  const cheap = await calm({ n: 4, mean: 0.095, max: 0.11, last: 0.095, recent: [0.09, 0.095, 0.11, 0.095] });
+  check('G23: once the mode has settled runs the estimate follows the money down — the rolling figure plus a quarter, not the shipped guess',
+    cheap.source === 'calibrated' && cheap.usd === +(0.095 * 1.25).toFixed(4) && cheap.usd < 0.14 && cheap.floor === 0.11, JSON.stringify(cheap));
+  const dear = await calm({ n: 4, mean: 0.12, max: 0.30, last: 0.30, recent: [0.09, 0.1, 0.12, 0.30] });
+  check('G23: and it can never fall below what the mode actually cost in its last runs, however low the average drifts',
+    dear.usd === 0.30 && dear.floor === 0.30 && dear.usd > dear.def, JSON.stringify(dear));
+  const runaway = await calm({ n: 9, mean: 9.0, max: 0.2, last: 0.2, recent: [0.2] });
+  check('G23: a runaway average is capped at five times the shipped figure, so one freak run cannot lock the guard',
+    runaway.usd === +(0.14 * 5).toFixed(4), JSON.stringify(runaway));
+
+  // ---------- 5. one source: the request -> its estimate keys ----------
+  const pickOf = async (kind, request, rows = []) => kit({ call: 'pick', kind, request, rows });
+  const aiVis = await pickOf('ai', { mode: 'ai_visibility' }), dfsVis = await pickOf('dfs', { mode: 'ai_visibility' });
+  check('G23: an on-demand AI visibility run reserves $0.14 of Claude money and $0.95 of DataForSEO money (it cost $0.095 and $0.7946)',
+    aiVis.usd === 0.14 && dfsVis.usd === 0.95 && aiVis.key === 'ai_visibility', JSON.stringify({ ai: aiVis.usd, dfs: dfsVis.usd }));
+  const full = await pickOf('dfs', { mode: 'audit', include_full_report: true }), tech = await pickOf('dfs', { mode: 'audit' });
+  check('G23: a full report and a technical audit are priced apart, and the audit still reserves the $0.09 its crawl measured twice',
+    full.usd === 0.55 && tech.usd === 0.09 && tech.key === 'crawl' && (await pickOf('ai', { mode: 'audit' })).usd === 0, JSON.stringify({ full: full.usd, tech: tech.usd }));
+  const page = await pickOf('ai', { mode: 'keyword', include_content: true, need_site_description: true });
+  check('G23: a page run that must also describe the site reserves both, is priced on its primary key, and names every key it used',
+    page.usd === +(0.8 + 0.03).toFixed(4) && page.key === 'content' && page.label === 'content+describe', JSON.stringify(page));
+  const freeBl = await pickOf('dfs', { mode: 'backlinks', free_only: true });
+  check('G23: a free-only backlink check reserves nothing and says this mode spends nothing there',
+    freeBl.usd === 0 && /spends nothing/.test(freeBl.basis), JSON.stringify(freeBl));
+  const caseStudy = await pickOf('ai', { mode: 'case_study' });
+  check('G23: the case-study intake still holds back room for the page run it spawns, now at the recalibrated figure',
+    caseStudy.usd === 0 && caseStudy.room === 0.8, JSON.stringify(caseStudy));
+
+  // ---------- 6. the guard end to end: the recalibrated reservation really reaches the ledger row ----------
+  ledgerReset([]);
+  const visRun = (await ledgerRun([{ json: { mode: 'ai_visibility', domain: 'northwind-erp.com', ai_budget_usd: 6, ai_budget_period: 'day', client_ip: 'app:co_1', email: '' } }]))[0].json;
+  const visRow = LEDGER.rows[LEDGER.rows.length - 1];
+  check('G23: an ai_visibility run through the real guard reserves the recalibrated figures and carries them on its ledger row and in the run',
+    !visRun.validation_error && visRow.est_usd === 0.14 && visRow.dfs_est_usd === 0.95 && visRow.cost_mode === 'ai_visibility|ai_visibility'
+    && visRow.measured_usd === 0 && visRow.estimated_usd === 1.09 && /ESTIMATED/.test(visRow.cost_basis)
+    && visRun.ai_spend_estimate_usd === 0.14 && visRun.cost_estimate_source === 'default', JSON.stringify(visRow));
+  check('G23: the reserved row still has exactly the seo_run_ledger columns, in the table\'s own order',
+    eq(Object.keys(visRow).filter(k => k !== 'id'), TC.RUN_LEDGER), Object.keys(visRow).join(','));
+  // the five refusals of 2026-10-13 in reverse: the day that refused ai_visibility at $5.74 of $6 now lets it through
+  ledgerReset([{ key: 'app:co_1', mode: 'keyword', est_usd: 5.74, created_at: new Date().toISOString(), status: 'done', settled_usd: 5.74 }]);
+  const tight = (await ledgerRun([{ json: { mode: 'ai_visibility', domain: 'northwind-erp.com', ai_budget_usd: 6, ai_budget_period: 'day', client_ip: 'app:co_1', email: '' } }]))[0].json;
+  check('G23: the recalibrated figure is what the guard spends the day\'s budget on, so a run it refused for $0.06 of headroom now fits',
+    !tight.validation_error && tight.ai_budget_used_est_usd === 5.88, JSON.stringify({ err: tight.validation_error, used: tight.ai_budget_used_est_usd }));
+
+  // ---------- 7. the wiring: the calibration is read before the guard counts, and taught after the settle ----------
+  check('G23: Load Cost Calibration sits between the ledger table and the reservation, so the guard prices itself from the stored figures',
+    CW.intake.from === 'Ensure Run Ledger Table' && CW.intake.ensure === 'Ensure Cost Cache' && CW.intake.load === 'Load Cost Calibration'
+    && CW.intake.to === 'Run Ledger Row' && CW.intake.table === 'seo_cache' && CW.intake.kind === 'cost', JSON.stringify(CW.intake));
+  check('G23: every branch that used to settle the row now goes through Run Ledger Settle, and the update writes the split',
+    CW.settle.code === 'Run Ledger Settle' && CW.settle.from.length >= 13 && !CW.settle.from.includes('Run Ledger Settle')
+    && eq(CW.settle.writes, ['ai_usd', 'cost_basis', 'cost_mode', 'dfs_usd', 'estimated_usd', 'measured_usd', 'settled_usd', 'status'])
+    && eq(CW.settle.match, ['run_id', 'status']), JSON.stringify(CW.settle));
+  check('G23: the settle then teaches the estimate through a gate, so a run with nothing to teach writes no cache row',
+    CW.calibrate.code === 'Cost Calibration Row' && CW.calibrate.gate === 'Calibration To Save?' && CW.calibrate.save === 'Save Cost Calibration'
+    && eq(CW.calibrate.match, ['key']), JSON.stringify(CW.calibrate));
+  check('G23: the five report builders are the nodes the settle reads the per-call figure from, and each of them computes it',
+    CW.settle.ends.length >= 5 && ['Build_Word_File.js', 'Build_Full_Report.js', 'Build_Audit_Report.js', 'Build_Keyword_File.js', 'Build_Ladder_Report.js']
+      .every(f => /CC\.runCost\(__costCalls/.test(srcOf(f)) && /ai_cost_estimated/.test(srcOf(f))), CW.settle.ends.join(', '));
+});
 H.report();
 })();

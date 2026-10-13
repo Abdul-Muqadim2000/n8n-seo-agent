@@ -5,5 +5,9 @@ const v = $('Assess Validate').first().json || {};
 return [{ json: { run_id: String($execution.id), key: String(v.caller || 'anon').toLowerCase(), mode: 'assess', est_usd: 0.002, created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,
   domain: String(v.domain || '').toLowerCase(), heavy: false,
   // R9 (2026-10-13): the DataForSEO estimate beside the AI one -- a keyword check pays for the overview, the site's position and (without a
-  // stored reach) the reach measurement, about $0.024 measured live on 2026-10-13.
-  dfs_est_usd: 0.024, dfs_usd: 0 } }];
+  // stored reach) the reach measurement. G23 recalibrated it from the money: the three checks of 2026-10-13 cost $0.0761 together, so
+  // $0.0254 each, and the estimate may never sit below what the mode has recently cost (it was $0.024, under the measured figure).
+  dfs_est_usd: 0.034, dfs_usd: 0,
+  // G23: which part of a settled row's cost is measured and which is estimated. Nothing is measured at reservation time.
+  cost_mode: 'assess', ai_usd: 0, measured_usd: 0, estimated_usd: 0.036,
+  cost_basis: 'reserved: Claude $0.0020 ESTIMATED (one Haiku call), DataForSEO $0.0340 ESTIMATED (the per-check figure measured on 2026-10-13) - nothing measured yet' } }];

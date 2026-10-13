@@ -3288,6 +3288,26 @@
               {
                 "name": "dfs_usd",
                 "type": "number"
+              },
+              {
+                "name": "cost_mode",
+                "type": "string"
+              },
+              {
+                "name": "ai_usd",
+                "type": "number"
+              },
+              {
+                "name": "measured_usd",
+                "type": "number"
+              },
+              {
+                "name": "estimated_usd",
+                "type": "number"
+              },
+              {
+                "name": "cost_basis",
+                "type": "string"
               }
             ]
           },
@@ -3308,7 +3328,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// R9 (2026-10-13, re-rating RESULTS §3.2): the daily spend guard saw only the main workflow and the Keyword Check. seo_run_ledger had no row at\n// all for the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker (execs 502, 505, 506, 508, 511,\n// 515), although the pulse alone cost $0.084 and the monitors accounted for about $0.18 of that run's $0.578 of DataForSEO — so two\n// customer-facing runs were refused for AI estimates while the measured money went out unguarded.\n// This is the same reservation the main workflow makes (one appended row per execution, settled at the end), hung BESIDE the plan node: a Data\n// Table node answers with the row it wrote, not with its input, so the ledger must never sit in the monitor's own data path. The row is for the\n// record and for the main workflow's guard, which now sees what the schedules spend; a monitor is never refused by it.\n// MODE / EST / HEAVY are written in by the builder at build time (one source: build_monitors.py's WF.run_ledger).\nconst PLAN = 'LB Plan';\nconst MODE = 'link_builder';\nconst EST = {\"ai\": 0.3, \"dfs\": 0.05};   // { ai: <usd per site>, dfs: <usd per site>, dfs_full?: <usd per site for a full run> }\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\nlet rows = [];\ntry { rows = $(PLAN).all().map(i => i.json || {}).filter(r => !r.nothing_to_do && !r.skip && (r.domain || r.site_id)); } catch (e) { rows = []; }\nconst full = (r) => EST.dfs_full != null && (String(r.mode || '') === 'full' || r.full === true || r.full_report === true);\nconst ai = +(n0(EST.ai) * rows.length).toFixed(4);\nconst dfs = +rows.reduce((s, r) => s + (full(r) ? n0(EST.dfs_full) : n0(EST.dfs)), 0).toFixed(4);\n// one site in the run: name it, as the main workflow's reservation does (P34-5 reads `domain` to refuse a second heavy crawl of the same site)\nconst domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : '';\nreturn [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),\n  status: 'reserved', settled_usd: 0, domain, heavy: false, dfs_est_usd: dfs, dfs_usd: 0 } }];\n"
+          "jsCode": "// R9 (2026-10-13, re-rating RESULTS §3.2): the daily spend guard saw only the main workflow and the Keyword Check. seo_run_ledger had no row at\n// all for the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker (execs 502, 505, 506, 508, 511,\n// 515), although the pulse alone cost $0.084 and the monitors accounted for about $0.18 of that run's $0.578 of DataForSEO — so two\n// customer-facing runs were refused for AI estimates while the measured money went out unguarded.\n// This is the same reservation the main workflow makes (one appended row per execution, settled at the end), hung BESIDE the plan node: a Data\n// Table node answers with the row it wrote, not with its input, so the ledger must never sit in the monitor's own data path. The row is for the\n// record and for the main workflow's guard, which now sees what the schedules spend; a monitor is never refused by it.\n// MODE / EST / HEAVY are written in by the builder at build time (one source: build_monitors.py's WF.run_ledger).\nconst PLAN = 'LB Plan';\nconst MODE = 'link_builder';\nconst EST = {\"ai\": 0.3, \"dfs\": 0.05};   // { ai: <usd per site>, dfs: <usd per site>, dfs_full?: <usd per site for a full run> }\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\nlet rows = [];\ntry { rows = $(PLAN).all().map(i => i.json || {}).filter(r => !r.nothing_to_do && !r.skip && (r.domain || r.site_id)); } catch (e) { rows = []; }\nconst full = (r) => EST.dfs_full != null && (String(r.mode || '') === 'full' || r.full === true || r.full_report === true);\nconst ai = +(n0(EST.ai) * rows.length).toFixed(4);\nconst dfs = +rows.reduce((s, r) => s + (full(r) ? n0(EST.dfs_full) : n0(EST.dfs)), 0).toFixed(4);\n// one site in the run: name it, as the main workflow's reservation does (P34-5 reads `domain` to refuse a second heavy crawl of the same site)\nconst domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : '';\nreturn [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),\n  status: 'reserved', settled_usd: 0, domain, heavy: false, dfs_est_usd: dfs, dfs_usd: 0,\n  // G23 (2026-10-13): a row must say which part of its money was measured and which estimated; at reservation time none of it is measured.\n  // `cost_mode` is the key of the self-correcting rolling figure in seo_cache (`cost:<kind>:<mode>`) this run will settle into.\n  cost_mode: MODE, ai_usd: 0, measured_usd: 0, estimated_usd: +(ai + dfs).toFixed(4),\n  cost_basis: 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + rows.length + ' site(s) x the per-site figure), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet' } }];\n"
         },
         "id": "16fe646a-bff9-5039-b723-c09caffab51a",
         "name": "Run Ledger Row (LB)",
@@ -3443,6 +3463,56 @@
                 "type": "number",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "cost_mode",
+                "displayName": "cost_mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_usd",
+                "displayName": "ai_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "measured_usd",
+                "displayName": "measured_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "estimated_usd",
+                "displayName": "estimated_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_basis",
+                "displayName": "cost_basis",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,
@@ -3464,7 +3534,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// R9 (2026-10-13): settles this monitor run's seo_run_ledger reservation. `settled_usd` is the AI estimate the row reserved (Claude streams and\n// reports no usage — G23), and `dfs_usd` is the DataForSEO cost the run really measured where it knows it: the monitors add up the `cost` of\n// every DataForSEO task they sent (AI Metrics / Pulse Metrics / Growth Metrics / Parse Backlinks all carry it as `cost_usd`). A run that\n// measures nothing settles its own estimate, and says so, so the figure is never silently invented.\n// MEASURED / ROW are written in by the builder at build time.\nconst ROW = 'Run Ledger Row (LB)';\nconst MEASURED = '';   // '' when this workflow has no measured figure\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };\nlet row = {}; try { row = $(ROW).first().json || {}; } catch (e) { row = {}; }\nconst costOf = (x) => {\n  if (!x || typeof x !== 'object') return null;\n  const direct = n0(x.cost_usd); if (direct != null) return direct;\n  for (const k of Object.keys(x)) { const v = x[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { const n = n0(v.cost_usd); if (n != null) return n; } }\n  return null;\n};\nlet measured = null;\nif (MEASURED) {\n  try {\n    const vals = $(MEASURED).all().map(i => costOf(i.json)).filter(v => v != null);\n    if (vals.length) measured = +vals.reduce((s, v) => s + v, 0).toFixed(4);\n  } catch (e) { measured = null; }\n}\nreturn [{ json: { run_id: String($execution.id), mode: String(row.mode || ''), status: 'done',\n  settled_usd: +Number(row.est_usd || 0).toFixed(4),\n  dfs_usd: measured == null ? +Number(row.dfs_est_usd || 0).toFixed(4) : measured,\n  dfs_measured: measured != null, dfs_est_usd: +Number(row.dfs_est_usd || 0).toFixed(4) } }];\n"
+          "jsCode": "// R9 (2026-10-13): settles this monitor run's seo_run_ledger reservation. `settled_usd` is the AI estimate the row reserved (Claude streams and\n// reports no usage — G23), and `dfs_usd` is the DataForSEO cost the run really measured where it knows it: the monitors add up the `cost` of\n// every DataForSEO task they sent (AI Metrics / Pulse Metrics / Growth Metrics / Parse Backlinks all carry it as `cost_usd`). A run that\n// measures nothing settles its own estimate, and says so, so the figure is never silently invented.\n// MEASURED / ROW are written in by the builder at build time.\nconst ROW = 'Run Ledger Row (LB)';\nconst MEASURED = '';   // '' when this workflow has no measured figure\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };\nlet row = {}; try { row = $(ROW).first().json || {}; } catch (e) { row = {}; }\nconst costOf = (x) => {\n  if (!x || typeof x !== 'object') return null;\n  const direct = n0(x.cost_usd); if (direct != null) return direct;\n  for (const k of Object.keys(x)) { const v = x[k]; if (v && typeof v === 'object' && !Array.isArray(v)) { const n = n0(v.cost_usd); if (n != null) return n; } }\n  return null;\n};\nlet measured = null;\nif (MEASURED) {\n  try {\n    const vals = $(MEASURED).all().map(i => costOf(i.json)).filter(v => v != null);\n    if (vals.length) measured = +vals.reduce((s, v) => s + v, 0).toFixed(4);\n  } catch (e) { measured = null; }\n}\n// G23 (2026-10-13): the settled row says which part of its money was measured and which is an estimate. A monitor's Claude figure is always\n// the reservation (the agents here report no usage either), its DataForSEO figure is measured whenever MEASURED named a node that answered.\nconst ai_usd = +Number(row.est_usd || 0).toFixed(4);\nconst dfs_usd = measured == null ? +Number(row.dfs_est_usd || 0).toFixed(4) : measured;\nconst cost_basis = ('Claude $' + ai_usd.toFixed(4) + ' ESTIMATED (the per-site figure this run reserved; the models report no token usage); '\n  + 'DataForSEO $' + dfs_usd.toFixed(4) + ' ' + (measured == null ? 'ESTIMATED (this workflow reports no cost of its own)' : 'measured (the cost of every task it sent)')).slice(0, 500);\nreturn [{ json: { run_id: String($execution.id), mode: String(row.mode || ''), status: 'done',\n  settled_usd: ai_usd, ai_usd, cost_mode: String(row.cost_mode || row.mode || ''),\n  dfs_usd, dfs_measured: measured != null, dfs_est_usd: +Number(row.dfs_est_usd || 0).toFixed(4),\n  measured_usd: measured == null ? 0 : dfs_usd, estimated_usd: +(ai_usd + (measured == null ? dfs_usd : 0)).toFixed(4), cost_basis } }];\n"
         },
         "id": "17a89093-b7d3-5459-9a21-2e087fccf2d1",
         "name": "Ledger Settle (LB)",
@@ -3505,7 +3575,12 @@
             "value": {
               "status": "done",
               "settled_usd": "={{ $json.settled_usd }}",
-              "dfs_usd": "={{ $json.dfs_usd }}"
+              "dfs_usd": "={{ $json.dfs_usd }}",
+              "ai_usd": "={{ $json.ai_usd }}",
+              "cost_mode": "={{ $json.cost_mode }}",
+              "measured_usd": "={{ $json.measured_usd }}",
+              "estimated_usd": "={{ $json.estimated_usd }}",
+              "cost_basis": "={{ $json.cost_basis }}"
             },
             "matchingColumns": [],
             "schema": [
@@ -3616,6 +3691,56 @@
                 "defaultMatch": false,
                 "display": true,
                 "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_mode",
+                "displayName": "cost_mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_usd",
+                "displayName": "ai_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "measured_usd",
+                "displayName": "measured_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "estimated_usd",
+                "displayName": "estimated_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_basis",
+                "displayName": "cost_basis",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
               }

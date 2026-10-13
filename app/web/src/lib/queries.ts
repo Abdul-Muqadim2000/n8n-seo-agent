@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
   AdminOrg,
+  DeliveryReport,
   AdminResult,
   AiData,
   AlertsData,
@@ -611,6 +612,10 @@ export const useReport = (orgId: string, reportId: string | undefined) =>
 
 // ---------- platform admin ----------
 export const useAdminOrgs = (enabled: boolean) => useQuery({ queryKey: ['admin', 'orgs'], queryFn: () => api<AdminOrg[]>('/api/admin/orgs'), enabled });
+
+/** G21: runs delivered / runs started per week, the schedule fires that left no execution behind, and how ops alerts went out. */
+export const useAdminDelivery = (enabled: boolean) =>
+  useQuery({ queryKey: ['admin', 'delivery'], queryFn: () => api<DeliveryReport>('/api/admin/delivery'), enabled, staleTime: 60_000 });
 
 export function useAdminUpdateOrg() {
   const qc = useQueryClient();

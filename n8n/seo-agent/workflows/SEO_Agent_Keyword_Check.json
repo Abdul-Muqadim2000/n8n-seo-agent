@@ -132,6 +132,26 @@
               {
                 "name": "dfs_usd",
                 "type": "number"
+              },
+              {
+                "name": "cost_mode",
+                "type": "string"
+              },
+              {
+                "name": "ai_usd",
+                "type": "number"
+              },
+              {
+                "name": "measured_usd",
+                "type": "number"
+              },
+              {
+                "name": "estimated_usd",
+                "type": "number"
+              },
+              {
+                "name": "cost_basis",
+                "type": "string"
               }
             ]
           },
@@ -152,7 +172,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// v4.14 (FIX_PLAN D1): the Keyword Check's reservation in the run ledger (seo_run_ledger, exact columns; mode 'assess' keeps it out of the main\n// workflow's limits), inserted before Assess Limit counts, so parallel requests see each other. est_usd = the Claude Haiku call (~$0.002).\nconst v = $('Assess Validate').first().json || {};\n// P34-5: the row carries the site it is about (`heavy` is false: a keyword check crawls nothing), so every seo_run_ledger row has the same shape.\nreturn [{ json: { run_id: String($execution.id), key: String(v.caller || 'anon').toLowerCase(), mode: 'assess', est_usd: 0.002, created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,\n  domain: String(v.domain || '').toLowerCase(), heavy: false,\n  // R9 (2026-10-13): the DataForSEO estimate beside the AI one -- a keyword check pays for the overview, the site's position and (without a\n  // stored reach) the reach measurement, about $0.024 measured live on 2026-10-13.\n  dfs_est_usd: 0.024, dfs_usd: 0 } }];\n"
+          "jsCode": "// v4.14 (FIX_PLAN D1): the Keyword Check's reservation in the run ledger (seo_run_ledger, exact columns; mode 'assess' keeps it out of the main\n// workflow's limits), inserted before Assess Limit counts, so parallel requests see each other. est_usd = the Claude Haiku call (~$0.002).\nconst v = $('Assess Validate').first().json || {};\n// P34-5: the row carries the site it is about (`heavy` is false: a keyword check crawls nothing), so every seo_run_ledger row has the same shape.\nreturn [{ json: { run_id: String($execution.id), key: String(v.caller || 'anon').toLowerCase(), mode: 'assess', est_usd: 0.002, created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,\n  domain: String(v.domain || '').toLowerCase(), heavy: false,\n  // R9 (2026-10-13): the DataForSEO estimate beside the AI one -- a keyword check pays for the overview, the site's position and (without a\n  // stored reach) the reach measurement. G23 recalibrated it from the money: the three checks of 2026-10-13 cost $0.0761 together, so\n  // $0.0254 each, and the estimate may never sit below what the mode has recently cost (it was $0.024, under the measured figure).\n  dfs_est_usd: 0.034, dfs_usd: 0,\n  // G23: which part of a settled row's cost is measured and which is estimated. Nothing is measured at reservation time.\n  cost_mode: 'assess', ai_usd: 0, measured_usd: 0, estimated_usd: 0.036,\n  cost_basis: 'reserved: Claude $0.0020 ESTIMATED (one Haiku call), DataForSEO $0.0340 ESTIMATED (the per-check figure measured on 2026-10-13) - nothing measured yet' } }];\n"
         },
         "id": "9ff3e471-0436-512c-a68f-d6b61aff0eb8",
         "name": "Run Ledger Row (Assess)",
@@ -284,6 +304,56 @@
                 "defaultMatch": false,
                 "display": true,
                 "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_mode",
+                "displayName": "cost_mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_usd",
+                "displayName": "ai_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "measured_usd",
+                "displayName": "measured_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "estimated_usd",
+                "displayName": "estimated_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_basis",
+                "displayName": "cost_basis",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
               }
@@ -543,6 +613,56 @@
                 "type": "number",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "cost_mode",
+                "displayName": "cost_mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_usd",
+                "displayName": "ai_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "measured_usd",
+                "displayName": "measured_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "estimated_usd",
+                "displayName": "estimated_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_basis",
+                "displayName": "cost_basis",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,
@@ -701,6 +821,56 @@
                 "defaultMatch": false,
                 "display": true,
                 "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_mode",
+                "displayName": "cost_mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "ai_usd",
+                "displayName": "ai_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "measured_usd",
+                "displayName": "measured_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "estimated_usd",
+                "displayName": "estimated_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "cost_basis",
+                "displayName": "cost_basis",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
               }
