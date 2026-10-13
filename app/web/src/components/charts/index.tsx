@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine } from 'recharts';
 import { BarChart3, Table2 } from 'lucide-react';
-import { compactNumber } from '@seo/shared';
+import { compactNumber, lineageNote, type ChartAnnotation, type Lineage } from '@seo/shared';
 import { cn, fmtDay } from '@/lib/utils';
 import { Card } from '../ui/card';
 import { Segmented } from '../ui/tabs';
@@ -179,6 +179,62 @@ function SimpleTable({ view }: { view: TableView }) {
   );
 }
 
+// ---------- G12: event markers, and G29: the lineage note under a chart ----------
+/**
+ * Each annotation is pinned to the chart point nearest its date, so an event between two weekly points still shows. Events outside
+ * the plotted range are dropped: a marker off the axis would be a lie about where it happened.
+ */
+export function annotationMarks(annotations: readonly ChartAnnotation[] | undefined, data: Row[], xKey: string): { a: ChartAnnotation; x: unknown }[] {
+  if (!annotations?.length || data.length < 2) return [];
+  const xs = data.map((r) => String(r[xKey] ?? '')).filter(Boolean);
+  if (!xs.length) return [];
+  const first = xs[0]!;
+  const last = xs[xs.length - 1]!;
+  const out: { a: ChartAnnotation; x: unknown }[] = [];
+  for (const a of annotations) {
+    if (a.dateEnd < first.slice(0, 10) || a.date > last.slice(0, 10)) continue;
+    // the nearest point at or after the event, else the last one before it
+    const x = xs.find((v) => v.slice(0, 10) >= a.date) ?? xs.filter((v) => v.slice(0, 10) <= a.dateEnd).pop();
+    if (x) out.push({ a, x });
+  }
+  return out.sort((p, q) => p.a.date.localeCompare(q.a.date));
+}
+
+/** The numbered key under a chart: what each marker was, with its date. Readable without hover. */
+export function AnnotationLegend({ annotations, data, xKey, className }: { annotations: readonly ChartAnnotation[] | undefined; data: Row[]; xKey: string; className?: string }) {
+  const marks = annotationMarks(annotations, data, xKey);
+  if (!marks.length) return null;
+  return (
+    <ul className={cn('flex flex-wrap gap-x-4 gap-y-1 text-[11px] leading-snug text-ink-3', className)}>
+      {marks.map((m, i) => (
+        <li key={`${m.a.kind}-${m.a.date}-${i}`} className="flex items-start gap-1.5" title={m.a.detail || undefined}>
+          <span className={cn('mt-px inline-flex size-[14px] shrink-0 items-center justify-center rounded-full text-[9px] font-semibold', m.a.tone === 'warning' ? 'bg-warning-soft text-warning-text' : 'bg-accent-soft text-accent-text')}>{i + 1}</span>
+          <span>
+            <span className="tabular">{m.a.date === m.a.dateEnd ? fmtDay(m.a.date) : `${fmtDay(m.a.date)}–${fmtDay(m.a.dateEnd)}`}</span> {m.a.label}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** G29: one line of lineage under a figure or a chart — source, period, sample, and how the number was arrived at. */
+export function LineageNote({ lineage: l, className }: { lineage: Lineage | Lineage[] | null | undefined; className?: string }) {
+  const list = (Array.isArray(l) ? l : l ? [l] : []).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <p className={cn('text-[11px] leading-snug text-ink-3', className)}>
+      {list.map((x, i) => (
+        <span key={x.figure || i}>
+          {i > 0 && <span aria-hidden> · </span>}
+          {list.length > 1 && <span className="text-ink-2">{x.figure}: </span>}
+          {lineageNote(x)}
+        </span>
+      ))}
+    </p>
+  );
+}
+
 // ---------- time series (line or area) ----------
 export function TimeSeriesChart({
   data,
@@ -193,6 +249,7 @@ export function TimeSeriesChart({
   reference,
   referenceX,
   connectNulls = true,
+  annotations,
 }: {
   data: Row[];
   xKey: string;
@@ -210,10 +267,14 @@ export function TimeSeriesChart({
   referenceX?: { x: string | number; label: string };
   /** false: a missing value (failed check) breaks the line instead of bridging it */
   connectNulls?: boolean;
+  /** G12: dated events marked on the x axis (publishes, audit fixes, Google updates, data breaks) */
+  annotations?: readonly ChartAnnotation[];
 }) {
   const Chart = area ? AreaChart : LineChart;
   const focus = useSeriesFocus();
   const single = series.length === 1;
+  // G12: a marker sits on the x value it is nearest to, so an event between two points is still visible
+  const marks = annotationMarks(annotations, data, xKey);
   // positions: rank 1 at the top, and the top tick labelled
   const domain = yDomain ?? (invertY ? ([1, 'dataMax'] as [number, 'dataMax']) : (['auto', 'auto'] as ['auto', 'auto']));
   return (
@@ -225,6 +286,16 @@ export function TimeSeriesChart({
         <Tooltip cursor={{ stroke: 'var(--line-strong)', strokeWidth: 1, strokeDasharray: '3 3' }} content={(p: TipProps) => <ChartTooltip {...p} series={series} xFormat={xFormat} />} />
         {reference && <ReferenceLine y={reference.y} stroke="var(--axis)" label={{ value: reference.label, fill: 'var(--ink-3)', fontSize: 11, position: 'insideTopRight' }} />}
         {referenceX && <ReferenceLine x={referenceX.x} stroke="var(--axis)" label={{ value: referenceX.label, fill: 'var(--ink-3)', fontSize: 11, position: 'insideTopLeft' }} />}
+        {marks.map((m, i) => (
+          <ReferenceLine
+            key={`${m.a.kind}-${m.a.date}-${i}`}
+            x={m.x as string | number}
+            stroke={m.a.tone === 'warning' ? 'var(--warning-text)' : 'var(--accent)'}
+            strokeDasharray="4 3"
+            strokeWidth={1}
+            label={{ value: String(i + 1), fill: 'var(--ink-3)', fontSize: 10, position: 'top' }}
+          />
+        ))}
         {series.map((s, i) =>
           area ? (
             <Area

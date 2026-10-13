@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Eye,
   FileText,
+  FlaskConical,
   Hand,
   Hourglass,
   Inbox,
@@ -20,8 +21,8 @@ import {
   TrendingUp,
   Trophy,
 } from 'lucide-react';
-import { compactNumber, formatUsd, type LadderDetail, type LadderPage, type LadderTimelineEvent } from '@seo/shared';
-import { ChartCard, Sparkline, TimeSeriesChart } from '@/components/charts';
+import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, formatUsd, type LadderDetail, type LadderPage, type LadderTimelineEvent } from '@seo/shared';
+import { AnnotationLegend, ChartCard, LineageNote, Sparkline, TimeSeriesChart } from '@/components/charts';
 import { Badge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
 import { EmptyState, ErrorState, Skeleton } from '@/components/ui/feedback';
@@ -214,6 +215,7 @@ function Ladder({ ladder: l, back }: { ladder: LadderDetail; back: ReactNode }) 
           <div className="min-w-0 space-y-4">
             <PositionResults ladder={l} />
             <Traffic ladder={l} />
+            <ChangeReadings ladder={l} />
           </div>
         </div>
 
@@ -369,15 +371,62 @@ function Traffic({ ladder: l }: { ladder: LadderDetail }) {
     ],
     rows: [...rows].reverse(),
   });
+  const lin = l.lineage?.find((x) => /^Clicks and impressions/.test(x.figure));
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <ChartCard title={<ChartTitle icon={<MousePointerClick />}>Clicks from Google</ChartTitle>} description="Visits to the ladder’s pages, per period" table={table('clicks', 'Clicks')}>
-        <TimeSeriesChart data={rows} xKey="periodEnd" series={[{ key: 'clicks', label: 'Clicks' }]} height={180} area />
+      <ChartCard
+        title={<ChartTitle icon={<MousePointerClick />}>Clicks from Google</ChartTitle>}
+        description="Visits to the ladder’s pages, per period"
+        table={table('clicks', 'Clicks')}
+        footer={
+          <div className="space-y-1.5">
+            <AnnotationLegend annotations={l.annotations} data={rows} xKey="periodEnd" />
+            <LineageNote lineage={lin} />
+          </div>
+        }
+      >
+        <TimeSeriesChart data={rows} xKey="periodEnd" series={[{ key: 'clicks', label: 'Clicks' }]} height={180} area annotations={l.annotations} />
       </ChartCard>
       <ChartCard title={<ChartTitle icon={<Eye />}>Times shown on Google</ChartTitle>} description="Impressions of the ladder’s pages, per period" table={table('impressions', 'Impressions')}>
-        <TimeSeriesChart data={rows} xKey="periodEnd" series={[{ key: 'impressions', label: 'Impressions', color: 'var(--series-1)' }]} height={180} area />
+        <TimeSeriesChart data={rows} xKey="periodEnd" series={[{ key: 'impressions', label: 'Impressions', color: 'var(--series-1)' }]} height={180} area annotations={l.annotations} />
       </ChartCard>
     </div>
+  );
+}
+
+/**
+ * G12 (2026-10-13, FIX_PLAN; criterion 3.4): what publishing each of this ladder's pages did, against the site's other pages over the
+ * same weeks. Graded wording only — a control group narrows the alternatives, it never proves a cause.
+ */
+function ChangeReadings({ ladder: l }: { ladder: LadderDetail }) {
+  const tests = l.changeTests ?? [];
+  if (!tests.length) return null;
+  return (
+    <Panel
+      icon={<FlaskConical />}
+      title="Did publishing these pages help?"
+      description="Each page’s own move on Google, minus what the rest of the website did over the same weeks."
+      info={CHANGE_TEST_METHOD}
+      footer={<LineageNote lineage={l.lineage?.find((x) => /^Did publishing/.test(x.figure))} />}
+    >
+      <ul className="divide-y divide-line">
+        {tests.map((t) => (
+          <li key={`${t.url}|${t.t0}`} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2.5 first:pt-0 last:pb-0">
+            <span className="flex min-w-0 flex-col">
+              <a href={t.url} target="_blank" rel="noopener noreferrer" className="truncate text-[13px] text-accent-text transition-colors duration-150 ease-brand hover:underline" title={t.url}>
+                {t.keyword || t.url}
+              </a>
+              <span className="text-[11px] leading-snug text-ink-3">
+                {t.change === 'rewritten' ? 'Rewritten' : 'Published'} {validDate(t.t0) ? fmtDate(t.t0) : t.t0}
+                {t.weeks ? ` · ${t.weeks} weeks ago` : ''}
+                {t.note ? ` · ${t.note}` : ''}
+              </span>
+            </span>
+            <Badge tone={CHANGE_VERDICT_TONES[t.verdict] === 'good' ? 'good' : 'neutral'}>{t.verdictLabel}</Badge>
+          </li>
+        ))}
+      </ul>
+    </Panel>
   );
 }
 

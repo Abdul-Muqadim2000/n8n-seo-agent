@@ -1,11 +1,11 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
-import { ArrowUpDown, BarChart3, CalendarRange, CheckCircle2, FileText, Lightbulb, LineChart, Minus, MousePointerClick, PieChart, Search, Sparkles, Target, TrendingDown, TrendingUp, TriangleAlert, Users } from 'lucide-react';
-import { compactNumber, titleCase, type MetricsPoint, type SearchData, type TrendPoint } from '@seo/shared';
+import { ArrowUpDown, BarChart3, CalendarRange, CheckCircle2, FileText, FlaskConical, Lightbulb, LineChart, Minus, MousePointerClick, PieChart, Search, Sparkles, Target, TrendingDown, TrendingUp, TriangleAlert, Users } from 'lucide-react';
+import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, titleCase, type Lineage, type MetricsPoint, type SearchData, type TrendPoint } from '@seo/shared';
 import { useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { fmtAgo, fmtDate } from '@/lib/utils';
-import { ChartCard, ShareBars, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
+import { AnnotationLegend, ChartCard, LineageNote, ShareBars, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
 import { Badge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -91,6 +91,12 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
           Add the service account as a user of the Search Console property. Reported error: {S.gsc.error}
         </Callout>
       )}
+      {/* G12 (2026-10-13): a before / after comparison that straddles a break in Google's own data is not a comparison */}
+      {d.dataBreaks.map((b) => (
+        <Callout key={b.name} tone="warning" title={`${b.name} (${b.start} to ${b.end}): figures either side are not comparable`}>
+          {b.detail}
+        </Callout>
+      ))}
       {alerts.length > 0 && (
         <Callout tone="warning" title="This week’s alerts">
           <ul className="list-disc space-y-0.5 pl-4">
@@ -228,9 +234,11 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
       </section>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <GscDailyChart rows={gDaily} range={period?.previous ? fmtRange(period.previous.start, period.current.end) : null} loading={refetching} />
-        <GaDailyChart rows={aDaily} connected={gaOn} loading={refetching} />
+        <GscDailyChart rows={gDaily} range={period?.previous ? fmtRange(period.previous.start, period.current.end) : null} loading={refetching} annotations={d.annotations} lineage={lineageOf(d, /^Clicks, impressions/)} />
+        <GaDailyChart rows={aDaily} connected={gaOn} loading={refetching} lineage={lineageOf(d, /^Organic sessions/)} />
       </div>
+
+      <ChangeTests tests={d.changeTests} lineage={lineageOf(d, /^Did this change help/)} />
 
       {S && gaOn && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-5 xl:items-start">
@@ -314,8 +322,67 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
 
       <TrendsSection trends={d.trends} />
 
-      {metrics.length > 0 && <WeeklyHistory metrics={metrics} loading={refetching} />}
+      {metrics.length > 0 && <WeeklyHistory metrics={metrics} loading={refetching} annotations={d.annotations} lineage={lineageOf(d, /^Weekly history/)} />}
     </Stagger>
+  );
+}
+
+/** G29: the lineage entry behind one figure group, by its name */
+const lineageOf = (d: SearchData, re: RegExp): Lineage | undefined => d.lineage.find((l) => re.test(l.figure));
+
+/**
+ * G12 (2026-10-13, FIX_PLAN; criterion 3.4): did a change help? Each published or rewritten page is read against the site's other
+ * pages over the same weeks, and the verdict stays graded: nothing here says a change caused a move.
+ */
+function ChangeTests({ tests, lineage: l }: { tests: SearchData['changeTests']; lineage: Lineage | undefined }) {
+  const { site } = useSitePage();
+  if (!tests.length) return null;
+  const columns: Column<SearchData['changeTests'][number]>[] = [
+    {
+      key: 'url',
+      header: 'Page',
+      sortValue: (r) => r.url,
+      cell: (r) => (
+        <a href={r.url} target="_blank" rel="noopener noreferrer" className="block max-w-[18rem] truncate text-[13px] text-accent-text transition-colors duration-150 ease-brand hover:underline" title={r.url}>
+          {urlPath(r.url) || r.url}
+        </a>
+      ),
+    },
+    { key: 'change', header: 'Change', hideOnMobile: true, sortValue: (r) => r.change, cell: (r) => <span className="text-ink-2">{r.change === 'rewritten' ? 'Rewritten' : 'Published'}</span> },
+    { key: 't0', header: 'When', sortValue: (r) => r.t0, cell: (r) => <span className="tabular text-ink-2">{fmtDate(r.t0)}</span> },
+    { key: 'weeks', header: 'Weeks', align: 'right', hideOnMobile: true, sortValue: (r) => r.weeks, cell: (r) => r.weeks },
+    {
+      key: 'position',
+      header: 'Position',
+      align: 'right',
+      sortValue: (r) => r.position,
+      cell: (r) => (r.basePosition ? <span className="tabular">{r.basePosition.toFixed(1)} → {r.position.toFixed(1)}</span> : <span className="text-ink-3">–</span>),
+    },
+    {
+      key: 'verdict',
+      header: 'Verdict',
+      sortValue: (r) => r.verdict,
+      cell: (r) => (
+        <span className="flex flex-col gap-0.5">
+          <Badge tone={CHANGE_VERDICT_TONES[r.verdict] === 'good' ? 'good' : 'neutral'}>{r.verdictLabel}</Badge>
+          {r.note && <span className="text-[11px] leading-snug text-ink-3">{r.note}</span>}
+        </span>
+      ),
+    },
+  ];
+  return (
+    <Panel
+      title="Did your changes help?"
+      icon={<FlaskConical />}
+      description={`Each page of ${site.domain} that went live, read against the website’s other pages over the same weeks`}
+      info={CHANGE_TEST_METHOD}
+      flush
+      footer={<LineageNote lineage={l} />}
+    >
+      <div className="px-4 pb-4">
+        <DataTable rows={tests} columns={columns} rowKey={(r) => `${r.url}|${r.t0}`} initialSort={{ key: 't0', dir: 'desc' }} dense pageSize={8} empty="No page of this website has a recorded publish date yet." />
+      </div>
+    </Panel>
   );
 }
 
@@ -330,7 +397,7 @@ function clicksHeadline(cur: Totals | null, ch: number | null | undefined): stri
 }
 
 type GMetric = 'clicks' | 'impressions' | 'position';
-function GscDailyChart({ rows, range, loading }: { rows: { date: string; clicks: number; impressions: number; position: number | null }[]; range: string | null; loading: boolean }) {
+function GscDailyChart({ rows, range, loading, annotations, lineage: l }: { rows: { date: string; clicks: number; impressions: number; position: number | null }[]; range: string | null; loading: boolean; annotations?: SearchData['annotations']; lineage?: Lineage }) {
   const [m, setM] = useState<GMetric>('clicks');
   const series: Record<GMetric, Series> = {
     clicks: { key: 'clicks', label: 'Clicks' },
@@ -352,9 +419,15 @@ function GscDailyChart({ rows, range, loading }: { rows: { date: string; clicks:
         ],
         rows: [...rows].reverse(),
       }}
+      footer={
+        <div className="space-y-1.5">
+          <AnnotationLegend annotations={annotations} data={rows} xKey="date" />
+          <LineageNote lineage={l} />
+        </div>
+      }
     >
       {rows.length ? (
-        <TimeSeriesChart data={rows} xKey="date" series={[series[m]]} area={m !== 'position'} invertY={m === 'position'} height={240} yFormat={m === 'position' ? (v) => String(Math.round(v)) : undefined} />
+        <TimeSeriesChart data={rows} xKey="date" series={[series[m]]} area={m !== 'position'} invertY={m === 'position'} height={240} yFormat={m === 'position' ? (v) => String(Math.round(v)) : undefined} annotations={annotations} />
       ) : (
         <EmptyState className="py-10" icon={<MousePointerClick className="size-5" />} title="No daily data yet" description="Daily clicks and impressions arrive with the weekly report once Search Console is connected." />
       )}
@@ -363,7 +436,7 @@ function GscDailyChart({ rows, range, loading }: { rows: { date: string; clicks:
 }
 
 type AMetric = 'sessions' | 'keyEvents';
-function GaDailyChart({ rows, connected, loading }: { rows: { date: string; sessions: number; engaged: number; keyEvents: number }[]; connected: boolean; loading: boolean }) {
+function GaDailyChart({ rows, connected, loading, lineage: l }: { rows: { date: string; sessions: number; engaged: number; keyEvents: number }[]; connected: boolean; loading: boolean; lineage?: Lineage }) {
   const [m, setM] = useState<AMetric>('sessions');
   const series: Series[] = m === 'sessions' ? [{ key: 'sessions', label: 'Organic sessions' }, { key: 'engaged', label: 'Engaged sessions' }] : [{ key: 'keyEvents', label: 'Key events' }];
   return (
@@ -382,6 +455,7 @@ function GaDailyChart({ rows, connected, loading }: { rows: { date: string; sess
         ],
         rows: [...rows].reverse(),
       }}
+      footer={<LineageNote lineage={l} />}
     >
       {rows.length ? (
         <TimeSeriesChart data={rows} xKey="date" series={series} area={series.length === 1} height={240} />
@@ -523,7 +597,7 @@ const W_OPTIONS: { value: WMetric; label: string; series: Series }[] = [
   { value: 'striking', label: 'Striking', series: { key: 'striking', label: 'Queries at positions 4–20' } },
 ];
 
-function WeeklyHistory({ metrics, loading }: { metrics: MetricsPoint[]; loading: boolean }) {
+function WeeklyHistory({ metrics, loading, annotations, lineage: l }: { metrics: MetricsPoint[]; loading: boolean; annotations?: SearchData['annotations']; lineage?: Lineage }) {
   const [m, setM] = useState<WMetric>('clicks');
   const opt = W_OPTIONS.find((o) => o.value === m)!;
   const rows = metrics.map((x) => ({ periodEnd: x.periodEnd, clicks: x.clicks, impressions: x.impressions, ctr: x.ctr, position: plotAvgPos(x.position), sessions: x.sessions, striking: x.striking, queries: x.queries }));
@@ -548,8 +622,14 @@ function WeeklyHistory({ metrics, loading }: { metrics: MetricsPoint[]; loading:
         ],
         rows: [...rows].reverse(),
       }}
+      footer={
+        <div className="space-y-1.5">
+          <AnnotationLegend annotations={annotations} data={rows} xKey="periodEnd" />
+          <LineageNote lineage={l} />
+        </div>
+      }
     >
-      <TimeSeriesChart data={rows} xKey="periodEnd" series={[opt.series]} area={m !== 'position'} invertY={m === 'position'} height={240} yFormat={m === 'position' ? (v) => String(Math.round(v)) : undefined} />
+      <TimeSeriesChart data={rows} xKey="periodEnd" series={[opt.series]} area={m !== 'position'} invertY={m === 'position'} height={240} yFormat={m === 'position' ? (v) => String(Math.round(v)) : undefined} annotations={annotations} />
     </ChartCard>
   );
 }

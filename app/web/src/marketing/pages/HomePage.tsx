@@ -33,7 +33,7 @@ const HERO_FACTS = ['Free to set up', 'Cost shown before every run', 'Nothing pu
 const PROBLEMS: { today: string; outcome: string }[] = [
   {
     today: 'Keyword lists pile up with no clear call on which ones are worth the effort.',
-    outcome: 'Every keyword gets a verdict, its reach for your site and the plan it takes to rank.',
+    outcome: 'Research starts from the searches you already appear for, and every keyword gets a verdict, its reach for your site and the plan it takes to rank.',
   },
   {
     today: 'Posts are written one at a time and rarely build towards the terms that matter.',

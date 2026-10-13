@@ -32,7 +32,7 @@ export const pricingTiers: PricingTier[] = [
       '1 website', // PLACEHOLDER — confirm
       'Keyword research and verdicts',
       'One active keyword ladder', // PLACEHOLDER — confirm
-      'Content engine with SEO QA and the blog package',
+      'Content engine with SEO QA, the originality check and the blog package',
       'Monthly technical audits with a fix pack',
       'Search Console, GA4 and Trends tracking',
       'Monday report',
@@ -95,6 +95,9 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
     rows: [
       { label: 'Keyword research and verdicts', hint: 'A verdict per keyword, with its topic fit', values: [true, true, true] },
       { label: 'Difficulty for your site', hint: 'Reach, with a Direct, Short or Full plan', values: [true, true, true] },
+      { label: 'Your own searches as the starting point', hint: 'Search Console searches with no page of yours, and the ones just off page one', values: [true, true, true] },
+      { label: 'Traffic estimates marked measured or modelled', hint: 'Calibrated against your own impressions and clicks where you rank', values: [true, true, true] },
+      { label: 'Searches grouped by shared results page', hint: 'One page for every search Google answers with the same results', values: [true, true, true] },
       { label: 'Keyword ladders', values: ['1 active', 'Several', 'Several'] }, // PLACEHOLDER — confirm
       { label: 'Weekly rank tracking', hint: 'Every rung and the head term, desktop and phone', values: [true, true, true] },
       { label: 'Search features per keyword', hint: 'AI Overview, snippet, People Also Ask, local pack, video', values: [true, true, true] },
@@ -107,7 +110,10 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Content engine with SEO QA', hint: 'Written, critiqued and edited, then checked', values: [true, true, true] },
       { label: 'Author byline, author box and expert reviewer', values: [true, true, true] },
       { label: 'Hub, case study, local and video pages', values: [true, true, true] },
-      { label: 'Blog package and WordPress drafts', hint: 'HTML, Markdown and meta.json', values: [true, true, true] },
+      { label: 'Originality check on every page', hint: 'Against the competitor pages researched and your own pages', values: [true, true, true] },
+      { label: 'Coverage target from the best competitor', hint: 'With the subtopics that page covers', values: [true, true, true] },
+      { label: 'Three images made with every page', hint: 'WebP, with the alt text and file names', values: [true, true, true] },
+      { label: 'Blog package and WordPress drafts', hint: 'HTML, Markdown, meta.json and the images', values: [true, true, true] },
       { label: 'Live publish check', hint: 'Verifies the page once it is live', values: [true, true, true] },
     ],
   },

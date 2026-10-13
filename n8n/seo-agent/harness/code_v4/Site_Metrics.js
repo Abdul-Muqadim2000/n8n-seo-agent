@@ -221,20 +221,526 @@ const ST = (() => {
       direction: pct == null ? 'new' : pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat',
       text: (pct == null ? 'new' : (pct > 0 ? 'up ' : 'down ') + Math.abs(pct) + '%') + ' (' + p + ' → ' + c + (band(c, p) ? ', 95% range ' + band(c, p)[0] + '% to ' + band(c, p)[1] + '%' : '') + ')' };
   };
-  // Google's confirmed ranking updates: context for a real fall, never a cause ("correlation, not proof"). Add new ones here.
-  const UPDATES = [
-    { name: 'March 2025 core update', start: '2025-03-13', end: '2025-03-27' },
-    { name: 'June 2025 core update', start: '2025-06-30', end: '2025-07-17' },
-    { name: 'August 2025 spam update', start: '2025-08-26', end: '2025-09-22' },
-    { name: 'December 2025 core update', start: '2025-12-02', end: '2025-12-18' },
-    { name: 'March 2026 core update', start: '2026-03-10', end: '2026-03-26' },
-    { name: 'June 2026 core update', start: '2026-06-23', end: '2026-07-08' },
-    { name: 'September 2026 core update', start: '2026-09-15', end: '2026-09-30' }
-  ];
+  // Google's confirmed ranking updates: context for a real fall, never a cause ("correlation, not proof").
+  // G12 (2026-10-13): the list is no longer written here. It is inlined from `v5/data/seo_events.json` — the one dated place to add
+  // an update, shared with the chart annotations (`_annotations.js`) and with the app (`app/shared/src/seo-events.generated.ts`).
+  const UPDATES = [].concat([{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-27"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-17"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-22"}, {"name": "December 2025 core update", "start": "2025-12-02", "end": "2025-12-18"}, {"name": "March 2026 core update", "start": "2026-03-10", "end": "2026-03-26"}, {"name": "June 2026 core update", "start": "2026-06-23", "end": "2026-07-08"}, {"name": "September 2026 core update", "start": "2026-09-15", "end": "2026-09-30"}]);
   const updatesIn = (range) => { const r = range || {}; const a = String(r.start || ''), b = String(r.end || '');
     if (!a || !b) return []; return UPDATES.filter(u => u.start <= b && u.end >= a); };
   const updateNote = (range) => { const hits = updatesIn(range); return hits.length ? ' A Google ' + hits.map(u => u.name + ' (' + u.start + ' to ' + u.end + ')').join(' and ') + ' ran inside this period — it may be part of the cause, which cannot be proven from these numbers.' : ''; };
   return { z, band, change, updatesIn, updateNote, UPDATES };
+})();
+// ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13; system review FIX_PLAN.md) ----
+// G11: a monthly audit cannot see a page that went noindex on the 3rd. Every day the key pages are fetched raw and cheaply (one plain GET
+// each, no JavaScript, no paid API) and compared with what we stored: HTTP status, a redirect that appeared, `noindex`, the canonical, the
+// title - plus a hash of robots.txt per site. A change that matters raises an alert the same day; an unchanged page raises none.
+// G11's second half: when somebody presses "I fixed this" in the app on an audit finding, that one finding is re-checked on these pages
+// within a day instead of waiting for the next monthly audit (PW.recheck).
+// G25: Search Console's URL Inspection API says what *Google* thinks of a page - indexed or not, which canonical it chose, when it last
+// crawled it, mobile usability and rich results. Its quota is 2,000 queries a day and 600 a minute per property, so the pages rotate
+// (never inspected first, then the oldest inspection) and whatever the budget does not reach is reported as "not checked", never as fine.
+const PW = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  // the n8n Code sandbox has no URL constructor (live finding 2026-10-02), so hosts and paths are read with regexes
+  const hostOf = (u) => { const m = S(u).match(/^https?:\/\/(?:[^@\/?#]*@)?([^\/?#:]+)/i); return m ? m[1].toLowerCase() : ''; };
+  const bare = (h) => S(h).toLowerCase().replace(/^www\./, '');
+  const pathOf = (u) => { const p = S(u).replace(/^https?:\/\/[^\/]*/i, '').replace(/#.*$/, ''); return p || '/'; };
+  // host-agnostic identity of a URL: crawls, sitemaps and canonicals disagree about www and the trailing slash
+  const ukey = (u) => S(u).toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '') || S(u).toLowerCase();
+  const same = (a, b) => !!a && !!b && ukey(a) === ukey(b);
+  const strip = (s) => S(s).replace(/<[^>]*>/g, ' ').replace(/&nbsp;|&#160;/gi, ' ').replace(/&amp;/gi, '&').replace(/\s+/g, ' ').trim();
+
+  // ---- a small, stable fingerprint (FNV-1a, 32 bit): no crypto module is available in the sandbox ----
+  const hash = (text) => {
+    const t = S(text); let h = 0x811c9dc5;
+    for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0; }
+    return ('0000000' + h.toString(16)).slice(-8);
+  };
+
+  // ---- what one raw fetch tells us about a page ----
+  // `res` is an n8n HTTP Request answer with fullResponse + responseFormat text (so the body is under `data`, not `body`) and redirects NOT
+  // followed: a key page that starts redirecting is itself a change worth knowing about.
+  const signals = (res) => {
+    const r = res || {};
+    const status = n0(r.statusCode ?? r.status);
+    const headers = r.headers || {};
+    const hdr = (name) => { const k = Object.keys(headers).find(x => x.toLowerCase() === name); return k ? S(Array.isArray(headers[k]) ? headers[k].join(', ') : headers[k]) : ''; };
+    const body = S(r.body ?? r.data);
+    const failed = !status && (r.error || !body);
+    if (failed) return { ok: false, error: S((r.error && (r.error.message || r.error.description)) || r.error || 'no answer').slice(0, 200), status: 0 };
+    const xrobots = hdr('x-robots-tag');
+    const head = body.slice(0, 200000);
+    const metas = head.match(/<meta\b[^>]*>/gi) || [];
+    const metaOf = (name) => {
+      for (const m of metas) {
+        if (!new RegExp('\\b(?:name|property)\\s*=\\s*["\']?' + name + '["\']?', 'i').test(m)) continue;
+        const c = m.match(/\bcontent\s*=\s*"([^"]*)"/i) || m.match(/\bcontent\s*=\s*'([^']*)'/i) || m.match(/\bcontent\s*=\s*([^\s>]+)/i);
+        if (c) return S(c[1]);
+      }
+      return '';
+    };
+    const robotsMeta = metaOf('robots') || metaOf('googlebot');
+    const noindex = /\bnone\b|\bnoindex\b/i.test(robotsMeta) || /\bnone\b|\bnoindex\b/i.test(xrobots);
+    const titles = (head.match(/<title[^>]*>[\s\S]*?<\/title>/gi) || []).map(t => strip(t.replace(/<\/?title[^>]*>/gi, '')));
+    const canonRe = /<link\b[^>]*\brel\s*=\s*["']?canonical["']?[^>]*>/gi;
+    const canons = (head.match(canonRe) || []).map(l => { const h = l.match(/\bhref\s*=\s*"([^"]*)"/i) || l.match(/\bhref\s*=\s*'([^']*)'/i); return h ? S(h[1]) : ''; }).filter(Boolean);
+    const h1s = (body.match(/<h1\b[^>]*>[\s\S]*?<\/h1>/gi) || []).map(x => strip(x).slice(0, 200)).filter(Boolean);
+    return {
+      ok: true, status,
+      location: status >= 300 && status < 400 ? S(hdr('location')).slice(0, 500) : '',
+      noindex, noindex_source: noindex ? (/\bnone\b|\bnoindex\b/i.test(robotsMeta) ? 'meta robots' : 'X-Robots-Tag header') : '',
+      robots_meta: robotsMeta.slice(0, 120), canonical: (canons[0] || '').slice(0, 500), canonicals: canons.length,
+      title: (titles[0] || '').slice(0, 300), titles: titles.length, description: metaOf('description').slice(0, 400),
+      h1: (h1s[0] || ''), h1s: h1s.length, bytes: body.length, error: '',
+    };
+  };
+
+  // ---- robots.txt: the fingerprint (seo_cache) plus the rules that decide whether a key page is crawlable ----
+  const robotsRead = (res) => {
+    const r = res || {}; const status = n0(r.statusCode ?? r.status); const text = S(r.body ?? r.data);
+    if (!status) return { ok: false, status: 0, error: S((r.error && (r.error.message || r.error.description)) || r.error || 'no answer').slice(0, 200), hash: '', rules: [] };
+    const clean = text.replace(/\r/g, '').split('\n').map(l => l.replace(/#.*$/, '').trim()).filter(Boolean).join('\n');
+    const rules = []; let groups = [];
+    for (const line of clean.split('\n')) {
+      const m = line.match(/^([A-Za-z-]+)\s*:\s*(.*)$/); if (!m) continue;
+      const field = m[1].toLowerCase(), value = S(m[2]);
+      if (field === 'user-agent') { if (rules.length && rules[rules.length - 1].touched) { groups = []; } groups.push(value.toLowerCase()); rules.push({ agents: groups.slice(), touched: false }); continue; }
+      if (field !== 'disallow' && field !== 'allow') continue;
+      if (!rules.length) { groups = ['*']; rules.push({ agents: ['*'], touched: false }); }
+      const g = rules[rules.length - 1]; g.touched = true; g.agents = groups.slice();
+      (g.lines = g.lines || []).push({ allow: field === 'allow', path: value });
+    }
+    // which groups apply to Googlebot (its own group wins over `*`, as Google's parser does)
+    const forGoogle = rules.filter(g => g.agents.some(a => a === 'googlebot'));
+    const applies = (forGoogle.length ? forGoogle : rules.filter(g => g.agents.includes('*'))).flatMap(g => g.lines || []);
+    const blocks = (url) => {
+      if (status === 404 || status >= 500 || !applies.length) return null;   // no file, or nothing that applies: nothing is blocked by it
+      const p = pathOf(url);
+      let best = null;
+      for (const l of applies) {
+        if (!l.path) continue;                                              // `Disallow:` with no path allows everything
+        const pat = l.path.replace(/\*+/g, '*');
+        const rx = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\\\$$/, '$'));
+        if (!rx.test(p)) continue;
+        if (!best || l.path.length > best.path.length) best = l;
+      }
+      return best ? !best.allow : false;
+    };
+    return { ok: true, status, hash: hash(clean), length: clean.length, rules: applies, blocks, error: '' };
+  };
+
+  // ---- what changed since the stored reading, and how loudly to say it ----
+  // `prev` is the stored seo_page_watch row (or null for a page nobody has watched yet), `now` the signals of this run.
+  const CODES = {
+    page_gone: { severity: 'critical', label: 'page gone' },
+    page_error: { severity: 'critical', label: 'server error' },
+    noindex_added: { severity: 'critical', label: 'noindex added' },
+    robots_blocked: { severity: 'critical', label: 'blocked by robots.txt' },
+    page_redirects: { severity: 'high', label: 'page now redirects' },
+    canonical_moved: { severity: 'high', label: 'canonical moved' },
+    canonical_removed: { severity: 'high', label: 'canonical removed' },
+    robots_changed: { severity: 'high', label: 'robots.txt changed' },
+    title_changed: { severity: 'medium', label: 'title changed' },
+    page_back: { severity: 'info', label: 'page answers again' },
+    noindex_removed: { severity: 'info', label: 'noindex gone' },
+  };
+  const compare = (prev, now, o) => {
+    const opts = o || {}; const out = [];
+    const add = (code, text, from, to) => out.push({ code, severity: CODES[code].severity, label: CODES[code].label, text, from: S(from), to: S(to) });
+    if (!now || now.ok === false) return out;                                 // a failed fetch is "not checked", never a change
+    const first = !prev || !S(prev.checked_at);
+    const was = prev || {};
+    const wasStatus = n0(was.status), nowStatus = n0(now.status);
+    const url = S(opts.url);
+    if (!first) {
+      if (wasStatus >= 200 && wasStatus < 400 && nowStatus >= 500) add('page_error', 'The page answers ' + nowStatus + ' (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
+      else if (wasStatus >= 200 && wasStatus < 400 && nowStatus >= 400) add('page_gone', 'The page is gone: it answers ' + nowStatus + ' (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
+      else if (wasStatus >= 400 && nowStatus >= 200 && nowStatus < 300) add('page_back', 'The page answers ' + nowStatus + ' again (it answered ' + wasStatus + ' before)', wasStatus, nowStatus);
+      if (nowStatus >= 300 && nowStatus < 400 && !(wasStatus >= 300 && wasStatus < 400)) add('page_redirects', 'The page now redirects (' + nowStatus + ' to ' + (S(now.location) || 'an address it does not name') + ')', wasStatus, nowStatus + ' ' + S(now.location));
+      if (now.noindex && !was.noindex) add('noindex_added', 'The page tells search engines not to index it (' + S(now.noindex_source) + ': "' + S(now.robots_meta || 'noindex') + '")', '', S(now.noindex_source));
+      if (!now.noindex && was.noindex) add('noindex_removed', 'The page no longer tells search engines to leave it out', S(was.noindex_source), '');
+      // the title and the canonical are only compared between two readings of a page that was answering: the title of yesterday's 404
+      // ("Not found") is not a baseline, so a page that comes back is "answers again", never "the title changed".
+      const wasOk = wasStatus >= 200 && wasStatus < 300;
+      if (wasOk && nowStatus >= 200 && nowStatus < 300) {
+        if (S(was.canonical) && !S(now.canonical)) add('canonical_removed', 'The canonical tag is gone (it pointed at ' + S(was.canonical) + ')', S(was.canonical), '');
+        else if (S(now.canonical) && S(was.canonical) && !same(now.canonical, was.canonical)) add('canonical_moved', 'The canonical now points at ' + S(now.canonical) + ' (it pointed at ' + S(was.canonical) + ')', S(was.canonical), S(now.canonical));
+        if (S(was.title) && S(now.title) && S(was.title) !== S(now.title)) add('title_changed', 'The title changed to "' + S(now.title) + '" (it was "' + S(was.title) + '")', S(was.title), S(now.title));
+      }
+    }
+    // a page we are seeing for the first time is a baseline, never a change — that includes one robots.txt already blocked before we looked
+    if (!first && opts.robots_blocked === true && opts.robots_blocked_before !== true) add('robots_blocked', 'robots.txt now stops Google crawling ' + (url || 'this page'), '', 'disallowed');
+    return out;
+  };
+  // the site's robots.txt as a change of its own (one per site, compared with the stored seo_cache fingerprint)
+  const robotsChange = (prevHash, robots) => {
+    if (!robots || robots.ok === false) return null;
+    const before = S(prevHash);
+    if (!before || before === S(robots.hash)) return null;
+    return { code: 'robots_changed', severity: CODES.robots_changed.severity, label: CODES.robots_changed.label,
+      text: 'robots.txt changed (' + robots.status + ', ' + n0(robots.length) + ' characters of rules). Read it before the next crawl: one wrong Disallow line can take the whole site out of Google.',
+      from: before, to: S(robots.hash) };
+  };
+  const state = (changes, now) => (!now || now.ok === false) ? 'not_checked' : ((changes || []).some(c => c.severity !== 'info') ? 'changed' : 'ok');
+  const worst = (changes) => { const order = ['critical', 'high', 'medium', 'info']; return (changes || []).map(c => c.severity).sort((a, b) => order.indexOf(a) - order.indexOf(b))[0] || ''; };
+
+  // ---- "I fixed this": one audit finding, re-checked on the key pages we just fetched ----
+  // Only what a raw fetch of the key pages can honestly answer is answered. Anything else (a crawl of the whole site, Search Console,
+  // speed data) says so and waits for the audit - it never comes back "fixed" on a guess.
+  const RULES = [
+    { rule: 'broken_pages', re: /broken pages|do not return 200|not return 200|4xx|5xx/i, label: 'a key page that does not answer 200',
+      test: (p) => n0(p.status) >= 400 },
+    { rule: 'redirecting_pages', re: /internal urls that redirect|meta refresh/i, label: 'a key page that redirects',
+      test: (p) => n0(p.status) >= 300 && n0(p.status) < 400 },
+    { rule: 'noindex', re: /noindex|not indexable/i, label: 'a key page that asks not to be indexed', test: (p) => !!p.noindex },
+    { rule: 'robots_blocked', re: /blocked by robots\.txt/i, label: 'a key page robots.txt blocks', test: (p) => p.robots_blocked === true },
+    { rule: 'missing_title', re: /missing title tag/i, label: 'a key page with no title', test: (p) => n0(p.status) < 300 && !S(p.title) },
+    { rule: 'multiple_titles', re: /more than one title tag/i, label: 'a key page with more than one title tag', test: (p) => n0(p.titles) > 1 },
+    { rule: 'title_short', re: /title shorter than/i, label: 'a key page title under 30 characters', test: (p) => n0(p.status) < 300 && S(p.title) && S(p.title).length < 30 },
+    { rule: 'title_long', re: /title longer than/i, label: 'a key page title over 60 characters', test: (p) => S(p.title).length > 60 },
+    { rule: 'missing_description', re: /missing meta description/i, label: 'a key page with no meta description', test: (p) => n0(p.status) < 300 && !S(p.description) },
+    { rule: 'description_short', re: /meta description shorter than/i, label: 'a key page description under 70 characters', test: (p) => n0(p.status) < 300 && S(p.description) && S(p.description).length < 70 },
+    { rule: 'description_long', re: /meta description longer than/i, label: 'a key page description over 160 characters', test: (p) => S(p.description).length > 160 },
+    { rule: 'missing_h1', re: /missing h1/i, label: 'a key page with no H1', test: (p) => n0(p.status) < 300 && !S(p.h1) },
+    { rule: 'multiple_h1', re: /more than one h1/i, label: 'a key page with more than one H1', test: (p) => n0(p.h1s) > 1 },
+    { rule: 'missing_canonical', re: /missing canonical tag/i, label: 'a key page with no canonical tag', test: (p) => n0(p.status) < 300 && !S(p.canonical) },
+    { rule: 'canonical_other', re: /canonical points to a different page/i, label: 'a key page whose canonical points elsewhere',
+      test: (p) => n0(p.status) < 300 && S(p.canonical) && !same(p.canonical, p.url) },
+    { rule: 'http_pages', re: /served over http\b|link to http urls/i, label: 'a key page on http', test: (p) => /^http:\/\//i.test(S(p.url)) },
+  ];
+  const recheckRule = (finding) => {
+    const text = S((finding || {}).title) || S((finding || {}).finding_key).split('|').slice(1).join('|');
+    if (!text) return null;
+    return RULES.find(r => r.re.test(text)) || null;
+  };
+  /** finding + the pages this run read -> { state: 'fixed' | 'still_open' | 'not_checked', note, checked, hits } */
+  const recheck = (finding, pages) => {
+    const list = (pages || []).filter(p => p && p.ok !== false && S(p.url) && S(p.kind) !== 'robots');
+    const r = recheckRule(finding);
+    const title = S((finding || {}).title) || S((finding || {}).finding_key);
+    if (!r) return { state: 'not_checked', rule: '', checked: list.length, hits: [],
+      note: 'The daily key-page watch cannot judge "' + title + '" on its own (it needs the full crawl, Search Console or speed data). The next audit decides it.' };
+    if (!list.length) return { state: 'not_checked', rule: r.rule, checked: 0, hits: [],
+      note: 'No key page could be read in this check, so nothing was judged. It is tried again with the next daily watch.' };
+    const hits = list.filter(p => { try { return !!r.test(p); } catch (e) { return false; } }).map(p => S(p.url));
+    return hits.length
+      ? { state: 'still_open', rule: r.rule, checked: list.length, hits: hits.slice(0, 10),
+          note: 'Still open on ' + hits.length + ' of the ' + list.length + ' key pages checked (' + r.label + '): ' + hits.slice(0, 3).join(', ') + (hits.length > 3 ? ' …' : '') + '.' }
+      : { state: 'fixed', rule: r.rule, checked: list.length, hits: [],
+          note: 'Fixed on the ' + list.length + ' key pages checked (no ' + r.label + ' left). The next full audit checks the rest of the site.' };
+  };
+
+  // ---- G25: URL Inspection within the quota ----
+  const QUOTA_PER_DAY = 2000;        // Search Console URL Inspection API, per property (developers.google.com/webmaster-tools/limits)
+  const QUOTA_PER_MINUTE = 600;      // the same page, per property
+  const PER_RUN = 150;               // what one weekly Site Tracker run spends per property: 7.5% of the day's quota
+  const PER_AUDIT = 100;             // what one audit spends (it also runs on demand, several times a day on a bad day)
+  /**
+   * Chooses which pages to inspect now: never inspected first, then the oldest inspection, importance breaking ties. Everything the
+   * budget does not reach comes back under `skipped` so the report can say "not checked" instead of implying the page is fine.
+   * pages: [{ url, weight, inspect_at }]; cap: how many this run may spend.
+   */
+  const inspectBudget = (pages, cap, o) => {
+    const opts = o || {};
+    const limit = Math.max(0, Math.min(n0(cap) || PER_RUN, QUOTA_PER_DAY - n0(opts.used)));
+    const seen = new Set(); const list = [];
+    for (const p of (pages || [])) { const k = ukey(p.url); if (!S(p.url) || seen.has(k)) continue; seen.add(k); list.push(p); }
+    const ts = (p) => { const t = Date.parse(S(p.inspect_at)); return Number.isFinite(t) ? t : 0; };   // 0 = never inspected, so it goes first
+    const ordered = list.slice().sort((a, b) => ts(a) - ts(b) || n0(b.weight) - n0(a.weight) || S(a.url).localeCompare(S(b.url)));
+    const take = ordered.slice(0, limit), skipped = ordered.slice(limit);
+    return { take, skipped, limit, quota: QUOTA_PER_DAY,
+      note: 'URL Inspection is capped at ' + QUOTA_PER_DAY + ' pages a day per Search Console property (Google\'s quota); this run asked about '
+        + take.length + ' of ' + ordered.length + ' key pages, oldest inspection first'
+        + (skipped.length ? ', so ' + skipped.length + ' are reported as "not checked" until the next run.' : '.') };
+  };
+  /** One URL Inspection answer -> what Google thinks. A permission or quota error is an error, never "not indexed". */
+  const inspection = (res) => {
+    const r = res || {};
+    const ir = (r.inspectionResult || {});
+    const idx = ir.indexStatusResult || null;
+    const mob = ir.mobileUsabilityResult || null;
+    const rich = ir.richResultsResult || null;
+    const gErr = () => { const e = r.error; if (!e) return ''; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return S((inner && inner.message) || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };
+    const err = r.error ? gErr() : (idx ? '' : 'no inspection result');
+    const quota = /quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(err);
+    const denied = /permission|forbidden|403|unauthor|invalid_grant/i.test(err);
+    if (err) return { ok: false, error: err, error_kind: quota ? 'quota' : denied ? 'access' : 'error', indexed: null, verdict: '', coverage: '',
+      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], rich_results: [], rich_verdict: '',
+      not_checked: quota ? 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' : denied ? 'Search Console access is missing for this property: not checked.' : 'The inspection failed: not checked (' + err + ').' };
+    return {
+      ok: true, error: '', error_kind: '', verdict: S(idx.verdict), indexed: S(idx.verdict) === 'PASS', coverage: S(idx.coverageState),
+      indexing_state: S(idx.indexingState), robots: S(idx.robotsTxtState), last_crawl: S(idx.lastCrawlTime),
+      google_canonical: S(idx.googleCanonical), user_canonical: S(idx.userCanonical),
+      canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : same(idx.googleCanonical, idx.userCanonical),
+      mobile_usable: mob ? (S(mob.verdict) === 'PASS' ? true : S(mob.verdict) === 'NEUTRAL' || !S(mob.verdict) ? null : false) : null,
+      mobile_issues: mob && Array.isArray(mob.issues) ? mob.issues.map(i => S(i.message) || S(i.issueType)).filter(Boolean).slice(0, 5) : [],
+      rich_verdict: rich ? S(rich.verdict) : '',
+      rich_results: rich && rich.detectedItems ? rich.detectedItems.map(d => S(d.richResultType)).filter(Boolean) : [],
+      not_checked: '',
+    };
+  };
+  /** The index picture over a set of inspections, with what was not checked said out loud (G25). */
+  const coverage = (inspections, o) => {
+    const opts = o || {};
+    const list = (inspections || []).filter(Boolean);
+    const ok = list.filter(i => i.ok !== false && !i.error);
+    const by = {}; for (const i of ok) { const k = S(i.coverage) || S(i.verdict) || 'unknown'; by[k] = (by[k] || 0) + 1; }
+    const failed = list.filter(i => i.ok === false || i.error);
+    const indexed = ok.filter(i => i.indexed === true).length;
+    const notIndexed = ok.filter(i => i.indexed === false);
+    const canonMismatch = ok.filter(i => i.canonical_ok === false);
+    const mobileBad = ok.filter(i => i.mobile_usable === false);
+    const richTypes = [...new Set(ok.flatMap(i => i.rich_results || []))];
+    const notChecked = n0(opts.not_checked) + failed.length;
+    return { checked: ok.length, indexed, not_indexed: notIndexed.length, by_state: by, failed: failed.length, not_checked: notChecked,
+      not_checked_reason: notChecked ? (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'not checked in this run') : '',
+      canonical_mismatch: canonMismatch.length, mobile_bad: mobileBad.length, mobile_checked: ok.filter(i => i.mobile_usable !== null).length,
+      rich_results: richTypes, quota: QUOTA_PER_DAY, quota_note: S(opts.quota_note),
+      // never "fine": a page nobody inspected is counted apart from the ones Google answered about
+      text: ok.length
+        ? indexed + ' of ' + ok.length + ' key pages are indexed' + (notIndexed.length ? ', ' + notIndexed.length + ' are not' : '')
+          + (notChecked ? ', ' + notChecked + ' were not checked' : '') + ' (Search Console URL Inspection; quota ' + QUOTA_PER_DAY + ' pages a day per property)'
+        : 'No page could be inspected in Search Console' + (notChecked ? ' (' + notChecked + ' not checked: ' + (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'no access') + ')' : '') };
+  };
+
+  return { signals, robotsRead, compare, robotsChange, state, worst, recheck, recheckRule, inspectBudget, inspection, coverage, hash,
+    CODES, RULES, QUOTA_PER_DAY, QUOTA_PER_MINUTE, PER_RUN, PER_AUDIT,
+    helpers: { hostOf, bare, pathOf, ukey, same, strip, S, n0 } };
+})();
+// G12 / G29 (2026-10-13, FIX_PLAN): the events of the period are marked for every chart (pages published, audit fixes, Google
+// updates, data breaks — AN, from v5/data/seo_events.json and the stored rows), and every figure group carries its source, period
+// and sample (LN). A figure whose source nobody recorded says "source not recorded" instead of borrowing one.
+// ---- chart annotations (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.5 / 2.12) ----
+// A line that falls in mid-September 2025 is not a ranking problem: that is the week Google stopped serving 100 results on one page.
+// A line that climbs two weeks after a page went live is the page. Rank Ranger and Search Console both mark such events on their
+// charts; we marked nothing, so every chart had to be read without its context. These marks are computed from data already stored -
+// published pages (`seo_content_log.published_at`), the technical audits (`seo_audits`), and the dated registry in
+// `v5/data/seo_events.json` (Google updates and data breaks) - and never from a guess. A date with no event produces no mark.
+// The registry is THE one place to add a new Google update: the build inlines the same file here, into _site_stats.js and into the
+// app (app/shared/src/seo-events.generated.ts), so the engine and the dashboards mark the same dates.
+const AN = (() => {
+  const EVENTS = Object.assign({ updated: '', google_updates: [], data_breaks: [] }, {"updated": "2026-10-13", "google_updates": [{"name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-27"}, {"name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-17"}, {"name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-22"}, {"name": "December 2025 core update", "start": "2025-12-02", "end": "2025-12-18"}, {"name": "March 2026 core update", "start": "2026-03-10", "end": "2026-03-26"}, {"name": "June 2026 core update", "start": "2026-06-23", "end": "2026-07-08"}, {"name": "September 2026 core update", "start": "2026-09-15", "end": "2026-09-30"}], "data_breaks": [{"name": "num=100 stopped working", "start": "2025-09-10", "end": "2025-09-19", "affects": ["impressions", "position"], "detail": "Google stopped serving 100 results on one page in mid-September 2025, so the SEO tools that read 100 results at a time disappeared from the counts. Impressions fell and average position improved on most sites without anything changing on the site: figures from before and after this break are not comparable."}]});
+  const KINDS = {
+    publish: { label: 'Page published', tone: 'good' },
+    fix: { label: 'Audit fixes', tone: 'good' },
+    google_update: { label: 'Google update', tone: 'warning' },
+    data_break: { label: 'Data break', tone: 'warning' },
+    link: { label: 'Link won', tone: 'good' },
+  };
+  const S = (v) => String(v == null ? '' : v);
+  const day = (v) => S(v).slice(0, 10);
+  const esc1 = (s) => S(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // a point event is in the window when its day is inside it; a dated range is in when it overlaps it. An open end means "no limit".
+  const inRange = (from, to, start, end) => { const a = day(from), b = day(to), s0 = day(start), e0 = day(end) || day(start);
+    if (!s0) return false;
+    if (a && e0 < a) return false;
+    if (b && s0 > b) return false;
+    return true; };
+  const mark = (kind, date, label, o) => { const x = o || {};
+    return { kind, date: day(date), date_end: day(x.date_end) || day(date), label: S(label), detail: S(x.detail), url: S(x.url), source: S(x.source),
+      tone: (KINDS[kind] || {}).tone || 'neutral', kind_label: (KINDS[kind] || {}).label || kind }; };
+  // every event inside [from, to]. `published`: seo_content_log rows; `audits`: seo_audits rows (oldest first or any order);
+  // `links`: won links with their first sighting. Everything optional - what is missing simply produces no marks.
+  const marks = (o) => {
+    const x = o || {}; const from = day(x.from), to = day(x.to); const out = [];
+    for (const p of (x.published || [])) {
+      const d = day(p.published_at || p.publishedAt || p.date);
+      if (!d || !inRange(from, to, d, d)) continue;
+      const kw = S(p.keyword).trim();
+      out.push(mark('publish', d, kw ? 'Published: "' + kw + '"' : 'Page published', { url: S(p.published_url || p.publishedUrl || p.url), source: 'seo_content_log',
+        detail: S(p.source) === 'ladder' ? 'a keyword-ladder page' : S(p.source) === 'cadence' ? 'a page of the weekly cadence' : S(p.source) ? 'source: ' + S(p.source) : '' }));
+    }
+    const audits = (x.audits || []).filter(a => day(a.audited_at || a.auditedAt)).slice()
+      .sort((a, b) => day(a.audited_at || a.auditedAt).localeCompare(day(b.audited_at || b.auditedAt)));
+    for (let i = 0; i < audits.length; i++) {
+      const a = audits[i], prev = audits[i - 1];
+      const d = day(a.audited_at || a.auditedAt);
+      if (!inRange(from, to, d, d)) continue;
+      const nFind = Number(a.findings == null ? a.findingsCount : a.findings), pFind = prev ? Number(prev.findings == null ? prev.findingsCount : prev.findings) : NaN;
+      const hs = Number(a.health_score == null ? a.healthScore : a.health_score), ps = prev ? Number(prev.health_score == null ? prev.healthScore : prev.health_score) : NaN;
+      const fixed = (Number.isFinite(nFind) && Number.isFinite(pFind)) ? pFind - nFind : null;
+      const detail = [Number.isFinite(hs) ? (Number.isFinite(ps) ? 'health ' + ps + ' → ' + hs : 'health ' + hs + '/100') : '',
+        fixed == null ? '' : fixed > 0 ? fixed + ' fewer finding' + (fixed === 1 ? '' : 's') + ' than the audit before'
+          : fixed < 0 ? Math.abs(fixed) + ' more finding' + (fixed === -1 ? '' : 's') + ' than the audit before' : 'the same findings as the audit before'].filter(Boolean).join(' · ');
+      out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' : 'Technical audit', { detail, source: 'seo_audits' }));
+    }
+    for (const l of (x.links || [])) {
+      const d = day(l.t0 || l.first_seen || l.date);
+      if (!d || !inRange(from, to, d, d)) continue;
+      out.push(mark('link', d, 'Link won: ' + S(l.ref_domain || l.refDomain), { url: S(l.target_url || l.targetUrl), source: 'seo_backlinks' }));
+    }
+    for (const u of (EVENTS.google_updates || [])) {
+      if (!inRange(from, to, u.start, u.end)) continue;
+      out.push(mark('google_update', u.start, 'Google: ' + S(u.name), { date_end: u.end, source: 'v5/data/seo_events.json',
+        detail: 'Google changed its ranking systems between ' + day(u.start) + ' and ' + day(u.end) + '. A move in this window may be part of the cause, which cannot be proven from these numbers.' }));
+    }
+    for (const b of (EVENTS.data_breaks || [])) {
+      if (!inRange(from, to, b.start, b.end)) continue;
+      out.push(mark('data_break', b.start, 'Data break: ' + S(b.name), { date_end: b.end, source: 'v5/data/seo_events.json', detail: S(b.detail) }));
+    }
+    out.sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind) || a.label.localeCompare(b.label));
+    return out;
+  };
+  // does a before / after comparison straddle a data break? Then the two sides are not comparable and the report says so.
+  const breakBetween = (from, to) => (EVENTS.data_breaks || []).filter(b => inRange(from, to, b.start, b.end))
+    .map(b => ({ name: S(b.name), start: day(b.start), end: day(b.end), detail: S(b.detail), affects: (b.affects || []).map(S) }));
+  const html = (list, o) => { const rows = (list || []); const x = o || {};
+    if (!rows.length) return x.empty === false ? '' : '<p style="color:#64748b;font-size:13px">Nothing happened in this period that would explain a move in the charts.</p>';
+    const td = 'style="padding:4px 8px;border:1px solid #cbd5e1;font-size:12px;vertical-align:top"';
+    const th = 'style="padding:4px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:11px"';
+    return '<table style="border-collapse:collapse;margin:6px 0;max-width:100%"><tr><th ' + th + '>Date</th><th ' + th + '>Event</th><th ' + th + '>What it was</th></tr>'
+      + rows.map(m => '<tr><td ' + td + '>' + esc1(m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '')) + '</td><td ' + td + '>'
+        + esc1(m.label) + '</td><td ' + td + '>' + esc1(m.detail || m.kind_label) + '</td></tr>').join('') + '</table>';
+  };
+  return { marks, html, inRange, breakBetween, EVENTS, KINDS, UPDATES: EVENTS.google_updates || [], BREAKS: EVENTS.data_breaks || [] };
+})();
+// ---- lineage (G29, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.11) ----
+// Every number a customer reads has to say where it came from, over what period, and how big the sample was. Before this, the AI
+// visibility report said it (sample sizes, Wilson ranges) and the others did not: the weekly report printed "1,240 impressions" and
+// "#8" side by side without saying that one is a 28-day Search Console count and the other one live sample of one results page.
+// LN.of() carries that as structured fields next to the value (`source`, `period`, `sample`, `basis`), LN.note() turns them into one
+// short line for a tooltip or a footnote, and LN.block() prints the whole list under a report as "Where these numbers come from".
+// Rules: the vocabulary is the one the rest of the system already uses (G6 "modelled, not measured clicks", G8 `calibrated` /
+// `modelled` / `unknown`, G28 statistical ranges, G26 `impact_basis`) - this kit makes it universal, it does not invent a second
+// scheme. A modelled or uncalibrated number must say so. Where lineage is genuinely unknown the note reads "source not recorded":
+// never a guessed source.
+const LN = (() => {
+  const MISSING = 'source not recorded';
+  // where numbers come from. `label` is what a customer reads, `how` the one sentence about what that source can and cannot see.
+  const SOURCES = {
+    gsc: { label: 'Google Search Console', how: 'Google\'s own count of the impressions and clicks it served; the last 3 days are not final, and figures are averages across devices and locations' },
+    gsc_history: { label: 'your stored Search Console history', how: 'the weekly Search Console readings we have kept for this site' },
+    inspection: { label: 'Search Console URL Inspection', how: 'Google\'s own answer about one URL at the moment it was asked' },
+    gsc_links: { label: 'your Search Console link export', how: 'the sample of links Google shows you; it is a sample, not the whole list' },
+    ga4: { label: 'Google Analytics 4', how: 'visits measured on your site by your own GA4 property' },
+    serp: { label: 'a live Google results page', how: 'one results page read through DataForSEO at that moment, from one country and one device' },
+    kwdata: { label: 'Google Ads keyword data (through DataForSEO)', how: 'the provider\'s monthly search volume and cost per click; a provider estimate for a single keyword, not a measurement of your site' },
+    backlink_index: { label: 'the DataForSEO backlink index', how: 'one crawler\'s index of the web: it finds much of the web, never all of it' },
+    bing: { label: 'Bing Webmaster Tools', how: 'Bing\'s own figures for the site it has verified' },
+    link_graph: { label: 'the Common Crawl web graph', how: 'a public crawl of the web, released every few months' },
+    ahrefs: { label: 'the Ahrefs Domain Rating API', how: 'Ahrefs\' own 0-100 rating of a domain' },
+    trends: { label: 'Google Trends', how: 'a relative index of search interest (100 = the peak of the period), not a count of searches' },
+    ai_engines: { label: 'the AI assistants themselves', how: 'the answers ChatGPT, Gemini, Google AI Mode and the others gave to the questions in your panel' },
+    ai_db: { label: 'the DataForSEO AI-answer database', how: 'a database of AI answers and the brands they name' },
+    own_check: { label: 'our own fetch of the page', how: 'we requested the page ourselves and read what came back' },
+    crawl: { label: 'our crawl of your website', how: 'the pages we could reach and read on your site' },
+    crux: { label: 'the Chrome User Experience Report', how: 'speed as real Chrome visitors experienced it over 28 days' },
+    pagespeed: { label: 'Google PageSpeed Insights (Lighthouse)', how: 'one simulated mobile load in a lab, not what your visitors felt' },
+    rdap: { label: 'the domain registry (RDAP, else WHOIS)', how: 'the registry\'s own record of when a domain was registered' },
+    gbp: { label: 'Google Business Profile', how: 'the public listing Google holds for the business' },
+    wikidata: { label: 'Wikidata', how: 'the public knowledge base search engines read' },
+    web: { label: 'public web pages we read', how: 'pages we fetched and quoted; nothing behind a login' },
+    you: { label: 'what you told us', how: 'the business profile, the monthly check-in or the forms you filled in' },
+    model: { label: 'a model on top of measured data', how: 'computed from measured numbers with a published formula, not measured itself' },
+    none: { label: MISSING, how: 'this figure reached the report without its source: treat it as unverified' },
+  };
+  // how the figure was arrived at. The words are the ones G6 / G8 / G28 already use.
+  const BASIS = {
+    measured: 'measured',
+    calibrated: 'calibrated against your own measured data',
+    modelled: 'modelled, not measured',
+    one_sample: 'one sample, not an average',
+    estimated: 'estimated',
+    reported: 'reported by the source',
+    unknown: MISSING,
+  };
+  const S = (v) => String(v == null ? '' : v);
+  const fmt = (v) => (Number(v) || 0).toLocaleString('en-GB');
+  const esc1 = (s) => S(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const src = (k) => SOURCES[k] || SOURCES.none;
+  // "2026-09-15 to 2026-10-12 (28 days)" - the period a figure covers, never an empty string
+  const range = (r, label) => { const o = r || {}; const a = S(o.start), b = S(o.end);
+    if (!a && !b) return label ? S(label) : 'period not recorded';
+    if (a && b) { const d = Math.round((new Date(b + 'T00:00:00Z').getTime() - new Date(a + 'T00:00:00Z').getTime()) / 864e5) + 1;
+      return a + ' to ' + b + (Number.isFinite(d) && d > 0 ? ' (' + d + ' day' + (d === 1 ? '' : 's') + ')' : ''); }
+    return 'to ' + (b || a); };
+  const asOf = (at) => { const d = S(at).slice(0, 10); return d ? 'as of ' + d : 'date not recorded'; };
+  const days = (n, end) => (Number(n) || 0) + ' days' + (S(end).slice(0, 10) ? ' to ' + S(end).slice(0, 10) : '');
+  const sample = (n, unit) => (n == null || n === '' || !Number.isFinite(Number(n))) ? 'sample not recorded' : fmt(n) + (unit ? ' ' + S(unit) : '');
+  // one figure's lineage, as structured fields beside the value
+  const of = (figure, source, o) => { const x = o || {}; const key = SOURCES[source] ? source : 'none';
+    const basis = BASIS[x.basis] ? x.basis : (key === 'none' ? 'unknown' : 'measured');
+    return { figure: S(figure), source: key, source_label: src(key).label, source_how: src(key).how,
+      period: S(x.period) || 'period not recorded', sample: x.sample == null ? 'sample not recorded' : S(x.sample),
+      basis, basis_label: BASIS[basis], note: S(x.note) };
+  };
+  // a figure whose source nobody recorded: say exactly that instead of inventing one
+  const unknown = (figure, why) => ({ figure: S(figure), source: 'none', source_label: MISSING, source_how: src('none').how,
+    period: '', sample: '', basis: 'unknown', basis_label: MISSING, note: S(why) });
+  // "Google Search Console · 2026-09-15 to 2026-10-12 (28 days) · 1,240 impressions · measured"
+  const note = (l) => { const x = l || {}; const lbl = x.source_label || MISSING;
+    return [lbl, x.period, x.sample, x.basis_label === lbl ? '' : x.basis_label, x.note].filter(Boolean).join(' · '); };
+  const isHonest = (l) => !!l && (l.basis !== 'unknown' || note(l).indexOf(MISSING) >= 0);
+  const html = (l) => '<span style="color:#64748b;font-size:11px">' + esc1(note(l)) + '</span>';
+  const line = (l) => '<div style="color:#64748b;font-size:11px;margin-top:2px">' + esc1(note(l)) + '</div>';
+  // the block under a report: one row per figure, so no number is left without a source, a period and a sample
+  const block = (list, o) => { const rows = (list || []).filter(Boolean); const x = o || {};
+    const td = 'style="padding:3px 8px;border:1px solid #cbd5e1;font-size:11px;vertical-align:top;color:#334155"';
+    const th = 'style="padding:3px 8px;border:1px solid #cbd5e1;background:#f1f5f9;text-align:left;font-size:11px"';
+    if (!rows.length) return '';
+    return '<h3 style="margin:18px 0 4px;font-size:13px;color:#0f172a">' + esc1(x.title || 'Where these numbers come from') + '</h3>'
+      + '<table style="border-collapse:collapse;margin:4px 0;max-width:100%">'
+      + '<tr><th ' + th + '>Figure</th><th ' + th + '>Source</th><th ' + th + '>Period</th><th ' + th + '>Sample</th><th ' + th + '>How it was arrived at</th></tr>'
+      + rows.map(l => '<tr><td ' + td + '>' + esc1(l.figure) + '</td><td ' + td + '>' + esc1(l.source_label) + '</td><td ' + td + '>' + esc1(l.period || '—')
+        + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+      + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
+  };
+  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, SOURCES, BASIS, MISSING };
+})();
+// ---- change test (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.4) ----
+// "We changed the page and clicks went up" is not a result: seasonality and Google's own updates move every page on a site at once
+// (P1: CausalImpact, Brodersen et al. 2015 - measuring a change needs a control or a counterfactual; P2: even the most reliable test
+// type SearchPilot publishes wins only about 2 times in 3). The Link Builder already measured a won link against a control group of
+// the site's OTHER pages over the same weeks; this kit is that same comparison, lifted out so a PAGE CHANGE can be read the same way.
+// The verdicts are graded and deliberately weak: "likely helped" / "possibly helped" / "no clear effect yet" / "too early to tell" /
+// "can't tell". Nothing here ever says a change CAUSED anything - a control group narrows the alternatives, it does not prove a cause.
+const CT = (() => {
+  const LABELS = { likely_helped: 'Likely helped', possibly_helped: 'Possibly helped', no_effect_yet: 'No clear effect yet', too_early: 'Too early to tell', cant_tell: 'Can\'t tell' };
+  const MIN_WEEKS = 6;          // a change read before 6 weeks says "too early": Google needs weeks to settle (P2: ~10 weeks per position for a link)
+  const MIN_OTHERS = 3;         // fewer than 3 other pages to compare with = no usable control group, so the verdict can only be "possibly"
+  const r1 = (n) => Math.round(10 * n) / 10;
+  const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };
+  const S = (v) => String(v == null ? '' : v);
+  const NOTES = {
+    link: { early: 'read at 6, 10 and 16 weeks after the link went live', no_data: 'the page had no search impressions before or after the link' },
+    page: { early: 'read at 6, 10 and 16 weeks after the change', no_data: 'the page had no search impressions before or after the change' },
+  };
+  const label = (v) => LABELS[v] || S(v);
+  /**
+   * One change, against the control group of the site's other pages over the same window. Positions: lower is better, so a positive
+   * `page_change` means the page moved UP. `others` are the control pages' own moves (before - after), unrounded.
+   * o: { weeks, base, now, others, joint, kind, min_weeks, min_others, no_data, early }
+   */
+  const compare = (o) => {
+    const x = o || {}; const kind = NOTES[x.kind] ? x.kind : 'page';
+    const minWeeks = x.min_weeks == null ? MIN_WEEKS : x.min_weeks, minOthers = x.min_others == null ? MIN_OTHERS : x.min_others;
+    const weeks = Math.max(0, Math.floor(Number(x.weeks) || 0));
+    const out = { weeks, base_position: 0, position: 0, page_change: 0, control_change: 0, control_spread: 0, control_pages: 0, effect: 0, verdict: '', verdict_label: '', note: '' };
+    if (weeks < minWeeks) { out.verdict = 'too_early'; out.note = S(x.early) || NOTES[kind].early; out.verdict_label = label(out.verdict); return out; }
+    const base = x.base == null || x.base === '' ? null : Number(x.base), now = x.now == null || x.now === '' ? null : Number(x.now);
+    if (!Number.isFinite(base) || !Number.isFinite(now) || base <= 0 || now <= 0) {
+      out.verdict = 'cant_tell'; out.note = S(x.no_data) || NOTES[kind].no_data; out.verdict_label = label(out.verdict); return out; }
+    const others = (x.others || []).map(Number).filter(Number.isFinite);
+    out.base_position = r1(base); out.position = r1(now); out.page_change = r1(out.base_position - out.position);
+    const mid = median(others);
+    out.control_change = r1(mid); out.control_spread = r1(median(others.map(d => Math.abs(d - mid)))); out.control_pages = others.length;
+    out.effect = r1(out.page_change - out.control_change);
+    const joint = Number(x.joint) || 0;
+    out.verdict = others.length < minOthers ? (out.effect > 1 ? 'possibly_helped' : 'no_effect_yet')
+      : out.effect > Math.max(1, 2 * out.control_spread) && !joint ? 'likely_helped'
+      : out.effect > Math.max(0.5, out.control_spread) ? 'possibly_helped' : 'no_effect_yet';
+    out.verdict_label = label(out.verdict);
+    out.note = (joint ? (kind === 'link' ? 'another link to this page within 4 weeks (credit shared); ' : 'another change to this page within 4 weeks (credit shared); ') : '')
+      + (others.length < minOthers ? 'few other pages to compare with; ' : '')
+      + 'position ' + out.base_position + ' → ' + out.position + ' vs the site\'s other pages ' + (out.control_change >= 0 ? '+' : '') + out.control_change;
+    return out;
+  };
+  const method = 'Each change is dated and read against a control group: the same page\'s average Google position before and after, minus what the site\'s OTHER pages did over the same weeks. That removes the part of the move that was the season, the market or a Google update. "Likely helped" means the page beat its control group by more than twice the spread of the control group itself and nothing else changed on that page in the same four weeks; "possibly helped" means it beat the control group by less than that; "no clear effect yet" means it did not. A control group narrows the alternatives: it is never proof of cause.';
+  const summary = (rows) => { const list = (rows || []); const by = (v) => list.filter(r => r.verdict === v).length;
+    return { total: list.length, likely_helped: by('likely_helped'), possibly_helped: by('possibly_helped'), no_effect_yet: by('no_effect_yet'), too_early: by('too_early'), cant_tell: by('cant_tell'),
+      read: list.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length }; };
+  return { compare, label, summary, method, LABELS, NOTES, MIN_WEEKS, MIN_OTHERS, r1, median };
 })();
 // G28 (2026-10-12, FIX_PLAN): a traffic alert fires on a STATISTICAL change, not on a fixed 30%. ST.change (two-sample Poisson z, 95% range)
 // decides; a large move that is still inside sampling noise is reported as "watch". Google's own update dates are added as context.
@@ -247,6 +753,13 @@ let ga4Reason = ''; try { const r = ($('GA4 Requests').first() || {}).json; if (
 const gErr = (r) => { if (!r) return 'no response'; const e = r.error; if (!e) return null; if (typeof e === 'string') return e.slice(0, 200); const ctx = (e.context && e.context.data) || {}; const inner = (ctx.error && typeof ctx.error === 'object') ? ctx.error : null; return String((inner && inner.message) || (ctx.error_description ? String(ctx.error || 'error') + ': ' + ctx.error_description : '') || e.message || e.description || e.status || JSON.stringify(e)).slice(0, 200); };   // Google errors: the useful text sits in context.data (invalid_grant: account not found) or in error.message (PERMISSION_DENIED)
 let acctErr = ''; try { const a = ($('GA4 Accounts').first() || {}).json || {}; if (a.error) acctErr = gErr(a); } catch (e) {}
 const metricsHist = (() => { try { return $('Load Site Metrics').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();
+// G11 / G25 (2026-10-13): the daily key-page watch's rows and its site fingerprint, so the weekly report and the app's technical page show
+// the same picture (the watch runs in its own workflow, SEO Agent — Page Watch, every morning)
+const watchRows = grab('Load Page Watch (Site)').filter(r => r.site_id && r.url);
+const watchCacheRows = grab('Load Watch Cache (Site)').filter(r => String(r.key || '').indexOf('watch:') === 0);
+// G12: the stored rows the chart marks are computed from — pages that went live (seo_content_log) and the technical audits (seo_audits)
+const logRowsAll = (() => { try { return $('Load Content Log').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();
+const auditRowsAll = (() => { try { return $('Load Audits (Site)').all().map(i => i.json).filter(r => r && r.site_id && !r.error); } catch (e) { return []; } })();
 const queryHist = (() => { try { return $('Load Query History').all().map(i => i.json).filter(r => r && r.site_id && r.tracked && !r.error); } catch (e) { return []; } })();
 const now = new Date().toISOString();
 const pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (cur > 0 ? null : 0);
@@ -289,7 +802,11 @@ return sites.map((s, idx) => {
   const det = detAll.find(x => x.site_id === s.site_id) || null; const found = det ? det.detected : [];
   const basePages = (s.ladder_pages || []).map(p => { const f = found.find(f => kwKey(f.keyword) === kwKey(p.keyword) && (!f.ladder_id || !p.ladder_id || f.ladder_id === p.ladder_id)); return f ? { ...p, url: f.url, status: 'published', page_exists: true, detected: true } : promised(p); });
   for (const f of found) if (!basePages.some(p => ukey(p.url) === ukey(f.url))) basePages.push({ url: f.url, keyword: f.keyword, rung: 0, status: 'published', ladder_id: f.ladder_id || '', page_exists: true, detected: true });
-  const pages = basePages.map(p => { const i = insp.find(x => x.url === p.url); return { ...p, inspected: !!i && !i.error, indexed: (i && !i.error) ? !!i.indexed : null, verdict: i ? i.verdict : '', coverage: i ? i.coverage : '', last_crawl: i ? i.last_crawl : '', canonical_ok: i ? i.canonical_ok : null, inspect_error: i ? i.error : (s.gsc_connected ? 'not inspected' : 'Search Console not connected') }; });
+  // G25 (2026-10-13): an inspection the quota did not reach, or one that failed, is "not checked" — never "not indexed" (`skipped` / `not_checked`)
+  const pages = basePages.map(p => { const i = insp.find(x => x.url === p.url && !x.skipped && !x.inspect_error) || insp.find(x => x.url === p.url); const asked = !!i && !i.skipped && !i.inspect_error;
+    return { ...p, inspected: asked, indexed: asked ? !!i.indexed : null, verdict: asked ? i.verdict : '', coverage: asked ? i.coverage : '', last_crawl: asked ? i.last_crawl : '', canonical_ok: asked ? i.canonical_ok : null,
+      google_canonical: asked ? i.google_canonical : '', mobile_usable: asked ? i.mobile_usable : null, rich_results: asked ? i.rich_results : [],
+      inspect_error: asked ? null : (i ? (i.not_checked || i.inspect_error) : (s.gsc_connected ? 'not inspected' : 'Search Console not connected')) }; });
   // pages not live yet are reported as such, never as 'not indexed'
   for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = p.status === 'writing' ? 'written, not published yet' : 'planned, not written yet'; p.indexed = null; }
   // ---- alerts ----
@@ -351,6 +868,41 @@ return sites.map((s, idx) => {
   // ---- rows for the Data Tables ----
   const T = gsc ? gsc.totals : null; const G = ga4;
   const prevRuns = metricsHist.filter(m => m.site_id === s.site_id).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).slice(-12).map(m => ({ period_end: m.period_end, clicks: Number(m.clicks) || 0, impressions: Number(m.impressions) || 0, position: r1(m.position), sessions: Number(m.sessions) || 0 }));
+  // ---- G12 (2026-10-13): the events of the two periods this report compares, marked on every chart ----
+  const myLogs = logRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain);
+  const publishedLogs = myLogs.filter(r => String(r.published_at || '').slice(0, 10));
+  const loggedKw = new Set(publishedLogs.map(r => kwKey(r.keyword)));
+  const annotations = AN.marks({ from: R.previous.start, to: R.current.end,
+    published: [...publishedLogs.map(r => ({ published_at: r.published_at, keyword: r.keyword, published_url: r.published_url, source: r.source })),
+      ...found.filter(f => !loggedKw.has(kwKey(f.keyword))).map(f => ({ published_at: (det && det.checked_at) || now, keyword: f.keyword, published_url: f.url, source: f.ladder_id ? 'ladder' : 'detected' }))],
+    audits: auditRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain) });
+  const data_breaks = AN.breakBetween(R.previous.start, R.current.end);
+  // ---- G29 (2026-10-13): where every figure in this report came from, over what period, from how big a sample ----
+  const lineage = [];
+  const curRange = LN.range(R.current), prevRange = LN.range(R.previous);
+  if (gsc) {
+    lineage.push(LN.of('Clicks, impressions, CTR and average position', 'gsc', { period: curRange, basis: 'measured',
+      sample: LN.sample(gsc.totals.cur.impressions, 'impressions across ' + (gsc.query_count || 0) + ' named queries'), note: 'compared with ' + prevRange }));
+    if (gsc.totals.yoy) lineage.push(LN.of('Year-on-year clicks', 'gsc', { period: LN.range(R.yoy), sample: LN.sample(gsc.totals.yoy.impressions, 'impressions'), basis: 'measured' }));
+    lineage.push(LN.of('Queries, quick wins, click-through gaps and page lists', 'gsc', { period: curRange, basis: 'measured',
+      sample: LN.sample(gsc.rows_read, 'rows read') + ((gsc.truncated || []).length ? ' — Search Console held more rows than this run read (' + gsc.truncated.join(', ') + ')' : ''),
+      note: 'the queries Google withholds are reported apart, never spread over the named ones' }));
+    lineage.push(LN.of('Expected click-through rate for a position', 'model', { period: 'industry averages, not dated', sample: 'positions 1-10', basis: 'modelled',
+      note: 'a published industry curve, not your own measured click-through rate' }));
+  } else lineage.push(LN.unknown('Search clicks, impressions and positions', 'Search Console is not connected for this site, so this report carries no measured search data'));
+  if (ga4) lineage.push(LN.of('Organic sessions, engaged sessions and key events', 'ga4', { period: curRange, basis: 'measured',
+    sample: LN.sample(ga4.organic.cur.sessions, 'organic sessions of ' + (ga4.total && ga4.total.cur ? ga4.total.cur.sessions : 0) + ' from all channels'), note: 'property ' + ga4.ga4_property_id }));
+  else lineage.push(LN.unknown('Visits, engagement and key events', 'Google Analytics is not connected for this site'));
+  if (tracked.some(t => t.serp_position != null)) lineage.push(LN.of('Live Google check per tracked keyword', 'serp', { basis: 'one_sample',
+    period: LN.asOf((tracked.find(t => t.serp_checked_at) || {}).serp_checked_at), sample: LN.sample(tracked.filter(t => t.serp_position != null).length, 'keywords, one results page each'),
+    note: 'one country and one device, so it will differ from the Search Console average' }));
+  if (pages.some(p => p.inspected)) lineage.push(LN.of('Index status of your pages', 'inspection', { basis: 'measured',
+    period: LN.asOf(now), sample: LN.sample(pages.filter(p => p.inspected).length, 'pages inspected') }));
+  if (trends.length) lineage.push(LN.of('Search interest', 'trends', { period: 'the last 12 months', basis: 'reported',
+    sample: LN.sample(trends.length, 'keywords'), note: 'a relative index (100 = the peak of the period), not a count of searches' }));
+  if (notices.length) lineage.push(LN.of('Search Console notices', 'gsc', { period: 'the last 35 days', sample: LN.sample(notices.length, 'notification e-mails'), basis: 'reported' }));
+  if (ck) lineage.push(LN.of('Manual actions, security issues and site-wide index coverage', 'you', { period: 'check-in of ' + String(ck.month || ''), sample: 'one check-in', basis: 'reported',
+    note: 'Google offers no API for these, so they come from your monthly check-in' }));
   const metrics_row = { site_id: s.site_id, domain: s.domain, period_start: R.current.start, period_end: R.current.end, checked_at: now, gsc_connected: !!gsc, ga4_connected: !!ga4,
     clicks: T ? T.cur.clicks : 0, impressions: T ? T.cur.impressions : 0, ctr: T ? T.cur.ctr : 0, position: T ? T.cur.position : 0, prev_clicks: T ? T.prev.clicks : 0, prev_impressions: T ? T.prev.impressions : 0, prev_ctr: T ? T.prev.ctr : 0, prev_position: T ? T.prev.position : 0,
     yoy_clicks: T && T.yoy ? T.yoy.clicks : 0, yoy_impressions: T && T.yoy ? T.yoy.impressions : 0, sessions: G ? G.organic.cur.sessions : 0, engaged_sessions: G ? G.organic.cur.engaged : 0, key_events: G ? G.organic.cur.key_events : 0,
@@ -362,6 +914,29 @@ return sites.map((s, idx) => {
     ...((gsc && gsc.queries) || []).filter(q => !trackedSet.has(q.query)).slice(0, 100).map(q => qrow(q, false, null))];
   const site_row = { ...SM.toRow(model), site_id: s.site_id, domain: s.domain, gsc_property: s.gsc_property || s.gsc_property_hint || '', ga4_property_id: ga4 ? String(ga4.ga4_property_id) : (s.ga4_property_id || ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en', email: s.email || '', callback_url: s.callback_url || '',
     keywords: (s.keywords || []).join(', '), status: s.status || 'active', source: s.source || 'form', created_at: s.created_at || now, last_run_at: now, last_status: (gsc ? 'gsc:ok' : 'gsc:off') + ' ' + (ga4 ? 'ga4:ok' : 'ga4:off') + (alerts.some(a => a.level === 'high') ? ' alerts' : ''), request_id: s.request_id || '' };
+  // ---- G25: what Google thinks of the key pages, with what was not checked said out loud ----
+  const mine = insp.filter(x => x.site_id === s.site_id || x.site_idx === idx);
+  const askedIns = mine.filter(x => !x.skipped);
+  const budget = (mine.find(x => x.budget) || {}).budget || null;
+  const index_coverage = s.gsc_connected
+    ? { ...PW.coverage(askedIns.map(x => ({ ok: !x.inspect_error, error: x.inspect_error || '', indexed: x.indexed, verdict: x.verdict, coverage: x.coverage, canonical_ok: x.canonical_ok, mobile_usable: x.mobile_usable, rich_results: x.rich_results, not_checked: x.not_checked || '' })),
+        { not_checked: mine.filter(x => x.skipped).length, not_checked_reason: mine.filter(x => x.skipped).length ? 'the run\'s share of Google\'s daily quota was used up; they are inspected in the next run, oldest first' : '', quota_note: budget ? budget.note : '' }),
+        connected: true, candidates: budget ? budget.candidates : askedIns.length, cap: budget ? budget.cap : null,
+        pages: askedIns.filter(x => !x.inspect_error).slice(0, 50).map(x => ({ url: x.url, indexed: x.indexed, verdict: x.verdict, coverage: x.coverage, last_crawl: x.last_crawl, canonical_ok: x.canonical_ok, google_canonical: x.google_canonical, mobile_usable: x.mobile_usable, rich_results: x.rich_results, kind: x.kind })),
+        not_checked_pages: mine.filter(x => x.skipped || x.inspect_error).slice(0, 25).map(x => ({ url: x.url, reason: x.not_checked || x.inspect_error || 'not checked' })) }
+    : { connected: false, checked: 0, indexed: 0, not_indexed: 0, not_checked: 0, pages: [], not_checked_pages: [], text: 'Search Console is not connected, so Google\'s index view could not be read (not checked).' };
+  // ---- G11: the daily key-page watch, as the weekly report sees it ----
+  const wmine = watchRows.filter(r => r.site_id === s.site_id);
+  const wcache = (() => { try { return JSON.parse(String((watchCacheRows.find(c => String(c.key) === 'watch:' + s.site_id) || {}).value || '') || 'null') || null; } catch (e) { return null; } })();
+  const weekAgo = new Date(Date.now() - 7 * 864e5).toISOString();
+  const watch = wmine.length || wcache
+    ? { running: !!wcache, last_checked_at: wcache ? String(wcache.checked_at || '') : wmine.map(r => String(r.checked_at || '')).sort().slice(-1)[0] || '',
+        pages_watched: wcache ? Number(wcache.pages_watched) || wmine.length : wmine.length, pages_not_checked: wcache ? Number(wcache.pages_not_checked) || 0 : 0,
+        robots_hash: wcache ? String(wcache.robots_hash || '') : '', changed_this_week: wmine.filter(r => String(r.last_change_at || '') >= weekAgo).length,
+        changes: wmine.filter(r => String(r.last_change_at || '') >= weekAgo).slice(0, 10).map(r => ({ url: r.url, changes: String(r.changes || ''), at: String(r.last_change_at || '') })),
+        noindex: wmine.filter(r => r.noindex === true).map(r => r.url).slice(0, 10), broken: wmine.filter(r => Number(r.status) >= 400).map(r => r.url).slice(0, 10),
+        cost_usd: 0 }
+    : { running: false, pages_watched: 0, last_checked_at: '', changed_this_week: 0, changes: [], noindex: [], broken: [], pages_not_checked: 0, cost_usd: 0 };
   return { json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', period: R, checked_at: now, first_run: !!s.first_run, on_demand: !!s.on_demand, source: s.source, country: s.country || '',
     site: { canonical_host: model.canonical_host, home_url: SM.siteUrl(model, '/'), business_name: SM.name(model), name_source: model.name_source || '', services: SM.services(model).slice(0, 12), nav_pages: (model.nav_pages || []).slice(0, 8), nap: SM.nap(model), pages_known: SM.pages(model).length, model_updated_at: model.model_updated_at || '' },
     page_inventory: inv ? { pages: inv.total, with_queries: inv.with_queries, changed: inv.changed, by_source: inv.by_source, sitemap_read: inv.sitemap_read } : null,
@@ -369,6 +944,10 @@ return sites.map((s, idx) => {
     ga4: ga4 ? { connected: true, property_id: ga4.ga4_property_id, detected: ga4.ga4_detected, property_name: ga4.ga4_property_name, organic: ga4.organic, total: ga4.total, organic_share: ga4.organic_share, channels: ga4.channels, landing: ga4.landing, daily: ga4.daily, errors: ga4.errors } : { connected: false, error: acctErr || ga4Reason || 'no property id given or detected' },
     console: { notices, last_checkin: ck, checkin_due: !!s.checkin_due },
     significance: stat,   // G28: the Poisson z-test behind every traffic alert (clicks / impressions / sessions)
+    index_coverage,       // G25: Google's own view of every key page (URL Inspection within the 2,000-a-day quota, oldest first)
+    page_watch: watch,    // G11: the daily key-page watch — what it checks, what changed this week, what it could not read
+    annotations, data_breaks, lineage,   // G12 / G29: the events of the period for every chart, and where each figure came from
+    change_method: CT.method,   // G12: how a page change is read against the site's other pages (the Link Builder measures it; the wording is shared)
     tracked, ladder_pages: pages, pending_publish: (s.pending_publish || []).filter(p => !found.some(f => kwKey(f.keyword) === kwKey(p.keyword))), ladder_heads: s.ladder_heads || [], trends, alerts, actions: acts, prev_runs: prevRuns, weeks_tracked: prevRuns.length + 1, service_account_email: cfg.service_account_email || '', form_url: FORM_URL, api_url: API_URL,
     detected_published: found.map(f => ({ keyword: f.keyword, url: f.url, ladder_id: f.ladder_id || '', matched_by: f.matched_by, source: f.source })),
     publish_detection: det ? { checked: true, candidates: det.candidates, sitemap_ok: !!(det.sitemap || {}).ok, sitemap_urls: (det.sitemap || {}).urls || 0, sitemap_error: (det.sitemap || {}).error || '', pages_fetched: det.pages_fetched || 0, found: found.length,

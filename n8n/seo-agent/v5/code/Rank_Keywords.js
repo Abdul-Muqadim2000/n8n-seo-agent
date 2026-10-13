@@ -1,6 +1,7 @@
 /*__REACH__*/
 /*__FIT_GATE__*/
 /*__SITE_MODEL__*/
+/*__KW_INPUTS__*/
 // Applies the AI relevance verdicts, computes the final opportunity score, builds topic clusters and the content plan,
 // and chooses the priority keywords (live SERP check next) and the keyword for the content pipeline.
 // v4.8: with a website, every keyword is labelled against the site's reach (difficulty_for_you, plan_type, months) and "Now" means easy or
@@ -71,6 +72,17 @@ const kws = (base.research.candidates || []).map(k => {
   return g.ok;
 }).sort((a, b) => b.opportunity - a.opportunity);
 
+// ---- G8 / K7 (2026-10-13): clusters by SHARED RESULTS PAGES, not only by the AI's topic label ----
+// Two searches Google answers with the same pages want one page, not two. The competitors' own ranking URLs (DataForSEO
+// ranked_keywords, already fetched above) give each keyword part of its top 10; Build Keyword Strategy recomputes this with the live
+// checks' full top 10 on top. A cluster forms when a keyword shares at least 3 of the head keyword's top-10 URLs.
+const serpEntry = (k) => ({ keyword: k.keyword, weight: k.opportunity, volume: k.volume,
+  urls: (k.competitors || []).filter(c => c && c.url && Number(c.position) > 0 && Number(c.position) <= 10).map(c => c.url) });
+const serpOverlap = KWI.serpClusters(kws.map(serpEntry), {});
+const serpHeadOf = new Map();
+for (const cl of serpOverlap.clusters) for (const m of cl.keywords) serpHeadOf.set(m.keyword, { head_keyword: cl.head_keyword, shared_urls: m.shared_urls, keyword_count: cl.keyword_count });
+for (const k of kws) { const h = serpHeadOf.get(k.keyword); k.serp_cluster = (h && h.head_keyword !== k.keyword) ? h : null; }
+
 // ---- clusters (topic label from the AI pass) ----
 const cl = new Map();
 for (const k of kws) {
@@ -105,11 +117,16 @@ const long_tail = kws.filter(k => k.words >= 4 && k.relevance === 2).slice(0, 15
 const competitor_gaps = kws.filter(k => k.competitors.length && k.relevance === 2).sort((a, b) => b.volume - a.volume).slice(0, 20);
 const by_intent = {}; INTENTS.forEach(x => by_intent[x] = kws.filter(k => k.intent === x).slice(0, 10));
 
-// ---- priority keywords: best opportunity, at most 2 per topic ----
+// ---- priority keywords: best opportunity, at most a few per topic ----
+// G8 / K4 (2026-10-13): how many keywords get a LIVE results-page check used to be fixed at 8, so the intent and page type of
+// everything else came from the AI label alone. CONFIG.live_serp_checks (Normalize Input, default 16, hard cap 25) decides now; one
+// check is a DataForSEO live-advanced SERP at depth 10 (about $0.002), so the default costs ~$0.03 a run instead of ~$0.016.
+const LIVE_N = KWI.liveChecks(base.live_serp_checks);
+const PER_TOPIC = Math.max(2, Math.ceil(LIVE_N / 4));   // 2 at 8 checks, 4 at 16: a wider check must not become one topic's list
 const priority = []; const per = {};
-const pickPriority = (minVol) => { for (const k of kws) { if (priority.includes(k) || k.relevance < 2 || k.volume < minVol) continue; per[k.topic] = (per[k.topic] || 0) + 1; if (per[k.topic] > 2) continue; priority.push(k); if (priority.length >= 8) break; } };
-pickPriority(50); if (priority.length < 8) pickPriority(20); if (priority.length < 5) pickPriority(0);
-if (!priority.length) priority.push(...kws.slice(0, 8));
+const pickPriority = (minVol) => { for (const k of kws) { if (priority.includes(k) || k.relevance < 2 || !(k.volume >= minVol)) continue; per[k.topic] = (per[k.topic] || 0) + 1; if (per[k.topic] > PER_TOPIC) continue; priority.push(k); if (priority.length >= LIVE_N) break; } };
+pickPriority(50); if (priority.length < LIVE_N) pickPriority(20); if (priority.length < Math.ceil(LIVE_N * 0.625)) pickPriority(0);
+if (!priority.length) priority.push(...kws.slice(0, LIVE_N));
 const goal = base.goal || 'leads';
 const want = goal === 'traffic' ? ['informational', 'commercial'] : goal === 'brand' ? ['informational', 'commercial', 'transactional'] : ['commercial', 'transactional'];
 const fits = (k) => k.relevance === 2 && want.includes(k.intent) && winnableFor(k.difficulty_for_you, k.kd);
@@ -122,5 +139,15 @@ return [{ json: { ...base, keyword_strategy: {
   competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
   covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by })), pages_known: SM.pages(pageModelD).length,
   ladder_covered: kws.filter(k => k.ladder_covered).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, ladder_id: k.ladder_covered.ladder_id, head_keyword: k.ladder_covered.head_keyword, ladder_keyword: k.ladder_covered.ladder_keyword, part: k.ladder_covered.part, rung: k.ladder_covered.rung, status: k.ladder_covered.status, target_url: k.ladder_covered.target_url, how: k.ladder_covered.how })), ladders_known: [...new Set(ladderKwsD.map(x => x.ladder_id))].length,
-  reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR } : null
+  reach: R ? { reach: R.reach, method: R.method, p75: R.p75 ?? null, size_reach: R.size_reach ?? null, sample: R.sample ?? null, top10: R.top10 ?? null, organic_keywords: R.organic_keywords ?? null, cached: !!R.cached, cached_at: R.cached_at || null, strong: strongR } : null,
+  // ---- G8 (2026-10-13): the three new inputs, carried into the report, the callback and the app ----
+  // K7: which keywords Google answers with the same pages (recomputed in Build Keyword Strategy once the live checks are in)
+  serp_clusters: serpOverlap.clusters.slice(0, 15),
+  serp_overlap: { keywords_compared: serpOverlap.keywords_compared, clustered: serpOverlap.clustered, min_shared_urls: serpOverlap.min_shared_urls, source: 'competitor rankings' },
+  // K6: the site's own Search Console queries that seeded this research, and what they measured
+  search_console: (base.search_console && typeof base.search_console === 'object')
+    ? { ...base.search_console, seeded: (base.gsc_seeds || []), from_research: (base.research || {}).search_console || null }
+    : null,
+  // K4: how many keywords this run checked live on Google
+  live_checks: { planned: priority.length, cap: LIVE_N, per_topic: PER_TOPIC, est_cost_usd: +(priority.length * 0.002).toFixed(3) }
 } } }];

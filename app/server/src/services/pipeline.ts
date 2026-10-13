@@ -8,6 +8,17 @@ import {
   aiPulseQuestions,
   estimateAiVisibilityCost,
   nextScheduledRun,
+  // G12 / G29 (2026-10-13, FIX_PLAN): the ladder's chart marks, its page-change readings and the lineage of its numbers
+  buildAnnotations,
+  pageChangeTests,
+  CHANGE_TEST_METHOD,
+  lineage,
+  lineagePeriod,
+  lineageSample,
+  lineageUnknown,
+  type AuditPoint,
+  type Lineage,
+  type PagePeriodPoint,
   type AutomationId,
   type AutomationStatus,
   type AiTargetRow,
@@ -323,14 +334,47 @@ export async function ladderCards(org: OrgRow, site: SiteRow): Promise<LadderCar
 
 /** One keyword ladder of the website (404 when it is not one of this domain's ladders). */
 export async function ladderDetailData(org: OrgRow, site: SiteRow, ladderId: string): Promise<LadderDetail> {
-  const { ladders } = await pipelineState(org, site);
+  const { ladders, rows } = await pipelineState(org, site);
   const d = ladders.details.get(ladderId);
   if (!d) throw notFound('Keyword ladder not found');
   const pageReports = d.pages.map((p) => p.reportId).filter((id): id is string => !!id);
-  return { ...d, reports: await ladderReports(org, site, ladderId, pageReports) };
+  // ---- G12 / G29 (2026-10-13, FIX_PLAN): what to mark on this ladder's charts, what its page changes did, and where its numbers come from ----
+  const mine = rows.logs.filter((r) => String(r.ladder_id ?? '') === ladderId || d.pages.some((p) => p.keyword && p.keyword === String(r.keyword ?? '')));
+  const published = mine
+    .filter((r) => String(r.published_at ?? ''))
+    .map((r) => ({ publishedAt: String(r.published_at), keyword: String(r.keyword ?? ''), url: String(r.published_url ?? ''), source: String(r.source ?? '') }));
+  const checks = d.pages.flatMap((p) => (p.history ?? []).map((h) => String(h.checkedAt).slice(0, 10))).filter(Boolean).sort();
+  const from = (d.startDate || checks[0] || '').slice(0, 10);
+  const to = new Date().toISOString().slice(0, 10);
+  const annotations = buildAnnotations({
+    from,
+    to,
+    published,
+    audits: rows.audits.map((a) => ({ auditedAt: a.auditedAt, healthScore: a.healthScore, findings: a.findings })),
+  });
+  const points: PagePeriodPoint[] = rows.queries
+    .filter((q) => String(q.page ?? '') && Number(q.position) > 0)
+    .map((q) => ({ periodEnd: String(q.period_end ?? ''), page: String(q.page), query: String(q.query ?? ''), position: Number(q.position), impressions: Number(q.impressions) || 0, clicks: Number(q.clicks) || 0 }));
+  const changeTests = pageChangeTests({
+    points,
+    changes: published.map((p) => ({ url: p.url, t0: p.publishedAt.slice(0, 10), change: 'published', keyword: p.keyword })),
+  });
+  const lineageList: Lineage[] = [
+    checks.length
+      ? lineage('Position on Google over time', 'serp', { period: lineagePeriod(checks[0], checks[checks.length - 1]), sample: lineageSample(checks.length, 'weekly checks, one results page each'), basis: 'one_sample', note: 'one country and one device at one moment' })
+      : lineageUnknown('Position on Google over time', 'this ladder has not been checked on Google yet'),
+    d.traffic.points.length
+      ? lineage('Clicks and impressions of this ladder’s pages', 'gsc', { period: lineagePeriod(d.traffic.points[0]!.periodEnd, d.traffic.points[d.traffic.points.length - 1]!.periodEnd), sample: lineageSample(d.traffic.points.length, 'stored 28-day periods'), basis: 'measured' })
+      : lineageUnknown('Clicks and impressions of this ladder’s pages', 'Search Console has not reported traffic for these pages yet'),
+    lineage('Expected visits in the top 3', 'model', { period: 'per month, once the pages rank', sample: lineageSample(d.counts.total, 'planned pages'), basis: 'modelled', note: 'searches after results-page click loss × a top-3 click share — modelled, never measured clicks' }),
+    changeTests.length
+      ? lineage('Did publishing this page help?', 'gsc_history', { period: lineagePeriod(from, to), sample: lineageSample(changeTests.length, 'page changes read'), basis: 'measured', note: CHANGE_TEST_METHOD })
+      : lineageUnknown('Did publishing this page help?', 'no page of this ladder has a recorded publish date yet'),
+  ];
+  return { ...d, reports: await ladderReports(org, site, ladderId, pageReports), annotations, changeTests, lineage: lineageList };
 }
 
-async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: PipelineData; ladders: LadderBuild }> {
+async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: PipelineData; ladders: LadderBuild; rows: { logs: ContentLogRow[]; queries: QueryRow[]; audits: AuditPoint[] } }> {
   const d = site.domain;
   const [x, ladders, queries, trends, logs, history, settingsRows, app, spent, cadenceReport, recentReports, running, aiTargets, sitePages] = await Promise.all([
     loadBundle(org, site),
@@ -623,5 +667,6 @@ async function pipelineState(org: OrgRow, site: SiteRow): Promise<{ data: Pipeli
     detected: detectedFeed(app.detected ?? [], build.cards),
     autoStartEnabled: config.autoStartLadders,
   };
-  return { data, ladders: build };
+  // G12 / G29: the rows the ladder detail marks its charts and states its lineage from (already read for the pipeline)
+  return { data, ladders: build, rows: { logs, queries, audits: x.technical.audits } };
 }

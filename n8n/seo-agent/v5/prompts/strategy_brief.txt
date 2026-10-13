@@ -39,6 +39,9 @@ COMPETITOR PAGES (title, word count, headings)
 TERMS THE TOP PAGES SHARE
 {{ $json.term_digest || 'n/a' }}
 
+COVERAGE TARGET (read off the best page in these results, not an average — it is the bar to clear, not a promise about rankings)
+{{ $json.coverage_digest || 'n/a — no competitor page could be read for this keyword, so plan the coverage from the keyword data and the questions above' }}
+
 VERIFIED FACTS WITH SOURCES (the only external numbers the writer may cite)
 {{ ($json.facts_list || $json.facts || []).map(f => '- ' + f.claim + ' — ' + f.source + ' — ' + f.url).join('\n') || 'none found; the writer must use [Statistic] placeholders for any external number' }}
 
@@ -93,7 +96,8 @@ RULES
 - Plan a page the writer can finish from the facts above: at most 5 bracketed placeholders in the whole page. A section that could only be written with figures nobody gave (prices, timelines, counts) is the wrong section — plan the qualitative answer instead.
 - Every item in content_gaps and information_gain_opportunities from the competitor analysis must be covered somewhere in the outline.
 - Use question-style H2s where the People Also Ask data shows questions; put those questions in snippet_targets with a direct answer.
-- terms_to_use: 12-20 terms from the shared-terms list that the page must use naturally, with a realistic minimum count.
+- terms_to_use: 12-20 terms from the shared-terms list that the page must use naturally, with a realistic minimum count. Choose enough of them to reach the coverage target above, and never at the cost of readable sentences: coverage comes from covering the subject, not from repeating words.
+- Every subtopic in the COVERAGE TARGET block must be answered somewhere in the outline — as its own section or inside a related one. Our own structure, our own words and our own order: never copy that page's headings or sentences (the draft is checked for overlap against every competitor page read, and over 15% of identical 8-word runs fails the quality check).
 - evidence_plan may ONLY contain facts from the VERIFIED FACTS list, copied exactly with their URL. Prefer the official, standards, research and major-press sources; use at most one page per vendor or agency blog on the whole page, and never for a market or compliance figure.
 - internal_link_suggestions may ONLY use URLs from the REAL PAGES list (3-6 links). Never invent a URL.
 - Do not copy competitor headings. Build a better, more complete structure.

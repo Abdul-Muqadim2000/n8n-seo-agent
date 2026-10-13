@@ -7,6 +7,9 @@
 // - the listings checklist (linked / listed / missing / submitted / unknown — a blocked check is unknown, never missing), competitors present;
 // - our old URLs that now 404 → redirects to add; what each won link did for its page (impact, with a control group);
 // - this week's writer jobs: the best `budget` ready prospects (value × fit), not in free-only checks.
+// G12 (2026-10-13, FIX_PLAN): the control-group comparison that read what a won link did now also reads what a page CHANGE did
+// (section 5b). One implementation (CT, v5/code/_change_test.js), one set of graded verdicts, the same table (seo_link_impact, with a
+// `kind` column: link | page_change). Nothing in it ever says a change caused a move.
 // ---- link kit (v4.10, inlined by build_monitors.py): reads a fetched page the way a link checker does — the links to a site with their rel,
 // anchor and placement, page facts (noindex, canonical, outbound links, language) and contact e-mails. Regex only: the n8n sandbox has no URL
 // constructor and no DOM. Hosts are compared without "www." (crawls report www. URLs while canonicals often use the bare host).
@@ -505,18 +508,72 @@ function siteKind(businessType, topicText) {   // the checklists that apply: a c
   return agency && software ? ['agency', 'saas'] : agency ? ['agency'] : ['saas'];
 }
 
+// ---- change test (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.4) ----
+// "We changed the page and clicks went up" is not a result: seasonality and Google's own updates move every page on a site at once
+// (P1: CausalImpact, Brodersen et al. 2015 - measuring a change needs a control or a counterfactual; P2: even the most reliable test
+// type SearchPilot publishes wins only about 2 times in 3). The Link Builder already measured a won link against a control group of
+// the site's OTHER pages over the same weeks; this kit is that same comparison, lifted out so a PAGE CHANGE can be read the same way.
+// The verdicts are graded and deliberately weak: "likely helped" / "possibly helped" / "no clear effect yet" / "too early to tell" /
+// "can't tell". Nothing here ever says a change CAUSED anything - a control group narrows the alternatives, it does not prove a cause.
+const CT = (() => {
+  const LABELS = { likely_helped: 'Likely helped', possibly_helped: 'Possibly helped', no_effect_yet: 'No clear effect yet', too_early: 'Too early to tell', cant_tell: 'Can\'t tell' };
+  const MIN_WEEKS = 6;          // a change read before 6 weeks says "too early": Google needs weeks to settle (P2: ~10 weeks per position for a link)
+  const MIN_OTHERS = 3;         // fewer than 3 other pages to compare with = no usable control group, so the verdict can only be "possibly"
+  const r1 = (n) => Math.round(10 * n) / 10;
+  const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };
+  const S = (v) => String(v == null ? '' : v);
+  const NOTES = {
+    link: { early: 'read at 6, 10 and 16 weeks after the link went live', no_data: 'the page had no search impressions before or after the link' },
+    page: { early: 'read at 6, 10 and 16 weeks after the change', no_data: 'the page had no search impressions before or after the change' },
+  };
+  const label = (v) => LABELS[v] || S(v);
+  /**
+   * One change, against the control group of the site's other pages over the same window. Positions: lower is better, so a positive
+   * `page_change` means the page moved UP. `others` are the control pages' own moves (before - after), unrounded.
+   * o: { weeks, base, now, others, joint, kind, min_weeks, min_others, no_data, early }
+   */
+  const compare = (o) => {
+    const x = o || {}; const kind = NOTES[x.kind] ? x.kind : 'page';
+    const minWeeks = x.min_weeks == null ? MIN_WEEKS : x.min_weeks, minOthers = x.min_others == null ? MIN_OTHERS : x.min_others;
+    const weeks = Math.max(0, Math.floor(Number(x.weeks) || 0));
+    const out = { weeks, base_position: 0, position: 0, page_change: 0, control_change: 0, control_spread: 0, control_pages: 0, effect: 0, verdict: '', verdict_label: '', note: '' };
+    if (weeks < minWeeks) { out.verdict = 'too_early'; out.note = S(x.early) || NOTES[kind].early; out.verdict_label = label(out.verdict); return out; }
+    const base = x.base == null || x.base === '' ? null : Number(x.base), now = x.now == null || x.now === '' ? null : Number(x.now);
+    if (!Number.isFinite(base) || !Number.isFinite(now) || base <= 0 || now <= 0) {
+      out.verdict = 'cant_tell'; out.note = S(x.no_data) || NOTES[kind].no_data; out.verdict_label = label(out.verdict); return out; }
+    const others = (x.others || []).map(Number).filter(Number.isFinite);
+    out.base_position = r1(base); out.position = r1(now); out.page_change = r1(out.base_position - out.position);
+    const mid = median(others);
+    out.control_change = r1(mid); out.control_spread = r1(median(others.map(d => Math.abs(d - mid)))); out.control_pages = others.length;
+    out.effect = r1(out.page_change - out.control_change);
+    const joint = Number(x.joint) || 0;
+    out.verdict = others.length < minOthers ? (out.effect > 1 ? 'possibly_helped' : 'no_effect_yet')
+      : out.effect > Math.max(1, 2 * out.control_spread) && !joint ? 'likely_helped'
+      : out.effect > Math.max(0.5, out.control_spread) ? 'possibly_helped' : 'no_effect_yet';
+    out.verdict_label = label(out.verdict);
+    out.note = (joint ? (kind === 'link' ? 'another link to this page within 4 weeks (credit shared); ' : 'another change to this page within 4 weeks (credit shared); ') : '')
+      + (others.length < minOthers ? 'few other pages to compare with; ' : '')
+      + 'position ' + out.base_position + ' → ' + out.position + ' vs the site\'s other pages ' + (out.control_change >= 0 ? '+' : '') + out.control_change;
+    return out;
+  };
+  const method = 'Each change is dated and read against a control group: the same page\'s average Google position before and after, minus what the site\'s OTHER pages did over the same weeks. That removes the part of the move that was the season, the market or a Google update. "Likely helped" means the page beat its control group by more than twice the spread of the control group itself and nothing else changed on that page in the same four weeks; "possibly helped" means it beat the control group by less than that; "no clear effect yet" means it did not. A control group narrows the alternatives: it is never proof of cause.';
+  const summary = (rows) => { const list = (rows || []); const by = (v) => list.filter(r => r.verdict === v).length;
+    return { total: list.length, likely_helped: by('likely_helped'), possibly_helped: by('possibly_helped'), no_effect_yet: by('no_effect_yet'), too_early: by('too_early'), cant_tell: by('cant_tell'),
+      read: list.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length }; };
+  return { compare, label, summary, method, LABELS, NOTES, MIN_WEEKS, MIN_OTHERS, r1, median };
+})();
 const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const rows = (n) => { try { return $(n).all().map(i => i.json).filter(r => r && typeof r === 'object' && Object.keys(r).length && !r.error && !r.skip); } catch (e) { return []; } };
 const pair = (a, b) => { try { const R = $(a).all().map(i => i.json); const S = $(b).all().map(i => i.json || {}); return R.map((r, i) => ({ r, x: S[i] || {} })).filter(o => !o.r.skip); } catch (e) { return []; } };
 const prospects = rows('Load Link Prospects'), outreach = rows('Load Link Outreach'), listingRows = rows('Load Listings'), ledger = rows('Load Backlinks'), impacts = rows('Load Link Impact'), queries = rows('Load Query History');
+const contentLog = rows('Load Content Log');   // G12: the dates pages went live, for the page-change test of section 5b
 const sources = pair('LB Source Requests', 'Fetch LB Sources'), pagesRead = pair('LB Page Requests', 'Fetch LB Pages'), second = pair('LB Second Requests', 'Fetch LB Second');
 const now = new Date(); const iso = now.toISOString(); const day = iso.slice(0, 10);
 const htmlOf = (x) => String(x.body ?? x.data ?? ''); const statusOf = (x) => Number(x.statusCode || x.status || 0);
 const jsonOf = (x) => { if (!x) return null; if (x.body && typeof x.body === 'object') return x.body; if (x.posts || Array.isArray(x)) return x; try { return JSON.parse(String(x.body ?? x.data ?? '')); } catch (e) { return null; } };
 const errOf = (x) => x.error ? String(x.error.message || x.error.description || x.error).slice(0, 160) : '';
 const pathKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
-const median = (a) => { const s = [...a].sort((x, y) => x - y); return s.length ? (s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2) : 0; };
-const r1 = (n) => Math.round(10 * n) / 10;
+// the median and the one-decimal rounding of the control-group reading live in CT now (v5/code/_change_test.js), used by both kinds
 const LIKELY = { lost: 0.7, mention: 0.9, list: 0.5, comp_new: 0.55, gap: 0.4, ai_source: 0.35, resource: 0.45, broken: 0.6, press: 0.5 };
 // the posts of #journorequest (one shared fetch + per-topic searches), newest first, deduplicated
 const posts = new Map();
@@ -685,23 +742,41 @@ for (const p of plans) {
   const trackStart = myLedger.map(l => String(l.first_seen || '')).filter(Boolean).sort()[0] || '';
   const farms = LK.footprints(myLedger, { domain: p.domain, brands: p.brand_names || [] });   // link-farm pages (D3): no impact tracking, whatever an older ledger row says
   const won = myLedger.filter(l => l.status !== 'lost' && l.kind === 'web' && l.link_type !== 'spam' && !farms.has(l.ref_domain) && l.to_url && l.first_seen && trackStart && new Date(l.first_seen).getTime() - new Date(trackStart).getTime() >= 7 * 864e5 && (now.getTime() - new Date(l.first_seen).getTime()) / 864e5 <= 200 && (l.verify === 'found' || Number(l.seo_value) >= 20));
-  for (const l of won.slice(0, 30)) {
-    const t0 = String(l.first_seen).slice(0, 10); const weeks = Math.floor((now.getTime() - new Date(t0).getTime()) / (7 * 864e5)); const k = pathKey(l.to_url);
-    const before = periods.filter(x => x <= t0).pop(); const after = periods[periods.length - 1];
-    const row = { site_id: sid, domain: p.domain, ref_domain: l.ref_domain, from_url: l.from_url || '', target_url: l.to_url, t0, weeks, base_position: 0, base_clicks: 0, position: 0, clicks: 0, page_change: 0, control_change: 0, control_spread: 0, effect: 0, verdict: '', note: '', keyword: '', updated_at: iso };
+  const lastPeriod = periods[periods.length - 1];
+  // one reading: the page's own move before / after the date, minus what the site's OTHER pages did over the same weeks (CT.compare).
+  // `exclude` keeps pages that changed inside the same window out of the control group, as the link reading always did.
+  const readChange = (o) => {
+    const t0 = String(o.t0).slice(0, 10); const weeks = Math.floor((now.getTime() - new Date(t0).getTime()) / (7 * 864e5)); const k = pathKey(o.target_url);
+    const before = periods.filter(x => x <= t0).pop(); const after = lastPeriod;
     const B = before ? pagePos(before) : null, A = after && after !== before ? pagePos(after) : null;
     const pb = B && B.get(k), pa = A && A.get(k);
-    if (weeks < 6) { row.verdict = 'too_early'; row.note = 'read at 6, 10 and 16 weeks after the link went live'; }
-    else if (!pb || !pa) { row.verdict = 'cant_tell'; row.note = !myQ.length ? 'no Search Console data for this site' : 'the page had no search impressions before or after the link'; }
-    else {
-      row.base_position = r1(pb.s / pb.w); row.position = r1(pa.s / pa.w); row.base_clicks = pb.c; row.clicks = pa.c; row.keyword = pa.q || pb.q || ''; row.page_change = r1(row.base_position - row.position);
-      const others = [...A.keys()].filter(x => x !== k && B.has(x) && !won.some(w => pathKey(w.to_url) === x && String(w.first_seen).slice(0, 10) >= before)).map(x => (B.get(x).s / B.get(x).w) - (A.get(x).s / A.get(x).w));
-      row.control_change = r1(median(others)); row.control_spread = r1(median(others.map(d => Math.abs(d - median(others))))); row.effect = r1(row.page_change - row.control_change);
-      const joint = won.filter(w => w !== l && pathKey(w.to_url) === k && Math.abs(new Date(w.first_seen).getTime() - new Date(t0).getTime()) <= 28 * 864e5).length;
-      row.verdict = others.length < 3 ? (row.effect > 1 ? 'possibly_helped' : 'no_effect_yet') : row.effect > Math.max(1, 2 * row.control_spread) && !joint ? 'likely_helped' : row.effect > Math.max(0.5, row.control_spread) ? 'possibly_helped' : 'no_effect_yet';
-      row.note = (joint ? 'another link to this page within 4 weeks (credit shared); ' : '') + (others.length < 3 ? 'few other pages to compare with; ' : '') + 'position ' + row.base_position + ' → ' + row.position + ' vs the site\'s other pages ' + (row.control_change >= 0 ? '+' : '') + row.control_change;
-    }
-    impact_rows.push(row);
+    const others = (B && A) ? [...A.keys()].filter(x => x !== k && B.has(x) && !o.exclude(x, before)).map(x => (B.get(x).s / B.get(x).w) - (A.get(x).s / A.get(x).w)) : [];
+    const cmp = CT.compare({ kind: o.kind === 'page_change' ? 'page' : 'link', weeks, base: pb ? pb.s / pb.w : null, now: pa ? pa.s / pa.w : null, others, joint: o.joint,
+      no_data: !myQ.length ? 'no Search Console data for this site' : (!before && o.kind === 'page_change') ? 'no stored Search Console period from before the change' : '' });
+    const read = !['too_early', 'cant_tell'].includes(cmp.verdict);
+    return { site_id: sid, domain: p.domain, kind: o.kind, change: o.change || '', ref_domain: o.ref_domain || '', from_url: o.from_url || '', target_url: o.target_url, t0, weeks: cmp.weeks,
+      base_position: cmp.base_position, base_clicks: read ? pb.c : 0, position: cmp.position, clicks: read ? pa.c : 0, page_change: cmp.page_change, control_change: cmp.control_change,
+      control_spread: cmp.control_spread, effect: cmp.effect, verdict: cmp.verdict, note: cmp.note, keyword: read ? (pa.q || pb.q || '') : '', updated_at: iso };
+  };
+  for (const l of won.slice(0, 30)) {
+    const t0 = String(l.first_seen).slice(0, 10); const k = pathKey(l.to_url);
+    impact_rows.push(readChange({ kind: 'link', t0, target_url: l.to_url, ref_domain: l.ref_domain, from_url: l.from_url || '',
+      exclude: (x, before) => won.some(w => pathKey(w.to_url) === x && String(w.first_seen).slice(0, 10) >= before),
+      joint: won.filter(w => w !== l && pathKey(w.to_url) === k && Math.abs(new Date(w.first_seen).getTime() - new Date(t0).getTime()) <= 28 * 864e5).length }));
+  }
+  // ---- 5b. G12: what each PAGE CHANGE did for its page, read exactly the same way (seo_content_log dates, kind page_change) ----
+  const changes = new Map();
+  for (const r of contentLog.filter(r => r.site_id === sid && String(r.published_at || '').slice(0, 10) && String(r.published_url || ''))) {
+    const t0 = String(r.published_at).slice(0, 10); const k = pathKey(r.published_url);
+    const kind = (String(r.existing_page_url || '') && pathKey(r.existing_page_url) === k) ? 'rewritten' : 'published';
+    const old = changes.get(k);
+    if (!old || t0 > old.t0) changes.set(k, { t0, url: String(r.published_url), change: kind, keyword: String(r.keyword || '') });
+  }
+  const changeList = [...changes.values()].filter(c => (now.getTime() - new Date(c.t0).getTime()) / 864e5 <= 400).sort((a, b) => b.t0.localeCompare(a.t0)).slice(0, 30);
+  for (const c of changeList) {
+    impact_rows.push(readChange({ kind: 'page_change', t0: c.t0, target_url: c.url, change: c.change,
+      exclude: (x, before) => changes.has(x) && changes.get(x).t0 >= before && x !== pathKey(c.url),
+      joint: won.filter(w => pathKey(w.to_url) === pathKey(c.url) && Math.abs(new Date(w.first_seen).getTime() - new Date(c.t0).getTime()) <= 28 * 864e5).length }));
   }
   // ---- 6. this week's writer jobs: the best ready prospects (new rows of this run + stored ready rows), not in free-only checks ----
   const ready = [...outreach_rows.filter(o => o.status === 'ready'), ...myOutreach.filter(o => o.status === 'ready' && !o.sequence_json && !outreach_rows.some(n => n.prospect_domain === o.prospect_domain && n.type === o.type))]
@@ -713,6 +788,8 @@ for (const p of plans) {
     cache_row: { key: 'linkbld:' + sid, kind: 'linkbld', site_id: sid, value: JSON.stringify({ ...p.state, listings_at: p.due.listings ? iso : p.state.listings_at, resources_at: p.due.resources ? iso : p.state.resources_at, wayback_at: p.due.wayback ? iso : p.state.wayback_at, broken_at: p.due.broken ? iso : p.state.broken_at, last_run: iso }), updated_at: iso },
     summary: { press: press.length, qualified: outreach_rows.filter(o => !['not_fit', 'fix'].includes(o.status)).length, not_fit: outreach_rows.filter(o => o.status === 'not_fit').length, needs_contact: outreach_rows.filter(o => o.status === 'needs_contact').length,
       ready: ready.length, to_draft: jobs.length, redirects: fixes.length, listings_missing: listing_rows.filter(l => l.status === 'missing').length, listings_linked: listing_rows.filter(l => l.status === 'linked').length,
-      impact_reads: impact_rows.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length } } });
+      impact_reads: impact_rows.filter(r => r.kind === 'link' && !['too_early', 'cant_tell'].includes(r.verdict)).length,
+      page_changes: impact_rows.filter(r => r.kind === 'page_change').length,
+      change_reads: impact_rows.filter(r => r.kind === 'page_change' && !['too_early', 'cant_tell'].includes(r.verdict)).length } } });
 }
 return out.length ? out : [{ json: { skip: true } }];

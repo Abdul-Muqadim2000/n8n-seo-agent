@@ -1615,7 +1615,14 @@ await guard('pipeline', async () => {
   check('tracker: stuck (published 75 days ago, no page improved in 8 weeks)', t.tr[0].json.stuck === true && t.tr[0].json.won === false, JSON.stringify({ stuck: t.tr[0].json.stuck }));
   const htmlStuck = t.tr[0].json.html, subjStuck = t.tr[0].json.subject;
   t = await trk(LS, sHist, flat, []);
-  check('tracker: the e-mail does not change with the flags', t.tr[0].json.html === htmlStuck && t.tr[0].json.subject === subjStuck, 'html differs');
+  // G12 (2026-10-13): the publish dates DO change the e-mail now — they are marked as events at the end of it, with the lineage block.
+  // Everything above those two sections must still be identical, and the marks must appear only when a publish date is recorded.
+  const beforeMarks = (h) => String(h).split('<p style="margin-top:14px"><b>What happened while this ladder was tracked')[0].split('Where these numbers come from')[0];
+  check('tracker: the e-mail above the event marks does not change with the flags (G12 adds the publish dates and the lineage at the end)',
+    beforeMarks(t.tr[0].json.html) === beforeMarks(htmlStuck) && t.tr[0].json.subject === subjStuck
+    && /Published: "vat software uae cost"/.test(htmlStuck) && !/Published: /.test(t.tr[0].json.html),
+    JSON.stringify({ prefix_same: beforeMarks(t.tr[0].json.html) === beforeMarks(htmlStuck), subject_same: t.tr[0].json.subject === subjStuck,
+      pub_marked: /Published: "vat software uae cost"/.test(htmlStuck), pub_absent: !/Published: /.test(t.tr[0].json.html) }));
   t = await trk(LS, sHist, (k) => k === 'vat software uae cost' ? 9 : 0, pubLog(75));
   check('tracker: not stuck when a published page improved (#12 -> #9)', t.tr[0].json.stuck === false, t.tr[0].json.stuck);
   t = await trk(LS, sHist, flat, pubLog(30));
@@ -1850,9 +1857,12 @@ await guard('pipeline phase 3', async () => {
 
   // ---------- F. discovery: labels and tiers with and without a website ----------
   const SEEDS = { output: { primary_seed: 'erp implementation services', seed_groups: { services: ['erp implementation services', 'odoo implementation', 'dynamics 365 business central partner', 'erp customisation'], problems: ['inventory software for distributors', 'replace excel stock control'], comparisons: ['best erp for distributors', 'odoo vs dynamics 365'], pricing: ['erp implementation cost', 'odoo pricing uae'], local: ['erp implementation dubai', 'erp company abu dhabi'], audience: ['erp for wholesale distributors', 'northwind erp reviews'] }, services: ['ERP implementation', 'Data migration'] } };
-  const discover = async (withDomain, cacheRows) => {
+  // `o.base` overrides fields of the normalised request (2026-10-13, G8: the frozen v4.7 code checks 8 keywords live, so the
+  // comparison below runs this build with the old limit instead of the new default of 16)
+  const discover = async (withDomain, cacheRows, o = {}) => {
     delete store['Start Form']; mock('Start Form', F.forms.startDiscover);
-    const nD = await run('Normalize Input', withDomain ? F.forms.pageDiscover : { ...F.forms.pageDiscover, 'Website Domain': '', 'Extra Features': [] });
+    const nD0 = await run('Normalize Input', withDomain ? F.forms.pageDiscover : { ...F.forms.pageDiscover, 'Website Domain': '', 'Extra Features': [] });
+    const nD = o.base ? nD0.map(x => ({ json: { ...x.json, ...o.base } })) : nD0;
     mock('Route Mode', nD); mock('Keyword Seeds', SEEDS);
     const sl = await run('Seed List', store['Keyword Seeds']);
     mock('Load Site Cache', cacheRows || EMPTY);
@@ -1899,8 +1909,8 @@ await guard('pipeline phase 3', async () => {
   const nowL = Wl.rk.clusters.filter(c => c.tier === 'Now'), legacyNow = Wl.legacy.clusters.filter(c => c.tier === 'Now').map(c => c.topic);
   console.log('   tiers with reach 10 ->', JSON.stringify(Wl.rk.clusters.slice(0, 8).map(c => c.tier + ':' + c.primary_kd + ':' + c.difficulty_for_you)));
   check('discovery for a small site (reach 10): Now only up to difficulty 30 — topics v4.7 put in Now move to Next', nowL.every(c => c.primary_kd == null || c.primary_kd <= 30) && legacyNow.some(t => !nowL.some(c => c.topic === t)), JSON.stringify({ now: nowL.map(c => c.primary_kd), legacyNow }));
-  const N0 = await discover(false);
-  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder)
+  const N0 = await discover(false, null, { base: { live_serp_checks: 8 } });
+  const strip = (o) => JSON.parse(JSON.stringify(o, (k, v) => ['difficulty_for_you', 'plan_type', 'months', 'for_you_label', 'reach', 'chance', 'refused', 'why', 'live', 'covered_by', 'covered', 'pages_known', 'ladder_covered', 'ladders_known', 'traffic_basis', 'traffic_note', 'modelled_traffic_potential', 'gsc', 'serp_cluster', 'serp_clusters', 'serp_overlap', 'search_console', 'live_checks'].includes(k) ? undefined : v));   // 2026-10-11: chance / refused (G3, D4) are new fields; why / live changed on purpose (D26: the AI Overview as a timed observation, D20: deduplicated domains); 2026-10-12: covered_by / covered / pages_known are D11's labels (null / empty without a page inventory) and ladder_covered / ladders_known are D20's (null / 0 without a ladder); 2026-10-13: traffic_basis / traffic_note / modelled_traffic_potential / gsc / serp_cluster / serp_clusters / serp_overlap / search_console / live_checks are G8's new fields (the traffic number itself is unchanged without Search Console data, which is what this check proves)
   check('discovery without a website: no reach call, no labels', N0.rq[0].json.skip && N0.rd.reach === null && N0.rk.reach === null && N0.rk.keywords.every(k => k.difficulty_for_you === undefined), JSON.stringify(N0.rd));
   check('discovery without a website = v4.7 (tiers with difficulty <= 55, priority, pipeline keyword)', eq(strip(N0.rk), strip(N0.legacy)) && eq(N0.ks.choice_options, N0.legacyKs.choice_options) && eq(strip(N0.ks.keyword_strategy), strip(N0.legacyKs.keyword_strategy)), 'differs from the frozen v4.7 Rank Keywords / Build Keyword Strategy');
   check('callback without a website: the new fields are null', N0.ir.reach === null && N0.ir.priority.every(k => k.difficulty_for_you === null && k.label === null && k.plan_type === null) && !/For your site/.test(N0.ks.result_html), JSON.stringify(N0.ir.priority[0]).slice(0, 200));
@@ -6107,6 +6117,985 @@ await guard('phase 3+4 live defects', async () => {
   const aiP2 = (await run('AI Plan', store['Load Query History']))[0].json;
   check('P34-6: a filled business profile still comes first — the profile name wins over the model\'s, as it always did',
     aiP2.business_name === 'Northwind ERP' && aiP2.profile.city === 'Dubai', JSON.stringify([aiP2.business_name, aiP2.profile.business_name]));
+});
+
+
+// ===================================================================================
+// S52 G8 (2026-10-13, system review FIX_PLAN G8; criteria K2 / K4 / K6 / K7 in CRITERIA_keywords_content.md): the four discovery inputs
+// keyword research was missing. Every check fails against the code of the 2026-10-11 run: the research never read Search Console, the
+// traffic number was always modelled and never labelled, clusters came from the AI's topic label alone, and exactly 8 keywords were
+// checked live on Google.
+// ===================================================================================
+await guard('g8-discovery-inputs', async () => {
+  const SN = 'S52 G8 — the site\'s own Search Console searches seed the research, traffic potential says calibrated or modelled, keywords that share a results page are one cluster, and the live check is a configurable cap instead of a fixed 8';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const D = 'northwind-erp.com', W = 'https://www.' + D, SITE = 'site_northwind-erp-com';
+  const EMPTY = [{ json: {} }];
+  const PERIOD = '2026-10-12', LASTMONTH = '2026-09-14';
+
+  // ---- 1. K6: the site's own Search Console queries become seeds (the research never read them) ----
+  // seo_query_history rows exactly as the Site Tracker writes them (one per site, query and 28-day period)
+  const qrow = (query, impressions, clicks, position, page, period) => ({ json: { id: 1, site_id: SITE, domain: D, period_end: period || PERIOD, checked_at: PERIOD + 'T09:00:00.000Z',
+    query, clicks, impressions, ctr: impressions ? +(clicks / impressions).toFixed(3) : 0, position, prev_clicks: 0, prev_impressions: 0, prev_position: 0, page: page || '', tracked: false, serp_position: -1 } });
+  const QROWS = [
+    qrow('erp implementation dubai', 480, 12, 3.4, W + '/erp-implementation-dubai/'),             // a page answers it and it ranks #3: no seed
+    qrow('warehouse management software uae', 320, 2, 24.1, ''),                                   // impressions, no page of ours: seed
+    qrow('inventory software for distributors', 210, 5, 12.6, W + '/inventory-software-for-distributors/'),   // has a page but ranks #12.6: seed
+    qrow('northwind erp login', 900, 300, 1.2, W + '/'),                                           // our own brand: never a seed
+    qrow('site:northwind-erp.com erp', 50, 0, 18.3, ''),                                           // typed by an SEO tool, not a customer
+    qrow('erp training', 4, 0, 11.0, ''),                                                          // 4 impressions: below the floor
+    qrow('last month only query', 999, 40, 9.1, '', LASTMONTH)                                     // an older period: the table only grows
+  ];
+  const PAGES = [{ url: W + '/erp-implementation-dubai/', title: 'ERP Implementation in Dubai', source: 'sitemap', queries: [] },
+    { url: W + '/inventory-software-for-distributors/', title: 'Inventory Software for Distributors', source: 'sitemap', queries: [] }];
+  const SEED_ITEM = { domain: D, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', goal: 'leads', business: 'ERP and e-invoicing implementation partner in Dubai',
+    seeds: ['erp implementation services', 'odoo implementation dubai'], primary_seed: 'erp implementation services', seed_groups: { local: ['erp implementation dubai'] },
+    services: ['ERP implementation'], competitors: [], site_urls: [], request_id: 'req-g8' };
+  const modelItem = (pages) => [{ json: { site_model: { site_id: SITE, domain: D, canonical_host: 'www.' + D, business_name: 'Northwind ERP', brand_names: ['Northwind ERP'], pages: pages || [] } } }];
+  const seedRun = async (rows, pages) => { mock('Seed List', [{ json: { ...SEED_ITEM } }]); mock('Site Model', modelItem(pages));
+    mock('Load Query History (Discovery)', rows.length ? rows : EMPTY);
+    return (await run('Search Console Seeds (Discovery)', rows.length ? rows : EMPTY))[0].json; };
+  const S = await seedRun(QROWS, PAGES);
+  console.log('   search console seeds ->', JSON.stringify({ seeded: S.gsc_seeds, no_page: S.search_console.no_page.map(q => q.keyword), striking: S.search_console.striking.map(q => q.keyword), dropped: S.search_console.dropped, period: S.search_console.period_end }));
+  check('K6: a search with impressions that no page of the site answers becomes a seed, with its measured impressions, clicks and position',
+    eq(S.search_console.no_page.map(q => q.keyword), ['warehouse management software uae'])
+    && S.search_console.no_page[0].impressions === 320 && S.search_console.no_page[0].clicks === 2 && S.search_console.no_page[0].position === 24.1
+    && S.search_console.no_page[0].period_days === 28, JSON.stringify(S.search_console.no_page));
+  check('K6: a striking-distance search (position 8-20) becomes a seed even though a page already covers it',
+    eq(S.search_console.striking.map(q => q.keyword), ['inventory software for distributors'])
+    && S.search_console.striking[0].position === 12.6 && (S.search_console.striking[0].answered_by || {}).matched_by === 'slug', JSON.stringify(S.search_console.striking));
+  check('K6: a search a live page already answers at #3 is NOT seeded — it is named as answered, with that page',
+    !S.gsc_seeds.includes('erp implementation dubai') && S.search_console.answered.length === 1
+    && S.search_console.answered[0].keyword === 'erp implementation dubai' && S.search_console.answered[0].answered_by.url === W + '/erp-implementation-dubai/', JSON.stringify(S.search_console.answered));
+  check('K6: the brand search, the SEO tool\'s operator query and the 4-impression query are dropped with a count each',
+    eq(S.search_console.dropped, { scraper: 1, brand: 1, low_impressions: 1, duplicate: 0 })
+    && !S.gsc_seeds.some(k => /northwind|site:|training/.test(k)), JSON.stringify(S.search_console.dropped));
+  check('K6: only the newest 28-day period counts (the table only grows, so last month\'s rows must not seed this run)',
+    S.search_console.period_end === PERIOD && !S.gsc_seeds.includes('last month only query') && S.search_console.rows === 7, JSON.stringify([S.search_console.period_end, S.search_console.rows]));
+  check('K6: the measured searches are inserted behind the primary seed, so they also drive the long-tail pulls',
+    eq(S.seeds, ['erp implementation services', 'warehouse management software uae', 'inventory software for distributors', 'odoo implementation dubai'])
+    && S.primary_seed === 'erp implementation services' && S.search_console.page_check === 'page inventory' && S.search_console.pages_known === 2, JSON.stringify(S.seeds));
+  const rr = await run('Research Requests', [{ json: {} }]);
+  const ideasReq = rr.find(r => r.json.kind === 'ideas').json, heads = rr.filter(r => r.json.kind === 'suggestions').map(r => r.json.body[0].keyword);
+  console.log('   research requests ->', rr.length, '|', ideasReq.label, '| heads:', heads.join(' / '));
+  check('K6: the paid keyword pulls carry the Search Console seeds and say so — no extra request, the same 7 pulls as a run without them (1 ideas, 3 long-tail, 2 related, 1 competitor SERP)',
+    rr.length === 7 && ideasReq.body[0].keywords.includes('warehouse management software uae') && ideasReq.body[0].keywords.includes('inventory software for distributors')
+    && /2 from your Search Console/.test(ideasReq.label) && eq(heads, ['erp implementation services', 'warehouse management software uae', 'inventory software for distributors']), JSON.stringify({ n: rr.length, label: ideasReq.label, heads }));
+  const Sfb = await seedRun(QROWS, []);
+  check('K6: with no page list on file yet the page Search Console reports is used instead, and said so — "erp implementation dubai" is still not seeded',
+    Sfb.search_console.page_check === 'search console page' && !Sfb.gsc_seeds.includes('erp implementation dubai')
+    && Sfb.gsc_seeds.includes('warehouse management software uae') && (Sfb.search_console.answered[0] || {}).answered_by.matched_by === 'search console page', JSON.stringify(Sfb.gsc_seeds));
+  const Snone = await seedRun([], PAGES);
+  check('K6: a site with no stored Search Console history is untouched (the seed list, the primary seed and the research are exactly as before)',
+    eq(Snone.seeds, SEED_ITEM.seeds) && eq(Snone.gsc_seeds, []) && Snone.search_console.available === false && Snone.search_console.queries.length === 0, JSON.stringify(Snone.seeds));
+
+  // ---- 2. K2 + K7: the pool, the calibrated numbers and the clusters by shared results page ----
+  const kwItem = (keyword, volume, kd, types, intent) => ({ se_type: 'google', keyword, keyword_info: { search_volume: volume, cpc: 4.5, competition: 0.4, monthly_searches: [], search_volume_trend: { yearly: 5, quarterly: 1 } },
+    keyword_properties: { keyword_difficulty: kd, words_count: keyword.split(' ').length }, search_intent_info: { main_intent: intent || 'commercial' },
+    serp_info: { serp_item_types: types || ['organic'], se_results_count: 120000 }, avg_backlinks_info: { referring_domains: 25 } });
+  const FILLERS = ['abu dhabi', 'sharjah', 'ajman', 'fujairah', 'riyadh', 'jeddah', 'doha', 'muscat', 'manama', 'kuwait city', 'cairo', 'amman', 'beirut', 'karachi', 'mumbai', 'london', 'dublin', 'toronto', 'sydney', 'singapore'];
+  const IDEAS = V.task({ seed_keywords: ['erp implementation services'], items: [
+    kwItem('inventory software for distributors', 210, 25),
+    kwItem('erp software uae', 1900, 40, ['organic', 'local_pack']),
+    kwItem('erp system uae', 880, 38),
+    kwItem('odoo partner dubai', 140, 20),
+    kwItem('emaratax portal', 300, 10, ['organic'], 'informational'),
+    kwItem('northwind erp login', 40, 5, ['organic'], 'navigational'),
+    ...FILLERS.map(c => kwItem('erp software ' + c, 200, 30))
+  ] });
+  // three competitors' own ranking URLs: one page of each ranks for "erp software uae" AND "erp system uae" (3 shared top-10 URLs),
+  // while "odoo partner dubai" shares only one of them
+  const RANKED = { 'gulferp.ae': [['erp software uae', 2, 'https://gulferp.ae/erp-software-uae/'], ['erp system uae', 3, 'https://gulferp.ae/erp-software-uae/'], ['odoo partner dubai', 4, 'https://gulferp.ae/erp-software-uae/']],
+    'erpmasters.com': [['erp software uae', 5, 'https://erpmasters.com/uae-erp/'], ['erp system uae', 6, 'https://erpmasters.com/uae-erp/'], ['odoo partner dubai', 7, 'https://erpmasters.com/odoo-partner/']],
+    'cloudledger.io': [['erp software uae', 8, 'https://cloudledger.io/erp/'], ['erp system uae', 9, 'https://cloudledger.io/erp/'], ['odoo partner dubai', 10, 'https://cloudledger.io/odoo/']] };
+  const rankedRes = (dom) => V.task({ total_count: RANKED[dom].length, items: RANKED[dom].map(([k, pos, url]) => ({ se_type: 'google',
+    keyword_data: kwItem(k, k === 'erp software uae' ? 1900 : k === 'erp system uae' ? 880 : 140, 30), ranked_serp_element: { serp_item: { type: 'organic', rank_group: pos, rank_absolute: pos, url } } })) });
+  const COMPS = Object.keys(RANKED);
+  const collect = async (scItem) => {
+    mock('Search Console Seeds (Discovery)', [{ json: scItem }]);
+    mock('Research Requests', [{ json: { kind: 'ideas', label: 'keyword ideas', body: [{ keywords: scItem.seeds }] } }]);
+    mock('Run Research', [{ json: IDEAS }]);
+    mock('Competitor Keyword Requests', COMPS.map(d => ({ json: { kind: 'competitor', domain: d, body: [{ target: d }] } })));
+    return (await run('Collect Research', COMPS.map(d => ({ json: rankedRes(d) }))))[0].json;
+  };
+  const col = await collect(S);
+  const cand = (k) => col.research.candidates.find(x => x.keyword === k);
+  console.log('   calibration ->', JSON.stringify(col.research.search_console), '| inventory:', JSON.stringify(cand('inventory software for distributors') && [cand('inventory software for distributors').traffic_potential, cand('inventory software for distributors').traffic_basis]));
+  check('K2: a keyword the site already ranks for is CALIBRATED from its own measured impressions and clicks, and says so',
+    cand('inventory software for distributors').traffic_basis === 'calibrated'
+    && cand('inventory software for distributors').traffic_potential === Math.round(210 * (30 / 28) * 0.3)
+    && cand('inventory software for distributors').modelled_traffic_potential === Math.round(210 * 0.3)
+    && /Calibrated with your own Search Console data: 210 impressions and 5 click\(s\)/.test(cand('inventory software for distributors').traffic_note),
+    JSON.stringify(cand('inventory software for distributors') && [cand('inventory software for distributors').traffic_potential, cand('inventory software for distributors').traffic_note]));
+  check('K2: a keyword the site does not rank for is MODELLED — the same number as before this fix, now labelled as an estimate of an estimate',
+    cand('erp software uae').traffic_basis === 'modelled' && cand('erp software uae').traffic_potential === Math.round(1900 * 0.85 * 0.3)
+    && /Modelled, not measured/.test(cand('erp software uae').traffic_note) && cand('erp software uae').gsc === null,
+    JSON.stringify([cand('erp software uae').traffic_potential, cand('erp software uae').traffic_basis]));
+  check('K6: a search only Search Console knows about is a candidate in its own right, with NO invented search volume',
+    cand('warehouse management software uae') && cand('warehouse management software uae').volume === null
+    && cand('warehouse management software uae').traffic_basis === 'calibrated' && cand('warehouse management software uae').traffic_potential === Math.round(320 * (30 / 28) * 0.3)
+    && eq(cand('warehouse management software uae').sources, ['search_console']) && col.research.search_console.only_source === 1
+    && /no monthly volume from the search-data provider/.test(cand('warehouse management software uae').volume_note),
+    JSON.stringify(cand('warehouse management software uae') && [cand('warehouse management software uae').volume, cand('warehouse management software uae').traffic_potential]));
+  const colNone = await collect(Snone);
+  check('K2: without Search Console data every number is modelled and unchanged (back-compatible)',
+    colNone.research.candidates.every(k => k.traffic_basis === 'modelled') && colNone.research.search_console.calibrated === 0
+    && colNone.research.candidates.find(x => x.keyword === 'inventory software for distributors').traffic_potential === Math.round(210 * 0.3),
+    JSON.stringify(colNone.research.search_console));
+
+  // ---- 3. K7 + K4: the clusters and the live-check cap in Rank Keywords ----
+  const rankWith = async (colOut, over) => {
+    mock('Collect Research', [{ json: over ? { ...colOut, ...over } : colOut }]);
+    const cands = colOut.research.candidates;
+    mock('Relevance Chunks', [{ json: { keywords_chunk: cands.map(c => ({ keyword: c.keyword })) } }]);
+    mock('Load Site Cache', EMPTY); mock('Site Model', modelItem(PAGES));
+    mock('Load Domain Ladders (Discovery)', EMPTY); mock('Load Ladder Settings (Discovery)', EMPTY);
+    delete store['Reach (Discovery)'];
+    const rel = [{ json: { output: { items: cands.map(c => ({ keyword: c.keyword, relevance: 2, intent: c.intent,
+      page_type: 'Service Page', topic: /erp software uae|erp system uae/.test(c.keyword) ? 'erp software' : c.keyword })) } } }];
+    return (await run('Rank Keywords', rel))[0].json.keyword_strategy;
+  };
+  const KS = await rankWith(col);
+  console.log('   serp clusters ->', JSON.stringify(KS.serp_clusters.map(c => [c.head_keyword, c.keywords.map(k => k.keyword + ':' + k.shared_urls)])), '| live:', JSON.stringify(KS.live_checks));
+  const cl0 = KS.serp_clusters[0] || {};
+  check('K7: two keywords whose top 10 shares 3 URLs form one cluster, named after the head keyword, with the shared count',
+    KS.serp_clusters.length === 1 && cl0.head_keyword === 'erp software uae' && cl0.keyword_count === 2
+    && (cl0.keywords[1] || {}).keyword === 'erp system uae' && cl0.keywords[1].shared_urls === 3 && cl0.min_shared_urls === 3,
+    JSON.stringify(KS.serp_clusters));
+  check('K7: a keyword that shares only ONE of those top-10 URLs is not pulled into the cluster',
+    !cl0.keywords.some(k => k.keyword === 'odoo partner dubai') && KS.keywords.find(k => k.keyword === 'odoo partner dubai').serp_cluster === null
+    && KS.serp_overlap.min_shared_urls === 3 && KS.serp_overlap.source === 'competitor rankings', JSON.stringify(KS.serp_overlap));
+  check('K7: the clustered keyword points at its head keyword, so one page can target both',
+    eq(KS.keywords.find(k => k.keyword === 'erp system uae').serp_cluster, { head_keyword: 'erp software uae', shared_urls: 3, keyword_count: 2 })
+    && KS.keywords.find(k => k.keyword === 'erp software uae').serp_cluster === null, JSON.stringify(KS.keywords.find(k => k.keyword === 'erp system uae').serp_cluster));
+  check('D4 still holds: the government query is refused with its reason and the navigational brand query never reaches the list',
+    KS.refused.some(r => r.keyword === 'emaratax portal' && r.reason === 'government')
+    && !KS.keywords.some(k => /northwind erp login|emaratax/.test(k.keyword)) && !KS.priority.some(k => /northwind|emaratax/.test(k.keyword))
+    && (KS.pipeline_keyword || {}).keyword !== 'emaratax portal', JSON.stringify(KS.refused));
+  check('K4: the live results-page check covers 16 keywords by default, not 8, with at most 4 per topic and its cost named',
+    KS.live_checks.cap === 16 && KS.priority.length === 16 && KS.live_checks.per_topic === 4 && KS.live_checks.est_cost_usd === 0.032,
+    JSON.stringify([KS.live_checks, KS.priority.length]));
+  const pk = await run('Priority Keywords', [{ json: {} }]);
+  check('K4: Priority Keywords buys exactly those checks (it used to slice a hard-coded 8)', pk.length === 16 && pk.every(p => p.json.location_code === 2784), JSON.stringify(pk.length));
+  const KS6 = await rankWith(col, { live_serp_checks: 6 });
+  mock('Rank Keywords', [{ json: { ...SEED_ITEM, live_serp_checks: 6, keyword_strategy: KS6 } }]);
+  const pk6 = await run('Priority Keywords', [{ json: {} }]);
+  check('K4: the limit is configurable per run — 6 gives 6 checks in both the pick and the purchase', KS6.live_checks.cap === 6 && KS6.priority.length === 6 && pk6.length === 6, JSON.stringify([KS6.live_checks.cap, pk6.length]));
+  const KS99 = await rankWith(col, { live_serp_checks: 99 });
+  check('K4: the cap is hard — 99 is clamped to 25 (about $0.05 of search data a run)', KS99.live_checks.cap === 25 && KS99.priority.length <= 25, JSON.stringify(KS99.live_checks));
+
+  // ---- 4. the report and the callback: the live checks sharpen the clusters, every number carries its basis ----
+  const serp10 = (keyword, shared) => V.task({ keyword, datetime: '2026-10-13 09:15:00 +00:00', items: [
+    ...(shared || []).map((u, i) => ({ type: 'organic', rank_group: i + 1, rank_absolute: i + 1, domain: u.replace(/^https?:\/\//, '').split('/')[0], url: u })),
+    ...Array.from({ length: 10 - (shared || []).length }, (_, i) => ({ type: 'organic', rank_group: (shared || []).length + i + 1, rank_absolute: (shared || []).length + i + 1, domain: 'own-' + keyword.replace(/\s+/g, '') + i + '.example', url: 'https://own-' + keyword.replace(/\s+/g, '') + i + '.example/p' })),
+    { type: 'people_also_ask', items: [{ title: 'Which ERP is best for distributors in the UAE?' }] }] });
+  const SHARED4 = ['https://gulferp.ae/erp-software-uae/', 'https://erpmasters.com/uae-erp/', 'https://cloudledger.io/erp/', 'https://clutch.co/ae/erp'];
+  const KSfull = await rankWith(col);
+  mock('Rank Keywords', [{ json: { ...SEED_ITEM, research: { requests: 6 }, keyword_strategy: KSfull } }]);
+  const pkFull = await run('Priority Keywords', [{ json: {} }]);
+  delete store['AI Demand'];
+  const strat = (await run('Build Keyword Strategy', pkFull.map(p => ({ json: serp10(p.json.keyword, /erp software uae|erp system uae/.test(p.json.keyword) ? SHARED4 : []) }))))[0].json;
+  const KSR = strat.keyword_strategy;
+  console.log('   live-fed clusters ->', JSON.stringify(KSR.serp_clusters.map(c => [c.head_keyword, c.keyword_count])), '|', JSON.stringify(KSR.serp_overlap));
+  check('K7: the live checks feed the clustering too — the same two keywords now share 4 top-10 URLs and the source says so',
+    KSR.serp_overlap.source === 'live checks + competitor rankings' && KSR.serp_overlap.live_checked === pkFull.length
+    && (KSR.serp_clusters[0] || {}).head_keyword === 'erp software uae' && KSR.serp_clusters[0].keywords[1].shared_urls === 4, JSON.stringify(KSR.serp_overlap));
+  check('K2: the keyword card says whether its traffic number was calibrated with the site\'s data or modelled',
+    /Traffic potential ~\d+\/mo \(calibrated with your data\)/.test(strat.result_html) && /Traffic potential ~\d+\/mo \(modelled\)/.test(strat.result_html)
+    && /Search Console already measured 210 impressions for this exact search on your site in 28 days/.test(strat.result_html)
+    && /Traffic potential is <b>calibrated<\/b> where Search Console measured/.test(strat.result_html), (strat.result_html.match(/Traffic potential[^<]{0,60}/g) || []).slice(0, 4).join(' | '));
+  check('K6: the report has a section for the searches the site already appears for, with the reason each one is there and the page that gets them',
+    /<h2>Searches your website already appears for<\/h2>/.test(strat.result_html) && /2 of your own Search Console searches were used as research seeds/.test(strat.result_html)
+    && /no page of yours answers this search/.test(strat.result_html) && /striking distance/.test(strat.result_html)
+    && /already answered by a page you have, so they were not seeded/.test(strat.result_html) && /erp-implementation-dubai/.test(strat.result_html), (strat.result_html.match(/Searches your website already appears for[\s\S]{0,400}/) || [''])[0]);
+  check('K7: the report names the group and says one page can serve it',
+    /<h2>Searches that share a results page<\/h2>/.test(strat.result_html) && /One page can target all 2: "erp software uae" shares 4 of its top-10 pages with "erp system uae"/.test(strat.result_html)
+    && /Same results page as "erp software uae"/.test(strat.result_html), (strat.result_html.match(/Searches that share a results page[\s\S]{0,400}/) || [''])[0]);
+  check('K4: the report says how many keywords were checked live and what the limit costs',
+    new RegExp(pkFull.length + ' keywords were checked live on Google for intent and page type \\(limit 16 a run, about \\$0.03 of search data\\)').test(strat.result_html), (strat.result_html.match(/keywords were checked live[^.]{0,120}/) || [''])[0]);
+  scanHtml('keyword strategy with the G8 inputs', strat.result_html); save('keyword-strategy-g8.html', strat.result_html);
+  const cb = (await run('Build Ideas Response', [{ json: strat, binary: {} }]))[0].json;
+  console.log('   callback ->', JSON.stringify({ sc: cb.search_console && cb.search_console.seeded, clusters: cb.serp_clusters.length, live: cb.live_checks, bases: [...new Set(cb.priority.map(k => k.traffic_basis))] }));
+  check('the callback carries all four inputs, so the app and the report renderer can show them',
+    eq(cb.search_console.seeded, S.gsc_seeds) && cb.search_console.no_page.length === 1 && cb.search_console.striking.length === 1
+    && cb.search_console.answered.length === 1 && cb.search_console.period_days === 28 && cb.serp_clusters.length === 1
+    && cb.serp_overlap.min_shared_urls === 3 && cb.live_checks.cap === 16
+    && cb.priority.every(k => ['calibrated', 'modelled', 'unknown'].includes(k.traffic_basis) && typeof k.traffic_note === 'string')
+    && cb.priority.some(k => k.traffic_basis === 'calibrated' && k.gsc && k.gsc.impressions > 0)
+    && cb.priority.some(k => k.serp_cluster && k.serp_cluster.head_keyword === 'erp software uae'), JSON.stringify({ sc: cb.search_console && Object.keys(cb.search_console), clusters: cb.serp_clusters.length, live: cb.live_checks }));
+});
+
+// ===================================================================================
+// S54 (2026-10-13, docs/system-review-2026-10-11/FIX_PLAN.md G5 / G30 / G33; CRITERIA_keywords_content.md C5 / C13 / C1)
+//   G5  nothing ever compared the finished draft with the pages it was written from (originality scored 1/10).
+//   G30 the package described three images and produced none, so every page left three gaps before publishing.
+//   G33 the coverage bar was a silent 100% of the term list: nobody said what the page that already ranks covers.
+// ===================================================================================
+await guard('originality, produced images, coverage target', async () => {
+  reset(); const SN = 'S54 G5 G30 G33 — a draft checked for copied passages against the pages it was written from, three images actually produced, and a coverage target taken from the best competitor';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 600))); };
+  const D = 'techand.ai', WWW = 'https://www.' + D;
+  const words = (t) => String(t).split(/\s+/).filter(Boolean).length;
+
+  // ---------- the pages this run read: two competitor pages and two pages of the site itself ----------
+  // The paragraph below is what a copying draft lifts word for word; nothing else in the fixtures repeats it.
+  const COMP_PARA = 'Every accredited service provider validates the structure of an invoice before it moves, signs it with its own certificate and forwards it over the Peppol network to the provider the buyer has chosen, while a reporting copy of the same document reaches the Federal Tax Authority inside twenty four hours, which is exactly why the five corner model is described as continuous transaction control rather than as periodic reporting, and why neither side of the transaction may skip the checks that go with it.';
+  const BEST_TEXT = [
+    'Who must comply in the first wave of the UAE mandate, and what the free zone rules mean for them.',
+    COMP_PARA,
+    'An implementation partner usually starts from the invoice format, because the XML the federal tax authority expects is stricter than the PDF layouts most finance teams keep today.',
+    'Corporate tax reporting and customs data sit in the same master records, so the clean-up work pays for itself twice.',
+    'A free zone entity that invoices a mainland customer is inside the mandate from the same date as everyone else.',
+  ].join('\n\n');
+  const SECOND_TEXT = [
+    'A short vendor page about invoicing software, written for buyers who have already chosen their accredited service provider.',
+    'It mentions the peppol network once, lists three products and spends the rest of the page on a contact form and a newsletter box.',
+    'The corporate tax section is two sentences long and the way invoices are structured is never explained at all.',
+  ].join('\n\n');
+  const BEST = { rank: 2, url: 'https://cleartax.ae/uae-e-invoicing-guide/', domain: 'cleartax.ae', title: 'UAE e-invoicing guide', word_count: 1850,
+    headings: ['H2: Who must comply in the first wave', 'H2: How the five corner model works', 'H2: What an accredited service provider does', 'H2: Penalties for late reporting', 'H2: Related reading'], content_full: BEST_TEXT };
+  const SECOND = { rank: 4, url: 'https://invoicevendor.com/uae/', domain: 'invoicevendor.com', title: 'Invoicing software for the UAE', word_count: 540,
+    headings: ['H2: Our products', 'H2: Contact us'], content_full: SECOND_TEXT };
+  const TERMS = ['accredited service provider', 'peppol network', 'federal tax authority', 'five corner model', 'free zone', 'corporate tax', 'invoice format', 'implementation partner', 'vat registration', 'clearance step']
+    .map(t => ({ term: t, docs: 2, avg_count: 2, words: t.split(' ').length }));
+  // a passage of this site's own page, which draft C repeats (cannibalisation)
+  const OWN_PARA = 'Our team maps every invoice flow in your finance system against the mandate before a single line of code is written, so you know which documents move through the network, which ones stay inside your own books, and what the first reporting month will actually look like for the people who close it.';
+  const OWN_PAGE = { url: WWW + '/e-invoicing-services/', kind: 'related', words: 120, text: 'E-invoicing services in the UAE.\n\n' + OWN_PARA + '\n\nWe work with distributors, contractors and free zone entities across the Emirates and hand over a tested integration.' };
+  const HOME = { url: WWW + '/', kind: 'home', words: 90, text: 'Tech& builds ERP and invoicing integrations in Dubai for mid-sized distributors, contractors and service businesses across the Gulf region, with a team that has delivered more than forty projects since 2016. '
+  + 'We start every engagement with a workshop, agree the scope in writing and hand over a tested integration with the documentation your auditor will ask for.' };
+  const modelPages = [
+    { url: WWW + '/e-invoicing-uae-guide/', title: 'E invoicing UAE: the complete guide', h1: '', source: 'sitemap', lastmod: '', queries: [] },
+    { url: WWW + '/erp-software-uae/', title: 'ERP software UAE', h1: '', source: 'sitemap', lastmod: '', queries: [] },
+  ];
+  const setPages = (pages) => mock('Site Model', [{ json: { site_model: { domain: D, canonical_host: 'www.' + D, business_name: 'Tech&', pages } } }]);
+  mock('Analyze Competitor Pages', [{ json: { competitors: [BEST, SECOND], competitors_read: 2, term_model: TERMS } }]);
+  setPages([]);
+
+  // ---------- G5 (a): a draft that copies a competitor paragraph fails, with the page named and the percentage ----------
+  const OWN_SENTENCES = [
+    '# E-invoicing in the UAE', '',
+    'Finance teams in Dubai ask us one question before any other: what has to change in the system we already run?', '',
+    'The answer is rarely the whole stack. Most teams keep their ledger, add a connector and rebuild two or three report layouts that nobody has touched since the VAT years.', '',
+    'Plan the work around your close. Nobody wants a first live invoice on the day the month ends, and the finance calendar decides the go-live date more often than the IT calendar does.', '',
+    'Ask your provider for a test run with your own data, not with their demo set, and keep the results.',
+  ].join('\n');
+  const DRAFT_COPY = OWN_SENTENCES + '\n\n' + COMP_PARA + '\n';
+  const DRAFT_CLEAN = OWN_SENTENCES + '\n\nAn accredited service provider checks each invoice, then the Peppol network carries it to whichever provider the buyer uses, and the Federal Tax Authority receives its own copy. That is the shape of the rules; how fast your team gets there depends on how clean the master data is.\n';
+  const DRAFT_OWN = OWN_SENTENCES + '\n\n' + OWN_PARA + '\n';
+  const qaIn = (md, over) => [{ json: { output: md, keyword: 'e invoicing uae', domain: D, originality_max_overlap_pct: 15,
+    content_qa: { passed: true, passed_copy: true, editor_needed: false, content_score: 88, warnings: ['Passive voice in about 12% of sentences — rewrite in active voice'] }, ...(over || {}) } }];
+  mock('Collect Client Pages', [{ json: { client_pages: [OWN_PAGE, HOME] } }]);
+
+  const copied = (await run('Originality Check', qaIn(DRAFT_COPY)))[0].json.content_qa;
+  const O1 = copied.originality;
+  console.log('   copied draft ->', JSON.stringify({ pct: O1.highest_pct, source: O1.highest_source, longest: O1.top_overlaps[0].longest_passage_words, pages: O1.pages_compared }));
+  check('G5: a draft that copies a competitor paragraph fails the quality check, names that page and says by how much',
+    O1.passed === false && copied.passed === false && copied.editor_needed === true && O1.highest_source === 'cleartax.ae'
+    && O1.highest_pct > 15 && O1.top_overlaps[0].kind === 'competitor' && O1.top_overlaps[0].longest_passage_words >= 60
+    && copied.warnings.some(w => /^Originality: \d+(\.\d+)?% of this draft is word for word the same as the competitor page cleartax\.ae/.test(w) && /longest identical run \d+ words: "every accredited service provider validates/.test(w))
+    && copied.warnings[0] === 'Passive voice in about 12% of sentences — rewrite in active voice',
+    JSON.stringify({ o: O1, w: copied.warnings }));
+  check('G5: the figure says what it measured — 8-word windows, against the pages this run read, the competitor and own pages counted separately',
+    O1.window_words === 8 && O1.threshold_pct === 15 && O1.competitor_pages === 2 && O1.own_pages === 2 && O1.draft_windows > 100
+    && /share of the draft's 8-word windows found on one page, measured against 4 page\(s\) this run read \(2 competitor, 2 of this site\)/.test(O1.basis),
+    JSON.stringify(O1.basis));
+
+  // ---------- G5 (b): a draft that only shares the ordinary phrases of the subject passes ----------
+  const cleanRun = (await run('Originality Check', qaIn(DRAFT_CLEAN)))[0].json.content_qa;
+  const O2 = cleanRun.originality;
+  console.log('   clean draft ->', JSON.stringify({ pct: O2.highest_pct, source: O2.highest_source, passed: O2.passed }));
+  check('G5: a draft that merely uses the same terms as the competitors passes, and the quality check is left exactly as Content QA set it',
+    O2.passed === true && O2.highest_pct <= 5 && cleanRun.passed === true && cleanRun.editor_needed === false
+    && !cleanRun.warnings.some(w => /^Originality/.test(w)) && cleanRun.warnings.length === 1,
+    JSON.stringify({ pct: O2.highest_pct, w: cleanRun.warnings }));
+
+  // ---------- G5 (c): the same text on one of our own pages is caught too (cannibalisation) ----------
+  const ownRun = (await run('Originality Check', qaIn(DRAFT_OWN)))[0].json.content_qa;
+  const O3 = ownRun.originality;
+  console.log('   own-page draft ->', JSON.stringify({ pct: O3.highest_pct, source: O3.highest_source, kind: O3.top_overlaps[0].kind }));
+  check('G5: a draft that repeats one of the site\'s own pages fails as cannibalisation, with that page named and the advice to improve it instead',
+    O3.passed === false && ownRun.passed === false && O3.highest_source === WWW + '/e-invoicing-services/' && O3.top_overlaps[0].kind === 'own'
+    && ownRun.warnings.some(w => /this site's own page https:\/\/www\.techand\.ai\/e-invoicing-services\//.test(w) && /compete with each other/.test(w)),
+    JSON.stringify({ o: O3, w: ownRun.warnings }));
+
+  // the page this run is improving is the exception: a rewrite is meant to keep its text
+  mock('Collect Client Pages', [{ json: { client_pages: [{ ...OWN_PAGE, kind: 'existing' }, HOME] } }]);
+  const rewrite = (await run('Originality Check', qaIn(DRAFT_OWN, { existing_page: { url: OWN_PAGE.url }, existing_page_url: OWN_PAGE.url })))[0].json.content_qa;
+  console.log('   rewrite of that page ->', JSON.stringify({ passed: rewrite.originality.passed, improved: rewrite.originality.improved_page }));
+  check('G5: rewriting the page the run is improving is not copying — its overlap is reported, the quality check still passes',
+    rewrite.originality.passed === true && rewrite.passed === true && rewrite.originality.improved_page
+    && rewrite.originality.improved_page.overlap_pct > 15 && !rewrite.warnings.some(w => /^Originality: /.test(w)),
+    JSON.stringify(rewrite.originality));
+  mock('Collect Client Pages', [{ json: { client_pages: [OWN_PAGE, HOME] } }]);
+
+  // ---------- G5 (d): the threshold is configurable, and the rest of the page inventory is checked by title ----------
+  const loose = (await run('Originality Check', qaIn(DRAFT_OWN, { originality_max_overlap_pct: 60 })))[0].json.content_qa;
+  check('G5: the limit is a setting (CONFIG.originality_max_overlap_pct) — at 60% the same draft passes and the figure is reported either way',
+    loose.originality.threshold_pct === 60 && loose.originality.passed === true && loose.passed === true
+    && loose.originality.highest_pct === O3.highest_pct, JSON.stringify({ t: loose.originality.threshold_pct, pct: loose.originality.highest_pct }));
+  setPages(modelPages);
+  const dupe = (await run('Originality Check', qaIn(DRAFT_CLEAN)))[0].json.content_qa;
+  console.log('   duplicate targets ->', JSON.stringify(dupe.originality.duplicate_targets));
+  check('G5: a page of the inventory aimed at the same search is reported as a duplicate target (its text was not read, so it is never counted as overlap)',
+    dupe.originality.duplicate_targets.length === 1 && dupe.originality.duplicate_targets[0].url === WWW + '/e-invoicing-uae-guide/'
+    && dupe.originality.passed === true && dupe.warnings.some(w => /already has a page aimed at the same search/.test(w)),
+    JSON.stringify(dupe.originality.duplicate_targets));
+  setPages([]);
+  // with no page text in hand the answer is "not checked", never "clean"
+  delete store['Analyze Competitor Pages']; delete store['Collect Client Pages'];
+  const blind = (await run('Originality Check', [{ json: { output: DRAFT_COPY, keyword: 'e invoicing uae', domain: D, content_qa: { passed: true, warnings: [] } } }]))[0].json.content_qa;
+  check('G5: with no page text in this run the check says so (passed: null) instead of claiming the draft is original, and never fails the run',
+    blind.originality.passed === null && blind.originality.pages_compared === 0 && blind.passed === true
+    && /no page text was available in this run/.test(blind.originality.basis),
+    JSON.stringify(blind.originality));
+  mock('Analyze Competitor Pages', [{ json: { competitors: [BEST, SECOND], competitors_read: 2, term_model: TERMS } }]);
+  mock('Collect Client Pages', [{ json: { client_pages: [OWN_PAGE, HOME] } }]);
+
+  // ---------- G33: the coverage target comes from the best competitor, not the average ----------
+  mock('Collect Facts', [{ json: { keyword: 'e invoicing uae', domain: D, country: 'United Arab Emirates', page_type: 'Blog Post / Guide',
+    competitors: [BEST, SECOND], term_model: TERMS, competitors_read: 2, avg_competitor_words: 1195 } }]);
+  const pa = (await run('Parse Analysis', [{ json: { output: { recommended_word_count: 1600, content_gaps: [], information_gain_opportunities: [] } } }]))[0].json;
+  const CT = pa.coverage_target;
+  console.log('   coverage target ->', JSON.stringify({ best: CT.best, target: CT.target_pct, avg: CT.average_pct, subs: CT.subtopics }));
+  check('G33: the target is the best competitor page\'s term coverage (not the average), with its position, depth and the basis spelled out',
+    CT && CT.best.domain === 'cleartax.ae' && CT.best.rank === 2 && CT.best.coverage_pct === 80 && CT.average_pct === 55
+    && CT.target_pct === 80 && CT.terms_total === 10 && CT.best.word_count === 1850
+    && /cleartax\.ae \(position 2\) uses 8 of the 10 terms they share \(80%\), against an average of 55%/.test(CT.basis),
+    JSON.stringify(CT));
+  check('G33: the subtopics are that page\'s own headings, cleaned of navigation, and the brief prompt is told to cover each one in our own words',
+    CT.subtopics.length === 4 && CT.subtopics[0] === 'Who must comply in the first wave' && !CT.subtopics.some(s => /Related reading/.test(s))
+    && /TARGET: use at least 80% of the shared terms above/.test(pa.coverage_digest) && /SUBTOPICS THAT PAGE COVERS/.test(pa.coverage_digest),
+    JSON.stringify({ subs: CT.subtopics, digest: pa.coverage_digest.slice(0, 400) }));
+
+  // the brief carries the target even when the model's answer leaves it out
+  mock('Brief Context', [{ json: { ...pa, keyword: 'e invoicing uae', domain: D, page_role: 'standard', article_like: true, content_brief: null } }]);
+  const brief = { h1: 'E-invoicing in the UAE', target_word_count: 1600, slug: 'e-invoicing-uae', terms_to_use: [{ term: 'peppol network', min_count: 2 }],
+    outline: [{ h2: 'How the five corner model works', key_points: ['the clearance step'], target_words: 400 }, { h2: 'What an accredited service provider does', key_points: [], target_words: 400 }], snippet_targets: [], evidence_plan: [] };
+  const pb = (await run('Parse Brief', [{ json: { output: brief } }]))[0].json;
+  console.log('   brief coverage ->', JSON.stringify({ ct: pb.content_brief.coverage_target && pb.content_brief.coverage_target.target_pct, terms: pb.content_brief.terms_to_use.length, adj: pb.brief_adjustments }));
+  check('G33: the brief states the target, its subtopics and the subtopics the outline misses, and holds enough terms to be able to reach it',
+    pb.content_brief.coverage_target.target_pct === 80 && pb.content_brief.coverage_target.best_competitor.domain === 'cleartax.ae'
+    && pb.content_brief.terms_to_use.length >= 8 && pb.brief_adjustments.some(a => /coverage target of 80% needs at least 8 of the 10 terms/.test(a))
+    && pb.content_brief.coverage_target.subtopics_not_in_outline.includes('Who must comply in the first wave')
+    && pb.brief_adjustments.some(a => /subtopic\(s\) of the best competitor page are not in the outline/.test(a)),
+    JSON.stringify({ ct: pb.content_brief.coverage_target, adj: pb.brief_adjustments }));
+
+  // ---------- G33 + G5 in the real quality check ----------
+  const QA_MD = [
+    'Title: E-invoicing in the UAE: what changes in 2026',
+    'Meta Description: What the UAE e-invoicing mandate changes for finance teams, who is in the first wave and how to be ready without stopping the month-end close.',
+    'Slug: e-invoicing-uae', '', '# E-invoicing in the UAE', '',
+    'Finance teams in Dubai ask one question first: what has to change in the system we already run today?', '',
+    '**Quick answer:** From July 2026 the first wave of UAE businesses must issue structured invoices through an accredited service provider and send a reporting copy to the Federal Tax Authority, so plan the connector work around your month-end close and test it with your own data.', '',
+    '## How does the five corner model work?', '',
+    'Your system creates the document, your provider checks it and the peppol network carries it to the provider your buyer uses. The clearance step happens in the same minute, not at the end of the quarter, and that is the part most finance calendars have to absorb.', '',
+    '| Step | Who does it |', '|---|---|', '| Validation | Your provider |', '| Delivery | The buyer\'s provider |', '',
+    '## What does an accredited service provider do?', '',
+    'It checks the document against the rules, signs it and keeps the audit trail your auditor will ask for. Choose one whose support hours match your close, and ask for a test run on your own master data before you sign anything at all.', '',
+    '## When should you start?', '',
+    'Start a quarter before your wave. Your own team needs time for the data clean-up, and corporate tax and vat registration records sit in the same master files, so the work pays for itself twice over.', '',
+    '## Talk to us', '',
+    'Book a scoping call and we will map your invoice flows against the mandate in one workshop with your finance team.'].join('\n');
+  mock('Parse Brief', [{ json: { ...pb, keyword: 'e invoicing uae', domain: D, term_model: TERMS, coverage_target: CT, currency: 'AED',
+    business: 'ERP and e-invoicing partner in the UAE', content_brief: { ...brief, terms_to_use: [], target_word_count: 230 }, facts: [], competitors: [BEST, SECOND] } }]);
+  const qa = (await run('Content QA', [{ json: { output: QA_MD, critique: null } }], { runIndex: 0 }))[0];
+  const CQ = qa.json.content_qa;
+  console.log('   QA coverage ->', JSON.stringify({ cov: CQ.coverage.pct, target: CQ.coverage.target_pct, best: CQ.coverage.best_competitor_pct, pts: CQ.score_breakdown.coverage, missing: CQ.coverage.subtopics_missing }));
+  check('G33: the quality check reports coverage as a figure with its basis — this page against the best competitor page, measured on the same term list',
+    CQ.coverage.target_pct === 80 && CQ.coverage.best_competitor_pct === 80 && CQ.coverage.best_competitor.domain === 'cleartax.ae'
+    && CQ.coverage.pct === CQ.coverage_pct && CQ.coverage.terms_total === 10
+    && /against a target of 80% taken from cleartax\.ae \(position 2\), which covers 80%/.test(CQ.coverage.basis)
+    && /average of the 2 pages read: 55%/.test(CQ.coverage.basis)
+    && CQ.coverage.measured_on === 'this page\'s own term list, on both the draft and that competitor page',
+    JSON.stringify(CQ.coverage));
+  check('G33: the 25 coverage points are scored against that target, and the warning names the subtopics the best page covers and this draft does not',
+    CQ.score_breakdown.coverage === Math.round(25 * Math.min(1, (CQ.coverage.pct / 100) / 0.8))
+    && CQ.coverage.subtopics_missing.includes('Who must comply in the first wave')
+    && CQ.warnings.some(w => /^Subtopics the best competitor page covers and this draft does not: "Who must comply in the first wave"/.test(w))
+    && (CQ.coverage.pct >= 80 || CQ.warnings.some(w => /^Topic coverage \d+% against a target of 80% \(cleartax\.ae covers 80%\)/.test(w))),
+    JSON.stringify({ pts: CQ.score_breakdown.coverage, pct: CQ.coverage.pct, w: CQ.warnings.filter(w => /coverage|Subtopic/i.test(w)) }));
+  const oc = (await run('Originality Check', qa))[0].json.content_qa;
+  check('G5: the check runs on the real quality check\'s output — this draft is original, every warning Content QA raised is kept and the verdict is unchanged',
+    oc.originality.passed === true && oc.originality.highest_pct <= 5 && oc.passed === CQ.passed && oc.content_score === CQ.content_score
+    && CQ.warnings.every(w => oc.warnings.includes(w)), JSON.stringify({ o: oc.originality, added: oc.warnings.filter(w => !CQ.warnings.includes(w)) }));
+
+  // ---------- G30: the three planned images are produced, attached and listed ----------
+  const pkgIn = [{ json: { ...qa.json, page_markdown: qa.json.output, keyword: 'e invoicing uae', domain: D, content_brief_slug: 'e-invoicing-uae',
+    content_images: [], content_score: CQ.content_score, content_originality: oc.originality, content_coverage: CQ.coverage, site_profile: { business_name: 'Tech&' },
+    language_name: 'English', language_code: 'en' }, binary: { data: { data: Buffer.from('<html>report</html>', 'utf8').toString('base64'), mimeType: 'text/html', fileName: 'report.doc' } } }];
+  const pkg = await run('Blog Package', pkgIn);
+  const PM = pkg[0].json.article_meta;
+  console.log('   package images ->', JSON.stringify(PM.images.map(i => [i.purpose, i.filename, i.width + 'x' + i.height])));
+  check('G5 / G33 in the package: meta.json carries the originality figure and the coverage figure with their basis, next to the page they judge',
+    PM.originality && PM.originality.threshold_pct === 15 && PM.coverage && PM.coverage.target_pct === 80 && /taken from cleartax\.ae/.test(PM.coverage.basis),
+    JSON.stringify({ o: PM.originality && PM.originality.highest_pct, c: PM.coverage && PM.coverage.basis }));
+  const cards = await run('Image Cards', pkg);
+  const cardHtml = cards.map(c => Buffer.from(c.binary.html.data, 'base64').toString('utf8'));
+  save('image-card-hero.html', cardHtml[0]); save('image-card-body.html', cardHtml[1]);
+  console.log('   image cards ->', JSON.stringify(cards.map(c => [c.json.kind, c.json.filename, c.json.width + 'x' + c.json.height])));
+  check('G30: one card per planned image, at the planned size, built from the page itself — the H1 on the hero, the section\'s own heading and points on the others',
+    cards.length === 3 && cards[0].json.kind === 'title card' && cards[0].json.width === 1200 && cards[0].json.height === 675
+    && cards[1].json.kind === 'section summary card' && cards[1].json.width === 1000
+    && /<h1>E-invoicing in the UAE<\/h1>/.test(cardHtml[0]) && /Tech&amp;/.test(cardHtml[0])
+    && /<h2>How does the five corner model work\?<\/h2>/.test(cardHtml[1])
+    && /the clearance step happens in the same minute/i.test(cardHtml[1])
+    && cardHtml.every(h => /^<!doctype html>/i.test(h) && !/<script/i.test(h) && !/https?:\/\//.test(h.replace(/techand\.ai/g, ''))),
+    JSON.stringify({ n: cards.length, head: cardHtml[1].slice(-400) }));
+  const webp = (n) => Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBPVP8 '), Buffer.alloc(n)]).toString('base64');
+  mock('Render Images', cards.map((c, i) => ({ json: {}, binary: { image: { data: webp(1200 + i * 400), mimeType: 'image/webp', fileName: 'index.webp' } } })));
+  const att = await run('Attach Images', store['Render Images']);
+  const AM = att[0].json.article_meta, AB = att[0].binary;
+  const metaFile = JSON.parse(Buffer.from(AB.meta_json.data, 'base64').toString('utf8'));
+  console.log('   produced ->', JSON.stringify({ binaries: Object.keys(AB), produced: AM.images_produced, kb: AM.images.map(i => i.kb) }));
+  check('G30: the three images are attached as WebP under the planned file names, with the planned alt text, size and Open Graph image kept',
+    att[0].json.images_produced === 3 && AM.images_produced === 3 && AM.images_planned === 3
+    && ['image_1', 'image_2', 'image_3'].every(k => AB[k] && AB[k].mimeType === 'image/webp')
+    && AB.image_1.fileName === PM.images[0].filename && AB.image_2.fileName === PM.images[1].filename
+    && AM.images.every((i, k) => i.produced === true && i.bytes > 500 && i.format === 'webp' && i.alt_text === PM.images[k].alt_text && i.width === PM.images[k].width)
+    && AM.open_graph['og:image'] === PM.open_graph['og:image'] && AB.article_html && AB.article_md,
+    JSON.stringify({ bin: Object.keys(AB), imgs: AM.images.map(i => [i.filename, i.produced, i.bytes]) }));
+  check('G30: meta.json lists the produced files and the publish checklist asks the owner to save them instead of to create three images',
+    metaFile.images_produced === 3 && metaFile.images.every(i => i.produced === true && i.binary_key)
+    && /3 of 3 images are attached as WebP/.test(metaFile.image_notes)
+    && metaFile.publish_checklist.some(s => /^Save the 3 attached image file\(s\)/.test(s))
+    && !metaFile.publish_checklist.some(s => /^Create the three images/.test(s)),
+    JSON.stringify({ notes: metaFile.image_notes, checklist: metaFile.publish_checklist.filter(s => /image/i.test(s)) }));
+  const wr = (await run('Build Webhook Response', att))[0].json;
+  check('G30: the produced images travel in the API callback, with their alt text, so the app can offer them next to the article',
+    Array.isArray(wr.images) && wr.images.length === 3 && wr.images[0].mimeType === 'image/webp'
+    && wr.images[0].fileName === PM.images[0].filename && wr.images[0].alt_text === PM.images[0].alt_text && wr.images[0].data.length > 100
+    && wr.meta.images_produced === 3, JSON.stringify((wr.images || []).map(i => [i.fileName, i.alt_text, (i.data || '').length])));
+
+  // a render that fails leaves the plan in place and never breaks the run
+  mock('Render Images', cards.map((c, i) => i === 1 ? { json: { error: { message: 'connect ECONNREFUSED gotenberg:3000' } } } : { json: {}, binary: { image: { data: webp(1500), mimeType: 'image/webp', fileName: 'index.webp' } } }));
+  const partial = (await run('Attach Images', store['Render Images']))[0];
+  check('G30: a card the renderer could not produce keeps its place in the plan with the reason, the others are still attached',
+    partial.json.images_produced === 2 && partial.json.images_failed === 1
+    && partial.json.article_meta.images[1].produced === false && /ECONNREFUSED/.test(partial.json.article_meta.images[1].produce_error)
+    && partial.json.article_meta.images[1].alt_text === PM.images[1].alt_text && !partial.binary.image_2 && partial.binary.image_1 && partial.binary.image_3,
+    JSON.stringify(partial.json.article_meta.images.map(i => [i.filename, i.produced, i.produce_error || ''])));
+  mock('Render Images', cards.map(() => ({ json: { error: { message: 'service unavailable' } } })));
+  const none = (await run('Attach Images', store['Render Images']))[0];
+  check('G30: with the renderer down nothing is produced, the plan and the package are untouched and the checklist still asks for the three images',
+    none.json.images_produced === 0 && none.json.article_meta.images.every(i => i.produced === false)
+    && /No image could be produced in this run/.test(none.json.article_meta.image_notes)
+    && none.json.article_meta.publish_checklist.some(s => /^Create the three images/.test(s))
+    && none.binary.article_html && none.binary.article_md && none.binary.meta_json && !none.binary.image_1,
+    JSON.stringify({ notes: none.json.article_meta.image_notes, bin: Object.keys(none.binary) }));
+  // a report-only run has no article: the chain passes it through untouched
+  const noArticle = await run('Image Cards', [{ json: { keyword: 'e invoicing uae', verdict: 'AVOID' }, binary: {} }]);
+  mock('Blog Package', [{ json: { keyword: 'e invoicing uae', verdict: 'AVOID' }, binary: { data: { data: 'AA==', mimeType: 'text/html', fileName: 'report.doc' } } }]);
+  mock('Render Images', [{ json: { error: { message: 'no binary html' } } }]);
+  const through = (await run('Attach Images', store['Render Images']))[0];
+  check('G30: a run that wrote no page emits exactly one item and reaches delivery unchanged (no branch is ever left empty)',
+    noArticle.length === 1 && noArticle[0].json.skip === true && !through.json.article_meta && through.binary.data,
+    JSON.stringify({ cards: noArticle.map(c => c.json), out: Object.keys(through.binary) }));
+});
+
+// ===================================================================================
+await guard('page watch + url inspection', async () => {
+  const SN = 'S53 G11 G25 — a daily key-page watch that alerts the same day (gone, noindex, moved canonical, changed title, changed robots.txt), a finding re-checked within a day of "I fixed this", and URL Inspection rotating through every key page inside Google\'s 2,000-a-day quota';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T = require('./fixtures_tracking'), TC = require('./table_cols.json'), WIRE = require('./page_watch_wiring.json');
+  const D = T.D, SITE = 'site_northwind-erp-com', W = 'https://www.' + D, EMPTY = [{ json: {} }];
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const HOME = W + '/', PRICING = W + '/erp-pricing/', GUIDE = W + '/blog/e-invoicing-uae-fta', ABOUT = W + '/about/', CASE = W + '/case-studies/ifrs-17-case-study/';
+  const ROBOTS = W + '/robots.txt';
+
+  // ---- 0. the wiring the builder generated (the workflow JSON is not copied into the container) ----
+  check('G11: the watch is its own daily workflow at 05:45, with a fetch that does NOT follow redirects (a key page that starts redirecting is the change) and the retry rule',
+    WIRE.workflow === 'SEOagentPageWch1' && WIRE.schedule.every === 'day' && WIRE.schedule.hour === 5 && WIRE.fetch.follows_redirects === false && WIRE.fetch.response_format === 'text' && WIRE.fetch.retries === 3,
+    JSON.stringify({ schedule: WIRE.schedule, fetch: WIRE.fetch }));
+  check('G11: the alert path is D25b\'s — recorded in seo_console_alerts and seo_ops_alerts first, then the webhook, and the record nodes come before the sending ones',
+    eq(WIRE.connections['Watch Alerts'], [['Any Watch Alerts?']]) && eq(WIRE.connections['Any Watch Alerts?'], [['Save Watch Alerts'], ['Watch Ops Alert']])
+    && eq(WIRE.connections['Save Watch Ops Alert'], [['Watch Ops Channels']]) && eq(WIRE.connections['Send Watch Webhook?'], [['Post Watch Alert'], ['Watched']])
+    && WIRE.nodes.includes('Save Finding Recheck') && !WIRE.nodes.some(n => /email/i.test(n)),
+    JSON.stringify(WIRE.connections['Any Watch Alerts?']));
+
+  // ---- 1. the kit: what one raw fetch says, and what robots.txt allows ----
+  const pw = async (j) => (await run('_page_watch', [{ json: j }]))[0].json;
+  const page = (o) => ({ statusCode: o.status === undefined ? 200 : o.status, headers: { 'content-type': 'text/html', ...(o.headers || {}) },
+    data: '<html><head>' + (o.title === undefined ? '<title>ERP pricing in the UAE | Northwind</title>' : (o.title ? '<title>' + o.title + '</title>' : ''))
+      + (o.canonical === undefined ? '<link rel="canonical" href="' + PRICING + '"/>' : (o.canonical ? '<link rel="canonical" href="' + o.canonical + '"/>' : ''))
+      + (o.robots ? '<meta name="robots" content="' + o.robots + '">' : '') + (o.desc === undefined ? '<meta name="description" content="What an ERP costs in the UAE, with real implementation ranges and the licence fees of every tier.">' : (o.desc ? '<meta name="description" content="' + o.desc + '">' : ''))
+      + '</head><body>' + (o.h1 === undefined ? '<h1>ERP pricing in the UAE</h1>' : o.h1) + '<p>text</p></body></html>' });
+  const s1 = (await pw({ res: page({}) })).signals;
+  check('the raw reading gives status, title, canonical, description and the H1 of one fetch, with no JavaScript and no paid call',
+    s1.ok && s1.status === 200 && s1.title === 'ERP pricing in the UAE | Northwind' && s1.canonical === PRICING && s1.titles === 1 && s1.h1s === 1 && /real implementation ranges/.test(s1.description), JSON.stringify(s1));
+  const sN = (await pw({ res: page({ robots: 'noindex, follow' }) })).signals;
+  const sH = (await pw({ res: page({ headers: { 'x-robots-tag': 'noindex' } }) })).signals;
+  check('`noindex` is read from the meta robots tag AND from the X-Robots-Tag header (the header-only case is invisible to a crawler that only parses HTML)',
+    sN.noindex && /meta robots/.test(sN.noindex_source) && sH.noindex && /X-Robots-Tag/.test(sH.noindex_source), JSON.stringify([sN.noindex_source, sH.noindex_source]));
+  const s3 = (await pw({ res: { statusCode: 301, headers: { location: W + '/pricing/' }, data: '' } })).signals;
+  check('a redirect is read as a redirect with its target, because the fetch does not follow it', s3.status === 301 && s3.location === W + '/pricing/', JSON.stringify(s3));
+  const sErr = (await pw({ res: { error: { message: 'ETIMEDOUT' } } })).signals;
+  check('a failed fetch is `ok: false` with its reason — never an empty page with no title', sErr.ok === false && /ETIMEDOUT/.test(sErr.error), JSON.stringify(sErr));
+  const RB_TEXT = 'User-agent: *\nDisallow: /wp-admin/\nDisallow: /search\nAllow: /wp-admin/admin-ajax.php\n\nUser-agent: Googlebot\nDisallow: /erp-pricing/\n\nSitemap: ' + W + '/sitemap.xml\n';
+  const rb = await pw({ robots_res: { statusCode: 200, data: RB_TEXT }, block_urls: [PRICING, HOME, W + '/wp-admin/'] });
+  check('robots.txt is parsed with Googlebot\'s own group winning over `*`: /erp-pricing/ is blocked for Google, the home page is not, and the `*` rules do not apply once Googlebot has a group',
+    eq(rb.robots.blocks.map(b => b.blocked), [true, false, false]) && rb.robots.hash.length === 8, JSON.stringify(rb.robots.blocks));
+  const rbSame = await pw({ robots_res: { statusCode: 200, data: RB_TEXT.replace('Disallow: /search', '# a comment\nDisallow: /search') }, prev_hash: rb.robots.hash });
+  check('the fingerprint ignores comments and blank lines, so re-formatting robots.txt raises no alert', rbSame.robots.hash === rb.robots.hash && rbSame.robots_change === null, JSON.stringify([rb.robots.hash, rbSame.robots.hash]));
+  const rbChanged = await pw({ robots_res: { statusCode: 200, data: RB_TEXT + 'User-agent: *\nDisallow: /\n' }, prev_hash: rb.robots.hash });
+  check('G11: a real change to robots.txt is a high alert the same day, with the fingerprints on both sides',
+    rbChanged.robots_change && rbChanged.robots_change.code === 'robots_changed' && rbChanged.robots_change.severity === 'high' && rbChanged.robots_change.from === rb.robots.hash, JSON.stringify(rbChanged.robots_change));
+  const rb404 = await pw({ robots_res: { statusCode: 404, data: 'not found' }, block_urls: [PRICING], prev_hash: rb.robots.hash });
+  check('no robots.txt blocks nothing, and a failed read never claims a change (the stored fingerprint stays)',
+    rb404.robots.blocks[0].blocked === null, JSON.stringify(rb404.robots.blocks));
+
+  // ---- 2. the daily run on a site whose pages are already on file ----
+  const modelOf = async (row) => (await run('_site_model', [{ json: { site_row: row } }]))[0].json.model;
+  const model = await modelOf({ site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1),
+    nav_pages_json: JSON.stringify([{ url: PRICING, title: 'Pricing' }, { url: ABOUT, title: 'About' }]) });
+  const siteRow = { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1), email: 'owner@example.com', callback_url: 'https://app.example.com/hooks/x',
+    nav_pages_json: JSON.stringify([{ url: PRICING, title: 'Pricing' }, { url: ABOUT, title: 'About' }]), status: 'active' };
+  const pagesRows = [
+    { site_id: SITE, url: PRICING, title: 'ERP pricing in the UAE | Northwind', source: 'sitemap', queries_json: JSON.stringify([{ query: 'erp cost dubai', impressions: 240 }]) },
+    { site_id: SITE, url: GUIDE, title: 'E-invoicing in the UAE', source: 'detected', queries_json: '[]' },
+    { site_id: SITE, url: ABOUT, title: 'About', source: 'sitemap', queries_json: '[]' },
+    { site_id: SITE, url: CASE, title: 'IFRS 17 case study', source: 'ai_page', queries_json: '[]' },
+  ];
+  const watchLoads = (o = {}) => {
+    mock('Load Sites (Watch)', [{ json: siteRow }]);
+    mock('Load Ladders (Watch)', o.ladders || [{ json: { ladder_id: 'lad_1', domain: D, keyword: 'e invoicing uae', target_url: GUIDE, status: 'published', page_exists: true, email: 'owner@example.com' } }]);
+    mock('Load Pages (Watch)', o.pages || pagesRows.map(p => ({ json: p })));
+    mock('Load Page Watch', o.watch || EMPTY);
+    mock('Load Watch Cache', o.cache || EMPTY);
+    mock('Load Recheck Requests', o.rechecks || EMPTY);
+    mock('Load Ops Alerts (Watch)', o.ops || EMPTY);
+    if (o.trigger) mock('Watch Run', [{ json: o.trigger }]); else delete store['Watch Run'];
+  };
+  watchLoads();
+  const plan1 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  console.log('   watch plan ->', JSON.stringify(plan1.map(p => [p.kind, p.url.replace(W, '')])));
+  check('G11: the day\'s targets are the key pages of the site model and the page inventory plus /robots.txt — the home page and the menu first, then the page Search Console brings impressions for, never a fresh crawl',
+    plan1.length === 6 && plan1[0].kind === 'robots' && plan1[0].url === ROBOTS && plan1.filter(p => p.kind !== 'robots')[0].url === HOME
+    && plan1.some(p => p.kind === 'nav' && p.url === PRICING) && plan1.some(p => p.kind === 'ladder' && p.url === GUIDE) && plan1.some(p => p.kind === 'ai' && p.url === CASE)
+    && plan1.every(p => p.site_id === SITE), JSON.stringify(plan1.map(p => [p.kind, p.url])));
+  check('the cost is one plain GET per key page plus one for robots.txt — nothing paid, and the cap (25 pages a site) is on the plan',
+    plan1.filter(p => p.kind !== 'robots').length === 5 && plan1[0].site.max_watch_pages === 25, JSON.stringify({ requests: plan1.length, cap: plan1[0].site.max_watch_pages }));
+  // the cap really cuts: 40 pages on file -> 25 watched + robots
+  watchLoads({ pages: Array.from({ length: 40 }, (_, i) => ({ json: { site_id: SITE, url: W + '/p' + i + '/', title: 'P' + i, source: 'sitemap', queries_json: '[]' } })) });
+  const planCap = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('G11: with 40 pages on file the watch still fetches at most 25 of them (plus robots.txt), so a big site cannot run away with the daily budget',
+    planCap.filter(p => p.kind !== 'robots').length === 25 && planCap.length === 26, planCap.length);
+  // a paused site is not watched; an on-demand run picks exactly one site
+  watchLoads({ pages: pagesRows.map(p => ({ json: p })) });
+  mock('Load Sites (Watch)', [{ json: { ...siteRow, status: 'paused' } }]);
+  const planPaused = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('a paused site is left alone, and the run says why instead of failing', planPaused.length === 1 && planPaused[0].skip === true && /no tracked site/.test(planPaused[0].reason), JSON.stringify(planPaused[0]));
+
+  // ---- 3. day one: the baseline is written and nothing is alerted ----
+  watchLoads();
+  const plan = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  const answers = (over = {}) => plan.map(p => p.kind === 'robots'
+    ? (over.robots || { statusCode: 200, data: RB_TEXT })
+    : (over[p.url] || page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url })));
+  mock('Fetch Watch Page', answers());
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day1 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  check('day one is a baseline: every page is read, the state is `ok` and nothing is alerted (nobody is told their site changed on the first morning)',
+    day1.summary.pages_checked === 5 && day1.changes.length === 0 && day1.summary.first_run === true && day1.summary.cost_usd === 0, JSON.stringify(day1.summary));
+  const rows1 = (await run('Watch Rows', store['Watch Compare'])).map(x => x.json);
+  check('the stored rows carry exactly the seo_page_watch columns (table_cols.json PAGE_WATCH), one per page that was read',
+    rows1.length === 5 && rows1.every(r => eq(Object.keys(r).sort(), [...TC.PAGE_WATCH].sort())) && rows1.every(r => r.state === 'ok' && r.changed_count === 0 && r.robots_hash === day1.robots.hash),
+    JSON.stringify({ cols: Object.keys(rows1[0]), expected: TC.PAGE_WATCH }));
+  const cache1 = (await run('Watch Cache Rows', store['Watch Compare'])).map(x => x.json);
+  check('G11: the site fingerprint goes into seo_cache under `watch:<site_id>` (beside the sitemap fingerprints), with the robots.txt hash and the day\'s counts',
+    cache1.length === 1 && cache1[0].key === 'watch:' + SITE && cache1[0].kind === 'watch' && eq(Object.keys(cache1[0]).sort(), [...TC.CACHE].sort())
+    && JSON.parse(cache1[0].value).robots_hash === day1.robots.hash, JSON.stringify(cache1[0]));
+  const al1 = (await run('Watch Alerts', store['Watch Compare'])).map(x => x.json);
+  check('and no alert row is written on the baseline day', al1.length === 1 && al1[0].skip === true, JSON.stringify(al1[0]));
+
+  // ---- 4. day two: five changes, each with the right alert, and an unchanged page that says nothing ----
+  const stored = rows1.map(r => ({ json: { ...r, id: 1 } }));
+  watchLoads({ watch: stored, cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }] });
+  const plan2 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('day two reads the stored reading of every page back (the baseline a change is measured against)',
+    plan2.filter(p => p.kind !== 'robots').every(p => p.prev && p.prev.url === p.url) && plan2[0].site.robots_hash_prev === day1.robots.hash, JSON.stringify(plan2[0].site.robots_hash_prev));
+  mock('Fetch Watch Page', plan2.map(p => {
+    if (p.kind === 'robots') return { statusCode: 200, data: RB_TEXT.replace('Disallow: /erp-pricing/', 'Disallow: /erp-pricing/\nDisallow: /blog/') };   // robots.txt changed: Googlebot's own group now blocks /blog/
+    if (p.url === HOME) return page({ status: 404, title: 'Not found', canonical: '' });                                     // the home page is gone
+    if (p.url === PRICING) return page({ title: 'Title of /erp-pricing/', canonical: p.url, robots: 'noindex' });            // noindex appeared
+    if (p.url === GUIDE) return page({ title: 'Title of /blog/e-invoicing-uae-fta', canonical: W + '/uae-e-invoicing/' });    // canonical moved
+    if (p.url === ABOUT) return page({ title: 'About Northwind ERP — 2026', canonical: p.url });                             // the title changed
+    return page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url });                                            // the case study is untouched
+  }));
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day2 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  const codeOf = (u) => day2.changes.filter(c => c.url === u).map(c => c.code);
+  console.log('   day two ->', JSON.stringify(day2.changes.map(c => [c.code, c.severity, c.url.replace(W, '')])));
+  check('G11: a key page that is gone (200 -> 404) is a critical alert the same day, with both status codes named',
+    eq(codeOf(HOME), ['page_gone']) && day2.changes.find(c => c.code === 'page_gone').severity === 'critical' && /404/.test(day2.changes.find(c => c.code === 'page_gone').text), JSON.stringify(day2.changes.find(c => c.code === 'page_gone')));
+  check('G11: a page that gained `noindex` is critical, and the alert quotes the tag it found',
+    eq(codeOf(PRICING), ['noindex_added']) && /meta robots/.test(day2.changes.find(c => c.code === 'noindex_added').text), JSON.stringify(day2.changes.find(c => c.code === 'noindex_added')));
+  check('G11: a canonical that moved to another URL is high, with the old and the new address — and the same page, now disallowed in robots.txt, is critical',
+    eq(codeOf(GUIDE).sort(), ['canonical_moved', 'robots_blocked']) && day2.changes.find(c => c.code === 'canonical_moved').to === W + '/uae-e-invoicing/'
+    && day2.changes.find(c => c.code === 'canonical_moved').from === GUIDE && day2.changes.find(c => c.code === 'robots_blocked').severity === 'critical', JSON.stringify(codeOf(GUIDE)));
+  check('G11: a changed title is a medium alert that quotes both titles', eq(codeOf(ABOUT), ['title_changed']) && /About Northwind ERP — 2026/.test(day2.changes.find(c => c.code === 'title_changed').text), JSON.stringify(day2.changes.find(c => c.code === 'title_changed')));
+  check('G11: the changed robots.txt is one alert of its own, and it now blocks a key page we watch (the ladder page under /blog/)',
+    day2.changes.some(c => c.code === 'robots_changed') && day2.robots.changed === true && day2.robots.blocks_key_pages.includes(GUIDE), JSON.stringify({ blocks: day2.robots.blocks_key_pages, changed: day2.robots.changed }));
+  check('and the page nobody touched raises nothing at all, for one GET',
+    codeOf(CASE).length === 0 && (day2.pages.find(p => p.url === CASE) || {}).state === 'ok' && day2.summary.requests === 6, JSON.stringify({ case: codeOf(CASE), requests: day2.summary.requests }));
+  const rows2 = (await run('Watch Rows', store['Watch Compare'])).map(x => x.json);
+  check('the changed pages are stored with the change codes and a change count that grew, while the untouched one keeps its count at 0',
+    (rows2.find(r => r.url === PRICING) || {}).changes === 'noindex_added' && (rows2.find(r => r.url === PRICING) || {}).changed_count === 1
+    && (rows2.find(r => r.url === CASE) || {}).changed_count === 0 && rows2.every(r => eq(Object.keys(r).sort(), [...TC.PAGE_WATCH].sort())), JSON.stringify(rows2.map(r => [r.url.replace(W, ''), r.changes, r.changed_count])));
+  const al2 = (await run('Watch Alerts', store['Watch Compare'])).map(x => x.json);
+  check('every change becomes a seo_console_alerts row (the app\'s Alerts page and the Monday report read that table) with exactly its columns and one id per site, page, change and day',
+    al2.length === 6 && al2.every(r => eq(Object.keys(r).sort(), [...TC.CONSOLE_ALERTS].sort())) && al2.every(r => r.kind === 'page_watch' && r.source === 'page_watch' && r.status === 'new')
+    && new Set(al2.map(r => r.message_id)).size === 6 && al2.some(r => /^Page gone/.test(r.subject)), JSON.stringify(al2.map(r => [r.severity, r.subject])));
+  const ops2 = (await run('Watch Ops Alert', store['Watch Compare'])).map(x => x.json);
+  check('G11 / D25b: only the serious changes take the ops path (the medium title change does not), recorded in seo_ops_alerts with exactly its columns before anything is sent',
+    ops2.length === 5 && ops2.every(r => eq(Object.keys(r).sort(), [...TC.OPS_ALERTS].sort())) && ops2.every(r => r.mode === 'page_watch' && r.delivered === 'pending')
+    && eq(ops2.map(r => r.severity).sort(), ['critical', 'critical', 'critical', 'high', 'high']) && !ops2.some(r => /title/i.test(r.message)), JSON.stringify(ops2.map(r => [r.severity, r.node])));
+  mock('Save Watch Ops Alert', ops2.map(r => ({ json: r })));
+  const ch2 = (await run('Watch Ops Channels', store['Save Watch Ops Alert']))[0].json;
+  check('the webhook body carries the day\'s changes for Slack / Teams / any POST endpoint and needs no SMTP; with no webhook configured the changes are still on record',
+    ch2.alerts === 5 && /key-page watch/.test(ch2.webhook_body.text) && ch2.webhook_body.alerts.length === 5 && ch2.recorded === true
+    && ch2.send_webhook === !!WIRE.webhook_configured, JSON.stringify({ send: ch2.send_webhook, note: ch2.note }));
+  // the same changes an hour later, inside the dedupe window: recorded, not re-sent
+  watchLoads({ watch: stored, cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }], ops: ops2.map(r => ({ json: { ...r, last_seen_at: new Date().toISOString() } })) });
+  const ops3 = (await run('Watch Ops Alert', store['Watch Compare'])).map(x => x.json);
+  const ch3 = (await run('Watch Ops Channels', store['Watch Ops Alert']))[0].json;
+  check('D25b\'s dedupe: the same changes an hour later are recorded with count 2 and `deduped`, and nothing is posted',
+    ops3.every(r => r.count === 2 && r.delivered === 'deduped') && ch3.alerts === 0 && ch3.send_webhook === false && /less than/.test(ch3.note), JSON.stringify([ops3.map(r => r.delivered), ch3.note]));
+
+  // ---- 5. a fetch that fails is "not checked": the stored reading survives ----
+  watchLoads({ watch: rows2.map(r => ({ json: { ...r, id: 1 } })), cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }] });
+  const plan3 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  mock('Fetch Watch Page', plan3.map(p => p.kind === 'robots' ? { error: { message: 'EAI_AGAIN' } } : (p.url === CASE ? { error: { message: 'ETIMEDOUT' } } : page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url }))));
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day3 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  const rows3 = (await run('Watch Rows', store['Watch Compare'])).map(x => x.json);
+  const cache3 = (await run('Watch Cache Rows', store['Watch Compare']))[0].json;
+  check('a page whose fetch failed is "not checked": no alert about it, no row written, and its stored reading is kept exactly as it was',
+    day3.summary.pages_not_checked === 1 && day3.not_checked[0].url === CASE && !day3.changes.some(c => c.url === CASE) && !rows3.some(r => r.url === CASE), JSON.stringify({ not_checked: day3.not_checked, rows: rows3.length }));
+  check('a robots.txt that could not be read never overwrites the stored fingerprint (otherwise tomorrow would report a change that never happened)',
+    JSON.parse(cache3.value).robots_hash === day1.robots.hash && JSON.parse(cache3.value).robots_read === false && !day3.changes.some(c => c.code === 'robots_changed'), cache3.value);
+
+  // ---- 6. the recovery, so a fix shows up ----
+  watchLoads({ watch: rows2.map(r => ({ json: { ...r, id: 1 } })), cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }] });
+  const plan4 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  mock('Fetch Watch Page', plan4.map(p => p.kind === 'robots' ? { statusCode: 200, data: RB_TEXT }
+    : p.url === ABOUT ? page({ title: 'About Northwind ERP — 2026', canonical: p.url })                 // unchanged since yesterday
+      : p.url === GUIDE ? page({ title: 'Title of /blog/e-invoicing-uae-fta', canonical: W + '/uae-e-invoicing/' })   // the moved canonical is still where it was
+        : page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url })));
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day4 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  const codes4 = day4.changes.map(c => c.code);
+  check('when the owner puts it right the watch says so: the home page answers again and the noindex is gone, both as `info` — and the title of the 404 page it served yesterday is not reported as a title change',
+    codes4.includes('page_back') && codes4.includes('noindex_removed') && day4.changes.filter(c => c.severity !== 'info').length === 0 && !codes4.includes('title_changed'), JSON.stringify(day4.changes.map(c => [c.code, c.severity])));
+  const ops4 = (await run('Watch Ops Alert', store['Watch Compare'])).map(x => x.json);
+  check('good news never wakes anybody: no ops alert and no webhook post for a recovery', ops4.length === 1 && ops4[0].skip === true, JSON.stringify(ops4[0]));
+
+  // ---- 7. "I fixed this": one finding, re-checked on those pages within a day ----
+  const finding = (title, over = {}) => ({ site_id: SITE, domain: D, audit_id: 'aud_s53', finding_key: 'Crawlability & Indexing|' + title.toLowerCase(), title, category: 'Crawlability & Indexing', severity: 'High', recheck_state: 'requested', recheck_requested_at: daysAgo(1), ...over });
+  const RQ = [finding('Missing meta description'), finding('Broken pages (4xx, 5xx or timeout)'), finding('Slow page load time'), finding('Missing canonical tag')];
+  watchLoads({ watch: rows1.map(r => ({ json: { ...r, id: 1 } })), cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }], rechecks: RQ.map(f => ({ json: f })) });
+  const plan5 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('the re-check queue rides along on the day\'s plan, so the same fetches answer it (no extra request, no paid call)',
+    plan5[0].site.rechecks.length === 4 && plan5[0].site.rechecks.every(r => r.audit_id === 'aud_s53'), JSON.stringify(plan5[0].site.rechecks.map(r => r.title)));
+  mock('Fetch Watch Page', plan5.map(p => p.kind === 'robots' ? { statusCode: 200, data: RB_TEXT }
+    : (p.url === ABOUT ? page({ title: 'Title of /about/', canonical: ABOUT, desc: '' })            // one page still has no meta description
+      : page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url }))));
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day5 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  const rcOf = (t) => day5.rechecks.find(r => r.title === t) || {};
+  console.log('   rechecks ->', JSON.stringify(day5.rechecks.map(r => [r.title, r.state])));
+  check('G11 / criterion 1.10: a finding the watch can judge comes back with its new state within a day — "still open" names the pages it is still wrong on',
+    rcOf('Missing meta description').state === 'still_open' && rcOf('Missing meta description').hits.includes(ABOUT) && /1 of the 5 key pages/.test(rcOf('Missing meta description').note), JSON.stringify(rcOf('Missing meta description')));
+  check('a finding that really is fixed comes back `fixed`, with how many pages were checked and the promise that the audit checks the rest',
+    rcOf('Broken pages (4xx, 5xx or timeout)').state === 'fixed' && /5 key pages checked/.test(rcOf('Broken pages (4xx, 5xx or timeout)').note) && /next full audit/.test(rcOf('Broken pages (4xx, 5xx or timeout)').note), JSON.stringify(rcOf('Broken pages (4xx, 5xx or timeout)')));
+  check('a finding a raw fetch cannot judge is never guessed: "not checked", with the reason and who decides it',
+    rcOf('Slow page load time').state === 'not_checked' && /cannot judge/.test(rcOf('Slow page load time').note) && /next audit/.test(rcOf('Slow page load time').note), JSON.stringify(rcOf('Slow page load time')));
+  const rcRows = (await run('Watch Recheck Rows', store['Watch Compare'])).map(x => x.json);
+  check('the answer is written back on that finding row (site, audit and finding key identify it) with the rule it used and one sentence of evidence',
+    rcRows.length === 4 && rcRows.every(r => r.site_id === SITE && r.audit_id === 'aud_s53' && r.finding_key && r.recheck_at && r.recheck_note)
+    && rcRows.find(r => /meta description/.test(r.title)).recheck_state === 'still_open' && rcRows.find(r => /Missing canonical/.test(r.title)).recheck_state === 'fixed', JSON.stringify(rcRows.map(r => [r.recheck_state, r.recheck_rule])));
+  const al5 = (await run('Watch Alerts', store['Watch Compare'])).map(x => x.json);
+  check('a fix that is confirmed is shown to the owner as an `info` notice, so pressing "I fixed this" always ends in an answer',
+    al5.filter(r => /^Fixed: /.test(r.subject || '')).length === 2 && al5.every(r => r.skip || r.severity === 'info'), JSON.stringify(al5.map(r => r.subject)));
+  // on demand: the app asks for one finding only
+  watchLoads({ watch: rows1.map(r => ({ json: { ...r, id: 1 } })), rechecks: RQ.map(f => ({ json: f })), trigger: { domain: D, finding_key: RQ[1].finding_key } });
+  const plan6 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('an on-demand run for one finding watches that site only and carries that one finding',
+    plan6.every(p => p.site_id === SITE) && plan6[0].site.rechecks.length === 1 && plan6[0].site.rechecks[0].finding_key === RQ[1].finding_key && plan6[0].site.on_demand === true, JSON.stringify(plan6[0].site.rechecks));
+
+  // ---- 8. G25: URL Inspection rotates through every key page inside Google's quota ----
+  const budget = await pw({ pages_budget: [
+    { url: PRICING, weight: 60, inspect_at: daysAgo(2) }, { url: HOME, weight: 100, inspect_at: daysAgo(9) }, { url: GUIDE, weight: 90, inspect_at: '' },
+    { url: ABOUT, weight: 70, inspect_at: daysAgo(30) }, { url: CASE, weight: 50, inspect_at: daysAgo(1) }, { url: CASE + '?utm=x', weight: 10, inspect_at: '' }], cap: 3 });
+  check('G25: the rotation is never-inspected first, then the oldest inspection — and the same page is asked about once however it is spelled',
+    eq(budget.budget.take, [GUIDE, ABOUT, HOME]) && eq(budget.budget.skipped, [PRICING, CASE]) && budget.budget.quota === 2000, JSON.stringify(budget.budget));
+  check('the quota is named where it is spent: 2,000 inspections a day and 600 a minute per property, 150 a weekly run, 100 an audit',
+    /2000 pages a day per Search Console property/.test(budget.budget.note) && budget.limits.quota === 2000 && budget.limits.per_minute === 600 && budget.limits.per_run === 150 && budget.limits.per_audit === 100
+    && WIRE.site_tracker_inspections.cap === 150, JSON.stringify(budget.limits));
+  const used = await pw({ pages_budget: [{ url: HOME, weight: 1 }, { url: ABOUT, weight: 1 }], cap: 150, used: 1999 });
+  check('G25: with the day\'s quota nearly gone the run asks about what is left and reports the rest as "not checked", instead of asking and failing',
+    used.budget.take.length === 1 && used.budget.skipped.length === 1 && /reported as "not checked"/.test(used.budget.note), JSON.stringify(used.budget));
+  // the Site Tracker's own chain
+  mock('Resolve Properties', [{ json: { site_idx: 0, site_id: SITE, domain: D, gsc_connected: true, gsc_property: 'sc-domain:' + D, config: { max_inspections: 4 },
+    ladder_pages: [{ url: GUIDE, keyword: 'e invoicing uae', rung: 1, status: 'published', page_exists: true }] } }]);
+  mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model } }]);
+  mock('Load Pages (Site)', pagesRows.map(p => ({ json: p })));
+  mock('Load Page Watch (Site)', [{ json: { site_id: SITE, url: PRICING, inspect_at: daysAgo(2), kind: 'nav' } }, { json: { site_id: SITE, url: GUIDE, inspect_at: daysAgo(40), kind: 'ladder' } }]);
+  delete store['Detect Published'];
+  const ireq = (await run('Inspect Requests', store['Resolve Properties'])).map(x => x.json);
+  console.log('   inspections ->', JSON.stringify(ireq.map(r => r.inspect_url.replace(W, ''))));
+  check('G25: the weekly run asks about every kind of key page, not only the ladder pages — never inspected first, then the oldest, inside the cap',
+    ireq.length === 4 && ireq.map(r => r.inspect_url).includes(HOME) && ireq.map(r => r.inspect_url).includes(ABOUT) && ireq[ireq.length - 1].inspect_url === GUIDE
+    && ireq.every(r => r.body.siteUrl === 'sc-domain:' + D) && ireq[0].budget.candidates === 5 && ireq[0].budget.skipped_total === 1, JSON.stringify(ireq.map(r => [r.inspect_url.replace(W, ''), r.kind, r.inspect_at && r.inspect_at.slice(0, 10)])));
+  const INSPECT = (url, o = {}) => ({ inspectionResult: { indexStatusResult: { verdict: o.verdict || 'PASS', coverageState: o.coverage || 'Submitted and indexed', robotsTxtState: 'ALLOWED',
+      indexingState: 'INDEXING_ALLOWED', lastCrawlTime: o.crawl || '2026-10-08T04:05:06Z', googleCanonical: o.google === undefined ? url : o.google, userCanonical: url },
+    ...(o.mobile === undefined ? { mobileUsabilityResult: { verdict: 'PASS' } } : o.mobile === false ? { mobileUsabilityResult: { verdict: 'FAIL', issues: [{ issueType: 'TAP_TARGETS_TOO_CLOSE', message: 'Clickable elements too close together' }] } } : {}),
+    ...(o.rich ? { richResultsResult: { verdict: 'PASS', detectedItems: [{ richResultType: 'FAQ' }] } } : {}) } });
+  mock('Inspect URL', ireq.map(r => r.inspect_url === ABOUT ? INSPECT(r.inspect_url, { verdict: 'NEUTRAL', coverage: 'Crawled - currently not indexed', google: '' })
+    : r.inspect_url === HOME ? INSPECT(r.inspect_url, { google: W + '/en/', mobile: false })
+      : r.inspect_url === GUIDE ? { error: { message: 'User does not have sufficient permission for site. See also: https://support.google.com/webmasters/answer/2451999.', context: { data: { error: { message: 'PERMISSION_DENIED' } } } } }
+        : INSPECT(r.inspect_url, { rich: true })));   // the AI page is the one with an FAQ rich result; /erp-pricing/ is the page the budget skipped
+  const pins = (await run('Parse Inspection', store['Inspect URL'])).map(x => x.json);
+  const byUrl = (u) => pins.find(p => p.url === u) || {};
+  console.log('   parsed ->', JSON.stringify(pins.map(p => [p.url.replace(W, ''), p.indexed, p.not_checked ? 'not checked' : ''])));
+  check('G25: each page reports its index state, the canonical Google chose against ours, the crawl date, mobile usability and the rich results',
+    byUrl(CASE).indexed === true && eq(byUrl(CASE).rich_results, ['FAQ']) && byUrl(CASE).last_crawl === '2026-10-08T04:05:06Z' && byUrl(CASE).mobile_usable === true
+    && byUrl(HOME).canonical_ok === false && byUrl(HOME).google_canonical === W + '/en/' && byUrl(HOME).mobile_usable === false && /Clickable elements/.test((byUrl(HOME).mobile_issues || [])[0] || ''),
+    JSON.stringify([byUrl(CASE), byUrl(HOME)]));
+  check('a page Google has not indexed says so with its reason, and never carries a canonical it does not have',
+    byUrl(ABOUT).indexed === false && /not indexed/i.test(byUrl(ABOUT).coverage) && byUrl(ABOUT).canonical_ok === null, JSON.stringify(byUrl(ABOUT)));
+  check('G25: a permission error is "not checked" with the reason — never "not indexed" — and the run carries on',
+    byUrl(GUIDE).indexed === null && byUrl(GUIDE).error_kind === 'access' && /access is missing/.test(byUrl(GUIDE).not_checked) && pins.length === 5, JSON.stringify(byUrl(GUIDE)));
+  check('G25: the page the budget did not reach is listed as "not checked" with the day it was last inspected, instead of being dropped silently',
+    byUrl(PRICING).skipped === true && byUrl(PRICING).indexed === null && /rotate, oldest first/.test(byUrl(PRICING).not_checked) && /last inspected \d{4}-\d\d-\d\d/.test(byUrl(PRICING).not_checked), JSON.stringify(byUrl(PRICING)));
+  const irows = (await run('Inspect Rows (Site)', store['Parse Inspection'])).map(x => x.json);
+  check('G25: the answers are stored on each page\'s seo_page_watch row (exact columns) — that date is what makes next week\'s rotation possible — and the page the budget skipped is not written',
+    irows.length === 4 && irows.every(r => eq(Object.keys(r).sort(), [...TC.PAGE_WATCH].sort())) && irows.find(r => r.url === CASE).indexed === 'yes'
+    && irows.find(r => r.url === HOME).mobile === 'fail' && irows.find(r => r.url === ABOUT).indexed === 'no' && !irows.some(r => r.url === PRICING), JSON.stringify(irows.map(r => [r.url.replace(W, ''), r.indexed, r.index_state, r.mobile, r.inspect_at && r.inspect_at.slice(0, 10)])));
+  const permRow = irows.find(r => r.url === GUIDE);
+  check('a failed inspection keeps the last answer and records why today\'s attempt did not happen (it is not written as a fresh state)',
+    permRow === undefined || (permRow.index_state === '' && /access is missing/.test(permRow.inspect_error)), JSON.stringify(permRow));
+  const cov = await pw({ inspections: pins.filter(p => !p.skipped).map(p => ({ ok: !p.inspect_error, error: p.inspect_error || '', indexed: p.indexed, verdict: p.verdict, coverage: p.coverage, canonical_ok: p.canonical_ok, mobile_usable: p.mobile_usable, rich_results: p.rich_results, not_checked: p.not_checked })),
+    coverage_opts: { not_checked: 1, not_checked_reason: 'the run\'s share of the quota was used up' } });
+  check('G25: the index picture counts the pages Google answered about and the ones nobody asked about separately, and names the quota in the same sentence',
+    cov.coverage.checked === 3 && cov.coverage.indexed === 2 && cov.coverage.not_indexed === 1 && cov.coverage.not_checked === 2 && /were not checked/.test(cov.coverage.text) && /2000 pages a day per property/.test(cov.coverage.text), JSON.stringify(cov.coverage));
+
+  // ---- 9. the weekly report and the app read the same picture ----
+  const smIns = pins;
+  mock('Parse Inspection', smIns.map(p => ({ json: p })));
+  mock('Load Watch Cache (Site)', [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: JSON.stringify({ checked_at: new Date().toISOString(), robots_hash: day1.robots.hash, pages_watched: 5, pages_checked: 5, pages_not_checked: 0, changed: 2, worst: 'critical' }), updated_at: new Date().toISOString() } }]);
+  mock('Load Page Watch (Site)', rows2.map(r => ({ json: { ...r, id: 1 } })));
+  const trackLoads = () => { for (const n of ['Load Site Metrics', 'Load Query History', 'Load Content Log', 'Load Console Alerts', 'Load Check-ins', 'Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)', 'Load Audits (Site)', 'Load Trends (Site)', 'Load Profiles (Site)', 'Load Monitors (Site)', 'Load AI Pages (Site)', 'Load Descriptions (Site)', 'Load Sites', 'Load Ladders', 'Load Rank History']) if (!store[n]) mock(n, EMPTY); };
+  trackLoads();
+  for (const n of ['Parse GSC', 'Parse GA4', 'Parse Trends', 'Parse Site SERP', 'Detect Published', 'Page Inventory (Site)']) delete store[n];
+  const siteItem = { site_idx: 0, site_id: SITE, domain: D, email: 'owner@example.com', callback_url: 'https://app.example.com/hooks/x', gsc_connected: true, gsc_property: 'sc-domain:' + D,
+    config: { max_inspections: 4, service_account_email: 'sa@example.com', alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40, decay_drop_pct: 25, striking_min_impressions: 30, ctr_gap_min_impressions: 100 },
+    ranges: { current: { start: '2026-09-10', end: '2026-10-07' }, previous: { start: '2026-08-13', end: '2026-09-09' }, yoy: { start: '2025-09-11', end: '2025-10-08' } },
+    tracked: [], ladder_pages: [{ url: GUIDE, keyword: 'e invoicing uae', rung: 1, status: 'published', page_exists: true }], ladder_heads: [], pending_publish: [], trends: [], serp_positions: [] };
+  mock('Site Plan', [{ json: siteItem }]);
+  mock('Resolve Properties', [{ json: siteItem }]);
+  const sm = (await run('Site Metrics', store['Resolve Properties'])).map(x => x.json).find(x => x.site_id === SITE);
+  check('G25: the weekly item (and so the callback the app stores) carries Google\'s view of the key pages with what was not checked',
+    sm.index_coverage && sm.index_coverage.connected === true && sm.index_coverage.indexed === 2 && sm.index_coverage.not_checked >= 1
+    && sm.index_coverage.pages.some(p => p.url === HOME && p.canonical_ok === false) && sm.index_coverage.not_checked_pages.length >= 1, JSON.stringify({ ...sm.index_coverage, pages: sm.index_coverage.pages.length }));
+  check('G11: the same item carries the daily watch — when it last ran, how many pages it watches, what changed this week and which pages are noindexed or broken',
+    sm.page_watch.running === true && sm.page_watch.pages_watched === 5 && sm.page_watch.changed_this_week === 4 && sm.page_watch.cost_usd === 0, JSON.stringify(sm.page_watch));
+  check('and a ladder page the quota did not reach is reported as "not checked", never as "not indexed" (the old mapping would have called it not indexed)',
+    (sm.ladder_pages.find(p => p.url === GUIDE) || {}).indexed === null && /access is missing/.test((sm.ladder_pages.find(p => p.url === GUIDE) || {}).inspect_error || ''), JSON.stringify(sm.ladder_pages.map(p => [p.url.replace(W, ''), p.indexed, p.inspect_error])));
+});
+
+// ===================================================================================
+// S56 G12 + G29 (2026-10-13, system review FIX_PLAN G12 / G29; criteria 3.4 / 3.5 / 2.12 / 3.11 in
+// CRITERIA_technical_tracking_reporting_ai_links.md): what the charts are marked with, how a change is read against a control group,
+// and the lineage every figure carries. Every check fails against the code of the 2026-10-11 run: nothing was marked on any chart,
+// only won links were ever measured against a control group, and outside the AI-visibility report no figure said where it came from.
+// ===================================================================================
+await guard('g12-g29-annotations-change-tests-lineage', async () => {
+  const SN = 'S56 G12 G29 — pages published, audit fixes, Google updates and the num=100 break are marked with their dates; a page change is read against the site\'s other pages with graded wording; and every figure in a report carries its source, period and sample';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const EMPTY = [{ json: {} }];
+  const T = require('./fixtures_tracking');
+  const day = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+  const CAUSAL = /\bcaused\b|\bbecause of\b|\bproves\b|\bguarantee/i;   // a change test may never claim a cause
+
+  // ---- 1. G12 / 3.5 + 2.12: the marks, from the stored rows and the dated registry (v5/data/seo_events.json) ----
+  const AM = async (input) => (await run('_annotations', [{ json: input }]))[0].json;
+  const marked = await AM({ from: '2026-09-01', to: '2026-10-13',
+    published: [{ published_at: '2026-09-25T10:00:00.000Z', keyword: 'peppol uae', published_url: 'https://northwind-erp.com/peppol-uae/', source: 'ladder' },
+      { published_at: '2026-07-02T10:00:00.000Z', keyword: 'too old to be in this window', published_url: 'https://northwind-erp.com/old/' }],
+    audits: [{ audited_at: '2026-08-01T06:00:00Z', health_score: 64, findings: 40 }, { audited_at: '2026-09-18T06:00:00Z', health_score: 81, findings: 34 }] });
+  const mk = (k) => marked.marks.filter(m => m.kind === k);
+  console.log('   marks ->', JSON.stringify(marked.marks.map(m => [m.date + (m.date_end !== m.date ? '→' + m.date_end : ''), m.kind, m.label])));
+  check('G12: a published page is marked on its own date with the keyword, and a page published before the window is not',
+    mk('publish').length === 1 && mk('publish')[0].date === '2026-09-25' && mk('publish')[0].label === 'Published: "peppol uae"'
+    && /keyword-ladder page/.test(mk('publish')[0].detail) && mk('publish')[0].url === 'https://northwind-erp.com/peppol-uae/', JSON.stringify(mk('publish')));
+  check('G12: an audit is marked with the findings it cleared since the audit before and with the health score either side',
+    mk('fix').length === 1 && mk('fix')[0].date === '2026-09-18' && mk('fix')[0].label === 'Audit fixes: 6 findings gone'
+    && /health 64 → 81/.test(mk('fix')[0].detail) && /6 fewer findings than the audit before/.test(mk('fix')[0].detail), JSON.stringify(mk('fix')));
+  check('G12: a Google update that ran inside the window is marked with its start and end from the dated registry, and says a move may be part of its cause without claiming proof',
+    mk('google_update').length === 1 && mk('google_update')[0].label === 'Google: September 2026 core update' && mk('google_update')[0].date === '2026-09-15'
+    && mk('google_update')[0].date_end === '2026-09-30' && /cannot be proven from these numbers/.test(mk('google_update')[0].detail)
+    && mk('google_update')[0].source === 'v5/data/seo_events.json', JSON.stringify(mk('google_update')));
+  check('G12 / 2.12: the num=100 break of September 2025 is in the same registry and is marked when a chart covers it, with what it did to the numbers',
+    marked.data_breaks.length === 1 && marked.data_breaks[0].name === 'num=100 stopped working' && marked.updates.length >= 7 && !!marked.registry_updated, JSON.stringify({ breaks: marked.data_breaks.length, updates: marked.updates.length }));
+  const br = await AM({ from: '2025-08-15', to: '2025-10-15' });
+  const brk = br.marks.find(m => m.kind === 'data_break') || {};
+  check('G12 / 2.12: a window over the num=100 break carries the break mark and the warning that the two sides are not comparable',
+    br.marks.filter(m => m.kind === 'data_break').length === 1 && brk.date === '2025-09-10' && brk.date_end === '2025-09-19'
+    && /not comparable/.test(brk.detail) && br.breaks.length === 1 && br.breaks[0].affects.join() === 'impressions,position', JSON.stringify(br.marks.map(m => m.label)));
+  const quiet = await AM({ from: '2026-11-01', to: '2026-11-20', published: [], audits: [] });
+  check('G12: a window where nothing happened produces no marks at all (never an invented one), and says so',
+    quiet.marks.length === 0 && quiet.breaks.length === 0 && /Nothing happened in this period/.test(quiet.html), JSON.stringify(quiet.marks));
+
+  // ---- 2. G12 / 3.4: the change test — the same control-group reading for a page change as for a won link ----
+  const CTR = async (input) => (await run('_change_test', [{ json: input }]))[0].json;
+  const helped = await CTR({ kind: 'page', weeks: 11, base: 35, now: 12, others: [1, 0.5, 1.2, -0.3, 0.8] });
+  console.log('   change test ->', JSON.stringify({ v: helped.verdict, effect: helped.effect, control: helped.control_change, spread: helped.control_spread }));
+  check('3.4: a page that moved 23 places while the site\'s other pages moved about 1 reads "Likely helped", with the effect over the control group',
+    helped.verdict === 'likely_helped' && helped.verdict_label === 'Likely helped' && helped.page_change === 23 && helped.control_change === 0.8
+    && helped.effect === 22.2 && helped.control_pages === 5 && /vs the site's other pages \+0\.8/.test(helped.note), JSON.stringify(helped));
+  const noData = await CTR({ kind: 'page', weeks: 11, base: null, now: null, others: [] });
+  check('3.4: a page with no search impressions before or after the change reads "Can\'t tell" — never "no effect"',
+    noData.verdict === 'cant_tell' && noData.verdict_label === 'Can\'t tell' && /no search impressions before or after the change/.test(noData.note)
+    && noData.page_change === 0 && noData.effect === 0, JSON.stringify(noData));
+  const flat = await CTR({ kind: 'page', weeks: 11, base: 20, now: 19.4, others: [1, 0.7, 1.1, 0.9] });
+  check('3.4: a page that moved less than the site\'s other pages reads "No clear effect yet"', flat.verdict === 'no_effect_yet' && flat.verdict_label === 'No clear effect yet', JSON.stringify(flat));
+  const early = await CTR({ kind: 'page', weeks: 3, base: 35, now: 12, others: [1, 1, 1, 1] });
+  check('3.4: a change read before 6 weeks reads "Too early to tell" and claims nothing, however big the move',
+    early.verdict === 'too_early' && early.verdict_label === 'Too early to tell' && /read at 6, 10 and 16 weeks after the change/.test(early.note) && early.page_change === 0, JSON.stringify(early));
+  const thin = await CTR({ kind: 'page', weeks: 11, base: 35, now: 12, others: [1, 0.5] });
+  check('3.4: with fewer than 3 other pages to compare with, the best it can say is "Possibly helped", and it says why',
+    thin.verdict === 'possibly_helped' && /few other pages to compare with/.test(thin.note), JSON.stringify(thin));
+  const joint = await CTR({ kind: 'page', weeks: 11, base: 35, now: 12, others: [1, 0.5, 1.2, -0.3, 0.8], joint: 1 });
+  check('3.4: when something else changed on the same page inside four weeks the credit is shared, so it can never read "Likely helped"',
+    joint.verdict === 'possibly_helped' && /credit shared/.test(joint.note), JSON.stringify(joint));
+  check('3.4: the five verdicts are graded and none of them, nor the method, claims a cause',
+    JSON.stringify(helped.labels) === JSON.stringify({ likely_helped: 'Likely helped', possibly_helped: 'Possibly helped', no_effect_yet: 'No clear effect yet', too_early: 'Too early to tell', cant_tell: 'Can\'t tell' })
+    && Object.values(helped.labels).every(l => !CAUSAL.test(l)) && [helped, noData, flat, early, thin, joint].every(r => !CAUSAL.test(r.note))
+    && !CAUSAL.test(helped.method) && /never proof of cause/.test(helped.method) && /control group/.test(helped.method), JSON.stringify(helped.labels));
+
+  // ---- 3. G29 / 3.11: the weekly report — every figure group with its source, period and sample ----
+  reset();
+  const SITE = 'site_northwind-erp-com', WWW = 'https://www.northwind-erp.com';
+  const LOGS = [{ json: { id: 1, site_id: SITE, domain: 'northwind-erp.com', keyword: 'erp for distributors', source: 'cadence', page_type: 'Service Page', existing_page_url: '', rung: 0, ladder_id: '', request_id: 'c1', started_at: day(30) + 'T10:00:00.000Z', status: 'published', published_url: WWW + '/erp-for-distributors/', published_at: day(12) + 'T10:00:00.000Z', week: day(30) } }];
+  const AUDITS = [{ json: { site_id: SITE, domain: 'northwind-erp.com', audit_id: 'a2', audited_at: day(20) + 'T06:00:00Z', health_score: 81, grade: 'B', findings: 34, critical: 0, high: 3, medium: 6, pages_crawled: 58 } },
+    { json: { site_id: SITE, domain: 'northwind-erp.com', audit_id: 'a1', audited_at: day(80) + 'T06:00:00Z', health_score: 64, grade: 'C', findings: 40 } }];
+  mock('Manual Run', { site_id: SITE, on_demand: true, request_id: 'g29' });
+  mock('Load Sites', T.sitesRows()); mock('Load Ladders', EMPTY); mock('Load Rank History', EMPTY); mock('Load Site Metrics', EMPTY); mock('Load Query History', EMPTY);
+  mock('Load Content Log', LOGS); mock('Load Console Alerts', EMPTY); mock('Load Check-ins', EMPTY); mock('Load Audits (Site)', AUDITS);
+  mock('Load AI Visibility (Site)', EMPTY); mock('Load Backlink Snapshots (Site)', EMPTY);
+  await run('Site Plan', store['Load Query History']);
+  mock('GSC Sites', T.gscSites()); await run('Resolve Properties', store['GSC Sites']);
+  const gq56 = await run('GSC Requests', store['Resolve Properties']);
+  mock('GSC Query', gq56.map(q => T.gscResponse(q.json))); await run('Parse GSC', store['GSC Query']);
+  mock('GA4 Accounts', T.ga4Accounts()); const sr56 = await run('Stream Requests', store['GA4 Accounts']);
+  mock('GA4 Streams', sr56.map(r => T.ga4Streams(r.json))); const gr56 = await run('GA4 Requests', store['GA4 Streams']);
+  mock('GA4 Report', gr56.map(r => T.ga4Report(r.json))); await run('Parse GA4', store['GA4 Report']);
+  const ir56 = await run('Inspect Requests', store['Resolve Properties']);
+  mock('Inspect URL', ir56.map(r => T.inspection(r.json))); await run('Parse Inspection', store['Inspect URL']);
+  const tq56 = await run('Trends Requests', store['Resolve Properties']);
+  mock('Google Trends', tq56.map(r => T.trends(r.json))); await run('Parse Trends', store['Google Trends']);
+  const sq56 = await run('Site SERP Requests', store['Resolve Properties']);
+  mock('SERP Check (Site)', sq56.map(q => V.serpFor(q.json.keyword, q.json.domain, 5))); await run('Parse Site SERP', store['SERP Check (Site)']);
+  const m56 = (await run('Site Metrics', store['Resolve Properties']))[0].json;
+  const lin = (re) => m56.lineage.find(l => re.test(l.figure)) || null;
+  console.log('   lineage ->', JSON.stringify(m56.lineage.map(l => [l.figure, l.source, l.basis])));
+  check('3.11: every figure group of the weekly report carries a source, a period, a sample and how it was arrived at — nothing is left blank',
+    m56.lineage.length >= 6 && m56.lineage.every(l => l.figure && l.source && l.source_label && l.basis && l.basis_label
+      && (l.basis === 'unknown' ? l.note : (l.period && l.sample))), JSON.stringify(m56.lineage.filter(l => !(l.period && l.sample)).map(l => [l.figure, l.basis])));
+  check('3.11: the Search Console figures name Search Console, the 28-day range with both dates, and the impressions they rest on',
+    lin(/^Clicks, impressions/) && lin(/^Clicks, impressions/).source === 'gsc' && lin(/^Clicks, impressions/).basis === 'measured'
+    && /^\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} \(28 days\)$/.test(lin(/^Clicks, impressions/).period)
+    && /impressions across \d+ named queries$/.test(lin(/^Clicks, impressions/).sample), JSON.stringify(lin(/^Clicks, impressions/)));
+  check('3.11: a modelled number says it is modelled, and a live Google check says it is one sample, not an average',
+    lin(/^Expected click-through/).basis === 'modelled' && lin(/^Expected click-through/).basis_label === 'modelled, not measured'
+    && lin(/^Live Google check/).basis === 'one_sample' && /one country and one device/.test(lin(/^Live Google check/).note)
+    && lin(/^Search interest/).basis === 'reported' && /relative index/.test(lin(/^Search interest/).note), JSON.stringify([lin(/^Expected click-through/), lin(/^Live Google check/)]));
+  const bi56 = await run('Brief Input', [{ json: m56 }]);
+  mock('Site Brief', [{ json: { error: 'no model in this test' } }]);
+  const rep56 = (await run('Site Report', bi56))[0].json;
+  save('weekly-report-g12-g29.html', rep56.html); scanHtml('weekly report, G12 + G29', rep56.html);
+  check('3.11: the report shows a "Where these numbers come from" table with a row per figure (figure, source, period, sample, how)',
+    /Where these numbers come from/.test(rep56.html) && /<th[^>]*>Figure<\/th>/.test(rep56.html) && /<th[^>]*>Period<\/th>/.test(rep56.html) && /<th[^>]*>Sample<\/th>/.test(rep56.html)
+    && m56.lineage.every(l => rep56.html.includes(l.figure)) && /modelled, not measured/.test(rep56.html), (rep56.html.match(/Where these numbers come from[\s\S]{0,300}/) || [''])[0].slice(0, 260));
+  check('3.11: the headline figures carry their source and period right under them, not only in the table at the end',
+    /Google Search Console · \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2} \(28 days\)/.test(rep56.html) && /Google Analytics 4 · /.test(rep56.html), (rep56.html.match(/Google Search Console · [^<]{0,160}/) || [''])[0]);
+  check('G12 / 3.5: the weekly report lists what happened in the period — the page that went live, the audit fixes and the Google update — each with its date',
+    /What happened in this period/.test(rep56.html) && /Published: "erp for distributors"/.test(rep56.html) && /Audit fixes: 6 findings gone/.test(rep56.html)
+    && m56.annotations.some(a => a.kind === 'google_update') && /Every chart in your dashboard is marked with these dates/.test(rep56.html)
+    && m56.annotations.every(a => !CAUSAL.test(a.label)), JSON.stringify(m56.annotations.map(a => [a.date, a.label])));
+  // the same run without Google Analytics: the figure says "source not recorded", it does not borrow Search Console's
+  delete store['Parse GA4'];
+  const noGa = (await run('Site Metrics', store['Resolve Properties']))[0].json;
+  const unk = noGa.lineage.find(l => l.basis === 'unknown');
+  check('3.11: where the lineage is genuinely unknown the figure reads "source not recorded" with the reason, never a borrowed source',
+    !!unk && unk.source === 'none' && unk.source_label === 'source not recorded' && unk.basis_label === 'source not recorded' && /not connected/.test(unk.note)
+    && !noGa.lineage.some(l => l.figure === unk.figure && l.source === 'gsc'), JSON.stringify(unk));
+  const repU = (await run('Site Report', await run('Brief Input', [{ json: noGa }])))[0].json;
+  check('3.11: that "source not recorded" reaches the report\'s table, so a figure without a source is visible as one',
+    /source not recorded/.test(repU.html), (repU.html.match(/source not recorded[^<]{0,120}/) || [''])[0]);
+
+  // ---- 4. G12 / 3.4 in the engine: LB Assemble reads a page change with the same machinery as a won link ----
+  reset();
+  const F56 = require('./fixtures_lb413'); const TC56 = require('./table_cols.json');
+  const same56 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+  const CHANGED = F56.H + '/insights/peppol-accredited-service-providers-uae';   // 35 → 12 in the stored query history
+  const NOQ = F56.H + '/insights/no-impressions-page';
+  mock('Load Sites', F56.sites()); mock('Load Ladders', F56.ladders()); mock('Load Monitors', F56.monitors()); mock('Load Profiles', F56.profiles());
+  mock('Load Link Prospects', F56.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', F56.outreachPrev().map(j => ({ json: j })));
+  mock('Load Listings', F56.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', EMPTY);
+  mock('Load Backlinks', F56.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F56.snaps().map(j => ({ json: j })));
+  mock('Load AI Targets', F56.targets().map(j => ({ json: j }))); mock('Load Query History', F56.queries().map(j => ({ json: j })));
+  mock('Load Rank History', F56.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', F56.cache().map(j => ({ json: j })));
+  mock('Load Content Log', [{ json: { site_id: F56.SITE, domain: F56.DOMAIN, keyword: 'peppol accredited service providers uae', source: 'ladder', status: 'published', published_url: CHANGED, published_at: day(80) + 'T09:00:00.000Z', started_at: day(95) + 'T09:00:00.000Z' } },
+    { json: { site_id: F56.SITE, domain: F56.DOMAIN, keyword: 'no impressions yet', source: 'cadence', status: 'published', published_url: NOQ, published_at: day(80) + 'T09:00:00.000Z', started_at: day(95) + 'T09:00:00.000Z' } },
+    { json: { site_id: F56.SITE, domain: F56.DOMAIN, keyword: 'published this week', source: 'cadence', status: 'published', published_url: F56.H + '/insights/brand-new/', published_at: day(4) + 'T09:00:00.000Z', started_at: day(10) + 'T09:00:00.000Z' } }]);
+  delete store['Manual Run'];
+  const P56 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  const SR56 = (await run('LB Source Requests', [{ json: P56 }])).map(r => r.json);
+  mock('Fetch LB Sources', SR56.map(() => ({})));
+  const DR56 = (await run('LB DFS Requests', [{ json: P56 }])).map(r => r.json);
+  mock('Run LB DFS', DR56.map(() => ({})));
+  const PR56 = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
+  mock('Fetch LB Pages', PR56.map(r => F56.fetchPage(r.url)));
+  const S256 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json);
+  mock('Fetch LB Second', S256.map(r => F56.fetchPage(r.url)));
+  const AS56 = (await run('LB Assemble', [{ json: {} }]))[0].json;
+  const pageRows = AS56.impact_rows.filter(r => r.kind === 'page_change'), linkRows = AS56.impact_rows.filter(r => r.kind === 'link');
+  const PCH = (u) => pageRows.find(r => r.target_url === u) || {};
+  console.log('   page changes ->', JSON.stringify(pageRows.map(r => [r.target_url.replace(F56.H, ''), r.change, r.weeks, r.page_change, r.control_change, r.effect, r.verdict])));
+  check('3.4: a page published 80 days ago that moved 23 places while the site\'s other pages moved about 1 reads "likely_helped", with the control group and no linking site',
+    PCH(CHANGED).verdict === 'likely_helped' && PCH(CHANGED).change === 'published' && PCH(CHANGED).ref_domain === '' && PCH(CHANGED).base_position === 35
+    && PCH(CHANGED).position === 12 && PCH(CHANGED).page_change === 23 && Math.abs(PCH(CHANGED).control_change) <= 2 && PCH(CHANGED).effect > 20, JSON.stringify(PCH(CHANGED)));
+  check('3.4: a published page Search Console never reported reads "cant_tell", and one published 4 days ago reads "too_early"',
+    PCH(NOQ).verdict === 'cant_tell' && /no search impressions before or after the change/.test(PCH(NOQ).note)
+    && PCH(F56.H + '/insights/brand-new/').verdict === 'too_early', JSON.stringify([PCH(NOQ).verdict, PCH(F56.H + '/insights/brand-new/').verdict]));
+  check('3.4: the won-link readings are unchanged by the shared implementation (peppol.org still "likely_helped", the 20-day-old link still "too_early")',
+    (linkRows.find(r => r.ref_domain === 'peppol.org') || {}).verdict === 'likely_helped' && (linkRows.find(r => r.ref_domain === 'gulfbiz.ae') || {}).verdict === 'too_early'
+    && linkRows.every(r => r.kind === 'link' && r.change === ''), JSON.stringify(linkRows.map(r => [r.ref_domain, r.verdict])));
+  check('3.4: the summary counts link readings and page-change readings apart',
+    AS56.summary.page_changes === pageRows.length && AS56.summary.change_reads === pageRows.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length
+    && AS56.summary.impact_reads === linkRows.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length, JSON.stringify(AS56.summary));
+  mock('LB Rows', [{ json: { site_id: F56.SITE, outreach_rows: AS56.outreach_rows, impact_rows: AS56.impact_rows, drafted: 0, held: 0, skipped: 0 } }]);
+  const IR56 = (await run('Impact Rows', [{ json: {} }])).map(r => r.json);
+  check('G12: the rows stored in seo_link_impact carry exactly the table columns, including the new kind and change',
+    IR56.length === AS56.impact_rows.length && IR56.every(r => same56(Object.keys(r), TC56.LINK_IMPACT)) && TC56.LINK_IMPACT.includes('kind') && TC56.LINK_IMPACT.includes('change'), JSON.stringify(Object.keys(IR56[0] || {})));
+  const RP56 = (await run('LB Report', [{ json: {} }]))[0].json;
+  save('link-builder-g12-g29.html', RP56.html); scanHtml('link builder report, G12 + G29', RP56.html);
+  check('3.4: the Link Builder report has its own "What your page changes did" section with the graded verdict, the date and the method, and keeps the links in theirs',
+    /What your page changes did/.test(RP56.html) && /What your links did/.test(RP56.html) && /Likely helped/.test(RP56.html) && /No clear effect yet|Can.t tell|Too early to tell/.test(RP56.html)
+    && /control group/.test(RP56.html) && /never proof of cause/.test(RP56.html), (RP56.html.match(/What your page changes did[\s\S]{0,400}/) || [''])[0].slice(0, 300));
+  check('3.4: nothing in that report claims a change caused a move, and the callback carries the graded verdicts for the app',
+    !CAUSAL.test(RP56.html) && RP56.page_changes.length === pageRows.length && RP56.page_changes.every(x => ['Likely helped', 'Possibly helped', 'No clear effect yet', 'Too early to tell', 'Can\'t tell'].includes(x.verdict_label))
+    && /never proof of cause/.test(RP56.change_method), JSON.stringify(RP56.page_changes.map(x => [x.change, x.verdict_label])));
+  check('3.11: the Link Builder report says where its figures come from, and a free check says the backlink index was not asked',
+    /Where these numbers come from/.test(RP56.html) && RP56.lineage.length >= 3 && RP56.lineage.every(l => l.figure && l.source_label)
+    && RP56.lineage.some(l => /Position before and after/.test(l.figure) && l.source === 'gsc_history'), JSON.stringify(RP56.lineage.map(l => [l.figure, l.source])));
 });
 
 

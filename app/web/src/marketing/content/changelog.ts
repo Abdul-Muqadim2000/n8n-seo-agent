@@ -15,6 +15,72 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Charts that say what happened, and numbers that say where they came from',
+    summary:
+      'Every chart is now marked with the events behind its moves — the pages you published, the technical fixes you made, Google’s ranking updates and the week Google changed its own data. After a page goes live, its trend is compared with the rest of your website. And every number in a report or on a dashboard says its source, its period and its sample size.',
+    highlights: [
+      'Pages you published and technical fixes are marked on the search, overview and keyword-ladder charts, each with its date',
+      'Google’s ranking updates are marked as context, never as a cause',
+      'Mid-September 2025, when Google stopped serving a hundred results on one page, is marked as a break in its own data: figures either side are not comparable, and reports say so',
+      'A page that changed is compared with the rest of your website over the same weeks, so the season and Google’s updates are taken out of the reading',
+      'The verdict stays honest: “likely helped”, “possibly helped”, “no clear effect yet”, “too early to tell” or “can’t tell” — never “this caused that”',
+      'The same reading that measured a won link now measures a page you published or rewrote',
+      'Every figure carries its source, the period it covers and the sample behind it, with a “Where these numbers come from” table at the end of each report',
+      'A number that was calculated rather than counted says “modelled, not measured”; if one ever arrives without its source it says “source not recorded”',
+    ],
+    features: ['site-tracking', 'reports', 'keyword-ladders', 'backlinks'],
+  },
+  {
+    date: '2026-10-13',
+    title: 'Keyword research starts from the searches you already appear for',
+    summary:
+      'Your own Search Console data now seeds the keyword research instead of only being reported afterwards, traffic estimates say whether they were measured on your site or modelled, and searches Google answers with the same pages are grouped so one page serves them all.',
+    highlights: [
+      'The searches you get impressions for but have no page for become new page ideas, with their real impressions, clicks and position',
+      'The searches you rank between eighth and twentieth for become pages to strengthen, named with the page that already ranks',
+      'Your own brand searches and queries typed by SEO tools are left out, and a search one of your pages already answers is named instead of seeded',
+      'Traffic potential is calibrated against your measured impressions and clicks where you already rank, and marked “measured”; everywhere else it is marked “modelled”',
+      'A search only your Search Console knows about is still a candidate — with no invented search volume',
+      'Searches that share at least three of the same top-ten results are one group, named after its main keyword, so one page targets them all',
+      'Twice as many keywords get a live results-page check for intent and page type, with the limit and its cost in the report',
+    ],
+    features: ['keyword-research', 'keyword-ladders', 'reports'],
+  },
+  {
+    date: '2026-10-13',
+    title: 'Pages that are yours: an originality check, three real images and a coverage target',
+    summary:
+      'Every finished page is now compared with the pages it was researched from and with your own pages, arrives with its three images already made, and is measured against the best page in the results instead of a silent ideal.',
+    highlights: [
+      'More than 15% of a page matching one competitor page, word for word, fails the quality check and goes back to the editor — with the page named and the passage shown',
+      'The same check catches two of your own pages saying the same thing, so a new page never competes with one you already have',
+      'Rewriting a page you already have is not copying: the page being improved is exempt, and its overlap is reported either way',
+      'A page of yours aimed at the same search is flagged as a duplicate target before you publish a second one',
+      'The three planned images are produced with the page — a title card and two cards built from its own sections — as WebP files under the planned names, with the alt text and the social image',
+      'Swap any image for your own photo: the file name and the alt text stay',
+      'The coverage target is read off the best page in the results, not an average, with the subtopics that page covers and your draft does not',
+      'Coverage is reported as a figure with what it was measured against, in the report, the page files and the app',
+    ],
+    features: ['content', 'reports'],
+  },
+  {
+    date: '2026-10-13',
+    title: 'Your key pages checked every morning, and fixes verified in a day',
+    summary:
+      'A monthly audit cannot see a page that was set to noindex on the 3rd. Ascentra now checks your most important pages every day and tells you the same day when something that matters changes — and when you mark a fix done, that exact issue is re-checked the next morning instead of at the next audit.',
+    highlights: [
+      'Every morning your key pages are fetched and compared with yesterday: HTTP status, a redirect that appeared, the noindex tag, the canonical, the title — plus your robots.txt',
+      'A page gone, set to noindex, newly blocked or re-canonicalised reaches you the same day, on the alerts page and in your alert channel',
+      'An unchanged page says nothing, and a page that could not be read is reported as not checked — never as fine',
+      'Mark an issue fixed and the next daily check judges that one issue on your key pages and shows the answer, usually within a day',
+      'Issues that need the full crawl or Search Console data say so instead of guessing, and wait for the audit',
+      'Google’s own view of every key page: indexed or not, the canonical Google chose against yours, the last crawl, mobile usability and rich results',
+      'Those inspections rotate through all your key pages, oldest first, inside Google’s daily limit, and anything a run did not reach is listed as not checked',
+    ],
+    features: ['technical-audits', 'site-tracking', 'reports'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Shorter fix lists, honest best links, and a word even when your numbers are small',
     summary:
       'Three quality fixes measured against real sites: the tiniest audit findings are folded into one line so the list you read is the list to act on, a search-results page can no longer be called one of your best links, and a site with a handful of clicks a month still hears when they halve.',

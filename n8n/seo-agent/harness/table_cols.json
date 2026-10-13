@@ -216,7 +216,9 @@
   "verdict",
   "note",
   "keyword",
-  "updated_at"
+  "updated_at",
+  "kind",
+  "change"
  ],
  "LINKS": [
   "site_id",
@@ -367,7 +369,12 @@
   "title",
   "affected_count",
   "impact",
-  "impact_basis"
+  "impact_basis",
+  "recheck_state",
+  "recheck_requested_at",
+  "recheck_at",
+  "recheck_rule",
+  "recheck_note"
  ],
  "CHECKIN": [
   "site_id",
@@ -399,5 +406,53 @@
   "channels",
   "delivered",
   "notes"
+ ],
+ "PAGE_WATCH": [
+  "site_id",
+  "domain",
+  "url",
+  "kind",
+  "weight",
+  "checked_at",
+  "status",
+  "location",
+  "noindex",
+  "noindex_source",
+  "canonical",
+  "canonical_ok",
+  "title",
+  "title_hash",
+  "titles",
+  "description",
+  "h1",
+  "h1s",
+  "robots_blocked",
+  "robots_hash",
+  "state",
+  "changes",
+  "last_change_at",
+  "changed_count",
+  "error",
+  "inspect_at",
+  "index_state",
+  "indexed",
+  "coverage",
+  "google_canonical",
+  "last_crawl",
+  "mobile",
+  "rich_results",
+  "inspect_error"
+ ],
+ "CONSOLE_ALERTS": [
+  "site_id",
+  "domain",
+  "kind",
+  "severity",
+  "subject",
+  "summary",
+  "received_at",
+  "message_id",
+  "status",
+  "source"
  ]
 }

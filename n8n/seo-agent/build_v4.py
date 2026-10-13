@@ -734,7 +734,9 @@ SITE_MODEL_SRC = _rd0('code/_site_model.js').rstrip('\n')   # 2026-10-12 (G19, S
 SOURCES_SRC = _rd0('code/_sources.js').rstrip('\n'); ANCHOR_SRC = _rd0('code/_anchor.js').rstrip('\n')   # 2026-10-11: source quality, figure lookup and link cleaning (G4) and the anchor words of a link to our own page (D9)
 PAGE_TYPE_SRC = _rd0('code/_page_type.js').rstrip('\n')   # 2026-10-12 (D10): the page type as one of the form's fixed options, with the verdict's free text kept as page_notes
 GSC_QUERIES_SRC = _rd0('code/_gsc_queries.js').rstrip('\n')   # 2026-10-12 (G9 / D24): the Search Console query rules (scraper queries, brand split, anonymised share)
-rd = lambda p: _rd0(p).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries), one copy each, inlined where a node asks for them
+KW_INPUTS_SRC = _rd0('code/_kw_inputs.js').rstrip('\n')   # 2026-10-13 (G8): the discovery inputs -- Search Console seeds, calibrated traffic potential, SERP-overlap clusters, the live-check cap
+import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the lineage / annotation / change-test kits, one copy each
+rd = lambda p: seo_events.inline(_rd0(p)).replace('/*__REACH__*/', _rd0('code/_reach.js').rstrip('\n')).replace('/*__PUBLISH_ROWS__*/', _rd0('code/_publish_rows.js').rstrip('\n')).replace('/*__RDAP__*/', _rd0('code/_rdap.js').rstrip('\n')).replace('/*__FIT_GATE__*/', FIT_GATE_SRC).replace('/*__SERP_OBS__*/', SERP_OBS_SRC).replace('/*__SITE_MODEL__*/', SITE_MODEL_SRC).replace('/*__SOURCES__*/', SOURCES_SRC).replace('/*__ANCHOR__*/', ANCHOR_SRC).replace('/*__PAGE_TYPE__*/', PAGE_TYPE_SRC).replace('/*__GSC_QUERIES__*/', GSC_QUERIES_SRC).replace('/*__KW_INPUTS__*/', KW_INPUTS_SRC)   # shared kits (reach, published-page rows, RDAP, fit gate, SERP observations, site model, sources, anchors, page types, Search Console queries, discovery inputs), one copy each, inlined where a node asks for them
 def set_prompt(name, file): nodes[name]['parameters']['text'] = '=' + rd('prompts/' + file)
 def set_schema(parser_name, schema): nodes[parser_name]['parameters']['inputSchema'] = json.dumps(schema, ensure_ascii=False)
 def get_schema(parser_name): return json.loads(nodes[parser_name]['parameters']['inputSchema'])
@@ -3354,6 +3356,433 @@ Two 200-page audits of the same site started two seconds apart; the n8n **JavaSc
 **Refused:** the reservation now carries `domain` and `heavy` (mode `audit` from `CONFIG.heavy_audit_pages` pages up), and a second heavy audit of the same site is refused while the first one is still reserved, with the reason and how long to wait.""",
     _rlp[0] - 40, _rlp[1] + 320, 940, 240, 6)
 log('Runs that never settle and concurrent heavy audits (2026-10-12, P34-5): CONFIG.run_stale_hours (2) releases a seo_run_ledger reservation nobody settled — Release Stale Runs marks it `stale` and Rate Limit leaves stale rows out of the day\'s count and of the AI budget (two cancelled 200-page audits held $0.77 for ever) — and the reservation carries the domain and whether it is a heavy crawl (mode audit from CONFIG.heavy_audit_pages pages up), so a second large audit of the same site while one is running is refused with the reason and the time to wait instead of stalling the task runner; release_stale_runs.py clears rows left from before the deploy (--dry-run by default)')
+
+# =============================================================================
+# 44. WHAT THE KEYWORD RESEARCH IS ALLOWED TO USE (2026-10-13, system review FIX_PLAN.md G8; criteria K2 / K4 / K6 / K7 in
+#     docs/system-review-2026-10-11/CRITERIA_keywords_content.md). Keyword research scored 5/10: the data sources were good but four
+#     things the leaders do were missing, and all four can be had from data the run already holds.
+#       * K6 first-party demand: Search Console was read by the weekly tracker and the content cadence only. Discovery started from
+#         what an AI model guessed the business sells, so the searches the site ALREADY gets impressions for never reached the paid
+#         pulls. *Load Query History (Discovery)* reads the stored rows (seo_query_history, newest 28-day period) and *Search Console
+#         Seeds (Discovery)* keeps two kinds -- a query no live page answers (the D11 page inventory decides, SM.matchPage; the page
+#         Search Console reports is the fallback while no inventory exists) and a striking-distance query (position 8-20) -- drops
+#         brand and scraper queries with the weekly report's own rules (GQ) and inserts them into the seed list behind the primary
+#         seed. They ride on the pulls the research makes anyway: no new call, no extra cost.
+#       * K2 traffic potential: "~270/mo" was volume x click loss x 0.3 everywhere -- a model on a provider estimate that is itself
+#         50-70% off for a single keyword, printed with no hint of that. KWI.calibrate now starts from the site's own measured
+#         impressions and clicks where Search Console has them, never reports less than the clicks the site already gets, and labels
+#         every number `calibrated` / `modelled` / `unknown` in the report, the callback and the app. Without Search Console data the
+#         number is bit-for-bit the old one.
+#       * K7 clustering: clusters came from the AI's topic label. KWI.serpClusters groups keywords that share at least 3 of the head
+#         keyword's top-10 URLs -- from the live checks' full top 10 plus the competitors' ranking URLs the run already fetched -- and
+#         names each group by its head keyword with the shared results pages, so one page can target the whole group.
+#       * K4 live SERP checks: fixed at 8, so the intent and page type of everything else came from the AI label alone. The limit is
+#         CONFIG.live_serp_checks (16 by default, hard cap 25, about $0.002 a check: ~$0.032 a run instead of ~$0.016), and the
+#         per-topic cap grows with it so a wider check cannot become one topic's list.
+# =============================================================================
+from ladder_common import QUERY_TABLE, QUERY_COLS
+# ---------- A. the live-check limit, configurable like every other limit ----------
+patch('Normalize Input', "  ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)",
+      "  // G8 / K4 (2026-10-13): how many keywords discovery checks live on Google for intent, page type and who ranks. One check is a\n"
+      "  // DataForSEO live-advanced SERP at depth 10 (about $0.002), so 16 costs ~$0.032 a run; KWI.liveChecks caps it at 25.\n"
+      "  live_serp_checks: 16,\n"
+      "  ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)")
+patch('Normalize Input', "    run_stale_hours: CONFIG.run_stale_hours,\n", "    run_stale_hours: CONFIG.run_stale_hours,\n    live_serp_checks: CONFIG.live_serp_checks,\n")
+assert 'live_serp_checks: CONFIG.live_serp_checks' in code('Normalize Input'), 'G8: the live-check limit does not reach the run'
+# ---------- B. the site's own Search Console queries, loaded in discovery and turned into seeds ----------
+_sdq = pos('Seed List'); QX44, QY44 = _sdq[0], _sdq[1] + 820
+DOMAIN_SEED44 = "={{ String($('Seed List').first().json.domain || '').toLowerCase() }}"
+_q_load = dt_get_any_params(QUERY_TABLE, [('domain', DOMAIN_SEED44), ('domain', "={{ 'www.' + String($('Seed List').first().json.domain || '').toLowerCase() }}")])
+# the table only grows (one row per site, query and week): the newest rows are enough, and Search Console Seeds keeps only the newest period
+_q_load.update({'returnAll': False, 'limit': 300, 'orderBy': True, 'orderByColumn': 'period_end', 'orderByDirection': 'DESC'})
+add_node('Ensure Query Table (Discovery)', DT_TYPE, DT_VERSION, dt_create_params(QUERY_TABLE, QUERY_COLS), [QX44, QY44], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Query History (Discovery)', DT_TYPE, DT_VERSION, _q_load, [QX44 + 220, QY44], LOAD18)
+add_node('Search Console Seeds (Discovery)', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/GSC_Seeds_Discovery.js')}, [QX44 + 440, QY44])
+disconnect('Load Ladder Settings (Discovery)', 'Reach Requests (Discovery)')
+for a, b in [('Load Ladder Settings (Discovery)', 'Ensure Query Table (Discovery)'), ('Ensure Query Table (Discovery)', 'Load Query History (Discovery)'),
+             ('Load Query History (Discovery)', 'Search Console Seeds (Discovery)'), ('Search Console Seeds (Discovery)', 'Reach Requests (Discovery)')]:
+    connect(a, b)
+for _n44 in ('Search Console Seeds (Discovery)', 'Collect Research', 'Rank Keywords', 'Build Keyword Strategy', 'Priority Keywords'):
+    assert 'const KWI = (() => {' in code(_n44), _n44 + ': the discovery-input kit is not inlined (G8)'
+assert not any('/*__KW_INPUTS__*/' in n['parameters'].get('jsCode', '') for n in nodes.values()), 'discovery-input kit placeholder left'
+assert 'const GQ = (() => {' in code('Search Console Seeds (Discovery)') and 'const SM = (() => {' in code('Search Console Seeds (Discovery)'), 'G8: the seeds node needs the Search Console query rules and the site model'
+assert "$('Search Console Seeds (Discovery)')" in code('Research Requests') and "$('Search Console Seeds (Discovery)')" in code('Collect Research'), 'G8: the research does not read the Search Console seeds'
+assert 'KWI.liveChecks(' in code('Priority Keywords') and 'KWI.liveChecks(' in code('Rank Keywords'), 'G8 / K4: the live-check limit is not applied in both places'
+assert 'KWI.calibrate(' in code('Collect Research') and "traffic_basis: cal.traffic_basis" in code('Collect Research'), 'G8 / K2: the traffic estimate is not calibrated or not labelled'
+assert 'KWI.serpClusters(' in code('Rank Keywords') and 'KWI.serpClusters(' in code('Build Keyword Strategy'), 'G8 / K7: the SERP-overlap clusters are not built'
+assert 'Searches that share a results page' in code('Build Keyword Strategy') and 'Searches your website already appears for' in code('Build Keyword Strategy'), 'G8: the report does not show the new inputs'
+assert 'search_console' in code('Build Ideas Response') and 'serp_clusters' in code('Build Ideas Response') and 'traffic_basis' in code('Build Ideas Response'), 'G8: the callback does not carry the new inputs'
+sticky("""### What the keyword research is allowed to use (G8, criteria K2 / K4 / K6 / K7)
+**Your own Search Console searches seed the research** (*Load Query History (Discovery)* → *Search Console Seeds (Discovery)*): the newest 28-day period, brand and SEO-tool queries dropped with the weekly report's own rules, keeping the searches **no page of yours answers** (page inventory, `SM.matchPage`) and the ones you rank **8-20** for. They go into the seed list behind the primary seed and ride on the pulls the research makes anyway — **no new call**.
+**Traffic potential says what it is:** `calibrated` where Search Console measured that exact search on your site (impressions and clicks over 28 days, never below the clicks you already get), `modelled` from the provider's volume everywhere else, `unknown` when there is neither. Without Search Console data the number is unchanged.
+**Clusters by shared results pages** (`KWI.serpClusters`): keywords that share **≥ 3** of the head keyword's top-10 URLs are one group named after that head keyword — one page can target them all.
+**Live results-page checks**: `CONFIG.live_serp_checks` (**16**, hard cap 25, ~$0.002 each → ~$0.032 a run) instead of a fixed 8, with the per-topic cap growing with it.""",
+    QX44 - 40, QY44 + 160, 1180, 260, 3)
+log('What the keyword research is allowed to use (2026-10-13, FIX_PLAN G8, criteria K2 / K4 / K6 / K7): the site\'s own Search Console queries seed discovery (Load Query History (Discovery) -> Search Console Seeds (Discovery): the newest period, brand and scraper queries dropped with the weekly report\'s rules, the searches no live page answers (SM.matchPage page inventory, the Search Console page as the fallback) and the striking-distance ones at position 8-20, inserted behind the primary seed with their measured impressions, clicks and position -- no new API call); traffic potential is calibrated against those measurements where they exist, never below the clicks the site already gets, and every number is labelled calibrated / modelled / unknown in the report, the callback and the app (v5/code/_kw_inputs.js KWI.calibrate); keywords that share at least 3 of a head keyword\'s top-10 URLs form one SERP-overlap cluster named after it, from the live checks plus the competitors\' ranking URLs the run already fetched (KWI.serpClusters), so one page can target the group; and the live intent / page-type check is CONFIG.live_serp_checks (16 by default, hard cap 25, about $0.002 a check) instead of a fixed 8, with the per-topic cap growing with the limit')
+# 46. ORIGINAL WORDS, REAL IMAGES, AND A COVERAGE TARGET SOMEBODY SET (2026-10-13, system review FIX_PLAN.md G5 / G30 / G33;
+#     CRITERIA_keywords_content.md C5 / C13 / C1). Content scored 5/10 against Surfer and Clearscope, and originality 1/10.
+#     G5: nothing ever compared the finished draft with the pages it was written from. Semrush does it with Copyleaks and the convention
+#       is 10-15% overlap, so *Originality Check* (between *Content QA* and *Needs Revision?*) measures the share of the draft's 8-word
+#       windows that one single page also carries (v5/code/_shingle.js) against every competitor page this run read (*Analyze Competitor
+#       Pages*) and the site's own pages it read (*Collect Client Pages* -- the inventory page that matches the keyword is read as the
+#       "existing" page, P2-5). Over CONFIG.originality_max_overlap_pct (15) the quality check fails, the editor is sent in with the
+#       passage quoted and the source named, and the report and meta.json say against which page and by how much. The page this run is
+#       improving is the exception: a rewrite is meant to keep that page's text, so its overlap is reported, never counted. The rest of
+#       the inventory (D11) has no text in hand, so a page aimed at the same search is reported as a duplicate target, by title and slug.
+#     G30: the package only described three images ("no images produced"), leaving every page with three gaps before publishing. *Image
+#       Cards* builds one HTML card per planned image from the page's own content (hero: the H1 over the business name; in-body: the
+#       section's heading with the three to five points that section makes), *Render Images* turns each into WebP through the Gotenberg
+#       service already in compose.override.yml (`/forms/chromium/screenshot/html`, free, local, ~0.3 s a card, no JavaScript, no
+#       licence) and *Attach Images* attaches them under the planned file names with the planned alt text, dimensions and Open Graph
+#       image, lists them in meta.json and rewrites the "create the three images" checklist step. A card the renderer cannot produce
+#       keeps its place in the plan with the reason: the run never fails over a picture.
+#     G33: the coverage bar was a silent 100% of the term list. *Parse Analysis* now picks the page to beat -- the competitor page that
+#       uses most of the shared terms -- and publishes the target (its coverage, kept inside 60-90% by CVG.target), its own headings as
+#       the subtopics to cover and its depth; the brief states it, and *Content QA* measures that same page on its own term list, scores
+#       the 25 coverage points against the target, warns about the subtopics it covers and we do not, and reports coverage as a figure
+#       with its basis. A target read off competitor pages, never a promise about rankings.
+# =============================================================================
+COVERAGE_SRC = _rd0('code/_coverage.js').rstrip('\n'); SHINGLE_SRC = _rd0('code/_shingle.js').rstrip('\n')
+assert 'const CVG = (() => {' in COVERAGE_SRC and 'const SHG = (() => {' in SHINGLE_SRC, 'the coverage / originality kits are missing'
+rd46 = lambda p: rd(p).replace('/*__COVERAGE__*/', COVERAGE_SRC).replace('/*__SHINGLE__*/', SHINGLE_SRC)
+
+# ---------- G33: the coverage target travels from Parse Analysis to the brief and the quality check ----------
+setcode('Parse Analysis', rd46('code/Parse_Analysis.js'))
+setcode('Content QA', rd46('code/Content_QA.js'))
+set_prompt('Strategy Brief', 'strategy_brief.txt')
+set_prompt('Copywriter', 'copywriter.txt')
+assert 'const CVG = (() => {' in code('Parse Analysis') and 'const CVG = (() => {' in code('Content QA'), 'the coverage kit is not inlined'
+assert 'coverage_digest' in nodes['Strategy Brief']['parameters']['text'], 'the brief prompt carries no coverage target (G33)'
+# the brief keeps the target even when the model ignores it: the number and the subtopics are set here, not asked for
+patch('Parse Brief', """// Word count check
+const totalWords = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);""",
+      """// 3. the coverage target is the best competitor's, measured in Parse Analysis (FIX_PLAN G33, 2026-10-13): it is written into the brief
+//    here rather than taken from the model's answer, so Content QA judges the page against a number nobody could talk away. The target
+//    is what that one page covers (clamped 60-90%), not an average, and it is a target read off competitor pages -- not a promise.
+const covT = prev.coverage_target && typeof prev.coverage_target === 'object' ? prev.coverage_target : null;
+if (covT && covT.target_pct) {
+  brief.coverage_target = { target_pct: covT.target_pct, best_competitor: covT.best || null, average_pct: covT.average_pct ?? null,
+    terms_total: covT.terms_total ?? null, subtopics: covT.subtopics || [], basis: covT.basis || '' };
+  const have = new Set((brief.terms_to_use || []).map(t => String((t && t.term) || t || '').toLowerCase().trim()).filter(Boolean));
+  const want = Math.ceil((covT.terms_total || 0) * covT.target_pct / 100);
+  if (have.size < want) {   // the writer cannot reach the target with a shorter list than the target itself needs
+    const add = (covT.terms || []).filter(t => !have.has(String(t).toLowerCase())).slice(0, Math.min(10, want - have.size));
+    if (add.length) { brief.terms_to_use = [...(brief.terms_to_use || []), ...add.map(t => ({ term: t, min_count: 1 }))];
+      adjustments.push('Added ' + add.length + ' shared term(s) to terms_to_use: the coverage target of ' + covT.target_pct + '% needs at least ' + want + ' of the ' + covT.terms_total + ' terms'); }
+  }
+  const missing = (covT.subtopics || []).filter(s => !(brief.outline || []).some(o => {
+    const h = String((o && (o.h2 + ' ' + (o.key_points || []).join(' '))) || '').toLowerCase();
+    const T = String(s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').split(/\\s+/).filter(w => w.length > 3);
+    return T.length ? T.filter(w => h.includes(w)).length / T.length >= 0.6 : true; }));
+  if (missing.length) { brief.coverage_target.subtopics_not_in_outline = missing.slice(0, 8);
+    adjustments.push(missing.length + ' subtopic(s) of the best competitor page are not in the outline: ' + missing.slice(0, 4).join('; ')); }
+}
+
+// Word count check
+const totalWords = (brief.outline || []).reduce((s, sec) => s + (Number(sec.target_words) || 0), 0);""")
+assert 'coverage_target' in code('Parse Brief'), 'Parse Brief does not carry the coverage target (G33)'
+
+# ---------- G5: the originality check, between Content QA and Needs Revision? ----------
+patch('Normalize Input', "  run_stale_hours: 2,",
+      "  // G5 (2026-10-13): how much of a draft may be word for word the same as ONE page it was written from (the 10-15% convention of\n"
+      "  // the similarity checkers). Over this, *Originality Check* fails the quality check and the editor rewrites those passages.\n"
+      "  originality_max_overlap_pct: 15,\n"
+      "  run_stale_hours: 2,")
+patch('Normalize Input', "    run_stale_hours: CONFIG.run_stale_hours,", "    originality_max_overlap_pct: CONFIG.originality_max_overlap_pct,\n    run_stale_hours: CONFIG.run_stale_hours,")
+_cqa = pos('Content QA')
+add_node('Originality Check', 'n8n-nodes-base.code', 2, {'jsCode': rd46('code/Originality_Check.js')}, [_cqa[0] + 110, _cqa[1] + 180])
+disconnect('Content QA', 'Needs Revision?')
+connect('Content QA', 'Originality Check'); connect('Originality Check', 'Needs Revision?')
+assert 'const SHG = (() => {' in code('Originality Check') and 'const SM = (() =>' in code('Originality Check'), 'the originality node is missing a kit'
+# the report and the package say what was measured
+patch('Build Word File', """    ['Topic coverage', qa.coverage_pct != null ? qa.coverage_pct + '% of the terms top-ranking pages share' : 'N/A'],""",
+      """    ['Topic coverage', qa.coverage && qa.coverage.basis ? esc(qa.coverage.basis) + (qa.coverage.subtopics_missing && qa.coverage.subtopics_missing.length ? ' · subtopics still missing: ' + esc(qa.coverage.subtopics_missing.slice(0, 3).join('; ')) : '') : (qa.coverage_pct != null ? qa.coverage_pct + '% of the terms top-ranking pages share' : 'N/A')],
+    ['Originality', qa.originality ? (qa.originality.passed === null ? 'Could not be checked: no competitor or own page text was available in this run'
+      : (qa.originality.highest_pct != null ? qa.originality.highest_pct + '% of the page matches ' + esc(qa.originality.highest_source || 'another page') + ' word for word (limit ' + qa.originality.threshold_pct + '%' + (qa.originality.passed ? '' : ' — EXCEEDED') + ')' : 'No overlap found')
+        + ' · ' + esc(qa.originality.basis)) : 'N/A'],""")
+patch('Build Word File', "    page_markdown: md || undefined, content_brief_slug: brief.slug || '',",
+      "    content_originality: qa.originality || null, content_coverage: qa.coverage || null,\n    page_markdown: md || undefined, content_brief_slug: brief.slug || '',")
+setcode('Blog Package', rd46('code/Blog_Package.js'))
+assert "originality: d.content_originality" in code('Blog Package'), 'the package does not carry the originality figure (G5)'
+
+# ---------- G30: the three planned images are produced ----------
+# Gotenberg's screenshot route answers with the image file itself; the service is already in n8n/compose.override.yml for the PDF
+# reports and is reachable only from inside this machine. One request per card, each a few hundred milliseconds, no cost at all.
+_bpp = pos('Blog Package')
+_bp_targets = [t['node'] for t in conns['Blog Package']['main'][0]]
+if_node('Make Images?', "{{ !!$json.article_meta && ($json.article_meta.images || []).length > 0 }}", [_bpp[0] + 170, _bpp[1] + 170])
+add_node('Image Cards', 'n8n-nodes-base.code', 2, {'jsCode': rd46('code/Image_Cards.js')}, [_bpp[0] + 340, _bpp[1] + 170])
+add_node('Render Images', 'n8n-nodes-base.httpRequest', 4.5,
+         {'method': 'POST', 'url': 'http://gotenberg:3000/forms/chromium/screenshot/html', 'sendBody': True, 'contentType': 'multipart-form-data',
+          'bodyParameters': {'parameters': [{'parameterType': 'formBinaryData', 'name': 'files', 'inputDataFieldName': 'html'},
+                                            {'name': 'format', 'value': 'webp'},
+                                            {'name': 'width', 'value': '={{ $json.width }}'},
+                                            {'name': 'height', 'value': '={{ $json.height }}'},
+                                            {'name': 'clip', 'value': 'true'},
+                                            {'name': 'optimizeForSpeed', 'value': 'true'},
+                                            {'name': 'skipNetworkIdleEvent', 'value': 'true'}]},
+          'options': {'timeout': 60000, 'response': {'response': {'responseFormat': 'file', 'outputPropertyName': 'image'}}}},
+         [_bpp[0] + 510, _bpp[1] + 170], {'onError': 'continueRegularOutput', **retry_lint.RETRY})
+add_node('Attach Images', 'n8n-nodes-base.code', 2, {'jsCode': rd46('code/Attach_Images.js')}, [_bpp[0] + 680, _bpp[1] + 170])
+for _t in _bp_targets: disconnect('Blog Package', _t)
+connect('Blog Package', 'Make Images?')
+connect('Make Images?', 'Image Cards', 0)
+connect('Image Cards', 'Render Images'); connect('Render Images', 'Attach Images')
+for _t in _bp_targets:
+    connect('Attach Images', _t)          # with images
+    connect('Make Images?', _t, 1)        # a report-only run passes through untouched
+# the images travel with everything else the customer gets: the e-mail, the API callback and the app's report files
+_sr46 = nodes['Send Report']['parameters']['options']
+assert _sr46['fileAttachments'] == "={{ ['pdf', 'data', 'article_html', 'article_md', 'meta_json'].filter(k => $binary[k]).join(',') }}", 'Send Report: unexpected attachment list'
+_sr46['fileAttachments'] = "={{ ['pdf', 'data', 'article_html', 'article_md', 'meta_json'].concat(Object.keys($binary).filter(k => /^image_\\d+$/.test(k)).sort()).filter(k => $binary[k]).join(',') }}"
+patch('Build Webhook Response', """const docData = bin ? await b64('data', bin) : null;""",
+      """const docData = bin ? await b64('data', bin) : null;
+// G30 (2026-10-13): the produced images (WebP cards built from this page) travel in the callback like the PDF; the app stores every
+// embedded file of a callback and offers it for download next to the article.
+const imgPlan = ((d.article_meta || {}).images) || [];
+const images = [];
+for (const k of Object.keys(item.binary || {}).filter(x => /^image_\\d+$/.test(x)).sort()) {
+  const b = item.binary[k]; const data = await b64(k, b);
+  const plan = imgPlan.find(p => p && p.binary_key === k) || {};
+  if (data) images.push({ data, fileName: b.fileName || (k + '.webp'), mimeType: b.mimeType || 'image/webp',
+    alt_text: plan.alt_text || '', caption: plan.caption || '', width: plan.width ?? null, height: plan.height ?? null, purpose: plan.purpose || '' });
+}""")
+patch('Build Webhook Response', "    meta: d.article_meta || null,", "    meta: d.article_meta || null,\n    images: images.length ? images : null,")
+assert 'images.length ? images : null' in code('Build Webhook Response'), 'the callback carries no images (G30)'
+
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+sticky("""### Original words, real images, a coverage target (G5 / G30 / G33, 2026-10-13)
+**Originality (G5).** *Originality Check* sits between *Content QA* and *Needs Revision?* and measures the share of the draft's **8-word windows** that one single page also carries, against every competitor page this run read and the site's own pages it read. Over **`originality_max_overlap_pct` (15)** the quality check fails: the editor gets the passage quoted and the page named. The page being improved is exempt (a rewrite keeps its text); other inventory pages are reported as **duplicate targets** by title and slug.
+**Images (G30).** *Image Cards* → *Render Images* (Gotenberg `/forms/chromium/screenshot/html`, local and free) → *Attach Images*: the hero and the two in-body figures are produced as **WebP** from the page's own content, under the planned file names, alt text and sizes, listed in `meta.json`, attached to the e-mail and sent in the callback. A card that cannot be rendered stays a plan with its reason.
+**Coverage (G33).** The target is the **best** competitor's term coverage (clamped 60-90%), with its subtopics and depth: stated in the brief, scored in the quality check, reported with its basis.""",
+    _bpp[0] + 150, _bpp[1] + 330, 940, 250, 4)
+log('Original words, produced images and a coverage target from the best competitor (2026-10-13, FIX_PLAN G5 / G30 / G33): the new Originality Check node measures 8-word shingle overlap between the finished draft and every competitor page and own page the run read (v5/code/_shingle.js), fails the quality check over CONFIG.originality_max_overlap_pct (15) against any single page with the passage quoted and the source named, exempts the page the run is improving and reports the rest of the inventory as duplicate targets by title; Image Cards / Render Images / Attach Images produce the hero and the two in-body images as WebP cards from the page\'s own content through the local Gotenberg screenshot route (free, no API, no licence), attach them under the planned file names with the planned alt text and dimensions, list them in meta.json and in the callback and rewrite the publish checklist, while a failed render leaves the plan in place; and the coverage target is now the best competitor page\'s term coverage (v5/code/_coverage.js, clamped 60-90%) with its subtopics and depth, written into the brief by Parse Brief, scored by Content QA\'s 25 coverage points and reported with its basis in the report, meta.json and the app')
+# 45. GOOGLE'S OWN VIEW OF EVERY KEY PAGE, AND A FIX THAT IS CHECKED IN DAYS (2026-10-13, system review FIX_PLAN.md G25 / G11)
+#     G25 The audit asked Search Console's URL Inspection about 25 crawled pages and the weekly Site Tracker about 20 ladder pages, so most
+#         of a site was never seen through Google's eyes and the reports said "sampled pages" without ever saying what the sample left out.
+#         Google's quota is **2,000 inspections a day and 600 a minute per property** (developers.google.com/webmaster-tools/limits), which is
+#         far more than these sites have pages. The audit now asks about up to PW.PER_AUDIT (100) of its indexable pages, the weekly run
+#         rotates through every key page oldest-inspection-first within PW.PER_RUN (150) and stores each answer on the page's own
+#         seo_page_watch row, and both report **per page**: index state, the canonical Google chose against the one the page names, the last
+#         crawl, mobile usability and the rich results detected. What the budget did not reach, what failed and what access is missing is
+#         printed as **"not checked"** with the reason - never as "fine" and never as "not indexed" (v5/code/_page_watch.js).
+#     G11 The audit was the only thing that ever verified a fix, so a page that went noindex on the 3rd stayed broken until the 1st of the
+#         next month. The new daily workflow **SEO Agent - Page Watch** (build_site_tracker.py) fetches each site's key pages raw every
+#         morning and alerts the same day; marking a finding fixed in the app re-checks that finding on those pages within a day. Both
+#         audit reports say so where the fix list starts, so nobody waits for the next audit to learn whether it worked.
+# =============================================================================
+import url_lint as _ul45
+PAGE_WATCH_SRC = rd('code/_page_watch.js').rstrip('\n')
+
+# ---- A. the audit asks about every important page it can, inside the quota, oldest first ----
+setcode('GSC Audit Plan', PAGE_WATCH_SRC + '\n' + code('GSC Audit Plan'))
+patch('GSC Audit Plan', """const sample = [...indexable].sort((a, b) => (isHome(b.url) - isHome(a.url)) || ((a.depth ?? 9) - (b.depth ?? 9)) || (b.inbound - a.inbound)).filter(p => { const k = key(inspectUrl(p)); if (seenInspect.has(k)) return false; seenInspect.add(k); return true; }).slice(0, 25);""",
+      """// G25 (2026-10-13, FIX_PLAN): every indexable page is a candidate, ordered home page first, then click depth, then inbound links, and
+// the run asks about as many as its share of Google's quota allows (2,000 URL inspections a day and 600 a minute per property). What the
+// budget does not reach is carried as `inspect_budget.skipped` and printed as "not checked", never left silently out of a "sample".
+const ranked = [...indexable].sort((a, b) => (isHome(b.url) - isHome(a.url)) || ((a.depth ?? 9) - (b.depth ?? 9)) || (b.inbound - a.inbound)).filter(p => { const k = key(inspectUrl(p)); if (seenInspect.has(k)) return false; seenInspect.add(k); return true; });
+const inspectPlan = PW.inspectBudget(ranked.map((p, i) => ({ url: inspectUrl(p), weight: ranked.length - i })), PW.PER_AUDIT);
+const sample = inspectPlan.take.map(p => p.url);
+const inspect_budget = { note: inspectPlan.note, cap: inspectPlan.limit, quota: inspectPlan.quota, candidates: ranked.length, asked: sample.length,
+  skipped: inspectPlan.skipped.slice(0, 25).map(p => p.url), skipped_total: inspectPlan.skipped.length };""")
+patch('GSC Audit Plan', "pages: pages.map(p => ({ url: p.url, status: p.status, depth: p.depth, inbound: p.inbound, orphan: p.orphan, indexable: indexable.includes(p) })), sample: sample.map(inspectUrl),",
+      "pages: pages.map(p => ({ url: p.url, status: p.status, depth: p.depth, inbound: p.inbound, orphan: p.orphan, indexable: indexable.includes(p) })), sample, inspect_budget,")
+
+# a fresh audit's finding rows carry the re-check columns empty: the state belongs to the audit that is current, and the row keeps
+# exactly the columns ladder_common.py defines (the Data Table node auto-maps every field it is given)
+_fr45 = code('Finding Rows')
+_FR_OLD = "affected_count: Number(f.affected_count) || 0, impact: Number(f.impact) || 0, impact_basis: String(f.impact_basis || '').slice(0, 400) }));"
+assert _fr45.count(_FR_OLD) == 1, 'Finding Rows: the row shape moved'
+_FR_NEW = ("affected_count: Number(f.affected_count) || 0, impact: Number(f.impact) || 0, impact_basis: String(f.impact_basis || '').slice(0, 400),\n"
+           "  recheck_state: '', recheck_requested_at: '', recheck_at: '', recheck_rule: '', recheck_note: '' }));   // G11: filled when the owner marks it fixed and the daily watch answers")
+setcode('Finding Rows', _fr45.replace(_FR_OLD, _FR_NEW))
+
+# ---- B. what Google said per page, with mobile usability and what was not checked ----
+setcode('GSC Audit Findings', PAGE_WATCH_SRC + '\n' + code('GSC Audit Findings'))
+patch('GSC Audit Findings', """  const insp = (byKind.inspect || []).map(x => { const r = x.r || {}; const ir = (r.inspectionResult || {}).indexStatusResult || null; const rr = (r.inspectionResult || {}).richResultsResult || null;
+    return { url: x.q.inspect_url, error: r.error ? gErr(r) : (ir ? null : 'no result'), verdict: ir ? ir.verdict || '' : '', coverage: ir ? ir.coverageState || '' : '', indexed: ir ? ir.verdict === 'PASS' : null, robots: ir ? ir.robotsTxtState || '' : '', last_crawl: ir ? ir.lastCrawlTime || '' : '', google_canonical: ir ? ir.googleCanonical || '' : '', user_canonical: ir ? ir.userCanonical || '' : '', rich: rr && rr.detectedItems ? rr.detectedItems.map(d => d.richResultType).filter(Boolean) : [] }; });""",
+      """  // G25 (2026-10-13): one reading per inspected page — index state, the canonical Google chose, the last crawl, mobile usability and the
+  // rich results — through the shared kit, which also classifies a permission error or an exhausted quota as "not checked" (never "not indexed").
+  const insp = (byKind.inspect || []).map(x => { const o = PW.inspection(x.r || {});
+    return { url: x.q.inspect_url, error: o.ok ? null : o.error, not_checked: o.not_checked || '', error_kind: o.error_kind || '', verdict: o.verdict, coverage: o.coverage,
+      indexed: o.ok ? o.indexed : null, robots: o.robots, last_crawl: o.last_crawl, google_canonical: o.google_canonical, user_canonical: o.user_canonical,
+      mobile_usable: o.mobile_usable, mobile_issues: o.mobile_issues, rich_verdict: o.rich_verdict, rich: o.rich_results }; });""")
+patch('GSC Audit Findings', """    const rich = [...new Set(ok.flatMap(i => i.rich))]; search_console.rich_results = rich; if (rich.length) works.push('Google detects rich results on sampled pages: ' + rich.join(', '));
+    const errCount = insp.length - ok.length; if (errCount) search_console.inspection_errors = errCount;""",
+      """    const rich = [...new Set(ok.flatMap(i => i.rich))]; search_console.rich_results = rich; if (rich.length) works.push('Google detects rich results on sampled pages: ' + rich.join(', '));
+    const errCount = insp.length - ok.length; if (errCount) search_console.inspection_errors = errCount;
+    // G25: mobile-first indexing has been complete since 2024-07-05, so a page Google calls not mobile-usable is a real ranking problem
+    const mobBad = ok.filter(i => i.mobile_usable === false);
+    if (mobBad.length) F('High', 'Pages Google reports as not mobile-friendly', 'Google indexes the mobile version of every page: what its phone crawler cannot use properly cannot rank well.', 'Fix the issues Search Console lists for these URLs (viewport, text size, tap targets, content wider than the screen), then re-inspect them.', mobBad.slice(0, 3).map(i => path(i.url) + ': ' + (i.mobile_issues || []).slice(0, 2).join('; ')).join(' | ').slice(0, 300), mobBad.map(i => i.url), mobBad.length, Math.round(mobBad.length / ok.length * 100));
+    else if (ok.some(i => i.mobile_usable === true)) works.push('Google reports every inspected page as mobile-friendly');""")
+patch('GSC Audit Findings', """  search_console.inspections = insp;""",
+      """  search_console.inspections = insp;
+  // G25: the index picture, with the pages the quota did not reach counted apart and named (PW.coverage never says "fine" about a page nobody asked about)
+  const _ib = plan.inspect_budget || null;
+  search_console.index_coverage = { ...PW.coverage(insp.map(i => ({ ok: !i.error, error: i.error || '', indexed: i.indexed, verdict: i.verdict, coverage: i.coverage,
+      canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich, not_checked: i.not_checked || '' })),
+      { not_checked: _ib ? _ib.skipped_total : 0, not_checked_reason: _ib && _ib.skipped_total ? 'the audit\\'s share of Google\\'s daily quota was used up; the weekly run inspects them, oldest first' : '', quota_note: _ib ? _ib.note : '' }),
+    candidates: _ib ? _ib.candidates : insp.length, cap: _ib ? _ib.cap : null,
+    pages: insp.filter(i => !i.error).slice(0, 100).map(i => ({ url: i.url, indexed: i.indexed, verdict: i.verdict, coverage: i.coverage, last_crawl: i.last_crawl,
+      google_canonical: i.google_canonical, canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich })),
+    not_checked_pages: [...insp.filter(i => i.error).map(i => ({ url: i.url, reason: i.not_checked || i.error })), ...((_ib && _ib.skipped) || []).map(u => ({ url: u, reason: 'not checked in this audit: the pages rotate through Google\\'s daily quota, oldest first' }))].slice(0, 25) };""")
+
+# ---- C. both audit reports: the page-level index view, and the sentence about verification ----
+IDX_SECTION_JS = r"""// ---- what Google says about each key page (G25, 2026-10-13) ----
+const indexSection = (sc) => {
+  const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const p3 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  const ic = sc.index_coverage || null;
+  if (!ic) return '';
+  let h = `<h3>Google's index view of the key pages (URL Inspection)</h3><p>${e3(ic.text)}.</p>`;
+  if ((ic.pages || []).length) {
+    h += `<table class="ct"><tr><th>Page</th><th>In Google</th><th>State</th><th>Google's canonical</th><th>Last crawl</th><th>Mobile</th><th>Rich results</th></tr>`
+      + ic.pages.slice(0, 25).map(p => `<tr><td>${e3(p3(p.url))}</td><td>${p.indexed === true ? '<span class="ok">yes</span>' : p.indexed === false ? '<span class="bad">no</span>' : '—'}</td><td>${e3(p.coverage || p.verdict || '—')}</td>`
+        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3(p.google_canonical)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
+        + `<td>${e3(String(p.last_crawl || '').slice(0, 10) || '—')}</td><td>${p.mobile_usable === true ? 'ok' : p.mobile_usable === false ? '<span class="bad">issues</span>' : '—'}</td>`
+        + `<td>${e3((p.rich_results || []).join(', ') || '—')}</td></tr>`).join('') + `</table>`;
+    if (ic.pages.length > 25) h += `<p class="small">${ic.pages.length - 25} more inspected pages are in the data behind this report.</p>`;
+  }
+  if ((ic.not_checked_pages || []).length) h += `<p class="small"><b>Not checked (${ic.not_checked}):</b> ` + ic.not_checked_pages.slice(0, 8).map(x => e3(p3(x.url))).join(', ')
+    + (ic.not_checked_pages.length > 8 ? ' …' : '') + ` — ${e3(ic.not_checked_reason || ic.not_checked_pages[0].reason)}. Nothing is claimed about these pages.</p>`;
+  if (ic.quota_note) h += `<p class="small">${e3(ic.quota_note)}</p>`;
+  return h;
+};
+// ---- how a fix is verified (G11, 2026-10-13) ----
+const fixWatchNote = () => `<p class="small"><b>After you fix something:</b> mark it done in the dashboard and the daily key-page watch re-checks that exact item on your key pages within a day (status, noindex, canonical, title, robots.txt) and shows the result — it does not wait for the next monthly audit.</p>`;
+"""
+_IDX_OLD = """    const covRows = Object.entries(sc.coverage || {});
+    if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} sampled pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;"""
+_IDX_NEW = """    const covRows = Object.entries(sc.coverage || {});
+    if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} inspected pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
+    h += indexSection(sc);   // G25: page by page — in Google's index, the canonical it chose, its last crawl, mobile usability, rich results"""
+for _rn45 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn45, "const findings = a.findings || [];", IDX_SECTION_JS + "const findings = a.findings || [];")
+    patch(_rn45, _IDX_OLD, _IDX_NEW)
+    patch(_rn45, "'<h3>Fix These First</h3>' + prioNote(a) + '<ol>'", "'<h3>Fix These First</h3>' + prioNote(a) + fixWatchNote() + '<ol>'")
+# the app's technical page reads the same picture from the callback
+patch('Build Audit Response', "coverage: d.search_console.coverage, not_indexed: d.search_console.not_indexed,",
+      "coverage: d.search_console.coverage, index_coverage: d.search_console.index_coverage || null, not_indexed: d.search_console.not_indexed,")
+
+# harness shim (S53): the kit as a runnable script — one item in, one answer out
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_page_watch.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 45): the page-watch kit - { res?, robots_res?, prev?, now?, finding?, pages?, pages_budget?, cap?, inspection? }\n"
+    "// -> the signals of one fetch, the robots.txt reading, the changes against the stored row, a finding re-check, the inspection budget and one inspection answer\n"
+    + PAGE_WATCH_SRC +
+    "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  const rb = j.robots_res === undefined ? null : PW.robotsRead(j.robots_res);\n"
+    "  const sig = j.res === undefined ? null : PW.signals(j.res);\n"
+    "  const now = j.now === undefined ? sig : j.now;\n"
+    "  return { json: { signals: sig, robots: rb ? { ok: rb.ok, status: rb.status, hash: rb.hash, length: rb.length, error: rb.error, rules: rb.rules,\n"
+    "      blocks: (j.block_urls || []).map(u => ({ url: u, blocked: rb.blocks ? rb.blocks(u) : null })) } : null,\n"
+    "    robots_change: j.prev_hash === undefined ? null : PW.robotsChange(j.prev_hash, rb || j.robots || null),\n"
+    "    changes: now === null ? [] : PW.compare(j.prev === undefined ? null : j.prev, now, { url: j.url, robots_blocked: j.robots_blocked, robots_blocked_before: j.robots_blocked_before }),\n"
+    "    state: now === null ? '' : PW.state(PW.compare(j.prev === undefined ? null : j.prev, now, { url: j.url, robots_blocked: j.robots_blocked, robots_blocked_before: j.robots_blocked_before }), now),\n"
+    "    recheck: j.finding === undefined ? null : PW.recheck(j.finding, j.pages || []),\n"
+    "    rule: j.finding === undefined ? null : (PW.recheckRule(j.finding) || {}).rule || '',\n"
+    "    budget: j.pages_budget === undefined ? null : (() => { const b = PW.inspectBudget(j.pages_budget, j.cap, { used: j.used }); return { take: b.take.map(p => p.url), skipped: b.skipped.map(p => p.url), limit: b.limit, quota: b.quota, note: b.note }; })(),\n"
+    "    inspection: j.inspection === undefined ? null : PW.inspection(j.inspection),\n"
+    "    coverage: j.inspections === undefined ? null : PW.coverage(j.inspections, j.coverage_opts || {}),\n"
+    "    hash: j.hash_text === undefined ? '' : PW.hash(j.hash_text), limits: { quota: PW.QUOTA_PER_DAY, per_minute: PW.QUOTA_PER_MINUTE, per_run: PW.PER_RUN, per_audit: PW.PER_AUDIT } } }; });\n")
+
+# ---- D. the asserts and the notes ----
+for _n45 in ('GSC Audit Plan', 'GSC Audit Findings'):
+    assert 'const PW = (() => {' in code(_n45), _n45 + ': the page-watch kit is not inlined'
+assert 'PW.inspectBudget(' in code('GSC Audit Plan'), 'G25: the audit does not budget its inspections'
+assert 'index_coverage' in code('GSC Audit Findings') and 'mobile_usable' in code('GSC Audit Findings'), 'G25: the audit does not report Google\'s view per page'
+for _n45 in ('Build Audit Report', 'Build Full Report'):
+    assert 'indexSection(sc)' in code(_n45) and 'fixWatchNote()' in code(_n45), _n45 + ': the index view or the verification note is missing'
+_ul45.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_gp45 = pos('GSC Audit Plan')
+sticky("""### Google's own view of every key page, and a fix checked in days (G25 / G11, 2026-10-13)
+**URL Inspection within the quota:** Google allows **2,000 inspections a day and 600 a minute per property**. The audit asks about up to **100** of its indexable pages (home page first, then click depth, then inbound links) and the weekly Site Tracker rotates through **every** key page, **oldest inspection first**, up to 150 a run — each answer stored on the page's row in `seo_page_watch`, which is what makes the rotation possible. Both reports print, per page: in Google's index or not, the state, **the canonical Google chose** against ours, the last crawl, **mobile usability** and the rich results. Whatever the budget did not reach, whatever failed and missing access are printed as **"not checked"** with the reason — never as "fine", never as "not indexed" (`v5/code/_page_watch.js`).
+**Checked in days, not months:** the daily **SEO Agent — Page Watch** (05:45, free: one GET per key page + robots.txt) alerts on a page gone, a `noindex`, a moved canonical, a changed title or a changed robots.txt the same day, and re-checks any finding the owner marks as fixed on those pages within a day. Both audit reports say so where the fix list starts.""",
+    _gp45[0] - 40, _gp45[1] - 420, 1180, 320, 5)
+log('Google\'s own view of every key page, inside the quota (2026-10-13, FIX_PLAN G25): the audit inspects up to 100 of its indexable pages and the weekly Site Tracker rotates through every key page oldest-inspection-first (up to 150 a run, stored per page in seo_page_watch) inside Google\'s 2,000-a-day / 600-a-minute URL Inspection quota; both reports print per page whether it is in Google\'s index, the canonical Google chose against ours, the last crawl, mobile usability (a new High finding when Google reports issues) and the rich results, and everything the budget, a failure or missing access left out is printed as "not checked" with its reason instead of being hidden inside the word "sample"')
+log('A daily key-page watch and a fix re-checked in days (2026-10-13, FIX_PLAN G11): the new workflow SEO Agent — Page Watch (build_site_tracker.py, every morning 05:45, free — one plain GET per key page plus robots.txt, max 25 pages a site) compares status, a redirect that appeared, noindex, the canonical, the title and the robots.txt fingerprint (seo_cache `watch:<site_id>`) with the stored reading and alerts the same day in seo_console_alerts plus, for the serious ones, seo_ops_alerts and the alert webhook (D25b\'s path, deduped); a failed fetch is "not checked" and never overwrites the stored reading; "I fixed this" in the app marks the finding (seo_audit_findings.recheck_state) and the next watch answers that one finding on those pages — fixed, still open, or not checkable without the full audit — and both audit reports say so where the fix list starts')
+
+# =============================================================================
+# 47. ANNOTATIONS, CHANGE TESTS AND LINEAGE ON EVERY NUMBER (2026-10-13, system review FIX_PLAN.md G12 + G29; criteria 3.4 / 3.5 /
+#     2.12 / 3.11 in docs/system-review-2026-10-11/CRITERIA_technical_tracking_reporting_ai_links.md). Reporting scored 4.5/10 and
+#     change tests scored 0:
+#       * G12 annotations: a chart that falls in mid-September 2025 looks like a ranking disaster until you know that is the week
+#         Google stopped serving 100 results on one page. Rank Ranger and Search Console both mark such events; we marked nothing.
+#         `v5/data/seo_events.json` is now THE dated place for Google updates and data breaks — inlined into `_annotations.js` (the
+#         marks), into `_site_stats.js` (the alert context G28 already printed) and written out as
+#         `app/shared/src/seo-events.generated.ts` for the app's charts, so engine and dashboards mark the same dates. AN.marks()
+#         computes a mark per published page (seo_content_log.published_at), per technical audit with the findings it cleared
+#         (seo_audits), and per registry event overlapping the window; a date with no event produces nothing.
+#       * G12 change tests: the Link Builder measured what a won link did against a control group of the site's other pages. That
+#         comparison is now `_change_test.js` (CT) and measures a PAGE CHANGE the same way — LB Assemble writes `kind: page_change`
+#         rows into seo_link_impact from the content log's publish dates, and the Link Builder report reads them under "What your
+#         page changes did". Verdicts stay graded and weak: likely helped / possibly helped / no clear effect yet / too early to
+#         tell / can't tell. Nothing says a change caused a move.
+#       * G29 lineage: the AI-visibility report stated its sample sizes and ranges; everywhere else "1,240 impressions" and "#8" sat
+#         side by side with no hint that one is a 28-day Google count and the other one live sample. `_lineage.js` (LN) carries
+#         source / period / sample / basis as structured fields beside every figure group, renders one short note under the figures
+#         and a "Where these numbers come from" table at the end of the weekly, AI-visibility, AI-growth, backlink, link-building,
+#         rank-tracker, ladder-plan and full reports, and travels in the callbacks so the app shows the same words. The vocabulary is
+#         the one already in use (G6 "modelled, not measured", G8 calibrated / modelled / unknown, G28 ranges, G26 impact_basis).
+#         Where lineage is genuinely unknown the note reads "source not recorded" — never a borrowed source.
+# =============================================================================
+LINEAGE_SRC47 = seo_events.LINEAGE_SRC
+# ---------- A. the full SEO report: a figure-level lineage table before the methodology section ----
+setcode('Build Full Report', LINEAGE_SRC47 + '\n' + code('Build Full Report'))
+_LIN47 = """// G29 (2026-10-13): every figure group of this report with its source, period and sample (LN, v5/code/_lineage.js)
+const _sc47 = a.search_console || {};
+const lineage = [
+  LN.of('Health score and the findings', 'crawl', { basis: 'modelled', period: LN.asOf(a.audited_at || today), sample: LN.sample(a.pages_crawled, 'pages crawled'),
+    note: 'our own 0-100 score: points off per finding by severity (the table below), not a Google figure' }),
+  _sc47.connected
+    ? LN.of('Clicks, impressions and index coverage', 'gsc', { basis: 'measured', period: 'the last 28 days', sample: LN.sample((_sc47.totals || {}).impressions, 'impressions'), note: 'property ' + String(_sc47.property || '') })
+    : LN.unknown('Clicks, impressions and index coverage', String(_sc47.error || 'Search Console is not connected for this site')),
+  LN.of('Searches per month, difficulty, cost per click and traffic estimates', 'kwdata', { basis: 'estimated', period: 'the provider\\'s latest 12-month average',
+    sample: LN.sample((a.keyword_ideas || a.keywords || []).length, 'keywords'), note: 'provider estimates for ' + String(d.country || '') + ', not measurements of your site' }),
+  LN.of('Backlinks and referring domains', 'backlink_index', { basis: 'reported', period: LN.asOf(today), sample: LN.sample((a.backlinks || {}).referring_domains, 'referring domains'),
+    note: 'one crawler\\'s index of the web: it finds much of the web, never all of it' }),
+  LN.of('Core Web Vitals (real users)', 'crux', { basis: 'measured', period: 'the last 28 days of Chrome visits', sample: 'all Chrome visitors Google could aggregate',
+    note: 'where a page or template has too few visits the report says so instead of showing a figure' }),
+  LN.of('Lighthouse scores and speed savings', 'pagespeed', { basis: 'one_sample', period: LN.asOf(today), sample: 'one simulated mobile load per page tested' }),
+  LN.of('Domain age', 'rdap', { basis: 'reported', period: LN.asOf(today), sample: LN.sample(((a.domain_ages || {}).rows || []).length || undefined, 'domains looked up'), note: 'the registry record, cached for a year' }),
+];
+html += '<h2 class="pb">' + '16a. Where these numbers come from</h2>'
+  + '<table class="ct"><tr><th>Figure</th><th>Source</th><th>Period</th><th>Sample</th><th>How it was arrived at</th></tr>'
+  + lineage.map(l => '<tr><td>' + esc(l.figure) + '</td><td>' + esc(l.source_label) + '</td><td>' + esc(l.period || '—') + '</td><td>' + esc(l.sample || '—') + '</td><td>' + esc([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
+  + '</table><p class="small">A figure marked "modelled, not measured" is computed, not counted; "source not recorded" means the figure reached this report without its source and should be treated as unverified.</p>';
+"""
+patch('Build Full Report', '// ---------- 16. Methodology ----------', _LIN47 + '// ---------- 16. Methodology ----------')
+patch('Build Full Report', "    health_score: a.health_score,", "    health_score: a.health_score,\n    lineage,")
+assert 'const LN = (() => {' in code('Build Full Report') and 'Where these numbers come from' in code('Build Full Report'), 'G29: the full report has no lineage'
+# ---------- B. nothing left unresolved, and the kits really reached the nodes that ask for them ----------
+for _m47 in ('/*__LINEAGE__*/', '/*__ANNOTATIONS__*/', '/*__CHANGE_TEST__*/', '/*__SEO_EVENTS__*/', '/*__GOOGLE_UPDATES__*/'):
+    assert not any(_m47 in n['parameters'].get('jsCode', '') for n in nodes.values()), 'G12 / G29: placeholder left: ' + _m47
+assert 'const LN = (() => {' in code('Build Ladder Report') and 'Where these numbers come from' in code('Build Ladder Report'), 'G29: the ladder plan has no lineage'
+# ---------- C. harness shims (S56): each kit as a runnable script, one call per item ----------
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_lineage.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 47): the lineage kit — { figure, source, period, sample, basis, note } -> the structured fields, the one-line note and the report block\n"
+    + LINEAGE_SRC47 + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  const l = j.unknown ? LN.unknown(j.figure, j.why) : LN.of(j.figure, j.source, j);\n"
+    "  return { json: { ...l, line: LN.note(l), html: LN.html(l), block: LN.block([l]), sources: Object.keys(LN.SOURCES), bases: Object.keys(LN.BASIS), missing: LN.MISSING,\n"
+    "    range: j.range === undefined ? null : LN.range(j.range), as_of: j.as_of === undefined ? null : LN.asOf(j.as_of), sample_text: j.sample_n === undefined ? null : LN.sample(j.sample_n, j.sample_unit) } }; });\n")
+open(os.path.join(OUT_CODE, '_annotations.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 47): the annotation kit — { from, to, published, audits, links } -> the dated marks of that window\n"
+    + seo_events.ANNOTATIONS_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; const marks = AN.marks(j);\n"
+    "  return { json: { marks, html: AN.html(marks), breaks: AN.breakBetween(j.from, j.to), updates: AN.UPDATES, data_breaks: AN.BREAKS, registry_updated: AN.EVENTS.updated } }; });\n")
+open(os.path.join(OUT_CODE, '_change_test.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 47): the change test — { weeks, base, now, others, joint, kind } -> the control-group reading and its graded verdict\n"
+    + seo_events.CHANGE_TEST_SRC + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  return { json: { ...CT.compare(j), labels: CT.LABELS, method: CT.method, min_weeks: CT.MIN_WEEKS, min_others: CT.MIN_OTHERS } }; });\n")
+# ---------- D. the same dated registry for the app's charts (generated, committed) ----------
+seo_events.write_app_ts()
+sticky("""### Annotations, change tests and lineage (G12 + G29)
+**Every chart is marked** with what happened: pages that went live (`seo_content_log.published_at`), technical audits with the findings they cleared (`seo_audits`), **Google updates** and **data breaks** (the num=100 break of September 2025) — from one dated file, `v5/data/seo_events.json`, inlined into `_annotations.js`, `_site_stats.js` and the app (`seo-events.generated.ts`). Add an update there and rebuild; a date with no event produces no mark.
+**A page change is read like a won link**: `_change_test.js` (CT) compares the page's own move with the site's **other pages** over the same weeks (`seo_link_impact`, `kind: page_change`). Verdicts stay graded — *likely helped · possibly helped · no clear effect yet · too early to tell · can't tell* — and nothing ever says a change **caused** a move.
+**Every figure carries its lineage** (`_lineage.js`): source, period, sample and how it was arrived at, as fields beside the value, one short note under the figures and a **"Where these numbers come from"** table in the weekly, AI-visibility, AI-growth, backlink, link-building, rank-tracker, ladder-plan and full reports. Modelled numbers say so; where the source was never recorded it reads **"source not recorded"**.""",
+    pos('Build Full Report')[0] - 40, pos('Build Full Report')[1] + 360, 1180, 280, 4)
+log('Annotations, change tests and lineage on every number (2026-10-13, FIX_PLAN G12 + G29; criteria 3.4 / 3.5 / 2.12 / 3.11): one dated event registry (v5/data/seo_events.json) feeds the chart marks (v5/code/_annotations.js: published pages from seo_content_log, audit fixes from seo_audits, Google updates and the September 2025 num=100 data break), the G28 alert context (_site_stats.js) and the app (app/shared/src/seo-events.generated.ts); the Link Builder\'s control-group impact became the shared change test (v5/code/_change_test.js) and now also reads what a PAGE CHANGE did (seo_link_impact kind=page_change + change columns, "What your page changes did" in the Link Builder report) with graded verdicts and no causal wording; and every figure group in the weekly, AI-visibility, AI-growth, backlink, link-building, rank-tracker, ladder-plan and full reports carries its source, period, sample and basis (v5/code/_lineage.js) inline and in a "Where these numbers come from" table, with "source not recorded" where the lineage is genuinely unknown')
 
 # =============================================================================
 # 9. WRITE

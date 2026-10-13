@@ -174,8 +174,8 @@ export function TrackingForm({
                 Blog posts per week
               </p>
               <p className="mb-3 text-[13px] leading-relaxed text-ink-3">
-                Each post is a full, researched page: keyword and competitor research, a written and quality-checked article with an image plan and schema. It arrives
-                every Monday as HTML and Markdown (plus a meta.json) for you to review and publish. Topics come from your keyword plan, queries close to page one and
+                Each post is a full, researched page: keyword and competitor research, a written and quality-checked article with its three images and schema. It arrives
+                every Monday as HTML and Markdown (plus the image files and a meta.json) for you to review and publish. Topics come from your keyword plan, queries close to page one and
                 rising trends.
               </p>
               <div role="radiogroup" aria-labelledby={blogsLabel} className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

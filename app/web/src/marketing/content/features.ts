@@ -152,10 +152,13 @@ export const features: Feature[] = [
       'Topic fit, so you only chase keywords your business can own',
       'A quick keyword check before you commit to a plan',
       'Keywords one of your live pages already answers are marked with that page, so you refresh it instead of writing a second one',
+      'The searches you already appear for seed the research: the ones no page of yours answers, and the ones you rank just off page one',
+      'Every traffic estimate says whether it was measured on your own site or modelled from provider volume',
+      'Searches Google answers with the same pages are grouped, so one page targets the whole group',
     ],
     steps: [
       { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Ascentra looks at.' },
-      { title: 'Discover', body: 'Candidates come from your pages, your competitors, search volumes and trends in your market.' },
+      { title: 'Discover', body: 'Candidates come from your own Search Console searches, your pages, your competitors, search volumes and trends in your market.' },
       { title: 'Judge', body: 'Each keyword gets reach for your site, topic fit, search intent and a plan type.' },
       { title: 'Act', body: 'Start a ladder, write a single page or keep the keyword for later.' },
     ],
@@ -175,6 +178,14 @@ export const features: Feature[] = [
       },
       { q: 'Can I bring my own keywords?', a: 'Yes. Type a keyword and Ascentra checks it, or let it recommend keywords from discovery.' },
       { q: 'Which markets are covered?', a: 'You choose the country for each run; volumes and results come from that market.' },
+      {
+        q: 'How does my own Search Console data change the research?',
+        a: 'Once your website is connected, the searches it already gets impressions for are the starting point: the ones no page of yours answers become new page ideas, and the ones you rank between eighth and twentieth for become pages to strengthen. Where a search is already measured on your site, the traffic estimate is calibrated against your real impressions and clicks and labelled as measured; everywhere else it is labelled as modelled.',
+      },
+      {
+        q: 'Why are some keywords grouped together?',
+        a: 'When Google answers two searches with the same pages, they want one page, not two. Ascentra compares the results pages it reads and groups searches that share at least three of the same top-ten results, naming the group after its main keyword.',
+      },
     ],
     related: ['keyword-ladders', 'content', 'site-tracking'],
     image: 'notesLaptop',
@@ -255,13 +266,15 @@ export const features: Feature[] = [
     shortName: 'Content',
     tagline: 'Long-form pages written, critiqued and edited by AI, with SEO QA before you see them.',
     summary:
-      'Every page goes through a writer, a critic and an editor, then an SEO check. Pages carry real expertise signals — an author byline, an expert reviewer, your experience notes and schema — and arrive as a publish-ready package with a three-image plan.',
+      'Every page goes through a writer, a critic and an editor, then an SEO check that measures it against the best page in the results and compares it, word for word, with the pages it was researched from and with your own. Pages carry real expertise signals — an author byline, an expert reviewer, your experience notes and schema — and arrive as a publish-ready package with their three images already made.',
     icon: PenLine,
     benefits: [
       'Writer, critic and editor passes, then an SEO quality check',
       'E-E-A-T built in: author byline and box, expert reviewer, experience notes and schema',
       'Page types for hub and pillar pages, case studies, local (city) pages and video pages',
-      'A three-image plan with alt text, file names and the social image',
+      'Three images produced with every page — a title card and two section cards made from the page itself, with the alt text, file names and the social image',
+      'An originality check against every competitor page the research read and against your own pages: more than 15% of a page matching one of them comes back for a rewrite, with the passage shown',
+      'A coverage target taken from the best page in the results, not an average, with the subtopics it covers and yours still missing',
       'A blog package as HTML, Markdown and meta.json, or a WordPress draft',
       'Links only to pages that are already live, with link text that reads like a title; pages still to come are listed as links to add later',
       'Every figure looked up in the source the page cites, and a source without independent authority cited at most once',
@@ -271,13 +284,13 @@ export const features: Feature[] = [
     steps: [
       { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile and your case studies.' },
       { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
-      { title: 'Check', body: 'SEO checks on every page. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm.' },
+      { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
       { title: 'Publish and verify', body: 'Take the package or a WordPress draft; Ascentra checks the page once it is live.' },
     ],
     facts: [
       { value: 3, label: 'passes: writer, critic and editor' },
       { value: 4, label: 'special page types' },
-      { value: 3, label: 'images planned per article' },
+      { value: 3, label: 'images produced per article' },
     ],
     faqs: [
       {
@@ -286,14 +299,22 @@ export const features: Feature[] = [
       },
       { q: 'Who is shown as the author?', a: 'The author and expert reviewer from your business profile, with a byline, an author box and Person schema.' },
       { q: 'Can Ascentra publish to WordPress?', a: 'It creates WordPress drafts for your team to review. Publishing stays with you.' },
-      { q: 'What is the blog package?', a: 'The article as HTML and Markdown, plus a meta.json file with the title, description, slug, schema and image plan — ready for any CMS.' },
+      { q: 'What is the blog package?', a: 'The article as HTML and Markdown, the three images as WebP files, plus a meta.json file with the title, description, slug, schema and the image list — ready for any CMS.' },
+      {
+        q: 'How do you know the page is not copied?',
+        a: 'Every finished draft is compared with the competitor pages the research read and with your own pages, in runs of eight words. More than 15% matching a single page fails the quality check and the page is rewritten; the report tells you which page, by how much and which passage.',
+      },
+      {
+        q: 'Where do the images come from?',
+        a: 'They are generated from the page itself — a title card with your business name and two cards that lay out the points of a section — at the planned sizes and file names, with the alt text. Swap any of them for a photo of your own; the file name and alt text stay.',
+      },
     ],
     related: ['keyword-ladders', 'autopilot', 'technical-audits'],
     image: 'colleaguesReview',
     visual: 'content',
     story: {
       title: 'Pages that show real expertise.',
-      body: 'Readers and search engines look for experience, expertise and trust. Ascentra writes from your business profile, names a real author and reviewer, cites your own case studies and marks every figure it cannot verify for you to confirm.',
+      body: 'Readers and search engines look for experience, expertise and trust. Ascentra writes from your business profile, names a real author and reviewer, cites your own case studies, marks every figure it cannot verify for you to confirm — and checks that the finished page is not a rewording of the pages it researched or of a page you already have.',
     },
   },
   {
@@ -308,6 +329,9 @@ export const features: Feature[] = [
       'Crawls of 200, 500 or 1,000 pages, with JavaScript rendering',
       'Search Console index coverage, submitted sitemaps and site structure',
       'Core Web Vitals from real Chrome visitors, per template, on phone and desktop',
+      'A daily check of your key pages: you hear the same day when one disappears, is set to noindex, starts redirecting or changes its canonical, title or robots.txt',
+      'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
+      'Google’s own view of every key page — indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
       'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
       'The smallest items folded into one “minor items” line, so the list you read is the list to act on',
       'A brand and entity check',
@@ -320,11 +344,12 @@ export const features: Feature[] = [
       { title: 'Combine', body: 'Crawl findings meet Search Console coverage, sitemaps, the speed your real visitors measured and entity data.' },
       { title: 'Prioritise', body: 'Issues are ranked by the traffic they put at risk — index blockers first, cosmetics never — and each one says why it ranks there.' },
       { title: 'Fix', body: 'Download the fix pack and hand it to your developers.' },
+      { title: 'Watch', body: 'Your key pages are checked every morning, and marking a fix done has it re-checked within a day.' },
     ],
     facts: [
       { value: 1000, label: 'pages per crawl, JavaScript included' },
       { value: 5, label: 'files in every fix pack' },
-      { value: 3, label: 'crawl depths: 200, 500 and 1,000' },
+      { value: 1, label: 'check of your key pages every day' },
     ],
     faqs: [
       {
@@ -337,6 +362,18 @@ export const features: Feature[] = [
       {
         q: 'Where do the speed figures come from?',
         a: 'From the Chrome User Experience Report: what real Chrome visitors measured over the last 28 days, at the 75th percentile, for your home page, a service page and a blog post on phone and desktop. A page with too few visits to report on its own shows the whole-site figures, marked as such. Speed carries a deliberately low weight in the health score.',
+      },
+      {
+        q: 'What does the daily check of my key pages look at?',
+        a: 'Every morning Ascentra fetches your most important pages — the home page, the pages in your menu, the pages Search Console brings impressions for and the pages your keyword ladders own — and compares the HTTP status, a redirect that appeared, the noindex tag, the canonical and the title with yesterday’s reading, plus your robots.txt. A change that matters becomes an alert the same day; an unchanged page says nothing. A page it could not read is reported as not checked, never as fine.',
+      },
+      {
+        q: 'I fixed something. Do I have to wait for the next audit?',
+        a: 'No. Mark it fixed in the dashboard and the next daily check judges that exact issue on your key pages, usually within a day, and shows you the result. Issues that need the full crawl, Search Console or speed data say so instead of guessing, and those wait for the next audit.',
+      },
+      {
+        q: 'How do you know whether Google has indexed a page?',
+        a: 'Ascentra asks Search Console’s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it, mobile usability and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first — and whatever a run did not reach is shown as not checked rather than assumed fine.',
       },
       {
         q: 'How is the fix list ordered?',
@@ -370,6 +407,8 @@ export const features: Feature[] = [
       'A weekly report every Monday with the changes that matter',
       'Notices when you publish a page from the plan',
       'A weekly list of the pages your site has, so the advice says “refresh this page” instead of “publish another one”',
+      'Every chart marked with what happened: pages you published, technical fixes, Google updates and breaks in Google’s own data',
+      'After a page goes live, its trend is compared with the rest of your website, so you hear whether the change likely helped',
       'Dashboards per website for search, traffic, rankings and content',
     ],
     steps: [
@@ -397,6 +436,14 @@ export const features: Feature[] = [
       {
         q: 'How does Ascentra know I published a planned page?',
         a: 'Each week it looks for the page in your sitemap by its slug and title. Once found, the page is checked live and its ranking is tracked from then on.',
+      },
+      {
+        q: 'Why is my chart marked in mid-September 2025?',
+        a: 'That is when Google stopped serving a hundred results on one page, which removed most SEO tools from the counts. Impressions fell and average positions improved on nearly every website without anything changing on the site, so figures either side of that week are not comparable. Charts mark it, along with Google’s ranking updates, the pages you published and the technical fixes you made.',
+      },
+      {
+        q: 'Can Ascentra tell me whether a change worked?',
+        a: 'It compares the page you changed with the rest of your website over the same weeks, which removes the part of the move that was the season or a Google update, and reports “likely helped”, “possibly helped”, “no clear effect yet” or “can’t tell”. It never claims a change caused a move: a comparison like this narrows the alternatives, it does not prove a cause.',
       },
     ],
     related: ['reports', 'keyword-ladders', 'technical-audits'],
@@ -534,11 +581,12 @@ export const features: Feature[] = [
       'A Search Console alert watcher for Google’s notification e-mails',
       'A monthly check-in for manual actions and security issues',
       'Prioritised recommendations you can start with one click',
+      'Every number says where it came from, over what period and from how big a sample',
       'Every run kept with its report and files',
     ],
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
-      { title: 'Explain', body: 'What changed, why it matters and how sure Ascentra is.' },
+      { title: 'Explain', body: 'What changed, why it matters, how sure Ascentra is — and where each number came from.' },
       { title: 'Recommend', body: 'A prioritised list of next steps, each one ready to run.' },
       { title: 'Share', body: 'Export the full report as PDF or Word, or open any past run with its report and files.' },
     ],
@@ -554,6 +602,10 @@ export const features: Feature[] = [
       {
         q: 'Are recommendations ranked?',
         a: 'Yes. Recommendations are listed in priority order, and each one can be started as a run with its cost shown first.',
+      },
+      {
+        q: 'Can I see where a number came from?',
+        a: 'Yes. Every figure in a report and on a dashboard carries its source, the period it covers and the size of the sample behind it, with a “Where these numbers come from” table at the end of each report. A number that was calculated rather than counted says “modelled, not measured”, and if a figure ever reaches a report without its source it says “source not recorded” instead of borrowing one.',
       },
     ],
     related: ['site-tracking', 'technical-audits', 'enterprise'],

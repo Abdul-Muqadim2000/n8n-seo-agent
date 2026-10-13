@@ -202,7 +202,11 @@ LINK_IMPACT_TABLE = 'seo_link_impact'
 LINK_IMPACT_COLS = [('site_id', 'string'), ('domain', 'string'), ('ref_domain', 'string'), ('from_url', 'string'), ('target_url', 'string'), ('t0', 'string'),
                     ('weeks', 'number'), ('base_position', 'number'), ('base_clicks', 'number'), ('position', 'number'), ('clicks', 'number'),
                     ('page_change', 'number'), ('control_change', 'number'), ('control_spread', 'number'), ('effect', 'number'), ('verdict', 'string'),
-                    ('note', 'string'), ('keyword', 'string'), ('updated_at', 'string')]
+                    ('note', 'string'), ('keyword', 'string'), ('updated_at', 'string'),
+                    # G12 (2026-10-13, FIX_PLAN): the same control-group reading now also measures a PAGE CHANGE, so each row says
+                    # which it is — kind `link` (a won link, ref_domain set) or `page_change` (a page that went live or was rewritten,
+                    # ref_domain empty), and `change` names the change (published | rewritten).
+                    ('kind', 'string'), ('change', 'string')]
 LINK_GRAPH_TABLE = 'seo_link_graph'
 LINK_GRAPH_COLS = [('site_id', 'string'), ('domain', 'string'), ('release', 'string'), ('kind', 'string'), ('ref_domain', 'string'), ('hc_pos', 'number'), ('pr_pos', 'number'),
                    ('n_hosts', 'number'), ('links_to', 'string'), ('checked_at', 'string')]
@@ -214,12 +218,32 @@ AUDITS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string
 AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number'),
                        # G26 (2026-10-12, FIX_PLAN): the impact weight that ordered the fix list (severity x pages affected x their clicks and
                        # impressions x their place in the site) and the one sentence that explains it, so the app can order the same way
-                       ('impact', 'number'), ('impact_basis', 'string')]
+                       ('impact', 'number'), ('impact_basis', 'string'),
+                       # G11 (2026-10-13, FIX_PLAN): "I fixed this" in the app sets recheck_state to `requested` (with recheck_requested_at);
+                       # the next daily Page Watch answers it on the site's key pages and writes back `fixed` / `still_open` / `not_checked`
+                       # with the rule it used and one sentence of evidence - days instead of waiting for the next monthly audit (1.10).
+                       ('recheck_state', 'string'), ('recheck_requested_at', 'string'), ('recheck_at', 'string'), ('recheck_rule', 'string'), ('recheck_note', 'string')]
+
+# ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13, FIX_PLAN) ----
+# One row per site and key page: today's raw reading (status, a redirect that appeared, noindex, canonical, title, description, H1s, whether
+# robots.txt blocks it) with the change history, plus what Search Console's URL Inspection said about the same page (index state, the
+# canonical Google chose, its last crawl, mobile usability, rich results) - written by the weekly rotation, which spends at most
+# PW.PER_RUN of Google's 2,000-a-day quota per property. The site-level fingerprint (robots.txt hash, when the watch last ran) lives in
+# seo_cache under `watch:<site_id>`, beside the sitemap fingerprints.
+PAGE_WATCH_TABLE = 'seo_page_watch'
+PAGE_WATCH_COLS = [('site_id', 'string'), ('domain', 'string'), ('url', 'string'), ('kind', 'string'), ('weight', 'number'), ('checked_at', 'string'),
+                   ('status', 'number'), ('location', 'string'), ('noindex', 'boolean'), ('noindex_source', 'string'), ('canonical', 'string'), ('canonical_ok', 'boolean'),
+                   ('title', 'string'), ('title_hash', 'string'), ('titles', 'number'), ('description', 'string'), ('h1', 'string'), ('h1s', 'number'),
+                   ('robots_blocked', 'boolean'), ('robots_hash', 'string'), ('state', 'string'), ('changes', 'string'), ('last_change_at', 'string'),
+                   ('changed_count', 'number'), ('error', 'string'),
+                   ('inspect_at', 'string'), ('index_state', 'string'), ('indexed', 'string'), ('coverage', 'string'), ('google_canonical', 'string'),
+                   ('last_crawl', 'string'), ('mobile', 'string'), ('rich_results', 'string'), ('inspect_error', 'string')]
 
 # ---- reuse instead of repeat (v4.6): one key/value cache for results that do not need to be fetched again ----
 # keys: 'age:<domain>' (registration date, 365 days), 'desc:<domain>' (site description, 30 days), 'sitemap:<site_id>' (sitemap fingerprint)
 # v4.9: 'ai_brands:<site_id>' (brand names AI uses for competitors -> their domain, learned by the Answer Analyst), 'ai_index:<site_id>' (the monthly AI-answer database view)
 # v4.12: 'indexnow:<site_id>' (the site's IndexNow key; the owner hosts https://<domain>/<key>.txt)
+# v4.16 (G11): 'watch:<site_id>' (the daily key-page watch: the robots.txt fingerprint and when it last ran)
 CACHE_TABLE = 'seo_cache'
 CACHE_COLS = [('key', 'string'), ('kind', 'string'), ('site_id', 'string'), ('value', 'string'), ('updated_at', 'string')]
 

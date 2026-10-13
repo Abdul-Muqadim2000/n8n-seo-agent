@@ -5,7 +5,7 @@ import { compactNumber, type OverviewData } from '@seo/shared';
 import { useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { cn, fmtDate, fmtDateTime } from '@/lib/utils';
-import { ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
+import { AnnotationLegend, ChartCard, LineageNote, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
 import { StatusBadge } from '@/components/ui/badge';
 import { ButtonLink } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -234,7 +234,7 @@ function Overview({ d, refetching }: { d: OverviewData; refetching: boolean }) {
 
       {/* the chart card stretches with the movers next to it and the chart grows into the space */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <SearchTrend series={search} kind={d.search.seriesKind} loading={refetching} className="lg:col-span-2" />
+        <SearchTrend series={search} kind={d.search.seriesKind} loading={refetching} className="lg:col-span-2" annotations={d.search.annotations} lineage={d.search.lineage} />
         <MoversCard d={d} />
       </div>
 
@@ -456,7 +456,7 @@ function ChartTitle({ icon, children, info }: { icon: ReactNode; children: React
   );
 }
 
-function SearchTrend({ series, kind, loading, className }: { series: OverviewData['search']['series']; kind: OverviewData['search']['seriesKind']; loading: boolean; className?: string }) {
+function SearchTrend({ series, kind, loading, className, annotations, lineage }: { series: OverviewData['search']['series']; kind: OverviewData['search']['seriesKind']; loading: boolean; className?: string; annotations?: OverviewData['search']['annotations']; lineage?: OverviewData['search']['lineage'] }) {
   const [metric, setMetric] = useState<Metric>('clicks');
   const { page } = useSitePage();
   const m = METRICS.find((x) => x.value === metric)!;
@@ -486,11 +486,17 @@ function SearchTrend({ series, kind, loading, className }: { series: OverviewDat
         ],
         rows: [...series].reverse(),
       }}
-      footer={<MoreLink to={page('search')}>Daily data, queries and landing pages</MoreLink>}
+      footer={
+        <div className="space-y-1.5">
+          <AnnotationLegend annotations={annotations} data={rows} xKey="periodEnd" />
+          <LineageNote lineage={lineage?.find((l) => /^Clicks, impressions/.test(l.figure))} />
+          <MoreLink to={page('search')}>Daily data, queries and landing pages</MoreLink>
+        </div>
+      }
     >
       {series.length ? (
         <FillHeight min={300}>
-          {(h) => <TimeSeriesChart data={rows} xKey="periodEnd" series={[m.series]} area={metric !== 'position'} invertY={metric === 'position'} height={h} yFormat={metric === 'position' ? (v) => String(Math.round(v)) : undefined} />}
+          {(h) => <TimeSeriesChart data={rows} xKey="periodEnd" series={[m.series]} area={metric !== 'position'} invertY={metric === 'position'} height={h} yFormat={metric === 'position' ? (v) => String(Math.round(v)) : undefined} annotations={annotations} />}
         </FillHeight>
       ) : (
         <EmptyState

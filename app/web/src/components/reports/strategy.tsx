@@ -11,7 +11,7 @@ import { KeyValue } from '@/components/ui/misc';
 import { DataTable, type Column } from '@/components/ui/table';
 import { ShareBars } from '@/components/charts';
 import { DifficultyBadge, PlanBadge } from '@/components/site/keyword';
-import { Block, Bullets, Chips, Facts, has, LedgerCard, n, num, obj, objs, SectionTitle, str, strs, usd, type P } from './kit';
+import { Block, Bullets, Chips, Facts, has, LedgerCard, n, num, obj, objs, plural, SectionTitle, shortUrl, str, strs, usd, type P } from './kit';
 import { isCountry, keywordPrefill } from './meta';
 import { KdMeter, PositionPill, ReportHero, VolumeBar } from './visuals';
 
@@ -51,6 +51,23 @@ function RankLink({ keyword, country, siteId, label = 'Rank for this keyword', p
 
 const DIFF_RANK: Record<string, number> = { easy: 0, reachable: 1, hard: 2, very_hard: 3, not_realistic: 4 };
 
+/**
+ * G8 (2026-10-13): a traffic number must say where it comes from — `calibrated` from this website's own measured Search Console
+ * impressions and clicks for that exact search, `modelled` from the provider's monthly volume, or no estimate at all.
+ */
+function TrafficPotential({ k }: { k: P }) {
+  const basis = str(k.traffic_basis);
+  const value = n(k.traffic_potential);
+  if (num(k.traffic_potential) == null) return <span className="text-ink-3">–</span>;
+  if (!basis || basis === 'unknown') return <span className="tabular">{value}</span>;
+  return (
+    <span className="inline-flex items-center gap-1.5" title={str(k.traffic_note) || undefined}>
+      <span className="tabular">{value}</span>
+      <Badge tone={basis === 'calibrated' ? 'accent' : 'neutral'}>{basis === 'calibrated' ? 'measured' : 'modelled'}</Badge>
+    </span>
+  );
+}
+
 /** The keyword's difficulty for the website and its plan ("Easy for your site · Direct plan · 2-4 months"), when the research knew the website. */
 function ForYou({ k, compact }: { k: P; compact?: boolean }) {
   const d = asDifficulty(k.difficulty_for_you);
@@ -89,6 +106,14 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
   const questions = strs(p.questions);
   const gaps = objs(p.competitor_gaps);
   const ai = obj(p.ai_demand);
+  // G8 (2026-10-13): the searches this website already appears for that seeded the research, and the groups one page can serve
+  const sc = obj(p.search_console);
+  const scNoPage = objs(sc.no_page);
+  const scStriking = objs(sc.striking);
+  const scAnswered = objs(sc.answered);
+  const scDays = num(sc.period_days) ?? 28;
+  const serpClusters = objs(p.serp_clusters);
+  const overlap = obj(p.serp_overlap);
   const followUps = obj(p.follow_ups);
   const failures = arr2str(p.research_failures);
   const country = str(p.country);
@@ -129,7 +154,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
     { key: 'volume', header: 'Volume', align: 'right', sortValue: (r) => num(r.volume), cell: (r) => <VolumeBar value={num(r.volume)} max={maxVolume} text={n(r.volume)} /> },
     { key: 'kd', header: 'KD', align: 'right', sortValue: (r) => num(r.kd), cell: (r) => <KdMeter value={num(r.kd)} /> },
     { key: 'cpc', header: 'CPC', align: 'right', sortValue: (r) => num(r.cpc), cell: (r) => (num(r.cpc) == null ? '–' : usd(r.cpc)), hideOnMobile: true },
-    { key: 'traffic_potential', header: 'Traffic potential', align: 'right', sortValue: (r) => num(r.traffic_potential), cell: (r) => n(r.traffic_potential), hideOnMobile: true },
+    { key: 'traffic_potential', header: 'Traffic potential', align: 'right', sortValue: (r) => num(r.traffic_potential), cell: (r) => <TrafficPotential k={r} />, hideOnMobile: true },
     { key: 'opportunity', header: 'Opportunity', align: 'right', sortValue: (r) => num(r.opportunity), cell: (r) => <span className="font-semibold text-accent-text tabular">{n(r.opportunity)}</span> },
     { key: 'ai_search_volume', header: 'AI volume', align: 'right', sortValue: (r) => num(r.ai_search_volume), cell: (r) => n(r.ai_search_volume), hideOnMobile: true },
     { key: 'go', header: <span className="sr-only">Write or rank</span>, align: 'right', cell: (r) => <span className="block min-w-[11rem]"><KeywordActions keyword={str(r.keyword)} pageType={r.page_type} country={country} siteId={siteId} compact /></span> },
@@ -225,7 +250,7 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
                   { icon: <Search />, label: 'Searches / month', value: n(start.volume) },
                   { icon: <BarChart3 />, label: 'Difficulty', value: num(start.kd) != null ? String(num(start.kd)) : '–' },
                   { icon: <MousePointerClick />, label: 'Cost per click', value: num(start.cpc) != null ? usd(start.cpc) : '–' },
-                  { icon: <TrendingUp />, label: 'Traffic potential', value: n(start.traffic_potential) },
+                  { icon: <TrendingUp />, label: 'Traffic potential', value: <TrafficPotential k={start} />, hint: str(start.traffic_note) || undefined },
                 ]}
               />
               <div className="mt-4 flex flex-wrap gap-2">
@@ -295,6 +320,101 @@ export function KeywordStrategyReport({ report }: { report: ReportDetail }) {
               />
             ))}
           </ul>
+        </Block>
+      )}
+
+      {(scNoPage.length > 0 || scStriking.length > 0) && (
+        <Block
+          title="Searches you already appear for"
+          description={`Taken from your own Search Console, measured over ${scDays} days: these searches seeded the research, so the plan starts from real demand instead of guesses`}
+          icon={<Search />}
+          info={
+            str(sc.page_check) === 'search console page'
+              ? 'No page list is on file for this website yet, so "no page answers it" was judged on the page Search Console reports.'
+              : 'A search counts as unanswered when no page of your website matches it — your sitemap and the pages Search Console knows about.'
+          }
+          flush
+        >
+          <ul className="divide-y divide-line">
+            {[...scNoPage, ...scStriking.filter((q) => !scNoPage.some((x) => str(x.keyword) === str(q.keyword)))].slice(0, 20).map((q, i) => {
+              const noPage = strs(q.kinds).includes('no_page');
+              const page = obj(q.answered_by);
+              return (
+                <InsightItem
+                  key={`${str(q.keyword)}-${i}`}
+                  icon={noPage ? <PenLine /> : <TrendingUp />}
+                  title={str(q.keyword)}
+                  description={
+                    <>
+                      {`${n(q.impressions)} impressions · ${n(q.clicks)} clicks${num(q.position) != null ? ` · you rank #${num(q.position)}` : ''}`}
+                      {!noPage && str(page.url) && (
+                        <>
+                          {' · strengthen '}
+                          <a href={str(page.url)} target="_blank" rel="noreferrer noopener" className="text-accent-text hover:underline">
+                            {shortUrl(str(page.url))}
+                          </a>
+                        </>
+                      )}
+                    </>
+                  }
+                  meta={
+                    <Badge tone={noPage ? 'accent' : 'neutral'}>
+                      {noPage ? 'no page answers it' : 'striking distance'}
+                    </Badge>
+                  }
+                  action={<KeywordActions keyword={str(q.keyword)} pageType={noPage ? 'Service Page' : undefined} country={country} siteId={siteId} compact />}
+                  actionPosition="side"
+                />
+              );
+            })}
+          </ul>
+          {scAnswered.length > 0 && (
+            <p className="border-t border-line px-4 py-3 text-[13px] leading-snug text-ink-3">
+              {plural(scAnswered.length, 'other search')} already {scAnswered.length === 1 ? 'has' : 'have'} a page of yours and {scAnswered.length === 1 ? 'was' : 'were'} left out:{' '}
+              {scAnswered
+                .slice(0, 5)
+                .map((q) => str(q.keyword))
+                .join(', ')}
+              . Refresh those pages instead of writing new ones.
+            </p>
+          )}
+        </Block>
+      )}
+
+      {serpClusters.length > 0 && (
+        <Block
+          title="Searches that share a results page"
+          description={`Google answers these with the same pages (${num(overlap.min_shared_urls) ?? 3} or more shared top-10 results), so one page can target the whole group`}
+          icon={<Layers />}
+          info="Two pages for searches that share a results page split your own signals: neither ranks as well as one strong page would."
+        >
+          <div className="space-y-3">
+            {serpClusters.slice(0, 6).map((c, i) => (
+              <div key={`${str(c.head_keyword)}-${i}`} className="min-w-0 rounded-xl border border-line bg-surface p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="font-medium text-ink">{str(c.head_keyword)}</p>
+                  <Badge>{plural(num(c.keyword_count) ?? objs(c.keywords).length, 'search', 'searches')} · one page</Badge>
+                </div>
+                <ul className="mt-2 space-y-1 text-[13px] text-ink-2">
+                  {objs(c.keywords)
+                    .slice(1)
+                    .map((k, j) => (
+                      <li key={`${str(k.keyword)}-${j}`} className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="min-w-0 truncate">{str(k.keyword)}</span>
+                        <span className="text-xs text-ink-3">
+                          {plural(num(k.shared_urls) ?? 0, 'shared result')}
+                          {num(k.volume) != null ? ` · ${n(k.volume)} searches` : ''}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  <WriteLink keyword={str(c.head_keyword)} pageType="Service Page" country={country} siteId={siteId} label="Write one page for the group" />
+                  <RankLink keyword={str(c.head_keyword)} country={country} siteId={siteId} />
+                </div>
+              </div>
+            ))}
+          </div>
         </Block>
       )}
 

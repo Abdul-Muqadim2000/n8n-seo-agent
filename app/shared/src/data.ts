@@ -3,6 +3,9 @@
 import type { ModeId } from './constants';
 import type { MonitorSettings, ProfileFields } from './schemas';
 import type { Report } from './api';
+import type { ChartAnnotation } from './annotations';
+import type { PageChangeTest } from './change-test';
+import type { Lineage } from './lineage';
 
 export interface MetricsPoint {
   periodStart: string;
@@ -149,6 +152,14 @@ export interface SearchData {
   queries: QueryPoint[];
   periods: string[];
   trends: TrendPoint[];
+  /** G12: what to mark on the charts — pages published, audit fixes, Google updates, data breaks (oldest first) */
+  annotations: ChartAnnotation[];
+  /** G12: the data breaks this window straddles, so a before / after comparison can say it is not comparable */
+  dataBreaks: { name: string; start: string; end: string; detail: string }[];
+  /** G12: did a page change help? Each change read against the site's other pages over the same weeks */
+  changeTests: PageChangeTest[];
+  /** G29: where each figure on this page came from, over what period, from how big a sample */
+  lineage: Lineage[];
 }
 
 export interface RankPoint {
@@ -244,6 +255,8 @@ export interface TrackedKeyword {
 export interface RankingsData {
   ladders: Ladder[];
   keywords: TrackedKeyword[];
+  /** G29: where the positions and the share of voice come from */
+  lineage: Lineage[];
 }
 
 export interface ContentItem {
@@ -316,6 +329,68 @@ export interface Finding {
   /** G26: the audit's impact weight and why it ranks where it does (null on audits written before 2026-10-12). */
   impact: number | null;
   impactBasis: string;
+  /** G11: the state of a re-check the owner asked for with "I fixed this" (null when nobody asked). */
+  recheck: FindingRecheck | null;
+}
+
+/** G11 (2026-10-13, FIX_PLAN): "I fixed this" asks the daily key-page watch to judge this one finding again — within a day, not at the
+ *  next monthly audit. `requested` = waiting for tonight's watch; `fixed` / `still_open` = it was judged on the site's key pages;
+ *  `not_checked` = the watch cannot judge it without the full audit (and says so). */
+export type RecheckState = 'requested' | 'fixed' | 'still_open' | 'not_checked';
+export interface FindingRecheck {
+  state: RecheckState;
+  requestedAt: string;
+  checkedAt: string;
+  /** the watch rule that judged it (empty when nothing could) */
+  rule: string;
+  note: string;
+}
+
+/** G11: the daily key-page watch, as the technical page shows it. */
+export interface PageWatch {
+  running: boolean;
+  lastCheckedAt: string;
+  pagesWatched: number;
+  pagesNotChecked: number;
+  changedLast7Days: number;
+  pages: WatchedPage[];
+  changes: { url: string; changes: string[]; at: string }[];
+}
+export interface WatchedPage {
+  url: string;
+  kind: string;
+  checkedAt: string;
+  status: number;
+  noindex: boolean;
+  canonical: string;
+  canonicalOk: boolean;
+  title: string;
+  robotsBlocked: boolean;
+  state: string;
+  changes: string[];
+  lastChangeAt: string;
+  /** G25: what Search Console's URL Inspection said about this page ('' / null = not checked, never "fine") */
+  inspectedAt: string;
+  indexed: boolean | null;
+  indexState: string;
+  coverage: string;
+  googleCanonical: string;
+  lastCrawl: string;
+  mobile: 'pass' | 'fail' | '';
+  richResults: string[];
+  inspectError: string;
+}
+
+/** G25: Google's own view of the key pages, with what nobody asked about counted apart. */
+export interface IndexCoverage {
+  checked: number;
+  indexed: number;
+  notIndexed: number;
+  notChecked: number;
+  canonicalMismatch: number;
+  mobileBad: number;
+  quota: number;
+  text: string;
 }
 
 export interface TechnicalData {
@@ -325,6 +400,18 @@ export interface TechnicalData {
   findings: Finding[];
   byCategory: { category: string; critical: number; high: number; medium: number; low: number }[];
   reports: Report[];
+  /** G11: the daily key-page watch (null before the first watch has run for this website) */
+  watch: PageWatch | null;
+  /** G25: Google's index view of those pages, from URL Inspection within its 2,000-a-day quota */
+  indexCoverage: IndexCoverage | null;
+}
+
+/** What the app answers when somebody presses "I fixed this" on a finding. */
+export interface RecheckRequest {
+  findingKey: string;
+  state: RecheckState;
+  requestedAt: string;
+  message: string;
 }
 
 export interface AiEngineStat {
@@ -838,6 +925,10 @@ export interface OverviewData {
     series: { periodEnd: string; clicks: number; impressions: number; position: number; sessions: number }[];
     /** 'weekly': rolling 28-day totals per weekly run; 'daily': the latest report's daily Search Console values (before the weekly history exists) */
     seriesKind: 'weekly' | 'daily';
+    /** G12: the events marked on this chart */
+    annotations: ChartAnnotation[];
+    /** G29: where these figures come from */
+    lineage: Lineage[];
   };
   health: { latest: AuditPoint | null; series: { auditedAt: string; healthScore: number }[] };
   ai: { latest: AiRun | null; series: { checkedAt: string; mentionRate: number; citationRate: number; shareOfVoice: number }[] };
@@ -1053,6 +1144,12 @@ export interface LadderDetail extends LadderCard {
   reports: Report[];
   costSoFarUsd: number;
   expectedVisitsTop3: number | null;
+  /** G12: the events marked on this ladder's charts — its pages going live, audit fixes, Google updates, data breaks */
+  annotations: ChartAnnotation[];
+  /** G12: what each of this ladder's page changes did, against the site's other pages */
+  changeTests: PageChangeTest[];
+  /** G29: where the positions, the traffic and the expected visits come from */
+  lineage: Lineage[];
 }
 
 export interface NeedsYouItem {
