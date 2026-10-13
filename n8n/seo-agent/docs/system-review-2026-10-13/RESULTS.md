@@ -33,7 +33,7 @@ All 13 executions succeeded.
 | | Amount | How it was measured |
 |---|---|---|
 | DataForSEO | **$1.8761** | Balance $18.287684 at 06:46:28 UTC and $16.411543 at 07:18:12 UTC, probed with `appendix/user_data` from inside the n8n container before and after every run (`files/spend-2026-10-13.json`); nothing else ran in the window. Per run, by balance delta: `discover` + its keyword report **$0.2773**, the ladder page **$0.0221**, the full SEO report **$0.4094**, `ai_visibility` **$0.7946**, backlinks full **$0.3727**. The runs' own figures agree to the cent for the page and backlinks, and the discover pair matches exactly ($0.2552 + $0.0221); the full report reports $0.4674, **$0.058 above** what the balance moved, and `ai_visibility` reports $0.7866, $0.008 below. |
-| Claude | **≈ $1.00** | `files/claude-tokens-2026-10-13.json`. Ten Sonnet 5.5 calls report real usage: **119,060 in / 32,563 out** = $0.564 at the baseline prices (Sonnet $2/$10 per million). The page run's three **Opus 5.5 streaming** nodes (Strategy Brief, Copywriter, Editor) report only `tokenUsageEstimate`, not usage — 27,365 in / 16,426 out ≈ $0.438 at Opus $4/$20 — so **this figure has an estimated part again** (G23), unlike the 2026-10-12 window where no content run happened. |
+| Claude | **≈ $1.00** | `files/claude-tokens-2026-10-13.json`. Ten Sonnet 5.5 nodes (14 calls) report real usage: **119,060 in / 32,563 out** = $0.564 at the baseline prices (Sonnet $2/$10 per million). The page run's three **Opus 5.5 streaming** nodes (Strategy Brief, Copywriter, Editor) report only `tokenUsageEstimate`, not usage — 27,365 in / 16,426 out ≈ $0.438 at Opus $4/$20 — so **this figure has an estimated part again** (G23), unlike the 2026-10-12 window where no content run happened. |
 
 **Both windows together: $3.79** ($0.91 on 2026-10-12 + $2.88 on 2026-10-13), against the re-rating's $4.3 budget.
 
@@ -629,8 +629,8 @@ target `https://techand.ai/` (a 2026-10-02 row, P2-3's stored residual).
 another part failed or could not be tested; "still present" means the defect was reproduced; "not exercised" means neither window has
 evidence either way. Execution ids 481–516 are the 2026-10-12 window, **517–529 the completion runs of 2026-10-13**.
 
-**Totals over the 48 items, both windows: 39 gone, 6 partly, 1 still present, 2 not exercised** (D1–D26 + D25a/b/c: 24 gone,
-3 partly, 1 still present — D10 —, 1 not exercised; P1, P2, G18, P34: 15 gone, 3 partly, 1 not exercised). Before the completion runs
+**Totals over the 48 items, both windows: 38 gone, 7 partly, 1 still present (D10, through R11), 2 not exercised** (D1–D26 +
+D25a/b/c: 22 gone, 4 partly, 1 still present, 1 not exercised; P1, P2, G18, P34: 16 gone, 3 partly, 1 not exercised). Before the completion runs
 the same table read 26 gone, 6 partly, 16 not exercised: **14 of the 16 unexercised items now have evidence**, and the two that
 remain (D25a's missed schedules, P2-6's author box) need a week of schedules and a filled business profile, neither of which a run can
 supply.

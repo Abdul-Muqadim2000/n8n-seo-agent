@@ -11,7 +11,7 @@ the ladder's rung page through the app's "Write now", the full SEO report, `ai_v
 **$0.91 + $2.88 = $3.79** of the $4.3 budget. 76 artefacts are in this folder's git-ignored `files/`.
 
 **`RESULTS.md` is written** (both windows: §0 and §0b costs, §1 runs, §2.1–§2.15 findings by feature, §3.1 the 48-item defect status,
-§3.2 the new defects **R1–R16**, §4 owner items, §5 state left behind, §6 artefacts). 39 of the 48 tracked defects are gone, 6 partly,
+§3.2 the new defects **R1–R16**, §4 owner items, §5 state left behind, §6 artefacts). 38 of the 48 tracked defects are gone, 7 partly,
 1 still present (D10, through R11), 2 unexercised (D25a, P2-6).
 
 **Next: the independent scoring.** Give a fresh session with no fixing context the new `RESULTS.md`, the unchanged
@@ -55,7 +55,7 @@ file** · publish or discard the **5 written pages** (the weekly cadence pauses 
 no limit was changed): discovery + follow-up, the ladder's rung page, the full report, `ai_visibility` and the full backlink check —
 executions **517–529**, 76 artefacts in `files/`, measured spend **$2.88** ($1.8761 DataForSEO + ≈ $1.00 Claude, $0.438 of it the
 estimate for the page run's three Opus streaming nodes). The document now carries §0b (the completion runs and their spend), their
-rows in §1, §2.11–§2.15, the rewritten §3.1 (**39 of 48 gone, 6 partly, 1 still present, 2 unexercised**), the new defects
+rows in §1, §2.11–§2.15, the rewritten §3.1 (**38 of 48 gone, 7 partly, 1 still present, 2 unexercised**), the new defects
 **R10–R16** in §3.2 and the updated §4–§6.
 
 **Still to enter in `FIX_PLAN.md`:** the six new defects **R10–R16**. Two are serious — **R10**, the audit raises a High "pages are
