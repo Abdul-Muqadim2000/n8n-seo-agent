@@ -4362,6 +4362,60 @@ log("Claude's cost is a number and the estimates come from the money (2026-10-13
     "Calibration, seo_cache cost:ai:<mode> / cost:dfs:<mode>: the rolling figure with a quarter of headroom, never below what the mode "
     "recently cost); and reconcile_claude_cost.py (dry run by default) reconciles a month of ledger rows against the owner's Anthropic "
     "Console usage export and writes one correction factor per model into cost:factor:claude")
+# 53. A STORED RUNG NOBODY REVISITED, ALERTS ON STATISTICS, A PRE-RELEASE CHECK, AND TWO SMALL LIES (2026-10-13, system review
+#     FIX_PLAN.md R16 / G28 / G27 and the re-rating's "Also seen"):
+#       * R16 — the fit gate (D4 / D8) stops a NEW keyword, but nothing ever revisited the rows already stored: `seo_ladders` still
+#         held rung 2 of lad_mv40b6s9h5a8 as "facts erp" (facts.ae, a competing UAE ERP vendor), `status: planned`, so the Rank
+#         Tracker's delivered report of 2026-10-12 listed it and the Content Cadence would have written it. The gate now also runs on
+#         the READ path: `fitStored` (added to `v5/code/_fit_gate.js`, never restructured) is the same gate plus the one rule a stored
+#         row needs — a rung whose page is already written or published is kept and flagged, never silently dropped. The Content
+#         Cadence leaves a set-aside rung out of what it writes (`set_aside` with the reason in the note and the callback) and marks
+#         the row `set_aside` through *Ladder Marks*, so the app and the next run see the same thing; the Rank Tracker buys no check
+#         for it and names it with its reason instead of asking for the page. `fix_brand_rungs.py` repairs the rows that exist today
+#         (dry run by default; it never touches a rung whose page is written).
+#       * G28 — the last fixed threshold in the site tracking. Clicks, impressions and sessions have been tested against their own
+#         baseline since 2026-10-12 (`_site_stats.js`, two-sample Poisson z, minimum volumes, Google-update context), but a keyword's
+#         position still alerted on "5 places while it was in the top 10" with no volume at all: Search Console's position is an
+#         impression-weighted 28-day average, so five places on 12 impressions is one search. `ST.position` needs
+#         `alert_min_position_impressions` (50) in BOTH periods before it calls a move real and tests the same keyword's clicks over
+#         the same two periods; `ST.tested` puts the source, the two periods, the test and the confidence into every alert's words.
+#       * G27 — a pre-release check: `POST /webhook/seo-prerelease` (built in `build_api.py`, workflow `SEOagentPreRel1`) runs the
+#         key-page checks (G11) against a staging host or a URL list and answers `{ verdict, exit_code, failures, counts }`. It has no
+#         Data Table node and no sub-workflow call, so it cannot write anything for a site, and whatever a staging host cannot answer
+#         (index coverage, real-user speed, positions) comes back as `not_checked` with the reason.
+#       * the re-rating's "Also seen", two of them: a ladder row stored before D10 carried free text as its page type and it travelled
+#         unchanged into the brief, the schema and the content log — *Normalize Input* now maps it through the page-type kit and keeps
+#         the sentence as `page_notes` with a note saying what happened; and the fix pack repeated the site's own LinkedIn `sameAs`
+#         (the schema's spelling and the footer link's both survived the exact-string Set), so profiles are deduped by identity and the
+#         file says which ones the homepage already lists and which are genuinely new.
+# =============================================================================
+# ---------- A. the page type of a row stored before D10 never reaches the brief as free text ----------
+setcode('Normalize Input', PAGE_TYPE_SRC + "\n// 2026-10-13 (re-rating §3.2 \"Also seen\"): a ladder row written before D10 carries free text as its page type\n// (\"Service Page (ERP implementation UAE) with built-in vendor-neutral comparison…\"), and the cadence / \"Write now\" body passed it\n// straight on. PT.of maps anything to one of the form's options, PT.notes keeps the sentence for the brief.\n" + code('Normalize Input'))
+patch('Normalize Input', "const pageType = (mode === 'case_study' || /case stud/i.test(pageType0)) ? 'Case Study' : /pillar|hub/i.test(pageType0) ? 'Pillar Page' : /^local/i.test(pageType0) ? 'Local Page' : (pageType0 || 'Service Page');",
+      "const pageType = mode === 'case_study' ? 'Case Study' : PT.of(pageType0, 'Service Page');\n"
+      "const page_notes = PT.notes(pageType0, pageType);   // the sentence itself, for the brief (strategy_brief.txt prints it)\n"
+      "const page_type_note = (pageType0 && !PT.TYPES.includes(pageType0)) ? 'The page type \"' + pageType0.slice(0, 120) + '\" is not one of the page types we write, so it was read as \"' + pageType + '\"' + (page_notes ? ' and the rest kept as a note for the brief' : '') + '.' : '';")
+patch('Normalize Input', "    page_type: pageType,", "    page_type: pageType,\n    page_notes,\n    page_type_note,")
+assert 'const PT = (() => {' in code('Normalize Input') and 'PT.of(pageType0' in code('Normalize Input'), 'page type: Normalize Input does not normalise it'
+# ---------- B. R16: the gate is part of the kit, and the harness can run it on a stored row ----------
+assert 'const fitStored = ' in FIT_GATE_SRC and 'fitStoredLive' in FIT_GATE_SRC, 'R16: _fit_gate.js has no fitStored'
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_fit_stored.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 53): the fit gate over a STORED ladder row (R16) — { row, ctx } -> { ok, live, flagged, reason, detail, note }\n"
+    + FIT_GATE_SRC + "\nreturn $input.all().map(i => { const j = i.json || {}; const row = j.row || j; const ctx = j.ctx || {};\n"
+    "  return { json: { ...fitStored(row, ctx), keyword: row.keyword || '', gate: fitGate(row.keyword || '', ctx) } }; });\n")
+# ---------- C. the fix pack never offers a profile the homepage already lists ----------
+assert 'const profKey = ' in code('Fix Pack') and 'sameAs_new' in code('Fix Pack') and 'nothing new to add there' in code('Fix Pack'), 'fix pack: the sameAs profiles are not deduped by identity'
+sticky("""### A stored rung nobody revisited, alerts on statistics, and a pre-release check (R16 · G28 · G27)
+**R16 — the gate also reads what is already stored.** The keyword fit gate stopped new keywords; `seo_ladders` still held *"facts erp"* (a competitor's brand) as a planned rung, so the Rank Tracker reported it and the cadence would have written it. `fitStored` (in `_fit_gate.js`) now runs on the **read** path: the Content Cadence leaves such a rung out with its reason and marks the row **`set_aside`**, the Rank Tracker buys no check for it and names it instead of asking for the page. A rung whose page is already written is **kept and flagged**, never dropped. `fix_brand_rungs.py` repairs today's rows (dry run by default).
+**G28 — the last fixed threshold is gone.** A keyword's position is an impression-weighted 28-day average: five places on 12 impressions is one search, not a drop. `ST.position` needs **50 impressions in both periods** before it calls a move real, tests the same keyword's clicks (Poisson z) and every alert now says **what was tested, over what period and how sure it is** (`ST.tested`), with Google's update dates as context.
+**G27 — a pre-release check for CI.** `POST /webhook/seo-prerelease` runs the key-page checks (status, redirect, `noindex`, robots.txt, canonical, title, H1, description) against a **staging host or URL list** and answers `{ verdict, exit_code, failures, counts }`. It **writes nothing** (no Data Table node, no sub-workflow), and index coverage, real-user speed and positions come back as **`not_checked` with the reason** — a staging URL Google has never seen cannot be asked.
+**Also:** a page type stored as free text is mapped to one of the form's options (the sentence kept as `page_notes`), and the fix pack no longer asks you to add a `sameAs` profile your homepage already lists.""",
+    pos('Normalize Input')[0] - 40, pos('Normalize Input')[1] + 420, 1180, 300, 3)
+log('A stored rung nobody revisited (2026-10-13, FIX_PLAN R16): the fit gate now also runs over the rows stored before it existed (fitStored in v5/code/_fit_gate.js) — the Content Cadence leaves a set-aside rung ("facts erp" -> facts.ae) out of what it writes, names it with its reason in the note and the callback and marks the ladder row `set_aside` through Ladder Marks; the Rank Tracker buys no position check for it and reports it with the reason instead of asking for the page; a rung whose page is already written is kept and only flagged; and fix_brand_rungs.py repairs the stored rows (dry run by default, never touching a rung whose page is written or published)')
+log('Alerts on statistics, not on fixed percentages (2026-10-13, FIX_PLAN G28): the keyword-position alert was the last fixed threshold in the site tracking (5 places while the keyword was in the top 10, at any volume) — ST.position (v5/code/_site_stats.js) now needs alert_min_position_impressions (50) impressions in both 28-day periods before a move is called real, tests the same keyword\'s clicks over the same periods (two-sample Poisson z) and reports a big move on too little data as a "Watch" info line; every traffic and position alert carries ST.tested: the source, the two periods, the test and how sure it is, plus the Google update dates of the period from v5/data/seo_events.json')
+log('A pre-release check a CI job can read (2026-10-13, FIX_PLAN G27): the new workflow SEO Agent — Pre-release Check (build_api.py, SEOagentPreRel1, POST /webhook/seo-prerelease, synchronous and free) runs the key-page checks of the daily watch (status, redirect, noindex, robots.txt, one canonical / title / H1, description) against a staging host or an explicit URL list and answers { verdict, exit_code, summary, counts, failures, warnings, not_checked, pages }; it has no Data Table node and no sub-workflow call, so it can never create a ladder row, a content-log row or an audit, and index coverage, real-user speed and positions come back as "not checked" with the reason because a staging URL Google has never seen cannot be asked')
+log('Two small lies from the re-rating ("Also seen", 2026-10-13): a ladder row stored before D10 carried free text as its page type and it travelled unchanged into the brief, the schema and the content log — Normalize Input maps it through v5/code/_page_type.js, keeps the sentence as page_notes and says in page_type_note what it did; and the fix pack repeated the site\'s own LinkedIn sameAs (the schema spelling and the footer link both survived the exact-string Set), so profiles are deduped by identity and organization.jsonld says which ones the homepage already lists and which are genuinely new')
 
 # =============================================================================
 # 9. WRITE

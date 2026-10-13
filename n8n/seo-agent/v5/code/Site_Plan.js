@@ -15,7 +15,10 @@ const CONFIG = {
   decay_drop_pct: 25,               // decaying page: clicks down by this much vs the previous 28 days (and at least 10 clicks before)
   // G28: a drop is an alert when it is statistically real (two-sample Poisson z, 95%) AND at least alert_min_pct; alert_drop_pct only decides
   // whether that alert is "high" or "medium". min_*_events = the events both periods must carry together before anything is claimed at all.
-  alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40
+  // G28 follow-up (2026-10-13): a position alert needs volume too — both 28-day periods must carry alert_min_position_impressions
+  // impressions for the keyword before a move of alert_min_places is called a drop (ST.position)
+  alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40,
+  alert_min_position_impressions: 50, alert_min_places: 5
 };
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
 if (trigger.body && typeof trigger.body === 'object') trigger = { ...trigger, ...trigger.body };

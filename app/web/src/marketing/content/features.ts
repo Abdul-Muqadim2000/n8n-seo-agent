@@ -333,6 +333,7 @@ export const features: Feature[] = [
       'Search Console index coverage, submitted sitemaps and site structure',
       'Core Web Vitals from real Chrome visitors, per template, on phone and desktop',
       'A daily check of your key pages: you hear the same day when one disappears, is set to noindex, starts redirecting or changes its canonical, title or robots.txt',
+      'A pre-release check your build can call: the same page checks run against a staging address or a list of URLs and answer pass or fail, so a release never takes a page out of Google',
       'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
       'Google’s own view of every key page — indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
       'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
@@ -348,6 +349,7 @@ export const features: Feature[] = [
       { title: 'Prioritise', body: 'Issues are ranked by the traffic they put at risk — index blockers first, cosmetics never — and each one says why it ranks there.' },
       { title: 'Fix', body: 'Download the fix pack and hand it to your developers.' },
       { title: 'Watch', body: 'Your key pages are checked every morning, and marking a fix done has it re-checked within a day.' },
+      { title: 'Check before you ship', body: 'Your build calls the pre-release check on the staging address and gets a pass or fail before the release goes out.' },
     ],
     facts: [
       { value: 1000, label: 'pages per crawl, JavaScript included' },
@@ -369,6 +371,10 @@ export const features: Feature[] = [
       {
         q: 'What does the daily check of my key pages look at?',
         a: 'Every morning Ascentra fetches your most important pages — the home page, the pages in your menu, the pages Search Console brings impressions for and the pages your keyword ladders own — and compares the HTTP status, a redirect that appeared, the noindex tag, the canonical and the title with yesterday’s reading, plus your robots.txt. A change that matters becomes an alert the same day; an unchanged page says nothing. A page it could not read is reported as not checked, never as fine.',
+      },
+      {
+        q: 'Can we check a release before it goes live?',
+        a: 'Yes. Your build can call the pre-release check with a staging address or a list of URLs, and it answers pass or fail in a form a build pipeline can read: which URL failed and which check — the page not answering, a redirect that appeared, a noindex tag, robots.txt blocking it, a missing or wrong canonical, no title or no H1. On a staging address a deliberate noindex or a blocking robots.txt is reported as a warning that names the live page instead of a failure. The check only reads: it never changes anything in your account, and whatever a staging address cannot answer — whether Google has indexed a URL it has never seen, the speed real visitors measure, positions — is reported as not checked, with the reason.',
       },
       {
         q: 'I fixed something. Do I have to wait for the next audit?',

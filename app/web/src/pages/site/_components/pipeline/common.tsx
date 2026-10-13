@@ -9,6 +9,7 @@ import {
   Bot,
   CheckCircle2,
   Circle,
+  Ban,
   Clock,
   Gauge,
   Handshake,
@@ -127,6 +128,8 @@ export const PAGE_STATE: Record<LadderPageState, { label: string; tone: Tone; ic
   writing: { label: 'Being written', tone: 'accent', icon: <RotateCw className="size-3" aria-hidden /> },
   planned: { label: 'Planned', tone: 'neutral', icon: <Circle className="size-3" aria-hidden /> },
   gated: { label: 'Waits for support', tone: 'neutral', icon: <Hourglass className="size-3" aria-hidden /> },
+  // R16: the keyword rule refused this planned page (a competitor's brand, a government portal, an off-topic search)
+  set_aside: { label: 'Set aside', tone: 'warning', icon: <Ban className="size-3" aria-hidden /> },
 };
 
 export function PageStateBadge({ state, className }: { state: LadderPageState; className?: string }) {

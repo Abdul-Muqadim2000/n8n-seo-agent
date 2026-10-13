@@ -15,6 +15,23 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Check a release before it goes live, and alerts that only fire on a real change',
+    summary:
+      'Your build can now ask Ascentra to check a release candidate — a staging address or a list of URLs — and get a pass or fail it can act on. Traffic and position alerts are tested against your own numbers instead of a fixed percentage, so a small website is no longer told its traffic fell when a handful of searches moved. And a planned page for a search you should not target is set aside with the reason instead of being written.',
+    highlights: [
+      'A pre-release check your build pipeline can call: the same page checks — answers, redirect, noindex, robots.txt, canonical, title, H1 — against a staging address or a list of URLs',
+      'It answers pass or fail with the URL and the check that failed, so a release can be stopped before it takes a page out of Google',
+      'On a staging address a deliberate noindex or a blocking robots.txt is a warning that names the live page, not a failure',
+      'The check only reads: it never changes anything in your account, and anything a staging address cannot answer is reported as not checked, with the reason',
+      'Traffic alerts now say what was tested, over which periods and how sure the result is',
+      'A position alert needs real impressions behind both periods: a five-place move measured on a dozen impressions is shown as something to watch, never as a drop',
+      'A planned page for a search that names another company, a government portal or something you do not sell is set aside with the reason — including pages planned before this rule existed',
+      'A page already written for such a search is kept and flagged instead, so you decide what happens to it',
+    ],
+    features: ['technical-audits', 'site-tracking', 'keyword-ladders'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Share a report with a link that expires, and a plan that tells you when to change course',
     summary:
       'You can now hand one report to a client or a colleague without giving them an account: a link that opens that report read-only and stops working on the day you choose. The weekly link-building result comes as a PDF with the same numbers and sources as the app. And every plan now shows your topic radius, while a keyword ladder that has stopped moving comes back with a concrete proposal.',

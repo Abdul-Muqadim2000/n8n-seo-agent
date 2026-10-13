@@ -16,6 +16,7 @@ import seo_events   # 2026-10-13 (G12 / G29): the dated event registry and the l
 rd = lambda p: (seo_events.inline(_rd0(p)).replace('/*__ANCHOR__*/', _rd0('code/_anchor.js').rstrip('\n'))
                 .replace('/*__SITE_MODEL__*/', _rd0('code/_site_model.js').rstrip('\n'))
                 .replace('/*__SERP_OBS__*/', _rd0('code/_serp_obs.js').rstrip('\n'))
+                .replace('/*__FIT_GATE__*/', _rd0('code/_fit_gate.js').rstrip('\n'))   # R16 (build_v4.py section 53): the gate also reads the rungs stored before it existed
                 .replace('/*__RANK_SERP__*/', _rd0('code/_rank_serp.js').rstrip('\n'))
                 .replace('/*__REPLAN__*/', _rd0('code/_replan.js').rstrip('\n')))   # G32: the re-plan proposal for a stuck ladder
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
@@ -115,11 +116,15 @@ for _n in ('Parse Positions', 'Tracker Report'):
     assert 'const RS = (() => {' in _tracker_nodes[_n], _n + ': the results-page kit (_rank_serp.js) is not inlined'
     assert 'const aioObserved' in _tracker_nodes[_n], _n + ': the observation rules (_serp_obs.js) are not inlined'
 assert 'const SM = (() => {' in _tracker_nodes['Tracker Plan'], 'Tracker Plan: the site model kit is not inlined (needed for the competitor list)'
-assert not any(m in src for src in _tracker_nodes.values() for m in ('/*__RANK_SERP__*/', '/*__SERP_OBS__*/', '/*__SITE_MODEL__*/', '/*__ANCHOR__*/', '/*__REPLAN__*/')), 'kit placeholder left in the Rank Tracker'
+assert not any(m in src for src in _tracker_nodes.values() for m in ('/*__RANK_SERP__*/', '/*__SERP_OBS__*/', '/*__SITE_MODEL__*/', '/*__ANCHOR__*/', '/*__REPLAN__*/', '/*__FIT_GATE__*/')), 'kit placeholder left in the Rank Tracker'
 # G32 (2026-10-13, FIX_PLAN): the stuck ladder's re-plan proposal, and the proof that it only proposes
 assert 'const RP = (() => {' in _tracker_nodes['Tracker Report'], 'Tracker Report: the re-plan kit (_replan.js) is not inlined'
 assert 'RP.propose(' in _tracker_nodes['Tracker Report'] and 'RP.block(replan)' in _tracker_nodes['Tracker Report'], 'Tracker Report: the re-plan proposal is not built or not shown'
 assert 'applied: false' in _tracker_nodes['Tracker Report'], 'G32: a re-plan must say that nothing was applied'
+# R16 (2026-10-13, FIX_PLAN §3.11, build_v4.py section 53): a stored rung that names another company is set aside, not checked and not reported as a page to write
+assert 'const fitStored = ' in _tracker_nodes['Tracker Plan'] and 'fitStored(p, fitCtx)' in _tracker_nodes['Tracker Plan'], 'R16: the Rank Tracker does not run the fit gate over the stored rungs'
+assert 'const fitStored = ' in _tracker_nodes['Tracker Report'] and 'serp_domains: doms' in _tracker_nodes['Tracker Report'], 'R16: the Rank Tracker report does not judge the rungs against the results page it just read'
+assert 'set_aside_pages' in _tracker_nodes['Tracker Plan'] and 'set_aside_pages' in _tracker_nodes['Tracker Report'] and 'Set aside' in _tracker_nodes['Tracker Report'], 'R16: the set-aside rungs do not reach the report'
 for _c, _t in HISTORY_COLS:
     assert _c + ':' in _tracker_nodes['Parse Positions'], 'Parse Positions does not write the seo_rank_history column ' + _c
 # ---- R9 (2026-10-13, re-rating): the Rank Tracker reserves and settles a seo_run_ledger row too (exec 505 had none, although the week's SERP

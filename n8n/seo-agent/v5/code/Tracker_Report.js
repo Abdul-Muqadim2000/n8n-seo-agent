@@ -5,6 +5,7 @@
 /*__ANNOTATIONS__*/
 /*__LINEAGE__*/
 /*__REPLAN__*/
+/*__FIT_GATE__*/
 // Rank tracker report: per ladder, positions vs the previous check, rungs reached, drops and the recommended next step.
 // G32 (2026-10-13, FIX_PLAN): a ladder that has not moved for the configured number of weeks (`seo_monitors.stuck_weeks`, empty = 8)
 // no longer only says "stuck": RP (v5/code/_replan.js) turns the same facts into a re-plan PROPOSAL — a different rung order, an easier
@@ -55,6 +56,9 @@ const byLadder = new Map();
 plan.forEach((p, i) => { if (isMob(p)) return; if (!byLadder.has(p.ladder_id)) byLadder.set(p.ladder_id, []); byLadder.get(p.ladder_id).push({ ...p, result: pos[i] || {} }); });
 // pages not checked this week (not live yet; checked monthly) keep their last known position, so the ladder picture stays complete
 for (const d of ((plan[0] || {}).deferred_pages || [])) { if (isMob(d) || !byLadder.has(d.ladder_id)) continue; const src = byLadder.get(d.ladder_id)[0]; byLadder.get(d.ladder_id).push({ ...src, ...d, deferred: true, result: { position: d.last_position, url: d.last_url, checked_at: d.last_checked } }); }
+// R16 (2026-10-13, FIX_PLAN §3.11): rungs the fit gate set aside (a competitor's brand, a government portal, stored before the rule).
+// No check was bought for them, so they are not in `positions`; the report names them with the reason instead of promising a page.
+const asideAll = ((plan[0] || {}).set_aside_pages) || [];
 const out = [];
 for (const [id, items] of byLadder) {
   const prevOf = (kw) => { const h = deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && Number(x.position) >= 0).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0]; return h ? Number(h.position) : null; };
@@ -94,6 +98,24 @@ for (const [id, items] of byLadder) {
   //   row, an existing page, or ranking. Direct plan (the main page is page 1) and main-page-only ladders: the main page comes first, the rungs
   //   only once it is live (the Content Cadence's gate). Short / full plans: rungs first; "every rung is in the top 10" only when rungs exist
   //   and are all in — then the main page is written, published or improved by its state.
+  // ---- R16 (2026-10-13, FIX_PLAN §3.11): the fit gate with THIS run's results page in hand ----
+  // A rung stored before the gate existed ("facts erp") is only recognisable from the page it ranks on: facts.ae holding the top
+  // results is what makes it a brand query. The check was already paid for, so the position stays in the table — but the rung is taken
+  // out of "write or improve" and named with its reason. A rung whose page is already written is kept and only flagged.
+  const trackedComps = [...new Set(rowsK.flatMap(r => ((serps.get(r.keyword) || {}).competitors || []).filter(c => c.tracked).map(c => c.domain)))];
+  const fitAside = []; const asideKw = new Set();
+  for (const r of rowsK) {
+    const s = serps.get(r.keyword); if (!s) continue;
+    const doms = [...(s.above || []), ...(s.competitors || [])].filter(x => x && x.domain && Number(x.position) > 0)
+      .sort((a, b) => Number(a.position) - Number(b.position)).map(x => x.domain);
+    const lr = rowOf(r.keyword);
+    const g = fitStored({ keyword: r.keyword, status: r.status, page_exists: lr.page_exists, published_url: (logOf(r.keyword) || {}).published_url },
+      { own_domain: normD(head.domain), brands: {}, competitors: trackedComps, serp: doms, serp_domains: doms, protect: [head.head_keyword || ''] });
+    if (!g.flagged) continue;
+    fitAside.push({ ladder_id: id, keyword: r.keyword, rung: r.rung, page_no: r.page_no, status: r.status || '', target_url: lr.target_url || '',
+      reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok, seen: 'this check' });
+    if (!g.ok) asideKw.add(r.keyword);
+  }
   const isTop = (r) => r.rung === 4;
   const topRow = rowsK.find(isTop) || null;
   const invModel = pageRows.length ? modelFor(head.domain) : null;
@@ -114,7 +136,7 @@ for (const [id, items] of byLadder) {
   else if (topRow && mainWritten && !mainLive && (mainFirst || allIn)) next = { action: 'publish_top', rung: 4, main_page: 'written', publish_url: topRow.target_url || '',
     text: 'The main page "' + head.keyword + '" is written but not live yet: publish it' + (topRow.target_url ? ' at ' + topRow.target_url : '') + '. Nothing climbs until it is published' + (rungs.length && mainFirst ? ', and its supporting pages wait for it' : '') + '.', pages: [] };
   else if (pending) {
-    const target = rowsK.filter(x => x.rung === pending.rung);
+    const target = rowsK.filter(x => x.rung === pending.rung && !asideKw.has(x.keyword));   // R16: never ask for a page we should not write
     next = { action: 'write_rung_' + pending.rung, rung: pending.rung, main_page: mainLive ? 'live' : mainWritten ? 'written' : 'planned',
       text: 'Work on rung ' + pending.rung + ': ' + (pending.top10 ? pending.top10 + ' of ' + pending.pages + ' pages are in the top 10. ' : 'none of its pages is in the top 10 yet. ') + 'Write or improve: ' + target.map(t => { const c = coveredBy(t);
         return '"' + t.keyword + '"' + (c ? ' (' + c.url + ' already answers this search — refresh that page, do not publish a second one)' : (t.status === 'writing' && writtenOf(t.keyword)) ? ' (already written — publish it)' : t.status === 'writing' ? ' (a page run was started for it but no page was written — it is written again)' : ''); }).join(', ') + '.',
@@ -186,11 +208,16 @@ for (const [id, items] of byLadder) {
     myPub.length ? LN.of('The dates your pages went live', 'own_check', { basis: 'measured', period: windowFrom + ' onwards', sample: LN.sample(myPub.length, 'published pages recorded') })
       : LN.unknown('The dates your pages went live', 'no publish date is recorded for this ladder yet — report one with "I published a page"'),
   ];
+  // R16: this ladder's set-aside rungs, with the reason, before the next step (so nothing in the report asks for that page) — the ones
+  // the plan never checked and the ones this run's results page revealed
+  const aside = [...asideAll.filter(x => x && x.ladder_id === id), ...fitAside];
+  const asideHtml = aside.length ? '<p style="color:#b45309"><b>Set aside</b> (planned before the keyword rule existed, no position checked and no page to write): '
+    + aside.map(x => esc(x.note || x.keyword)).join(' | ') + '</p>' : '';
   const subject = '[Keyword ladder] ' + head.head_keyword + ' — ' + head.domain + ': ' + (head.current > 0 ? 'top page at #' + head.current : 'top page not yet in the top 100') + (drops.length ? ' · ' + drops.length + ' drop(s)' : '');
   const html = '<p>Hi,</p><p>Position check for your keyword ladder towards <b>' + esc(head.head_keyword) + '</b> on <b>' + esc(head.domain) + '</b> (' + rowsK.length + ' keywords, Google top 50).</p>' + table +
     '<p><b>Rungs:</b> ' + (rungs.map(r => 'Rung ' + r.rung + ': ' + r.top10 + '/' + r.pages + ' in top 10, ' + r.top3 + ' in top 3' + (r.reached ? ' ✓ reached' : '')).join(' · ') || 'no rung pages tracked') + '</p>' +
     (gains.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(gains.join('; ')) + '</p>' : '') + (drops.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(drops.join('; ')) + '</p>' : '') +
-    serpHtml + remindHtml + RP.block(replan) + '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
+    serpHtml + remindHtml + RP.block(replan) + asideHtml + '<p><b>Next step:</b> ' + esc(next.text) + '</p>' + (next.publish_url ? '<p>Page to publish: <a href="' + esc(next.publish_url) + '">' + esc(next.publish_url) + '</a></p>' : '') +
     (apiBody ? '<p>Start the next page: open the <a href="' + formLink + '">SEO Assistant form</a> ("I know my keyword", keyword <b>' + esc(apiBody.keyword) + '</b>, domain ' + esc(head.domain) + '), or send this to the API (' + esc(API_URL) + '):</p><pre style="background:#f1f5f9;padding:8px;font-size:12px">' + esc(JSON.stringify(apiBody, null, 2)) + '</pre>' : '') +
     '<p style="color:#64748b;font-size:12px">Checks run weekly; once the top page holds the top 3 for four checks, the main keyword and the published pages are checked monthly. Positions come from DataForSEO live SERPs.</p>'
     // G12 / G29 (2026-10-13): the events of the tracked window, and where each figure came from
@@ -220,7 +247,7 @@ for (const [id, items] of byLadder) {
         mobile_position: m ? m.position : null, mobile_checked_at: m ? m.checked_at : null,
         features: s ? s.features : null, feature_labels: s ? s.chips : [], results_page: s ? s.line : '',
         share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null }; }),
-    rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, api_body: apiBody, done, won, stuck,
+    rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, set_aside: aside, api_body: apiBody, done, won, stuck,
     stuck_weeks: stuckWeeks, replan } });   // G32: the proposal, never applied here
 }
 return out.length ? out : [{ json: { nothing_to_do: true } }];
