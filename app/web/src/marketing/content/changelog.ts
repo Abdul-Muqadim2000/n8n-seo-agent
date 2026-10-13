@@ -15,6 +15,22 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Share a report with a link that expires, and a plan that tells you when to change course',
+    summary:
+      'You can now hand one report to a client or a colleague without giving them an account: a link that opens that report read-only and stops working on the day you choose. The weekly link-building result comes as a PDF with the same numbers and sources as the app. And every plan now shows your topic radius, while a keyword ladder that has stopped moving comes back with a concrete proposal.',
+    highlights: [
+      'A share link per report: no account needed, read-only, 14 days by default (1 to 90), and you can turn it off at any time',
+      'The link shows that one report and its documents — nothing else of your data — and you can see when it was last opened',
+      'The week’s link building arrives as a PDF: every opportunity with the reason it was kept or dropped, the contacts found on their own sites, the page and link text to ask for, each pitch as it would be sent, the listings to add yourself, the redirects to reclaim, and what your links did so far',
+      'Your topic radius with every keyword research run and every ladder plan: which topics are within reach today, which are a stretch, and the evidence behind each verdict',
+      'A topic that is easy to rank for but has nothing to do with what you sell is marked as a stretch, not as a quick win',
+      'A ladder with no movement for weeks comes back with a proposal — improve the page you already have, write the easier keyword first, change the order, or stop — with the evidence behind it',
+      'Proposals stay proposals: a plan you approved is never rewritten for you, and you choose how many weeks without movement count as stuck',
+    ],
+    features: ['reports', 'backlinks', 'keyword-ladders', 'keyword-research'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Charts that say what happened, and numbers that say where they came from',
     summary:
       'Every chart is now marked with the events behind its moves — the pages you published, the technical fixes you made, Google’s ranking updates and the week Google changed its own data. After a page goes live, its trend is compared with the rest of your website. And every number in a report or on a dashboard says its source, its period and its sample size.',

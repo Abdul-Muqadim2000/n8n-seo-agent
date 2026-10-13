@@ -230,6 +230,11 @@ engine and of this repository.
 - **Callbacks**: n8n posts results to `/api/hooks/n8n/<token>`; the token is random per company and never stored in a report.
 - **Sessions**: random 256-bit cookie (httpOnly, SameSite=Lax, Secure on https), only its SHA-256 is stored; 30 days, sliding.
   State-changing requests need `X-Requested-With: fetch` (CSRF guard). Login, sign-up and reset are rate limited.
+- **Share links** (G15, `/share/:token`, details in `API.md`): an admin can hand **one report** to somebody with no account through an
+  expiring link — 256-bit token, only its SHA-256 stored, 14 days by default (1-90), revocable at any time, with who created it and
+  when it was last opened on record. A holder reaches that report's headline figures and *its* files (same sandboxed file handling as
+  inside the app) and nothing else: no other report, no list, no dashboard, no payload, no company id, no write. A wrong, revoked or
+  expired token is a rate-limited 404 with no hint.
 - **Secrets** (n8n webhook key, n8n API key, SMTP, service-account key) stay on the server.
 - Generated HTML (articles) is shown in a sandboxed iframe and downloaded, never served as a page of the app.
 - **Spend**: each company has a monthly budget (estimated cost per run and per keyword check, checked with the insert under a per-company lock before

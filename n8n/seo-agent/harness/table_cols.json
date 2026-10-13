@@ -153,7 +153,8 @@
   "ai_pulse",
   "ai_growth",
   "ai_pages_month",
-  "link_builder"
+  "link_builder",
+  "stuck_weeks"
  ],
  "LINK_OUTREACH": [
   "site_id",

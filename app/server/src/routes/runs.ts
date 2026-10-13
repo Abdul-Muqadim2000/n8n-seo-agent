@@ -1,12 +1,34 @@
 import { and, desc, eq, inArray, lt, type SQL } from 'drizzle-orm';
-import type { FastifyInstance } from 'fastify';
-import { MODE_IDS, parseRunInput, type Page, type ReportDetail, type Run } from '@seo/shared';
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { isShareToken, MODE_IDS, parseRunInput, SHARE, shareDays, shareRefusal, shareState, shareUrl, type Page, type ReportDetail, type Run } from '@seo/shared';
 import { isUuid, orgAccess } from '../auth/access';
+import { config } from '../config';
 import { db, schema } from '../db';
-import { notFound, validationError } from '../lib/errors';
+import type { FileRow } from '../db/schema';
+import { HttpError, notFound, validationError } from '../lib/errors';
 import { createRun, filesFor, getRunOrThrow, reportsList, toReport, toRun } from '../services/runs';
+import { createShare, listShares, markOpened, revokeShare, sharedFile, sharedReport, shareByToken } from '../services/shareLinks';
 
-type P = { orgId: string; runId: string; reportId: string; fileId: string };
+type P = { orgId: string; runId: string; reportId: string; fileId: string; shareId: string; token: string };
+
+/**
+ * A generated file as a response. Generated files are untrusted content: shown inline only as PDF or plain text, everything else
+ * downloads; the content type follows the stored kind (never n8n's MIME, which could say text/html for a .txt). The same handling is
+ * used for a company's own files and for the files of a shared report (G15) — one implementation, one set of headers.
+ */
+function sendFile(reply: FastifyReply, f: Pick<FileRow, 'kind' | 'fileName' | 'data'>, download: boolean) {
+  const inline = !download && (f.kind === 'pdf' || f.kind === 'txt' || f.kind === 'md' || f.kind === 'json' || f.kind === 'csv');
+  const type = f.kind === 'pdf' ? 'application/pdf' : inline ? 'text/plain; charset=utf-8' : 'application/octet-stream';
+  const safeName = f.fileName.replace(/[^\w.\- ]+/g, '_');
+  if (f.kind !== 'pdf') reply.header('content-security-policy', 'sandbox; default-src \'none\'');
+  reply
+    .header('content-type', type)
+    .header('content-disposition', `${inline ? 'inline' : 'attachment'}; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(f.fileName)}`)
+    .header('cache-control', 'private, max-age=3600')
+    .header('x-content-type-options', 'nosniff');
+  if (f.kind === 'pdf') reply.header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; object-src 'self'; plugin-types application/pdf");
+  return reply.send(f.data);
+}
 
 async function runWithNames(runId: string): Promise<Run | null> {
   const rows = await db
@@ -87,19 +109,64 @@ export async function runRoutes(app: FastifyInstance) {
     if (!isUuid(p.fileId)) throw notFound('File not found');
     const f = await db.query.files.findFirst({ where: and(eq(schema.files.orgId, a.org.id), eq(schema.files.id, p.fileId)) });
     if (!f) throw notFound('File not found');
-    const download = (req.query as { download?: string }).download === '1';
-    // generated files are untrusted content: shown inline only as PDF or plain text, everything else downloads; the content type
-    // follows the stored kind (never n8n's MIME, which could say text/html for a .txt)
-    const inline = !download && (f.kind === 'pdf' || f.kind === 'txt' || f.kind === 'md' || f.kind === 'json' || f.kind === 'csv');
-    const type = f.kind === 'pdf' ? 'application/pdf' : inline ? 'text/plain; charset=utf-8' : 'application/octet-stream';
-    const safeName = f.fileName.replace(/[^\w.\- ]+/g, '_');
-    if (f.kind !== 'pdf') reply.header('content-security-policy', 'sandbox; default-src \'none\'');
-    reply
-      .header('content-type', type)
-      .header('content-disposition', `${inline ? 'inline' : 'attachment'}; filename="${safeName}"; filename*=UTF-8''${encodeURIComponent(f.fileName)}`)
-      .header('cache-control', 'private, max-age=3600')
-      .header('x-content-type-options', 'nosniff');
-    if (f.kind === 'pdf') reply.header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; object-src 'self'; plugin-types application/pdf");
-    return reply.send(f.data);
+    return sendFile(reply, f, (req.query as { download?: string }).download === '1');
+  });
+
+  // ---- G15: expiring, revocable, read-only links to ONE report, for somebody with no account ----
+  // The owner's side needs the admin role (a viewer can read a report but must not hand it outside the company); the public side needs
+  // nothing but the token, so both of its routes are rate-limited by IP and say the same thing for a wrong, a revoked and an expired
+  // token — a guess learns nothing. GET only: there is no shared write anywhere.
+
+  app.post('/api/orgs/:orgId/reports/:reportId/shares', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+    const p = req.params as P;
+    const a = await orgAccess(req, p.orgId, 'admin');
+    if (!isUuid(p.reportId)) throw notFound('Report not found');
+    const body = (req.body ?? {}) as { days?: unknown };
+    if (body.days != null && body.days !== '' && !Number.isFinite(Number(body.days)))
+      throw new HttpError(400, `Choose how many days the link should last (${SHARE.minDays}-${SHARE.maxDays}).`, 'validation', { days: 'Must be a number of days' });
+    const { link, token } = await createShare({ org: a.org, user: a.user, reportId: p.reportId, days: body.days == null || body.days === '' ? SHARE.defaultDays : body.days });
+    // the token is returned exactly once: it is stored only as a hash
+    return { ...link, url: shareUrl(config.appUrl, token), days: shareDays(body.days == null || body.days === '' ? SHARE.defaultDays : body.days) };
+  });
+
+  app.get('/api/orgs/:orgId/reports/:reportId/shares', async (req) => {
+    const p = req.params as P;
+    const a = await orgAccess(req, p.orgId, 'admin');
+    if (!isUuid(p.reportId)) throw notFound('Report not found');
+    return { items: await listShares(a.org.id, p.reportId), defaultDays: SHARE.defaultDays, maxDays: SHARE.maxDays, minDays: SHARE.minDays };
+  });
+
+  app.delete('/api/orgs/:orgId/reports/:reportId/shares/:shareId', async (req) => {
+    const p = req.params as P;
+    const a = await orgAccess(req, p.orgId, 'admin');
+    if (!isUuid(p.reportId) || !isUuid(p.shareId)) throw notFound('Share link not found');
+    return revokeShare(a.org.id, p.reportId, p.shareId);
+  });
+
+  /** The one report behind a live link. No session, no company id in the URL: the token itself names the report. */
+  app.get('/api/share/:token', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req) => {
+    const p = req.params as P;
+    const gone = () => new HttpError(404, shareRefusal('missing'), 'share_invalid');
+    if (!isShareToken(p.token)) throw gone();
+    const share = await shareByToken(p.token);
+    const state = shareState(share);
+    if (state !== 'live') throw new HttpError(404, shareRefusal(state), state === 'missing' ? 'share_invalid' : state === 'revoked' ? 'share_revoked' : 'share_expired');
+    const report = await sharedReport(share!);
+    if (!report) throw gone();
+    await markOpened(share!.id);
+    return { report };
+  });
+
+  /** One file of that report. The file must belong to the shared report, so a file id from anywhere else is a 404. */
+  app.get('/api/share/:token/files/:fileId', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
+    const p = req.params as P;
+    const gone = () => new HttpError(404, shareRefusal('missing'), 'share_invalid');
+    if (!isShareToken(p.token) || !isUuid(p.fileId)) throw gone();
+    const share = await shareByToken(p.token);
+    if (shareState(share) !== 'live') throw gone();
+    const f = await sharedFile(share!, p.fileId);
+    if (!f) throw gone();
+    await markOpened(share!.id);
+    return sendFile(reply, f, (req.query as { download?: string }).download === '1');
   });
 }

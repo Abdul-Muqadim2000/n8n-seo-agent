@@ -783,6 +783,13 @@
     "waitBetweenTries": 5000
    },
    {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render PDF LB",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
     "allowed": true,
     "maxTries": null,
     "name": "POST LB Report",

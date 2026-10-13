@@ -1,4 +1,5 @@
 /*__REACH__*/
+/*__RADIUS__*/
 /*__FIT_GATE__*/
 /*__SITE_MODEL__*/
 /*__KW_INPUTS__*/
@@ -8,6 +9,9 @@
 // reachable for THIS site (the pipeline keyword too); without a website the fixed difficulty limit (55) stays.
 // 2026-10-11 (FIX_PLAN D4): the shared fit gate drops government / portal / other-brand keywords before anything is recommended
 // (keyword_strategy.refused lists them with a reason); G3: every plan carries its estimated chance band.
+// G32 (2026-10-13, FIX_PLAN): the research also draws the site's TOPIC RADIUS (`keyword_strategy.topic_radius`, v5/code/_radius.js) —
+// which topics are within reach today, which are a stretch and which are out of reach for now, each with the evidence behind it (the
+// difficulty against the measured reach, a position the site already holds, a page it already has, a service it sells).
 const base = $('Collect Research').first().json;
 const chunks = $('Relevance Chunks').all().map(i => i.json);
 const outs = $input.all().map(i => i.json);
@@ -111,6 +115,15 @@ ordered.forEach(c => {
 });
 clusters.sort((a, b) => ({ Now: 0, Next: 1, Later: 2 }[a.tier] - { Now: 0, Next: 1, Later: 2 }[b.tier]) || b.total_opportunity - a.total_opportunity);
 
+// ---- G32 / K12: the site's topic radius — in reach, a stretch, or out of reach for now, with the evidence per topic ----
+const bestPosD = (c) => { const ps = (c.keywords || []).map(k => { const f = kws.find(x => x.keyword === k.keyword) || {}; const p = Number((f.live && f.live.your_position) || f.your_position || 0); return p > 0 ? p : null; }).filter(p => p != null); return ps.length ? Math.min(...ps) : null; };
+const topic_radius = RAD.of({ reach: R ? R.reach : null, reach_method: R ? R.method : '', domain: base.domain || '',
+  services: [...(base.services || []), ...(((base.site_description || {}).products_or_services) || [])],
+  site_topics: (base.seeds || []).slice(0, 12), pages: SM.pages(pageModelD).map(p => ({ url: p.url, title: p.title })),
+  topics: clusters.map(c => ({ topic: c.topic, primary_keyword: c.primary_keyword, kd: c.primary_kd, volume: c.total_volume, keyword_count: c.keyword_count,
+    your_position: bestPosD(c), keywords: c.keywords })) });
+for (const c of clusters) { const t = RAD.pick(topic_radius, c.topic + ' ' + c.primary_keyword); if (t) { c.radius = t.verdict; c.radius_reason = t.reason; } }
+
 const quick_wins = kws.filter(k => k.relevance === 2 && k.kd != null && k.kd < 30 && k.volume >= 30).slice(0, 12);
 const questions = kws.filter(k => /^(how|what|why|when|which|where|who|can|do|does|is|are|should|will)\b/.test(k.keyword)).slice(0, 15);
 const long_tail = kws.filter(k => k.words >= 4 && k.relevance === 2).slice(0, 15);
@@ -135,7 +148,7 @@ const pipeline = kws.find(k => fits(k) && free(k)) || kws.find(k => fits(k) && !
 
 return [{ json: { ...base, keyword_strategy: {
   goal, pool_size: base.research.pool_size, ai_reviewed, total_relevant: kws.length, keywords: kws.slice(0, 200),
-  clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline,
+  clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline, topic_radius,
   competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
   covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by })), pages_known: SM.pages(pageModelD).length,
   ladder_covered: kws.filter(k => k.ladder_covered).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, ladder_id: k.ladder_covered.ladder_id, head_keyword: k.ladder_covered.head_keyword, ladder_keyword: k.ladder_covered.ladder_keyword, part: k.ladder_covered.part, rung: k.ladder_covered.rung, status: k.ladder_covered.status, target_url: k.ladder_covered.target_url, how: k.ladder_covered.how })), ladders_known: [...new Set(ladderKwsD.map(x => x.ladder_id))].length,
