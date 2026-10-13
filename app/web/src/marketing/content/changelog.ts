@@ -15,6 +15,22 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'What crawlers see before JavaScript runs',
+    summary:
+      'Every technical audit now reads your key pages twice — once exactly as a crawler receives them, before any script runs, and once after — and names anything only a browser can see. AI crawlers do not run JavaScript, so content that appears only after it is invisible to the answers they write.',
+    highlights: [
+      'The title, main heading, canonical link, robots rule, link count and text length of both readings are shown side by side, and every number says which reading it came from',
+      'A heading or body text that only appears after JavaScript is a high-priority finding, with the two values quoted',
+      'A noindex tag a script adds after load is caught: the first response says the page may be indexed and the rendered page asks to be dropped',
+      'A title or canonical link rewritten by a script is reported, and the same address with and without “www.” is never counted as a mismatch',
+      'One finding counts the key pages an AI crawler sees differently from a browser',
+      'A page we could not read both ways is reported as not checked, with the reason — never as “no difference”',
+      'Both readings are free and add nothing to your bill',
+    ],
+    features: ['technical-audits', 'ai-visibility', 'reports'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Charts that say what happened, and numbers that say where they came from',
     summary:
       'Every chart is now marked with the events behind its moves — the pages you published, the technical fixes you made, Google’s ranking updates and the week Google changed its own data. After a page goes live, its trend is compared with the rest of your website. And every number in a report or on a dashboard says its source, its period and its sample size.',

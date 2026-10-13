@@ -22,6 +22,10 @@ const CONFIG = {
   // G8 / K4 (2026-10-13): how many keywords discovery checks live on Google for intent, page type and who ranks. One check is a
   // DataForSEO live-advanced SERP at depth 10 (about $0.002), so 16 costs ~$0.032 a run; KWI.liveChecks caps it at 25.
   live_serp_checks: 16,
+  // G14 (2026-10-13): how many key pages of an audit are read twice — the raw first response and the rendered page — so the
+  // report can say what only exists after JavaScript. Both fetches are free (a plain GET and one render); 5 covers the homepage
+  // plus the four pages Search Console says earn the most.
+  render_diff_pages: 5,
   ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)
   ladder_tracker_cadence: 'weekly', // the Rank Tracker workflow runs weekly; 'monthly' is documentation only until its schedule is changed
   ladder_auto_next_rung: false,     // false = the tracker recommends the next rung (one-click form link + API body); true is not wired
@@ -370,6 +374,7 @@ return [{
     run_stale_hours: CONFIG.run_stale_hours,
     live_serp_checks: CONFIG.live_serp_checks,
     heavy_audit_pages: CONFIG.heavy_audit_pages,
+    render_diff_pages: CONFIG.render_diff_pages,
     started_at: new Date().toISOString(),
     validation_error: ''
   }

@@ -7097,6 +7097,178 @@ await guard('g12-g29-annotations-change-tests-lineage', async () => {
     /Where these numbers come from/.test(RP56.html) && RP56.lineage.length >= 3 && RP56.lineage.every(l => l.figure && l.source_label)
     && RP56.lineage.some(l => /Position before and after/.test(l.figure) && l.source === 'gsc_history'), JSON.stringify(RP56.lineage.map(l => [l.figure, l.source])));
 });
+// S63 G14 + G31 (2026-10-13, system review FIX_PLAN.md G14 / G31; criteria TECH 1.4 and CAD C17)
+//   G14 the audit crawl can render JavaScript, so a page whose heading, text, canonical or links are written by a script looked healthy
+//       to us while every crawler that does not render (all of today's AI crawlers) sees an empty shell. Nothing ever compared the raw
+//       first response with the rendered page.
+//   G31 nothing stored how the customer writes — the brand's written form ("Tech&", not "Tech and"), the spelling variant, the words to
+//       avoid and the tone — so no prompt carried it and no check caught a draft that broke it.
+// ===================================================================================
+await guard('response-vs-render diff and the stored style guide', async () => {
+  reset(); const SN = 'S63 G14 G31 — what only exists after JavaScript, and a style guide that is stored, used in the prompts and checked';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 500))); };
+  const D = 'northwind-erp.com';
+
+  // ---------- G14 ----------
+  // one page of HTML, built the same way for both readings so the only differences are the ones the scenario puts there
+  const pageHtml = (o = {}) => {
+    const can = o.canonical ? `<link rel="canonical" href="${o.canonical}">` : '';
+    const rob = o.robots ? `<meta name="robots" content="${o.robots}">` : '';
+    const h1 = o.h1 ? `<h1>${o.h1}</h1>` : '';
+    const links = Array.from({ length: o.links || 0 }, (_, i) => `<a href="/page-${i}/">Link ${i}</a>`).join('');
+    const shell = o.shell ? '<div id="root"></div><script src="/app.js"></script>' : '';
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${o.title == null ? '' : o.title}</title>${can}${rob}</head><body>${shell}${h1}<p>${F.words(o.words || 0)}</p><nav>${links}</nav></body></html>`;
+  };
+  const ok200 = (html) => ({ statusCode: 200, headers: { 'content-type': 'text/html' }, data: html });
+  const CHALLENGE = { statusCode: 403, headers: {}, data: '<html><head><title>Just a moment...</title></head><body>Enable JavaScript and cookies to continue</body></html>' };
+  const TOP_PAGES = [
+    { page: 'https://' + D + '/services/erp-implementation/', clicks: 420, impressions: 9000, position: 7.1 },
+    { page: 'https://' + D + '/services/data-migration/', clicks: 300, impressions: 6400, position: 9.4 },
+    { page: 'https://' + D + '/blog/odoo-vs-dynamics/', clicks: 90, impressions: 2200, position: 12.0 },
+    { page: 'https://' + D + '/services/odoo-erp/', clicks: 40, impressions: 1100, position: 14.2 },
+  ];
+  const prevOf = (o = {}) => ({ domain: D, audit_level: 'site_audit', probe: { findings: [], what_works: [], measurements: {} },
+    extra_findings: [], extra_works: [], crux: null, crawl_extras: { non_indexable: o.non_indexable || [] },
+    search_console: { connected: true, property: 'sc-domain:' + D, permission: 'siteOwner', top_pages: TOP_PAGES, top_queries: [],
+      totals: { clicks: 980, impressions: 24000, ctr: 0.04, position: 18.2, period: { start: '2026-09-14', end: '2026-10-11' } },
+      pages_with_impressions: 12, queries_with_impressions: 300, sitemaps: [], coverage: {}, not_indexed: [], canonical_mismatch: [], rich_results: [] }, ...o.over });
+  const setCrawl = (o = {}) => {
+    mock('Check Crawl', [{ json: { domain: D, crawl_js: o.crawl_js !== false, render_diff_pages: o.cap || 5, crawl_max_pages: 200, audit_level: 'site_audit', crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+    mock('Get Crawled Pages', F.crawledPagesRes);
+    mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+    mock('Site Model', [{ json: { site_model: { domain: D, canonical_host: 'www.' + D, business_name: 'Northwind ERP', pages: [] } } }]);
+  };
+
+  // ---------- A. the plan: the homepage plus the pages Search Console says earn the most, capped ----------
+  setCrawl();
+  const prev1 = prevOf();
+  mock('Analyze CrUX', [{ json: prev1 }]);
+  const T1 = await run('Render Diff Targets', [{ json: prev1 }]);
+  const paths1 = T1.map(x => x.json.url.replace(/^https?:\/\/[^/]+/, ''));
+  console.log('   render diff targets ->', JSON.stringify(paths1), '| plan', JSON.stringify(T1[0].json.render_plan));
+  check('G14: the audit picks the homepage plus the key pages Search Console says earn the most, inside CONFIG.render_diff_pages, and asks for both readings of each',
+    T1.length === 5 && paths1[0] === '/' && paths1.includes('/services/erp-implementation/') && paths1.includes('/services/data-migration/')
+    && T1.every(x => x.json.render_url === 'https://r.jina.ai/' + x.json.url) && T1[0].json.render_plan.cap === 5
+    && !paths1.some(p => /privacy|careers/.test(p)),   // legal pages and the 404 are not key pages
+    JSON.stringify(paths1));
+  const RAW1 = await run('Raw Page Targets', T1);
+  check('G14: the raw request keeps the page order of the plan, so the two readings line up without pairing expressions',
+    RAW1.length === T1.length && RAW1.every((r, i) => r.json.url === T1[i].json.url && r.json.index === i), JSON.stringify(RAW1.map(r => r.json.url)));
+
+  // the answers: /  = identical but for the www. of its canonical · [1] = a JavaScript shell · [2] = a raw fetch behind a bot challenge
+  //              [3] = noindex added after load · [4] = the title rewritten by a script
+  const shellH1 = 'ERP Implementation for Distributors';
+  const answers = (url, side) => {
+    const p = url.replace(/^https?:\/\/[^/]+/, '');
+    const i = paths1.indexOf(p);
+    if (i === 0) return ok200(pageHtml({ title: 'Northwind ERP', h1: 'ERP for distributors', words: 400, links: 30,
+      canonical: side === 'raw' ? 'https://www.' + D + '/' : 'https://' + D + '/' }));   // www. on one side, bare host on the other
+    if (i === 1) return side === 'raw'
+      ? ok200(pageHtml({ title: 'Northwind ERP', words: 18, links: 2, shell: true, canonical: 'https://' + D + p }))
+      : ok200(pageHtml({ title: 'Northwind ERP', h1: shellH1, words: 520, links: 34, canonical: 'https://' + D + p }));
+    if (i === 2) return side === 'raw' ? CHALLENGE : ok200(pageHtml({ title: 'Data migration', h1: 'Data migration', words: 600, links: 28, canonical: 'https://' + D + p }));
+    if (i === 3) return ok200(pageHtml({ title: 'Odoo vs Dynamics', h1: 'Odoo vs Dynamics', words: 900, links: 26, canonical: 'https://' + D + p,
+      robots: side === 'raw' ? 'index,follow' : 'noindex,follow' }));
+    return ok200(pageHtml({ title: side === 'raw' ? 'Untitled' : 'Odoo ERP implementation in Dubai', h1: 'Odoo ERP', words: 700, links: 24, canonical: 'https://' + D + p }));
+  };
+  mock('Render Key Pages', T1.map(x => answers(x.json.url, 'rendered')));
+  mock('Fetch Raw Pages', RAW1.map(x => answers(x.json.url, 'raw')));
+  const RD1 = (await run('Render Diff', store['Fetch Raw Pages']))[0].json;
+  const rd1 = RD1.render_diff;
+  const page = (p) => rd1.pages.find(x => x.path === p) || { figures: [], js_only: [] };
+  const fig = (p, key) => (page(p).figures || []).find(f => f.key === key) || {};
+  console.log('   render diff ->', JSON.stringify(rd1.pages.map(p => [p.path, p.checked ? p.js_only.concat(p.differs || []).join('+') || 'same' : 'NOT CHECKED'])));
+
+  check('G14: a main heading that only exists after JavaScript is flagged, and the figure says the value came from the rendered page while the first response has none',
+    page(paths1[1]).js_only.includes('h1') && fig(paths1[1], 'h1').state === 'js_only'
+    && fig(paths1[1], 'h1').rendered === shellH1 && fig(paths1[1], 'h1').raw === ''
+    && fig(paths1[1], 'h1').from === 'after JavaScript (rendered page)',
+    JSON.stringify(fig(paths1[1], 'h1')));
+  check('G14: the same page\'s text and links are flagged too, and every figure that is really identical says it came from the first response',
+    page(paths1[1]).js_only.includes('words') && page(paths1[1]).js_only.includes('links')
+    && fig(paths1[1], 'title').state === 'same' && fig(paths1[1], 'title').from === 'the first response (raw HTML)',
+    JSON.stringify(page(paths1[1]).figures.map(f => [f.key, f.state, f.from])));
+  check('G14: a www. host on one side and the bare host on the other is the same canonical — never a mismatch',
+    fig('/', 'canonical').state === 'same' && /^https:\/\/www\./.test(fig('/', 'canonical').raw) && /^https:\/\/northwind/.test(fig('/', 'canonical').rendered)
+    && page('/').js_only.length === 0 && (page('/').differs || []).length === 0,
+    JSON.stringify(fig('/', 'canonical')));
+  check('G14: a raw fetch that hit a bot challenge is "not checked" with the reason — never reported as "no difference"',
+    page(paths1[2]).checked === false && /not checked|bot challenge/i.test(page(paths1[2]).not_checked)
+    && /bot challenge \(HTTP 403\)/.test(page(paths1[2]).not_checked) && (page(paths1[2]).figures || []).length === 0
+    && rd1.pages_not_checked === 1 && rd1.pages_checked === 4,
+    JSON.stringify(page(paths1[2])));
+  check('G14: a noindex that a script adds after load, and a title a script rewrites, are both caught with the two values side by side',
+    page(paths1[3]).differs.includes('robots') && /noindex/.test(fig(paths1[3], 'robots').rendered) && !/noindex/.test(fig(paths1[3], 'robots').raw)
+    && page(paths1[4]).differs.includes('title') && fig(paths1[4], 'title').raw === 'Untitled' && fig(paths1[4], 'title').from === 'the two readings differ',
+    JSON.stringify([fig(paths1[3], 'robots'), fig(paths1[4], 'title')]));
+  const f1 = RD1.extra_findings.filter(f => f.source === 'render_diff');
+  console.log('   render diff findings ->', f1.map(f => '[' + f.severity + (f.scoring === false ? ', unscored' : '') + '] ' + f.title).join(' | '));
+  check('G14: the findings name the six figures by what they cost: the heading and the text are High, the rendered-only robots rule is High, the title and the links Medium, and one finding counts every key page an AI crawler sees differently',
+    f1.some(f => f.severity === 'High' && /main heading of 1 page\(s\) only appears after JavaScript/.test(f.title) && f.category === 'Crawlability & Indexing')
+    && f1.some(f => f.severity === 'High' && /page text of 1 page\(s\) only appears after JavaScript/.test(f.title))
+    && f1.some(f => f.severity === 'High' && /robots meta of 1 page\(s\) changes after JavaScript/.test(f.title))
+    && f1.some(f => f.severity === 'Medium' && /title of 1 page\(s\) is written by JavaScript/.test(f.title))
+    && f1.some(f => f.severity === 'Medium' && /Most links of 1 page\(s\) appear only after JavaScript/.test(f.title))
+    && f1.some(f => f.severity === 'Medium' && f.category === 'AI Search Readiness' && /AI crawlers see a different version of 3 key page\(s\)/.test(f.title)),
+    JSON.stringify(f1.map(f => [f.severity, f.category, f.title])));
+  check('G14: the page that could not be read twice is reported as an unscored Info item with its reason, so a failed fetch never changes the score',
+    f1.some(f => f.severity === 'Info' && f.scoring === false && /could not be completed for 1 page\(s\)/.test(f.title) && /bot challenge/.test(f.evidence)),
+    JSON.stringify(f1.filter(f => f.severity === 'Info')));
+
+  // the scored audit and the report
+  const BSI1 = await run('Build Site Issues', [{ json: RD1 }]);
+  const a1 = BSI1[0].json.site_audit;
+  check('G14: the diff travels inside the scored audit with its method, and the audit does not list it as "not assessed"',
+    !!a1.render_diff && a1.render_diff.available === true && /read twice/.test(a1.render_diff.method)
+    && !a1.not_assessed.some(x => /before JavaScript runs/.test(x)), JSON.stringify({ has: !!a1.render_diff, na: a1.not_assessed.filter(x => /JavaScript/.test(x)) }));
+  const DOC1 = decode(await run('Build Audit Report', BSI1));
+  check('G14: the technical audit report prints the figure, both readings and which one each number came from, and says AI crawlers do not run JavaScript',
+    /What crawlers see before JavaScript runs/.test(DOC1) && /In the first response/.test(DOC1) && /After JavaScript/.test(DOC1) && /Taken from/.test(DOC1)
+    && /after JavaScript \(rendered page\)/.test(DOC1) && /not checked/.test(DOC1) && /AI crawlers do not run JavaScript/.test(DOC1),
+    (DOC1.match(/What crawlers see before JavaScript runs[\s\S]{0,500}/) || [''])[0].slice(0, 400));
+  const RESP1 = (await run('Build Audit Response', BSI1))[0].json;
+  check('G14: the callback carries the diff so the app can show it', !!RESP1.render_diff && RESP1.render_diff.pages_checked === 4, JSON.stringify(Object.keys(RESP1.render_diff || {})));
+
+  // ---------- B. nothing to compare with: a crawl that did not render JavaScript, and a render that failed ----------
+  reset(); setCrawl({ crawl_js: false, cap: 2 });
+  const prev2 = prevOf();
+  mock('Analyze CrUX', [{ json: prev2 }]);
+  const T2 = await run('Render Diff Targets', [{ json: prev2 }]);
+  const RAW2 = await run('Raw Page Targets', T2);
+  mock('Render Key Pages', T2.map(() => ({ statusCode: 502, headers: {}, data: '' })));
+  mock('Fetch Raw Pages', RAW2.map(x => answers(x.json.url, 'raw')));
+  const RD2 = (await run('Render Diff', store['Fetch Raw Pages']))[0].json;
+  console.log('   no rendered reading ->', JSON.stringify(RD2.render_diff.pages.map(p => [p.path, p.checked, p.not_checked])));
+  check('G14: with the render failed and a crawl that did not render JavaScript, every page is "not checked" with both reasons — the crawl is never passed off as a rendered reading',
+    RD2.render_diff.available === false && RD2.render_diff.pages_checked === 0 && RD2.render_diff.pages.length === 2
+    && RD2.render_diff.pages.every(p => /answered HTTP 502|returned no HTML/.test(p.not_checked) && /the crawl did not render JavaScript/.test(p.not_checked)),
+    JSON.stringify(RD2.render_diff.pages.map(p => p.not_checked)));
+  const a2 = (await run('Build Site Issues', [{ json: RD2 }]))[0].json.site_audit;
+  check('G14: the audit then lists the check under "not assessed" with the reason instead of implying the pages are fine',
+    a2.not_assessed.some(x => /before JavaScript runs/.test(x) && /no key page could be read twice/.test(x)), JSON.stringify(a2.not_assessed.filter(x => /JavaScript/.test(x))));
+
+  // ---------- C. a site that server-renders everything: the rendered reading may come from the JavaScript crawl ----------
+  reset(); setCrawl({ cap: 2 });
+  const prev3 = prevOf();
+  mock('Analyze CrUX', [{ json: prev3 }]);
+  const T3 = await run('Render Diff Targets', [{ json: prev3 }]);
+  const RAW3 = await run('Raw Page Targets', T3);
+  const clean = (url) => { const p = url.replace(/^https?:\/\/[^/]+/, ''); const i = (F.crawledPagesRes.tasks[0].result[0].items || []).findIndex(x => x.url === url);
+    const it = (F.crawledPagesRes.tasks[0].result[0].items || [])[i] || { meta: {} };
+    return ok200(pageHtml({ title: (it.meta || {}).title || 'Page', h1: (((it.meta || {}).htags || {}).h1 || ['Heading'])[0] || 'Heading',
+      words: (((it.meta || {}).content || {}).plain_text_word_count) || 900, links: ((it.meta || {}).internal_links_count || 40), canonical: 'https://' + D + p })); };
+  mock('Render Key Pages', T3.map(() => ({ statusCode: 429, headers: {}, data: '' })));   // the render service refused: the JavaScript crawl stands in
+  mock('Fetch Raw Pages', RAW3.map(x => clean(x.json.url)));
+  const RD3 = (await run('Render Diff', store['Fetch Raw Pages']))[0].json;
+  console.log('   crawl as the rendered reading ->', JSON.stringify({ source: RD3.render_diff.rendered_source, checked: RD3.render_diff.pages_checked, js: RD3.render_diff.pages_with_js_only, works: RD3.extra_works.slice(-1) }));
+  check('G14: when the render service refuses but the crawl did render JavaScript, the crawl stands in and the source says so',
+    RD3.render_diff.available === true && RD3.render_diff.rendered_source === 'crawl_js' && RD3.render_diff.pages_checked === 2, JSON.stringify(RD3.render_diff.pages.map(p => [p.path, p.rendered_source])));
+  check('G14: a site that serves everything in the first response gets a "what works" line and no finding at all',
+    RD3.render_diff.pages_with_js_only === 0 && RD3.extra_findings.filter(f => f.source === 'render_diff').length === 0
+    && RD3.extra_works.some(w => /serves its title, heading, canonical, robots rule, links and text in the first response/.test(w)), JSON.stringify(RD3.extra_works));
+});
+
 
 
 H.report();

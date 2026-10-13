@@ -3785,6 +3785,112 @@ sticky("""### Annotations, change tests and lineage (G12 + G29)
 log('Annotations, change tests and lineage on every number (2026-10-13, FIX_PLAN G12 + G29; criteria 3.4 / 3.5 / 2.12 / 3.11): one dated event registry (v5/data/seo_events.json) feeds the chart marks (v5/code/_annotations.js: published pages from seo_content_log, audit fixes from seo_audits, Google updates and the September 2025 num=100 data break), the G28 alert context (_site_stats.js) and the app (app/shared/src/seo-events.generated.ts); the Link Builder\'s control-group impact became the shared change test (v5/code/_change_test.js) and now also reads what a PAGE CHANGE did (seo_link_impact kind=page_change + change columns, "What your page changes did" in the Link Builder report) with graded verdicts and no causal wording; and every figure group in the weekly, AI-visibility, AI-growth, backlink, link-building, rank-tracker, ladder-plan and full reports carries its source, period, sample and basis (v5/code/_lineage.js) inline and in a "Where these numbers come from" table, with "source not recorded" where the lineage is genuinely unknown')
 
 # =============================================================================
+# 54. WHAT EXISTS ONLY AFTER JAVASCRIPT (2026-10-13, system review FIX_PLAN.md G14; CRITERIA_technical… 1.4)
+#     The audit crawl can render JavaScript (DataForSEO on-page, `enable_javascript`), so a page whose heading, text, canonical or links
+#     are written by a script looked perfectly healthy to us — while every crawler that does NOT render (all of today's AI crawlers, and
+#     Google on its first pass) sees an empty shell. Nobody ever compared the two readings.
+#     Each audit now reads its key pages **twice**: the raw first response (*Fetch Raw Pages*, a plain GET) and the page after its scripts
+#     ran (*Render Key Pages*, the Jina Reader render path of v5/code/Render_Requests.js, `X-Return-Format: html`; the JavaScript crawl
+#     stands in only when it really rendered). *Render Diff* reads title, main heading, canonical link, robots meta, link count and text
+#     length from both with the same parser, flags what exists only after JavaScript and prints which of the two every figure came from.
+#     Two rules it keeps: URLs are compared host-agnostically (a www. crawl URL against a bare canonical is not a mismatch), and a reading
+#     that failed is **"not checked" with the reason** — never "no difference". Both fetches are free and capped at
+#     CONFIG.render_diff_pages (5) pages per audit; both carry the G1 retry rule.
+# =============================================================================
+import retry_lint as _rl54
+LK_SRC54 = _rd0('code/_link_kit.js').rstrip('\n')
+
+# how many key pages are read twice (free; the cap travels with the run like every other limit)
+patch('Normalize Input', "  live_serp_checks: 16,\n",
+      "  live_serp_checks: 16,\n"
+      "  // G14 (2026-10-13): how many key pages of an audit are read twice — the raw first response and the rendered page — so the\n"
+      "  // report can say what only exists after JavaScript. Both fetches are free (a plain GET and one render); 5 covers the homepage\n"
+      "  // plus the four pages Search Console says earn the most.\n"
+      "  render_diff_pages: 5,\n")
+patch('Normalize Input', "    heavy_audit_pages: CONFIG.heavy_audit_pages,\n", "    heavy_audit_pages: CONFIG.heavy_audit_pages,\n    render_diff_pages: CONFIG.render_diff_pages,\n")
+
+# ---------- the chain, between the speed figures and the scoring (both audit types pass through it) ----------
+_ac54 = pos('Analyze CrUX'); RX, RY = _ac54[0] + 220, _ac54[1]
+disconnect('Analyze CrUX', 'Build Site Issues')
+add_node('Render Diff Targets', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Render_Diff_Targets.js')}, [RX, RY])
+if_node('Any Render Diff?', '{{ !$json.skip }}', [RX + 220, RY])
+add_node('Render Key Pages', 'n8n-nodes-base.httpRequest', 4.5, {
+    'url': '=https://r.jina.ai/{{ $json.url }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+    'sendHeaders': True, 'headerParameters': {'parameters': [
+        {'name': 'X-Return-Format', 'value': 'html'},   # the HTML after the scripts ran, with the links and their rel attributes
+        {'name': 'X-Engine', 'value': 'browser'},
+        {'name': 'X-No-Cache', 'value': 'true'},
+        {'name': 'X-Timeout', 'value': '45'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 4000}}, 'timeout': 60000,
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [RX + 440, RY - 160], dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl54.RETRY))
+nodes['Render Key Pages']['credentials'] = {'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}
+add_node('Raw Page Targets', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Raw_Page_Targets.js')}, [RX + 660, RY - 160])
+add_node('Fetch Raw Pages', 'n8n-nodes-base.httpRequest', 4.5, {
+    'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': {'parameters': [
+        {'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEOAgentAudit/1.0; +https://www.google.com/bot.html)'},
+        {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 500}}, 'timeout': 20000,
+                'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}},
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [RX + 880, RY - 160], dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl54.RETRY))
+add_node('Render Diff', 'n8n-nodes-base.code', 2, {'jsCode': LK_SRC54 + '\n' + rd('code/Render_Diff.js')}, [RX + 1100, RY])
+for _a54, _b54 in [('Analyze CrUX', 'Render Diff Targets'), ('Render Diff Targets', 'Any Render Diff?'),
+                   ('Render Key Pages', 'Raw Page Targets'), ('Raw Page Targets', 'Fetch Raw Pages'),
+                   ('Fetch Raw Pages', 'Render Diff'), ('Render Diff', 'Build Site Issues')]:
+    connect(_a54, _b54)
+connect('Any Render Diff?', 'Render Key Pages', 0); connect('Any Render Diff?', 'Render Diff', 1)
+
+# ---------- the scored audit carries the diff, and says when it could not be made ----------
+patch('Build Site Issues', "      crux: input.crux || null,\n", "      crux: input.crux || null,\n      render_diff: input.render_diff || null,\n")
+patch('Build Site Issues', "if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');",
+      "if (!(input.render_diff && input.render_diff.available)) not_assessed.push('What crawlers see before JavaScript runs (the first response against the rendered page, per key page): ' + ((input.render_diff && input.render_diff.not_available) || 'not collected in this run'));\n"
+      "if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');")
+
+# ---------- both audit reports: the figure-by-figure table, with the reading each number came from ----------
+RD_SECTION_JS = r"""// ---- what crawlers see before JavaScript runs (G14, 2026-10-13) ----
+const renderDiffSection = (a) => {
+  const rdf = a.render_diff || null;
+  const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const val = (v) => { const s = String(v == null ? '' : v); return s ? e3(s).slice(0, 110) : '—'; };
+  let h = `<h3>What crawlers see before JavaScript runs</h3>`;
+  if (!rdf) return h + `<p>Not checked in this run.</p>`;
+  if (!rdf.available) return h + `<p><b>Not checked:</b> ${e3(rdf.not_available)}.</p>`;
+  const rows = [];
+  for (const p of (rdf.pages || [])) {
+    if (!p.checked) { rows.push(`<tr><td>${e3(p.path)}</td><td colspan="4" class="small"><b>not checked</b> — ${e3(p.not_checked)}</td></tr>`); continue; }
+    for (const f of (p.figures || [])) {
+      if (f.state === 'same' || f.state === 'absent') continue;
+      rows.push(`<tr><td>${e3(p.path)}</td><td>${e3(f.figure)}</td><td>${val(f.raw)}</td><td>${val(f.rendered)}</td><td class="small">${e3(f.from)}</td></tr>`);
+    }
+  }
+  h += rows.length
+    ? `<table class="ct"><tr><th>Page</th><th>Figure</th><th>In the first response</th><th>After JavaScript</th><th>Taken from</th></tr>` + rows.join('') + `</table>`
+    : `<p><span class="ok">No difference</span> on any of the ${rdf.pages_checked} key page(s) checked: title, main heading, canonical link, robots rule, links and text are all in the first response.</p>`;
+  h += `<p class="small">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice${rdf.pages_not_checked ? `, ${rdf.pages_not_checked} not checked (the reason is in the table)` : ''}${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}. AI crawlers do not run JavaScript, so anything listed as coming from the rendered page is invisible to them.</p>`;
+  return h;
+};
+"""
+for _rn54 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn54, "const findings = a.findings || [];", RD_SECTION_JS + "const findings = a.findings || [];")
+    patch(_rn54, "    search_console: a.search_console || null,\n    crux: a.crux || null,", "    search_console: a.search_console || null,\n    crux: a.crux || null,\n    render_diff: a.render_diff || null,")
+patch('Build Audit Report', "html += cwvSection(a);", "html += cwvSection(a);\nhtml += renderDiffSection(a);")
+patch('Build Full Report', "html += cwvSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));",
+      "html += cwvSection(a) + renderDiffSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));")
+patch('Build Audit Response', "crux: d.crux || null,", "crux: d.crux || null, render_diff: d.render_diff || null,")
+
+assert 'const LK = (() => {' in code('Render Diff'), 'Render Diff: the link kit is not inlined (G14)'
+assert 'const SM = (() => {' in code('Render Diff Targets'), 'Render Diff Targets: the site model kit is not inlined (G14)'
+assert nodes['Render Key Pages'].get('credentials'), 'Render Key Pages: Jina credential slot missing (G14)'
+for _hn54 in ('Render Key Pages', 'Fetch Raw Pages'):
+    assert not _rl54.weak(nodes[_hn54]), _hn54 + ': the G1 retry rule is missing'
+assert 'renderDiffSection' in code('Build Audit Report') and 'renderDiffSection' in code('Build Full Report'), 'the render diff is not in both audit reports'
+# the two lints run again here: both new HTTP nodes were added after the last pass (G1 retry rule, D15 canonical host)
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('What exists only after JavaScript (2026-10-13, FIX_PLAN G14): every audit reads up to CONFIG.render_diff_pages (5) key pages twice — the raw first response (Fetch Raw Pages, a plain GET) and the page after its scripts ran (Render Key Pages, the Jina render path, with the JavaScript crawl standing in only when it really rendered) — and Render Diff compares title, main heading, canonical link, robots meta, link count and text length with one parser, flags what exists only after JavaScript as a High / Medium finding plus an AI Search Readiness finding, and prints which of the two readings every figure came from in both audit reports and in the callback; URLs are compared host-agnostically (a www. crawl URL against a bare canonical is not a mismatch) and a reading that failed is "not checked" with the reason (bot challenge, HTTP error, DNS, empty body), never "no difference"')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())

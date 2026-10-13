@@ -332,6 +332,7 @@ export const features: Feature[] = [
       'A daily check of your key pages: you hear the same day when one disappears, is set to noindex, starts redirecting or changes its canonical, title or robots.txt',
       'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
       'Google’s own view of every key page — indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
+      'What crawlers see before JavaScript runs: your key pages read twice, so anything only a browser can see is named',
       'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
       'The smallest items folded into one “minor items” line, so the list you read is the list to act on',
       'A brand and entity check',
@@ -359,6 +360,10 @@ export const features: Feature[] = [
       { q: 'What is in the fix pack?', a: 'A robots.txt, an llms.txt, a redirect list, schema snippets and an internal-links CSV, zipped together.' },
       { q: 'Does it need access to my server?', a: 'No. Ascentra crawls the public site and reads Search Console through a service account you add as a user.' },
       { q: 'Does it handle JavaScript sites?', a: 'Yes. Pages can be rendered with JavaScript, so content that loads in the browser is audited too.' },
+      {
+        q: 'Would I know if my pages only work with JavaScript?',
+        a: 'Yes. Your key pages are read twice in every audit: once exactly as a crawler receives them, before any script runs, and once after. The report puts the title, main heading, canonical link, robots rule, link count and text length of both readings side by side and says which reading each number came from, so anything only a browser can see is named — it is invisible to the AI crawlers behind ChatGPT, Perplexity and Claude, which do not run JavaScript. A page we could not read both ways is reported as not checked, with the reason, never as fine.',
+      },
       {
         q: 'Where do the speed figures come from?',
         a: 'From the Chrome User Experience Report: what real Chrome visitors measured over the last 28 days, at the 75th percentile, for your home page, a service page and a blog post on phone and desktop. A page with too few visits to report on its own shows the whole-site figures, marked as such. Speed carries a deliberately low weight in the health score.',
