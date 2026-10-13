@@ -155,6 +155,7 @@ export const features: Feature[] = [
       'The searches you already appear for seed the research: the ones no page of yours answers, and the ones you rank just off page one',
       'Every traffic estimate says whether it was measured on your own site or modelled from provider volume',
       'Searches Google answers with the same pages are grouped, so one page targets the whole group',
+      'A topic radius with every research run: the topics within reach for your site, the ones that are a stretch and the evidence behind each verdict',
     ],
     steps: [
       { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Ascentra looks at.' },
@@ -215,6 +216,8 @@ export const features: Feature[] = [
       'Two active ladders at a time by default, so effort is not spread thin',
       'No keyword overlap between ladders, so your own pages never compete',
       'A rung you already have a page for is planned as an improvement of that page, with its real address — never as a second page',
+      'Your topic radius with every plan: which topics are within reach for your site today, which are a stretch and why — the difficulty against the level you already win, a position you already hold, a page you already have, a service you sell',
+      'A ladder that has not moved for weeks comes back with a proposal: improve the page you already have, write the easier keyword first, change the order, or stop — with the evidence behind it. It is a suggestion; your plan is never rewritten for you',
     ],
     steps: [
       { title: 'Choose the keyword', body: 'Pick a recommended keyword or type your own. Ascentra shows the reach for your site and the plan type.' },
@@ -523,6 +526,7 @@ export const features: Feature[] = [
       'A competitor’s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
       'Competitors, government portals, bare homepages and mailbox or data-broker addresses are never pitched',
       'Every draft is checked before you see it: nothing claimed that your profile does not carry, something quoted from their page, one link to your page, short, with one clear ask',
+      'The whole week as one PDF: every opportunity with the reason it was kept or dropped, the contacts found on their own sites, the page and the link text to ask for, each pitch as it would be sent, the places to list yourself, the redirects to add and what your links did so far',
       'A free-sources mode that costs nothing to run',
     ],
     steps: [
@@ -582,21 +586,30 @@ export const features: Feature[] = [
       'A monthly check-in for manual actions and security issues',
       'Prioritised recommendations you can start with one click',
       'Every number says where it came from, over what period and from how big a sample',
+      'A share link for one report: it expires on the day you choose, you can turn it off at any time, and the person you send it to needs no account',
       'Every run kept with its report and files',
     ],
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
       { title: 'Explain', body: 'What changed, why it matters, how sure Ascentra is — and where each number came from.' },
       { title: 'Recommend', body: 'A prioritised list of next steps, each one ready to run.' },
-      { title: 'Share', body: 'Export the full report as PDF or Word, or open any past run with its report and files.' },
+      { title: 'Share', body: 'Send one report as a link that expires, or export it as PDF or Word. Past runs keep their report and files.' },
     ],
     facts: [
       { value: 2, label: 'report formats: PDF and Word' },
       { value: 'Monday', label: 'report, every week' },
+      { value: 14, label: 'days a share link lasts by default (1 to 90, revocable)' },
       { value: 1, label: 'check-in a month for what Google’s API cannot see' },
     ],
     faqs: [
-      { q: 'Can I share reports with clients?', a: 'Yes. Full reports export as PDF or Word, ready to send.' },
+      {
+        q: 'Can I share reports with clients?',
+        a: 'Yes, two ways. Export the report as PDF or Word and send the file, or create a share link: it opens that one report in the browser with no account needed, it stops working on the day you choose (14 days by default, up to 90) and you can turn it off at any time.',
+      },
+      {
+        q: 'What can somebody with a share link see?',
+        a: 'That one report and its documents, read-only — its headline figures, the website it is about, when it was produced and where each number came from. Nothing else: no other report, no dashboard, no list, none of your settings or team, and nothing on the page can be changed. You see when the link was last opened, and turning it off takes one click.',
+      },
       { q: 'What does the Search Console alert watcher do?', a: 'It reads Google’s Search Console notification e-mails for your websites and turns them into alerts in Ascentra.' },
       { q: 'What is the monthly check-in?', a: 'A short checklist for what Google does not expose through its API, such as manual actions and security issues.' },
       {

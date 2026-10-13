@@ -171,6 +171,26 @@ Keyword checks count in the company's spend everywhere runs do: the budget check
 | GET | /api/orgs/:orgId/reports?siteId=&stage=&limit=&before= | | `Report[]` |
 | GET | /api/orgs/:orgId/reports/:reportId | | `ReportDetail` |
 | GET | /api/orgs/:orgId/files/:fileId?download=1 | | the file (inline unless `download=1`) |
+| POST | /api/orgs/:orgId/reports/:reportId/shares | `{ days?: 1-90 }` (admin; default 14) | `ShareLink` **plus `url`** — the only time the token is returned |
+| GET | /api/orgs/:orgId/reports/:reportId/shares | (admin) | `{ items: ShareLink[], defaultDays, minDays, maxDays }` (no tokens) |
+| DELETE | /api/orgs/:orgId/reports/:reportId/shares/:shareId | (admin) | `ShareLink` with `state: 'revoked'` |
+| GET | /api/share/:token | no session | `{ report: SharedReport }` |
+| GET | /api/share/:token/files/:fileId?download=1 | no session | that report's file (same headers and sandbox as the route above) |
+
+### Share links (G15, `shared/src/share.ts`, criterion REP 3.7)
+An expiring, revocable, **read-only** link to **one report**, for somebody with no account (the page is `/share/:token`).
+A 256-bit token goes in the URL and **only its SHA-256 is stored** (`report_shares`), so a database copy hands out no working links;
+the row keeps who created it, its expiry, its revocation and when it was last opened (with a counter the owner sees).
+**What a holder of the link can reach:** that one report — its title, stage, website domain, date, whether it was scheduled, its
+headline `summary` values, the company's name, and the files of *that* report (a PDF inline, everything else as a sandboxed download,
+with exactly the headers the signed-in file route uses).
+**What a holder can never reach:** any other report (the token resolves to one report id, and a file whose `report_id` differs is a
+404), any list of reports, runs or websites, the callback `payload` or the run's input, the company's id, members, settings, mailboxes
+or dashboards, and **no write of any kind** — the only shared routes are these two GETs. Editing the URL does not widen it: a token
+must be base64url and 32-128 characters before anything is looked up, a file id must be a uuid, and both routes are rate-limited per
+IP (30 and 60 a minute). A wrong, revoked or expired token answers **404** with the same shape of message and no report, so a guess
+learns nothing; `code` is `share_invalid` / `share_revoked` / `share_expired` for the page's wording. Creating and revoking need the
+**admin** role (a viewer may read a report but not hand it outside the company); at most 10 live links per report.
 
 A `ladder` run may carry app-only `ladderPrefs: { mode?: 'auto' | 'manual', first?: boolean }` (the "New keyword ladder" flow; admins
 only — a member's are dropped; never sent to n8n). When the run's `ladder_plan` callback arrives with pages planned (`planned` not

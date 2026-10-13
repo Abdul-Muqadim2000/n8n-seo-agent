@@ -1,0 +1,137 @@
+import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { SHARE, shareExpiry, shareState, type ShareLink, type SharedReport } from '@seo/shared';
+import { db, schema } from '../db';
+import type { OrgRow, ReportShareRow, UserRow } from '../db/schema';
+import { randomToken, sha256 } from '../lib/crypto';
+import { HttpError, notFound } from '../lib/errors';
+
+/**
+ * The expiring share links of one report (G15; the rules live in @seo/shared `share.ts`, this file only reads and writes the database).
+ * What a holder of a link can reach: that one report's title, website domain, date, headline values and its own files — read-only.
+ * What it can never reach: another report (the token resolves to one report id), any list or dashboard, the run's input, the callback
+ * payload, the company's other websites, its members or its settings, and no write of any kind. The token itself is never stored.
+ */
+
+const toLink = (r: ReportShareRow, createdByName: string | null, now = new Date()): ShareLink => ({
+  id: r.id,
+  reportId: r.reportId,
+  state: shareState(r, now) as ShareLink['state'],
+  expiresAt: r.expiresAt.toISOString(),
+  createdAt: r.createdAt.toISOString(),
+  createdByName,
+  lastOpenedAt: r.lastOpenedAt ? r.lastOpenedAt.toISOString() : null,
+  opens: r.opens,
+  revokedAt: r.revokedAt ? r.revokedAt.toISOString() : null,
+});
+
+/** The report, if it belongs to this company (404 otherwise — a report of another company is simply not there). */
+async function reportOfOrg(orgId: string, reportId: string) {
+  const row = await db.query.reports.findFirst({ where: and(eq(schema.reports.orgId, orgId), eq(schema.reports.id, reportId)) });
+  if (!row) throw notFound('Report not found');
+  return row;
+}
+
+/** The live links of one report, newest first (never another report's, and never a token). */
+export async function listShares(orgId: string, reportId: string): Promise<ShareLink[]> {
+  await reportOfOrg(orgId, reportId);
+  const rows = await db
+    .select({ s: schema.reportShares, name: schema.users.name })
+    .from(schema.reportShares)
+    .leftJoin(schema.users, eq(schema.reportShares.createdBy, schema.users.id))
+    .where(and(eq(schema.reportShares.orgId, orgId), eq(schema.reportShares.reportId, reportId)))
+    .orderBy(desc(schema.reportShares.createdAt))
+    .limit(50);
+  const now = new Date();
+  return rows.map((r) => toLink(r.s, r.name ?? null, now));
+}
+
+/**
+ * A new link for one report: a 256-bit token, stored only as its hash, with an explicit expiry. The URL (the only time the token is
+ * ever returned) is built by the caller from the app's own base URL.
+ */
+export async function createShare(o: { org: OrgRow; user: UserRow; reportId: string; days?: unknown }): Promise<{ link: ShareLink; token: string }> {
+  await reportOfOrg(o.org.id, o.reportId);
+  const now = new Date();
+  const live = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(schema.reportShares)
+    .where(and(eq(schema.reportShares.reportId, o.reportId), isNull(schema.reportShares.revokedAt), sql`${schema.reportShares.expiresAt} > now()`));
+  if (Number(live[0]?.n ?? 0) >= SHARE.maxPerReport)
+    throw new HttpError(409, `This report already has ${SHARE.maxPerReport} live share links. Turn one off before creating another.`, 'share_limit');
+  const token = randomToken(SHARE.tokenBytes);
+  const [row] = await db
+    .insert(schema.reportShares)
+    .values({ orgId: o.org.id, reportId: o.reportId, tokenHash: sha256(token), expiresAt: shareExpiry(o.days, now), createdBy: o.user.id })
+    .returning();
+  return { link: toLink(row, o.user.name, now), token };
+}
+
+/** Turns a link off for good. Revoking twice is not an error; another company's link is a 404. */
+export async function revokeShare(orgId: string, reportId: string, shareId: string): Promise<ShareLink> {
+  await reportOfOrg(orgId, reportId);
+  const row = await db.query.reportShares.findFirst({
+    where: and(eq(schema.reportShares.id, shareId), eq(schema.reportShares.orgId, orgId), eq(schema.reportShares.reportId, reportId)),
+  });
+  if (!row) throw notFound('Share link not found');
+  if (row.revokedAt) return toLink(row, null);
+  const [updated] = await db.update(schema.reportShares).set({ revokedAt: new Date() }).where(eq(schema.reportShares.id, row.id)).returning();
+  return toLink(updated, null);
+}
+
+/** The stored link behind a token (by its hash), whatever its state — the route decides what to say. */
+export async function shareByToken(token: string): Promise<ReportShareRow | null> {
+  const row = await db.query.reportShares.findFirst({ where: eq(schema.reportShares.tokenHash, sha256(token)) });
+  return row ?? null;
+}
+
+/** Records an open: the time and a counter, so the owner can see whether the link was used. Never fails the read. */
+export async function markOpened(shareId: string): Promise<void> {
+  try {
+    await db
+      .update(schema.reportShares)
+      .set({ lastOpenedAt: new Date(), opens: sql`${schema.reportShares.opens} + 1` })
+      .where(eq(schema.reportShares.id, shareId));
+  } catch {
+    /* an open is not worth failing the page for */
+  }
+}
+
+/** The one report a live link may show, with its files and the company's name — and nothing else from that company. */
+export async function sharedReport(share: ReportShareRow): Promise<SharedReport | null> {
+  const rows = await db
+    .select({ r: schema.reports, domain: schema.sites.domain, orgName: schema.organizations.name })
+    .from(schema.reports)
+    .leftJoin(schema.sites, eq(schema.reports.siteId, schema.sites.id))
+    .leftJoin(schema.organizations, eq(schema.reports.orgId, schema.organizations.id))
+    .where(and(eq(schema.reports.id, share.reportId), eq(schema.reports.orgId, share.orgId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) return null;
+  const files = await db
+    .select({ id: schema.files.id, kind: schema.files.kind, fileName: schema.files.fileName, mimeType: schema.files.mimeType, size: schema.files.size })
+    .from(schema.files)
+    .where(eq(schema.files.reportId, share.reportId))
+    .orderBy(asc(schema.files.createdAt))
+    .limit(50);
+  return {
+    id: row.r.id,
+    stage: row.r.stage,
+    status: row.r.status,
+    title: row.r.title,
+    siteDomain: row.domain ?? null,
+    receivedAt: row.r.receivedAt.toISOString(),
+    scheduled: row.r.scheduled,
+    summary: row.r.summary,
+    files,
+    orgName: row.orgName ?? '',
+    expiresAt: share.expiresAt.toISOString(),
+  };
+}
+
+/** One file of the shared report — the file must belong to that report, or there is nothing to serve. */
+export async function sharedFile(share: ReportShareRow, fileId: string) {
+  const f = await db.query.files.findFirst({
+    where: and(eq(schema.files.id, fileId), eq(schema.files.reportId, share.reportId), eq(schema.files.orgId, share.orgId)),
+  });
+  return f ?? null;
+}

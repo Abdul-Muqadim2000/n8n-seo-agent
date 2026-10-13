@@ -232,6 +232,33 @@ export const files = pgTable(
 );
 
 /**
+ * G15 (system review 2026-10-11): an expiring, revocable, read-only link to ONE report, for somebody with no account.
+ * `id` of the link is a uuid; the secret in the URL is never stored — only its SHA-256 (`tokenHash`), so a database copy hands out no
+ * working links. The link reaches that one report and its files, nothing else. We keep who created it, when it expires, when it was
+ * revoked and when it was last opened (with a counter), so an owner can see whether anybody used it.
+ */
+export const reportShares = pgTable(
+  'report_shares',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    reportId: uuid('report_id')
+      .notNull()
+      .references(() => reports.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: ts('expires_at').notNull(),
+    revokedAt: ts('revoked_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    lastOpenedAt: ts('last_opened_at'),
+    opens: integer('opens').notNull().default(0),
+  },
+  (t) => [uniqueIndex('report_shares_hash_idx').on(t.tokenHash), index('report_shares_report_idx').on(t.reportId), index('report_shares_org_idx').on(t.orgId)],
+);
+
+/**
  * Keyword checks of the "New keyword ladder" flow (n8n's Keyword Check, POST /webhook/seo-keyword-assess; PIPELINE_FEATURE_SPEC.md
  * §5.2). A row is reserved as 'pending' (with the estimated cost) under the company's budget lock before n8n is called, then 'done'
  * with the engine's answer and its reported cost, or 'failed' (cost 0: counted in the daily limit only). The same website, keyword
@@ -396,4 +423,5 @@ export type SiteRow = typeof sites.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;
 export type ReportRow = typeof reports.$inferSelect;
 export type FileRow = typeof files.$inferSelect;
+export type ReportShareRow = typeof reportShares.$inferSelect;
 export type KeywordCheckRow = typeof keywordChecks.$inferSelect;

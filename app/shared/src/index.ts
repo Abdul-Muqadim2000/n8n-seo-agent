@@ -18,3 +18,4 @@ export * from './findings';
 export * from './lineage';
 export * from './annotations';
 export * from './change-test';
+export * from './share';
