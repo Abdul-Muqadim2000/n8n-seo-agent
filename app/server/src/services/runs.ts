@@ -136,9 +136,10 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
   );
   if (input.mode === 'keyword' && input.ladder && site) {
     // the ladder's links and, since P2-7, the word count its verdict set for this page (the engine clamps the brief to `ladder_words`)
-    const { links, targetWords } = await ladderLinks(site.domain, input.ladder.id, input.ladder.rung, input.keyword);
+    const { links, targetWords, targetUrl } = await ladderLinks(site.domain, input.ladder.id, input.ladder.rung, input.keyword);
     body.ladder_links = links;
     if (targetWords) body.ladder_words = targetWords;
+    if (targetUrl) body.ladder_target_url = targetUrl;   // R15: the page keeps the URL the ladder planned for it
   }
   // budget checks and the insert under one lock per company, so parallel requests (runs and keyword checks) cannot all pass the same
   // check; the month counts runs and keyword checks, the platform's daily ceiling every company (spend.ts)
@@ -276,7 +277,7 @@ export interface LadderPageLink {
  * `seo_ladders.target_words` stores it; the engine clamps the brief to it (`ladder_words` -> *Parse Brief*).
  * Pure, so the harness-style situations are unit-tested; `ladderLinks` only fetches the rows.
  */
-export function ladderPageContext(rows: LadderRow[], rung: number, keyword: string): { links: LadderPageLink[]; targetWords: number } {
+export function ladderPageContext(rows: LadderRow[], rung: number, keyword: string): { links: LadderPageLink[]; targetWords: number; targetUrl: string } {
   const top = rows.find((r) => Number(r.rung) === 4);
   const links: { url: string; role: string; keyword: string }[] = [];
   if (rung === 4) for (const r of rows.filter((x) => Number(x.rung) !== 4 && x.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword });
@@ -289,13 +290,18 @@ export function ladderPageContext(rows: LadderRow[], rung: number, keyword: stri
   const k = normKeyword(keyword);
   const mine = rows.find((r) => normKeyword(r.keyword) === k) ?? rows.find((r) => Number(r.rung) === rung);
   const words = Number(mine?.target_words) || Number(top?.target_words) || 0;
+  // R15 (re-rating, 2026-10-13): the URL this ladder planned for the page. Exec 521 delivered `service-industry-erp-software-uae` while
+  // the row said `/service-industry-erp-software/` — the row's own link map, the siblings' up-links and the Rank Tracker all use the row,
+  // so the engine keeps the planned slug (`ladder_target_url` -> *Parse Brief*) instead of publishing at a URL nothing points at.
+  const planned = String(mine?.target_url ?? '').trim();
   return {
     links: links.map((l) => ({ ...l, path: l.url.replace(/^https?:\/\/[^/]+/i, '') || '/', planned: true })),
     targetWords: words >= 300 && words <= 6000 ? Math.round(words) : 0,
+    targetUrl: /^https?:\/\/\S+$/i.test(planned) ? planned.slice(0, 300) : '',
   };
 }
 
-async function ladderLinks(domain: string, ladderId: string, rung: number, keyword: string): Promise<{ links: LadderPageLink[]; targetWords: number }> {
+async function ladderLinks(domain: string, ladderId: string, rung: number, keyword: string): Promise<{ links: LadderPageLink[]; targetWords: number; targetUrl: string }> {
   const rowsOf = await siteRows<LadderRow>('ladders', domain, { extra: [{ columnName: 'ladder_id', condition: 'eq', value: ladderId }], max: 100, fresh: true }).catch(() => [] as LadderRow[]);
   return ladderPageContext(rowsOf, rung, keyword);
 }

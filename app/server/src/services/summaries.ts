@@ -32,6 +32,8 @@ export function summarize(stage: string, p: P): Summary {
       put('page', str(p.recommended_page));
       put('ladderRung', num(p.ladder_rung));
       put('qa', str(p.qa_summary));
+      // R11 (re-rating, 2026-10-13): a page the quality gate failed twice is a draft — the run list says so, not only the report
+      if (p.qa_not_ready === true) put('notReadyToPublish', true);
       put('volume', num(obj(p.keyword_data).search_volume));
       put('difficulty', num(obj(p.keyword_data).keyword_difficulty));
       put('hasPage', typeof p.html === 'string' && p.html.length > 50);
