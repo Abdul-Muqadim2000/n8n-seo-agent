@@ -5,6 +5,7 @@
 /*__LINK_KIT__*/
 /*__OUTREACH_KIT__*/
 /*__LISTINGS__*/
+/*__PODCAST__*/
 const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const rows = (n) => { try { return $(n).all().map(i => i.json).filter(r => r && typeof r === 'object' && Object.keys(r).length && !r.error); } catch (e) { return []; } };
 const prospects = rows('Load Link Prospects'), outreach = rows('Load Link Outreach'), ledger = rows('Load Backlinks');
@@ -22,7 +23,7 @@ for (const p of plans) {
   const comp = new Set(p.competitors.map(c => LK.regDomain(c)));
   const skipD = (d) => !d || LK.sameSite(d, p.domain) || comp.has(LK.regDomain(d)) || BIG.test(d) || LK.isWire(d) || !!OK.badHost(d) || linking.has(LK.refKey(d));   // D13: badHost covers infrastructure, statistics pages, mailbox providers and contact databases (outlook.com, zoominfo.com were read and pitched live)
   // 1. prospects to qualify: new, not yet qualified, best score first (reclaims are fixed on our own site)
-  const todo = prospects.filter(x => x.site_id === p.site_id && (x.status || 'new') === 'new' && x.type !== 'reclaim' && !known.has(x.prospect_domain + '|' + x.type) && !skipD(x.prospect_domain))
+  const todo = prospects.filter(x => x.site_id === p.site_id && (x.status || 'new') === 'new' && !['reclaim', 'digest'].includes(x.type) && !known.has(x.prospect_domain + '|' + x.type) && !skipD(x.prospect_domain))
     .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0)).slice(0, p.qualify_max);
   for (const x of todo) add('prospect', (x.source_url && !DOC.test(x.source_url)) ? x.source_url : 'https://' + x.prospect_domain + '/', { prospect_domain: x.prospect_domain, type: x.type });
   // 2. resource pages found by search (monthly)
@@ -32,7 +33,7 @@ for (const p of plans) {
       nRes++; add('prospect', it.url, { prospect_domain: LK.refKey(d), type: 'resource', topic: r.topic, title: String(it.title || '').slice(0, 160) }); } });
   // 3. pages linking to a competitor's dead page (DataForSEO, monthly)
   let nBr = 0;
-  dreqs.forEach((r, i) => { if (r.site_id !== p.site_id) return; const res = (((dresps[i] || {}).tasks || [])[0] || {}).result || []; const items = (res[0] || {}).items || [];
+  dreqs.forEach((r, i) => { if (r.site_id !== p.site_id || (r.kind || 'broken') !== 'broken') return; const res = (((dresps[i] || {}).tasks || [])[0] || {}).result || []; const items = (res[0] || {}).items || [];
     for (const it of items) { const d = LK.refKey(it.domain_from); if (nBr >= 10 || skipD(d) || known.has(d + '|broken') || out.some(o => o.json.prospect_domain === d)) continue; nBr++;
       add('prospect', it.url_from, { prospect_domain: d, type: 'broken', dead_url: it.url_to || '', dead_anchor: String(it.anchor || '').slice(0, 120), competitor: r.competitor, rank: Number(it.domain_from_rank) || 0 }); } });
   // 4. listings evidence (monthly)
@@ -48,6 +49,15 @@ for (const p of plans) {
     sreqs.forEach((r, i) => { if (r.site_id !== p.site_id || r.kind !== 'listing_search') return; const l = LISTINGS.find(x => x.id === r.listing_id); const j = body(sresps[i]) || {};
       const hit = (j.results || []).find(it => l && l.re && l.re.test(it.url || '')); if (hit) add('listing_profile', hit.url, { listing_id: l.id }); });
   }
+  // 4b. L5: podcast shows on our topics (monthly, free) — the feed says what the show is about and which website is its own
+  if (p.due.podcasts) { let nPod = 0; const seenFeed = new Set();
+    sreqs.forEach((r, i) => { if (r.site_id !== p.site_id || r.kind !== 'podcast_search') return;
+      for (const sh of PC.shows(body(sresps[i]) || {})) { if (nPod >= 6) break;
+        const fh = LK.hostOf(sh.feed), sh2 = sh.site ? LK.hostOf(sh.site) : '';
+        if (!fh || seenFeed.has(LK.normUrl(sh.feed))) continue;
+        if (sh2 && (LK.sameSite(sh2, p.domain) || comp.has(LK.regDomain(sh2)) || known.has(LK.refKey(sh2) + '|podcast') || linking.has(LK.refKey(sh2)))) continue;   // our own show, a competitor's, one already pitched or already linking
+        seenFeed.add(LK.normUrl(sh.feed)); nPod++;
+        add('podcast_feed', sh.feed, { topic: r.topic || '', show_title: sh.title.slice(0, 160), show_author: sh.author.slice(0, 120), platform_url: sh.platform_url, episodes: sh.episodes, feed_site: sh.site, provider: sh.provider }); } }); }
   // 5. our old URLs (Wayback CDX, monthly): does each still answer? (a 404 with history = a redirect to add)
   sreqs.forEach((r, i) => { if (r.site_id !== p.site_id || r.kind !== 'wayback') return; const j = body(sresps[i]); const list = Array.isArray(j) ? j.slice(1) : [];
     const seen = new Set(); let n = 0;

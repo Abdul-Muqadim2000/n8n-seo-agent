@@ -6,6 +6,8 @@ import {
   linkBuilderRunSchema,
   linkSettingsSchema,
   listingStatusSchema,
+  isOauthProvider,
+  mailboxOauthStartSchema,
   mailboxPatchSchema,
   mailboxSchema,
   n8nSiteId,
@@ -15,6 +17,7 @@ import {
   suppressionSchema,
   type LinkBuildingData,
   type MailboxTestResult,
+  type MailProviderInfo,
   type MailboxView,
   type SuppressionView,
 } from '@seo/shared';
@@ -26,12 +29,15 @@ import { secretsReady, seal, unseal } from '../lib/secretBox';
 import { invalidateSite, linkBuilderRun, upsertRow } from '../n8n/client';
 import { approve, linkBuildingData, linkSettingsOf, mailboxView, sequenceFor, setProspectStatus, suppress, updateSequence } from '../services/linkBuilder';
 import { testMailbox } from '../services/mail';
+import { exchangeMailCode, isOauthMailbox, MAIL_PROVIDERS, mailAuthUrl, mailProviderInfo, oauthProviderOf, revokeMailTokens, testOauthMailbox } from '../services/mailOauth';
 import { sendManual } from '../services/outreachJobs';
 
 // v4.13 Link Builder (n8n/seo-agent/LINK_BUILDER_SPEC.md): the company's mailboxes, a website's link-building board, approving / editing /
 // pausing sequences, answering replies in the thread, opt-outs, the listings checklist and "find opportunities now".
 
 type P = { orgId: string; siteId: string; id: string };
+/** L4: the short-lived cookies of the OAuth round trip (sent to the callback path only) */
+const MB_COOKIE = { path: '/api/mailbox-oauth', httpOnly: true, sameSite: 'lax' as const, secure: config.cookieSecure, maxAge: 900 };
 const mailboxErr = (t: Awaited<ReturnType<typeof testMailbox>>) => [!t.smtp.ok ? `Sending (SMTP) failed: ${t.smtp.error}` : '', !t.imap.ok ? `Reading replies (IMAP) failed: ${t.imap.error}` : ''].filter(Boolean).join(' · ');
 
 export async function linkBuilderRoutes(app: FastifyInstance) {
@@ -62,8 +68,11 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
     if (!mb) throw notFound('Mailbox not found');
     const m = parse(mailboxPatchSchema, req.body);
     if ((m.windowStart ?? mb.windowStart) >= (m.windowEnd ?? mb.windowEnd)) throw badRequest('The sending window must end after it starts.');
+    const oauth = isOauthMailbox(mb);   // L4: there is no password and no SMTP login to change on an OAuth mailbox
+    if (oauth && (['password', 'smtpHost', 'smtpPort', 'smtpSecure', 'imapHost', 'imapPort', 'imapSecure', 'username'] as const).some((k) => m[k] !== undefined))
+      throw badRequest(`${mb.fromEmail} is connected with ${MAIL_PROVIDERS[oauthProviderOf(mb)!].label}: it has no password or server settings to change. Disconnect it to connect it differently.`);
     const patch: Record<string, unknown> = { ...m }; delete patch.password; delete patch.fromEmail;
-    const connChanged = m.password !== undefined || (['smtpHost', 'smtpPort', 'smtpSecure', 'imapHost', 'imapPort', 'imapSecure', 'username'] as const).some((k) => m[k] !== undefined && m[k] !== mb[k]);   // only a real change re-tests the login
+    const connChanged = !oauth && (m.password !== undefined || (['smtpHost', 'smtpPort', 'smtpSecure', 'imapHost', 'imapPort', 'imapSecure', 'username'] as const).some((k) => m[k] !== undefined && m[k] !== mb[k]));   // only a real change re-tests the login
     if (connChanged) {
       const conn = { smtpHost: m.smtpHost ?? mb.smtpHost, smtpPort: m.smtpPort ?? mb.smtpPort, smtpSecure: m.smtpSecure ?? mb.smtpSecure, imapHost: m.imapHost ?? mb.imapHost, imapPort: m.imapPort ?? mb.imapPort, imapSecure: m.imapSecure ?? mb.imapSecure, username: m.username ?? mb.username, password: m.password ?? unseal(mb.secret) };
       const t = await testMailbox(conn, mb.fromEmail);
@@ -79,8 +88,10 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
     const p = req.params as P; const { org } = await orgAccess(req, p.orgId, 'admin');
     const mb = await db.query.mailboxes.findFirst({ where: and(eq(schema.mailboxes.id, p.id), eq(schema.mailboxes.orgId, org.id)) });
     if (!mb) throw notFound('Mailbox not found');
-    const t = await testMailbox({ smtpHost: mb.smtpHost, smtpPort: mb.smtpPort, smtpSecure: mb.smtpSecure, imapHost: mb.imapHost, imapPort: mb.imapPort, imapSecure: mb.imapSecure, username: mb.username, password: unseal(mb.secret) }, mb.fromEmail);
-    const ok = t.smtp.ok && t.imap.ok;
+    const t = isOauthMailbox(mb)   // L4: an OAuth mailbox is checked by renewing its permission and reading its own profile
+      ? await testOauthMailbox(mb)
+      : await testMailbox({ smtpHost: mb.smtpHost, smtpPort: mb.smtpPort, smtpSecure: mb.smtpSecure, imapHost: mb.imapHost, imapPort: mb.imapPort, imapSecure: mb.imapSecure, username: mb.username, password: unseal(mb.secret) }, mb.fromEmail);
+    const ok = t.smtp.ok && (t.imap.ok || !mb.readsReplies);
     await db.update(schema.mailboxes).set({ dns: t.dns as unknown as Record<string, unknown>, ...(t.imap.sentFolder ? { sentFolder: t.imap.sentFolder } : {}), ...(ok && mb.status === 'error' ? { status: 'active', statusReason: '' } : {}), lastError: ok ? '' : mailboxErr(t), updatedAt: new Date() }).where(eq(schema.mailboxes.id, mb.id));
     return { ok, smtp: t.smtp, imap: { ok: t.imap.ok, error: t.imap.error }, dns: t.dns };
   });
@@ -99,8 +110,72 @@ export async function linkBuilderRoutes(app: FastifyInstance) {
     const mb = await db.query.mailboxes.findFirst({ where: and(eq(schema.mailboxes.id, p.id), eq(schema.mailboxes.orgId, org.id)) });
     if (!mb) throw notFound('Mailbox not found');
     await db.update(schema.outreachSequences).set({ status: 'paused', error: 'Its mailbox was removed', updatedAt: new Date() }).where(and(eq(schema.outreachSequences.mailboxId, mb.id), inArray(schema.outreachSequences.status, ['scheduled', 'active'])));
+    // L4: withdraw our access as well as forgetting the tokens; Microsoft has no revocation endpoint for this flow, so the answer says
+    // where the customer removes the app themselves.
+    let revoked = { ok: true, note: '' };
+    const p4 = oauthProviderOf(mb);
+    if (p4 && mb.oauthRefresh) {
+      try { revoked = await revokeMailTokens(p4, unseal(mb.oauthRefresh)); } catch (e) { revoked = { ok: false, note: MAIL_PROVIDERS[p4].withdraw }; req.log.warn({ err: String(e) }, 'mailbox token not revoked'); }
+    }
     await db.delete(schema.mailboxes).where(eq(schema.mailboxes.id, mb.id));
-    return { ok: true };
+    return { ok: true, revoked: revoked.ok, note: revoked.note };
+  });
+
+  // ---- L4: mailboxes connected with OAuth (Microsoft 365 through Graph, Gmail for sending) ----
+  // The OAuth app belongs to the owner of this installation (app/.env): with none configured the option is not offered at all, never
+  // half-offered. The customer grants access on the provider's own consent screen; we store the refresh token encrypted, renew the access
+  // token before it expires, and revoke what we can when the mailbox is disconnected.
+  app.get('/api/orgs/:orgId/mailbox-oauth/providers', async (req): Promise<MailProviderInfo[]> => {
+    await orgAccess(req, (req.params as P).orgId, 'member');
+    return mailProviderInfo();
+  });
+
+  app.post('/api/orgs/:orgId/mailbox-oauth/start', { config: { rateLimit: { max: 20, timeWindow: '1 hour' } } }, async (req, reply): Promise<{ url: string }> => {
+    const { org } = await orgAccess(req, (req.params as P).orgId, 'admin');
+    if (!secretsReady()) throw new HttpError(503, 'Mailboxes cannot be connected yet: the server has no MAILBOX_KEY to encrypt the stored permission.', 'no_key');
+    const b = parse(mailboxOauthStartSchema, req.body);
+    const { url, state, verifier } = mailAuthUrl(b.provider);
+    reply.setCookie('mb_state', state, MB_COOKIE);
+    reply.setCookie('mb_verifier', verifier, MB_COOKIE);
+    reply.setCookie('mb_ctx', `${org.id}:${b.provider}:${b.label.replace(/[^\w .-]+/g, '').slice(0, 60)}`, MB_COOKIE);
+    return { url };
+  });
+
+  app.get('/api/mailbox-oauth/callback', async (req, reply) => {
+    const q = req.query as { code?: string; state?: string; error?: string; error_description?: string };
+    const state = req.cookies.mb_state;
+    const verifier = req.cookies.mb_verifier;
+    const [orgId = '', provider = '', label = ''] = String(req.cookies.mb_ctx ?? '').split(':');
+    for (const c of ['mb_state', 'mb_verifier', 'mb_ctx']) reply.clearCookie(c, { path: MB_COOKIE.path });
+    const back = (params: string) => reply.redirect(`/o/${encodeURIComponent(orgId)}/settings/mailboxes?${params}`);
+    const fail = (why: string) => back(`mailbox=error&why=${encodeURIComponent(why.slice(0, 200))}`);
+    if (!req.user) return reply.redirect('/login');
+    if (!orgId || !isOauthProvider(provider)) return fail('The connection did not start here: try again.');
+    if (q.error) return fail(q.error_description || q.error);
+    if (!q.code || !q.state || !state || !verifier || q.state !== state) return fail('The provider came back without a valid state: try again.');
+    let org;
+    try { ({ org } = await orgAccess(req, orgId, 'admin')); } catch { return reply.redirect('/'); }
+    try {
+      const t = await exchangeMailCode(provider, q.code, verifier);
+      const reads = MAIL_PROVIDERS[provider].reads;
+      const now = new Date();
+      const common = {
+        provider, label, fromEmail: t.email, username: t.email, secret: '',
+        oauthRefresh: seal(t.refreshToken), oauthAccess: seal(t.accessToken), oauthExpiresAt: t.expiresAt, oauthScope: t.scope.slice(0, 400), oauthSubject: t.subject.slice(0, 120),
+        readsReplies: reads, status: 'active', statusReason: '', lastError: '', smtpHost: '', imapHost: '', sentFolder: '', updatedAt: now,
+      };
+      const existing = await db.query.mailboxes.findFirst({ where: and(eq(schema.mailboxes.orgId, org.id), eq(schema.mailboxes.fromEmail, t.email)) });
+      if (existing) {
+        await db.update(schema.mailboxes).set(common).where(eq(schema.mailboxes.id, existing.id));
+      } else {
+        await db.insert(schema.mailboxes).values({ ...common, orgId: org.id, fromName: t.email.split('@')[0] ?? t.email, createdBy: req.user.id, startedAt: now });
+      }
+      req.log.info({ org: org.id, provider }, 'mailbox connected with OAuth');
+      return back(`mailbox=connected&address=${encodeURIComponent(t.email)}${reads ? '' : '&reads=0'}`);
+    } catch (e) {
+      req.log.warn({ err: String(e), provider }, 'mailbox OAuth failed');
+      return fail(e instanceof HttpError ? e.message : 'The provider refused the connection: try again.');
+    }
   });
 
   // ---- opt-outs (company) ----

@@ -64,9 +64,15 @@ with AI visibility far more than links (Ahrefs: 0.66 vs 0.22) — every won link
 through **SEO Agent — Link Builder API** (`SEOagentLinkBAPI`, `POST /webhook/seo-link-builder`, API key header: answers 202, then starts the run)
 Per site with `link_builder` on (Site Admin `monitors`; the app turns it on):
 1. **New opportunities** (free unless noted): journalist requests (#journorequest on Bluesky, matched to the site's topics; deadline
-   kept), resource pages and broken links on relevant pages (web search for "useful links / resources" + topic, each page fetched,
-   outbound links checked twice), our own old URLs from the Wayback CDX that now 404 → redirect suggestions (type `reclaim`, origin
-   `wayback`), competitors' broken backlinks (DataForSEO `is_broken`, monthly, ≈ $0.07), and the **listings checklist** (§4).
+   kept), **journalist digests** (L5, 2026-10-13: HARO / Source of Sources arrive in the customer's own mailbox, so the web app parses them
+   — `app/shared/src/digest.ts`, the inbox poller — and writes one `digest` prospect per open request for every verified site; nothing
+   arrives until a mailbox is connected), **podcast shows that take guests** (L5: monthly, free — a podcast directory is searched for the
+   site's topics, every show's RSS feed is read because its `<link>` is the only place that names the show's **own** website, that website
+   and its contact page are fetched, and the show is pitched only when it is on topic, still publishing, says somewhere that it takes
+   guests and has a contact on its own domain; `v5/code/_podcast.js`), resource pages and broken links on relevant pages (web search for
+   "useful links / resources" + topic, each page fetched, outbound links checked twice), our own old URLs from the Wayback CDX that now 404
+   → redirect suggestions (type `reclaim`, origin `wayback`), competitors' broken backlinks (DataForSEO `is_broken`, monthly, ≈ $0.07),
+   their **most-linked pages** (L6: `backlinks/domain_pages`, monthly, ≈ $0.02 a competitor) and the **listings checklist** (§4).
 2. **Qualify** every new prospect of every type (also the monitor's and AI Growth's): the page answers, its language, signs it sells
    links (price lists, "sponsored post", casino / CBD / essay categories), hundreds of unrelated outbound domains, already linking,
    spam score, contacted in the last 90 days → `not_fit` with the reason. **Never pitched** (D13, 2026-10-12; `v5/code/_outreach_kit.js`):
@@ -81,13 +87,18 @@ Per site with `link_builder` on (Site Admin `monitors`; the app turns it on):
    abuse, jobs. The address's source page is kept (GDPR Art. 14 line).
 4. **Our page and the link text** (§5): the page of ours to point to, why, and the anchor to ask for (brand / the page's title / URL).
 5. **Outreach Writer** (Claude Sonnet, one call per site, ≤ 10 prospects a week by value × likelihood): a **sequence** per prospect —
-   first e-mail (80-130 words, a subject of 36-50 characters, one detail quoted from *their* page, one link, never "backlink" / "dofollow"
+   first e-mail (80-130 words, **two** subjects of 36-50 characters in different styles (L7: A names what we found, B asks the one
+   question; the gate checks both and `LB Rows` hands them out in turn, A, B, A, B …, so each goes out as often as the other), one detail
+   quoted from *their* page, one link, never "backlink" / "dofollow"
    / a keyword anchor / payment / link swap), follow-up 1 (+4 business days, 40-70 words, one new useful detail) and follow-up 2 (+8 more,
    the last: "who is the right person?" or an easier alternative). Journalist requests: the answer itself, one follow-up. Signed with the
    business profile's author; the compliance footer is added by the app at send time.
 6. Rows: `seo_link_outreach` (one per site × prospect domain × type: status, fit, reasons, evidence, contacts, our page, anchor, the
    sequence), `seo_link_prospects` (new prospects of the new types, statuses kept), `seo_listings`, `seo_link_impact` (§6).
-7. Report + callback `link_builder` (new opportunities, drafts ready, listings missing, impact reads).
+7. **Linkable-asset ideas** (L6, 2026-10-13): the competitors' most-linked pages are grouped into the kinds of page that earn links in
+   this market — data study, free tool, template, definitive guide — and at most four ideas are offered, each with what the work is, the
+   competitor pages that prove it and the referring domains they hold. An idea says what it is based on and is never a promise of links.
+8. Report + callback `link_builder` (new opportunities, drafts ready, listings missing, impact reads, podcast shows, asset ideas).
 
 The **Backlink Monitor** keeps discovery and "won"; for a site with the Link Builder on it no longer drafts e-mails (one writer).
 **Facts only (D14, 2026-10-11):** the prompt always carries the facts block ("none on file" when empty) with the rule that any claim the facts do not state goes to the owner as `[Owner: …]`; the app sends `business_facts` and the business profile (`profile`: business, author, reviewer, address, phone, e-mail, service areas; `app/server/src/services/replyFacts.ts`), merged by Reply Input; Reply Result then checks every sentence of the suggested answer against the facts with `_claims.js` (`CL.check`: accredited, certified, partner, ISO, licensed, registered, approved, award, member of, founded, since, based in, numbers of years / clients / %, prices) and wraps an unsupported one in `[Owner: confirm — …]`, sets `needs_you` and lists it in `unverified`. Live 2026-10-11 the answer invented an accreditation with empty facts (execs 357-360).
@@ -98,9 +109,20 @@ with our e-mail → class (interested / question / says linked / wants payment /
 names a URL on the prospect's site, that page is fetched and checked for our link at once (instant "won").
 
 ### App — sending, replies, the queue
-- **Mailboxes** (company settings): SMTP + IMAP with an app password (Gmail / Google Workspace, Zoho, Fastmail, Microsoft 365 until
-  December 2026, any host), tested on connect (SMTP login, IMAP login, Sent folder), SPF / DMARC / DKIM (common selectors) checked for the
-  From domain; the password is encrypted (AES-256-GCM, `MAILBOX_KEY`), never shown again. Microsoft Graph and Gmail OAuth: next (§9).
+- **Mailboxes** (company settings), two ways to connect:
+  - **An app password**: SMTP + IMAP (Gmail / Google Workspace, Zoho, Fastmail, Microsoft 365 until December 2026, any host), tested on
+    connect (SMTP login, IMAP login, Sent folder), SPF / DMARC / DKIM (common selectors) checked for the From domain; the password is
+    encrypted (AES-256-GCM, `MAILBOX_KEY`), never shown again.
+  - **OAuth** (L4, 2026-10-13; `app/server/src/services/mailOauth.ts`): **Microsoft 365 through Graph** (`Mail.Send` + `Mail.Read` +
+    `offline_access`: sends and reads the replies) and **Gmail / Google Workspace** (`gmail.send`: sends only — reading a Gmail inbox needs
+    `gmail.readonly`, which Google classes as a **restricted** scope and only grants after a CASA assessment and app verification, so the
+    UI, `app/API.md` and the mailbox card say plainly that those replies are read in Gmail itself). Authorization code + PKCE on the
+    provider's own consent screen; the refresh token is encrypted exactly like a password, the access token is renewed two minutes before
+    it expires, and disconnecting revokes what the provider allows (Google's revoke endpoint; Microsoft has none for this flow, so the app
+    names the page where the customer removes it). The OAuth apps belong to the installation (`MS_OAUTH_*` / `GMAIL_OAUTH_*` in
+    `app/.env`): with a pair unset that provider is **not offered at all** — never half-offered. Sending goes through Gmail
+    `messages.send` (base64url MIME) or Graph `sendMail` (base64 MIME), so our own `Message-ID`, `In-Reply-To` and `References` keep the
+    thread, and both providers file their own copy in Sent.
 - **Approval** (per website): *Approve each* (default) — the person reads, edits and approves the whole sequence; *Automatic* (owner
   only, off by default) — sequences with a contact and fit ≥ 0.6 are approved within the daily limits, never consent-gated recipients.
 - **Sender** (every minute): per mailbox, Monday-Friday 08:00-17:00 in the mailbox's time zone; first e-mails 5 / 10 / 20 a day in
@@ -127,7 +149,9 @@ names a URL on the prospect's site, that page is fetched and checked for our lin
 Prospect: new → contacted → replied → won / rejected / ignored (v4.13 adds `replied`). Sequence (app): review → approved → active
 (step n, next date) → replied / out of office (until) / bounced / stopped / won / finished (no reply). KPIs on the page: links won this
 month and in all, e-mails sent, reply rate (people only, auto-replies excluded), positive replies, win rate (won ÷ domains contacted),
-median days to link, bounce and unsubscribe rates, all split by opportunity type; cost per link (Claude + data).
+median days to link, bounce and unsubscribe rates, all split by opportunity type; cost per link (Claude + data); and (L7) the first
+e-mails, replies and reply rate **per subject style**, with no verdict under 30 sends per style — the counts and "not enough sends yet"
+instead of a winner (`v5/code/_ab.js`, mirrored in `app/shared/src/outreach.ts` `subjectAbStats`; the two must change together).
 
 ## 4. Links you can add yourself (listings checklist)
 **Research (2026-10-10, fetched profiles and platform docs):** a plain fetch gets a bot wall (403 / challenge) on G2 (DataDome), Capterra,
@@ -240,6 +264,12 @@ n8n tables (created by the workflow, columns in `ladder_common.py`): `seo_link_o
   opportunities now" → free check).
 - techand.ai: connect its mailbox (company settings → Mailboxes) with a postal address; MoF accreditation (or the accredited partner's page).
   Until the accreditation is on file (the site model's `accreditation`), accredited-provider lists are not pitched — by design (D13 / O3).
-Microsoft 365 (Graph OAuth) and Gmail OAuth mailboxes (Gmail needs Google's restricted-scope verification for reading replies); podcasts
-(Podcast Index key); the journalist digests (HARO / Source of Sources e-mails read from the connected mailbox); linkable-asset ideas from
-competitors' most-linked pages; reply rates per subject line (A/B).
+- **Done 2026-10-13** (fix plan L4-L7, harness S61): OAuth mailboxes (Microsoft 365 sends and reads, Gmail sends), podcast guest
+  opportunities, the journalist digests read from the connected mailbox, the linkable-asset ideas and the subject-line A/B. What they still
+  need from the owner: an **Azure app** (`MS_OAUTH_CLIENT_ID` / `MS_OAUTH_CLIENT_SECRET`, redirect `<APP_URL>/api/mailbox-oauth/callback`)
+  and / or a **Google OAuth client** (`GMAIL_OAUTH_CLIENT_ID` / `GMAIL_OAUTH_CLIENT_SECRET`, scope `gmail.send`) in `app/.env` — without
+  them only app-password mailboxes are offered; and a **connected mailbox** (O4) before any digest can arrive.
+- **Podcast Index** (`SEO_PODCASTINDEX_API_KEY` / `_SECRET`, placeholders in `n8n/.env.seo.example`) is not read yet: every request must
+  carry `sha1(key + secret + unix time)`, which no n8n credential type can produce per request and which a node may not compute either
+  (the secret would have to live in the workflow JSON, and `$env` is blocked in nodes on this instance). The free Apple directory is read
+  instead; `PC.shows()` already parses both answers, so a signing step is all that is missing.

@@ -4632,6 +4632,67 @@ assert "ST.check(md, style_guide)" in code('Content QA') and 'ST.from(P,' in cod
 assert 'style_brand_form' in code('Profile Row') and 'style_brand_form' in code('Normalize Input'), 'the style guide is not stored (G31)'
 log('A style guide that is stored, used and checked (2026-10-13, FIX_PLAN G31): the brand\'s written form ("Tech&"), extra wrong forms, the spelling variant, the words to avoid, the tone and any further rule live on the site\'s business profile row (seo_profiles.style_*, filled through the profile form / API `style`), so every run that already loads the profile carries them at no extra cost; v5/code/_style_guide.js (ST) turns the row into the HOUSE STYLE paragraph the Strategy Brief, Copywriter and Editor prompts print and overrides the market-derived spelling and the requested tone, and Content QA checks it mechanically — the brand\'s own name written wrongly is a quality warning the editor must fix, while the spelling variant, the words to avoid and exclamation marks against a stated tone are advice printed in the report and the package (meta.json) that can never on its own make a page "not ready"')
 
+# 52. THE LAST FOUR LINK-BUILDER GAPS (2026-10-13, system review FIX_PLAN.md L4 / L5 / L6 / L7)
+#     * L5 two more free sources. **Podcast guest opportunities**: a free podcast directory is searched for the site's topics once a
+#       month, every show's RSS feed is read (the feed's <link> is the only place that names the show's OWN website), that website is
+#       fetched, and the show becomes a prospect only when it is on topic, still publishing, says somewhere that it takes guests and
+#       has a contact on its own domain — an address on a podcast platform or a free mailbox belongs to nobody we could write to about
+#       the show. `SEO_PODCASTINDEX_API_KEY` / `_SECRET` are in n8n/.env.seo.example as placeholders: the Podcast Index API signs every
+#       request with sha1(key + secret + unix time), which no n8n credential can produce and no node may compute (a node would have to
+#       hold the secret, and $env is blocked in nodes on this instance), so the free directory is read today — `PC.shows()` already
+#       takes both answers, so only the URL changes when a signing step exists. **Journalist digests** (HARO / Source of Sources)
+#       arrive in the customer's own mailbox, so the web app parses them (app/shared/src/digest.ts, the inbox poller) and writes one
+#       `digest` prospect per request; with no mailbox connected nothing arrives and nothing happens (fix-plan O4). Both kinds go
+#       through the same gates as every other prospect: OK.noPitch, the declared-competitor check, the topic fit, the draft gate.
+#     * L6 **linkable-asset ideas**: the competitors' most-linked pages (DataForSEO `backlinks/domain_pages`, monthly, about $0.02 a
+#       competitor) are grouped into the kinds of page that earn links in this market — data study, free tool, template, definitive
+#       guide — and at most four ideas are offered, each with the competitor pages that prove it and the referring domains they hold.
+#       An idea says what it is based on and what the work is; it is never presented as a promise of links.
+#     * L7 **subject-line A/B**: the writer gives every sequence a second subject in the other style (style A names what we found,
+#       style B asks the one question), the draft gate checks it like the first, and the drafts of a batch take the two in turn, so the
+#       two styles go out in equal numbers. Reading them is the app's job (app/shared/src/outreach.ts), and the rule is one
+#       implementation shared with v5/code/_ab.js: **under 30 first e-mails per variant nothing may be called better** — the counts are
+#       shown with "not enough sends yet". This changes which subject a draft carries, never what is sent: every pitch still waits for
+#       a person's approval.
+#     * L4 (Gmail / Microsoft 365 OAuth mailboxes) is entirely in the web app (app/server/src/services/mailOauth.ts and the Mailboxes
+#       tab): n8n never holds a customer's mailbox.
+# =============================================================================
+_L52 = {p: open(os.path.join(HERE0, 'v5', 'code', p + '.js')).read() for p in ('_podcast', '_ab', 'LB_Plan', 'LB_Source_Requests', 'LB_Page_Requests', 'LB_Second_Requests', 'LB_DFS_Requests', 'LB_Assemble', 'LB_Draft_QA', 'LB_Rows', 'LB_Report', '_outreach_kit')}
+_P52 = open(os.path.join(HERE0, 'v5', 'prompts', 'link_outreach.txt')).read()
+# L5: the podcast chain is three hops — search (Sources) -> feed (Pages) -> the show's own site and its contact page (Second)
+assert "add(p, 'podcast_search', PC.searchUrl(" in _L52['LB_Source_Requests'], 'L5: no podcast search'
+assert "'podcast_feed'" in _L52['LB_Page_Requests'] and "PC.shows(" in _L52['LB_Page_Requests'], 'L5: the shows are not read'
+assert "'podcast_site'" in _L52['LB_Second_Requests'] and 'PC.feed(' in _L52['LB_Second_Requests'], "L5: the show's own site is never fetched"
+assert "no contact on the show" in _L52['LB_Assemble'] and 'PC.guestSignal(' in _L52['LB_Assemble'], 'L5: the podcast gates are missing'
+assert "x.type === 'digest'" in _L52['LB_Assemble'], 'L5: digest requests never become pitches'
+assert "['reclaim', 'digest'].includes(x.type)" in _L52['LB_Page_Requests'], 'L5: a digest prospect has no page of its own to fetch'
+for _k in ('digest', 'podcast'):
+    assert _k in _L52['_outreach_kit'].split('SELL_EXEMPT = new Set(')[1].split(')')[0], 'L5: ' + _k + ' is not exempt from the vendor check'
+    assert _k in _P52, 'L5: the writer is not told about ' + _k
+assert 'PC.INDEX' not in _L52['LB_Source_Requests'] and 'PC.searchUrl(t, false)' in _L52['LB_Source_Requests'], 'L5: the signed Podcast Index path cannot be used yet (no node may hold the secret)'
+# L6: the competitors' most-linked pages, the kinds, and the evidence under every idea
+assert 'domain_pages/live' in _L52['LB_DFS_Requests'] and "kind: 'pages'" in _L52['LB_DFS_Requests'], 'L6: domain_pages is never asked for'
+assert "(r.kind || 'broken') !== 'broken'" in _L52['LB_Page_Requests'], 'L6: the two DataForSEO answers are not told apart'
+assert 'ASSET_KINDS' in _L52['LB_Assemble'] and 'asset_ideas' in _L52['LB_Assemble'] and 'basis:' in _L52['LB_Assemble'], 'L6: no asset ideas'
+assert 'Assets that earn links in your market' in _L52['LB_Report'] and 'no asset is a promise of links' in _L52['LB_Report'], 'L6: the ideas are not reported with their basis'
+# L7: two subjects, both checked, taken in turn; the 30-send rule in one place
+assert 'subject_b' in _P52 and 'subject_b' in _L52['LB_Draft_QA'], 'L7: no second subject'
+assert 'AB.altOk(' in _L52['LB_Draft_QA'] and 'AB.variantFor(' in _L52['LB_Rows'], 'L7: the variants are not assigned or not checked'
+assert 'MIN_SENDS = 30' in _L52['_ab'] and 'not enough sends yet' in _L52['_ab'], 'L7: the 30-send rule is missing'
+# the harness shims (S61): each kit as a runnable script, one call per item
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_ab.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 52): the subject-line A/B rule — { variants: [{ variant, subject, sent, replied }] }\n"
+    "// -> the counts per variant, whether they may be read at all, and the one line the app shows\n"
+    + _L52['_ab'] + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  return { json: { ...AB.read(j), alt_why: j.alt === undefined ? null : AB.altOk(j.alt, j.first), variant_for: [0, 1, 2, 3].map(AB.variantFor) } }; });\n")
+open(os.path.join(OUT_CODE, '_podcast.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 52): the podcast kit — a search answer (Apple or Podcast Index), an RSS feed, the\n"
+    "// guest signal and the staleness rule\n"
+    + _L52['_podcast'] + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  return { json: { shows: j.search ? PC.shows(j.search) : [], feed: j.xml ? PC.feed(j.xml) : null, guest: j.texts ? PC.guestSignal(j.texts) : null,\n"
+    "    stale: j.last === undefined ? null : PC.stale(j.last, j.now), url: PC.searchUrl(j.topic || 'e invoicing uae', !!j.signed), stale_days: PC.STALE_DAYS } }; });\n")
+log('Two more free link sources, asset ideas from the market, and two subjects a batch (2026-10-13, FIX_PLAN L5 / L6 / L7): podcast shows that take guests (a free directory a month -> the show\'s RSS feed -> its own website; pitched only when it is on topic, still publishing, says it takes guests and has a contact on its own domain) and journalist digests (HARO / Source of Sources, parsed by the app from the customer\'s own mailbox into `digest` prospects, nothing until a mailbox is connected) both run through the same gates as every other prospect; the competitors\' most-linked pages (DataForSEO domain_pages, monthly) become at most four linkable-asset ideas, each with the pages that prove it and the referring domains they hold and never a promise of links; and the writer gives every sequence a second subject in the other style, which the draft gate checks and LB Rows hands out in turn (A, B, A, B) so the app can read the reply rate per style, with no verdict under 30 first e-mails per variant (v5/code/_ab.js, mirrored in app/shared/src/outreach.ts). The Podcast Index key stays a placeholder in .env.seo.example: its signed requests need the secret inside a node, which this instance does not allow')
 
 # =============================================================================
 # 9. WRITE

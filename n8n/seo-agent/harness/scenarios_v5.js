@@ -2768,7 +2768,7 @@ await guard('link builder', async () => {
   check('sources: journalist requests every week (shared + per topic), listing searches and our Wayback history when due, no resource search (ran 10 days ago)', SR.filter(r => r.kind === 'press').length >= 2 && SR.some(r => r.kind === 'wayback' && /techand\.ai/.test(r.url)) && SR.some(r => r.kind === 'listing_search') && !SR.some(r => r.kind === 'resource_search'), JSON.stringify(SR.map(r => r.kind)));
   mock('Fetch LB Sources', SR.map(r => sourceFor(r)));
   const DR = (await run('LB DFS Requests', [{ json: P }])).map(r => r.json);
-  check("DataForSEO: competitors' broken backlinks, monthly, followed only (is_broken)", DR.length === 2 && DR[0].body[0].filters[0][0] === 'is_broken' && DR.every(d => /backlinks\/backlinks\/live/.test(d.endpoint)), JSON.stringify(DR));
+  check("DataForSEO: competitors' broken backlinks, monthly, followed only (is_broken), and (L6) their most-linked pages", DR.filter(d => d.kind === 'broken').length === 2 && DR.filter(d => d.kind === 'broken')[0].body[0].filters[0][0] === 'is_broken' && DR.filter(d => d.kind === 'broken').every(d => /backlinks\/backlinks\/live/.test(d.endpoint)) && DR.filter(d => d.kind === 'pages').length === 2, JSON.stringify(DR.map(d => [d.kind, d.endpoint])));
   mock('Run LB DFS', DR.map(() => F.dfsBroken()));
   // ---- (c) the pages to read ----
   const PR = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
@@ -8796,5 +8796,179 @@ await guard('G23 cost and G21 delivery', async () => {
     CW.settle.ends.length >= 5 && ['Build_Word_File.js', 'Build_Full_Report.js', 'Build_Audit_Report.js', 'Build_Keyword_File.js', 'Build_Ladder_Report.js']
       .every(f => /CC\.runCost\(__costCalls/.test(srcOf(f)) && /ai_cost_estimated/.test(srcOf(f))), CW.settle.ends.join(', '));
 });
+// ===================================================================================
+// S61 L4 / L5 / L6 / L7 (2026-10-13, system review FIX_PLAN.md §3.4): the last four Link Builder gaps — two more free sources (podcast
+// shows that take guests, journalist digests read from the customer's own mailbox), linkable-asset ideas from the competitors' most-linked
+// pages, and two subject lines a batch with no verdict before there is enough to read. L4 (Gmail / Microsoft 365 OAuth mailboxes) is
+// entirely in the web app and is tested there (app/server/test/mailOauth.test.ts).
+// ===================================================================================
+await guard('l4-l7-podcasts-digests-asset-ideas-subject-ab', async () => {
+  const SN = 'S61 L5 L6 L7 — a podcast show with no contact on its own domain is refused, a journalist digest becomes a pitch with its evidence and deadline, an asset idea names the competitor pages behind it, and a subject variant with 12 sends shows its counts and no winner';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 600))); };
+  const F61 = require('./fixtures_lb413'); const L61 = require('./fixtures_lb_l47'); const TC61 = require('./table_cols.json');
+  const J61 = (x) => { try { return JSON.parse(x || ''); } catch (e) { return null; } };
+  const same61 = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+
+  // ---- 1. L7: the rule on its own — nothing may be called better under 30 first e-mails per variant ----
+  const AB61 = async (input) => (await run('_ab', [{ json: input }]))[0].json;
+  const thin = await AB61({ variants: [{ variant: 'A', subject: 'Dead link on your VAT resources page', sent: 12, replied: 3 }, { variant: 'B', subject: 'Add a UAE e-invoicing guide to your list?', sent: 31, replied: 2 }] });
+  console.log('   subject a/b ->', JSON.stringify([thin.verdict, thin.leader, thin.rows.map(r => [r.variant, r.sent, r.replied, r.reply_rate])]));
+  check('L7: a variant with 12 sends shows its counts and no winner — "not enough sends yet", with how many are still missing',
+    thin.verdict === 'not_enough' && thin.leader === '' && thin.enough === false && thin.min_sends === 30
+    && thin.rows[0].sent === 12 && thin.rows[0].replied === 3 && thin.rows[0].reply_rate === 25 && thin.rows[1].sent === 31
+    && /not enough sends yet/i.test(thin.note) && /A \(12 of 30\)/.test(thin.note) && /3 replies from 12 e-mails/.test(thin.counts), JSON.stringify(thin));
+  const ahead = await AB61({ variants: [{ variant: 'A', sent: 40, replied: 8 }, { variant: 'B', sent: 38, replied: 2 }] });
+  const level = await AB61({ variants: [{ variant: 'A', sent: 40, replied: 8 }, { variant: 'B', sent: 41, replied: 8 }] });
+  const none = await AB61({ variants: [] });
+  check('L7: with 30 or more each the better subject is called "ahead" by its points (never proven), a difference under 2 points is no difference, and nothing sent reads "nothing to compare"',
+    ahead.verdict === 'ahead' && ahead.leader === 'A' && ahead.gap === 14.7 && /a hint, not a rule/.test(ahead.note)
+    && level.verdict === 'no_difference' && level.leader === '' && none.verdict === 'nothing_sent' && !/winner/i.test(ahead.note), JSON.stringify([ahead.verdict, ahead.leader, ahead.gap, level.verdict, none.verdict]));
+  check('L7: the drafts of a batch take the two subjects in turn (A, B, A, B), and a second subject that is unusable is named',
+    JSON.stringify(thin.variant_for) === JSON.stringify(['A', 'B', 'A', 'B'])
+    && (await AB61({ alt: 'Add our page and we will add a dofollow backlink', first: 'x' })).alt_why === 'the second subject uses a word we never use'
+    && (await AB61({ alt: 'Add a UAE e-invoicing guide to your list?', first: 'Add a UAE e-invoicing guide to your list?' })).alt_why === 'the second subject is the same as the first'
+    && (await AB61({ alt: '', first: 'x' })).alt_why === 'no second subject was written', JSON.stringify(thin.variant_for));
+
+  // ---- 2. L5: the podcast kit on real shapes (Apple's directory and the Podcast Index answer, an RSS feed, the guest signal) ----
+  const PC61 = async (input) => (await run('_podcast', [{ json: input }]))[0].json;
+  const apple = await PC61({ search: JSON.parse(L61.podcastSearch().data), topic: 'e invoicing uae' });
+  const idx = await PC61({ search: L61.indexSearch() });
+  check('L5: the free directory needs no key and the search URL is its own; both answers (Apple and Podcast Index) give the same list of shows',
+    /itunes\.apple\.com\/search/.test(apple.url) && !/podcastindex/.test(apple.url) && apple.shows.length === 4 && apple.shows[0].title === 'The Gulf Finance Podcast'
+    && apple.shows[0].feed === 'https://gulffinancepodcast.ae/feed.xml' && apple.shows[0].episodes === 84 && apple.shows[0].provider === 'apple'
+    && idx.shows.length === 1 && idx.shows[0].site === 'https://gulffinancepodcast.ae/' && idx.shows[0].provider === 'podcastindex', JSON.stringify([apple.url, apple.shows.map(s => s.title)]));
+  const fd = await PC61({ xml: L61.FEEDS['https://gulffinancepodcast.ae/feed.xml'], texts: [], last: L61.day(6) });
+  check("L5: the feed is where the show's own website comes from, with its description, the owner's address, its episodes and how fresh it is",
+    fd.feed.site === 'https://gulffinancepodcast.ae/' && fd.feed.owner_email === 'press@gulffinancepodcast.ae' && fd.feed.episodes === 2
+    && /Peppol deadline/.test(fd.feed.description) && fd.feed.last_episode === L61.day(6) && fd.stale === 0, JSON.stringify(fd.feed));
+  const g1 = await PC61({ texts: ['We record one interview a week. Be a guest on the show: write to us.'] });
+  const g2 = await PC61({ texts: ['Interview: choosing software', 'My guest this week on Peppol'] });
+  const g3 = await PC61({ texts: ['A solo show about the news of the week, written and read by one person.'], last: L61.day(410) });
+  check('L5: a show that invites guests, a show that only runs interviews and a show with no sign of guests are told apart, and a show with no episode for 410 days is stale',
+    g1.guest.ok && g1.guest.strength === 'invites' && /Be a guest/.test(g1.guest.quote) && g2.guest.ok && g2.guest.strength === 'interviews'
+    && !g3.guest.ok && g3.stale >= 410 && g3.stale <= 411 && g3.stale_days === 200, JSON.stringify([g1.guest, g2.guest, g3.guest, g3.stale]));
+
+  // ---- 3. the run: the plan, the sources, the pages, the decisions ----
+  reset();
+  mock('Load Sites', F61.sites()); mock('Load Ladders', F61.ladders()); mock('Load Monitors', F61.monitors()); mock('Load Profiles', F61.profiles());
+  mock('Load Link Prospects', [...F61.prospects(), ...L61.digests(), L61.anonDigest()].map(j => ({ json: j })));
+  mock('Load Link Outreach', F61.outreachPrev().map(j => ({ json: j }))); mock('Load Listings', F61.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', [{ json: {} }]);
+  mock('Load Backlinks', F61.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F61.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]);
+  mock('Load AI Targets', F61.targets().map(j => ({ json: j }))); mock('Load Query History', F61.queries().map(j => ({ json: j })));
+  mock('Load Rank History', F61.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', F61.cache().map(j => ({ json: j })));
+  delete store['Manual Run'];
+  const P61 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  check('L5 / L6: the podcast search and the competitors\' most-linked pages are monthly jobs of their own, due on a site that has never run them',
+    P61.due.podcasts === true && P61.due.assets === true, JSON.stringify(P61.due));
+  const SR61 = (await run('LB Source Requests', [{ json: P61 }])).map(r => r.json);
+  check('L5: one podcast search per topic, on the free directory (the signed Podcast Index path is not used: no node may hold the secret)',
+    SR61.filter(r => r.kind === 'podcast_search').length === 2 && SR61.filter(r => r.kind === 'podcast_search').every(r => /itunes\.apple\.com\/search\?media=podcast/.test(r.url) && r.topic)
+    && !SR61.some(r => /api\.podcastindex\.org/.test(r.url)), JSON.stringify(SR61.filter(r => r.kind === 'podcast_search').map(r => [r.topic, r.url.slice(0, 80)])));
+  const sourceFor61 = (r) => r.kind === 'press' ? F61.bsky(r.topic ? [] : [F61.onTopicPost()]) : r.kind === 'wayback' ? F61.cdx()
+    : r.kind === 'podcast_search' ? L61.podcastSearch() : r.kind === 'listing_search' ? F61.searx([]) : r.kind === 'resource_search' ? F61.searx([]) : {};
+  mock('Fetch LB Sources', SR61.map(sourceFor61));
+  const DR61 = (await run('LB DFS Requests', [{ json: P61 }])).map(r => r.json);
+  check('L6: for every competitor, their broken backlinks AND their most-linked pages (domain_pages, 3 or more linking sites), each request saying which kind it is',
+    DR61.length === 4 && DR61.filter(r => r.kind === 'pages').length === 2 && DR61.filter(r => r.kind === 'broken').length === 2
+    && DR61.filter(r => r.kind === 'pages').every(r => /backlinks\/domain_pages\/live/.test(r.endpoint) && r.body[0].order_by[0] === 'referring_domains,desc'), JSON.stringify(DR61.map(r => [r.kind, r.competitor, r.endpoint.slice(-30)])));
+  mock('Run LB DFS', DR61.map(r => r.kind === 'pages' ? L61.dfsPages(r.competitor) : F61.dfsBroken()));
+  const PR61 = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
+  check('L5: every show found gets its feed read, and a journalist request from a digest has no page of its own to fetch',
+    PR61.filter(r => r.kind === 'podcast_feed').length === 4 && PR61.some(r => r.kind === 'podcast_feed' && r.url === 'https://gulffinancepodcast.ae/feed.xml' && r.show_title === 'The Gulf Finance Podcast')
+    && !PR61.some(r => r.prospect_domain === 'gulfbusiness.com' || r.prospect_domain === 'petfoodweekly.com'), JSON.stringify(PR61.filter(r => r.kind === 'podcast_feed').map(r => [r.show_title, r.url])));
+  check('L6: the most-linked pages are not mistaken for pages that link to a competitor (only the broken-link answers are read as prospects)',
+    !PR61.some(r => r.type === 'broken' && /cleartax\.com|azentio\.com/.test(r.prospect_domain || '')), JSON.stringify(PR61.filter(r => r.type === 'broken').map(r => r.prospect_domain)));
+  mock('Fetch LB Pages', PR61.map(r => L61.fetchPage(r.url)));
+  const S261 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json);
+  check("L5: the show's own website and its contact page are read next, carrying what the feed said about the show",
+    S261.filter(r => r.kind === 'podcast_site').length === 4 && S261.some(r => r.kind === 'podcast_site' && r.url === 'https://gulffinancepodcast.ae/' && r.owner_email === 'press@gulffinancepodcast.ae' && r.guest_strength === 'invites' && r.episodes >= 84)
+    && S261.some(r => r.kind === 'contact' && r.prospect_domain === 'gulffinancepodcast.ae' && r.type === 'podcast'), JSON.stringify(S261.filter(r => r.kind === 'podcast_site').map(r => [r.prospect_domain, r.guest_strength, r.last_episode])));
+  mock('Fetch LB Second', S261.map(r => L61.fetchPage(r.url)));
+  const AS61 = (await run('LB Assemble', [{ json: {} }]))[0].json;
+  const O61 = (d, t) => AS61.outreach_rows.find(o => o.prospect_domain === d && (!t || o.type === t)) || {};
+  const ct61 = (o) => (J61(o.contacts_json) || []).map(c => c.email);
+  console.log('   podcasts ->', JSON.stringify(AS61.outreach_rows.filter(o => o.type === 'podcast').map(o => [o.prospect_domain, o.status, o.fit, o.fit_reason.slice(0, 90)])));
+  check('L5: the show on our topics that invites guests is ready — the contact is the address on its OWN domain, the page offered is the homepage with the brand as link text, and the evidence quotes what the show says about guests',
+    O61('gulffinancepodcast.ae', 'podcast').status === 'ready' && ct61(O61('gulffinancepodcast.ae')).includes('press@gulffinancepodcast.ae')
+    && ct61(O61('gulffinancepodcast.ae')).every(e => /@gulffinancepodcast\.ae$/.test(e)) && O61('gulffinancepodcast.ae').target_url === F61.H + '/'
+    && O61('gulffinancepodcast.ae').anchor_hint === 'brand' && /Be a guest|guest/i.test(O61('gulffinancepodcast.ae').evidence)
+    && /84 episodes/.test(O61('gulffinancepodcast.ae').evidence), JSON.stringify([O61('gulffinancepodcast.ae').status, ct61(O61('gulffinancepodcast.ae')), O61('gulffinancepodcast.ae').evidence]));
+  check('L5: a show whose only address is a free mailbox is refused — there is no contact on the show\'s own domain, so nobody to write to (and no pitch is drafted)',
+    O61('einvoicingweekly.com', 'podcast').status === 'not_fit' && /no contact on the show.s own domain/.test(O61('einvoicingweekly.com').fit_reason)
+    && !ct61(O61('einvoicingweekly.com')).length && !AS61.jobs.some(j => j.prospect_domain === 'einvoicingweekly.com')
+    && !AS61.prospect_rows.some(x => x.prospect_domain === 'einvoicingweekly.com'), JSON.stringify([O61('einvoicingweekly.com').status, O61('einvoicingweekly.com').fit_reason, ct61(O61('einvoicingweekly.com'))]));
+  check('L5: a show off our topics and a show that stopped publishing are both refused with the reason',
+    O61('deserttrailrunning.ae', 'podcast').status === 'not_fit' && /off your topics/.test(O61('deserttrailrunning.ae').fit_reason)
+    && O61('vathour.co.uk', 'podcast').status === 'not_fit' && /looks finished/.test(O61('vathour.co.uk').fit_reason), JSON.stringify([O61('deserttrailrunning.ae').fit_reason, O61('vathour.co.uk').fit_reason]));
+  check('L5: a journalist request from a digest becomes a pitch with its evidence, its deadline and the address the digest gives; an off-topic request is refused',
+    O61('gulfbusiness.com', 'digest').status === 'ready' && /five-corner model/.test(O61('gulfbusiness.com').evidence)
+    && O61('gulfbusiness.com').deadline === L61.day(-7) && O61('gulfbusiness.com').contact_email === 'query-8f21@email.sosresponse.com'
+    && O61('gulfbusiness.com').target_url === F61.H + '/' && /journalist request on your topic/.test(O61('gulfbusiness.com').fit_reason)
+    && O61('petfoodweekly.com', 'digest').status === 'not_fit' && /off topic/.test(O61('petfoodweekly.com').fit_reason), JSON.stringify([O61('gulfbusiness.com'), O61('petfoodweekly.com').fit_reason]));
+  check('L5: an anonymised request (the digest names the outlet but no website) is still pitched — the checks that need a real domain are skipped, not failed',
+    O61('sos/7c44', 'digest').status === 'ready' && O61('sos/7c44').contact_email === 'query-7c44@email.sosresponse.com'
+    && !/not a website/.test(O61('sos/7c44').fit_reason) && O61('sos/7c44').deadline === L61.day(-4), JSON.stringify([O61('sos/7c44').status, O61('sos/7c44').fit_reason]));
+  console.log('   asset ideas ->', JSON.stringify((AS61.asset_ideas || []).map(i => [i.kind, i.rds, i.basis])));
+  const idea61 = (k) => (AS61.asset_ideas || []).find(i => i.kind === k) || {};
+  check('L6: an asset idea names the competitor pages behind it, with the referring domains each one holds and what the idea is based on',
+    AS61.asset_ideas.length === 3 && AS61.asset_ideas.length <= 4 && idea61('data').rds === 82 && idea61('data').examples.length === 2
+    && idea61('data').examples.every(x => /uae-e-invoicing-statistics-2026/.test(x.url) && x.rds === 41 && /cleartax\.com|azentio\.com/.test(x.competitor))
+    && /hold 82 referring domains between them/.test(idea61('data').basis) && /e invoicing in uae/.test(idea61('data').idea)
+    && idea61('tool').rds === 36 && idea61('guide').rds === 24 && !idea61('template').kind, JSON.stringify(AS61.asset_ideas.map(i => [i.kind, i.rds, i.examples.map(x => x.rds)])));
+  check('L6: the competitors\' homepages and their thinly-linked pages are not asset ideas, and the ideas come in the order of the evidence behind them',
+    !AS61.asset_ideas.some(i => i.examples.some(x => /\/$/.test(x.url) || /we-are-hiring/.test(x.url)))
+    && AS61.asset_ideas.map(i => i.rds).join() === '82,36,24' && AS61.summary.asset_pages === 8, JSON.stringify(AS61.summary));
+  check('L5: the run counts the new kinds apart (podcast shows read and pitchable, digest requests), and the monthly clocks are kept',
+    AS61.summary.podcasts === 1 && AS61.summary.podcasts_read === 4 && AS61.summary.digests === 2 && AS61.summary.asset_ideas === 3
+    && (J61(AS61.cache_row.value) || {}).podcasts_at.slice(0, 10) === new Date().toISOString().slice(0, 10)
+    && (J61(AS61.cache_row.value) || {}).assets_at.slice(0, 10) === new Date().toISOString().slice(0, 10), JSON.stringify(AS61.summary));
+
+  // ---- 4. the writer, the gate and the rows: two subjects, taken in turn ----
+  const WI61 = (await run('LB Writer Input', [{ json: {} }]))[0].json;
+  check('L5: the writer is given the podcast and the journalist request with their own angle, the deadline and the contact',
+    WI61.jobs.some(j => j.prospect_domain === 'gulffinancepodcast.ae' && j.angle === 'podcast' && /@gulffinancepodcast\.ae/.test(j.to))
+    && WI61.jobs.some(j => j.prospect_domain === 'gulfbusiness.com' && j.angle === 'digest' && j.deadline === L61.day(-7)), JSON.stringify(WI61.jobs.map(j => [j.prospect_domain, j.angle, j.deadline])));
+  mock('Outreach Sequence Writer', [L61.writer(WI61.jobs)]);
+  const QA61 = (await run('LB Draft QA', [{ json: {} }]))[0].json;
+  const v61 = (d) => (QA61.verdicts || []).find(v => v.prospect_domain === d) || {};
+  check('L7: the second subject passes the same checks as the first, one that is too long and uses a word we never use is dropped with the reason (the pitch itself still stands), and a journalist answer keeps its "Re:" subject with nothing to test',
+    v61('gulffinancepodcast.ae').subject_alt === 'Add a UAE e-invoicing guide to your list?' && v61('azdan.com').subject_alt === ''
+    && (v61('azdan.com').notes || []).some(x => /second subject/.test(x)) && v61('azdan.com').ok === true
+    && v61('gulfbusiness.com').subject_alt === '' && !(v61('gulfbusiness.com').notes || []).some(x => /second subject/.test(x)), JSON.stringify((QA61.verdicts || []).map(v => [v.prospect_domain, v.ok, v.subject_alt, v.notes])));
+  check('L5: a journalist request from a digest is written like a press answer — two e-mails, the follow-up three working days later, the digest’s own reply address accepted, and both new kinds pass the draft gate',
+    (v61('gulfbusiness.com').steps || []).length === 2 && v61('gulfbusiness.com').steps[1].wait_days === 3
+    && v61('gulfbusiness.com').ok === true && v61('gulffinancepodcast.ae').ok === true
+    && (v61('gulffinancepodcast.ae').steps || []).length === 3 && v61('gulffinancepodcast.ae').steps[1].wait_days === 4, JSON.stringify((QA61.verdicts || []).map(v => [v.prospect_domain, v.ok, v.held])));
+  const RW61 = (await run('LB Rows', [{ json: {} }]))[0].json;
+  const withAlt = RW61.outreach_rows.filter(o => (J61(o.sequence_json) || [{}])[0] && (J61(o.sequence_json) || [{}])[0].variant);
+  const step0 = (d) => (J61((RW61.outreach_rows.find(o => o.prospect_domain === d) || {}).sequence_json) || [{}])[0] || {};
+  console.log('   variants ->', JSON.stringify(withAlt.map(o => [o.prospect_domain, step0(o.prospect_domain).variant, step0(o.prospect_domain).subject])));
+  check('L7: the drafts of the batch carry the two subjects in turn, so each goes out about as often as the other; every step keeps both lines and its variant letter, and the pitch with no usable second subject carries none',
+    withAlt.length >= 4 && Math.abs(withAlt.filter(o => step0(o.prospect_domain).variant === 'A').length - withAlt.filter(o => step0(o.prospect_domain).variant === 'B').length) <= 1
+    && withAlt.some(o => step0(o.prospect_domain).variant === 'A') && withAlt.some(o => step0(o.prospect_domain).variant === 'B')
+    && !withAlt.some(o => ['press', 'digest'].includes(o.type))
+    && withAlt.every(o => step0(o.prospect_domain).subject && step0(o.prospect_domain).subject_alt && step0(o.prospect_domain).subject !== step0(o.prospect_domain).subject_alt)
+    && step0(withAlt.find(o => step0(o.prospect_domain).variant === 'B').prospect_domain).subject === 'Add a UAE e-invoicing guide to your list?'
+    && !step0('azdan.com').variant && !step0('azdan.com').subject_alt && step0('azdan.com').subject, JSON.stringify(withAlt.map(o => [o.prospect_domain, step0(o.prospect_domain).variant])));
+  const OR61 = (await run('Outreach Rows', [{ json: {} }])).map(r => r.json);
+  check('the stored rows still carry exactly the columns of seo_link_outreach (the two subjects live inside the sequence, not in new columns)',
+    OR61.length === RW61.outreach_rows.length && OR61.every(r => same61(Object.keys(r), TC61.LINK_OUTREACH)), JSON.stringify(Object.keys(OR61[0] || {})));
+
+  // ---- 5. the report ----
+  const RP61 = (await run('LB Report', [{ json: {} }]))[0].json;
+  save('link-builder-l5-l6-l7.html', RP61.html); scanHtml('link builder report, L5 + L6 + L7', RP61.html);
+  check('L5 / L6: the report has its own section for the shows that take guests and for the assets that earn links here, each idea with its basis and the pages behind it, and the journalist requests include the one from the digest',
+    /Podcast shows that take guests/.test(RP61.html) && /gulffinancepodcast\.ae/.test(RP61.html) && /Assets that earn links in your market/.test(RP61.html)
+    && /hold 82 referring domains between them/.test(RP61.html) && /uae-e-invoicing-statistics-2026/.test(RP61.html)
+    && /Journalist requests on your topics/.test(RP61.html) && /five-corner model/.test(RP61.html), (RP61.html.match(/Assets that earn links[\s\S]{0,300}/) || [''])[0].slice(0, 300));
+  check('L6: nothing in the report promises links, and the asset ideas and the shows carry their lineage (what was read, how many, and that an idea is not a forecast)',
+    /no asset is a promise of links/.test(RP61.html) && !/\b(guarantee|guaranteed|will earn you|proves)\b/i.test(RP61.html)
+    && RP61.asset_ideas.length === 3 && RP61.podcasts.length === 1
+    && RP61.lineage.some(l => /kind of page earns links/.test(l.figure) && /never a forecast/.test(l.note))
+    && RP61.lineage.some(l => /Podcast shows/.test(l.figure) && /own domain/.test(l.note)), JSON.stringify(RP61.lineage.map(l => l.figure)));
+});
+
+
 H.report();
 })();

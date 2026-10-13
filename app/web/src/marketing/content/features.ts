@@ -543,6 +543,11 @@ export const features: Feature[] = [
       'SEO, referral and brand value for every link',
       'Link-farm pages and search-results pages are written off, so your best links are the ones that really help',
       'Scored prospects with contacts, outreach drafts and follow-ups after 7 and 14 days',
+      'Connect Microsoft 365 or Gmail in one click, with no password to store, or any mail host with an app password',
+      'Podcast shows on your topics that take guests, each with a contact on the show’s own website',
+      'Journalist requests from the digests in your own mailbox, matched to your topics and kept to their deadline',
+      'What kind of page earns links in your market — data study, free tool, template or guide — with the competitor pages that prove it',
+      'Two subject lines per batch with the reply rate of each, and no verdict until enough have gone out to mean anything',
       'A competitor’s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
       'Competitors, government portals, bare homepages and mailbox or data-broker addresses are never pitched',
       'Every draft is checked before you see it: nothing claimed that your profile does not carry, something quoted from their page, one link to your page, short, with one clear ask',
@@ -553,7 +558,7 @@ export const features: Feature[] = [
       { title: 'Merge', body: 'Nine sources flow into one ledger, one row per referring site.' },
       { title: 'Check', body: 'Ascentra visits each linking page and reads the link the way a search engine would.' },
       { title: 'Value', body: 'Every link gets an SEO, referral and brand value.' },
-      { title: 'Grow', body: 'Scored prospects, contacts, checked outreach drafts and follow-up reminders.' },
+      { title: 'Grow', body: 'Scored prospects, contacts, checked outreach drafts and follow-up reminders, sent from your own mailbox.' },
     ],
     facts: [
       { value: 9, label: 'link sources in one ledger' },
@@ -575,6 +580,22 @@ export const features: Feature[] = [
         a: 'Everything except the commercial index: Bing Webmaster Tools, Search Console and GA4 data, the Common Crawl graph, Wikipedia, Hacker News, news and web search.',
       },
       { q: 'Does Ascentra send outreach e-mails?', a: 'It drafts outreach and reminds you to follow up after 7 and 14 days. Sending stays with your team, from your own mailbox.' },
+      {
+        q: 'Do I have to hand over my mailbox password?',
+        a: 'No. Microsoft 365 and Gmail can be connected on their own sign-in screen, where you grant exactly two things: sending, and (for Microsoft 365) reading the replies to your own pitches. Nothing but a renewable permission is stored, it is encrypted, and it is withdrawn when you disconnect the mailbox. Google treats inbox access as a restricted scope, so a Gmail mailbox sends and you read its replies in Gmail — the app says so before you connect it. An app password still works for any mail host.',
+      },
+      {
+        q: 'Where do the opportunities come from?',
+        a: 'Pages that already link to your competitors or to a page that no longer exists, lists that leave you out, resource pages on your topics, journalists asking publicly or through the HARO and Source of Sources digests in your own mailbox, podcast shows that say they take guests, and the directories worth being on. Each one is checked on its own page before it reaches you.',
+      },
+      {
+        q: 'What should I build to earn links?',
+        a: 'Each month Ascentra reads the pages your competitors have the most links to and tells you which kind of page earns links in your market — a data study, a free tool, a template or a definitive guide — with those pages and the number of websites linking to each. It is evidence of what works, with the work named; it is never a promise of links.',
+      },
+      {
+        q: 'Do you decide which subject line is better?',
+        a: 'Only once there is enough to read. Every batch gets two subject lines in different styles and they go out in equal numbers; you see the e-mails sent and the replies for each. Under thirty sends per line the page says “not enough sends yet” instead of naming a winner, because at that size a few points of difference is noise.',
+      },
       {
         q: 'Who gets pitched, and what is in the draft?',
         a: 'Only sites that could really link to you: a competitor selling what you sell, a government portal, a page that sells links and a bare homepage are refused with the reason. Every draft then passes an automatic check — it may claim nothing your business profile does not carry, it quotes something from their page, it carries one link to the page it offers, it is short and makes one clear ask. A draft that fails any of these waits for your edit instead of being offered as ready.',

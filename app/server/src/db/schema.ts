@@ -286,7 +286,8 @@ export const keywordChecks = pgTable(
 );
 
 // ---- v4.13 Link Builder (n8n/seo-agent/LINK_BUILDER_SPEC.md): the company's mailboxes, the sequences it sends, every message, opt-outs ----
-/** A mailbox the company sends link-building e-mails from (its own address; SMTP + IMAP with an app password). The secret is encrypted. */
+/** A mailbox the company sends link-building e-mails from (its own address). Either SMTP + IMAP with an app password, or (L4) OAuth with
+ *  Microsoft 365 / Gmail, where no password exists and the provider's API sends. Every secret here is encrypted (lib/secretBox.ts). */
 export const mailboxes = pgTable(
   'mailboxes',
   {
@@ -295,6 +296,7 @@ export const mailboxes = pgTable(
     label: text('label').notNull().default(''),
     fromName: text('from_name').notNull(),
     fromEmail: text('from_email').notNull(),
+    /** smtp (app password) | gmail_oauth (sends only) | ms_graph (sends and reads) */
     provider: text('provider').notNull().default('smtp'),
     smtpHost: text('smtp_host').notNull(),
     smtpPort: integer('smtp_port').notNull().default(465),
@@ -303,8 +305,21 @@ export const mailboxes = pgTable(
     imapPort: integer('imap_port').notNull().default(993),
     imapSecure: boolean('imap_secure').notNull().default(true),
     username: text('username').notNull(),
-    /** AES-256-GCM (lib/secretBox.ts, key MAILBOX_KEY); never sent to the browser */
+    /** AES-256-GCM (lib/secretBox.ts, key MAILBOX_KEY); never sent to the browser. Empty for an OAuth mailbox: there is no password. */
     secret: text('secret').notNull(),
+    // ---- L4: an OAuth mailbox. The refresh token is the long-lived secret and is encrypted exactly like a password; the access token
+    // is refreshed before it expires, and both are revoked when the customer disconnects the mailbox.
+    oauthRefresh: text('oauth_refresh').notNull().default(''),
+    oauthAccess: text('oauth_access').notNull().default(''),
+    oauthExpiresAt: ts('oauth_expires_at'),
+    /** the scopes the customer actually granted, as the provider reported them */
+    oauthScope: text('oauth_scope').notNull().default(''),
+    /** the provider's own account id (sub / oid): a re-connect of the same account updates the row instead of adding one */
+    oauthSubject: text('oauth_subject').notNull().default(''),
+    /** where the inbox reading got to (Microsoft Graph: the newest receivedDateTime read; IMAP uses lastUid instead) */
+    oauthCursor: text('oauth_cursor').notNull().default(''),
+    /** false for Gmail OAuth: reading an inbox needs Google's restricted scope, so replies are read in Gmail itself */
+    readsReplies: boolean('reads_replies').notNull().default(true),
     /** active | paused | error */
     status: text('status').notNull().default('active'),
     statusReason: text('status_reason').notNull().default(''),
@@ -352,7 +367,9 @@ export const outreachSequences = pgTable(
     status: text('status').notNull().default('scheduled'),
     /** the next step to send (0 = the first e-mail); steps.length = all sent */
     step: integer('step').notNull().default(0),
-    steps: jsonb('steps').$type<{ step: number; waitDays: number; subject: string; body: string }[]>().notNull(),
+    steps: jsonb('steps').$type<{ step: number; waitDays: number; subject: string; body: string; subjectAlt?: string; variant?: string }[]>().notNull(),
+    /** L7: which of the batch's two subject styles this conversation went out with (A | B; empty when the pitch had only one) */
+    subjectVariant: text('subject_variant').notNull().default(''),
     nextAt: ts('next_at'),
     consent: boolean('consent').notNull().default(false),
     approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),

@@ -15,6 +15,20 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Connect your mailbox without handing over a password',
+    summary:
+      'Microsoft 365 and Gmail can now be connected on their own sign-in screen. You grant sending (and, with Microsoft 365, reading the replies to your own pitches); nothing but a renewable permission is stored, encrypted, and it is withdrawn the moment you disconnect the mailbox.',
+    highlights: [
+      'One click to connect Microsoft 365: pitches go out from your address and replies come back into the app',
+      'One click to connect Gmail or Google Workspace for sending; Google treats inbox access as a restricted scope, so you read those replies in Gmail — the app says so before you connect',
+      'No password is stored for either, and the permission renews itself before it expires',
+      'Disconnecting withdraws our access; where a provider has no way to do that for us, the app tells you exactly where to remove it',
+      'App passwords still work for any mail host, and Microsoft is retiring theirs — so the old way keeps working while it lasts',
+    ],
+    features: ['backlinks'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Tell it how you write, once',
     summary:
       'Your website profile now holds a style guide: exactly how your name is written, British or American spelling, the words you never want used and the tone. Every page is written to it, and the finished draft is read back against it.',

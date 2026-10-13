@@ -543,8 +543,11 @@ export const mailboxSchema = z.object({
 });
 export type MailboxInput = z.output<typeof mailboxSchema>;
 export const mailboxPatchSchema = mailboxSchema.partial().extend({ password: z.string().min(4).max(400).optional() });
+/** L4: start the OAuth flow for one provider (the settings a password mailbox asks for are filled in afterwards) */
+export const mailboxOauthStartSchema = z.object({ provider: z.enum(['gmail_oauth', 'ms_graph']), label: z.string().trim().max(60).default('') });
 export const linkSettingsSchema = z.object({ mode: z.enum(['approve', 'auto']).optional(), mailboxId: z.string().uuid().nullable().optional(), autoDailyMax: z.number().int().min(1).max(30).optional() });
-const stepSchema = z.object({ step: z.number().int().min(0).max(2), waitDays: z.number().int().min(0).max(30), subject: z.string().max(140).default(''), body: z.string().min(1).max(6000) });
+const stepSchema = z.object({ step: z.number().int().min(0).max(2), waitDays: z.number().int().min(0).max(30), subject: z.string().max(140).default(''), body: z.string().min(1).max(6000),
+  subjectAlt: z.string().max(140).optional(), variant: z.enum(['A', 'B']).optional() });   // L7: the other subject style, and which one this pitch carries
 export const approveSchema = z.object({ prospectDomain: z.string().trim().min(3).max(200), type: z.string().trim().min(2).max(30), toEmail: z.string().trim().toLowerCase().email().max(200),
   steps: z.array(stepSchema).min(1).max(3), consent: z.boolean().default(false), mailboxId: z.string().uuid().nullable().optional() });
 export const sequencePatchSchema = z.object({ steps: z.array(stepSchema).min(1).max(3).optional(), toEmail: z.string().trim().toLowerCase().email().max(200).optional() });
