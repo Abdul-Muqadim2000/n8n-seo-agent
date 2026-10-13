@@ -200,6 +200,27 @@ const fitBrandList = (ctx, protect) => { const out = []; const seen = new Set();
   for (const d of (ctx.serp_domains || [])) for (const l of fitLabels(d, protect)) add(l + ' (' + fitHost(d) + ')');
   for (const [n, d] of Object.entries(ctx.brands || {})) add(n + ' (' + fitHost(d) + ')');
   return out.slice(0, 40).join(', '); };
+// ---- R16 (2026-10-13, system review FIX_PLAN §3.11): the same gate, run over a row somebody stored BEFORE the gate existed ----
+// The gate stops a new keyword, but nothing ever revisited the rows already in `seo_ladders`: rung 2 of lad_mv40b6s9h5a8 still held
+// "facts erp" (facts.ae, a competing UAE ERP vendor) as a planned page, so the Rank Tracker's report of 2026-10-12 listed it and the
+// Content Cadence would have written it. `fitStored` is `fitGate` plus the one rule a stored row needs: a rung whose page is already
+// written or published is never dropped — that page is live work, it keeps being tracked, and it is flagged instead of hidden.
+// Returns { ok, live, flagged, reason, detail, note }: ok false = leave it out of what is written and reported; `note` is the sentence
+// a report or the repair script prints, so the reason always travels with the decision.
+const fitStoredLive = (row) => { const r = row || {}; const st = String(r.status || '').toLowerCase();
+  return st === 'writing' || st === 'published' || r.page_exists === true || r.page_exists === 'true' || !!String(r.published_url || '').trim(); };
+const fitStored = (row, ctx) => {
+  const r = row || {}; const kw = String(r.keyword || '').trim();
+  const live = fitStoredLive(r) || (ctx || {}).written === true;
+  if (!kw) return { ok: false, live, flagged: false, reason: 'empty', detail: 'the row has no keyword', note: 'a stored row with no keyword' };
+  const g = fitGate(kw, ctx || {});
+  if (g.ok) return { ok: true, live, flagged: false, reason: '', detail: '', note: '' };
+  const why = '"' + kw + '" is not a search this website should target: ' + g.detail + ' (' + g.reason + ')';
+  if (live) return { ok: true, live: true, flagged: true, reason: g.reason, detail: g.detail,
+    note: why + ' — its page is already written, so it stays tracked; decide whether to keep it' };
+  return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
+    note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
+};
 let cacheRowsAK = []; try { cacheRowsAK = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsAK = []; }
 const fitCtxAK = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: comps.map(c => c.domain).filter(d => !(base.competitors || []).includes(d)), brands: fitLearnedBrands(cacheRowsAK), protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)] };
 const refused = [];

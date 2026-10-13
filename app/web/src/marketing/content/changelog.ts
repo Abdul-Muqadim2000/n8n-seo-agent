@@ -15,6 +15,23 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-13',
+    title: 'Check a release before it goes live, and alerts that only fire on a real change',
+    summary:
+      'Your build can now ask Ascentra to check a release candidate — a staging address or a list of URLs — and get a pass or fail it can act on. Traffic and position alerts are tested against your own numbers instead of a fixed percentage, so a small website is no longer told its traffic fell when a handful of searches moved. And a planned page for a search you should not target is set aside with the reason instead of being written.',
+    highlights: [
+      'A pre-release check your build pipeline can call: the same page checks — answers, redirect, noindex, robots.txt, canonical, title, H1 — against a staging address or a list of URLs',
+      'It answers pass or fail with the URL and the check that failed, so a release can be stopped before it takes a page out of Google',
+      'On a staging address a deliberate noindex or a blocking robots.txt is a warning that names the live page, not a failure',
+      'The check only reads: it never changes anything in your account, and anything a staging address cannot answer is reported as not checked, with the reason',
+      'Traffic alerts now say what was tested, over which periods and how sure the result is',
+      'A position alert needs real impressions behind both periods: a five-place move measured on a dozen impressions is shown as something to watch, never as a drop',
+      'A planned page for a search that names another company, a government portal or something you do not sell is set aside with the reason — including pages planned before this rule existed',
+      'A page already written for such a search is kept and flagged instead, so you decide what happens to it',
+    ],
+    features: ['technical-audits', 'site-tracking', 'keyword-ladders'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Charts that say what happened, and numbers that say where they came from',
     summary:
       'Every chart is now marked with the events behind its moves — the pages you published, the technical fixes you made, Google’s ranking updates and the week Google changed its own data. After a page goes live, its trend is compared with the rest of your website. And every number in a report or on a dashboard says its source, its period and its sample size.',

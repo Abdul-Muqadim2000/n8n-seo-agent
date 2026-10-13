@@ -807,6 +807,15 @@
     "waitBetweenTries": 5000
    }
   ],
+  "SEO Agent \u2014 Pre-release Check": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Release Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
   "SEO Agent \u2014 Publish to WordPress": [
    {
     "allowed": true,

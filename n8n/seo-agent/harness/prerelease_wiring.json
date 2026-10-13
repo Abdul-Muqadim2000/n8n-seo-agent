@@ -1,0 +1,65 @@
+{
+ "workflow": "SEOagentPreRel1",
+ "path": "seo-prerelease",
+ "authentication": "headerAuth",
+ "response_mode": "responseNode",
+ "nodes": [
+  "Prerelease Webhook",
+  "Prerelease Validate",
+  "Prerelease Valid?",
+  "Fetch Release Pages",
+  "Prerelease Verdict",
+  "Respond Prerelease",
+  "Respond Prerelease Bad Request",
+  "Note (Pre-release)"
+ ],
+ "node_types": [
+  "n8n-nodes-base.code",
+  "n8n-nodes-base.httpRequest",
+  "n8n-nodes-base.if",
+  "n8n-nodes-base.respondToWebhook",
+  "n8n-nodes-base.stickyNote",
+  "n8n-nodes-base.webhook"
+ ],
+ "writes": [],
+ "responses": {
+  "Respond Prerelease": 200,
+  "Respond Prerelease Bad Request": 400
+ },
+ "fetch": {
+  "name": "Fetch Release Pages",
+  "follows_redirects": false,
+  "response_format": "text",
+  "retries": 3
+ },
+ "connections": {
+  "Prerelease Webhook": [
+   [
+    "Prerelease Validate"
+   ]
+  ],
+  "Prerelease Validate": [
+   [
+    "Prerelease Valid?"
+   ]
+  ],
+  "Fetch Release Pages": [
+   [
+    "Prerelease Verdict"
+   ]
+  ],
+  "Prerelease Verdict": [
+   [
+    "Respond Prerelease"
+   ]
+  ],
+  "Prerelease Valid?": [
+   [
+    "Fetch Release Pages"
+   ],
+   [
+    "Respond Prerelease Bad Request"
+   ]
+  ]
+ }
+}

@@ -73,10 +73,24 @@ if (map.length) {
   add('redirects.htaccess', 'fix_redirects_htaccess', 'text/plain', 'The same map for Apache / .htaccess', '# 301 redirects for broken URLs found by the audit on ' + today + '\n' + map.map(r => 'Redirect 301 ' + r.from.replace(/\?.*$/, '') + ' ' + r.to).join('\n') + '\n');
 }
 // ---- schema: Organization (+ LocalBusiness when an address exists) and WebSite ----
-const sameAs = [...new Set([...((E.homepage_org || {}).sameAs || []), ...(E.homepage_social || []), ...(E.gbp && E.gbp.cid ? ['https://maps.google.com/?cid=' + E.gbp.cid] : [])].filter(u => /^https?:\/\//.test(u)))];
+// 2026-10-13 (re-rating §3.2 "Also seen"): the fix pack asked the owner to add a `sameAs` profile the homepage already carries — the
+// same LinkedIn page in two spellings (the schema's and the footer link's) survived the exact-string Set, and the purpose line counted
+// both. Profiles are now deduped by identity (host without www, path without its trailing slash) in the spelling the page already uses,
+// and the line says which are already on the page and which are genuinely new, so nothing is offered "to add" that is already there.
+const profKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+const onPageSame = [...((E.homepage_org || {}).sameAs || [])].filter(u => /^https?:\/\//.test(u));
+const offPageSame = [...(E.homepage_social || []), ...(E.gbp && E.gbp.cid ? ['https://maps.google.com/?cid=' + E.gbp.cid] : [])].filter(u => /^https?:\/\//.test(u));
+const sameAs = []; const sameSeen = new Set();
+for (const u of [...onPageSame, ...offPageSame]) { const k = profKey(u); if (!k || sameSeen.has(k)) continue; sameSeen.add(k); sameAs.push(u); }
+const onPageKeys = new Set(onPageSame.map(profKey));
+const sameAs_new = sameAs.filter(u => !onPageKeys.has(profKey(u)));          // what this block really adds
+const sameAs_kept = sameAs.filter(u => onPageKeys.has(profKey(u)));          // already in the homepage's Organization schema: kept, not "to add"
+const sameNote = !sameAs.length ? 'fill in the sameAs placeholders'
+  : sameAs_new.length ? sameAs_new.length + ' official profile(s) to add in sameAs' + (sameAs_kept.length ? ', ' + sameAs_kept.length + ' kept from the schema your homepage already has' : '')
+  : 'the ' + sameAs_kept.length + ' official profile(s) your homepage already lists, unchanged — nothing new to add there';
 const org = { '@context': 'https://schema.org', '@type': 'Organization', '@id': home + '#organization', name: siteName, url: home, ...(P.logo_url || (E.homepage_org || {}).logo ? { logo: P.logo_url || E.homepage_org.logo } : { logo: '[Logo URL, 112x112 px or larger]' }),
   ...(P.phone || (E.gbp || {}).phone || (E.homepage_org || {}).telephone ? { contactPoint: { '@type': 'ContactPoint', telephone: P.phone || (E.gbp || {}).phone || E.homepage_org.telephone, contactType: 'customer service', ...(P.public_email ? { email: P.public_email } : {}) } } : {}), sameAs: sameAs.length ? sameAs : ['[LinkedIn company page URL]', '[Google Business Profile URL]'] };
-add('organization.jsonld', 'fix_schema_org', 'application/ld+json', 'Organization schema for the homepage (' + (sameAs.length ? sameAs.length + ' official profiles in sameAs' : 'fill in the sameAs placeholders') + ')', '<script type="application/ld+json">\n' + JSON.stringify(org, null, 2) + '\n</script>\n');
+add('organization.jsonld', 'fix_schema_org', 'application/ld+json', 'Organization schema for the homepage (' + sameNote + ')', '<script type="application/ld+json">\n' + JSON.stringify(org, null, 2) + '\n</script>\n');
 const HA = (E.homepage_org && E.homepage_org.address && typeof E.homepage_org.address === 'object') ? E.homepage_org.address : {};
 if (P.street_address || (E.gbp && E.gbp.address) || HA.streetAddress) {
   const lb = { '@context': 'https://schema.org', '@type': 'LocalBusiness', '@id': home + '#business', name: siteName, url: home, telephone: P.phone || (E.gbp || {}).phone || (E.homepage_org || {}).telephone || '[Phone]', address: { '@type': 'PostalAddress', streetAddress: P.street_address || HA.streetAddress || (E.gbp || {}).address || '[Street address]', addressLocality: P.city || HA.addressLocality || '[City]', ...((P.region || HA.addressRegion) ? { addressRegion: P.region || HA.addressRegion } : {}), ...((P.postal_code || HA.postalCode) ? { postalCode: P.postal_code || HA.postalCode } : {}), addressCountry: P.country_code || HA.addressCountry || base.country_iso || '[Country code]' },

@@ -67,7 +67,7 @@ return sites.map((s, idx) => {
   const gscKw = new Map(((gsc && gsc.tracked) || []).map(t => [t.keyword, t]));
   const tracked = (s.tracked || []).map(t => { const g = gscKw.get(t.keyword); const sp = serpNow[t.keyword];
     const hist = queryHist.filter(h => h.site_id === s.site_id && h.query === t.keyword).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).map(h => r1(h.position)).slice(-12);
-    return { ...t, gsc_position: g ? g.position : null, gsc_prev_position: g ? g.prev_position : null, clicks: g ? g.clicks : 0, impressions: g ? g.impressions : 0, prev_clicks: g ? g.prev_clicks : 0, page: g ? g.page : '',
+    return { ...t, gsc_position: g ? g.position : null, gsc_prev_position: g ? g.prev_position : null, clicks: g ? g.clicks : 0, impressions: g ? g.impressions : 0, prev_clicks: g ? g.prev_clicks : 0, prev_impressions: g ? g.prev_impressions : 0, page: g ? g.page : '',
       serp_position: sp ? sp.position : null, serp_url: sp ? sp.url : '', serp_checked_at: sp ? sp.checked_at : '', history: hist }; });
   // pages found live this week replace their planned entry (live URL, published) or are added; they were inspected in this run
   const det = detAll.find(x => x.site_id === s.site_id) || null; const found = det ? det.detected : [];
@@ -93,8 +93,11 @@ return sites.map((s, idx) => {
   const countAlert = (key, label, cur, prev, minEvents, level) => {
     const ch = ST.change(cur, prev, { min_events: minEvents, min_pct: minPct }); stat[key] = ch;
     if (ch.direction !== 'down' || !ch.big) return ch;
-    if (ch.real) alerts.push({ level: Math.abs(ch.pct) >= drop ? 'high' : level, text: label + ' fell ' + Math.abs(ch.pct) + '% (' + prev + ' → ' + cur + ' in 28 days' + (ch.ci ? '; 95% range ' + ch.ci[0] + '% to ' + ch.ci[1] + '%' : '') + ', z ' + ch.z + ')' + upd, stat: key });   // no range when one period is zero (the log-ratio is undefined)
-    else if (ch.watch) alerts.push({ level: 'medium', text: 'Watch: ' + label.toLowerCase() + ' are ' + Math.abs(ch.pct) + '% lower (' + prev + ' → ' + cur + ' in 28 days). Small numbers: ' + (prev + cur) + ' ' + label.toLowerCase() + ' over both periods together, so a swing this size happens by chance (z ' + ch.z + ') — worth a look, not a confirmed fall' + upd, stat: key, small_numbers: true });
+    // G28 follow-up (2026-10-13): the figures were already there; the alert now also says WHAT was tested and with WHICH test (ST.tested,
+    // without repeating the z and the range the sentence already prints)
+    const basis = ST.tested(ch, { stats: false, source: key === 'sessions' ? 'Google Analytics 4 organic sessions' : 'Search Console ' + label.toLowerCase() });
+    if (ch.real) alerts.push({ level: Math.abs(ch.pct) >= drop ? 'high' : level, text: label + ' fell ' + Math.abs(ch.pct) + '% (' + prev + ' → ' + cur + ' in 28 days' + (ch.ci ? '; 95% range ' + ch.ci[0] + '% to ' + ch.ci[1] + '%' : '') + ', z ' + ch.z + ')' + basis + upd, stat: key, tested: basis });   // no range when one period is zero (the log-ratio is undefined)
+    else if (ch.watch) alerts.push({ level: 'medium', text: 'Watch: ' + label.toLowerCase() + ' are ' + Math.abs(ch.pct) + '% lower (' + prev + ' → ' + cur + ' in 28 days). Small numbers: ' + (prev + cur) + ' ' + label.toLowerCase() + ' over both periods together, so a swing this size happens by chance (z ' + ch.z + ') — worth a look, not a confirmed fall' + basis + upd, stat: key, small_numbers: true, tested: basis });
     return ch;
   };
   if (!s.gsc_connected) alerts.push({ level: 'setup', text: 'Search Console is not connected: ' + (s.gsc_error || 'no property found') });
@@ -105,7 +108,18 @@ return sites.map((s, idx) => {
   if (ga4 && ga4.errors.length) alerts.push({ level: 'medium', text: 'Some GA4 requests failed: ' + ga4.errors.slice(0, 3).join('; ') });
   for (const p of pages) if (p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')) alerts.push({ level: p.detected ? 'info' : 'high', text: 'Page not indexed: ' + p.url + ' (' + (p.coverage || p.verdict || 'not indexed') + ')' + (p.detected ? ' — found live this week; request indexing to speed it up' : '') });   // a page that just went live is not alarming yet
   for (const p of pages) if (p.inspected && p.indexed && p.canonical_ok === false) alerts.push({ level: 'medium', text: 'Google picked another canonical for ' + p.url });
-  for (const t of tracked) if (t.gsc_position && t.gsc_prev_position && t.gsc_prev_position <= 10 && t.gsc_position - t.gsc_prev_position >= 5) alerts.push({ level: 'medium', text: '"' + t.keyword + '" slipped from #' + r1(t.gsc_prev_position) + ' to #' + r1(t.gsc_position) + ' (Search Console average)' });
+  // G28 follow-up (2026-10-13): the last fixed threshold in the site tracking. Search Console's position is an impression-weighted 28-day
+  // average, so "5 places" on 12 impressions is one search, not a drop. ST.position needs min_impressions in BOTH periods before it calls a
+  // move real, tests the same keyword's clicks over the same two periods, and the alert says what was tested and how sure it is.
+  for (const t of tracked) {
+    if (!(t.gsc_position > 0 && t.gsc_prev_position > 0 && t.gsc_prev_position <= 20)) continue;
+    const pc = ST.position(t.gsc_position, t.gsc_prev_position, { impressions: t.impressions, prev_impressions: t.prev_impressions, clicks: t.clicks, prev_clicks: t.prev_clicks,
+      min_impressions: cfg.alert_min_position_impressions || 50, min_places: cfg.alert_min_places || 5 });
+    if (pc.direction !== 'down' || !pc.big) continue;
+    const moved = '"' + t.keyword + '" slipped from #' + r1(pc.prev) + ' to #' + r1(pc.cur) + ' (' + pc.places + ' places)';
+    if (pc.real) alerts.push({ level: t.gsc_prev_position <= 10 ? 'medium' : 'info', text: moved + '. ' + pc.basis + '.' + ST.tested(pc.clicks, { source: 'Search Console clicks for this search' }) + upd, stat: 'position', keyword: t.keyword, tested: pc.basis });
+    else alerts.push({ level: 'info', text: 'Watch: ' + moved + ', measured on too little data to call it a drop. ' + pc.basis + '.' + upd, stat: 'position', keyword: t.keyword, small_numbers: true, tested: pc.basis });
+  }
   for (const t of tracked) if (t.serp_position > 0 && t.gsc_position && Math.abs(t.serp_position - t.gsc_position) >= 10) alerts.push({ level: 'info', text: '"' + t.keyword + '": live check #' + t.serp_position + ' vs Search Console average #' + r1(t.gsc_position) + ' — positions vary by location and device' });
   if (!ga4) alerts.push({ level: 'setup', text: 'Google Analytics 4 is not connected: ' + (acctErr || ga4Reason || 'no property id given or detected') });
   const notices = s.console_alerts || []; const ck = s.last_checkin || null;

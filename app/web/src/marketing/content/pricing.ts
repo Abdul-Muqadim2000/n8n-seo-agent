@@ -129,6 +129,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
     rows: [
       { label: 'Technical audits with fix pack', values: ['Monthly', 'Monthly', 'Monthly'] },
       { label: 'Crawl depth', hint: 'JavaScript rendering included', values: ['200 pages', '500 pages', '1,000 pages'] }, // PLACEHOLDER — confirm
+      { label: 'Daily key-page check and pre-release check', hint: 'Your build asks whether a release candidate is safe to publish', values: [true, true, true] },
       { label: 'Search Console, GA4 and Trends', values: [true, true, true] },
       { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews', values: [false, 'Up to 50 questions', 'Up to 50 questions'] }, // PLACEHOLDER — confirm
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },

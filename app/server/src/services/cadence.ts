@@ -210,6 +210,9 @@ export function planCadence(input: CadenceInput, now: number): CadencePlan {
   const lrows = input.ladders.filter((l) => l && l.ladder_id && l.keyword).sort(byRung);
   const ladderKw = new Set(lrows.map((l) => norm(l.keyword)));
   for (const l of lrows) if (l.status === 'writing' || l.status === 'published') recent.add(norm(l.keyword));
+  // R16 (2026-10-13, FIX_PLAN §3.11): only a row that still says `planned` is open. n8n now also writes `set_aside` on a stored rung the
+  // keyword rule refuses (a competitor's brand, a government portal, an off-topic search) and names the reason in its weekly note, so
+  // such a row drops out of this mirror as well — the app never promises a page the Monday run will not write (Cadence_Plan.js).
   const open = (l: LadderRow) => String(l.status || 'planned') === 'planned' && !recent.has(norm(l.keyword));
   const settingOf = new Map(input.settings.filter((r) => r.ladder_id && String(r.ladder_id) !== LADDER_SITE_ROW).map((r) => [String(r.ladder_id), r]));
 

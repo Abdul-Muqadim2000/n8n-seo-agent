@@ -7098,6 +7098,275 @@ await guard('g12-g29-annotations-change-tests-lineage', async () => {
     && RP56.lineage.some(l => /Position before and after/.test(l.figure) && l.source === 'gsc_history'), JSON.stringify(RP56.lineage.map(l => [l.figure, l.source])));
 });
 
+// ===================================================================================
+// S62 R16 G28 G27 (2026-10-13, system review FIX_PLAN §3.11 / §3.3 and the re-rating's "Also seen"):
+//   * R16 — the keyword fit gate stopped NEW keywords; `seo_ladders` still held "facts erp" (facts.ae, a competing UAE ERP vendor) as a
+//     planned rung, so the Rank Tracker's report of 2026-10-12 listed it and the Content Cadence would have written that page.
+//   * G28 — clicks, impressions and sessions were already tested against their own baseline; a keyword's POSITION still alerted on five
+//     places with no volume at all, although Search Console's position is an impression-weighted 28-day average.
+//   * G27 — there was no way to check a release candidate before it went live.
+//   * "Also seen" — a ladder row stored before D10 carried free text as its page type; the fix pack repeated a `sameAs` the homepage has.
+// ===================================================================================
+await guard('stored rungs, statistical alerts, pre-release check', async () => {
+  const SN = 'S62 R16 G28 G27 — a stored brand rung is dropped from what the cadence writes and what the tracker reports (with its reason, and kept when its page is already written), a small site is not told its traffic fell while a real move is, every alert says what was tested, the pre-release check answers a machine-readable verdict and writes nothing, an unknown page type falls back with a note, and a sameAs the homepage already has is not offered again';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const EMPTY = [{ json: {} }];
+  const D62 = 'techand.ai', SITE62 = 'site_techand-ai', W62 = 'https://www.' + D62, HEAD62 = 'erp software uae';
+  const daysAgo62 = (n) => new Date(Date.now() - n * 864e5).toISOString();
+
+  // ---------- 1. the kit: the gate over a STORED row (R16) ----------
+  const gate62 = async (row, ctx) => (await run('_fit_stored', [{ json: { row, ctx } }]))[0].json;
+  const CTX62 = { own_domain: D62, competitors: ['cleartax.com'], serp_domains: ['facts.ae'], serp: ['facts.ae', 'facts.ae', 'facts.ae', 'zoho.com', 'tally.ae'], protect: [HEAD62] };
+  const gBrand = await gate62({ keyword: 'facts erp', status: 'planned' }, CTX62);
+  console.log('   stored rung ->', JSON.stringify(gBrand));
+  check('R16: a planned rung that names another company on its own results page is set aside, with the reason in words an owner can read',
+    gBrand.ok === false && gBrand.flagged === true && gBrand.reason === 'other brand' && /facts\.ae/.test(gBrand.detail)
+    && /is not a search this website should target/.test(gBrand.note) && /set aside instead of written/.test(gBrand.note), JSON.stringify(gBrand));
+  const gWritten = await gate62({ keyword: 'facts erp', status: 'writing' }, CTX62);
+  check('R16: the same rung whose page is already written is KEPT and only flagged — live work is never dropped silently',
+    gWritten.ok === true && gWritten.live === true && gWritten.flagged === true && /already written/.test(gWritten.note), JSON.stringify(gWritten));
+  const gOwn = await gate62({ keyword: HEAD62, status: 'planned' }, CTX62);
+  const gGov = await gate62({ keyword: 'fta login', status: 'planned' }, CTX62);
+  check('R16: the ladder\'s own topic passes untouched, and a government portal stored as a rung is set aside too',
+    gOwn.ok === true && gOwn.flagged === false && gGov.ok === false && (gGov.reason === 'government' || gGov.reason === 'portal'), JSON.stringify([gOwn, gGov]));
+
+  // ---------- 2. the Content Cadence: it writes neither the brand rung nor a promise of it ----------
+  const lrow62 = (rung, page_no, keyword, status) => ({ json: { id: 1, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_R16', domain: D62, head_keyword: HEAD62, rung, page_no, keyword, supporting: '',
+    page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: W62 + '/' + keyword.replace(/\s+/g, '-') + '/', page_exists: false, status: status || 'planned', months: '', start_date: daysAgo62(40),
+    country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@techand.ai', callback_url: 'https://hooks.example.com/x', request_id: 'r-R16', target_words: 1800 } });
+  const LAD62 = [lrow62(1, 1, 'best erp software in dubai'), lrow62(2, 2, 'erp software dubai'), lrow62(2, 3, 'facts erp'), lrow62(4, 0, HEAD62)];
+  const SITEROW62 = { json: { id: 1, site_id: SITE62, domain: D62, canonical_host: 'www.' + D62, business_name: 'Tech&', competitors: 'cleartax.com', services_json: JSON.stringify(['ERP implementation', 'e-invoicing']),
+    model_updated_at: daysAgo62(1), country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@techand.ai', callback_url: 'https://hooks.example.com/x', status: 'active', source: 'form' } };
+  // the results page the Rank Tracker stored for that keyword two hours earlier (G6 columns) — the evidence the gate reads
+  const hist62 = (keyword, comps) => ({ json: { ladder_id: 'lad_R16', keyword, checked_at: daysAgo62(1), position: 0, url: '', serp_features: '', domain: D62, rung: 2, device: 'desktop',
+    competitors_json: JSON.stringify({ our_position: null, above: comps.map((d, i) => ({ d, p: i + 1, t: false })) }), snapshot_json: '', share_of_voice: -1 } });
+  const cadence62 = async (o = {}) => {
+    mock('Manual Run', o.trigger || EMPTY); mock('Load Sites', [SITEROW62]); mock('Load Cadence', [{ json: { site_id: SITE62, domain: D62, pages_per_week: 3, status: 'active', updated_at: 'x', request_id: '' } }]);
+    mock('Load Ladders', o.ladders || LAD62); mock('Load Query History', EMPTY); mock('Load Trends', EMPTY); mock('Load Content Log', o.logs || EMPTY);
+    mock('Load Ladder Settings', [{ json: { ladder_id: '_site', site_id: SITE62, domain: D62, mode: 'auto', opportunities: 'manual', status: 'active', max_active: 2, max_waiting: o.max_waiting == null ? 20 : o.max_waiting, priority: null, plan_type: '', created_at: daysAgo62(40) } }]);
+    mock('Load Main Keyword Ranks', o.ranks || [hist62('facts erp', ['facts.ae', 'zoho.com', 'tally.ae'])]);
+    mock('Load Monitors (Cadence)', EMPTY); mock('Load Pages (Cadence)', EMPTY); mock('Load AI Targets (Cadence)', EMPTY);
+    const items = await run('Cadence Plan', store['Load Main Keyword Ranks']);
+    const picks = items.filter(x => !x.json.nothing_to_do).map(x => x.json);
+    return { items, picks, kws: picks.map(p => p.keyword), first: items[0].json, status: (items.find(x => x.json.report_only) || {}).json };
+  };
+  const C62 = await cadence62();
+  console.log('   cadence picks ->', C62.kws.join(' | '), '| set aside:', JSON.stringify((C62.first.set_aside || []).map(x => [x.keyword, x.reason, x.dropped])));
+  check('R16: the Content Cadence writes the two honest rungs and never the stored brand rung',
+    eq(C62.kws, ['best erp software in dubai', 'erp software dubai']) && !C62.kws.includes('facts erp'), C62.kws.join(' | '));
+  const aside62 = (C62.first.set_aside || []).find(x => x.keyword === 'facts erp') || {};
+  check('R16: the rung is named in `set_aside` with its reason, the evidence and "not written", so nothing disappears quietly',
+    aside62.dropped === true && aside62.reason === 'other brand' && aside62.ladder_id === 'lad_R16' && aside62.rung === 2
+    && /facts\.ae/.test(aside62.detail) && /set aside instead of written/.test(aside62.note), JSON.stringify(aside62));
+  const marks62 = (await run('Ladder Marks', C62.items)).map(x => x.json);
+  console.log('   ladder marks ->', JSON.stringify(marks62));
+  check('R16: the ladder row is marked `set_aside` on the same run, so the next cadence, the tracker and the app all stop calling it planned',
+    marks62.some(m => m.keyword === 'facts erp' && m.status === 'set_aside' && m.ladder_id === 'lad_R16')
+    && marks62.filter(m => m.status === 'writing').length === 2 && marks62.every(m => Object.keys(m).length === 3), JSON.stringify(marks62));
+  const CWritten = await cadence62({ ladders: [lrow62(1, 1, 'best erp software in dubai'), lrow62(2, 3, 'facts erp', 'writing'), lrow62(4, 0, HEAD62)] });
+  const asideW = (CWritten.first.set_aside || []).find(x => x.keyword === 'facts erp') || {};
+  const marksW = (await run('Ladder Marks', CWritten.items)).map(x => x.json);
+  check('R16: when that page is already written the row is flagged but NOT dropped and NOT re-marked — the owner decides',
+    asideW.dropped === false && asideW.written === true && /already written/.test(asideW.note) && !marksW.some(m => m.status === 'set_aside'), JSON.stringify([asideW, marksW]));
+  const CNoEv = await cadence62({ ranks: EMPTY });
+  check('R16: with no stored results page and no declared competitor the gate claims nothing — the rung is written as before (no guessing)',
+    CNoEv.kws.includes('facts erp') && !(CNoEv.first.set_aside || []).length, CNoEv.kws.join(' | '));
+  // the owner hears about it even in a week when nothing is written
+  const CPaused = await cadence62({ max_waiting: 2, logs: [1, 2, 3].map(i => ({ json: { site_id: SITE62, domain: D62, keyword: 'written page ' + i, source: 'cadence', page_type: 'Guide', existing_page_url: '', rung: 0, ladder_id: '', request_id: 'x' + i, started_at: daysAgo62(20), status: 'started', published_url: '', published_at: '', week: '2026-09-21' } })) });
+  const st62 = CPaused.status || {};
+  check('R16: a week with nothing to write still reports the set-aside rung in the status note, with its reason',
+    (st62.set_aside || []).some(x => x.keyword === 'facts erp') || /facts erp/.test(String(st62.reason || '')), JSON.stringify({ reason: st62.reason, aside: (st62.set_aside || []).map(x => x.keyword) }));
+  const note62 = (await run('Cadence Status', CPaused.items))[0].json;
+  check('R16: the status e-mail says it in words, and the row it names is the one the gate refused',
+    /Set aside/.test(note62.html) && /facts erp/.test(note62.html) && /facts\.ae/.test(note62.html), (note62.html.match(/Set aside[\s\S]{0,260}/) || [''])[0]);
+
+  // ---------- 3. the Rank Tracker: no check is bought for it, and the report stops asking for the page ----------
+  const TROWS62 = [lrow62(4, 0, HEAD62), lrow62(2, 2, 'erp software dubai'), lrow62(2, 3, 'facts erp')];
+  const trkPlan62 = async (o = {}) => {
+    mock('Load Ladders', o.ladders || TROWS62); mock('Load Content Log (Tracker)', EMPTY); mock('Load Pages (Tracker)', EMPTY);
+    mock('Load Sites (Tracker)', [SITEROW62]); mock('Load Monitors (Tracker)', o.monitors || EMPTY); mock('Load History', o.history || EMPTY);
+    return (await run('Tracker Plan', store['Load History'])).map(x => x.json);
+  };
+  const PFacts = await trkPlan62({ monitors: [{ json: { site_id: SITE62, domain: D62, competitors: 'facts.ae', brand_names: 'Tech&' } }] });
+  console.log('   tracker plan (facts.ae declared) ->', JSON.stringify(PFacts.map(c => [c.keyword, c.device])), '| set aside:', JSON.stringify((PFacts[0].set_aside_pages || []).map(x => [x.keyword, x.reason])));
+  check('R16: a rung that names a declared competitor costs no position check at all, and the plan says why',
+    !PFacts.some(c => c.keyword === 'facts erp') && PFacts.some(c => c.keyword === HEAD62)
+    && (PFacts[0].set_aside_pages || []).some(x => x.keyword === 'facts erp' && x.reason === 'other brand' && x.dropped === true), JSON.stringify(PFacts.map(c => c.keyword)));
+  const PAll = await trkPlan62();
+  check('R16: without that evidence the same plan still checks it (nothing is dropped on a guess), one check more',
+    PAll.some(c => c.keyword === 'facts erp') && PAll.length === PFacts.length + 1, JSON.stringify(PAll.map(c => c.keyword)));
+  // the report, with THIS run's results page in hand: facts.ae owns the page for "facts erp"
+  mock('SERP Check', PAll.map(c => V.serpRich({ keyword: c.keyword, domain: D62, device: c.device,
+    position: c.keyword === HEAD62 ? 12 : 0, top: c.keyword === 'facts erp' ? ['facts.ae', 'zoho.com', 'tally.ae', 'sap.com', 'oracle.com'] : undefined })));
+  const pp62 = await run('Parse Positions', store['SERP Check']); mock('Save History', pp62);
+  const TR62 = (await run('Tracker Report', pp62))[0].json;
+  console.log('   tracker report ->', JSON.stringify({ aside: (TR62.set_aside || []).map(x => [x.keyword, x.reason]), next: TR62.next_step.text.slice(0, 120) }));
+  check('R16: the results page this run read exposes the rung as a brand query — it is named with its reason instead of being asked for',
+    (TR62.set_aside || []).some(x => x.keyword === 'facts erp' && x.reason === 'other brand' && /facts\.ae/.test(x.detail))
+    && !/facts erp/.test(TR62.next_step.text) && !(TR62.next_step.pages || []).some(p => p.keyword === 'facts erp')
+    && /Set aside/.test(TR62.html) && /facts erp/.test(TR62.html), JSON.stringify([TR62.next_step.text, (TR62.set_aside || []).map(x => x.keyword)]));
+  check('R16: the position it was checked for is still reported — we paid for that reading, so nothing is hidden',
+    TR62.positions.some(p => p.keyword === 'facts erp') && /facts erp/.test(TR62.html), JSON.stringify(TR62.positions.map(p => p.keyword)));
+  check('R16: the honest rung of the same ladder is still the one the next step asks for',
+    /erp software dubai|publish|improve|main page/.test(TR62.next_step.text), TR62.next_step.text);
+
+  // ---------- 4. G28: alerts on statistics, not on fixed percentages ----------
+  const RANGES62 = { current: { start: '2026-09-15', end: '2026-10-12' }, previous: { start: '2026-08-18', end: '2026-09-14' }, yoy: null };
+  const CFG62 = { alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40, alert_min_position_impressions: 50, alert_min_places: 5, max_gsc_pages: 3, striking_min_impressions: 30, service_account_email: 'svc@example.com' };
+  const trk62 = (keyword) => ({ keyword, source: 'ladder', rung: 2, ladder_id: 'lad_R16', head_keyword: HEAD62 });
+  const SROW62 = { site_id: SITE62, domain: D62, gsc_property: 'sc-domain:' + D62, gsc_connected: true, gsc_permission: 'siteFullUser', gsc_error: null, country: 'United Arab Emirates', location_code: 2784, language_code: 'en',
+    email: '', callback_url: '', request_id: '', source: 'form', status: 'active', created_at: '2026-01-01T00:00:00.000Z', keywords: ['peppol uae'], tracked: [trk62('peppol uae')],
+    ladder_pages: [], ladder_heads: [], serp_positions: {}, pending_publish: [], console_alerts: [], last_checkin: null, checkin_due: false, ranges: RANGES62, on_demand: false, checked_at: new Date().toISOString(), config: CFG62 };
+  const gscFor62 = (o) => ({ site_idx: 0, site_id: SITE62, errors: [], query_count: 1, page_count: 1, rows_read: 1, paging: [], truncated: [], anonymised: null, brand_split: null, scraper_queries: null,
+    totals: { cur: { clicks: o.clicks, impressions: o.impressions, ctr: 0.03, position: 12 }, prev: { clicks: o.prev_clicks, impressions: o.prev_impressions, ctr: 0.04, position: 11 }, yoy: null },
+    deltas: { clicks_pct: Math.round((o.clicks - o.prev_clicks) / o.prev_clicks * 100), impressions_pct: Math.round((o.impressions - o.prev_impressions) / o.prev_impressions * 100) },
+    daily: [], winners: [], losers: [], new_queries: [], lost_queries: [], striking: [], ctr_gaps: [], pages: [], decaying_pages: [], rising_pages: [],
+    tracked: [{ keyword: 'peppol uae', position: o.position, prev_position: o.prev_position, clicks: o.kw_clicks == null ? 4 : o.kw_clicks, impressions: o.kw_impressions, prev_clicks: o.kw_prev_clicks == null ? 6 : o.kw_prev_clicks, prev_impressions: o.kw_prev_impressions, ctr: 0.02, page: W62 + '/peppol-uae/' }] });
+  const metrics62 = async (o) => {
+    reset();
+    mock('Resolve Properties', [{ json: SROW62 }]);
+    mock('Parse GSC', [{ json: gscFor62(o) }]);
+    return (await run('Site Metrics', store['Resolve Properties']))[0].json;
+  };
+  // a small site: 54 -> 38 clicks is a 30% fall that any four weeks could produce (z -1.67)
+  const small62 = await metrics62({ clicks: 38, impressions: 1200, prev_clicks: 54, prev_impressions: 1250, position: 9.4, prev_position: 4.1, kw_impressions: 12, kw_prev_impressions: 14 });
+  const aSmall = small62.alerts.find(a => a.stat === 'clicks') || {};
+  console.log('   38 clicks vs 54 ->', JSON.stringify(small62.significance.clicks), '|', aSmall.text);
+  check('G28: a 30% fall on a site with 38 clicks a month is never reported as a fall — it is a "Watch" line with both periods\' counts named',
+    small62.significance.clicks.significant === false && small62.significance.clicks.watch === true && aSmall.level === 'medium' && aSmall.small_numbers === true
+    && /^Watch: search clicks are 30% lower \(54 → 38 in 28 days\)/.test(aSmall.text) && /Small numbers: 92 search clicks over both periods together/.test(aSmall.text)
+    && !/clicks fell/.test(aSmall.text) && !small62.alerts.some(a => a.level === 'high'), JSON.stringify([aSmall.level, aSmall.text]));
+  check('G28: that alert says WHAT was tested, over WHICH periods and with WHICH test',
+    /Tested: Search Console search clicks, the last 28 days against the 28 days before, two-sample Poisson z-test/.test(aSmall.text)
+    && /inside 95% sampling noise/.test(aSmall.text) && /Tested:/.test(String(aSmall.tested)) && aSmall.text.includes(aSmall.tested), aSmall.tested);
+  const aPos = small62.alerts.find(a => a.stat === 'position') || {};
+  console.log('   position on 12 impressions ->', aPos.level, '|', aPos.text);
+  check('G28: a keyword that "slipped" 5 places on 12 impressions is not a drop: an info line that names the impressions of both periods',
+    aPos.level === 'info' && aPos.small_numbers === true && /^Watch: "peppol uae" slipped from #4\.1 to #9\.4 \(5\.3 places\)/.test(aPos.text)
+    && /on 14 then 12 impressions/.test(aPos.text) && /under 50 impressions in a period one search can move the average several places/.test(aPos.text)
+    && !small62.alerts.some(a => a.stat === 'position' && a.level === 'medium'), JSON.stringify([aPos.level, aPos.text]));
+  // the same site with real volume behind both numbers
+  const real62 = await metrics62({ clicks: 1150, impressions: 9000, prev_clicks: 1600, prev_impressions: 9200, position: 9.4, prev_position: 4.1, kw_impressions: 820, kw_prev_impressions: 900, kw_clicks: 18, kw_prev_clicks: 44 });
+  const aReal = real62.alerts.find(a => a.stat === 'clicks') || {};
+  const aPosReal = real62.alerts.find(a => a.stat === 'position') || {};
+  console.log('   real move ->', aReal.level, '|', aPosReal.text);
+  check('G28: the same 28% fall on 1,600 clicks IS reported as a fall, with the 95% range, the z value and what was tested',
+    real62.significance.clicks.real === true && /^Search clicks fell 28%/.test(aReal.text) && /95% range/.test(aReal.text) && /z -8/.test(aReal.text)
+    && /Tested: Search Console search clicks/.test(aReal.text) && /outside 95% sampling noise/.test(aReal.text), JSON.stringify([aReal.level, aReal.text]));
+  check('G28: the same 5-place slip on 900 then 820 impressions IS an alert, and it says what was tested, over what period and how sure',
+    aPosReal.level === 'medium' && /"peppol uae" slipped from #4\.1 to #9\.4 \(5\.3 places\)/.test(aPosReal.text)
+    && /Search Console average position, the last 28 days against the 28 days before, on 900 then 820 impressions/.test(aPosReal.text)
+    && /Tested: Search Console clicks for this search/.test(aPosReal.text) && /outside 95% sampling noise \(z -3/.test(aPosReal.text)
+    && !/under 50 impressions/.test(aPosReal.text), JSON.stringify([aPosReal.level, aPosReal.text]));
+  const flat62 = await metrics62({ clicks: 1150, impressions: 9000, prev_clicks: 1600, prev_impressions: 9200, position: 5.4, prev_position: 4.1, kw_impressions: 820, kw_prev_impressions: 900 });
+  check('G28: a 1.3-place wobble on the same volume raises nothing (the size still has to be worth telling)',
+    !flat62.alerts.some(a => a.stat === 'position'), JSON.stringify(flat62.alerts.map(a => [a.stat, a.level])));
+
+  // ---------- 5. G27: a pre-release check a CI job can read, which writes nothing ----------
+  const WIRE62 = require('./prerelease_wiring.json');
+  check('G27: the check is its own synchronous endpoint with header auth, a fetch that does not follow redirects, and 200 / 400 answers',
+    WIRE62.workflow === 'SEOagentPreRel1' && WIRE62.path === 'seo-prerelease' && WIRE62.authentication === 'headerAuth' && WIRE62.response_mode === 'responseNode'
+    && WIRE62.fetch.follows_redirects === false && WIRE62.fetch.response_format === 'text' && WIRE62.fetch.retries === 3
+    && eq(WIRE62.responses, { 'Respond Prerelease': 200, 'Respond Prerelease Bad Request': 400 }), JSON.stringify(WIRE62.fetch));
+  check('G27: it CANNOT write anything — no Data Table node, no sub-workflow call, no e-mail (a release candidate never creates rows for a site)',
+    eq(WIRE62.writes, []) && !WIRE62.node_types.some(t => /dataTable|executeWorkflow|emailSend/i.test(t))
+    && eq(WIRE62.node_types, ['n8n-nodes-base.code', 'n8n-nodes-base.httpRequest', 'n8n-nodes-base.if', 'n8n-nodes-base.respondToWebhook', 'n8n-nodes-base.stickyNote', 'n8n-nodes-base.webhook']), JSON.stringify(WIRE62.node_types));
+  const STG = 'https://staging.techand.ai';
+  const relPage = (o) => ({ statusCode: o.status === undefined ? 200 : o.status, headers: { 'content-type': 'text/html', ...(o.headers || {}) },
+    data: '<html><head>' + (o.title === undefined ? '<title>ERP software in the UAE | Tech&</title>' : (o.title ? '<title>' + o.title + '</title>' : ''))
+      + (o.canonical === undefined ? '<link rel="canonical" href="' + W62 + '/erp-software-uae/"/>' : (o.canonical ? '<link rel="canonical" href="' + o.canonical + '"/>' : ''))
+      + (o.robots ? '<meta name="robots" content="' + o.robots + '">' : '')
+      + (o.desc === undefined ? '<meta name="description" content="What ERP software costs in the UAE and how to choose a partner.">' : '')
+      + '</head><body>' + (o.h1 === undefined ? '<h1>ERP software in the UAE</h1>' : o.h1) + '<p>text</p></body></html>' });
+  const robotsRes = (text, status) => ({ statusCode: status || 200, headers: { 'content-type': 'text/plain' }, data: text === undefined ? 'User-agent: *\nAllow: /\n' : text });
+  const prerelease = async (body, answers) => {
+    reset();
+    const items = (await run('Prerelease Validate', [{ json: { body, headers: {} } }])).map(x => x.json);
+    if (items[0].ok === false) return { bad: items[0] };
+    mock('Fetch Release Pages', items.map(answers));
+    return { out: (await run('Prerelease Verdict', store['Fetch Release Pages']))[0].json.body, plan: items };
+  };
+  const PASS = await prerelease({ base_url: STG, paths: ['/', '/erp-software-uae/'], live_host: 'www.' + D62, staging: false },
+    (it) => it.kind === 'robots' ? robotsRes() : relPage({ canonical: W62 + it.url.replace(STG, '') }));
+  console.log('   pre-release pass ->', JSON.stringify({ verdict: PASS.out.verdict, exit: PASS.out.exit_code, counts: PASS.out.counts, summary: PASS.out.summary }));
+  check('G27: a healthy release candidate answers a machine-readable pass — verdict, exit code 0, the counts and "writes: none"',
+    PASS.out.ok === true && PASS.out.verdict === 'pass' && PASS.out.exit_code === 0 && PASS.out.writes === 'none'
+    && PASS.out.counts.pages === 2 && PASS.out.counts.pages_read === 2 && PASS.out.counts.failed === 0 && PASS.out.counts.passed >= 14
+    && eq(PASS.out.failures, []) && PASS.out.pages.every(p => p.checks.length >= 8), JSON.stringify(PASS.out.counts));
+  check('G27: what a staging host cannot answer is returned as "not checked" WITH the reason, never as "fine"',
+    PASS.out.not_checked.some(n => n.check === 'index_coverage' && /Google has seen|never been crawled/.test(n.reason))
+    && PASS.out.not_checked.some(n => n.check === 'real_user_speed' && /Chrome UX Report/.test(n.reason))
+    && PASS.out.not_checked.some(n => n.check === 'positions'), JSON.stringify(PASS.out.not_checked.map(n => n.check)));
+  const FAIL = await prerelease({ base_url: STG, paths: ['/', '/gone/', '/moved/'], live_host: 'www.' + D62, staging: false },
+    (it) => it.kind === 'robots' ? robotsRes() : /gone/.test(it.url) ? relPage({ status: 404, title: 'Not found', canonical: '', h1: '' })
+      : /moved/.test(it.url) ? { statusCode: 301, headers: { location: W62 + '/erp-software-uae/' }, data: '' } : relPage({ robots: 'noindex, follow', title: '', h1: '' }));
+  console.log('   pre-release fail ->', JSON.stringify({ verdict: FAIL.out.verdict, exit: FAIL.out.exit_code, failures: FAIL.out.failures.map(f => [f.url.replace(STG, ''), f.check]) }));
+  check('G27: a broken release candidate fails with the URL and the check that failed on each one, and exit code 1',
+    FAIL.out.ok === false && FAIL.out.verdict === 'fail' && FAIL.out.exit_code === 1
+    && FAIL.out.failures.some(f => /\/gone\//.test(f.url) && f.check === 'page_answers' && f.severity === 'critical')
+    && FAIL.out.failures.some(f => /\/moved\//.test(f.url) && f.check === 'no_redirect' && /erp-software-uae/.test(f.detail))
+    && FAIL.out.failures.some(f => f.check === 'indexable' && /noindex/.test(f.detail)) && FAIL.out.failures.some(f => f.check === 'title')
+    && FAIL.out.counts.failed === FAIL.out.failures.length && /check\(s\) failed/.test(FAIL.out.summary), JSON.stringify(FAIL.out.failures.map(f => f.check)));
+  const STAGE = await prerelease({ base_url: STG, paths: ['/erp-software-uae/'], live_host: 'www.' + D62 },
+    (it) => it.kind === 'robots' ? robotsRes('User-agent: *\nDisallow: /\n') : relPage({ robots: 'noindex' }));
+  console.log('   staging guard ->', JSON.stringify({ verdict: STAGE.out.verdict, warnings: STAGE.out.warnings.map(w => w.check) }));
+  check('G27: on a staging host the deliberate noindex and robots.txt guard are WARNINGS that name the live page, not failures',
+    STAGE.out.staging === true && STAGE.out.verdict === 'pass' && STAGE.out.exit_code === 0
+    && STAGE.out.warnings.some(w => w.check === 'indexable' && /the live page must not carry it on techand\.ai/.test(w.detail))
+    && STAGE.out.warnings.some(w => w.check === 'robots_allows' && /the live robots\.txt must allow it/.test(w.detail)), JSON.stringify(STAGE.out.warnings.map(w => [w.check, w.detail])));
+  const AUTH = await prerelease({ base_url: STG, paths: ['/erp-software-uae/'] },
+    (it) => it.kind === 'robots' ? robotsRes('', 404) : { statusCode: 401, headers: {}, data: 'Unauthorized' });
+  check('G27: a staging host behind a password is "not checked" with the reason — never a failing page, and never a pass CI could read as "fine"',
+    AUTH.out.verdict === 'not_checked' && AUTH.out.ok === false && AUTH.out.exit_code === 2 && AUTH.out.counts.pages_read === 0 && AUTH.out.pages[0].checked === false
+    && /none of the 1 page\(s\) could be read/.test(AUTH.out.summary)
+    && AUTH.out.not_checked.some(n => n.check === 'page_answers' && /asked for authentication \(401\)/.test(n.reason)), JSON.stringify([AUTH.out.verdict, AUTH.out.summary]));
+  const BAD = await prerelease({ paths: ['/'] });
+  const INTERNAL = await prerelease({ urls: ['http://localhost:3000/'] });
+  check('G27: a request with no target, and one pointing inside the network, are refused with exit code 2 and nothing is fetched',
+    BAD.bad.ok === false && BAD.bad.exit_code === 2 && /base_url/.test(BAD.bad.error) && BAD.bad.writes === 'none'
+    && INTERNAL.bad.ok === false && /not a public host/.test(INTERNAL.bad.error), JSON.stringify([BAD.bad.error, INTERNAL.bad.error]));
+
+  // ---------- 6. the two "Also seen" leftovers ----------
+  const ni62 = async (body) => (await run('Normalize Input', [{ json: { body, headers: { 'x-forwarded-for': 'cadence:' + SITE62 } } }]))[0].json;
+  const PTfree = await ni62({ mode: 'keyword', keyword: 'erp software uae', country: 'AE', domain: D62, email: 'owner@techand.ai',
+    page_type: 'Service Page (ERP implementation UAE) with built-in vendor-neutral comparison, cost and compliance sections', receive: ['Page Content'] });
+  console.log('   free-text page type ->', JSON.stringify({ page_type: PTfree.page_type, notes: PTfree.page_notes, note: PTfree.page_type_note }));
+  check('"Also seen": a ladder row\'s free-text page type becomes one of the page types we write, with the sentence kept for the brief and a note saying so',
+    PTfree.page_type === 'Service Page' && /vendor-neutral comparison/.test(PTfree.page_notes) && /is not one of the page types we write/.test(PTfree.page_type_note)
+    && /read as "Service Page"/.test(PTfree.page_type_note), JSON.stringify([PTfree.page_type, PTfree.page_type_note]));
+  const PTknown = await ni62({ mode: 'keyword', keyword: 'erp software uae', country: 'AE', domain: D62, email: 'owner@techand.ai', page_type: 'Guide', receive: ['Page Content'] });
+  const PTnone = await ni62({ mode: 'keyword', keyword: 'erp software uae', country: 'AE', domain: D62, email: 'owner@techand.ai', receive: ['Page Content'] });
+  check('"Also seen": one of the options passes through unchanged with no note, and no page type at all still defaults to a service page',
+    PTknown.page_type === 'Guide' && PTknown.page_type_note === '' && PTknown.page_notes === '' && PTnone.page_type === 'Service Page' && PTnone.page_type_note === '', JSON.stringify([PTknown.page_type, PTnone.page_type]));
+
+  reset();
+  const fixPack62 = async (entity) => {
+    mock('Audit Diff', [{ json: { site_id: SITE62, domain: D62, audit_id: 'aud_s62', audited_at: new Date().toISOString(),
+      site_audit: { measurements: { canonical_host: 'www.' + D62, robots_txt: 'User-agent: *\nAllow: /\nSitemap: ' + W62 + '/sitemap.xml\n', llms_txt_present: false }, entity, internal_links: [] } } }]);
+    mock('Check Crawl', [{ json: { domain: D62, country_iso: 'AE' } }]);
+    mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items: [
+      { resource_type: 'html', url: W62 + '/', status_code: 200, meta: { title: 'Tech& | ERP and e-invoicing', description: 'ERP and e-invoicing in the UAE.' }, checks: {} },
+      { resource_type: 'html', url: W62 + '/erp-software-uae/', status_code: 200, meta: { title: 'ERP software in the UAE', description: 'What ERP software costs.' }, checks: {} },
+    ] }] }] } }]);
+    mock('Load Profile (Audit)', EMPTY);
+    return (await run('Fix Pack', [{ json: {} }]))[0].json;
+  };
+  const LI = 'https://www.linkedin.com/company/techand/';
+  const FPsame = await fixPack62({ business_name: 'Tech&', homepage_org: { name: 'Tech&', sameAs: ['https://linkedin.com/company/techand'] }, homepage_social: [LI], gbp: null, profile_set: false });
+  const orgFile = (FPsame.fix_pack.files || []).find(f => f.name === 'organization.jsonld') || {};
+  const orgJson = JSON.parse(String(orgFile.content || '').replace(/^[\s\S]*?\{/, '{').replace(/<\/script>[\s\S]*$/, '').trim());
+  console.log('   fix pack sameAs ->', JSON.stringify(orgJson.sameAs), '|', orgFile.purpose);
+  check('"Also seen": the LinkedIn profile the homepage already lists appears ONCE (the two spellings are the same profile) and nothing is offered to add',
+    orgJson.sameAs.length === 1 && /linkedin\.com\/company\/techand/.test(orgJson.sameAs[0])
+    && /already lists/.test(orgFile.purpose) && /nothing new to add/.test(orgFile.purpose) && !/profile\(s\) to add/.test(orgFile.purpose), JSON.stringify([orgJson.sameAs, orgFile.purpose]));
+  const FPnew = await fixPack62({ business_name: 'Tech&', homepage_org: { name: 'Tech&', sameAs: ['https://linkedin.com/company/techand'] }, homepage_social: [LI, 'https://www.youtube.com/@techand'], gbp: { cid: '123' }, profile_set: false });
+  const orgFile2 = (FPnew.fix_pack.files || []).find(f => f.name === 'organization.jsonld') || {};
+  check('"Also seen": a profile the page does NOT carry is still offered, counted apart from the ones kept',
+    /2 official profile\(s\) to add in sameAs/.test(orgFile2.purpose) && /1 kept from the schema your homepage already has/.test(orgFile2.purpose), orgFile2.purpose);
+});
+
 
 H.report();
 })();

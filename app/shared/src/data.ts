@@ -1060,8 +1060,10 @@ export interface DetectedPage {
 export type LadderStatus = 'planning' | 'writing' | 'climbing' | 'won' | 'paused' | 'queued' | 'stuck' | 'needs_you';
 export type LadderMode = 'auto' | 'manual';
 export type PlanType = 'direct' | 'short' | 'full';
-/** planned · writing (run in progress) · waiting (written, not published) · published · gated (main page waiting for support) */
-export type LadderPageState = 'planned' | 'writing' | 'waiting' | 'published' | 'gated';
+/** planned · writing (run in progress) · waiting (written, not published) · published · gated (main page waiting for support) ·
+ *  set_aside (R16: the keyword rule refused this planned page — a competitor's brand, a government portal or an off-topic search —
+ *  so the Monday runs skip it and nothing is written for it; the engine marks the row `set_aside` with the reason) */
+export type LadderPageState = 'planned' | 'writing' | 'waiting' | 'published' | 'gated' | 'set_aside';
 
 export interface LadderPage {
   keyword: string;

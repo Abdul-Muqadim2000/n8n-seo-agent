@@ -1,4 +1,8 @@
 /*__SITE_MODEL__*/
+// R16 (2026-10-13, FIX_PLAN §3.11): the fit gate also reads the rows stored before it existed. A planned rung that names a competitor
+// ("facts erp" -> facts.ae) or a government portal is set aside: no check is bought for it and the report names it with the reason
+// instead of listing it as a page to write. A rung whose page is already written or published keeps its check (fitStored).
+/*__FIT_GATE__*/
 // Rank tracker: one SERP check (Google top 50) per tracked keyword: the primary keyword of every ladder page, plus the head term.
 // Reads the ladders and the history from the Data Tables, skips finished ladders and caps the spend per run.
 // v4.6 (no repeated checks): live pages, the head term and any keyword the site already ranks for are checked every week; pages not written /
@@ -30,9 +34,20 @@ const competitorsFor = (domain) => {
   const mon = monRows.find(r => r.site_id === site.site_id || normD(r.domain) === d) || {};
   try { return SM.from(site, { monitors: mon }).competitors; } catch (e) { return []; }
 };
+// R16: the fit gate's context for one site — its own domain, its declared competitors, and the ladder heads plus the site's services as
+// protected words (so the ladder's own topic can never be read as a brand).
+const fitCtxFor = (domain, pages) => {
+  const d = normD(domain);
+  const site = siteRows.find(r => normD(r.domain) === d) || { site_id: 'site_' + d.replace(/[^a-z0-9]+/g, '-'), domain: d };
+  const mon = monRows.find(r => r.site_id === site.site_id || normD(r.domain) === d) || {};
+  let services = [];
+  try { services = SM.from(site, { monitors: mon }).services || []; } catch (e) { services = []; }
+  return { own_domain: d, brands: {}, competitors: competitorsFor(domain),
+    protect: [...new Set([...(pages || []).map(p => String(p.head_keyword || '')), ...services].filter(Boolean))] };
+};
 const byLadder = new Map();
 for (const r of rows) { if (!byLadder.has(r.ladder_id)) byLadder.set(r.ladder_id, []); byLadder.get(r.ladder_id).push(r); }
-const checks = []; const skipped = [];
+const checks = []; const skipped = []; const setAside = [];
 const serpBody = (p, device) => [{ keyword: p.keyword, location_code: Number(p.location_code), language_code: p.language_code || 'en', depth: 50,
   device, os: device === 'mobile' ? 'android' : 'windows' }];   // the device was never set before G6 (DataForSEO's default is desktop/windows)
 for (const [id, pages] of byLadder) {
@@ -44,11 +59,17 @@ for (const [id, pages] of byLadder) {
     skipped.push({ ladder_id: id, reason: 'won: the top rung has held the top 3 for ' + last.length + ' checks — checked monthly, next after ' + new Date(new Date(last[0].checked_at).getTime() + LIMITS.won_every_days * 864e5).toISOString().slice(0, 10), won: true }); continue;
   }
   const competitors = competitorsFor(top.domain);
+  const fitCtx = fitCtxFor(top.domain, pages);
   const sorted = [...pages].sort((a, b) => Number(a.rung) - Number(b.rung) || Number(a.page_no) - Number(b.page_no)).slice(0, LIMITS.max_keywords_per_ladder);
   const mobileWanted = [];   // the ladder's main keywords: the top rung and the main page (page 1), at most max_mobile_per_ladder
   for (const p of sorted) {
     if (checks.length >= LIMITS.max_checks_per_run) break;
     const live = Number(p.rung) === 4 || p.status === 'published' || p.page_exists === true || p.page_exists === 'true';
+    // R16: a rung stored before the fit gate that nobody should write — no check is bought and the report names it with the reason
+    const fit = fitStored(p, fitCtx);
+    if (fit.flagged) setAside.push({ ladder_id: id, domain: p.domain, head_keyword: p.head_keyword, rung: Number(p.rung) || 0, page_no: Number(p.page_no) || 0, keyword: p.keyword,
+      target_url: p.target_url || '', status: p.status || '', reason: fit.reason, detail: fit.detail, note: fit.note, written: !!fit.live, dropped: !fit.ok });
+    if (!fit.ok) continue;
     if (won && !live) continue;   // won ladder, monthly check: the main keyword and the published pages only
     const lastH = deskHist.filter(h => h.ladder_id === id && h.keyword === p.keyword).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0];
     if (!live && lastH && Number(lastH.position) === 0 && daysSince(lastH.checked_at) < LIMITS.unpublished_every_days) {   // only 'not in the top 50' (0); a page that ranks (published but not reported) or a failed check (-1) stays weekly
@@ -69,5 +90,5 @@ for (const [id, pages] of byLadder) {
     checks.push({ ...m, device: 'mobile', endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: serpBody(m, 'mobile') });
   }
 }
-if (!checks.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred } }];
-return checks.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred } }));
+if (!checks.length) return [{ json: { nothing_to_do: true, ladders: byLadder.size, skipped, deferred, set_aside: setAside } }];
+return checks.map(c => ({ json: { ...c, skipped_ladders: skipped, deferred_pages: deferred, set_aside_pages: setAside } }));
