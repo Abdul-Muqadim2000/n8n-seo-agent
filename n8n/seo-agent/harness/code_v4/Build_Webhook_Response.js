@@ -36,6 +36,9 @@ return [{
     keyword_data: d.keyword_data || null,
     existing_page: d.existing_page || null,
     qa_summary: d.qa_summary || null,
+    // R11 (2026-10-13): the app shows the last quality round's verdict, not a count of warnings
+    qa_publishable: d.qa_publishable == null ? null : !!d.qa_publishable,
+    qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,
     run_ledger: d.run_ledger || null,
     markdown: d.article_markdown || d.page_markdown || null,
     html: d.article_html || null,

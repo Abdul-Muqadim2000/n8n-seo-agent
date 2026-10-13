@@ -248,6 +248,7 @@ const indexSection = (sc) => {
   }
   if ((ic.not_checked_pages || []).length) h += `<p class="small"><b>Not checked (${ic.not_checked}):</b> ` + ic.not_checked_pages.slice(0, 8).map(x => e3(p3(x.url))).join(', ')
     + (ic.not_checked_pages.length > 8 ? ' …' : '') + ` — ${e3(ic.not_checked_reason || ic.not_checked_pages[0].reason)}. Nothing is claimed about these pages.</p>`;
+  if (ic.mobile_note) h += `<p class="small"><b>Mobile usability:</b> ${e3(ic.mobile_note)} Nothing is claimed about it either way.</p>`;   // R10 (2026-10-13): "no data" is not "not mobile-friendly"
   if (ic.quota_note) h += `<p class="small">${e3(ic.quota_note)}</p>`;
   return h;
 };
@@ -365,15 +366,22 @@ if (sk) {
     html += `<div class="note">Your site does not rank in the top 30 for any keyword in ${esc(d.country || 'this market')} yet. The opportunities below show which searches to target, grouped by search intent.</div>`;
   }
 
+  // R13 (2026-10-13): a bucket the gate emptied says so with the reasons, instead of reading like a market with no demand
+  const refusedAK = (sk.refused || []);
+  const refusedIn = (i) => refusedAK.filter(r => String(r.intent || '') === i);
   html += `<h2>4a. Keyword Opportunities by Search Intent</h2>`;
   INT.forEach(i => {
     const list = (sk.opportunities_by_intent || {})[i] || [];
     html += `<h3>${cap(i)} Keywords</h3><p class="small">${INT_DESC[i]}</p>` + (list.length
       ? `<table class="ct"><tr><th>Keyword</th><th>Searches/mo</th><th>Difficulty</th><th>CPC $</th><th>Your position</th><th>Competitors in top 10</th></tr>` +
         list.map(k => `<tr><td>${esc(k.keyword)}</td><td>${num(k.volume)}</td><td>${diffLabel(k.difficulty)}</td><td>${cpcTxt(k.cpc)}</td><td>${k.your_position ? '#' + k.your_position : '—'}</td><td class="small">${compCell(k.competitors)}</td></tr>`).join('') + `</table>`
-      : '<p>No keywords with measurable search volume found for this intent.</p>');
+      : '<p>' + (refusedIn(i).length
+        ? 'Every keyword this research found for this intent was left out on purpose: ' + refusedIn(i).slice(0, 4).map(r => esc(r.keyword) + ' \u2014 ' + esc(r.detail || r.reason)).join('; ') + '.'
+        : 'No keywords with measurable search volume found for this intent.') + '</p>');
   });
 
+  if (refusedAK.length) html += `<p class="small"><b>Left out of the lists above on purpose (${refusedAK.length}):</b> ` + refusedAK.slice(0, 12).map(r => esc(r.keyword) + ' \u2014 ' + esc(r.detail || r.reason)).join('; ')
+    + (refusedAK.length > 12 ? ' \u2026' : '') + `. No page of this website should chase another company's brand, a government portal or login, or a subject beyond what you sell.</p>`;
   if ((sk.easy_wins || []).length) {
     html += `<h3>Easy Wins (difficulty under 30)</h3><table class="ct"><tr><th>Keyword</th><th>Intent</th><th>Searches/mo</th><th>Difficulty</th><th>Competitors in top 10</th></tr>` +
       sk.easy_wins.map(k => `<tr><td>${esc(k.keyword)}</td><td>${cap(k.intent)}</td><td>${num(k.volume)}</td><td>${num(k.difficulty)}</td><td class="small">${compCell(k.competitors)}</td></tr>`).join('') + `</table>`;
@@ -382,7 +390,7 @@ if (sk) {
   html += `<h3>Keyword Gap: Competitors Rank, You Don't</h3>` + ((sk.keyword_gap || []).length
     ? `<table class="ct"><tr><th>Keyword</th><th>Searches/mo</th><th>Difficulty</th><th>Intent</th><th>Competitors ranking</th></tr>` + sk.keyword_gap.slice(0, 20).map(g => `<tr><td>${esc(g.keyword)}</td><td>${num(g.volume)}</td><td>${diffLabel(g.difficulty)}</td><td>${cap(g.intent)}</td><td class="small">${compCell(g.competitors)}</td></tr>`).join('') + `</table>`
     : '<p>No keyword gap found.</p>');
-  if ((sk.refused || []).length) html += '<p class="small">Left out of the gap on purpose: ' + sk.refused.length + ' searches for government portals, logins or other companies\' brands (e.g. ' + sk.refused.slice(0, 5).map(r => esc(r.keyword) + ' — ' + esc(r.reason)).join(', ') + ').</p>';
+  if ((sk.refused || []).length) html += '<p class="small">Left out of the gap on purpose: ' + sk.refused.length + ' searches no page of this website should target (e.g. ' + sk.refused.slice(0, 5).map(r => esc(r.keyword) + ' — ' + esc(r.reason)).join(', ') + ').</p>';
 
   if ((sk.striking_distance || []).length) {
     html += `<h3>Quick Wins: Keywords on Page 2</h3><table class="ct"><tr><th>Keyword</th><th>Position</th><th>Searches/mo</th><th>Ranking page</th></tr>` +

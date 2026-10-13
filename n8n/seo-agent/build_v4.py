@@ -3962,6 +3962,196 @@ sticky("""### Topic radius and the re-plan of a stuck ladder (G32) · the Link B
 **The Link Builder's week as a PDF** (L3): *LB Doc* + Gotenberg, attached to the e-mail and carried in the callback.""",
     pos('Build Keyword Strategy')[0] - 40, pos('Build Keyword Strategy')[1] + 420, 1180, 280, 6)
 log('Topic radius and stuck-ladder re-plan (2026-10-13, FIX_PLAN G32; criteria K12 / K13): one radius kit (v5/code/_radius.js) draws the site\'s topic radius in the keyword research (keyword_strategy.topic_radius + a report section) and in the ladder plan (ladder.topic_radius, head_radius, a plan note and a report section) — within reach / a stretch / out of reach for now, with the evidence behind each verdict, shown and never enforced; the Rank Tracker turns a stuck ladder (seo_monitors.stuck_weeks, empty = 8, 2-26) into a re-plan proposal (v5/code/_replan.js: improve the existing page, the easier keyword, a different order, or stop) with reasons, evidence and applied: false; and the Link Builder\'s weekly result is now a PDF (L3, build_monitors.py: LB Doc -> Gotenberg -> e-mail attachment + callback)')
+# 50. THE SIX DEFECTS THE RE-RATING'S COMPLETION RUNS FOUND (R10 … R15, 2026-10-13;
+#     docs/system-review-2026-10-13/RESULTS.md §3.2, register rows in docs/system-review-2026-10-11/FIX_PLAN.md §3.11).
+#     R10 (High) Google retired the Mobile Usability report, so all 45 URL Inspection answers of exec 523 came back
+#          `mobileUsabilityResult: {"verdict": "VERDICT_UNSPECIFIED"}` — and the audit read that as "not mobile-friendly": a **High**
+#          finding on 45 of 47 pages with an **empty** evidence string ("/:  | /whatwedo/ai-automation: "), ranked second of 60 by impact
+#          and reported "new" by every diff. `PW.inspection` now answers **not checked** for anything but a FAIL that names an issue
+#          (v5/code/_page_watch.js), the finding needs a real issue list and a non-empty evidence string, and both reports print the
+#          sentence "Search Console no longer answers mobile usability". Its second half was just as wrong: the basis claimed "about 720
+#          clicks and 22,860 impressions in the last 28 days" for a property that measured **38 clicks and 5,295 impressions** — the site
+#          average per page multiplied by the pages affected, with no cap. `IMP.rank` (v5/code/_impact.js) now caps **every** finding's
+#          clicks / impressions basis at Search Console's own 28-day totals and says so in the line when the cap bit.
+#     R11 (High) exec 521 delivered a page with 12 placeholders: QA round 1 failed on 6, the editor ran, round 2 came back with **12**
+#          (11 × [Price], 1 × [Number]) and 40% coverage against a target of 68 — and because `qa_max_rounds: 2` was reached the page went
+#          out, the owner told only "Quality check: 6 item(s) to review" with nothing saying the gate had failed. Content QA now carries the
+#          gate itself (`quality`, `not_ready`, `rounds_left`, the reasons) and the delivery — the Word report, `meta.json`, the e-mail, the
+#          callback and the app payload — carries the **last** round's counts under the label *"did not pass the quality check — not ready
+#          to publish"*; the work is still delivered, as a draft, and `qa_max_rounds` is unchanged. The mask that caused it is fixed too: a
+#          passage the draft itself declares illustrative or hypothetical keeps its figures (live, "40 fee-earners at an average rate of
+#          [Price] per hour" and "billings of [Price] a week (40 × 22.5 × [Price])" destroyed a worked example's arithmetic), while an
+#          unsourced real price still becomes [Price].
+#     R12 (Medium) 11 of 25 rows of discovery's "Searches your website already appears for" read "no page of yours answers this search"
+#          while the same row named a live 200-OK page of the site, one of them ranking #6.2: `KWI.gscSeeds` decided with `SM.matchPage`
+#          alone and ignored the URL Search Console itself reports. A URL on this site is now the answering page with its own label — "the
+#          page that gets the impressions does not target this search" — and the kit, not the report, owns that wording.
+#     R13 (Medium) §4a of the full report still offered "ai" (165,000/mo), "character ai", "google ai", "humanize ai", "meta ai",
+#          "blackbox ai", "mh enterprises uae" and "microsoft ai", and the gap kept "mofa attestation dubai" and "how to check emirates id
+#          status with passport number", under a High finding telling the owner to build pages for them: the gate only refused classes
+#          somebody had listed. The fit gate now measures **topic distance** on the same 25% bar the outreach gate uses (`fitTopic` in
+#          v5/code/_fit_gate.js: place names and generic words count for neither side, a keyword left with nothing but them is "too broad"),
+#          *Analyze Keywords* hands it the site's own topics, every refusal is printed with its reason under §4a, and a bucket that empties
+#          says why instead of disappearing.
+#     R14 (Medium) exec 526 printed `"Tech&" by name (you) | 19,579 answers | 16,421,600 AI searches` as the first row of "Market-wide:
+#          every AI answer in the database", directly under the headline "Market-wide share 0% — 0 AI answers cite you", while the run's own
+#          54 samples named the business 0 times and the next row was microsoft.com with 1,897 — the index matched the 4-letter name inside
+#          the whole "tech" family (P34-2's collapse again). `you` now comes from a **domain** match only, and a name-only row is dropped
+#          with its reason when the name is under the brand-token bar or claims orders of magnitude more than the measurement, else kept and
+#          labelled "matched by name only, not to your website" and left out of the share arithmetic (v5/code/_ai_stats.js `indexNameRow`).
+#     R15 (Medium) the same write-now ladder page was delivered as `service-industry-erp-software-uae` while its ladder row (the link map,
+#          the siblings' up-links and the Rank Tracker) said `/service-industry-erp-software/`, and `meta.links_to_add_when_published` came
+#          back `[]` although the app had sent two `planned: true` ladder links. The planned URL now travels with every ladder page run
+#          (`ladder_target_url`: the app's "Write now", *Spawn Page Runs* and the Content Cadence), *Parse Brief* and Content QA keep that
+#          slug, the package publishes at that exact URL, and every planned ladder link is listed as a link to add once it is live.
+# =============================================================================
+# ---------- A. R10: Google's "no data" is not a finding, and no basis is bigger than the property ----------
+patch('GSC Audit Findings', "const F = (severity, title, why, fix, evidence, urls, count, pct) => findings.push({",
+      "const F = (severity, title, why, fix, evidence, urls, count, pct) => (severity !== 'Info' && !/[A-Za-z0-9]/.test(String(evidence == null ? '' : evidence)))\n"
+      "  ? null   // R10 (2026-10-13): a finding with nothing behind it is not a finding — live, \"Pages Google reports as not mobile-friendly\" was raised with the evidence \"/:  | /whatwedo/ai-automation: \" on 45 of 47 pages\n"
+      "  : findings.push({")
+patch('GSC Audit Findings', "notIdx.map(i => i.coverage).filter((v, k, a) => a.indexOf(v) === k).join('; ')",
+      "(notIdx.map(i => i.coverage).filter(Boolean).filter((v, k, a) => a.indexOf(v) === k).join('; ') || (notIdx.length + ' of ' + ok.length + ' inspected pages are not in Google\\'s index (Search Console gave no reason for them)'))")
+_R10_OLD = """    // G25: mobile-first indexing has been complete since 2024-07-05, so a page Google calls not mobile-usable is a real ranking problem
+    const mobBad = ok.filter(i => i.mobile_usable === false);
+    if (mobBad.length) F('High', 'Pages Google reports as not mobile-friendly', 'Google indexes the mobile version of every page: what its phone crawler cannot use properly cannot rank well.', 'Fix the issues Search Console lists for these URLs (viewport, text size, tap targets, content wider than the screen), then re-inspect them.', mobBad.slice(0, 3).map(i => path(i.url) + ': ' + (i.mobile_issues || []).slice(0, 2).join('; ')).join(' | ').slice(0, 300), mobBad.map(i => i.url), mobBad.length, Math.round(mobBad.length / ok.length * 100));
+    else if (ok.some(i => i.mobile_usable === true)) works.push('Google reports every inspected page as mobile-friendly');"""
+_R10_NEW = """    // G25 + R10 (2026-10-13, re-rating §3.11): mobile-first indexing has been complete since 2024-07-05, so a page Google really calls
+    // not mobile-usable is a ranking problem — but Google RETIRED the Mobile Usability report and the API now answers
+    // VERDICT_UNSPECIFIED with no issue list for every page (45 of 45 live). That is NOT CHECKED, never "not mobile-friendly": the
+    // finding needs a FAIL that names at least one issue (PW.inspection decides) and an evidence string with something in it.
+    const mobBad = ok.filter(i => i.mobile_usable === false && (i.mobile_issues || []).length);
+    const mobEvidence = mobBad.slice(0, 3).map(i => path(i.url) + ': ' + (i.mobile_issues || []).slice(0, 2).join('; ')).join(' | ').slice(0, 300);
+    const mobChecked = ok.filter(i => i.mobile_usable !== null).length;
+    search_console.mobile_usability = { checked: mobChecked, not_checked: ok.length - mobChecked, with_issues: mobBad.length,
+      note: mobChecked ? '' : String(((ok.find(i => i.mobile_note) || {}).mobile_note) || 'Search Console no longer answers mobile usability (Google retired the Mobile Usability report), so it was not checked.') };
+    if (mobBad.length && mobEvidence) F('High', 'Pages Google reports as not mobile-friendly', 'Google indexes the mobile version of every page: what its phone crawler cannot use properly cannot rank well.', 'Fix the issues Search Console lists for these URLs (viewport, text size, tap targets, content wider than the screen), then re-inspect them.', mobEvidence, mobBad.map(i => i.url), mobBad.length, Math.round(mobBad.length / ok.length * 100));
+    else if (mobChecked && ok.some(i => i.mobile_usable === true)) works.push('Google reports the ' + mobChecked + ' page(s) it still answers about as mobile-friendly');"""
+patch('GSC Audit Findings', _R10_OLD, _R10_NEW)
+for _n50 in ('Build Audit Report', 'Build Full Report'):
+    patch(_n50, "  if (ic.quota_note) h += `<p class=\"small\">${e3(ic.quota_note)}</p>`;",
+          "  if (ic.mobile_note) h += `<p class=\"small\"><b>Mobile usability:</b> ${e3(ic.mobile_note)} Nothing is claimed about it either way.</p>`;   // R10 (2026-10-13): \"no data\" is not \"not mobile-friendly\"\n"
+          "  if (ic.quota_note) h += `<p class=\"small\">${e3(ic.quota_note)}</p>`;")
+assert 'const mobEvidence' in code('GSC Audit Findings') and 'mobile_usability' in code('GSC Audit Findings'), 'R10: the mobile finding is unchanged'
+assert "const capped = false" not in code('Build Site Issues') and 'capped at everything the whole website measured' in code('Build Site Issues'), 'R10: the impact basis is not capped'
+
+# ---------- B. R11: a page that fails the quality check is delivered as a draft, and says so everywhere ----------
+patch('Build Word File', "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : '<span class=\"bad\">Needs review</span>'],",
+      "    ['Status', qa.passed ? '<span class=\"ok\">Passed</span>' : qa.not_ready ? '<span class=\"bad\">Did not pass \\u2014 not ready to publish</span>' : '<span class=\"bad\">Needs review</span>'],\n"
+      "    ...(qa.not_ready ? [['Why it is not ready', '<span class=\"bad\">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first")
+patch('Build Word File', "    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed' : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),",
+      "    // R11 (2026-10-13, re-rating §3.11): the summary is this (the LAST) round's, and when the rounds ran out with the gate still failing it says the page is not ready\n"
+      "    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed'\n"
+      "      : qa.not_ready ? 'Did not pass the quality check \\u2014 not ready to publish (round ' + qa.round + ' of ' + qa.max_rounds + '): ' + ((qa.not_ready_reasons || []).slice(0, 3).join('; ') || ((qa.warnings || []).length + ' item(s) to review'))\n"
+      "        : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),\n"
+      "    qa_publishable: qa.passed == null ? null : !!qa.passed,\n"
+      "    qa_not_ready: !!qa.not_ready, qa_label: qa.quality_label || '', qa_reasons: qa.not_ready_reasons || [], qa_quality: qa.quality || null,\n"
+      "    qa_round: qa.round == null ? null : qa.round, qa_max_rounds: qa.max_rounds == null ? null : qa.max_rounds,\n"
+      "    qa_placeholders: qa.placeholders_total == null ? null : qa.placeholders_total,\n"
+      "    content_links_to_add: qa.links_to_add_when_published || [],   // R15: every planned ladder / cluster link, for the package\n"
+      "    ladder_target_url: d.ladder_target_url || '',")
+# the file name says it too, so a draft cannot be mistaken for a finished page on disk
+patch('Build Word File', "const fileName = prefix + '-' + safe + '-' + today + '.doc';",
+      "const fileName = prefix + '-' + safe + '-' + today + (qa.not_ready ? '-DRAFT' : '') + '.doc';   // R11 (2026-10-13)")
+_BP_META_OLD = "const meta = { title, h1: h1 || title, slug, suggested_url: dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/',"
+_BP_META_NEW = """// R15 (2026-10-13, re-rating §3.11): a ladder page is published at the URL its ladder row planned — the row's link map, the siblings'
+// up-links and the Rank Tracker all use it, so a different suggested URL leaves every stored link pointing nowhere.
+const plannedPageUrl = (d.ladder_id && String(d.ladder_target_url || '').trim()) ? ownUrl(String(d.ladder_target_url).trim()) : '';
+// R15: the links to add once a planned page is live — the ladder's planned pages as well as a hub's cluster pages (Content QA built the list)
+const plannedLinks = (Array.isArray(d.content_links_to_add) && d.content_links_to_add.length)
+  ? d.content_links_to_add.filter(p => p && p.url).map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(ownUrl(p.url)), anchor: p.anchor || anchorText(p), role: p.role || '', note: 'Not published yet: add this link from this page once the page is live.' }))
+  : HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), role: p.role || p.ladder || '', note: 'Not published yet: add this link from this page once the page is live.' }));
+const meta = { title, h1: h1 || title, slug, suggested_url: plannedPageUrl || (dom ? siteUrlOf(dom, '/' + slug + '/') : '/' + slug + '/'),"""
+patch('Blog Package', _BP_META_OLD, _BP_META_NEW)
+patch('Blog Package', "  links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', planned_url: SRC.clean(p.url), anchor: anchorText(p), note: 'Not published yet: add this link from this page once the page is live.' })),",
+      "  links_to_add_when_published: plannedLinks,")
+patch('Blog Package', "word_count: words, content_score: d.content_score == null ? null : d.content_score, qa_summary: d.qa_summary || '',",
+      "word_count: words, content_score: d.content_score == null ? null : d.content_score, qa_summary: d.qa_summary || '',\n"
+      "  // R11 (2026-10-13): the package says whether this page may be published as it is, with the last quality round's counts and reasons\n"
+      "  publishable: d.qa_publishable == null ? null : !!d.qa_publishable, quality: d.qa_quality || null,")
+patch('Blog Package', "if (HPplanned.length) extra.push('\"links_to_add_when_published\" lists ' + HPplanned.length + ' page(s) this hub does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');",
+      "if (plannedLinks.length) extra.push('\"links_to_add_when_published\" lists ' + plannedLinks.length + ' page(s) this page does NOT link to yet because they are not published: add the link with the anchor given once each one is live (the weekly ladder e-mail reminds you)');")
+patch('Blog Package', "const extra = [];", "const extra = [];\nif (d.qa_not_ready) extra.push('This page DID NOT PASS the quality check (' + (d.qa_label || 'not ready to publish') + '): ' + ((d.qa_reasons || []).slice(0, 3).join('; ') || 'see the report') + ' \\u2014 finish those points before you publish it');\nif (plannedPageUrl) extra.push('Publish it at ' + plannedPageUrl + ': that is the URL this keyword ladder planned, and the other pages of the ladder already link to it');")
+patch('Build Webhook Response', "    qa_summary: d.qa_summary || null,",
+      "    qa_summary: d.qa_summary || null,\n"
+      "    // R11 (2026-10-13): the app shows the last quality round's verdict, not a count of warnings\n"
+      "    qa_publishable: d.qa_publishable == null ? null : !!d.qa_publishable,\n"
+      "    qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,")
+assert 'qa_not_ready' in code('Build Word File') and 'qa_not_ready' in code('Build Webhook Response') and 'publishable: d.qa_publishable' in code('Blog Package'), 'R11: the delivery does not carry the gate'
+assert 'quality_label' in code('Content QA') and 'illustrativeZones' in code('Content QA'), 'R11: Content QA has no gate or no illustrative zones'
+
+# ---------- C. R13: every keyword list runs through the topic bar, and the refusals are printed ----------
+patch('Analyze Keywords', "brands: fitLearnedBrands(cacheRowsAK), protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)] };",
+      "brands: fitLearnedBrands(cacheRowsAK), protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)],\n"
+      "  // R13 (2026-10-13, re-rating §3.11): topic distance on the same 25% bar the outreach gate uses — §4a offered \"ai\" (165,000/mo),\n"
+      "  // \"character ai\", \"google ai\", \"meta ai\", \"mh enterprises uae\" and the gap kept \"mofa attestation dubai\" because the gate only\n"
+      "  // refused classes somebody had listed. The topics are the site's own: its services, its description and this run's seeds.\n"
+      "  topics: [...(base.services || []), String(base.business || '').slice(0, 600), ...seeds, ...(((base.site_description || {}).products_or_services) || []).map(String)],\n"
+      "  topic_label: 'what this website sells' };")
+patch('Analyze Keywords', "const fitsAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return g.ok; };",
+      "const fitsAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return g.ok; };")
+patch('Analyze Keywords', "if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return false; };",
+      "if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return false; };")
+patch('Build Full Report', "  html += `<h2>4a. Keyword Opportunities by Search Intent</h2>`;",
+      "  // R13 (2026-10-13): a bucket the gate emptied says so with the reasons, instead of reading like a market with no demand\n"
+      "  const refusedAK = (sk.refused || []);\n"
+      "  const refusedIn = (i) => refusedAK.filter(r => String(r.intent || '') === i);\n"
+      "  html += `<h2>4a. Keyword Opportunities by Search Intent</h2>`;")
+patch('Build Full Report', "      : '<p>No keywords with measurable search volume found for this intent.</p>');",
+      "      : '<p>' + (refusedIn(i).length\n"
+      "        ? 'Every keyword this research found for this intent was left out on purpose: ' + refusedIn(i).slice(0, 4).map(r => esc(r.keyword) + ' \\u2014 ' + esc(r.detail || r.reason)).join('; ') + '.'\n"
+      "        : 'No keywords with measurable search volume found for this intent.') + '</p>');")
+patch('Build Full Report', "  if ((sk.easy_wins || []).length) {",
+      "  if (refusedAK.length) html += `<p class=\"small\"><b>Left out of the lists above on purpose (${refusedAK.length}):</b> ` + refusedAK.slice(0, 12).map(r => esc(r.keyword) + ' \\u2014 ' + esc(r.detail || r.reason)).join('; ')\n"
+      "    + (refusedAK.length > 12 ? ' \\u2026' : '') + `. No page of this website should chase another company's brand, a government portal or login, or a subject beyond what you sell.</p>`;\n"
+      "  if ((sk.easy_wins || []).length) {")
+patch('Build Full Report', "html += '<p class=\"small\">Left out of the gap on purpose: ' + sk.refused.length + ' searches for government portals, logins or other companies\\' brands (e.g. '",
+      "html += '<p class=\"small\">Left out of the gap on purpose: ' + sk.refused.length + ' searches no page of this website should target (e.g. '")
+assert "topic_label: 'what this website sells'" in code('Analyze Keywords') and 'function fitTopic(' in code('Analyze Keywords'), 'R13: the topic bar is not wired into Analyze Keywords'
+# R12: the report prints the kit's own reason per row, so it can never word a row itself
+assert "q.why ||" in code('Build Keyword Strategy') and 'mismatch' in code('Build Keyword Strategy'), 'R12: the keyword strategy still words the reason itself'
+assert "kinds.push('page_mismatch')" in code('Search Console Seeds (Discovery)'), 'R12: the discovery seeds have no page-mismatch class'
+assert 'refusedIn(i)' in code('Build Full Report'), 'R13: the full report does not say what was left out'
+
+# ---------- D. R15: the planned URL travels with every ladder page run ----------
+patch('Normalize Input', "   // P2-7: the word count the ladder verdict set for this page\n",
+      "   // P2-7: the word count the ladder verdict set for this page\n"
+      "    ladder_target_url: /^https?:\\/\\/\\S+$/i.test(String(p2.ladder_target_url || '').trim()) ? String(p2.ladder_target_url).trim().slice(0, 300) : '',   // R15: the URL the ladder planned for this page\n")
+patch('Parse Brief', "// Word count check",
+      """// 4. R15 (2026-10-13, re-rating §3.11): a ladder page keeps the URL its ladder row planned. Live, the row said
+//    `…/service-industry-erp-software/` while the page was delivered as `service-industry-erp-software-uae`: the ladder's link map, the
+//    sibling pages' up-links and the Rank Tracker's weekly check all use the row, so publishing at the suggested URL would have left
+//    every one of them pointing at a URL that never exists.
+const ladderUrlPB = String(prev.ladder_target_url || '').trim();
+if (prev.ladder_id && ladderUrlPB) {
+  const slugPB = ladderUrlPB.replace(/^https?:\\/\\/[^\\/]+/, '').replace(/[?#].*$/, '').replace(/^\\/+|\\/+$/g, '').split('/').filter(Boolean).pop() || '';
+  const asked = String(brief.slug || '').replace(/^\\/|\\/$/g, '');
+  if (slugPB && slugPB !== asked) { adjustments.push('Slug "' + (asked || 'unset') + '" -> "' + slugPB + '": the keyword ladder planned this page at ' + ladderUrlPB + ', and its link map, the other rung pages and the rank tracking all use that URL'); brief.slug = slugPB; }
+}
+
+// Word count check""")
+assert 'ladder_target_url' in code('Normalize Input') and 'ladderUrlPB' in code('Parse Brief'), 'R15: the planned URL does not reach the brief'
+assert 'plannedPageUrl' in code('Blog Package') and 'ladderPlannedUrl' in code('Content QA'), 'R15: the planned URL does not reach the page'
+
+# ---------- E. harness shim (S59): the impact kit as a runnable script ----------
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_impact.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 50): the impact kit - { findings, total_pages, search_console, key_pages } -> every\n"
+    "// finding with its weight, band, traffic basis (capped at the property's measured totals, R10) and the one line that explains it\n"
+    + IMPACT_SRC + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  const list = IMP.rank(JSON.parse(JSON.stringify(j.findings || [])), { total_pages: j.total_pages, search_console: j.search_console || null, key_pages: j.key_pages || [] });\n"
+    "  const folded = IMP.fold(list);\n"
+    "  return { json: { findings: list, first_reason: IMP.firstReason(list), method: IMP.method, minor: folded.minor.map(f => f.title), folded: folded.folded, fold_note: IMP.foldNote(folded.folded) } }; });\n")
+
+sticky("""### The six defects the re-rating found (R10-R15, 2026-10-13)
+**R10** Google retired the Mobile Usability report: `VERDICT_UNSPECIFIED`, a missing result or a FAIL with no issue list is **not checked** (`PW.inspection`), never "not mobile-friendly", and a finding with an empty evidence string is never raised. **Every** finding's clicks / impressions basis is now **capped at Search Console's own 28-day totals** (`IMP.rank`) - the live run claimed 720 clicks and 22,860 impressions for a site that measured 38 and 5,295.
+**R11** A run that uses up `qa_max_rounds` with the gate still failing is delivered **as a draft**: the Word report, `meta.json`, the e-mail, the callback and the app all carry the **last** round's counts under "did not pass the quality check - not ready to publish". A passage the draft labels **illustrative** keeps its figures (the mask destroyed a worked example's arithmetic); unsourced real prices are still masked.
+**R12** A Search Console row that names a page of this site is answered **by that page** - "the page that gets the impressions does not target this search" - never "no page of yours answers this search".
+**R13** The fit gate measures **topic distance** (25%, the outreach bar) over every intent bucket and the gap; refusals are printed with their reasons and an emptied bucket says why.
+**R14** The market-wide AI table identifies you by **domain**; a name-only row is dropped or labelled "not matched to your website" and never counted.
+**R15** A ladder page keeps the **URL its ladder planned** (`ladder_target_url`) and lists every planned ladder link under `links_to_add_when_published`.""",
+    pos('Content QA')[0] - 40, pos('Content QA')[1] + 420, 1180, 420, 3)
+log('The six defects the re-rating\'s completion runs found (R10-R15, 2026-10-13; docs/system-review-2026-10-13/RESULTS.md §3.2): Google\'s retired mobile-usability answer (VERDICT_UNSPECIFIED, a missing result, a FAIL with no issues) is "not checked" instead of a High "not mobile-friendly" finding on every page, a finding with an empty evidence string is never raised and every finding\'s clicks / impressions basis is capped at the property\'s measured 28-day totals (v5/code/_page_watch.js, _impact.js); a content run that exhausts qa_max_rounds with the gate still failing is delivered as a DRAFT labelled "did not pass the quality check - not ready to publish" with the LAST round\'s counts in the Word report, meta.json, the e-mail, the callback and the app payload, and the price mask leaves the figures of a passage the draft itself declares illustrative (v5/code/Content_QA.js); a Search Console row that names a live page of the site is answered by that page with its own label instead of "no page of yours answers this search" (v5/code/_kw_inputs.js); the fit gate measures topic distance on the outreach gate\'s 25% bar over every intent bucket and the keyword gap, prints every refusal with its reason and says why a bucket is empty (v5/code/_fit_gate.js fitTopic, Analyze Keywords, Build Full Report); the AI market-wide index identifies the owner by domain only and drops or labels a name-only row that the measurement cannot support (v5/code/_ai_stats.js indexNameRow, AI_Metrics.js, AI_Report.js); and a ladder page keeps the URL its ladder row planned (ladder_target_url through Normalize Input, Parse Brief, Content QA and the package) and carries every planned ladder link in links_to_add_when_published')
 
 # =============================================================================
 # 9. WRITE

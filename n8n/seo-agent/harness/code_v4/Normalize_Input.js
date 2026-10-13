@@ -349,6 +349,7 @@ return [{
     ladder_head: String(p2.ladder_head || ''),
     ladder_links,
     ladder_words: Math.max(0, Math.round(Number(p2.ladder_words) || 0)),   // P2-7: the word count the ladder verdict set for this page
+    ladder_target_url: /^https?:\/\/\S+$/i.test(String(p2.ladder_target_url || '').trim()) ? String(p2.ladder_target_url).trim().slice(0, 300) : '',   // R15: the URL the ladder planned for this page
     ai_target,
     force_content: !!p2.force_content,
     publish_wordpress: !!CONFIG.wordpress_publish && !!wordpress_url,

@@ -170,12 +170,26 @@ return plans.map(p => {
   const ix = mine.filter(x => /^index_/.test(x.q.engine));
   if (ix.length) { index = { checked_at: p.checked_at.slice(0, 10), platforms: [], brands: [], questions: [], answers_citing_you: 0, errors: [] }; const brandMap = new Map();
     for (const { q, r } of ix) { const t = task0(r); if (t.status_code !== 20000) { index.errors.push(q.engine + ' ' + q.topic + ': ' + (t.status_message || 'no response')); continue; } const res = (t.result || [])[0] || {};
-      if (q.engine === 'index_sov') { index.platforms.push(q.topic); for (const it of (res.items || [])) { const key = String(it.key || ''); const tot = it.total || ((it.platform || [])[0]) || {}; const b = brandMap.get(key) || { key, domain: key.startsWith('name:') ? '' : key, name: key.startsWith('name:') ? key.slice(5) : '', you: key === p.domain || key === 'name:' + p.business_name, mentions: 0, ai_search_volume: 0 };
+      // R14 (2026-10-13): `you` comes from a DOMAIN match only — a name-only row ("name:Tech&") is never this website, whatever the index matched it against
+      if (q.engine === 'index_sov') { index.platforms.push(q.topic); for (const it of (res.items || [])) { const key = String(it.key || ''); const tot = it.total || ((it.platform || [])[0]) || {}; const b = brandMap.get(key) || { key, domain: key.startsWith('name:') ? '' : key, name: key.startsWith('name:') ? key.slice(5) : '', you: !key.startsWith('name:') && (key === p.domain || normD(key) === p.domain || normD(key).endsWith('.' + p.domain)), mentions: 0, ai_search_volume: 0 };
         b.mentions += Number(tot.mentions) || 0; b.ai_search_volume += Number(tot.ai_search_volume) || 0; brandMap.set(key, b); } }
       else { index.answers_citing_you += Number(res.total_count) || 0; for (const it of (res.items || []).slice(0, 20)) index.questions.push({ question: String(it.question || '').slice(0, 200), volume: Number(it.ai_search_volume) || 0, platform: it.platform || q.topic, model: it.model_name || '', sources: (it.sources || []).map(s => normD(s.domain)).filter(Boolean).slice(0, 5) }); } }
     const doms = [...brandMap.values()].filter(b => b.domain); const totM = doms.reduce((s, b) => s + b.mentions, 0), totV = doms.reduce((s, b) => s + b.ai_search_volume, 0);
-    index.brands = [...brandMap.values()].map(b => ({ ...b, share: b.domain ? pct(b.mentions, totM) : null, volume_share: b.domain ? pct(b.ai_search_volume, totV) : null })).sort((a, b) => b.mentions - a.mentions);
-    const youI = index.brands.find(b => b.key === p.domain) || null; index.sov = youI ? youI.share : null; index.impressions = youI ? youI.ai_search_volume : 0; index.name_mentions = (index.brands.find(b => b.key === 'name:' + p.business_name) || {}).mentions || 0;
+    // R14: a row the index matched by name alone is judged before it is shown — a name shorter than the brand-token bar, or one claiming
+    // orders of magnitude more answers than this run measured and than any website in the same table, is dropped with its reason; a
+    // distinctive one is kept, labelled "not matched to your website" and left out of the share arithmetic (it never had a share).
+    const peerMax = doms.reduce((m, b) => Math.max(m, b.mentions), 0);
+    const nameDropped = [];
+    const kept = [...brandMap.values()].filter(b => {
+      if (b.domain) return true;
+      const v = indexNameRow(b.name, b.mentions, { peer_max: peerMax, measured_mentions: mentioned });
+      if (!v.ok) { nameDropped.push({ name: b.name, mentions: b.mentions, ai_search_volume: b.ai_search_volume, why: v.why }); return false; }
+      b.name_only = true; b.name_note = v.why; return true;
+    });
+    index.brands = kept.map(b => ({ ...b, share: b.domain ? pct(b.mentions, totM) : null, volume_share: b.domain ? pct(b.ai_search_volume, totV) : null })).sort((a, b) => b.mentions - a.mentions);
+    index.name_rows_dropped = nameDropped.sort((a, b) => b.mentions - a.mentions).slice(0, 5);
+    const youI = index.brands.find(b => b.you) || null; index.sov = youI ? youI.share : null; index.impressions = youI ? youI.ai_search_volume : 0;
+    index.name_mentions = (index.brands.find(b => b.name_only && normD(b.name) === normD(p.business_name)) || {}).mentions || 0;
     index.questions = index.questions.sort((a, b) => b.volume - a.volume).slice(0, 15); }
   else if (p.previous && p.previous.index) index = { ...p.previous.index, carried: true };
   // questions people ask AI about the topics that the panel does not track yet (discovery), and the searches AI ran (fan-out)

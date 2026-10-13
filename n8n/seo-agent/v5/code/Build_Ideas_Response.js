@@ -27,7 +27,8 @@ return [{ json: {
   search_console: ks.search_console ? { available: !!ks.search_console.available, period_end: ks.search_console.period_end || '', period_days: ks.search_console.period_days ?? 28,
     page_check: ks.search_console.page_check || '', pages_known: ks.search_console.pages_known ?? 0, seeded: ks.search_console.seeded || [], dropped: ks.search_console.dropped || null,
     min_impressions: ks.search_console.min_impressions ?? null, striking_min: ks.search_console.striking_min ?? null, striking_max: ks.search_console.striking_max ?? null,
-    no_page: (ks.search_console.no_page || []).slice(0, 20), striking: (ks.search_console.striking || []).slice(0, 20), answered: (ks.search_console.answered || []).slice(0, 10) } : null,
+    no_page: (ks.search_console.no_page || []).slice(0, 20), striking: (ks.search_console.striking || []).slice(0, 20), answered: (ks.search_console.answered || []).slice(0, 10),
+    mismatch: (ks.search_console.mismatch || []).slice(0, 20) } : null,   // R12: the page that gets the impressions targets something else
   serp_clusters: (ks.serp_clusters || []).slice(0, 10), serp_overlap: ks.serp_overlap || null, live_checks: ks.live_checks || null,
   follow_ups: { content: !!(d.include_content || d.include_seo_report), audit: !!d.include_audit },
   run_ledger: d.run_ledger || null,

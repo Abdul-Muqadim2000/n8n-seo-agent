@@ -221,7 +221,8 @@ if (wantSeo) {
 // ===== PAGE CONTENT =====
 if (wantContent) {
   parts.push(h2('Content Quality Check', true) + kv([
-    ['Status', qa.passed ? '<span class="ok">Passed</span>' : '<span class="bad">Needs review</span>'],
+    ['Status', qa.passed ? '<span class="ok">Passed</span>' : qa.not_ready ? '<span class="bad">Did not pass \u2014 not ready to publish</span>' : '<span class="bad">Needs review</span>'],
+    ...(qa.not_ready ? [['Why it is not ready', '<span class="bad">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first
     ...(qa.profile_placeholders ? [['Fields only you can fill', '<span class="bad">' + num(qa.profile_placeholders) + ' bracketed field(s) in the byline / author box / Person schema \u2014 set up the business profile</span>']] : []),
     ['Main Content Words', num(qa.main_content_words) + ' (target ' + num(qa.target_word_count) + ')'],
     ['FAQ Words', num(qa.faq_words)],
@@ -337,7 +338,7 @@ const prefix = wantSeo && wantContent ? 'seo-report-and-content'
   : wantVerdict ? 'keyword-verdict'
   : 'report';
 const safe = String(brief.slug || d.keyword || 'page').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const fileName = prefix + '-' + safe + '-' + today + '.doc';
+const fileName = prefix + '-' + safe + '-' + today + (qa.not_ready ? '-DRAFT' : '') + '.doc';   // R11 (2026-10-13)
 
 return [{
   json: {
@@ -355,7 +356,16 @@ return [{
     mode: d.mode,
     brand: d.brand || 'Dev SEO',
     existing_page: d.existing_page || null,
-    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed' : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),
+    // R11 (2026-10-13, re-rating §3.11): the summary is this (the LAST) round's, and when the rounds ran out with the gate still failing it says the page is not ready
+    qa_summary: qa.passed == null ? '' : (qa.passed ? 'Quality check passed'
+      : qa.not_ready ? 'Did not pass the quality check \u2014 not ready to publish (round ' + qa.round + ' of ' + qa.max_rounds + '): ' + ((qa.not_ready_reasons || []).slice(0, 3).join('; ') || ((qa.warnings || []).length + ' item(s) to review'))
+        : 'Quality check: ' + ((qa.warnings || []).length + (qa.profile_placeholders ? 1 : 0)) + ' item(s) to review'),
+    qa_publishable: qa.passed == null ? null : !!qa.passed,
+    qa_not_ready: !!qa.not_ready, qa_label: qa.quality_label || '', qa_reasons: qa.not_ready_reasons || [], qa_quality: qa.quality || null,
+    qa_round: qa.round == null ? null : qa.round, qa_max_rounds: qa.max_rounds == null ? null : qa.max_rounds,
+    qa_placeholders: qa.placeholders_total == null ? null : qa.placeholders_total,
+    content_links_to_add: qa.links_to_add_when_published || [],   // R15: every planned ladder / cluster link, for the package
+    ladder_target_url: d.ladder_target_url || '',
     verdict: d.verdict,
     verdict_score: d.verdict_score,
     verdict_reasons: d.verdict_reasons || [],
