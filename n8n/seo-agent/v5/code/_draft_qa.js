@@ -32,7 +32,7 @@ const DQ = (() => {
   /** d: { type, steps: [{ subject, body }], to, prospect_domain, page_url, page_title, evidence, dead }
    *  ctx: { facts, signer, brand, brand_known, domain, canonical_host, target_url, competitors, accreditation / accredited } */
   function check(d, ctx) {
-    const c = ctx || {}; const type = S(d.type); const press = type === 'press';
+    const c = ctx || {}; const type = S(d.type); const press = type === 'press' || type === 'digest';   // L5: a request from a journalist digest is a press answer (its reply address is the digest's, and an answer may be longer than a pitch)
     const steps = (d.steps || []).map(x => ({ step: Number(x.step) || 0, subject: S(x.subject), body: S(x.body) }));
     const held = [], notes = [];
     const add = (why) => { if (why && !held.includes(why)) held.push(why); };

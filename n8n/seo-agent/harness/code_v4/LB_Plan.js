@@ -1,6 +1,7 @@
 // Link Builder plan (v4.13, LINK_BUILDER_SPEC.md; Monday 11:00 after the Backlink Monitor and AI Growth, or on demand): per site with the Link
 // Builder on, what to look for this week — journalist requests (weekly), resource pages, the listings checklist, our old URLs in the Wayback
-// Machine and competitors' broken backlinks (monthly: every ~25 days, kept in seo_cache linkbld:<site>), the prospects to qualify — and what
+// Machine, podcast shows that take guests on the site's topics (L5) and competitors' broken backlinks and most-linked pages (L6)
+// (monthly: every ~25 days, kept in seo_cache linkbld:<site>), the prospects to qualify — and what
 // the pitches need: topics, competitors, the business profile (signature), our pages with their position and links (which page to point to).
 // On demand with free_only: no DataForSEO, no Claude ($0).
 // ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----
@@ -569,6 +570,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     profile: { business_name: bn, business_type: pr.business_type || '', author_name: pr.author_name || '', author_job_title: pr.author_job_title || '', street_address: pr.street_address || '', city: pr.city || '', region: pr.region || '',
       postal_code: pr.postal_code || '', country_code: pr.country_code || c.iso || '', phone: pr.phone || '', public_email: pr.public_email || '', logo_url: pr.logo_url || '' },
     pages, home, canonical_host: site_model.canonical_host || s.domain, budget: CONFIG.sequences_per_week, qualify_max: CONFIG.qualify_per_week,
-    due: { listings: due('listings_at'), resources: due('resources_at'), wayback: due('wayback_at'), broken: due('broken_at') && !free_only, press: true },
+    due: { listings: due('listings_at'), resources: due('resources_at'), wayback: due('wayback_at'), broken: due('broken_at') && !free_only, press: true,
+      podcasts: due('podcasts_at'), assets: due('assets_at') && !free_only },   // L5: podcast shows (free, monthly). L6: the asset ideas read from the competitors' most-linked pages (DataForSEO domain_pages, monthly, ~$0.02 a competitor)
     state: st, prospects_open: mineP.filter(p => (p.status || 'new') === 'new').length, outreach_rows: mineO.length, checked_at: iso } };
 });

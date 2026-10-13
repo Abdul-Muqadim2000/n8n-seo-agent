@@ -3,7 +3,10 @@
 // domain, a real quote from their page, one link to the page we chose on our canonical host, the length and one clear ask, the words we never
 // use, and the business name as the site model has it (DQ, v5/code/_draft_qa.js). A draft that fails is held ("needs_edit") with its reasons:
 // the owner edits it in the app, automatic mode skips it, and nothing is sent. The steps carry the waits in working days (follow-ups after 4
-// and 8; a journalist request gets one follow-up after 3).
+// and 8; a journalist request — on Bluesky or from a digest — gets one follow-up after 3).
+// L7 (2026-10-13): the writer gives every sequence a second subject in the other style; it is kept only when it passes the same
+// checks (length, nothing left in brackets, none of the words we never use, not a copy of the first). LB Rows then gives half the
+// batch each subject, so the app can read the reply rate per style.
 // ---- link kit (v4.10, inlined by build_monitors.py): reads a fetched page the way a link checker does — the links to a site with their rel,
 // anchor and placement, page facts (noindex, canonical, outbound links, language) and contact e-mails. Regex only: the n8n sandbox has no URL
 // constructor and no DOM. Hosts are compared without "www." (crawls report www. URLs while canonicals often use the bare host).
@@ -286,7 +289,7 @@ const OK = (() => {
   const countryOf = (domain) => { const d = String(domain || '').toLowerCase(); const m = d.match(/\.([a-z]{2})$/); return m && CC[m[1]] ? CC[m[1]] : ''; };
   // our page to point to and the link text to ask for (LINK_BUILDER_SPEC.md §5). pages: [{ url, title, keyword, kind, page_type, position,
   // rds, kw_share, pitched }] (kind: home | hub | guide | answer | article | case | money); p: the prospect { type, text, dead_text, to_url }
-  const HOME_TYPES = new Set(['mention', 'list', 'listing', 'press', 'ai_list']);
+  const HOME_TYPES = new Set(['mention', 'list', 'listing', 'press', 'digest', 'podcast', 'ai_list']);   // L5: an answer in the press and a guest appearance name the business, so they point at the homepage
   function pickTarget(p, pages, df, nDocs, home) {
     if (p.type === 'lost' && p.to_url) return { url: p.to_url, reason: 'the page it used to link to', anchor: 'as before', fit: 1 };
     if (HOME_TYPES.has(p.type)) return { url: home, reason: p.type === 'list' || p.type === 'ai_list' ? 'lists link to the homepage' : 'a mention or a listing names the business: the homepage', anchor: 'brand', fit: 1 };
@@ -320,7 +323,7 @@ const OK = (() => {
     return '';
   }
   // a bare homepage is no place for a link to add: only a listing, a list, a mention or a journalist request is pitched on the front page
-  const HOME_OK = new Set(['mention', 'list', 'listing', 'ai_list', 'press', 'lost', 'reclaim']);
+  const HOME_OK = new Set(['mention', 'list', 'listing', 'ai_list', 'press', 'digest', 'podcast', 'lost', 'reclaim']);   // L5: a show's front page is where its contact and its guest invitation live
   const isHomeUrl = (u) => /^https?:\/\/[^\/?#]+\/?([?#]|$)/i.test(String(u || ''));
   const homepageOnly = (type, url) => (isHomeUrl(url) && !HOME_OK.has(String(type || '')))
     ? 'only their homepage was found: a front page has no section a link could be added to (find the page on your topic first)' : '';
@@ -336,7 +339,7 @@ const OK = (() => {
   // them. A publisher writing about our topic has the words but not the signals; a list that leaves us out, a mention or a journalist
   // request is still pitched when the publisher also sells something (the ask there is "add us", not "link to us").
   const VENDOR_RE = /(book|schedule|request)(?: a| your)? (?:demo|call|consultation)|free trial|start (?:for )?free|talk to (?:sales|an expert|our advisor)|our (?:software|platform|product|products|solution|solutions|services|suite)|request (?:a )?quote|why choose us|our (?:clients|customers) (?:include|trust)|pricing plans?|per user ?\/ ?month|we (?:provide|offer|deliver|implement|build) /gi;
-  const SELL_EXEMPT = new Set(['list', 'listing', 'ai_list', 'mention', 'press', 'lost', 'reclaim']);
+  const SELL_EXEMPT = new Set(['list', 'listing', 'ai_list', 'mention', 'press', 'digest', 'podcast', 'lost', 'reclaim']);   // L5: a journalist request and a podcast that takes guests are asked "will you cover us", not "link to us" — the declared-competitor check above still runs
   const THEIRS_RE = /\b(solutions?|services?|software|platform|suite|provider|providers|consultan\w+|implementation|company)\b/i;
   function sellsSame(o) {
     const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
@@ -480,7 +483,7 @@ const DQ = (() => {
   /** d: { type, steps: [{ subject, body }], to, prospect_domain, page_url, page_title, evidence, dead }
    *  ctx: { facts, signer, brand, brand_known, domain, canonical_host, target_url, competitors, accreditation / accredited } */
   function check(d, ctx) {
-    const c = ctx || {}; const type = S(d.type); const press = type === 'press';
+    const c = ctx || {}; const type = S(d.type); const press = type === 'press' || type === 'digest';   // L5: a request from a journalist digest is a press answer (its reply address is the digest's, and an answer may be longer than a pitch)
     const steps = (d.steps || []).map(x => ({ step: Number(x.step) || 0, subject: S(x.subject), body: S(x.body) }));
     const held = [], notes = [];
     const add = (why) => { if (why && !held.includes(why)) held.push(why); };
@@ -541,6 +544,58 @@ const DQ = (() => {
   return { LIMITS, check, quotesThem, grams, linksIn, bracketsIn, wordCount };
 })();
 
+// ---- subject-line A/B (L7, LINK_BUILDER_SPEC.md §2): two subjects a batch, the reply rate per variant, and silence until there is
+// enough to read. The writer gives every batch two subjects; each drafted sequence carries one of them (A, B, A, B … across the batch),
+// so the two go out in equal numbers. Nothing is sent that a person has not approved: this only decides which subject a draft carries.
+// **No verdict under MIN_SENDS first e-mails per variant** — at 12 sends a 2-point difference in reply rate is noise, so the counts are
+// shown and the line reads "not enough sends yet". Mirrored in app/shared/src/outreach.ts (`subjectAbStats`, `subjectVariantFor`):
+// the two must change together.
+const AB = (() => {
+  const MIN_SENDS = 30;            // per variant, before anything may be called ahead (first e-mails only; follow-ups ride the same thread)
+  const MIN_GAP_POINTS = 2;        // reply rates closer than this are read as "no difference"
+  const VARIANTS = ['A', 'B'];
+  /** which variant the nth draft of a batch carries (A, B, A, B …) */
+  const variantFor = (i) => VARIANTS[Math.abs(Math.round(Number(i) || 0)) % VARIANTS.length];
+  const rate = (replied, sent) => (sent > 0 ? Math.round((1000 * replied) / sent) / 10 : null);
+  /** o: { variants: [{ variant, subject, sent, replied }] } -> the counts per variant, whether they may be read, and one honest line */
+  function read(o) {
+    const given = ((o || {}).variants || []).filter(x => x && VARIANTS.includes(String(x.variant || '').toUpperCase()));
+    const rows = VARIANTS.map(v => {
+      const hit = given.find(x => String(x.variant).toUpperCase() === v) || {};
+      const sent = Math.max(0, Math.round(Number(hit.sent) || 0));
+      const replied = Math.min(sent, Math.max(0, Math.round(Number(hit.replied) || 0)));
+      return { variant: v, subject: String(hit.subject || '').slice(0, 140), sent, replied, reply_rate: rate(replied, sent), enough: sent >= MIN_SENDS };
+    });
+    const live = rows.filter(r => r.sent > 0);
+    const enough = live.length >= 2 && live.every(r => r.enough);
+    const counts = rows.map(r => r.variant + ': ' + r.replied + ' replies from ' + r.sent + ' e-mail' + (r.sent === 1 ? '' : 's')).join(' · ');
+    if (!live.length) return { rows, enough: false, leader: '', verdict: 'nothing_sent', min_sends: MIN_SENDS, note: 'No first e-mails have gone out yet, so there is nothing to compare.', counts };
+    if (!enough) {
+      const short = rows.filter(r => r.sent < MIN_SENDS).map(r => r.variant + ' (' + r.sent + ' of ' + MIN_SENDS + ')').join(', ');
+      return { rows, enough: false, leader: '', verdict: 'not_enough', min_sends: MIN_SENDS,
+        note: 'Not enough sends yet to call a subject better: ' + MIN_SENDS + ' first e-mails per variant are needed, and ' + short + ' ' + (short.includes(',') ? 'are' : 'is') + ' short. ' + counts + '.', counts };
+    }
+    const sorted = [...live].sort((a, b) => b.reply_rate - a.reply_rate);
+    const gap = Math.round((sorted[0].reply_rate - sorted[sorted.length - 1].reply_rate) * 10) / 10;
+    if (gap < MIN_GAP_POINTS) return { rows, enough: true, leader: '', verdict: 'no_difference', min_sends: MIN_SENDS, gap,
+      note: 'Both subjects reply about equally well (' + counts + '): keep either.', counts };
+    return { rows, enough: true, leader: sorted[0].variant, verdict: 'ahead', min_sends: MIN_SENDS, gap,
+      note: 'Subject ' + sorted[0].variant + ' is ahead by ' + gap + ' points (' + counts + '). One test on this many e-mails is a hint, not a rule.', counts };
+  }
+  // the second subject a draft may carry: different from the first, short, nothing left in brackets, none of the words we never use
+  const BAD_SUBJECT = /(backlink|dofollow|do-follow|link exchange|link swap|guest post|sponsored post|\bSEO\b)/i;
+  const MAX_SUBJECT = 70;
+  function altOk(alt, first) {
+    const a = String(alt || '').replace(/\s+/g, ' ').trim(); const f = String(first || '').replace(/\s+/g, ' ').trim();
+    if (!a) return 'no second subject was written';
+    if (a.length > MAX_SUBJECT) return 'the second subject is ' + a.length + ' characters (at most ' + MAX_SUBJECT + ')';
+    if (/[[\]{}]|\(confirm/i.test(a)) return 'the second subject still has something to fill in';
+    if (BAD_SUBJECT.test(a)) return 'the second subject uses a word we never use';
+    if (a.toLowerCase() === f.toLowerCase()) return 'the second subject is the same as the first';
+    return '';
+  }
+  return { read, variantFor, altOk, VARIANTS, MIN_SENDS, MIN_GAP_POINTS, MAX_SUBJECT };
+})();
 const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 let inputs = [], outs = [];
 try { inputs = $('LB Writer Input').all().map(i => i.json).filter(j => !j.skip); outs = $('Outreach Sequence Writer').all().map(i => i.json); } catch (e) {}
@@ -554,7 +609,7 @@ inputs.forEach((job, i) => {
   const verdicts = [];
   for (const sq of (res.sequences || [])) {
     const j = (job.jobs || []).find(x => x.n === Number(sq.n)); if (!j) continue;
-    const press = j.type === 'press';
+    const press = ['press', 'digest'].includes(j.type);
     const raw = (sq.steps || []).filter(x => clean(x.body, 10)).sort((a, b) => Number(a.step) - Number(b.step)).slice(0, press ? 2 : 3);
     if (!raw.length) { verdicts.push({ n: j.n, prospect_domain: j.prospect_domain, type: j.type, ok: false, held: ['no e-mail was written'], notes: [], steps: [] }); continue; }
     const v = DQ.check({ type: j.type, steps: raw.map((x, k) => ({ step: k, subject: k === 0 ? clean(x.subject, 90) : '', body: clean(x.body, k === 0 ? 2200 : 900) })),
@@ -562,7 +617,10 @@ inputs.forEach((job, i) => {
       { facts: job.facts, signer: job.signer, brand: p.brand || job.business, brand_known: !!p.brand_known, domain: p.domain || job.domain, canonical_host: p.canonical_host || p.domain || job.domain,
         target_url: j.target_url, competitors: p.competitors || [], accredited: OK.accredited(p.accreditation) });
     const waits = press ? [0, 3] : [0, 4, 8];
-    verdicts.push({ n: j.n, prospect_domain: j.prospect_domain, type: j.type, ok: v.ok, held: v.held, notes: v.notes,
+    const alt = press ? '' : clean(sq.subject_b, 90);   // a journalist answer keeps "Re: " + their request: there is nothing to test there
+    const altWhy = press ? '' : AB.altOk(alt, v.steps[0] ? v.steps[0].subject : '');
+    verdicts.push({ n: j.n, prospect_domain: j.prospect_domain, type: j.type, ok: v.ok, held: v.held, notes: altWhy ? [...v.notes, altWhy] : v.notes,
+      subject_alt: altWhy ? '' : alt,
       steps: v.steps.map((x, k) => ({ step: k, wait_days: waits[k], subject: k === 0 ? x.subject : '', body: x.body })) });
   }
   const writer_skip = (res.skip || []).map(sk => { const j = (job.jobs || []).find(x => x.n === Number(sk.n)); return j ? { n: j.n, prospect_domain: j.prospect_domain, type: j.type, reason: clean(sk.reason, 200) } : null; }).filter(Boolean);

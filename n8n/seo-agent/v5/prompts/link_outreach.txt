@@ -15,16 +15,23 @@ Angle by kind:
 - list / ai_list / ai_source (a list): their list names similar providers but not us. One sentence on why we fit their readers, then the facts they would need (what we do, for whom, where). Offer a logo or a 50-word description.
 - resource: a resources / useful-links page on our topic. Offer our page as an addition, one sentence on what it adds for their readers.
 - gap / comp_new / ai_source (an article): they link to similar resources on this topic. Offer our page as a useful addition for their readers, or expert input (a quote in [brackets] for the owner to confirm, a data point from the facts, a correction).
+- podcast: a podcast on our topics that takes guests. Offer the signer as a guest: name the show and quote what they say about guests (or the episode kind you mean), then two or three specific things they could talk about that their listeners would want (only from the facts above), and the homepage once. End with one question ("would an episode on that suit your listeners?"). No media kit, no list of topics longer than three, no "I'd love to share my story".
+- digest: a journalist's request that arrived in a media digest (HARO / Source of Sources). Treat it exactly like press, and answer the address the digest gives.
 - press: a journalist's request. The first e-mail IS the answer: 120-200 words of expert input that answers exactly what they asked (practical, specific, [brackets] for any figure or claim the owner must confirm), who is answering (the signer) and why they know; the homepage once. Subject: "Re: " + their request in a few words.
 
 Rules for every e-mail:
-- First e-mail: 80-120 words (press 120-200), plain text, no markdown, no bullet lists unless giving facts for a list. Subject 36-50 characters, specific to their page (never "Quick question" or "Collaboration").
+- First e-mail: 80-120 words (press / digest 120-200), plain text, no markdown, no bullet lists unless giving facts for a list. Subject 36-50 characters, specific to their page (never "Quick question" or "Collaboration").
 - The first sentence is about THEIR page — quote or name the evidence. No compliments you cannot back with the evidence, no fake familiarity ("I've been reading your blog for years"), no "I hope this finds you well".
 - Exactly one link: our page to offer. Never write "backlink", "link building", "dofollow", "SEO", "DA" or "DR"; never ask for specific link text or a keyword; never offer money, a link swap or a guest post; never mention AI assistants or rankings.
 - Do not add an unsubscribe line or an address: the app adds the sender's details and opt-out line to every e-mail.
 - Follow-up 1 (sent 4 working days later in the same thread, 40-60 words, no subject): one NEW useful detail — a specific section of our page that fits their page, or an offer that makes it easy (a short description, a logo, a correction). Not "just bumping this".
 - Follow-up 2 (8 working days after that, 30-55 words, no subject, the last one): ask whether someone else handles their page ("who would be the right person?") or offer the easiest alternative, and say plainly you will not write again.
-- press: only ONE follow-up (3 working days later, 30-50 words), and none if the deadline has passed by then.
+- press / digest: only ONE follow-up (3 working days later, 30-50 words), and none if the deadline has passed by then.
+- TWO subjects for the first e-mail of every sequence, in two different styles, both 36-50 characters and both specific to this prospect:
+  `subject` (style A) names the thing you found on their page or in their request ("Dead link on your VAT resources page");
+  `subject_b` (style B) is the one question you are asking, in their words ("Add a UAE e-invoicing guide to your list?").
+  A person approves whichever is sent; half the batch goes out with each style so we can see which one gets more replies. Neither may
+  contain a word from the forbidden list above or anything left in [brackets].
 - Write the business name exactly as it stands in the facts above, every time (never the website address, never a lower-case version of it).
 - Say nothing about the business that the facts above do not carry: no accreditation, certification, licence, partnership, award, client count,
   years, size or price unless it is in the facts. Where a figure or a proof point would help, write it as [Owner: confirm — …] so the owner fills it in.
@@ -33,4 +40,4 @@ Rules for every e-mail:
 - If the evidence shows a prospect is not a fit (unrelated topic, a competitor's own site, their bare homepage, a page that sells links), do not write — list it under "skip" with the reason.
 
 Return ONLY JSON:
-{"sequences": [{"n": 1, "steps": [{"step": 0, "subject": "", "body": ""}, {"step": 1, "body": ""}, {"step": 2, "body": ""}]}], "skip": [{"n": 2, "reason": ""}]}
+{"sequences": [{"n": 1, "subject_b": "", "steps": [{"step": 0, "subject": "", "body": ""}, {"step": 1, "body": ""}, {"step": 2, "body": ""}]}], "skip": [{"n": 2, "reason": ""}]}

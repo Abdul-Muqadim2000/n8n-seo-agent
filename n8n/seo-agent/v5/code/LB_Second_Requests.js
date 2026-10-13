@@ -1,8 +1,11 @@
 // Second round (free): who to write to — the author's page, /contact and /about of every prospect whose page answered and does not sell links
 // (up to 15 a site) — and the outbound links of resource and list pages, each checked once (broken link building: a dead link on a page
 // about our topic is the easiest pitch there is — "one of your links is dead, here is a current page on the same subject").
+// L5 (2026-10-13): and the website of every podcast show whose feed answered — the feed's <link> is the show's own domain, which is the
+// only domain we will take a contact from; its /contact page is read in the same round.
 /*__LINK_KIT__*/
 /*__OUTREACH_KIT__*/
+/*__PODCAST__*/
 let reqs = [], resps = []; try { reqs = $('LB Page Requests').all().map(i => i.json).filter(r => !r.skip); resps = $('Fetch LB Pages').all().map(i => i.json || {}); } catch (e) {}
 const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const BIG = /(^|\.)(google|youtube|facebook|linkedin|wikipedia|amazon|apple|microsoft|reddit|quora|instagram|twitter|x|tiktok|medium|github|pinterest|bing|yahoo|wa\.me|whatsapp|t\.me|cloudflare|gstatic|w3\.org|schema\.org)\.[a-z.]+$/i;
@@ -35,6 +38,22 @@ for (const p of plans) {
         out.push({ json: { site_id: p.site_id, kind: 'outbound', url: href.slice(0, 500), on_page: r.url, prospect_domain: r.prospect_domain, type: r.type, anchor: LK.text(m[2]).slice(0, 120) } });
       }
     }
+  });
+  // L5: the podcast shows — their own website and its contact page (the feed named the site; a show hosted only on a platform has none)
+  reqs.forEach((r, i) => {
+    if (r.site_id !== p.site_id || r.kind !== 'podcast_feed') return;
+    const x = resps[i] || {}; const xml = String(x.body ?? x.data ?? ''); const status = Number(x.statusCode) || 0;
+    if (!xml || status >= 400) return;
+    const f = PC.feed(xml); const site = f.site || r.feed_site || '';
+    const host = LK.hostOf(site); if (!host || BIG.test(host) || LK.isInfra(host) || LK.sameSite(host, p.domain)) return;   // a show that only lives on a hosting platform has no page of its own to add a link to
+    const pd = LK.refKey(host); const base = String(site).replace(/^(https?:\/\/[^\/?#]+).*$/i, '$1');
+    const g = PC.guestSignal([f.description, ...(f.episode_titles || [])]);
+    const show = { prospect_domain: pd, type: 'podcast', topic: r.topic || '', feed_url: r.url, platform_url: r.platform_url || '',
+      show_title: (f.title || r.show_title || '').slice(0, 160), show_author: (f.author || r.show_author || '').slice(0, 120),
+      summary: String(f.description || '').slice(0, 600), owner_email: f.owner_email || '', episodes: Math.max(Number(r.episodes) || 0, f.episodes || 0),
+      last_episode: f.last_episode || '', guest_strength: g.strength, guest_quote: String(g.quote || '').slice(0, 300) };
+    out.push({ json: { site_id: p.site_id, kind: 'podcast_site', url: base + '/', ...show } });
+    out.push({ json: { site_id: p.site_id, kind: 'contact', url: base + '/contact', prospect_domain: pd, type: 'podcast' } });
   });
 }
 return out.length ? out : [{ json: { skip: true } }];
