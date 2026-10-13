@@ -1,0 +1,1 @@
+ALTER TABLE "outreach_sequences" ADD COLUMN "subject_variant" text DEFAULT '' NOT NULL;
