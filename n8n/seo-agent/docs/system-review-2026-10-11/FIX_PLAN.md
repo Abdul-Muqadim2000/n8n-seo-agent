@@ -929,6 +929,26 @@ Evidence and texts: `LIVE_CHECK_phase34_2026-10-12.md` (29 executions, ≈ $2.49
 
 **Owner actions from this check:** enable the Chrome UX Report API for the PageSpeed key's project (then one audit shows real speed data; today both reports honestly print "not available" with the enabling step); fill techand.ai's business profile (it unblocks the 6 held outreach drafts and the AI fact check); upload the IndexNow key file. **Rotate `SEO_API_KEY`:** it appeared once in an execution's webhook headers inside a subagent's local tool output (no file carries it).
 
+### 3.11 Defects found by the re-rating run (R, 2026-10-13)
+
+Evidence: `../system-review-2026-10-13/RESULTS.md` §3.2 (35 executions, $0.58 DataForSEO + $0.33 Claude). The run covered only
+16 of the protocol's 21 runs: **the engine's own daily AI budget guard refused `discover` and the ladder's page run** ($5.74 of $6),
+so content, discovery, full-report, AI-visibility and backlink evidence of its own is missing and 16 earlier items stayed unexercised.
+
+| ID | Title | Impact | Where | Fix | Status |
+|---|---|---|---|---|---|
+| R1 | A budget-refused run leaves the ladder row "writing", so the ladder plan, Rank Tracker and Cadence all report a page that does not exist | **High** | the refusal path in `build_v4.py` (*Mark Run Refused* / *Refused Input*) | for a `ladder:`-keyed run set the ladder row back to `planned` with the reason; promise the page only after the spawn is accepted; cadence / tracker / site tracker count a row as written only when `seo_content_log` says `written` | open |
+| R2 | A finding in a category the audit calls "not assessed" is reported "new" at every audit | Medium | *Audit Diff* in `build_v4.py` | filter current and previous findings through the same category set, and decide whether Schema belongs in a technical audit's weights | open |
+| R3 | The Keyword Check's topic fit failed twice and shipped `fit: null` (on D22's own acceptance keyword), still charging $0.024 | Medium | *Claude — Keyword Fit* / *Parser — Keyword Fit* | raise `maxTokensToSample`, simplify the output schema or fall back to a plain-text parse; an unknown fit must show in the label, not only in `warnings` | open |
+| R4 | The Link Builder's competitor gate only reads the prospect's page, so a competitor ranked #1 for our head keyword passed as a prospect | Medium | `v5/code/_outreach_kit.js` / *LB Assemble* | refuse on the registrable domain matching the competitor list or the SERP competitors just measured, not only on page-text overlap | open |
+| R5 | The Error Handler cannot read a trigger-mode failure: node, message and execution are all lost | Medium | *Format Alert* in the error handler | fall back to `trigger.error` (message, description, cause) and `workflow.name` when `execution` is absent | open |
+| R6 | No ops alert has ever been delivered, and `seo_ops_alerts.delivered` is never written back | Medium | after *Email Ops* / *Send Webhook* | update the row with the result and the channel that carried it (G21 cannot be measured until then) | open |
+| R9 | The budget guard sees only the main workflow and the Keyword Check, and counts AI spend only: the monitors spend DataForSEO money unguarded and both audits carried `est_usd: 0` | Medium | the shared ledger kit + the monitor workflows | reserve and settle a ledger row in the monitors too, and carry a DataForSEO estimate (and the measured amount on settle) beside the AI estimate | open |
+| R7 | The verdict and ladder still tell the owner to add FAQPage schema, which G2 removed from the pages we write | Low | `v5/prompts/verdict.txt` and the ladder feasibility prompt | ask for an FAQ *section*, not FAQPage schema | open |
+| R8 | Rung pages carry no word-count target (`target_words: 0`), so P2-7's clamp protects only the top page | Low | the ladder plan's rung rows | set a target per rung page from its own SERP word counts | open |
+
+**Also:** the guard's refusal text shown in the app is developer language ("Raise `ai_budget_usd` in Normalize Input"); `files/tech-audit-497.html` was captured as 0 bytes; the fix pack repeats the site's own LinkedIn `sameAs`.
+
 ### 3.6 Cross-check: nothing from the inputs is lost
 
 | SCORECARD fix | Register items | | SCORECARD fix | Register items |
