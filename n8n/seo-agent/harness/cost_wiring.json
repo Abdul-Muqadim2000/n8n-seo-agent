@@ -1,0 +1,406 @@
+{
+ "ai_calls": [
+  {
+   "effort": "medium",
+   "fields": [
+    "audience",
+    "business",
+    "country",
+    "domain",
+    "goal",
+    "language_name",
+    "site_description"
+   ],
+   "from": [],
+   "input": "Route Mode",
+   "loop": false,
+   "max_tokens": 16384,
+   "model": "claude-sonnet-5-5",
+   "node": "Keyword Seeds",
+   "streaming": false,
+   "template_chars": 1913
+  },
+  {
+   "effort": "medium",
+   "fields": [
+    "avg_competitor_words",
+    "competitor_digest",
+    "competitor_questions",
+    "competitors_read",
+    "country",
+    "existing_page",
+    "existing_page_text",
+    "facts",
+    "goal",
+    "keyword",
+    "language_name",
+    "page_type",
+    "serp_digest",
+    "stats_seen",
+    "term_digest"
+   ],
+   "from": [],
+   "input": "Collect Facts",
+   "loop": false,
+   "max_tokens": 16384,
+   "model": "claude-sonnet-5-5",
+   "node": "Competitor Analyzer",
+   "streaming": false,
+   "template_chars": 4016
+  },
+  {
+   "effort": "medium",
+   "fields": [
+    "content_prompt_comp",
+    "content_prompt_our",
+    "country",
+    "domain",
+    "language_name"
+   ],
+   "from": [],
+   "input": "Build Content Prompt",
+   "loop": false,
+   "max_tokens": 16384,
+   "model": "claude-sonnet-5-5",
+   "node": "Content Reviewer",
+   "streaming": false,
+   "template_chars": 2388
+  },
+  {
+   "effort": "medium",
+   "fields": [
+    "ai_target",
+    "audience",
+    "business",
+    "business_facts",
+    "content_brief",
+    "country",
+    "eeat_context",
+    "existing_page",
+    "existing_page_text",
+    "goal",
+    "keyword",
+    "language_name",
+    "page_type",
+    "proof_context",
+    "role_writer",
+    "site_description",
+    "spelling",
+    "tone",
+    "video_context"
+   ],
+   "from": [],
+   "input": "Parse Brief",
+   "loop": false,
+   "max_tokens": 32768,
+   "model": "claude-opus-5-5",
+   "node": "Copywriter",
+   "streaming": true,
+   "template_chars": 9555
+  },
+  {
+   "effort": "medium",
+   "fields": [
+    "output"
+   ],
+   "from": [
+    [
+     "Parse Brief",
+     "audience"
+    ],
+    [
+     "Parse Brief",
+     "business_facts"
+    ],
+    [
+     "Parse Brief",
+     "case_facts_text"
+    ],
+    [
+     "Parse Brief",
+     "content_brief.client_facts"
+    ],
+    [
+     "Parse Brief",
+     "content_brief.evidence_plan"
+    ],
+    [
+     "Parse Brief",
+     "content_brief.information_gain"
+    ],
+    [
+     "Parse Brief",
+     "content_brief.objections"
+    ],
+    [
+     "Parse Brief",
+     "content_brief.snippet_targets"
+    ],
+    [
+     "Parse Brief",
+     "content_brief.target_audience"
+    ],
+    [
+     "Parse Brief",
+     "content_brief.target_word_count"
+    ],
+    [
+     "Parse Brief",
+     "content_brief.terms_to_use"
+    ],
+    [
+     "Parse Brief",
+     "content_brief.unique_angle"
+    ],
+    [
+     "Parse Brief",
+     "goal"
+    ],
+    [
+     "Parse Brief",
+     "keyword"
+    ],
+    [
+     "Parse Brief",
+     "page_type"
+    ],
+    [
+     "Parse Brief",
+     "site_description"
+    ]
+   ],
+   "input": "Copywriter",
+   "loop": true,
+   "max_tokens": 16384,
+   "model": "claude-sonnet-5-5",
+   "node": "Critic",
+   "streaming": false,
+   "template_chars": 6212
+  },
+  {
+   "effort": "medium",
+   "fields": [
+    "content_brief",
+    "content_qa.main_content_words",
+    "content_qa.missing_terms",
+    "content_qa.target_word_count",
+    "content_qa.warnings",
+    "critique",
+    "keyword",
+    "language_name",
+    "output",
+    "spelling"
+   ],
+   "from": [],
+   "input": "Needs Revision?",
+   "loop": true,
+   "max_tokens": 32768,
+   "model": "claude-opus-5-5",
+   "node": "Editor",
+   "streaming": true,
+   "template_chars": 5413
+  },
+  {
+   "effort": "low",
+   "fields": [
+    "audience",
+    "business",
+    "chunk_index",
+    "chunk_size",
+    "chunk_total",
+    "country",
+    "goal",
+    "keywords_text",
+    "other_brands",
+    "services"
+   ],
+   "from": [],
+   "input": "Relevance Chunks",
+   "loop": false,
+   "max_tokens": 16384,
+   "model": "claude-sonnet-5-5",
+   "node": "Keyword Relevance",
+   "streaming": false,
+   "template_chars": 2242
+  },
+  {
+   "effort": "low",
+   "fields": [
+    "audience",
+    "business",
+    "chunk_index",
+    "chunk_size",
+    "chunk_total",
+    "country",
+    "goal",
+    "keywords_text",
+    "other_brands",
+    "services"
+   ],
+   "from": [],
+   "input": "Ladder Relevance Chunks",
+   "loop": false,
+   "max_tokens": 16384,
+   "model": "claude-sonnet-5-5",
+   "node": "Ladder Keyword Relevance",
+   "streaming": false,
+   "template_chars": 2242
+  },
+  {
+   "effort": "",
+   "fields": [
+    "domain",
+    "page_title",
+    "pages_text",
+    "site_pages",
+    "site_text"
+   ],
+   "from": [],
+   "input": "Site Pages",
+   "loop": false,
+   "max_tokens": 4096,
+   "model": "claude-haiku-4-5-20251001",
+   "node": "Site Describer",
+   "streaming": false,
+   "template_chars": 1881
+  },
+  {
+   "effort": "medium",
+   "fields": [
+    "ai_target",
+    "angle_rules",
+    "audience",
+    "business",
+    "business_facts",
+    "client_pages",
+    "client_signals",
+    "competitor_analysis",
+    "competitors_summary",
+    "country",
+    "coverage_digest",
+    "cta",
+    "currency",
+    "domain",
+    "eeat_context",
+    "existing_page",
+    "facts",
+    "facts_list",
+    "goal",
+    "internal_link_candidates",
+    "keyword",
+    "keyword_data",
+    "ladder_head",
+    "ladder_links",
+    "ladder_rung",
+    "language_name",
+    "page_notes",
+    "page_type",
+    "planned_link_targets",
+    "proof_context",
+    "recommended_page",
+    "role_brief",
+    "serp_features",
+    "site_description",
+    "spelling",
+    "term_digest",
+    "tone",
+    "verdict",
+    "verdict_reasons",
+    "verdict_score",
+    "video_context"
+   ],
+   "from": [],
+   "input": "Brief Context",
+   "loop": false,
+   "max_tokens": 24576,
+   "model": "claude-opus-5-5",
+   "node": "Strategy Brief",
+   "streaming": true,
+   "template_chars": 12497
+  },
+  {
+   "effort": "medium",
+   "fields": [
+    "audience",
+    "business",
+    "competitor_analysis",
+    "competitors_summary",
+    "country",
+    "domain",
+    "existing_page",
+    "goal",
+    "keyword",
+    "keyword_data",
+    "language_name",
+    "page_type",
+    "serp_digest",
+    "site_authority"
+   ],
+   "from": [],
+   "input": "Merge Keyword Data",
+   "loop": false,
+   "max_tokens": 16384,
+   "model": "claude-sonnet-5-5",
+   "node": "Verdict Agent",
+   "streaming": false,
+   "template_chars": 4379
+  }
+ ],
+ "calibrate": {
+  "code": "Cost Calibration Row",
+  "gate": "Calibration To Save?",
+  "match": [
+   "key"
+  ],
+  "save": "Save Cost Calibration",
+  "table": "seo_cache"
+ },
+ "intake": {
+  "ensure": "Ensure Cost Cache",
+  "from": "Ensure Run Ledger Table",
+  "kind": "cost",
+  "load": "Load Cost Calibration",
+  "table": "seo_cache",
+  "to": "Run Ledger Row"
+ },
+ "settle": {
+  "code": "Run Ledger Settle",
+  "ends": [
+   "Build Audit Report",
+   "Build Full Report",
+   "Build Keyword File",
+   "Build Ladder Report",
+   "Build Word File"
+  ],
+  "from": [
+   "Build Audit Report",
+   "Build Description Page",
+   "Build Full Report",
+   "Build Keyword File",
+   "Build Ladder Report",
+   "Build Word File",
+   "Case Study Delivery",
+   "Check-in Delivery",
+   "Monitor Started",
+   "Profile Delivery",
+   "Published Delivery",
+   "Spawn Audit Run",
+   "Start Site Tracker"
+  ],
+  "match": [
+   "run_id",
+   "status"
+  ],
+  "update": "Settle Run Ledger",
+  "writes": [
+   "ai_usd",
+   "cost_basis",
+   "cost_mode",
+   "dfs_usd",
+   "estimated_usd",
+   "measured_usd",
+   "settled_usd",
+   "status"
+  ]
+ }
+}

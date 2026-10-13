@@ -20,7 +20,13 @@ if (MEASURED) {
     if (vals.length) measured = +vals.reduce((s, v) => s + v, 0).toFixed(4);
   } catch (e) { measured = null; }
 }
+// G23 (2026-10-13): the settled row says which part of its money was measured and which is an estimate. A monitor's Claude figure is always
+// the reservation (the agents here report no usage either), its DataForSEO figure is measured whenever MEASURED named a node that answered.
+const ai_usd = +Number(row.est_usd || 0).toFixed(4);
+const dfs_usd = measured == null ? +Number(row.dfs_est_usd || 0).toFixed(4) : measured;
+const cost_basis = ('Claude $' + ai_usd.toFixed(4) + ' ESTIMATED (the per-site figure this run reserved; the models report no token usage); '
+  + 'DataForSEO $' + dfs_usd.toFixed(4) + ' ' + (measured == null ? 'ESTIMATED (this workflow reports no cost of its own)' : 'measured (the cost of every task it sent)')).slice(0, 500);
 return [{ json: { run_id: String($execution.id), mode: String(row.mode || ''), status: 'done',
-  settled_usd: +Number(row.est_usd || 0).toFixed(4),
-  dfs_usd: measured == null ? +Number(row.dfs_est_usd || 0).toFixed(4) : measured,
-  dfs_measured: measured != null, dfs_est_usd: +Number(row.dfs_est_usd || 0).toFixed(4) } }];
+  settled_usd: ai_usd, ai_usd, cost_mode: String(row.cost_mode || row.mode || ''),
+  dfs_usd, dfs_measured: measured != null, dfs_est_usd: +Number(row.dfs_est_usd || 0).toFixed(4),
+  measured_usd: measured == null ? 0 : dfs_usd, estimated_usd: +(ai_usd + (measured == null ? dfs_usd : 0)).toFixed(4), cost_basis } }];

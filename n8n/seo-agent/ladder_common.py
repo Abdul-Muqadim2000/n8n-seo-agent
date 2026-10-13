@@ -294,7 +294,15 @@ RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), 
                    # R9 (2026-10-13, re-rating): the ledger counted Claude money only, so the monitors spent DataForSEO money with no row at
                    # all and both audits carried est_usd 0 while each crawl cost $0.09. Every row now carries the run's DataForSEO estimate
                    # beside the AI one, and `dfs_usd` is the measured amount where the run knows it (the monitors' own cost_usd).
-                   ('dfs_est_usd', 'number'), ('dfs_usd', 'number')]
+                   ('dfs_est_usd', 'number'), ('dfs_usd', 'number'),
+                   # G23 (2026-10-13, FIX_PLAN): a settled row must say which part of its cost was MEASURED and which ESTIMATED. `settled_usd`
+                   # stored the per-mode reservation while every reader took it for a measured cost, and Claude's spend could be stated no
+                   # closer than "$1.6-3.0" because the three Opus nodes stream and a streaming call reports no token usage at all.
+                   # `cost_mode` is the estimate key the run was priced on — the key of the self-correcting rolling figure in seo_cache
+                   # (`cost:<kind>:<mode>`); `ai_usd` is the run's own Claude figure, priced by v5/code/_cost_cal.js from the characters the
+                   # prompts really interpolated, the characters the models answered with and the thinking budget; and `cost_basis` says in
+                   # words which half of measured_usd + estimated_usd is which.
+                   ('cost_mode', 'string'), ('ai_usd', 'number'), ('measured_usd', 'number'), ('estimated_usd', 'number'), ('cost_basis', 'string')]
 
 # ---- R9 (2026-10-13, re-rating): every scheduled run reserves and settles a seo_run_ledger row too. Before this the ledger held nothing for
 # the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker, so the day's guard refused

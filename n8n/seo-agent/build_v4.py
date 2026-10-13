@@ -3925,6 +3925,216 @@ sticky("""### What the re-rating run found (R1 … R9, 2026-10-13)
 log('What the re-rating run found (2026-10-13, R1 … R9): a budget-refused ladder page run sets its row back to planned with the reason (Refused Ladder Row -> Release Ladder Row) and the cadence, Rank Tracker and Site Tracker count a page as written only when seo_content_log says written, so no feature promises a page nobody wrote (R1, repair script fix_phantom_pages.py); the audit diff filters current and previous findings through the same category set and names what it did not compare, with Schema deliberately out of a technical audit\'s weights (R2); the Keyword Check\'s topic fit has a 1,200-token budget, a three-scalar schema and a plain-text retry, and an unknown fit is in the label, not only in the warnings (R3); the Link Builder refuses a prospect whose registrable domain is a declared competitor or a SERP rival of ours while a "best X" list stays pitchable (R4); the Error Handler reads a trigger-mode failure (trigger.error message / description / cause and the node it names) (R5); the delivery result and the carrying channel go back on the seo_ops_alerts row (R6); no verdict asks for FAQPage schema any more, only an FAQ section (R7); a rung page takes its word target from the pages that rank for its ladder\'s topic (R8); every scheduled run reserves and settles a seo_run_ledger row and every row carries a DataForSEO estimate, settled with the measured amount where the run knows it (R9); and the budget refusal the customer reads is no longer "Raise ai_budget_usd in Normalize Input"')
 
 # =============================================================================
+# 51. CLAUDE'S COST IS A NUMBER, AND THE ESTIMATES COME FROM THE MONEY (2026-10-13, system review FIX_PLAN.md G23 + the estimate
+#     recalibration the re-rating measured; docs/system-review-2026-10-13/RESULTS.md §0b / §1 / §2.10).
+#     Two things about this engine's own money were not true.
+#     (a) **Claude's spend was a range, not a number.** Strategy Brief, Copywriter and Editor run on Opus with `streaming: true` (the
+#         Anthropic SDK requires it above ~21k tokens), and a streaming call reports no token usage at all — the delivered run carried only
+#         `tokenUsageEstimate`, which a Code node cannot read either (usage rides the ai_languageModel connection). So the re-rating could
+#         put the page run's Claude cost no closer than "$1.6-3.0" (2026-10-11) / "$0.44 of $1.00 estimated" (2026-10-13), and worse,
+#         `seo_run_ledger.settled_usd` stored the per-mode RESERVATION while the guard, the app and the review all read it as a measured
+#         cost. Now every Claude call of a run is priced from what the run really knows — the characters its prompt interpolated, the
+#         characters it answered with and the thinking budget of its effort level (v5/code/_cost_cal.js, the call table baked from the real
+#         model nodes so a model or token change reaches the cost) — and the figure travels as `run_ledger.ai_cost` with `estimated: true`
+#         and a basis in words. *Run Ledger Settle* then settles the row with the measured and the estimated money kept apart
+#         (`ai_usd`, `measured_usd`, `estimated_usd`, `cost_basis`), so no reader can mistake one for the other again.
+#     (b) **The per-mode estimates were up to 13x away from the money**, which is why the day's guard refused five customer runs that cost
+#         a fraction of what it held back: `ai_visibility` reserved $0.06 and cost $0.79, backlinks $0.04 for $0.37, the full report $0.25
+#         for $0.41, and the written page reserved $1.23 for about $0.46. Both tables are recalibrated from the measured runs (every value
+#         above the figure beside it in _cost_cal.js, never below) and are now SELF-CORRECTING: *Cost Calibration Row* -> *Save Cost
+#         Calibration* moves the mode's rolling figure in seo_cache (`cost:ai:<mode>` / `cost:dfs:<mode>`) toward what the run cost, and
+#         the guard reserves max(rolling x CC.HEADROOM, the recent maximum) — it may fall as a mode gets cheaper but can never sit below
+#         what the mode has actually cost. *Load Cost Calibration* reads those rows once per run, before the guard counts.
+#     (c) **The monthly reconciliation.** A character-based figure still needs a reality check the engine cannot do itself, so
+#         reconcile_claude_cost.py compares a month of ledger rows with the owner's Anthropic Console usage export and writes one
+#         correction factor per model family into `cost:factor:claude`, which CC.callCost applies from the next run on.
+# =============================================================================
+from ladder_common import CACHE_TABLE as CACHE_TABLE51, CACHE_COLS as CACHE_COLS51
+COST_SRC = _rd0('code/_cost_cal.js').rstrip('\n')
+_rd51 = lambda f: rd(f).replace('/*__COST_CAL__*/', COST_SRC)
+
+# ---------- A. every Claude call of this workflow, baked from the real nodes ----------
+# The prompt text is an n8n expression, so the characters it sends are the template plus the fields it interpolates — not the whole input
+# item (Brief Context alone carries the competitor pages). Both are read here: `$json.<path>` from the agent's own main input and
+# `$('Node').first().json.<path>` from wherever else the prompt reaches. Nested paths collapse into their root-most prefix so a field is
+# never counted twice.
+def _roots51(paths):
+    out = []
+    for p in sorted(paths, key=lambda s: (s.count('.'), s)):
+        if not any(p == q or p.startswith(q + '.') for q in out): out.append(p)
+    return sorted(out)
+_LOOPS51 = {'Editor', 'Critic'}   # these run once per QA round (Content QA counts them as qa_round)
+_AI_CALLS51 = []
+for _mn51, _m51 in sorted(nodes.items()):
+    if _m51['type'] != '@n8n/n8n-nodes-langchain.lmChatAnthropic': continue
+    _o51 = _m51['parameters'].get('options', {})
+    _model51 = _m51['parameters']['model']['value']
+    for _ag51 in [t['node'] for l in conns.get(_mn51, {}).get('ai_languageModel', [[]]) for t in l]:
+        _txt51 = str(nodes[_ag51]['parameters'].get('text', ''))
+        assert _txt51, 'G23: agent ' + _ag51 + ' has no prompt text'
+        _own51 = _roots51(re.findall(r"\$json\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", _txt51))
+        _oth51 = sorted({(a, b) for a, b in re.findall(r"\$\('([^']+)'\)\.(?:first\(\)|item)\.json\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", _txt51)})
+        _in51 = sorted({s for s, o in conns.items() for l in o.get('main', []) for t in l if t['node'] == _ag51})
+        _AI_CALLS51.append({'node': _ag51, 'model': _model51, 'max_tokens': int(_o51.get('maxTokensToSample') or 0),
+                            'effort': _o51.get('effort') or '', 'streaming': bool(_o51.get('streaming')),
+                            'template_chars': len(_txt51), 'input': _in51[0] if _in51 else '', 'fields': _own51,
+                            'from': [[a, b] for a, b in _oth51], 'loop': _ag51 in _LOOPS51})
+assert len(_AI_CALLS51) >= 11, _AI_CALLS51
+assert sum(1 for c in _AI_CALLS51 if c['streaming']) == 3, 'G23: the three streaming Opus nodes are not what the cost code thinks they are'
+assert {c['node'] for c in _AI_CALLS51 if c['streaming']} == {'Strategy Brief', 'Copywriter', 'Editor'}, 'G23: the streaming nodes moved'
+
+AI_COST_JS51 = """
+// ---- what Claude cost this run (G23, 2026-10-13): priced per call from what the run can actually see ----
+// A streaming call reports no token usage, so there is nothing to read; what the run does know is the prompt it built, the answer it got
+// and the thinking budget of the node's effort level. Every figure here is an ESTIMATE and says so (ai_cost.estimated / .basis), and the
+// per-model correction factors the monthly reconciliation writes into seo_cache are applied before the prices are.
+const __calRows = () => { try { return $('Load Cost Calibration').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) { return []; } };
+const __AI_CALLS = __AI_CALLS_JSON__;
+const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);
+const __at = (o, p) => String(p).split('.').reduce((v, k) => (v == null ? v : v[k]), o);
+const __jsonOf = (n) => { try { return ($(n).all() || []).map(i => (i && i.json) || {}); } catch (e) { return null; } };
+const __qaRounds = () => { try { return Math.max(1, Number($('Content QA').first().json.qa_round) || 1); } catch (e) { return 1; } };
+const __costCalls = [];
+for (const c of __AI_CALLS) {
+  const answers = __jsonOf(c.node);
+  if (!answers || !answers.length) continue;   // the node did not run in this execution
+  let prompt_chars = c.template_chars;
+  const own = c.input ? (__jsonOf(c.input) || [])[0] : null;
+  for (const f of c.fields) prompt_chars += __chars(__at(own || {}, f));
+  for (const p of c.from) prompt_chars += __chars(__at((__jsonOf(p[0]) || [])[0] || {}, p[1]));
+  const output_chars = answers.reduce((s, j) => s + (typeof j.output === 'string' ? j.output.length : __chars(j)), 0);
+  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, calls: answers.length * (c.loop ? __qaRounds() : 1) });
+}
+run_ledger.ai_cost = CC.runCost(__costCalls, CC.readCal(__calRows()).factors);
+run_ledger.ai_usd = run_ledger.ai_cost.usd;
+run_ledger.ai_cost_estimated = run_ledger.ai_cost.estimated;
+"""
+_ends51 = sorted(nm for nm in nodes if 'const run_ledger = {' in nodes[nm]['parameters'].get('jsCode', ''))
+assert {'Build Word File', 'Build Full Report', 'Build Audit Report', 'Build Keyword File', 'Build Ladder Report'} <= set(_ends51), _ends51
+for _n51 in _ends51:
+    patch(_n51, "run_ledger.dataforseo_usd = +run_ledger.dataforseo_usd.toFixed(4);",
+          "run_ledger.dataforseo_usd = +run_ledger.dataforseo_usd.toFixed(4);\n" + AI_COST_JS51.replace('__AI_CALLS_JSON__', json.dumps(_AI_CALLS51)))
+    setcode(_n51, COST_SRC + '\n' + code(_n51))
+    assert 'CC.runCost' in code(_n51) and 'const CC = (() =>' in code(_n51), _n51
+
+# ---------- B. the stored calibration, read once before the guard counts ----------
+_ert51 = pos('Ensure Run Ledger Table')
+add_node('Ensure Cost Cache', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE51, CACHE_COLS51), [_ert51[0], _ert51[1] + 160], {'onError': 'continueRegularOutput', 'executeOnce': True})
+add_node('Load Cost Calibration', DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE51, 'kind', 'eq', 'cost'), [_ert51[0] + 110, _ert51[1] + 160], dict(LOAD18))
+disconnect('Ensure Run Ledger Table', 'Run Ledger Row')
+for _a51, _b51 in [('Ensure Run Ledger Table', 'Ensure Cost Cache'), ('Ensure Cost Cache', 'Load Cost Calibration'), ('Load Cost Calibration', 'Run Ledger Row')]:
+    connect(_a51, _b51)
+
+# ---------- C. the guard's estimate: one source, recalibrated, self-correcting ----------
+_CHAIN51 = re.compile(r"// ---- estimated Claude spend guard ----\n.*?\ndfs_est = \+Number\(dfs_est\)\.toFixed\(4\);\n", re.S)
+NEW_EST51 = """// ---- what this run reserves, in Claude money and in DataForSEO money (G23, 2026-10-13) ----
+// Both per-mode tables used to be typed in this node and were never checked against the money: the re-rating measured them up to 13x out
+// (`ai_visibility` reserved $0.06 and cost $0.79; backlinks $0.04 for $0.37; the written page $1.23 for about $0.46), which is why the day's
+// guard refused five customer runs that would each have cost a fraction of what it held back. They now live once, in v5/code/_cost_cal.js,
+// recalibrated from the measured runs of 2026-10-12 / 13, and CC.pick resolves this request against the SELF-CORRECTING figures the settles
+// write into seo_cache (`cost:ai:<mode>` / `cost:dfs:<mode>`, read by Load Cost Calibration): the shipped default until the mode has settled
+// runs, then its rolling figure with a quarter of headroom -- and never below what the mode has actually cost in its last runs.
+const CAL = CC.readCal(__calRows());
+const __ai = CC.pick('ai', d, CAL), __dfs = CC.pick('dfs', d, CAL);
+let est = __ai.usd;          // Claude money: what ai_budget_usd guards
+let dfs_est = __dfs.usd;     // DataForSEO money: carried on the row, settled with the measured amount (R9)
+"""
+CAL_HEAD51 = ("// G23 (2026-10-13): the shared cost kit (v5/code/_cost_cal.js) and the stored per-mode calibration this node prices with.\n"
+              + COST_SRC
+              + "\nconst __calRows = () => { try { return $('Load Cost Calibration').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) { return []; } };\n")
+for _n51 in ('Rate Limit', 'Run Ledger Row'):
+    _c51 = code(_n51)
+    assert len(_CHAIN51.findall(_c51)) == 1, 'G23: the estimate block of ' + _n51 + ' did not match exactly once'
+    setcode(_n51, CAL_HEAD51 + _CHAIN51.sub(lambda m: NEW_EST51, _c51))
+    # the tables and the mode chain live in the kit now (inside its IIFE), not in the node
+    assert "est = EST.describe" not in code(_n51) and "dfs_est = DFS_EST." not in code(_n51), 'G23: ' + _n51 + ' still resolves a mode with its own chain'
+    assert "CC.pick('ai', d, CAL)" in code(_n51) and "CC.pick('dfs', d, CAL)" in code(_n51), 'G23: ' + _n51 + ' does not price the request through the kit'
+patch('Rate Limit', "const __room = d.mode === 'case_study' ? EST.content : 0;   // reject the intake at once when the case-study page could not run today",
+      "const __room = __ai.room;   // reject the case-study intake at once when the page run it spawns could not run today")
+patch('Rate Limit', "d.dfs_spend_estimate_usd = dfs_est;",
+      "d.dfs_spend_estimate_usd = dfs_est;\nd.cost_estimate_source = __ai.source;   // 'calibrated' once the mode has settled runs, 'default' until then\nd.cost_estimate_basis = __ai.basis;")
+patch('Run Ledger Row', "  domain: String(d.domain || '').toLowerCase(), heavy, dfs_est_usd: dfs_est, dfs_usd: 0 } }];",
+      "  domain: String(d.domain || '').toLowerCase(), heavy, dfs_est_usd: dfs_est, dfs_usd: 0,\n"
+      "  // G23: the estimate keys this run is priced on (Claude|DataForSEO) and the honest split, which only a settle can fill in\n"
+      "  cost_mode: __ai.key + '|' + __dfs.key, ai_usd: 0, measured_usd: 0, estimated_usd: +(Number(est || 0) + Number(dfs_est || 0)).toFixed(4),\n"
+      "  cost_basis: 'reserved: Claude $' + Number(est || 0).toFixed(4) + ' ESTIMATED (' + __ai.basis + '), DataForSEO $' + Number(dfs_est || 0).toFixed(4) + ' ESTIMATED (' + __dfs.basis + ') - nothing measured yet' } }];")
+
+# ---------- D. the settle: measured and estimated money kept apart, and the estimate taught ----------
+_from51 = sorted({s for s, o in conns.items() for l in o.get('main', []) for t in l if t['node'] == 'Settle Run Ledger'})
+assert len(_from51) >= 13, _from51
+_sp51 = pos('Settle Run Ledger')
+add_node('Run Ledger Settle', 'n8n-nodes-base.code', 2, {'jsCode': _rd51('code/Run_Ledger_Settle.js').replace('__ENDS__', json.dumps(_ends51))},
+         [_sp51[0] - 200, _sp51[1] + 140], {'executeOnce': True})
+for _s51 in _from51:
+    disconnect(_s51, 'Settle Run Ledger'); connect(_s51, 'Run Ledger Settle')
+connect('Run Ledger Settle', 'Settle Run Ledger')
+nodes['Settle Run Ledger']['parameters']['columns']['value'].update({
+    'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}', 'ai_usd': '={{ $json.ai_usd }}',
+    'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
+    'cost_basis': '={{ $json.cost_basis }}'})
+add_node('Cost Calibration Row', 'n8n-nodes-base.code', 2, {'jsCode': _rd51('code/Cost_Calibration_Row.js')}, [_sp51[0] + 220, _sp51[1] + 140], {'executeOnce': True})
+if_node('Calibration To Save?', "{{ !$json.skip }}", [_sp51[0] + 440, _sp51[1] + 140])
+add_node('Save Cost Calibration', DT_TYPE, DT_VERSION, dt_upsert_params(CACHE_TABLE51, CACHE_COLS51, 'key'), [_sp51[0] + 660, _sp51[1] + 140],
+         {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+connect('Settle Run Ledger', 'Cost Calibration Row'); connect('Cost Calibration Row', 'Calibration To Save?'); connect('Calibration To Save?', 'Save Cost Calibration', 0)
+
+# ---------- E. harness shims and wiring (S60) ----------
+open(os.path.join(OUT_CODE, '_cost_cal.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 51, G23): the shared cost kit as a runnable script. One item in, one call out:\n"
+    "// { call: 'runCost' | 'callCost' | 'pick' | 'estOf' | 'calRow' | 'split' | 'readCal' | 'tables', ... }\n"
+    + COST_SRC + """
+return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call || ''); const cal = CC.readCal(j.rows || []);
+  if (fn === 'runCost') return { json: CC.runCost(j.calls || [], j.factors || cal.factors) };
+  if (fn === 'callCost') return { json: CC.callCost(j.call_spec || {}, j.factors || cal.factors) };
+  if (fn === 'pick') return { json: CC.pick(j.kind, j.request || {}, cal) };
+  if (fn === 'estOf') return { json: CC.estOf(j.kind, j.key, cal) };
+  if (fn === 'calRow') return { json: CC.calRow(j.kind, j.mode, j.amount, cal, !!j.measured) };
+  if (fn === 'split') return { json: CC.split(j.ai || {}, j.dfs || {}) };
+  if (fn === 'readCal') return { json: cal };
+  if (fn === 'tables') return { json: { EST: CC.EST, DFS_EST: CC.DFS_EST, PRICES: CC.PRICES, UNKNOWN: CC.UNKNOWN, CHARS_PER_TOKEN: CC.CHARS_PER_TOKEN,
+    THINK_SHARE: CC.THINK_SHARE, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY } };
+  return { json: { error: 'unknown call ' + fn } }; });
+""")
+_cw51 = {'ai_calls': _AI_CALLS51,
+         'intake': {'from': 'Ensure Run Ledger Table', 'ensure': 'Ensure Cost Cache', 'load': 'Load Cost Calibration',
+                    'to': 'Run Ledger Row', 'table': CACHE_TABLE51, 'kind': 'cost'},
+         'settle': {'code': 'Run Ledger Settle', 'update': 'Settle Run Ledger', 'from': _from51, 'ends': _ends51,
+                    'writes': sorted(nodes['Settle Run Ledger']['parameters']['columns']['value'].keys()),
+                    'match': [c['keyName'] for c in nodes['Settle Run Ledger']['parameters']['filters']['conditions']]},
+         'calibrate': {'code': 'Cost Calibration Row', 'gate': 'Calibration To Save?', 'save': 'Save Cost Calibration',
+                       'table': CACHE_TABLE51, 'match': [c['keyName'] for c in nodes['Save Cost Calibration']['parameters']['filters']['conditions']]}}
+json.dump(_cw51, open(os.path.join(HERE0, 'harness', 'cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+# ---------- F. the asserts ----------
+assert "'cost:ai:'" not in COST_SRC and "calKey = (kind, mode)" in COST_SRC, 'G23: the calibration key is not built in one place'
+assert ('cost_mode', 'string') in RUN_LEDGER_COLS and ('ai_usd', 'number') in RUN_LEDGER_COLS and ('measured_usd', 'number') in RUN_LEDGER_COLS \
+    and ('estimated_usd', 'number') in RUN_LEDGER_COLS and ('cost_basis', 'string') in RUN_LEDGER_COLS, \
+    'G23: seo_run_ledger cannot say which part of a cost was measured (add the columns in ladder_common.py, then sync_tables.py on the next deploy)'
+assert 'ai_visibility: 0.14' in COST_SRC and 'ai_visibility: 0.95' in COST_SRC, 'G23: ai_visibility still reserves the $0.06 that cost $0.79'
+assert 'dfs_est_usd: 0.034' in rd('code/Assess_Ledger_Row.js'), "G23: the Keyword Check still reserves less than a check has measured"
+assert 'cost_mode' in rd('code/Monitor_Ledger_Row.js') and 'cost_basis' in rd('code/Monitor_Ledger_Settle.js'), 'G23: a scheduled run settles without saying what was measured'
+assert os.path.exists(os.path.join(HERE0, 'reconcile_claude_cost.py')), 'G23: the monthly reconciliation script is missing'
+_rc51 = open(os.path.join(HERE0, 'reconcile_claude_cost.py'), encoding='utf-8').read()
+assert '--apply' in _rc51 and 'dry run' in _rc51.lower() and 'cost:factor:claude' in _rc51, 'G23: the reconciliation does not write the factors the guard reads'
+_cal51 = pos('Save Cost Calibration')
+sticky("""### What Claude costs, and where the estimates come from (G23, 2026-10-13)
+**The three Opus nodes stream** (`streaming: true`, required above ~21k tokens), and a streaming call reports **no token usage at all** — so the page run's Claude cost could only ever be stated as a range, and `settled_usd` stored the *reservation* while every reader took it for a measured cost. Each call is now priced from what the run really knows: the characters its prompt interpolated, the characters it answered with and the thinking budget of its effort level (`v5/code/_cost_cal.js`, the call table baked from the real model nodes). It travels as `run_ledger.ai_cost` with **`estimated: true`** and a basis in words, and **Run Ledger Settle** writes `ai_usd`, `dfs_usd`, `measured_usd`, `estimated_usd` and `cost_basis` — measured and estimated money are never added up as one figure.
+**The estimates now come from the money.** They were up to **13x** out (`ai_visibility` reserved $0.06 and cost $0.79; backlinks $0.04 for $0.37; the page $1.23 for $0.46), which is why the guard refused five runs that cost a fraction of the reservation. Both tables are recalibrated from the measured runs and **self-correcting**: **Cost Calibration Row → Save Cost Calibration** moves each mode's rolling figure in `seo_cache` (`cost:ai:<mode>` / `cost:dfs:<mode>`) toward what the run cost, and the guard reserves `max(rolling x 1.25, the recent maximum)` — it may fall as a mode gets cheaper, never below what the mode actually cost.
+**Once a month** the owner downloads the Anthropic Console usage export (CSV or JSON) and runs `reconcile_claude_cost.py` (dry run by default): it compares the month's ledger rows with the export per model, prints the correction factor and, with `--apply`, writes it to `cost:factor:claude`, which every price then goes through.""",
+    _cal51[0] - 120, _cal51[1] + 180, 1120, 280, 6)
+log("Claude's cost is a number and the estimates come from the money (2026-10-13, FIX_PLAN G23 + the re-rating's recalibration): every "
+    "Claude call of a run is priced from the characters its prompt interpolated, the characters it answered with and the thinking budget of "
+    "its effort level (v5/code/_cost_cal.js, the call table baked from the real model nodes - the three Opus nodes stream and report no token "
+    "usage at all), the figure rides on run_ledger.ai_cost labelled estimated with its basis, and Run Ledger Settle settles the row with "
+    "ai_usd / dfs_usd / measured_usd / estimated_usd / cost_basis so a measured amount is never added to an estimate; the per-mode tables "
+    "(up to 13x out: ai_visibility reserved $0.06 and cost $0.79, backlinks $0.04 for $0.37, the page $1.23 for $0.46) are recalibrated from "
+    "the measured runs of 2026-10-12 / 13 and self-correct on every settle (Load Cost Calibration -> Cost Calibration Row -> Save Cost "
+    "Calibration, seo_cache cost:ai:<mode> / cost:dfs:<mode>: the rolling figure with a quarter of headroom, never below what the mode "
+    "recently cost); and reconcile_claude_cost.py (dry run by default) reconciles a month of ledger rows against the owner's Anthropic "
+    "Console usage export and writes one correction factor per model into cost:factor:claude")
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())

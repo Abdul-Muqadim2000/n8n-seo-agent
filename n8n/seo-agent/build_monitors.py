@@ -113,7 +113,10 @@ class WF:
         # the update matches status = reserved, so a row settles once and a refused row stays refused (P1-1's rule in the main workflow)
         self.node('Settle Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
             [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
-            {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}'}), [x + 440, y + 160],
+            # G23 (2026-10-13): the settle also records which part of the money was measured and which estimated, in figures and in words
+            {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}', 'ai_usd': '={{ $json.ai_usd }}',
+             'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
+             'cost_basis': '={{ $json.cost_basis }}'}), [x + 440, y + 160],
             onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
         self.chain(plan, 'Ensure Run Ledger (' + tag + ')', row_node, 'Reserve Run Ledger (' + tag + ')')
         for e in ends: self.link(e, 'Ledger Settle (' + tag + ')')

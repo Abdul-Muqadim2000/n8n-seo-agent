@@ -10,7 +10,12 @@
   "domain",
   "heavy",
   "dfs_est_usd",
-  "dfs_usd"
+  "dfs_usd",
+  "cost_mode",
+  "ai_usd",
+  "measured_usd",
+  "estimated_usd",
+  "cost_basis"
  ],
  "AI_PAGES": [
   "site_id",
