@@ -931,9 +931,11 @@ Evidence and texts: `LIVE_CHECK_phase34_2026-10-12.md` (29 executions, ≈ $2.49
 
 ### 3.11 Defects found by the re-rating run (R, 2026-10-13)
 
-Evidence: `../system-review-2026-10-13/RESULTS.md` §3.2 (35 executions, $0.58 DataForSEO + $0.33 Claude). The run covered only
-16 of the protocol's 21 runs: **the engine's own daily AI budget guard refused `discover` and the ladder's page run** ($5.74 of $6),
-so content, discovery, full-report, AI-visibility and backlink evidence of its own is missing and 16 earlier items stayed unexercised.
+Evidence: `../system-review-2026-10-13/RESULTS.md` §3.2. The first pass (35 executions, $0.58 DataForSEO + $0.33 Claude) covered only
+16 of the protocol's 21 runs: **the engine's own daily AI budget guard refused `discover` and the ladder's page run** ($5.74 of $6) —
+R1 is that refusal's own damage. The five refused runs were then re-run on 2026-10-13 (**execs 517-529, $2.88**: discovery + its
+report, the ladder rung page, the full report, AI visibility, a full backlink check), which exercised the 16 items left open and
+found **R10-R16**.
 
 | ID | Title | Impact | Where | Fix | Status |
 |---|---|---|---|---|---|
@@ -947,7 +949,17 @@ so content, discovery, full-report, AI-visibility and backlink evidence of its o
 | R7 | The verdict and ladder still tell the owner to add FAQPage schema, which G2 removed from the pages we write | Low | `v5/prompts/verdict.txt` and the ladder feasibility prompt | ask for an FAQ *section*, not FAQPage schema | open |
 | R8 | Rung pages carry no word-count target (`target_words: 0`), so P2-7's clamp protects only the top page | Low | the ladder plan's rung rows | set a target per rung page from its own SERP word counts | open |
 
+| R10 | The audit turns Google's "no data" into a High finding: 45 of 47 pages reported "not mobile-friendly" with empty evidence, ranked #2 by impact, "new" in every diff, on a basis of 22,860 impressions the site never had (5,295 measured) | **High** | the G25 URL Inspection parser (*GSC Audit Findings* in `build_v4.py`, `v5/code/_page_watch.js`) | `VERDICT_UNSPECIFIED` or a missing `mobileUsabilityResult` reads "not checked" and raises nothing (Google retired the field); cap a finding's clicks / impressions basis at the property's measured totals | open |
+| R11 | The written page is delivered with 12 placeholders (11 × `[Price]`, 1 × `[Number]`) although Content QA failed it in both rounds; the owner is shown round 1's "6 items to review" and never told the gate failed | **High** | the QA loop and the delivery branch (*Content QA* / *Needs Revision?* / *Build Word File* in `build_v4.py`, `v5/code/Content_QA.js`) | a run that exhausts `qa_max_rounds` with `passed: false` reports the **last** round's counts, says the page did not pass and is not published-ready; the `[Price]` / `[Number]` mask leaves figures the draft itself declares illustrative | open |
+| R12 | Discovery prints "no page of yours answers this search" on 11 of 25 rows whose last column names the live page earning the impressions (one of them ranking #6.2) | Medium | `v5/code/_kw_inputs.js` (`gscSeeds`) | when the Search Console row names a URL on the site, use it as `answered_by` with its own label ("the page that gets the impressions does not target this search"); never print "no page answers this" for a query the site ranks for | open |
+| R13 | §4a intent lists and the keyword gap still recommend other companies' brands and off-topic searches ("google ai", "meta ai", "mh enterprises uae", "mofa attestation dubai"): only the navigational class is gated | Medium | *Analyze Keywords* in `build_v4.py` | run `_fit_gate.js` over every intent bucket and the gap list: refuse another company's brand whoever owns the SERP, and refuse a keyword beyond the same 25% topic-distance bar the outreach gate uses | open |
+| R14 | The AI market table credits the owner with 19,579 citing answers from a 4-character name match, beside its own "0 AI answers cite you" | Medium | the market-index builder (`v5/code/_ai_stats.js` / `AI_Metrics.js`) | the owner's own row comes from a domain match; a name-only row is dropped or labelled "not matched to your website" when the name is below the brand-token bar or its mentions are orders of magnitude above the measured sample | open |
+| R15 | A write-now ladder page ignores the ladder row's planned URL (slug `…-uae` vs the stored `target_url`) and ships `links_to_add_when_published: []` although the app sent two planned ladder links | Medium | *Parse Brief* / *Blog Package* in `build_v4.py` | for a run with a `ladder_id` keep the ladder row's slug (or write the new slug back to `seo_ladders.target_url` in the same run), and put every `planned` ladder link into `links_to_add_when_published` | open |
+| R16 | A pre-fix ladder rung that is a competitor's brand ("facts erp") is still planned and still printed in the Rank Tracker's reports | Low | a one-off cleanup of the stored ladder rows + the fit gate on the read path | clean the stored rungs as `fix_ladder_hosts.py` did for hosts, and run the fit gate where the cadence and the Rank Tracker read rungs, so a stored brand rung is dropped rather than written | open |
+
 **Also:** the guard's refusal text shown in the app is developer language ("Raise `ai_budget_usd` in Normalize Input"); `files/tech-audit-497.html` was captured as 0 bytes; the fix pack repeats the site's own LinkedIn `sameAs`.
+
+**Also from the completion runs:** the per-mode estimates are far from the money (`ai_visibility` reserved $0.06, cost $0.79; backlinks $0.04 for $0.37; the full report $0.25 for $0.41; the page $1.23 for $0.46) — R9 from the other side; the full report's own `dataforseo_usd` is $0.058 above the measured balance delta; the page's two word counters disagree; three Opus streaming nodes still report only `tokenUsageEstimate` (G23).
 
 ### 3.6 Cross-check: nothing from the inputs is lost
 
