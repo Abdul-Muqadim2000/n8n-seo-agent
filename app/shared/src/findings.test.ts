@@ -12,6 +12,7 @@ const f = (over: Partial<Finding>): Finding => ({
   status: 'open',
   impact: 0.6,
   impactBasis: '',
+  recheck: null,
   ...over,
 });
 

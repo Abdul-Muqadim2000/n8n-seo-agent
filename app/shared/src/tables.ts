@@ -202,6 +202,9 @@ export interface AuditRow extends DtRow {
 export interface AuditFindingRow extends DtRow {
   site_id: string; domain: string; audit_id: string; audited_at: string; finding_key: string; category: string; severity: string;
   title: string; affected_count: number;
+  /** G11 (2026-10-13, FIX_PLAN): "I fixed this" sets recheck_state to `requested`; the next daily key-page watch answers it
+   * (`fixed` / `still_open` / `not_checked`) with the rule it used and one sentence of evidence. Rows written before this have none. */
+  recheck_state?: string; recheck_requested_at?: string; recheck_at?: string; recheck_rule?: string; recheck_note?: string;
   /** G26 (2026-10-12, FIX_PLAN): the impact weight the audit ordered its fix list by (severity x pages affected x the Search Console
    * clicks and impressions of those pages x their place in the site) and the one line that explains it. Rows written before this
    * change have neither, so every reader falls back to the severity order. */
@@ -240,6 +243,18 @@ export type LadderSettingsColumn = (typeof LADDER_SETTINGS_COLUMNS)[number]['nam
 /** the settings row that holds the website's defaults */
 export const LADDER_SITE_ROW = '_site';
 
+/** G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch (`SEO Agent — Page Watch`, every morning) and the weekly URL Inspection
+ * rotation write one row per site and key page. `state`: ok | changed | not_checked; `changes`: the change codes of the last reading;
+ * `indexed`: 'yes' | 'no' | '' (empty = Google was not asked, or the answer failed — never "fine"); `mobile`: 'pass' | 'fail' | ''. */
+export interface PageWatchRow extends DtRow {
+  site_id: string; domain: string; url: string; kind: string; weight: number; checked_at: string;
+  status: number; location: string; noindex: boolean; noindex_source: string; canonical: string; canonical_ok: boolean;
+  title: string; title_hash: string; titles: number; description: string; h1: string; h1s: number;
+  robots_blocked: boolean; robots_hash: string; state: string; changes: string; last_change_at: string; changed_count: number; error: string;
+  inspect_at: string; index_state: string; indexed: string; coverage: string; google_canonical: string; last_crawl: string;
+  mobile: string; rich_results: string; inspect_error: string;
+}
+
 export const TABLES = {
   ladders: 'seo_ladders',
   rankHistory: 'seo_rank_history',
@@ -269,6 +284,8 @@ export const TABLES = {
   linkGraph: 'seo_link_graph',
   audits: 'seo_audits',
   auditFindings: 'seo_audit_findings',
+  /** G11 + G25 (2026-10-13): one row per site and key page — the daily raw watch and what Search Console's URL Inspection said about it */
+  pageWatch: 'seo_page_watch',
   ladderSettings: 'seo_ladder_settings',
   /** v4.13 Link Builder */
   linkOutreach: 'seo_link_outreach',

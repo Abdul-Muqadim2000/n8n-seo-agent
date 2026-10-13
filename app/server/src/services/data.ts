@@ -24,6 +24,7 @@ import {
   type AiVisibilityRow,
   type AlertsData,
   type AuditFindingRow,
+  type PageWatchRow,
   type AuditPoint,
   type AuditRow,
   type BacklinkLink,
@@ -76,6 +77,7 @@ import {
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { siteRows } from '../n8n/client';
+import { indexCoverage, recheckOf, watchView } from './pageWatch';
 import { callbackUrl, latestReport, reportsList } from './runs';
 
 // Dashboards: the n8n Data Tables of one domain (filtered server-side by `domain`), shaped for the client. JSON columns are parsed
@@ -590,9 +592,12 @@ const impactOf = (f: AuditFindingRow): number | null => {
 
 export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string): Promise<TechnicalData> {
   const d = site.domain;
-  const [audits, reports] = await Promise.all([
+  // G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch and what Search Console says about those pages live in seo_page_watch,
+  // written by the engine (`SEO Agent — Page Watch` every morning, the weekly URL Inspection rotation). The app only reads them.
+  const [audits, reports, watchRows] = await Promise.all([
     siteRows<AuditRow>('audits', d, { sortBy: 'audited_at:asc', max: 500 }),
     reportsList(org.id, { siteId: site.id, stages: ['site_audit', 'full_report'], limit: 12 }),
+    siteRows<PageWatchRow>('pageWatch', d, { max: 200 }),
   ]);
   const points = audits.map(toAudit);
   const idx = auditId ? points.findIndex((a) => a.auditId === auditId) : points.length - 1;
@@ -615,10 +620,11 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
       status: (previous ? (prevBy.has(f.finding_key) ? 'open' : 'new') : 'open') as Finding['status'],
       impact: impactOf(f),
       impactBasis: s(f.impact_basis),
+      recheck: recheckOf(f),
     })),
     ...prev
       .filter((f) => !curKeys.has(f.finding_key))
-      .map((f) => ({ key: s(f.finding_key), category: s(f.category), severity: s(f.severity), title: s(f.title), affectedCount: 0, previousCount: n(f.affected_count), status: 'fixed' as const, impact: impactOf(f), impactBasis: s(f.impact_basis) })),
+      .map((f) => ({ key: s(f.finding_key), category: s(f.category), severity: s(f.severity), title: s(f.title), affectedCount: 0, previousCount: n(f.affected_count), status: 'fixed' as const, impact: impactOf(f), impactBasis: s(f.impact_basis), recheck: recheckOf(f) })),
   ];
   const sevRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
   // G26 (2026-10-12, FIX_PLAN): the audit ranked its findings by likely impact (severity x pages affected x the clicks and impressions
@@ -643,6 +649,8 @@ export async function technicalData(org: OrgRow, site: SiteRow, auditId?: string
     findings,
     byCategory: [...cats.values()].sort((a, c) => c.critical * 100 + c.high * 10 + c.medium - (a.critical * 100 + a.high * 10 + a.medium)),
     reports,
+    watch: watchView(watchRows),
+    indexCoverage: indexCoverage(watchRows),
   };
 }
 

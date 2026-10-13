@@ -329,6 +329,9 @@ export const features: Feature[] = [
       'Crawls of 200, 500 or 1,000 pages, with JavaScript rendering',
       'Search Console index coverage, submitted sitemaps and site structure',
       'Core Web Vitals from real Chrome visitors, per template, on phone and desktop',
+      'A daily check of your key pages: you hear the same day when one disappears, is set to noindex, starts redirecting or changes its canonical, title or robots.txt',
+      'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
+      'Google’s own view of every key page — indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
       'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
       'The smallest items folded into one “minor items” line, so the list you read is the list to act on',
       'A brand and entity check',
@@ -341,11 +344,12 @@ export const features: Feature[] = [
       { title: 'Combine', body: 'Crawl findings meet Search Console coverage, sitemaps, the speed your real visitors measured and entity data.' },
       { title: 'Prioritise', body: 'Issues are ranked by the traffic they put at risk — index blockers first, cosmetics never — and each one says why it ranks there.' },
       { title: 'Fix', body: 'Download the fix pack and hand it to your developers.' },
+      { title: 'Watch', body: 'Your key pages are checked every morning, and marking a fix done has it re-checked within a day.' },
     ],
     facts: [
       { value: 1000, label: 'pages per crawl, JavaScript included' },
       { value: 5, label: 'files in every fix pack' },
-      { value: 3, label: 'crawl depths: 200, 500 and 1,000' },
+      { value: 1, label: 'check of your key pages every day' },
     ],
     faqs: [
       {
@@ -358,6 +362,18 @@ export const features: Feature[] = [
       {
         q: 'Where do the speed figures come from?',
         a: 'From the Chrome User Experience Report: what real Chrome visitors measured over the last 28 days, at the 75th percentile, for your home page, a service page and a blog post on phone and desktop. A page with too few visits to report on its own shows the whole-site figures, marked as such. Speed carries a deliberately low weight in the health score.',
+      },
+      {
+        q: 'What does the daily check of my key pages look at?',
+        a: 'Every morning Ascentra fetches your most important pages — the home page, the pages in your menu, the pages Search Console brings impressions for and the pages your keyword ladders own — and compares the HTTP status, a redirect that appeared, the noindex tag, the canonical and the title with yesterday’s reading, plus your robots.txt. A change that matters becomes an alert the same day; an unchanged page says nothing. A page it could not read is reported as not checked, never as fine.',
+      },
+      {
+        q: 'I fixed something. Do I have to wait for the next audit?',
+        a: 'No. Mark it fixed in the dashboard and the next daily check judges that exact issue on your key pages, usually within a day, and shows you the result. Issues that need the full crawl, Search Console or speed data say so instead of guessing, and those wait for the next audit.',
+      },
+      {
+        q: 'How do you know whether Google has indexed a page?',
+        a: 'Ascentra asks Search Console’s URL Inspection about your key pages: whether the page is in the index and why not, which canonical Google chose against the one your page names, when Google last crawled it, mobile usability and the rich results it detected. Google allows 2,000 of these a day per property, so the pages rotate with the oldest inspection first — and whatever a run did not reach is shown as not checked rather than assumed fine.',
       },
       {
         q: 'How is the fix list ordered?',

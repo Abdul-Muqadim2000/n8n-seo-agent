@@ -3557,6 +3557,150 @@ sticky("""### Original words, real images, a coverage target (G5 / G30 / G33, 20
 **Coverage (G33).** The target is the **best** competitor's term coverage (clamped 60-90%), with its subtopics and depth: stated in the brief, scored in the quality check, reported with its basis.""",
     _bpp[0] + 150, _bpp[1] + 330, 940, 250, 4)
 log('Original words, produced images and a coverage target from the best competitor (2026-10-13, FIX_PLAN G5 / G30 / G33): the new Originality Check node measures 8-word shingle overlap between the finished draft and every competitor page and own page the run read (v5/code/_shingle.js), fails the quality check over CONFIG.originality_max_overlap_pct (15) against any single page with the passage quoted and the source named, exempts the page the run is improving and reports the rest of the inventory as duplicate targets by title; Image Cards / Render Images / Attach Images produce the hero and the two in-body images as WebP cards from the page\'s own content through the local Gotenberg screenshot route (free, no API, no licence), attach them under the planned file names with the planned alt text and dimensions, list them in meta.json and in the callback and rewrite the publish checklist, while a failed render leaves the plan in place; and the coverage target is now the best competitor page\'s term coverage (v5/code/_coverage.js, clamped 60-90%) with its subtopics and depth, written into the brief by Parse Brief, scored by Content QA\'s 25 coverage points and reported with its basis in the report, meta.json and the app')
+# 45. GOOGLE'S OWN VIEW OF EVERY KEY PAGE, AND A FIX THAT IS CHECKED IN DAYS (2026-10-13, system review FIX_PLAN.md G25 / G11)
+#     G25 The audit asked Search Console's URL Inspection about 25 crawled pages and the weekly Site Tracker about 20 ladder pages, so most
+#         of a site was never seen through Google's eyes and the reports said "sampled pages" without ever saying what the sample left out.
+#         Google's quota is **2,000 inspections a day and 600 a minute per property** (developers.google.com/webmaster-tools/limits), which is
+#         far more than these sites have pages. The audit now asks about up to PW.PER_AUDIT (100) of its indexable pages, the weekly run
+#         rotates through every key page oldest-inspection-first within PW.PER_RUN (150) and stores each answer on the page's own
+#         seo_page_watch row, and both report **per page**: index state, the canonical Google chose against the one the page names, the last
+#         crawl, mobile usability and the rich results detected. What the budget did not reach, what failed and what access is missing is
+#         printed as **"not checked"** with the reason - never as "fine" and never as "not indexed" (v5/code/_page_watch.js).
+#     G11 The audit was the only thing that ever verified a fix, so a page that went noindex on the 3rd stayed broken until the 1st of the
+#         next month. The new daily workflow **SEO Agent - Page Watch** (build_site_tracker.py) fetches each site's key pages raw every
+#         morning and alerts the same day; marking a finding fixed in the app re-checks that finding on those pages within a day. Both
+#         audit reports say so where the fix list starts, so nobody waits for the next audit to learn whether it worked.
+# =============================================================================
+import url_lint as _ul45
+PAGE_WATCH_SRC = rd('code/_page_watch.js').rstrip('\n')
+
+# ---- A. the audit asks about every important page it can, inside the quota, oldest first ----
+setcode('GSC Audit Plan', PAGE_WATCH_SRC + '\n' + code('GSC Audit Plan'))
+patch('GSC Audit Plan', """const sample = [...indexable].sort((a, b) => (isHome(b.url) - isHome(a.url)) || ((a.depth ?? 9) - (b.depth ?? 9)) || (b.inbound - a.inbound)).filter(p => { const k = key(inspectUrl(p)); if (seenInspect.has(k)) return false; seenInspect.add(k); return true; }).slice(0, 25);""",
+      """// G25 (2026-10-13, FIX_PLAN): every indexable page is a candidate, ordered home page first, then click depth, then inbound links, and
+// the run asks about as many as its share of Google's quota allows (2,000 URL inspections a day and 600 a minute per property). What the
+// budget does not reach is carried as `inspect_budget.skipped` and printed as "not checked", never left silently out of a "sample".
+const ranked = [...indexable].sort((a, b) => (isHome(b.url) - isHome(a.url)) || ((a.depth ?? 9) - (b.depth ?? 9)) || (b.inbound - a.inbound)).filter(p => { const k = key(inspectUrl(p)); if (seenInspect.has(k)) return false; seenInspect.add(k); return true; });
+const inspectPlan = PW.inspectBudget(ranked.map((p, i) => ({ url: inspectUrl(p), weight: ranked.length - i })), PW.PER_AUDIT);
+const sample = inspectPlan.take.map(p => p.url);
+const inspect_budget = { note: inspectPlan.note, cap: inspectPlan.limit, quota: inspectPlan.quota, candidates: ranked.length, asked: sample.length,
+  skipped: inspectPlan.skipped.slice(0, 25).map(p => p.url), skipped_total: inspectPlan.skipped.length };""")
+patch('GSC Audit Plan', "pages: pages.map(p => ({ url: p.url, status: p.status, depth: p.depth, inbound: p.inbound, orphan: p.orphan, indexable: indexable.includes(p) })), sample: sample.map(inspectUrl),",
+      "pages: pages.map(p => ({ url: p.url, status: p.status, depth: p.depth, inbound: p.inbound, orphan: p.orphan, indexable: indexable.includes(p) })), sample, inspect_budget,")
+
+# a fresh audit's finding rows carry the re-check columns empty: the state belongs to the audit that is current, and the row keeps
+# exactly the columns ladder_common.py defines (the Data Table node auto-maps every field it is given)
+_fr45 = code('Finding Rows')
+_FR_OLD = "affected_count: Number(f.affected_count) || 0, impact: Number(f.impact) || 0, impact_basis: String(f.impact_basis || '').slice(0, 400) }));"
+assert _fr45.count(_FR_OLD) == 1, 'Finding Rows: the row shape moved'
+_FR_NEW = ("affected_count: Number(f.affected_count) || 0, impact: Number(f.impact) || 0, impact_basis: String(f.impact_basis || '').slice(0, 400),\n"
+           "  recheck_state: '', recheck_requested_at: '', recheck_at: '', recheck_rule: '', recheck_note: '' }));   // G11: filled when the owner marks it fixed and the daily watch answers")
+setcode('Finding Rows', _fr45.replace(_FR_OLD, _FR_NEW))
+
+# ---- B. what Google said per page, with mobile usability and what was not checked ----
+setcode('GSC Audit Findings', PAGE_WATCH_SRC + '\n' + code('GSC Audit Findings'))
+patch('GSC Audit Findings', """  const insp = (byKind.inspect || []).map(x => { const r = x.r || {}; const ir = (r.inspectionResult || {}).indexStatusResult || null; const rr = (r.inspectionResult || {}).richResultsResult || null;
+    return { url: x.q.inspect_url, error: r.error ? gErr(r) : (ir ? null : 'no result'), verdict: ir ? ir.verdict || '' : '', coverage: ir ? ir.coverageState || '' : '', indexed: ir ? ir.verdict === 'PASS' : null, robots: ir ? ir.robotsTxtState || '' : '', last_crawl: ir ? ir.lastCrawlTime || '' : '', google_canonical: ir ? ir.googleCanonical || '' : '', user_canonical: ir ? ir.userCanonical || '' : '', rich: rr && rr.detectedItems ? rr.detectedItems.map(d => d.richResultType).filter(Boolean) : [] }; });""",
+      """  // G25 (2026-10-13): one reading per inspected page — index state, the canonical Google chose, the last crawl, mobile usability and the
+  // rich results — through the shared kit, which also classifies a permission error or an exhausted quota as "not checked" (never "not indexed").
+  const insp = (byKind.inspect || []).map(x => { const o = PW.inspection(x.r || {});
+    return { url: x.q.inspect_url, error: o.ok ? null : o.error, not_checked: o.not_checked || '', error_kind: o.error_kind || '', verdict: o.verdict, coverage: o.coverage,
+      indexed: o.ok ? o.indexed : null, robots: o.robots, last_crawl: o.last_crawl, google_canonical: o.google_canonical, user_canonical: o.user_canonical,
+      mobile_usable: o.mobile_usable, mobile_issues: o.mobile_issues, rich_verdict: o.rich_verdict, rich: o.rich_results }; });""")
+patch('GSC Audit Findings', """    const rich = [...new Set(ok.flatMap(i => i.rich))]; search_console.rich_results = rich; if (rich.length) works.push('Google detects rich results on sampled pages: ' + rich.join(', '));
+    const errCount = insp.length - ok.length; if (errCount) search_console.inspection_errors = errCount;""",
+      """    const rich = [...new Set(ok.flatMap(i => i.rich))]; search_console.rich_results = rich; if (rich.length) works.push('Google detects rich results on sampled pages: ' + rich.join(', '));
+    const errCount = insp.length - ok.length; if (errCount) search_console.inspection_errors = errCount;
+    // G25: mobile-first indexing has been complete since 2024-07-05, so a page Google calls not mobile-usable is a real ranking problem
+    const mobBad = ok.filter(i => i.mobile_usable === false);
+    if (mobBad.length) F('High', 'Pages Google reports as not mobile-friendly', 'Google indexes the mobile version of every page: what its phone crawler cannot use properly cannot rank well.', 'Fix the issues Search Console lists for these URLs (viewport, text size, tap targets, content wider than the screen), then re-inspect them.', mobBad.slice(0, 3).map(i => path(i.url) + ': ' + (i.mobile_issues || []).slice(0, 2).join('; ')).join(' | ').slice(0, 300), mobBad.map(i => i.url), mobBad.length, Math.round(mobBad.length / ok.length * 100));
+    else if (ok.some(i => i.mobile_usable === true)) works.push('Google reports every inspected page as mobile-friendly');""")
+patch('GSC Audit Findings', """  search_console.inspections = insp;""",
+      """  search_console.inspections = insp;
+  // G25: the index picture, with the pages the quota did not reach counted apart and named (PW.coverage never says "fine" about a page nobody asked about)
+  const _ib = plan.inspect_budget || null;
+  search_console.index_coverage = { ...PW.coverage(insp.map(i => ({ ok: !i.error, error: i.error || '', indexed: i.indexed, verdict: i.verdict, coverage: i.coverage,
+      canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich, not_checked: i.not_checked || '' })),
+      { not_checked: _ib ? _ib.skipped_total : 0, not_checked_reason: _ib && _ib.skipped_total ? 'the audit\\'s share of Google\\'s daily quota was used up; the weekly run inspects them, oldest first' : '', quota_note: _ib ? _ib.note : '' }),
+    candidates: _ib ? _ib.candidates : insp.length, cap: _ib ? _ib.cap : null,
+    pages: insp.filter(i => !i.error).slice(0, 100).map(i => ({ url: i.url, indexed: i.indexed, verdict: i.verdict, coverage: i.coverage, last_crawl: i.last_crawl,
+      google_canonical: i.google_canonical, canonical_ok: (!i.google_canonical || !i.user_canonical) ? null : same(i.google_canonical, i.user_canonical), mobile_usable: i.mobile_usable, rich_results: i.rich })),
+    not_checked_pages: [...insp.filter(i => i.error).map(i => ({ url: i.url, reason: i.not_checked || i.error })), ...((_ib && _ib.skipped) || []).map(u => ({ url: u, reason: 'not checked in this audit: the pages rotate through Google\\'s daily quota, oldest first' }))].slice(0, 25) };""")
+
+# ---- C. both audit reports: the page-level index view, and the sentence about verification ----
+IDX_SECTION_JS = r"""// ---- what Google says about each key page (G25, 2026-10-13) ----
+const indexSection = (sc) => {
+  const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const p3 = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
+  const ic = sc.index_coverage || null;
+  if (!ic) return '';
+  let h = `<h3>Google's index view of the key pages (URL Inspection)</h3><p>${e3(ic.text)}.</p>`;
+  if ((ic.pages || []).length) {
+    h += `<table class="ct"><tr><th>Page</th><th>In Google</th><th>State</th><th>Google's canonical</th><th>Last crawl</th><th>Mobile</th><th>Rich results</th></tr>`
+      + ic.pages.slice(0, 25).map(p => `<tr><td>${e3(p3(p.url))}</td><td>${p.indexed === true ? '<span class="ok">yes</span>' : p.indexed === false ? '<span class="bad">no</span>' : '—'}</td><td>${e3(p.coverage || p.verdict || '—')}</td>`
+        + `<td>${p.canonical_ok === false ? '<span class="bad">' + e3(p3(p.google_canonical)) + '</span>' : p.canonical_ok === true ? 'same as ours' : '—'}</td>`
+        + `<td>${e3(String(p.last_crawl || '').slice(0, 10) || '—')}</td><td>${p.mobile_usable === true ? 'ok' : p.mobile_usable === false ? '<span class="bad">issues</span>' : '—'}</td>`
+        + `<td>${e3((p.rich_results || []).join(', ') || '—')}</td></tr>`).join('') + `</table>`;
+    if (ic.pages.length > 25) h += `<p class="small">${ic.pages.length - 25} more inspected pages are in the data behind this report.</p>`;
+  }
+  if ((ic.not_checked_pages || []).length) h += `<p class="small"><b>Not checked (${ic.not_checked}):</b> ` + ic.not_checked_pages.slice(0, 8).map(x => e3(p3(x.url))).join(', ')
+    + (ic.not_checked_pages.length > 8 ? ' …' : '') + ` — ${e3(ic.not_checked_reason || ic.not_checked_pages[0].reason)}. Nothing is claimed about these pages.</p>`;
+  if (ic.quota_note) h += `<p class="small">${e3(ic.quota_note)}</p>`;
+  return h;
+};
+// ---- how a fix is verified (G11, 2026-10-13) ----
+const fixWatchNote = () => `<p class="small"><b>After you fix something:</b> mark it done in the dashboard and the daily key-page watch re-checks that exact item on your key pages within a day (status, noindex, canonical, title, robots.txt) and shows the result — it does not wait for the next monthly audit.</p>`;
+"""
+_IDX_OLD = """    const covRows = Object.entries(sc.coverage || {});
+    if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} sampled pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;"""
+_IDX_NEW = """    const covRows = Object.entries(sc.coverage || {});
+    if (covRows.length) h += `<p>Index coverage of ${n2((sc.inspections || []).length)} inspected pages: ` + covRows.map(([k, v]) => `${n2(v)} × ${e2(k)}`).join(', ') + ((sc.rich_results || []).length ? `. Rich results detected: ${e2(sc.rich_results.join(', '))}` : '') + `.</p>`;
+    h += indexSection(sc);   // G25: page by page — in Google's index, the canonical it chose, its last crawl, mobile usability, rich results"""
+for _rn45 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn45, "const findings = a.findings || [];", IDX_SECTION_JS + "const findings = a.findings || [];")
+    patch(_rn45, _IDX_OLD, _IDX_NEW)
+    patch(_rn45, "'<h3>Fix These First</h3>' + prioNote(a) + '<ol>'", "'<h3>Fix These First</h3>' + prioNote(a) + fixWatchNote() + '<ol>'")
+# the app's technical page reads the same picture from the callback
+patch('Build Audit Response', "coverage: d.search_console.coverage, not_indexed: d.search_console.not_indexed,",
+      "coverage: d.search_console.coverage, index_coverage: d.search_console.index_coverage || null, not_indexed: d.search_console.not_indexed,")
+
+# harness shim (S53): the kit as a runnable script — one item in, one answer out
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_page_watch.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 45): the page-watch kit - { res?, robots_res?, prev?, now?, finding?, pages?, pages_budget?, cap?, inspection? }\n"
+    "// -> the signals of one fetch, the robots.txt reading, the changes against the stored row, a finding re-check, the inspection budget and one inspection answer\n"
+    + PAGE_WATCH_SRC +
+    "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  const rb = j.robots_res === undefined ? null : PW.robotsRead(j.robots_res);\n"
+    "  const sig = j.res === undefined ? null : PW.signals(j.res);\n"
+    "  const now = j.now === undefined ? sig : j.now;\n"
+    "  return { json: { signals: sig, robots: rb ? { ok: rb.ok, status: rb.status, hash: rb.hash, length: rb.length, error: rb.error, rules: rb.rules,\n"
+    "      blocks: (j.block_urls || []).map(u => ({ url: u, blocked: rb.blocks ? rb.blocks(u) : null })) } : null,\n"
+    "    robots_change: j.prev_hash === undefined ? null : PW.robotsChange(j.prev_hash, rb || j.robots || null),\n"
+    "    changes: now === null ? [] : PW.compare(j.prev === undefined ? null : j.prev, now, { url: j.url, robots_blocked: j.robots_blocked, robots_blocked_before: j.robots_blocked_before }),\n"
+    "    state: now === null ? '' : PW.state(PW.compare(j.prev === undefined ? null : j.prev, now, { url: j.url, robots_blocked: j.robots_blocked, robots_blocked_before: j.robots_blocked_before }), now),\n"
+    "    recheck: j.finding === undefined ? null : PW.recheck(j.finding, j.pages || []),\n"
+    "    rule: j.finding === undefined ? null : (PW.recheckRule(j.finding) || {}).rule || '',\n"
+    "    budget: j.pages_budget === undefined ? null : (() => { const b = PW.inspectBudget(j.pages_budget, j.cap, { used: j.used }); return { take: b.take.map(p => p.url), skipped: b.skipped.map(p => p.url), limit: b.limit, quota: b.quota, note: b.note }; })(),\n"
+    "    inspection: j.inspection === undefined ? null : PW.inspection(j.inspection),\n"
+    "    coverage: j.inspections === undefined ? null : PW.coverage(j.inspections, j.coverage_opts || {}),\n"
+    "    hash: j.hash_text === undefined ? '' : PW.hash(j.hash_text), limits: { quota: PW.QUOTA_PER_DAY, per_minute: PW.QUOTA_PER_MINUTE, per_run: PW.PER_RUN, per_audit: PW.PER_AUDIT } } }; });\n")
+
+# ---- D. the asserts and the notes ----
+for _n45 in ('GSC Audit Plan', 'GSC Audit Findings'):
+    assert 'const PW = (() => {' in code(_n45), _n45 + ': the page-watch kit is not inlined'
+assert 'PW.inspectBudget(' in code('GSC Audit Plan'), 'G25: the audit does not budget its inspections'
+assert 'index_coverage' in code('GSC Audit Findings') and 'mobile_usable' in code('GSC Audit Findings'), 'G25: the audit does not report Google\'s view per page'
+for _n45 in ('Build Audit Report', 'Build Full Report'):
+    assert 'indexSection(sc)' in code(_n45) and 'fixWatchNote()' in code(_n45), _n45 + ': the index view or the verification note is missing'
+_ul45.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+_gp45 = pos('GSC Audit Plan')
+sticky("""### Google's own view of every key page, and a fix checked in days (G25 / G11, 2026-10-13)
+**URL Inspection within the quota:** Google allows **2,000 inspections a day and 600 a minute per property**. The audit asks about up to **100** of its indexable pages (home page first, then click depth, then inbound links) and the weekly Site Tracker rotates through **every** key page, **oldest inspection first**, up to 150 a run — each answer stored on the page's row in `seo_page_watch`, which is what makes the rotation possible. Both reports print, per page: in Google's index or not, the state, **the canonical Google chose** against ours, the last crawl, **mobile usability** and the rich results. Whatever the budget did not reach, whatever failed and missing access are printed as **"not checked"** with the reason — never as "fine", never as "not indexed" (`v5/code/_page_watch.js`).
+**Checked in days, not months:** the daily **SEO Agent — Page Watch** (05:45, free: one GET per key page + robots.txt) alerts on a page gone, a `noindex`, a moved canonical, a changed title or a changed robots.txt the same day, and re-checks any finding the owner marks as fixed on those pages within a day. Both audit reports say so where the fix list starts.""",
+    _gp45[0] - 40, _gp45[1] - 420, 1180, 320, 5)
+log('Google\'s own view of every key page, inside the quota (2026-10-13, FIX_PLAN G25): the audit inspects up to 100 of its indexable pages and the weekly Site Tracker rotates through every key page oldest-inspection-first (up to 150 a run, stored per page in seo_page_watch) inside Google\'s 2,000-a-day / 600-a-minute URL Inspection quota; both reports print per page whether it is in Google\'s index, the canonical Google chose against ours, the last crawl, mobile usability (a new High finding when Google reports issues) and the rich results, and everything the budget, a failure or missing access left out is printed as "not checked" with its reason instead of being hidden inside the word "sample"')
+log('A daily key-page watch and a fix re-checked in days (2026-10-13, FIX_PLAN G11): the new workflow SEO Agent — Page Watch (build_site_tracker.py, every morning 05:45, free — one plain GET per key page plus robots.txt, max 25 pages a site) compares status, a redirect that appeared, noindex, the canonical, the title and the robots.txt fingerprint (seo_cache `watch:<site_id>`) with the stored reading and alerts the same day in seo_console_alerts plus, for the serious ones, seo_ops_alerts and the alert webhook (D25b\'s path, deduped); a failed fetch is "not checked" and never overwrites the stored reading; "I fixed this" in the app marks the finding (seo_audit_findings.recheck_state) and the next watch answers that one finding on those pages — fixed, still open, or not checkable without the full audit — and both audit reports say so where the fix list starts')
 
 # =============================================================================
 # 9. WRITE

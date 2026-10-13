@@ -6588,6 +6588,318 @@ await guard('originality, produced images, coverage target', async () => {
     JSON.stringify({ cards: noArticle.map(c => c.json), out: Object.keys(through.binary) }));
 });
 
+// ===================================================================================
+await guard('page watch + url inspection', async () => {
+  const SN = 'S53 G11 G25 — a daily key-page watch that alerts the same day (gone, noindex, moved canonical, changed title, changed robots.txt), a finding re-checked within a day of "I fixed this", and URL Inspection rotating through every key page inside Google\'s 2,000-a-day quota';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T = require('./fixtures_tracking'), TC = require('./table_cols.json'), WIRE = require('./page_watch_wiring.json');
+  const D = T.D, SITE = 'site_northwind-erp-com', W = 'https://www.' + D, EMPTY = [{ json: {} }];
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const HOME = W + '/', PRICING = W + '/erp-pricing/', GUIDE = W + '/blog/e-invoicing-uae-fta', ABOUT = W + '/about/', CASE = W + '/case-studies/ifrs-17-case-study/';
+  const ROBOTS = W + '/robots.txt';
+
+  // ---- 0. the wiring the builder generated (the workflow JSON is not copied into the container) ----
+  check('G11: the watch is its own daily workflow at 05:45, with a fetch that does NOT follow redirects (a key page that starts redirecting is the change) and the retry rule',
+    WIRE.workflow === 'SEOagentPageWch1' && WIRE.schedule.every === 'day' && WIRE.schedule.hour === 5 && WIRE.fetch.follows_redirects === false && WIRE.fetch.response_format === 'text' && WIRE.fetch.retries === 3,
+    JSON.stringify({ schedule: WIRE.schedule, fetch: WIRE.fetch }));
+  check('G11: the alert path is D25b\'s — recorded in seo_console_alerts and seo_ops_alerts first, then the webhook, and the record nodes come before the sending ones',
+    eq(WIRE.connections['Watch Alerts'], [['Any Watch Alerts?']]) && eq(WIRE.connections['Any Watch Alerts?'], [['Save Watch Alerts'], ['Watch Ops Alert']])
+    && eq(WIRE.connections['Save Watch Ops Alert'], [['Watch Ops Channels']]) && eq(WIRE.connections['Send Watch Webhook?'], [['Post Watch Alert'], ['Watched']])
+    && WIRE.nodes.includes('Save Finding Recheck') && !WIRE.nodes.some(n => /email/i.test(n)),
+    JSON.stringify(WIRE.connections['Any Watch Alerts?']));
+
+  // ---- 1. the kit: what one raw fetch says, and what robots.txt allows ----
+  const pw = async (j) => (await run('_page_watch', [{ json: j }]))[0].json;
+  const page = (o) => ({ statusCode: o.status === undefined ? 200 : o.status, headers: { 'content-type': 'text/html', ...(o.headers || {}) },
+    data: '<html><head>' + (o.title === undefined ? '<title>ERP pricing in the UAE | Northwind</title>' : (o.title ? '<title>' + o.title + '</title>' : ''))
+      + (o.canonical === undefined ? '<link rel="canonical" href="' + PRICING + '"/>' : (o.canonical ? '<link rel="canonical" href="' + o.canonical + '"/>' : ''))
+      + (o.robots ? '<meta name="robots" content="' + o.robots + '">' : '') + (o.desc === undefined ? '<meta name="description" content="What an ERP costs in the UAE, with real implementation ranges and the licence fees of every tier.">' : (o.desc ? '<meta name="description" content="' + o.desc + '">' : ''))
+      + '</head><body>' + (o.h1 === undefined ? '<h1>ERP pricing in the UAE</h1>' : o.h1) + '<p>text</p></body></html>' });
+  const s1 = (await pw({ res: page({}) })).signals;
+  check('the raw reading gives status, title, canonical, description and the H1 of one fetch, with no JavaScript and no paid call',
+    s1.ok && s1.status === 200 && s1.title === 'ERP pricing in the UAE | Northwind' && s1.canonical === PRICING && s1.titles === 1 && s1.h1s === 1 && /real implementation ranges/.test(s1.description), JSON.stringify(s1));
+  const sN = (await pw({ res: page({ robots: 'noindex, follow' }) })).signals;
+  const sH = (await pw({ res: page({ headers: { 'x-robots-tag': 'noindex' } }) })).signals;
+  check('`noindex` is read from the meta robots tag AND from the X-Robots-Tag header (the header-only case is invisible to a crawler that only parses HTML)',
+    sN.noindex && /meta robots/.test(sN.noindex_source) && sH.noindex && /X-Robots-Tag/.test(sH.noindex_source), JSON.stringify([sN.noindex_source, sH.noindex_source]));
+  const s3 = (await pw({ res: { statusCode: 301, headers: { location: W + '/pricing/' }, data: '' } })).signals;
+  check('a redirect is read as a redirect with its target, because the fetch does not follow it', s3.status === 301 && s3.location === W + '/pricing/', JSON.stringify(s3));
+  const sErr = (await pw({ res: { error: { message: 'ETIMEDOUT' } } })).signals;
+  check('a failed fetch is `ok: false` with its reason — never an empty page with no title', sErr.ok === false && /ETIMEDOUT/.test(sErr.error), JSON.stringify(sErr));
+  const RB_TEXT = 'User-agent: *\nDisallow: /wp-admin/\nDisallow: /search\nAllow: /wp-admin/admin-ajax.php\n\nUser-agent: Googlebot\nDisallow: /erp-pricing/\n\nSitemap: ' + W + '/sitemap.xml\n';
+  const rb = await pw({ robots_res: { statusCode: 200, data: RB_TEXT }, block_urls: [PRICING, HOME, W + '/wp-admin/'] });
+  check('robots.txt is parsed with Googlebot\'s own group winning over `*`: /erp-pricing/ is blocked for Google, the home page is not, and the `*` rules do not apply once Googlebot has a group',
+    eq(rb.robots.blocks.map(b => b.blocked), [true, false, false]) && rb.robots.hash.length === 8, JSON.stringify(rb.robots.blocks));
+  const rbSame = await pw({ robots_res: { statusCode: 200, data: RB_TEXT.replace('Disallow: /search', '# a comment\nDisallow: /search') }, prev_hash: rb.robots.hash });
+  check('the fingerprint ignores comments and blank lines, so re-formatting robots.txt raises no alert', rbSame.robots.hash === rb.robots.hash && rbSame.robots_change === null, JSON.stringify([rb.robots.hash, rbSame.robots.hash]));
+  const rbChanged = await pw({ robots_res: { statusCode: 200, data: RB_TEXT + 'User-agent: *\nDisallow: /\n' }, prev_hash: rb.robots.hash });
+  check('G11: a real change to robots.txt is a high alert the same day, with the fingerprints on both sides',
+    rbChanged.robots_change && rbChanged.robots_change.code === 'robots_changed' && rbChanged.robots_change.severity === 'high' && rbChanged.robots_change.from === rb.robots.hash, JSON.stringify(rbChanged.robots_change));
+  const rb404 = await pw({ robots_res: { statusCode: 404, data: 'not found' }, block_urls: [PRICING], prev_hash: rb.robots.hash });
+  check('no robots.txt blocks nothing, and a failed read never claims a change (the stored fingerprint stays)',
+    rb404.robots.blocks[0].blocked === null, JSON.stringify(rb404.robots.blocks));
+
+  // ---- 2. the daily run on a site whose pages are already on file ----
+  const modelOf = async (row) => (await run('_site_model', [{ json: { site_row: row } }]))[0].json.model;
+  const model = await modelOf({ site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1),
+    nav_pages_json: JSON.stringify([{ url: PRICING, title: 'Pricing' }, { url: ABOUT, title: 'About' }]) });
+  const siteRow = { site_id: SITE, domain: D, canonical_host: 'www.' + D, model_updated_at: daysAgo(1), email: 'owner@example.com', callback_url: 'https://app.example.com/hooks/x',
+    nav_pages_json: JSON.stringify([{ url: PRICING, title: 'Pricing' }, { url: ABOUT, title: 'About' }]), status: 'active' };
+  const pagesRows = [
+    { site_id: SITE, url: PRICING, title: 'ERP pricing in the UAE | Northwind', source: 'sitemap', queries_json: JSON.stringify([{ query: 'erp cost dubai', impressions: 240 }]) },
+    { site_id: SITE, url: GUIDE, title: 'E-invoicing in the UAE', source: 'detected', queries_json: '[]' },
+    { site_id: SITE, url: ABOUT, title: 'About', source: 'sitemap', queries_json: '[]' },
+    { site_id: SITE, url: CASE, title: 'IFRS 17 case study', source: 'ai_page', queries_json: '[]' },
+  ];
+  const watchLoads = (o = {}) => {
+    mock('Load Sites (Watch)', [{ json: siteRow }]);
+    mock('Load Ladders (Watch)', o.ladders || [{ json: { ladder_id: 'lad_1', domain: D, keyword: 'e invoicing uae', target_url: GUIDE, status: 'published', page_exists: true, email: 'owner@example.com' } }]);
+    mock('Load Pages (Watch)', o.pages || pagesRows.map(p => ({ json: p })));
+    mock('Load Page Watch', o.watch || EMPTY);
+    mock('Load Watch Cache', o.cache || EMPTY);
+    mock('Load Recheck Requests', o.rechecks || EMPTY);
+    mock('Load Ops Alerts (Watch)', o.ops || EMPTY);
+    if (o.trigger) mock('Watch Run', [{ json: o.trigger }]); else delete store['Watch Run'];
+  };
+  watchLoads();
+  const plan1 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  console.log('   watch plan ->', JSON.stringify(plan1.map(p => [p.kind, p.url.replace(W, '')])));
+  check('G11: the day\'s targets are the key pages of the site model and the page inventory plus /robots.txt — the home page and the menu first, then the page Search Console brings impressions for, never a fresh crawl',
+    plan1.length === 6 && plan1[0].kind === 'robots' && plan1[0].url === ROBOTS && plan1.filter(p => p.kind !== 'robots')[0].url === HOME
+    && plan1.some(p => p.kind === 'nav' && p.url === PRICING) && plan1.some(p => p.kind === 'ladder' && p.url === GUIDE) && plan1.some(p => p.kind === 'ai' && p.url === CASE)
+    && plan1.every(p => p.site_id === SITE), JSON.stringify(plan1.map(p => [p.kind, p.url])));
+  check('the cost is one plain GET per key page plus one for robots.txt — nothing paid, and the cap (25 pages a site) is on the plan',
+    plan1.filter(p => p.kind !== 'robots').length === 5 && plan1[0].site.max_watch_pages === 25, JSON.stringify({ requests: plan1.length, cap: plan1[0].site.max_watch_pages }));
+  // the cap really cuts: 40 pages on file -> 25 watched + robots
+  watchLoads({ pages: Array.from({ length: 40 }, (_, i) => ({ json: { site_id: SITE, url: W + '/p' + i + '/', title: 'P' + i, source: 'sitemap', queries_json: '[]' } })) });
+  const planCap = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('G11: with 40 pages on file the watch still fetches at most 25 of them (plus robots.txt), so a big site cannot run away with the daily budget',
+    planCap.filter(p => p.kind !== 'robots').length === 25 && planCap.length === 26, planCap.length);
+  // a paused site is not watched; an on-demand run picks exactly one site
+  watchLoads({ pages: pagesRows.map(p => ({ json: p })) });
+  mock('Load Sites (Watch)', [{ json: { ...siteRow, status: 'paused' } }]);
+  const planPaused = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('a paused site is left alone, and the run says why instead of failing', planPaused.length === 1 && planPaused[0].skip === true && /no tracked site/.test(planPaused[0].reason), JSON.stringify(planPaused[0]));
+
+  // ---- 3. day one: the baseline is written and nothing is alerted ----
+  watchLoads();
+  const plan = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  const answers = (over = {}) => plan.map(p => p.kind === 'robots'
+    ? (over.robots || { statusCode: 200, data: RB_TEXT })
+    : (over[p.url] || page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url })));
+  mock('Fetch Watch Page', answers());
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day1 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  check('day one is a baseline: every page is read, the state is `ok` and nothing is alerted (nobody is told their site changed on the first morning)',
+    day1.summary.pages_checked === 5 && day1.changes.length === 0 && day1.summary.first_run === true && day1.summary.cost_usd === 0, JSON.stringify(day1.summary));
+  const rows1 = (await run('Watch Rows', store['Watch Compare'])).map(x => x.json);
+  check('the stored rows carry exactly the seo_page_watch columns (table_cols.json PAGE_WATCH), one per page that was read',
+    rows1.length === 5 && rows1.every(r => eq(Object.keys(r).sort(), [...TC.PAGE_WATCH].sort())) && rows1.every(r => r.state === 'ok' && r.changed_count === 0 && r.robots_hash === day1.robots.hash),
+    JSON.stringify({ cols: Object.keys(rows1[0]), expected: TC.PAGE_WATCH }));
+  const cache1 = (await run('Watch Cache Rows', store['Watch Compare'])).map(x => x.json);
+  check('G11: the site fingerprint goes into seo_cache under `watch:<site_id>` (beside the sitemap fingerprints), with the robots.txt hash and the day\'s counts',
+    cache1.length === 1 && cache1[0].key === 'watch:' + SITE && cache1[0].kind === 'watch' && eq(Object.keys(cache1[0]).sort(), [...TC.CACHE].sort())
+    && JSON.parse(cache1[0].value).robots_hash === day1.robots.hash, JSON.stringify(cache1[0]));
+  const al1 = (await run('Watch Alerts', store['Watch Compare'])).map(x => x.json);
+  check('and no alert row is written on the baseline day', al1.length === 1 && al1[0].skip === true, JSON.stringify(al1[0]));
+
+  // ---- 4. day two: five changes, each with the right alert, and an unchanged page that says nothing ----
+  const stored = rows1.map(r => ({ json: { ...r, id: 1 } }));
+  watchLoads({ watch: stored, cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }] });
+  const plan2 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('day two reads the stored reading of every page back (the baseline a change is measured against)',
+    plan2.filter(p => p.kind !== 'robots').every(p => p.prev && p.prev.url === p.url) && plan2[0].site.robots_hash_prev === day1.robots.hash, JSON.stringify(plan2[0].site.robots_hash_prev));
+  mock('Fetch Watch Page', plan2.map(p => {
+    if (p.kind === 'robots') return { statusCode: 200, data: RB_TEXT.replace('Disallow: /erp-pricing/', 'Disallow: /erp-pricing/\nDisallow: /blog/') };   // robots.txt changed: Googlebot's own group now blocks /blog/
+    if (p.url === HOME) return page({ status: 404, title: 'Not found', canonical: '' });                                     // the home page is gone
+    if (p.url === PRICING) return page({ title: 'Title of /erp-pricing/', canonical: p.url, robots: 'noindex' });            // noindex appeared
+    if (p.url === GUIDE) return page({ title: 'Title of /blog/e-invoicing-uae-fta', canonical: W + '/uae-e-invoicing/' });    // canonical moved
+    if (p.url === ABOUT) return page({ title: 'About Northwind ERP — 2026', canonical: p.url });                             // the title changed
+    return page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url });                                            // the case study is untouched
+  }));
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day2 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  const codeOf = (u) => day2.changes.filter(c => c.url === u).map(c => c.code);
+  console.log('   day two ->', JSON.stringify(day2.changes.map(c => [c.code, c.severity, c.url.replace(W, '')])));
+  check('G11: a key page that is gone (200 -> 404) is a critical alert the same day, with both status codes named',
+    eq(codeOf(HOME), ['page_gone']) && day2.changes.find(c => c.code === 'page_gone').severity === 'critical' && /404/.test(day2.changes.find(c => c.code === 'page_gone').text), JSON.stringify(day2.changes.find(c => c.code === 'page_gone')));
+  check('G11: a page that gained `noindex` is critical, and the alert quotes the tag it found',
+    eq(codeOf(PRICING), ['noindex_added']) && /meta robots/.test(day2.changes.find(c => c.code === 'noindex_added').text), JSON.stringify(day2.changes.find(c => c.code === 'noindex_added')));
+  check('G11: a canonical that moved to another URL is high, with the old and the new address — and the same page, now disallowed in robots.txt, is critical',
+    eq(codeOf(GUIDE).sort(), ['canonical_moved', 'robots_blocked']) && day2.changes.find(c => c.code === 'canonical_moved').to === W + '/uae-e-invoicing/'
+    && day2.changes.find(c => c.code === 'canonical_moved').from === GUIDE && day2.changes.find(c => c.code === 'robots_blocked').severity === 'critical', JSON.stringify(codeOf(GUIDE)));
+  check('G11: a changed title is a medium alert that quotes both titles', eq(codeOf(ABOUT), ['title_changed']) && /About Northwind ERP — 2026/.test(day2.changes.find(c => c.code === 'title_changed').text), JSON.stringify(day2.changes.find(c => c.code === 'title_changed')));
+  check('G11: the changed robots.txt is one alert of its own, and it now blocks a key page we watch (the ladder page under /blog/)',
+    day2.changes.some(c => c.code === 'robots_changed') && day2.robots.changed === true && day2.robots.blocks_key_pages.includes(GUIDE), JSON.stringify({ blocks: day2.robots.blocks_key_pages, changed: day2.robots.changed }));
+  check('and the page nobody touched raises nothing at all, for one GET',
+    codeOf(CASE).length === 0 && (day2.pages.find(p => p.url === CASE) || {}).state === 'ok' && day2.summary.requests === 6, JSON.stringify({ case: codeOf(CASE), requests: day2.summary.requests }));
+  const rows2 = (await run('Watch Rows', store['Watch Compare'])).map(x => x.json);
+  check('the changed pages are stored with the change codes and a change count that grew, while the untouched one keeps its count at 0',
+    (rows2.find(r => r.url === PRICING) || {}).changes === 'noindex_added' && (rows2.find(r => r.url === PRICING) || {}).changed_count === 1
+    && (rows2.find(r => r.url === CASE) || {}).changed_count === 0 && rows2.every(r => eq(Object.keys(r).sort(), [...TC.PAGE_WATCH].sort())), JSON.stringify(rows2.map(r => [r.url.replace(W, ''), r.changes, r.changed_count])));
+  const al2 = (await run('Watch Alerts', store['Watch Compare'])).map(x => x.json);
+  check('every change becomes a seo_console_alerts row (the app\'s Alerts page and the Monday report read that table) with exactly its columns and one id per site, page, change and day',
+    al2.length === 6 && al2.every(r => eq(Object.keys(r).sort(), [...TC.CONSOLE_ALERTS].sort())) && al2.every(r => r.kind === 'page_watch' && r.source === 'page_watch' && r.status === 'new')
+    && new Set(al2.map(r => r.message_id)).size === 6 && al2.some(r => /^Page gone/.test(r.subject)), JSON.stringify(al2.map(r => [r.severity, r.subject])));
+  const ops2 = (await run('Watch Ops Alert', store['Watch Compare'])).map(x => x.json);
+  check('G11 / D25b: only the serious changes take the ops path (the medium title change does not), recorded in seo_ops_alerts with exactly its columns before anything is sent',
+    ops2.length === 5 && ops2.every(r => eq(Object.keys(r).sort(), [...TC.OPS_ALERTS].sort())) && ops2.every(r => r.mode === 'page_watch' && r.delivered === 'pending')
+    && eq(ops2.map(r => r.severity).sort(), ['critical', 'critical', 'critical', 'high', 'high']) && !ops2.some(r => /title/i.test(r.message)), JSON.stringify(ops2.map(r => [r.severity, r.node])));
+  mock('Save Watch Ops Alert', ops2.map(r => ({ json: r })));
+  const ch2 = (await run('Watch Ops Channels', store['Save Watch Ops Alert']))[0].json;
+  check('the webhook body carries the day\'s changes for Slack / Teams / any POST endpoint and needs no SMTP; with no webhook configured the changes are still on record',
+    ch2.alerts === 5 && /key-page watch/.test(ch2.webhook_body.text) && ch2.webhook_body.alerts.length === 5 && ch2.recorded === true
+    && ch2.send_webhook === !!WIRE.webhook_configured, JSON.stringify({ send: ch2.send_webhook, note: ch2.note }));
+  // the same changes an hour later, inside the dedupe window: recorded, not re-sent
+  watchLoads({ watch: stored, cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }], ops: ops2.map(r => ({ json: { ...r, last_seen_at: new Date().toISOString() } })) });
+  const ops3 = (await run('Watch Ops Alert', store['Watch Compare'])).map(x => x.json);
+  const ch3 = (await run('Watch Ops Channels', store['Watch Ops Alert']))[0].json;
+  check('D25b\'s dedupe: the same changes an hour later are recorded with count 2 and `deduped`, and nothing is posted',
+    ops3.every(r => r.count === 2 && r.delivered === 'deduped') && ch3.alerts === 0 && ch3.send_webhook === false && /less than/.test(ch3.note), JSON.stringify([ops3.map(r => r.delivered), ch3.note]));
+
+  // ---- 5. a fetch that fails is "not checked": the stored reading survives ----
+  watchLoads({ watch: rows2.map(r => ({ json: { ...r, id: 1 } })), cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }] });
+  const plan3 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  mock('Fetch Watch Page', plan3.map(p => p.kind === 'robots' ? { error: { message: 'EAI_AGAIN' } } : (p.url === CASE ? { error: { message: 'ETIMEDOUT' } } : page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url }))));
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day3 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  const rows3 = (await run('Watch Rows', store['Watch Compare'])).map(x => x.json);
+  const cache3 = (await run('Watch Cache Rows', store['Watch Compare']))[0].json;
+  check('a page whose fetch failed is "not checked": no alert about it, no row written, and its stored reading is kept exactly as it was',
+    day3.summary.pages_not_checked === 1 && day3.not_checked[0].url === CASE && !day3.changes.some(c => c.url === CASE) && !rows3.some(r => r.url === CASE), JSON.stringify({ not_checked: day3.not_checked, rows: rows3.length }));
+  check('a robots.txt that could not be read never overwrites the stored fingerprint (otherwise tomorrow would report a change that never happened)',
+    JSON.parse(cache3.value).robots_hash === day1.robots.hash && JSON.parse(cache3.value).robots_read === false && !day3.changes.some(c => c.code === 'robots_changed'), cache3.value);
+
+  // ---- 6. the recovery, so a fix shows up ----
+  watchLoads({ watch: rows2.map(r => ({ json: { ...r, id: 1 } })), cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }] });
+  const plan4 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  mock('Fetch Watch Page', plan4.map(p => p.kind === 'robots' ? { statusCode: 200, data: RB_TEXT }
+    : p.url === ABOUT ? page({ title: 'About Northwind ERP — 2026', canonical: p.url })                 // unchanged since yesterday
+      : p.url === GUIDE ? page({ title: 'Title of /blog/e-invoicing-uae-fta', canonical: W + '/uae-e-invoicing/' })   // the moved canonical is still where it was
+        : page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url })));
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day4 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  const codes4 = day4.changes.map(c => c.code);
+  check('when the owner puts it right the watch says so: the home page answers again and the noindex is gone, both as `info` — and the title of the 404 page it served yesterday is not reported as a title change',
+    codes4.includes('page_back') && codes4.includes('noindex_removed') && day4.changes.filter(c => c.severity !== 'info').length === 0 && !codes4.includes('title_changed'), JSON.stringify(day4.changes.map(c => [c.code, c.severity])));
+  const ops4 = (await run('Watch Ops Alert', store['Watch Compare'])).map(x => x.json);
+  check('good news never wakes anybody: no ops alert and no webhook post for a recovery', ops4.length === 1 && ops4[0].skip === true, JSON.stringify(ops4[0]));
+
+  // ---- 7. "I fixed this": one finding, re-checked on those pages within a day ----
+  const finding = (title, over = {}) => ({ site_id: SITE, domain: D, audit_id: 'aud_s53', finding_key: 'Crawlability & Indexing|' + title.toLowerCase(), title, category: 'Crawlability & Indexing', severity: 'High', recheck_state: 'requested', recheck_requested_at: daysAgo(1), ...over });
+  const RQ = [finding('Missing meta description'), finding('Broken pages (4xx, 5xx or timeout)'), finding('Slow page load time'), finding('Missing canonical tag')];
+  watchLoads({ watch: rows1.map(r => ({ json: { ...r, id: 1 } })), cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }], rechecks: RQ.map(f => ({ json: f })) });
+  const plan5 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('the re-check queue rides along on the day\'s plan, so the same fetches answer it (no extra request, no paid call)',
+    plan5[0].site.rechecks.length === 4 && plan5[0].site.rechecks.every(r => r.audit_id === 'aud_s53'), JSON.stringify(plan5[0].site.rechecks.map(r => r.title)));
+  mock('Fetch Watch Page', plan5.map(p => p.kind === 'robots' ? { statusCode: 200, data: RB_TEXT }
+    : (p.url === ABOUT ? page({ title: 'Title of /about/', canonical: ABOUT, desc: '' })            // one page still has no meta description
+      : page({ title: 'Title of ' + p.url.replace(W, ''), canonical: p.url }))));
+  await run('Watch Read', store['Fetch Watch Page']);
+  const day5 = (await run('Watch Compare', store['Watch Read']))[0].json;
+  const rcOf = (t) => day5.rechecks.find(r => r.title === t) || {};
+  console.log('   rechecks ->', JSON.stringify(day5.rechecks.map(r => [r.title, r.state])));
+  check('G11 / criterion 1.10: a finding the watch can judge comes back with its new state within a day — "still open" names the pages it is still wrong on',
+    rcOf('Missing meta description').state === 'still_open' && rcOf('Missing meta description').hits.includes(ABOUT) && /1 of the 5 key pages/.test(rcOf('Missing meta description').note), JSON.stringify(rcOf('Missing meta description')));
+  check('a finding that really is fixed comes back `fixed`, with how many pages were checked and the promise that the audit checks the rest',
+    rcOf('Broken pages (4xx, 5xx or timeout)').state === 'fixed' && /5 key pages checked/.test(rcOf('Broken pages (4xx, 5xx or timeout)').note) && /next full audit/.test(rcOf('Broken pages (4xx, 5xx or timeout)').note), JSON.stringify(rcOf('Broken pages (4xx, 5xx or timeout)')));
+  check('a finding a raw fetch cannot judge is never guessed: "not checked", with the reason and who decides it',
+    rcOf('Slow page load time').state === 'not_checked' && /cannot judge/.test(rcOf('Slow page load time').note) && /next audit/.test(rcOf('Slow page load time').note), JSON.stringify(rcOf('Slow page load time')));
+  const rcRows = (await run('Watch Recheck Rows', store['Watch Compare'])).map(x => x.json);
+  check('the answer is written back on that finding row (site, audit and finding key identify it) with the rule it used and one sentence of evidence',
+    rcRows.length === 4 && rcRows.every(r => r.site_id === SITE && r.audit_id === 'aud_s53' && r.finding_key && r.recheck_at && r.recheck_note)
+    && rcRows.find(r => /meta description/.test(r.title)).recheck_state === 'still_open' && rcRows.find(r => /Missing canonical/.test(r.title)).recheck_state === 'fixed', JSON.stringify(rcRows.map(r => [r.recheck_state, r.recheck_rule])));
+  const al5 = (await run('Watch Alerts', store['Watch Compare'])).map(x => x.json);
+  check('a fix that is confirmed is shown to the owner as an `info` notice, so pressing "I fixed this" always ends in an answer',
+    al5.filter(r => /^Fixed: /.test(r.subject || '')).length === 2 && al5.every(r => r.skip || r.severity === 'info'), JSON.stringify(al5.map(r => r.subject)));
+  // on demand: the app asks for one finding only
+  watchLoads({ watch: rows1.map(r => ({ json: { ...r, id: 1 } })), rechecks: RQ.map(f => ({ json: f })), trigger: { domain: D, finding_key: RQ[1].finding_key } });
+  const plan6 = (await run('Watch Plan', store['Load Ops Alerts (Watch)'])).map(x => x.json);
+  check('an on-demand run for one finding watches that site only and carries that one finding',
+    plan6.every(p => p.site_id === SITE) && plan6[0].site.rechecks.length === 1 && plan6[0].site.rechecks[0].finding_key === RQ[1].finding_key && plan6[0].site.on_demand === true, JSON.stringify(plan6[0].site.rechecks));
+
+  // ---- 8. G25: URL Inspection rotates through every key page inside Google's quota ----
+  const budget = await pw({ pages_budget: [
+    { url: PRICING, weight: 60, inspect_at: daysAgo(2) }, { url: HOME, weight: 100, inspect_at: daysAgo(9) }, { url: GUIDE, weight: 90, inspect_at: '' },
+    { url: ABOUT, weight: 70, inspect_at: daysAgo(30) }, { url: CASE, weight: 50, inspect_at: daysAgo(1) }, { url: CASE + '?utm=x', weight: 10, inspect_at: '' }], cap: 3 });
+  check('G25: the rotation is never-inspected first, then the oldest inspection — and the same page is asked about once however it is spelled',
+    eq(budget.budget.take, [GUIDE, ABOUT, HOME]) && eq(budget.budget.skipped, [PRICING, CASE]) && budget.budget.quota === 2000, JSON.stringify(budget.budget));
+  check('the quota is named where it is spent: 2,000 inspections a day and 600 a minute per property, 150 a weekly run, 100 an audit',
+    /2000 pages a day per Search Console property/.test(budget.budget.note) && budget.limits.quota === 2000 && budget.limits.per_minute === 600 && budget.limits.per_run === 150 && budget.limits.per_audit === 100
+    && WIRE.site_tracker_inspections.cap === 150, JSON.stringify(budget.limits));
+  const used = await pw({ pages_budget: [{ url: HOME, weight: 1 }, { url: ABOUT, weight: 1 }], cap: 150, used: 1999 });
+  check('G25: with the day\'s quota nearly gone the run asks about what is left and reports the rest as "not checked", instead of asking and failing',
+    used.budget.take.length === 1 && used.budget.skipped.length === 1 && /reported as "not checked"/.test(used.budget.note), JSON.stringify(used.budget));
+  // the Site Tracker's own chain
+  mock('Resolve Properties', [{ json: { site_idx: 0, site_id: SITE, domain: D, gsc_connected: true, gsc_property: 'sc-domain:' + D, config: { max_inspections: 4 },
+    ladder_pages: [{ url: GUIDE, keyword: 'e invoicing uae', rung: 1, status: 'published', page_exists: true }] } }]);
+  mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model } }]);
+  mock('Load Pages (Site)', pagesRows.map(p => ({ json: p })));
+  mock('Load Page Watch (Site)', [{ json: { site_id: SITE, url: PRICING, inspect_at: daysAgo(2), kind: 'nav' } }, { json: { site_id: SITE, url: GUIDE, inspect_at: daysAgo(40), kind: 'ladder' } }]);
+  delete store['Detect Published'];
+  const ireq = (await run('Inspect Requests', store['Resolve Properties'])).map(x => x.json);
+  console.log('   inspections ->', JSON.stringify(ireq.map(r => r.inspect_url.replace(W, ''))));
+  check('G25: the weekly run asks about every kind of key page, not only the ladder pages — never inspected first, then the oldest, inside the cap',
+    ireq.length === 4 && ireq.map(r => r.inspect_url).includes(HOME) && ireq.map(r => r.inspect_url).includes(ABOUT) && ireq[ireq.length - 1].inspect_url === GUIDE
+    && ireq.every(r => r.body.siteUrl === 'sc-domain:' + D) && ireq[0].budget.candidates === 5 && ireq[0].budget.skipped_total === 1, JSON.stringify(ireq.map(r => [r.inspect_url.replace(W, ''), r.kind, r.inspect_at && r.inspect_at.slice(0, 10)])));
+  const INSPECT = (url, o = {}) => ({ inspectionResult: { indexStatusResult: { verdict: o.verdict || 'PASS', coverageState: o.coverage || 'Submitted and indexed', robotsTxtState: 'ALLOWED',
+      indexingState: 'INDEXING_ALLOWED', lastCrawlTime: o.crawl || '2026-10-08T04:05:06Z', googleCanonical: o.google === undefined ? url : o.google, userCanonical: url },
+    ...(o.mobile === undefined ? { mobileUsabilityResult: { verdict: 'PASS' } } : o.mobile === false ? { mobileUsabilityResult: { verdict: 'FAIL', issues: [{ issueType: 'TAP_TARGETS_TOO_CLOSE', message: 'Clickable elements too close together' }] } } : {}),
+    ...(o.rich ? { richResultsResult: { verdict: 'PASS', detectedItems: [{ richResultType: 'FAQ' }] } } : {}) } });
+  mock('Inspect URL', ireq.map(r => r.inspect_url === ABOUT ? INSPECT(r.inspect_url, { verdict: 'NEUTRAL', coverage: 'Crawled - currently not indexed', google: '' })
+    : r.inspect_url === HOME ? INSPECT(r.inspect_url, { google: W + '/en/', mobile: false })
+      : r.inspect_url === GUIDE ? { error: { message: 'User does not have sufficient permission for site. See also: https://support.google.com/webmasters/answer/2451999.', context: { data: { error: { message: 'PERMISSION_DENIED' } } } } }
+        : INSPECT(r.inspect_url, { rich: true })));   // the AI page is the one with an FAQ rich result; /erp-pricing/ is the page the budget skipped
+  const pins = (await run('Parse Inspection', store['Inspect URL'])).map(x => x.json);
+  const byUrl = (u) => pins.find(p => p.url === u) || {};
+  console.log('   parsed ->', JSON.stringify(pins.map(p => [p.url.replace(W, ''), p.indexed, p.not_checked ? 'not checked' : ''])));
+  check('G25: each page reports its index state, the canonical Google chose against ours, the crawl date, mobile usability and the rich results',
+    byUrl(CASE).indexed === true && eq(byUrl(CASE).rich_results, ['FAQ']) && byUrl(CASE).last_crawl === '2026-10-08T04:05:06Z' && byUrl(CASE).mobile_usable === true
+    && byUrl(HOME).canonical_ok === false && byUrl(HOME).google_canonical === W + '/en/' && byUrl(HOME).mobile_usable === false && /Clickable elements/.test((byUrl(HOME).mobile_issues || [])[0] || ''),
+    JSON.stringify([byUrl(CASE), byUrl(HOME)]));
+  check('a page Google has not indexed says so with its reason, and never carries a canonical it does not have',
+    byUrl(ABOUT).indexed === false && /not indexed/i.test(byUrl(ABOUT).coverage) && byUrl(ABOUT).canonical_ok === null, JSON.stringify(byUrl(ABOUT)));
+  check('G25: a permission error is "not checked" with the reason — never "not indexed" — and the run carries on',
+    byUrl(GUIDE).indexed === null && byUrl(GUIDE).error_kind === 'access' && /access is missing/.test(byUrl(GUIDE).not_checked) && pins.length === 5, JSON.stringify(byUrl(GUIDE)));
+  check('G25: the page the budget did not reach is listed as "not checked" with the day it was last inspected, instead of being dropped silently',
+    byUrl(PRICING).skipped === true && byUrl(PRICING).indexed === null && /rotate, oldest first/.test(byUrl(PRICING).not_checked) && /last inspected \d{4}-\d\d-\d\d/.test(byUrl(PRICING).not_checked), JSON.stringify(byUrl(PRICING)));
+  const irows = (await run('Inspect Rows (Site)', store['Parse Inspection'])).map(x => x.json);
+  check('G25: the answers are stored on each page\'s seo_page_watch row (exact columns) — that date is what makes next week\'s rotation possible — and the page the budget skipped is not written',
+    irows.length === 4 && irows.every(r => eq(Object.keys(r).sort(), [...TC.PAGE_WATCH].sort())) && irows.find(r => r.url === CASE).indexed === 'yes'
+    && irows.find(r => r.url === HOME).mobile === 'fail' && irows.find(r => r.url === ABOUT).indexed === 'no' && !irows.some(r => r.url === PRICING), JSON.stringify(irows.map(r => [r.url.replace(W, ''), r.indexed, r.index_state, r.mobile, r.inspect_at && r.inspect_at.slice(0, 10)])));
+  const permRow = irows.find(r => r.url === GUIDE);
+  check('a failed inspection keeps the last answer and records why today\'s attempt did not happen (it is not written as a fresh state)',
+    permRow === undefined || (permRow.index_state === '' && /access is missing/.test(permRow.inspect_error)), JSON.stringify(permRow));
+  const cov = await pw({ inspections: pins.filter(p => !p.skipped).map(p => ({ ok: !p.inspect_error, error: p.inspect_error || '', indexed: p.indexed, verdict: p.verdict, coverage: p.coverage, canonical_ok: p.canonical_ok, mobile_usable: p.mobile_usable, rich_results: p.rich_results, not_checked: p.not_checked })),
+    coverage_opts: { not_checked: 1, not_checked_reason: 'the run\'s share of the quota was used up' } });
+  check('G25: the index picture counts the pages Google answered about and the ones nobody asked about separately, and names the quota in the same sentence',
+    cov.coverage.checked === 3 && cov.coverage.indexed === 2 && cov.coverage.not_indexed === 1 && cov.coverage.not_checked === 2 && /were not checked/.test(cov.coverage.text) && /2000 pages a day per property/.test(cov.coverage.text), JSON.stringify(cov.coverage));
+
+  // ---- 9. the weekly report and the app read the same picture ----
+  const smIns = pins;
+  mock('Parse Inspection', smIns.map(p => ({ json: p })));
+  mock('Load Watch Cache (Site)', [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: JSON.stringify({ checked_at: new Date().toISOString(), robots_hash: day1.robots.hash, pages_watched: 5, pages_checked: 5, pages_not_checked: 0, changed: 2, worst: 'critical' }), updated_at: new Date().toISOString() } }]);
+  mock('Load Page Watch (Site)', rows2.map(r => ({ json: { ...r, id: 1 } })));
+  const trackLoads = () => { for (const n of ['Load Site Metrics', 'Load Query History', 'Load Content Log', 'Load Console Alerts', 'Load Check-ins', 'Load AI Visibility (Site)', 'Load Backlink Snapshots (Site)', 'Load Audits (Site)', 'Load Trends (Site)', 'Load Profiles (Site)', 'Load Monitors (Site)', 'Load AI Pages (Site)', 'Load Descriptions (Site)', 'Load Sites', 'Load Ladders', 'Load Rank History']) if (!store[n]) mock(n, EMPTY); };
+  trackLoads();
+  for (const n of ['Parse GSC', 'Parse GA4', 'Parse Trends', 'Parse Site SERP', 'Detect Published', 'Page Inventory (Site)']) delete store[n];
+  const siteItem = { site_idx: 0, site_id: SITE, domain: D, email: 'owner@example.com', callback_url: 'https://app.example.com/hooks/x', gsc_connected: true, gsc_property: 'sc-domain:' + D,
+    config: { max_inspections: 4, service_account_email: 'sa@example.com', alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40, decay_drop_pct: 25, striking_min_impressions: 30, ctr_gap_min_impressions: 100 },
+    ranges: { current: { start: '2026-09-10', end: '2026-10-07' }, previous: { start: '2026-08-13', end: '2026-09-09' }, yoy: { start: '2025-09-11', end: '2025-10-08' } },
+    tracked: [], ladder_pages: [{ url: GUIDE, keyword: 'e invoicing uae', rung: 1, status: 'published', page_exists: true }], ladder_heads: [], pending_publish: [], trends: [], serp_positions: [] };
+  mock('Site Plan', [{ json: siteItem }]);
+  mock('Resolve Properties', [{ json: siteItem }]);
+  const sm = (await run('Site Metrics', store['Resolve Properties'])).map(x => x.json).find(x => x.site_id === SITE);
+  check('G25: the weekly item (and so the callback the app stores) carries Google\'s view of the key pages with what was not checked',
+    sm.index_coverage && sm.index_coverage.connected === true && sm.index_coverage.indexed === 2 && sm.index_coverage.not_checked >= 1
+    && sm.index_coverage.pages.some(p => p.url === HOME && p.canonical_ok === false) && sm.index_coverage.not_checked_pages.length >= 1, JSON.stringify({ ...sm.index_coverage, pages: sm.index_coverage.pages.length }));
+  check('G11: the same item carries the daily watch — when it last ran, how many pages it watches, what changed this week and which pages are noindexed or broken',
+    sm.page_watch.running === true && sm.page_watch.pages_watched === 5 && sm.page_watch.changed_this_week === 4 && sm.page_watch.cost_usd === 0, JSON.stringify(sm.page_watch));
+  check('and a ladder page the quota did not reach is reported as "not checked", never as "not indexed" (the old mapping would have called it not indexed)',
+    (sm.ladder_pages.find(p => p.url === GUIDE) || {}).indexed === null && /access is missing/.test((sm.ladder_pages.find(p => p.url === GUIDE) || {}).inspect_error || ''), JSON.stringify(sm.ladder_pages.map(p => [p.url.replace(W, ''), p.indexed, p.inspect_error])));
+});
 
 H.report();
 })();

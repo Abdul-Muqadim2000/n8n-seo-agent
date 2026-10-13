@@ -1,13 +1,15 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
-import { BarChart3, CheckCircle2, Circle, FileArchive, FileSearch, FileText, Gauge, ListChecks, Siren, Sparkles, TrendingUp } from 'lucide-react';
-import { foldMinor, minorFoldNote, titleCase, type AuditPoint, type Finding, type FindingStatus, type TechnicalData } from '@seo/shared';
-import { fileUrl } from '@/lib/api';
-import { useSiteData } from '@/lib/queries';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { BarChart3, BellRing, CheckCircle2, Circle, Eye, FileArchive, FileSearch, FileText, Gauge, ListChecks, Siren, Sparkles, TrendingUp } from 'lucide-react';
+import { foldMinor, minorFoldNote, titleCase, type AuditPoint, type Finding, type FindingStatus, type IndexCoverage, type PageWatch, type RecheckRequest, type TechnicalData } from '@seo/shared';
+import { api, errorMessage, fileUrl } from '@/lib/api';
+import { qk, useSiteData } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
 import { BarsChart, ChartCard, Sparkline, TimeSeriesChart, type Series } from '@/components/charts';
 import { Badge, StatusBadge, severityTone } from '@/components/ui/badge';
-import { ButtonLink, buttonClass } from '@/components/ui/button';
+import { Button, ButtonLink, buttonClass } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/feedback';
 import { Select } from '@/components/ui/field';
@@ -236,6 +238,8 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
 
       <FixFirst findings={d.findings} hasPrevious={!!prev} sel={sel} />
 
+      <WatchPanel watch={d.watch} coverage={d.indexCoverage} />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <ChartCard
           title={<ChartTitle icon={<TrendingUp />}>Health score over time</ChartTitle>}
@@ -267,7 +271,7 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
           info="Filter by severity and status, search by issue or category; the affected count shows the change since the previous audit."
         />
         <Card className="p-4">
-          <FindingsTable findings={d.findings} hasPrevious={!!prev} />
+          <FindingsTable findings={d.findings} hasPrevious={!!prev} auditId={sel.auditId} />
         </Card>
       </section>
 
@@ -414,7 +418,7 @@ const STATUS_META: Record<FindingStatus, { label: string; node: ReactNode }> = {
 type SevFilter = Sev | 'all';
 type StatusFilter = FindingStatus | 'all';
 
-function FindingsTable({ findings: all, hasPrevious }: { findings: Finding[]; hasPrevious: boolean }) {
+function FindingsTable({ findings: all, hasPrevious, auditId }: { findings: Finding[]; hasPrevious: boolean; auditId: string }) {
   const [sev, setSev] = useState<SevFilter>('all');
   const [status, setStatus] = useState<StatusFilter>('all');
   const [cat, setCat] = useState('all');
@@ -460,6 +464,8 @@ function FindingsTable({ findings: all, hasPrevious }: { findings: Finding[]; ha
       ),
     },
     ...(hasPrevious ? [{ key: 'status', header: 'Status', sortValue: (f: Finding) => ['new', 'open', 'fixed'].indexOf(f.status), cell: (f: Finding) => STATUS_META[f.status]?.node ?? f.status }] : []),
+    // G11 (2026-10-13): mark it fixed and the daily key-page watch judges that one finding again the next morning
+    { key: 'recheck', header: 'Fix check', sortValue: (f: Finding) => f.recheck?.state ?? '', cell: (f: Finding) => <RecheckCell finding={f} auditId={auditId} /> },
   ];
 
   if (!all.length) return <EmptyState className="py-8" title="No findings stored for this audit" description="Audits before v4.5 stored only their score; run a new audit for the full list." />;
@@ -530,5 +536,152 @@ function FindingsTable({ findings: all, hasPrevious }: { findings: Finding[]; ha
         />
       </div>
     </div>
+  );
+}
+
+// ---- G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch, and what Google says about the same pages ----
+const CHANGE_LABEL: Record<string, string> = {
+  page_gone: 'page gone',
+  page_error: 'server error',
+  page_redirects: 'redirects now',
+  noindex_added: 'noindex added',
+  noindex_removed: 'noindex gone',
+  robots_blocked: 'blocked by robots.txt',
+  canonical_moved: 'canonical moved',
+  canonical_removed: 'canonical removed',
+  robots_changed: 'robots.txt changed',
+  title_changed: 'title changed',
+  page_back: 'answers again',
+};
+const pathOnly = (u: string) => u.replace(/^https?:\/\/[^/]+/, '') || '/';
+
+function WatchPanel({ watch, coverage }: { watch: PageWatch | null; coverage: IndexCoverage | null }) {
+  if (!watch) {
+    return (
+      <Panel
+        title="Daily key-page watch"
+        icon={<Eye />}
+        iconTone="neutral"
+        description="Checks your most important pages every morning — status, noindex, canonical, title and robots.txt"
+      >
+        <p className="text-sm text-ink-2">
+          It starts once this website is tracked: every morning the engine fetches your key pages (home page, the menu, the pages Search Console brings impressions for, the pages your keyword ladders own) and tells you the same day when one disappears, is set to noindex, starts redirecting, changes its canonical or its title, or when robots.txt changes.
+        </p>
+      </Panel>
+    );
+  }
+  const problem = watch.pages.filter((p) => p.status >= 400 || p.noindex || p.robotsBlocked);
+  return (
+    <Panel
+      title="Daily key-page watch"
+      icon={<Eye />}
+      iconTone={problem.length ? 'serious' : watch.running ? 'good' : 'neutral'}
+      description={
+        watch.running
+          ? `${plural(watch.pagesWatched, 'key page')} checked every morning · last check ${fmtDate(watch.lastCheckedAt)}`
+          : `Last check ${watch.lastCheckedAt ? fmtDate(watch.lastCheckedAt) : 'unknown'} — the watch has not run since`
+      }
+      flush
+    >
+      <div className="grid grid-cols-1 gap-3 px-5 pb-4 sm:grid-cols-3">
+        <MetricCard
+          label="Pages watched daily"
+          value={<CountUp value={watch.pagesWatched} />}
+          icon={<Eye />}
+          tone="blue"
+          meta={watch.pagesNotChecked ? `${watch.pagesNotChecked} could not be read in the last check` : 'free: one plain request per page'}
+          info="The key pages come from your site model and page inventory. One plain request each, no paid API — so this can run every day."
+        />
+        <MetricCard
+          label="Changes in the last 7 days"
+          value={<CountUp value={watch.changedLast7Days} />}
+          icon={<BellRing />}
+          tone={watch.changedLast7Days ? 'warning' : 'good'}
+          meta={watch.changedLast7Days ? 'alerted the same day' : 'nothing changed'}
+          info="A page gone, a noindex, a redirect, a moved canonical, a changed title, or a changed robots.txt. You also get these on the Alerts page."
+        />
+        <MetricCard
+          label="In Google's index"
+          value={coverage && coverage.checked ? `${coverage.indexed}/${coverage.checked}` : '—'}
+          icon={<FileSearch />}
+          tone={coverage && coverage.notIndexed ? 'warning' : 'blue'}
+          meta={coverage ? (coverage.notChecked ? `${coverage.notChecked} not checked yet` : 'every key page inspected') : 'Search Console not connected'}
+          info={coverage?.text ?? "Connect Search Console to see which of these pages Google has indexed and which canonical it chose."}
+        />
+      </div>
+      {watch.changes.length > 0 && (
+        <ul className="divide-y divide-line border-t border-line">
+          {watch.changes.map((c) => (
+            <InsightItem
+              key={`${c.url}-${c.at}`}
+              tone={c.changes.some((x) => /gone|noindex_added|robots_blocked|error/.test(x)) ? 'critical' : 'warning'}
+              meta={
+                <>
+                  {c.changes.map((x) => (
+                    <Badge key={x}>{CHANGE_LABEL[x] ?? x.replace(/_/g, ' ')}</Badge>
+                  ))}
+                  <span className="text-xs text-ink-3">{fmtDate(c.at)}</span>
+                </>
+              }
+              title={pathOnly(c.url)}
+              titleAttr={c.url}
+              clampTitle
+              actionPosition="side"
+            />
+          ))}
+        </ul>
+      )}
+      {coverage && (
+        <div className="border-t border-line px-5 py-3">
+          <p className="text-[13px] text-ink-2">{coverage.text}</p>
+          {(coverage.canonicalMismatch > 0 || coverage.mobileBad > 0) && (
+            <p className="mt-1 text-xs text-ink-3">
+              {coverage.canonicalMismatch > 0 && `${plural(coverage.canonicalMismatch, 'page')} where Google picked a different canonical than the page itself. `}
+              {coverage.mobileBad > 0 && `${plural(coverage.mobileBad, 'page')} Google reports as not mobile-friendly.`}
+            </p>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+const RECHECK_META: Record<string, { label: string; tone: 'accent' | 'good' | 'warning' | undefined }> = {
+  requested: { label: 'Re-check queued', tone: 'accent' },
+  fixed: { label: 'Fixed (re-checked)', tone: 'good' },
+  still_open: { label: 'Still open', tone: 'warning' },
+  not_checked: { label: 'Needs the next audit', tone: undefined },
+};
+
+/** "I fixed this": asks the daily key-page watch to judge this one finding again, and shows what it answered. */
+function RecheckCell({ finding, auditId }: { finding: Finding; auditId: string }) {
+  const { org, site, can } = useSitePage();
+  const qc = useQueryClient();
+  const [asked, setAsked] = useState<RecheckRequest | null>(null);
+  const ask = useMutation({
+    mutationFn: () => api<RecheckRequest>(`/api/orgs/${org.id}/sites/${site.id}/technical/findings/recheck`, { method: 'POST', body: { auditId, findingKey: finding.key } }),
+    onSuccess: (r) => {
+      setAsked(r);
+      toast.success(r.message);
+      void qc.invalidateQueries({ queryKey: qk.siteData(site.id, 'technical') });
+    },
+    onError: (e) => toast.error(errorMessage(e)),
+  });
+  const state = asked?.state ?? finding.recheck?.state;
+  if (state) {
+    const m = RECHECK_META[state] ?? { label: state, tone: undefined };
+    const note = asked?.message ?? finding.recheck?.note ?? '';
+    return (
+      <span className="inline-flex items-center gap-1.5">
+        <Badge tone={m.tone}>{m.label}</Badge>
+        {note && <InfoTip label="What the re-check found">{note}</InfoTip>}
+      </span>
+    );
+  }
+  if (finding.status === 'fixed' || !can('member')) return <span className="text-ink-3">—</span>;
+  return (
+    <Button size="sm" variant="ghost" loading={ask.isPending} onClick={() => ask.mutate()}>
+      I fixed this
+    </Button>
   );
 }

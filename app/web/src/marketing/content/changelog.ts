@@ -48,6 +48,22 @@ export const changelog: ChangelogEntry[] = [
   },
   {
     date: '2026-10-13',
+    title: 'Your key pages checked every morning, and fixes verified in a day',
+    summary:
+      'A monthly audit cannot see a page that was set to noindex on the 3rd. Ascentra now checks your most important pages every day and tells you the same day when something that matters changes — and when you mark a fix done, that exact issue is re-checked the next morning instead of at the next audit.',
+    highlights: [
+      'Every morning your key pages are fetched and compared with yesterday: HTTP status, a redirect that appeared, the noindex tag, the canonical, the title — plus your robots.txt',
+      'A page gone, set to noindex, newly blocked or re-canonicalised reaches you the same day, on the alerts page and in your alert channel',
+      'An unchanged page says nothing, and a page that could not be read is reported as not checked — never as fine',
+      'Mark an issue fixed and the next daily check judges that one issue on your key pages and shows the answer, usually within a day',
+      'Issues that need the full crawl or Search Console data say so instead of guessing, and wait for the audit',
+      'Google’s own view of every key page: indexed or not, the canonical Google chose against yours, the last crawl, mobile usability and rich results',
+      'Those inspections rotate through all your key pages, oldest first, inside Google’s daily limit, and anything a run did not reach is listed as not checked',
+    ],
+    features: ['technical-audits', 'site-tracking', 'reports'],
+  },
+  {
+    date: '2026-10-13',
     title: 'Shorter fix lists, honest best links, and a word even when your numbers are small',
     summary:
       'Three quality fixes measured against real sites: the tiniest audit findings are folded into one line so the list you read is the list to act on, a search-results page can no longer be called one of your best links, and a site with a handful of clicks a month still hears when they halve.',
