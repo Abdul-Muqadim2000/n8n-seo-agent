@@ -4416,6 +4416,222 @@ log('A stored rung nobody revisited (2026-10-13, FIX_PLAN R16): the fit gate now
 log('Alerts on statistics, not on fixed percentages (2026-10-13, FIX_PLAN G28): the keyword-position alert was the last fixed threshold in the site tracking (5 places while the keyword was in the top 10, at any volume) — ST.position (v5/code/_site_stats.js) now needs alert_min_position_impressions (50) impressions in both 28-day periods before a move is called real, tests the same keyword\'s clicks over the same periods (two-sample Poisson z) and reports a big move on too little data as a "Watch" info line; every traffic and position alert carries ST.tested: the source, the two periods, the test and how sure it is, plus the Google update dates of the period from v5/data/seo_events.json')
 log('A pre-release check a CI job can read (2026-10-13, FIX_PLAN G27): the new workflow SEO Agent — Pre-release Check (build_api.py, SEOagentPreRel1, POST /webhook/seo-prerelease, synchronous and free) runs the key-page checks of the daily watch (status, redirect, noindex, robots.txt, one canonical / title / H1, description) against a staging host or an explicit URL list and answers { verdict, exit_code, summary, counts, failures, warnings, not_checked, pages }; it has no Data Table node and no sub-workflow call, so it can never create a ladder row, a content-log row or an audit, and index coverage, real-user speed and positions come back as "not checked" with the reason because a staging URL Google has never seen cannot be asked')
 log('Two small lies from the re-rating ("Also seen", 2026-10-13): a ladder row stored before D10 carried free text as its page type and it travelled unchanged into the brief, the schema and the content log — Normalize Input maps it through v5/code/_page_type.js, keeps the sentence as page_notes and says in page_type_note what it did; and the fix pack repeated the site\'s own LinkedIn sameAs (the schema spelling and the footer link both survived the exact-string Set), so profiles are deduped by identity and organization.jsonld says which ones the homepage already lists and which are genuinely new')
+# 54. WHAT EXISTS ONLY AFTER JAVASCRIPT (2026-10-13, system review FIX_PLAN.md G14; CRITERIA_technical… 1.4)
+#     The audit crawl can render JavaScript (DataForSEO on-page, `enable_javascript`), so a page whose heading, text, canonical or links
+#     are written by a script looked perfectly healthy to us — while every crawler that does NOT render (all of today's AI crawlers, and
+#     Google on its first pass) sees an empty shell. Nobody ever compared the two readings.
+#     Each audit now reads its key pages **twice**: the raw first response (*Fetch Raw Pages*, a plain GET) and the page after its scripts
+#     ran (*Render Key Pages*, the Jina Reader render path of v5/code/Render_Requests.js, `X-Return-Format: html`; the JavaScript crawl
+#     stands in only when it really rendered). *Render Diff* reads title, main heading, canonical link, robots meta, link count and text
+#     length from both with the same parser, flags what exists only after JavaScript and prints which of the two every figure came from.
+#     Two rules it keeps: URLs are compared host-agnostically (a www. crawl URL against a bare canonical is not a mismatch), and a reading
+#     that failed is **"not checked" with the reason** — never "no difference". Both fetches are free and capped at
+#     CONFIG.render_diff_pages (5) pages per audit; both carry the G1 retry rule.
+# =============================================================================
+import retry_lint as _rl54
+LK_SRC54 = _rd0('code/_link_kit.js').rstrip('\n')
+
+# how many key pages are read twice (free; the cap travels with the run like every other limit)
+patch('Normalize Input', "  live_serp_checks: 16,\n",
+      "  live_serp_checks: 16,\n"
+      "  // G14 (2026-10-13): how many key pages of an audit are read twice — the raw first response and the rendered page — so the\n"
+      "  // report can say what only exists after JavaScript. Both fetches are free (a plain GET and one render); 5 covers the homepage\n"
+      "  // plus the four pages Search Console says earn the most.\n"
+      "  render_diff_pages: 5,\n")
+patch('Normalize Input', "    heavy_audit_pages: CONFIG.heavy_audit_pages,\n", "    heavy_audit_pages: CONFIG.heavy_audit_pages,\n    render_diff_pages: CONFIG.render_diff_pages,\n")
+
+# ---------- the chain, between the speed figures and the scoring (both audit types pass through it) ----------
+_ac54 = pos('Analyze CrUX'); RX, RY = _ac54[0] + 220, _ac54[1]
+disconnect('Analyze CrUX', 'Build Site Issues')
+add_node('Render Diff Targets', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Render_Diff_Targets.js')}, [RX, RY])
+if_node('Any Render Diff?', '{{ !$json.skip }}', [RX + 220, RY])
+add_node('Render Key Pages', 'n8n-nodes-base.httpRequest', 4.5, {
+    'url': '=https://r.jina.ai/{{ $json.url }}', 'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+    'sendHeaders': True, 'headerParameters': {'parameters': [
+        {'name': 'X-Return-Format', 'value': 'html'},   # the HTML after the scripts ran, with the links and their rel attributes
+        {'name': 'X-Engine', 'value': 'browser'},
+        {'name': 'X-No-Cache', 'value': 'true'},
+        {'name': 'X-Timeout', 'value': '45'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 4000}}, 'timeout': 60000,
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [RX + 440, RY - 160], dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl54.RETRY))
+nodes['Render Key Pages']['credentials'] = {'httpHeaderAuth': {'id': 'SEOcredJinaReade', 'name': 'Jina Reader'}}
+add_node('Raw Page Targets', 'n8n-nodes-base.code', 2, {'jsCode': rd('code/Raw_Page_Targets.js')}, [RX + 660, RY - 160])
+add_node('Fetch Raw Pages', 'n8n-nodes-base.httpRequest', 4.5, {
+    'url': '={{ $json.url }}', 'sendHeaders': True, 'headerParameters': {'parameters': [
+        {'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEOAgentAudit/1.0; +https://www.google.com/bot.html)'},
+        {'name': 'Accept', 'value': 'text/html,application/xhtml+xml'}]},
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 500}}, 'timeout': 20000,
+                'redirect': {'redirect': {'followRedirects': True, 'maxRedirects': 5}},
+                'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}},
+    [RX + 880, RY - 160], dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl54.RETRY))
+add_node('Render Diff', 'n8n-nodes-base.code', 2, {'jsCode': LK_SRC54 + '\n' + rd('code/Render_Diff.js')}, [RX + 1100, RY])
+for _a54, _b54 in [('Analyze CrUX', 'Render Diff Targets'), ('Render Diff Targets', 'Any Render Diff?'),
+                   ('Render Key Pages', 'Raw Page Targets'), ('Raw Page Targets', 'Fetch Raw Pages'),
+                   ('Fetch Raw Pages', 'Render Diff'), ('Render Diff', 'Build Site Issues')]:
+    connect(_a54, _b54)
+connect('Any Render Diff?', 'Render Key Pages', 0); connect('Any Render Diff?', 'Render Diff', 1)
+
+# ---------- the scored audit carries the diff, and says when it could not be made ----------
+patch('Build Site Issues', "      crux: input.crux || null,\n", "      crux: input.crux || null,\n      render_diff: input.render_diff || null,\n")
+patch('Build Site Issues', "if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');",
+      "if (!(input.render_diff && input.render_diff.available)) not_assessed.push('What crawlers see before JavaScript runs (the first response against the rendered page, per key page): ' + ((input.render_diff && input.render_diff.not_available) || 'not collected in this run'));\n"
+      "if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');")
+
+# ---------- both audit reports: the figure-by-figure table, with the reading each number came from ----------
+RD_SECTION_JS = r"""// ---- what crawlers see before JavaScript runs (G14, 2026-10-13) ----
+const renderDiffSection = (a) => {
+  const rdf = a.render_diff || null;
+  const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const val = (v) => { const s = String(v == null ? '' : v); return s ? e3(s).slice(0, 110) : '—'; };
+  let h = `<h3>What crawlers see before JavaScript runs</h3>`;
+  if (!rdf) return h + `<p>Not checked in this run.</p>`;
+  if (!rdf.available) return h + `<p><b>Not checked:</b> ${e3(rdf.not_available)}.</p>`;
+  const rows = [];
+  for (const p of (rdf.pages || [])) {
+    if (!p.checked) { rows.push(`<tr><td>${e3(p.path)}</td><td colspan="4" class="small"><b>not checked</b> — ${e3(p.not_checked)}</td></tr>`); continue; }
+    for (const f of (p.figures || [])) {
+      if (f.state === 'same' || f.state === 'absent') continue;
+      rows.push(`<tr><td>${e3(p.path)}</td><td>${e3(f.figure)}</td><td>${val(f.raw)}</td><td>${val(f.rendered)}</td><td class="small">${e3(f.from)}</td></tr>`);
+    }
+  }
+  h += rows.length
+    ? `<table class="ct"><tr><th>Page</th><th>Figure</th><th>In the first response</th><th>After JavaScript</th><th>Taken from</th></tr>` + rows.join('') + `</table>`
+    : `<p><span class="ok">No difference</span> on any of the ${rdf.pages_checked} key page(s) checked: title, main heading, canonical link, robots rule, links and text are all in the first response.</p>`;
+  h += `<p class="small">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice${rdf.pages_not_checked ? `, ${rdf.pages_not_checked} not checked (the reason is in the table)` : ''}${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}. AI crawlers do not run JavaScript, so anything listed as coming from the rendered page is invisible to them.</p>`;
+  return h;
+};
+"""
+for _rn54 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn54, "const findings = a.findings || [];", RD_SECTION_JS + "const findings = a.findings || [];")
+    patch(_rn54, "    search_console: a.search_console || null,\n    crux: a.crux || null,", "    search_console: a.search_console || null,\n    crux: a.crux || null,\n    render_diff: a.render_diff || null,")
+patch('Build Audit Report', "html += cwvSection(a);", "html += cwvSection(a);\nhtml += renderDiffSection(a);")
+patch('Build Full Report', "html += cwvSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));",
+      "html += cwvSection(a) + renderDiffSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));")
+patch('Build Audit Response', "crux: d.crux || null,", "crux: d.crux || null, render_diff: d.render_diff || null,")
+
+assert 'const LK = (() => {' in code('Render Diff'), 'Render Diff: the link kit is not inlined (G14)'
+assert 'const SM = (() => {' in code('Render Diff Targets'), 'Render Diff Targets: the site model kit is not inlined (G14)'
+assert nodes['Render Key Pages'].get('credentials'), 'Render Key Pages: Jina credential slot missing (G14)'
+for _hn54 in ('Render Key Pages', 'Fetch Raw Pages'):
+    assert not _rl54.weak(nodes[_hn54]), _hn54 + ': the G1 retry rule is missing'
+assert 'renderDiffSection' in code('Build Audit Report') and 'renderDiffSection' in code('Build Full Report'), 'the render diff is not in both audit reports'
+# the two lints run again here: both new HTTP nodes were added after the last pass (G1 retry rule, D15 canonical host)
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('What exists only after JavaScript (2026-10-13, FIX_PLAN G14): every audit reads up to CONFIG.render_diff_pages (5) key pages twice — the raw first response (Fetch Raw Pages, a plain GET) and the page after its scripts ran (Render Key Pages, the Jina render path, with the JavaScript crawl standing in only when it really rendered) — and Render Diff compares title, main heading, canonical link, robots meta, link count and text length with one parser, flags what exists only after JavaScript as a High / Medium finding plus an AI Search Readiness finding, and prints which of the two readings every figure came from in both audit reports and in the callback; URLs are compared host-agnostically (a www. crawl URL against a bare canonical is not a mismatch) and a reading that failed is "not checked" with the reason (bot challenge, HTTP error, DNS, empty body), never "no difference"')
+
+# ---------- G31: a style guide that is stored, used in every writing prompt and checked (FIX_PLAN.md G31; criterion CAD C17) ----------
+#     Nothing stored how the customer writes. The brand's own written form ("Tech&", never "Tech and" or "techand"), the spelling variant
+#     (the market the page targets decided it, so a UAE site writing American English was corrected into British English on every page),
+#     the words they do not want used and the tone existed nowhere, so no prompt carried them and no check caught a draft that broke them.
+#     **Where it is stored: the site's business profile row (`seo_profiles.style_*`)** — not app site settings — for three reasons: every
+#     content run, the Content Cadence and the AI pages already load that row (*Load Profile (Brief)*), so the guide costs no new read, node
+#     or API call; it is already the one "how we present ourselves" record (author, reviewer, NAP), editable through the existing `profile`
+#     mode and the app's profile form; and Content QA can only score a rule that lives in the engine's own store (the app's `sites.tone` is
+#     a free-text prompt hint that reaches content runs only and cannot be checked).
+#     v5/code/_style_guide.js (ST) holds all of it: ST.from(row, defaults) builds the guide (spelling and tone fall back to the market /
+#     the request), ST.block(guide) is the HOUSE STYLE paragraph the brief, copywriter and editor prompts print, and ST.check(markdown)
+#     runs the mechanical checks. The brand's own name written wrongly is a real quality finding (a warning, so the editor corrects it and
+#     the page does not pass as it is); the spelling variant, the words to avoid and the tone are **advice** — reported beside the page like
+#     the other notes, never a reason on their own for a page to be "not ready".
+STYLE_SRC = _rd0('code/_style_guide.js').rstrip('\n')
+assert 'const ST = (() => {' in STYLE_SRC and 'function check(' in STYLE_SRC, 'the style kit has no check (G31)'
+for _sn54 in ('Brief Context', 'Content QA', 'Profile Delivery'):
+    assert 'const ST = (() => {' not in code(_sn54), _sn54 + ': the style kit is already inlined'
+    setcode(_sn54, STYLE_SRC + '\n' + code(_sn54))
+
+# A. the intake: the six fields on the profile form / `style` in the API body, and a style guide alone is enough to submit the form
+insert_fields('Page Profile', 'Logo URL (optional)', [
+    {'fieldLabel': 'How your brand name is written', 'placeholder': 'exactly as it must appear, e.g. Tech& (never "Tech and" or "techand")'},
+    {'fieldLabel': 'Spelling', 'placeholder': 'British English or American English - leave empty to follow the market you target'},
+    {'fieldLabel': 'Words to avoid', 'placeholder': 'comma separated, e.g. cutting-edge, synergy, solutions provider'},
+    {'fieldLabel': 'How you want to sound', 'placeholder': 'e.g. plain and direct, no hype, never an exclamation mark'},
+    {'fieldLabel': 'Other style rules', 'fieldType': 'textarea', 'placeholder': 'anything else every page must follow'}])
+nodes['Page Profile']['parameters']['options']['formDescription'] = nodes['Page Profile']['parameters']['options']['formDescription'].replace(
+    'and local pages carry your verified name, address, phone and hours (LocalBusiness schema).',
+    'and local pages carry your verified name, address, phone and hours (LocalBusiness schema). The style guide at the bottom is followed by every page we write and checked before delivery.')
+patch('Normalize Input', "const A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video);",
+      "const A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video), STY = obj(p2.style);   // G31: the stored style guide")
+patch('Normalize Input', "  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400)\n};",
+      "  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400),\n"
+      "  // G31 (2026-10-13): how this customer writes. The spelling variant is empty unless they chose one, and then it beats the market default.\n"
+      "  style_brand_form: s0(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written'), 160),\n"
+      "  style_brand_wrong: asArray(STY.brand_wrong || STY.brandWrong || p2.style_brand_wrong).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),\n"
+      "  style_spelling: s0(STY.spelling || p2.style_spelling || lab('Spelling'), 40),\n"
+      "  style_avoid: asArray(STY.avoid || STY.avoid_words || STY.avoidWords || p2.style_avoid || lab('Words to avoid')).map(x => s0(x, 60)).filter(Boolean).slice(0, 40).join(', '),\n"
+      "  style_tone: s0(STY.tone || p2.style_tone || lab('How you want to sound'), 300),\n"
+      "  style_notes: s0(STY.notes || p2.style_notes || lab('Other style rules'), 600)\n};")
+patch('Normalize Input', "if (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name or the business details.');",
+      "if (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name', 'style_brand_form', 'style_spelling', 'style_avoid', 'style_tone'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name, the business details or your style guide.');")
+patch('Normalize Input', "    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name) ? profile_input : null,",
+      "    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name || profile_input.style_brand_form) ? profile_input : null,")
+
+# B. the row that is stored (the upsert maps exactly the table columns)
+patch('Profile Row', "'reviewer_name', 'reviewer_job_title', 'reviewer_url'];",
+      "'reviewer_name', 'reviewer_job_title', 'reviewer_url',\n  'style_brand_form', 'style_brand_wrong', 'style_spelling', 'style_avoid', 'style_tone', 'style_notes'];   // G31 (2026-10-13): the stored style guide")
+patch('Profile Delivery', "const summary = (stored ?", "const style_guide = ST.from(r, {});   // G31: what is on file about how they write\nconst summary = (stored ?")
+patch('Profile Delivery', "const plain = summary + (missE.length ?",
+      "const style_line = style_guide.on_file\n"
+      "  ? 'House style on file: ' + [style_guide.brand_form ? 'the name written \"' + style_guide.brand_form + '\"' : '', style_guide.spelling ? style_guide.spelling + ' spelling' : '', style_guide.avoid.length ? style_guide.avoid.length + ' word(s) to avoid' : '', style_guide.tone ? 'tone \"' + style_guide.tone + '\"' : ''].filter(Boolean).join(', ') + '. Every new page follows it and the quality check reports a draft that breaks it.'\n"
+      "  : 'No style guide on file yet: how your name is written, the spelling variant, words to avoid and the tone. Fill it in once and every page follows it.';\n"
+      "const plain = summary + '\\n\\n' + style_line + (missE.length ?")
+patch('Profile Delivery', "eeat_score: score(eeat), local_score: score(local), schema_preview: { person, local_business: localBusiness }, stored, store_error, summary, plain, status: 'completed', stage: 'profile' } }];",
+      "eeat_score: score(eeat), local_score: score(local), schema_preview: { person, local_business: localBusiness }, style_guide, style_line, stored, store_error, summary, plain, status: 'completed', stage: 'profile' } }];")
+patch('Build Profile Response', "schema_preview: p.schema_preview,", "schema_preview: p.schema_preview, style_guide: p.style_guide || null, style_line: p.style_line || '',")
+
+# C. the guide reaches every writing prompt (the brief, the copywriter and the editor already print $json.spelling / $json.tone)
+patch('Brief Context', "return [{ json: { ...d, site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, hub_pages_planned: hub_planned, video, case_study: cs, local_area: area,",
+      "// G31 (2026-10-13): the stored style guide. A spelling variant the customer chose beats the one the target market implies, and their\n"
+      "// own tone beats the request's; both travel as `spelling` / `tone`, which the brief, copywriter and editor prompts already print.\n"
+      "const style_guide = ST.from(P, { spelling: s(d.spelling), tone: s(d.tone) });\n"
+      "return [{ json: { ...d, style_guide, spelling: style_guide.spelling_effective || s(d.spelling), tone: style_guide.tone || s(d.tone),\n"
+      "  site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, hub_pages_planned: hub_planned, video, case_study: cs, local_area: area,")
+for _pn54, _anchor54 in (('Strategy Brief', 'PAGE DETAILS\nTarget Keyword:'), ('Copywriter', 'PAGE\nTarget Keyword:'), ('Editor', 'TARGET\nPrimary keyword:')):
+    _t54 = nodes[_pn54]['parameters']['text']
+    assert _t54.count(_anchor54) == 1, _pn54 + ': prompt anchor moved (G31)'
+    nodes[_pn54]['parameters']['text'] = _t54.replace(_anchor54, "{{ ($json.style_guide || {}).prompt_block || '' }}\n\n" + _anchor54)
+    assert 'style_guide' in nodes[_pn54]['parameters']['text'], _pn54 + ': the house style block is missing (G31)'
+
+# D. the mechanical check, next to the other quality checks: the brand's name is a warning, the rest is advice
+patch('Content QA', "// FIX_PLAN D10: a page nobody can publish never passes — more than PH_MAX placeholders, or more than 25% over the brief's target (which is",
+      "// G31 (2026-10-13): the customer's stored style guide, checked mechanically (v5/code/_style_guide.js). The brand's own name written\n"
+      "// wrongly is a real quality finding and goes into `warnings`, so the editor corrects it and the page does not pass as it is. The\n"
+      "// spelling variant, the words to avoid and the tone are advice: they are reported beside the page and never make it \"not ready\".\n"
+      "const style_guide = prev.style_guide || null;\n"
+      "const style = ST.check(md, style_guide);\n"
+      "for (const e of style.errors) warnings.push(e);\n"
+      "const style_notes = [...style.notes];\n"
+      "\n"
+      "// FIX_PLAN D10: a page nobody can publish never passes — more than PH_MAX placeholders, or more than 25% over the brief's target (which is")
+patch('Content QA', "schema_types: blocks.map(b => b.type), eeat_notes, page_role: role, auto_fixes: fixes, warnings } } }];",
+      "schema_types: blocks.map(b => b.type), eeat_notes, style, style_notes, style_guide: style_guide && style_guide.on_file ? style_guide : null, page_role: role, auto_fixes: fixes, warnings } } }];")
+
+# E. the report and the package say what the style guide asked for and what the draft did with it
+patch('Build Word File', "  parts.push(h2('Author, Trust & Page Extras') + kv(extraRows) + ((qa.eeat_notes || []).length ? '<h3>Before publishing</h3>' + ul(qa.eeat_notes) : ''));",
+      """  parts.push(h2('Author, Trust & Page Extras') + kv(extraRows) + ((qa.eeat_notes || []).length ? '<h3>Before publishing</h3>' + ul(qa.eeat_notes) : ''));
+  // ---- G31: the customer's own style guide, and what the draft did with it ----
+  const sg = qa.style_guide || null, st = qa.style || null;
+  if (sg || (st && (st.notes || []).length)) {
+    const sgRows = [];
+    if (sg && sg.brand_form) sgRows.push(['Brand name is written', esc(sg.brand_form) + ((sg.wrong_forms || []).length ? ' <span class="small">(never ' + sg.wrong_forms.map(w => esc(w)).join(', ') + ')</span>' : '')]);
+    if (sg && sg.spelling_effective) sgRows.push(['Spelling', esc(sg.spelling_effective) + ' <span class="small">(' + esc(sg.spelling_source || 'house style') + ')</span>']);
+    if (sg && (sg.avoid || []).length) sgRows.push(['Words to avoid', esc(sg.avoid.join(', '))]);
+    if (sg && sg.tone) sgRows.push(['Tone', esc(sg.tone)]);
+    if (sg && sg.notes) sgRows.push(['Other rules', esc(sg.notes)]);
+    const brandErr = st && (st.brand || []).length ? st.brand.map(b => 'The name was written "' + b.found + '" ' + b.count + ' time(s)') : [];
+    parts.push(h2('Your Style Guide') + (sgRows.length ? kv(sgRows) : '<p>No style guide on file: set the brand\\'s written form, the spelling variant, words to avoid and the tone once, and every page follows them.</p>')
+      + (brandErr.length ? '<h3>Corrected before delivery</h3>' + ul(brandErr) : '')
+      + ((st && (st.notes || []).length) ? '<h3>Style notes (advice, not blockers)</h3>' + ul(st.notes) : (sgRows.length ? '<p class="ok">The draft matches every mechanical rule of your style guide.</p>' : '')));
+  }""")
+patch('Build Word File', "content_brief_video_placement: brief.video_placement || '', eeat_notes: qa.eeat_notes || [], page_type: d.page_type || ''",
+      "content_brief_video_placement: brief.video_placement || '', eeat_notes: qa.eeat_notes || [], style_notes: qa.style_notes || [], style_guide: qa.style_guide || null, page_type: d.page_type || ''")
+patch('Blog Package', "eeat_notes: Array.isArray(d.eeat_notes) ? d.eeat_notes : [],", "eeat_notes: Array.isArray(d.eeat_notes) ? d.eeat_notes : [],\n  style_notes: Array.isArray(d.style_notes) ? d.style_notes : [],   // G31: the style advice travels with the package (meta.json)")
+
+assert "ST.check(md, style_guide)" in code('Content QA') and 'ST.from(P,' in code('Brief Context'), 'the style guide is not wired into the content run (G31)'
+assert 'style_brand_form' in code('Profile Row') and 'style_brand_form' in code('Normalize Input'), 'the style guide is not stored (G31)'
+log('A style guide that is stored, used and checked (2026-10-13, FIX_PLAN G31): the brand\'s written form ("Tech&"), extra wrong forms, the spelling variant, the words to avoid, the tone and any further rule live on the site\'s business profile row (seo_profiles.style_*, filled through the profile form / API `style`), so every run that already loads the profile carries them at no extra cost; v5/code/_style_guide.js (ST) turns the row into the HOUSE STYLE paragraph the Strategy Brief, Copywriter and Editor prompts print and overrides the market-derived spelling and the requested tone, and Content QA checks it mechanically — the brand\'s own name written wrongly is a quality warning the editor must fix, while the spelling variant, the words to avoid and exclamation marks against a stated tone are advice printed in the report and the package (meta.json) that can never on its own make a page "not ready"')
+
 
 # =============================================================================
 # 9. WRITE

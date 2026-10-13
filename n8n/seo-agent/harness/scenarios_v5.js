@@ -7124,6 +7124,310 @@ await guard('g12-g29-annotations-change-tests-lineage', async () => {
     /Where these numbers come from/.test(RP56.html) && RP56.lineage.length >= 3 && RP56.lineage.every(l => l.figure && l.source_label)
     && RP56.lineage.some(l => /Position before and after/.test(l.figure) && l.source === 'gsc_history'), JSON.stringify(RP56.lineage.map(l => [l.figure, l.source])));
 });
+// S63 G14 + G31 (2026-10-13, system review FIX_PLAN.md G14 / G31; criteria TECH 1.4 and CAD C17)
+//   G14 the audit crawl can render JavaScript, so a page whose heading, text, canonical or links are written by a script looked healthy
+//       to us while every crawler that does not render (all of today's AI crawlers) sees an empty shell. Nothing ever compared the raw
+//       first response with the rendered page.
+//   G31 nothing stored how the customer writes — the brand's written form ("Tech&", not "Tech and"), the spelling variant, the words to
+//       avoid and the tone — so no prompt carried it and no check caught a draft that broke it.
+// ===================================================================================
+await guard('response-vs-render diff and the stored style guide', async () => {
+  reset(); const SN = 'S63 G14 G31 — what only exists after JavaScript, and a style guide that is stored, used in the prompts and checked';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 500))); };
+  const D = 'northwind-erp.com';
+
+  // ---------- G14 ----------
+  // one page of HTML, built the same way for both readings so the only differences are the ones the scenario puts there
+  const pageHtml = (o = {}) => {
+    const can = o.canonical ? `<link rel="canonical" href="${o.canonical}">` : '';
+    const rob = o.robots ? `<meta name="robots" content="${o.robots}">` : '';
+    const h1 = o.h1 ? `<h1>${o.h1}</h1>` : '';
+    const links = Array.from({ length: o.links || 0 }, (_, i) => `<a href="/page-${i}/">Link ${i}</a>`).join('');
+    const shell = o.shell ? '<div id="root"></div><script src="/app.js"></script>' : '';
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>${o.title == null ? '' : o.title}</title>${can}${rob}</head><body>${shell}${h1}<p>${F.words(o.words || 0)}</p><nav>${links}</nav></body></html>`;
+  };
+  const ok200 = (html) => ({ statusCode: 200, headers: { 'content-type': 'text/html' }, data: html });
+  const CHALLENGE = { statusCode: 403, headers: {}, data: '<html><head><title>Just a moment...</title></head><body>Enable JavaScript and cookies to continue</body></html>' };
+  const TOP_PAGES = [
+    { page: 'https://' + D + '/services/erp-implementation/', clicks: 420, impressions: 9000, position: 7.1 },
+    { page: 'https://' + D + '/services/data-migration/', clicks: 300, impressions: 6400, position: 9.4 },
+    { page: 'https://' + D + '/blog/odoo-vs-dynamics/', clicks: 90, impressions: 2200, position: 12.0 },
+    { page: 'https://' + D + '/services/odoo-erp/', clicks: 40, impressions: 1100, position: 14.2 },
+  ];
+  const prevOf = (o = {}) => ({ domain: D, audit_level: 'site_audit', probe: { findings: [], what_works: [], measurements: {} },
+    extra_findings: [], extra_works: [], crux: null, crawl_extras: { non_indexable: o.non_indexable || [] },
+    search_console: { connected: true, property: 'sc-domain:' + D, permission: 'siteOwner', top_pages: TOP_PAGES, top_queries: [],
+      totals: { clicks: 980, impressions: 24000, ctr: 0.04, position: 18.2, period: { start: '2026-09-14', end: '2026-10-11' } },
+      pages_with_impressions: 12, queries_with_impressions: 300, sitemaps: [], coverage: {}, not_indexed: [], canonical_mismatch: [], rich_results: [] }, ...o.over });
+  const setCrawl = (o = {}) => {
+    mock('Check Crawl', [{ json: { domain: D, crawl_js: o.crawl_js !== false, render_diff_pages: o.cap || 5, crawl_max_pages: 200, audit_level: 'site_audit', crawl_summary: { domain_info: { checks: {} }, page_metrics: {} } } }]);
+    mock('Get Crawled Pages', F.crawledPagesRes);
+    mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+    mock('Site Model', [{ json: { site_model: { domain: D, canonical_host: 'www.' + D, business_name: 'Northwind ERP', pages: [] } } }]);
+  };
+
+  // ---------- A. the plan: the homepage plus the pages Search Console says earn the most, capped ----------
+  setCrawl();
+  const prev1 = prevOf();
+  mock('Analyze CrUX', [{ json: prev1 }]);
+  const T1 = await run('Render Diff Targets', [{ json: prev1 }]);
+  const paths1 = T1.map(x => x.json.url.replace(/^https?:\/\/[^/]+/, ''));
+  console.log('   render diff targets ->', JSON.stringify(paths1), '| plan', JSON.stringify(T1[0].json.render_plan));
+  check('G14: the audit picks the homepage plus the key pages Search Console says earn the most, inside CONFIG.render_diff_pages, and asks for both readings of each',
+    T1.length === 5 && paths1[0] === '/' && paths1.includes('/services/erp-implementation/') && paths1.includes('/services/data-migration/')
+    && T1.every(x => x.json.render_url === 'https://r.jina.ai/' + x.json.url) && T1[0].json.render_plan.cap === 5
+    && !paths1.some(p => /privacy|careers/.test(p)),   // legal pages and the 404 are not key pages
+    JSON.stringify(paths1));
+  const RAW1 = await run('Raw Page Targets', T1);
+  check('G14: the raw request keeps the page order of the plan, so the two readings line up without pairing expressions',
+    RAW1.length === T1.length && RAW1.every((r, i) => r.json.url === T1[i].json.url && r.json.index === i), JSON.stringify(RAW1.map(r => r.json.url)));
+
+  // the answers: /  = identical but for the www. of its canonical · [1] = a JavaScript shell · [2] = a raw fetch behind a bot challenge
+  //              [3] = noindex added after load · [4] = the title rewritten by a script
+  const shellH1 = 'ERP Implementation for Distributors';
+  const answers = (url, side) => {
+    const p = url.replace(/^https?:\/\/[^/]+/, '');
+    const i = paths1.indexOf(p);
+    if (i === 0) return ok200(pageHtml({ title: 'Northwind ERP', h1: 'ERP for distributors', words: 400, links: 30,
+      canonical: side === 'raw' ? 'https://www.' + D + '/' : 'https://' + D + '/' }));   // www. on one side, bare host on the other
+    if (i === 1) return side === 'raw'
+      ? ok200(pageHtml({ title: 'Northwind ERP', words: 18, links: 2, shell: true, canonical: 'https://' + D + p }))
+      : ok200(pageHtml({ title: 'Northwind ERP', h1: shellH1, words: 520, links: 34, canonical: 'https://' + D + p }));
+    if (i === 2) return side === 'raw' ? CHALLENGE : ok200(pageHtml({ title: 'Data migration', h1: 'Data migration', words: 600, links: 28, canonical: 'https://' + D + p }));
+    if (i === 3) return ok200(pageHtml({ title: 'Odoo vs Dynamics', h1: 'Odoo vs Dynamics', words: 900, links: 26, canonical: 'https://' + D + p,
+      robots: side === 'raw' ? 'index,follow' : 'noindex,follow' }));
+    return ok200(pageHtml({ title: side === 'raw' ? 'Untitled' : 'Odoo ERP implementation in Dubai', h1: 'Odoo ERP', words: 700, links: 24, canonical: 'https://' + D + p }));
+  };
+  mock('Render Key Pages', T1.map(x => answers(x.json.url, 'rendered')));
+  mock('Fetch Raw Pages', RAW1.map(x => answers(x.json.url, 'raw')));
+  const RD1 = (await run('Render Diff', store['Fetch Raw Pages']))[0].json;
+  const rd1 = RD1.render_diff;
+  const page = (p) => rd1.pages.find(x => x.path === p) || { figures: [], js_only: [] };
+  const fig = (p, key) => (page(p).figures || []).find(f => f.key === key) || {};
+  console.log('   render diff ->', JSON.stringify(rd1.pages.map(p => [p.path, p.checked ? p.js_only.concat(p.differs || []).join('+') || 'same' : 'NOT CHECKED'])));
+
+  check('G14: a main heading that only exists after JavaScript is flagged, and the figure says the value came from the rendered page while the first response has none',
+    page(paths1[1]).js_only.includes('h1') && fig(paths1[1], 'h1').state === 'js_only'
+    && fig(paths1[1], 'h1').rendered === shellH1 && fig(paths1[1], 'h1').raw === ''
+    && fig(paths1[1], 'h1').from === 'after JavaScript (rendered page)',
+    JSON.stringify(fig(paths1[1], 'h1')));
+  check('G14: the same page\'s text and links are flagged too, and every figure that is really identical says it came from the first response',
+    page(paths1[1]).js_only.includes('words') && page(paths1[1]).js_only.includes('links')
+    && fig(paths1[1], 'title').state === 'same' && fig(paths1[1], 'title').from === 'the first response (raw HTML)',
+    JSON.stringify(page(paths1[1]).figures.map(f => [f.key, f.state, f.from])));
+  check('G14: a www. host on one side and the bare host on the other is the same canonical — never a mismatch',
+    fig('/', 'canonical').state === 'same' && /^https:\/\/www\./.test(fig('/', 'canonical').raw) && /^https:\/\/northwind/.test(fig('/', 'canonical').rendered)
+    && page('/').js_only.length === 0 && (page('/').differs || []).length === 0,
+    JSON.stringify(fig('/', 'canonical')));
+  check('G14: a raw fetch that hit a bot challenge is "not checked" with the reason — never reported as "no difference"',
+    page(paths1[2]).checked === false && /not checked|bot challenge/i.test(page(paths1[2]).not_checked)
+    && /bot challenge \(HTTP 403\)/.test(page(paths1[2]).not_checked) && (page(paths1[2]).figures || []).length === 0
+    && rd1.pages_not_checked === 1 && rd1.pages_checked === 4,
+    JSON.stringify(page(paths1[2])));
+  check('G14: a noindex that a script adds after load, and a title a script rewrites, are both caught with the two values side by side',
+    page(paths1[3]).differs.includes('robots') && /noindex/.test(fig(paths1[3], 'robots').rendered) && !/noindex/.test(fig(paths1[3], 'robots').raw)
+    && page(paths1[4]).differs.includes('title') && fig(paths1[4], 'title').raw === 'Untitled' && fig(paths1[4], 'title').from === 'the two readings differ',
+    JSON.stringify([fig(paths1[3], 'robots'), fig(paths1[4], 'title')]));
+  const f1 = RD1.extra_findings.filter(f => f.source === 'render_diff');
+  console.log('   render diff findings ->', f1.map(f => '[' + f.severity + (f.scoring === false ? ', unscored' : '') + '] ' + f.title).join(' | '));
+  check('G14: the findings name the six figures by what they cost: the heading and the text are High, the rendered-only robots rule is High, the title and the links Medium, and one finding counts every key page an AI crawler sees differently',
+    f1.some(f => f.severity === 'High' && /main heading of 1 page\(s\) only appears after JavaScript/.test(f.title) && f.category === 'Crawlability & Indexing')
+    && f1.some(f => f.severity === 'High' && /page text of 1 page\(s\) only appears after JavaScript/.test(f.title))
+    && f1.some(f => f.severity === 'High' && /robots meta of 1 page\(s\) changes after JavaScript/.test(f.title))
+    && f1.some(f => f.severity === 'Medium' && /title of 1 page\(s\) is written by JavaScript/.test(f.title))
+    && f1.some(f => f.severity === 'Medium' && /Most links of 1 page\(s\) appear only after JavaScript/.test(f.title))
+    && f1.some(f => f.severity === 'Medium' && f.category === 'AI Search Readiness' && /AI crawlers see a different version of 3 key page\(s\)/.test(f.title)),
+    JSON.stringify(f1.map(f => [f.severity, f.category, f.title])));
+  check('G14: the page that could not be read twice is reported as an unscored Info item with its reason, so a failed fetch never changes the score',
+    f1.some(f => f.severity === 'Info' && f.scoring === false && /could not be completed for 1 page\(s\)/.test(f.title) && /bot challenge/.test(f.evidence)),
+    JSON.stringify(f1.filter(f => f.severity === 'Info')));
+
+  // the scored audit and the report
+  const BSI1 = await run('Build Site Issues', [{ json: RD1 }]);
+  const a1 = BSI1[0].json.site_audit;
+  check('G14: the diff travels inside the scored audit with its method, and the audit does not list it as "not assessed"',
+    !!a1.render_diff && a1.render_diff.available === true && /read twice/.test(a1.render_diff.method)
+    && !a1.not_assessed.some(x => /before JavaScript runs/.test(x)), JSON.stringify({ has: !!a1.render_diff, na: a1.not_assessed.filter(x => /JavaScript/.test(x)) }));
+  const DOC1 = decode(await run('Build Audit Report', BSI1));
+  check('G14: the technical audit report prints the figure, both readings and which one each number came from, and says AI crawlers do not run JavaScript',
+    /What crawlers see before JavaScript runs/.test(DOC1) && /In the first response/.test(DOC1) && /After JavaScript/.test(DOC1) && /Taken from/.test(DOC1)
+    && /after JavaScript \(rendered page\)/.test(DOC1) && /not checked/.test(DOC1) && /AI crawlers do not run JavaScript/.test(DOC1),
+    (DOC1.match(/What crawlers see before JavaScript runs[\s\S]{0,500}/) || [''])[0].slice(0, 400));
+  const RESP1 = (await run('Build Audit Response', BSI1))[0].json;
+  check('G14: the callback carries the diff so the app can show it', !!RESP1.render_diff && RESP1.render_diff.pages_checked === 4, JSON.stringify(Object.keys(RESP1.render_diff || {})));
+
+  // ---------- B. nothing to compare with: a crawl that did not render JavaScript, and a render that failed ----------
+  reset(); setCrawl({ crawl_js: false, cap: 2 });
+  const prev2 = prevOf();
+  mock('Analyze CrUX', [{ json: prev2 }]);
+  const T2 = await run('Render Diff Targets', [{ json: prev2 }]);
+  const RAW2 = await run('Raw Page Targets', T2);
+  mock('Render Key Pages', T2.map(() => ({ statusCode: 502, headers: {}, data: '' })));
+  mock('Fetch Raw Pages', RAW2.map(x => answers(x.json.url, 'raw')));
+  const RD2 = (await run('Render Diff', store['Fetch Raw Pages']))[0].json;
+  console.log('   no rendered reading ->', JSON.stringify(RD2.render_diff.pages.map(p => [p.path, p.checked, p.not_checked])));
+  check('G14: with the render failed and a crawl that did not render JavaScript, every page is "not checked" with both reasons — the crawl is never passed off as a rendered reading',
+    RD2.render_diff.available === false && RD2.render_diff.pages_checked === 0 && RD2.render_diff.pages.length === 2
+    && RD2.render_diff.pages.every(p => /answered HTTP 502|returned no HTML/.test(p.not_checked) && /the crawl did not render JavaScript/.test(p.not_checked)),
+    JSON.stringify(RD2.render_diff.pages.map(p => p.not_checked)));
+  const a2 = (await run('Build Site Issues', [{ json: RD2 }]))[0].json.site_audit;
+  check('G14: the audit then lists the check under "not assessed" with the reason instead of implying the pages are fine',
+    a2.not_assessed.some(x => /before JavaScript runs/.test(x) && /no key page could be read twice/.test(x)), JSON.stringify(a2.not_assessed.filter(x => /JavaScript/.test(x))));
+
+  // ---------- C. a site that server-renders everything: the rendered reading may come from the JavaScript crawl ----------
+  reset(); setCrawl({ cap: 2 });
+  const prev3 = prevOf();
+  mock('Analyze CrUX', [{ json: prev3 }]);
+  const T3 = await run('Render Diff Targets', [{ json: prev3 }]);
+  const RAW3 = await run('Raw Page Targets', T3);
+  const clean = (url) => { const p = url.replace(/^https?:\/\/[^/]+/, ''); const i = (F.crawledPagesRes.tasks[0].result[0].items || []).findIndex(x => x.url === url);
+    const it = (F.crawledPagesRes.tasks[0].result[0].items || [])[i] || { meta: {} };
+    return ok200(pageHtml({ title: (it.meta || {}).title || 'Page', h1: (((it.meta || {}).htags || {}).h1 || ['Heading'])[0] || 'Heading',
+      words: (((it.meta || {}).content || {}).plain_text_word_count) || 900, links: ((it.meta || {}).internal_links_count || 40), canonical: 'https://' + D + p })); };
+  mock('Render Key Pages', T3.map(() => ({ statusCode: 429, headers: {}, data: '' })));   // the render service refused: the JavaScript crawl stands in
+  mock('Fetch Raw Pages', RAW3.map(x => clean(x.json.url)));
+  const RD3 = (await run('Render Diff', store['Fetch Raw Pages']))[0].json;
+  console.log('   crawl as the rendered reading ->', JSON.stringify({ source: RD3.render_diff.rendered_source, checked: RD3.render_diff.pages_checked, js: RD3.render_diff.pages_with_js_only, works: RD3.extra_works.slice(-1) }));
+  check('G14: when the render service refuses but the crawl did render JavaScript, the crawl stands in and the source says so',
+    RD3.render_diff.available === true && RD3.render_diff.rendered_source === 'crawl_js' && RD3.render_diff.pages_checked === 2, JSON.stringify(RD3.render_diff.pages.map(p => [p.path, p.rendered_source])));
+
+
+  check('G14: a site that serves everything in the first response gets a "what works" line and no finding at all',
+    RD3.render_diff.pages_with_js_only === 0 && RD3.extra_findings.filter(f => f.source === 'render_diff').length === 0
+    && RD3.extra_works.some(w => /serves its title, heading, canonical, robots rule, links and text in the first response/.test(w)), JSON.stringify(RD3.extra_works));
+
+  // ---------- G31: the stored style guide ----------
+  reset();
+  const TC63 = require('./table_cols.json');
+  const sameKeys = (a, b) => a.length === b.length && a.every(k => b.includes(k));
+  const DOM63 = 'techand.ai';
+  const STYLE_IN = { author_name: 'Sara Khan', style_brand_form: 'Tech&', style_brand_wrong: 'Tech & Co',
+    style_spelling: 'British English', style_avoid: 'solutions provider, turnkey', style_tone: 'plain and direct, no hype',
+    style_notes: 'Write dates as 14 March 2026.' };
+
+  // ---------- D. it is stored on the business profile row, as exactly the table columns ----------
+  mock('Normalize Input', [{ json: { domain: DOM63, request_id: 'req_s63', profile_input: { ...STYLE_IN } } }]);
+  mock('Load Profile (Profile)', [{ json: {} }]);
+  mock('Site Model', [{ json: { site_model: { domain: DOM63, canonical_host: 'www.' + DOM63, pages: [] } } }]);
+  const PR63 = (await run('Profile Row', [{ json: {} }]))[0].json;
+  console.log('   profile row style ->', JSON.stringify({ form: PR63.style_brand_form, spelling: PR63.style_spelling, avoid: PR63.style_avoid, tone: PR63.style_tone }));
+  check('G31: the style guide is stored on the site\'s business profile row (seo_profiles.style_*), as exactly the table columns the upsert maps',
+    TC63.PROFILE.includes('style_brand_form') && TC63.PROFILE.includes('style_spelling') && TC63.PROFILE.includes('style_avoid') && TC63.PROFILE.includes('style_tone')
+    && sameKeys(Object.keys(PR63), TC63.PROFILE) && PR63.style_brand_form === 'Tech&' && PR63.style_spelling === 'British English'
+    && PR63.style_avoid === 'solutions provider, turnkey' && PR63.style_tone === 'plain and direct, no hype',
+    JSON.stringify({ extra: Object.keys(PR63).filter(k => !TC63.PROFILE.includes(k)), missing: TC63.PROFILE.filter(k => !(k in PR63)) }));
+  mock('Save Profile', [{ json: { ...PR63 } }]);
+  const PD63 = (await run('Profile Delivery', [{ json: { ...PR63 } }]))[0].json;
+  check('G31: the answer tells the customer what is on file and what it does',
+    /House style on file: the name written "Tech&", British English spelling, 2 word\(s\) to avoid, tone "plain and direct, no hype"/.test(PD63.style_line)
+    && /the quality check reports a draft that breaks it/.test(PD63.style_line) && PD63.plain.includes(PD63.style_line) && PD63.style_guide.on_file === true,
+    JSON.stringify(PD63.style_line));
+
+  // ---------- E. it reaches every writing prompt, and beats the spelling the target market implies ----------
+  reset();
+  mock('Parse Verdict', [{ json: { domain: DOM63, keyword: 'e invoicing uae', country: 'United Arab Emirates', spelling: 'American English',
+    tone: 'Professional and direct', page_type: 'Blog Post', business: 'E-invoicing and ERP partner in Dubai', site_description: {} } }]);
+  mock('Load Profile (Brief)', [{ json: { site_id: 'site_techand-ai', domain: DOM63, ...STYLE_IN } }]);
+  mock('Load Case Studies (Brief)', [{ json: {} }]);
+  const BC63 = (await run('Brief Context', [{ json: {} }]))[0].json;
+  const SG = BC63.style_guide;
+  console.log('   style guide ->', JSON.stringify({ spelling: SG.spelling_effective, source: SG.spelling_source, tone: SG.tone, wrong: SG.wrong_forms }));
+  check('G31: a spelling variant the customer chose beats the one their target market implies, and the source is named',
+    SG.on_file === true && SG.spelling_effective === 'British English' && SG.spelling_source === 'the style guide'
+    && BC63.spelling === 'British English' && BC63.tone === 'plain and direct, no hype',
+    JSON.stringify({ guide: SG.spelling_effective, out: BC63.spelling, tone: BC63.tone }));
+  check('G31: the wrong forms of the name are derived from the one correct form ("Tech and", "Techand", "Tech-and") plus anything the customer added',
+    SG.wrong_forms.includes('Tech and') && SG.wrong_forms.includes('Techand') && SG.wrong_forms.includes('Tech-and') && SG.wrong_forms.includes('Tech & Co'),
+    JSON.stringify(SG.wrong_forms));
+  check('G31: the prompts are handed one HOUSE STYLE paragraph with the name, the spelling, the words to avoid, the tone and the extra rules',
+    /^HOUSE STYLE/.test(SG.prompt_block) && /Write the business name exactly as "Tech&" everywhere/.test(SG.prompt_block)
+    && /never "Tech and" or "Techand" or "Tech-and" or "Tech & Co"/.test(SG.prompt_block)
+    && /Use British English spelling throughout \(the style guide\)/.test(SG.prompt_block)
+    && /Never use these words or phrases: "solutions provider", "turnkey"/.test(SG.prompt_block)
+    && /Tone: plain and direct, no hype/.test(SG.prompt_block) && /Write dates as 14 March 2026/.test(SG.prompt_block),
+    JSON.stringify(SG.prompt_block));
+  mock('Load Profile (Brief)', [{ json: {} }]);
+  const BC63e = (await run('Brief Context', [{ json: {} }]))[0].json;
+  check('G31: with nothing on file the prompts get no paragraph at all and the market still decides the spelling',
+    BC63e.style_guide.on_file === false && BC63e.style_guide.prompt_block === '' && BC63e.spelling === 'American English'
+    && BC63e.style_guide.spelling_source === 'the market this page targets', JSON.stringify(BC63e.style_guide));
+
+  // ---------- F. Content QA checks it: the brand's own name is a quality finding, the rest is advice ----------
+  const PB63 = { keyword: 'e invoicing uae', domain: DOM63, country: 'United Arab Emirates', page_type: 'Blog Post', page_role: 'standard', article_like: false,
+    content_brief: { h1: 'E-invoicing in the UAE', target_word_count: 260, outline: [], terms_to_use: [], snippet_targets: [], secondary_keywords: [], evidence_plan: [] },
+    facts: [], currency: 'AED', business: 'E-invoicing and ERP partner in Dubai', business_facts: '', term_model: [], existing_page: null, hub_pages: [], site_profile: null,
+    include_content: true, include_seo_report: false };   // the report the customer gets for a content run
+  const draft63 = (o = {}) => [
+    'Title: E-invoicing in the UAE: what changes in 2026',
+    'Meta Description: What the UAE e-invoicing mandate changes for finance teams, when it starts, and the three steps to take before the first reporting month.',
+    'Slug: e-invoicing-uae', '', '# E-invoicing in the UAE', '',
+    '**Quick answer:** From July 2026 UAE taxpayers above the revenue threshold must issue invoices through an accredited service provider, which reports a copy to the Federal Tax Authority within a day. Start with your invoice format and your master data.', '',
+    '## What the mandate changes' + (o.bang ? '!' : ''), '',
+    (o.brand || 'Tech&') + ' maps every invoice flow in your finance system before a line of code is written, so you know which documents move through the network and which stay in your own books' + (o.bang ? '!' : '.'), '',
+    'We work with distributors, contractors and free zone entities, and most teams keep their ledger and add a connector rather than replace the stack.', '',
+    '## Where teams lose time', '',
+    'Master data is the work nobody budgets for. Clean the customer and supplier records first, then the tax codes, then the item master, and keep one owner per table.', '',
+    o.spell ? 'Plan the project so your team can optimize the invoice format and check the color of every report template before go-live.'
+      : 'Plan the project so your team can standardise the invoice format and check every report template before go-live.', '',
+    o.avoid ? 'A turnkey rollout from one solutions provider rarely survives the first month-end close.'
+      : 'A rollout handed over in one piece rarely survives the first month-end close.', '',
+    ...(o.amb ? ['Keep the provider licence, the gray-area entities and the training program in one register, and practise the first submission twice.', ''] : []),
+    '## What to do first', '',
+    'Ask your provider for a test run with your own data, not their demo set, and keep the results. Read our guide at [e-invoicing in the UAE](https://' + DOM63 + '/e-invoicing-uae/) for the full timetable.', '',
+    '## Talk to us', '',
+    'Book a scoping call and we will map your invoice flows against the mandate in one workshop.'].join('\n');
+  const qa63 = async (md, guide) => { mock('Parse Brief', [{ json: { ...PB63, style_guide: guide || null } }]); return (await run('Content QA', [{ json: { output: md, critique: null } }], { runIndex: 0 }))[0].json.content_qa; };
+
+  const BAD = await qa63(draft63({ brand: 'Tech and' }), SG);
+  console.log('   brand written wrongly ->', JSON.stringify({ brand: BAD.style.brand, warning: BAD.warnings.find(w => /^Brand name/.test(w)), passed_copy: BAD.passed_copy }));
+  check('G31: a draft that writes the brand as "Tech and" is reported like the other quality findings — a warning the editor must fix, and the page does not pass as it is',
+    BAD.style.brand.length === 1 && BAD.style.brand[0].found === 'Tech and' && BAD.style.brand[0].count === 1
+    && BAD.warnings.some(w => w === 'Brand name: "Tech and" (1) — this business writes its name "Tech&". Correct every one.')
+    && BAD.passed_copy === false && BAD.style_notes.every(n => !/^Brand name/.test(n)),
+    JSON.stringify({ brand: BAD.style.brand, warnings: BAD.warnings }));
+  const OKMD = draft63().replace('We work with distributors', 'We work with tech and finance teams, with distributors');
+  const OKG = await qa63(OKMD, SG), OK0 = await qa63(OKMD, null);
+  check('G31: the same page written correctly raises nothing — "tech and finance teams" in prose is not the brand, and the name inside a link is not read as prose',
+    OKG.style.brand.length === 0 && !OKG.warnings.some(w => /^Brand name/.test(w)) && OKG.warnings.length === OK0.warnings.length && OKG.passed_copy === OK0.passed_copy,
+    JSON.stringify({ brand: OKG.style.brand, w: OKG.warnings.length, w0: OK0.warnings.length }));
+
+  const TONE = await qa63(draft63({ bang: true }), SG), TONE0 = await qa63(draft63({ bang: true }), null);
+  console.log('   tone only ->', JSON.stringify({ notes: TONE.style_notes, passed: TONE.passed, passed_copy: TONE.passed_copy, same_warnings: TONE.warnings.length === TONE0.warnings.length }));
+  check('G31: a draft that only breaks the tone advice is reported and nothing more — the same warnings and the same verdict as with no style guide on file, so a style note can never make a page "not ready"',
+    TONE.style.tone.exclamations === 2 && TONE.style_notes.some(n => /^Tone: 2 exclamation mark\(s\) in the page; the style guide asks for "plain and direct, no hype"/.test(n))
+    && !TONE.warnings.some(w => /^Tone:/.test(w)) && TONE.warnings.length === TONE0.warnings.length
+    && TONE.passed_copy === TONE0.passed_copy && TONE.passed === TONE0.passed,
+    JSON.stringify({ notes: TONE.style_notes, w: TONE.warnings.length, w0: TONE0.warnings.length, p: [TONE.passed_copy, TONE0.passed_copy] }));
+
+  const SPELL = await qa63(draft63({ spell: true, avoid: true }), SG), SPELL0 = await qa63(draft63({ spell: true, avoid: true }), null);
+  console.log('   spelling + avoid ->', JSON.stringify({ spelling: SPELL.style.spelling.wrong, avoid: SPELL.style.avoid, notes: SPELL.style_notes }));
+  check('G31: the wrong spelling variant and the words the customer banned are reported with their counts and the word to use instead — still advice, never a blocker',
+    SPELL.style.spelling.checked === true && SPELL.style.spelling.count === 2
+    && SPELL.style.spelling.wrong.some(w => w.found === 'optimize' && w.wanted === 'optimise') && SPELL.style.spelling.wrong.some(w => w.found === 'color' && w.wanted === 'colour')
+    && SPELL.style_notes.some(n => /^Spelling: 2 word\(s\) use American spelling/.test(n) && /where the style guide says British English/.test(n))
+    && SPELL.style.avoid.length === 2 && SPELL.style_notes.some(n => /^Words to avoid: "solutions provider" \(1\), "turnkey" \(1\)/.test(n))
+    && SPELL.warnings.length === SPELL0.warnings.length && SPELL.passed === SPELL0.passed,
+    JSON.stringify({ sp: SPELL.style.spelling, av: SPELL.style.avoid, notes: SPELL.style_notes }));
+  const AMB = await qa63(draft63({ amb: true }), SG);
+  check('G31: a spelling pair that means two different things in British English, or where both forms are correct (licence, practise, program, gray), is never "corrected" — the check cannot invent an error',
+    AMB.style.spelling.checked === true && AMB.style.spelling.count === 0 && AMB.style_notes.every(n => !/^Spelling/.test(n)),
+    JSON.stringify(AMB.style.spelling));
+
+  // ---------- G. the customer sees the guide and what the draft did with it ----------
+  mock('Parse Brief', [{ json: { ...PB63, style_guide: SG } }]);
+  const QAITEM = await run('Content QA', [{ json: { output: draft63({ spell: true, avoid: true, brand: 'Tech and' }), critique: null } }], { runIndex: 0 });
+  const WF63 = await run('Build Word File', QAITEM);
+  const DOC63 = decode(WF63);
+  check('G31: the content report has a "Your Style Guide" section with the rules on file, what was corrected and the advice left for the writer',
+    /Your Style Guide/.test(DOC63) && /Brand name is written/.test(DOC63) && /Tech&/.test(DOC63) && /British English/.test(DOC63)
+    && /Words to avoid/.test(DOC63) && /The name was written/.test(DOC63) && /Tech and/.test(DOC63) && /Style notes \(advice, not blockers\)/.test(DOC63),
+    (DOC63.match(/Your Style Guide[\s\S]{0,700}/) || [''])[0].slice(0, 600));
+  check('G31: the style advice travels on to the blog package, so whoever publishes the page sees it',
+    Array.isArray(WF63[0].json.style_notes) && WF63[0].json.style_notes.length > 0 && !!WF63[0].json.style_guide
+    && WF63[0].json.style_guide.brand_form === 'Tech&', JSON.stringify({ notes: WF63[0].json.style_notes, guide: !!WF63[0].json.style_guide }));
+});
+
 
 // ===================================================================================
 // S58 G15 + L3 + G32 (2026-10-13, system review FIX_PLAN.md G15 / L3 / G32; criteria REP 3.6 / 3.7 in

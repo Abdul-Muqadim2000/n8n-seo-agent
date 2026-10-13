@@ -112,7 +112,13 @@ PROFILE_COLS = [('site_id', 'string'), ('domain', 'string'), ('business_name', '
                 ('region', 'string'), ('postal_code', 'string'), ('country_code', 'string'), ('phone', 'string'), ('public_email', 'string'), ('opening_hours', 'string'), ('price_range', 'string'),
                 ('service_areas', 'string'), ('map_url', 'string'), ('author_name', 'string'), ('author_job_title', 'string'), ('author_credentials', 'string'), ('author_bio', 'string'),
                 ('author_url', 'string'), ('author_image_url', 'string'), ('author_same_as', 'string'), ('author_knows_about', 'string'), ('reviewer_name', 'string'), ('reviewer_job_title', 'string'),
-                ('reviewer_url', 'string'), ('updated_at', 'string'), ('request_id', 'string')]
+                ('reviewer_url', 'string'),
+                # G31 (2026-10-13, FIX_PLAN): the stored style guide — the brand's written form ("Tech&"), extra wrong forms to catch,
+                # the spelling variant (empty = follow the market the page targets), the words to avoid, the tone and any further rule.
+                # Read by Brief Context into every writing prompt (v5/code/_style_guide.js) and checked by Content QA.
+                ('style_brand_form', 'string'), ('style_brand_wrong', 'string'), ('style_spelling', 'string'),
+                ('style_avoid', 'string'), ('style_tone', 'string'), ('style_notes', 'string'),
+                ('updated_at', 'string'), ('request_id', 'string')]
 CASE_COLS = [('case_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), ('title', 'string'), ('client_name', 'string'), ('client_public', 'boolean'), ('industry', 'string'),
              ('location', 'string'), ('service', 'string'), ('challenge', 'string'), ('solution', 'string'), ('timeline', 'string'), ('results', 'string'), ('quote', 'string'), ('quote_by', 'string'),
              ('page_url', 'string'), ('status', 'string'), ('created_at', 'string'), ('request_id', 'string')]

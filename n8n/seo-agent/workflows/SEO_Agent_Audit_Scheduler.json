@@ -474,6 +474,30 @@
                 "type": "string"
               },
               {
+                "name": "style_brand_form",
+                "type": "string"
+              },
+              {
+                "name": "style_brand_wrong",
+                "type": "string"
+              },
+              {
+                "name": "style_spelling",
+                "type": "string"
+              },
+              {
+                "name": "style_avoid",
+                "type": "string"
+              },
+              {
+                "name": "style_tone",
+                "type": "string"
+              },
+              {
+                "name": "style_notes",
+                "type": "string"
+              },
+              {
                 "name": "updated_at",
                 "type": "string"
               },

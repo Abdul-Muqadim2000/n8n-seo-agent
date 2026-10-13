@@ -274,6 +274,7 @@ export const features: Feature[] = [
     benefits: [
       'Writer, critic and editor passes, then an SEO quality check',
       'E-E-A-T built in: author byline and box, expert reviewer, experience notes and schema',
+      'Your house style, stored once and followed: how your name is written, British or American spelling, words to avoid and the tone — your own name written the wrong way is corrected before delivery',
       'Page types for hub and pillar pages, case studies, local (city) pages and video pages',
       'Three images produced with every page — a title card and two section cards made from the page itself, with the alt text, file names and the social image',
       'An originality check against every competitor page the research read and against your own pages: more than 15% of a page matching one of them comes back for a rewrite, with the passage shown',
@@ -285,7 +286,7 @@ export const features: Feature[] = [
       'One search, one page: a search a live page of yours already answers is written as a refresh of that page',
     ],
     steps: [
-      { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile and your case studies.' },
+      { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile, your case studies and your style guide.' },
       { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
       { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
       { title: 'Publish and verify', body: 'Take the package or a WordPress draft; Ascentra checks the page once it is live.' },
@@ -301,6 +302,14 @@ export const features: Feature[] = [
         a: 'Each page is written from a brief built on your business profile, your experience notes and your case studies, then reviewed by a critic and an editor. Figures that cannot be verified are marked for you to confirm instead of being made up.',
       },
       { q: 'Who is shown as the author?', a: 'The author and expert reviewer from your business profile, with a byline, an author box and Person schema.' },
+      {
+        q: 'Can I tell it how we write?',
+        a: 'Yes. Your profile holds a style guide: exactly how your name is written (Tech&, never “Tech and” or “techand”), British or American spelling, the words you never want used and the tone. Every page is written to it, and the quality check reads the finished draft against it. Your own name written the wrong way is a real finding and is corrected before you see the page; the spelling variant, the banned words and the tone are reported beside the page as advice, and never hold a page back on their own.',
+      },
+      {
+        q: 'Which spelling do the pages use?',
+        a: 'The spelling of the country each page targets, unless your style guide names one — then that wins everywhere. The report says which rule was used.',
+      },
       { q: 'Can Ascentra publish to WordPress?', a: 'It creates WordPress drafts for your team to review. Publishing stays with you.' },
       { q: 'What is the blog package?', a: 'The article as HTML and Markdown, the three images as WebP files, plus a meta.json file with the title, description, slug, schema and the image list — ready for any CMS.' },
       {
@@ -336,6 +345,7 @@ export const features: Feature[] = [
       'A pre-release check your build can call: the same page checks run against a staging address or a list of URLs and answer pass or fail, so a release never takes a page out of Google',
       'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
       'Google’s own view of every key page — indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
+      'What crawlers see before JavaScript runs: your key pages read twice, so anything only a browser can see is named',
       'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
       'The smallest items folded into one “minor items” line, so the list you read is the list to act on',
       'A brand and entity check',
@@ -364,6 +374,10 @@ export const features: Feature[] = [
       { q: 'What is in the fix pack?', a: 'A robots.txt, an llms.txt, a redirect list, schema snippets and an internal-links CSV, zipped together.' },
       { q: 'Does it need access to my server?', a: 'No. Ascentra crawls the public site and reads Search Console through a service account you add as a user.' },
       { q: 'Does it handle JavaScript sites?', a: 'Yes. Pages can be rendered with JavaScript, so content that loads in the browser is audited too.' },
+      {
+        q: 'Would I know if my pages only work with JavaScript?',
+        a: 'Yes. Your key pages are read twice in every audit: once exactly as a crawler receives them, before any script runs, and once after. The report puts the title, main heading, canonical link, robots rule, link count and text length of both readings side by side and says which reading each number came from, so anything only a browser can see is named — it is invisible to the AI crawlers behind ChatGPT, Perplexity and Claude, which do not run JavaScript. A page we could not read both ways is reported as not checked, with the reason, never as fine.',
+      },
       {
         q: 'Where do the speed figures come from?',
         a: 'From the Chrome User Experience Report: what real Chrome visitors measured over the last 28 days, at the 75th percentile, for your home page, a service page and a blog post on phone and desktop. A page with too few visits to report on its own shows the whole-site figures, marked as such. Speed carries a deliberately low weight in the health score.',

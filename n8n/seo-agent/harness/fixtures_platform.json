@@ -457,6 +457,7 @@
         "ai_growth": true,
         "ai_pages_month": 2,
         "backlinks": false,
+        "link_builder": true,
         "audit_monthly": true,
         "audit_pages": 500,
         "audit_js": false,
@@ -620,7 +621,20 @@
         "Abu Dhabi"
       ],
       "map_url": "",
-      "logo_url": ""
+      "logo_url": "",
+      "style": {
+        "brand_form": "Northwind ERP",
+        "brand_wrong": [
+          "NorthWind"
+        ],
+        "spelling": "British English",
+        "avoid": [
+          "cutting-edge",
+          "synergy"
+        ],
+        "tone": "plain and direct, no hype",
+        "notes": "Write dates as 14 March 2026."
+      }
     },
     "expect": {
       "mode": "profile",
@@ -631,7 +645,12 @@
       "profile_input.country_code": "AE",
       "profile_input.reviewer_name": "Omar Ali",
       "profile_input.author_same_as": "https://www.linkedin.com/in/sara-khan/",
-      "profile_input.service_areas": "Dubai, Abu Dhabi"
+      "profile_input.service_areas": "Dubai, Abu Dhabi",
+      "profile_input.style_brand_form": "Northwind ERP",
+      "profile_input.style_brand_wrong": "NorthWind",
+      "profile_input.style_spelling": "British English",
+      "profile_input.style_avoid": "cutting-edge, synergy",
+      "profile_input.style_tone": "plain and direct, no hype"
     }
   },
   {

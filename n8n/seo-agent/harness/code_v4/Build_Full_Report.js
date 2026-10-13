@@ -534,6 +534,28 @@ const indexSection = (sc) => {
 };
 // ---- how a fix is verified (G11, 2026-10-13) ----
 const fixWatchNote = () => `<p class="small"><b>After you fix something:</b> mark it done in the dashboard and the daily key-page watch re-checks that exact item on your key pages within a day (status, noindex, canonical, title, robots.txt) and shows the result — it does not wait for the next monthly audit.</p>`;
+// ---- what crawlers see before JavaScript runs (G14, 2026-10-13) ----
+const renderDiffSection = (a) => {
+  const rdf = a.render_diff || null;
+  const e3 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const val = (v) => { const s = String(v == null ? '' : v); return s ? e3(s).slice(0, 110) : '—'; };
+  let h = `<h3>What crawlers see before JavaScript runs</h3>`;
+  if (!rdf) return h + `<p>Not checked in this run.</p>`;
+  if (!rdf.available) return h + `<p><b>Not checked:</b> ${e3(rdf.not_available)}.</p>`;
+  const rows = [];
+  for (const p of (rdf.pages || [])) {
+    if (!p.checked) { rows.push(`<tr><td>${e3(p.path)}</td><td colspan="4" class="small"><b>not checked</b> — ${e3(p.not_checked)}</td></tr>`); continue; }
+    for (const f of (p.figures || [])) {
+      if (f.state === 'same' || f.state === 'absent') continue;
+      rows.push(`<tr><td>${e3(p.path)}</td><td>${e3(f.figure)}</td><td>${val(f.raw)}</td><td>${val(f.rendered)}</td><td class="small">${e3(f.from)}</td></tr>`);
+    }
+  }
+  h += rows.length
+    ? `<table class="ct"><tr><th>Page</th><th>Figure</th><th>In the first response</th><th>After JavaScript</th><th>Taken from</th></tr>` + rows.join('') + `</table>`
+    : `<p><span class="ok">No difference</span> on any of the ${rdf.pages_checked} key page(s) checked: title, main heading, canonical link, robots rule, links and text are all in the first response.</p>`;
+  h += `<p class="small">${e3(rdf.method)} ${rdf.pages_checked} page(s) read twice${rdf.pages_not_checked ? `, ${rdf.pages_not_checked} not checked (the reason is in the table)` : ''}${rdf.rendered_source === 'crawl_js' ? '; the rendered reading came from the JavaScript crawl' : ''}. AI crawlers do not run JavaScript, so anything listed as coming from the rendered page is invisible to them.</p>`;
+  return h;
+};
 const findings = a.findings || [];
 const counts = a.issue_counts || {};
 const byCat = (cat) => findings.filter(f => f.category === cat);
@@ -706,7 +728,7 @@ if (ps) {
   const yps = ps.rows.find(r => r.is_you) || {};
   if ((yps.opportunities || []).length) html += '<h3>Biggest Speed Savings (your homepage)</h3><ul>' + yps.opportunities.map(o => `<li>${esc(o.title)} — about ${num(o.savings_ms)}ms</li>`).join('') + '</ul>';
 }
-html += cwvSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));
+html += cwvSection(a) + renderDiffSection(a) + '<h3>Findings</h3>' + findingsBlock(byCat('Performance'));
 
 // ---------- 8. AI visibility ----------
 html += `<h2 class="pb">8. AI Search Visibility</h2>`;
@@ -865,6 +887,7 @@ return [{
     lineage,
     search_console: a.search_console || null,
     crux: a.crux || null,
+    render_diff: a.render_diff || null,
     priority_method: a.priority_method || '',
     priority_first: a.priority_first || '',
     minor_count: a.minor_count || 0,

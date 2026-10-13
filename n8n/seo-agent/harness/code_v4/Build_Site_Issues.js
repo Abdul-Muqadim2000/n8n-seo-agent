@@ -503,6 +503,7 @@ if (!isFull) not_assessed.push('Structured data (schema) and HTML-level checks')
 if (!isFull || !input.competitor_benchmark) not_assessed.push('Competitor benchmark (organic keywords, rankings, traffic, domain age)');
 if (!input.pagespeed) not_assessed.push('Core Web Vitals in a lab test (Google PageSpeed / Lighthouse) and the speed comparison with competitors');
 if (!(input.crux && input.crux.available)) not_assessed.push('Core Web Vitals from real Chrome users per template (Chrome UX Report, 75th percentile): ' + ((input.crux && input.crux.not_available) || 'not collected in this run'));
+if (!(input.render_diff && input.render_diff.available)) not_assessed.push('What crawlers see before JavaScript runs (the first response against the rendered page, per key page): ' + ((input.render_diff && input.render_diff.not_available) || 'not collected in this run'));
 if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');
 if (!input.authority) not_assessed.push('Backlinks and referring domains');
 if (!input.site_keywords) not_assessed.push('Keyword rankings by search intent and keyword gap');
@@ -536,6 +537,7 @@ return [{
       site_structure: input.site_structure || null,
       entity: input.entity || null,
       crux: input.crux || null,
+      render_diff: input.render_diff || null,
       measurements: probe.measurements || {},
       sampled_pages: (input.html_analysis || {}).sampled_pages || [],
       competitor_benchmark: input.competitor_benchmark || null,

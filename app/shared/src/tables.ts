@@ -76,6 +76,8 @@ export interface ProfileRow extends DtRow {
   opening_hours: string; price_range: string; service_areas: string; map_url: string; author_name: string;
   author_job_title: string; author_credentials: string; author_bio: string; author_url: string; author_image_url: string;
   author_same_as: string; author_knows_about: string; reviewer_name: string; reviewer_job_title: string; reviewer_url: string;
+  /** G31: the stored style guide — the brand's written form, wrong forms to catch, the spelling variant, words to avoid, the tone, other rules */
+  style_brand_form: string; style_brand_wrong: string; style_spelling: string; style_avoid: string; style_tone: string; style_notes: string;
   updated_at: string; request_id: string;
 }
 export interface CaseStudyRow extends DtRow {
