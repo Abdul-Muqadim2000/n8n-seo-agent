@@ -234,15 +234,25 @@ const PW = (() => {
     const quota = /quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(err);
     const denied = /permission|forbidden|403|unauthor|invalid_grant/i.test(err);
     if (err) return { ok: false, error: err, error_kind: quota ? 'quota' : denied ? 'access' : 'error', indexed: null, verdict: '', coverage: '',
-      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], rich_results: [], rich_verdict: '',
+      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
       not_checked: quota ? 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' : denied ? 'Search Console access is missing for this property: not checked.' : 'The inspection failed: not checked (' + err + ').' };
+    // R10 (2026-10-13, re-rating §3.11): Google retired the Mobile Usability report and the API now answers `VERDICT_UNSPECIFIED` with no
+    // issue list for every page (45 of 45 live on 2026-10-13). That is NOT CHECKED. The live run read it as "not mobile-friendly" and raised
+    // a High finding on 45 of 47 pages with empty evidence, ranked second of 60. Only a FAIL that names at least one issue is a real problem;
+    // every other answer (unspecified, neutral, missing, a FAIL with nothing behind it) is unknown, with the reason said out loud.
+    const mobVerdict = S(mob && mob.verdict).toUpperCase();
+    const mobIssues = mob && Array.isArray(mob.issues) ? mob.issues.map(i => S(i.message) || S(i.issueType)).filter(Boolean).slice(0, 5) : [];
+    const mobUsable = mobVerdict === 'PASS' ? true : (mobVerdict === 'FAIL' && mobIssues.length) ? false : null;
+    const mobNote = mobUsable !== null ? ''
+      : (mobVerdict === 'FAIL' ? 'Search Console reports a mobile problem without naming an issue, so mobile usability was not checked.'
+        : mobVerdict === 'NEUTRAL' ? 'Search Console gave no mobile verdict for this page, so mobile usability was not checked.'
+          : 'Search Console no longer answers mobile usability (Google retired the Mobile Usability report), so it was not checked.');
     return {
       ok: true, error: '', error_kind: '', verdict: S(idx.verdict), indexed: S(idx.verdict) === 'PASS', coverage: S(idx.coverageState),
       indexing_state: S(idx.indexingState), robots: S(idx.robotsTxtState), last_crawl: S(idx.lastCrawlTime),
       google_canonical: S(idx.googleCanonical), user_canonical: S(idx.userCanonical),
       canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : same(idx.googleCanonical, idx.userCanonical),
-      mobile_usable: mob ? (S(mob.verdict) === 'PASS' ? true : S(mob.verdict) === 'NEUTRAL' || !S(mob.verdict) ? null : false) : null,
-      mobile_issues: mob && Array.isArray(mob.issues) ? mob.issues.map(i => S(i.message) || S(i.issueType)).filter(Boolean).slice(0, 5) : [],
+      mobile_usable: mobUsable, mobile_issues: mobIssues, mobile_verdict: mobVerdict, mobile_note: mobNote,
       rich_verdict: rich ? S(rich.verdict) : '',
       rich_results: rich && rich.detectedItems ? rich.detectedItems.map(d => S(d.richResultType)).filter(Boolean) : [],
       not_checked: '',
@@ -261,9 +271,15 @@ const PW = (() => {
     const mobileBad = ok.filter(i => i.mobile_usable === false);
     const richTypes = [...new Set(ok.flatMap(i => i.rich_results || []))];
     const notChecked = n0(opts.not_checked) + failed.length;
+    // R10: mobile usability is reported on its own terms — how many pages Google really answered about, and the reason when it answered about none
+    const mobileChecked = ok.filter(i => i.mobile_usable !== null).length;
+    const mobileNote = (ok.length && !mobileChecked)
+      ? (S((ok.find(i => S(i.mobile_note)) || {}).mobile_note) || 'Search Console no longer answers mobile usability (Google retired the Mobile Usability report), so it was not checked.')
+      : '';
     return { checked: ok.length, indexed, not_indexed: notIndexed.length, by_state: by, failed: failed.length, not_checked: notChecked,
       not_checked_reason: notChecked ? (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'not checked in this run') : '',
-      canonical_mismatch: canonMismatch.length, mobile_bad: mobileBad.length, mobile_checked: ok.filter(i => i.mobile_usable !== null).length,
+      canonical_mismatch: canonMismatch.length, mobile_bad: mobileBad.length, mobile_checked: mobileChecked,
+      mobile_not_checked: ok.length - mobileChecked, mobile_note: mobileNote,
       rich_results: richTypes, quota: QUOTA_PER_DAY, quota_note: S(opts.quota_note),
       // never "fine": a page nobody inspected is counted apart from the ones Google answered about
       text: ok.length
@@ -320,7 +336,9 @@ const gErr = (r) => { if (!r) return 'no response'; const e = r.error; if (!e) r
 const same = (a, b) => String(a || '').replace(/\/$/, '').toLowerCase() === String(b || '').replace(/\/$/, '').toLowerCase();
 const path = (u) => String(u || '').replace(/^https?:\/\/[^\/]+/, '') || '/';
 const findings = [], works = []; const CAT = 'Crawlability & Indexing';
-const F = (severity, title, why, fix, evidence, urls, count, pct) => findings.push({ category: CAT, severity, title, why, fix, evidence: evidence || '', affected_count: count == null ? null : count, affected_pct: pct == null ? 100 : pct, sample_urls: (urls || []).slice(0, 5), scope: urls && urls.length ? 'pages' : 'site' });
+const F = (severity, title, why, fix, evidence, urls, count, pct) => (severity !== 'Info' && !/[A-Za-z0-9]/.test(String(evidence == null ? '' : evidence)))
+  ? null   // R10 (2026-10-13): a finding with nothing behind it is not a finding — live, "Pages Google reports as not mobile-friendly" was raised with the evidence "/:  | /whatwedo/ai-automation: " on 45 of 47 pages
+  : findings.push({ category: CAT, severity, title, why, fix, evidence: evidence || '', affected_count: count == null ? null : count, affected_pct: pct == null ? 100 : pct, sample_urls: (urls || []).slice(0, 5), scope: urls && urls.length ? 'pages' : 'site' });
 // ---- sitemap file(s) read from the site ----
 const bodyOf = (r) => { const b = r && (r.body != null ? r.body : r.data); return typeof b === 'string' ? b : (b ? JSON.stringify(b) : ''); };   // the HTTP node puts text responses under `data` (live finding 2026-10-02)
 const key = (u) => String(u || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/$/, '');   // host-agnostic URL key: crawls report www while sitemaps/canonicals may not
@@ -414,7 +432,7 @@ if (!connected) {
   if (ok.length) {
     const share = Math.round(notIdx.length / ok.length * 100);
     if (notIdx.length && share >= 20) F('High', 'A large share of important pages is not indexed by Google', 'Pages that Google has not indexed cannot rank at all, whatever their content.', 'Open each URL in Search Console\'s URL inspection, fix the stated reason (crawled but not indexed usually means thin or duplicate content; discovered but not indexed means too few internal links), then request indexing.', notIdx.length + ' of ' + ok.length + ' sampled pages: ' + Object.entries(coverage).filter(([k]) => !/indexed/i.test(k) || /not indexed/i.test(k)).map(([k, v]) => v + ' × ' + k).join(', '), notIdx.map(i => i.url), notIdx.length, share);
-    else if (notIdx.length) F('Medium', 'Some sampled pages are not indexed by Google', 'These pages cannot rank until Google indexes them.', 'Check the reason in Search Console\'s URL inspection, strengthen internal links to them and request indexing.', notIdx.map(i => i.coverage).filter((v, k, a) => a.indexOf(v) === k).join('; '), notIdx.map(i => i.url), notIdx.length, share);
+    else if (notIdx.length) F('Medium', 'Some sampled pages are not indexed by Google', 'These pages cannot rank until Google indexes them.', 'Check the reason in Search Console\'s URL inspection, strengthen internal links to them and request indexing.', (notIdx.map(i => i.coverage).filter(Boolean).filter((v, k, a) => a.indexOf(v) === k).join('; ') || (notIdx.length + ' of ' + ok.length + ' inspected pages are not in Google\'s index (Search Console gave no reason for them)')), notIdx.map(i => i.url), notIdx.length, share);
     else works.push('All ' + ok.length + ' sampled pages are indexed by Google');
     const robotsBlocked = ok.filter(i => /disallow|blocked/i.test(i.robots)); if (robotsBlocked.length) F('High', 'Important pages blocked by robots.txt', 'Google cannot crawl these pages, so it cannot rank them on their content.', 'Remove the Disallow rule that matches them in robots.txt.', robotsBlocked.map(i => i.robots).join(', '), robotsBlocked.map(i => i.url), robotsBlocked.length, Math.round(robotsBlocked.length / ok.length * 100));
     const canon = ok.filter(i => i.indexed && i.google_canonical && !same(i.google_canonical, i.url)); search_console.canonical_mismatch = canon.map(i => ({ url: i.url, google_canonical: i.google_canonical }));
@@ -423,10 +441,17 @@ if (!connected) {
     const stale = ok.filter(i => i.indexed && i.last_crawl && (Date.now() - new Date(i.last_crawl).getTime()) / 864e5 > 60); if (stale.length && stale.length / ok.length >= 0.5) F('Low', 'Google crawls important pages rarely', 'Pages Google visits only every few months pick up changes late; it usually means few internal links and little fresh content.', 'Update and interlink key pages regularly; keep the sitemap lastmod dates honest.', stale.length + ' of ' + ok.length + ' sampled pages last crawled over 60 days ago', stale.map(i => i.url), stale.length, Math.round(stale.length / ok.length * 100));
     const rich = [...new Set(ok.flatMap(i => i.rich))]; search_console.rich_results = rich; if (rich.length) works.push('Google detects rich results on sampled pages: ' + rich.join(', '));
     const errCount = insp.length - ok.length; if (errCount) search_console.inspection_errors = errCount;
-    // G25: mobile-first indexing has been complete since 2024-07-05, so a page Google calls not mobile-usable is a real ranking problem
-    const mobBad = ok.filter(i => i.mobile_usable === false);
-    if (mobBad.length) F('High', 'Pages Google reports as not mobile-friendly', 'Google indexes the mobile version of every page: what its phone crawler cannot use properly cannot rank well.', 'Fix the issues Search Console lists for these URLs (viewport, text size, tap targets, content wider than the screen), then re-inspect them.', mobBad.slice(0, 3).map(i => path(i.url) + ': ' + (i.mobile_issues || []).slice(0, 2).join('; ')).join(' | ').slice(0, 300), mobBad.map(i => i.url), mobBad.length, Math.round(mobBad.length / ok.length * 100));
-    else if (ok.some(i => i.mobile_usable === true)) works.push('Google reports every inspected page as mobile-friendly');
+    // G25 + R10 (2026-10-13, re-rating §3.11): mobile-first indexing has been complete since 2024-07-05, so a page Google really calls
+    // not mobile-usable is a ranking problem — but Google RETIRED the Mobile Usability report and the API now answers
+    // VERDICT_UNSPECIFIED with no issue list for every page (45 of 45 live). That is NOT CHECKED, never "not mobile-friendly": the
+    // finding needs a FAIL that names at least one issue (PW.inspection decides) and an evidence string with something in it.
+    const mobBad = ok.filter(i => i.mobile_usable === false && (i.mobile_issues || []).length);
+    const mobEvidence = mobBad.slice(0, 3).map(i => path(i.url) + ': ' + (i.mobile_issues || []).slice(0, 2).join('; ')).join(' | ').slice(0, 300);
+    const mobChecked = ok.filter(i => i.mobile_usable !== null).length;
+    search_console.mobile_usability = { checked: mobChecked, not_checked: ok.length - mobChecked, with_issues: mobBad.length,
+      note: mobChecked ? '' : String(((ok.find(i => i.mobile_note) || {}).mobile_note) || 'Search Console no longer answers mobile usability (Google retired the Mobile Usability report), so it was not checked.') };
+    if (mobBad.length && mobEvidence) F('High', 'Pages Google reports as not mobile-friendly', 'Google indexes the mobile version of every page: what its phone crawler cannot use properly cannot rank well.', 'Fix the issues Search Console lists for these URLs (viewport, text size, tap targets, content wider than the screen), then re-inspect them.', mobEvidence, mobBad.map(i => i.url), mobBad.length, Math.round(mobBad.length / ok.length * 100));
+    else if (mobChecked && ok.some(i => i.mobile_usable === true)) works.push('Google reports the ' + mobChecked + ' page(s) it still answers about as mobile-friendly');
   }
 }
 // ---- G24 (2026-10-12, FIX_PLAN): crawl coverage — the audit judged a site on the pages it happened to crawl without ever saying how much of

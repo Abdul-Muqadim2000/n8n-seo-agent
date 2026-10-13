@@ -145,6 +145,7 @@ const indexSection = (sc) => {
   }
   if ((ic.not_checked_pages || []).length) h += `<p class="small"><b>Not checked (${ic.not_checked}):</b> ` + ic.not_checked_pages.slice(0, 8).map(x => e3(p3(x.url))).join(', ')
     + (ic.not_checked_pages.length > 8 ? ' …' : '') + ` — ${e3(ic.not_checked_reason || ic.not_checked_pages[0].reason)}. Nothing is claimed about these pages.</p>`;
+  if (ic.mobile_note) h += `<p class="small"><b>Mobile usability:</b> ${e3(ic.mobile_note)} Nothing is claimed about it either way.</p>`;   // R10 (2026-10-13): "no data" is not "not mobile-friendly"
   if (ic.quota_note) h += `<p class="small">${e3(ic.quota_note)}</p>`;
   return h;
 };
