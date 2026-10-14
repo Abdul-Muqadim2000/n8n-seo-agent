@@ -6,6 +6,9 @@
 //   our page to point to and the link text to ask for (pickTarget: topic match × position band × links needed, paced per page);
 // - the listings checklist (linked / listed / missing / submitted / unknown — a blocked check is unknown, never missing), competitors present;
 // - our old URLs that now 404 → redirects to add; what each won link did for its page (impact, with a control group);
+// - L5 (2026-10-13): journalist requests from a media digest the app read in the customer's mailbox, and podcast shows that take guests
+//   (qualified like every other prospect: on topic, still publishing, says it takes guests, a contact on the show's own domain);
+// - L6 (2026-10-13): what kind of page earns links in this market, from the competitors' most-linked pages (never a promise of links);
 // - this week's writer jobs: the best `budget` ready prospects (value × fit), not in free-only checks.
 // G12 (2026-10-13, FIX_PLAN): the control-group comparison that read what a won link did now also reads what a page CHANGE did
 // (section 5b). One implementation (CT, v5/code/_change_test.js), one set of graded verdicts, the same table (seo_link_impact, with a
@@ -292,7 +295,7 @@ const OK = (() => {
   const countryOf = (domain) => { const d = String(domain || '').toLowerCase(); const m = d.match(/\.([a-z]{2})$/); return m && CC[m[1]] ? CC[m[1]] : ''; };
   // our page to point to and the link text to ask for (LINK_BUILDER_SPEC.md §5). pages: [{ url, title, keyword, kind, page_type, position,
   // rds, kw_share, pitched }] (kind: home | hub | guide | answer | article | case | money); p: the prospect { type, text, dead_text, to_url }
-  const HOME_TYPES = new Set(['mention', 'list', 'listing', 'press', 'ai_list']);
+  const HOME_TYPES = new Set(['mention', 'list', 'listing', 'press', 'digest', 'podcast', 'ai_list']);   // L5: an answer in the press and a guest appearance name the business, so they point at the homepage
   function pickTarget(p, pages, df, nDocs, home) {
     if (p.type === 'lost' && p.to_url) return { url: p.to_url, reason: 'the page it used to link to', anchor: 'as before', fit: 1 };
     if (HOME_TYPES.has(p.type)) return { url: home, reason: p.type === 'list' || p.type === 'ai_list' ? 'lists link to the homepage' : 'a mention or a listing names the business: the homepage', anchor: 'brand', fit: 1 };
@@ -326,7 +329,7 @@ const OK = (() => {
     return '';
   }
   // a bare homepage is no place for a link to add: only a listing, a list, a mention or a journalist request is pitched on the front page
-  const HOME_OK = new Set(['mention', 'list', 'listing', 'ai_list', 'press', 'lost', 'reclaim']);
+  const HOME_OK = new Set(['mention', 'list', 'listing', 'ai_list', 'press', 'digest', 'podcast', 'lost', 'reclaim']);   // L5: a show's front page is where its contact and its guest invitation live
   const isHomeUrl = (u) => /^https?:\/\/[^\/?#]+\/?([?#]|$)/i.test(String(u || ''));
   const homepageOnly = (type, url) => (isHomeUrl(url) && !HOME_OK.has(String(type || '')))
     ? 'only their homepage was found: a front page has no section a link could be added to (find the page on your topic first)' : '';
@@ -342,12 +345,32 @@ const OK = (() => {
   // them. A publisher writing about our topic has the words but not the signals; a list that leaves us out, a mention or a journalist
   // request is still pitched when the publisher also sells something (the ask there is "add us", not "link to us").
   const VENDOR_RE = /(book|schedule|request)(?: a| your)? (?:demo|call|consultation)|free trial|start (?:for )?free|talk to (?:sales|an expert|our advisor)|our (?:software|platform|product|products|solution|solutions|services|suite)|request (?:a )?quote|why choose us|our (?:clients|customers) (?:include|trust)|pricing plans?|per user ?\/ ?month|we (?:provide|offer|deliver|implement|build) /gi;
-  const SELL_EXEMPT = new Set(['list', 'listing', 'ai_list', 'mention', 'press', 'lost', 'reclaim']);
+  const SELL_EXEMPT = new Set(['list', 'listing', 'ai_list', 'mention', 'press', 'digest', 'podcast', 'lost', 'reclaim']);   // L5: a journalist request and a podcast that takes guests are asked "will you cover us", not "link to us" — the declared-competitor check above still runs
   const THEIRS_RE = /\b(solutions?|services?|software|platform|suite|provider|providers|consultan\w+|implementation|company)\b/i;
-  function sellsSame(o) {
+  // R4 (2026-10-13, re-rating): the gate only read the prospect's page, so a competitor's *guide* passed. Live, flick.network was a `ready`
+  // resource prospect with a drafted sequence while the same run's Rank Tracker had just found it at #1 for the ladder head "e invoicing in
+  // uae", and basware.com (an AP / e-invoicing vendor) reached `needs_contact`. The refusal now matches the prospect's REGISTRABLE domain
+  // against the declared competitors (seo_monitors.competitors) and the SERP competitors the ladder / verdict measured, and says which it was.
+  // A list page ("best X", a directory, a mention, a journalist request) stays pitchable even on a rival's domain: the ask there is "add us to
+  // your list", which is legitimate; pitching their guide or resource page is not.
+  const LIST_TYPES = new Set(['list', 'listing', 'ai_list', 'mention', 'press']);
+  const domOf = (c) => String((c && typeof c === 'object' ? (c.domain || c.d) : c) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  function rivalOf(o) {
     const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
-    for (const c of (o.competitors || [])) { const x = String(c || '').toLowerCase().replace(/^www\./, '');
-      if (x && (LK.sameSite(d, x) || LK.sameSite(x, d) || LK.regDomain(d) === LK.regDomain(x))) return 'a competing site of yours (' + x + '): a competitor does not link to you'; }
+    const hit = (list, label) => {
+      for (const c of (list || [])) { const x = domOf(c);
+        if (x && (LK.sameSite(d, x) || LK.sameSite(x, d) || LK.regDomain(d) === LK.regDomain(x)))
+          return { domain: x, why: label + ((c && typeof c === 'object' && c.position) ? ' (#' + c.position + ' for "' + String(c.keyword || '').slice(0, 60) + '")' : '') };
+      }
+      return null;
+    };
+    return hit(o.competitors, 'a competitor of yours') || hit(o.serp_rivals, 'a site that outranks you for one of your own keywords');
+  }
+  function sellsSame(o) {
+    const rival = rivalOf(o);
+    if (rival && LIST_TYPES.has(String(o.type || ''))) return '';   // asking a rival's "best X" list to add you is fair game
+    if (rival) return 'a competing site of yours (' + rival.domain + '): ' + rival.why + ', and a competitor does not link to your page';
+    const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
     if (SELL_EXEMPT.has(String(o.type || ''))) return '';
     const terms = [...new Set((o.terms || []).flatMap(t => words(t).map(stem)))];
     if (terms.length < 2) return '';
@@ -414,7 +437,7 @@ const OK = (() => {
     return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
   }
   return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, rivalOf, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
 // ---- the "links you can add yourself" checklist (v4.13, LINK_BUILDER_SPEC.md §4; inlined by the build) ----
@@ -562,19 +585,88 @@ const CT = (() => {
       read: list.filter(r => !['too_early', 'cant_tell'].includes(r.verdict)).length }; };
   return { compare, label, summary, method, LABELS, NOTES, MIN_WEEKS, MIN_OTHERS, r1, median };
 })();
+// ---- podcast kit (L5, LINK_BUILDER_SPEC.md §2: podcast guest opportunities; inlined after the link kit) ----
+// A guest appearance on a show in the site's topics earns an editorial link from the show's own page, and the owner has to say yes to it —
+// so the shows are found for free, qualified like any other prospect and pitched only when there is a contact on the show's OWN domain.
+// Where the list comes from: Apple's podcast directory (`itunes.apple.com/search`) needs no key at all. The **Podcast Index API**
+// (`SEO_PODCASTINDEX_API_KEY` / `SEO_PODCASTINDEX_API_SECRET`) signs every request with sha1(key + secret + unix time); an n8n credential
+// cannot compute that per request and a node may not hold the secret ($env is blocked in nodes on this instance), so the signed path waits
+// for the owner's key **and** a signing step — `shows()` already reads both answers, so only the URL changes when it arrives.
+// Regex only (the n8n Code sandbox has no URL and no DOM).
+const PC = (() => {
+  const S = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+  const num = (v) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.round(n) : 0; };
+  const APPLE = 'https://itunes.apple.com/search?media=podcast&entity=podcast&limit=25&term=';
+  const INDEX = 'https://api.podcastindex.org/api/1.0/search/byterm?max=25&clean&fulltext&q=';
+  /** one search URL for a topic; `signed` only when the Podcast Index key and a signing step are in place (see the note above) */
+  const searchUrl = (topic, signed) => (signed ? INDEX : APPLE) + encodeURIComponent(S(topic).slice(0, 80));
+  const KEEP_TITLE = /[a-z]/i;
+  /** the shows in a search answer, from either shape (Apple `results`, Podcast Index `feeds`), newest-looking first, deduplicated by feed */
+  function shows(j) {
+    const out = []; const seen = new Set();
+    const add = (o) => { const k = (o.feed || o.title).toLowerCase(); if (!o.feed || !KEEP_TITLE.test(o.title) || seen.has(k)) return; seen.add(k); out.push(o); };
+    for (const r of ((j || {}).results || [])) add({ provider: 'apple', title: S(r.collectionName || r.trackName), author: S(r.artistName), feed: S(r.feedUrl),
+      platform_url: S(r.collectionViewUrl || r.trackViewUrl), site: '', episodes: num(r.trackCount), genres: (Array.isArray(r.genres) ? r.genres : []).map(S).filter(Boolean), updated: S(r.releaseDate).slice(0, 10) });
+    for (const r of ((j || {}).feeds || [])) add({ provider: 'podcastindex', title: S(r.title), author: S(r.author || r.ownerName), feed: S(r.url || r.originalUrl),
+      platform_url: '', site: S(r.link), episodes: num(r.episodeCount), genres: Object.values((r.categories && typeof r.categories === 'object') ? r.categories : {}).map(S).filter(Boolean),
+      updated: r.lastUpdateTime ? new Date(Number(r.lastUpdateTime) * 1000).toISOString().slice(0, 10) : '' });
+    return out;
+  }
+  const tag = (xml, name) => { const m = String(xml || '').match(new RegExp('<' + name + '\\b[^>]*>([\\s\\S]*?)</' + name + '>', 'i')); return m ? m[1] : ''; };
+  const strip = (t) => S(String(t || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+  const EMAIL = /[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}/i;
+  /** what an RSS feed says about the show: its own website, its description, the owner's address, how many episodes and how fresh it is */
+  function feed(xml) {
+    const x = String(xml || '');
+    const chan = (x.match(/<channel\b[\s\S]*?(?:<item\b|<\/channel>)/i) || [x])[0];
+    const link = strip(tag(chan, 'link')) || (chan.match(/<atom:link\b[^>]*rel=["']alternate["'][^>]*href=["']([^"']+)["']/i) || [])[1] || '';
+    const owner = tag(chan, 'itunes:owner');
+    const mail = strip(tag(owner, 'itunes:email')) || (owner.match(EMAIL) || [])[0] || (strip(tag(chan, 'managingEditor')).match(EMAIL) || [])[0] || '';
+    const dates = [...x.matchAll(/<pubDate>([^<]{6,60})<\/pubDate>/gi)].map(m => Date.parse(m[1])).filter(t => Number.isFinite(t)).sort((a, b) => b - a);
+    return { site: /^https?:\/\//i.test(link) ? link.slice(0, 300) : '', title: strip(tag(chan, 'title')).slice(0, 160),
+      description: strip(tag(chan, 'description') || tag(chan, 'itunes:summary')).slice(0, 2000), owner_email: S(mail).toLowerCase(),
+      author: strip(tag(chan, 'itunes:author')).slice(0, 120), episodes: (x.match(/<item\b/gi) || []).length,
+      last_episode: dates.length ? new Date(dates[0]).toISOString().slice(0, 10) : '', episode_titles: [...x.matchAll(/<item\b[\s\S]*?<title>([\s\S]*?)<\/title>/gi)].slice(0, 12).map(m => strip(m[1]).slice(0, 160)).filter(Boolean) };
+  }
+  // does the show take guests? Said in its own words — a page that invites guests, or a run of episodes that are interviews.
+  const INVITE = /(be (?:a|our|my) guest|guest application|apply to (?:be|come on)[^.]{0,30}guest|pitch (?:a|us a|your)[^.]{0,20}(?:guest|story|topic|idea)|(?:suggest|nominate|recommend) a guest|guest form|want to be (?:on|a guest on) the (?:show|podcast)|submit (?:a |your )?guest|guest inquir|guest request|appear on the (?:show|podcast)|come on the (?:show|podcast))/i;
+  const INTERVIEW = /\b(interview[sd]?|in conversation with|we (?:talk|speak) (?:to|with)|joins? (?:me|us) (?:on|to)|my guest|our guest|guest[s]?:)\b/i;
+  /** { ok, strength: 'invites' | 'interviews', quote } — with nothing of the sort, ok is false and the show is not pitched */
+  function guestSignal(texts) {
+    const list = (Array.isArray(texts) ? texts : [texts]).map(S).filter(Boolean);
+    for (const t of list) { const m = t.match(INVITE); if (m) { const i = Math.max(0, m.index - 90); return { ok: true, strength: 'invites', quote: t.slice(i, m.index + 160).trim() }; } }
+    const hits = list.flatMap(t => (t.match(new RegExp(INTERVIEW.source, 'gi')) || []));
+    if (hits.length >= 2) { const t = list.find(x => INTERVIEW.test(x)) || ''; const m = t.match(INTERVIEW); return { ok: true, strength: 'interviews', quote: t.slice(Math.max(0, m.index - 90), m.index + 160).trim() }; }
+    return { ok: false, strength: '', quote: '' };
+  }
+  // a show with no episode in the last half year is not worth a pitch (the feed is the only evidence either way)
+  const STALE_DAYS = 200;
+  const stale = (last, now) => { if (!last) return false; const d = (new Date(now || Date.now()).getTime() - new Date(last).getTime()) / 864e5; return d > STALE_DAYS ? Math.round(d) : 0; };
+  return { searchUrl, shows, feed, guestSignal, stale, STALE_DAYS, APPLE, INDEX, strip };
+})();
 const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const rows = (n) => { try { return $(n).all().map(i => i.json).filter(r => r && typeof r === 'object' && Object.keys(r).length && !r.error && !r.skip); } catch (e) { return []; } };
 const pair = (a, b) => { try { const R = $(a).all().map(i => i.json); const S = $(b).all().map(i => i.json || {}); return R.map((r, i) => ({ r, x: S[i] || {} })).filter(o => !o.r.skip); } catch (e) { return []; } };
 const prospects = rows('Load Link Prospects'), outreach = rows('Load Link Outreach'), listingRows = rows('Load Listings'), ledger = rows('Load Backlinks'), impacts = rows('Load Link Impact'), queries = rows('Load Query History');
 const contentLog = rows('Load Content Log');   // G12: the dates pages went live, for the page-change test of section 5b
 const sources = pair('LB Source Requests', 'Fetch LB Sources'), pagesRead = pair('LB Page Requests', 'Fetch LB Pages'), second = pair('LB Second Requests', 'Fetch LB Second');
+const dfs = pair('LB DFS Requests', 'Run LB DFS');   // L6: the competitors' most-linked pages (kind `pages`); the broken-link answers are read in LB Page Requests
 const now = new Date(); const iso = now.toISOString(); const day = iso.slice(0, 10);
 const htmlOf = (x) => String(x.body ?? x.data ?? ''); const statusOf = (x) => Number(x.statusCode || x.status || 0);
 const jsonOf = (x) => { if (!x) return null; if (x.body && typeof x.body === 'object') return x.body; if (x.posts || Array.isArray(x)) return x; try { return JSON.parse(String(x.body ?? x.data ?? '')); } catch (e) { return null; } };
 const errOf = (x) => x.error ? String(x.error.message || x.error.description || x.error).slice(0, 160) : '';
 const pathKey = (u) => String(u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
 // the median and the one-decimal rounding of the control-group reading live in CT now (v5/code/_change_test.js), used by both kinds
-const LIKELY = { lost: 0.7, mention: 0.9, list: 0.5, comp_new: 0.55, gap: 0.4, ai_source: 0.35, resource: 0.45, broken: 0.6, press: 0.5 };
+const LIKELY = { lost: 0.7, mention: 0.9, list: 0.5, comp_new: 0.55, gap: 0.4, ai_source: 0.35, resource: 0.45, broken: 0.6, press: 0.5, digest: 0.55, podcast: 0.35 };
+// L6: the kinds of page that earn links, each with the words that give it away, how many referring domains make it worth saying, and
+// what the work actually is. A kind nobody in this market has links for is not suggested.
+const ASSET_MIN_RDS = 3, ASSET_MIN_TOTAL = 5;
+const ASSET_KINDS = [
+  { kind: 'data', label: 'A data study of your market', re: /\b(report|survey|statistic|statistics|benchmark|benchmarks|data|study|research|index|trends?|salaries|salary|state of|insights?)\b/, how: 'numbers nobody else publishes: ask your own customers, or count what you already see' },
+  { kind: 'tool', label: 'A free tool or calculator', re: /\b(calculator|calculate|tool|tools|generator|checker|estimator|simulator|quiz)\b/, how: 'one page that does one calculation your buyers make by hand' },
+  { kind: 'template', label: 'A template or checklist to download', re: /\b(template|templates|checklist|checklists|sample|samples|form|forms|policy|contract|spreadsheet|download|downloads)\b/, how: 'the document your buyers rebuild every time' },
+  { kind: 'guide', label: 'A definitive guide', re: /\b(guide|guides|handbook|what-is|what is|how-to|how to|ultimate|complete|101|basics|explained|glossary|definition|requirements|rules|deadlines?)\b/, how: 'the one page that answers the whole question, kept up to date and dated' },
+];
 // the posts of #journorequest (one shared fetch + per-topic searches), newest first, deduplicated
 const posts = new Map();
 for (const { r, x } of sources.filter(o => o.r.kind === 'press')) for (const pst of ((jsonOf(x) || {}).posts || [])) { const rec = pst.record || {}; if (!pst.uri || posts.has(pst.uri)) continue;
@@ -608,6 +700,32 @@ for (const p of plans) {
     const o = { prospect_domain: (String(x.handle || 'bsky') + '/' + x.rkey).toLowerCase(), type: 'press',   /* one row per request: a journalist account posts many */ status: em ? 'ready' : 'needs_contact', score: Math.round(60 * x.f + 20), fit: x.f, fit_reason: 'request on your topic (' + Math.round(x.f * 100) + '% match)', page_url: x.url, page_title: 'Journalist request by ' + x.name,
       evidence: x.text.slice(0, 500), contacts: em ? [{ email: em.toLowerCase(), kind: 'person', own: false, source_url: x.url }] : [], contact_form_url: em ? '' : x.url, deadline: deadlineOf(x.text), target_url: p.home, target_reason: 'an expert answer names the business: the homepage', anchor_hint: 'brand', checks: { posted: x.at.slice(0, 10), how: em ? 'e-mail in the request' : 'reply on Bluesky or the link in the request' } };
     outreach_rows.push(base(o)); prospect_rows.push(newProspect({ ...o, detail: 'Journalist request: ' + x.text.slice(0, 240), origin: 'bluesky' })); }
+  // ---- 1b. L5: journalist requests from a media digest (HARO / Source of Sources), read in the customer's own mailbox ----
+  // A digest arrives as e-mail, so the web app parses it (app/shared/src/digest.ts) and writes one `digest` prospect per request; with no
+  // mailbox connected nothing arrives and this does nothing. Here each new request becomes a pitch: the request itself is the evidence to
+  // quote, the deadline is kept, and the reply goes to the address the digest gives (an anonymised address on the service's own domain is
+  // how these are answered — the own-domain contact rule is for sites we found ourselves). Off-topic requests, outlets nobody may pitch and
+  // competitors are refused with the reason, exactly as for every other kind.
+  const digests = myProspects.filter(x => x.type === 'digest' && (x.status || 'new') === 'new' && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === 'digest'));
+  for (const x of digests) {
+    const text = String(x.detail || ''); const noteOf = String(x.note || '');
+    const f = OK.fit(text + ' ' + noteOf, topicText + ' ' + p.topics.join(' '), df, docs.length);
+    // most requests are anonymised (the digest names the outlet but no website), so the row is keyed by the service and the query's
+    // own id: the checks that need a real domain are then skipped, never failed. The topic fit and the draft gate always apply.
+    const named = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(String(x.prospect_domain || ''));
+    const why = (named ? (OK.noPitch(x.prospect_domain, { title: noteOf, spam: Number(x.spam_score) || 0, accredited: weAreAccredited })
+      || OK.sellsSame({ type: 'digest', domain: x.prospect_domain, competitors: p.competitors })) : '')
+      || (f < 0.3 ? 'off topic for you (' + Math.round(f * 100) + '% match with your pages)' : '');
+    const em = String(x.contact_email || '').toLowerCase() || (text.match(/[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}/i) || [])[0] || '';
+    const dl = (noteOf.match(/\d{4}-\d{2}-\d{2}/) || [])[0] || '';
+    const o = { prospect_domain: x.prospect_domain, type: 'digest', score: Number(x.score) || Math.round(100 * LIKELY.digest * (0.4 + 0.6 * Math.min(1, f + 0.2))), fit: f,
+      fit_reason: why || 'a journalist request on your topic (' + Math.round(f * 100) + '% match)', page_url: x.source_url || '', page_title: (noteOf || 'Journalist request').slice(0, 140),
+      evidence: text.slice(0, 500), contacts: em ? [{ email: em, kind: OK.kindOf(em), own: false, source_url: x.source_url || '' }] : [], contact_form_url: em ? '' : (x.source_url || ''),
+      country: OK.countryOf(x.prospect_domain), language: '', deadline: dl, target_url: p.home, target_reason: 'an expert answer names the business: the homepage', anchor_hint: 'brand',
+      checks: { source: 'journalist digest read in your mailbox', how: em ? 'answer the address the digest gives' : 'the digest gives no address: answer in the digest itself', reasons: why ? [why] : [] } };
+    o.status = why ? 'not_fit' : (em ? 'ready' : 'needs_contact');
+    outreach_rows.push(base(o));
+  }
   // ---- 2. every prospect page read: qualify, evidence, contacts, our page ----
   const contactsBy = new Map(); const formBy = new Map(); const deadBy = new Map();
   for (const { r, x } of second.filter(o => o.r.site_id === sid)) {
@@ -650,7 +768,7 @@ for (const p of plans) {
     // ---- D13: who is never pitched (live 2026-10-11: competitors, bare homepages, mailbox providers and contact databases were) ----
     const bad = OK.badHost(r.prospect_domain); if (bad) reasons.push(bad);
     const onlyHome = OK.homepageOnly(r.type, r.url); if (onlyHome) reasons.push(onlyHome);
-    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, title: o.page_title, text: t, terms: sellTerms });
+    const competing = OK.sellsSame({ type: r.type, domain: r.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals, title: o.page_title, text: t, terms: sellTerms });   // R4: a SERP rival counts as a competitor
     if (competing) reasons.push(competing);
     if (!weAreAccredited && OK.accreditedList(o.page_title + ' ' + r.url))   // the page IS such a list (its title / address says so); a page that merely names accredited providers is fine
       reasons.push('a list of accredited / approved providers: you get on it by applying with the accreditation, and the facts on file do not say you hold one (asking to be added claims it)');
@@ -678,10 +796,50 @@ for (const p of plans) {
       && !myOutreach.some(o => o.prospect_domain === x.prospect_domain && o.type === x.type && o.status === 'drafted'))) {
     const why = OK.badHost(x.prospect_domain)
       || (OK.isGov(x.prospect_domain) ? 'government site: you get on its lists by applying or being accredited, not by a pitch (see the listings checklist)' : '')
-      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors });
+      || OK.sellsSame({ type: x.type, domain: x.prospect_domain, competitors: p.competitors, serp_rivals: p.serp_rivals });   // R4
     if (!why) continue;
     outreach_rows.push(base({ prospect_domain: x.prospect_domain, type: x.type, status: 'not_fit', score: Number(x.score) || 0, fit: 0, fit_reason: why,
       page_url: x.source_url || '', page_title: String(x.detail || '').slice(0, 140), evidence: String(x.detail || ''), country: OK.countryOf(x.prospect_domain), checks: { reasons: [why], read: false } }));
+  }
+  // ---- 2c. L5: podcast shows that take guests (free; the show's own website came from its RSS feed and was fetched this run) ----
+  // A guest appearance earns an editorial link from the show's own page, and only the owner can accept the invitation. A show is pitched
+  // only when it is on our topics, still publishing, says somewhere that it takes guests, and has a contact on its OWN domain: an address
+  // on a podcast platform or a free mailbox belongs to nobody we can write to about the show.
+  for (const { r, x } of second.filter(o => o.r.site_id === sid && o.r.kind === 'podcast_site')) {
+    if (linking.has(LK.refKey(r.prospect_domain))) continue;
+    if (outreach_rows.some(o => o.prospect_domain === r.prospect_domain && o.type === 'podcast')) continue;
+    const stored = myProspects.find(y => y.prospect_domain === r.prospect_domain && y.type === 'podcast') || {};
+    const html = htmlOf(x); const st = statusOf(x); const e = errOf(x);
+    const blocked = !!html && LK.challenge(st, html);
+    const facts = html && !blocked ? LK.pageFacts(html, x.headers, r.url) : {};
+    const t = html && !blocked ? LK.text(html) : '';
+    const reasons = [];
+    if ((!html && e) || st === 404 || st === 410) reasons.push(st ? "the show's site answers " + st : "the show's site does not answer");
+    if (html && !blocked) reasons.push(...OK.sellSignals(html, facts));
+    const bad = OK.noPitch(r.prospect_domain, { title: r.show_title, accredited: weAreAccredited }); if (bad) reasons.push(bad);
+    const competing = OK.sellsSame({ type: 'podcast', domain: r.prospect_domain, competitors: p.competitors }); if (competing) reasons.push(competing);
+    const fit = OK.fit([r.show_title, r.summary, t.slice(0, 3000)].join(' '), topicText, df, docs.length);
+    if (fit < OK.OFF_TOPIC) reasons.push('the show is off your topics (' + Math.round(fit * 100) + '% match)');
+    const quiet = PC.stale(r.last_episode, now); if (quiet) reasons.push('no new episode for ' + quiet + ' days: the show looks finished');
+    const own = t ? PC.guestSignal([t.slice(0, 20000)]) : { ok: false, strength: '', quote: '' };
+    const guest = own.ok ? own : (r.guest_strength ? { ok: true, strength: r.guest_strength, quote: r.guest_quote || '' } : { ok: false, strength: '', quote: '' });
+    if (!guest.ok) reasons.push('nothing on the show or in its feed says it takes guests: not pitched');
+    const cands = [...(html && !blocked ? OK.contactsIn(html, r.prospect_domain, r.url) : []), ...(contactsBy.get(r.prospect_domain) || [])];
+    if (r.owner_email) cands.push({ email: String(r.owner_email).toLowerCase(), kind: OK.kindOf(r.owner_email), own: LK.sameSite(String(r.owner_email).split('@')[1] || '', r.prospect_domain), w: 2, source_url: r.feed_url || '' });
+    const contacts = OK.rankContacts(cands);
+    const form = contacts.length ? '' : (formBy.get(r.prospect_domain) || OK.contactForm(html, r.url) || '');
+    if (!reasons.length && !contacts.length && !form) reasons.push('no contact on the show’s own domain (' + r.prospect_domain + '): the address it publishes is on a podcast platform or a free mailbox, so there is nobody to write to about the show');
+    const o = { prospect_domain: r.prospect_domain, type: 'podcast', page_url: r.url, page_title: String(r.show_title || facts.title || '').slice(0, 140), fit,
+      fit_reason: reasons.length ? reasons.join('; ') : 'a show on your topics (' + Math.round(fit * 100) + '% match) that ' + (guest.strength === 'invites' ? 'invites guests' : 'runs interviews'),
+      evidence: [r.show_title ? '“' + r.show_title + '”' + (r.show_author ? ' by ' + r.show_author : '') : '', r.episodes ? r.episodes + ' episodes' : '', r.last_episode ? 'last episode ' + r.last_episode : '',
+        guest.quote ? 'They say: "' + String(guest.quote).replace(/\s+/g, ' ').slice(0, 220) + '"' : ''].filter(Boolean).join(' · ').slice(0, 500),
+      contacts, contact_form_url: form, country: OK.countryOf(r.prospect_domain), language: String(facts.lang || '').slice(0, 5),
+      target_url: p.home, target_reason: 'a guest appearance names the business: the homepage', anchor_hint: 'brand',
+      score: Math.round(100 * LIKELY.podcast * (0.4 + 0.6 * Math.min(1, fit + 0.2)) * (guest.strength === 'invites' ? 1.2 : 1)),
+      checks: { reasons, guest: guest.strength, episodes: r.episodes || 0, last_episode: r.last_episode || '', feed: r.feed_url || '', platform: r.platform_url || '', page_status: st || (e ? 'error' : ''), blocked } };
+    o.status = reasons.length ? 'not_fit' : (contacts.length ? 'ready' : 'needs_contact');
+    outreach_rows.push(base(o));
+    if (!stored.prospect_domain && o.status !== 'not_fit') prospect_rows.push(newProspect({ ...o, detail: 'Podcast: ' + String(r.show_title || r.prospect_domain) + (r.episodes ? ' (' + r.episodes + ' episodes)' : ''), origin: 'podcast' }));
   }
   // ---- 3. our old URLs that now 404 (Wayback) → a redirect to the closest live page ----
   for (const { r, x } of pagesRead.filter(o => o.r.site_id === sid && o.r.kind === 'wayback_check')) {
@@ -733,6 +891,32 @@ for (const p of plans) {
         priority: l.prio + (comps.length ? -0.5 : 0), why: (evidence ? evidence + ' · ' : '') + l.why, checked_at: iso, submitted_at: old.submitted_at || '', note: old.note || '' });
     }
   }
+  // ---- 4b. L6: what kind of page earns links in this market (the competitors' most-linked pages, DataForSEO domain_pages, monthly) ----
+  // Their pages with the most referring domains say what this market links to; the idea is a kind of page to make, tied to the pages that
+  // prove it and the referring domains those hold. An idea is never a promise: it is what worked for someone else, with the evidence.
+  const asset_ideas = [];
+  const compPages = [];
+  for (const { r, x } of dfs.filter(o => o.r.site_id === sid && (o.r.kind || '') === 'pages')) {
+    const tasks = (x && x.tasks) ? x.tasks : ((jsonOf(x) || {}).tasks || []);   // the DataForSEO node answers with a parsed object, as LB Page Requests reads it
+    const items = (((tasks[0] || {}).result) || []).flatMap(q => (q || {}).items || []);
+    for (const it of items) {
+      const url = String(it.url || it.page_address || ''); const rds = Number(it.referring_domains) || 0;
+      if (!/^https?:\/\//i.test(url) || rds < ASSET_MIN_RDS) continue;
+      const title = String(((it.meta || {}).title) || '').slice(0, 160);
+      const path = url.replace(/^https?:\/\/[^\/]+/, '');
+      compPages.push({ competitor: r.competitor, url, title, rds, home: /^\/?$/.test(path.replace(/[?#].*$/, '')), words: (title + ' ' + path.replace(/[\/_.?=&+-]+/g, ' ')).toLowerCase() });
+    }
+  }
+  for (const K of ASSET_KINDS) {
+    const hits = compPages.filter(x => !x.home && K.re.test(x.words)).sort((a, b) => b.rds - a.rds).slice(0, 3);
+    const rds = hits.reduce((n, x) => n + x.rds, 0);
+    if (!hits.length || rds < ASSET_MIN_TOTAL) continue;
+    const who = [...new Set(hits.map(h => h.competitor))];
+    asset_ideas.push({ kind: K.kind, idea: K.label + ' — ' + (p.topics[0] || p.profile.business_type || 'your topic'), how: K.how, rds, pages_seen: hits.length,
+      basis: hits.length + ' page' + (hits.length === 1 ? '' : 's') + ' of this kind on ' + who.join(', ') + ' hold ' + rds + ' referring domain' + (rds === 1 ? '' : 's') + ' between them',
+      examples: hits.map(h => ({ url: h.url, title: h.title, competitor: h.competitor, rds: h.rds })) });
+  }
+  asset_ideas.sort((a, b) => b.rds - a.rds); asset_ideas.splice(4);   // at most a handful, the best-evidenced first
   // ---- 5. what each won link did for its page (Search Console positions, control group of the site's other pages) ----
   const myQ = queries.filter(q => q.site_id === sid && q.page);
   const periods = [...new Set(myQ.map(q => String(q.period_end || '')))].filter(Boolean).sort();
@@ -784,9 +968,12 @@ for (const p of plans) {
   const jobs = p.free_only ? [] : ready.slice(0, p.budget).map(({ rankv, ...o }) => o);
   const stillOld = (k) => !(myOutreach.find(o => o.prospect_domain + '|' + o.type === k) || {}).sequence_json;
   out.push({ json: { site_id: sid, domain: p.domain, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, free_only: p.free_only, checked_at: iso,
-    outreach_rows, prospect_rows, listing_rows, impact_rows, jobs: jobs.filter(j => stillOld(j.prospect_domain + '|' + j.type)), fixes,
-    cache_row: { key: 'linkbld:' + sid, kind: 'linkbld', site_id: sid, value: JSON.stringify({ ...p.state, listings_at: p.due.listings ? iso : p.state.listings_at, resources_at: p.due.resources ? iso : p.state.resources_at, wayback_at: p.due.wayback ? iso : p.state.wayback_at, broken_at: p.due.broken ? iso : p.state.broken_at, last_run: iso }), updated_at: iso },
-    summary: { press: press.length, qualified: outreach_rows.filter(o => !['not_fit', 'fix'].includes(o.status)).length, not_fit: outreach_rows.filter(o => o.status === 'not_fit').length, needs_contact: outreach_rows.filter(o => o.status === 'needs_contact').length,
+    outreach_rows, prospect_rows, listing_rows, impact_rows, jobs: jobs.filter(j => stillOld(j.prospect_domain + '|' + j.type)), fixes, asset_ideas,
+    cache_row: { key: 'linkbld:' + sid, kind: 'linkbld', site_id: sid, value: JSON.stringify({ ...p.state, listings_at: p.due.listings ? iso : p.state.listings_at, resources_at: p.due.resources ? iso : p.state.resources_at, wayback_at: p.due.wayback ? iso : p.state.wayback_at, broken_at: p.due.broken ? iso : p.state.broken_at,
+      podcasts_at: p.due.podcasts ? iso : p.state.podcasts_at, assets_at: p.due.assets ? iso : p.state.assets_at, last_run: iso }), updated_at: iso },
+    summary: { press: press.length, digests: outreach_rows.filter(o => o.type === 'digest' && o.status !== 'not_fit').length,
+      podcasts: outreach_rows.filter(o => o.type === 'podcast' && o.status !== 'not_fit').length, podcasts_read: second.filter(o => o.r.site_id === sid && o.r.kind === 'podcast_site').length,
+      asset_ideas: asset_ideas.length, asset_pages: compPages.length, qualified: outreach_rows.filter(o => !['not_fit', 'fix'].includes(o.status)).length, not_fit: outreach_rows.filter(o => o.status === 'not_fit').length, needs_contact: outreach_rows.filter(o => o.status === 'needs_contact').length,
       ready: ready.length, to_draft: jobs.length, redirects: fixes.length, listings_missing: listing_rows.filter(l => l.status === 'missing').length, listings_linked: listing_rows.filter(l => l.status === 'linked').length,
       impact_reads: impact_rows.filter(r => r.kind === 'link' && !['too_early', 'cant_tell'].includes(r.verdict)).length,
       page_changes: impact_rows.filter(r => r.kind === 'page_change').length,

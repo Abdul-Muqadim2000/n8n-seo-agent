@@ -193,21 +193,39 @@ const KWI = (() => {
       // which page, if any, already answers this search: the page inventory first (D11), the page Search Console reports only when
       // the inventory is empty (then it is the best evidence we have, and it is labelled as such)
       const inv = matchPage(q);
-      const row_page = (c.use_row_page && S(r.page)) ? { url: S(r.page), title: '', matched_by: 'search console page' } : null;
+      // R12 (2026-10-13, re-rating §3.11): 11 of 25 rows read "no page of yours answers this search" while the same row named a live
+      // 200-OK page of the site — one of them ranking #6.2 — because only the slug / title match counted and the URL Search Console
+      // itself reports was ignored whenever the inventory was non-empty. A URL on this site is evidence: it is the answering page, with
+      // its own label ("the page that gets the impressions does not target this search"), so the report never asks the owner for a second
+      // page for a search they already rank for (D11's cannibalisation rule, in the discovery path).
+      const rowUrl = S(r.page);
+      const rowBare = bare(rowUrl);
+      const rowOnSite = !!rowUrl && !!rowBare && (!dom || rowBare === dom || rowBare.endsWith('.' + dom));
+      const row_page = (rowUrl && (c.use_row_page || rowOnSite))
+        ? { url: rowUrl, title: '', matched_by: c.use_row_page ? 'search console page' : 'impressions' } : null;
       const answered_by = inv ? { url: S(inv.url), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory' } : row_page;
       const kinds = [];
       if (!answered_by) kinds.push('no_page');
-      if (position >= c.striking_min && position <= c.striking_max) kinds.push('striking');
+      else if (!inv && answered_by.matched_by === 'impressions') kinds.push('page_mismatch');
+      const striking = position >= c.striking_min && position <= c.striking_max;
+      if (striking) kinds.push('striking');
+      const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
+      const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
+        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions does not target this search'
+          + (striking ? ' (you rank ' + posTxt + ' with it — striking distance)' : ' (you rank ' + posTxt + ' with it)')
+          : striking ? 'you rank ' + posTxt + ' — striking distance' : 'a page of yours already answers this search';
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
-        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: S(r.page), answered_by, kinds,
+        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowUrl, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
     }
     const wanted = considered.filter(q => q.kinds.length);
-    const order = [...wanted].sort((a, b) => (b.kinds.indexOf('no_page') >= 0 ? 1 : 0) - (a.kinds.indexOf('no_page') >= 0 ? 1 : 0) || b.impressions - a.impressions);
+    const rank = (x) => x.kinds.indexOf('no_page') >= 0 ? 2 : x.kinds.indexOf('page_mismatch') >= 0 ? 1 : 0;   // R12: a search with no page at all first, then one whose ranking page targets something else
+    const order = [...wanted].sort((a, b) => rank(b) - rank(a) || b.impressions - a.impressions);
     return { available: all.length > 0, period_end: period, period_days: c.period_days, rows: all.length, considered: considered.length,
       page_check: (num(c.pages_known) || 0) > 0 ? 'page inventory' : (c.use_row_page ? 'search console page' : 'unavailable'),
       pages_known: num(c.pages_known) || 0,
       queries: wanted, no_page: wanted.filter(q => q.kinds.indexOf('no_page') >= 0), striking: wanted.filter(q => q.kinds.indexOf('striking') >= 0),
+      mismatch: wanted.filter(q => q.kinds.indexOf('page_mismatch') >= 0),
       answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 20),
       seeds: order.slice(0, c.max_seeds).map(q => q.keyword), dropped,
       min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
@@ -412,7 +430,9 @@ if (pipeline) recommended.push({ ...pipeline, reason: 'best fit for the goal "' 
 ks.priority.forEach(k => { if (!recommended.some(r => r.keyword === k.keyword)) recommended.push(k); });
 const keyword_suggestions = { covered: ks.covered || [], ladder_covered: ks.ladder_covered || [], recommended, easy_wins: ks.quick_wins, by_intent: ks.by_intent, topic_clusters: (ks.clusters || []).map(c => ({ topic: c.topic, total_volume: c.total_volume, keyword_count: c.keyword_count, suggested_page: c.page_type, keywords: (c.keywords || []).map(k => k.keyword) })), total_found: ks.total_relevant,
   // G8: the searches the site already gets impressions for (K6) and the groups one page can serve (K7)
-  search_console: ks.search_console || null, serp_clusters: (ks.serp_clusters || []).map(c => ({ head_keyword: c.head_keyword, keyword_count: c.keyword_count, keywords: (c.keywords || []).map(k => k.keyword), shared_urls: c.min_shared_urls })) };
+  search_console: ks.search_console || null, serp_clusters: (ks.serp_clusters || []).map(c => ({ head_keyword: c.head_keyword, keyword_count: c.keyword_count, keywords: (c.keywords || []).map(k => k.keyword), shared_urls: c.min_shared_urls })),
+  // G32: the topic radius, so the app and the content steps see the same verdicts as the report
+  topic_radius: ks.topic_radius || null };
 
 // ---- report ----
 const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -440,10 +460,16 @@ const tpCell = (k) => '~' + num(k.traffic_potential) + '/mo' + (k.traffic_basis 
 const SC = ks.search_console || null;
 const scRows = SC ? (SC.queries || []) : [];
 const scTable = (list) => table(list, [['Search', q => esc(q.keyword)], ['Impressions (' + ((SC && SC.period_days) || 28) + ' days)', q => num(q.impressions)], ['Clicks', q => num(q.clicks)],
-  ['Your position', q => q.position == null ? 'not reported' : '#' + q.position], ['Why it is here', q => q.kinds.includes('no_page') ? 'no page of yours answers this search' + ((SC && SC.page_check) === 'search console page' ? ' (judged on the page Search Console reports, no page list on file yet)' : '') : 'you rank #' + q.position + ' — striking distance'],
+  ['Your position', q => q.position == null ? 'not reported' : '#' + q.position],
+  // R12 (2026-10-13): the reason comes from the kit (KWI.gscSeeds), so a row that names a live page of ours can never read
+  // "no page of yours answers this search" — it reads that the page getting the impressions targets something else
+  ['Why it is here', q => esc(q.why || (q.kinds.includes('no_page') ? 'no page of yours answers this search' : 'you rank #' + q.position + ' — striking distance'))
+    + (q.kinds.includes('no_page') && (SC && SC.page_check) === 'search console page' ? ' (judged on the page Search Console reports, no page list on file yet)' : '')],
   ['Page that gets the impressions', q => q.page ? '<a href="' + esc(q.page) + '">' + esc(String(q.page).replace(/^https?:\/\/[^/]+/, '') || '/') + '</a>' : '—']]);
 const scLine = !SC ? '' : (SC.available
-  ? (SC.seeded || []).length + ' of your own Search Console searches were used as research seeds (the ' + ((SC.no_page || []).length) + ' with impressions and no page of their own, and the ' + ((SC.striking || []).length) + ' where you rank ' + SC.striking_min + '-' + SC.striking_max + '), measured in the 28 days to ' + esc(String(SC.period_end || '').slice(0, 10)) + '. ' + (SC.dropped ? 'Left out: ' + (SC.dropped.brand || 0) + ' brand searches, ' + (SC.dropped.scraper || 0) + ' typed by SEO tools, ' + (SC.dropped.low_impressions || 0) + ' under ' + SC.min_impressions + ' impressions.' : '')
+  ? (SC.seeded || []).length + ' of your own Search Console searches were used as research seeds (the ' + ((SC.no_page || []).length) + ' with impressions and no page of their own, '
+    + ((SC.mismatch || []).length ? 'the ' + (SC.mismatch || []).length + ' a live page of yours already earns the impressions for while targeting something else, ' : '')
+    + 'and the ' + ((SC.striking || []).length) + ' where you rank ' + SC.striking_min + '-' + SC.striking_max + '), measured in the 28 days to ' + esc(String(SC.period_end || '').slice(0, 10)) + '. ' + (SC.dropped ? 'Left out: ' + (SC.dropped.brand || 0) + ' brand searches, ' + (SC.dropped.scraper || 0) + ' typed by SEO tools, ' + (SC.dropped.low_impressions || 0) + ' under ' + SC.min_impressions + ' impressions.' : '')
   : 'No Search Console history is stored for this website yet, so the research started from the business description and the site itself. Connect Search Console (or let one weekly tracker run finish) and the next research will start from the searches you already appear for.');
 // K7: the searches Google answers with the same pages
 const SO = ks.serp_overlap || null;
@@ -452,6 +478,18 @@ const serpClusterHtml = (ks.serp_clusters || []).length
     + (ks.serp_clusters || []).slice(0, 8).map(c => '<div class="card"><div class="kw">' + esc(c.head_keyword) + '</div><p class="muted">' + esc(KWI.clusterText(c)) + '</p><p>'
       + (c.keywords || []).map(k => '<span class="pill">' + esc(k.keyword) + (k.volume == null ? '' : ' · ' + num(k.volume) + '/mo') + '</span>').join('') + '</p></div>').join('')
   : '<p class="muted">No two keywords shared ' + ((SO && SO.min_shared_urls) || 3) + ' or more of their top-10 results' + (SO && SO.keywords_compared ? ' among the ' + SO.keywords_compared + ' whose results pages this run read' : '') + ', so every topic below needs its own page.</p>';
+// G32 / K12: the site's topic radius — which topics are within reach today, which are a stretch, and the evidence behind each verdict
+// (built in Rank Keywords by v5/code/_radius.js; every row carries its own label, so this only lays the data out)
+const RAD_PILL = { in_reach: 'now', stretch: 'next', far: 'later' };
+const rad = ks.topic_radius || null;
+const radRows = rad ? [...(rad.in_reach || []), ...(rad.stretch || []), ...(rad.far || [])] : [];
+const radiusHtml = !radRows.length ? '' : '<h2>Your topic radius: what is within reach and what is a stretch</h2>'
+  + '<p class="muted">' + esc(rad.summary) + '</p>'
+  + '<table class="t"><tr><th>Topic</th><th>Verdict</th><th>Why</th><th>On what evidence</th></tr>'
+  + radRows.slice(0, 25).map(t => '<tr><td><b>' + esc(cap(t.topic)) + '</b><br><span class="muted">' + esc(t.primary_keyword) + '</span></td>'
+    + '<td><span class="pill ' + (RAD_PILL[t.verdict] || 'later') + '">' + esc(t.verdict_label) + '</span></td><td>' + esc(t.reason) + '</td>'
+    + '<td class="muted">' + esc((t.evidence || []).join('; ')) + '</td></tr>').join('')
+  + '</table><p class="muted">' + esc(rad.note) + '</p>';
 const goalText = { leads: 'enquiries and leads', sales: 'online sales', traffic: 'traffic and authority', brand: 'brand awareness' }[ks.goal] || ks.goal;
 const now = (ks.clusters || []).filter(c => c.tier === 'Now'), next = (ks.clusters || []).filter(c => c.tier === 'Next'), later = (ks.clusters || []).filter(c => c.tier === 'Later');
 const seeds = (base.seeds || []).slice(0, 10);
@@ -490,6 +528,8 @@ const html = `
 
   <h2>Searches that share a results page</h2>
   ${serpClusterHtml}
+
+  ${radiusHtml}
 
   <h2>Content plan by topic</h2>
   <p class="muted">One strong page per topic. "Now" = highest opportunity and ${RR ? 'easy or reachable for your site' : 'winnable difficulty'}; "Next" = plan for the following months; "Later" = long-term or hard.</p>

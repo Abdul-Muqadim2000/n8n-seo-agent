@@ -15,6 +15,7 @@ import {
   type AiEngine,
   type MonitorSettings,
 } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { Checkbox, Field, Select } from '@/components/ui/field';
 import { Segmented, SwitchRow } from '@/components/ui/tabs';
 import { TagInput } from '@/components/ui/tag-input';
@@ -212,6 +213,7 @@ export function MonitorSettingsFields({
             label="Brand names"
             optional
             hint="How AI answers and mentions recognise you. A short name shared with other companies can produce false matches, so list your full brand names."
+            labelAction={<GuideButton id="brand-names" variant="link" label="How should I write these?" />}
           >
             {(p) => (
               <TagInput

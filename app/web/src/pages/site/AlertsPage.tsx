@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { BarChart3, BellRing, CalendarCheck, CheckCircle2, ClipboardCheck, FileSearch, Info, Mail, OctagonAlert, ShieldAlert, TriangleAlert } from 'lucide-react';
 import { titleCase, type AlertsData, type Checkin, type ConsoleAlert } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { useSiteData } from '@/lib/queries';
 import { cn, fmtAgo, fmtDate } from '@/lib/utils';
 import { BarsChart, ChartCard } from '@/components/charts';
@@ -53,6 +54,7 @@ const SEV_RANK: Record<string, number> = { critical: 0, high: 1, serious: 1, med
 const sevRank = (s: string) => SEV_RANK[String(s ?? '').toLowerCase()] ?? 5;
 
 function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
+  const { site } = useSitePage();
   const checkins = useMemo(() => sortByDate(d.checkins, (c) => c.month), [d.checkins]);
   const last = checkins[checkins.length - 1] ?? null;
   const prev = checkins.length > 1 ? checkins[checkins.length - 2] : null;
@@ -62,7 +64,18 @@ function Alerts({ d, refetching }: { d: AlertsData; refetching: boolean }) {
   return (
     <Stagger className="space-y-6">
       {d.checkinDue && (
-        <Callout tone="warning" title="This month’s Search Console check-in is due" action={<ToolButton mode="checkin" variant="primary" size="sm">Record it now</ToolButton>}>
+        <Callout
+          tone="warning"
+          title="This month’s Search Console check-in is due"
+          action={
+            <>
+              <ToolButton mode="checkin" variant="primary" size="sm">
+                Record it now
+              </ToolButton>
+              <GuideButton id="search-console-checkin" vars={{ domain: site.domain }} label="Where do I look?" />
+            </>
+          }
+        >
           Open Search Console and look at three things: Security & Manual actions (both should say “No issues detected”) and the Pages report (export it as CSV to record what is not indexed and why). It takes about two minutes.
         </Callout>
       )}

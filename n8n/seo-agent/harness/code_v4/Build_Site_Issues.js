@@ -87,6 +87,16 @@ const IMP = (() => {
           if (!measured) { clicks = Math.round(avgClicks * affected); impressions = Math.round(avgImpr * affected); }
         }
       }
+      // R10 (2026-10-13, re-rating §3.11): the site average per page multiplied by the pages affected claimed "about 720 clicks and
+      // 22,860 impressions in the last 28 days" for a property that measured 38 clicks and 5,295 in that period (the mobile-usability
+      // finding, 45 of 47 pages). No finding can put more traffic at risk than the whole property has, so every basis — measured,
+      // scaled or averaged — is capped at Search Console's own 28-day totals, and the line says when the cap bit.
+      let capped = false;
+      if (totals) {
+        const totC = n0(totals.clicks), totI = n0(totals.impressions);
+        if (clicks > totC) { clicks = totC; capped = true; }
+        if (impressions > totI) { impressions = totI; capped = true; }
+      }
       const traffic = clicks * 10 + impressions;
       const trafficFactor = sc ? 1 + Math.log10(1 + traffic) : 1;
       const onKeyPage = siteWide || (f.sample_urls || []).some(u => keyPaths.has(pathOf(S(u).split(' — ')[0])));
@@ -100,12 +110,14 @@ const IMP = (() => {
       // the blocker band is for blockers that matter: a Low "these pages are not indexable" (usually on purpose) must not outrank a
       // High somewhere else just because it touches indexing
       f.impact_band = f.severity === 'Info' ? 0 : (blocker && sev >= SEV_W.Medium) ? 3 : cosmetic ? 1 : 2;
-      f.impact_traffic = sc ? { clicks, impressions, estimated: !measured && !siteWide, period_days: 28 } : null;
+      f.impact_traffic = sc ? { clicks, impressions, estimated: !measured && !siteWide, capped, period_days: 28,
+        property_totals: totals ? { clicks: n0(totals.clicks), impressions: n0(totals.impressions) } : null } : null;
       f.minor = isMinor(f);   // G18-2: folded in the reports and in the app, never removed
       f.impact_basis = [
         blocker ? 'Google cannot index or follow these pages' : '',
         siteWide ? 'the whole website' : affected + ' of ' + total + ' crawled pages',
-        sc ? (measured || siteWide ? 'about ' : 'an estimated ') + fmt(clicks) + ' clicks and ' + fmt(impressions) + ' impressions in the last 28 days' : 'no Search Console data, so the pages affected and their place in the site decide the order',
+        sc ? (measured || siteWide ? 'about ' : 'an estimated ') + fmt(clicks) + ' clicks and ' + fmt(impressions) + ' impressions in the last 28 days'
+          + (capped ? ' (capped at everything the whole website measured in that period: the pages affected cannot put more at risk)' : '') : 'no Search Console data, so the pages affected and their place in the site decide the order',
         onKeyPage && !siteWide ? 'the homepage or a key page is affected' : '',
         f.severity + ' severity',
         cosmetic ? 'cosmetic, so it is never ranked first' : ''
@@ -491,6 +503,7 @@ if (!isFull) not_assessed.push('Structured data (schema) and HTML-level checks')
 if (!isFull || !input.competitor_benchmark) not_assessed.push('Competitor benchmark (organic keywords, rankings, traffic, domain age)');
 if (!input.pagespeed) not_assessed.push('Core Web Vitals in a lab test (Google PageSpeed / Lighthouse) and the speed comparison with competitors');
 if (!(input.crux && input.crux.available)) not_assessed.push('Core Web Vitals from real Chrome users per template (Chrome UX Report, 75th percentile): ' + ((input.crux && input.crux.not_available) || 'not collected in this run'));
+if (!(input.render_diff && input.render_diff.available)) not_assessed.push('What crawlers see before JavaScript runs (the first response against the rendered page, per key page): ' + ((input.render_diff && input.render_diff.not_available) || 'not collected in this run'));
 if (!input.content_review) not_assessed.push('Content quality and E-E-A-T review (authors, case studies, claims, pricing)');
 if (!input.authority) not_assessed.push('Backlinks and referring domains');
 if (!input.site_keywords) not_assessed.push('Keyword rankings by search intent and keyword gap');
@@ -524,6 +537,7 @@ return [{
       site_structure: input.site_structure || null,
       entity: input.entity || null,
       crux: input.crux || null,
+      render_diff: input.render_diff || null,
       measurements: probe.measurements || {},
       sampled_pages: (input.html_analysis || {}).sampled_pages || [],
       competitor_benchmark: input.competitor_benchmark || null,

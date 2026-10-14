@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select, Textarea } from '@/components/ui/field';
 import { TagInput } from '@/components/ui/tag-input';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { applyServerErrors, asCountry, competitorValidator, errorText, guessCountry } from './helpers';
@@ -204,6 +205,7 @@ export function SiteBusinessForm({
               label="Business facts"
               optional
               hint={`Real facts only: years in business, number of clients, certifications, published prices, guarantees, locations, awards. Pages quote these and never invent numbers. ${factsLen}/2000`}
+              labelAction={<GuideButton id="business-facts" variant="link" label="What makes a good fact?" />}
               error={errors.businessFacts?.message}
             >
               {(p) => (
@@ -225,6 +227,7 @@ export function SiteBusinessForm({
                   label="Competitors"
                   optional
                   hint="Up to 3 competitor websites. Used for share of voice in AI answers, the backlink gap and the full SEO report."
+                  labelAction={<GuideButton id="competitors" vars={{ domain: site?.domain ?? domain }} variant="link" label="Who counts as a competitor?" />}
                   error={errorText(fieldState.error)}
                 >
                   {(p) => (
@@ -252,6 +255,7 @@ export function SiteBusinessForm({
                   label="Brand names"
                   optional
                   hint="Names people use for your company, like 'Techand AI'. A short name that other companies share can be confused in AI answers, so list the full names."
+                  labelAction={<GuideButton id="brand-names" vars={{ domain: site?.domain ?? domain }} variant="link" label="How should I write these?" />}
                   error={errorText(fieldState.error)}
                 >
                   {(p) => (

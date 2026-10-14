@@ -59,21 +59,39 @@ const KWI = (() => {
       // which page, if any, already answers this search: the page inventory first (D11), the page Search Console reports only when
       // the inventory is empty (then it is the best evidence we have, and it is labelled as such)
       const inv = matchPage(q);
-      const row_page = (c.use_row_page && S(r.page)) ? { url: S(r.page), title: '', matched_by: 'search console page' } : null;
+      // R12 (2026-10-13, re-rating §3.11): 11 of 25 rows read "no page of yours answers this search" while the same row named a live
+      // 200-OK page of the site — one of them ranking #6.2 — because only the slug / title match counted and the URL Search Console
+      // itself reports was ignored whenever the inventory was non-empty. A URL on this site is evidence: it is the answering page, with
+      // its own label ("the page that gets the impressions does not target this search"), so the report never asks the owner for a second
+      // page for a search they already rank for (D11's cannibalisation rule, in the discovery path).
+      const rowUrl = S(r.page);
+      const rowBare = bare(rowUrl);
+      const rowOnSite = !!rowUrl && !!rowBare && (!dom || rowBare === dom || rowBare.endsWith('.' + dom));
+      const row_page = (rowUrl && (c.use_row_page || rowOnSite))
+        ? { url: rowUrl, title: '', matched_by: c.use_row_page ? 'search console page' : 'impressions' } : null;
       const answered_by = inv ? { url: S(inv.url), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory' } : row_page;
       const kinds = [];
       if (!answered_by) kinds.push('no_page');
-      if (position >= c.striking_min && position <= c.striking_max) kinds.push('striking');
+      else if (!inv && answered_by.matched_by === 'impressions') kinds.push('page_mismatch');
+      const striking = position >= c.striking_min && position <= c.striking_max;
+      if (striking) kinds.push('striking');
+      const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
+      const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
+        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions does not target this search'
+          + (striking ? ' (you rank ' + posTxt + ' with it — striking distance)' : ' (you rank ' + posTxt + ' with it)')
+          : striking ? 'you rank ' + posTxt + ' — striking distance' : 'a page of yours already answers this search';
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
-        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: S(r.page), answered_by, kinds,
+        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowUrl, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
     }
     const wanted = considered.filter(q => q.kinds.length);
-    const order = [...wanted].sort((a, b) => (b.kinds.indexOf('no_page') >= 0 ? 1 : 0) - (a.kinds.indexOf('no_page') >= 0 ? 1 : 0) || b.impressions - a.impressions);
+    const rank = (x) => x.kinds.indexOf('no_page') >= 0 ? 2 : x.kinds.indexOf('page_mismatch') >= 0 ? 1 : 0;   // R12: a search with no page at all first, then one whose ranking page targets something else
+    const order = [...wanted].sort((a, b) => rank(b) - rank(a) || b.impressions - a.impressions);
     return { available: all.length > 0, period_end: period, period_days: c.period_days, rows: all.length, considered: considered.length,
       page_check: (num(c.pages_known) || 0) > 0 ? 'page inventory' : (c.use_row_page ? 'search console page' : 'unavailable'),
       pages_known: num(c.pages_known) || 0,
       queries: wanted, no_page: wanted.filter(q => q.kinds.indexOf('no_page') >= 0), striking: wanted.filter(q => q.kinds.indexOf('striking') >= 0),
+      mismatch: wanted.filter(q => q.kinds.indexOf('page_mismatch') >= 0),
       answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 20),
       seeds: order.slice(0, c.max_seeds).map(q => q.keyword), dropped,
       min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };

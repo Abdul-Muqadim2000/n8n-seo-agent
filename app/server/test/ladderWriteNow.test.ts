@@ -39,6 +39,17 @@ describe('the "Write now" body of a ladder page', () => {
     expect(ladderPageContext(ROWS, 1, 'erp software dubai').links.map((l) => l.role)).toEqual(['top', 'sibling']);
   });
 
+  // R15 (re-rating, 2026-10-13): the page also keeps the URL its own row planned — exec 521 delivered
+  // `service-industry-erp-software-uae` while the row (and every link pointing at it) said `/service-industry-erp-software/`
+  it('carries the URL the ladder planned for this page, and nothing when the row has none or it is not a URL', () => {
+    expect(ladderPageContext(ROWS, 4, 'erp software uae').targetUrl).toBe('https://www.techand.ai/erp-software-uae/');
+    expect(ladderPageContext(ROWS, 1, 'erp software dubai').targetUrl).toBe('https://www.techand.ai/erp-software-dubai/');
+    const noUrl = ROWS.map((r) => ({ ...r, target_url: '' }) as LadderRow);
+    expect(ladderPageContext(noUrl, 1, 'erp software dubai').targetUrl).toBe('');
+    const bad = ROWS.map((r) => (r.keyword === 'erp software dubai' ? ({ ...r, target_url: '/erp-software-dubai/' } as LadderRow) : r));
+    expect(ladderPageContext(bad, 1, 'erp software dubai').targetUrl).toBe('');
+  });
+
   it('sends no target when the rows have none (a ladder planned before P2-7) or the number is not a page length', () => {
     const old = ROWS.map(({ target_words: _drop, ...r }) => r as LadderRow);
     expect(ladderPageContext(old, 4, 'erp software uae').targetWords).toBe(0);

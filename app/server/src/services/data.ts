@@ -636,6 +636,15 @@ export function profileFromRow(r: ProfileRow | null | undefined): ProfileFields 
     serviceAreas: splitList(r.service_areas),
     mapUrl: s(r.map_url),
     logoUrl: s(r.logo_url),
+    // G31: the stored style guide. The variant is stored as free text by the engine, so anything else reads as "follow your market".
+    style: {
+      brandForm: s(r.style_brand_form),
+      brandWrong: splitList(r.style_brand_wrong),
+      spelling: /brit/i.test(s(r.style_spelling)) ? 'British English' : /amer/i.test(s(r.style_spelling)) ? 'American English' : '',
+      avoid: splitList(r.style_avoid),
+      tone: s(r.style_tone),
+      notes: s(r.style_notes),
+    },
   };
 }
 

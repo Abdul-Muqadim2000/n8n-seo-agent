@@ -1,3 +1,157 @@
+// ---- the stored style guide (G31, 2026-10-13, system review FIX_PLAN.md; criterion CAD C17) ----
+// Nothing stored how the customer writes: the brand's written form ("Tech&", never "Tech and" or "techand"), the spelling variant, the
+// words they do not want used and the tone. The guide now lives on the site's business profile row (seo_profiles.style_*), so every run
+// that already loads the profile carries it — no new read, no new API call — and ST turns it into three things:
+//   ST.from(row, defaults)  the guide, with the spelling variant falling back to the market the page targets
+//   ST.block(guide)         the HOUSE STYLE paragraph the brief, copywriter and editor prompts print
+//   ST.check(markdown, g)   the mechanical checks: `errors` (the brand's own name written wrongly — a real quality finding) and
+//                           `notes` (advice: spelling variant, words to avoid, tone signals) that never fail a page on their own
+// Every check is mechanical and quiet: it counts exact matches, quotes what it found, and says nothing when the guide is empty.
+const ST = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const list = (v) => (Array.isArray(v) ? v : S(v).split(/[\n,;|]+/)).map(x => S(x)).filter(Boolean);
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const VARIANTS = ['British English', 'American English'];
+  // British / American pairs that are unambiguous. Pairs where the two spellings mean different things in British English
+  // (licence / license, practise / practice) or where both are correct (programme / program for software, enquiry / inquiry,
+  // judgement / judgment, grey / gray) are deliberately left out: a style check must not invent an error.
+  const PAIRS = [
+    ['organise', 'organize'], ['organised', 'organized'], ['organising', 'organizing'], ['organisation', 'organization'], ['organisations', 'organizations'],
+    ['optimise', 'optimize'], ['optimised', 'optimized'], ['optimising', 'optimizing'], ['optimisation', 'optimization'],
+    ['analyse', 'analyze'], ['analysed', 'analyzed'], ['analysing', 'analyzing'],
+    ['recognise', 'recognize'], ['recognised', 'recognized'], ['specialise', 'specialize'], ['specialised', 'specialized'],
+    ['prioritise', 'prioritize'], ['prioritised', 'prioritized'], ['customise', 'customize'], ['customised', 'customized'],
+    ['standardise', 'standardize'], ['standardised', 'standardized'], ['centralise', 'centralize'], ['centralised', 'centralized'],
+    ['summarise', 'summarize'], ['summarised', 'summarized'], ['utilise', 'utilize'], ['realise', 'realize'],
+    ['minimise', 'minimize'], ['maximise', 'maximize'], ['digitise', 'digitize'], ['digitised', 'digitized'], ['digitisation', 'digitization'],
+    ['colour', 'color'], ['colours', 'colors'], ['behaviour', 'behavior'], ['behaviours', 'behaviors'],
+    ['favour', 'favor'], ['favourite', 'favorite'], ['labour', 'labor'], ['honour', 'honor'],
+    ['centre', 'center'], ['centres', 'centers'], ['metre', 'meter'], ['metres', 'meters'], ['theatre', 'theater'], ['fibre', 'fiber'],
+    ['defence', 'defense'], ['offence', 'offense'], ['catalogue', 'catalog'], ['catalogues', 'catalogs'], ['dialogue', 'dialog'],
+    ['fulfil', 'fulfill'], ['fulfilment', 'fulfillment'], ['enrolment', 'enrollment'], ['instalment', 'installment'], ['skilful', 'skillful'],
+    ['travelling', 'traveling'], ['cancelled', 'canceled'], ['cancelling', 'canceling'], ['modelling', 'modeling'], ['labelled', 'labeled'], ['labelling', 'labeling']
+  ];
+
+  // Wrong written forms of a brand, derived from the one correct form: the "&" spelled out ("Tech and"), the same words run
+  // together ("Techand") and hyphenated ("Tech-and"). The customer can add more (style_brand_wrong).
+  function wrongForms(form, extra) {
+    const f = S(form);
+    const out = [];
+    const add = (v) => { const x = S(v); if (x && x.toLowerCase() !== f.toLowerCase() && !out.some(y => y.toLowerCase() === x.toLowerCase())) out.push(x); };
+    if (f) {
+      const words = f.replace(/&/g, ' and ').replace(/[^A-Za-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+      if (words.length) { add(words.join(' ')); add(words.join('')); add(words.join('-')); }
+    }
+    for (const e of list(extra)) add(e);
+    return out.slice(0, 16);
+  }
+
+  function from(row, o = {}) {
+    const r = row || {};
+    const brand_form = S(r.style_brand_form) || S(o.brand_form);
+    const raw = S(r.style_spelling);
+    const spelling = /brit|en.?gb|\bgb\b|\buk\b/i.test(raw) ? 'British English' : /amer|en.?us|\bus\b/i.test(raw) ? 'American English' : '';
+    const avoid = list(r.style_avoid).slice(0, 40);
+    const tone = S(r.style_tone);
+    const notes = S(r.style_notes);
+    const g = { on_file: !!(brand_form || spelling || avoid.length || tone || notes), brand_form, brand_wrong: list(r.style_brand_wrong).slice(0, 12),
+      spelling, spelling_effective: spelling || S(o.spelling), spelling_source: spelling ? 'the style guide' : (S(o.spelling) ? 'the market this page targets' : ''),
+      avoid, tone, tone_effective: tone || S(o.tone), notes };
+    g.wrong_forms = wrongForms(brand_form, g.brand_wrong);
+    g.prompt_block = block(g);
+    return g;
+  }
+
+  // the paragraph the writing prompts print (empty when nothing is on file, so no prompt gains a meaningless line)
+  function block(g) {
+    const x = g || {};
+    if (!x.on_file) return '';
+    const parts = [];
+    if (x.brand_form) parts.push('Write the business name exactly as "' + x.brand_form + '" everywhere, including headings, the title and the meta description'
+      + ((x.wrong_forms || []).length ? ' — never ' + x.wrong_forms.map(w => '"' + w + '"').join(' or ') : '') + '.');
+    if (x.spelling_effective) parts.push('Use ' + x.spelling_effective + ' spelling throughout (' + (x.spelling_source || 'house style') + ').');
+    if ((x.avoid || []).length) parts.push('Never use these words or phrases: ' + x.avoid.map(w => '"' + w + '"').join(', ') + '.');
+    if (x.tone) parts.push('Tone: ' + x.tone + '.');
+    if (x.notes) parts.push(x.notes);
+    return 'HOUSE STYLE (the customer\'s own style guide — follow it exactly)\n' + parts.map(p => '- ' + p).join('\n');
+  }
+
+  // what we scan: the prose, without code blocks, the meta lines, link targets, bare URLs and HTML tags, so a brand name inside a
+  // slug or a URL is never read as prose
+  const scrub = (md) => String(md || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):.*$/gim, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/<[^>]*>/g, ' ');
+  const hits = (text, term) => {
+    const t = S(term);
+    if (!t) return [];
+    const re = new RegExp('(?<![A-Za-z0-9])' + esc(t).replace(/\s+/g, '[\\s\\u00a0]+') + '(?![A-Za-z0-9])', 'gi');
+    const out = []; let m;
+    while ((m = re.exec(text))) out.push({ text: m[0], at: m.index });
+    return out;
+  };
+
+  function check(md, guide) {
+    const g = guide || {};
+    const text = scrub(md);
+    const res = { on_file: !!g.on_file, brand: [], spelling: { variant: g.spelling_effective || '', checked: false, wrong: [], count: 0 },
+      avoid: [], tone: { exclamations: 0 }, errors: [], notes: [] };
+    if (!g.on_file) return res;
+
+    // 1. the brand's own name: the one hard check. A run-together form ("techand") is never prose, so every case counts; a spaced
+    //    form ("Tech and") counts only where it reads as a name (capitalised), so "tech and finance teams" is not an error.
+    if (g.brand_form) {
+      const byForm = new Map();
+      for (const w of (g.wrong_forms || [])) {
+        const spaced = /\s/.test(w);
+        for (const h of hits(text, w)) {
+          if (spaced && !/^[A-Z]/.test(h.text)) continue;
+          const k = h.text;
+          byForm.set(k, (byForm.get(k) || 0) + 1);
+        }
+      }
+      for (const h of hits(text, g.brand_form)) if (h.text !== g.brand_form) byForm.set(h.text, (byForm.get(h.text) || 0) + 1);
+      res.brand = [...byForm.entries()].map(([found, count]) => ({ found, count })).sort((a, b) => b.count - a.count);
+      const total = res.brand.reduce((s, x) => s + x.count, 0);
+      if (total) res.errors.push('Brand name: ' + res.brand.map(b => '"' + b.found + '" (' + b.count + ')').join(', ')
+        + ' — this business writes its name "' + g.brand_form + '". Correct every one.');
+    }
+
+    // 2. the spelling variant (advice)
+    if (g.spelling_effective) {
+      const gb = /brit/i.test(g.spelling_effective);
+      const us = /amer/i.test(g.spelling_effective);
+      if (gb || us) {
+        res.spelling.checked = true;
+        for (const [b, a] of PAIRS) {
+          const wrong = gb ? a : b, right = gb ? b : a;
+          const n = hits(text, wrong).length;
+          if (n) res.spelling.wrong.push({ found: wrong, wanted: right, count: n });
+        }
+        res.spelling.wrong.sort((x, y) => y.count - x.count);
+        res.spelling.count = res.spelling.wrong.reduce((s, x) => s + x.count, 0);
+        if (res.spelling.count) res.notes.push('Spelling: ' + res.spelling.count + ' word(s) use ' + (gb ? 'American' : 'British') + ' spelling ('
+          + res.spelling.wrong.slice(0, 5).map(w => '"' + w.found + '" -> "' + w.wanted + '"').join(', ') + ') where the style guide says ' + g.spelling_effective + '.');
+      }
+    }
+
+    // 3. the words the customer does not want used (advice)
+    for (const w of (g.avoid || [])) { const n = hits(text, w).length; if (n) res.avoid.push({ word: w, count: n }); }
+    res.avoid.sort((a, b) => b.count - a.count);
+    if (res.avoid.length) res.notes.push('Words to avoid: ' + res.avoid.slice(0, 8).map(a => '"' + a.word + '" (' + a.count + ')').join(', ')
+      + ' — the style guide asks for these not to be used.');
+
+    // 4. tone, mechanically: exclamation marks are the one signal that can be counted without judging the writing
+    res.tone.exclamations = (text.match(/!/g) || []).length;
+    if (g.tone && res.tone.exclamations) res.notes.push('Tone: ' + res.tone.exclamations + ' exclamation mark(s) in the page; the style guide asks for "' + g.tone + '".');
+    return res;
+  }
+
+  return { from, block, check, wrongForms, scrub, VARIANTS, PAIRS };
+})();
 // ---- fit gate (2026-10-11, FIX_PLAN D4 / D8): ONE rule for keywords that no page of this website should target. Inlined by the build
 // (the FIT_GATE placeholder) into Analyze Keywords (full report: keyword gap, easy wins, opportunities), Rank Keywords (discovery), Ladder Pool /
 // Ladder Plan (ladder rungs and the main keyword), Relevance Chunks (the brands the AI screen is told about) and Brief Context (the hub
@@ -10,6 +164,9 @@
 //                    status word ("fta portal", "emirates id status"), or, with its results page in hand (ctx.serp), 3+ of the top 5 results
 //                    are on government hosts (.gov / .gov.xx / .gouv.xx / u.ae …);
 //   'portal'       — a login / portal / password / status check / renewal / verification / application task: people want the owner's own site;
+//   'off topic'    — with topics on file (ctx.topics, R13): under a quarter of the keyword's own words have anything to do with what the
+//                    site sells ("character ai", "mofa attestation dubai", "mh enterprises uae");
+//   'too broad'    — with topics on file: nothing but generic or place words is left of it ("ai", "google ai", "microsoft ai");
 //   'other brand'  — one of its words is the label of a declared competitor (cleartax.com ↔ "cleartax"), of a domain on the results page
 //                    (facts.ae ↔ "facts"), or a brand name AI uses for another company (seo_cache ai_brands: name -> domain); with the
 //                    keyword's own results page in hand also when one domain whose label is in the keyword holds 3+ of the top 5.
@@ -29,7 +186,10 @@
 const FIT_CFG = { min_label: 4, serp_top: 5, serp_hold: 3 };
 const FIT_STOP = new Set(['the', 'a', 'an', 'and', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'my', 'your', 'our', 'is', 'are', 'what', 'how', 'me']);
 const FIT_GEO = new Set(['uae', 'u.a.e', 'dubai', 'abu', 'dhabi', 'sharjah', 'ajman', 'fujairah', 'ras', 'al', 'khaimah', 'umm', 'quwain', 'emirates', 'gcc', 'saudi', 'arabia', 'ksa', 'riyadh', 'jeddah', 'qatar', 'doha', 'oman', 'muscat', 'bahrain', 'kuwait', 'egypt', 'india', 'pakistan', 'uk', 'usa', 'us', 'online', 'portal']);
-const FIT_GENERIC = new Set(['software', 'softwares', 'services', 'service', 'erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'tax', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll', 'finance', 'financial', 'cloud', 'digital', 'online', 'web', 'data', 'tech', 'technology', 'technologies', 'solutions', 'solution', 'systems', 'system', 'business', 'company', 'group', 'global', 'international', 'gulf', 'arab', 'arabia', 'emirates', 'national', 'consulting', 'consultants', 'consultancy', 'partners', 'partner', 'network', 'news', 'blog', 'guide', 'guides', 'info', 'best', 'top', 'free', 'app', 'apps', 'shop', 'store', 'market', 'media', 'academy', 'institute', 'university', 'school', 'bank', 'pay', 'pro', 'plus', 'hub', 'one', 'first', 'smart', 'easy', 'get', 'go', 'ae', 'com', 'net', 'org', 'home', 'house', 'world', 'city', 'daily', 'times', 'post', 'review', 'reviews', 'compare', 'comparison', 'list', 'directory', 'jobs', 'careers', 'wiki', 'wikipedia', 'youtube', 'linkedin', 'facebook', 'instagram', 'twitter', 'reddit', 'quora', 'medium', 'google', 'microsoft', 'amazon', 'apple']);
+// R13 (2026-10-13): 'ai' joined this list — it is a category word, not a topic. With it in, "ai" (165,000/mo) and "google ai" are left with
+// nothing of their own ("too broad") while "character ai", "humanize ai", "meta ai" and "blackbox ai" are judged on the word that is really
+// theirs; a keyword that names a service of the site ("ai automation uae") still matches on that service's own words.
+const FIT_GENERIC = new Set(['ai', 'software', 'softwares', 'services', 'service', 'erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'tax', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll', 'finance', 'financial', 'cloud', 'digital', 'online', 'web', 'data', 'tech', 'technology', 'technologies', 'solutions', 'solution', 'systems', 'system', 'business', 'company', 'group', 'global', 'international', 'gulf', 'arab', 'arabia', 'emirates', 'national', 'consulting', 'consultants', 'consultancy', 'partners', 'partner', 'network', 'news', 'blog', 'guide', 'guides', 'info', 'best', 'top', 'free', 'app', 'apps', 'shop', 'store', 'market', 'media', 'academy', 'institute', 'university', 'school', 'bank', 'pay', 'pro', 'plus', 'hub', 'one', 'first', 'smart', 'easy', 'get', 'go', 'ae', 'com', 'net', 'org', 'home', 'house', 'world', 'city', 'daily', 'times', 'post', 'review', 'reviews', 'compare', 'comparison', 'list', 'directory', 'jobs', 'careers', 'wiki', 'wikipedia', 'youtube', 'linkedin', 'facebook', 'instagram', 'twitter', 'reddit', 'quora', 'medium', 'google', 'microsoft', 'amazon', 'apple']);
 const FIT_GOV_WORDS = /\b(ministry|ministries|authority|authorities|federal|government|govt|municipality|municipal|embassy|consulate|police|courts?|customs|immigration|department of|public prosecution|parliament|chamber of commerce|free zone authority)\b/;
 const FIT_GOV_NAMES = /\b(fta|emaratax|emara ?tax|tax authority|mohre|mohap|mofa|moec|gdrfa|icp|ica|rta|dewa|sewa|fewa|addc|aadc|dha|doh|ded|tdra|adjd|ejari|dubai land department|dld|dubai economy|dubai courts|zatca|gazt|gosi|qiwa|absher|muqeem|mudad|hrsd|misa|nafath|tawtheeq|uae pass|smart pass|amer cent(er|re)|tasheel|tawjeeh|emirates id|emirates identity|national id|i ?d card|identity card|labou?r card|work permit status|visa status|visa check|passport status|establishment card|golden visa status|trn verification|trn check|trn lookup|tax registration number check)\b/;
 const FIT_PORTAL = /\b(log ?in|logins|sign ?in|sign ?up|password|passwords|portal|portals|e ?services?|customer care|customer service number|helpline|toll ?free|contact number|phone number|status|status check|check status|status enquiry|application status|track(ing)? (status|application|order)|renewal|renew|verification|verify|apply online|online application|download (the )?app|app download|complaint|complaints|fine check|traffic fines?|balance check|otp)\b/;
@@ -48,6 +208,44 @@ const fitLabels = (domain, protect) => { const h = fitHost(domain); if (!h) retu
 const fitLearnedBrands = (rows) => { const out = {}; for (const r of (rows || [])) { const j = r && r.json ? r.json : r; if (!j || typeof j !== 'object' || !/^ai_brands:/.test(String(j.key || ''))) continue; let v = j.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } } if (v && typeof v === 'object') for (const [name, d] of Object.entries(v)) if (name && d) out[String(name)] = String(d); } return out; };
 // the organic domains of a DataForSEO SERP answer, in rank order (for ctx.serp)
 const fitSerpDomains = (res) => { try { return ((((res || {}).tasks || [])[0] || {}).result || [])[0].items.filter(x => x && x.type === 'organic').sort((a, b) => (a.rank_group || 99) - (b.rank_group || 99)).map(x => fitHost(x.domain || String(x.url || '').replace(/^https?:\/\//, '').split('/')[0])).filter(Boolean); } catch (e) { return []; } };
+// ---- R13 (2026-10-13, re-rating §3.11): TOPIC DISTANCE, the same 25% bar the outreach gate uses (OK.OFF_TOPIC in _outreach_kit.js) ----
+// The full report's §4a offered "ai" (165,000/mo), "character ai" (110,000), "google ai", "humanize ai", "meta ai", "blackbox ai",
+// "mh enterprises uae" and "microsoft ai", and the gap kept "mofa attestation dubai" and "how to check emirates id status with passport
+// number", under a High finding telling the owner to build pages for them: the gate only ever refused classes somebody had listed
+// (navigational, a declared competitor, a results-page label), so a brand or a subject nobody listed walked straight through. fitTopic()
+// measures what share of a keyword's OWN distinctive words the site's topics carry. Place names and generic category words are neutral —
+// they count for neither side, so "best erp software dubai" is judged on "erp" — and a keyword left with nothing but generic or place
+// words ("ai", "google ai", "microsoft ai") is too broad for any page of this site to win.
+const FIT_TOPIC_BAR = 0.25;
+const fitStem = (w) => w.length > 5 ? w.replace(/(ingly|ings|ing|ments|ment|ations|ation|ions|ion|ies|ers|er|ed|es|s|e)$/, '') : w;   // the outreach kit's stem: invoice / invoices / invoicing -> invoic
+const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).toLowerCase()
+  .split(/[^a-z0-9]+/).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
+function fitTopic(keyword, topics, ctx) {
+  const o = ctx || {};
+  const bar = typeof o.topic_bar === 'number' ? o.topic_bar : FIT_TOPIC_BAR;
+  const label = String(o.topic_label || 'what this website sells');
+  const T = fitTopicWords(topics);
+  // With little on file the measure would refuse good keywords, so under topic_min_words (12) distinctive words it judges nothing: a site
+  // whose services and description are a single line gets no topic refusals at all ("no evidence, no refusal").
+  if (T.size < (typeof o.topic_min_words === 'number' ? o.topic_min_words : 12)) return { ok: true, reason: '', detail: T.size ? 'too few topic words on file (' + T.size + ') to judge topic distance' : 'no topics on file, so topic distance was not judged', share: null };
+  const toks = fitTokens(keyword);
+  const own = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t));
+  const known = [...T];
+  const matches = (t) => { const s = fitStem(t); return T.has(s) || known.some(x => x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0)); };
+  // a keyword made only of category and place words is a head term: it is on topic when at least two of those categories are the site's own
+  // ("erp software uae", "best erp software dubai"), and too broad when only one is and there is no market in it either ("ai", "google ai")
+  if (!own.length) {
+    const cats = toks.filter(t => FIT_GENERIC.has(t)).filter(matches);
+    const hasPlace = toks.some(t => FIT_GEO.has(t));
+    if (cats.length >= 2 || (cats.length >= 1 && hasPlace)) return { ok: true, reason: '', detail: 'a category you sell (' + cats.join(', ') + ')' + (hasPlace ? ' in your market' : ''), share: 1 };
+    return { ok: false, reason: 'too broad', detail: 'only category or place words, so it says nothing about ' + label + ' ("' + String(keyword || '').trim() + '")', share: cats.length ? 0.5 : 0 };
+  }
+  const hits = own.filter(matches);
+  const share = Math.round(100 * hits.length / own.length) / 100;
+  if (share < bar) return { ok: false, reason: 'off topic', detail: Math.round(share * 100) + '% of its own words match ' + label + ' (' + Math.round(bar * 100) + '% is the bar): '
+    + own.filter(t => hits.indexOf(t) < 0).slice(0, 4).join(', ') + ' — add it to your services if you do sell it', share };
+  return { ok: true, reason: '', detail: Math.round(share * 100) + '% of its own words match ' + label, share };
+}
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
 function fitGate(keyword, ctx) {
@@ -92,8 +290,11 @@ function fitGate(keyword, ctx) {
     const count = {}; for (const h of serp) count[h] = (count[h] || 0) + 1;
     for (const [h, n] of Object.entries(count)) if (n >= FIT_CFG.serp_hold && fitLabels(h, protect).some(l => toks.includes(l))) return { ok: false, reason: 'other brand', detail: h + ' holds ' + n + ' of the top ' + serp.length + ' results: a brand query' };
   }
-  // 6. relevance to the website's services (G19): not built yet — the hook
+  // 6. relevance to the website's services: the caller's own hook (G19) first, else the topic bar when the caller gave topics (R13)
   if (typeof ctx.relevance === 'function') { const r = ctx.relevance(kw); if (r && r.ok === false) return { ok: false, reason: r.reason || 'off topic', detail: r.detail || '' }; }
+  else if (ctx.topics && (Array.isArray(ctx.topics) ? ctx.topics.length : String(ctx.topics).trim())) {
+    const t = fitTopic(kw, ctx.topics, ctx); if (!t.ok) return { ok: false, reason: t.reason, detail: t.detail };
+  }
   return { ok: true };
 }
 // one line for reports and prompts: "facts (facts.ae), cleartax (cleartax.com), Zoho Books (zoho.com)"
@@ -102,6 +303,27 @@ const fitBrandList = (ctx, protect) => { const out = []; const seen = new Set();
   for (const d of (ctx.serp_domains || [])) for (const l of fitLabels(d, protect)) add(l + ' (' + fitHost(d) + ')');
   for (const [n, d] of Object.entries(ctx.brands || {})) add(n + ' (' + fitHost(d) + ')');
   return out.slice(0, 40).join(', '); };
+// ---- R16 (2026-10-13, system review FIX_PLAN §3.11): the same gate, run over a row somebody stored BEFORE the gate existed ----
+// The gate stops a new keyword, but nothing ever revisited the rows already in `seo_ladders`: rung 2 of lad_mv40b6s9h5a8 still held
+// "facts erp" (facts.ae, a competing UAE ERP vendor) as a planned page, so the Rank Tracker's report of 2026-10-12 listed it and the
+// Content Cadence would have written it. `fitStored` is `fitGate` plus the one rule a stored row needs: a rung whose page is already
+// written or published is never dropped — that page is live work, it keeps being tracked, and it is flagged instead of hidden.
+// Returns { ok, live, flagged, reason, detail, note }: ok false = leave it out of what is written and reported; `note` is the sentence
+// a report or the repair script prints, so the reason always travels with the decision.
+const fitStoredLive = (row) => { const r = row || {}; const st = String(r.status || '').toLowerCase();
+  return st === 'writing' || st === 'published' || r.page_exists === true || r.page_exists === 'true' || !!String(r.published_url || '').trim(); };
+const fitStored = (row, ctx) => {
+  const r = row || {}; const kw = String(r.keyword || '').trim();
+  const live = fitStoredLive(r) || (ctx || {}).written === true;
+  if (!kw) return { ok: false, live, flagged: false, reason: 'empty', detail: 'the row has no keyword', note: 'a stored row with no keyword' };
+  const g = fitGate(kw, ctx || {});
+  if (g.ok) return { ok: true, live, flagged: false, reason: '', detail: '', note: '' };
+  const why = '"' + kw + '" is not a search this website should target: ' + g.detail + ' (' + g.reason + ')';
+  if (live) return { ok: true, live: true, flagged: true, reason: g.reason, detail: g.detail,
+    note: why + ' — its page is already written, so it stays tracked; decide whether to keep it' };
+  return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
+    note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
+};
 // ---- anchor kit (D9, 2026-10-11; inlined through the __ANCHOR__ marker): the words a link to one of our own pages is written with.
 // Live, "Guides in this series" linked to "Facts erp" and "Erp software dubai" — a raw keyword string with one capital letter (exec 365).
 // anchorText() uses the page's own title when we have one, else title-cases the keyword and keeps acronyms: a token that is already
@@ -476,7 +698,11 @@ const proof_context = proof_library.length ? proof_library.map(c => '- ' + (c.ti
 const video_context = video ? 'VIDEO: the page has a video ("' + (video.title || 'untitled') + '"' + (video.minutes ? ', about ' + video.minutes + ' minutes' : '') + '). The system embeds it' + (video.placement ? ' under "' + video.placement + '"' : ' after the quick answer') + ' with its transcript. Refer to it once, naturally (what it shows and why to watch); never transcribe it or invent what it says.' + (video.chapters.length ? ' Key moments: ' + video.chapters.map(c => c.name).join(' · ') + '.' : '') : '';
 const case_facts_text = caseFacts.replace(/\n/g, ' | ') + (proof_library.length ? (caseFacts ? ' | ' : '') + proof_library.map(c => c.results).join(' | ') : '');
 
-return [{ json: { ...d, site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, hub_pages_planned: hub_planned, video, case_study: cs, local_area: area,
+// G31 (2026-10-13): the stored style guide. A spelling variant the customer chose beats the one the target market implies, and their
+// own tone beats the request's; both travel as `spelling` / `tone`, which the brief, copywriter and editor prompts already print.
+const style_guide = ST.from(P, { spelling: s(d.spelling), tone: s(d.tone) });
+return [{ json: { ...d, style_guide, spelling: style_guide.spelling_effective || s(d.spelling), tone: style_guide.tone || s(d.tone),
+  site_profile, author, reviewer, proof_library, page_role, article_like, hub_pages, hub_pages_planned: hub_planned, video, case_study: cs, local_area: area,
   eeat_context, proof_context, role_brief: ROLE_BRIEF[page_role] || '', role_writer: ROLE_WRITER[page_role] || '', video_context, case_facts_text,
   // the facts and the call to action the site model holds (what the app sent, what the weekly run stored) when this request carries none
   business_facts: s(d.business_facts) || mFacts.business_facts, cta: s(d.cta) || mFacts.cta,

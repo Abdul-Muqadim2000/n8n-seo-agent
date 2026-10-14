@@ -10,6 +10,7 @@ import { ErrorState, Skeleton } from '@/components/ui/feedback';
 import { PageHeader } from '@/components/ui/misc';
 import { StageIcon, stageLabel } from '@/components/reports/meta';
 import { ReportView } from '@/components/reports/ReportView';
+import { ShareReport } from '@/components/reports/ShareReport';
 
 export default function ReportPage() {
   const { reportId = '' } = useParams();
@@ -62,11 +63,15 @@ export default function ReportPage() {
           </span>
         }
         actions={
-          r.runId && (
-            <ButtonLink to={paths.run(org.id, r.runId)} variant="secondary" size="sm" icon={<ListChecks className="size-4" />}>
-              Open the run
-            </ButtonLink>
-          )
+          <span className="flex flex-wrap items-center gap-2">
+            {/* G15: an expiring, read-only link for somebody with no account (admins and owners only) */}
+            <ShareReport reportId={r.id} />
+            {r.runId && (
+              <ButtonLink to={paths.run(org.id, r.runId)} variant="secondary" size="sm" icon={<ListChecks className="size-4" />}>
+                Open the run
+              </ButtonLink>
+            )}
+          </span>
         }
       />
       <ReportView report={r} />

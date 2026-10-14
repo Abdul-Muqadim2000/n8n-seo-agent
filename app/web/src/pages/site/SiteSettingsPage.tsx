@@ -21,6 +21,7 @@ import { IconTile } from '@/components/insight';
 import { Dialog } from '@/components/ui/overlay';
 import { LinkTabs, Segmented } from '@/components/ui/tabs';
 import { TagInput } from '@/components/ui/tag-input';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { useOrgCtx, useSiteCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -448,7 +449,12 @@ function MonitorsCard({
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-5">
             <MonitorSettingsFields value={monitors} onChange={setMonitors} disabled={!admin} enginesError={enginesError} />
-            <Field label="Competitors" optional hint="Up to 3. Compared in AI answers (share of voice), the backlink gap and reports.">
+            <Field
+              label="Competitors"
+              optional
+              hint="Up to 3. Compared in AI answers (share of voice), the backlink gap and reports."
+              labelAction={<GuideButton id="competitors" vars={{ domain: site.domain }} variant="link" label="Who counts as a competitor?" />}
+            >
               {(p) => (
                 <TagInput
                   id={p.id}

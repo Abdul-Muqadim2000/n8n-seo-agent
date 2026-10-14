@@ -2,7 +2,11 @@
 // site's topics later), and monthly: resource / "useful links" pages on the site's topics (web search, plain phrases: our SearXNG's site:
 // searches return nothing since its Brave / DuckDuckGo engines are rate-limited — probe 2026-10-10), best-effort searches for the brand on
 // the listing platforms, and our own old URLs in the Wayback Machine (CDX; those that now 404 get a redirect suggestion).
+// L5 (2026-10-13): and monthly, podcast shows on the site's topics from a free podcast directory (PC.searchUrl; the Podcast Index key
+// cannot be used from a node yet — see v5/code/_podcast.js). Journalist digests (HARO / Source of Sources) are not read here: they
+// arrive in the customer's own mailbox, so the web app reads them and writes the requests as `digest` prospects.
 /*__LISTINGS__*/
+/*__PODCAST__*/
 const plans = $('LB Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
 const enc = encodeURIComponent; const out = [];
 const add = (p, kind, url, extra = {}) => out.push({ json: { site_id: p ? p.site_id : '', kind, url, ...extra } });
@@ -15,6 +19,7 @@ for (const p of plans) {
   }
   if (p.due.listings) { const kind = siteKind(p.profile.business_type, p.topics.join(' ')); for (const l of listingsFor(kind, p.country_iso, p.topics.join(' ') + ' ' + p.profile.business_type, '').filter(l => l.re && !l.list).slice(0, 8))
     add(p, 'listing_search', 'http://searxng:8080/search?format=json&q=' + enc('"' + p.brand + '" ' + l.name.split(/[\s(—/]/)[0]), { listing_id: l.id }); }
+  if (p.due.podcasts) for (const t of p.topics.slice(0, 2)) add(p, 'podcast_search', PC.searchUrl(t, false), { topic: t });
   if (p.due.wayback) add(p, 'wayback', 'https://web.archive.org/cdx/search/cdx?url=' + enc(p.domain) + '&matchType=domain&output=json&fl=original,statuscode,timestamp&collapse=urlkey&filter=statuscode:200&limit=3000');
 }
 return out;

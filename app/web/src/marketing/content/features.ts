@@ -6,6 +6,7 @@ import {
   ChartLine,
   ChartNoAxesColumnIncreasing,
   FileText,
+  LifeBuoy,
   Link2,
   PenLine,
   ScanSearch,
@@ -26,6 +27,7 @@ export type VisualKey =
   | 'content'
   | 'audit'
   | 'workspace'
+  | 'guided-setup'
   | 'growth-loop'
   | 'link-sources'
   | 'ai-engines';
@@ -155,6 +157,7 @@ export const features: Feature[] = [
       'The searches you already appear for seed the research: the ones no page of yours answers, and the ones you rank just off page one',
       'Every traffic estimate says whether it was measured on your own site or modelled from provider volume',
       'Searches Google answers with the same pages are grouped, so one page targets the whole group',
+      'A topic radius with every research run: the topics within reach for your site, the ones that are a stretch and the evidence behind each verdict',
     ],
     steps: [
       { title: 'Describe the business', body: 'Your website, market and goals set the context for every keyword Ascentra looks at.' },
@@ -215,6 +218,8 @@ export const features: Feature[] = [
       'Two active ladders at a time by default, so effort is not spread thin',
       'No keyword overlap between ladders, so your own pages never compete',
       'A rung you already have a page for is planned as an improvement of that page, with its real address — never as a second page',
+      'Your topic radius with every plan: which topics are within reach for your site today, which are a stretch and why — the difficulty against the level you already win, a position you already hold, a page you already have, a service you sell',
+      'A ladder that has not moved for weeks comes back with a proposal: improve the page you already have, write the easier keyword first, change the order, or stop — with the evidence behind it. It is a suggestion; your plan is never rewritten for you',
     ],
     steps: [
       { title: 'Choose the keyword', body: 'Pick a recommended keyword or type your own. Ascentra shows the reach for your site and the plan type.' },
@@ -271,6 +276,7 @@ export const features: Feature[] = [
     benefits: [
       'Writer, critic and editor passes, then an SEO quality check',
       'E-E-A-T built in: author byline and box, expert reviewer, experience notes and schema',
+      'Your house style, stored once and followed: how your name is written, British or American spelling, words to avoid and the tone — your own name written the wrong way is corrected before delivery',
       'Page types for hub and pillar pages, case studies, local (city) pages and video pages',
       'Three images produced with every page — a title card and two section cards made from the page itself, with the alt text, file names and the social image',
       'An originality check against every competitor page the research read and against your own pages: more than 15% of a page matching one of them comes back for a rewrite, with the passage shown',
@@ -282,7 +288,7 @@ export const features: Feature[] = [
       'One search, one page: a search a live page of yours already answers is written as a refresh of that page',
     ],
     steps: [
-      { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile and your case studies.' },
+      { title: 'Brief', body: 'Keyword, intent and outline, with facts from your business profile, your case studies and your style guide.' },
       { title: 'Write and critique', body: 'A draft, a critic’s review and an editor’s pass that acts on it.' },
       { title: 'Check', body: 'SEO checks on every page, against a coverage target read off the best page in the results. Every figure is looked up in the source it cites, and anything that is not there is marked for you to confirm. A page that repeats a competitor or one of your own pages goes back for a rewrite.' },
       { title: 'Publish and verify', body: 'Take the package or a WordPress draft; Ascentra checks the page once it is live.' },
@@ -298,6 +304,14 @@ export const features: Feature[] = [
         a: 'Each page is written from a brief built on your business profile, your experience notes and your case studies, then reviewed by a critic and an editor. Figures that cannot be verified are marked for you to confirm instead of being made up.',
       },
       { q: 'Who is shown as the author?', a: 'The author and expert reviewer from your business profile, with a byline, an author box and Person schema.' },
+      {
+        q: 'Can I tell it how we write?',
+        a: 'Yes. Your profile holds a style guide: exactly how your name is written (Tech&, never “Tech and” or “techand”), British or American spelling, the words you never want used and the tone. Every page is written to it, and the quality check reads the finished draft against it. Your own name written the wrong way is a real finding and is corrected before you see the page; the spelling variant, the banned words and the tone are reported beside the page as advice, and never hold a page back on their own.',
+      },
+      {
+        q: 'Which spelling do the pages use?',
+        a: 'The spelling of the country each page targets, unless your style guide names one — then that wins everywhere. The report says which rule was used.',
+      },
       { q: 'Can Ascentra publish to WordPress?', a: 'It creates WordPress drafts for your team to review. Publishing stays with you.' },
       { q: 'What is the blog package?', a: 'The article as HTML and Markdown, the three images as WebP files, plus a meta.json file with the title, description, slug, schema and the image list — ready for any CMS.' },
       {
@@ -330,8 +344,11 @@ export const features: Feature[] = [
       'Search Console index coverage, submitted sitemaps and site structure',
       'Core Web Vitals from real Chrome visitors, per template, on phone and desktop',
       'A daily check of your key pages: you hear the same day when one disappears, is set to noindex, starts redirecting or changes its canonical, title or robots.txt',
+      'A pre-release check your build can call: the same page checks run against a staging address or a list of URLs and answer pass or fail, so a release never takes a page out of Google',
       'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
+      'The fix pack comes with a guide for putting each file where it belongs — robots.txt, llms.txt, redirects, schema and the internal links',
       'Google’s own view of every key page — indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
+      'What crawlers see before JavaScript runs: your key pages read twice, so anything only a browser can see is named',
       'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
       'The smallest items folded into one “minor items” line, so the list you read is the list to act on',
       'A brand and entity check',
@@ -345,6 +362,7 @@ export const features: Feature[] = [
       { title: 'Prioritise', body: 'Issues are ranked by the traffic they put at risk — index blockers first, cosmetics never — and each one says why it ranks there.' },
       { title: 'Fix', body: 'Download the fix pack and hand it to your developers.' },
       { title: 'Watch', body: 'Your key pages are checked every morning, and marking a fix done has it re-checked within a day.' },
+      { title: 'Check before you ship', body: 'Your build calls the pre-release check on the staging address and gets a pass or fail before the release goes out.' },
     ],
     facts: [
       { value: 1000, label: 'pages per crawl, JavaScript included' },
@@ -360,12 +378,20 @@ export const features: Feature[] = [
       { q: 'Does it need access to my server?', a: 'No. Ascentra crawls the public site and reads Search Console through a service account you add as a user.' },
       { q: 'Does it handle JavaScript sites?', a: 'Yes. Pages can be rendered with JavaScript, so content that loads in the browser is audited too.' },
       {
+        q: 'Would I know if my pages only work with JavaScript?',
+        a: 'Yes. Your key pages are read twice in every audit: once exactly as a crawler receives them, before any script runs, and once after. The report puts the title, main heading, canonical link, robots rule, link count and text length of both readings side by side and says which reading each number came from, so anything only a browser can see is named — it is invisible to the AI crawlers behind ChatGPT, Perplexity and Claude, which do not run JavaScript. A page we could not read both ways is reported as not checked, with the reason, never as fine.',
+      },
+      {
         q: 'Where do the speed figures come from?',
         a: 'From the Chrome User Experience Report: what real Chrome visitors measured over the last 28 days, at the 75th percentile, for your home page, a service page and a blog post on phone and desktop. A page with too few visits to report on its own shows the whole-site figures, marked as such. Speed carries a deliberately low weight in the health score.',
       },
       {
         q: 'What does the daily check of my key pages look at?',
         a: 'Every morning Ascentra fetches your most important pages — the home page, the pages in your menu, the pages Search Console brings impressions for and the pages your keyword ladders own — and compares the HTTP status, a redirect that appeared, the noindex tag, the canonical and the title with yesterday’s reading, plus your robots.txt. A change that matters becomes an alert the same day; an unchanged page says nothing. A page it could not read is reported as not checked, never as fine.',
+      },
+      {
+        q: 'Can we check a release before it goes live?',
+        a: 'Yes. Your build can call the pre-release check with a staging address or a list of URLs, and it answers pass or fail in a form a build pipeline can read: which URL failed and which check — the page not answering, a redirect that appeared, a noindex tag, robots.txt blocking it, a missing or wrong canonical, no title or no H1. On a staging address a deliberate noindex or a blocking robots.txt is reported as a warning that names the live page instead of a failure. The check only reads: it never changes anything in your account, and whatever a staging address cannot answer — whether Google has indexed a URL it has never seen, the speed real visitors measure, positions — is reported as not checked, with the reason.',
       },
       {
         q: 'I fixed something. Do I have to wait for the next audit?',
@@ -410,6 +436,7 @@ export const features: Feature[] = [
       'Every chart marked with what happened: pages you published, technical fixes, Google updates and breaks in Google’s own data',
       'After a page goes live, its trend is compared with the rest of your website, so you hear whether the change likely helped',
       'Dashboards per website for search, traffic, rankings and content',
+      'Every connection has a guide: Search Console, Analytics and the property ID, step by step, with your own values ready to copy',
     ],
     steps: [
       { title: 'Connect', body: 'Add Ascentra’s service account to Search Console and choose your GA4 property.' },
@@ -424,6 +451,10 @@ export const features: Feature[] = [
     ],
     faqs: [
       { q: 'What access does Ascentra need?', a: 'You add Ascentra’s service account as a user in Search Console and GA4. It reads your data; it does not change your settings.' },
+      {
+        q: 'What if nobody here has done this before?',
+        a: 'Every ask in Ascentra has a “Show me how” button next to it. It opens the job as numbered steps you tick off, with your own values in copy boxes, the page to open, and tabs for the provider or CMS you actually use. If the person who can do it is someone else — whoever manages your DNS, usually — one button sends them the whole thing by e-mail, values filled in, no account needed.',
+      },
       {
         q: 'What is a striking-distance keyword?',
         a: 'A keyword where your page already ranks just below the top results. Small improvements there tend to pay off fastest, so the pipeline picks them early.',
@@ -471,6 +502,7 @@ export const features: Feature[] = [
       'Answer Analyst for sentiment and wrong claims, plus AI crawler access and llms.txt',
       'Every rate counts the answers that came back, and the report names any request that failed and was sent again',
       'Wrong claims are checked against your business facts — with no profile on file the report says “not checked”, never “nothing wrong”',
+      'The one file that gets new pages to Bing (and so to Copilot and ChatGPT search) comes with a guide for whichever platform your site runs on',
     ],
     steps: [
       { title: 'Build the panel', body: 'Up to 50 questions your buyers ask, grouped by stage and topic.' },
@@ -520,16 +552,23 @@ export const features: Feature[] = [
       'SEO, referral and brand value for every link',
       'Link-farm pages and search-results pages are written off, so your best links are the ones that really help',
       'Scored prospects with contacts, outreach drafts and follow-ups after 7 and 14 days',
+      'Connect Microsoft 365 or Gmail in one click, with no password to store, or any mail host with an app password',
+      'Guides for the parts that happen outside Ascentra: the app password, the SMTP and IMAP settings, your SPF, DKIM and DMARC records, and Google’s own export of your links',
+      'Podcast shows on your topics that take guests, each with a contact on the show’s own website',
+      'Journalist requests from the digests in your own mailbox, matched to your topics and kept to their deadline',
+      'What kind of page earns links in your market — data study, free tool, template or guide — with the competitor pages that prove it',
+      'Two subject lines per batch with the reply rate of each, and no verdict until enough have gone out to mean anything',
       'A competitor’s own sister domains and sites off your topics stay out of the prospect list, with the reason shown',
       'Competitors, government portals, bare homepages and mailbox or data-broker addresses are never pitched',
       'Every draft is checked before you see it: nothing claimed that your profile does not carry, something quoted from their page, one link to your page, short, with one clear ask',
+      'The whole week as one PDF: every opportunity with the reason it was kept or dropped, the contacts found on their own sites, the page and the link text to ask for, each pitch as it would be sent, the places to list yourself, the redirects to add and what your links did so far',
       'A free-sources mode that costs nothing to run',
     ],
     steps: [
       { title: 'Merge', body: 'Nine sources flow into one ledger, one row per referring site.' },
       { title: 'Check', body: 'Ascentra visits each linking page and reads the link the way a search engine would.' },
       { title: 'Value', body: 'Every link gets an SEO, referral and brand value.' },
-      { title: 'Grow', body: 'Scored prospects, contacts, checked outreach drafts and follow-up reminders.' },
+      { title: 'Grow', body: 'Scored prospects, contacts, checked outreach drafts and follow-up reminders, sent from your own mailbox.' },
     ],
     facts: [
       { value: 9, label: 'link sources in one ledger' },
@@ -551,6 +590,22 @@ export const features: Feature[] = [
         a: 'Everything except the commercial index: Bing Webmaster Tools, Search Console and GA4 data, the Common Crawl graph, Wikipedia, Hacker News, news and web search.',
       },
       { q: 'Does Ascentra send outreach e-mails?', a: 'It drafts outreach and reminds you to follow up after 7 and 14 days. Sending stays with your team, from your own mailbox.' },
+      {
+        q: 'Do I have to hand over my mailbox password?',
+        a: 'No. Microsoft 365 and Gmail can be connected on their own sign-in screen, where you grant exactly two things: sending, and (for Microsoft 365) reading the replies to your own pitches. Nothing but a renewable permission is stored, it is encrypted, and it is withdrawn when you disconnect the mailbox. Google treats inbox access as a restricted scope, so a Gmail mailbox sends and you read its replies in Gmail — the app says so before you connect it. An app password still works for any mail host.',
+      },
+      {
+        q: 'Where do the opportunities come from?',
+        a: 'Pages that already link to your competitors or to a page that no longer exists, lists that leave you out, resource pages on your topics, journalists asking publicly or through the HARO and Source of Sources digests in your own mailbox, podcast shows that say they take guests, and the directories worth being on. Each one is checked on its own page before it reaches you.',
+      },
+      {
+        q: 'What should I build to earn links?',
+        a: 'Each month Ascentra reads the pages your competitors have the most links to and tells you which kind of page earns links in your market — a data study, a free tool, a template or a definitive guide — with those pages and the number of websites linking to each. It is evidence of what works, with the work named; it is never a promise of links.',
+      },
+      {
+        q: 'Do you decide which subject line is better?',
+        a: 'Only once there is enough to read. Every batch gets two subject lines in different styles and they go out in equal numbers; you see the e-mails sent and the replies for each. Under thirty sends per line the page says “not enough sends yet” instead of naming a winner, because at that size a few points of difference is noise.',
+      },
       {
         q: 'Who gets pitched, and what is in the draft?',
         a: 'Only sites that could really link to you: a competitor selling what you sell, a government portal, a page that sells links and a bare homepage are refused with the reason. Every draft then passes an automatic check — it may claim nothing your business profile does not carry, it quotes something from their page, it carries one link to the page it offers, it is short and makes one clear ask. A draft that fails any of these waits for your edit instead of being offered as ready.',
@@ -582,21 +637,30 @@ export const features: Feature[] = [
       'A monthly check-in for manual actions and security issues',
       'Prioritised recommendations you can start with one click',
       'Every number says where it came from, over what period and from how big a sample',
+      'A share link for one report: it expires on the day you choose, you can turn it off at any time, and the person you send it to needs no account',
       'Every run kept with its report and files',
     ],
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
       { title: 'Explain', body: 'What changed, why it matters, how sure Ascentra is — and where each number came from.' },
       { title: 'Recommend', body: 'A prioritised list of next steps, each one ready to run.' },
-      { title: 'Share', body: 'Export the full report as PDF or Word, or open any past run with its report and files.' },
+      { title: 'Share', body: 'Send one report as a link that expires, or export it as PDF or Word. Past runs keep their report and files.' },
     ],
     facts: [
       { value: 2, label: 'report formats: PDF and Word' },
       { value: 'Monday', label: 'report, every week' },
+      { value: 14, label: 'days a share link lasts by default (1 to 90, revocable)' },
       { value: 1, label: 'check-in a month for what Google’s API cannot see' },
     ],
     faqs: [
-      { q: 'Can I share reports with clients?', a: 'Yes. Full reports export as PDF or Word, ready to send.' },
+      {
+        q: 'Can I share reports with clients?',
+        a: 'Yes, two ways. Export the report as PDF or Word and send the file, or create a share link: it opens that one report in the browser with no account needed, it stops working on the day you choose (14 days by default, up to 90) and you can turn it off at any time.',
+      },
+      {
+        q: 'What can somebody with a share link see?',
+        a: 'That one report and its documents, read-only — its headline figures, the website it is about, when it was produced and where each number came from. Nothing else: no other report, no dashboard, no list, none of your settings or team, and nothing on the page can be changed. You see when the link was last opened, and turning it off takes one click.',
+      },
       { q: 'What does the Search Console alert watcher do?', a: 'It reads Google’s Search Console notification e-mails for your websites and turns them into alerts in Ascentra.' },
       { q: 'What is the monthly check-in?', a: 'A short checklist for what Google does not expose through its API, such as manual actions and security issues.' },
       {
@@ -615,6 +679,60 @@ export const features: Feature[] = [
     story: {
       title: 'Reports people actually read.',
       body: 'The Monday report puts rankings, traffic, AI visibility and links on one page, with what changed and what to do next. Full reports export as PDF or Word for everyone who was not in the room.',
+    },
+  },
+  {
+    slug: 'guided-setup',
+    name: 'Guided setup',
+    shortName: 'Guided setup',
+    tagline: 'Every step we ask of you, with your own values and the page to open.',
+    summary:
+      'SEO work stalls at the same place every time: the part that happens in someone else’s account. Wherever Ascentra needs something from you — a Google permission, a DNS record, a file on your site, a mailbox — the ask carries a guide through that one job, with your own values ready to copy and a way to hand it to whoever can do it.',
+    icon: LifeBuoy,
+    benefits: [
+      'A guide beside every ask: Search Console and Analytics access, proving the domain is yours, the IndexNow file, your links export, letting the AI crawlers in, mailboxes and their SPF, DKIM and DMARC records, publishing a page, applying a fix pack, your business profile and style guide',
+      'Your own values, never a placeholder: the record for your domain, your key file, the exact address to add — each in a box you copy from',
+      'Written for the provider you actually use: Cloudflare, GoDaddy, Namecheap or cPanel for DNS; WordPress, Shopify, Wix, Squarespace or Webflow for the website',
+      'Tick the steps off as you go — close it, come back tomorrow, and it opens where you stopped',
+      'Send the whole guide to the colleague who has to do it, values filled in, with no account needed at their end',
+      'Each one ends with how to tell it worked, what to try when it did not, and the button in Ascentra that checks',
+    ],
+    steps: [
+      { title: 'Ascentra asks for one thing', body: 'A permission, a record, a file — with the reason it is needed and what it unlocks next.' },
+      { title: 'Open the guide beside the ask', body: 'That one job as numbered steps, with your values, the page to open and the tab for your provider.' },
+      { title: 'Do it, or pass it on', body: 'Tick the steps off yourself, or e-mail the guide to whoever manages your DNS, your website or your mailbox.' },
+      { title: 'Ascentra checks the result', body: 'The button at the end runs the check — verified, connected, file found — so nobody is left guessing whether it worked.' },
+    ],
+    facts: [
+      { value: 27, label: 'guides, one for each thing we ask of you' },
+      { value: 'Your values', label: 'in every copy box, not an example' },
+      { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
+    ],
+    faqs: [
+      {
+        q: 'Do we need a developer?',
+        a: 'For most of it, no: the Google permissions, the business details and the mailbox are all done in a browser by whoever has the account. A DNS record or a file at the root of the site usually needs the person who manages those — the guide is written for them too, and goes to them in one click.',
+      },
+      {
+        q: 'Our website is run by an agency. Does that work?',
+        a: 'Yes. Every guide can be sent as an e-mail with your values already in it, so the agency gets the exact steps without an account here. You still see in Ascentra whether the job landed, because the same guide ends with the check.',
+      },
+      {
+        q: 'What if the provider’s screen looks different?',
+        a: 'Providers move things. The guides name what to look for rather than only where it used to be, keep separate instructions for the common providers and CMSs, and end with an “if it does not work” list for the things that usually go wrong.',
+      },
+      {
+        q: 'Is this only for the first week?',
+        a: 'No. The same guides sit on the asks that come up later: the IndexNow file, a new mailbox, the fix pack from an audit, publishing a page that was written for you, the monthly Search Console check-in. There is also a searchable list of all of them in the app.',
+      },
+    ],
+    related: ['site-tracking', 'enterprise', 'technical-audits'],
+    image: 'teamAtDesks',
+    visual: 'guided-setup',
+    story: {
+      eyebrow: 'Why it matters',
+      title: 'What stalls the work is never the SEO.',
+      body: 'It is the Google permission nobody has, the DNS record that needs a colleague, the file that has to sit at the root of the site. Ascentra treats that as part of the product: every ask carries its steps, your own values and a way to hand it to the person who can do it.',
     },
   },
   {

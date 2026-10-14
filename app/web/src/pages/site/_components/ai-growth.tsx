@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { CheckCircle2, ChevronDown, FileCheck2, Globe, Library, MailPlus, Megaphone, PenSquare, Rocket, Send, ShieldCheck, Target } from 'lucide-react';
+import { GuideButton } from '@/components/guide';
 import { fmtAgo, fmtDate } from '@/lib/utils';
 import type { AiEarnedPage, AiGrowth, AiPageStat, AiTargetStat, IndexNowCheck } from '@seo/shared';
 import { api, errorMessage } from '@/lib/api';
@@ -128,6 +129,12 @@ function IndexNowSetup({ keyUrl, k }: { keyUrl: string; k: string }) {
         <Button size="sm" variant="secondary" loading={check.isPending} onClick={() => check.mutate()}>
           Check the file
         </Button>
+        <GuideButton
+          id="indexnow-key-file"
+          vars={{ domain: site.domain, indexNowKey: k, indexNowFile: file, indexNowUrl: keyUrl }}
+          label="Show me how"
+          finish={{ label: 'Check the file', onClick: () => check.mutate() }}
+        />
       </div>
       {result && !result.verified && <p className="mt-2 text-[13px] text-warning-text">{result.message}</p>}
     </Callout>

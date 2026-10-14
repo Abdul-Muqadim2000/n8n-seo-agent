@@ -1,5 +1,5 @@
 // Site Admin "monitors": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines
-// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot), ai_prompts_max (3-50), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), backlinks, audit_monthly, audit_pages (50-1000), audit_js,
+// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot), ai_prompts_max (3-50), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), stuck_weeks (2-26, G32), backlinks, audit_monthly, audit_pages (50-1000), audit_js,
 // competitors (domains), brand_names.
 const a = $('Admin Action').first().json; const m = a.monitors || {};
 let old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}
@@ -13,6 +13,8 @@ const __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_vis
   ai_pages_month: has('ai_pages_month') ? Math.min(8, Math.max(0, parseInt(m.ai_pages_month, 10) || 0)) : (old.ai_pages_month === '' || old.ai_pages_month == null ? null : Number(old.ai_pages_month)), backlinks: b('backlinks', true), audit_monthly: b('audit_monthly', true), link_builder: b('link_builder', true),
   audit_pages: has('audit_pages') ? Math.min(1000, Math.max(50, parseInt(m.audit_pages, 10) || 200)) : (Number(old.audit_pages) || 200), audit_js: b('audit_js', false),
   competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),
+  // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)
+  stuck_weeks: has('stuck_weeks') ? Math.min(26, Math.max(2, parseInt(m.stuck_weeks, 10) || 8)) : (old.stuck_weeks === '' || old.stuck_weeks == null ? null : Number(old.stuck_weeks)),
   updated_at: a.updated_at, request_id: a.request_id || '' };
 if (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit
 return [{ json: __row }];

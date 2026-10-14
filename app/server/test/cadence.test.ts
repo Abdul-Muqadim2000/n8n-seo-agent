@@ -31,7 +31,7 @@ const siteSet = (o: Partial<LadderSettingsRow>) => set('_site', { opportunities:
 const noGuard = [siteSet({ max_waiting: 20 })];
 /** newest first, weekly */
 const ranks = (id: string, kw: string, positions: number[]) => positions.map((p, i) => ({ ladder_id: id, keyword: kw, checked_at: daysAgo(7 * i + 2), position: p, domain: D, rung: 4 }) as RankHistoryRow);
-const logRow = (keyword: string, o: Partial<ContentLogRow> = {}) => ({ domain: D, keyword, source: 'ladder', ladder_id: '', request_id: 'cad_x', started_at: daysAgo(10), status: 'started', published_url: '', published_at: '', ...o }) as ContentLogRow;
+const logRow = (keyword: string, o: Partial<ContentLogRow> = {}) => ({ domain: D, keyword, source: 'ladder', ladder_id: '', request_id: 'cad_x', started_at: daysAgo(10), status: 'written', published_url: '', published_at: '', ...o }) as ContentLogRow;   // R1 (2026-10-13): a page waits for publication only once the log row says `written`
 const input = (o: Partial<CadenceInput>): CadenceInput => ({ domain: D, pagesPerWeek: 3, ladders: [], queries: [], trends: [], logs: [], settings: [], history: [], ...o });
 const kws = (o: Partial<CadenceInput>) => planCadence(input(o), NOW).picks.map((p) => p.keyword);
 
@@ -120,26 +120,36 @@ describe('cadence mirror: pile-up guard and opportunity posts', () => {
 
   // ---- v4.14 (FIX_PLAN D5): pages written by a keyword ladder count too (they reached the content log only from v4.14 on) ----
   it('D5: 2 content-log rows + 2 ladder rows “writing” are 4 pages waiting at a limit of 3 → nothing is written, and they are named', () => {
-    const p = planCadence(input({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors')] }), NOW);
+    const p = planCadence(input({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors'), logRow('peppol uae cost', { started_at: daysAgo(20) }), logRow('peppol uae guide', { started_at: daysAgo(19) })] }), NOW);
     expect([p.picks, p.pausedReason, p.waitingPublish]).toEqual([[], 'pileup', 4]);
     expect([...p.waitingKeywords].sort()).toEqual(['erp for distributors', 'erp pricing uae', 'peppol uae cost', 'peppol uae guide']);
     expect(cadenceDetail([], { ...p, at: '' }, { cards: [] })).toBe(
       'Writes nothing: 4 written pages waiting for publication (pile-up guard, limit 3): “peppol uae cost”, “peppol uae guide”, “erp pricing uae”, “erp for distributors”. Publish them to continue',
     );
     // the same website is written again once its limit allows it: the guard stopped it, not the ladder
-    expect(kws({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors')], settings: [siteSet({ max_waiting: 5 })] })).toEqual([
+    expect(kws({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('erp pricing uae'), logRow('erp for distributors'), logRow('peppol uae cost', { started_at: daysAgo(20) }), logRow('peppol uae guide', { started_at: daysAgo(19) })], settings: [siteSet({ max_waiting: 5 })] })).toEqual([
       'peppol uae software',
       'peppol uae providers',
     ]);
   });
 
-  it('D5: a page in the content log and on its ladder row counts once; published pages never count; “written” waits like “started”', () => {
+  it('D5 / R1: a page in the content log and on its ladder row counts once; published pages never count; only “written” waits', () => {
     const both = planCadence(input({ ladders: A({ a: 'writing', b: 'writing' }), logs: [logRow('peppol uae cost', { status: 'written' }), logRow('peppol uae guide', { status: 'written' })] }), NOW);
     expect([both.waitingPublish, both.pausedReason, [...both.waitingKeywords].sort()]).toEqual([2, '', ['peppol uae cost', 'peppol uae guide']]);
     const published = ['peppol uae cost', 'peppol uae guide', 'peppol uae software'].map((k) => logRow(k, { status: 'published', published_url: slug(k), published_at: daysAgo(3) }));
     expect(planCadence(input({ ladders: A({ a: 'published', b: 'published', c: 'published' }), logs: published }), NOW).waitingPublish).toBe(0);
     // a ladder row left on 'writing' whose page is live (the content log has the address) does not count either
     expect(planCadence(input({ ladders: A({ a: 'writing', b: 'writing', c: 'writing' }), logs: published }), NOW).waitingPublish).toBe(0);
+  });
+
+  // R1 (2026-10-13, the re-rating run): a budget-refused page run left row 19 saying `writing` with a `started` log row, and this guard
+  // counted it among 6 pages waiting and paused the website for a week. `written` in the content log is the only proof of a page.
+  it('R1: a ladder row “writing” whose log row only says “started” is no page waiting — the website keeps writing', () => {
+    const promised = planCadence(input({ pagesPerWeek: 1, ladders: A({ a: 'writing' }), logs: [logRow('peppol uae cost', { status: 'started' })] }), NOW);
+    expect([promised.waitingPublish, promised.pausedReason, promised.waitingKeywords]).toEqual([0, '', []]);
+    expect(promised.picks.map((x) => x.keyword)).toEqual(['peppol uae guide']);
+    const written = planCadence(input({ pagesPerWeek: 1, ladders: A({ a: 'writing' }), logs: [logRow('peppol uae cost', { status: 'written' })], settings: [siteSet({ max_waiting: 1 })] }), NOW);
+    expect([written.waitingPublish, written.pausedReason, written.waitingKeywords]).toEqual([1, 'pileup', ['peppol uae cost']]);
   });
 
   it('D5: nothing older than 120 days waits; a content-log row dates an older ladder’s page', () => {
@@ -214,7 +224,7 @@ describe('cadence mirror: the AI page of the week', () => {
     const m = planCadence(input({ pagesPerWeek: 1, ladders: A(), aiTargets: T, aiPagesPerMonth: 2, settings: [siteSet({ opportunities: 'manual' })] }), NOW);
     expect(m.picks.some((x) => /^ai_/.test(x.source))).toBe(false);
     expect(m.suggestions[0].aiTarget?.targetId).toBe('ait_x_2');
-    const pile = planCadence(input({ pagesPerWeek: 1, aiTargets: T, aiPagesPerMonth: 2, logs: ['a', 'b', 'c'].map((k) => logRow('waiting ' + k, { started_at: daysAgo(5) })) }), NOW);
+    const pile = planCadence(input({ pagesPerWeek: 1, aiTargets: T, aiPagesPerMonth: 2, logs: ['a', 'b', 'c'].map((k) => logRow('waiting ' + k, { started_at: daysAgo(5) })) }), NOW);   // R1: `written` rows
     expect(pile.picks.some((x) => /^ai_/.test(x.source))).toBe(false);
   });
   it('one search, one page: a question the planned ladder page targets is written as that ladder page, with the AI target', () => {

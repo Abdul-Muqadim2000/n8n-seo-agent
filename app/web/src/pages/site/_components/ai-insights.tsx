@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { AtSign, Bot, Coins, Globe, Layers, Link2, MessageSquareQuote, PieChart, Plus, Scale, ShieldAlert, ShieldCheck, Target, Users } from 'lucide-react';
 import { compactNumber, formatPercent, titleCase, type AiAccess, type AiGroup, type AiIndex, type AiPerception, type AiTraffic } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
@@ -28,7 +29,20 @@ export function AiTrafficPanel({ traffic }: { traffic: AiTraffic | null }) {
   if (!traffic.connected)
     return (
       <Panel title="What AI visits are worth" icon={<Coins />} description="Visits, key events and revenue from ChatGPT, Perplexity, Gemini, Copilot, Claude and other assistants (GA4)">
-        <Callout tone="info" title="GA4 is not connected for this website" action={can('admin') ? <ButtonLink to={page('settings/tracking')} size="sm" variant="secondary">Connect GA4</ButtonLink> : undefined}>
+        <Callout
+          tone="info"
+          title="GA4 is not connected for this website"
+          action={
+            <>
+              {can('admin') && (
+                <ButtonLink to={page('settings/tracking')} size="sm" variant="secondary">
+                  Connect GA4
+                </ButtonLink>
+              )}
+              <GuideButton id="ga4-access" />
+            </>
+          }
+        >
           {traffic.error && !/not connected/i.test(traffic.error) ? `${traffic.error}. ` : ''}Give the service account Viewer access to your GA4 property; the next weekly run shows what AI answers are worth.
         </Callout>
       </Panel>
@@ -171,6 +185,7 @@ export function PerceptionPanel({ perception }: { perception: AiPerception | nul
 
 /** Whether the AI crawlers may read the site: robots.txt per bot, llms.txt, and a firewall / CDN test of the homepage. */
 export function AccessPanel({ access }: { access: AiAccess | null }) {
+  const { site } = useSitePage();
   if (!access) return null;
   const a = access;
   const answer = a.bots.filter((b) => b.group === 'answer'), training = a.bots.filter((b) => b.group === 'training');
@@ -198,10 +213,11 @@ export function AccessPanel({ access }: { access: AiAccess | null }) {
       iconTone={a.ok ? 'good' : 'critical'}
       flush
     >
-      <div className="flex flex-wrap gap-2 px-4 pb-3">
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
         {a.ok ? <StatusBadge tone="good">AI search crawlers can read the site</StatusBadge> : <StatusBadge tone="critical">Some AI crawlers are blocked</StatusBadge>}
         <Badge>robots.txt {a.robotsFound ? 'found' : 'missing'}</Badge>
         <Badge>llms.txt {a.llmsTxt ? 'found' : 'missing'}</Badge>
+        {(!a.ok || !a.robotsFound || !a.llmsTxt) && <GuideButton id="ai-crawler-access" vars={{ domain: site.domain }} label="How to open the door" className="ml-auto" />}
       </div>
       {a.issues.length > 0 && (
         <ul className="space-y-2 px-4 pb-3">

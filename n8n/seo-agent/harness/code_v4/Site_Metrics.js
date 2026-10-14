@@ -199,6 +199,8 @@ const SM = (() => {
 // 28 clicks against 20 is a 40% "fall" that any week could produce by chance (z = -1.18); 1,400 against 1,600 is a 13% fall that is real
 // (z = -3.65). A change therefore needs three things: enough volume to measure, statistical significance, and a size worth telling the owner.
 // Anything large but not significant is reported as "watch", never as a fall — and Google's update dates are named when one ran in the period.
+// 2026-10-13 (G28 follow-up): `tested()` puts the source, the period, the test and the confidence into every alert's own words, and
+// `position()` replaces the last fixed threshold in the site tracking — "5 places" on a keyword with 12 impressions is not a drop.
 const ST = (() => {
   const num = (v) => Number(v) || 0;
   const z = (cur, prev) => { const s = num(cur) + num(prev); return s > 0 ? (num(cur) - num(prev)) / Math.sqrt(s) : 0; };
@@ -228,7 +230,38 @@ const ST = (() => {
   const updatesIn = (range) => { const r = range || {}; const a = String(r.start || ''), b = String(r.end || '');
     if (!a || !b) return []; return UPDATES.filter(u => u.start <= b && u.end >= a); };
   const updateNote = (range) => { const hits = updatesIn(range); return hits.length ? ' A Google ' + hits.map(u => u.name + ' (' + u.start + ' to ' + u.end + ')').join(' and ') + ' ran inside this period — it may be part of the cause, which cannot be proven from these numbers.' : ''; };
-  return { z, band, change, updatesIn, updateNote, UPDATES };
+  // ---- G28 follow-up (2026-10-13): an alert must say WHAT was tested, over WHAT period, and HOW SURE it is ----
+  // One sentence, from the test itself, so no caller can print a number without its basis. `o`: { source, period, test }.
+  // `stats: false` leaves the z value and the range out of this sentence, for a text that already prints them.
+  const tested = (ch, o) => { const x = o || {}; const c = ch || {};
+    const src = String(x.source || 'Search Console'), per = String(x.period || 'the last 28 days against the 28 days before'),
+      test = String(x.test || 'two-sample Poisson z-test (counts over two equal periods)');
+    const zz = x.stats === false ? '' : ' (z ' + c.z + ')';
+    const sure = c.significant === true ? 'outside 95% sampling noise' + zz
+      : c.measurable === false ? 'not enough events to test (' + ((Number(c.cur) || 0) + (Number(c.prev) || 0)) + ' over both periods together)'
+      : 'inside 95% sampling noise' + zz + ', so it may be chance';
+    return ' Tested: ' + src + ', ' + per + ', ' + test + '; ' + sure + (x.stats === false || !c.ci ? '' : '; 95% range ' + c.ci[0] + '% to ' + c.ci[1] + '%') + '.'; };
+  // ---- a MOVE IN AVERAGE POSITION, which is not a count and must not be tested like one ----
+  // Search Console's position is the impression-weighted average of the best position per impression over 28 days. With a handful of
+  // impressions one search moves it several places, so the old rule ("5 places and the keyword was in the top 10") fired on noise for a
+  // small site. There is no published variance for that average, so nothing is claimed about significance: the move is reported only when
+  // BOTH periods carry min_impressions, and the clicks of the same two periods are tested (Poisson) so the alert can say how sure it is.
+  // o: { impressions, prev_impressions, clicks, prev_clicks, min_impressions, min_places, min_click_events }
+  const position = (cur, prev, o) => {
+    const x = o || {}; const c = num(cur), p = num(prev);
+    const minImp = x.min_impressions == null ? 50 : num(x.min_impressions), minPlaces = x.min_places == null ? 5 : num(x.min_places);
+    const imp = num(x.impressions), impPrev = num(x.prev_impressions);
+    const places = Math.round((c - p) * 10) / 10;                       // positive = slipped down the page
+    const clicks = change(x.clicks, x.prev_clicks, { min_events: x.min_click_events == null ? 20 : num(x.min_click_events), min_pct: 0 });
+    const measurable = c > 0 && p > 0 && imp >= minImp && impPrev >= minImp;
+    const big = c > 0 && p > 0 && Math.abs(places) >= minPlaces;
+    return { cur: c, prev: p, places, impressions: imp, prev_impressions: impPrev, clicks, measurable, big,
+      real: measurable && big, watch: big && !measurable,               // a big move on too few impressions: worth a look, never a fact
+      direction: places > 0 ? 'down' : places < 0 ? 'up' : 'flat',
+      basis: 'Search Console average position, the last 28 days against the 28 days before, on ' + impPrev + ' then ' + imp + ' impressions'
+        + (measurable ? '' : ' (under ' + minImp + ' impressions in a period one search can move the average several places)') };
+  };
+  return { z, band, change, position, tested, updatesIn, updateNote, UPDATES };
 })();
 // ---- the daily key-page watch and Google's view of those pages (G11 + G25, 2026-10-13; system review FIX_PLAN.md) ----
 // G11: a monthly audit cannot see a page that went noindex on the 3rd. Every day the key pages are fetched raw and cheaply (one plain GET
@@ -466,15 +499,25 @@ const PW = (() => {
     const quota = /quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(err);
     const denied = /permission|forbidden|403|unauthor|invalid_grant/i.test(err);
     if (err) return { ok: false, error: err, error_kind: quota ? 'quota' : denied ? 'access' : 'error', indexed: null, verdict: '', coverage: '',
-      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], rich_results: [], rich_verdict: '',
+      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
       not_checked: quota ? 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' : denied ? 'Search Console access is missing for this property: not checked.' : 'The inspection failed: not checked (' + err + ').' };
+    // R10 (2026-10-13, re-rating §3.11): Google retired the Mobile Usability report and the API now answers `VERDICT_UNSPECIFIED` with no
+    // issue list for every page (45 of 45 live on 2026-10-13). That is NOT CHECKED. The live run read it as "not mobile-friendly" and raised
+    // a High finding on 45 of 47 pages with empty evidence, ranked second of 60. Only a FAIL that names at least one issue is a real problem;
+    // every other answer (unspecified, neutral, missing, a FAIL with nothing behind it) is unknown, with the reason said out loud.
+    const mobVerdict = S(mob && mob.verdict).toUpperCase();
+    const mobIssues = mob && Array.isArray(mob.issues) ? mob.issues.map(i => S(i.message) || S(i.issueType)).filter(Boolean).slice(0, 5) : [];
+    const mobUsable = mobVerdict === 'PASS' ? true : (mobVerdict === 'FAIL' && mobIssues.length) ? false : null;
+    const mobNote = mobUsable !== null ? ''
+      : (mobVerdict === 'FAIL' ? 'Search Console reports a mobile problem without naming an issue, so mobile usability was not checked.'
+        : mobVerdict === 'NEUTRAL' ? 'Search Console gave no mobile verdict for this page, so mobile usability was not checked.'
+          : 'Search Console no longer answers mobile usability (Google retired the Mobile Usability report), so it was not checked.');
     return {
       ok: true, error: '', error_kind: '', verdict: S(idx.verdict), indexed: S(idx.verdict) === 'PASS', coverage: S(idx.coverageState),
       indexing_state: S(idx.indexingState), robots: S(idx.robotsTxtState), last_crawl: S(idx.lastCrawlTime),
       google_canonical: S(idx.googleCanonical), user_canonical: S(idx.userCanonical),
       canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : same(idx.googleCanonical, idx.userCanonical),
-      mobile_usable: mob ? (S(mob.verdict) === 'PASS' ? true : S(mob.verdict) === 'NEUTRAL' || !S(mob.verdict) ? null : false) : null,
-      mobile_issues: mob && Array.isArray(mob.issues) ? mob.issues.map(i => S(i.message) || S(i.issueType)).filter(Boolean).slice(0, 5) : [],
+      mobile_usable: mobUsable, mobile_issues: mobIssues, mobile_verdict: mobVerdict, mobile_note: mobNote,
       rich_verdict: rich ? S(rich.verdict) : '',
       rich_results: rich && rich.detectedItems ? rich.detectedItems.map(d => S(d.richResultType)).filter(Boolean) : [],
       not_checked: '',
@@ -493,9 +536,15 @@ const PW = (() => {
     const mobileBad = ok.filter(i => i.mobile_usable === false);
     const richTypes = [...new Set(ok.flatMap(i => i.rich_results || []))];
     const notChecked = n0(opts.not_checked) + failed.length;
+    // R10: mobile usability is reported on its own terms — how many pages Google really answered about, and the reason when it answered about none
+    const mobileChecked = ok.filter(i => i.mobile_usable !== null).length;
+    const mobileNote = (ok.length && !mobileChecked)
+      ? (S((ok.find(i => S(i.mobile_note)) || {}).mobile_note) || 'Search Console no longer answers mobile usability (Google retired the Mobile Usability report), so it was not checked.')
+      : '';
     return { checked: ok.length, indexed, not_indexed: notIndexed.length, by_state: by, failed: failed.length, not_checked: notChecked,
       not_checked_reason: notChecked ? (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'not checked in this run') : '',
-      canonical_mismatch: canonMismatch.length, mobile_bad: mobileBad.length, mobile_checked: ok.filter(i => i.mobile_usable !== null).length,
+      canonical_mismatch: canonMismatch.length, mobile_bad: mobileBad.length, mobile_checked: mobileChecked,
+      mobile_not_checked: ok.length - mobileChecked, mobile_note: mobileNote,
       rich_results: richTypes, quota: QUOTA_PER_DAY, quota_note: S(opts.quota_note),
       // never "fine": a page nobody inspected is counted apart from the ones Google answered about
       text: ok.length
@@ -796,7 +845,7 @@ return sites.map((s, idx) => {
   const gscKw = new Map(((gsc && gsc.tracked) || []).map(t => [t.keyword, t]));
   const tracked = (s.tracked || []).map(t => { const g = gscKw.get(t.keyword); const sp = serpNow[t.keyword];
     const hist = queryHist.filter(h => h.site_id === s.site_id && h.query === t.keyword).sort((a, b) => String(a.period_end).localeCompare(String(b.period_end))).map(h => r1(h.position)).slice(-12);
-    return { ...t, gsc_position: g ? g.position : null, gsc_prev_position: g ? g.prev_position : null, clicks: g ? g.clicks : 0, impressions: g ? g.impressions : 0, prev_clicks: g ? g.prev_clicks : 0, page: g ? g.page : '',
+    return { ...t, gsc_position: g ? g.position : null, gsc_prev_position: g ? g.prev_position : null, clicks: g ? g.clicks : 0, impressions: g ? g.impressions : 0, prev_clicks: g ? g.prev_clicks : 0, prev_impressions: g ? g.prev_impressions : 0, page: g ? g.page : '',
       serp_position: sp ? sp.position : null, serp_url: sp ? sp.url : '', serp_checked_at: sp ? sp.checked_at : '', history: hist }; });
   // pages found live this week replace their planned entry (live URL, published) or are added; they were inspected in this run
   const det = detAll.find(x => x.site_id === s.site_id) || null; const found = det ? det.detected : [];
@@ -808,7 +857,9 @@ return sites.map((s, idx) => {
       google_canonical: asked ? i.google_canonical : '', mobile_usable: asked ? i.mobile_usable : null, rich_results: asked ? i.rich_results : [],
       inspect_error: asked ? null : (i ? (i.not_checked || i.inspect_error) : (s.gsc_connected ? 'not inspected' : 'Search Console not connected')) }; });
   // pages not live yet are reported as such, never as 'not indexed'
-  for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = p.status === 'writing' ? 'written, not published yet' : 'planned, not written yet'; p.indexed = null; }
+  // R1 (2026-10-13): "written, not published yet" only when seo_content_log says the page was written (Site Plan's `written`); a ladder row
+  // that merely says `writing` is a promise — a refused page run leaves exactly that, and the note says what happened.
+  for (const p of pages) if (!(p.page_exists || p.status === 'published')) { p.inspect_error = (p.status === 'writing' && p.written) ? 'written, not published yet' : p.status === 'writing' ? ('no page was written yet' + (p.status_note ? ': ' + String(p.status_note).slice(0, 160) : '')) : 'planned, not written yet'; p.indexed = null; }
   // ---- alerts ----
   // G28: `drop` is no longer the test, it is the line between a medium and a high alert. The test is ST.change: enough events in the two
   // periods together (min_events), a change beyond 95% sampling noise (|z| >= 1.96) and a size worth reporting (min_pct).
@@ -822,8 +873,11 @@ return sites.map((s, idx) => {
   const countAlert = (key, label, cur, prev, minEvents, level) => {
     const ch = ST.change(cur, prev, { min_events: minEvents, min_pct: minPct }); stat[key] = ch;
     if (ch.direction !== 'down' || !ch.big) return ch;
-    if (ch.real) alerts.push({ level: Math.abs(ch.pct) >= drop ? 'high' : level, text: label + ' fell ' + Math.abs(ch.pct) + '% (' + prev + ' → ' + cur + ' in 28 days' + (ch.ci ? '; 95% range ' + ch.ci[0] + '% to ' + ch.ci[1] + '%' : '') + ', z ' + ch.z + ')' + upd, stat: key });   // no range when one period is zero (the log-ratio is undefined)
-    else if (ch.watch) alerts.push({ level: 'medium', text: 'Watch: ' + label.toLowerCase() + ' are ' + Math.abs(ch.pct) + '% lower (' + prev + ' → ' + cur + ' in 28 days). Small numbers: ' + (prev + cur) + ' ' + label.toLowerCase() + ' over both periods together, so a swing this size happens by chance (z ' + ch.z + ') — worth a look, not a confirmed fall' + upd, stat: key, small_numbers: true });
+    // G28 follow-up (2026-10-13): the figures were already there; the alert now also says WHAT was tested and with WHICH test (ST.tested,
+    // without repeating the z and the range the sentence already prints)
+    const basis = ST.tested(ch, { stats: false, source: key === 'sessions' ? 'Google Analytics 4 organic sessions' : 'Search Console ' + label.toLowerCase() });
+    if (ch.real) alerts.push({ level: Math.abs(ch.pct) >= drop ? 'high' : level, text: label + ' fell ' + Math.abs(ch.pct) + '% (' + prev + ' → ' + cur + ' in 28 days' + (ch.ci ? '; 95% range ' + ch.ci[0] + '% to ' + ch.ci[1] + '%' : '') + ', z ' + ch.z + ')' + basis + upd, stat: key, tested: basis });   // no range when one period is zero (the log-ratio is undefined)
+    else if (ch.watch) alerts.push({ level: 'medium', text: 'Watch: ' + label.toLowerCase() + ' are ' + Math.abs(ch.pct) + '% lower (' + prev + ' → ' + cur + ' in 28 days). Small numbers: ' + (prev + cur) + ' ' + label.toLowerCase() + ' over both periods together, so a swing this size happens by chance (z ' + ch.z + ') — worth a look, not a confirmed fall' + basis + upd, stat: key, small_numbers: true, tested: basis });
     return ch;
   };
   if (!s.gsc_connected) alerts.push({ level: 'setup', text: 'Search Console is not connected: ' + (s.gsc_error || 'no property found') });
@@ -834,7 +888,18 @@ return sites.map((s, idx) => {
   if (ga4 && ga4.errors.length) alerts.push({ level: 'medium', text: 'Some GA4 requests failed: ' + ga4.errors.slice(0, 3).join('; ') });
   for (const p of pages) if (p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')) alerts.push({ level: p.detected ? 'info' : 'high', text: 'Page not indexed: ' + p.url + ' (' + (p.coverage || p.verdict || 'not indexed') + ')' + (p.detected ? ' — found live this week; request indexing to speed it up' : '') });   // a page that just went live is not alarming yet
   for (const p of pages) if (p.inspected && p.indexed && p.canonical_ok === false) alerts.push({ level: 'medium', text: 'Google picked another canonical for ' + p.url });
-  for (const t of tracked) if (t.gsc_position && t.gsc_prev_position && t.gsc_prev_position <= 10 && t.gsc_position - t.gsc_prev_position >= 5) alerts.push({ level: 'medium', text: '"' + t.keyword + '" slipped from #' + r1(t.gsc_prev_position) + ' to #' + r1(t.gsc_position) + ' (Search Console average)' });
+  // G28 follow-up (2026-10-13): the last fixed threshold in the site tracking. Search Console's position is an impression-weighted 28-day
+  // average, so "5 places" on 12 impressions is one search, not a drop. ST.position needs min_impressions in BOTH periods before it calls a
+  // move real, tests the same keyword's clicks over the same two periods, and the alert says what was tested and how sure it is.
+  for (const t of tracked) {
+    if (!(t.gsc_position > 0 && t.gsc_prev_position > 0 && t.gsc_prev_position <= 20)) continue;
+    const pc = ST.position(t.gsc_position, t.gsc_prev_position, { impressions: t.impressions, prev_impressions: t.prev_impressions, clicks: t.clicks, prev_clicks: t.prev_clicks,
+      min_impressions: cfg.alert_min_position_impressions || 50, min_places: cfg.alert_min_places || 5 });
+    if (pc.direction !== 'down' || !pc.big) continue;
+    const moved = '"' + t.keyword + '" slipped from #' + r1(pc.prev) + ' to #' + r1(pc.cur) + ' (' + pc.places + ' places)';
+    if (pc.real) alerts.push({ level: t.gsc_prev_position <= 10 ? 'medium' : 'info', text: moved + '. ' + pc.basis + '.' + ST.tested(pc.clicks, { source: 'Search Console clicks for this search' }) + upd, stat: 'position', keyword: t.keyword, tested: pc.basis });
+    else alerts.push({ level: 'info', text: 'Watch: ' + moved + ', measured on too little data to call it a drop. ' + pc.basis + '.' + upd, stat: 'position', keyword: t.keyword, small_numbers: true, tested: pc.basis });
+  }
   for (const t of tracked) if (t.serp_position > 0 && t.gsc_position && Math.abs(t.serp_position - t.gsc_position) >= 10) alerts.push({ level: 'info', text: '"' + t.keyword + '": live check #' + t.serp_position + ' vs Search Console average #' + r1(t.gsc_position) + ' — positions vary by location and device' });
   if (!ga4) alerts.push({ level: 'setup', text: 'Google Analytics 4 is not connected: ' + (acctErr || ga4Reason || 'no property id given or detected') });
   const notices = s.console_alerts || []; const ck = s.last_checkin || null;
@@ -855,7 +920,7 @@ return sites.map((s, idx) => {
   if (!s.gsc_connected) actions.push({ priority: 1, type: 'connect_gsc', action: 'Add ' + sa + ' as a user (Full) of ' + s.domain + ' in Search Console → Settings → Users and permissions.', why: 'Without it the report has no real query, click or index data.', keyword: '', url: '' });
   for (const p of pages.filter(p => p.inspected && p.indexed === false && (p.page_exists || p.status === 'published')).slice(0, 3)) actions.push({ priority: 1, type: 'index', action: 'Request indexing for ' + p.url + ' in Search Console (URL inspection → Request indexing) and link to it from 2-3 existing pages.', why: (p.rung ? 'Ladder rung ' + p.rung + ' for "' + p.keyword + '"' : 'The page for "' + p.keyword + '"') + ' cannot rank until Google indexes it (' + (p.coverage || p.verdict || 'not indexed') + ').', keyword: p.keyword, url: p.url });
   // D11: a page written for a keyword a LIVE page already answers must not go up as a second page — it is folded into the page that exists
-  for (const p of pages.filter(p => p.status === 'writing' && !p.page_exists).slice(0, 3)) { const c = covered(p.keyword, p.url);
+  for (const p of pages.filter(p => p.status === 'writing' && p.written && !p.page_exists).slice(0, 3)) { const c = covered(p.keyword, p.url);   // R1: only a page the content log says was written
     if (c) actions.push({ priority: 1, type: 'refresh_existing', action: 'Do not publish the new page for "' + p.keyword + '" as a second URL: ' + c.url + ' already answers this search. Use the new text to refresh that page instead.', why: 'Two pages for one search split the signals and neither ranks (the live page was found ' + (c.matched_by === 'query' ? 'in Search Console with ' + c.impressions + ' impressions for this query' : 'in the site\'s page list') + ').', keyword: p.keyword, url: c.url });
     else actions.push({ priority: 1, type: 'publish', action: 'Publish the written page for "' + p.keyword + '" (planned URL ' + p.url + ') and report the link with "I published a page".', why: 'It is written but not live yet; nothing can be indexed or ranked before it is published.', keyword: p.keyword, url: p.url }); }
   for (const q of ((gsc && gsc.striking) || []).slice(0, 3)) actions.push({ priority: 2, type: 'striking', action: 'Push "' + q.query + '" from #' + r1(q.position) + ' into the top 3: expand ' + (q.page || 'the ranking page') + ' with the missing sub-topics, add an FAQ and 2-3 internal links to it.', why: q.impressions + ' impressions in 28 days at position ' + r1(q.position) + ' (' + q.clicks + ' clicks); a top-3 spot typically triples the clicks.', keyword: q.query, url: q.page || '', api_body: pageBody(q.query, q.page, 'Service Page') });

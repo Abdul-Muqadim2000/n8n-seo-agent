@@ -7,7 +7,9 @@
 // stored rows (seo_query_history, the newest 28-day period only), drops scraper and brand queries with the same rules the weekly report
 // uses (GQ, v5/code/_gsc_queries.js), and keeps two kinds:
 //   * no page answers it - the page inventory (seo_pages + this run's sitemap, SM.matchPage; D11) has nothing for the search;
-//   * striking distance - the site ranks 8-20, where one strong page moves it onto page one.
+//   * striking distance - the site ranks 8-20, where one strong page moves it onto page one;
+//   * the page that gets the impressions targets something else (R12, 2026-10-13) - a live page of ours already earns the impressions,
+//     so the answer is to aim that page at the search, never to write a second one.
 // Those queries are inserted into the seed list right after the primary seed (so they also reach keyword_suggestions / related), and
 // their measured impressions, clicks and position travel with the run for the traffic calibration in Collect Research (K2).
 // No new API call: the rows are already in the Data Table and the seeds ride on the pulls the research makes anyway.
@@ -31,5 +33,6 @@ return [{ json: { ...base, seeds, gsc_seeds: extra, search_console: {
   available: gsc.available, period_end: gsc.period_end, period_days: gsc.period_days, rows: gsc.rows, considered: gsc.considered,
   page_check: gsc.page_check, pages_known, brand_names: BR.keys, dropped: gsc.dropped,
   min_impressions: gsc.min_impressions, striking_min: gsc.striking_min, striking_max: gsc.striking_max,
-  seeded: extra, queries: gsc.queries.slice(0, 60), no_page: gsc.no_page.slice(0, 30), striking: gsc.striking.slice(0, 30), answered: gsc.answered
+  seeded: extra, queries: gsc.queries.slice(0, 60), no_page: gsc.no_page.slice(0, 30), striking: gsc.striking.slice(0, 30), answered: gsc.answered,
+  mismatch: gsc.mismatch.slice(0, 30)   // R12 (2026-10-13): a search a live page of ours already ranks for while targeting something else — improve that page, never a second one
 } } }];

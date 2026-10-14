@@ -1,6 +1,7 @@
 // Link Builder plan (v4.13, LINK_BUILDER_SPEC.md; Monday 11:00 after the Backlink Monitor and AI Growth, or on demand): per site with the Link
 // Builder on, what to look for this week — journalist requests (weekly), resource pages, the listings checklist, our old URLs in the Wayback
-// Machine and competitors' broken backlinks (monthly: every ~25 days, kept in seo_cache linkbld:<site>), the prospects to qualify — and what
+// Machine, podcast shows that take guests on the site's topics (L5) and competitors' broken backlinks and most-linked pages (L6)
+// (monthly: every ~25 days, kept in seo_cache linkbld:<site>), the prospects to qualify — and what
 // the pitches need: topics, competitors, the business profile (signature), our pages with their position and links (which page to point to).
 // On demand with free_only: no DataForSEO, no Claude ($0).
 // ---- shared by the monitors (AI Visibility Tracker, Backlink Monitor, Audit Scheduler; inlined by the build): which sites, with which settings ----
@@ -520,6 +521,23 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const lastFull = snaps.filter(x => x.site_id === s.site_id && x.mode === 'full').sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0];
   const kept = lastFull ? (parse(lastFull.competitors_json, []) || []).map(c => c.domain).filter(Boolean) : [];
   const competitors = (s.settings.competitors.length ? s.settings.competitors : kept).slice(0, 3);
+  // R4 (2026-10-13): who the site actually competes with in the results, read from the rank checks of the last 90 days
+  // (seo_rank_history.competitors_json, written by _rank_serp.js: `above` = the domains ahead of us, `competitors` = the top 10). Only the
+  // qualification gate uses this list; the pitches still name the up-to-3 declared competitors.
+  const serp_rivals = (() => {
+    const cut = new Date(Date.now() - 90 * 864e5).toISOString(); const byDom = new Map();
+    for (const h of ranks.filter(r => normD(r.domain) === s.domain && String(r.checked_at || '') >= cut)) {
+      const c = parse(h.competitors_json, null) || {};
+      for (const x of [...(c.above || []), ...(c.competitors || [])]) {
+        const dom = String((x && (x.d || x.domain)) || '').toLowerCase().replace(/^www\./, '');
+        const pos = Number(x && (x.p || x.position)) || 0;
+        if (!dom || dom === s.domain || !/\./.test(dom)) continue;
+        const was = byDom.get(dom);
+        if (!was || (pos > 0 && (!was.position || pos < was.position))) byDom.set(dom, { domain: dom, position: pos || (was && was.position) || 0, keyword: String(h.keyword || '') });
+      }
+    }
+    return [...byDom.values()].sort((a, b) => (a.position || 99) - (b.position || 99)).slice(0, 40);
+  })();
   const pr = profiles.find(x => x.site_id === s.site_id) || {};
   const lad = ladders.filter(l => normD(l.domain) === s.domain);
   const topics = [...new Set([...lad.map(l => l.head_keyword || l.keyword), ...(s.keywords || []), pr.business_type].map(x => String(x || '').trim().toLowerCase()).filter(x => x && x.split(/\s+/).some(w => !STOP.test(w))))].slice(0, 4);
@@ -564,11 +582,12 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const mineP = prospects.filter(p => p.site_id === s.site_id);
   const mineO = outreach.filter(o => o.site_id === s.site_id);
   return { json: { site_id: s.site_id, domain: s.domain, country: s.country || c.name || '', country_iso: c.iso, location_code: Number(s.location_code) || 2840, language_code: s.language_code || 'en',
-    email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, free_only, competitors, topics, brand, brand_known, services, accreditation,
+    email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, free_only, competitors, serp_rivals, topics, brand, brand_known, services, accreditation,
     brand_names: [...new Set([brand, named, ...s.settings.brand_names, s.domain.split('.')[0].length >= 5 ? s.domain.split('.')[0] : ''].filter(Boolean))],
     profile: { business_name: bn, business_type: pr.business_type || '', author_name: pr.author_name || '', author_job_title: pr.author_job_title || '', street_address: pr.street_address || '', city: pr.city || '', region: pr.region || '',
       postal_code: pr.postal_code || '', country_code: pr.country_code || c.iso || '', phone: pr.phone || '', public_email: pr.public_email || '', logo_url: pr.logo_url || '' },
     pages, home, canonical_host: site_model.canonical_host || s.domain, budget: CONFIG.sequences_per_week, qualify_max: CONFIG.qualify_per_week,
-    due: { listings: due('listings_at'), resources: due('resources_at'), wayback: due('wayback_at'), broken: due('broken_at') && !free_only, press: true },
+    due: { listings: due('listings_at'), resources: due('resources_at'), wayback: due('wayback_at'), broken: due('broken_at') && !free_only, press: true,
+      podcasts: due('podcasts_at'), assets: due('assets_at') && !free_only },   // L5: podcast shows (free, monthly). L6: the asset ideas read from the competitors' most-linked pages (DataForSEO domain_pages, monthly, ~$0.02 a competitor)
     state: st, prospects_open: mineP.filter(p => (p.status || 'new') === 'new').length, outreach_rows: mineO.length, checked_at: iso } };
 });

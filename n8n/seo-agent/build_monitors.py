@@ -13,7 +13,8 @@ from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_para
                            AI_DAILY_TABLE, AI_DAILY_COLS, QUERY_TABLE, dt_get_all_where_params, dt_delete_where_params,
                            LINKS_TABLE, LINKS_COLS, LINK_IMPORTS_TABLE, LINK_IMPORTS_COLS, LINK_GRAPH_TABLE, LINK_GRAPH_COLS,
                            AI_PAGES_TABLE, AI_PAGES_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS, AI_GROWTH_TABLE, AI_GROWTH_COLS,
-                           LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS, LISTINGS_TABLE, LISTINGS_COLS, LINK_IMPACT_TABLE, LINK_IMPACT_COLS, HISTORY_TABLE, METRICS_TABLE)
+                           LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS, LISTINGS_TABLE, LISTINGS_COLS, LINK_IMPACT_TABLE, LINK_IMPACT_COLS, HISTORY_TABLE, METRICS_TABLE,
+                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST)   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
 from env_settings import SENDER, ENV, BRAND, OPS_EMAIL
 BING_ON = bool((ENV.get('SEO_BING_WEBMASTER_API_KEY') or '').strip())   # v4.10: optional free sources, baked in at build time (apply_env.py rebuilds)
 AHREFS_ON = bool((ENV.get('SEO_AHREFS_API_KEY') or '').strip())
@@ -31,10 +32,13 @@ def src(p):   # a Code node source with the shared snippets inlined
     s = s.replace('/*__MONITOR_SITES__*/', rd('code/_monitor_sites.js')).replace('/*__REPORT_KIT__*/', rd('code/_report_kit.js')).replace('/*__AI_STATS__*/', rd('code/_ai_stats.js'))
     s = s.replace('/*__SITE_MODEL__*/', rd('code/_site_model.js').rstrip('\n'))   # G19 (SITE_MODEL_SPEC.md): the one site model, one copy per node that asks for it
     s = s.replace('/*__DRAFTS__*/', rd('code/_drafts.js').rstrip('\n'))   # P34-1: which stored outreach draft may still be offered
+    s = s.replace('/*__PODCAST__*/', rd('code/_podcast.js').rstrip('\n'))   # L5: podcast guest opportunities (free directory, the show's own feed and site)
+    s = s.replace('/*__AB__*/', rd('code/_ab.js').rstrip('\n'))   # L7: two subjects a batch, and no verdict under 30 sends per variant
     s = s.replace('/*__LINK_KIT__*/', rd('code/_link_kit.js')).replace('/*__OUTREACH_KIT__*/', rd('code/_outreach_kit.js')).replace('/*__LISTINGS__*/', rd('code/_listings.js')).replace('/*__CLAIMS__*/', rd('code/_claims.js')).replace('/*__DRAFT_QA__*/', rd('code/_draft_qa.js')).replace('__BING_ENABLED__', 'true' if BING_ON else 'false').replace('__AHREFS_ENABLED__', 'true' if AHREFS_ON else 'false')
     s = s.replace('/*__COUNTRIES__*/', "// ---- countries: copied from the main workflow's Normalize Input by build_monitors.py (DataForSEO location code = 2000 + ISO numeric) ----" + _COUNTRIES.group(0))
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
     return s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL)
+LEDGER_WIRING = {}   # R9: workflow name -> its ledger nodes; merged into harness/ledger_wiring.json at the end (S57)
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 SMTP = {'smtp': {'id': 'SEOcredSmtpGmail', 'name': 'Gmail SMTP (SEO Agent)'}}
 DFS = {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}}
@@ -95,6 +99,32 @@ class WF:
         self.chain('Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers')
         self.link('Merge AI Answers', nxt)
         retry_lint.record_gate(self.name, ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', nxt])
+
+    def run_ledger(self, mode, tag, plan, ends, pos, measured=''):
+        """R9 (2026-10-13, re-rating): one seo_run_ledger row per scheduled run — reserved as a SIDE BRANCH off the plan node (a Data Table
+        node answers with the row it wrote, not with its input, so the ledger must never sit in the workflow's own data path) and settled at
+        the end with the DataForSEO cost the run measured. The row carries a DataForSEO estimate beside the Claude one, so the main
+        workflow's daily guard finally sees what the schedules spend; a monitor itself is never refused by it."""
+        x, y = pos
+        row_node = 'Run Ledger Row (' + tag + ')'
+        reserve_js, settle_js = monitor_ledger_js(V5, mode, plan, row_node, measured)
+        self.node('Ensure Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_create_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x, y], onError='continueRegularOutput', executeOnce=True)
+        self.code(row_node, reserve_js, [x + 220, y], executeOnce=True)
+        self.node('Reserve Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x + 440, y], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+        self.code('Ledger Settle (' + tag + ')', settle_js, [x + 220, y + 160], executeOnce=True)
+        # the update matches status = reserved, so a row settles once and a refused row stays refused (P1-1's rule in the main workflow)
+        self.node('Settle Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
+            [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
+            # G23 (2026-10-13): the settle also records which part of the money was measured and which estimated, in figures and in words
+            {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}', 'ai_usd': '={{ $json.ai_usd }}',
+             'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
+             'cost_basis': '={{ $json.cost_basis }}'}), [x + 440, y + 160],
+            onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+        self.chain(plan, 'Ensure Run Ledger (' + tag + ')', row_node, 'Reserve Run Ledger (' + tag + ')')
+        for e in ends: self.link(e, 'Ledger Settle (' + tag + ')')
+        self.chain('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')
+        LEDGER_WIRING[self.name] = {'mode': mode, 'plan': plan, 'reserve': row_node, 'settle': 'Settle Run Ledger (' + tag + ')',
+                                    'settle_from': list(ends), 'measured': measured, 'est': LEDGER_EST[mode]}
 
     def sticky(self, content, pos, w, h, color=5): return self.node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': content, 'height': h, 'width': w, 'color': color}, pos)
     def link(self, a, b, out=0):
@@ -188,6 +218,7 @@ A.chain('Apply Analysis', 'Any Answer Rows?'); A.link('Any Answer Rows?', 'Save 
 A.chain('AI Metrics', 'AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', 'Any AI Prospects?'); A.link('Any AI Prospects?', 'Save AI Prospects', 0); A.link('Any AI Prospects?', 'AI Cache Rows', 1); A.link('Save AI Prospects', 'AI Cache Rows')
 A.chain('AI Cache Rows', 'Any Cache Rows?'); A.link('Any Cache Rows?', 'Save AI Cache', 0); A.link('Any Cache Rows?', 'Prune Old Answers', 1); A.link('Save AI Cache', 'Prune Old Answers')
 A.chain('Prune Old Answers', 'AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
+A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report'], at(12, 7), measured='AI Metrics')
 A.sticky(f"""## SEO Agent — AI Visibility Tracker (v4.5, v4.9)
 **Every Monday 07:00** (before the Site Tracker, whose report shows the summary) and on demand (*Manual Run* `{{ domain | site_id, email?, callback_url?, country?, location_code?, competitors?, topics? }}`; form option "Check my AI visibility" / API `mode: ai_visibility`). The **AI Pulse** workflow asks the same panel every other day on the fast engines; this run adds its samples to the week's figures.
 Per site (`seo_sites` + ladder domains; settings in `{MONITORS_TABLE}`: engines, questions (3-50, default 20), daily pulse, competitors, brand names): a stable **question panel** (`{AI_PROMPTS_TABLE}`: buyer stage, topic cluster, monthly AI search volume; written by Claude from the topics, **real questions from the AI-answer database** and the site's long Search Console queries; custom ones through Site Admin `ai_prompts`) is asked to **ChatGPT** and **Gemini** (the real chat interfaces, LLM scraper $0.004), **Perplexity** (sonar, localised, $0.006), **Google AI Mode** ($0.004) and the **AI Overview** of the matching search ($0.002); **Claude** (Haiku + web search, $0.025), the brand question, question discovery and the **market-wide index** (LLM Mentions: your share vs the competitors across the 387M-question database) on the month's first run.
@@ -226,6 +257,7 @@ Q.ai_retry_gate(at(13, 1), 'Parse AI Answers')   # D19: the pulse re-sends a fai
 Q.chain('Parse AI Answers', 'Pulse Metrics', 'Pulse Answer Rows', 'Any Pulse Answers?'); Q.link('Any Pulse Answers?', 'Save AI Answers', 0); Q.link('Any Pulse Answers?', 'AI Daily Rows', 1); Q.link('Save AI Answers', 'AI Daily Rows')
 Q.chain('AI Daily Rows', 'Any Daily Rows?'); Q.link('Any Daily Rows?', 'Save AI Daily', 0); Q.link('Any Daily Rows?', 'Prune Pulse Answers', 1); Q.link('Save AI Daily', 'Prune Pulse Answers')
 Q.chain('Prune Pulse Answers', 'Pulse Alerts', 'Any Pulse Alerts?'); Q.link('Any Pulse Alerts?', 'Has Email (Pulse)?', 0); Q.link('Any Pulse Alerts?', 'Has Callback (Pulse)?', 0)
+Q.run_ledger('ai_pulse', 'Pulse', 'AI Plan', ['Pulse Alerts'], at(10, 4), measured='Pulse Metrics')
 Q.sticky(f"""## SEO Agent — AI Pulse (v4.9)
 **Every day 06:30 except Monday** (cron `30 6 * * 0,2-6`; Monday's AI Visibility Tracker asks the same engines) and on demand (*Manual Run* `{{ domain | site_id, email?, callback_url? }}`). Per site with AI visibility and `ai_pulse` on (`{MONITORS_TABLE}`; default on): the whole question panel (`{AI_PROMPTS_TABLE}`, no brand question) on **ChatGPT** and **Gemini** (the real chat interfaces) and **Google AI Mode** — $0.004 each, about $0.24 a day for 20 questions. AI answers change from one ask to the next; seven samples a week per question and engine give rates with a narrow 95% range and catch a real change within a day.
 Shares *AI Requests* and *Parse AI Answers* with the weekly tracker (same node names). *Pulse Metrics* → one `{AI_DAILY_TABLE}` row per site and day (counts per engine / question / competitor / source; the weekly report adds them) + the answers (`{AI_ANSWERS_TABLE}`, run_kind pulse, kept 35 days). **Alerts only when something really changed** (z-test at 99% vs the past week, a business suddenly named in 30%+ of answers, a question where you were named first for 3 days and are now missing) → e-mail + callback `stage: ai_pulse`. Quiet days send nothing.""", [-40, -560], 1300, 330)
@@ -321,6 +353,7 @@ step('Outreach Input', 'Any Outreach?', 'Outreach Writer', 'Prospect Rows')
 step('Prospect Rows', 'Any Prospect Rows?', 'Save Prospects', 'Ledger Rows')
 step('Ledger Rows', 'Any Ledger Rows?', 'Save Backlinks', 'BL Snapshot Rows')
 B.chain('BL Snapshot Rows', 'Save BL Snapshot', 'BL Report', 'Prepare PDF BL', 'Render PDF BL', 'Attach PDF BL', 'Has Email (BL)?'); B.link('Attach PDF BL', 'Build BL Callback'); B.link('Build BL Callback', 'Has Callback (BL)?')
+B.run_ledger('backlinks', 'BL', 'BL Plan', ['BL Report'], at(13, 6), measured='Parse Backlinks')
 B.sticky(f"""## SEO Agent — Backlink Monitor (v4.5; v4.10 every source merged + our own link check — BACKLINKS_SPEC.md)
 **Every Monday 07:30**: a light watch (links lost / new since the last check, spam, the valuable links re-checked on their pages) that e-mails only when an **important link was lost** (two misses in a row) or spam arrived; the **first run of each month** is the full report. On demand: *Manual Run* `{{ domain | site_id, light?, email?, callback_url? }}`; form option "Check my backlinks" / API `mode: backlinks`.
 **Sources**: DataForSEO Backlinks (summary, lost, new; full runs: referring domains, one link per domain with details, anchors, most-linked pages, broken, history, Content Analysis mentions, competitors' new links, the quarterly gap); **free**: Bing Webmaster Tools (GetUrlLinks; when SEO_BING_WEBMASTER_API_KEY is set: {'on' if BING_ON else 'off'}), the Search Console Links exports uploaded in the app (`{LINK_IMPORTS_TABLE}`), GA4 referrals (links that send visits), the Common Crawl web graph (`{LINK_GRAPH_TABLE}`, monthly linkgraph job), Wikipedia, Hacker News, GDELT news, web search (SearXNG: mentions, "best X" lists, `site:` lookups); Ahrefs Domain Rating (free key; {'on' if AHREFS_ON else 'off'}).
@@ -355,6 +388,7 @@ S.chain('Monthly Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load 
 S.link('Any Candidates?', 'Fetch Sitemap (Schedule)', 0); S.link('Any Candidates?', 'Nothing Due', 1)
 S.chain('Fetch Sitemap (Schedule)', 'Audit Schedule Plan', 'Fingerprint Rows', 'Any Fingerprints?'); S.link('Any Fingerprints?', 'Save Fingerprints', 0); S.link('Any Fingerprints?', 'Audits To Start', 1); S.link('Save Fingerprints', 'Audits To Start')
 S.chain('Audits To Start', 'Any Audits Due?'); S.link('Any Audits Due?', 'Start Scheduled Audits', 0); S.link('Any Audits Due?', 'Audits Started', 1); S.link('Start Scheduled Audits', 'Audits Started')
+S.run_ledger('audit_schedule', 'Audit', 'Audit Schedule Plan', ['Audits Started'], at(10, 4))
 S.sticky(f"""## SEO Agent — Audit Scheduler (v4.6: no repeated audits)
 **1st of every month, 06:00** (cron `0 6 1 * *`) and on demand (*Manual Run* `{{ domain | site_id }}` always audits). Per site with `audit_monthly` on (`{MONITORS_TABLE}`): the sitemap is read (free) and its fingerprint (URLs + lastmod dates, or the sitemap index entries) compared with the one stored at the last check (`{CACHE_TABLE}`, key `sitemap:<site>`). **Audit only when** the site changed, 60+ days passed since the last audit (safety net for theme / plugin / server changes a sitemap does not show), the site was never audited, or no sitemap (or an index without dates) is readable (then monthly as before). Unchanged sites are skipped — the weekly Site Tracker keeps watching indexing in Search Console. Started audits run as their own executions (internal key `audit:`), compare themselves with the previous audit and deliver the report with the **fix pack**.""", [-40, -420], 1150, 240)
 S.write('SEO_Agent_Audit_Scheduler.json')
@@ -435,6 +469,7 @@ gstep('Growth Prospect Rows', 'Any Growth Prospects?', 'Save Growth Prospects', 
 gstep('Growth Cache Rows', 'Any Growth Cache?', 'Save Growth Cache', 'AI Growth Row')
 gstep('AI Growth Row', 'Any Growth Row?', 'Save AI Growth', 'Growth Report')
 G.link('Growth Report', 'Has Email (Growth)?'); G.link('Growth Report', 'Build Growth Callback'); G.link('Build Growth Callback', 'Has Callback (Growth)?')
+G.run_ledger('ai_growth', 'Growth', 'Growth Plan', ['Growth Report'], at(16, 4), measured='Growth Metrics')
 G.sticky(f"""## SEO Agent — AI Growth (v4.12, AI_GROWTH_SPEC.md)
 **Every Monday 09:30** (after the AI Visibility Tracker 07:00 and the Site Tracker 09:00, before the Content Cadence 10:00) and on demand (*Manual Run* `{{{{ domain | site_id, email?, callback_url? }}}}`). Per site with AI visibility and `ai_growth` on (`{MONITORS_TABLE}`; default on): the work that gets the business **named and cited** in AI answers.
 **Indexing**: new / updated pages and key pages Bing has not crawled → **Bing Webmaster Tools SubmitUrlBatch** (ChatGPT search and Copilot draw on Bing; key SEO_BING_WEBMASTER_API_KEY: {'on' if BING_ON else 'off'}) and **IndexNow** once the site hosts its key file (`{CACHE_TABLE}` `indexnow:`). **AI readiness** of up to 12 key pages a week (`{AI_PAGES_TABLE}`): raw HTML without JavaScript, answer in the first ~200 characters, visible update date ≤ 90 days, question headings, sourced figures, lists, author, FAQ; Bing's crawl state (GetUrlInfo).
@@ -474,7 +509,7 @@ L.code('LB Page Requests', 'LB_Page_Requests.js', at(23, 0)); L.iff('Any LB Page
 L.code('LB Second Requests', 'LB_Second_Requests.js', at(26, 0)); L.iff('Any LB Second?', '{{ !$json.skip }}', at(27, 0)); x_http(L, 'Fetch LB Second', at(28, -1), batch=6, interval=200, timeout=12000, text=True, headers=PAGE_H)
 L.code('LB Assemble', 'LB_Assemble.js', at(29, 0))
 L.code('LB Writer Input', 'LB_Writer_Input.js', at(30, 0)); L.iff('Any LB Writing?', '{{ !$json.skip }}', at(31, 0))
-L.agent('Outreach Sequence Writer', 'link_outreach.txt', {'type': 'object', 'properties': {'sequences': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'steps': {'type': 'array', 'items': {'type': 'object', 'properties': {'step': {'type': 'number'}, 'subject': {'type': 'string'}, 'body': {'type': 'string'}}, 'required': ['step', 'body']}}}, 'required': ['n', 'steps']}},
+L.agent('Outreach Sequence Writer', 'link_outreach.txt', {'type': 'object', 'properties': {'sequences': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'subject_b': {'type': 'string'}, 'steps': {'type': 'array', 'items': {'type': 'object', 'properties': {'step': {'type': 'number'}, 'subject': {'type': 'string'}, 'body': {'type': 'string'}}, 'required': ['step', 'body']}}}, 'required': ['n', 'steps']}},
     'skip': {'type': 'array', 'items': {'type': 'object', 'properties': {'n': {'type': 'number'}, 'reason': {'type': 'string'}}, 'required': ['n']}}}, 'required': ['sequences']}, at(32, -1), max_tokens=16000)
 L.code('LB Draft QA', 'LB_Draft_QA.js', at(33, -1))   # L2 (system review 2026-10-11): the deterministic gate every drafted e-mail passes
 L.code('LB Rows', 'LB_Rows.js', at(33, 0))
@@ -491,8 +526,12 @@ L.node('Save Link Impact', DT_TYPE, DT_VERSION, dt_upsert_params_keys(LINK_IMPAC
 l_rows('LB Cache Rows', 'When the monthly searches last ran (seo_cache linkbld:<site>)', 'cache_rows', CACHE_COLS, at(46, 0)); L.iff('Any LB Cache?', '{{ !$json.skip }}', at(47, 0))
 L.node('Save LB Cache', DT_TYPE, DT_VERSION, dt_upsert_params_keys(CACHE_TABLE, CACHE_COLS, ['key']), at(48, -1), onError='continueRegularOutput')
 L.code('LB Report', 'LB_Report.js', at(49, 0))
-L.code('Build LB Callback', "// Callback payload per site (stage link_builder): the summary; the rows stay in n8n (the app reads them).\nreturn $input.all().map(i => { const { html, ...rest } = i.json; return { json: rest }; });", at(50, 1))
-L.deliver('LB', at(50, 0), None)
+# L3 (2026-10-13, FIX_PLAN.md L3; criterion REP 3.6): the whole week as one printable document -> PDF through Gotenberg, as the AI (l.164)
+# and backlink (l.296) reports do. The e-mail keeps its summary HTML (json.html) and attaches the PDF; a renderer failure leaves the run
+# intact (Render PDF LB is continueRegularOutput) and the HTML document goes out instead. The callback carries the PDF for the app.
+L.code('LB Doc', 'LB_Doc.js', at(50, 0)); L.pdf_chain('LB', at(51, 0))
+L.code('Build LB Callback', 'Build_LB_Callback.js', at(54, 1))
+L.deliver('LB', at(54, 0), "={{ $binary.pdf ? 'pdf' : 'data' }}")
 L.chain('Weekly Schedule', *[e[0] for e in ens], *[l[0] for l in loads], 'Load Query History', 'Load Rank History', 'Load Cache (Links)', 'LB Plan', 'Any Sites (LB)?'); L.link('Manual Run', ens[0][0])
 L.link('Any Sites (LB)?', 'LB Source Requests', 0); L.link('Any Sites (LB)?', 'Nothing To Do (LB)', 1)
 L.chain('LB Source Requests', 'Fetch LB Sources', 'LB DFS Requests')
@@ -509,11 +548,14 @@ lstep('LB Prospect Rows', 'Any LB Prospects?', 'Save LB Prospects', 'Listing Row
 lstep('Listing Rows', 'Any Listing Rows?', 'Save Listings', 'Impact Rows')
 lstep('Impact Rows', 'Any Impact Rows?', 'Save Link Impact', 'LB Cache Rows')
 lstep('LB Cache Rows', 'Any LB Cache?', 'Save LB Cache', 'LB Report')
-L.link('LB Report', 'Has Email (LB)?'); L.link('LB Report', 'Build LB Callback'); L.link('Build LB Callback', 'Has Callback (LB)?')
+L.chain('LB Report', 'LB Doc', 'Prepare PDF LB', 'Render PDF LB', 'Attach PDF LB')   # L3
+L.link('Attach PDF LB', 'Has Email (LB)?'); L.link('Attach PDF LB', 'Build LB Callback'); L.link('Build LB Callback', 'Has Callback (LB)?')
+L.run_ledger('link_builder', 'LB', 'LB Plan', ['LB Report'], at(17, 4))
 L.sticky(f"""## SEO Agent — Link Builder (v4.13, LINK_BUILDER_SPEC.md)
 **Every Monday 11:00** (after the Backlink Monitor 07:30 and AI Growth 09:30) and on demand (*Manual Run* `{{{{ domain | site_id, free_only?, callback_url?, request_id? }}}}`, started by **SEO Agent — Link Builder API** `POST /webhook/seo-link-builder`). Per site with `link_builder` on (`{MONITORS_TABLE}`, default on).
-**New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** (DataForSEO, ≈ $0.07). **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1), then the **draft gate** (*LB Draft QA*, L2): claims against the facts on file, no bracket left to fill, the address on their own domain, a real quote from their page, one link to the page we chose on the canonical host, length and one clear ask, the words we never use, the business name as the site model has it — a draft that fails is held as `needs_edit` with its reasons. Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.
-Rows: `{LINK_OUTREACH_TABLE}`, `{PROSPECT_TABLE}` (new kinds), `{LISTINGS_TABLE}`, `{LINK_IMPACT_TABLE}` (what each won link did, vs the site's other pages), `{CACHE_TABLE}` linkbld:; report + callback `link_builder`.""", [-40, -420], 1100, 300, 6)
+**New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), **journalist digests** (HARO / Source of Sources, read from the customer's own mailbox by the web app and written here as `digest` prospects — nothing arrives until a mailbox is connected), **podcast shows that take guests** (monthly: a free podcast directory → the show's RSS feed → the show's own website; pitched only when it is on topic, still publishing, says it takes guests and has a contact on its own domain), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** and their **most-linked pages** (DataForSEO, ≈ $0.07 + ≈ $0.02 a competitor) — the second gives the **linkable-asset ideas** (data study / free tool / template / definitive guide), each tied to the competitor pages that prove it and the referring domains they hold, and never a promise of links. **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1), then the **draft gate** (*LB Draft QA*, L2): claims against the facts on file, no bracket left to fill, the address on their own domain, a real quote from their page, one link to the page we chose on the canonical host, length and one clear ask, the words we never use, the business name as the site model has it — a draft that fails is held as `needs_edit` with its reasons. **Two subjects a batch** (L7): the writer gives every sequence a second subject in the other style, the drafts take the two in turn (A, B, A, B …) and the app shows the reply rate per style — with **no verdict under 30 first e-mails per variant**. Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.
+Rows: `{LINK_OUTREACH_TABLE}`, `{PROSPECT_TABLE}` (new kinds), `{LISTINGS_TABLE}`, `{LINK_IMPACT_TABLE}` (what each won link did, vs the site's other pages), `{CACHE_TABLE}` linkbld:; report + callback `link_builder`.
+**The week as a PDF** (L3): *LB Doc* writes the whole week as one printable document — what to do this week, every opportunity with its qualification, the contacts found on the prospects' own domains, our page and the link text per prospect, each drafted sequence with its status (a held one with the reasons), the listings checklist, the redirects, what the links and the page changes did, and where every figure came from — and *Render PDF LB* turns it into a PDF through Gotenberg: attached to the e-mail and carried in the callback, so the app offers it like the other reports' PDFs. A renderer failure never fails the run (the HTML document goes out instead).""", [-40, -420], 1100, 320, 6)
 L.write('SEO_Agent_Link_Builder.json')
 
 # =============================================================================
@@ -556,10 +598,18 @@ RR.sticky("""## SEO Agent — Reply Reader (v4.13, LINK_BUILDER_SPEC.md §2)
 `POST /webhook/seo-reply-read` (header X-API-Key, credential **SEO API Key**), synchronous. Body: `{ domain, prospect_domain, page_url?, business, signer, facts?, our_subject, our_body, reply_from, reply_subject, reply_text }`. The web app calls it for every reply a person wrote (bounces and automatic replies are sorted by headers in the app). Pages on the prospect's site named in the reply (and the page we pitched) are fetched and checked for our link at once. **Claude Haiku 4.5** (≈ $0.001): class (says_linked / interested / question / wants_payment / link_swap / not_now / declined / unsubscribe / wrong_person / out_of_office / other), one-line summary, return date, referred contact, suggested answer. An opt-out is never missed (rule fallback).""", [-40, -360], 900, 220, 6)
 RR.write('SEO_Agent_Reply_Reader.json')
 
+# R9: the monitors' ledger wiring goes into the same harness file the main workflow's wiring uses (S36 / S57)
+_lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
+_lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}
+_lwj.setdefault('monitors', {}).update(LEDGER_WIRING)   # the Rank Tracker and the Site Tracker add their own rows from their builders
+json.dump(_lwj, open(_lw9, 'w'), indent=1, sort_keys=True)
+print('ledger wiring: ' + str(len(LEDGER_WIRING)) + ' scheduled workflows reserve and settle a run-ledger row')
+
 # the harness compares rows with the table columns defined here (v4.12): harness/table_cols.json
 from ladder_common import RUN_LEDGER_COLS, SITES_COLS, PAGES_COLS, LADDER_COLS, HISTORY_COLS   # v4.14 (D1); v4.15 (G19) site model + page inventory; P2-7 ladder word target; v4.16 (G6) rank history
 from ladder_common import CHECKIN_COLS, OPS_ALERTS_COLS, AUDIT_FINDINGS_COLS   # D25c / D25b / G26 (2026-10-12)
 from ladder_common import PAGE_WATCH_COLS, ALERTS_COLS   # G11 + G25 (2026-10-13): the daily key-page watch rows and the alert rows it writes
+from ladder_common import PROFILE_COLS   # G31 (2026-10-13): the business profile row, now with the stored style guide
 json.dump({'RUN_LEDGER': [c for c, _ in RUN_LEDGER_COLS], 'AI_PAGES': [c for c, _ in AI_PAGES_COLS], 'AI_TARGETS': [c for c, _ in AI_TARGETS_COLS], 'AI_GROWTH': [c for c, _ in AI_GROWTH_COLS], 'PROSPECT': [c for c, _ in PROSPECT_COLS],
            'CACHE': [c for c, _ in CACHE_COLS], 'AI_ANSWERS': [c for c, _ in AI_ANSWERS_COLS], 'MONITORS': [c for c, _ in MONITORS_COLS], 'LINK_OUTREACH': [c for c, _ in LINK_OUTREACH_COLS], 'LISTINGS': [c for c, _ in LISTINGS_COLS], 'LINK_IMPACT': [c for c, _ in LINK_IMPACT_COLS], 'LINKS': [c for c, _ in LINKS_COLS], 'SITES': [c for c, _ in SITES_COLS], 'PAGES': [c for c, _ in PAGES_COLS],
-           'LOG': [c for c, _ in LOG_COLS], 'LADDER': [c for c, _ in LADDER_COLS], 'HISTORY': [c for c, _ in HISTORY_COLS], 'AUDIT_FINDINGS': [c for c, _ in AUDIT_FINDINGS_COLS], 'CHECKIN': [c for c, _ in CHECKIN_COLS], 'OPS_ALERTS': [c for c, _ in OPS_ALERTS_COLS], 'PAGE_WATCH': [c for c, _ in PAGE_WATCH_COLS], 'CONSOLE_ALERTS': [c for c, _ in ALERTS_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write
+           'LOG': [c for c, _ in LOG_COLS], 'LADDER': [c for c, _ in LADDER_COLS], 'HISTORY': [c for c, _ in HISTORY_COLS], 'AUDIT_FINDINGS': [c for c, _ in AUDIT_FINDINGS_COLS], 'CHECKIN': [c for c, _ in CHECKIN_COLS], 'OPS_ALERTS': [c for c, _ in OPS_ALERTS_COLS], 'PAGE_WATCH': [c for c, _ in PAGE_WATCH_COLS], 'CONSOLE_ALERTS': [c for c, _ in ALERTS_COLS], 'PROFILE': [c for c, _ in PROFILE_COLS]}, open(os.path.join(HERE, 'harness', 'table_cols.json'), 'w'), indent=1)   # G19 site model + D5 content log: the rows these nodes write

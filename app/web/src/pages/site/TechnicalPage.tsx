@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { BarChart3, BellRing, CheckCircle2, Circle, Eye, FileArchive, FileSearch, FileText, Gauge, ListChecks, Siren, Sparkles, TrendingUp } from 'lucide-react';
 import { foldMinor, minorFoldNote, titleCase, type AuditPoint, type Finding, type FindingStatus, type IndexCoverage, type PageWatch, type RecheckRequest, type TechnicalData } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { api, errorMessage, fileUrl } from '@/lib/api';
 import { qk, useSiteData } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
@@ -80,7 +81,7 @@ export default function TechnicalPage() {
 }
 
 function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean }) {
-  const { org, page, can } = useSitePage();
+  const { org, site, page, can } = useSitePage();
   const audits = useMemo(() => sortByDate(d.audits, (a) => a.auditedAt), [d.audits]);
 
   if (!audits.length)
@@ -218,12 +219,15 @@ function Technical({ d, refetching }: { d: TechnicalData; refetching: boolean })
                 </h2>
                 <p className="mt-1 max-w-3xl text-sm leading-relaxed text-ink-2">Ready-to-apply files: robots.txt, llms.txt, structured data (JSON-LD), redirects and an internal-links list, with a README on where each one goes.</p>
               </div>
-              {fixZip && (
-                <a href={fileUrl(org.id, fixZip.id, true)} download={fixZip.fileName} className={cn(buttonClass('primary', 'md'), 'shrink-0')}>
-                  <FileArchive className="size-4" aria-hidden />
-                  Download all (.zip)
-                </a>
-              )}
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                {fixZip && (
+                  <a href={fileUrl(org.id, fixZip.id, true)} download={fixZip.fileName} className={cn(buttonClass('primary', 'md'), 'shrink-0')}>
+                    <FileArchive className="size-4" aria-hidden />
+                    Download all (.zip)
+                  </a>
+                )}
+                <GuideButton id="fix-pack" vars={{ domain: site.domain }} label="How to apply it" />
+              </div>
             </div>
             {fixLoose.length > 0 && (
               <span className="mt-3 flex flex-wrap gap-1.5">

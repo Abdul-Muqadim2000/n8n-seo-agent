@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ArrowUpDown, AtSign, BarChart3, BellRing, Bot, CalendarRange, CheckCircle2, Clock, Download, ExternalLink as ExternalIcon, FileText, FileUp, Globe, Link2, ListOrdered, Mail, Network, Plug, Quote, Send, ShieldAlert, Sparkles, Swords, Target, TriangleAlert, Trophy, Unlink, Wrench } from 'lucide-react';
 import { PROSPECT_STATUSES, compactNumber, titleCase, type BacklinkLink, type BacklinkRef, type BacklinksData, type Prospect, type ProspectStatus } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { errorMessage, fileUrl } from '@/lib/api';
 import { useLinkImport, useSiteAdmin, useSiteData } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
@@ -277,7 +278,7 @@ function valueSegments(rows: BacklinkRef[]) {
 
 // ---------------- where the links come from ----------------
 function Coverage({ d }: { d: BacklinksData }) {
-  const { can } = useSitePage();
+  const { can, site } = useSitePage();
   const [upload, setUpload] = useState(false);
   const c = d.latest?.coverage ?? null;
   const st = c?.status ?? null;
@@ -286,10 +287,10 @@ function Coverage({ d }: { d: BacklinksData }) {
   const rows = ['dfs', 'bing', 'gsc', 'ga4', 'cc', 'wiki', 'hn', 'news', 'web', 'import']
     .filter((k) => (c?.perSource[k] ?? 0) > 0 || ['dfs', 'bing', 'gsc', 'ga4', 'cc'].includes(k))
     .map((k) => ({ label: sourceLabel(k), value: c?.perSource[k] ?? 0, sub: c?.onlyIn[k] ? `${c.onlyIn[k]} only here` : undefined }));
-  const status: { name: string; ok: boolean | null; text: string }[] = [
-    { name: 'Bing Webmaster Tools', ok: st ? (st.bing.enabled ? st.bing.connected : null) : null, text: !st ? 'after the next full check' : !st.bing.enabled ? 'not set up on this server (a free API key)' : st.bing.connected ? `${st.bing.links} links read` : st.bing.inAccount === false ? 'add the site in Bing Webmaster Tools (import it from Search Console)' : st.bing.error || 'not connected' },
-    { name: 'Search Console export', ok: gscUpload ? true : false, text: gscUpload ? `${gscUpload.rows} rows, uploaded ${fmtDate(gscUpload.importedAt)}` : 'not uploaded — Google’s own sample of your links' },
-    { name: 'GA4 referrals', ok: st ? st.ga4.connected : null, text: !st ? 'after the next check' : st.ga4.connected ? `${compactNumber(st.ga4.visits)} visits from ${st.ga4.sources} sites` : st.ga4.property ? st.ga4.error || 'no answer' : 'connect GA4 in tracking settings' },
+  const status: { name: string; ok: boolean | null; text: string; guide?: string }[] = [
+    { name: 'Bing Webmaster Tools', guide: 'bing-webmaster', ok: st ? (st.bing.enabled ? st.bing.connected : null) : null, text: !st ? 'after the next full check' : !st.bing.enabled ? 'not set up on this server (a free API key)' : st.bing.connected ? `${st.bing.links} links read` : st.bing.inAccount === false ? 'add the site in Bing Webmaster Tools (import it from Search Console)' : st.bing.error || 'not connected' },
+    { name: 'Search Console export', guide: 'search-console-links-export', ok: gscUpload ? true : false, text: gscUpload ? `${gscUpload.rows} rows, uploaded ${fmtDate(gscUpload.importedAt)}` : 'not uploaded — Google’s own sample of your links' },
+    { name: 'GA4 referrals', guide: 'ga4-access', ok: st ? st.ga4.connected : null, text: !st ? 'after the next check' : st.ga4.connected ? `${compactNumber(st.ga4.visits)} visits from ${st.ga4.sources} sites` : st.ga4.property ? st.ga4.error || 'no answer' : 'connect GA4 in tracking settings' },
     { name: 'Common Crawl web graph', ok: d.linkGraph ? true : null, text: d.linkGraph ? `release ${d.linkGraph.release}` : 'the monthly job has not written this site yet' },
   ];
   return (
@@ -329,6 +330,7 @@ function Coverage({ d }: { d: BacklinksData }) {
                     {s.ok === true ? <StatusBadge tone="good">On</StatusBadge> : s.ok === false ? <StatusBadge tone="warning">Missing</StatusBadge> : <Badge>Waiting</Badge>}
                   </div>
                   <p className="text-xs text-ink-3">{s.text}</p>
+                  {s.ok !== true && s.guide && <GuideButton id={s.guide} vars={{ domain: site.domain }} variant="link" label="Show me how" className="mt-1" />}
                 </div>
               </li>
             ))}
@@ -374,12 +376,15 @@ function ImportDialog({ onClose }: { onClose: () => void }) {
         </Button>
       }
     >
-      <ol className="mb-4 list-decimal space-y-1 pl-5 text-[13px] text-ink-2">
+      <ol className="mb-3 list-decimal space-y-1 pl-5 text-[13px] text-ink-2">
         <li>
           In <ExternalLink href="https://search.google.com/search-console/links">Search Console → Links</ExternalLink>, choose <b>Export external links → Latest links</b> (or More sample links), then <b>Download CSV</b>.
         </li>
         <li>Upload the file here. A new upload of the same kind replaces the old one.</li>
       </ol>
+      <div className="mb-4">
+        <GuideButton id="search-console-links-export" vars={{ domain: site.domain }} label="Walk me through the export" />
+      </div>
       <Field label="CSV file" hint={`"Top linking sites" works too. A backlink CSV from another tool also works (Ahrefs Webmaster Tools is free for your own site).`}>
         {(f) => <Input {...f} ref={file} type="file" accept=".csv,text/csv" onChange={(e) => setName(e.target.files?.[0]?.name ?? '')} />}
       </Field>

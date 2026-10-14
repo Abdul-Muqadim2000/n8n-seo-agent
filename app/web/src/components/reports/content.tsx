@@ -48,7 +48,16 @@ export function ContentReport({ report }: { report: ReportDetail }) {
   const existing = obj(p.existing_page);
   const pageRole = str(meta.page_role);
   const qa = str(p.qa_summary) || str(meta.qa_summary);
-  const qaOk = /passed/i.test(qa);
+  // R11 (re-rating, 2026-10-13): a run that used up its editing rounds with the quality gate still failing is delivered as a DRAFT.
+  // Exec 521 shipped a page with 12 placeholders and 40% topic coverage against a target of 68 while the app showed only
+  // "Quality check: 6 item(s) to review". The engine now says so outright (`qa_not_ready`, `qa_label`, `qa_reasons`, meta.quality,
+  // meta.publishable), with the LAST quality round's counts, and this page leads with it.
+  const quality = obj(p.qa_quality ?? meta.quality);
+  const notReady = p.qa_not_ready === true || quality.not_ready === true;
+  const publishable = p.qa_publishable === true || meta.publishable === true || quality.publishable === true;
+  const qaLabel = str(p.qa_label) || str(quality.label);
+  const qaReasons = strs(p.qa_reasons ?? quality.reasons);
+  const qaOk = !notReady && (publishable || /passed/i.test(qa));
   const country = str(p.country);
   const volume = num(kd.search_volume);
   const kdValue = num(kd.keyword_difficulty);
@@ -98,7 +107,13 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         description={details.length ? details.join(' · ') : undefined}
         aside={
           html ? (
-            <ScoreMark score={contentScore} label="Content score" status={qa ? (qaOk ? 'Quality check passed' : 'To review') : undefined} statusTone={qa ? (qaOk ? 'good' : 'warning') : undefined} caption={qa ? qa.replace(/^Quality check:\s*/i, 'Quality check: ') : undefined} />
+            <ScoreMark
+              score={contentScore}
+              label="Content score"
+              status={notReady ? 'Not ready to publish' : qa ? (qaOk ? 'Quality check passed' : 'To review') : undefined}
+              statusTone={notReady ? 'critical' : qa ? (qaOk ? 'good' : 'warning') : undefined}
+              caption={qa ? qa.replace(/^Quality check:\s*/i, 'Quality check: ') : undefined}
+            />
           ) : verdict || score != null ? (
             <ScoreMark score={score} label="Opportunity score" verdict={verdict || undefined} caption={avoid ? 'The research advises against a page for this keyword.' : 'From the competitor, keyword and live Google research.'} />
           ) : undefined
@@ -214,7 +229,21 @@ export function ContentReport({ report }: { report: ReportDetail }) {
         </Block>
       )}
 
-      {html && <PageChecks html={html} meta={meta} qa={qa} qaOk={qaOk} ledger={obj(p.run_ledger)} />}
+      {/* R11: the page is here to finish by hand, not to publish as it is — said before the SEO checks and the page itself */}
+      {html && notReady && (
+        <Callout tone="critical" title={qaLabel || 'This page did not pass the quality check — not ready to publish'}>
+          The editor had {num(quality.max_rounds) ?? 2} round(s) and the page still fails the checks below, so it is delivered as a draft to finish by hand.
+          {qaReasons.length > 0 && (
+            <ul className="mt-1.5 list-disc space-y-0.5 pl-5">
+              {qaReasons.slice(0, 5).map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          )}
+        </Callout>
+      )}
+
+      {html && <PageChecks html={html} meta={meta} qa={qa} qaOk={qaOk} notReady={notReady} qaLabel={qaLabel} ledger={obj(p.run_ledger)} />}
 
       {html ? (
         <Block
@@ -249,7 +278,7 @@ export function ContentReport({ report }: { report: ReportDetail }) {
  * The written page's SEO checks as ticks (title and description lengths, H1, structured data, links, image plan, placeholders,
  * the quality check) and the chain of AI steps that wrote it. Every tick is a fact from meta.json, stated next to it.
  */
-function PageChecks({ html, meta, qa, qaOk, ledger }: { html: string; meta: P; qa: string; qaOk: boolean; ledger: P }) {
+function PageChecks({ html, meta, qa, qaOk, notReady, qaLabel, ledger }: { html: string; meta: P; qa: string; qaOk: boolean; notReady?: boolean; qaLabel?: string; ledger: P }) {
   const placeholders = useMemo(() => findPlaceholders(`${html}\n${JSON.stringify(meta)}`), [html, meta]);
   const phCount = placeholders.reduce((s, x) => s + x.count, 0);
   const titleLen = num(meta.title_length) ?? (str(meta.title).length || null);
@@ -306,7 +335,8 @@ function PageChecks({ html, meta, qa, qaOk, ledger }: { html: string; meta: P; q
         ]
       : []),
     { ok: phCount === 0, label: 'Placeholders to fill', detail: phCount ? `${phCount} left (see the preview)` : 'None' },
-    ...(qa ? [{ ok: qaOk, label: 'Quality check', detail: qa.replace(/^Quality check:\s*/i, '') }] : []),
+    // R11: the gate's own verdict, from the last quality round — "to review" never stands in for "did not pass"
+    ...(qa || notReady ? [{ ok: notReady ? false : qaOk, label: 'Quality check', detail: notReady ? qaLabel || 'Did not pass — not ready to publish' : qa.replace(/^Quality check:\s*/i, '') }] : []),
   ];
   const steps = strs(ledger.ai_nodes);
   return (
@@ -330,7 +360,15 @@ function PageChecks({ html, meta, qa, qaOk, ledger }: { html: string; meta: P; q
             {qa && (
               <li className="flex items-center gap-1.5">
                 <ArrowRight className="size-3.5 text-ink-3" aria-hidden />
-                <span className={qaOk ? 'inline-flex h-7 items-center gap-1.5 rounded-full bg-good-soft px-2.5 text-xs font-medium text-good-text' : 'inline-flex h-7 items-center gap-1.5 rounded-full bg-warning-soft px-2.5 text-xs font-medium text-warning-text'}>
+                <span
+                  className={
+                    qaOk
+                      ? 'inline-flex h-7 items-center gap-1.5 rounded-full bg-good-soft px-2.5 text-xs font-medium text-good-text'
+                      : notReady
+                        ? 'inline-flex h-7 items-center gap-1.5 rounded-full bg-critical-soft px-2.5 text-xs font-medium text-critical-text'
+                        : 'inline-flex h-7 items-center gap-1.5 rounded-full bg-warning-soft px-2.5 text-xs font-medium text-warning-text'
+                  }
+                >
                   <ListChecks className="size-3.5" aria-hidden />
                   {qa}
                 </span>

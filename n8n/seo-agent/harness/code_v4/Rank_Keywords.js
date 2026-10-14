@@ -106,6 +106,100 @@ const overlapTokens = (s) => { const out = []; for (const t of String(s || '').t
   const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, '').replace(/[^a-z0-9]/g, ''); if (w && !out.includes(w)) out.push(w); } return out; };
 const overlapScore = (a, b) => { if (!a.length || !b.length) return 0; const sb = new Set(b); const common = a.filter(t => sb.has(t)).length; return common / (a.length + b.length - common); };
 const keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b)) >= 0.75;
+// ---- topic radius (G32, 2026-10-13, system review FIX_PLAN.md G32; criterion K12 in CRITERIA_keywords_content.md) ----
+// "Which topics is this website close enough to win, and which are a stretch?" — until now the system answered that per keyword
+// (difficulty for your site, `_reach.js`) but never per TOPIC, so a plan could quietly wander off what the site actually sells: the
+// 2026-10-11 review found the topic check was a warning on one keyword, never a picture of the radius (K12 scored 5 of 10).
+// RAD.of() groups this run's keywords into topics and gives each one a verdict with the evidence behind it:
+//   in_reach — the difficulty sits inside the site's reach (or the site already ranks in the top 20 for it), and something the site
+//              sells or has a page about names the topic;
+//   stretch  — within sight but above the reach, or nothing the site sells names it: possible, but it needs the easier topics (and
+//              links) first;
+//   far      — very hard for this site today, or not realistic at all (another company's brand, a government portal: `_fit_gate.js`
+//              already refuses those keywords, so this is only about difficulty).
+// Nothing here blocks anything on its own: it is the block of evidence a plan, a report and the app show, and `RAD.pick()` answers
+// "is this topic inside the radius?" for a caller that wants to warn or to ask for a confirmation.
+// It needs the reach kit in the same node (`difficultyForYou`, REACH_CFG, REACH_DIFF_LABEL) — the build asserts that.
+const RAD = (() => {
+  const CFG = { max_topics: 40, in_reach: ['easy', 'reachable'], stretch: ['hard'], min_service_tokens: 1 };
+  const LABEL = { in_reach: 'Within reach', stretch: 'A stretch', far: 'Out of reach for now' };
+  const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my', 'our', 'service', 'services', 'company', 'companies', 'solution', 'solutions', 'provider', 'providers', 'software', 'system', 'systems']);
+  const S = (v) => String(v == null ? '' : v);
+  const num = (v) => (v === '' || v == null || typeof v === 'boolean' || !Number.isFinite(Number(v))) ? null : Number(v);
+  const tokens = (s) => { const out = []; for (const t of S(s).toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 2 || STOP.has(t)) continue;
+    const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, ''); if (w && !out.includes(w)) out.push(w); } return out; };
+  const shared = (a, b) => { const sb = new Set(b); return a.filter(t => sb.has(t)); };
+  // what the site sells / already writes about, as one token set per source, so the evidence can name the matching one
+  const anchors = (o) => {
+    const list = [];
+    for (const sv of (o.services || [])) if (S(sv).trim()) list.push({ kind: 'service', label: S(sv).trim(), tokens: tokens(sv) });
+    for (const pg of (o.pages || [])) { const label = S(pg.title || pg.url); if (label) list.push({ kind: 'page', label, url: S(pg.url), tokens: tokens([pg.title, pg.keyword, S(pg.url).replace(/^https?:\/\/[^/]+/i, '')].join(' ')) }); }
+    for (const tp of (o.site_topics || [])) if (S(tp).trim()) list.push({ kind: 'topic', label: S(tp).trim(), tokens: tokens(tp) });
+    return list.filter(a => a.tokens.length);
+  };
+  // one topic's verdict and the evidence behind it
+  const judge = (t, reach, anchorList, o) => {
+    const kd = num(t.kd), pos = num(t.your_position);
+    const diff = difficultyForYou(kd, reach, { position: pos });
+    const toks = tokens([t.topic, t.primary_keyword, (t.keywords || []).map(k => S(k.keyword || k)).join(' ')].join(' '));
+    const hits = anchorList.map(a => ({ a, common: shared(toks, a.tokens) })).filter(x => x.common.length >= CFG.min_service_tokens)
+      .sort((x, y) => y.common.length - x.common.length);
+    const near = hits[0] || null;
+    const evidence = [];
+    if (pos != null && pos >= 1 && pos <= REACH_CFG.easy_position) evidence.push('you already rank #' + pos + ' for "' + t.primary_keyword + '"');
+    evidence.push(kd == null ? 'no difficulty figure for "' + t.primary_keyword + '" (counted as ' + (reach + REACH_CFG.unknown_kd) + ', your reach is ' + reach + ')'
+      : 'difficulty ' + kd + ' against your reach ' + reach);
+    if (near) evidence.push(near.a.kind === 'service' ? 'it matches what you sell: "' + near.a.label + '"'
+      : near.a.kind === 'page' ? 'you already have a page on it: ' + (near.a.url || near.a.label)
+      : 'it is one of your topics: "' + near.a.label + '"');
+    else if (anchorList.length) evidence.push('nothing you sell or have a page about names this topic');
+    if (num(t.volume) != null) evidence.push(Number(t.volume).toLocaleString('en-GB') + ' searches a month across ' + (num(t.keyword_count) || 1) + ' keyword(s)');
+    let verdict = CFG.in_reach.includes(diff) ? 'in_reach' : CFG.stretch.includes(diff) ? 'stretch' : 'far';
+    let reason = verdict === 'in_reach' ? REACH_DIFF_LABEL[diff] : verdict === 'stretch' ? 'above your reach today, but within sight' : REACH_DIFF_LABEL[diff] || 'very hard for your site today';
+    // off what the site sells: a topic can be easy to rank for and still be the wrong topic, so it is a stretch at best
+    if (verdict === 'in_reach' && !near && anchorList.length && !(pos != null && pos >= 1 && pos <= REACH_CFG.easy_position)) {
+      verdict = 'stretch'; reason = 'the difficulty is inside your reach, but nothing you sell or write about names this topic';
+    }
+    return { topic: t.topic, primary_keyword: t.primary_keyword, kd: kd, volume: num(t.volume), keyword_count: num(t.keyword_count) || (t.keywords || []).length || 1,
+      your_position: pos, difficulty_for_you: diff, verdict, verdict_label: LABEL[verdict], reason, basis: near ? near.a.kind : 'none', matched: near ? near.a.label : '', evidence };
+  };
+  /**
+   * o: { reach, reach_method?, topics: [{ topic, primary_keyword, kd, volume, keyword_count, your_position?, keywords? }],
+   *      services?, pages?, site_topics?, checked_at?, domain? }
+   * -> { reach, in_reach: [], stretch: [], far: [], topics: [], summary, note, measured }
+   */
+  const of = (o) => {
+    const x = o || {};
+    const reach = num(x.reach) == null ? null : Number(x.reach);
+    const r = reach == null ? 10 : reach;
+    const anchorList = anchors(x);
+    const topics = (x.topics || []).filter(t => t && S(t.topic || t.primary_keyword)).slice(0, CFG.max_topics)
+      .map(t => judge({ topic: S(t.topic || t.primary_keyword), primary_keyword: S(t.primary_keyword || t.topic), kd: t.kd, volume: t.volume, keyword_count: t.keyword_count, your_position: t.your_position, keywords: t.keywords }, r, anchorList, x));
+    const pick1 = (v) => topics.filter(t => t.verdict === v);
+    const inR = pick1('in_reach'), st = pick1('stretch'), far = pick1('far');
+    const name = (list, k) => list.slice(0, k).map(t => '"' + t.topic + '"').join(', ');
+    const summary = !topics.length ? 'Not enough keyword data to draw your topic radius yet.'
+      : (inR.length ? inR.length + ' topic(s) are within reach for ' + S(x.domain || 'your site') + ' today (' + name(inR, 3) + (inR.length > 3 ? ' …' : '') + ')' : 'No topic in this research is within reach today')
+        + (st.length ? '; ' + st.length + ' are a stretch (' + name(st, 3) + (st.length > 3 ? ' …' : '') + ')' : '')
+        + (far.length ? '; ' + far.length + ' are out of reach for now (' + name(far, 2) + (far.length > 2 ? ' …' : '') + ')' : '') + '.';
+    const note = reach == null
+      ? 'Your reach could not be measured this run, so these verdicts use the smallest default (' + r + '): treat them as provisional.'
+      : 'Your reach is the difficulty your site already wins — the 75th percentile of the difficulty of the keywords it ranks in the top 10 for'
+        + (x.reach_method === 'size' ? ' (measured from the size of your ranking profile this time)' : x.reach_method === 'default' ? ' (no ranking data: the default for a new site)' : '')
+        + '. A stretch topic is not a no: it is the one to come back to once the topics within reach are won and links have been earned.';
+    return { reach, reach_method: S(x.reach_method), measured: reach != null, topics, in_reach: inR, stretch: st, far, summary, note, checked_at: S(x.checked_at) };
+  };
+  /** is one topic (or keyword) inside the radius? -> the topic's verdict, or null when it is not among the topics */
+  const pick = (radius, topic) => { const t = tokens(topic); if (!t.length) return null;
+    const all = ((radius || {}).topics || []).map(x => ({ x, common: shared(t, tokens([x.topic, x.primary_keyword].join(' '))) }))
+      .filter(o => o.common.length).sort((a, b) => b.common.length - a.common.length);
+    return all.length ? all[0].x : null; };
+  /** one topic's verdict as a sentence (a plan's notes, a tooltip): "A stretch — … (difficulty 55 against your reach 28; …)" */
+  const line = (t) => !t ? '' : LABEL[t.verdict] + ' — ' + t.reason + ' (' + (t.evidence || []).join('; ') + ')';
+  /** the rows a report prints, in reading order: within reach, then the stretches, then what is out of reach for now */
+  const rows = (radius) => { const rad = radius || {}; return [...(rad.in_reach || []), ...(rad.stretch || []), ...(rad.far || [])]; };
+  return { of, pick, rows, line, LABEL, CFG, tokens };
+})();
 // ---- fit gate (2026-10-11, FIX_PLAN D4 / D8): ONE rule for keywords that no page of this website should target. Inlined by the build
 // (the FIT_GATE placeholder) into Analyze Keywords (full report: keyword gap, easy wins, opportunities), Rank Keywords (discovery), Ladder Pool /
 // Ladder Plan (ladder rungs and the main keyword), Relevance Chunks (the brands the AI screen is told about) and Brief Context (the hub
@@ -118,6 +212,9 @@ const keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b
 //                    status word ("fta portal", "emirates id status"), or, with its results page in hand (ctx.serp), 3+ of the top 5 results
 //                    are on government hosts (.gov / .gov.xx / .gouv.xx / u.ae …);
 //   'portal'       — a login / portal / password / status check / renewal / verification / application task: people want the owner's own site;
+//   'off topic'    — with topics on file (ctx.topics, R13): under a quarter of the keyword's own words have anything to do with what the
+//                    site sells ("character ai", "mofa attestation dubai", "mh enterprises uae");
+//   'too broad'    — with topics on file: nothing but generic or place words is left of it ("ai", "google ai", "microsoft ai");
 //   'other brand'  — one of its words is the label of a declared competitor (cleartax.com ↔ "cleartax"), of a domain on the results page
 //                    (facts.ae ↔ "facts"), or a brand name AI uses for another company (seo_cache ai_brands: name -> domain); with the
 //                    keyword's own results page in hand also when one domain whose label is in the keyword holds 3+ of the top 5.
@@ -137,7 +234,10 @@ const keywordsOverlap = (a, b) => overlapScore(overlapTokens(a), overlapTokens(b
 const FIT_CFG = { min_label: 4, serp_top: 5, serp_hold: 3 };
 const FIT_STOP = new Set(['the', 'a', 'an', 'and', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'my', 'your', 'our', 'is', 'are', 'what', 'how', 'me']);
 const FIT_GEO = new Set(['uae', 'u.a.e', 'dubai', 'abu', 'dhabi', 'sharjah', 'ajman', 'fujairah', 'ras', 'al', 'khaimah', 'umm', 'quwain', 'emirates', 'gcc', 'saudi', 'arabia', 'ksa', 'riyadh', 'jeddah', 'qatar', 'doha', 'oman', 'muscat', 'bahrain', 'kuwait', 'egypt', 'india', 'pakistan', 'uk', 'usa', 'us', 'online', 'portal']);
-const FIT_GENERIC = new Set(['software', 'softwares', 'services', 'service', 'erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'tax', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll', 'finance', 'financial', 'cloud', 'digital', 'online', 'web', 'data', 'tech', 'technology', 'technologies', 'solutions', 'solution', 'systems', 'system', 'business', 'company', 'group', 'global', 'international', 'gulf', 'arab', 'arabia', 'emirates', 'national', 'consulting', 'consultants', 'consultancy', 'partners', 'partner', 'network', 'news', 'blog', 'guide', 'guides', 'info', 'best', 'top', 'free', 'app', 'apps', 'shop', 'store', 'market', 'media', 'academy', 'institute', 'university', 'school', 'bank', 'pay', 'pro', 'plus', 'hub', 'one', 'first', 'smart', 'easy', 'get', 'go', 'ae', 'com', 'net', 'org', 'home', 'house', 'world', 'city', 'daily', 'times', 'post', 'review', 'reviews', 'compare', 'comparison', 'list', 'directory', 'jobs', 'careers', 'wiki', 'wikipedia', 'youtube', 'linkedin', 'facebook', 'instagram', 'twitter', 'reddit', 'quora', 'medium', 'google', 'microsoft', 'amazon', 'apple']);
+// R13 (2026-10-13): 'ai' joined this list — it is a category word, not a topic. With it in, "ai" (165,000/mo) and "google ai" are left with
+// nothing of their own ("too broad") while "character ai", "humanize ai", "meta ai" and "blackbox ai" are judged on the word that is really
+// theirs; a keyword that names a service of the site ("ai automation uae") still matches on that service's own words.
+const FIT_GENERIC = new Set(['ai', 'software', 'softwares', 'services', 'service', 'erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'tax', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll', 'finance', 'financial', 'cloud', 'digital', 'online', 'web', 'data', 'tech', 'technology', 'technologies', 'solutions', 'solution', 'systems', 'system', 'business', 'company', 'group', 'global', 'international', 'gulf', 'arab', 'arabia', 'emirates', 'national', 'consulting', 'consultants', 'consultancy', 'partners', 'partner', 'network', 'news', 'blog', 'guide', 'guides', 'info', 'best', 'top', 'free', 'app', 'apps', 'shop', 'store', 'market', 'media', 'academy', 'institute', 'university', 'school', 'bank', 'pay', 'pro', 'plus', 'hub', 'one', 'first', 'smart', 'easy', 'get', 'go', 'ae', 'com', 'net', 'org', 'home', 'house', 'world', 'city', 'daily', 'times', 'post', 'review', 'reviews', 'compare', 'comparison', 'list', 'directory', 'jobs', 'careers', 'wiki', 'wikipedia', 'youtube', 'linkedin', 'facebook', 'instagram', 'twitter', 'reddit', 'quora', 'medium', 'google', 'microsoft', 'amazon', 'apple']);
 const FIT_GOV_WORDS = /\b(ministry|ministries|authority|authorities|federal|government|govt|municipality|municipal|embassy|consulate|police|courts?|customs|immigration|department of|public prosecution|parliament|chamber of commerce|free zone authority)\b/;
 const FIT_GOV_NAMES = /\b(fta|emaratax|emara ?tax|tax authority|mohre|mohap|mofa|moec|gdrfa|icp|ica|rta|dewa|sewa|fewa|addc|aadc|dha|doh|ded|tdra|adjd|ejari|dubai land department|dld|dubai economy|dubai courts|zatca|gazt|gosi|qiwa|absher|muqeem|mudad|hrsd|misa|nafath|tawtheeq|uae pass|smart pass|amer cent(er|re)|tasheel|tawjeeh|emirates id|emirates identity|national id|i ?d card|identity card|labou?r card|work permit status|visa status|visa check|passport status|establishment card|golden visa status|trn verification|trn check|trn lookup|tax registration number check)\b/;
 const FIT_PORTAL = /\b(log ?in|logins|sign ?in|sign ?up|password|passwords|portal|portals|e ?services?|customer care|customer service number|helpline|toll ?free|contact number|phone number|status|status check|check status|status enquiry|application status|track(ing)? (status|application|order)|renewal|renew|verification|verify|apply online|online application|download (the )?app|app download|complaint|complaints|fine check|traffic fines?|balance check|otp)\b/;
@@ -156,6 +256,44 @@ const fitLabels = (domain, protect) => { const h = fitHost(domain); if (!h) retu
 const fitLearnedBrands = (rows) => { const out = {}; for (const r of (rows || [])) { const j = r && r.json ? r.json : r; if (!j || typeof j !== 'object' || !/^ai_brands:/.test(String(j.key || ''))) continue; let v = j.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } } if (v && typeof v === 'object') for (const [name, d] of Object.entries(v)) if (name && d) out[String(name)] = String(d); } return out; };
 // the organic domains of a DataForSEO SERP answer, in rank order (for ctx.serp)
 const fitSerpDomains = (res) => { try { return ((((res || {}).tasks || [])[0] || {}).result || [])[0].items.filter(x => x && x.type === 'organic').sort((a, b) => (a.rank_group || 99) - (b.rank_group || 99)).map(x => fitHost(x.domain || String(x.url || '').replace(/^https?:\/\//, '').split('/')[0])).filter(Boolean); } catch (e) { return []; } };
+// ---- R13 (2026-10-13, re-rating §3.11): TOPIC DISTANCE, the same 25% bar the outreach gate uses (OK.OFF_TOPIC in _outreach_kit.js) ----
+// The full report's §4a offered "ai" (165,000/mo), "character ai" (110,000), "google ai", "humanize ai", "meta ai", "blackbox ai",
+// "mh enterprises uae" and "microsoft ai", and the gap kept "mofa attestation dubai" and "how to check emirates id status with passport
+// number", under a High finding telling the owner to build pages for them: the gate only ever refused classes somebody had listed
+// (navigational, a declared competitor, a results-page label), so a brand or a subject nobody listed walked straight through. fitTopic()
+// measures what share of a keyword's OWN distinctive words the site's topics carry. Place names and generic category words are neutral —
+// they count for neither side, so "best erp software dubai" is judged on "erp" — and a keyword left with nothing but generic or place
+// words ("ai", "google ai", "microsoft ai") is too broad for any page of this site to win.
+const FIT_TOPIC_BAR = 0.25;
+const fitStem = (w) => w.length > 5 ? w.replace(/(ingly|ings|ing|ments|ment|ations|ation|ions|ion|ies|ers|er|ed|es|s|e)$/, '') : w;   // the outreach kit's stem: invoice / invoices / invoicing -> invoic
+const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).toLowerCase()
+  .split(/[^a-z0-9]+/).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
+function fitTopic(keyword, topics, ctx) {
+  const o = ctx || {};
+  const bar = typeof o.topic_bar === 'number' ? o.topic_bar : FIT_TOPIC_BAR;
+  const label = String(o.topic_label || 'what this website sells');
+  const T = fitTopicWords(topics);
+  // With little on file the measure would refuse good keywords, so under topic_min_words (12) distinctive words it judges nothing: a site
+  // whose services and description are a single line gets no topic refusals at all ("no evidence, no refusal").
+  if (T.size < (typeof o.topic_min_words === 'number' ? o.topic_min_words : 12)) return { ok: true, reason: '', detail: T.size ? 'too few topic words on file (' + T.size + ') to judge topic distance' : 'no topics on file, so topic distance was not judged', share: null };
+  const toks = fitTokens(keyword);
+  const own = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t));
+  const known = [...T];
+  const matches = (t) => { const s = fitStem(t); return T.has(s) || known.some(x => x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0)); };
+  // a keyword made only of category and place words is a head term: it is on topic when at least two of those categories are the site's own
+  // ("erp software uae", "best erp software dubai"), and too broad when only one is and there is no market in it either ("ai", "google ai")
+  if (!own.length) {
+    const cats = toks.filter(t => FIT_GENERIC.has(t)).filter(matches);
+    const hasPlace = toks.some(t => FIT_GEO.has(t));
+    if (cats.length >= 2 || (cats.length >= 1 && hasPlace)) return { ok: true, reason: '', detail: 'a category you sell (' + cats.join(', ') + ')' + (hasPlace ? ' in your market' : ''), share: 1 };
+    return { ok: false, reason: 'too broad', detail: 'only category or place words, so it says nothing about ' + label + ' ("' + String(keyword || '').trim() + '")', share: cats.length ? 0.5 : 0 };
+  }
+  const hits = own.filter(matches);
+  const share = Math.round(100 * hits.length / own.length) / 100;
+  if (share < bar) return { ok: false, reason: 'off topic', detail: Math.round(share * 100) + '% of its own words match ' + label + ' (' + Math.round(bar * 100) + '% is the bar): '
+    + own.filter(t => hits.indexOf(t) < 0).slice(0, 4).join(', ') + ' — add it to your services if you do sell it', share };
+  return { ok: true, reason: '', detail: Math.round(share * 100) + '% of its own words match ' + label, share };
+}
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
 function fitGate(keyword, ctx) {
@@ -200,8 +338,11 @@ function fitGate(keyword, ctx) {
     const count = {}; for (const h of serp) count[h] = (count[h] || 0) + 1;
     for (const [h, n] of Object.entries(count)) if (n >= FIT_CFG.serp_hold && fitLabels(h, protect).some(l => toks.includes(l))) return { ok: false, reason: 'other brand', detail: h + ' holds ' + n + ' of the top ' + serp.length + ' results: a brand query' };
   }
-  // 6. relevance to the website's services (G19): not built yet — the hook
+  // 6. relevance to the website's services: the caller's own hook (G19) first, else the topic bar when the caller gave topics (R13)
   if (typeof ctx.relevance === 'function') { const r = ctx.relevance(kw); if (r && r.ok === false) return { ok: false, reason: r.reason || 'off topic', detail: r.detail || '' }; }
+  else if (ctx.topics && (Array.isArray(ctx.topics) ? ctx.topics.length : String(ctx.topics).trim())) {
+    const t = fitTopic(kw, ctx.topics, ctx); if (!t.ok) return { ok: false, reason: t.reason, detail: t.detail };
+  }
   return { ok: true };
 }
 // one line for reports and prompts: "facts (facts.ae), cleartax (cleartax.com), Zoho Books (zoho.com)"
@@ -210,6 +351,27 @@ const fitBrandList = (ctx, protect) => { const out = []; const seen = new Set();
   for (const d of (ctx.serp_domains || [])) for (const l of fitLabels(d, protect)) add(l + ' (' + fitHost(d) + ')');
   for (const [n, d] of Object.entries(ctx.brands || {})) add(n + ' (' + fitHost(d) + ')');
   return out.slice(0, 40).join(', '); };
+// ---- R16 (2026-10-13, system review FIX_PLAN §3.11): the same gate, run over a row somebody stored BEFORE the gate existed ----
+// The gate stops a new keyword, but nothing ever revisited the rows already in `seo_ladders`: rung 2 of lad_mv40b6s9h5a8 still held
+// "facts erp" (facts.ae, a competing UAE ERP vendor) as a planned page, so the Rank Tracker's report of 2026-10-12 listed it and the
+// Content Cadence would have written it. `fitStored` is `fitGate` plus the one rule a stored row needs: a rung whose page is already
+// written or published is never dropped — that page is live work, it keeps being tracked, and it is flagged instead of hidden.
+// Returns { ok, live, flagged, reason, detail, note }: ok false = leave it out of what is written and reported; `note` is the sentence
+// a report or the repair script prints, so the reason always travels with the decision.
+const fitStoredLive = (row) => { const r = row || {}; const st = String(r.status || '').toLowerCase();
+  return st === 'writing' || st === 'published' || r.page_exists === true || r.page_exists === 'true' || !!String(r.published_url || '').trim(); };
+const fitStored = (row, ctx) => {
+  const r = row || {}; const kw = String(r.keyword || '').trim();
+  const live = fitStoredLive(r) || (ctx || {}).written === true;
+  if (!kw) return { ok: false, live, flagged: false, reason: 'empty', detail: 'the row has no keyword', note: 'a stored row with no keyword' };
+  const g = fitGate(kw, ctx || {});
+  if (g.ok) return { ok: true, live, flagged: false, reason: '', detail: '', note: '' };
+  const why = '"' + kw + '" is not a search this website should target: ' + g.detail + ' (' + g.reason + ')';
+  if (live) return { ok: true, live: true, flagged: true, reason: g.reason, detail: g.detail,
+    note: why + ' — its page is already written, so it stays tracked; decide whether to keep it' };
+  return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
+    note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
+};
 // ---- the one site model (G19, 2026-10-12; see SITE_MODEL_SPEC.md; the builders inline this file where a node asks for the SITE_MODEL kit) ----
 // Every workflow reads the same facts about a site through SM: the canonical host, the business name / logo / NAP (seo_profiles ->
 // the homepage Organization / LocalBusiness schema -> Google Business Profile -> the fields the web app sent), the services and nav
@@ -459,21 +621,39 @@ const KWI = (() => {
       // which page, if any, already answers this search: the page inventory first (D11), the page Search Console reports only when
       // the inventory is empty (then it is the best evidence we have, and it is labelled as such)
       const inv = matchPage(q);
-      const row_page = (c.use_row_page && S(r.page)) ? { url: S(r.page), title: '', matched_by: 'search console page' } : null;
+      // R12 (2026-10-13, re-rating §3.11): 11 of 25 rows read "no page of yours answers this search" while the same row named a live
+      // 200-OK page of the site — one of them ranking #6.2 — because only the slug / title match counted and the URL Search Console
+      // itself reports was ignored whenever the inventory was non-empty. A URL on this site is evidence: it is the answering page, with
+      // its own label ("the page that gets the impressions does not target this search"), so the report never asks the owner for a second
+      // page for a search they already rank for (D11's cannibalisation rule, in the discovery path).
+      const rowUrl = S(r.page);
+      const rowBare = bare(rowUrl);
+      const rowOnSite = !!rowUrl && !!rowBare && (!dom || rowBare === dom || rowBare.endsWith('.' + dom));
+      const row_page = (rowUrl && (c.use_row_page || rowOnSite))
+        ? { url: rowUrl, title: '', matched_by: c.use_row_page ? 'search console page' : 'impressions' } : null;
       const answered_by = inv ? { url: S(inv.url), title: S(inv.title), matched_by: S(inv.matched_by) || 'inventory' } : row_page;
       const kinds = [];
       if (!answered_by) kinds.push('no_page');
-      if (position >= c.striking_min && position <= c.striking_max) kinds.push('striking');
+      else if (!inv && answered_by.matched_by === 'impressions') kinds.push('page_mismatch');
+      const striking = position >= c.striking_min && position <= c.striking_max;
+      if (striking) kinds.push('striking');
+      const posTxt = position > 0 ? '#' + (Math.round(position * 10) / 10) : 'unreported';
+      const why = kinds.indexOf('no_page') >= 0 ? 'no page of yours answers this search'
+        : kinds.indexOf('page_mismatch') >= 0 ? 'the page that gets the impressions does not target this search'
+          + (striking ? ' (you rank ' + posTxt + ' with it — striking distance)' : ' (you rank ' + posTxt + ' with it)')
+          : striking ? 'you rank ' + posTxt + ' — striking distance' : 'a page of yours already answers this search';
       considered.push({ keyword: q, impressions, clicks, position: position > 0 ? Math.round(position * 10) / 10 : null,
-        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: S(r.page), answered_by, kinds,
+        ctr: impressions ? Math.round(clicks / impressions * 1000) / 10 : 0, page: rowUrl, answered_by, kinds, why,
         period_end: period, period_days: c.period_days, tracked: yes(r.tracked) });
     }
     const wanted = considered.filter(q => q.kinds.length);
-    const order = [...wanted].sort((a, b) => (b.kinds.indexOf('no_page') >= 0 ? 1 : 0) - (a.kinds.indexOf('no_page') >= 0 ? 1 : 0) || b.impressions - a.impressions);
+    const rank = (x) => x.kinds.indexOf('no_page') >= 0 ? 2 : x.kinds.indexOf('page_mismatch') >= 0 ? 1 : 0;   // R12: a search with no page at all first, then one whose ranking page targets something else
+    const order = [...wanted].sort((a, b) => rank(b) - rank(a) || b.impressions - a.impressions);
     return { available: all.length > 0, period_end: period, period_days: c.period_days, rows: all.length, considered: considered.length,
       page_check: (num(c.pages_known) || 0) > 0 ? 'page inventory' : (c.use_row_page ? 'search console page' : 'unavailable'),
       pages_known: num(c.pages_known) || 0,
       queries: wanted, no_page: wanted.filter(q => q.kinds.indexOf('no_page') >= 0), striking: wanted.filter(q => q.kinds.indexOf('striking') >= 0),
+      mismatch: wanted.filter(q => q.kinds.indexOf('page_mismatch') >= 0),
       answered: considered.filter(q => !q.kinds.length && q.answered_by).slice(0, 20),
       seeds: order.slice(0, c.max_seeds).map(q => q.keyword), dropped,
       min_impressions: c.min_impressions, striking_min: c.striking_min, striking_max: c.striking_max };
@@ -573,6 +753,9 @@ const KWI = (() => {
 // reachable for THIS site (the pipeline keyword too); without a website the fixed difficulty limit (55) stays.
 // 2026-10-11 (FIX_PLAN D4): the shared fit gate drops government / portal / other-brand keywords before anything is recommended
 // (keyword_strategy.refused lists them with a reason); G3: every plan carries its estimated chance band.
+// G32 (2026-10-13, FIX_PLAN): the research also draws the site's TOPIC RADIUS (`keyword_strategy.topic_radius`, v5/code/_radius.js) —
+// which topics are within reach today, which are a stretch and which are out of reach for now, each with the evidence behind it (the
+// difficulty against the measured reach, a position the site already holds, a page it already has, a service it sells).
 const base = $('Collect Research').first().json;
 const chunks = $('Relevance Chunks').all().map(i => i.json);
 const outs = $input.all().map(i => i.json);
@@ -676,6 +859,15 @@ ordered.forEach(c => {
 });
 clusters.sort((a, b) => ({ Now: 0, Next: 1, Later: 2 }[a.tier] - { Now: 0, Next: 1, Later: 2 }[b.tier]) || b.total_opportunity - a.total_opportunity);
 
+// ---- G32 / K12: the site's topic radius — in reach, a stretch, or out of reach for now, with the evidence per topic ----
+const bestPosD = (c) => { const ps = (c.keywords || []).map(k => { const f = kws.find(x => x.keyword === k.keyword) || {}; const p = Number((f.live && f.live.your_position) || f.your_position || 0); return p > 0 ? p : null; }).filter(p => p != null); return ps.length ? Math.min(...ps) : null; };
+const topic_radius = RAD.of({ reach: R ? R.reach : null, reach_method: R ? R.method : '', domain: base.domain || '',
+  services: [...(base.services || []), ...(((base.site_description || {}).products_or_services) || [])],
+  site_topics: (base.seeds || []).slice(0, 12), pages: SM.pages(pageModelD).map(p => ({ url: p.url, title: p.title })),
+  topics: clusters.map(c => ({ topic: c.topic, primary_keyword: c.primary_keyword, kd: c.primary_kd, volume: c.total_volume, keyword_count: c.keyword_count,
+    your_position: bestPosD(c), keywords: c.keywords })) });
+for (const c of clusters) { const t = RAD.pick(topic_radius, c.topic + ' ' + c.primary_keyword); if (t) { c.radius = t.verdict; c.radius_reason = t.reason; } }
+
 const quick_wins = kws.filter(k => k.relevance === 2 && k.kd != null && k.kd < 30 && k.volume >= 30).slice(0, 12);
 const questions = kws.filter(k => /^(how|what|why|when|which|where|who|can|do|does|is|are|should|will)\b/.test(k.keyword)).slice(0, 15);
 const long_tail = kws.filter(k => k.words >= 4 && k.relevance === 2).slice(0, 15);
@@ -700,7 +892,7 @@ const pipeline = kws.find(k => fits(k) && free(k)) || kws.find(k => fits(k) && !
 
 return [{ json: { ...base, keyword_strategy: {
   goal, pool_size: base.research.pool_size, ai_reviewed, total_relevant: kws.length, keywords: kws.slice(0, 200),
-  clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline,
+  clusters, quick_wins, questions, long_tail, competitor_gaps, by_intent, priority, pipeline_keyword: pipeline, topic_radius,
   competitor_domains: base.research.competitor_domains, by_source: base.research.by_source, research_failures: base.research.failures, refused: refused.slice(0, 60),
   covered: kws.filter(k => k.covered_by).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, url: k.covered_by.url, matched_by: k.covered_by.matched_by })), pages_known: SM.pages(pageModelD).length,
   ladder_covered: kws.filter(k => k.ladder_covered).slice(0, 20).map(k => ({ keyword: k.keyword, volume: k.volume, ladder_id: k.ladder_covered.ladder_id, head_keyword: k.ladder_covered.head_keyword, ladder_keyword: k.ladder_covered.ladder_keyword, part: k.ladder_covered.part, rung: k.ladder_covered.rung, status: k.ladder_covered.status, target_url: k.ladder_covered.target_url, how: k.ladder_covered.how })), ladders_known: [...new Set(ladderKwsD.map(x => x.ladder_id))].length,

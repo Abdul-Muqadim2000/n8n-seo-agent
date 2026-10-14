@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Target, TrendingUp, Trophy, Undo2, UserRound, XCircle } from 'lucide-react';
 import { titleCase, type CaseStudy, type ContentData, type ContentItem, type Report } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useSiteAdmin, useSiteData } from '@/lib/queries';
@@ -94,7 +95,7 @@ function reportsByKeyword(reports: readonly Report[]) {
 }
 
 function Content({ d }: { d: ContentData }) {
-  const { org, page, can, tool } = useSitePage();
+  const { org, site, page, can, tool } = useSitePage();
   const [view, setView] = useState<'board' | 'table'>('board');
   const [source, setSource] = useState('all');
   const [unpublish, setUnpublish] = useState<ContentItem | null>(null);
@@ -131,9 +132,12 @@ function Content({ d }: { d: ContentData }) {
               eyebrow={`Next step · ${oldestDays != null ? `${oldestDays} ${oldestDays === 1 ? 'day' : 'days'} waiting` : 'waiting'}`}
               title={`Publish “${oldest.keyword}”, then report its address`}
               actions={
-                <ButtonLink to={tool('published', { keyword: oldest.keyword, ...(oldest.existingPageUrl ? { publishedUrl: oldest.existingPageUrl } : {}) })} size="sm" variant="secondary">
-                  Report published URL
-                </ButtonLink>
+                <>
+                  <ButtonLink to={tool('published', { keyword: oldest.keyword, ...(oldest.existingPageUrl ? { publishedUrl: oldest.existingPageUrl } : {}) })} size="sm" variant="secondary">
+                    Report published URL
+                  </ButtonLink>
+                  <GuideButton id="publish-page" vars={{ domain: site.domain }} label="How to publish it" className="border-line-on-ink/40 bg-on-ink/10 text-on-ink" />
+                </>
               }
             />
           ) : undefined
@@ -164,6 +168,9 @@ function Content({ d }: { d: ContentData }) {
             .map((i) => `“${i.keyword}”`)
             .join(', ')}
           {stale.length > 4 ? ` and ${stale.length - 4} more` : ''}. Publish {stale.length === 1 ? 'it' : 'them'}, then use “Report published URL” so the engine checks the page and starts tracking it.
+          <div className="mt-2">
+            <GuideButton id="publish-page" vars={{ domain: site.domain }} label="Show me how to publish one" />
+          </div>
         </Callout>
       )}
 

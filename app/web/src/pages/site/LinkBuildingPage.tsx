@@ -2,8 +2,9 @@
 // person, picks our page and the link text, and drafts a short sequence; a person approves it here and it goes out from the company's own
 // mailbox, a few a day, stopping at the first reply. Then the replies, the listings to add by hand, redirects, and what won links did.
 import { useState } from 'react';
-import { CalendarClock, Handshake, Mail, MessageSquareReply, Search, Target, Trophy } from 'lucide-react';
+import { CalendarClock, FlaskConical, Handshake, Mail, MessageSquareReply, Search, Target, Trophy } from 'lucide-react';
 import { formatPercent, type LinkBuildingData } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { paths } from '@/lib/paths';
 import { useLinkBuilding } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
@@ -50,6 +51,26 @@ export default function LinkBuildingPage() {
 }
 
 /** A "go to that section" link inside the hero (looks like HeroLink, scrolls instead of navigating). */
+// L7: two subject styles per batch, the reply rate of each — and nothing called better before there is enough to read.
+function SubjectAb({ ab }: { ab: LinkBuildingData['subjectAb'] }) {
+  const cols: Column<LinkBuildingData['subjectAb']['rows'][number]>[] = [
+    { key: 'variant', header: 'Style', cell: (r) => <span className="text-ink">{r.variant}{ab.leader === r.variant ? ' · ahead' : ''}</span> },
+    { key: 'subject', header: 'Example subject', cell: (r) => <span className="text-ink-2">{r.subject || '–'}</span> },
+    { key: 'sent', header: 'First e-mails', align: 'right', sortValue: (r) => r.sent, cell: (r) => <span className="tabular">{r.sent}</span> },
+    { key: 'replied', header: 'Replies', align: 'right', sortValue: (r) => r.replied, cell: (r) => <span className="tabular">{r.replied}</span> },
+    { key: 'rate', header: 'Reply rate', align: 'right', sortValue: (r) => r.replyRate ?? -1, cell: (r) => <span className="tabular">{r.replyRate != null ? formatPercent(r.replyRate) : '–'}</span> },
+  ];
+  return (
+    <div className="space-y-2">
+      <DataTable rows={ab.rows} rowKey={(r) => r.variant} columns={cols} dense />
+      <p className="flex items-start gap-1.5 text-[13px] text-ink-3">
+        <FlaskConical className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+        <span>{ab.note}</span>
+      </p>
+    </div>
+  );
+}
+
 function HeroJump({ to, children }: { to: string; children: string }) {
   const surface = useSurface();
   return (
@@ -120,9 +141,12 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
             title="Pitches cannot go out yet"
             action={
               can('admin') ? (
-                <ButtonLink size="sm" variant="secondary" to={paths.settings(org.id, 'mailboxes')} icon={<Mail className="size-3.5" />}>
-                  Company settings → Mailboxes
-                </ButtonLink>
+                <>
+                  <ButtonLink size="sm" variant="secondary" to={paths.settings(org.id, 'mailboxes')} icon={<Mail className="size-3.5" />}>
+                    Company settings → Mailboxes
+                  </ButtonLink>
+                  <GuideButton id="mailbox-connect" label="How to connect it" />
+                </>
               ) : undefined
             }
           >
@@ -203,6 +227,11 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
         {k.byType.length > 0 && (
           <Collapsible className="mt-3" label="Results by opportunity type" openLabel="Hide results by type" contentClassName="pt-2">
             <DataTable rows={k.byType} rowKey={(r) => r.type} columns={typeCols} dense initialSort={{ key: 'sent', dir: 'desc' }} />
+          </Collapsible>
+        )}
+        {d.subjectAb.rows.some((r) => r.sent > 0) && (
+          <Collapsible className="mt-3" label="Subject lines being tested" openLabel="Hide the subject lines" contentClassName="pt-2">
+            <SubjectAb ab={d.subjectAb} />
           </Collapsible>
         )}
       </div>

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { AlertTriangle, ArrowLeft, ArrowRight, Check, Clock, Lightbulb, LogOut, User } from 'lucide-react';
 import type { Me, Org, Site } from '@seo/shared';
+import { GuideIndexButton } from '@/components/guide';
 import { Brand, pageTitle } from '@/components/layout/Brand';
 import { ThemeMenu } from '@/components/layout/ThemeMenu';
 import { useDocumentTitle, useScrolled } from '@/components/layout/useDocumentTitle';
@@ -96,6 +97,7 @@ export function WizardShell({
                 <span className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden />
               </>
             )}
+            <GuideIndexButton />
             <ThemeMenu />
             <AccountMenu me={me} />
           </div>

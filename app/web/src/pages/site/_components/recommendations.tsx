@@ -3,9 +3,11 @@
 import type { ReactNode } from 'react';
 import { Activity, ArrowRight, Bot, ExternalLink as ExternalIcon, Gauge, Link2, PenSquare, Settings, TrendingUp } from 'lucide-react';
 import { MODES, type Priority, type Recommendation, type RecommendationAction, type RecommendationCategory } from '@seo/shared';
+import { GUIDE_FOR_RECOMMENDATION } from '@seo/shared/guides';
 import { cn } from '@/lib/utils';
 import { buttonClass, ButtonLink } from '@/components/ui/button';
 import { InsightItem } from '@/components/insight';
+import { GuideButton } from '@/components/guide';
 import { PriorityBadge, useSitePage } from './kit';
 
 export const CATEGORY_META: Record<RecommendationCategory, { label: string; icon: ReactNode }> = {
@@ -73,6 +75,7 @@ function CategoryIcon({ category, className }: { category: RecommendationCategor
  */
 export function RecommendationItem({ rec }: { rec: Recommendation }) {
   const meta = CATEGORY_META[rec.category] ?? CATEGORY_META.setup;
+  const guide = GUIDE_FOR_RECOMMENDATION[rec.id];
   return (
     <InsightItem
       icon={meta.icon}
@@ -86,7 +89,14 @@ export function RecommendationItem({ rec }: { rec: Recommendation }) {
       description={rec.evidence ? <span className="tabular [overflow-wrap:anywhere]">{rec.evidence}</span> : <span className="text-[13px] leading-relaxed text-ink-2 [overflow-wrap:anywhere]">{rec.detail}</span>}
       detail={rec.evidence ? <span className="text-[13px] leading-relaxed [overflow-wrap:anywhere]">{rec.detail}</span> : undefined}
       detailLabel="Why it matters"
-      action={rec.action ? <RecommendationButton action={rec.action} /> : undefined}
+      action={
+        rec.action || guide ? (
+          <div className="flex flex-col items-stretch gap-1.5">
+            {rec.action && <RecommendationButton action={rec.action} />}
+            {guide && <GuideHelp id={guide} />}
+          </div>
+        ) : undefined
+      }
       actionPosition="side"
     />
   );
@@ -106,9 +116,10 @@ export function RecommendationRows({ recs }: { recs: readonly Recommendation[] }
             </div>
             <p className="mt-1 line-clamp-2 text-sm font-medium leading-snug text-ink">{rec.title}</p>
             {rec.evidence ? <p className="mt-0.5 truncate text-xs text-ink-3 tabular">{rec.evidence}</p> : <p className="mt-0.5 line-clamp-1 text-xs text-ink-3">{rec.detail}</p>}
-            {rec.action && (
-              <div className="mt-2">
-                <RecommendationButton action={rec.action} />
+            {(rec.action || GUIDE_FOR_RECOMMENDATION[rec.id]) && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {rec.action && <RecommendationButton action={rec.action} />}
+                {GUIDE_FOR_RECOMMENDATION[rec.id] && <GuideHelp id={GUIDE_FOR_RECOMMENDATION[rec.id]} />}
               </div>
             )}
           </div>
@@ -116,4 +127,10 @@ export function RecommendationRows({ recs }: { recs: readonly Recommendation[] }
       ))}
     </ul>
   );
+}
+
+/** "Show me how" on a recommendation that asks the person to do something outside the app (the site's own values are filled in). */
+function GuideHelp({ id }: { id: string }) {
+  const { site } = useSitePage();
+  return <GuideButton id={id} vars={{ domain: site.domain }} className="justify-center" />;
 }

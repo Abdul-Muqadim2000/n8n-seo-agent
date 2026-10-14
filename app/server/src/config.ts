@@ -46,6 +46,14 @@ const Env = z.object({
 
   GOOGLE_OAUTH_CLIENT_ID: str(),
   GOOGLE_OAUTH_CLIENT_SECRET: str(),
+  /** L4: the owner's own Google app for Gmail OAuth mailboxes (scope gmail.send; may be the same app as sign-in, but is given here
+   *  on purpose so adding a mailbox scope is never implicit). With these unset the Gmail OAuth option is not offered. */
+  GMAIL_OAUTH_CLIENT_ID: str(),
+  GMAIL_OAUTH_CLIENT_SECRET: str(),
+  /** L4: the owner's own Azure app for Microsoft 365 mailboxes (delegated Mail.Send + Mail.Read + offline_access) */
+  MS_OAUTH_CLIENT_ID: str(),
+  MS_OAUTH_CLIENT_SECRET: str(),
+  MS_OAUTH_TENANT: str('common'),
 
   SEO_BRAND: str('Dev SEO'),
   SEO_MAIL_FROM: str(''),
@@ -145,6 +153,12 @@ export const config = {
   defaultBudgetUsd: e.DEFAULT_MONTHLY_BUDGET_USD,
   allowSignup: e.ALLOW_SIGNUP,
   mailboxKey: e.MAILBOX_KEY,
+  // L4: OAuth mailboxes. The redirect URI must be registered in the owner's Google / Azure app exactly as it is built here.
+  mailOauth: {
+    gmail: { clientId: e.GMAIL_OAUTH_CLIENT_ID, clientSecret: e.GMAIL_OAUTH_CLIENT_SECRET, enabled: !!(e.GMAIL_OAUTH_CLIENT_ID && e.GMAIL_OAUTH_CLIENT_SECRET) },
+    microsoft: { clientId: e.MS_OAUTH_CLIENT_ID, clientSecret: e.MS_OAUTH_CLIENT_SECRET, tenant: e.MS_OAUTH_TENANT || 'common', enabled: !!(e.MS_OAUTH_CLIENT_ID && e.MS_OAUTH_CLIENT_SECRET) },
+    redirectUri: `${e.APP_URL}/api/mailbox-oauth/callback`,
+  },
   linkBuilderJobs: e.LINK_BUILDER_JOBS,
   outreachMxCheck: e.OUTREACH_MX_CHECK,
 };

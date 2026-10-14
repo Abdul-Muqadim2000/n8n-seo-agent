@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
 import { CheckCircle2, FileSpreadsheet, Upload, X } from 'lucide-react';
 import { CRAWL_PAGE_OPTIONS, RUN_SCHEMAS, urlOnDomain, type Site } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { useOrgCtx } from '@/lib/context';
 import { fmtBytes } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -191,7 +192,11 @@ export function PublishedForm({ initialSiteId, prefill }: ToolFormProps) {
   useSyncSiteParam(v.siteId);
   return (
     <ToolShell mode="published" site={site} cost={0} eta={estimateEta('published', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Check the page" blocked={noVerified(sites)}>
-      <FormCard title="The page you published" description="We fetch it live, check what Google will see, mark it published (ladder and content log) and start tracking its position.">
+      <FormCard
+        title="The page you published"
+        description="We fetch it live, check what Google will see, mark it published (ladder and content log) and start tracking its position."
+        aside={<GuideButton id="publish-page" vars={{ domain: site?.domain }} label="How to publish one" />}
+      >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         <TextField label="Page address" reg={form.register('publishedUrl')} error={errMsg(e.publishedUrl)} inputMode="url" placeholder={site ? `https://${site.domain}/…` : 'https://…'} hint={site ? `The live URL on ${site.domain}.` : 'The live URL.'} />
         <TextField label="Target keyword" reg={form.register('keyword')} error={errMsg(e.keyword)} placeholder="e.g. uae e invoicing penalties" hint="The keyword the page was written for (the one in its report)." />
@@ -264,7 +269,11 @@ export function CheckinForm({ initialSiteId, prefill }: ToolFormProps) {
 
   return (
     <ToolShell mode="checkin" site={site} cost={0} eta={estimateEta('checkin', v)} emailCopy={!!v.emailCopy} onSubmit={onSubmit} pending={pending} error={error} submitLabel="Record the check-in" blocked={noVerified(sites)}>
-      <FormCard title="This month in Search Console" description="Two things the Search Console API cannot see. Takes two minutes once a month; the Monday report reminds you.">
+      <FormCard
+        title="This month in Search Console"
+        description="Two things the Search Console API cannot see. Takes two minutes once a month; the Monday report reminds you."
+        aside={<GuideButton id="search-console-checkin" vars={{ domain: site?.domain }} label="Where do I look?" />}
+      >
         <SiteField value={v.siteId} onChange={(id) => form.setValue('siteId', id ?? '', { shouldDirty: true, shouldValidate: true })} error={errMsg(e.siteId)} />
         {yesNo('manualAction', 'Manual actions', 'Search Console → Security & Manual Actions → Manual actions.')}
         {yesNo('securityIssue', 'Security issues', 'Search Console → Security & Manual Actions → Security issues.')}

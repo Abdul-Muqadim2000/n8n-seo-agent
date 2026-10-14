@@ -226,6 +226,16 @@
     transform: none;
   }
 }
+@keyframes asc-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
 @keyframes asc-shimmer {
   from {
     background-position: 100% 0;
@@ -286,6 +296,7 @@
   --animate-fade-in: asc-fade-in 200ms var(--brand-ease) both;
   --animate-fade-up: asc-fade-up 560ms var(--brand-ease) both;
   --animate-scale-in: asc-scale-in 180ms var(--brand-ease) both;
+  --animate-slide-in-right: asc-slide-in-right 240ms var(--brand-ease) both;
   --animate-shimmer: asc-shimmer 1.6s linear infinite;
 }
 

@@ -237,15 +237,25 @@ const PW = (() => {
     const quota = /quota|rate limit|RESOURCE_EXHAUSTED|429/i.test(err);
     const denied = /permission|forbidden|403|unauthor|invalid_grant/i.test(err);
     if (err) return { ok: false, error: err, error_kind: quota ? 'quota' : denied ? 'access' : 'error', indexed: null, verdict: '', coverage: '',
-      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], rich_results: [], rich_verdict: '',
+      robots: '', last_crawl: '', google_canonical: '', user_canonical: '', canonical_ok: null, mobile_usable: null, mobile_issues: [], mobile_verdict: '', mobile_note: '', rich_results: [], rich_verdict: '',
       not_checked: quota ? 'Google\'s daily URL Inspection quota for this property is used up: not checked today.' : denied ? 'Search Console access is missing for this property: not checked.' : 'The inspection failed: not checked (' + err + ').' };
+    // R10 (2026-10-13, re-rating §3.11): Google retired the Mobile Usability report and the API now answers `VERDICT_UNSPECIFIED` with no
+    // issue list for every page (45 of 45 live on 2026-10-13). That is NOT CHECKED. The live run read it as "not mobile-friendly" and raised
+    // a High finding on 45 of 47 pages with empty evidence, ranked second of 60. Only a FAIL that names at least one issue is a real problem;
+    // every other answer (unspecified, neutral, missing, a FAIL with nothing behind it) is unknown, with the reason said out loud.
+    const mobVerdict = S(mob && mob.verdict).toUpperCase();
+    const mobIssues = mob && Array.isArray(mob.issues) ? mob.issues.map(i => S(i.message) || S(i.issueType)).filter(Boolean).slice(0, 5) : [];
+    const mobUsable = mobVerdict === 'PASS' ? true : (mobVerdict === 'FAIL' && mobIssues.length) ? false : null;
+    const mobNote = mobUsable !== null ? ''
+      : (mobVerdict === 'FAIL' ? 'Search Console reports a mobile problem without naming an issue, so mobile usability was not checked.'
+        : mobVerdict === 'NEUTRAL' ? 'Search Console gave no mobile verdict for this page, so mobile usability was not checked.'
+          : 'Search Console no longer answers mobile usability (Google retired the Mobile Usability report), so it was not checked.');
     return {
       ok: true, error: '', error_kind: '', verdict: S(idx.verdict), indexed: S(idx.verdict) === 'PASS', coverage: S(idx.coverageState),
       indexing_state: S(idx.indexingState), robots: S(idx.robotsTxtState), last_crawl: S(idx.lastCrawlTime),
       google_canonical: S(idx.googleCanonical), user_canonical: S(idx.userCanonical),
       canonical_ok: (!S(idx.googleCanonical) || !S(idx.userCanonical)) ? null : same(idx.googleCanonical, idx.userCanonical),
-      mobile_usable: mob ? (S(mob.verdict) === 'PASS' ? true : S(mob.verdict) === 'NEUTRAL' || !S(mob.verdict) ? null : false) : null,
-      mobile_issues: mob && Array.isArray(mob.issues) ? mob.issues.map(i => S(i.message) || S(i.issueType)).filter(Boolean).slice(0, 5) : [],
+      mobile_usable: mobUsable, mobile_issues: mobIssues, mobile_verdict: mobVerdict, mobile_note: mobNote,
       rich_verdict: rich ? S(rich.verdict) : '',
       rich_results: rich && rich.detectedItems ? rich.detectedItems.map(d => S(d.richResultType)).filter(Boolean) : [],
       not_checked: '',
@@ -264,9 +274,15 @@ const PW = (() => {
     const mobileBad = ok.filter(i => i.mobile_usable === false);
     const richTypes = [...new Set(ok.flatMap(i => i.rich_results || []))];
     const notChecked = n0(opts.not_checked) + failed.length;
+    // R10: mobile usability is reported on its own terms — how many pages Google really answered about, and the reason when it answered about none
+    const mobileChecked = ok.filter(i => i.mobile_usable !== null).length;
+    const mobileNote = (ok.length && !mobileChecked)
+      ? (S((ok.find(i => S(i.mobile_note)) || {}).mobile_note) || 'Search Console no longer answers mobile usability (Google retired the Mobile Usability report), so it was not checked.')
+      : '';
     return { checked: ok.length, indexed, not_indexed: notIndexed.length, by_state: by, failed: failed.length, not_checked: notChecked,
       not_checked_reason: notChecked ? (S(opts.not_checked_reason) || (failed[0] && failed[0].not_checked) || 'not checked in this run') : '',
-      canonical_mismatch: canonMismatch.length, mobile_bad: mobileBad.length, mobile_checked: ok.filter(i => i.mobile_usable !== null).length,
+      canonical_mismatch: canonMismatch.length, mobile_bad: mobileBad.length, mobile_checked: mobileChecked,
+      mobile_not_checked: ok.length - mobileChecked, mobile_note: mobileNote,
       rich_results: richTypes, quota: QUOTA_PER_DAY, quota_note: S(opts.quota_note),
       // never "fine": a page nobody inspected is counted apart from the ones Google answered about
       text: ok.length

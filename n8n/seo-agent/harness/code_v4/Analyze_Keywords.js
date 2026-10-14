@@ -108,6 +108,9 @@ Object.entries(compRank).forEach(([kw, list]) => {
 //                    status word ("fta portal", "emirates id status"), or, with its results page in hand (ctx.serp), 3+ of the top 5 results
 //                    are on government hosts (.gov / .gov.xx / .gouv.xx / u.ae …);
 //   'portal'       — a login / portal / password / status check / renewal / verification / application task: people want the owner's own site;
+//   'off topic'    — with topics on file (ctx.topics, R13): under a quarter of the keyword's own words have anything to do with what the
+//                    site sells ("character ai", "mofa attestation dubai", "mh enterprises uae");
+//   'too broad'    — with topics on file: nothing but generic or place words is left of it ("ai", "google ai", "microsoft ai");
 //   'other brand'  — one of its words is the label of a declared competitor (cleartax.com ↔ "cleartax"), of a domain on the results page
 //                    (facts.ae ↔ "facts"), or a brand name AI uses for another company (seo_cache ai_brands: name -> domain); with the
 //                    keyword's own results page in hand also when one domain whose label is in the keyword holds 3+ of the top 5.
@@ -127,7 +130,10 @@ Object.entries(compRank).forEach(([kw, list]) => {
 const FIT_CFG = { min_label: 4, serp_top: 5, serp_hold: 3 };
 const FIT_STOP = new Set(['the', 'a', 'an', 'and', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'my', 'your', 'our', 'is', 'are', 'what', 'how', 'me']);
 const FIT_GEO = new Set(['uae', 'u.a.e', 'dubai', 'abu', 'dhabi', 'sharjah', 'ajman', 'fujairah', 'ras', 'al', 'khaimah', 'umm', 'quwain', 'emirates', 'gcc', 'saudi', 'arabia', 'ksa', 'riyadh', 'jeddah', 'qatar', 'doha', 'oman', 'muscat', 'bahrain', 'kuwait', 'egypt', 'india', 'pakistan', 'uk', 'usa', 'us', 'online', 'portal']);
-const FIT_GENERIC = new Set(['software', 'softwares', 'services', 'service', 'erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'tax', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll', 'finance', 'financial', 'cloud', 'digital', 'online', 'web', 'data', 'tech', 'technology', 'technologies', 'solutions', 'solution', 'systems', 'system', 'business', 'company', 'group', 'global', 'international', 'gulf', 'arab', 'arabia', 'emirates', 'national', 'consulting', 'consultants', 'consultancy', 'partners', 'partner', 'network', 'news', 'blog', 'guide', 'guides', 'info', 'best', 'top', 'free', 'app', 'apps', 'shop', 'store', 'market', 'media', 'academy', 'institute', 'university', 'school', 'bank', 'pay', 'pro', 'plus', 'hub', 'one', 'first', 'smart', 'easy', 'get', 'go', 'ae', 'com', 'net', 'org', 'home', 'house', 'world', 'city', 'daily', 'times', 'post', 'review', 'reviews', 'compare', 'comparison', 'list', 'directory', 'jobs', 'careers', 'wiki', 'wikipedia', 'youtube', 'linkedin', 'facebook', 'instagram', 'twitter', 'reddit', 'quora', 'medium', 'google', 'microsoft', 'amazon', 'apple']);
+// R13 (2026-10-13): 'ai' joined this list — it is a category word, not a topic. With it in, "ai" (165,000/mo) and "google ai" are left with
+// nothing of their own ("too broad") while "character ai", "humanize ai", "meta ai" and "blackbox ai" are judged on the word that is really
+// theirs; a keyword that names a service of the site ("ai automation uae") still matches on that service's own words.
+const FIT_GENERIC = new Set(['ai', 'software', 'softwares', 'services', 'service', 'erp', 'crm', 'hrms', 'hcm', 'wms', 'pos', 'tax', 'vat', 'invoice', 'invoices', 'invoicing', 'einvoicing', 'accounting', 'accountants', 'payroll', 'finance', 'financial', 'cloud', 'digital', 'online', 'web', 'data', 'tech', 'technology', 'technologies', 'solutions', 'solution', 'systems', 'system', 'business', 'company', 'group', 'global', 'international', 'gulf', 'arab', 'arabia', 'emirates', 'national', 'consulting', 'consultants', 'consultancy', 'partners', 'partner', 'network', 'news', 'blog', 'guide', 'guides', 'info', 'best', 'top', 'free', 'app', 'apps', 'shop', 'store', 'market', 'media', 'academy', 'institute', 'university', 'school', 'bank', 'pay', 'pro', 'plus', 'hub', 'one', 'first', 'smart', 'easy', 'get', 'go', 'ae', 'com', 'net', 'org', 'home', 'house', 'world', 'city', 'daily', 'times', 'post', 'review', 'reviews', 'compare', 'comparison', 'list', 'directory', 'jobs', 'careers', 'wiki', 'wikipedia', 'youtube', 'linkedin', 'facebook', 'instagram', 'twitter', 'reddit', 'quora', 'medium', 'google', 'microsoft', 'amazon', 'apple']);
 const FIT_GOV_WORDS = /\b(ministry|ministries|authority|authorities|federal|government|govt|municipality|municipal|embassy|consulate|police|courts?|customs|immigration|department of|public prosecution|parliament|chamber of commerce|free zone authority)\b/;
 const FIT_GOV_NAMES = /\b(fta|emaratax|emara ?tax|tax authority|mohre|mohap|mofa|moec|gdrfa|icp|ica|rta|dewa|sewa|fewa|addc|aadc|dha|doh|ded|tdra|adjd|ejari|dubai land department|dld|dubai economy|dubai courts|zatca|gazt|gosi|qiwa|absher|muqeem|mudad|hrsd|misa|nafath|tawtheeq|uae pass|smart pass|amer cent(er|re)|tasheel|tawjeeh|emirates id|emirates identity|national id|i ?d card|identity card|labou?r card|work permit status|visa status|visa check|passport status|establishment card|golden visa status|trn verification|trn check|trn lookup|tax registration number check)\b/;
 const FIT_PORTAL = /\b(log ?in|logins|sign ?in|sign ?up|password|passwords|portal|portals|e ?services?|customer care|customer service number|helpline|toll ?free|contact number|phone number|status|status check|check status|status enquiry|application status|track(ing)? (status|application|order)|renewal|renew|verification|verify|apply online|online application|download (the )?app|app download|complaint|complaints|fine check|traffic fines?|balance check|otp)\b/;
@@ -146,6 +152,44 @@ const fitLabels = (domain, protect) => { const h = fitHost(domain); if (!h) retu
 const fitLearnedBrands = (rows) => { const out = {}; for (const r of (rows || [])) { const j = r && r.json ? r.json : r; if (!j || typeof j !== 'object' || !/^ai_brands:/.test(String(j.key || ''))) continue; let v = j.value; if (typeof v === 'string') { try { v = JSON.parse(v); } catch (e) { v = null; } } if (v && typeof v === 'object') for (const [name, d] of Object.entries(v)) if (name && d) out[String(name)] = String(d); } return out; };
 // the organic domains of a DataForSEO SERP answer, in rank order (for ctx.serp)
 const fitSerpDomains = (res) => { try { return ((((res || {}).tasks || [])[0] || {}).result || [])[0].items.filter(x => x && x.type === 'organic').sort((a, b) => (a.rank_group || 99) - (b.rank_group || 99)).map(x => fitHost(x.domain || String(x.url || '').replace(/^https?:\/\//, '').split('/')[0])).filter(Boolean); } catch (e) { return []; } };
+// ---- R13 (2026-10-13, re-rating §3.11): TOPIC DISTANCE, the same 25% bar the outreach gate uses (OK.OFF_TOPIC in _outreach_kit.js) ----
+// The full report's §4a offered "ai" (165,000/mo), "character ai" (110,000), "google ai", "humanize ai", "meta ai", "blackbox ai",
+// "mh enterprises uae" and "microsoft ai", and the gap kept "mofa attestation dubai" and "how to check emirates id status with passport
+// number", under a High finding telling the owner to build pages for them: the gate only ever refused classes somebody had listed
+// (navigational, a declared competitor, a results-page label), so a brand or a subject nobody listed walked straight through. fitTopic()
+// measures what share of a keyword's OWN distinctive words the site's topics carry. Place names and generic category words are neutral —
+// they count for neither side, so "best erp software dubai" is judged on "erp" — and a keyword left with nothing but generic or place
+// words ("ai", "google ai", "microsoft ai") is too broad for any page of this site to win.
+const FIT_TOPIC_BAR = 0.25;
+const fitStem = (w) => w.length > 5 ? w.replace(/(ingly|ings|ing|ments|ment|ations|ation|ions|ion|ies|ers|er|ed|es|s|e)$/, '') : w;   // the outreach kit's stem: invoice / invoices / invoicing -> invoic
+const fitTopicWords = (topics) => new Set((Array.isArray(topics) ? topics.filter(Boolean).join(' ') : String(topics || '')).toLowerCase()
+  .split(/[^a-z0-9]+/).filter(t => t.length > 2 && !FIT_STOP.has(t) && !FIT_GEO.has(t)).map(fitStem));
+function fitTopic(keyword, topics, ctx) {
+  const o = ctx || {};
+  const bar = typeof o.topic_bar === 'number' ? o.topic_bar : FIT_TOPIC_BAR;
+  const label = String(o.topic_label || 'what this website sells');
+  const T = fitTopicWords(topics);
+  // With little on file the measure would refuse good keywords, so under topic_min_words (12) distinctive words it judges nothing: a site
+  // whose services and description are a single line gets no topic refusals at all ("no evidence, no refusal").
+  if (T.size < (typeof o.topic_min_words === 'number' ? o.topic_min_words : 12)) return { ok: true, reason: '', detail: T.size ? 'too few topic words on file (' + T.size + ') to judge topic distance' : 'no topics on file, so topic distance was not judged', share: null };
+  const toks = fitTokens(keyword);
+  const own = toks.filter(t => t.length > 2 && !FIT_GEO.has(t) && !FIT_GENERIC.has(t));
+  const known = [...T];
+  const matches = (t) => { const s = fitStem(t); return T.has(s) || known.some(x => x.length >= 5 && s.length >= 5 && (s.indexOf(x) === 0 || x.indexOf(s) === 0)); };
+  // a keyword made only of category and place words is a head term: it is on topic when at least two of those categories are the site's own
+  // ("erp software uae", "best erp software dubai"), and too broad when only one is and there is no market in it either ("ai", "google ai")
+  if (!own.length) {
+    const cats = toks.filter(t => FIT_GENERIC.has(t)).filter(matches);
+    const hasPlace = toks.some(t => FIT_GEO.has(t));
+    if (cats.length >= 2 || (cats.length >= 1 && hasPlace)) return { ok: true, reason: '', detail: 'a category you sell (' + cats.join(', ') + ')' + (hasPlace ? ' in your market' : ''), share: 1 };
+    return { ok: false, reason: 'too broad', detail: 'only category or place words, so it says nothing about ' + label + ' ("' + String(keyword || '').trim() + '")', share: cats.length ? 0.5 : 0 };
+  }
+  const hits = own.filter(matches);
+  const share = Math.round(100 * hits.length / own.length) / 100;
+  if (share < bar) return { ok: false, reason: 'off topic', detail: Math.round(share * 100) + '% of its own words match ' + label + ' (' + Math.round(bar * 100) + '% is the bar): '
+    + own.filter(t => hits.indexOf(t) < 0).slice(0, 4).join(', ') + ' — add it to your services if you do sell it', share };
+  return { ok: true, reason: '', detail: Math.round(share * 100) + '% of its own words match ' + label, share };
+}
 // ctx: { intent, own_domain, competitors: [domains, declared], serp_domains: [domains on the results page / auto-detected rivals], brands: { name: domain } (learned),
 //       serp: [this keyword's own top domains, in rank order] (optional), protect: [words of the head term / seeds / services], relevance: fn (G19 hook) }
 function fitGate(keyword, ctx) {
@@ -190,8 +234,11 @@ function fitGate(keyword, ctx) {
     const count = {}; for (const h of serp) count[h] = (count[h] || 0) + 1;
     for (const [h, n] of Object.entries(count)) if (n >= FIT_CFG.serp_hold && fitLabels(h, protect).some(l => toks.includes(l))) return { ok: false, reason: 'other brand', detail: h + ' holds ' + n + ' of the top ' + serp.length + ' results: a brand query' };
   }
-  // 6. relevance to the website's services (G19): not built yet — the hook
+  // 6. relevance to the website's services: the caller's own hook (G19) first, else the topic bar when the caller gave topics (R13)
   if (typeof ctx.relevance === 'function') { const r = ctx.relevance(kw); if (r && r.ok === false) return { ok: false, reason: r.reason || 'off topic', detail: r.detail || '' }; }
+  else if (ctx.topics && (Array.isArray(ctx.topics) ? ctx.topics.length : String(ctx.topics).trim())) {
+    const t = fitTopic(kw, ctx.topics, ctx); if (!t.ok) return { ok: false, reason: t.reason, detail: t.detail };
+  }
   return { ok: true };
 }
 // one line for reports and prompts: "facts (facts.ae), cleartax (cleartax.com), Zoho Books (zoho.com)"
@@ -200,10 +247,36 @@ const fitBrandList = (ctx, protect) => { const out = []; const seen = new Set();
   for (const d of (ctx.serp_domains || [])) for (const l of fitLabels(d, protect)) add(l + ' (' + fitHost(d) + ')');
   for (const [n, d] of Object.entries(ctx.brands || {})) add(n + ' (' + fitHost(d) + ')');
   return out.slice(0, 40).join(', '); };
+// ---- R16 (2026-10-13, system review FIX_PLAN §3.11): the same gate, run over a row somebody stored BEFORE the gate existed ----
+// The gate stops a new keyword, but nothing ever revisited the rows already in `seo_ladders`: rung 2 of lad_mv40b6s9h5a8 still held
+// "facts erp" (facts.ae, a competing UAE ERP vendor) as a planned page, so the Rank Tracker's report of 2026-10-12 listed it and the
+// Content Cadence would have written it. `fitStored` is `fitGate` plus the one rule a stored row needs: a rung whose page is already
+// written or published is never dropped — that page is live work, it keeps being tracked, and it is flagged instead of hidden.
+// Returns { ok, live, flagged, reason, detail, note }: ok false = leave it out of what is written and reported; `note` is the sentence
+// a report or the repair script prints, so the reason always travels with the decision.
+const fitStoredLive = (row) => { const r = row || {}; const st = String(r.status || '').toLowerCase();
+  return st === 'writing' || st === 'published' || r.page_exists === true || r.page_exists === 'true' || !!String(r.published_url || '').trim(); };
+const fitStored = (row, ctx) => {
+  const r = row || {}; const kw = String(r.keyword || '').trim();
+  const live = fitStoredLive(r) || (ctx || {}).written === true;
+  if (!kw) return { ok: false, live, flagged: false, reason: 'empty', detail: 'the row has no keyword', note: 'a stored row with no keyword' };
+  const g = fitGate(kw, ctx || {});
+  if (g.ok) return { ok: true, live, flagged: false, reason: '', detail: '', note: '' };
+  const why = '"' + kw + '" is not a search this website should target: ' + g.detail + ' (' + g.reason + ')';
+  if (live) return { ok: true, live: true, flagged: true, reason: g.reason, detail: g.detail,
+    note: why + ' — its page is already written, so it stays tracked; decide whether to keep it' };
+  return { ok: false, live: false, flagged: true, reason: g.reason, detail: g.detail,
+    note: why + ' — it was planned before this rule existed, so it is set aside instead of written' };
+};
 let cacheRowsAK = []; try { cacheRowsAK = $('Load Site Cache').all().map(i => i.json); } catch (e) { cacheRowsAK = []; }
-const fitCtxAK = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: comps.map(c => c.domain).filter(d => !(base.competitors || []).includes(d)), brands: fitLearnedBrands(cacheRowsAK), protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)] };
+const fitCtxAK = { own_domain: base.domain || '', competitors: (base.competitors || []).map(String), serp_domains: comps.map(c => c.domain).filter(d => !(base.competitors || []).includes(d)), brands: fitLearnedBrands(cacheRowsAK), protect: [...seeds, ...(base.services || []), String(base.business || '').slice(0, 400)],
+  // R13 (2026-10-13, re-rating §3.11): topic distance on the same 25% bar the outreach gate uses — §4a offered "ai" (165,000/mo),
+  // "character ai", "google ai", "meta ai", "mh enterprises uae" and the gap kept "mofa attestation dubai" because the gate only
+  // refused classes somebody had listed. The topics are the site's own: its services, its description and this run's seeds.
+  topics: [...(base.services || []), String(base.business || '').slice(0, 600), ...seeds, ...(((base.site_description || {}).products_or_services) || []).map(String)],
+  topic_label: 'what this website sells' };
 const refused = [];
-const fitsAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return g.ok; };
+const fitsAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (!g.ok) refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return g.ok; };
 const notWinning = ideas.filter(k => !k.your_position || k.your_position > 10);
 const notWinningFit = notWinning.filter(fitsAK);
 const opportunities_by_intent = {};
@@ -223,7 +296,7 @@ const keyword_gap = notWinningFit.filter(k => k.competitors.length && (!k.your_p
 // ---------- Page 1 ke qareeb ----------
 // P1-4: page-2 keywords are shown as "quick wins", so they run through the gate too — but a search for the site's OWN brand stays (ranking
 // 11-20 for your own name is a real problem to fix, not a keyword to drop)
-const fitsOwnAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, reason: g.reason, detail: g.detail }); return false; };
+const fitsOwnAK = (k) => { const g = fitGate(k.keyword, { ...fitCtxAK, intent: k.intent }); if (g.ok || g.reason === 'own brand') return true; refused.push({ keyword: k.keyword, volume: k.volume, intent: k.intent || '', reason: g.reason, detail: g.detail }); return false; };
 const striking_distance = you.keywords.filter(k => k.position >= 11 && k.position <= 20).filter(fitsOwnAK)
   .sort((a, b) => (b.volume || 0) - (a.volume || 0)).slice(0, 10);
 

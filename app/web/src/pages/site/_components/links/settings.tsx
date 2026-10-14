@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Mail, Search, Settings2, ShieldBan, UserCheck, Zap } from 'lucide-react';
 import type { LinkBuildingData } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useRunLinkBuilder, useUpdateLinkSettings } from '@/lib/queries';
@@ -96,7 +97,15 @@ export function LinkSettingsCard({ d, onRun }: { d: LinkBuildingData; onRun?: ()
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field
               label="Send from"
-              hint={d.mailboxes.length ? 'Pitches go out from this address; replies are read from its inbox.' : 'No mailbox connected yet.'}
+              hint={
+                d.mailboxes.length ? (
+                  'Pitches go out from this address; replies are read from its inbox.'
+                ) : (
+                  <>
+                    No mailbox connected yet. <GuideButton id="mailbox-connect" variant="link" label="How to connect one" />
+                  </>
+                )
+              }
               labelAction={can('admin') ? <MoreLink to={paths.settings(org.id, 'mailboxes')}>Mailboxes</MoreLink> : undefined}
             >
               {(f) => (

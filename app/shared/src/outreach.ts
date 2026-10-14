@@ -44,7 +44,13 @@ export type SequenceStatus = (typeof SEQUENCE_STATUSES)[number];
 export const SEQUENCE_LABEL: Record<SequenceStatus, string> = { scheduled: 'Scheduled', active: 'Sent, waiting', paused: 'Paused', replied: 'Replied', bounced: 'Bounced', stopped: 'Stopped', won: 'Won', finished: 'No reply', failed: 'Failed' };
 
 // ---- API shapes ----
-export interface OutreachStep { step: number; waitDays: number; subject: string; body: string }
+export interface OutreachStep {
+  step: number; waitDays: number; subject: string; body: string;
+  /** L7: the other subject the writer wrote for this pitch, in the other style (only on the first step, and only when it passed the same checks) */
+  subjectAlt?: string;
+  /** L7: which of the two styles this pitch carries — A names what we found, B asks the one question */
+  variant?: string;
+}
 export interface OutreachContact { email: string; kind: 'person' | 'editorial' | 'general' | 'other'; own: boolean; sourceUrl: string }
 export interface OutreachDraft {
   prospectDomain: string; type: string; status: string; prospectStatus: string; score: number; fit: number; fitReason: string;
@@ -55,12 +61,29 @@ export interface OutreachDraft {
 export interface OutreachMessageView { id: string; direction: 'out' | 'in'; step: number; kind: string; subject: string; body: string; from: string; to: string; at: string; error: string | null }
 export interface OutreachSequence {
   id: string; prospectDomain: string; type: string; toEmail: string; mailboxId: string | null; status: SequenceStatus; step: number; steps: OutreachStep[];
+  /** L7: the subject style this conversation went out with (A | B, empty for a pitch with only one subject) */
+  subjectVariant: string;
   nextAt: string | null; approvedAt: string | null; startedAt: string | null; lastSentAt: string | null; targetUrl: string; pageUrl: string;
   replyAt: string | null; replyClass: ReplyClass | null; replySummary: string; suggestedReply: string; replyFrom: string; oooUntil: string | null; wonAt: string | null; error: string;
   messages: OutreachMessageView[];
 }
+// ---- L4: how a mailbox is connected ----
+/** `smtp`: SMTP + IMAP with an app password. The others are OAuth: no password is stored and the provider's API does the sending. */
+export const MAILBOX_PROVIDERS = ['smtp', 'gmail_oauth', 'ms_graph'] as const;
+export type MailboxProvider = (typeof MAILBOX_PROVIDERS)[number];
+export const OAUTH_PROVIDERS = ['gmail_oauth', 'ms_graph'] as const;
+export type OauthProvider = (typeof OAUTH_PROVIDERS)[number];
+export const isOauthProvider = (p: string): p is OauthProvider => (OAUTH_PROVIDERS as readonly string[]).includes(p);
+/** what the Mailboxes tab offers: whether this installation has the provider's OAuth app, and what the provider can do */
+export interface MailProviderInfo { id: OauthProvider; label: string; enabled: boolean; reads: boolean; note: string; disabledWhy: string; withdraw: string }
 export interface MailboxView {
-  id: string; label: string; fromName: string; fromEmail: string; provider: 'smtp'; smtpHost: string; smtpPort: number; smtpSecure: boolean; imapHost: string; imapPort: number; imapSecure: boolean;
+  id: string; label: string; fromName: string; fromEmail: string; provider: MailboxProvider; smtpHost: string; smtpPort: number; smtpSecure: boolean; imapHost: string; imapPort: number; imapSecure: boolean;
+  /** L4: `password` (SMTP + IMAP with an app password) or `oauth` (the provider's own permission, nothing to store) */
+  authType: 'password' | 'oauth';
+  /** L4: are replies read automatically? False for Gmail OAuth, whose inbox scope is restricted by Google */
+  readsReplies: boolean;
+  /** L4: when the stored permission needs renewing (OAuth only; it is renewed by itself before every send) */
+  oauthExpiresAt: string | null;
   username: string; status: 'active' | 'paused' | 'error'; statusReason: string; signatureName: string; signatureTitle: string; company: string; postalAddress: string; timezone: string;
   windowStart: number; windowEnd: number; dailyFirstMax: number; dailyMax: number; startedAt: string; dns: DnsCheck | null; lastPollAt: string | null; lastSendAt: string | null; lastError: string;
   today: { first: number; total: number; firstCap: number; totalCap: number };
@@ -79,7 +102,55 @@ export interface LinkBuildingData {
   impact: { refDomain: string; fromUrl: string; targetUrl: string; t0: string; weeks: number; basePosition: number | null; position: number | null; pageChange: number | null; controlChange: number | null; effect: number | null; verdict: string; note: string; keyword: string }[];
   /** G12 (2026-10-13): the same control-group reading for a page that went live or was rewritten (never mixed into the link readings) */
   pageChanges: { targetUrl: string; change: string; t0: string; weeks: number; basePosition: number | null; position: number | null; pageChange: number | null; controlChange: number | null; effect: number | null; verdict: string; note: string; keyword: string }[];
+  /** L7: the reply rate per subject style, or why it may not be read yet */
+  subjectAb: SubjectAbRead;
   lastRun: string | null; suppressed: number; canSend: { ok: boolean; why: string };
+}
+
+// ---- L7: subject-line A/B (mirrors n8n/seo-agent/v5/code/_ab.js — the two must change together) ----
+// The engine gives every batch two subjects in different styles and hands them out in turn (A, B, A, B …), so both go out about as often.
+// Here they are read back: first e-mails sent per style, people who replied, and the reply rate. **Under SUBJECT_AB_MIN_SENDS first
+// e-mails per style nothing may be called better** — at a dozen sends a few points of difference is noise, so the counts are shown with
+// "not enough sends yet" instead of a winner. Measuring never changes what is sent: a person approves every pitch.
+export const SUBJECT_AB_MIN_SENDS = 30;
+export const SUBJECT_AB_MIN_GAP = 2;
+export const SUBJECT_VARIANTS = ['A', 'B'] as const;
+export type SubjectVariant = (typeof SUBJECT_VARIANTS)[number];
+export const subjectVariantFor = (i: number): SubjectVariant => SUBJECT_VARIANTS[Math.abs(Math.round(i)) % SUBJECT_VARIANTS.length]!;
+export interface SubjectAbRow { variant: SubjectVariant; subject: string; sent: number; replied: number; replyRate: number | null; enough: boolean }
+export interface SubjectAbRead {
+  rows: SubjectAbRow[];
+  enough: boolean;
+  leader: SubjectVariant | '';
+  verdict: 'nothing_sent' | 'not_enough' | 'no_difference' | 'ahead';
+  minSends: number;
+  gap: number | null;
+  note: string;
+  counts: string;
+}
+interface SubjectAbInput { subjectVariant?: string | null; startedAt: string | null; replyAt: string | null; replyClass: string | null; steps: OutreachStep[] }
+/** the reply rate per subject style, and whether it may be read at all */
+export function subjectAbStats(sequences: SubjectAbInput[]): SubjectAbRead {
+  const rate = (replied: number, sent: number) => (sent > 0 ? Math.round((1000 * replied) / sent) / 10 : null);
+  const rows: SubjectAbRow[] = SUBJECT_VARIANTS.map((v) => {
+    const mine = sequences.filter((q) => String(q.subjectVariant ?? '').toUpperCase() === v && q.startedAt);
+    const replied = mine.filter((q) => q.replyAt && q.replyClass && q.replyClass !== 'out_of_office').length;
+    return { variant: v, subject: (mine[0]?.steps?.[0]?.subject ?? '').slice(0, 140), sent: mine.length, replied, replyRate: rate(replied, mine.length), enough: mine.length >= SUBJECT_AB_MIN_SENDS };
+  });
+  const live = rows.filter((r) => r.sent > 0);
+  const counts = rows.map((r) => `${r.variant}: ${r.replied} ${r.replied === 1 ? 'reply' : 'replies'} from ${r.sent} e-mail${r.sent === 1 ? '' : 's'}`).join(' · ');
+  if (!live.length) return { rows, enough: false, leader: '', verdict: 'nothing_sent', minSends: SUBJECT_AB_MIN_SENDS, gap: null, note: 'No first e-mails have gone out yet, so there is nothing to compare.', counts };
+  const enough = live.length >= 2 && live.every((r) => r.enough);
+  if (!enough) {
+    const short = rows.filter((r) => r.sent < SUBJECT_AB_MIN_SENDS).map((r) => `${r.variant} (${r.sent} of ${SUBJECT_AB_MIN_SENDS})`).join(', ');
+    return { rows, enough: false, leader: '', verdict: 'not_enough', minSends: SUBJECT_AB_MIN_SENDS, gap: null,
+      note: `Not enough sends yet to call a subject better: ${SUBJECT_AB_MIN_SENDS} first e-mails per variant are needed, and ${short} ${short.includes(',') ? 'are' : 'is'} short. ${counts}.`, counts };
+  }
+  const sorted = [...live].sort((a, b) => (b.replyRate ?? 0) - (a.replyRate ?? 0));
+  const gap = Math.round(((sorted[0]!.replyRate ?? 0) - (sorted[sorted.length - 1]!.replyRate ?? 0)) * 10) / 10;
+  if (gap < SUBJECT_AB_MIN_GAP) return { rows, enough: true, leader: '', verdict: 'no_difference', minSends: SUBJECT_AB_MIN_SENDS, gap, note: `Both subjects reply about equally well (${counts}): keep either.`, counts };
+  return { rows, enough: true, leader: sorted[0]!.variant, verdict: 'ahead', minSends: SUBJECT_AB_MIN_SENDS, gap,
+    note: `Subject ${sorted[0]!.variant} is ahead by ${gap} points (${counts}). One test on this many e-mails is a hint, not a rule.`, counts };
 }
 
 // ---- rules ----

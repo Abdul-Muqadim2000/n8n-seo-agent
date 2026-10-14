@@ -1,3 +1,41 @@
+// ---- the page type, as one of the options the form offers (D10, 2026-10-12; the builders inline this file where a node asks for the PAGE_TYPE kit) ----
+// The verdict and the keyword screen answer in free text: the live page of execution 365 was planned as "Service Page (ERP implementation
+// UAE) with built-in vendor-neutral comparison, cost and compliance sections". That sentence then travelled as the page type into the brief
+// (which read it as a guide and set 3,100 words), into the schema and into meta.json. PT.of() maps any such text to one of the fixed options
+// and PT.notes() keeps the sentence itself, so nothing the verdict said is lost — it reaches the brief as page_notes instead.
+const PT = (() => {
+  const TYPES = ['Service Page', 'Product Page', 'Blog Post', 'Landing Page', 'Guide', 'Pillar Page', 'Local Page', 'Case Study'];
+  // first match wins by POSITION in the text, not by rule order: "Service Page (…) with built-in vendor-neutral comparison" is a service
+  // page that also compares, not a comparison guide.
+  const RULES = [[/case stud/i, 'Case Study'], [/\bpillar\b|\bhub\b|topic cluster/i, 'Pillar Page'], [/\blocal\b|city page|area page/i, 'Local Page'],
+    [/\bproducts?\b|e-?commerce|\bshop\b|\bstore\b|catalou?g/i, 'Product Page'], [/landing|lead capture|campaign page|squeeze/i, 'Landing Page'],
+    [/\bblogs?\b|\bnews\b|\barticles?\b|\bposts?\b/i, 'Blog Post'],
+    [/\bguides?\b|how.?to|tutorial|comparison|compare|versus|\bvs\b|\bfaqs?\b|resource|checklist|listicle|round.?up|explainer|glossary/i, 'Guide'],
+    [/\bservices?\b|solution|category|collection|offering/i, 'Service Page']];
+  const of = (v, dflt) => {
+    const t = String(v == null ? '' : v).trim();
+    const fallback = TYPES.find(x => x.toLowerCase() === String(dflt || '').trim().toLowerCase()) || 'Service Page';
+    if (!t) return fallback;
+    const exact = TYPES.find(x => x.toLowerCase() === t.toLowerCase());
+    if (exact) return exact;
+    let best = null;
+    for (const r of RULES) { const i = t.search(r[0]); if (i >= 0 && (!best || i < best.i)) best = { i: i, type: r[1] }; }
+    return best ? best.type : fallback;
+  };
+  // the free text, kept for the brief; empty when it says nothing beyond the type itself (the form's own wording included)
+  const SAME = ['pillar / hub page', 'pillar/hub page', 'hub page', 'local page (city or area)', 'case study page'];
+  const notes = (v, type) => {
+    const t = String(v == null ? '' : v).trim().replace(/\s+/g, ' ');
+    if (!t) return '';
+    const bare = t.replace(/[.\s]+$/, '').toLowerCase();
+    if (bare === String(type || '').toLowerCase() || TYPES.some(x => x.toLowerCase() === bare) || SAME.indexOf(bare) >= 0) return '';
+    return t.slice(0, 300);
+  };
+  return { of: of, notes: notes, TYPES: TYPES };
+})();
+// 2026-10-13 (re-rating §3.2 "Also seen"): a ladder row written before D10 carries free text as its page type
+// ("Service Page (ERP implementation UAE) with built-in vendor-neutral comparison…"), and the cadence / "Write now" body passed it
+// straight on. PT.of maps anything to one of the form's options, PT.notes keeps the sentence for the brief.
 // v4: validation errors no longer crash the run. They are returned as { validation_error } and shown to the
 // user (form completion page) or returned as HTTP 400 (API). See "Input OK?" right after Rate Limit.
 let __via_webhook = false;
@@ -22,6 +60,10 @@ const CONFIG = {
   // G8 / K4 (2026-10-13): how many keywords discovery checks live on Google for intent, page type and who ranks. One check is a
   // DataForSEO live-advanced SERP at depth 10 (about $0.002), so 16 costs ~$0.032 a run; KWI.liveChecks caps it at 25.
   live_serp_checks: 16,
+  // G14 (2026-10-13): how many key pages of an audit are read twice — the raw first response and the rendered page — so the
+  // report can say what only exists after JavaScript. Both fetches are free (a plain GET and one render); 5 covers the homepage
+  // plus the four pages Search Console says earn the most.
+  render_diff_pages: 5,
   ladder_pages_default: 1,          // ladder mode: pages written immediately (1-3; each page is its own content run)
   ladder_tracker_cadence: 'weekly', // the Rank Tracker workflow runs weekly; 'monthly' is documentation only until its schedule is changed
   ladder_auto_next_rung: false,     // false = the tracker recommends the next rung (one-click form link + API body); true is not wired
@@ -150,7 +192,9 @@ let keyword  = (mode === 'track' || mode === 'profile' ? '' : String(pick(p2, 'k
 const business = String(pick(p2, 'business') || '').trim();
 const audience = String(pick(p2, 'customer') || pick(p2, 'audience') || '').trim();
 const pageType0 = String(pick(p2, 'page', 'type') || '').trim();
-const pageType = (mode === 'case_study' || /case stud/i.test(pageType0)) ? 'Case Study' : /pillar|hub/i.test(pageType0) ? 'Pillar Page' : /^local/i.test(pageType0) ? 'Local Page' : (pageType0 || 'Service Page');
+const pageType = mode === 'case_study' ? 'Case Study' : PT.of(pageType0, 'Service Page');
+const page_notes = PT.notes(pageType0, pageType);   // the sentence itself, for the brief (strategy_brief.txt prints it)
+const page_type_note = (pageType0 && !PT.TYPES.includes(pageType0)) ? 'The page type "' + pageType0.slice(0, 120) + '" is not one of the page types we write, so it was read as "' + pageType + '"' + (page_notes ? ' and the rest kept as a note for the brief' : '') + '.' : '';
 const business_facts = String(pick(p2, 'facts') || p2.business_facts || '').trim().slice(0, 2000);
 const cta = String(pick(p2, 'call', 'action') || p2.cta || '').trim().slice(0, 200);
 const tone = String(pick(p2, 'tone') || '').trim();
@@ -172,7 +216,7 @@ const lab = (label) => { const v = p2[label]; return v == null ? '' : String(v).
 const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
 const s0 = (v, n) => String(v == null ? '' : v).trim().slice(0, n || 400);
 const urlOk = (u) => /^https?:\/\/\S+$/i.test(String(u || ''));
-const A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video);
+const A = obj(p2.author), R = obj(p2.reviewer), AD = obj(p2.address), CS = obj(p2.case_study), VI = obj(p2.video), STY = obj(p2.style);   // G31: the stored style guide
 const authorLinks = (Array.isArray(A.same_as) ? A.same_as : String(A.same_as || A.links || lab('Author profile links (one per line)')).split(/[\s,]+/)).map(x => String(x).trim()).filter(urlOk).slice(0, 8);
 const authorUrl = s0(A.url, 400) || authorLinks.find(u => cleanDomain(u) === domain) || '';   // the author page on the site; LinkedIn & co. go to sameAs (an update without a page link keeps the stored one)
 const revText = lab('Expert reviewer (optional)'); const revUrl = (revText.match(/https?:\/\/\S+/) || [''])[0]; const revParts = revText.replace(/https?:\/\/\S+/, '').split(',').map(x => x.trim()).filter(Boolean);
@@ -186,7 +230,14 @@ const profile_input = {
   author_name: s0(A.name || p2.author_name || lab('Author name'), 120), author_job_title: s0(A.job_title || A.title || lab('Author job title'), 160), author_credentials: s0(A.credentials || lab('Author credentials and experience'), 600),
   author_bio: s0(A.bio || lab('Author bio'), 1200), author_url: authorUrl, author_image_url: s0(A.image_url || A.image || lab('Author photo URL (optional)'), 400),
   author_same_as: authorLinks.filter(u => u !== authorUrl).join(' '), author_knows_about: asArray(A.knows_about || lab('Topics the author knows best')).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),
-  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400)
+  reviewer_name: s0(R.name || revParts[0], 120), reviewer_job_title: s0(R.job_title || R.title || revParts.slice(1).join(', '), 160), reviewer_url: s0(R.url || revUrl, 400),
+  // G31 (2026-10-13): how this customer writes. The spelling variant is empty unless they chose one, and then it beats the market default.
+  style_brand_form: s0(STY.brand_form || STY.brandForm || p2.style_brand_form || lab('How your brand name is written'), 160),
+  style_brand_wrong: asArray(STY.brand_wrong || STY.brandWrong || p2.style_brand_wrong).map(x => s0(x, 80)).filter(Boolean).slice(0, 12).join(', '),
+  style_spelling: s0(STY.spelling || p2.style_spelling || lab('Spelling'), 40),
+  style_avoid: asArray(STY.avoid || STY.avoid_words || STY.avoidWords || p2.style_avoid || lab('Words to avoid')).map(x => s0(x, 60)).filter(Boolean).slice(0, 40).join(', '),
+  style_tone: s0(STY.tone || p2.style_tone || lab('How you want to sound'), 300),
+  style_notes: s0(STY.notes || p2.style_notes || lab('Other style rules'), 600)
 };
 for (const k of ['logo_url', 'author_url', 'author_image_url', 'reviewer_url', 'map_url']) if (profile_input[k] && profile_input[k] !== '-' && !urlOk(profile_input[k])) throw new Error('Please enter full links (https://...) for the logo, author page, photo, reviewer and map.');
 const csIn = mode === 'case_study' || Object.keys(CS).length > 0;
@@ -268,7 +319,7 @@ if (mode === 'track' && !domain) throw new Error('Website Domain is required: tr
 if (mode === 'track' && !deliverable) throw new Error('Please add your email — the weekly tracking report is sent by email.');
 if (mode === 'checkin' && !domain) throw new Error('Website Domain is required.');
 if (mode === 'profile' && !domain) throw new Error('Website Domain is required: the profile belongs to your site.');
-if (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name or the business details.');
+if (mode === 'profile' && !['author_name', 'business_name', 'street_address', 'phone', 'reviewer_name', 'style_brand_form', 'style_spelling', 'style_avoid', 'style_tone'].some(k => profile_input[k])) throw new Error('Please fill in at least the author name, the business details or your style guide.');
 if (mode === 'case_study' && !domain) throw new Error('Website Domain is required: the case study is written for your site.');
 if ((mode === 'ai_visibility' || mode === 'backlinks') && !domain) throw new Error('Website Domain is required.');
 if ((mode === 'ai_visibility' || mode === 'backlinks') && !deliverable) throw new Error('Please add your email — the report is sent by email.');
@@ -302,6 +353,8 @@ return [{
     email,
     competitors,
     page_type: pageType,
+    page_notes,
+    page_type_note,
     business_facts,
     cta,
     tone,
@@ -337,7 +390,7 @@ return [{
     checkin_notes,
     checkin_is_test,
     checkin_csv_text,
-    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name) ? profile_input : null,
+    profile_input: (mode === 'profile' || profile_input.author_name || profile_input.reviewer_name || profile_input.style_brand_form) ? profile_input : null,
     case_study,
     case_id,
     local_area,
@@ -349,6 +402,7 @@ return [{
     ladder_head: String(p2.ladder_head || ''),
     ladder_links,
     ladder_words: Math.max(0, Math.round(Number(p2.ladder_words) || 0)),   // P2-7: the word count the ladder verdict set for this page
+    ladder_target_url: /^https?:\/\/\S+$/i.test(String(p2.ladder_target_url || '').trim()) ? String(p2.ladder_target_url).trim().slice(0, 300) : '',   // R15: the URL the ladder planned for this page
     ai_target,
     force_content: !!p2.force_content,
     publish_wordpress: !!CONFIG.wordpress_publish && !!wordpress_url,
@@ -370,6 +424,7 @@ return [{
     run_stale_hours: CONFIG.run_stale_hours,
     live_serp_checks: CONFIG.live_serp_checks,
     heavy_audit_pages: CONFIG.heavy_audit_pages,
+    render_diff_pages: CONFIG.render_diff_pages,
     started_at: new Date().toISOString(),
     validation_error: ''
   }

@@ -34,6 +34,7 @@ import { ModeGlyph } from '@/components/reports/meta';
 import { Dialog } from '@/components/ui/overlay';
 import { DataTable, type Column } from '@/components/ui/table';
 import { LinkTabs } from '@/components/ui/tabs';
+import { GuideButton } from '@/components/guide';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { paths } from '@/lib/paths';
@@ -617,7 +618,11 @@ function InviteDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o:
         </div>
       ) : (
         <form id="invite-form" onSubmit={submit} noValidate className="space-y-4">
-          <Field label="E-mail address" error={form.formState.errors.email?.message}>
+          <Field
+            label="E-mail address"
+            labelAction={<GuideButton id="invite-team" variant="link" label="Which role do they need?" />}
+            error={form.formState.errors.email?.message}
+          >
             {(p) => <Input {...p} type="email" autoComplete="off" placeholder="colleague@company.com" autoFocus {...form.register('email')} />}
           </Field>
           <div>
@@ -888,7 +893,13 @@ function BudgetCard({ usage }: { usage: Usage }) {
     >
       <CardBody>
         {owner ? (
-          <Field label="Budget per month (USD)" hint={`Used this month: ${formatUsd(usage.estimatedUsd)}.`} error={err ?? undefined} className="max-w-sm">
+          <Field
+            label="Budget per month (USD)"
+            hint={`Used this month: ${formatUsd(usage.estimatedUsd)}.`}
+            labelAction={<GuideButton id="budget" variant="link" label="How should I set this?" />}
+            error={err ?? undefined}
+            className="max-w-sm"
+          >
             {(p) => (
               <div className="flex gap-2">
                 <div className="relative flex-1">

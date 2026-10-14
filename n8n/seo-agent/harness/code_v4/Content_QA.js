@@ -1,3 +1,157 @@
+// ---- the stored style guide (G31, 2026-10-13, system review FIX_PLAN.md; criterion CAD C17) ----
+// Nothing stored how the customer writes: the brand's written form ("Tech&", never "Tech and" or "techand"), the spelling variant, the
+// words they do not want used and the tone. The guide now lives on the site's business profile row (seo_profiles.style_*), so every run
+// that already loads the profile carries it — no new read, no new API call — and ST turns it into three things:
+//   ST.from(row, defaults)  the guide, with the spelling variant falling back to the market the page targets
+//   ST.block(guide)         the HOUSE STYLE paragraph the brief, copywriter and editor prompts print
+//   ST.check(markdown, g)   the mechanical checks: `errors` (the brand's own name written wrongly — a real quality finding) and
+//                           `notes` (advice: spelling variant, words to avoid, tone signals) that never fail a page on their own
+// Every check is mechanical and quiet: it counts exact matches, quotes what it found, and says nothing when the guide is empty.
+const ST = (() => {
+  const S = (v) => String(v == null ? '' : v).trim();
+  const list = (v) => (Array.isArray(v) ? v : S(v).split(/[\n,;|]+/)).map(x => S(x)).filter(Boolean);
+  const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const VARIANTS = ['British English', 'American English'];
+  // British / American pairs that are unambiguous. Pairs where the two spellings mean different things in British English
+  // (licence / license, practise / practice) or where both are correct (programme / program for software, enquiry / inquiry,
+  // judgement / judgment, grey / gray) are deliberately left out: a style check must not invent an error.
+  const PAIRS = [
+    ['organise', 'organize'], ['organised', 'organized'], ['organising', 'organizing'], ['organisation', 'organization'], ['organisations', 'organizations'],
+    ['optimise', 'optimize'], ['optimised', 'optimized'], ['optimising', 'optimizing'], ['optimisation', 'optimization'],
+    ['analyse', 'analyze'], ['analysed', 'analyzed'], ['analysing', 'analyzing'],
+    ['recognise', 'recognize'], ['recognised', 'recognized'], ['specialise', 'specialize'], ['specialised', 'specialized'],
+    ['prioritise', 'prioritize'], ['prioritised', 'prioritized'], ['customise', 'customize'], ['customised', 'customized'],
+    ['standardise', 'standardize'], ['standardised', 'standardized'], ['centralise', 'centralize'], ['centralised', 'centralized'],
+    ['summarise', 'summarize'], ['summarised', 'summarized'], ['utilise', 'utilize'], ['realise', 'realize'],
+    ['minimise', 'minimize'], ['maximise', 'maximize'], ['digitise', 'digitize'], ['digitised', 'digitized'], ['digitisation', 'digitization'],
+    ['colour', 'color'], ['colours', 'colors'], ['behaviour', 'behavior'], ['behaviours', 'behaviors'],
+    ['favour', 'favor'], ['favourite', 'favorite'], ['labour', 'labor'], ['honour', 'honor'],
+    ['centre', 'center'], ['centres', 'centers'], ['metre', 'meter'], ['metres', 'meters'], ['theatre', 'theater'], ['fibre', 'fiber'],
+    ['defence', 'defense'], ['offence', 'offense'], ['catalogue', 'catalog'], ['catalogues', 'catalogs'], ['dialogue', 'dialog'],
+    ['fulfil', 'fulfill'], ['fulfilment', 'fulfillment'], ['enrolment', 'enrollment'], ['instalment', 'installment'], ['skilful', 'skillful'],
+    ['travelling', 'traveling'], ['cancelled', 'canceled'], ['cancelling', 'canceling'], ['modelling', 'modeling'], ['labelled', 'labeled'], ['labelling', 'labeling']
+  ];
+
+  // Wrong written forms of a brand, derived from the one correct form: the "&" spelled out ("Tech and"), the same words run
+  // together ("Techand") and hyphenated ("Tech-and"). The customer can add more (style_brand_wrong).
+  function wrongForms(form, extra) {
+    const f = S(form);
+    const out = [];
+    const add = (v) => { const x = S(v); if (x && x.toLowerCase() !== f.toLowerCase() && !out.some(y => y.toLowerCase() === x.toLowerCase())) out.push(x); };
+    if (f) {
+      const words = f.replace(/&/g, ' and ').replace(/[^A-Za-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+      if (words.length) { add(words.join(' ')); add(words.join('')); add(words.join('-')); }
+    }
+    for (const e of list(extra)) add(e);
+    return out.slice(0, 16);
+  }
+
+  function from(row, o = {}) {
+    const r = row || {};
+    const brand_form = S(r.style_brand_form) || S(o.brand_form);
+    const raw = S(r.style_spelling);
+    const spelling = /brit|en.?gb|\bgb\b|\buk\b/i.test(raw) ? 'British English' : /amer|en.?us|\bus\b/i.test(raw) ? 'American English' : '';
+    const avoid = list(r.style_avoid).slice(0, 40);
+    const tone = S(r.style_tone);
+    const notes = S(r.style_notes);
+    const g = { on_file: !!(brand_form || spelling || avoid.length || tone || notes), brand_form, brand_wrong: list(r.style_brand_wrong).slice(0, 12),
+      spelling, spelling_effective: spelling || S(o.spelling), spelling_source: spelling ? 'the style guide' : (S(o.spelling) ? 'the market this page targets' : ''),
+      avoid, tone, tone_effective: tone || S(o.tone), notes };
+    g.wrong_forms = wrongForms(brand_form, g.brand_wrong);
+    g.prompt_block = block(g);
+    return g;
+  }
+
+  // the paragraph the writing prompts print (empty when nothing is on file, so no prompt gains a meaningless line)
+  function block(g) {
+    const x = g || {};
+    if (!x.on_file) return '';
+    const parts = [];
+    if (x.brand_form) parts.push('Write the business name exactly as "' + x.brand_form + '" everywhere, including headings, the title and the meta description'
+      + ((x.wrong_forms || []).length ? ' — never ' + x.wrong_forms.map(w => '"' + w + '"').join(' or ') : '') + '.');
+    if (x.spelling_effective) parts.push('Use ' + x.spelling_effective + ' spelling throughout (' + (x.spelling_source || 'house style') + ').');
+    if ((x.avoid || []).length) parts.push('Never use these words or phrases: ' + x.avoid.map(w => '"' + w + '"').join(', ') + '.');
+    if (x.tone) parts.push('Tone: ' + x.tone + '.');
+    if (x.notes) parts.push(x.notes);
+    return 'HOUSE STYLE (the customer\'s own style guide — follow it exactly)\n' + parts.map(p => '- ' + p).join('\n');
+  }
+
+  // what we scan: the prose, without code blocks, the meta lines, link targets, bare URLs and HTML tags, so a brand name inside a
+  // slug or a URL is never read as prose
+  const scrub = (md) => String(md || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^(Title|Meta Description|Slug|Primary Keyword|Secondary Keywords):.*$/gim, ' ')
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')
+    .replace(/\[([^\[\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/<[^>]*>/g, ' ');
+  const hits = (text, term) => {
+    const t = S(term);
+    if (!t) return [];
+    const re = new RegExp('(?<![A-Za-z0-9])' + esc(t).replace(/\s+/g, '[\\s\\u00a0]+') + '(?![A-Za-z0-9])', 'gi');
+    const out = []; let m;
+    while ((m = re.exec(text))) out.push({ text: m[0], at: m.index });
+    return out;
+  };
+
+  function check(md, guide) {
+    const g = guide || {};
+    const text = scrub(md);
+    const res = { on_file: !!g.on_file, brand: [], spelling: { variant: g.spelling_effective || '', checked: false, wrong: [], count: 0 },
+      avoid: [], tone: { exclamations: 0 }, errors: [], notes: [] };
+    if (!g.on_file) return res;
+
+    // 1. the brand's own name: the one hard check. A run-together form ("techand") is never prose, so every case counts; a spaced
+    //    form ("Tech and") counts only where it reads as a name (capitalised), so "tech and finance teams" is not an error.
+    if (g.brand_form) {
+      const byForm = new Map();
+      for (const w of (g.wrong_forms || [])) {
+        const spaced = /\s/.test(w);
+        for (const h of hits(text, w)) {
+          if (spaced && !/^[A-Z]/.test(h.text)) continue;
+          const k = h.text;
+          byForm.set(k, (byForm.get(k) || 0) + 1);
+        }
+      }
+      for (const h of hits(text, g.brand_form)) if (h.text !== g.brand_form) byForm.set(h.text, (byForm.get(h.text) || 0) + 1);
+      res.brand = [...byForm.entries()].map(([found, count]) => ({ found, count })).sort((a, b) => b.count - a.count);
+      const total = res.brand.reduce((s, x) => s + x.count, 0);
+      if (total) res.errors.push('Brand name: ' + res.brand.map(b => '"' + b.found + '" (' + b.count + ')').join(', ')
+        + ' — this business writes its name "' + g.brand_form + '". Correct every one.');
+    }
+
+    // 2. the spelling variant (advice)
+    if (g.spelling_effective) {
+      const gb = /brit/i.test(g.spelling_effective);
+      const us = /amer/i.test(g.spelling_effective);
+      if (gb || us) {
+        res.spelling.checked = true;
+        for (const [b, a] of PAIRS) {
+          const wrong = gb ? a : b, right = gb ? b : a;
+          const n = hits(text, wrong).length;
+          if (n) res.spelling.wrong.push({ found: wrong, wanted: right, count: n });
+        }
+        res.spelling.wrong.sort((x, y) => y.count - x.count);
+        res.spelling.count = res.spelling.wrong.reduce((s, x) => s + x.count, 0);
+        if (res.spelling.count) res.notes.push('Spelling: ' + res.spelling.count + ' word(s) use ' + (gb ? 'American' : 'British') + ' spelling ('
+          + res.spelling.wrong.slice(0, 5).map(w => '"' + w.found + '" -> "' + w.wanted + '"').join(', ') + ') where the style guide says ' + g.spelling_effective + '.');
+      }
+    }
+
+    // 3. the words the customer does not want used (advice)
+    for (const w of (g.avoid || [])) { const n = hits(text, w).length; if (n) res.avoid.push({ word: w, count: n }); }
+    res.avoid.sort((a, b) => b.count - a.count);
+    if (res.avoid.length) res.notes.push('Words to avoid: ' + res.avoid.slice(0, 8).map(a => '"' + a.word + '" (' + a.count + ')').join(', ')
+      + ' — the style guide asks for these not to be used.');
+
+    // 4. tone, mechanically: exclamation marks are the one signal that can be counted without judging the writing
+    res.tone.exclamations = (text.match(/!/g) || []).length;
+    if (g.tone && res.tone.exclamations) res.notes.push('Tone: ' + res.tone.exclamations + ' exclamation mark(s) in the page; the style guide asks for "' + g.tone + '".');
+    return res;
+  }
+
+  return { from, block, check, wrongForms, scrub, VARIANTS, PAIRS };
+})();
 // ---- source kit (G4, 2026-10-11; inlined through the __SOURCES__ marker): what a citation is worth, what a figure says, and clean links.
 // The 2026-10-11 review found a page that cited one vendor blog (trangotech.com) three times and kept Google's `?srsltid=` on a Statista
 // link, with no check that the numbers in the copy are the numbers the source actually carries (RESULTS.md §2.4, exec 365).
@@ -410,8 +564,22 @@ if (!userGavePrices) {
   const PRICE_WORDS = /\b(price[sd]?|pricing|cost[s]?|fees?|quotes?|packages?|plans?|investment|budget|starting|subscriptions?|rates?|charge[sd]?|pay|paid|per (user|seat|hour|day|project))\b/i;
   const OTHER_WORDS = /\b(revenue|turnover|threshold|fines?|penalt(y|ies)|tax|vat|levy|duty|salary|salaries|wages?|market|funding|raised|valuation|gdp|economy|exports?|imports?|sales of)\b/i;
   const sentenceAt = (text, at, len) => { let a = at, b = at + len; while (a > 0 && !/[.!?\n|]/.test(text[a - 1])) a--; while (b < text.length && !/[.!?\n|]/.test(text[b])) b++; return text.slice(a, b); };
-  let masked = 0, flagged = 0, kept = 0;
+  // R11 (2026-10-13, re-rating §3.11): a passage the draft itself declares illustrative or hypothetical keeps its figures. Live, the mask
+  // turned a worked example into "40 fee-earners at an average rate of [Price] per hour" and "billings of [Price] a week (40 × 22.5 ×
+  // [Price])" two lines under "All figures are illustrative assumptions for a hypothetical firm", so the arithmetic of the whole example
+  // was destroyed and the page shipped with 11 × [Price]. The guard is unchanged everywhere else: an unsourced amount the draft states as
+  // a real price still becomes [Price], and an unsourced threshold or fine still becomes [Confirm: …].
+  const ILLUSTRATIVE_RE = /\b(illustrative|illustration only|hypothetical|worked example|for example only|example figures|sample figures|not benchmarks|assumptions for a)\b/i;
+  const illustrativeZones = (() => {
+    const out = []; const starts = [0]; const re = /^#{1,6} .*$/gm; let h;
+    while ((h = re.exec(md))) if (h.index > 0) starts.push(h.index);
+    for (let i = 0; i < starts.length; i++) { const a = starts[i], b = i + 1 < starts.length ? starts[i + 1] : md.length; if (ILLUSTRATIVE_RE.test(md.slice(a, b))) out.push([a, b]); }
+    return out;
+  })();
+  const inIllustrative = (at) => illustrativeZones.some(z => at >= z[0] && at < z[1]);
+  let masked = 0, flagged = 0, kept = 0, illustrative = 0;
   md = md.replace(priceRe, (amt, _r, _s, at, whole) => {
+    if (inIllustrative(at)) { illustrative++; return amt; }
     if (verified(amt)) { kept++; return amt; }
     const sent = sentenceAt(whole, at, amt.length);
     const big = /(m|M|bn|BN|million|Million|billion|Billion)\b\s*$/.test(amt);
@@ -421,11 +589,20 @@ if (!userGavePrices) {
   if (masked) fixes.push(`Replaced ${masked} invented price(s) with [Price]`);
   if (flagged) fixes.push(`Marked ${flagged} unsourced amount(s) (thresholds, fines, market figures) as [Confirm: …] for review`);
   if (kept) fixes.push(`Kept ${kept} amount(s) stated in the verified facts`);
+  if (illustrative) fixes.push(`Kept ${illustrative} amount(s) inside a passage the draft labels illustrative or hypothetical (a worked example has to keep its arithmetic)`);
 }
 
 // 4. Meta lines — and nothing else may sit between them and the H1 (models sometimes add "production notes")
 const metaOf = (label) => { const m = md.match(new RegExp('^' + label + ':\\s*(.+)$', 'im')); return m ? m[1].trim() : ''; };
-const metaTitle = metaOf('Title'), metaDesc = metaOf('Meta Description'), slug = metaOf('Slug');
+const metaTitle = metaOf('Title'), metaDesc = metaOf('Meta Description');
+// R15 (2026-10-13, re-rating §3.11): a ladder page keeps the URL its ladder row planned. Live, the row said
+// `…/service-industry-erp-software/` (the ladder's link map, the siblings' up-links and the Rank Tracker all use it) while the page was
+// delivered as `service-industry-erp-software-uae`, so publishing it would have left every stored link pointing at a URL that never exists.
+const ladderPlannedUrl = (prev.ladder_id && String(prev.ladder_target_url || '').trim()) ? String(prev.ladder_target_url).trim() : '';
+const ladderSlug = ladderPlannedUrl ? (ladderPlannedUrl.replace(/^https?:\/\/[^\/]+/, '').replace(/[?#].*$/, '').replace(/^\/+|\/+$/g, '').split('/').filter(Boolean).pop() || '') : '';
+const slugWritten = metaOf('Slug');
+const slug = ladderSlug || slugWritten;
+if (ladderSlug && slugWritten && slugWritten.replace(/^\/|\/$/g, '') !== ladderSlug) fixes.push('Kept the URL the keyword ladder planned (/' + ladderSlug + '/) instead of the slug the draft suggested (' + slugWritten + '): the ladder\'s link map, the other pages\' links and the rank tracking all use the planned URL');
 {
   const h1At = md.search(/^# .+$/m);
   if (h1At > 0) {
@@ -805,6 +982,17 @@ const HP = HPall.filter(p => !p.planned);
 const ownUrlQA = (u) => { const raw = String(u || '').trim(); const h = raw.match(/^https?:\/\/([^\/?#]+)/i); const host = h ? SM.helpers.bare(h[1]) : '';
   return (raw && domain && host === SM.helpers.bare(domain)) ? siteUrlOf(domain, raw.replace(/^https?:\/\/[^\/?#]*/i, '') || '/') : raw; };
 const HPplanned = HPall.filter(p => p.planned).map(p => ({ ...p, url: ownUrlQA(p.url) }));
+// R15 (2026-10-13, re-rating §3.11): the ladder's own planned pages are links to add once they are live, exactly like a hub's planned
+// cluster pages. Live, `meta.links_to_add_when_published` came back `[]` although the app had sent two `planned: true` ladder links
+// (the main page and one sibling) — the only list that carried them was the hub list, which a rung page never has.
+// `planned_link_targets` is what *Collect Site URLs* decided is not live yet (D9); only when the run never computed it (an older body) do
+// the ladder links the caller sent stand in, and then only the ones it marked planned — a page the site already has is a link, not a to-do.
+const plannedLadderQA = Array.isArray(prev.planned_link_targets) ? prev.planned_link_targets : (prev.ladder_links || []).filter(l => l && l.planned === true);
+const plannedLinksQA = [...HPplanned.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role || p.ladder || 'cluster' })),
+  ...plannedLadderQA.filter(l => l && l.url)
+    .map(l => ({ keyword: l.keyword || l.about || '', url: ownUrlQA(l.url), role: l.role || l.ladder || 'ladder' }))]
+  .filter((l, i, a) => l.url && a.findIndex(x => String(x.url).replace(/\/$/, '') === String(l.url).replace(/\/$/, '')) === i)
+  .filter(l => String(l.url).replace(/\/$/, '') !== String(pageUrl).replace(/\/$/, ''));
 if (role === 'hub' && HP.length) blocks.push({ type: 'ItemList', note: 'The cluster pages this hub links to (live pages only).', json: { '@context': 'https://schema.org', '@type': 'ItemList', name: h1Text + ': guides in this series', itemListElement: HP.map((p, i) => ({ '@type': 'ListItem', position: i + 1, name: anchorText(p), url: p.url })) } });
 blocks.push({ type: 'BreadcrumbList', json: { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: home }, { '@type': 'ListItem', position: 2, name: h1Text, item: pageUrl }] } });
 // FIX_PLAN G2: no FAQPage block any more — Google stopped showing FAQ rich results on 2026-05-07 and no other engine reads the markup.
@@ -823,6 +1011,14 @@ if (V && (V.missing || []).length) eeat_notes.push('Video: missing ' + V.missing
 if (role === 'hub' && HPplanned.length) eeat_notes.push(HPplanned.length + ' cluster page(s) are planned and not live yet: this page links to none of them. They are listed in the package as "links to add when published" — add the link once each one is live.');
 fixes.push('Generated ' + blocks.map(b => b.type).join(' + ') + ' schema');
 
+// G31 (2026-10-13): the customer's stored style guide, checked mechanically (v5/code/_style_guide.js). The brand's own name written
+// wrongly is a real quality finding and goes into `warnings`, so the editor corrects it and the page does not pass as it is. The
+// spelling variant, the words to avoid and the tone are advice: they are reported beside the page and never make it "not ready".
+const style_guide = prev.style_guide || null;
+const style = ST.check(md, style_guide);
+for (const e of style.errors) warnings.push(e);
+const style_notes = [...style.notes];
+
 // FIX_PLAN D10: a page nobody can publish never passes — more than PH_MAX placeholders, or more than 25% over the brief's target (which is
 // itself clamped to the competitor analysis' recommendation, or to the verdict's own target, in Parse Brief).
 const too_many_placeholders = placeholder_count > PH_MAX;
@@ -840,14 +1036,36 @@ const crit = critique || lastCritique || {};
 const highProblem = (crit.problems || []).some(p => /high|critical/i.test(p.severity || ''));
 const editor_needed = !passed_copy && !(content_score >= 90 && crit.score != null && Number(crit.score) >= 85 && !highProblem && !too_many_placeholders && !too_long && Math.abs(mainWords - target) <= target * 0.25 && warnings.every(w => STYLE_ONLY.test(w)));
 if (!passed_copy && !editor_needed && round === 1) fixes.push('Editor pass skipped: the draft met every SEO check (score ' + content_score + ', review ' + crit.score + '); the style notes below are left for a final read');
+// R11 (2026-10-13, re-rating §3.11): when the rounds run out with the gate still failing, the page is DELIVERED AS A DRAFT and labelled as
+// one. Live (exec 521) round 1 failed on 6 placeholders, the editor ran, round 2 came back with 12 (11 × [Price], 1 × [Number]) and 40%
+// coverage against a target of 68 — and because `qa_max_rounds: 2` was reached the page went out with nothing in the callback, the e-mail or
+// meta.json saying the quality check had failed. The counts below are this round's, so the delivery can only ever carry the LAST round's.
+const max_rounds = Math.max(1, Math.round(Number(prev.qa_max_rounds) || 2));
+const rounds_left = Math.max(0, max_rounds - round);
+const not_ready = !passed && !rounds_left;   // no round left to fix it: a draft, not a publishable page
+const not_ready_reasons = !not_ready ? [] : [
+  too_many_placeholders ? placeholder_count + ' placeholder(s) left in the copy (at most ' + PH_MAX + ' can be published): ' + placeholders.slice(0, 4).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ') : '',
+  profile_placeholders ? profile_placeholders + ' bracketed field(s) in the byline, the author box and the Person schema still need your details' : '',
+  too_long ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
+  (!too_long && Math.abs(mainWords - target) > target * 0.25) ? 'the main content is ' + mainWords + ' words against a target of ' + target : '',
+  (coverage_target_pct && coverage_pct < coverage_target_pct) ? 'it covers ' + coverage_pct + '% of the terms the best-ranking page covers, against a target of ' + coverage_target_pct + '%' : '',
+  content_score < 80 ? 'the content score is ' + content_score + ' of 100 (80 is the bar)' : '',
+  ...warnings.filter(w => !/^Too many placeholders|^Main content is too long/.test(w)).slice(0, 4)
+].filter(Boolean);
+const quality_label = passed ? 'passed the quality check'
+  : not_ready ? 'did not pass the quality check — not ready to publish'
+    : 'needs another editing round before it can be published';
+const quality = { passed, publishable: passed, not_ready, round, max_rounds, rounds_left, label: quality_label, reasons: not_ready_reasons,
+  placeholder_count, placeholders_total: placeholder_count + profile_placeholders, placeholder_max: PH_MAX, coverage_pct, coverage_target_pct, content_score,
+  note: not_ready ? 'The editor had ' + max_rounds + ' round(s) and the page still fails the checks above: it is delivered as a draft to finish by hand, not as a page to publish as it is.' : '' };
 const site_profile_out = (P && Object.keys(P).some(k => k === 'address' ? Object.values(P.address || {}).some(Boolean) : String(P[k] || '').trim())) ? P : (prev.site_profile || null);
 return [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle, description: metaDesc, slug }, schema_blocks: blocks, critique: critique || lastCritique || null, site_profile: site_profile_out,
-  content_qa: { ai_ready, round, passed, editor_needed, content_score, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
+  content_qa: { ai_ready, round, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, business_name: bizName, nap_source,
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
-    source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: HPplanned.map(p => ({ keyword: p.keyword || '', url: p.url, anchor: anchorText(p) })),
+    source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),
     answer_block_words: answerWords, meta_title_length: metaTitle.length, meta_description_length: metaDesc.length, unverified_statistics: stats, unverified_figures,
     trusted_sources, banned_phrases: banned_found, readability: { flesch, avg_sentence_words: avgSentence, long_sentences: longSentences, passive_pct }, term_coverage: termCoverage, coverage_pct, coverage: coverage_report, coverage_target_pct, missing_terms: missingTerms, missing_subtopics: missingSubtopics, specificity_per_100_words: specificity,
     critic_score: (critique || lastCritique || {}).score ?? null, critic_verdict: (critique || lastCritique || {}).verdict || null,
-    schema_types: blocks.map(b => b.type), eeat_notes, page_role: role, auto_fixes: fixes, warnings } } }];
+    schema_types: blocks.map(b => b.type), eeat_notes, style, style_notes, style_guide: style_guide && style_guide.on_file ? style_guide : null, page_role: role, auto_fixes: fixes, warnings } } }];

@@ -13,13 +13,18 @@
 //   * won: the main keyword in the top 3 in each of the last 4 rank checks (failed checks skipped) -> no more pages (won_ladders).
 //   * pile-up guard (v4.14, FIX_PLAN D5): max_waiting or more distinct keywords written but not published -> nothing is written for the
 //     site (paused_reason 'pileup'; waiting_keywords names them); an on-demand run may bypass it only with force: true. A keyword waits
-//     when a content-log row of the last 120 days has any status but published, or a ladder row is still 'writing' and its keyword has no
+//     when a content-log row of the last 120 days says `written` (R1: `started` is a run that never finished), or a ladder row is still 'writing',
+//     its keyword has a `written` content-log row and no
 //     published page (ladder pages reach the content log only from v4.14 on).
 //   * opportunity posts (striking / trend) only when opportunities is auto; when manual they are listed as suggestions.
 //   * Manual ladders are never written: each one's next eligible page is listed in awaiting_approval.
 // Sites without a pick but with something to say (paused, awaiting approval, suggestions, a main page waiting for support) get one report_only item (nothing_to_do: true) for the
 // Cadence Status note; dry_run only plans.
 /*__SITE_MODEL__*/
+// R16 (2026-10-13, FIX_PLAN §3.11): the fit gate also reads the rows that were STORED before it existed, so a competitor's brand or a
+// government portal planned as a rung is set aside here instead of being written (`set_aside`, with the reason; the Ladder Marks node
+// writes `status: set_aside` back on the row, so the app and the next run see the same thing).
+/*__FIT_GATE__*/
 const CONFIG = { default_pages_per_week: 1, max_pages_per_week: 3, skip_recent_days: 90, striking_min_impressions: 30, striking_min_position: 4, striking_max_position: 20, publish_reminder_days: 7, upcoming: 4,
   max_active: 2, max_waiting: 3, waiting_days: 120, gate_head_position: 30, won_checks: 4, won_position: 3, suggestions: 5 };
 let trigger = {}; try { const t = $('Manual Run').first(); trigger = (t && t.json) || {}; } catch (e) {}
@@ -29,7 +34,11 @@ const normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\/\//
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const lc = (v) => String(v == null ? '' : v).toLowerCase().trim();
 const sites = rowsOf('Load Sites').filter(r => r.site_id && r.domain), cad = rowsOf('Load Cadence').filter(r => r.site_id), ladders = rowsOf('Load Ladders').filter(r => r.ladder_id && r.keyword), qh = rowsOf('Load Query History'), trends = rowsOf('Load Trends'), logs = rowsOf('Load Content Log').filter(r => r.keyword);
-const settings = rowsOf('Load Ladder Settings').filter(r => r.ladder_id), headRanks = rowsOf('Load Main Keyword Ranks').filter(r => r.ladder_id && r.keyword);
+const settings = rowsOf('Load Ladder Settings').filter(r => r.ladder_id);
+// R16 (2026-10-13): the node loads the ranks of EVERY rung now (it was rung 4 only). The won / gate rules still read the main keyword's
+// own rows (headRanks); every rung's rows carry the results page the Rank Tracker stored for that keyword, which the fit gate reads.
+const allRanks = rowsOf('Load Main Keyword Ranks').filter(r => r.ladder_id && r.keyword);
+const headRanks = allRanks.filter(r => Number(r.rung) === 4 || r.rung === '' || r.rung == null);
 // 2026-10-12 (FIX_PLAN D11): the site's page inventory (seo_pages, filled weekly by the Site Tracker). A candidate whose search a live page
 // already answers is not written as a new post: a ladder page becomes a refresh of that page, an opportunity post is dropped and named.
 const pageRows = rowsOf('Load Pages (Cadence)').filter(r => r.site_id && r.url);
@@ -65,7 +74,40 @@ for (const s of list) {
   const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort(byRung);
   const ladderKw = new Set(lrows.map(l => norm(l.keyword)));
   for (const l of lrows) if (l.status === 'writing' || l.status === 'published') recent.add(norm(l.keyword));
-  const open = (l) => String(l.status || 'planned') === 'planned' && !recent.has(norm(l.keyword));
+  // R16: every stored rung goes through the fit gate before it can be written. Context: the website's own domain, the competitors it
+  // declared (seo_monitors / the site model) and, PROTECTED so that the ladder's own topic can never look like a brand, the ladder head
+  // terms and the site's services. A rung whose page is already written or published is kept (fitStored) and only flagged.
+  const monRow = monitors.find(m => m.site_id === s.site_id || normD(m.domain) === s.domain) || {};
+  const fitModel = (() => { try { return SM.from(s, { monitors: monRow }); } catch (e) { return null; } })();
+  const fitCtx = { own_domain: s.domain, brands: {},
+    competitors: fitModel ? fitModel.competitors : String(monRow.competitors || '').split(',').map(x => normD(x)).filter(Boolean),
+    protect: [...new Set([...lrows.map(l => String(l.head_keyword || '')), ...(fitModel ? fitModel.services : [])].filter(Boolean))] };
+  // the results page the Rank Tracker stored for this very keyword (G6 `competitors_json` / `snapshot_json`, written two hours earlier on
+  // the same Monday): the domains that really rank for it, in rank order — the evidence that makes "facts erp" a brand query
+  const serpFor = (kw) => {
+    const best = new Map();
+    for (const h of allRanks.filter(h => norm(h.keyword) === norm(kw))) {
+      for (const col of ['competitors_json', 'snapshot_json']) {
+        let o = null; try { o = JSON.parse(h[col] || 'null'); } catch (e) { o = null; }
+        if (!o || typeof o !== 'object') continue;
+        for (const x of [...(o.above || []), ...(o.competitors || []), ...(o.top || [])]) {
+          const d = normD(x.d || x.domain || x.u || x.url), p = Number(x.p || x.position);
+          if (d && Number.isFinite(p) && p > 0) best.set(d, Math.min(best.get(d) == null ? 999 : best.get(d), p));
+        }
+      }
+    }
+    return [...best.entries()].sort((a, b) => a[1] - b[1]).map(e => e[0]);
+  };
+  const fitOf = new Map(); const set_aside = [];
+  for (const l of lrows) {
+    const serp = serpFor(l.keyword);
+    const g = fitStored(l, { ...fitCtx, serp, serp_domains: serp }); fitOf.set(l, g);
+    if (!g.flagged) continue;
+    set_aside.push({ ladder_id: l.ladder_id, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '',
+      reason: g.reason, detail: g.detail, note: g.note, written: !!g.live, dropped: !g.ok });
+  }
+  const fitOk = (l) => (fitOf.get(l) || { ok: true }).ok;
+  const open = (l) => String(l.status || 'planned') === 'planned' && !recent.has(norm(l.keyword)) && fitOk(l);
   // one entry per ladder: settings, main-keyword ranks, gate, won, eligible pages in writing order
   const groups = new Map(); for (const l of lrows) { if (!groups.has(l.ladder_id)) groups.set(l.ladder_id, []); groups.get(l.ladder_id).push(l); }
   const info = [...groups.entries()].map(([id, rows]) => {
@@ -99,7 +141,9 @@ for (const s of list) {
     const rows = x.rows, top = x.top; const links = [];
     if (isTop(l)) { for (const r of rows.filter(r => !isTop(r) && r.target_url).slice(0, 12)) links.push({ url: r.target_url, role: 'down', keyword: r.keyword }); }   // the top page is the hub: it lists the whole cluster (12, was 6; v4.4)
     else { if (top && top.target_url && top.keyword !== l.keyword) links.push({ url: top.target_url, role: 'top', keyword: top.keyword }); const sib = rows.find(r => Number(r.rung) === Number(l.rung) && r.keyword !== l.keyword && r.target_url); if (sib) links.push({ url: sib.target_url, role: 'sibling', keyword: sib.keyword }); }
-    return { keyword: l.keyword, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '', source: 'ladder', ladder_id: l.ladder_id, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '', links, why: 'keyword ladder, rung ' + (isTop(l) ? 'top' : l.rung) + ' towards "' + (l.head_keyword || '') + '"' };
+    // R15 (2026-10-13): `target_url` is the URL this ladder planned for the page — the run keeps it as the page's slug, so the ladder's
+    // link map, the other rung pages' links and the rank tracking never point at a URL that will not exist
+    return { keyword: l.keyword, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '', target_url: l.target_url || '', source: 'ladder', ladder_id: l.ladder_id, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, head: l.head_keyword || '', links, why: 'keyword ladder, rung ' + (isTop(l) ? 'top' : l.rung) + ' towards "' + (l.head_keyword || '') + '"' };
   };
   const cands = [];
   for (const x of active) for (const l of x.eligible) cands.push(ladderCand(x, l));
@@ -127,15 +171,19 @@ for (const s of list) {
     if (x.source !== 'ladder') return false;   // an opportunity post would be a second page for the same search
     x.existing_page_url = c.url; x.covered_by = c.url; x.why += ' \u2014 ' + c.url + ' already answers this search, so it is refreshed, not written again';
     return true; });
-  // pile-up guard (v4.14, FIX_PLAN D5): every page written and not published counts, each keyword once — the content log (any status
-  // but published, written in the last 120 days) AND the ladder rows still 'writing' whose keyword has no published page. Ladder pages
-  // were logged only from v4.14 on, so the ladder rows are what the guard sees for everything written before it.
+  // pile-up guard (v4.14, FIX_PLAN D5): every page written and not published counts, each keyword once — the content log rows that say
+  // `written` (in the last 120 days) AND the ladder rows still 'writing' whose keyword has such a row and no published page.
   const freshW = (t) => { const x = Date.parse(String(t || '')); return Number.isFinite(x) && (now - x) < CONFIG.waiting_days * 864e5; };
   const waitingMap = new Map();   // keyword key -> { keyword, written_at, source }
-  for (const l of slog) { if (l.status === 'published' || !freshW(l.started_at)) continue; const k = norm(l.keyword); if (!k || waitingMap.has(k)) continue; waitingMap.set(k, { keyword: l.keyword, written_at: String(l.started_at || ''), source: String(l.source || '') }); }
+  // R1 (2026-10-13, re-rating): `written` in the content log is the only proof that a page exists. A `started` row is a run that opened the
+  // row and never finished, and a ladder row saying `writing` is a promise, not a page: live, a page run the budget guard refused left row 19
+  // "writing" with a `started` log row, and this guard counted it as one of 6 pages waiting and paused the site's writing for a week.
+  const writtenOf = (k) => slog.filter(r => norm(r.keyword) === k && (r.status === 'written' || r.status === 'published' || String(r.published_url || '').trim()))
+    .sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;
+  for (const l of slog) { if (l.status !== 'written' || !freshW(l.started_at)) continue; const k = norm(l.keyword); if (!k || waitingMap.has(k)) continue; waitingMap.set(k, { keyword: l.keyword, written_at: String(l.started_at || ''), source: String(l.source || '') }); }
   for (const l of lrows) { if (l.status !== 'writing') continue; const k = norm(l.keyword); if (!k || waitingMap.has(k) || publishedKw.has(k)) continue;
-    const lg = slog.filter(r => norm(r.keyword) === k).sort((a, b) => String(b.started_at).localeCompare(String(a.started_at)))[0] || null;
-    const at = String((lg && lg.started_at) || l.start_date || ''); if (!freshW(at)) continue;
+    const lg = writtenOf(k); if (!lg) continue;   // R1: no `written` log row = the page was never written (the refusal path resets such a row to `planned`)
+    const at = String(lg.started_at || l.start_date || ''); if (!freshW(at)) continue;
     waitingMap.set(k, { keyword: l.keyword, written_at: at, source: 'ladder' }); }
   const waiting = [...waitingMap.values()].sort((a, b) => String(a.written_at).localeCompare(String(b.written_at)));
   const waitingKw = new Set(waitingMap.keys());
@@ -172,7 +220,7 @@ for (const s of list) {
   const upcoming = uniq.slice(fromUniq, fromUniq + CONFIG.upcoming).map(x => ({ keyword: x.keyword, source: x.source, why: x.why }));
   const pending = waiting.map(w => ({ keyword: w.keyword, started_at: w.written_at, days: Math.round((now - new Date(w.written_at || nowIso)) / 864e5) })).filter(p => p.days >= CONFIG.publish_reminder_days);   // D5: ladder pages are in `waiting` too
   const awaiting_approval = manualL.filter(x => x.eligible.length).map(x => { const l = x.eligible[0]; return { ladder_id: x.id, head: x.head, keyword: l.keyword, rung: Number(l.rung) || 0, page_no: Number(l.page_no) || 0, page_type: l.page_type || 'Service Page', existing_page_url: l.page_exists ? (l.target_url || '') : '' }; });
-  const facts = { covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size, waiting_keywords: waiting.map(w => w.keyword).slice(0, 20), max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,
+  const facts = { set_aside, covered_by_live_pages: covered.slice(0, 10), paused_reason, waiting_publish: waitingKw.size, waiting_keywords: waiting.map(w => w.keyword).slice(0, 20), max_waiting: cfg.max_waiting, pileup_forced: pileup && force, opportunities: cfg.opportunities, awaiting_approval, suggestions,
     ai_pages: { per_month: aiQuota, used_this_month: aiUsed, this_week: !!aiPick, next: aiCand ? { keyword: aiCand.keyword, source: aiCand.source, target_id: aiCand.target_id, why: aiCand.why } : null, queued: aiQueue.length },
     queued_ladders: queued.map(x => ({ ladder_id: x.id, head: x.head, priority: Number.isFinite(x.priority) ? x.priority : null, reason: 'max_active' })),
     won_ladders: info.filter(x => x.won || x.status === 'won').map(x => ({ ladder_id: x.id, head: x.head, position: x.head_position, checks: x.won_checks })),
@@ -181,9 +229,12 @@ for (const s of list) {
     out.push({ json: { site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', source: p.source, keyword: p.keyword, page_type: p.page_type, existing_page_url: p.existing_page_url || '', ladder_id: p.ladder_id || '', rung: p.rung || 0, page_no: p.page_no || 0, target_id: p.target_id || '', why: p.why, request_id, pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, ...facts,
       body: { mode: 'keyword', keyword: p.keyword, page_type: p.page_type, country: s.country || '', domain: s.domain, receive: ['Keyword Report', 'Page Content'], existing_page_url: p.existing_page_url || '', email: s.email || '', callback_url: s.callback_url || '', request_id, client_ip: 'cadence:' + s.site_id, force_content: true,
         ...(p.ai_target ? { ai_target: p.ai_target } : {}),
-        ...(p.source === 'ladder' ? { ladder_id: p.ladder_id, ladder_rung: p.rung, ladder_head: p.head, ladder_page_no: p.page_no, ladder_links: (p.links || []).map(l => ({ url: l.url, path: String(l.url).replace(/^https?:\/\/[^\/]+/i, '') || '/', role: l.role, keyword: l.keyword, planned: true })) } : {}) } } }); });
-  if (!picks.length && (paused_reason || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length)) {
-    const reason = paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"').join(', ') + ' — publish them to continue' : 'nothing to write automatically this week';
+        ...(p.source === 'ladder' ? { ladder_id: p.ladder_id, ladder_rung: p.rung, ladder_head: p.head, ladder_page_no: p.page_no, ladder_target_url: p.target_url || '', ladder_links: (p.links || []).map(l => ({ url: l.url, path: String(l.url).replace(/^https?:\/\/[^\/]+/i, '') || '/', role: l.role, keyword: l.keyword, planned: true })) } : {}) } } }); });
+  const dropped = set_aside.filter(x => x.dropped);   // R16: a rung nobody should write is a reason to report, not to go quiet
+  if (!picks.length && (paused_reason || awaiting_approval.length || suggestions.length || facts.waiting_for_support.length || dropped.length)) {
+    const reason = paused_reason ? waitingKw.size + ' written pages waiting for publication (pile-up guard, limit ' + cfg.max_waiting + '): ' + facts.waiting_keywords.slice(0, 6).map(k => '"' + k + '"').join(', ') + ' — publish them to continue'
+      : dropped.length ? 'nothing to write automatically this week; ' + dropped.length + ' planned page(s) set aside: ' + dropped.slice(0, 3).map(x => x.note).join(' | ')
+      : 'nothing to write automatically this week';
     out.push({ json: { nothing_to_do: true, report_only: true, reason, site_id: s.site_id, domain: s.domain, email: s.email || '', callback_url: s.callback_url || '', country: s.country || '', request_id: 'cad_' + week.replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, '') + '_0',
       pages_per_week: pages, upcoming, pending_publish: pending, candidates: uniq.length, dry_run, week, ...facts } });
   }

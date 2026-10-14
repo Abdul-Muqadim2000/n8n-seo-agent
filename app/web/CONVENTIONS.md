@@ -28,6 +28,28 @@ Logged-in pages follow **`DESIGN.md`** (insight kit `@/components/insight`, page
 - Accessibility: labels on every control (`Field` does it), `aria-label` on icon buttons, keyboard reachable menus/dialogs (Radix does it), never colour alone.
 - Copy: plain, short, specific ("Search Console is not connected yet — add the service account as a user"), sentence case, no exclamation marks.
 
+## Setup guides ("Show me how")
+
+**Rule: wherever the app asks a person for something it cannot get itself — a Google permission, a DNS record, a file on their site,
+an app password, facts about their business — the ask carries a guide.** No exceptions: if you add a field, a callout or an empty
+state that asks for something, add or reuse a guide in the same change.
+
+- Content is data in **`shared/src/guides.ts`** (`@seo/shared/guides` — deliberately *not* re-exported from the `@seo/shared` barrel,
+  so the catalogue stays out of the entry chunk). One `Guide` = one job: `why` it matters, `where` it happens, `who` can do it,
+  `minutes`, numbered `steps` (body, `copy` values, `link`, `note`, `warn`, per-provider `choices`), `done`, `trouble`, `related`,
+  `keywords`. Bodies use a tiny markup — `**click this**`, `` `type this` ``, `[label](https://…)` — and `{{placeholders}}` filled
+  from the caller's values (each declared in `vars` with an `example`, so a guide always reads sensibly).
+- Triggers: `GuideButton` from `@/components/guide` — `variant="chip"` next to a heading, a callout (`action=`) or an empty state,
+  `variant="link"` in a `Field labelAction`, `variant="icon"` where there is no room. Pass the website's real values
+  (`vars={{ domain: site.domain, … }}`) and, when the app can finish the job, `finish={{ label: 'Check now', onClick }}`.
+- The panel (`components/guide/GuidePanel.tsx`, lazy-loaded) shows one step at a time with ticks kept in `localStorage`, copy
+  buttons on every value, provider tabs, "If it does not work", related guides, **Copy all steps** and **Send to a colleague**
+  (mailto with the steps and the values filled in — the person with DNS access is usually someone else).
+- Recommendations get theirs automatically: map the recommendation id in `GUIDE_FOR_RECOMMENDATION`.
+- `GuideIndexButton` (sidebar, onboarding header) opens the searchable catalogue.
+- Tests: `shared/src/guides.test.ts` (ids, placeholders declared and used, https links, closed markup, plain-text export, search).
+  Run the browser check in `app/scripts/` style against the dev stack when the panel itself changes.
+
 ## Brand (Ascentra) — for every UI change
 Full guide: `brand/BRAND.md`; the app's tokens are in `src/index.css` (light + dark).
 - Name: **Ascentra** in all UI copy ("SEO Agent" is only the internal engine name). The logo is always one of the supplied SVGs in

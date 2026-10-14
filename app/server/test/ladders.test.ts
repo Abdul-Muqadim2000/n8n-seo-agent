@@ -11,7 +11,7 @@ const MONDAYS = ['2026-10-05T14:00:00.000Z', '2026-10-12T14:00:00.000Z', '2026-1
 
 const lad = (o: Partial<LadderRow>) =>
   ({ ladder_id: 'l1', head_keyword: 'e invoicing in uae', keyword: '', status: 'planned', rung: 1, page_no: 1, page_type: 'Guide', target_url: '', page_exists: false, months: '1-2', start_date: ago(60), country: 'United Arab Emirates', supporting: '', ...o }) as LadderRow;
-const log = (o: Partial<ContentLogRow>) => ({ keyword: '', status: 'started', started_at: ago(5), published_url: '', published_at: '', request_id: '', ladder_id: '', source: 'app', ...o }) as ContentLogRow;
+const log = (o: Partial<ContentLogRow>) => ({ keyword: '', status: 'written', started_at: ago(5), published_url: '', published_at: '', request_id: '', ladder_id: '', source: 'app', ...o }) as ContentLogRow;   // R1 (2026-10-13): a page waits for publication only once the log row says `written`
 /** weekly checks, oldest first, the last one `end` days ago */
 const ranks = (ladder: string, keyword: string, positions: number[], end = 1) =>
   positions.map((position, i) => ({ ladder_id: ladder, keyword, position, checked_at: ago(end + (positions.length - 1 - i) * 7) }) as RankHistoryRow);
@@ -83,6 +83,32 @@ describe('ladder pages: states', () => {
     expect(pages.find((p) => p.keyword === 'uae e invoicing penalties')!.publishedUrl).toBe('https://techand.ai/penalties/');
     expect(pages.find((p) => p.keyword === 'uae e invoicing requirements')!.runId).toBe('r-req');
     expect(pages.find((p) => p.keyword === 'e invoicing uae 2026')!.writtenAt).toBe(ago(60));
+  });
+
+  // R16 (2026-10-13, FIX_PLAN §3.11): a rung the keyword rule refused (a competitor's brand, a government portal, an off-topic search).
+  // n8n writes `set_aside` on the row and names the reason in its weekly note; the app must show it as set aside, never promise it and
+  // never offer "Write now" for it.
+  it('a rung n8n set aside is shown as set_aside: not planned, not counted as coming, not written', () => {
+    const asideSrc = src({
+      ladders: [
+        lad({ keyword: 'erp software dubai', rung: 2, page_no: 1 }),
+        lad({ keyword: 'facts erp', rung: 2, page_no: 2, status: 'set_aside' }),
+        lad({ keyword: 'erp software uae', rung: 4, page_no: 3 }),
+      ],
+    });
+    const picks = [pick('erp software dubai', 'l1', 1, 2), pick('facts erp', 'l1', 2, 2)];
+    const ab = buildLadders(asideSrc, sched({ picks }), { now: NOW });
+    const ap = ab.details.get('l1')!.pages;
+    expect(Object.fromEntries(ap.map((p) => [p.keyword, p.state]))).toEqual({
+      'erp software dubai': 'planned',
+      'facts erp': 'set_aside',
+      'erp software uae': 'gated',
+    });
+    // 3 pages, 2 of them still to write (the set-aside one is neither planned nor waiting nor written)
+    expect(ab.cards[0].counts).toEqual({ total: 3, published: 0, waiting: 0, writing: 0, planned: 2 });
+    // no Monday is promised for it, even though the mirror's queue still carried it
+    expect(ab.cards[0].next.text).toBe('Writes page 1: “erp software dubai”');
+    expect(ab.details.get('l1')!.timeline.filter((e) => e.kind === 'next' && /facts erp/.test(e.text))).toEqual([]);
   });
 
   it('a page waiting 7+ days: the ladder needs you, and the next step is publishing', () => {

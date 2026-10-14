@@ -56,3 +56,7 @@ export function errorMessage(e: unknown): string {
 }
 
 export const fileUrl = (orgId: string, fileId: string, download = false) => `/api/orgs/${orgId}/files/${fileId}${download ? '?download=1' : ''}`;
+
+/** G15: a file of a shared report, through the share token (no account, read-only). */
+export const sharedFileUrl = (token: string, fileId: string, download = false) =>
+  `/api/share/${encodeURIComponent(token)}/files/${fileId}${download ? '?download=1' : ''}`;

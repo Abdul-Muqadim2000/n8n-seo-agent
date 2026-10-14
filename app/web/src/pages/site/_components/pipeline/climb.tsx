@@ -36,6 +36,9 @@ function pageLine(p: LadderPage): string {
       return 'Arrives in about 10 minutes';
     case 'gated':
       return 'Written once half the supporting pages are live';
+    case 'set_aside':
+      // R16: the keyword rule refused this planned page (a competitor's brand, a government portal, an off-topic search)
+      return 'Set aside: not a search to target — see the weekly content note';
     default:
       return p.pageType ? asPageType(p.pageType) : 'Planned';
   }
@@ -190,6 +193,12 @@ function PagePanel({ page: p, ladder, onClose, onWrite }: { page: LadderPage; la
           <p className="text-[13px] leading-snug text-ink-2">
             The main page waits until half of the supporting pages are live (or the main keyword already ranks in the top 30): supporting pages first make it much
             more likely to rank. You can still write it now.
+          </p>
+        )}
+        {p.state === 'set_aside' && (
+          <p className="text-[13px] leading-snug text-ink-2">
+            This page was planned before the keyword rule existed, and the rule refuses the search: it names another company, a government portal, or something
+            your website does not sell. Nothing is written for it, and it is not tracked. The weekly content note gives the exact reason.
           </p>
         )}
         <KeyValue

@@ -444,6 +444,20 @@
     "name": "Render Images",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render Key Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Raw Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Growth": [
@@ -783,6 +797,13 @@
     "waitBetweenTries": 5000
    },
    {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Render PDF LB",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
     "allowed": true,
     "maxTries": null,
     "name": "POST LB Report",
@@ -803,6 +824,15 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Post Watch Alert",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   }
+  ],
+  "SEO Agent \u2014 Pre-release Check": [
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Fetch Release Pages",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }

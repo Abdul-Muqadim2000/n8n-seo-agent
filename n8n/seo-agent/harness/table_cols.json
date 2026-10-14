@@ -8,7 +8,14 @@
   "status",
   "settled_usd",
   "domain",
-  "heavy"
+  "heavy",
+  "dfs_est_usd",
+  "dfs_usd",
+  "cost_mode",
+  "ai_usd",
+  "measured_usd",
+  "estimated_usd",
+  "cost_basis"
  ],
  "AI_PAGES": [
   "site_id",
@@ -151,7 +158,8 @@
   "ai_pulse",
   "ai_growth",
   "ai_pages_month",
-  "link_builder"
+  "link_builder",
+  "stuck_weeks"
  ],
  "LINK_OUTREACH": [
   "site_id",
@@ -341,7 +349,8 @@
   "email",
   "callback_url",
   "request_id",
-  "target_words"
+  "target_words",
+  "status_note"
  ],
  "HISTORY": [
   "ladder_id",
@@ -454,5 +463,42 @@
   "message_id",
   "status",
   "source"
+ ],
+ "PROFILE": [
+  "site_id",
+  "domain",
+  "business_name",
+  "business_type",
+  "logo_url",
+  "street_address",
+  "city",
+  "region",
+  "postal_code",
+  "country_code",
+  "phone",
+  "public_email",
+  "opening_hours",
+  "price_range",
+  "service_areas",
+  "map_url",
+  "author_name",
+  "author_job_title",
+  "author_credentials",
+  "author_bio",
+  "author_url",
+  "author_image_url",
+  "author_same_as",
+  "author_knows_about",
+  "reviewer_name",
+  "reviewer_job_title",
+  "reviewer_url",
+  "style_brand_form",
+  "style_brand_wrong",
+  "style_spelling",
+  "style_avoid",
+  "style_tone",
+  "style_notes",
+  "updated_at",
+  "request_id"
  ]
 }

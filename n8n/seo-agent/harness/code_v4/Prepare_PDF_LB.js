@@ -1,0 +1,2 @@
+// Copy of each report HTML named index.html for the PDF renderer (Gotenberg requires that exact file name); one item per site.
+return $input.all().map(item => { const doc = (item.binary || {}).data; if (!doc) return item; return { json: item.json, binary: { ...(item.binary || {}), html: { ...doc, fileName: 'index.html', mimeType: 'text/html', fileExtension: 'html' } } }; });

@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import type {
   AdminOrg,
+  DeliveryReport,
   AdminResult,
   AiData,
   AlertsData,
@@ -18,6 +19,7 @@ import type {
   LinkImportSummary,
   LinkSettings,
   MailboxView,
+  MailProviderInfo,
   Me,
   Member,
   Org,
@@ -528,7 +530,13 @@ export const useUpdateMailbox = (orgId: string) =>
 export const useTestMailbox = (orgId: string) => useMailboxMutation<{ id: string }, MailboxTestResult>(orgId, ({ id }) => ({ method: 'POST', path: `/${id}/test`, body: {} }));
 export const useMailboxAction = (orgId: string) =>
   useMailboxMutation<{ id: string; action: 'pause' | 'resume' }, { ok: boolean }>(orgId, ({ id, action }) => ({ method: 'POST', path: `/${id}/${action}`, body: {} }));
-export const useDeleteMailbox = (orgId: string) => useMailboxMutation<{ id: string }, { ok: boolean }>(orgId, ({ id }) => ({ method: 'DELETE', path: `/${id}` }));
+export const useDeleteMailbox = (orgId: string) => useMailboxMutation<{ id: string }, { ok: boolean; revoked?: boolean; note?: string }>(orgId, ({ id }) => ({ method: 'DELETE', path: `/${id}` }));
+
+// L4: mailboxes connected with OAuth. The providers this installation has an app for, and the consent URL to send the person to.
+export const useMailProviders = (orgId: string, enabled = true) =>
+  useQuery({ queryKey: [...mailboxesKey(orgId), 'providers'], queryFn: () => api<MailProviderInfo[]>(`/api/orgs/${orgId}/mailbox-oauth/providers`), enabled, retry: noRetryOn4xx, staleTime: 300_000 });
+export const useStartMailboxOauth = (orgId: string) =>
+  useMutation({ mutationFn: (body: { provider: string; label?: string }) => api<{ url: string }>(`/api/orgs/${orgId}/mailbox-oauth/start`, { method: 'POST', body }) });
 
 // the company's opt-out list
 export const useSuppressions = (orgId: string, enabled = true) =>
@@ -611,6 +619,10 @@ export const useReport = (orgId: string, reportId: string | undefined) =>
 
 // ---------- platform admin ----------
 export const useAdminOrgs = (enabled: boolean) => useQuery({ queryKey: ['admin', 'orgs'], queryFn: () => api<AdminOrg[]>('/api/admin/orgs'), enabled });
+
+/** G21: runs delivered / runs started per week, the schedule fires that left no execution behind, and how ops alerts went out. */
+export const useAdminDelivery = (enabled: boolean) =>
+  useQuery({ queryKey: ['admin', 'delivery'], queryFn: () => api<DeliveryReport>('/api/admin/delivery'), enabled, staleTime: 60_000 });
 
 export function useAdminUpdateOrg() {
   const qc = useQueryClient();

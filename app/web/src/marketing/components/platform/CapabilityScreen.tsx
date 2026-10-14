@@ -14,6 +14,7 @@ const APP_PATH: Record<string, string> = {
   'ai-visibility': 'ai-visibility',
   backlinks: 'backlinks',
   reports: 'reports',
+  'guided-setup': 'settings/verification',
   enterprise: 'settings/company',
 };
 

@@ -4,7 +4,11 @@ HISTORY_TABLE = 'seo_rank_history'
 LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('rung', 'number'), ('page_no', 'number'), ('keyword', 'string'),
                ('supporting', 'string'), ('page_type', 'string'), ('target_url', 'string'), ('page_exists', 'boolean'), ('status', 'string'), ('months', 'string'),
                ('start_date', 'string'), ('country', 'string'), ('location_code', 'number'), ('language_code', 'string'), ('email', 'string'), ('callback_url', 'string'), ('request_id', 'string'),
-               ('target_words', 'number')]   # P2-7 (2026-10-12): the word target the verdict set for this page (0 = unknown); run sync_tables.py after deploying
+               ('target_words', 'number'),   # P2-7 (2026-10-12): the word target the verdict set for this page (0 = unknown); run sync_tables.py after deploying
+               # R1 (2026-10-13, re-rating): why the row is in its current status when something moved it back -- a page run the daily budget
+               # guard refused sets `writing` back to `planned` and says so here, so the ladder plan, the Rank Tracker and the Content
+               # Cadence never report a page that was never written. Empty on a row nothing moved.
+               ('status_note', 'string')]
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number')]
 HISTORY_COLS = [('ladder_id', 'string'), ('keyword', 'string'), ('checked_at', 'string'), ('position', 'number'), ('url', 'string'), ('serp_features', 'string'), ('domain', 'string'), ('rung', 'number'),
                 # v4.16 (G6, 2026-10-12 system review): the whole results page of the same SERP call, so a reading can be read back and
@@ -108,7 +112,13 @@ PROFILE_COLS = [('site_id', 'string'), ('domain', 'string'), ('business_name', '
                 ('region', 'string'), ('postal_code', 'string'), ('country_code', 'string'), ('phone', 'string'), ('public_email', 'string'), ('opening_hours', 'string'), ('price_range', 'string'),
                 ('service_areas', 'string'), ('map_url', 'string'), ('author_name', 'string'), ('author_job_title', 'string'), ('author_credentials', 'string'), ('author_bio', 'string'),
                 ('author_url', 'string'), ('author_image_url', 'string'), ('author_same_as', 'string'), ('author_knows_about', 'string'), ('reviewer_name', 'string'), ('reviewer_job_title', 'string'),
-                ('reviewer_url', 'string'), ('updated_at', 'string'), ('request_id', 'string')]
+                ('reviewer_url', 'string'),
+                # G31 (2026-10-13, FIX_PLAN): the stored style guide — the brand's written form ("Tech&"), extra wrong forms to catch,
+                # the spelling variant (empty = follow the market the page targets), the words to avoid, the tone and any further rule.
+                # Read by Brief Context into every writing prompt (v5/code/_style_guide.js) and checked by Content QA.
+                ('style_brand_form', 'string'), ('style_brand_wrong', 'string'), ('style_spelling', 'string'),
+                ('style_avoid', 'string'), ('style_tone', 'string'), ('style_notes', 'string'),
+                ('updated_at', 'string'), ('request_id', 'string')]
 CASE_COLS = [('case_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('keyword', 'string'), ('title', 'string'), ('client_name', 'string'), ('client_public', 'boolean'), ('industry', 'string'),
              ('location', 'string'), ('service', 'string'), ('challenge', 'string'), ('solution', 'string'), ('timeline', 'string'), ('results', 'string'), ('quote', 'string'), ('quote_by', 'string'),
              ('page_url', 'string'), ('status', 'string'), ('created_at', 'string'), ('request_id', 'string')]
@@ -126,7 +136,8 @@ MONITORS_COLS = [('site_id', 'string'), ('domain', 'string'), ('ai_visibility', 
                  ('audit_pages', 'number'), ('audit_js', 'boolean'), ('competitors', 'string'), ('brand_names', 'string'), ('updated_at', 'string'), ('request_id', 'string'),
                  ('ai_pulse', 'boolean'),   # v4.9: daily AI pulse (empty = on)
                  ('ai_growth', 'boolean'), ('ai_pages_month', 'number'),   # v4.12 (AI_GROWTH_SPEC.md): the weekly AI Growth loop (empty = on) and AI answer / refresh pages a month (empty = 2)
-                 ('link_builder', 'boolean')]   # v4.13 (LINK_BUILDER_SPEC.md): the weekly Link Builder (empty = on); on, the Backlink Monitor no longer drafts e-mails
+                 ('link_builder', 'boolean'),   # v4.13 (LINK_BUILDER_SPEC.md): the weekly Link Builder (empty = on); on, the Backlink Monitor no longer drafts e-mails
+                 ('stuck_weeks', 'number')]   # G32 (2026-10-13): weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept 2-26); run sync_tables.py after deploying
 AI_PROMPTS_COLS = [('prompt_id', 'string'), ('site_id', 'string'), ('domain', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('keyword', 'string'), ('source', 'string'), ('status', 'string'), ('created_at', 'string'),
                    ('stage', 'string'), ('cluster', 'string'), ('volume', 'number'), ('origin', 'string'), ('updated_at', 'string')]   # v4.9: buyer stage, topic cluster, monthly search volume, where the question came from
 AI_ANSWERS_COLS = [('site_id', 'string'), ('domain', 'string'), ('run_id', 'string'), ('checked_at', 'string'), ('prompt_id', 'string'), ('prompt', 'string'), ('kind', 'string'), ('topic', 'string'), ('engine', 'string'),
@@ -286,7 +297,53 @@ RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), 
                    # P34-5 (2026-10-12): which site a run is working on and whether it is a heavy crawl, so a second large audit of the
                    # same site is refused while one is running (two 200-page audits at once killed the n8n task runner and both were
                    # cancelled at the 90-minute timeout). status gains `stale`: reserved, never settled, older than the age limit.
-                   ('domain', 'string'), ('heavy', 'boolean')]
+                   ('domain', 'string'), ('heavy', 'boolean'),
+                   # R9 (2026-10-13, re-rating): the ledger counted Claude money only, so the monitors spent DataForSEO money with no row at
+                   # all and both audits carried est_usd 0 while each crawl cost $0.09. Every row now carries the run's DataForSEO estimate
+                   # beside the AI one, and `dfs_usd` is the measured amount where the run knows it (the monitors' own cost_usd).
+                   ('dfs_est_usd', 'number'), ('dfs_usd', 'number'),
+                   # G23 (2026-10-13, FIX_PLAN): a settled row must say which part of its cost was MEASURED and which ESTIMATED. `settled_usd`
+                   # stored the per-mode reservation while every reader took it for a measured cost, and Claude's spend could be stated no
+                   # closer than "$1.6-3.0" because the three Opus nodes stream and a streaming call reports no token usage at all.
+                   # `cost_mode` is the estimate key the run was priced on — the key of the self-correcting rolling figure in seo_cache
+                   # (`cost:<kind>:<mode>`); `ai_usd` is the run's own Claude figure, priced by v5/code/_cost_cal.js from the characters the
+                   # prompts really interpolated, the characters the models answered with and the thinking budget; and `cost_basis` says in
+                   # words which half of measured_usd + estimated_usd is which.
+                   ('cost_mode', 'string'), ('ai_usd', 'number'), ('measured_usd', 'number'), ('estimated_usd', 'number'), ('cost_basis', 'string')]
+
+# ---- R9 (2026-10-13, re-rating): every scheduled run reserves and settles a seo_run_ledger row too. Before this the ledger held nothing for
+# the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker, so the day's guard refused
+# customer-facing runs over Claude estimates while the schedules spent DataForSEO money unseen. The estimates are per site and measured on
+# techand.ai (the 2026-10-11 and 2026-10-13 runs plus each feature's spec): `ai` = Claude, `dfs` = DataForSEO, `dfs_full` = a full run where
+# the workflow has a light and a full mode (the Backlink Monitor). They are estimates, exactly like Rate Limit's EST table; `dfs_usd` carries
+# the measured figure once the run knows it.
+LEDGER_EST = {
+    'ai_visibility':   {'ai': 0.27, 'dfs': 0.60},    # ~$0.87 / site / week measured (AI_VISIBILITY_SPEC)
+    'ai_pulse':        {'ai': 0.004, 'dfs': 0.08},   # $0.084 / site / day measured 2026-10-08 and again on 2026-10-13
+    'ai_growth':       {'ai': 0.55, 'dfs': 0.05},    # AI pages + outreach drafts (AI_GROWTH_SPEC: ~$2.53 / site / month)
+    'backlinks':       {'ai': 0.05, 'dfs': 0.05, 'dfs_full': 0.45},   # Monday light watch vs the monthly full report (~$0.50)
+    'audit_schedule':  {'ai': 0.0,  'dfs': 0.09},    # the 200-page crawl of one audit, measured twice on 2026-10-13
+    'link_builder':    {'ai': 0.30, 'dfs': 0.05},    # $0.35 / site / month (LINK_BUILDER_SPEC)
+    'rank_tracker':    {'ai': 0.0,  'dfs': 0.15},    # the week's SERP checks of one site's ladders
+    'site_tracker':    {'ai': 0.03, 'dfs': 0.01},    # the site brief; Search Console / GA4 / Trends are free
+    'content_cadence': {'ai': 0.0,  'dfs': 0.0},     # it plans and spawns; every page run reserves its own row
+}
+
+
+def monitor_ledger_js(v5_dir, mode, plan_node, row_node, measured=''):
+    """R9: the reserve and settle Code-node sources for one scheduled workflow, filled in from v5/code/Monitor_Ledger_*.js.
+    `plan_node` knows how many sites this run covers, `row_node` is the reserve node's own name, and `measured` is the node that
+    carries the run's real DataForSEO cost as `cost_usd` ('' when the workflow has none)."""
+    import json as _json, os as _os
+    assert mode in LEDGER_EST, 'no ledger estimate for ' + mode
+    rd = lambda f: open(_os.path.join(v5_dir, 'code', f), encoding='utf-8').read()
+    reserve = (rd('Monitor_Ledger_Row.js').replace('__PLAN__', plan_node).replace('__MODE__', mode)
+               .replace('__EST__', _json.dumps(LEDGER_EST[mode], sort_keys=True)))
+    settle = rd('Monitor_Ledger_Settle.js').replace('__ROW__', row_node).replace('__MEASURED__', measured)
+    for ph in ('__PLAN__', '__MODE__', '__EST__', '__ROW__', '__MEASURED__'):
+        assert ph not in reserve and ph not in settle, ph + ' left in the ledger code for ' + mode
+    return reserve, settle
+
 
 # ---- ops alerts (D25b, 2026-10-12, FIX_PLAN): the Error Handler had one channel (e-mail), and on 2026-10-10 and 2026-10-12 it failed with a
 # connection error, so nobody learned that a run had failed. Every alert is now written here first (one row per alert key, the repeats counted)

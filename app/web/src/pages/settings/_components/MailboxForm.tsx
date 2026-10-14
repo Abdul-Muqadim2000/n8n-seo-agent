@@ -1,11 +1,14 @@
 // Company settings → Mailboxes: connect or change the mailbox link-building pitches go out from (LINK_BUILDER_SPEC.md §2). SMTP + IMAP with an
 // app password; the server logs in to both before it saves anything, and the password is never shown again.
+// L4 (2026-10-13): a mailbox connected with Microsoft 365 or Gmail (OAuth) has no password and no server settings — this dialog then
+// edits only the signature, the postal address, the window and the limits, and says where the connection itself is changed.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { mailboxSchema, type MailboxView } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useCreateMailbox, useUpdateMailbox } from '@/lib/queries';
 import { applyServerErrors } from '@/components/site/helpers';
@@ -29,10 +32,13 @@ interface Provider {
   imapSecure: boolean;
   help: ReactNode;
   warn?: boolean;
+  /** the step-by-step guide for this host */
+  guide: string;
 }
 const PROVIDERS: Provider[] = [
   {
     id: 'google',
+    guide: 'gmail-app-password',
     label: 'Gmail / Google Workspace',
     smtpHost: 'smtp.gmail.com',
     smtpPort: 465,
@@ -50,6 +56,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     id: 'microsoft',
+    guide: 'microsoft-app-password',
     label: 'Microsoft 365 / Outlook',
     smtpHost: 'smtp.office365.com',
     smtpPort: 587,
@@ -62,6 +69,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     id: 'zoho',
+    guide: 'smtp-imap-settings',
     label: 'Zoho Mail',
     smtpHost: 'smtp.zoho.com',
     smtpPort: 465,
@@ -73,6 +81,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     id: 'fastmail',
+    guide: 'smtp-imap-settings',
     label: 'Fastmail',
     smtpHost: 'smtp.fastmail.com',
     smtpPort: 465,
@@ -84,6 +93,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     id: 'other',
+    guide: 'smtp-imap-settings',
     label: 'Other',
     smtpHost: '',
     smtpPort: 465,
@@ -117,6 +127,8 @@ const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
 
 // editing: the password is optional (empty = keep the current one)
 const editSchema = mailboxSchema.extend({ password: z.union([z.literal(''), z.string().min(4, 'At least 4 characters').max(400)]).optional() });
+// L4: an OAuth mailbox has no password and no server settings — only who it signs as, where it sends from and when
+const oauthSchema = mailboxSchema.omit({ password: true, smtpHost: true, imapHost: true, username: true }).partial({ smtpPort: true, imapPort: true, smtpSecure: true, imapSecure: true });
 
 function defaults(mb: MailboxView | null, company: string): Values {
   if (mb)
@@ -170,12 +182,13 @@ function defaults(mb: MailboxView | null, company: string): Values {
 /** Connect a mailbox (`mailbox` null) or change one. */
 export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: string; company: string; mailbox: MailboxView | null; onClose: () => void }) {
   const editing = !!mailbox;
+  const oauth = mailbox?.authType === 'oauth';   // L4: granted by the provider, so there is nothing here to log in with
   const create = useCreateMailbox(orgId);
   const update = useUpdateMailbox(orgId);
   const [error, setError] = useState<{ title: string; text: string } | null>(null);
   const [provider, setProvider] = useState(editing ? providerOf(mailbox.smtpHost) : 'google');
   const form = useForm<Values, unknown, Output>({
-    resolver: (editing ? zodResolver(editSchema) : zodResolver(mailboxSchema)) as unknown as Resolver<Values, unknown, Output>,
+    resolver: (oauth ? zodResolver(oauthSchema) : editing ? zodResolver(editSchema) : zodResolver(mailboxSchema)) as unknown as Resolver<Values, unknown, Output>,
     defaultValues: defaults(mailbox, company),
   });
   const { register, formState, watch, setValue, getFieldState } = form;
@@ -232,19 +245,24 @@ export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: str
       onOpenChange={(o) => !o && onClose()}
       wide
       title={editing ? `Change ${mailbox.fromEmail}` : 'Connect a mailbox'}
-      description="Pitches go out from this address and replies are read from its inbox. We log in to both before saving; the password is stored encrypted and never shown again."
+      description={
+        oauth
+          ? `${mailbox.provider === 'ms_graph' ? 'Microsoft 365' : 'Gmail'} granted the permission, so there is no password or server setting here. To change the connection itself, disconnect the mailbox and connect it again.`
+          : 'Pitches go out from this address and replies are read from its inbox. We log in to both before saving; the password is stored encrypted and never shown again.'
+      }
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" form="mailbox-form" loading={pending}>
-            {editing ? 'Test and save' : 'Test and connect'}
+            {oauth ? 'Save' : editing ? 'Test and save' : 'Test and connect'}
           </Button>
         </>
       }
     >
       <form id="mailbox-form" onSubmit={submit} noValidate className="space-y-6">
+        {!oauth && (
         <fieldset className="space-y-3">
           <legend className="mb-2 text-[13px] font-medium text-ink">Provider</legend>
           <div role="radiogroup" aria-label="Provider" className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
@@ -252,8 +270,11 @@ export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: str
               <ChoiceCard key={x.id} selected={provider === x.id} onSelect={() => pick(x.id)} title={x.label} />
             ))}
           </div>
-          <Callout tone={p.warn ? 'warning' : 'info'}>{p.help}</Callout>
+          <Callout tone={p.warn ? 'warning' : 'info'} action={<GuideButton id={p.guide} label="Show me how" />}>
+            {p.help}
+          </Callout>
         </fieldset>
+        )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Field label="Your name" hint="As recipients see it" error={e.fromName?.message}>
@@ -262,16 +283,28 @@ export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: str
           <Field label="E-mail address" hint={editing ? 'To use another address, connect it as a new mailbox' : undefined} error={e.fromEmail?.message}>
             {(f) => <Input {...f} type="email" autoComplete="email" readOnly={editing} {...register('fromEmail')} />}
           </Field>
-          <Field label="Username" hint="Usually the e-mail address" error={e.username?.message}>
-            {(f) => <Input {...f} autoComplete="username" {...register('username')} />}
-          </Field>
-          <Field label={editing ? 'New app password' : 'App password'} optional={editing} hint={editing ? 'Leave empty to keep the current one' : 'Never shown again after saving'} error={e.password?.message}>
-            {(f) => <Input {...f} type="password" autoComplete="new-password" {...register('password')} />}
-          </Field>
+          {!oauth && (
+            <Field label="Username" hint="Usually the e-mail address" error={e.username?.message}>
+              {(f) => <Input {...f} autoComplete="username" {...register('username')} />}
+            </Field>
+          )}
+          {!oauth && (
+            <Field
+              label={editing ? 'New app password' : 'App password'}
+              optional={editing}
+              hint={editing ? 'Leave empty to keep the current one' : 'Never shown again after saving'}
+              labelAction={<GuideButton id={p.guide} variant="link" label="How do I get one?" />}
+              error={e.password?.message}
+            >
+              {(f) => <Input {...f} type="password" autoComplete="new-password" {...register('password')} />}
+            </Field>
+          )}
         </div>
 
+        {!oauth && (
         <fieldset className="space-y-3">
           <legend className="mb-2 text-[13px] font-medium text-ink">Server settings</legend>
+          <GuideButton id="smtp-imap-settings" variant="link" label="Where do I find these?" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_7rem]">
             <Field label="SMTP server (sending)" error={e.smtpHost?.message}>
               {(f) => <Input {...f} placeholder="smtp.example.com" {...register('smtpHost')} />}
@@ -291,10 +324,14 @@ export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: str
             <Checkbox label="IMAP: SSL (port 993)" {...register('imapSecure')} />
           </div>
         </fieldset>
+        )}
 
         <fieldset className="space-y-4">
           <legend className="mb-1 text-[13px] font-medium text-ink">Signature and footer</legend>
-          <p className="text-[13px] text-ink-3">Every e-mail ends with who is writing, your postal address and a way to say no: the law asks for them (CAN-SPAM, GDPR, PECR).</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] text-ink-3">Every e-mail ends with who is writing, your postal address and a way to say no: the law asks for them (CAN-SPAM, GDPR, PECR).</p>
+            <GuideButton id="mailbox-connect" variant="link" label="What goes in here?" />
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Name in the signature" optional hint="Defaults to your name" error={e.signatureName?.message}>
               {(f) => <Input {...f} {...register('signatureName')} />}

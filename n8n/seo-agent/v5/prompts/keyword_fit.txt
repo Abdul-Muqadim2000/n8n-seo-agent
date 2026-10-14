@@ -13,4 +13,4 @@ Decide three things:
 2. navigational — true when people searching this keyword want one particular website, product, login page or ANOTHER company's brand (for example "xero login", "cleartax", "microsoft"), not a type of product or service. The website's own brand is not another company: searches for it are false.
 3. alternatives — only when fit is 0 or navigational is true: up to 3 realistic keywords this business could rank for instead (real search phrases of 2-6 words, specific to its services, local to the market when that helps). Otherwise an empty list.
 
-Return exactly: {"fit": 0 | 1 | 2, "navigational": true | false, "alternatives": ["..."]}
+Return exactly: {"fit": 0 | 1 | 2, "navigational": true | false, "alternatives": "up to 3 keywords separated by commas, or an empty string"}

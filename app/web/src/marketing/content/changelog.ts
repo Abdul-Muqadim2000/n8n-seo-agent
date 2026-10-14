@@ -14,6 +14,85 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-14',
+    title: 'Every setup step now comes with a guide',
+    summary:
+      'Wherever Ascentra asks you for something it cannot get itself — a Google permission, a DNS record, a file on your site, a mailbox, your business details — there is now a “Show me how” button beside the ask. It opens that one job as numbered steps, with your own values ready to copy.',
+    highlights: [
+      'Twenty-seven guides covering everything we ask for: Search Console and Analytics access, proving the domain is yours, the IndexNow file, the links export, letting the AI crawlers in, mailboxes and their SPF, DKIM and DMARC records, publishing a written page, applying a fix pack, your business profile and style guide',
+      'Your real values, not examples: the DNS record for your domain, your key file, the address to add in Search Console — each in a copy box',
+      'Tabs for the provider you actually use: Cloudflare, GoDaddy, Namecheap, cPanel; WordPress, Shopify, Wix, Squarespace, Webflow',
+      'Tick the steps off as you go — close the panel, come back tomorrow and it opens where you stopped',
+      'Send to a colleague puts the whole guide in an e-mail, values filled in, for whoever manages your DNS or your website',
+      'Each guide ends with how to tell it worked and an “if it does not work” list, and the button that carries on in the app is right there',
+      'A searchable list of all of them in the sidebar and in the setup wizard',
+    ],
+    features: ['guided-setup', 'site-tracking', 'backlinks', 'technical-audits', 'ai-visibility'],
+  },
+  {
+    date: '2026-10-13',
+    title: 'Connect your mailbox without handing over a password',
+    summary:
+      'Microsoft 365 and Gmail can now be connected on their own sign-in screen. You grant sending (and, with Microsoft 365, reading the replies to your own pitches); nothing but a renewable permission is stored, encrypted, and it is withdrawn the moment you disconnect the mailbox.',
+    highlights: [
+      'One click to connect Microsoft 365: pitches go out from your address and replies come back into the app',
+      'One click to connect Gmail or Google Workspace for sending; Google treats inbox access as a restricted scope, so you read those replies in Gmail — the app says so before you connect',
+      'No password is stored for either, and the permission renews itself before it expires',
+      'Disconnecting withdraws our access; where a provider has no way to do that for us, the app tells you exactly where to remove it',
+      'App passwords still work for any mail host, and Microsoft is retiring theirs — so the old way keeps working while it lasts',
+    ],
+    features: ['backlinks'],
+  },
+  {
+    date: '2026-10-13',
+    title: 'Tell it how you write, once',
+    summary:
+      'Your website profile now holds a style guide: exactly how your name is written, British or American spelling, the words you never want used and the tone. Every page is written to it, and the finished draft is read back against it.',
+    highlights: [
+      'Write your name once — Tech&, never “Tech and” or “techand” — and every page uses that form, including the title and the meta description',
+      'Your own name written the wrong way is a real quality finding and is corrected before the page reaches you',
+      '“tech and finance teams” in an ordinary sentence is not your name, and your name inside a link or a slug is not prose: neither is reported',
+      'Choose British or American spelling and it wins over the country the page targets; leave it on “follow the market” and each page uses the spelling of its own country',
+      'Words you ban are counted and listed; so are the exclamation marks, when your tone says no hype',
+      'Spellings that mean two different things, or where both forms are correct, are never “corrected”',
+      'The style notes are advice next to the page, never a reason to hold it back — and the report shows the rules on file beside what the draft did with them',
+    ],
+    features: ['content', 'autopilot', 'reports'],
+  },
+  {
+    date: '2026-10-13',
+    title: 'Check a release before it goes live, and alerts that only fire on a real change',
+    summary:
+      'Your build can now ask Ascentra to check a release candidate — a staging address or a list of URLs — and get a pass or fail it can act on. Traffic and position alerts are tested against your own numbers instead of a fixed percentage, so a small website is no longer told its traffic fell when a handful of searches moved. And a planned page for a search you should not target is set aside with the reason instead of being written.',
+    highlights: [
+      'A pre-release check your build pipeline can call: the same page checks — answers, redirect, noindex, robots.txt, canonical, title, H1 — against a staging address or a list of URLs',
+      'It answers pass or fail with the URL and the check that failed, so a release can be stopped before it takes a page out of Google',
+      'On a staging address a deliberate noindex or a blocking robots.txt is a warning that names the live page, not a failure',
+      'The check only reads: it never changes anything in your account, and anything a staging address cannot answer is reported as not checked, with the reason',
+      'Traffic alerts now say what was tested, over which periods and how sure the result is',
+      'A position alert needs real impressions behind both periods: a five-place move measured on a dozen impressions is shown as something to watch, never as a drop',
+      'A planned page for a search that names another company, a government portal or something you do not sell is set aside with the reason — including pages planned before this rule existed',
+      'A page already written for such a search is kept and flagged instead, so you decide what happens to it',
+    ],
+    features: ['technical-audits', 'site-tracking', 'keyword-ladders'],
+  },
+  {
+    date: '2026-10-13',
+    title: 'Share a report with a link that expires, and a plan that tells you when to change course',
+    summary:
+      'You can now hand one report to a client or a colleague without giving them an account: a link that opens that report read-only and stops working on the day you choose. The weekly link-building result comes as a PDF with the same numbers and sources as the app. And every plan now shows your topic radius, while a keyword ladder that has stopped moving comes back with a concrete proposal.',
+    highlights: [
+      'A share link per report: no account needed, read-only, 14 days by default (1 to 90), and you can turn it off at any time',
+      'The link shows that one report and its documents — nothing else of your data — and you can see when it was last opened',
+      'The week’s link building arrives as a PDF: every opportunity with the reason it was kept or dropped, the contacts found on their own sites, the page and link text to ask for, each pitch as it would be sent, the listings to add yourself, the redirects to reclaim, and what your links did so far',
+      'Your topic radius with every keyword research run and every ladder plan: which topics are within reach today, which are a stretch, and the evidence behind each verdict',
+      'A topic that is easy to rank for but has nothing to do with what you sell is marked as a stretch, not as a quick win',
+      'A ladder with no movement for weeks comes back with a proposal — improve the page you already have, write the easier keyword first, change the order, or stop — with the evidence behind it',
+      'Proposals stay proposals: a plan you approved is never rewritten for you, and you choose how many weeks without movement count as stuck',
+    ],
+    features: ['reports', 'backlinks', 'keyword-ladders', 'keyword-research'],
+  },
+  {
     date: '2026-10-13',
     title: 'Charts that say what happened, and numbers that say where they came from',
     summary:

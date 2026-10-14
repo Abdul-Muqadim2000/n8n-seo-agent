@@ -1,10 +1,11 @@
-import { and, eq, inArray, lte, or, sql } from 'drizzle-orm';
-import { addWorkingDays, consentGate, emailDomain, inSendWindow, parseReturnDate, sendGap, warmupCap, type LinkOutreachRow, type ProfileRow, type ProspectRow } from '@seo/shared';
+import { and, eq, inArray, isNotNull, lte, or, sql } from 'drizzle-orm';
+import { addWorkingDays, consentGate, digestOpen, digestProspect, emailDomain, inSendWindow, isDigestEmail, n8nSiteId, parseDigest, parseReturnDate, sendGap, warmupCap, type LinkOutreachRow, type ProfileRow, type ProspectRow } from '@seo/shared';
 import { db, schema } from '../db';
 import type { MailboxRow, OutreachSequenceRow, SiteRow } from '../db/schema';
-import { replyRead, siteRows } from '../n8n/client';
+import { replyRead, siteRows, upsertRow } from '../n8n/client';
 import { approve, isSuppressed, linkSettingsOf, sentCounts, setProspectStatus, suppress } from './linkBuilder';
 import { compose, connOf, imapClient, mxCheck, parseIncoming, rawMessage, savesSentCopy, smtpTransport, stripQuoted, type Incoming } from './mail';
+import { inboxViaApi, isOauthMailbox, sendRawViaApi } from './mailOauth';
 import { replyReadBody } from './replyFacts';
 
 // v4.13 Link Builder jobs (index.ts runs them on timers; LINK_BUILDER_JOBS=false switches them off):
@@ -13,9 +14,14 @@ import { replyReadBody } from './replyFacts';
 // - inbox (every 3 minutes): new messages in INBOX matched to our sequences (Message-ID → address → domain + subject); bounces, automatic
 //   replies (out of office reschedules), people (the conversation stops, the Reply Reader classifies it and suggests an answer);
 // - automatic approval (every 10 minutes) for websites whose owner chose it; sequences without a reply end after their last e-mail.
+// L5 (2026-10-13): the same inbox pass reads journalist digests (HARO / Source of Sources) and writes every request that is still open
+//   as a `digest` prospect for each verified website, which the SEO engine then qualifies and drafts like any other prospect.
+// L4 (2026-10-13): a mailbox connected with OAuth sends through its provider's API (Gmail messages.send / Graph sendMail) and, for
+//   Microsoft 365, is read through Graph; Gmail OAuth sends only (Google's inbox scope is restricted), so its replies are not polled.
 
 type Log = { info: (o: object, m: string) => void; warn: (o: object, m: string) => void; error: (o: object, m: string) => void };
 const ACTIVE = ['scheduled', 'active'];
+const DIGESTS_PER_EMAIL = 15;   // L5: at most this many requests are taken from one digest
 const short = (e: unknown) => String((e as Error)?.message || e).replace(/\s+/g, ' ').slice(0, 300);
 let sending = false, polling = false, approving = false;
 
@@ -33,25 +39,30 @@ async function sendStep(mb: MailboxRow, q: OutreachSequenceRow, site: SiteRow, l
   const st = q.steps[q.step]!; const now = new Date();
   const prev = await db.select({ messageId: schema.outreachMessages.messageId }).from(schema.outreachMessages).where(and(eq(schema.outreachMessages.sequenceId, q.id), eq(schema.outreachMessages.direction, 'out'))).orderBy(schema.outreachMessages.at);
   const mail = compose(mb, { sequenceId: q.id, step: q.step, to: q.toEmail, subject: st.subject, body: st.body, firstSubject: q.steps[0]!.subject, country: q.country, foundOn: q.contactUrl, previousIds: prev.map((p) => p.messageId) });
+  const oauth = isOauthMailbox(mb);   // L4: no password to read, and the provider's API sends
   let conn;
-  try { conn = connOf(mb); } catch (e) { await db.update(schema.mailboxes).set({ status: 'error', statusReason: short(e), updatedAt: now }).where(eq(schema.mailboxes.id, mb.id)); return; }
+  if (!oauth) { try { conn = connOf(mb); } catch (e) { await db.update(schema.mailboxes).set({ status: 'error', statusReason: short(e), updatedAt: now }).where(eq(schema.mailboxes.id, mb.id)); return; } }
   try {
-    const info = await smtpTransport(conn).sendMail({ from: mail.from, to: mail.to, subject: mail.subject, text: mail.text, messageId: mail.messageId, ...(mail.inReplyTo ? { inReplyTo: mail.inReplyTo, references: mail.references } : {}), headers: mail.headers });
-    const mid = String(info.messageId || mail.messageId);
+    const mid = oauth
+      ? await sendRawViaApi(mb, await rawMessage(mail), mail.messageId)
+      : String((await smtpTransport(conn!).sendMail({ from: mail.from, to: mail.to, subject: mail.subject, text: mail.text, messageId: mail.messageId, ...(mail.inReplyTo ? { inReplyTo: mail.inReplyTo, references: mail.references } : {}), headers: mail.headers })).messageId || mail.messageId);
     await db.insert(schema.outreachMessages).values({ sequenceId: q.id, orgId: q.orgId, mailboxId: mb.id, direction: 'out', step: q.step, kind: 'step', subject: mail.subject, body: mail.text, messageId: mid, inReplyTo: mail.inReplyTo ?? '', fromEmail: mb.fromEmail, toEmail: q.toEmail, at: now });
     const next = q.step + 1; const more = next < q.steps.length;
     await db.update(schema.outreachSequences).set({ status: 'active', step: next, startedAt: q.startedAt ?? now, lastSentAt: now, nextAt: more ? addWorkingDays(now, q.steps[next]!.waitDays) : addWorkingDays(now, 7), error: '', updatedAt: now }).where(eq(schema.outreachSequences.id, q.id));
     await db.update(schema.mailboxes).set({ lastSendAt: now, lastError: '', updatedAt: now }).where(eq(schema.mailboxes.id, mb.id));
     if (q.step === 0) await setProspectStatus(site.domain, q.prospectDomain, q.prospectType, 'contacted', undefined, log);
-    if (!savesSentCopy(mb.smtpHost) && mb.sentFolder) {   // a copy in the person's own Sent folder, as if they had sent it themselves
-      const c = imapClient(conn);
+    if (!oauth && !savesSentCopy(mb.smtpHost) && mb.sentFolder) {   // a copy in the person's own Sent folder, as if they had sent it themselves (Gmail and Graph keep their own)
+      const c = imapClient(conn!);
       try { await c.connect(); await c.append(mb.sentFolder, await rawMessage(mail), ['\\Seen']); } catch (e) { log.warn({ err: short(e), mailbox: mb.id }, 'sent copy not saved'); } finally { await c.logout().catch(() => c.close()); }
     }
     log.info({ sequence: q.id, step: q.step, to: emailDomain(q.toEmail) }, 'outreach e-mail sent');
   } catch (e) {
     const err = short(e); const code = Number((e as { responseCode?: number }).responseCode) || 0;
     await db.insert(schema.outreachMessages).values({ sequenceId: q.id, orgId: q.orgId, mailboxId: mb.id, direction: 'out', step: q.step, kind: 'step', subject: mail.subject, body: mail.text, messageId: mail.messageId, fromEmail: mb.fromEmail, toEmail: q.toEmail, error: err, at: now });
-    if (code === 535 || /auth|credentials|password|username and password/i.test(err)) {   // the mailbox stops; nothing else is tried until a person fixes it
+    if (oauth) {   // L4: a provider that refuses the token needs the customer to grant access again (accessTokenFor already recorded why)
+      if (/refused the request|no stored permission|withdrew our access/i.test(err)) await db.update(schema.mailboxes).set({ status: 'error', statusReason: err, lastError: err, updatedAt: now }).where(eq(schema.mailboxes.id, mb.id));
+      else await db.update(schema.outreachSequences).set({ nextAt: new Date(now.getTime() + 30 * 60_000), error: err, updatedAt: now }).where(eq(schema.outreachSequences.id, q.id));
+    } else if (code === 535 || /auth|credentials|password|username and password/i.test(err)) {   // the mailbox stops; nothing else is tried until a person fixes it
       await db.update(schema.mailboxes).set({ status: 'error', statusReason: 'The mail server refused the login: ' + err, lastError: err, updatedAt: now }).where(eq(schema.mailboxes.id, mb.id));
     } else if (/\b5\.7\.\d/.test(err) || code === 550 && /policy|spam|blocked|reputation/i.test(err)) {
       await db.update(schema.mailboxes).set({ status: 'paused', statusReason: 'The mail server blocked a message as a policy issue: ' + err, lastError: err, updatedAt: now }).where(eq(schema.mailboxes.id, mb.id));
@@ -131,8 +142,30 @@ async function matchSequence(mb: MailboxRow, m: Incoming): Promise<OutreachSeque
   return null;
 }
 
+/** L5: one journalist digest -> one `digest` prospect per open request, for every verified website of the company. */
+async function storeDigest(mb: MailboxRow, m: Incoming, log: Log): Promise<number> {
+  const requests = parseDigest(m.text, m.date ?? new Date()).filter((r) => digestOpen(r)).slice(0, DIGESTS_PER_EMAIL);
+  if (!requests.length) return 0;
+  const sites = await db.select().from(schema.sites).where(and(eq(schema.sites.orgId, mb.orgId), isNotNull(schema.sites.verifiedAt)));
+  const service = /helpareporter/i.test(m.fromDomain) ? 'HARO' : 'Source of Sources';
+  let written = 0;
+  for (const site of sites) {
+    const siteId = n8nSiteId(site.domain);
+    for (const r of requests) {
+      const row = digestProspect(r, { siteId, domain: site.domain, service });
+      try {
+        await upsertRow('prospects', [{ columnName: 'site_id', condition: 'eq', value: siteId }, { columnName: 'prospect_domain', condition: 'eq', value: String(row.prospect_domain) }, { columnName: 'type', condition: 'eq', value: 'digest' }], row);
+        written++;
+      } catch (e) { log.warn({ err: short(e), site: site.domain, request: r.id }, 'journalist request not stored'); }
+    }
+  }
+  log.info({ mailbox: mb.id, service, requests: requests.length, sites: sites.length }, 'journalist digest read');
+  return written;
+}
+
 async function handleIncoming(mb: MailboxRow, m: Incoming, log: Log): Promise<void> {
   if (!m.from || m.from === mb.fromEmail.toLowerCase()) return;
+  if (m.kind !== 'bounce' && isDigestEmail(m.from, m.subject)) { await storeDigest(mb, m, log); return; }   // L5: a digest answers no e-mail of ours
   const q = await matchSequence(mb, m); if (!q) return;
   const site = await siteOf(q.siteId); if (!site) return;
   const now = new Date(); const text = stripQuoted(m.text);
@@ -169,13 +202,31 @@ async function handleIncoming(mb: MailboxRow, m: Incoming, log: Log): Promise<vo
   log.info({ sequence: q.id, cls }, 'outreach reply read');
 }
 
+/** L4: new messages of a Microsoft 365 mailbox, through Graph. A Gmail OAuth mailbox is not read: its scope is restricted. */
+async function pollApiMailbox(mb: MailboxRow, log: Log): Promise<number> {
+  const now = new Date();
+  if (!mb.readsReplies) { await db.update(schema.mailboxes).set({ lastPollAt: now }).where(eq(schema.mailboxes.id, mb.id)); return 0; }
+  let read = 0;
+  try {
+    const { messages, cursor } = await inboxViaApi(mb);
+    for (const m of messages) {
+      try { await handleIncoming(mb, await parseIncoming(m.mime), log); read++; } catch (e) { log.warn({ err: short(e), message: m.id }, 'incoming message not handled'); }
+    }
+    await db.update(schema.mailboxes).set({ oauthCursor: cursor, lastPollAt: new Date(), ...(mb.lastError.startsWith('Graph') ? { lastError: '' } : {}) }).where(eq(schema.mailboxes.id, mb.id));
+  } catch (e) {
+    await db.update(schema.mailboxes).set({ lastError: 'Graph: ' + short(e), lastPollAt: new Date() }).where(eq(schema.mailboxes.id, mb.id));
+  }
+  return read;
+}
+
 export async function pollTick(log: Log): Promise<number> {
   if (polling) return 0; polling = true; let read = 0;
   try {
     const mbs = await db.select().from(schema.mailboxes).where(inArray(schema.mailboxes.status, ['active', 'paused']));
     for (const mb of mbs) {
-      const open = await db.select({ id: schema.outreachSequences.id }).from(schema.outreachSequences).where(and(eq(schema.outreachSequences.mailboxId, mb.id), inArray(schema.outreachSequences.status, ['active', 'replied', 'won', 'bounced', 'finished']))).limit(1);
-      if (!open.length) { await db.update(schema.mailboxes).set({ lastPollAt: new Date() }).where(eq(schema.mailboxes.id, mb.id)); continue; }   // nothing sent yet: nothing to read
+      // L4: an OAuth mailbox is read through its provider's API (Microsoft 365 only; Gmail's inbox scope is restricted by Google)
+      if (isOauthMailbox(mb)) { read += await pollApiMailbox(mb, log); continue; }
+      // L5: the inbox is read even before anything has been sent — the journalist digests arrive there.
       let conn; try { conn = connOf(mb); } catch { continue; }
       const c = imapClient(conn);
       try {
@@ -236,10 +287,13 @@ export async function sendManual(q: OutreachSequenceRow, body: string, log: Log)
   const lastIn = [...thread].reverse().find((m) => m.direction === 'in' && m.kind === 'reply');
   const to = lastIn?.fromEmail || q.toEmail;
   const mail = compose(mb, { sequenceId: q.id, step: q.step, to, subject: q.steps[0]!.subject, body: body + `\n\n${[mb.signatureName || mb.fromName, mb.signatureTitle, mb.company].filter(Boolean).join(', ')}`, firstSubject: q.steps[0]!.subject, country: q.country, foundOn: '', previousIds: thread.map((m) => m.messageId), manual: true });
-  const conn = connOf(mb);
-  const info = await smtpTransport(conn).sendMail({ from: mail.from, to: mail.to, subject: mail.subject, text: mail.text, messageId: mail.messageId, ...(mail.inReplyTo ? { inReplyTo: mail.inReplyTo, references: mail.references } : {}) });
+  const oauth = isOauthMailbox(mb);
+  const conn = oauth ? null : connOf(mb);
+  const mid = oauth
+    ? await sendRawViaApi(mb, await rawMessage(mail), mail.messageId)
+    : String((await smtpTransport(conn!).sendMail({ from: mail.from, to: mail.to, subject: mail.subject, text: mail.text, messageId: mail.messageId, ...(mail.inReplyTo ? { inReplyTo: mail.inReplyTo, references: mail.references } : {}) })).messageId || mail.messageId);
   const now = new Date();
-  await db.insert(schema.outreachMessages).values({ sequenceId: q.id, orgId: q.orgId, mailboxId: mb.id, direction: 'out', step: q.step, kind: 'manual', subject: mail.subject, body: mail.text, messageId: String(info.messageId || mail.messageId), inReplyTo: mail.inReplyTo ?? '', fromEmail: mb.fromEmail, toEmail: to, at: now });
+  await db.insert(schema.outreachMessages).values({ sequenceId: q.id, orgId: q.orgId, mailboxId: mb.id, direction: 'out', step: q.step, kind: 'manual', subject: mail.subject, body: mail.text, messageId: mid, inReplyTo: mail.inReplyTo ?? '', fromEmail: mb.fromEmail, toEmail: to, at: now });
   await db.update(schema.mailboxes).set({ lastSendAt: now, updatedAt: now }).where(eq(schema.mailboxes.id, mb.id));
-  if (!savesSentCopy(mb.smtpHost) && mb.sentFolder) { const cl = imapClient(conn); try { await cl.connect(); await cl.append(mb.sentFolder, await rawMessage(mail), ['\\Seen']); } catch (e) { log.warn({ err: short(e) }, 'sent copy not saved'); } finally { await cl.logout().catch(() => cl.close()); } }
+  if (!oauth && !savesSentCopy(mb.smtpHost) && mb.sentFolder) { const cl = imapClient(conn!); try { await cl.connect(); await cl.append(mb.sentFolder, await rawMessage(mail), ['\\Seen']); } catch (e) { log.warn({ err: short(e) }, 'sent copy not saved'); } finally { await cl.logout().catch(() => cl.close()); } }
 }

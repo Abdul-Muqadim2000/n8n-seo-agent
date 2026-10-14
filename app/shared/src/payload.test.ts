@@ -51,6 +51,24 @@ describe('buildN8nPayload', () => {
     expect(keys.indexOf('email')).toBeLessThan(keys.indexOf('public_email'));
   });
 
+  // G31: the style guide travels with the profile, and a style guide on its own is a valid profile submission
+  it('profile: the style guide is sent with the profile and defaults to empty', () => {
+    const empty = RUN_SCHEMAS.profile.parse({ mode: 'profile', siteId: SITE_ID, ...minimal.profile });
+    expect(empty.style).toEqual({ brandForm: '', brandWrong: [], spelling: '', avoid: [], tone: '', notes: '' });
+    const p = RUN_SCHEMAS.profile.parse({
+      mode: 'profile',
+      siteId: SITE_ID,
+      style: { brandForm: 'Tech&', brandWrong: ['Tech & Co'], spelling: 'British English', avoid: ['turnkey'], tone: 'plain and direct' },
+    });
+    const b = buildN8nPayload(p, site, delivery);
+    expect(b.style).toEqual({ brand_form: 'Tech&', brand_wrong: ['Tech & Co'], spelling: 'British English', avoid: ['turnkey'], tone: 'plain and direct', notes: '' });
+  });
+
+  it('profile: an unknown spelling variant is refused, and an empty profile is still refused', () => {
+    expect(RUN_SCHEMAS.profile.safeParse({ mode: 'profile', siteId: SITE_ID, style: { spelling: 'Canadian English' } }).success).toBe(false);
+    expect(RUN_SCHEMAS.profile.safeParse({ mode: 'profile', siteId: SITE_ID }).success).toBe(false);
+  });
+
   it('keyword: deliverables, goal label and site facts', () => {
     const p = keywordInput.parse({ mode: 'keyword', siteId: SITE_ID, keyword: 'ERP  Dubai', country: 'United Arab Emirates', goal: 'traffic', receiveReport: false, checkPageExists: true });
     const b = buildN8nPayload(p, site, delivery);

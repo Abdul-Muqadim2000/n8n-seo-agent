@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { CircleSlash, Clock, ExternalLink as ExternalIcon, FileText, Mail, MailCheck, Send, ShieldCheck, UserRound } from 'lucide-react';
 import { consentGate, footerLines, replySubject, type LinkBuildingData, type MailboxView, type OutreachDraft, type OutreachStep } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { useApproveOutreach, useDismissOutreach } from '@/lib/queries';
@@ -324,9 +325,12 @@ function ApproveDialog({ x, d, onClose }: { x: OutreachDraft; d: LinkBuildingDat
             title="This pitch cannot go out yet"
             action={
               can('admin') && d.canSend.why.toLowerCase().includes('mailbox') ? (
-                <ButtonLink size="sm" variant="secondary" to={paths.settings(org.id, 'mailboxes')}>
-                  Mailboxes
-                </ButtonLink>
+                <>
+                  <ButtonLink size="sm" variant="secondary" to={paths.settings(org.id, 'mailboxes')}>
+                    Mailboxes
+                  </ButtonLink>
+                  <GuideButton id="mailbox-connect" label="How to connect it" />
+                </>
               ) : undefined
             }
           >

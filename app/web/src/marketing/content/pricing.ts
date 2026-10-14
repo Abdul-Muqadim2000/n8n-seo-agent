@@ -35,6 +35,7 @@ export const pricingTiers: PricingTier[] = [
       'Content engine with SEO QA, the originality check and the blog package',
       'Monthly technical audits with a fix pack',
       'Search Console, GA4 and Trends tracking',
+      'Step-by-step guides for every setup task',
       'Monday report',
     ],
   },
@@ -53,7 +54,7 @@ export const pricingTiers: PricingTier[] = [
       'Autopilot pipeline with several keyword ladders',
       'AI search visibility: up to 50 questions and the daily AI Pulse',
       'Backlinks from every source with Ascentra’s own link checks',
-      'Prospects, contacts and outreach drafts',
+      'Prospects, contacts and outreach drafts from your own mailbox',
       'Full SEO reports as PDF or Word',
     ],
   },
@@ -129,11 +130,12 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
     rows: [
       { label: 'Technical audits with fix pack', values: ['Monthly', 'Monthly', 'Monthly'] },
       { label: 'Crawl depth', hint: 'JavaScript rendering included', values: ['200 pages', '500 pages', '1,000 pages'] }, // PLACEHOLDER — confirm
+      { label: 'Daily key-page check and pre-release check', hint: 'Your build asks whether a release candidate is safe to publish', values: [true, true, true] },
       { label: 'Search Console, GA4 and Trends', values: [true, true, true] },
       { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews', values: [false, 'Up to 50 questions', 'Up to 50 questions'] }, // PLACEHOLDER — confirm
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
       { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Ascentra', values: [false, true, true] }, // PLACEHOLDER — confirm
-      { label: 'Prospects, contacts and outreach drafts', values: [false, true, true] },
+      { label: 'Prospects, contacts and outreach drafts from your own mailbox', values: [false, true, true] },
     ],
   },
   {
@@ -141,6 +143,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
     rows: [
       { label: 'Monday report', values: [true, true, true] },
       { label: 'Full SEO report (PDF / Word)', values: [false, true, true] }, // PLACEHOLDER — confirm
+      { label: 'Share a report by link', hint: 'Read-only, no account needed, expires on the day you choose and can be turned off at any time', values: [true, true, true] },
       { label: 'Search Console alert watcher and monthly check-ins', values: [false, false, true] }, // PLACEHOLDER — confirm
     ],
   },
@@ -150,6 +153,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Websites', values: ['1', 'Up to 5', 'Custom'] }, // PLACEHOLDER — confirm
       { label: 'Roles and invitations', hint: 'Owner, admin, member and viewer', values: [true, true, true] },
       { label: 'Verified website ownership', values: [true, true, true] },
+      { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
       { label: 'Cost estimate before every run', values: [true, true, true] },
       { label: 'Spend caps per company', values: [true, true, true] },
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm

@@ -120,7 +120,7 @@ missing); the Content Cadence reads them every Monday. A ladder that is not one 
   true`; its reports count as automatic (`scheduled`).
 
 ## Link building (v4.13, `n8n/seo-agent/LINK_BUILDER_SPEC.md`)
-Pitches go out from the company's own mailbox (SMTP + IMAP with an app password; the password is encrypted with `MAILBOX_KEY` and never returned), after a person approves them (or automatically, within a daily limit the owner sets). The server's jobs (`LINK_BUILDER_JOBS`) send inside each mailbox's window (Monday-Friday, its hours and time zone; warm-up 5 / 10 / then its limit; 4-9 minutes apart), read the inbox every 3 minutes (replies, out-of-office, bounces, opt-outs) and stop a sequence at the first reply. Errors: `{ error, code }`; 409 codes `no_mailbox`, `no_address`, `suppressed`, `consent_needed`; 503 `no_key`.
+Pitches go out from the company's own mailbox, after a person approves them (or automatically, within a daily limit the owner sets). A mailbox is connected either with an **app password** (SMTP + IMAP; the password is encrypted with `MAILBOX_KEY` and never returned) or, since L4, with **OAuth**: **Microsoft 365** through Graph (sends *and* reads replies) or **Gmail / Google Workspace** (sends only — reading a Gmail inbox needs Google's `gmail.readonly`, a *restricted* scope that requires a CASA security assessment and app verification, so those replies are read in Gmail itself; the Mailboxes tab says so). The refresh token is encrypted like a password, the access token is renewed before it expires, and both are revoked when the mailbox is disconnected. The OAuth apps belong to this installation (`MS_OAUTH_*`, `GMAIL_OAUTH_*` in `app/.env`); with a pair unset that provider is not offered. The server's jobs (`LINK_BUILDER_JOBS`) send inside each mailbox's window (Monday-Friday, its hours and time zone; warm-up 5 / 10 / then its limit; 4-9 minutes apart), read the inbox every 3 minutes (replies, out-of-office, bounces, opt-outs) and stop a sequence at the first reply. The same inbox pass reads **journalist digests** (HARO / Source of Sources) and writes every open request as a `digest` prospect for each verified website (L5); the SEO engine then qualifies and drafts it like any other prospect. A mailbox connected with OAuth sends through its provider's API, and only Microsoft 365 is read. Errors: `{ error, code }`; 409 codes `no_mailbox`, `no_address`, `suppressed`, `consent_needed`; 503 `no_key`.
 
 | Method | Path | Body / notes | Returns |
 |---|---|---|---|
@@ -128,11 +128,14 @@ Pitches go out from the company's own mailbox (SMTP + IMAP with an app password;
 | POST | /api/orgs/:orgId/mailboxes | `mailboxSchema` (admin; 10 an hour): both logins are tested before anything is stored; 400 `mailbox_test_failed` with the server's message | `MailboxView` |
 | PATCH | /api/orgs/:orgId/mailboxes/:id | `mailboxPatchSchema` (admin): a changed connection value or password re-tests the logins | `MailboxView` |
 | POST | /api/orgs/:orgId/mailboxes/:id/test · /pause · /resume | admin; resume refuses a mailbox in error | `MailboxTestResult` / `{ ok }` |
-| DELETE | /api/orgs/:orgId/mailboxes/:id | admin; its open sequences pause | `{ ok }` |
+| DELETE | /api/orgs/:orgId/mailboxes/:id | admin; its open sequences pause; an OAuth mailbox's tokens are revoked (Microsoft has no revocation endpoint for this flow: `note` says where to withdraw the app) | `{ ok, revoked, note }` |
+| GET | /api/orgs/:orgId/mailbox-oauth/providers | member: the OAuth providers this installation has an app for, what each can do (`reads`) and, when it has none, why | `MailProviderInfo[]` |
+| POST | /api/orgs/:orgId/mailbox-oauth/start | `mailboxOauthStartSchema` `{ provider: ms_graph \| gmail_oauth, label? }` (admin; 20 an hour): sets the round-trip cookies and answers with the provider's consent URL; 503 `no_key` without `MAILBOX_KEY`, 503 `oauth_not_configured` when the provider has no app | `{ url }` |
+| GET | /api/mailbox-oauth/callback | the provider's redirect (signed-in admin + the state cookie): stores the mailbox and its encrypted tokens, then redirects to `…/settings/mailboxes?mailbox=connected\|error` | redirect |
 | GET · POST · DELETE | /api/orgs/:orgId/suppressions(/:id) | the opt-out list (hash + masked hint); add: member `{ value, kind: email \| domain }`, remove: admin | `SuppressionView[]` / `{ ok }` |
-| GET | /api/orgs/:orgId/sites/:siteId/link-building | verified site: drafts (from `seo_link_outreach`), sequences with their messages, numbers, listings, redirects, impact, `canSend` | `LinkBuildingData` |
+| GET | /api/orgs/:orgId/sites/:siteId/link-building | verified site: drafts (from `seo_link_outreach`), sequences with their messages, numbers, listings, redirects, impact, `subjectAb` (L7: first e-mails and replies per subject style; **no verdict under 30 sends per style** — the counts with "not enough sends yet"), `canSend` | `LinkBuildingData` |
 | PATCH | …/link-building/settings | `linkSettingsSchema` (admin; `mode: auto` owner only) | `LinkSettings` |
-| POST | …/link-building/approve | `approveSchema` `{ prospectDomain, type, toEmail, steps, consent, mailboxId? }` (member): checks the mailbox, postal address, opt-out list, consent rule (recipient country + address), one conversation per site, 90 days' rest | `{ ok, id }` |
+| POST | …/link-building/approve | `approveSchema` `{ prospectDomain, type, toEmail, steps, consent, mailboxId? }` (member): checks the mailbox, postal address, opt-out list, consent rule (recipient country + address), one conversation per site, 90 days' rest. A step may carry `variant` (`A` \| `B`) and `subjectAlt`: L7 keeps which subject style went out | `{ ok, id }` |
 | POST | …/link-building/dismiss | `{ prospectDomain, type }` (member): "not a fit" → the prospect is rejected in n8n | `{ ok }` |
 | PATCH | …/link-building/sequences/:id | `{ steps?, toEmail? }` (member): only unsent steps change; the address only before the first e-mail | `{ ok }` |
 | POST | …/link-building/sequences/:id/pause · /resume · /cancel | member | `{ ok }` |
@@ -171,6 +174,26 @@ Keyword checks count in the company's spend everywhere runs do: the budget check
 | GET | /api/orgs/:orgId/reports?siteId=&stage=&limit=&before= | | `Report[]` |
 | GET | /api/orgs/:orgId/reports/:reportId | | `ReportDetail` |
 | GET | /api/orgs/:orgId/files/:fileId?download=1 | | the file (inline unless `download=1`) |
+| POST | /api/orgs/:orgId/reports/:reportId/shares | `{ days?: 1-90 }` (admin; default 14) | `ShareLink` **plus `url`** — the only time the token is returned |
+| GET | /api/orgs/:orgId/reports/:reportId/shares | (admin) | `{ items: ShareLink[], defaultDays, minDays, maxDays }` (no tokens) |
+| DELETE | /api/orgs/:orgId/reports/:reportId/shares/:shareId | (admin) | `ShareLink` with `state: 'revoked'` |
+| GET | /api/share/:token | no session | `{ report: SharedReport }` |
+| GET | /api/share/:token/files/:fileId?download=1 | no session | that report's file (same headers and sandbox as the route above) |
+
+### Share links (G15, `shared/src/share.ts`, criterion REP 3.7)
+An expiring, revocable, **read-only** link to **one report**, for somebody with no account (the page is `/share/:token`).
+A 256-bit token goes in the URL and **only its SHA-256 is stored** (`report_shares`), so a database copy hands out no working links;
+the row keeps who created it, its expiry, its revocation and when it was last opened (with a counter the owner sees).
+**What a holder of the link can reach:** that one report — its title, stage, website domain, date, whether it was scheduled, its
+headline `summary` values, the company's name, and the files of *that* report (a PDF inline, everything else as a sandboxed download,
+with exactly the headers the signed-in file route uses).
+**What a holder can never reach:** any other report (the token resolves to one report id, and a file whose `report_id` differs is a
+404), any list of reports, runs or websites, the callback `payload` or the run's input, the company's id, members, settings, mailboxes
+or dashboards, and **no write of any kind** — the only shared routes are these two GETs. Editing the URL does not widen it: a token
+must be base64url and 32-128 characters before anything is looked up, a file id must be a uuid, and both routes are rate-limited per
+IP (30 and 60 a minute). A wrong, revoked or expired token answers **404** with the same shape of message and no report, so a guess
+learns nothing; `code` is `share_invalid` / `share_revoked` / `share_expired` for the page's wording. Creating and revoking need the
+**admin** role (a viewer may read a report but not hand it outside the company); at most 10 live links per report.
 
 A `ladder` run may carry app-only `ladderPrefs: { mode?: 'auto' | 'manual', first?: boolean }` (the "New keyword ladder" flow; admins
 only — a member's are dropped; never sent to n8n). When the run's `ladder_plan` callback arrives with pages planned (`planned` not
@@ -196,4 +219,5 @@ usual and read by the Pipeline (`detected`), the ladder detail and the site-repo
 |---|---|---|---|
 | GET | /api/admin/orgs | | `AdminOrg[]` |
 | PATCH | /api/admin/orgs/:orgId | `orgBudgetSchema` | `AdminOrg` |
+| GET | /api/admin/delivery | | `DeliveryReport` — runs delivered / runs started per week (app runs and the nine schedules), the schedule fires that left no execution behind (D25a) and how every ops alert went out (G21) |
 | POST | /api/admin/users/reset-link | `{ email }` | `{ url, expiresInHours, name }` — a password reset link to hand over (no e-mails on the platform) |

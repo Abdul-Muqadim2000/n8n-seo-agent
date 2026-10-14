@@ -147,7 +147,13 @@ def _aif(name, expr, pos_):
     return _an(name, 'n8n-nodes-base.if', 2.3, {'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3}, 'conditions': [{'id': _aid(name + ':c'), 'leftValue': '=' + expr, 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'}, 'looseTypeValidation': True, 'options': {}}, pos_)
 def _arespond(name, body, code, pos_): return _an(name, 'n8n-nodes-base.respondToWebhook', 1.1, {'respondWith': 'json', 'responseBody': body, 'options': {'responseCode': code}}, pos_)
 assert '$json' not in _rd5('prompts/keyword_fit.txt'), 'keyword_fit.txt: read the context with $(\'Assess Result\'), not $json'
-_FIT_SCHEMA = {'type': 'object', 'properties': {'fit': {'type': 'number'}, 'navigational': {'type': 'boolean'}, 'alternatives': {'type': 'array', 'items': {'type': 'string'}}}, 'required': ['fit', 'navigational']}
+# R3 (2026-10-13, re-rating): *Parser — Keyword Fit* failed twice on "business central partner uae" ("the AI model returned an empty
+# response to the Structured Output Parser") and the 200 shipped `fit: null` with $0.024 charged. The schema is now three scalars -- the
+# alternatives travel as one comma-separated string, which Assess Response's `listOf` already splits -- the token budget is 1,200 instead of
+# 400 (a Haiku preamble used to eat the answer), and *Keyword Fit (Text)* answers in one plain line when the parser still comes back empty.
+_FIT_SCHEMA = {'type': 'object', 'properties': {'fit': {'type': 'number'}, 'navigational': {'type': 'boolean'}, 'alternatives': {'type': 'string'}}, 'required': ['fit', 'navigational']}
+_FIT_RETURN = 'Return exactly: {"fit": 0 | 1 | 2, "navigational": true | false, "alternatives": "up to 3 keywords separated by commas, or an empty string"}'
+_FIT_PLAIN = 'Answer with ONE line and nothing else, exactly in this form:\nfit=<0 or 1 or 2>; navigational=<yes or no>; alternatives=<up to 3 keywords separated by commas, or none>'
 _assess_hook = {"httpMethod": "POST", "path": "seo-keyword-assess", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
 _AN = [
   _an('Assess Webhook', 'n8n-nodes-base.webhook', 2, _assess_hook, [0, 0], webhookId='9b4e2f61-3c8a-4d7e-a5b2-7f1c0e6d9a24', credentials={"httpHeaderAuth": {"id": "SEOcredApiHeader", "name": "SEO API Key"}}),
@@ -175,8 +181,10 @@ _AN = [
   _aif('DataForSEO OK?', '{{ $json.ok }}', [1760, -100]),
   _arespond('Respond Assess Upstream Error', "={{ JSON.stringify({ ok: false, error: $json.error }) }}", 502, [1980, 60]),
   _an('Keyword Fit', '@n8n/n8n-nodes-langchain.agent', 3.1, {'promptType': 'define', 'text': '=' + _rd5('prompts/keyword_fit.txt'), 'hasOutputParser': True, 'options': {}}, [1980, -200], retryOnFail=True, maxTries=2, waitBetweenTries=1000, onError='continueRegularOutput'),
-  _an('Claude — Keyword Fit', '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, {'model': {'__rl': True, 'mode': 'list', 'value': 'claude-haiku-4-5-20251001', 'cachedResultName': 'Claude Haiku 4.5'}, 'options': {'maxTokensToSample': 400}}, [1900, 0], credentials={"anthropicApi": {"id": "SEOcredAnthropic", "name": "Anthropic (SEO Agent)"}}),
+  _an('Claude — Keyword Fit', '@n8n/n8n-nodes-langchain.lmChatAnthropic', 1.6, {'model': {'__rl': True, 'mode': 'list', 'value': 'claude-haiku-4-5-20251001', 'cachedResultName': 'Claude Haiku 4.5'}, 'options': {'maxTokensToSample': 1200}}, [1900, 0], credentials={"anthropicApi": {"id": "SEOcredAnthropic", "name": "Anthropic (SEO Agent)"}}),   # R3: 400 left a Haiku preamble no room for the answer
   _an('Parser — Keyword Fit', '@n8n/n8n-nodes-langchain.outputParserStructured', 1.3, {'schemaType': 'manual', 'inputSchema': json.dumps(_FIT_SCHEMA)}, [2100, 0]),
+  _aif('Fit Parsed?', "{{ !$json.error && $json.output != null && JSON.stringify($json.output).includes('fit') }}", [2140, -200]),
+  _an('Keyword Fit (Text)', '@n8n/n8n-nodes-langchain.agent', 3.1, {'promptType': 'define', 'text': '=' + _rd5('prompts/keyword_fit.txt').replace(_FIT_RETURN, _FIT_PLAIN), 'options': {}}, [2140, -380], retryOnFail=True, maxTries=2, waitBetweenTries=1000, onError='continueRegularOutput'),
   _acode('Assess Response', 'Assess_Response.js', [2300, -200]),
   _arespond('Respond Assess', "={{ JSON.stringify($json.body) }}", 200, [2520, -200]),
   _acode('Reach Row (Assess)', "// After the answer: a newly measured reach goes to seo_cache ('reach:<site_id>', 30 days) for the ladder and discovery (exact columns).\nconst r = $('Assess Result').first().json.cache_row;\nreturn [{ json: r || { skip: true } }];", [2740, -200]),
@@ -190,16 +198,17 @@ def _alink(a, b, out=0):
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Assess Valid?'), ('Ensure Cache Table (Assess)', 'Load Assess Cache'), ('Load Assess Cache', 'Assess Requests'), ('Assess Requests', 'Run Assess Requests'),
-               ('Run Assess Requests', 'Assess Result'), ('Assess Result', 'DataForSEO OK?'), ('Keyword Fit', 'Assess Response'), ('Assess Response', 'Respond Assess'), ('Respond Assess', 'Reach Row (Assess)'), ('Reach Row (Assess)', 'New Reach (Assess)?'),
+               ('Run Assess Requests', 'Assess Result'), ('Assess Result', 'DataForSEO OK?'), ('Keyword Fit', 'Fit Parsed?'), ('Keyword Fit (Text)', 'Assess Response'), ('Assess Response', 'Respond Assess'), ('Respond Assess', 'Reach Row (Assess)'), ('Reach Row (Assess)', 'New Reach (Assess)?'),
                ('Ensure Run Ledger (Assess)', 'Run Ledger Row (Assess)'), ('Run Ledger Row (Assess)', 'Reserve Run Ledger (Assess)'), ('Reserve Run Ledger (Assess)', 'Load Run Ledger (Assess)'), ('Load Run Ledger (Assess)', 'Assess Limit'),
                ('Assess Limit', 'Assess Limited?'), ('Respond Assess Limited', 'Mark Run Refused (Assess)'), ('Respond Assess', 'Settle Run Ledger (Assess)')]:
     _alink(_a, _b)
 _alink('Assess Valid?', 'Ensure Run Ledger (Assess)', 0); _alink('Assess Valid?', 'Respond Assess Bad Request', 1)
 _alink('Assess Limited?', 'Respond Assess Limited', 0); _alink('Assess Limited?', 'Ensure Cache Table (Assess)', 1)
 _alink('DataForSEO OK?', 'Keyword Fit', 0); _alink('DataForSEO OK?', 'Respond Assess Upstream Error', 1)
+_alink('Fit Parsed?', 'Assess Response', 0); _alink('Fit Parsed?', 'Keyword Fit (Text)', 1)   # R3: the plain-text fallback runs only when the parser came back empty
 _alink('Respond Assess Upstream Error', 'Settle Run Ledger (Assess)')   # P1-1: an upstream failure settles its row too (it stayed reserved)
 _alink('New Reach (Assess)?', 'Save Reach (Assess)', 0)
-_AC['Claude — Keyword Fit'] = {'ai_languageModel': [[{'node': 'Keyword Fit', 'type': 'ai_languageModel', 'index': 0}]]}
+_AC['Claude — Keyword Fit'] = {'ai_languageModel': [[{'node': 'Keyword Fit', 'type': 'ai_languageModel', 'index': 0}, {'node': 'Keyword Fit (Text)', 'type': 'ai_languageModel', 'index': 0}]]}   # R3: one model node feeds both attempts
 _AC['Parser — Keyword Fit'] = {'ai_outputParser': [[{'node': 'Keyword Fit', 'type': 'ai_outputParser', 'index': 0}]]}
 _names = {n['name'] for n in _AN}
 for _s, _o in _AC.items():
@@ -226,5 +235,77 @@ if os.path.isfile(_lw_path):
     _lw['assess'] = {'settle_node': 'Settle Run Ledger (Assess)', 'settle_from': _assess_settle,
                      'settle_conditions': [[c['keyName'], c['keyValue']] for c in _sa['filters']['conditions']], 'settle_values': _sa['columns']['value'],
                      'refused_conditions': [[c['keyName'], c['keyValue']] for c in _ra['filters']['conditions']], 'refused_values': _ra['columns']['value']}
+    # R3 (2026-10-13): the topic-fit call's token budget, its (simpler) schema and the plain-text retry that runs when the parser comes back empty
+    _lw['assess']['fit'] = {'agent': 'Keyword Fit', 'gate': 'Fit Parsed?', 'fallback': 'Keyword Fit (Text)',
+                            'max_tokens': _by_name['Claude - Keyword Fit'.replace(' - ', ' \u2014 ')]['parameters']['options']['maxTokensToSample'],
+                            'schema': json.loads(_by_name['Parser - Keyword Fit'.replace(' - ', ' \u2014 ')]['parameters']['inputSchema']),
+                            'fallback_has_parser': bool(_by_name['Keyword Fit (Text)']['parameters'].get('hasOutputParser')),
+                            'to_response': sorted(s_ for s_, o_ in _AC.items() for l_ in (o_.get('main') or []) for t_ in (l_ or []) if t_['node'] == 'Assess Response')}
     json.dump(_lw, open(_lw_path, 'w'), indent=1)
 print('Keyword Check workflow written:', len(_AN), 'nodes')
+
+# =============================================================================
+# SEO Agent — Pre-release Check (G27, 2026-10-13, system review FIX_PLAN.md; criterion TECH 1.8 = 0 — build_v4.py section 53):
+#     `POST /webhook/seo-prerelease` (same header credential as the API front door), synchronous, free: the key-page checks the daily
+#     watch runs (G11, v5/code/_page_watch.js) against a STAGING host or an explicit URL list, before the release goes live, with a
+#     verdict a CI job can read in one line (`| jq -e '.exit_code == 0'`).
+#     It is a READ. The workflow has no Data Table node and starts no sub-workflow, so a release candidate can never create a ladder
+#     row, a content-log row or an audit for a site — asserted below. What a staging host cannot answer (index coverage, real-user
+#     speed, positions) is returned as `not_checked` with the reason, never as "fine".
+# =============================================================================
+_PRE_GET = {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
+            'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.16; +pre-release-check)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml,text/plain,*/*'}]},
+            # redirects are NOT followed: a key page that redirects before a release is itself the finding
+            'options': {'batching': {'batch': {'batchSize': 5, 'batchInterval': 250}}, 'timeout': 20000,
+                        'redirect': {'redirect': {'followRedirects': False}}, 'response': {'response': {'fullResponse': True, 'neverError': True, 'responseFormat': 'text'}}}}
+_PW_SRC = _rd5('code/_page_watch.js').rstrip('\n')
+_pre_code = lambda f: _rd5('code/' + f).replace('/*__PAGE_WATCH__*/', _PW_SRC)
+_pre_hook = {"httpMethod": "POST", "path": "seo-prerelease", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
+_PN = [
+  _an('Prerelease Webhook', 'n8n-nodes-base.webhook', 2, _pre_hook, [0, 0], webhookId='3f6c1d84-7b90-4e52-9a1d-26c8b5e71f03', credentials={"httpHeaderAuth": {"id": "SEOcredApiHeader", "name": "SEO API Key"}}),
+  _an('Prerelease Validate', 'n8n-nodes-base.code', 2, {'jsCode': _pre_code('Prerelease_Validate.js')}, [220, 0]),
+  _aif('Prerelease Valid?', '{{ $json.ok }}', [440, 0]),
+  _an('Fetch Release Pages', 'n8n-nodes-base.httpRequest', 4.5, _PRE_GET, [660, -100], alwaysOutputData=True, onError='continueRegularOutput', **retry_lint.RETRY),
+  _an('Prerelease Verdict', 'n8n-nodes-base.code', 2, {'jsCode': _pre_code('Prerelease_Verdict.js')}, [880, -100]),
+  _arespond('Respond Prerelease', "={{ JSON.stringify($json.body) }}", 200, [1100, -100]),
+  _arespond('Respond Prerelease Bad Request', "={{ JSON.stringify({ ok: false, verdict: 'error', exit_code: 2, error: $json.error, errors: $json.errors, writes: 'none' }) }}", 400, [660, 140]),
+  _an('Note (Pre-release)', 'n8n-nodes-base.stickyNote', 1, {'content': "## SEO Agent — Pre-release Check (G27, v4.16)\n`POST /webhook/seo-prerelease` (header auth: credential **SEO API Key**, header `X-API-Key`), synchronous (a few seconds), **free** — one plain GET per page plus `/robots.txt` per host, no paid API, nothing rendered.\n\nBody: `{ base_url: 'https://staging.example.com', paths: ['/', '/pricing'] }` or `{ urls: ['https://staging.example.com/pricing'] }` (max 25), optional `live_host` (the address the pages will have in production) and `staging: false`.\n\nChecks, the same ones the daily **Page Watch** runs on live key pages: does the page answer 200, does it redirect, is it `noindex`, does `robots.txt` allow it, one canonical pointing at the right page, one `<title>`, one H1, a meta description. On a staging host `noindex` and a robots.txt disallow are the deliberate staging guard, so they are **warnings** naming the live page; `staging: false` makes them failures.\n\n**200** `{ ok, verdict: 'pass' | 'fail', exit_code: 0 | 1, summary, counts, failures: [{url, check, severity, detail}], warnings, not_checked: [{check, reason}], pages }` · **400** field errors (`exit_code: 2`).\nCI in one line: `curl -s -H \"X-API-Key: …\" -H 'Content-Type: application/json' -d @release.json $URL/webhook/seo-prerelease | jq -e '.exit_code == 0'`.\n\n**It writes nothing** (`writes: \"none\"`): no Data Table node, no sub-workflow, so a release candidate never creates ladder rows, content-log rows or audits. What a staging host cannot answer — index coverage (Google has never crawled the URL), real-user speed (no Chrome visitors), positions — comes back as `not_checked` **with the reason**, never as \"fine\".", 'height': 520, 'width': 760, 'color': 4}, [-40, -620]),
+]
+_PC = {}
+def _plink(a, b, out=0):
+    outs = _PC.setdefault(a, {}).setdefault('main', [])
+    while len(outs) <= out: outs.append([])
+    outs[out].append({'node': b, 'type': 'main', 'index': 0})
+for _a, _b in [('Prerelease Webhook', 'Prerelease Validate'), ('Prerelease Validate', 'Prerelease Valid?'), ('Fetch Release Pages', 'Prerelease Verdict'), ('Prerelease Verdict', 'Respond Prerelease')]:
+    _plink(_a, _b)
+_plink('Prerelease Valid?', 'Fetch Release Pages', 0); _plink('Prerelease Valid?', 'Respond Prerelease Bad Request', 1)
+_pnames = {n['name'] for n in _PN}
+for _s, _o in _PC.items():
+    assert _s in _pnames, _s
+    for _lists in _o.values():
+        for _l in _lists:
+            for _t in _l: assert _t['node'] in _pnames, _t['node']
+_pcode = {n['name']: n['parameters']['jsCode'] for n in _PN if n['type'] == 'n8n-nodes-base.code'}
+assert all('const PW = (() => {' in c for c in _pcode.values()) and not any('/*__PAGE_WATCH__*/' in c for c in _pcode.values()), 'G27: the page-watch kit is not inlined in the pre-release check'
+assert "writes: 'none'" in _pcode['Prerelease Verdict'] and 'exit_code' in _pcode['Prerelease Verdict'], 'G27: the verdict is not machine-readable'
+assert not any(n['type'] in (DT_TYPE, 'n8n-nodes-base.executeWorkflow') for n in _PN), 'G27: a pre-release check must write nothing — no Data Table node, no sub-workflow'
+assert all(n.get('credentials') for n in _PN if n['type'] == 'n8n-nodes-base.webhook'), 'pre-release check: the webhook has no credential'
+pwf = {"id": "SEOagentPreRel1", "name": "SEO Agent — Pre-release Check", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl", "executionTimeout": 120}, "tags": [], "nodes": _PN, "connections": _PC}
+url_lint.check(pwf)   # D15: no node builds a site URL by hand (url_lint.py)
+retry_lint.check(pwf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
+json.dump([pwf], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Prerelease.json'), 'w'), indent=2, ensure_ascii=False)
+if os.path.isdir(_code):
+    for _n in _PN:
+        if _n['type'] == 'n8n-nodes-base.code': open(os.path.join(_code, re.sub(r'[^A-Za-z0-9_.-]+', '_', _n['name']) + '.js'), 'w').write(_n['parameters']['jsCode'])
+# the wiring the harness checks (S62): the workflow JSON is not copied into the container, so what matters about it travels as data —
+# that it answers synchronously, that its fetch does not follow redirects, and above all that it holds no node that could write anything
+_pre_wiring = {'workflow': pwf['id'], 'path': _pre_hook['path'], 'authentication': _pre_hook['authentication'], 'response_mode': _pre_hook['responseMode'],
+               'nodes': [n['name'] for n in _PN], 'node_types': sorted({n['type'] for n in _PN}),
+               'writes': [n['name'] for n in _PN if n['type'] in (DT_TYPE, 'n8n-nodes-base.executeWorkflow', 'n8n-nodes-base.emailSend')],
+               'responses': {n['name']: n['parameters']['options']['responseCode'] for n in _PN if n['type'] == 'n8n-nodes-base.respondToWebhook'},
+               'fetch': {'name': 'Fetch Release Pages', 'follows_redirects': _PRE_GET['options']['redirect']['redirect']['followRedirects'],
+                         'response_format': _PRE_GET['options']['response']['response']['responseFormat'], 'retries': retry_lint.RETRY['maxTries']},
+               'connections': {k: [[t['node'] for t in (l or [])] for l in v['main']] for k, v in _PC.items()}}
+if os.path.isdir(os.path.join(_here, 'harness')):
+    json.dump(_pre_wiring, open(os.path.join(_here, 'harness', 'prerelease_wiring.json'), 'w'), indent=1)
+print('Pre-release Check workflow written:', len(_PN), 'nodes')

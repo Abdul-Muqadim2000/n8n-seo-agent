@@ -46,7 +46,7 @@ const OK = (() => {
   const countryOf = (domain) => { const d = String(domain || '').toLowerCase(); const m = d.match(/\.([a-z]{2})$/); return m && CC[m[1]] ? CC[m[1]] : ''; };
   // our page to point to and the link text to ask for (LINK_BUILDER_SPEC.md §5). pages: [{ url, title, keyword, kind, page_type, position,
   // rds, kw_share, pitched }] (kind: home | hub | guide | answer | article | case | money); p: the prospect { type, text, dead_text, to_url }
-  const HOME_TYPES = new Set(['mention', 'list', 'listing', 'press', 'ai_list']);
+  const HOME_TYPES = new Set(['mention', 'list', 'listing', 'press', 'digest', 'podcast', 'ai_list']);   // L5: an answer in the press and a guest appearance name the business, so they point at the homepage
   function pickTarget(p, pages, df, nDocs, home) {
     if (p.type === 'lost' && p.to_url) return { url: p.to_url, reason: 'the page it used to link to', anchor: 'as before', fit: 1 };
     if (HOME_TYPES.has(p.type)) return { url: home, reason: p.type === 'list' || p.type === 'ai_list' ? 'lists link to the homepage' : 'a mention or a listing names the business: the homepage', anchor: 'brand', fit: 1 };
@@ -80,7 +80,7 @@ const OK = (() => {
     return '';
   }
   // a bare homepage is no place for a link to add: only a listing, a list, a mention or a journalist request is pitched on the front page
-  const HOME_OK = new Set(['mention', 'list', 'listing', 'ai_list', 'press', 'lost', 'reclaim']);
+  const HOME_OK = new Set(['mention', 'list', 'listing', 'ai_list', 'press', 'digest', 'podcast', 'lost', 'reclaim']);   // L5: a show's front page is where its contact and its guest invitation live
   const isHomeUrl = (u) => /^https?:\/\/[^\/?#]+\/?([?#]|$)/i.test(String(u || ''));
   const homepageOnly = (type, url) => (isHomeUrl(url) && !HOME_OK.has(String(type || '')))
     ? 'only their homepage was found: a front page has no section a link could be added to (find the page on your topic first)' : '';
@@ -96,12 +96,32 @@ const OK = (() => {
   // them. A publisher writing about our topic has the words but not the signals; a list that leaves us out, a mention or a journalist
   // request is still pitched when the publisher also sells something (the ask there is "add us", not "link to us").
   const VENDOR_RE = /(book|schedule|request)(?: a| your)? (?:demo|call|consultation)|free trial|start (?:for )?free|talk to (?:sales|an expert|our advisor)|our (?:software|platform|product|products|solution|solutions|services|suite)|request (?:a )?quote|why choose us|our (?:clients|customers) (?:include|trust)|pricing plans?|per user ?\/ ?month|we (?:provide|offer|deliver|implement|build) /gi;
-  const SELL_EXEMPT = new Set(['list', 'listing', 'ai_list', 'mention', 'press', 'lost', 'reclaim']);
+  const SELL_EXEMPT = new Set(['list', 'listing', 'ai_list', 'mention', 'press', 'digest', 'podcast', 'lost', 'reclaim']);   // L5: a journalist request and a podcast that takes guests are asked "will you cover us", not "link to us" — the declared-competitor check above still runs
   const THEIRS_RE = /\b(solutions?|services?|software|platform|suite|provider|providers|consultan\w+|implementation|company)\b/i;
-  function sellsSame(o) {
+  // R4 (2026-10-13, re-rating): the gate only read the prospect's page, so a competitor's *guide* passed. Live, flick.network was a `ready`
+  // resource prospect with a drafted sequence while the same run's Rank Tracker had just found it at #1 for the ladder head "e invoicing in
+  // uae", and basware.com (an AP / e-invoicing vendor) reached `needs_contact`. The refusal now matches the prospect's REGISTRABLE domain
+  // against the declared competitors (seo_monitors.competitors) and the SERP competitors the ladder / verdict measured, and says which it was.
+  // A list page ("best X", a directory, a mention, a journalist request) stays pitchable even on a rival's domain: the ask there is "add us to
+  // your list", which is legitimate; pitching their guide or resource page is not.
+  const LIST_TYPES = new Set(['list', 'listing', 'ai_list', 'mention', 'press']);
+  const domOf = (c) => String((c && typeof c === 'object' ? (c.domain || c.d) : c) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  function rivalOf(o) {
     const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
-    for (const c of (o.competitors || [])) { const x = String(c || '').toLowerCase().replace(/^www\./, '');
-      if (x && (LK.sameSite(d, x) || LK.sameSite(x, d) || LK.regDomain(d) === LK.regDomain(x))) return 'a competing site of yours (' + x + '): a competitor does not link to you'; }
+    const hit = (list, label) => {
+      for (const c of (list || [])) { const x = domOf(c);
+        if (x && (LK.sameSite(d, x) || LK.sameSite(x, d) || LK.regDomain(d) === LK.regDomain(x)))
+          return { domain: x, why: label + ((c && typeof c === 'object' && c.position) ? ' (#' + c.position + ' for "' + String(c.keyword || '').slice(0, 60) + '")' : '') };
+      }
+      return null;
+    };
+    return hit(o.competitors, 'a competitor of yours') || hit(o.serp_rivals, 'a site that outranks you for one of your own keywords');
+  }
+  function sellsSame(o) {
+    const rival = rivalOf(o);
+    if (rival && LIST_TYPES.has(String(o.type || ''))) return '';   // asking a rival's "best X" list to add you is fair game
+    if (rival) return 'a competing site of yours (' + rival.domain + '): ' + rival.why + ', and a competitor does not link to your page';
+    const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
     if (SELL_EXEMPT.has(String(o.type || ''))) return '';
     const terms = [...new Set((o.terms || []).flatMap(t => words(t).map(stem)))];
     if (terms.length < 2) return '';
@@ -168,5 +188,5 @@ const OK = (() => {
     return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
   }
   return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, rivalOf, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();

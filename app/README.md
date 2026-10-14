@@ -73,6 +73,20 @@ verification, the company adds that e-mail as a user of its Search Console prope
 property id is accepted only when one of its web streams measures the site's domain (checked across every property the account
 sees); the app never shows other companies' properties.
 
+## Guided setup ("Show me how")
+
+Everything the app asks a person to do somewhere else — add our service account to Search Console or GA4, add the DNS record or
+the meta tag, export the links CSV, put the IndexNow file on the site, connect a mailbox, apply a fix pack, publish a written page,
+fill the business profile — carries a **Show me how** button next to the ask. It opens a side panel with that one job: numbered
+steps you tick off (kept per browser), **your own values** in copy boxes (the real DNS record, the real key file, the real service
+account address), the page to open, tabs for the provider or CMS you actually use (Cloudflare / GoDaddy / Namecheap / cPanel,
+WordPress / Shopify / Wix / Squarespace / Webflow), an "If it does not work" list, and **Copy all steps** / **Send to a colleague**
+— the person who can edit DNS is usually not the person reading the screen. The sidebar and the onboarding header open the
+searchable catalogue of all 27 guides.
+
+Content is data in `shared/src/guides.ts` (imported as `@seo/shared/guides`), rendered by `web/src/components/guide/`. Adding an
+ask without a guide is a bug: see `web/CONVENTIONS.md` → "Setup guides".
+
 ## E-mail (off for now)
 
 The platform sends no e-mail: `ENGINE_EMAILS=false` (n8n receives no address, so its "Has Email?" branches skip every report /
@@ -230,6 +244,11 @@ engine and of this repository.
 - **Callbacks**: n8n posts results to `/api/hooks/n8n/<token>`; the token is random per company and never stored in a report.
 - **Sessions**: random 256-bit cookie (httpOnly, SameSite=Lax, Secure on https), only its SHA-256 is stored; 30 days, sliding.
   State-changing requests need `X-Requested-With: fetch` (CSRF guard). Login, sign-up and reset are rate limited.
+- **Share links** (G15, `/share/:token`, details in `API.md`): an admin can hand **one report** to somebody with no account through an
+  expiring link — 256-bit token, only its SHA-256 stored, 14 days by default (1-90), revocable at any time, with who created it and
+  when it was last opened on record. A holder reaches that report's headline figures and *its* files (same sandboxed file handling as
+  inside the app) and nothing else: no other report, no list, no dashboard, no payload, no company id, no write. A wrong, revoked or
+  expired token is a rate-limited 404 with no hint.
 - **Secrets** (n8n webhook key, n8n API key, SMTP, service-account key) stay on the server.
 - Generated HTML (articles) is shown in a sandboxed iframe and downloaded, never served as a page of the app.
 - **Spend**: each company has a monthly budget (estimated cost per run and per keyword check, checked with the insert under a per-company lock before
@@ -268,4 +287,5 @@ python3 scripts/smoke.py          # API integration test against the running dev
 | "Choose keywords for me" | `server/src/services/autoStart.ts` (decision + job), timer in `server/src/index.ts` (`AUTO_START_LADDERS`) |
 | A callback stage | `server/src/services/summaries.ts` (list summary), `web/src/components/reports/` (renderer), `shared/src/constants.ts` (`STAGE_LABELS`, `MODES[…].finalStages`) |
 | Database | `server/src/db/schema.ts`, then `npm run db:generate` (migrations run at start) |
+| A guide ("Show me how") or a new ask that needs one | `shared/src/guides.ts` (+ `guides.test.ts`), trigger with `GuideButton` from `web/src/components/guide` |
 | Business site copy, a new capability, prices | `web/src/marketing/content/` (registries), pages in `web/src/marketing/pages/`; steps in `web/CONVENTIONS.md` → "Business site" |

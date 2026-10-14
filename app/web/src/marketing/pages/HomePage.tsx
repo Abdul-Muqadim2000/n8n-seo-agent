@@ -336,7 +336,7 @@ function BacklinksSpotlight() {
         {[
           { t: 'Checked, not assumed', b: 'Rel, placement, noindex and canonical read from the live page.' },
           { t: 'Valued three ways', b: 'SEO, referral and brand value for every referring site.' },
-          { t: 'Prospects that convert', b: 'Scored prospects, contacts, outreach drafts and follow-ups after 7 and 14 days.' },
+          { t: 'Prospects that convert', b: 'Scored prospects, contacts, outreach drafts and follow-ups after 7 and 14 days — sent from your own mailbox, with no password to store.' },
         ].map((x, i) => (
           <Reveal key={x.t} index={i}>
             <p className="font-display text-[15px] font-semibold text-ink">{x.t}</p>

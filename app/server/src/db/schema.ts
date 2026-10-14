@@ -232,6 +232,33 @@ export const files = pgTable(
 );
 
 /**
+ * G15 (system review 2026-10-11): an expiring, revocable, read-only link to ONE report, for somebody with no account.
+ * `id` of the link is a uuid; the secret in the URL is never stored — only its SHA-256 (`tokenHash`), so a database copy hands out no
+ * working links. The link reaches that one report and its files, nothing else. We keep who created it, when it expires, when it was
+ * revoked and when it was last opened (with a counter), so an owner can see whether anybody used it.
+ */
+export const reportShares = pgTable(
+  'report_shares',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    reportId: uuid('report_id')
+      .notNull()
+      .references(() => reports.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    expiresAt: ts('expires_at').notNull(),
+    revokedAt: ts('revoked_at'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: created(),
+    lastOpenedAt: ts('last_opened_at'),
+    opens: integer('opens').notNull().default(0),
+  },
+  (t) => [uniqueIndex('report_shares_hash_idx').on(t.tokenHash), index('report_shares_report_idx').on(t.reportId), index('report_shares_org_idx').on(t.orgId)],
+);
+
+/**
  * Keyword checks of the "New keyword ladder" flow (n8n's Keyword Check, POST /webhook/seo-keyword-assess; PIPELINE_FEATURE_SPEC.md
  * §5.2). A row is reserved as 'pending' (with the estimated cost) under the company's budget lock before n8n is called, then 'done'
  * with the engine's answer and its reported cost, or 'failed' (cost 0: counted in the daily limit only). The same website, keyword
@@ -259,7 +286,8 @@ export const keywordChecks = pgTable(
 );
 
 // ---- v4.13 Link Builder (n8n/seo-agent/LINK_BUILDER_SPEC.md): the company's mailboxes, the sequences it sends, every message, opt-outs ----
-/** A mailbox the company sends link-building e-mails from (its own address; SMTP + IMAP with an app password). The secret is encrypted. */
+/** A mailbox the company sends link-building e-mails from (its own address). Either SMTP + IMAP with an app password, or (L4) OAuth with
+ *  Microsoft 365 / Gmail, where no password exists and the provider's API sends. Every secret here is encrypted (lib/secretBox.ts). */
 export const mailboxes = pgTable(
   'mailboxes',
   {
@@ -268,6 +296,7 @@ export const mailboxes = pgTable(
     label: text('label').notNull().default(''),
     fromName: text('from_name').notNull(),
     fromEmail: text('from_email').notNull(),
+    /** smtp (app password) | gmail_oauth (sends only) | ms_graph (sends and reads) */
     provider: text('provider').notNull().default('smtp'),
     smtpHost: text('smtp_host').notNull(),
     smtpPort: integer('smtp_port').notNull().default(465),
@@ -276,8 +305,21 @@ export const mailboxes = pgTable(
     imapPort: integer('imap_port').notNull().default(993),
     imapSecure: boolean('imap_secure').notNull().default(true),
     username: text('username').notNull(),
-    /** AES-256-GCM (lib/secretBox.ts, key MAILBOX_KEY); never sent to the browser */
+    /** AES-256-GCM (lib/secretBox.ts, key MAILBOX_KEY); never sent to the browser. Empty for an OAuth mailbox: there is no password. */
     secret: text('secret').notNull(),
+    // ---- L4: an OAuth mailbox. The refresh token is the long-lived secret and is encrypted exactly like a password; the access token
+    // is refreshed before it expires, and both are revoked when the customer disconnects the mailbox.
+    oauthRefresh: text('oauth_refresh').notNull().default(''),
+    oauthAccess: text('oauth_access').notNull().default(''),
+    oauthExpiresAt: ts('oauth_expires_at'),
+    /** the scopes the customer actually granted, as the provider reported them */
+    oauthScope: text('oauth_scope').notNull().default(''),
+    /** the provider's own account id (sub / oid): a re-connect of the same account updates the row instead of adding one */
+    oauthSubject: text('oauth_subject').notNull().default(''),
+    /** where the inbox reading got to (Microsoft Graph: the newest receivedDateTime read; IMAP uses lastUid instead) */
+    oauthCursor: text('oauth_cursor').notNull().default(''),
+    /** false for Gmail OAuth: reading an inbox needs Google's restricted scope, so replies are read in Gmail itself */
+    readsReplies: boolean('reads_replies').notNull().default(true),
     /** active | paused | error */
     status: text('status').notNull().default('active'),
     statusReason: text('status_reason').notNull().default(''),
@@ -325,7 +367,9 @@ export const outreachSequences = pgTable(
     status: text('status').notNull().default('scheduled'),
     /** the next step to send (0 = the first e-mail); steps.length = all sent */
     step: integer('step').notNull().default(0),
-    steps: jsonb('steps').$type<{ step: number; waitDays: number; subject: string; body: string }[]>().notNull(),
+    steps: jsonb('steps').$type<{ step: number; waitDays: number; subject: string; body: string; subjectAlt?: string; variant?: string }[]>().notNull(),
+    /** L7: which of the batch's two subject styles this conversation went out with (A | B; empty when the pitch had only one) */
+    subjectVariant: text('subject_variant').notNull().default(''),
     nextAt: ts('next_at'),
     consent: boolean('consent').notNull().default(false),
     approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
@@ -396,4 +440,5 @@ export type SiteRow = typeof sites.$inferSelect;
 export type RunRow = typeof runs.$inferSelect;
 export type ReportRow = typeof reports.$inferSelect;
 export type FileRow = typeof files.$inferSelect;
+export type ReportShareRow = typeof reportShares.$inferSelect;
 export type KeywordCheckRow = typeof keywordChecks.$inferSelect;

@@ -5,6 +5,7 @@ import {
   draftGate,
   emailDomain,
   n8nSiteId,
+  subjectAbStats,
   warmupCap,
   type LinkBuildingData,
   type LinkBuildingKpis,
@@ -28,6 +29,7 @@ import { sha256 } from '../lib/crypto';
 import { badRequest, conflict, HttpError, notFound } from '../lib/errors';
 import { siteAdmin, siteRows } from '../n8n/client';
 import { mxCheck } from './mail';
+import { isOauthMailbox } from './mailOauth';
 
 // v4.13 Link Builder (n8n/seo-agent/LINK_BUILDER_SPEC.md §2): what the page shows and what a person can do. The n8n workflow finds,
 // qualifies and drafts; this app sends from the company's own mailbox (outreachJobs.ts), reads the replies and keeps the sequences.
@@ -73,7 +75,8 @@ export async function sentCounts(mailboxId: string, since: Date): Promise<{ firs
 
 export async function mailboxView(m: MailboxRow): Promise<MailboxView> {
   const now = new Date(); const c = await sentCounts(m.id, new Date(now.getTime() - 864e5));
-  return { id: m.id, label: m.label, fromName: m.fromName, fromEmail: m.fromEmail, provider: 'smtp', smtpHost: m.smtpHost, smtpPort: m.smtpPort, smtpSecure: m.smtpSecure, imapHost: m.imapHost, imapPort: m.imapPort, imapSecure: m.imapSecure,
+  return { id: m.id, label: m.label, fromName: m.fromName, fromEmail: m.fromEmail, provider: (m.provider as MailboxView['provider']) ?? 'smtp',
+    authType: isOauthMailbox(m) ? 'oauth' : 'password', readsReplies: isOauthMailbox(m) ? m.readsReplies : true, oauthExpiresAt: iso(m.oauthExpiresAt), smtpHost: m.smtpHost, smtpPort: m.smtpPort, smtpSecure: m.smtpSecure, imapHost: m.imapHost, imapPort: m.imapPort, imapSecure: m.imapSecure,
     username: m.username, status: (m.status as MailboxView['status']) ?? 'active', statusReason: m.statusReason, signatureName: m.signatureName, signatureTitle: m.signatureTitle, company: m.company, postalAddress: m.postalAddress,
     timezone: m.timezone, windowStart: m.windowStart, windowEnd: m.windowEnd, dailyFirstMax: m.dailyFirstMax, dailyMax: m.dailyMax, startedAt: m.startedAt.toISOString(), dns: (m.dns as MailboxView['dns']) ?? null,
     lastPollAt: iso(m.lastPollAt), lastSendAt: iso(m.lastSendAt), lastError: m.lastError, today: { first: c.first, total: c.total, firstCap: warmupCap(m.startedAt, now, m.dailyFirstMax), totalCap: m.dailyMax } };
@@ -81,14 +84,14 @@ export async function mailboxView(m: MailboxRow): Promise<MailboxView> {
 
 const contactsOf = (r: LinkOutreachRow): OutreachContact[] => (json<{ email?: string; kind?: string; own?: boolean; source_url?: string }[]>(r.contacts_json, []) || [])
   .filter((c) => c && c.email).map((c) => ({ email: s(c.email).toLowerCase(), kind: (['person', 'editorial', 'general'].includes(s(c.kind)) ? c.kind : 'other') as OutreachContact['kind'], own: !!c.own, sourceUrl: s(c.source_url) }));
-const stepsOf = (r: LinkOutreachRow): OutreachStep[] => (json<{ step?: number; wait_days?: number; subject?: string; body?: string }[]>(r.sequence_json, []) || [])
-  .map((x, i) => ({ step: i, waitDays: n(x.wait_days), subject: s(x.subject), body: s(x.body) })).filter((x) => x.body);
+const stepsOf = (r: LinkOutreachRow): OutreachStep[] => (json<{ step?: number; wait_days?: number; subject?: string; body?: string; subject_alt?: string; variant?: string }[]>(r.sequence_json, []) || [])
+  .map((x, i) => ({ step: i, waitDays: n(x.wait_days), subject: s(x.subject), body: s(x.body), ...(x.subject_alt ? { subjectAlt: s(x.subject_alt) } : {}), ...(x.variant ? { variant: s(x.variant).toUpperCase() } : {}) })).filter((x) => x.body);
 
 export async function sequencesOf(siteId: string): Promise<OutreachSequence[]> {
   const seqs = await db.select().from(schema.outreachSequences).where(eq(schema.outreachSequences.siteId, siteId)).orderBy(desc(schema.outreachSequences.createdAt)).limit(500);
   if (!seqs.length) return [];
   const msgs = await db.select().from(schema.outreachMessages).where(inArray(schema.outreachMessages.sequenceId, seqs.map((x) => x.id))).orderBy(schema.outreachMessages.at);
-  return seqs.map((q) => ({ id: q.id, prospectDomain: q.prospectDomain, type: q.prospectType, toEmail: q.toEmail, mailboxId: q.mailboxId, status: q.status as SequenceStatus, step: q.step, steps: q.steps, nextAt: iso(q.nextAt),
+  return seqs.map((q) => ({ id: q.id, prospectDomain: q.prospectDomain, type: q.prospectType, toEmail: q.toEmail, mailboxId: q.mailboxId, status: q.status as SequenceStatus, step: q.step, steps: q.steps, subjectVariant: q.subjectVariant, nextAt: iso(q.nextAt),
     approvedAt: iso(q.approvedAt), startedAt: iso(q.startedAt), lastSentAt: iso(q.lastSentAt), targetUrl: q.targetUrl, pageUrl: q.pageUrl, replyAt: iso(q.replyAt), replyClass: (q.replyClass as ReplyClass | null) ?? null,
     replySummary: q.replySummary, suggestedReply: q.suggestedReply, replyFrom: q.replyFrom, oooUntil: iso(q.oooUntil), wonAt: iso(q.wonAt), error: q.error,
     messages: msgs.filter((m) => m.sequenceId === q.id).map((m) => ({ id: m.id, direction: m.direction as 'out' | 'in', step: m.step, kind: m.kind, subject: m.subject, body: m.body.slice(0, 6000), from: m.fromEmail, to: m.toEmail, at: m.at.toISOString(), error: m.error })) }));
@@ -141,7 +144,7 @@ export async function linkBuildingData(org: OrgRow, site: SiteRow, role: Role): 
     : !active.postalAddress ? { ok: false, why: 'Add your postal address to the mailbox: every e-mail must carry it (CAN-SPAM).' }
     : role === 'viewer' ? { ok: false, why: 'Viewers cannot send.' } : { ok: true, why: '' };
   return {
-    settings, mailboxes, drafts, sequences: seqs, kpis: kpisOf(seqs, prospects),
+    settings, mailboxes, drafts, sequences: seqs, kpis: kpisOf(seqs, prospects), subjectAb: subjectAbStats(seqs),
     listings: listings.map((l) => ({ id: s(l.listing_id), name: s(l.name), category: s(l.category), status: s(l.status), profileUrl: s(l.profile_url), rel: s(l.rel), competitors: s(l.competitors).split(/,\s*/).filter(Boolean), submitUrl: s(l.submit_url),
       priority: n(l.priority), why: s(l.why), checkedAt: s(l.checked_at), submittedAt: s(l.submitted_at), note: s(l.note) })).sort((a, b) => a.priority - b.priority),
     redirects: outreach.filter((r) => s(r.type) === 'redirect').map((r) => ({ from: s(r.page_url), to: s(r.target_url), reason: s(r.target_reason) })),
@@ -174,7 +177,8 @@ export async function approve(org: OrgRow, site: SiteRow, userId: string | null,
   if (!row) throw notFound(`${a.prospectDomain} is not in the link-building list.`);
   const gate = consentGate(s(row.country), to);
   if (gate.needed && !a.consent) throw new HttpError(409, gate.why + ' Tick "I have their consent or we already work together" to send.', 'consent_needed');
-  const steps = a.steps.map((x, i) => ({ step: i, waitDays: Math.min(30, Math.max(i === 0 ? 0 : 2, Math.round(n(x.waitDays)))), subject: s(x.subject).trim().slice(0, 140), body: s(x.body).replace(/\r/g, '').trim().slice(0, 6000) })).filter((x) => x.body).slice(0, 3);
+  const steps = a.steps.map((x, i) => ({ step: i, waitDays: Math.min(30, Math.max(i === 0 ? 0 : 2, Math.round(n(x.waitDays)))), subject: s(x.subject).trim().slice(0, 140), body: s(x.body).replace(/\r/g, '').trim().slice(0, 6000),
+    ...(x.subjectAlt ? { subjectAlt: s(x.subjectAlt).trim().slice(0, 140) } : {}), ...(x.variant ? { variant: s(x.variant).toUpperCase() } : {}) })).filter((x) => x.body).slice(0, 3);
   if (!steps.length || !steps[0]!.subject) throw badRequest('The first e-mail needs a subject and a text.');
   // L2: the same gate the engine ran when it drafted, on the text as it stands now (a person may have edited it in the dialog). The engine
   // checked the claims against the business facts and left anything unproven in brackets, so here a leftover bracket is enough to hold it.
@@ -194,7 +198,8 @@ export async function approve(org: OrgRow, site: SiteRow, userId: string | null,
   if (recent) throw conflict(`${a.prospectDomain} got a sequence without a reply in the last 90 days: give it a rest.`);
   const [q] = await db.insert(schema.outreachSequences).values({ orgId: org.id, siteId: site.id, mailboxId: mb.id, prospectDomain: a.prospectDomain, prospectType: a.type, toEmail: to,
     contactUrl: contactsOf(row).find((c) => c.email === to)?.sourceUrl ?? '', pageUrl: s(row.page_url), targetUrl: s(row.target_url), country: s(row.country), status: 'scheduled', step: 0, steps, nextAt: new Date(),
-    consent: !!a.consent, approvedBy: userId, approvedAt: new Date() }).returning();
+    consent: !!a.consent, approvedBy: userId, approvedAt: new Date(),
+    subjectVariant: ['A', 'B'].includes(String(steps[0]?.variant ?? '').toUpperCase()) ? String(steps[0]!.variant).toUpperCase() : '' }).returning();   // L7: which subject style went out
   return q!;
 }
 

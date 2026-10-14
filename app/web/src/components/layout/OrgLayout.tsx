@@ -29,6 +29,7 @@ import {
   X,
 } from 'lucide-react';
 import { MODES, ROLE_LABELS, type Org, type Site } from '@seo/shared';
+import { GuideIndexButton } from '@/components/guide';
 import { lastSite, makeCan, OrgContext, rememberSite, useOrgCtx, type OrgContextValue } from '@/lib/context';
 import { paths } from '@/lib/paths';
 import { useLogout, useMe, useOrg, useSites } from '@/lib/queries';
@@ -377,6 +378,7 @@ function Sidebar({ onClose }: { onClose: () => void }) {
             Sign out
           </MenuItem>
         </Menu>
+        <GuideIndexButton />
         <ThemeMenu />
       </div>
     </div>

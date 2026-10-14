@@ -1,0 +1,1170 @@
+// Step-by-step guides for everything the app asks a person to do outside it: connect Search Console, prove the domain is yours,
+// put a file on the site, connect a mailbox, fill the business profile. Every "ask" in the UI carries a "Show me how" button that
+// opens the matching guide (web/src/components/guide), so nobody has to leave and search for the answer.
+//
+// The guides are data, not components: the same text renders in the panel, copies to the clipboard and goes into an e-mail to the
+// colleague who actually manages the DNS. Bodies use a tiny inline markup — **bold** for what to click, `code` for values to type,
+// [label](https://url) for links — and {{placeholders}} for the real values of the site (its domain, the record to add, the key
+// file). Rendering is in web/src/components/guide/rich.tsx; the plain-text form is `guideText` below.
+
+export type GuideArea = 'google' | 'ownership' | 'website' | 'mailbox' | 'business' | 'company';
+
+export interface GuideVar {
+  key: string;
+  label: string;
+  /** shown when the caller has no real value yet, so a guide always reads sensibly */
+  example: string;
+}
+
+export interface GuideLink {
+  label: string;
+  href: string;
+}
+
+export interface GuideCopy {
+  label: string;
+  /** may contain {{placeholders}} */
+  value: string;
+  /** what to paste it into */
+  hint?: string;
+}
+
+/** One alternative path through a step: the provider, CMS or mail host the person actually uses. */
+export interface GuideChoice {
+  label: string;
+  body: string;
+  link?: GuideLink;
+  note?: string;
+}
+
+export interface GuideStep {
+  title: string;
+  body: string;
+  copy?: readonly GuideCopy[];
+  link?: GuideLink;
+  /** a helpful aside */
+  note?: string;
+  /** something that goes wrong if ignored */
+  warn?: string;
+  choices?: readonly GuideChoice[];
+}
+
+export interface Guide {
+  id: string;
+  area: GuideArea;
+  title: string;
+  /** one line: what this unlocks, in the customer's terms */
+  why: string;
+  /** where the work happens, e.g. "Google Search Console" */
+  where?: string;
+  /** who in the company can do it, when it is not the person reading */
+  who?: string;
+  /** realistic minutes, used for the "about N minutes" chip */
+  minutes: number;
+  vars?: readonly GuideVar[];
+  steps: readonly GuideStep[];
+  /** how to tell it worked */
+  done?: string;
+  trouble?: readonly { q: string; a: string }[];
+  related?: readonly string[];
+  /** extra words that should find this guide in the search box */
+  keywords?: readonly string[];
+}
+
+export const GUIDE_AREAS: { id: GuideArea; label: string; description: string }[] = [
+  { id: 'google', label: 'Google data', description: 'Search Console and Analytics: the data behind every report' },
+  { id: 'ownership', label: 'Proving the website is yours', description: 'One of three ways, before any data is shown' },
+  { id: 'website', label: 'Changes on your website', description: 'Files, pages and tools that live on your side' },
+  { id: 'mailbox', label: 'Your mailbox', description: 'Link-building pitches go out from your own address' },
+  { id: 'business', label: 'About your business', description: 'What every page is written from and checked against' },
+  { id: 'company', label: 'Your company in Ascentra', description: 'Budget, team and who may do what' },
+];
+
+const V = {
+  domain: { key: 'domain', label: 'Your website', example: 'your-domain.com' },
+  serviceAccount: { key: 'serviceAccount', label: 'The address that reads your Google data', example: 'reader@ascentra-seo.iam.gserviceaccount.com' },
+  dnsHost: { key: 'dnsHost', label: 'Host / name of the record', example: 'your-domain.com' },
+  dnsValue: { key: 'dnsValue', label: 'Value of the record', example: 'seo-agent-verification=abc123def456' },
+  metaTag: { key: 'metaTag', label: 'The meta tag', example: '<meta name="seo-agent-verification" content="abc123def456" />' },
+  indexNowKey: { key: 'indexNowKey', label: 'Your IndexNow key', example: 'e474f67e21841570c3de6d7624391652' },
+  indexNowFile: { key: 'indexNowFile', label: 'The file name', example: 'e474f67e21841570c3de6d7624391652.txt' },
+  indexNowUrl: { key: 'indexNowUrl', label: 'Where the file goes', example: 'https://your-domain.com/e474f67e21841570c3de6d7624391652.txt' },
+} as const;
+
+export const GUIDES = [
+  // ---------------------------------------------------------------- Google
+  {
+    id: 'search-console-property',
+    area: 'google',
+    title: 'Set up Search Console for your website',
+    why: 'Search Console is Google’s own record of your site: the searches you appear for, what is indexed and what Google could not read. Almost every report here is better with it.',
+    where: 'Google Search Console',
+    who: 'Anyone with a Google account, plus someone who can edit DNS for the best kind of property',
+    minutes: 10,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Sign in to Search Console',
+        body: 'Open **Search Console** and sign in with a Google account your company controls. Prefer a shared company account over a personal one: whoever owns the property keeps the history.',
+        link: { label: 'Open Search Console', href: 'https://search.google.com/search-console' },
+      },
+      {
+        title: 'Add a property for {{domain}}',
+        body: 'Click the property switcher at the top left, then **Add property**. Choose **Domain** if you can edit DNS — one property then covers http, https, www and every subdomain. Choose **URL prefix** only when you cannot touch DNS.',
+        note: 'A Domain property is worth the extra step: with a URL-prefix property, https://{{domain}} and https://www.{{domain}} are two separate properties with two separate histories.',
+      },
+      {
+        title: 'Prove the domain is yours to Google',
+        body: 'For a **Domain** property Google gives you one TXT record to add at your DNS provider. For a **URL prefix** property you can instead upload an HTML file, add a meta tag or use an existing Google Analytics tag.',
+        note: 'This is Google’s own check and separate from proving ownership inside Ascentra — but the work is the same kind, and the guide for the DNS record walks through the providers.',
+      },
+      {
+        title: 'Give it a few days, then come back',
+        body: 'A brand-new property starts empty and fills over the next two or three days. Everything else in Ascentra works meanwhile.',
+      },
+    ],
+    done: 'The property for {{domain}} appears in the property switcher, and **Performance** shows rows within a few days.',
+    trouble: [
+      { q: 'Someone set this up years ago and I cannot get in', a: 'Ask them to open **Settings → Users and permissions → Add user** and add you as an **Owner**. If nobody can get in at all, add a new Domain property yourself — a domain can have several owners.' },
+      { q: 'Verification keeps failing', a: 'The record is almost always right but not yet live. Wait, then press Google’s **Verify** again. Records usually appear within minutes but can take a couple of hours.' },
+    ],
+    related: ['search-console-access', 'dns-txt-record'],
+    keywords: ['gsc', 'google search console', 'property', 'webmaster'],
+  },
+  {
+    id: 'search-console-access',
+    area: 'google',
+    title: 'Let Ascentra read your Search Console',
+    why: 'This is where clicks, impressions, the searches you already rank for, your sitemaps and index coverage come from. Without it the weekly report, the audits and half the recommendations run blind.',
+    where: 'Google Search Console',
+    who: 'An owner of the Search Console property',
+    minutes: 3,
+    vars: [V.domain, V.serviceAccount],
+    steps: [
+      {
+        title: 'Open the property for {{domain}}',
+        body: 'Open **Search Console** and pick the property for {{domain}} in the switcher at the top left. No property yet? Set one up first — there is a guide for that.',
+        link: { label: 'Open Search Console', href: 'https://search.google.com/search-console' },
+      },
+      { title: 'Go to Users and permissions', body: 'Click **Settings** in the left menu, then **Users and permissions**.' },
+      {
+        title: 'Add our reading address as a user',
+        body: 'Click **Add user** and paste this address into **Email address**:',
+        copy: [{ label: 'Address to add', value: '{{serviceAccount}}', hint: 'Paste into Search Console’s “Email address” box' }],
+        note: 'It is a service account, not a person: it has no inbox, so it never gets or sends mail. It reads your property and nothing else.',
+      },
+      {
+        title: 'Set the permission to Full, then Add',
+        body: 'Choose **Full** and click **Add**. Full is what lets us read sitemaps and whether your pages are indexed; **Restricted** hides both. Nothing is ever changed, submitted or removed in your account.',
+        warn: 'Pick **Full**, not **Owner**: ownership is yours, and we never need it.',
+      },
+      { title: 'Come back and press “Check again”', body: 'Ascentra re-reads the connection straight away and shows the property name and permission it found.' },
+    ],
+    done: 'The Google data card shows **Connected**, your property and permission **Full**.',
+    trouble: [
+      { q: 'The Add user button is greyed out', a: 'Only an **owner** of the property can add users. Search Console shows who the owners are on the same page — ask one of them, or send them this guide.' },
+      { q: 'Ascentra says the access is restricted', a: 'Open the same screen, click the three dots next to our address and change the permission from **Restricted** to **Full**.' },
+      { q: 'We have several properties for the same site', a: 'The **Domain** property (no https:// in front of the name) is the one to use: it covers www, the bare domain and every subdomain.' },
+    ],
+    related: ['search-console-property', 'ga4-access'],
+    keywords: ['gsc', 'service account', 'permission', 'connect google'],
+  },
+  {
+    id: 'search-console-owner',
+    area: 'ownership',
+    title: 'Prove the website is yours with your Google account',
+    why: 'The fastest of the three ways to prove ownership: if your own Google account is already a verified owner in Search Console, there is nothing to add anywhere.',
+    where: 'Ascentra, then Google’s sign-in screen',
+    who: 'Whoever is a verified owner in Search Console',
+    minutes: 1,
+    vars: [V.domain],
+    steps: [
+      { title: 'Press “Verify with Google”', body: 'You go to Google’s own sign-in screen. Choose the account that is an **owner** of {{domain}} in Search Console.' },
+      {
+        title: 'Allow the read-only check',
+        body: 'Google asks whether Ascentra may see your Search Console properties. That permission is read-only: we check that your account owns {{domain}} and read nothing else at this point.',
+      },
+      { title: 'You come back verified', body: 'The website unlocks immediately. The next step is connecting the data itself, which is a separate, equally short job.' },
+    ],
+    done: '{{domain}} shows as verified, with “Google (Search Console owner)” as the method.',
+    trouble: [
+      {
+        q: 'Google says my account is not an owner',
+        a: 'Being able to *see* a property is not the same as owning it. Ask a current owner to open **Settings → Users and permissions → Add user** and add you as **Owner** — or use the DNS record or the meta tag instead, which prove the same thing without Google.',
+      },
+      { q: 'Another company already verified this website', a: 'A website belongs to one company here. Ask the owner of that company to invite you, or contact your platform administrator.' },
+    ],
+    related: ['dns-txt-record', 'meta-tag', 'search-console-access'],
+    keywords: ['verify', 'ownership', 'google sign in'],
+  },
+  {
+    id: 'ga4-access',
+    area: 'google',
+    title: 'Let Ascentra read your Google Analytics',
+    why: 'Analytics turns rankings into money: visits from search, which pages they land on, and the sign-ups, leads or sales that follow. It is optional — everything else works without it.',
+    where: 'Google Analytics (GA4)',
+    who: 'An administrator of the GA4 property',
+    minutes: 3,
+    vars: [V.domain, V.serviceAccount],
+    steps: [
+      {
+        title: 'Open Analytics and go to Admin',
+        body: 'Open **Google Analytics** and click **Admin** — the gear at the bottom left. Make sure the property shown is the one that measures {{domain}}.',
+        link: { label: 'Open Google Analytics', href: 'https://analytics.google.com/' },
+      },
+      { title: 'Open Property access management', body: 'In the **Property** column, click **Property access management**.' },
+      {
+        title: 'Add our reading address as a Viewer',
+        body: 'Click **+** at the top right, then **Add users**, and paste this address:',
+        copy: [{ label: 'Address to add', value: '{{serviceAccount}}', hint: 'Paste into Analytics’ “Email addresses” box' }],
+        note: 'Untick **Notify new users by email** — a service account has no inbox.',
+      },
+      {
+        title: 'Choose the Viewer role and click Add',
+        body: 'Viewer can read reports and nothing else: it cannot change settings, edit events or delete anything.',
+      },
+      { title: 'Come back and press “Check again”', body: 'Ascentra lists the properties it can now read. Pick the one that measures {{domain}} — the one whose web stream points at your domain is marked and listed first.' },
+    ],
+    done: 'The Google data card shows **Connected** with your property name under Google Analytics 4.',
+    trouble: [
+      { q: 'I cannot see Property access management', a: 'You need the **Administrator** role on that property. The person who set Analytics up has it, and the same screen lists them.' },
+      { q: 'Several properties look alike', a: 'Open **Admin → Data streams** and check which one has a web stream for {{domain}}. You can also paste the property ID here by hand.' },
+      { q: 'We use Universal Analytics', a: 'Universal Analytics stopped collecting data in 2023 and cannot be read. You need a GA4 property with its own tag on the site.' },
+    ],
+    related: ['ga4-property-id', 'search-console-access'],
+    keywords: ['ga4', 'analytics', 'viewer', 'traffic'],
+  },
+  {
+    id: 'ga4-property-id',
+    area: 'google',
+    title: 'Find your GA4 property ID',
+    why: 'When several Analytics properties look alike, the ID removes the doubt about which one measures this website.',
+    where: 'Google Analytics (GA4)',
+    minutes: 2,
+    vars: [V.domain],
+    steps: [
+      { title: 'Open Admin → Property details', body: 'In **Google Analytics**, click **Admin** (the gear, bottom left), then **Property details** in the Property column.', link: { label: 'Open Google Analytics', href: 'https://analytics.google.com/' } },
+      {
+        title: 'Copy the number at the top right',
+        body: 'The **PROPERTY ID** is nine or ten digits, for example `543096312`. Paste it here.',
+        warn: 'It is not the `G-XXXXXXX` measurement ID — that one sits on your website and cannot be used to read reports.',
+      },
+      { title: 'Check it is the right property', body: 'In **Data streams**, the stream of that property should show {{domain}} as its website URL.' },
+    ],
+    done: 'The ID is saved on the website and the weekly report starts showing visits and key events from search.',
+    related: ['ga4-access'],
+    keywords: ['property id', 'ga4', 'measurement id'],
+  },
+  {
+    id: 'search-console-links-export',
+    area: 'google',
+    title: 'Export the links Google knows about',
+    why: 'Google sees links no public index has, but its API will not hand them over. The export is the one way to add Google’s own view to your link ledger — and it shows how much of it the other sources already cover.',
+    where: 'Google Search Console',
+    minutes: 3,
+    vars: [V.domain],
+    steps: [
+      { title: 'Open Links in Search Console', body: 'Open **Search Console**, pick the property for {{domain}} and click **Links** at the bottom of the left menu.', link: { label: 'Open Search Console → Links', href: 'https://search.google.com/search-console/links' } },
+      {
+        title: 'Export the external links',
+        body: 'Click **Export external links** at the top right and choose **Latest links** — the most recent links Google found, with the date it crawled each one.',
+        note: '**More sample links** works too, and so does a backlink CSV from any other tool. Ahrefs Webmaster Tools is free for a site you have verified.',
+      },
+      { title: 'Download the CSV', body: 'Choose **Download CSV**. If you pick Google Sheets instead, open the sheet and use **File → Download → Comma-separated values**.' },
+      { title: 'Upload it here', body: 'Press **Add Search Console links** and choose the file. A new upload of the same kind replaces the old one, so you can refresh it whenever you like.' },
+      { title: 'Repeat every few months', body: 'Links come and go. An upload every quarter keeps Google’s view of your links fresh in the ledger.' },
+    ],
+    done: 'The source list shows the row count and the date of your upload, and the next full backlink check includes those links.',
+    trouble: [
+      { q: 'The file is bigger than 15 MB', a: 'Export **Latest links** on its own rather than the whole links report — the top-linking-sites table is far smaller than every page.' },
+      { q: 'I only see “Top linking sites”', a: 'That table works as well. It gives domains rather than pages, which is enough for the ledger to find links no other source had.' },
+    ],
+    related: ['search-console-access', 'bing-webmaster'],
+    keywords: ['backlinks', 'csv', 'export links', 'latest links'],
+  },
+  {
+    id: 'search-console-checkin',
+    area: 'google',
+    title: 'The monthly Search Console check-in',
+    why: 'Three things in Search Console are invisible to any API: a manual penalty, a security problem, and Google’s reasons for leaving pages out of the index. Two minutes a month catches the rare thing that would otherwise undo a year of work.',
+    where: 'Google Search Console',
+    minutes: 5,
+    vars: [V.domain],
+    steps: [
+      { title: 'Open Manual actions', body: 'In **Search Console**, with {{domain}} selected, open **Security & Manual Actions → Manual actions**. “No issues detected” is what you want to see.', link: { label: 'Open Search Console', href: 'https://search.google.com/search-console' } },
+      { title: 'Open Security issues', body: 'Same menu, **Security issues**. Hacked content and malware warnings show here first, usually before anything is visible on the site.' },
+      {
+        title: 'Look at the Pages report',
+        body: 'Open **Indexing → Pages**. The lower half lists why pages are not indexed. Big numbers under “Crawled – currently not indexed” or “Discovered – currently not indexed” are worth reporting.',
+      },
+      { title: 'Answer the two questions here', body: 'Come back, open the check-in and say what you saw. Anything you report is carried into the audit and the weekly report, so the advice accounts for it.' },
+    ],
+    done: 'The check-in is recorded for the month and the reminder stops until the next one.',
+    related: ['search-console-access'],
+    keywords: ['manual action', 'penalty', 'security', 'indexing', 'coverage'],
+  },
+
+  // ---------------------------------------------------------------- Proving ownership
+  {
+    id: 'dns-txt-record',
+    area: 'ownership',
+    title: 'Add the DNS record that proves the domain is yours',
+    why: 'Nothing about a website is shown here until the company proves it owns it. A TXT record is the strongest proof and needs no change to the website itself.',
+    where: 'Your domain registrar or DNS provider',
+    who: 'Whoever manages DNS — often not the same person who edits the website',
+    minutes: 10,
+    vars: [V.domain, V.dnsHost, V.dnsValue],
+    steps: [
+      {
+        title: 'Find where your DNS is managed',
+        body: 'That is the registrar you bought {{domain}} from, or wherever you pointed it since — Cloudflare, your hosting panel, your agency.',
+        note: 'Not sure? Look the domain up on [ICANN Lookup](https://lookup.icann.org) — it names the registrar, and the “Name Servers” line tells you who actually serves the DNS.',
+      },
+      {
+        title: 'Open the DNS records for {{domain}}',
+        body: 'Every provider calls this screen something slightly different.',
+        choices: [
+          { label: 'Cloudflare', body: 'Pick the domain, then **DNS → Records → Add record**.' },
+          { label: 'GoDaddy', body: 'Open **Domain portfolio**, click the domain, then **DNS → Add New Record**.' },
+          { label: 'Namecheap', body: 'Open **Domain List → Manage → Advanced DNS → Add New Record**.' },
+          { label: 'Squarespace', body: 'Open **Domains**, click the domain, then **DNS → DNS settings → Add record** (domains bought from Google Domains moved here).' },
+          { label: 'cPanel / Plesk', body: 'Open the **Zone Editor** (cPanel) or **DNS Settings** (Plesk) for the domain and add a record.' },
+          { label: 'Somewhere else', body: 'Look for **DNS**, **Zone editor**, **Name servers** or **Advanced DNS**. Every provider has one, and the three values below are all you need.' },
+        ],
+      },
+      {
+        title: 'Add this record',
+        body: 'Create a new record with exactly these values and leave TTL at whatever the provider suggests.',
+        copy: [
+          { label: 'Type', value: 'TXT' },
+          { label: 'Host / name', value: '{{dnsHost}}', hint: 'Many providers want `@` or an empty box for the domain itself' },
+          { label: 'Value / content', value: '{{dnsValue}}', hint: 'Paste it whole, without quotes' },
+        ],
+        warn: 'Most providers add the domain to whatever you type in the host box. If the saved record ends up reading `{{domain}}.{{domain}}`, put `@` in that box instead.',
+      },
+      {
+        title: 'Save it, then press “Check now” here',
+        body: 'New records are usually live within minutes, sometimes after an hour or two. You can close this and come back — nothing is lost.',
+      },
+      { title: 'Leave the record in place', body: 'It stays as the standing proof of ownership. Deleting it later can unverify the website.' },
+    ],
+    done: '{{domain}} shows as verified and the dashboards, tracking and site checks open up.',
+    trouble: [
+      {
+        q: 'It still says the record was not found',
+        a: 'Check it from outside your own network with [DNS Checker](https://dnschecker.org) (choose TXT), or run `dig TXT {{domain}} +short` in a terminal. If the value does not show there yet, it is propagation — wait and press Check now again.',
+      },
+      { q: 'There is already a TXT record on the domain', a: 'Add a second one. A domain can have any number of TXT records; they do not replace each other. Do not paste our value into the existing record.' },
+      { q: 'My provider only offers a "value" box with quotes', a: 'Paste the value without the quotes. Providers that need quotes add them themselves when they save.' },
+    ],
+    related: ['meta-tag', 'search-console-owner'],
+    keywords: ['dns', 'txt', 'verify', 'ownership', 'registrar', 'cloudflare', 'godaddy'],
+  },
+  {
+    id: 'meta-tag',
+    area: 'ownership',
+    title: 'Add the verification tag to your homepage',
+    why: 'The way to prove ownership when you can edit the website but not its DNS. One line in the homepage, and it can come out again once the website is verified — though leaving it costs nothing.',
+    where: 'Your website’s homepage',
+    who: 'Whoever can edit the site or its theme',
+    minutes: 10,
+    vars: [V.domain, V.metaTag],
+    steps: [
+      {
+        title: 'Copy the tag',
+        body: 'This exact line, nothing changed:',
+        copy: [{ label: 'Meta tag', value: '{{metaTag}}', hint: 'Goes inside the <head> of your homepage' }],
+      },
+      {
+        title: 'Paste it into the <head> of https://{{domain}}/',
+        body: 'It has to be in the homepage’s own HTML, before the closing `</head>`.',
+        choices: [
+          { label: 'WordPress', body: 'Your SEO plugin has a box for exactly this: **Yoast → Settings → Site features → Webmaster tools**, or **Rank Math → General Settings → Webmaster Tools**. Otherwise use a header-scripts plugin or your theme’s “header code” setting.' },
+          { label: 'Shopify', body: 'Open **Online Store → Themes → … → Edit code** and paste it into `theme.liquid`, just below the opening `<head>` tag.' },
+          { label: 'Wix', body: 'Open **Settings → Custom code → Add custom code**, paste the tag, place it in the **Head**, and apply it to all pages.' },
+          { label: 'Squarespace', body: 'Open **Settings → Developer tools → Code injection** and paste it into the **Header** box.' },
+          { label: 'Webflow', body: 'Open **Site settings → Custom code** and paste it into **Head code**, then publish.' },
+          { label: 'Hand-coded site', body: 'Paste it into the `<head>` of your `index.html` or the layout template the homepage uses, and deploy.' },
+        ],
+      },
+      { title: 'Publish, and clear any cache', body: 'Caching plugins and CDNs happily serve the old homepage for a while. Purge the cache if you have one.' },
+      { title: 'Press “Check now” here', body: 'We read https://{{domain}}/ and https://www.{{domain}}/ and look for the tag.' },
+    ],
+    done: '{{domain}} shows as verified. The tag can stay — it is invisible to visitors.',
+    trouble: [
+      {
+        q: 'The check does not find it, but I can see it on the page',
+        a: 'Open the page source (**Ctrl+U** / **⌘+⌥+U**) rather than the inspector and search for the tag. If it is not in the source, it is being inserted by JavaScript — a tag manager, for instance — and our check reads the raw HTML. Put it in the page itself.',
+      },
+      { q: 'My homepage redirects somewhere else', a: 'Put the tag on the page the redirect lands on too. If https://{{domain}}/ sends visitors to /en/ or to www, both need it.' },
+    ],
+    related: ['dns-txt-record', 'search-console-owner'],
+    keywords: ['meta tag', 'head', 'verify', 'wordpress', 'shopify'],
+  },
+
+  // ---------------------------------------------------------------- Your website
+  {
+    id: 'indexnow-key-file',
+    area: 'website',
+    title: 'Add the IndexNow key file to your site',
+    why: 'One small text file, once. After it, every new or changed page is announced to Bing — and so to Copilot and ChatGPT search — plus Yandex, Naver and Seznam, the same week instead of whenever a crawler happens by.',
+    where: 'Your website’s files',
+    who: 'Whoever can put a file at the root of the site',
+    minutes: 10,
+    vars: [V.domain, V.indexNowKey, V.indexNowFile, V.indexNowUrl],
+    steps: [
+      {
+        title: 'Make the file',
+        body: 'A plain text file named after the key, containing that key and nothing else — no quotes, no line about what it is.',
+        copy: [
+          { label: 'File name', value: '{{indexNowFile}}' },
+          { label: 'The only line inside it', value: '{{indexNowKey}}' },
+        ],
+      },
+      {
+        title: 'Put it at the root of {{domain}}',
+        body: 'It has to answer at exactly this address:',
+        copy: [{ label: 'Where it must live', value: '{{indexNowUrl}}' }],
+        choices: [
+          { label: 'WordPress', body: 'Upload it to the folder that holds `wp-config.php` with your host’s file manager or FTP — **not** the media library, which puts files under `/wp-content/uploads/`. An IndexNow plugin can also host the file for you.' },
+          { label: 'Next.js / Nuxt / Astro', body: 'Drop it in the `public/` folder and deploy. It is then served from the root.' },
+          { label: 'Apache / nginx / plain hosting', body: 'Put it in the web root — the folder that holds `index.html` — with FTP, SFTP or the host’s file manager.' },
+          { label: 'Webflow', body: 'Webflow cannot serve a file at the root. Skip this: your pages still reach Bing through the sitemap, a little more slowly.' },
+          { label: 'Shopify / Wix / Squarespace', body: 'These platforms do not let you add a file at the root either. Skip it — nothing else about the weekly run changes.' },
+        ],
+      },
+      {
+        title: 'Open the address in a browser',
+        body: 'You should see the key as plain text, over https, with no redirect and no page design around it.',
+        warn: 'A “404 not found”, a login screen or your site’s styled 404 page all mean the file is not at the root yet.',
+      },
+      { title: 'Press “Check the file” here', body: 'We fetch it and compare it with the key. From then on the Monday AI growth run submits your new and updated pages automatically.' },
+    ],
+    done: 'The panel says IndexNow is ready, and the next weekly run reports how many pages it sent.',
+    trouble: [
+      { q: 'The browser downloads the file instead of showing it', a: 'That is fine — the content is what matters, not how the browser chooses to show it.' },
+      { q: 'I get my site’s 404 page', a: 'The file is in a subfolder. The address must have nothing between the domain and the file name.' },
+    ],
+    related: ['bing-webmaster', 'publish-page'],
+    keywords: ['indexnow', 'bing', 'key file', 'crawl', 'ai search'],
+  },
+  {
+    id: 'ai-crawler-access',
+    area: 'website',
+    title: 'Let the AI assistants read your site',
+    why: 'An assistant can only name a page its crawler is allowed to fetch. A crawler turned away at the door is the one problem no amount of good content fixes — and most sites block one by accident.',
+    where: 'Your robots.txt and your CDN or firewall',
+    who: 'Whoever can edit the site files and the CDN rules',
+    minutes: 15,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Open your robots.txt',
+        body: 'It is a plain text file at the root of the site. If it answers 404, nothing is blocked by it — but it is worth adding one anyway.',
+        copy: [{ label: 'The address to open', value: 'https://{{domain}}/robots.txt' }],
+      },
+      {
+        title: 'Decide which crawlers you want',
+        body: 'They fall into two groups, and the table above says which ones can reach you today. **Answer crawlers** fetch a page because someone asked a question right now — those are the ones that get you cited. **Training crawlers** collect pages to train a model, which is a separate decision and costs you nothing in visibility if you refuse.',
+        note: 'Refusing the training crawlers while allowing the answer crawlers is a perfectly normal position, and the report never pushes you either way.',
+      },
+      {
+        title: 'Allow the ones you want, by name',
+        body: 'Add a block per crawler. A rule naming a crawler wins over the catch-all `User-agent: *`, so this is enough even when the catch-all is restrictive.',
+        copy: [{ label: 'For example', value: 'User-agent: OAI-SearchBot\nAllow: /', hint: 'One block per crawler, with a blank line between blocks' }],
+        warn: 'Check the catch-all while you are there: a `User-agent: *` block with `Disallow: /` takes the whole site out of every search engine, not only the AI ones.',
+      },
+      {
+        title: 'Check the firewall or CDN too',
+        body: 'This is the one people miss: robots.txt can say yes while Cloudflare, a WAF or a bot-protection rule turns the crawler away. The homepage test above is exactly that check — a crawler marked “turned away” with a status like 403 is being blocked by your edge, not by robots.txt.',
+        choices: [
+          { label: 'Cloudflare', body: 'Open **Security → Bots** and let verified bots through, then check **Security → WAF** for a rule that matches the user agent. Super Bot Fight Mode blocks most AI crawlers by default.' },
+          { label: 'Another CDN or WAF', body: 'Look for bot management, rate limiting or a user-agent rule, and allow the crawlers you chose. Your host can usually see which rule produced the 403.' },
+          { label: 'No CDN', body: 'Then robots.txt is the only gate, and there is nothing else to change.' },
+        ],
+      },
+      {
+        title: 'Optional: add an llms.txt',
+        body: 'A plain-text file at the root listing your best pages with one line each about what they answer. It is not a standard the engines promise to follow, and it is minutes of work: a clean map of your site for anything that reads it.',
+      },
+      { title: 'Check it again', body: 'The weekly run re-checks every crawler, robots.txt and the homepage test, so the next report tells you whether the door is open.' },
+    ],
+    done: 'Every crawler you chose shows as allowed, and the homepage test returns 200 for each of them.',
+    trouble: [
+      { q: 'We have no robots.txt at all', a: 'Then nothing is blocked by it. Adding one is still worth it: it is where your sitemap is announced and where these rules will live when you need them.' },
+      { q: 'A crawler is allowed but still turned away', a: 'That is the CDN or firewall, not robots.txt. The status in the homepage test — 403, 429, a challenge page — tells your host which rule to look for.' },
+    ],
+    related: ['indexnow-key-file', 'fix-pack'],
+    keywords: ['robots.txt', 'llms.txt', 'gptbot', 'crawler', 'blocked', 'cloudflare', 'ai'],
+  },
+  {
+    id: 'publish-page',
+    area: 'website',
+    title: 'Publish a page Ascentra wrote',
+    why: 'A written page earns nothing until it is live. Publishing it as planned — same slug, same links, same images — is what lets the rest of the plan and the rank tracking follow it.',
+    where: 'Your CMS',
+    minutes: 20,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Download the package',
+        body: 'Every finished page comes with the article as **HTML** and as **Markdown**, plus a `meta.json` holding the title, the meta description, the planned slug, the image plan and the structured data.',
+      },
+      {
+        title: 'Create the page at the planned slug',
+        body: 'The slug in `meta.json` is the one the plan, the internal links and the rank tracking expect. Keep it.',
+        warn: 'Changing the slug after publishing costs the page whatever ranking it has built. If you must, add a redirect from the old address to the new one.',
+      },
+      {
+        title: 'Paste the body in',
+        body: 'Use the HTML in a code or raw block, or the Markdown if your CMS speaks it. Keep the headings as they are: they answer the searches the page targets, and the quality check reads them.',
+        choices: [
+          { label: 'WordPress', body: 'Add a new post, switch the editor to **Code editor** (the three dots, top right) and paste the HTML. Switch back to see it laid out.' },
+          { label: 'Webflow / Ghost / Hubspot', body: 'Create the post, then paste the HTML into a raw-HTML or source block so the headings and links survive.' },
+          { label: 'Markdown-based site', body: 'Commit the Markdown file, keeping the front matter your site expects, and copy the title and description from `meta.json`.' },
+        ],
+      },
+      {
+        title: 'Set the title, the description and the images',
+        body: 'Copy the SEO title and the meta description from `meta.json` into your SEO plugin’s fields. The image plan names each image, where it goes and its alt text — add them before publishing, not after.',
+      },
+      {
+        title: 'Publish, then tell Ascentra',
+        body: 'Use **I published a page** and paste its address on {{domain}}. We read the live page — title, description, structured data, images, internal links — report anything the CMS dropped, and start tracking its position.',
+      },
+    ],
+    done: 'The page shows as published in the content list, and the rank tracker begins reporting its position the following Monday.',
+    trouble: [
+      { q: 'My editor strips the HTML', a: 'Paste into a code / raw block rather than the visual editor. Visual editors routinely drop headings, link attributes and structured data.' },
+      { q: 'The check says images are missing', a: 'The names in the package are a plan, not uploaded files. Add your own images, keep the alt text, and run the check again.' },
+    ],
+    related: ['indexnow-key-file', 'business-facts'],
+    keywords: ['publish', 'cms', 'wordpress', 'article', 'slug'],
+  },
+  {
+    id: 'bing-webmaster',
+    area: 'website',
+    title: 'Add your site to Bing Webmaster Tools',
+    why: 'Free, and it pays twice: Bing shares link data that costs money elsewhere, and Copilot and ChatGPT search read Bing’s index — so being in it is part of being in AI answers.',
+    where: 'Bing Webmaster Tools',
+    minutes: 5,
+    vars: [V.domain],
+    steps: [
+      { title: 'Sign in to Bing Webmaster Tools', body: 'Any Microsoft, Google or Facebook account works.', link: { label: 'Open Bing Webmaster Tools', href: 'https://www.bing.com/webmasters' } },
+      {
+        title: 'Import from Search Console',
+        body: 'Choose **Import your sites from Google Search Console**. It carries the verification across, so there is nothing to add to your DNS or your site.',
+        note: 'Prefer not to connect the two? Add {{domain}} by hand instead and verify it the same way as in Search Console — a DNS record or a meta tag.',
+      },
+      { title: 'Submit your sitemap', body: 'Open **Sitemaps** and add `https://{{domain}}/sitemap.xml` if it is not already listed.' },
+      { title: 'Give it a few days', body: 'Bing’s link data starts arriving within a week or two, and the backlink check picks it up on its own from then on.' },
+    ],
+    done: '{{domain}} is listed in Bing Webmaster Tools, and the backlink source list stops saying Bing has nothing.',
+    related: ['indexnow-key-file', 'search-console-links-export'],
+    keywords: ['bing', 'webmaster', 'copilot', 'import'],
+  },
+  {
+    id: 'fix-pack',
+    area: 'website',
+    title: 'Apply the fix pack from an audit',
+    why: 'An audit lists what is wrong; the fix pack is the work already done — the files to upload and the snippets to paste, so the fixing is minutes rather than an afternoon.',
+    where: 'Your website’s files and CMS',
+    minutes: 30,
+    vars: [V.domain],
+    steps: [
+      { title: 'Download the fix pack', body: 'It is attached to the audit report as a zip: `robots.txt`, `llms.txt`, a list of redirects, structured-data snippets and `internal-links.csv`.' },
+      {
+        title: 'Upload robots.txt and llms.txt',
+        body: 'Both belong at the root of {{domain}}. Compare `robots.txt` with the one you already have before replacing it — the pack keeps your rules and adds what was missing.',
+        warn: 'Never upload a `robots.txt` you have not read. One wrong `Disallow:` line can take a site out of Google.',
+      },
+      { title: 'Add the redirects', body: 'Each line is an address that answers 404 and the page it should go to instead. Add them wherever your redirects live — the CMS, a plugin, your server config.' },
+      { title: 'Paste the structured data', body: 'Each snippet is a `<script type="application/ld+json">` block for one page. Paste it into that page’s head or your SEO plugin’s schema field.' },
+      { title: 'Add the internal links', body: '`internal-links.csv` names, per page, the link to add and the text to use. These are the cheapest ranking gains in the pack: existing pages pointing at the pages you want to rank.' },
+      { title: 'Re-run the audit', body: 'The next audit compares itself with the last one and shows exactly what you fixed.' },
+    ],
+    done: 'The next audit’s health score rises and the findings you fixed appear under “fixed since the last audit”.',
+    related: ['publish-page'],
+    keywords: ['robots.txt', 'llms.txt', 'redirects', 'schema', 'internal links', 'audit'],
+  },
+
+  // ---------------------------------------------------------------- Your mailbox
+  {
+    id: 'mailbox-connect',
+    area: 'mailbox',
+    title: 'Connect the mailbox your pitches go out from',
+    why: 'Link building is asking real people for a link. Those asks have to come from your own address so the replies reach you and the thread looks like what it is — a message from your company, not from a tool.',
+    where: 'Company settings → Mailboxes',
+    who: 'An admin of the company, using a real mailbox someone reads',
+    minutes: 5,
+    steps: [
+      {
+        title: 'Pick the mailbox',
+        body: 'Use an address a person actually reads, on your own domain — `name@your-company.com`, not `info@` and not a free Gmail address. Replies, out-of-office notices and bounces all come back to it.',
+      },
+      {
+        title: 'Choose how to connect it',
+        body: 'Microsoft 365 and Gmail connect on their own sign-in screen with no password to store. Any other host connects with an app password.',
+        choices: [
+          { label: 'Microsoft 365', body: 'One click. You grant sending and reading the replies to your own pitches; nothing but a renewable permission is stored, and disconnecting withdraws it.' },
+          { label: 'Gmail / Workspace', body: 'One click for sending. Google treats inbox access as a restricted scope, so replies are read by you in Gmail rather than shown here — the app says so before you connect.' },
+          { label: 'Anything else', body: 'An app password plus your host’s SMTP and IMAP servers. There is a guide for finding those.' },
+        ],
+      },
+      {
+        title: 'Fill in the signature and the postal address',
+        body: 'Your name, job title, company and a real postal address. The address is not decoration: mail that asks a stranger for something needs an identifiable sender and a way to opt out.',
+      },
+      {
+        title: 'Let it warm up',
+        body: 'A new mailbox starts at five pitches a day and climbs to ten, then your limit. Sending is weekday-only, inside the window you set, four to nine minutes apart.',
+        note: 'Every pitch waits for your approval unless you turn that off. Nothing is ever sent from an address we own.',
+      },
+    ],
+    done: 'The mailbox shows as connected and tested, and drafted pitches can be approved and sent.',
+    trouble: [
+      { q: 'The test fails on connecting', a: 'Nine times out of ten the host wants an app password rather than the normal one, or the port is wrong. The guide for your provider has both.' },
+      { q: 'Should I use a separate domain for outreach?', a: 'No. Pitches from a lookalike domain get ignored, and the whole point is that the person can see who you are.' },
+    ],
+    related: ['gmail-app-password', 'microsoft-app-password', 'smtp-imap-settings', 'email-authentication'],
+    keywords: ['mailbox', 'outreach', 'smtp', 'imap', 'oauth'],
+  },
+  {
+    id: 'gmail-app-password',
+    area: 'mailbox',
+    title: 'Create a Gmail app password',
+    why: 'Gmail refuses a normal password from any outside program. An app password is a one-purpose password you can withdraw at any time without changing your own.',
+    where: 'Your Google account',
+    minutes: 5,
+    steps: [
+      {
+        title: 'Turn on 2-Step Verification',
+        body: 'App passwords only exist once 2-Step Verification is on. Open **Security** in your Google account and switch it on if it is not already.',
+        link: { label: 'Open Google security settings', href: 'https://myaccount.google.com/security' },
+      },
+      {
+        title: 'Create the app password',
+        body: 'Open the app passwords page, name it `Ascentra` and create it.',
+        link: { label: 'Open app passwords', href: 'https://myaccount.google.com/apppasswords' },
+      },
+      {
+        title: 'Copy the 16 characters',
+        body: 'Google shows it once. Copy it straight into the password box here — the spaces do not matter.',
+        warn: 'If you lose it, you cannot look it up: delete that app password and make another.',
+      },
+      {
+        title: 'Use Google’s servers',
+        body: 'The form fills these in for you; this is what they should say.',
+        copy: [
+          { label: 'SMTP (sending)', value: 'smtp.gmail.com' },
+          { label: 'SMTP port', value: '465' },
+          { label: 'IMAP (replies)', value: 'imap.gmail.com' },
+          { label: 'IMAP port', value: '993' },
+        ],
+      },
+    ],
+    done: 'The mailbox saves with a green test: Ascentra signed in to both sending and reading.',
+    trouble: [
+      { q: 'The app passwords page says it is not available', a: 'Either 2-Step Verification is off, or a Workspace administrator has switched app passwords off for the organisation. In a Workspace, connecting Gmail with one click avoids the problem entirely.' },
+      { q: 'Sign-in fails although the password is right', a: 'Check the address: an app password belongs to one Google account, and it must be the account whose mailbox you are connecting.' },
+    ],
+    related: ['mailbox-connect', 'email-authentication'],
+    keywords: ['gmail', 'app password', '2fa', 'workspace'],
+  },
+  {
+    id: 'microsoft-app-password',
+    area: 'mailbox',
+    title: 'Connect a Microsoft 365 or Outlook mailbox with a password',
+    why: 'Microsoft turns password-based sending off for new mailboxes, so this one needs two things to be true: the mailbox is allowed to send with a password, and you have an app password for it.',
+    where: 'Microsoft 365',
+    who: 'You, plus a Microsoft 365 administrator for the first step',
+    minutes: 10,
+    steps: [
+      {
+        title: 'Let the mailbox send with a password',
+        body: 'An administrator opens the **Microsoft 365 admin center → Users → Active users**, picks the person, then **Mail → Manage email apps**, and ticks **Authenticated SMTP**.',
+        link: { label: 'Open the Microsoft 365 admin center', href: 'https://admin.microsoft.com' },
+        warn: 'Microsoft is retiring password-based SMTP — the dates have moved before and may move again. The one-click Microsoft 365 connection does not depend on it.',
+      },
+      {
+        title: 'Create an app password',
+        body: 'With multi-factor sign-in on the account, open **Security info** and add an **App password**. Copy it: it is shown once.',
+        link: { label: 'Open Microsoft security info', href: 'https://mysignins.microsoft.com/security-info' },
+        note: 'No **App password** option means the administrator has disabled them. Connect with one click instead.',
+      },
+      {
+        title: 'Use Microsoft’s servers',
+        body: 'Port 587 with STARTTLS for sending — tick nothing for “SSL from the start”.',
+        copy: [
+          { label: 'SMTP (sending)', value: 'smtp.office365.com' },
+          { label: 'SMTP port', value: '587' },
+          { label: 'IMAP (replies)', value: 'outlook.office365.com' },
+          { label: 'IMAP port', value: '993' },
+        ],
+      },
+    ],
+    done: 'The mailbox saves with a green test, and the sender starts at five pitches a day.',
+    trouble: [
+      { q: 'The test says authentication is unsuccessful', a: 'Authenticated SMTP is still off for that mailbox, or the change has not reached the server yet — it can take up to an hour. Ask your administrator to confirm the tick.' },
+      { q: 'Our policy forbids app passwords', a: 'Then use the one-click Microsoft 365 connection: it stores a permission instead of a password and can be withdrawn at any time.' },
+    ],
+    related: ['mailbox-connect', 'email-authentication'],
+    keywords: ['microsoft', 'office 365', 'outlook', 'smtp auth', 'app password'],
+  },
+  {
+    id: 'smtp-imap-settings',
+    area: 'mailbox',
+    title: 'Find the SMTP and IMAP settings for any mail host',
+    why: 'Sending needs SMTP, reading the replies needs IMAP. Every host publishes both; they are rarely where you expect.',
+    where: 'Your mail host',
+    minutes: 10,
+    steps: [
+      {
+        title: 'Look them up',
+        body: 'Search for your host’s name plus `SMTP IMAP settings`, or open your webmail’s settings and look for **POP/IMAP**, **External access** or **Mail clients**. Your hosting panel usually shows them next to the mailbox.',
+      },
+      {
+        title: 'Note the four values',
+        body: 'The sending server and its port, the reading server and its port. Common pairs: `smtp.your-host.com` on **465** with SSL from the start, or on **587** with STARTTLS; `imap.your-host.com` on **993**.',
+        note: 'Port 465 means “SSL from the start” — tick it. Port 587 means STARTTLS — leave it unticked.',
+      },
+      {
+        title: 'Check the user name',
+        body: 'Most hosts want the whole address as the user name. Some want only the part before the @. The form has a separate box for this when they differ.',
+      },
+      {
+        title: 'Use an app password where the host offers one',
+        body: 'Anywhere with two-factor sign-in — Zoho, Fastmail, Yahoo, iCloud — a normal password is refused. Create an app password in the account’s security settings.',
+      },
+    ],
+    done: 'The connection test passes for both sending and reading.',
+    trouble: [
+      { q: 'Sending works, reading does not', a: 'IMAP is often switched off by default. Turn it on in the mailbox’s settings — without it, replies cannot stop a sequence.' },
+      { q: 'The host blocks outside programs entirely', a: 'Some providers only allow their own apps. You will need a mailbox elsewhere on the same domain.' },
+    ],
+    related: ['mailbox-connect', 'email-authentication'],
+    keywords: ['smtp', 'imap', 'port', 'ssl', 'starttls'],
+  },
+  {
+    id: 'email-authentication',
+    area: 'mailbox',
+    title: 'Check your domain is allowed to send mail (SPF, DKIM, DMARC)',
+    why: 'Three DNS records decide whether a stranger’s mail server believes your message is really from you. Without them, good pitches quietly land in spam and you never know.',
+    where: 'Your DNS provider',
+    who: 'Whoever manages DNS',
+    minutes: 20,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'See what you have',
+        body: 'Ascentra checks all three when a mailbox is connected and shows what it found. To check yourself, look up {{domain}} on [MXToolbox](https://mxtoolbox.com/SuperTool.aspx) with `spf:{{domain}}`, `dmarc:{{domain}}` and the DKIM selector your host gives you.',
+      },
+      {
+        title: 'SPF: who may send for you',
+        body: 'One TXT record on {{domain}} listing your mail host, for example `v=spf1 include:_spf.google.com ~all` for Workspace or `include:spf.protection.outlook.com` for Microsoft 365.',
+        warn: 'A domain must have exactly one SPF record. If one exists, add the new `include:` to it — never add a second record.',
+      },
+      {
+        title: 'DKIM: the signature',
+        body: 'Your mail host generates it and tells you which records to add. In Google Workspace it is **Apps → Google Workspace → Gmail → Authenticate email**; in Microsoft 365 it is **Defender → Policies → Email authentication → DKIM**.',
+      },
+      {
+        title: 'DMARC: what to do with the rest',
+        body: 'A TXT record at `_dmarc.{{domain}}`. Start gently with `v=DMARC1; p=none; rua=mailto:you@{{domain}}`, read the reports for a few weeks, then tighten it.',
+        note: 'Already on `p=reject`? Good — just make sure the mailbox you connect sends through a host your SPF and DKIM cover.',
+      },
+    ],
+    done: 'The mailbox panel shows SPF, DKIM and DMARC as found, and pitches stop landing in spam.',
+    trouble: [
+      { q: 'We send from several tools', a: 'They all belong in the one SPF record, as separate `include:` entries. Ten is the hard limit on lookups.' },
+      { q: 'Changes do not show up', a: 'DNS caches. Wait an hour and check again, and clear the lookup tool’s cache if it has one.' },
+    ],
+    related: ['mailbox-connect', 'dns-txt-record'],
+    keywords: ['spf', 'dkim', 'dmarc', 'spam', 'deliverability'],
+  },
+
+  // ---------------------------------------------------------------- About your business
+  {
+    id: 'business-profile',
+    area: 'business',
+    title: 'Fill in your business profile',
+    why: 'Google and the AI assistants both ask the same question about a page: who wrote this, and why should anyone believe them. The profile answers it once — a real byline, an author box, an expert reviewer, your address and schema — on every page that follows.',
+    where: 'Website settings → Business profile',
+    who: 'Someone who knows who at your company should be the public expert',
+    minutes: 20,
+    steps: [
+      {
+        title: 'Choose a real author',
+        body: 'One person at your company who genuinely knows the subject, and who is willing to have their name on it. A founder, the head of the practice, a senior consultant. Not “the team”, not a made-up persona.',
+        warn: 'Inventing an author is the one thing in here that can actively hurt you. Google’s guidance and every AI fact check look for a person who exists elsewhere on the web.',
+      },
+      {
+        title: 'Write the credentials, not the adjectives',
+        body: 'The credentials box is for checkable experience: “12 years in VAT compliance, led 40 e-invoicing rollouts, chartered accountant”. The pages draw on it when they explain why an answer is trustworthy.',
+      },
+      {
+        title: 'Point the byline at a real page',
+        body: 'An author page on your own site, plus a LinkedIn profile under profile links. That pairing is what lets Google connect the byline to a person it already knows about.',
+        note: 'No author page yet? A short page with the same bio, photo and links is an hour of work and lifts every article you publish afterwards.',
+      },
+      {
+        title: 'Add an expert reviewer where it matters',
+        body: 'In regulated or technical subjects — tax, law, health, finance, security — a named reviewer carries real weight. Each page then says who checked it, in words and in its structured data.',
+      },
+      {
+        title: 'Get the address exactly right',
+        body: 'Name, address and phone must match your website, your Google Business Profile and your invoices, character for character. Mismatched details are a classic reason a local business does not rank where it should.',
+      },
+      {
+        title: 'Watch the readiness score',
+        body: 'The panel next to the form lists every trust signal and what it is used for. Over 70% is a profile that carries a page on its own.',
+      },
+    ],
+    done: 'Readiness is comfortably above 70%, and the next page written carries a byline, an author box and the right schema instead of placeholders.',
+    trouble: [
+      { q: 'We would rather not name anyone', a: 'Then pages are published under the company alone. It works, but it is measurably weaker on exactly the subjects where trust decides the ranking, and AI fact checks have nothing to confirm.' },
+      { q: 'Different people write about different things', a: 'Fill in the one who covers most of what you publish. Several authors per website is on the roadmap; until then the byline can be changed per page when you publish.' },
+    ],
+    related: ['business-facts', 'style-guide'],
+    keywords: ['eeat', 'author', 'byline', 'reviewer', 'nap', 'schema', 'profile'],
+  },
+  {
+    id: 'business-facts',
+    area: 'business',
+    title: 'Write business facts a page can actually cite',
+    why: 'Every number in a published page has to come from somewhere. These facts are that somewhere — and anything a page cannot source gets marked for you to confirm instead of being quietly invented.',
+    where: 'Website settings → Business',
+    minutes: 15,
+    steps: [
+      {
+        title: 'List what is checkably true',
+        body: 'Years in business, number of clients, certifications and accreditations, published prices, guarantees, offices, languages, awards, named integrations. One short line each.',
+      },
+      {
+        title: 'Keep each one verifiable',
+        body: 'A fact that is on your website, in a contract or on a certificate is usable. “Market-leading” is not a fact and will never appear in a page.',
+      },
+      {
+        title: 'Include the numbers you want quoted',
+        body: 'If you want “trusted by 120 finance teams in the UAE” to appear, write it here. If it is not here, the page says something vaguer or nothing at all.',
+        note: 'Prices and legal thresholds are treated carefully: an amount the facts do not carry is published as “[Confirm: …]” rather than as a number.',
+      },
+      {
+        title: 'Keep it current',
+        body: 'Revisit it when a certification renews or a client count changes. Pages written afterwards use the new version; the old pages keep what was true when they were written.',
+      },
+    ],
+    done: 'The next draft quotes your own facts with no bracketed placeholders left in the body.',
+    related: ['business-profile', 'style-guide'],
+    keywords: ['facts', 'claims', 'proof', 'numbers', 'citations'],
+  },
+  {
+    id: 'style-guide',
+    area: 'business',
+    title: 'Set your style guide',
+    why: 'It is the difference between pages that read like your company and pages that read like software. Written once, applied to every draft and checked again before you see it.',
+    where: 'Website settings → Business profile',
+    minutes: 10,
+    steps: [
+      {
+        title: 'Write your name exactly as it is written',
+        body: 'Capitals, ampersands, spacing — `Tech&`, not “Tech and” and not “techand”. Titles, meta descriptions and body text all follow it, and a draft that gets your own name wrong is a real quality finding.',
+      },
+      {
+        title: 'Add the wrong spellings you keep seeing',
+        body: 'The forms other people use for you. They are caught and corrected before the draft reaches you.',
+        note: 'Your name inside a link, a slug or an e-mail address is left alone, and an ordinary sentence that happens to contain the same words is not treated as your name.',
+      },
+      { title: 'Choose British or American spelling', body: 'Your choice wins over the country a page targets. Leave it on “follow the market” and each page uses the spelling of the country it is written for.' },
+      {
+        title: 'Ban the words you never want to read',
+        body: 'Hype words, a competitor’s trademark, internal jargon. They are counted and listed in the quality check rather than silently rewritten.',
+      },
+      { title: 'Say how you want to sound', body: 'One line — “plain, direct, no hype; we explain the rule before the product” — does more than a page of adjectives. Exclamation marks are counted when your tone says no hype.' },
+    ],
+    done: 'The quality check on the next page reports the style check as passed, or names exactly what it changed.',
+    related: ['business-profile', 'business-facts'],
+    keywords: ['style', 'tone', 'brand name', 'spelling', 'voice'],
+  },
+  {
+    id: 'competitors',
+    area: 'business',
+    title: 'Choose the right competitors',
+    why: 'Competitors decide the link gap, the share of voice in AI answers and half of what a full report compares you against. The wrong three make all of it useless.',
+    where: 'Website settings',
+    minutes: 10,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Search the way your buyer searches',
+        body: 'Type two or three of the searches you want {{domain}} to win into Google, from your own country, and write down who keeps coming back on page one. That list beats any list from memory.',
+      },
+      {
+        title: 'Keep the ones that are genuinely like you',
+        body: 'They sell what you sell, to the people you sell to, in the same country or language, at roughly your size. Those are the sites whose links you can realistically win too.',
+      },
+      {
+        title: 'Leave out the ones that only look like competitors',
+        body: 'Marketplaces, directories, review sites and Wikipedia rank for everything and compete with nobody. A giant twenty times your size makes every gap look hopeless and hides the real ones.',
+        warn: 'Use the bare domain — `competitor.com`, not a long URL with https:// and a path.',
+      },
+      { title: 'Stay at three', body: 'Three is what the reports compare. More dilutes every number and costs more to check.' },
+    ],
+    done: 'The link gap and the AI share of voice start naming sites you recognise as rivals.',
+    related: ['brand-names', 'keywords-to-track'],
+    keywords: ['competitors', 'share of voice', 'link gap', 'benchmark'],
+  },
+  {
+    id: 'brand-names',
+    area: 'business',
+    title: 'Tell the AI monitor what your company is called',
+    why: 'The monitor reads AI answers looking for you. A short name is the problem: “techand” matches a dozen unrelated companies, and the result is either credit you did not earn or a miss nobody notices.',
+    where: 'Website settings → Monitors',
+    minutes: 5,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Write the full legal and trading names',
+        body: 'The way an AI assistant would write them in a sentence — “Acme Tax Technologies”, “Acme Tax LLC” — rather than the label in front of {{domain}} on its own.',
+      },
+      { title: 'Add the forms people really use', body: 'Abbreviations, the old name after a rebrand, the name with and without the legal suffix, the product name if it is better known than the company.' },
+      {
+        title: 'Leave out anything generic',
+        body: 'A word that could describe any company in your market will match answers that are not about you, and your visibility score will be wrong in the flattering direction.',
+      },
+      { title: 'Check the next AI report', body: 'Each answer shows which names matched. A name that keeps matching the wrong company belongs out of the list.' },
+    ],
+    done: 'Mentions in the AI reports are yours, and the share of voice stops jumping between runs.',
+    related: ['competitors'],
+    keywords: ['brand', 'mentions', 'ai visibility', 'name'],
+  },
+  {
+    id: 'keywords-to-track',
+    area: 'business',
+    title: 'Choose the keywords to track',
+    why: 'These are the searches whose positions are checked every week. Picking the ones that lead to money — rather than the ones with the biggest numbers — is what makes the rank report worth reading.',
+    where: 'Website settings → Tracking',
+    minutes: 15,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Start with what you sell',
+        body: 'Write down what someone types when they want exactly what you offer, in their words rather than yours. Five to twenty of those is a good start.',
+      },
+      {
+        title: 'Add the searches you nearly win',
+        body: 'Search Console shows searches where you sit at positions 11 to 20 — one page from the first. Those move fastest and are already in the dashboard once tracking runs.',
+      },
+      {
+        title: 'Mix short and long',
+        body: 'Two or three head terms for the market you are in, and longer, more specific phrases for the pages that actually convert. Long phrases are cheaper to win and bring better visitors.',
+      },
+      {
+        title: 'One country per website',
+        body: 'Positions are checked in the country set for {{domain}}. If you sell in two countries properly, they belong in two websites.',
+      },
+      { title: 'Review it each quarter', body: 'Drop what you have held at number one for months, add what the content has started to earn impressions for.' },
+    ],
+    done: 'The rankings page fills with searches you would actually like to win, and the weekly report shows their movement.',
+    related: ['competitors'],
+    keywords: ['keywords', 'tracking', 'rank', 'striking distance'],
+  },
+
+  // ---------------------------------------------------------------- Your company here
+  {
+    id: 'budget',
+    area: 'company',
+    title: 'Set the monthly budget',
+    why: 'Research calls and writing cost real money per run. The budget is a hard cap: when a run would take you past it, it is refused rather than quietly charged.',
+    where: 'Company settings → Usage and budget',
+    who: 'The company owner',
+    minutes: 5,
+    steps: [
+      {
+        title: 'Know what costs what',
+        body: 'Writing a page is the expensive part; keyword research, audits and the AI checks are cents. Every form shows its estimate before you start, and the schedules show what a month of monitoring costs per website.',
+      },
+      { title: 'Set the cap you are comfortable with', body: 'The budget is per company per month. The usage page shows what has been spent, what is left and what the schedules will add before the month ends.' },
+      {
+        title: 'Know what happens at the cap',
+        body: 'A run that would cross it is refused with a clear message, and nothing half-finished is left behind — no page is promised that nobody wrote.',
+      },
+      { title: 'Revisit after the first full month', body: 'The estimates correct themselves against what runs actually cost, so the second month’s forecast is the realistic one.' },
+    ],
+    done: 'The budget meter shows a month of planned work fitting inside the cap.',
+    related: ['invite-team'],
+    keywords: ['budget', 'cost', 'spend', 'usage', 'limit'],
+  },
+  {
+    id: 'invite-team',
+    area: 'company',
+    title: 'Invite your team',
+    why: 'Most of the setup needs someone else: the person with DNS, the person who edits the website, the expert whose name goes on the pages. Inviting them beats forwarding screenshots.',
+    where: 'Company settings → Team',
+    who: 'An admin or the owner',
+    minutes: 3,
+    steps: [
+      {
+        title: 'Pick the right role',
+        body: '**Viewer** reads dashboards and reports. **Member** can also start analyses. **Admin** manages websites, settings and the team. **Owner** additionally controls the budget and can delete the company.',
+      },
+      { title: 'Send the invitation', body: 'Enter the address and the role. They get a link that joins them straight to this company.' },
+      {
+        title: 'Or send them a single guide',
+        body: 'For a one-off job — adding a DNS record, say — every guide here has **Send to a colleague**, which puts the whole thing in an e-mail with your values already filled in. No account needed.',
+      },
+    ],
+    done: 'The team list shows them as a member, and work that needed them stops waiting.',
+    related: ['budget'],
+    keywords: ['team', 'invite', 'roles', 'permissions', 'colleague'],
+  },
+] as const satisfies readonly Guide[];
+
+export type GuideId = (typeof GUIDES)[number]['id'];
+
+// built on first use: a top-level Map would keep the whole catalogue in every bundle that imports anything from this file
+let byId: Map<string, Guide> | null = null;
+
+export function guideById(id: string | null | undefined): Guide | undefined {
+  if (!id) return undefined;
+  byId ??= new Map<string, Guide>((GUIDES as unknown as Guide[]).map((g) => [g.id, g]));
+  return byId.get(id);
+}
+
+export function guidesByArea(area: GuideArea): Guide[] {
+  return GUIDES.filter((g) => g.area === area) as unknown as Guide[];
+}
+
+/** Values the panel substitutes into a guide: the real domain, record, key file, service account of this website. */
+export type GuideVars = Record<string, string | null | undefined>;
+
+export interface FilledCopy extends GuideCopy {
+  /** the value still holds an example because the caller had no real one */
+  example?: boolean;
+}
+export interface FilledStep extends Omit<GuideStep, 'copy'> {
+  copy?: FilledCopy[];
+}
+export interface FilledGuide extends Omit<Guide, 'steps'> {
+  steps: FilledStep[];
+  /** var keys that fell back to their example */
+  missing: string[];
+}
+
+const PLACEHOLDER = /\{\{(\w+)\}\}/g;
+
+/** Replaces {{placeholders}} with the caller's values, falling back to the example declared on the guide. */
+export function fillText(text: string, guide: Guide, vars: GuideVars = {}): string {
+  return text.replace(PLACEHOLDER, (whole, key: string) => {
+    const given = vars[key];
+    if (typeof given === 'string' && given.trim()) return given.trim();
+    const declared = guide.vars?.find((v) => v.key === key);
+    return declared ? declared.example : whole;
+  });
+}
+
+function usesExample(text: string, guide: Guide, vars: GuideVars): boolean {
+  let example = false;
+  text.replace(PLACEHOLDER, (whole, key: string) => {
+    const given = vars[key];
+    if (!(typeof given === 'string' && given.trim()) && guide.vars?.some((v) => v.key === key)) example = true;
+    return whole;
+  });
+  return example;
+}
+
+/** A guide with every placeholder resolved, ready to render or to copy. */
+export function fillGuide(guide: Guide, vars: GuideVars = {}): FilledGuide {
+  const f = (t: string) => fillText(t, guide, vars);
+  const missing = (guide.vars ?? [])
+    .map((v) => v.key)
+    .filter((k) => !(typeof vars[k] === 'string' && (vars[k] as string).trim()));
+  return {
+    ...guide,
+    title: f(guide.title),
+    why: f(guide.why),
+    done: guide.done ? f(guide.done) : undefined,
+    steps: guide.steps.map((s) => ({
+      ...s,
+      title: f(s.title),
+      body: f(s.body),
+      note: s.note ? f(s.note) : undefined,
+      warn: s.warn ? f(s.warn) : undefined,
+      link: s.link,
+      choices: s.choices?.map((c) => ({ ...c, body: f(c.body), note: c.note ? f(c.note) : undefined })),
+      copy: s.copy?.map((c) => ({ ...c, value: f(c.value), hint: c.hint ? f(c.hint) : undefined, example: usesExample(c.value, guide, vars) || undefined })),
+    })),
+    trouble: guide.trouble?.map((t) => ({ q: f(t.q), a: f(t.a) })),
+    missing,
+  };
+}
+
+/** Drops the inline markup: **bold** and `code` lose their markers, [label](url) becomes "label (url)". */
+export function plainText(markup: string): string {
+  return markup
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '$1 ($2)')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1');
+}
+
+/** The whole guide as plain text — for the clipboard and for the e-mail to the colleague who has to do it. */
+export function guideText(guide: Guide, vars: GuideVars = {}): string {
+  const g = fillGuide(guide, vars);
+  const out: string[] = [g.title, '', plainText(g.why), ''];
+  if (g.where) out.push(`Where: ${g.where}`);
+  if (g.who) out.push(`Who can do it: ${g.who}`);
+  out.push(`Takes about ${g.minutes} minutes.`, '');
+  g.steps.forEach((s, i) => {
+    out.push(`${i + 1}. ${plainText(s.title)}`, `   ${plainText(s.body)}`);
+    for (const c of s.copy ?? []) out.push(`   ${c.label}: ${c.value}`);
+    if (s.link) out.push(`   ${s.link.label}: ${s.link.href}`);
+    for (const c of s.choices ?? []) out.push(`   ${c.label}: ${plainText(c.body)}`);
+    if (s.note) out.push(`   Note: ${plainText(s.note)}`);
+    if (s.warn) out.push(`   Careful: ${plainText(s.warn)}`);
+    out.push('');
+  });
+  if (g.done) out.push(`You know it worked when: ${plainText(g.done)}`, '');
+  if (g.trouble?.length) {
+    out.push('If it does not work');
+    for (const t of g.trouble) out.push(`- ${plainText(t.q)} — ${plainText(t.a)}`);
+    out.push('');
+  }
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Guides matching a search box query, best first. Every word has to match the start of a word somewhere in the guide — a search for
+ * "app password" must not return the fix pack because its text happens to contain "happens".
+ */
+export function searchGuides(query: string): Guide[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return GUIDES as unknown as Guide[];
+  const words = q.split(/\s+/).map((w) => w.replace(/[^\p{L}\p{N}]+/gu, '')).filter(Boolean);
+  if (!words.length) return GUIDES as unknown as Guide[];
+  const hits = (text: string, w: string) => new RegExp(`(^|[^\\p{L}\\p{N}])${w}`, 'iu').test(text);
+  const scored = (GUIDES as unknown as Guide[])
+    .map((g) => {
+      const title = g.title.toLowerCase();
+      const keywords = (g.keywords ?? []).join(' ').toLowerCase();
+      const rest = `${g.why} ${g.where ?? ''} ${g.who ?? ''} ${g.steps.map((s) => s.title).join(' ')}`.toLowerCase();
+      const score = words.reduce((n, w) => n + (hits(title, w) ? 4 : hits(keywords, w) ? 3 : hits(rest, w) ? 1 : -99), 0);
+      return { g, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+  return scored.map((x) => x.g);
+}
+
+/**
+ * Which guide answers a recommendation: the rows on the Recommendations page that ask the person to do something outside the app
+ * carry the guide that shows how. Keyed by the recommendation ids built in the server's recommendations service.
+ */
+export const GUIDE_FOR_RECOMMENDATION: Record<string, GuideId> = {
+  'setup:gsc': 'search-console-access',
+  'setup:ga4': 'ga4-access',
+  'setup:profile': 'business-profile',
+  'setup:checkin': 'search-console-checkin',
+  'ai:indexnow': 'indexnow-key-file',
+  'links:mailbox': 'mailbox-connect',
+  'bl:gsc-import': 'search-console-links-export',
+};

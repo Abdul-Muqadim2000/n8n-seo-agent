@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Callout, Skeleton } from '@/components/ui/feedback';
 import { Checkbox } from '@/components/ui/field';
 import { IconTile } from '@/components/insight';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { paths } from '@/lib/paths';
 import { qk, useGoogleConnection, useOnboardingStep, useSiteData, useStartRun, useUsage } from '@/lib/queries';
@@ -165,7 +166,10 @@ export function LaunchStep() {
                       connected <span className="text-ink-3">({gsc.property}, {permissionLabel(gsc.permissionLevel)})</span>
                     </>
                   ) : (
-                    <span className="text-warning-text">not connected; the weekly report explains how to connect it</span>
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      <span className="text-warning-text">not connected</span>
+                      <GuideButton id="search-console-access" vars={{ domain: site.domain }} label="Show me how" />
+                    </span>
                   )}
                 </span>
                 <span className="block">GA4: {ga4Id ? `property ${ga4Id}` : <span className="text-ink-3">detected from your web stream</span>}</span>

@@ -313,15 +313,40 @@ export const profileFields = z.object({
   serviceAreas: stringList(20, 80),
   mapUrl: optUrl,
   logoUrl: optUrl,
+  // G31: the house style every page follows — stored on the same profile row, applied in the writing prompts and checked before delivery
+  style: z
+    .object({
+      brandForm: opt(160),
+      brandWrong: stringList(12, 80),
+      spelling: z.enum(['', 'British English', 'American English']).default(''),
+      avoid: stringList(40, 60),
+      tone: opt(300),
+      notes: opt(600),
+    })
+    .default({ brandForm: '', brandWrong: [], spelling: '', avoid: [], tone: '', notes: '' }),
 });
 export type ProfileFields = z.output<typeof profileFields>;
 
 export const profileInput = profileFields
   .extend({ mode: z.literal('profile'), siteId, emailCopy: z.boolean().default(false) })
-  .refine((v) => !!(v.author.name || v.businessName || v.address.street || v.phone || v.reviewer.name), {
-    path: ['author', 'name'],
-    message: 'Fill in at least the author name or the business details',
-  });
+  .refine(
+    (v) =>
+      !!(
+        v.author.name ||
+        v.businessName ||
+        v.address.street ||
+        v.phone ||
+        v.reviewer.name ||
+        v.style.brandForm ||
+        v.style.spelling ||
+        v.style.avoid.length ||
+        v.style.tone
+      ),
+    {
+      path: ['author', 'name'],
+      message: 'Fill in at least the author name, the business details or your style guide',
+    },
+  );
 
 export const aiVisibilityInput = z.object({
   mode: z.literal('ai_visibility'),
@@ -518,8 +543,11 @@ export const mailboxSchema = z.object({
 });
 export type MailboxInput = z.output<typeof mailboxSchema>;
 export const mailboxPatchSchema = mailboxSchema.partial().extend({ password: z.string().min(4).max(400).optional() });
+/** L4: start the OAuth flow for one provider (the settings a password mailbox asks for are filled in afterwards) */
+export const mailboxOauthStartSchema = z.object({ provider: z.enum(['gmail_oauth', 'ms_graph']), label: z.string().trim().max(60).default('') });
 export const linkSettingsSchema = z.object({ mode: z.enum(['approve', 'auto']).optional(), mailboxId: z.string().uuid().nullable().optional(), autoDailyMax: z.number().int().min(1).max(30).optional() });
-const stepSchema = z.object({ step: z.number().int().min(0).max(2), waitDays: z.number().int().min(0).max(30), subject: z.string().max(140).default(''), body: z.string().min(1).max(6000) });
+const stepSchema = z.object({ step: z.number().int().min(0).max(2), waitDays: z.number().int().min(0).max(30), subject: z.string().max(140).default(''), body: z.string().min(1).max(6000),
+  subjectAlt: z.string().max(140).optional(), variant: z.enum(['A', 'B']).optional() });   // L7: the other subject style, and which one this pitch carries
 export const approveSchema = z.object({ prospectDomain: z.string().trim().min(3).max(200), type: z.string().trim().min(2).max(30), toEmail: z.string().trim().toLowerCase().email().max(200),
   steps: z.array(stepSchema).min(1).max(3), consent: z.boolean().default(false), mailboxId: z.string().uuid().nullable().optional() });
 export const sequencePatchSchema = z.object({ steps: z.array(stepSchema).min(1).max(3).optional(), toEmail: z.string().trim().toLowerCase().email().max(200).optional() });

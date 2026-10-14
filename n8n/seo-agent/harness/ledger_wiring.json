@@ -1,5 +1,291 @@
 {
- "settle_node": "Settle Run Ledger",
+ "assess": {
+  "fit": {
+   "agent": "Keyword Fit",
+   "fallback": "Keyword Fit (Text)",
+   "fallback_has_parser": false,
+   "gate": "Fit Parsed?",
+   "max_tokens": 1200,
+   "schema": {
+    "properties": {
+     "alternatives": {
+      "type": "string"
+     },
+     "fit": {
+      "type": "number"
+     },
+     "navigational": {
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "fit",
+     "navigational"
+    ],
+    "type": "object"
+   },
+   "to_response": [
+    "Fit Parsed?",
+    "Keyword Fit (Text)"
+   ]
+  },
+  "refused_conditions": [
+   [
+    "run_id",
+    "={{ $execution.id }}"
+   ]
+  ],
+  "refused_values": {
+   "status": "refused"
+  },
+  "settle_conditions": [
+   [
+    "run_id",
+    "={{ $execution.id }}"
+   ],
+   [
+    "status",
+    "reserved"
+   ]
+  ],
+  "settle_from": [
+   "Respond Assess",
+   "Respond Assess Upstream Error"
+  ],
+  "settle_node": "Settle Run Ledger (Assess)",
+  "settle_values": {
+   "settled_usd": "={{ Number($('Run Ledger Row (Assess)').first().json.est_usd) || 0 }}",
+   "status": "done"
+  }
+ },
+ "heavy_audit_pages": 100,
+ "ladder_release": {
+  "code": "Refused Ladder Row",
+  "conditions": [
+   "ladder_id",
+   "keyword"
+  ],
+  "from": "Refused Input",
+  "gate": "Ladder Row To Reset?",
+  "table": "seo_ladders",
+  "update": "Release Ladder Row",
+  "values": [
+   "status",
+   "status_note"
+  ]
+ },
+ "modes": {
+  "ai_visibility": [
+   "Monitor Started"
+  ],
+  "audit": [
+   "Build Audit Report",
+   "Build Full Report",
+   "Spawn Audit Run"
+  ],
+  "backlinks": [
+   "Monitor Started"
+  ],
+  "case_study": [
+   "Case Study Delivery"
+  ],
+  "checkin": [
+   "Check-in Delivery"
+  ],
+  "describe": [
+   "Build Description Page"
+  ],
+  "discover": [
+   "Build Keyword File"
+  ],
+  "keyword": [
+   "Build Ladder Report",
+   "Build Word File"
+  ],
+  "ladder": [
+   "Build Ladder Report",
+   "Build Word File"
+  ],
+  "profile": [
+   "Profile Delivery"
+  ],
+  "published": [
+   "Published Delivery"
+  ],
+  "track": [
+   "Start Site Tracker"
+  ]
+ },
+ "monitors": {
+  "SEO Agent \u2014 AI Growth": {
+   "est": {
+    "ai": 0.55,
+    "dfs": 0.05
+   },
+   "measured": "Growth Metrics",
+   "mode": "ai_growth",
+   "plan": "Growth Plan",
+   "reserve": "Run Ledger Row (Growth)",
+   "settle": "Settle Run Ledger (Growth)",
+   "settle_from": [
+    "Growth Report"
+   ]
+  },
+  "SEO Agent \u2014 AI Pulse": {
+   "est": {
+    "ai": 0.004,
+    "dfs": 0.08
+   },
+   "measured": "Pulse Metrics",
+   "mode": "ai_pulse",
+   "plan": "AI Plan",
+   "reserve": "Run Ledger Row (Pulse)",
+   "settle": "Settle Run Ledger (Pulse)",
+   "settle_from": [
+    "Pulse Alerts"
+   ]
+  },
+  "SEO Agent \u2014 AI Visibility Tracker": {
+   "est": {
+    "ai": 0.27,
+    "dfs": 0.6
+   },
+   "measured": "AI Metrics",
+   "mode": "ai_visibility",
+   "plan": "AI Plan",
+   "reserve": "Run Ledger Row (AI)",
+   "settle": "Settle Run Ledger (AI)",
+   "settle_from": [
+    "AI Report"
+   ]
+  },
+  "SEO Agent \u2014 Audit Scheduler": {
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.09
+   },
+   "measured": "",
+   "mode": "audit_schedule",
+   "plan": "Audit Schedule Plan",
+   "reserve": "Run Ledger Row (Audit)",
+   "settle": "Settle Run Ledger (Audit)",
+   "settle_from": [
+    "Audits Started"
+   ]
+  },
+  "SEO Agent \u2014 Backlink Monitor": {
+   "est": {
+    "ai": 0.05,
+    "dfs": 0.05,
+    "dfs_full": 0.45
+   },
+   "measured": "Parse Backlinks",
+   "mode": "backlinks",
+   "plan": "BL Plan",
+   "reserve": "Run Ledger Row (BL)",
+   "settle": "Settle Run Ledger (BL)",
+   "settle_from": [
+    "BL Report"
+   ]
+  },
+  "SEO Agent \u2014 Content Cadence": {
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "measured": "",
+   "mode": "content_cadence",
+   "plan": "Cadence Plan",
+   "reserve": "Run Ledger Row (Cadence)",
+   "settle": "Settle Run Ledger (Cadence)",
+   "settle_from": [
+    "Cadence Note"
+   ]
+  },
+  "SEO Agent \u2014 Link Builder": {
+   "est": {
+    "ai": 0.3,
+    "dfs": 0.05
+   },
+   "measured": "",
+   "mode": "link_builder",
+   "plan": "LB Plan",
+   "reserve": "Run Ledger Row (LB)",
+   "settle": "Settle Run Ledger (LB)",
+   "settle_from": [
+    "LB Report"
+   ]
+  },
+  "SEO Agent \u2014 Rank Tracker": {
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.15
+   },
+   "measured": "",
+   "mode": "rank_tracker",
+   "plan": "Tracker Plan",
+   "reserve": "Run Ledger Row (Tracker)",
+   "settle": "Settle Run Ledger (Tracker)",
+   "settle_from": [
+    "Tracker Report"
+   ]
+  },
+  "SEO Agent \u2014 Site Tracker": {
+   "est": {
+    "ai": 0.03,
+    "dfs": 0.01
+   },
+   "measured": "",
+   "mode": "site_tracker",
+   "plan": "Site Plan",
+   "reserve": "Run Ledger Row (Site)",
+   "settle": "Settle Run Ledger (Site)",
+   "settle_from": [
+    "Site Report"
+   ]
+  }
+ },
+ "refused_conditions": [
+  [
+   "run_id",
+   "={{ $execution.id }}"
+  ]
+ ],
+ "refused_values": {
+  "status": "refused"
+ },
+ "release_conditions": [
+  [
+   "status",
+   "eq",
+   "reserved"
+  ],
+  [
+   "created_at",
+   "lt",
+   "={{ new Date(Date.now() - (Number($('Normalize Input').first().json.run_stale_hours) || 2) * 3600000).toISOString() }}"
+  ]
+ ],
+ "release_from": [
+  "Load Run Ledger"
+ ],
+ "release_node": "Release Stale Runs",
+ "release_to": [
+  "Rate Limit"
+ ],
+ "release_values": {
+  "status": "stale"
+ },
+ "settle_conditions": [
+  [
+   "run_id",
+   "={{ $execution.id }}"
+  ],
+  [
+   "status",
+   "reserved"
+  ]
+ ],
  "settle_from": [
   "Build Audit Report",
   "Build Description Page",
@@ -15,123 +301,10 @@
   "Spawn Audit Run",
   "Start Site Tracker"
  ],
- "settle_conditions": [
-  [
-   "run_id",
-   "={{ $execution.id }}"
-  ],
-  [
-   "status",
-   "reserved"
-  ]
- ],
+ "settle_node": "Settle Run Ledger",
  "settle_values": {
-  "status": "done",
-  "settled_usd": "={{ Number($('Run Ledger Row').first().json.est_usd) || 0 }}"
+  "settled_usd": "={{ Number($('Run Ledger Row').first().json.est_usd) || 0 }}",
+  "status": "done"
  },
- "refused_conditions": [
-  [
-   "run_id",
-   "={{ $execution.id }}"
-  ]
- ],
- "refused_values": {
-  "status": "refused"
- },
- "modes": {
-  "describe": [
-   "Build Description Page"
-  ],
-  "discover": [
-   "Build Keyword File"
-  ],
-  "keyword": [
-   "Build Ladder Report",
-   "Build Word File"
-  ],
-  "audit": [
-   "Build Audit Report",
-   "Build Full Report",
-   "Spawn Audit Run"
-  ],
-  "ladder": [
-   "Build Ladder Report",
-   "Build Word File"
-  ],
-  "track": [
-   "Start Site Tracker"
-  ],
-  "published": [
-   "Published Delivery"
-  ],
-  "checkin": [
-   "Check-in Delivery"
-  ],
-  "profile": [
-   "Profile Delivery"
-  ],
-  "case_study": [
-   "Case Study Delivery"
-  ],
-  "ai_visibility": [
-   "Monitor Started"
-  ],
-  "backlinks": [
-   "Monitor Started"
-  ]
- },
- "release_node": "Release Stale Runs",
- "release_from": [
-  "Load Run Ledger"
- ],
- "release_to": [
-  "Rate Limit"
- ],
- "release_conditions": [
-  [
-   "status",
-   "eq",
-   "reserved"
-  ],
-  [
-   "created_at",
-   "lt",
-   "={{ new Date(Date.now() - (Number($('Normalize Input').first().json.run_stale_hours) || 2) * 3600000).toISOString() }}"
-  ]
- ],
- "release_values": {
-  "status": "stale"
- },
- "stale_hours": 2,
- "heavy_audit_pages": 100,
- "assess": {
-  "settle_node": "Settle Run Ledger (Assess)",
-  "settle_from": [
-   "Respond Assess",
-   "Respond Assess Upstream Error"
-  ],
-  "settle_conditions": [
-   [
-    "run_id",
-    "={{ $execution.id }}"
-   ],
-   [
-    "status",
-    "reserved"
-   ]
-  ],
-  "settle_values": {
-   "status": "done",
-   "settled_usd": "={{ Number($('Run Ledger Row (Assess)').first().json.est_usd) || 0 }}"
-  },
-  "refused_conditions": [
-   [
-    "run_id",
-    "={{ $execution.id }}"
-   ]
-  ],
-  "refused_values": {
-   "status": "refused"
-  }
- }
+ "stale_hours": 2
 }

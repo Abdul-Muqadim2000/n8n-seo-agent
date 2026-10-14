@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Callout } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input, Select } from '@/components/ui/field';
 import { TagInput } from '@/components/ui/tag-input';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { applyServerErrors, asCountry, competitorValidator, errorText } from './helpers';
 import { completeMonitors, DEFAULT_MONITORS, MonitoringCost, MonitorSettingsFields } from './MonitorSettingsFields';
@@ -116,6 +117,7 @@ export function TrackingForm({
               label="Keywords to track"
               optional
               hint="Up to 20 search terms you want to rank for. We check your live Google position for each every week. Everything Search Console reports is tracked anyway."
+              labelAction={<GuideButton id="keywords-to-track" vars={{ domain: site.domain }} variant="link" label="How do I choose these?" />}
               error={errorText(fieldState.error)}
             >
               {(p) => (
@@ -139,6 +141,7 @@ export function TrackingForm({
           label="GA4 property ID"
           optional
           hint="Leave empty and we use the GA4 property whose web stream matches your domain. Find it in GA4 → Admin → Property details."
+          labelAction={<GuideButton id="ga4-property-id" vars={{ domain: site.domain }} variant="link" label="Where do I find it?" />}
           error={errors.ga4PropertyId?.message}
           className="max-w-sm"
         >
@@ -149,7 +152,13 @@ export function TrackingForm({
           control={control}
           name="competitors"
           render={({ field, fieldState }) => (
-            <Field label="Competitors" optional hint="Up to 3. Compared in AI answers, backlinks and the monthly report." error={errorText(fieldState.error)}>
+            <Field
+              label="Competitors"
+              optional
+              hint="Up to 3. Compared in AI answers, backlinks and the monthly report."
+              labelAction={<GuideButton id="competitors" vars={{ domain: site.domain }} variant="link" label="Who counts as a competitor?" />}
+              error={errorText(fieldState.error)}
+            >
               {(p) => (
                 <TagInput
                   id={p.id}

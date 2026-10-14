@@ -76,6 +76,8 @@ export interface ProfileRow extends DtRow {
   opening_hours: string; price_range: string; service_areas: string; map_url: string; author_name: string;
   author_job_title: string; author_credentials: string; author_bio: string; author_url: string; author_image_url: string;
   author_same_as: string; author_knows_about: string; reviewer_name: string; reviewer_job_title: string; reviewer_url: string;
+  /** G31: the stored style guide — the brand's written form, wrong forms to catch, the spelling variant, words to avoid, the tone, other rules */
+  style_brand_form: string; style_brand_wrong: string; style_spelling: string; style_avoid: string; style_tone: string; style_notes: string;
   updated_at: string; request_id: string;
 }
 export interface CaseStudyRow extends DtRow {
@@ -287,6 +289,10 @@ export const TABLES = {
   /** G11 + G25 (2026-10-13): one row per site and key page — the daily raw watch and what Search Console's URL Inspection said about it */
   pageWatch: 'seo_page_watch',
   ladderSettings: 'seo_ladder_settings',
+  /** D25b + R6 (2026-10-12/13): every ops alert, with the channel that carried it — what G21's alert delivery rate is measured from */
+  opsAlerts: 'seo_ops_alerts',
+  /** D1 + R9 + G23: one row per run, with its reservation and what it settled (which part measured, which estimated) */
+  runLedger: 'seo_run_ledger',
   /** v4.13 Link Builder */
   linkOutreach: 'seo_link_outreach',
   listings: 'seo_listings',

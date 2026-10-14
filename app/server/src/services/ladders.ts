@@ -331,6 +331,11 @@ export function buildLadders(src: LadderSources, sched: LadderSchedule, opts: { 
         publishedAt = isoOk(at) ? at : null;
         const started = logs.map((l) => s(l.started_at)).filter(isoOk).sort()[0];
         writtenAt = started ?? report?.receivedAt ?? null;
+      } else if (status === 'set_aside') {
+        // R16 (2026-10-13): the keyword rule refused this planned page (a competitor's brand, a government portal, an off-topic
+        // search). n8n wrote `set_aside` on the row with the reason in its weekly note, and the Monday runs skip it — so the app
+        // must not show it as a page that is coming, and must not offer "Write now" for it.
+        state = 'set_aside';
       } else {
         const fromLog = logState(logs, reports, runs, now);
         if (fromLog) ({ state, writtenAt } = fromLog);
