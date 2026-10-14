@@ -5448,6 +5448,11 @@ assert 'NOT_CHECKED' in code('Parse Verdict') and 'score_withheld' in code('Buil
 retry_lint.record_gate('SEO Agent v4', ['GSC Audit Query', 'Inspect Retry Plan', 'Any Inspect Retries?', 'Wait Before Inspect Retry', 'GSC Audit Query (Retry)', 'GSC Sitemaps (Audit)'])
 url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
 retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+# INVARIANTS rule 3 (2026-10-15): a DataForSEO node needs the in-200 gate as well as retryOnFail, because the API reports most of
+# its failures inside an HTTP 200. A ratchet, not a big-bang rule: the build fails when a node appears that harness/in200_baseline.json
+# does not already excuse, so the debt R18 left behind (it gated three paths) cannot grow and shrinks as gates land.
+_g3, _u3 = retry_lint.check_in200({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+log('A DataForSEO node that fails inside an HTTP 200 (2026-10-15, INVARIANTS rule 3): the API reports most failures inside a 200, so retryOnFail does not see them - R18 gated the SERP, facts and keyword-data paths, and this measures how far that reaches. %d of the main workflow\'s %d DataForSEO calls are covered by a gate chain recorded with retry_lint.record_gate(); the rest are either ungated or gated without being recorded, and registering R18\'s chains is the next step. The build now refuses a NEW ungated node against harness/in200_baseline.json, so the class cannot grow' % (len(_g3), len(_g3) + len(_u3)))
 sticky("""### An answer that arrived with HTTP 200 and was still a failure (R18 / R19 / R24)
 **One rule, one kit** (`v5/code/_dfs_retry.js`): DataForSEO answers a dead task with `status_code` 40101 inside an HTTP 200 and Google's URL Inspection with an `error` object — n8n's `retryOnFail` never sees either. Every gate (SERP, facts search, keyword data, URL inspection) now judges the answer with `RT`, **pauses and asks once more**, and never re-sends what a second attempt cannot fix (permission, property, quota).
 **Where the retry fails too, nothing is scored on it.** The evidence is `unavailable`, the keyword verdict is **NOT CHECKED** with no score, no expected visits and no time to rank, and the first reason says why. A verdict computed on a results page nobody saw is worse than no verdict.

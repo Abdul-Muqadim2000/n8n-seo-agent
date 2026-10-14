@@ -50,6 +50,74 @@ def record_gate(where, chain):
     GATES[where] = list(chain)
 
 
+# ---- Rule 3 of docs/system-review-2026-10-14/INVARIANTS.md: an external call that fails says so ----
+# n8n's retryOnFail fires only when a node *fails*. DataForSEO answers most of its failures inside an HTTP 200
+# (`status_code` 40101, 50000 ...), so those nodes need a code-level gate as well (`v5/code/_dfs_retry.js`, R18).
+# R18 was exactly this hole: the gate existed on the AI path only, the test matched 50000, and 40101 passed through
+# twice -- a whole ladder was planned, scored "winnable 68" and written on a results page nobody had seen.
+#
+# This is a RATCHET, not a big-bang rule. `in200_coverage` reports every DataForSEO node and whether a registered gate
+# chain covers it; `check_in200` fails the build when a node appears that the baseline does not already excuse, so the
+# debt is visible, cannot grow, and shrinks as gates are added. Delete a name from the baseline once its gate lands.
+DFS_MARK = ('dataforseo', 'SEOcredDataForSE')
+_BASELINE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'harness', 'in200_baseline.json')
+
+
+def is_dfs(node):
+    """True when this node talks to DataForSEO, by URL or by credential."""
+    if node.get('type') != HTTP_TYPE:
+        return False
+    blob = json.dumps(node.get('parameters') or {}) + json.dumps(node.get('credentials') or {})
+    return any(m.lower() in blob.lower() for m in DFS_MARK)
+
+
+def in200_coverage(workflow, where=None):
+    """-> (gated, ungated) node names for the DataForSEO calls of one workflow."""
+    where = where or workflow.get('name') or ''
+    covered = set()
+    for chain in GATES.values():
+        covered.update(chain)
+    if not covered and os.path.exists(_WIRING):          # called outside a build: read the chains the build recorded
+        for chain in (json.load(open(_WIRING)).get('ai_gate') or {}).values():
+            covered.update(chain)
+    gated, ungated = [], []
+    for n in workflow.get('nodes') or []:
+        if not is_dfs(n):
+            continue
+        (gated if n.get('name') in covered else ungated).append(n.get('name'))
+    return sorted(gated), sorted(ungated)
+
+
+def check_in200(workflow, where=None):
+    """Fail the build when a DataForSEO node appears that no gate covers and the baseline does not already name."""
+    where = where or workflow.get('name') or ''
+    gated, ungated = in200_coverage(workflow, where)
+    base = {}
+    if os.path.exists(_BASELINE):
+        base = json.load(open(_BASELINE))
+    known = set(base.get(where) or [])
+    if not known:                                        # the builders call this with a short name, the baseline keys by the full one
+        for k, v in base.items():
+            if k.startswith(where) or where.startswith(k):
+                known = set(v); break
+    new = [n for n in ungated if n not in known]
+    assert not new, (
+        'INVARIANTS rule 3 (in-200 retry gate): %d new DataForSEO node(s) in "%s" with no gate: %s\n'
+        '  Wire them through v5/code/_dfs_retry.js and record the chain with retry_lint.record_gate(), or -- only with '
+        'a reason -- add them to harness/in200_baseline.json.' % (len(new), where, ', '.join(new)))
+    return gated, ungated
+
+
+def write_baseline(entries):
+    """Record today's ungated nodes so the ratchet can only tighten. Run by the builders, never by hand."""
+    base = json.load(open(_BASELINE)) if os.path.exists(_BASELINE) else {}
+    for where, ungated in entries.items():
+        keep = [n for n in (base.get(where) or []) if n in ungated]   # a gate that landed leaves the baseline for ever
+        base[where] = sorted(set(keep) | {n for n in ungated if n in (base.get(where) or [])})
+    json.dump(base, open(_BASELINE, 'w'), indent=1, sort_keys=True)
+    return base
+
+
 def needs(node):
     """True when this node is an external HTTP call that the rule applies to."""
     return node.get('type') == HTTP_TYPE and node.get('name') not in ALLOW
