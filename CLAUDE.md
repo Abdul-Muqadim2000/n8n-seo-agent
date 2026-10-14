@@ -57,7 +57,39 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-14 evening, the second re-rating run and every defect it found — latest)
+## Status (2026-10-15, the benchmark fix batch and what it found — latest)
+**Seven benchmark items closed, nine new problems found while closing them, nothing deployed.** Four worktree agents, two at a time.
+Harness **4505 passed, 0 failed** (4315 at the start of the day); app typecheck clean, **493** tests (254 shared + 239 server); smoke ALL
+PASSED; build exit 0. Register: `docs/system-review-2026-10-11/FIX_PLAN.md` §3.14 (statuses) and **§3.15 (B-F1…B-F9, what the batch found)**.
+**Closed:** B-R1 reports are delivered at last (per-company schedule, e-mail + signed webhook with an SSRF guard, share link, delivery log,
+retries, "Send it now"; it refuses anything a run marked not ready, with no override even on manual send — 23 reports landed in the app on
+2026-10-14 and not one had been delivered to anyone); B-R3 / B-B1 one cost table (`app/shared/src/cost.ts`), the app's 2026-10-02 table was
+1.3x–2.5x HIGH and was why runs were refused at "$5.74 of $6"; B-A8 measured Claude tokens; B-A5 per-run cost reconciliation; B-A6
+front-door idempotency; B-A7 alert retry + escalation; B-A9 all ten schedules through the concurrency gate.
+**The correction that matters (B-F1).** The engine measured **no** Claude token at all — not the 32%-estimated this file used to claim.
+`@langchain/anthropic` 1.5.6 returns `llmOutput` only from `_generateNonStreaming`; n8n's tracing reads exactly
+`result?.llmOutput?.tokenUsage`, so streaming falls back to a tiktoken estimate — and the eight non-streaming nodes' real `tokenUsage`
+rides the `ai_languageModel` connection, which `WorkflowDataProxy` only reads as `main`, so **no Code node can read a token**. The
+"measured" figures in the run analyses were real but came from reading executions back through the API *afterwards*. Verified by reading
+the running container, not inferred. Fixed with Anthropic's free `count_tokens` on the main path: those three Opus nodes 0% → **70.9%
+measured**, a whole page run 53.7%. Thinking stays modelled; **the Sonnet nodes are still character-priced — the open half.**
+**Also found:** a 404 from a revoked alert webhook was recorded as a **delivery** (`neverError`, no `fullResponse`) — the exact Rule 4
+violation the rule exists for; Page Watch posted its digest and wrote nothing back, so its rows sat `pending` for ever; a deduplicated
+request and the app disagreed about which run it was (the app matched callbacks newest-first, deliberately, because weekly reports reuse
+the tracking run's id — so the app now keeps no row for a run that never started, `repeatResolvesToOriginal`); `request_id` is
+`$execution.id` and not a caller key; `run_cost_estimate_usd` was computed and shipped to nobody; it is **ten** schedules, not nine.
+**Process hazard, open (B-F5): a git worktree has no `n8n/.env`** — it is gitignored, so it is absent there, and the build does **not**
+fail without it: it quietly bakes defaults into ten workflows (mail identity, service account, Bing flag). Every worktree agent of the last
+four days was exposed. Contained only because the generated JSON is **always rebuilt in the main worktree after a merge**. The build
+should refuse to write workflows when `.env` is absent. Keep rebuilding after every merge until it does.
+**Spend ceilings raised $6 → $15 a day** (`ai_budget_usd` and `dfs_budget_usd`, Normalize Input CONFIG) at the owner's request — cost is
+not the constraint, the result is. `dfs_balance_floor_usd` stays $0.50. **The DataForSEO account holds $13.79** (it held $32.60 on
+2026-10-01) and is roughly two thirds of what a run spends, so the account binds before the guard does: top it up before any live run.
+**NOT DEPLOYED — needs the owner.** `apply_env.py` was refused by the permission classifier as a production deploy. Everything above is
+inert on the running instance until it runs, and B-A5's three new Data Table columns need the `sync_tables.py` it runs.
+**Next:** `docs/system-review-2026-10-14/NEXT_SESSION.md` — the benchmark programme is **2 of 13 areas done**.
+
+## Status (2026-10-14 evening, the second re-rating run and every defect it found — previous)
 **The second whole-system live run is done and all 12 defects it found are fixed, deployed and pushed** (`docs/system-review-2026-10-14/RESULTS.md`: 21 protocol runs + G27 and G11, 47 executions 535-581, every one `success`, **$3.63** of its $8 cap — DataForSEO $2.3876 measured, Claude $1.2458 of which $0.3937 is `tokenUsageEstimate` only). Harness **4277 passed, 0 failed**; app typecheck + 387 tests; smoke ALL PASSED; deployed (main workflow **483 nodes**, 20 published, `seo_run_ledger.dfs_balance` + `seo_audit_findings.checked` synced). **81 defects have now been found and closed across four rounds**; no defect row in the register is open.
 **The three High ones.** **R17**: every monitor wrote its `seo_run_ledger` row *after* it had finished spending and never settled it (58% of the run's money attributed to no row) — the reserve chain hung beside the plan node, so n8n's v1 order ran it last. `ladder_common.ledger_mainline` puts Ensure / Row / Reserve on the **main** path in all ten workflows, and build section 55 **proves the ordering** by walking `main` from every trigger, refusing to pass *Reserve Run Ledger* and failing if a paid node is still reachable (broken three ways on purpose; it caught each). **R18**: the in-200 retry test matched error 50000 only, which is why 40101 passed twice and a ladder was planned, scored "winnable 68" and written on a SERP nobody saw — the rule is now the shared kit `_dfs_retry.js`, fires on any task error, and when a retry still fails the verdict is `NOT_CHECKED` with no score, no visits and no timeline ("could not be read", never "no demand"). **R19**: 31 of 45 URL inspections failed unretried and the diff called the smaller sample an improvement — failures are re-sent, findings carry `checked` / `checked_of`, and past 20% drift the diff prints "not compared: the sample moved".
 **Secret handling (R29 / R30, found while checking the credential refresh, not by the run).** `SEO_ALERT_WEBHOOK_URL` was baked into generated workflow JSON and harness code that this **public** repo tracks. The build no longer reads the setting: it bakes `__SEO_ALERT_WEBHOOK_URL__`, `apply_env.py` substitutes the real URL into a copy **outside** the repo at import time, and an un-substituted placeholder is treated as unset, so no build can emit a node that posts to a customer's Slack. Builds with and without the setting are byte-identical. A **build-time scanner** fails on Slack / Discord / Teams / Zapier webhooks, `xoxb-`, `sk-ant-`, `AIza` and private keys (proved by planting one). Verified both ends: the deployed instance carries the URL, the repository carries none.
