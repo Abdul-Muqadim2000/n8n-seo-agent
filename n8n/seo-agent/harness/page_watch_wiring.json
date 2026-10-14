@@ -51,6 +51,11 @@
     "Run Ledger Row (Watch)"
    ]
   ],
+  "DFS Balance End (Watch)": [
+   [
+    "Load Run Ledger (Watch)"
+   ]
+  ],
   "Daily Schedule": [
    [
     "Ensure Sites Table (Watch)"
@@ -131,6 +136,11 @@
     "Load Ops Alerts (Watch)"
    ]
   ],
+  "Load Run Ledger (Watch)": [
+   [
+    "Ledger Settle (Watch)"
+   ]
+  ],
   "Load Sites (Watch)": [
    [
     "Load Ladders (Watch)"
@@ -143,12 +153,12 @@
   ],
   "Nothing To Watch": [
    [
-    "Ledger Settle (Watch)"
+    "DFS Balance End (Watch)"
    ]
   ],
   "Post Watch Alert": [
    [
-    "Ledger Settle (Watch)"
+    "DFS Balance End (Watch)"
    ]
   ],
   "Reserve Run Ledger (Watch)": [
@@ -246,7 +256,7 @@
   ],
   "Watched": [
    [
-    "Ledger Settle (Watch)"
+    "DFS Balance End (Watch)"
    ]
   ]
  },
@@ -303,7 +313,9 @@
   "Ledger Settle (Watch)",
   "Settle Run Ledger (Watch)",
   "DFS Balance (Watch)",
-  "After Run Ledger (Watch)"
+  "After Run Ledger (Watch)",
+  "DFS Balance End (Watch)",
+  "Load Run Ledger (Watch)"
  ],
  "schedule": {
   "every": "day",

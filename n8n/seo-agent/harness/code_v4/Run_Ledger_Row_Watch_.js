@@ -41,4 +41,7 @@ return [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: 
   cost_basis: ((ai + dfs) > 0
     ? 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + paid.length + ' site(s) x the per-site figure), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet'
     : 'reserved: nothing - this run spends no model and no paid API money'
-    ) + (freeRows ? '; ' + freeRows + ' free-only site(s) reserve nothing (no paid API, no model call)' : '') } }];
+    ) + (freeRows ? '; ' + freeRows + ' free-only site(s) reserve nothing (no paid API, no model call)' : ''),
+  // B-A5 (2026-10-15, build section 62): filled in by the settle — when it settled, what the account read then, and whether the figure
+  // the row carries is the account's ('account') or the run's own tasks' ('tasks').
+  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks' } }];

@@ -13,4 +13,8 @@ return [{ json: { run_id: String($execution.id), key: String(v.caller || 'anon')
   dfs_balance: 0,
   // G23: which part of a settled row's cost is measured and which is estimated. Nothing is measured at reservation time.
   cost_mode: 'assess', ai_usd: 0, measured_usd: 0, estimated_usd: 0.036,
-  cost_basis: 'reserved: Claude $0.0020 ESTIMATED (one Haiku call), DataForSEO $0.0340 ESTIMATED (the per-check figure measured on 2026-10-13) - nothing measured yet' } }];
+  cost_basis: 'reserved: Claude $0.0020 ESTIMATED (one Haiku call), DataForSEO $0.0340 ESTIMATED (the per-check figure measured on 2026-10-13) - nothing measured yet',
+  // B-A5 (2026-10-15, build section 62): a reserved row has not settled, has taken no second balance reading and carries the cost its
+  // own tasks report. `settled_at` is stamped by the settle, and it is what lets ANOTHER run tell whether this one overlapped it:
+  // a `done` row with no settled_at is treated as having been open the whole time, which is the safe answer, not the useful one.
+  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks' } }];

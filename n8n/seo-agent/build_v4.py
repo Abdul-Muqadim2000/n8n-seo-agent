@@ -5753,6 +5753,212 @@ log('The spend guard covers both currencies and the account is a hard floor (202
     'before the work and what the guard holds back cannot be two different numbers')
 
 # =============================================================================
+# 62. THE TOKENS ANTHROPIC COUNTS, AND THE RUN THE ACCOUNT CAN ANSWER FOR
+#     (2026-10-15, benchmark programme items B-A8 and B-A5; docs/system-review-2026-10-14/INVARIANTS.md rule 1: every figure that
+#      reaches a customer is measured and says what measured it, modelled and says from what, or not available and says why.)
+#
+#     **B-A8 — the streaming nodes' token usage.** Section 51 priced every Claude call from characters because nothing the run can read
+#     reports tokens. That was checked against the running instance (n8n 2.41.4) rather than assumed, and it is worse than the note in
+#     CLAUDE.md said: it is not only the three streaming Opus nodes that go unmeasured, it is **every Claude call in the engine**.
+#       * `@langchain/anthropic` 1.5.6 `_generate`, streaming branch: `return { generations: [{ text, message }] }` — **no `llmOutput`**.
+#         The `message_delta.usage` Anthropic sends survives only on `message.usage_metadata`.
+#       * n8n's `LmChatAnthropic` `tokensUsageParser` reads `result?.llmOutput?.usage`, finds nothing and falls back to zeros, so
+#         `N8nLlmTracing.handleLLMEnd` records `tokenUsageEstimate` (a tiktoken guess) instead of `tokenUsage`. It also does
+#         `pick(g, ['text', 'generationInfo'])` first, which drops the message the usage rode in on.
+#       * and for the eight NON-streaming nodes, where n8n does record a real `tokenUsage` (exec 521: Critic 12,905 / 3,303), it lands on
+#         the model node's `ai_languageModel` connection — and `WorkflowDataProxy.getNodeExecutionData` only ever reads
+#         `taskData.data.main`, so `$('Claude — Critic')` throws "No data found from `main` input". No Code node can read one token of it.
+#     So the measurement has to arrive on the MAIN path, and now it does: Anthropic's **free** `/v1/messages/count_tokens` endpoint counts
+#     the exact prompt each streaming agent rendered and that prompt plus the exact answer it returned, in two free calls per agent. The
+#     difference is the answer's own tokens, counted by the tokeniser that bills them. What no counter can see is the thinking the model
+#     did before answering — billed as output, never returned — so that part stays modelled from the node's effort budget and is the only
+#     estimate left in those calls. `CC.callCost` splits each call into `measured_usd` and `estimated_usd` (it used to throw the whole
+#     call into one bucket), and `CC.runCost` adds the two halves per call, so a node whose tokens were counted no longer contributes its
+#     prompt and answer to the estimated half.
+#     The chains sit on the main path behind the agent (a side branch runs last, or not at all — R17), every node is
+#     `neverError` + `continueRegularOutput`, and a count that does not answer falls back to the character figure with its old basis.
+#
+#     **B-A5 — only the day was reconciled, not the run.** R28 put one free `appendix/user_data` reading on the RESERVE chain, which is
+#     enough to hold the DAY against the account (CC.dfsDay) and says nothing about any single run: a run can be 100% out while the day
+#     still agrees. Every settle now takes a SECOND free reading and reloads the ledger rows around its own window, and `CC.dfsRun`
+#     attributes the move between the two readings to the run **only when no other ledger row was open across that window**. When one
+#     was, the run keeps its per-task attribution and the row says so in words. Nothing is attributed when a reading is missing, when the
+#     account has not moved yet, or when it moved more than ten times what every task reported (something outside this engine spends on
+#     the same account) — each with its own reason. `seo_run_ledger` gains `settled_at`, `dfs_balance_end` and `dfs_source`
+#     ('account' | 'tasks'), so a reader can always tell which figure the row carries.
+# =============================================================================
+
+from ladder_common import LEDGER_WINDOW_MS as LEDGER_WINDOW_MS62
+
+# ---------- A. B-A8: the free token counter, on the main path, behind the three streaming agents ----------
+COUNT_URL62 = 'https://api.anthropic.com/v1/messages/count_tokens'
+_ANTHROPIC_CRED62 = {'anthropicApi': {'id': 'SEOcredAnthropic', 'name': 'Anthropic (SEO Agent)'}}
+_STREAM62 = [c for c in _AI_CALLS51 if c['streaming']]
+assert sorted(c['node'] for c in _STREAM62) == ['Copywriter', 'Editor', 'Strategy Brief'], _STREAM62
+_OLD_CALLS62 = json.dumps(_AI_CALLS51)   # the table section 51 / 59 baked into the six nodes, replaced below
+
+
+def _count_node62(name, body, at):
+    add_node(name, 'n8n-nodes-base.httpRequest', 4.5, {
+        'method': 'POST', 'url': COUNT_URL62,
+        'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',
+        'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'}]},
+        'sendBody': True, 'specifyBody': 'json', 'jsonBody': body,
+        'options': {'timeout': 20000, 'response': {'response': {'neverError': True}}}}, at,
+        dict(credentials=dict(_ANTHROPIC_CRED62), onError='continueRegularOutput', alwaysOutputData=True, **_rl55.RETRY))
+
+
+for _c62 in _STREAM62:
+    _ag62, _in62 = _c62['node'], _c62['input']
+    assert _in62 and _in62 in nodes, 'B-A8: ' + _ag62 + ' has no input node to render its prompt against'
+    # the agent's prompt is an n8n expression over `$json` — its own input item. Rendered one node later, `$json` is something else, so
+    # the same expression is re-pointed at the node that fed the agent. That is the whole rewrite, and it is asserted below.
+    _txt62 = str(nodes[_ag62]['parameters']['text'])
+    assert _txt62.startswith('='), 'B-A8: ' + _ag62 + "'s prompt is not an expression"
+    _prompt62 = re.sub(r'\$json\b', "$('" + _in62 + "').first().json", _txt62)
+    assert '$json.' not in _prompt62 and _prompt62 != _txt62, 'B-A8: ' + _ag62 + "'s prompt still reads $json after the rewrite"
+    _set62, _cp62 = 'Prompt For Count (' + _ag62 + ')', 'Count Prompt (' + _ag62 + ')'
+    _ca62, _af62 = 'Count Answer (' + _ag62 + ')', 'After Count (' + _ag62 + ')'
+    _px62, _py62 = pos(_ag62)
+    add_node(_set62, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
+        {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'ba8:' + _ag62 + ':prompt')), 'name': '__prompt', 'value': _prompt62, 'type': 'string'},
+        {'id': str(uuid.uuid5(uuid.NAMESPACE_URL, 'ba8:' + _ag62 + ':answer')), 'name': '__answer',
+         'value': "={{ String($('" + _ag62 + "').first().json.output ?? '') }}", 'type': 'string'}]}},
+        [_px62, _py62 + 260])
+    _mdl62 = json.dumps(_c62['model'])
+    _count_node62(_cp62, '={{ JSON.stringify({ model: ' + _mdl62 + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
+                  [_px62 + 200, _py62 + 260])
+    _count_node62(_ca62, '={{ JSON.stringify({ model: ' + _mdl62 + ', messages: ['
+                  + '{ role: "user", content: String($(\'' + _set62 + '\').first().json.__prompt || "") }, '
+                  + '{ role: "assistant", content: String($(\'' + _set62 + '\').first().json.__answer || "") }] }) }}',
+                  [_px62 + 400, _py62 + 260])
+    add_node(_af62, 'n8n-nodes-base.code', 2, {'jsCode':
+        "// B-A8 (2026-10-15, section 62): the two free token counts are taken; hand " + _ag62 + "'s own items back to the pipeline,\n"
+        "// unchanged and in order, so nothing downstream sees the counter at all (the R17 resume pattern).\n"
+        "return $('" + _ag62 + "').all();\n"}, [_px62 + 600, _py62 + 260])
+    _succ62 = [t['node'] for lst in ((conns.get(_ag62) or {}).get('main') or []) for t in (lst or [])]
+    assert _succ62, 'B-A8: ' + _ag62 + ' feeds nothing'
+    for _s62 in _succ62: disconnect(_ag62, _s62)
+    connect(_ag62, _set62); connect(_set62, _cp62); connect(_cp62, _ca62); connect(_ca62, _af62)
+    for _s62 in _succ62: connect(_af62, _s62)
+    _c62['count_prompt'], _c62['count_answer'] = _cp62, _ca62
+    _c62['count_rounds'] = 1   # only the last round of a looping agent is on the main path; the rest are modelled from it
+
+# the call table and the pricing loop are re-baked into the five report builders and Run Ledger Settle
+_NEW_CALLS62 = json.dumps(_AI_CALLS51)
+assert _NEW_CALLS62 != _OLD_CALLS62 and 'count_prompt' in _NEW_CALLS62, 'B-A8: the call table did not learn about the counter'
+_OLD_PUSH62 = """  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, calls: answers.length * (c.loop ? __qaRounds() : 1) });"""
+_NEW_PUSH62 = """  // B-A8 (2026-10-15): the free Anthropic token counter answered for this node on the main path — the prompt it really rendered
+  // (*Count Prompt (…)*) and that prompt plus the answer it really got (*Count Answer (…)*). The difference is the answer's own tokens.
+  // `rounds` is how many of this node's calls those two counts cover: the Editor runs once per QA round and only the last round's
+  // prompt and answer are on the main path, so the rest are repeated from it and stay modelled. A count that did not answer leaves
+  // `counted` null and the call falls back to characters, with the old basis.
+  let counted = null;
+  if (c.count_prompt && c.count_answer) {
+    const p = __countOf(c.count_prompt), t = __countOf(c.count_answer);
+    if (p > 0 && t > p) counted = { prompt_tokens: p, total_tokens: t, rounds: c.count_rounds || 1, source: 'Anthropic /v1/messages/count_tokens' };
+  }
+  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, counted, calls: answers.length * (c.loop ? __qaRounds() : 1) });"""
+_COUNT_OF62 = """const __countOf = (n) => { const a = __jsonOf(n) || []; const v = Number(((a[a.length - 1] || {}) || {}).input_tokens); return Number.isFinite(v) && v > 0 ? v : 0; };
+const __costCalls = [];"""
+for _n62 in _ends51 + ['Run Ledger Settle']:
+    _src62 = code(_n62)
+    assert _OLD_CALLS62 in _src62 and _OLD_PUSH62 in _src62, 'B-A8: ' + _n62 + ' does not carry section 51\'s call table'
+    _src62 = _src62.replace(_OLD_CALLS62, _NEW_CALLS62).replace(_OLD_PUSH62, _NEW_PUSH62).replace('const __costCalls = [];', _COUNT_OF62)
+    setcode(_n62, _src62)
+    assert '__countOf' in code(_n62) and 'counted,' in code(_n62), _n62
+    assert code(_n62).index('const __countOf') < code(_n62).index('__countOf(c.count_prompt)'), _n62 + ': the counter helper is used before it exists'
+assert 'countUsage' in COST_SRC and 'counted_rounds' in COST_SRC, 'B-A8: the cost kit cannot price a counted call'
+
+# ---------- A2. B-A8 / B-A5: the harness shim learns the two new calls (section 51 part E wrote it) ----------
+_shim62 = os.path.join(OUT_CODE, '_cost_cal.js')
+_shim62txt = open(_shim62, encoding='utf-8').read()
+_shim62old = "  if (fn === 'dfsDay') return { json: CC.dfsDay(j.rows || [], j.mine || {}) };\n"
+assert _shim62txt.count(_shim62old) == 1, 'B-A5: the cost kit shim moved'
+open(_shim62, 'w').write(_shim62txt.replace(_shim62old, _shim62old
+    + "  // B-A8 / B-A5 (2026-10-15, section 62): the tokens Anthropic counted, and the run the account can answer for\n"
+    + "  if (fn === 'countUsage') return { json: CC.countUsage(j) || { none: true } };\n"
+    + "  if (fn === 'dfsRun') return { json: CC.dfsRun(j) };\n"))
+
+# ---------- A3. a reserved row carries the three new columns, in seo_run_ledger's own order ----------
+patch('Run Ledger Row', " ESTIMATED (' + __dfs.basis + ') - nothing measured yet' } }];",
+      " ESTIMATED (' + __dfs.basis + ') - nothing measured yet',\n"
+      "  // B-A5 (2026-10-15, section 62): the settle fills these in. `settled_at` is what lets ANOTHER run tell whether this one was open\n"
+      "  // across its window: a `done` row with no settled_at is treated as having been open the whole time, which is the safe answer.\n"
+      "  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks' } }];")
+assert "settled_at: ''" in code('Run Ledger Row'), 'B-A5: the reservation does not carry the settle columns'
+
+# ---------- B. B-A5: the second free reading, and the run the account can answer for ----------
+_sp62 = pos('Run Ledger Settle')
+add_node('DFS Balance End', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'GET', 'url': _BALANCE_URL55,
+    'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth',
+    'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+    [_sp62[0] - 440, _sp62[1] + 140],
+    dict(credentials={'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
+         onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True, **_rl55.RETRY))
+add_node('Load Run Ledger (Settle)', DT_TYPE, DT_VERSION, dt_get_all_where_params(RUN_LEDGER_TABLE, [
+    ('created_at', 'gte', '={{ new Date(Date.now() - ' + str(LEDGER_WINDOW_MS62) + ').toISOString() }}')]),
+    [_sp62[0] - 220, _sp62[1] + 140], {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+for _s62 in _from51:
+    disconnect(_s62, 'Run Ledger Settle'); connect(_s62, 'DFS Balance End')
+connect('DFS Balance End', 'Load Run Ledger (Settle)'); connect('Load Run Ledger (Settle)', 'Run Ledger Settle')
+nodes['Settle Run Ledger']['parameters']['columns']['value'].update({
+    'settled_at': '={{ $json.settled_at }}', 'dfs_balance_end': '={{ $json.dfs_balance_end }}', 'dfs_source': '={{ $json.dfs_source }}'})
+assert "CC.dfsRun(" in code('Run Ledger Settle') and "$('DFS Balance End')" in code('Run Ledger Settle'), 'B-A5: the settle does not cost the run against the account'
+assert ('settled_at', 'string') in RUN_LEDGER_COLS and ('dfs_balance_end', 'number') in RUN_LEDGER_COLS and ('dfs_source', 'string') in RUN_LEDGER_COLS, \
+    'B-A5: seo_run_ledger cannot say which figure a settled row carries (add the columns in ladder_common.py, then sync_tables.py on the next deploy)'
+assert 'dfsRun' in COST_SRC and 'other run(s) were in flight' in COST_SRC, 'B-A5: the cost kit cannot attribute a run to the account'
+
+# the whole settle chain is still what the guard proof expects: nothing paid runs before the reservation, and both new nodes are free
+assert nodes['DFS Balance End']['parameters']['url'] == _BALANCE_URL55, 'B-A5: the settle reading is not the free endpoint'
+
+# ---------- C. the wiring the harness reads (S72) ----------
+_cw51['count'] = {'url': COUNT_URL62, 'free': True,
+                  'nodes': {c['node']: {'set': 'Prompt For Count (' + c['node'] + ')', 'prompt': c['count_prompt'],
+                                        'answer': c['count_answer'], 'resume': 'After Count (' + c['node'] + ')',
+                                        'input': c['input'], 'model': c['model'], 'rounds': c['count_rounds'],
+                                        'after': [t['node'] for lst in ((conns.get('After Count (' + c['node'] + ')') or {}).get('main') or []) for t in (lst or [])]}
+                            for c in _STREAM62}}
+_cw51['run_reconcile'] = {'balance_end': 'DFS Balance End', 'load': 'Load Run Ledger (Settle)', 'settle': 'Run Ledger Settle',
+                          'window_ms': LEDGER_WINDOW_MS62,
+                          'writes': sorted(nodes['Settle Run Ledger']['parameters']['columns']['value'].keys())}
+_cw51['ai_calls'] = _AI_CALLS51
+json.dump(_cw51, open(os.path.join(HERE0, 'harness', 'cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+sticky("""### The tokens Anthropic counts, and the run the account can answer for (B-A8 / B-A5, 2026-10-15)
+**Nothing in this engine measured a Claude token.** Checked against the running instance, not assumed: `@langchain/anthropic`'s
+streaming `_generate` returns no `llmOutput`, so n8n records a tiktoken `tokenUsageEstimate` for the three Opus nodes — and the real
+`tokenUsage` of the other eight rides the `ai_languageModel` connection, which `WorkflowDataProxy` never reads. A Code node cannot see
+one token of it.
+**So the measurement arrives on the main path.** Anthropic's **free** `count_tokens` endpoint counts the exact prompt each streaming
+agent rendered and that prompt plus the exact answer — two free calls per agent, `neverError`, falling back to characters if either is
+silent. The difference is the answer's own tokens. Only the **thinking** no counter can see stays modelled, from the effort budget, and
+it is the only estimate left in those calls: `CC.callCost` now splits every call into measured and estimated money instead of throwing
+the whole call into one bucket.
+**And the run, not only the day, is held against the account.** A second free `appendix/user_data` reading on the settle chain, the
+ledger rows reloaded around this run's window, and the move attributed to the run **only when no other row was open across it** —
+otherwise the run keeps its per-task figure and says why. `settled_at`, `dfs_balance_end` and `dfs_source` say which figure the row
+carries.""",
+    pos('Run Ledger Settle')[0] - 40, pos('Run Ledger Settle')[1] + 320, 1120, 360, 3)
+
+log('Claude tokens are counted by Anthropic and a run is costed against the account when it was alone (2026-10-15, benchmark items B-A8 '
+    'and B-A5; INVARIANTS rule 1): reading the running n8n 2.41.4 showed the engine measured NO Claude token at all - @langchain/anthropic '
+    "1.5.6's streaming _generate returns no llmOutput, so n8n's tokensUsageParser falls back to zeros and records a tiktoken "
+    'tokenUsageEstimate for Strategy Brief / Copywriter / Editor, and the real tokenUsage of the eight non-streaming nodes rides the '
+    'ai_languageModel connection, which WorkflowDataProxy never reads (it only ever reads main), so no Code node can see a token of it; the '
+    "free /v1/messages/count_tokens endpoint now counts each streaming agent's exact prompt and its prompt plus its exact answer on the main "
+    'path (Prompt For Count / Count Prompt / Count Answer / After Count, neverError, falling back to the character figure), so their prompt '
+    'and answer are MEASURED and only the thinking no counter can see is modelled from the effort budget - CC.callCost splits each call into '
+    'measured_usd and estimated_usd instead of bucketing the whole call, and CC.runCost adds the halves per call; and every settle takes a '
+    'second free appendix/user_data reading, reloads the ledger rows around its own window and attributes the move to the run only when no '
+    'other row was open across it (CC.dfsRun), keeping the per-task figure with its reason when one was, when a reading is missing, when the '
+    'account has not moved yet or when it moved more than ten times what the tasks reported - seo_run_ledger gains settled_at, '
+    'dfs_balance_end and dfs_source so a reader can always tell which figure a row carries')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())

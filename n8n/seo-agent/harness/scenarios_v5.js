@@ -10069,5 +10069,187 @@ await guard('S71 the guard covers both currencies and the account is a hard floo
     /The AI budget for this day is used up \(estimated \$6\.00 of \$6;/.test(err71(f71)), err71(f71));
 });
 
+// ===================================================================================
+// S72 (2026-10-15, benchmark items B-A8 and B-A5; docs/system-review-2026-10-14/INVARIANTS.md rule 1) — the last two figures this
+// engine reported about itself without measuring them.
+// B-A8: nothing in the engine measured a single Claude token. Checked against the running n8n 2.41.4 rather than assumed —
+// @langchain/anthropic 1.5.6's streaming `_generate` returns no `llmOutput`, so n8n's `tokensUsageParser` falls back to zeros and records
+// a tiktoken `tokenUsageEstimate` for Strategy Brief / Copywriter / Editor; and the real `tokenUsage` of the eight non-streaming nodes
+// rides the `ai_languageModel` connection, which `WorkflowDataProxy` never reads. Anthropic's free `count_tokens` endpoint now counts the
+// exact prompt and the exact answer of the three streaming agents on the main path, so only the thinking no counter can see is modelled.
+// B-A5: only the DAY was held against the account. A run is now costed from the balance when it was the only one in flight, and keeps its
+// per-task figure — saying why — when it was not.
+// Every check below fails on the build of 2026-10-15 morning.
+// ===================================================================================
+await guard('B-A8 counted tokens and B-A5 the run against the account', async () => {
+  reset(); const SN = 'S72 B-A8 B-A5 — Anthropic counts the tokens a streaming call never reports, and a run is costed against the account only when it was alone';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const fs72 = require('fs'), path72 = require('path');
+  const CODE72 = process.env.CODE_DIR || path72.join(__dirname, 'code');
+  const src72 = (f) => fs72.readFileSync(path72.join(CODE72, f), 'utf8');
+  const TC72 = require('./table_cols.json');
+  const CW72 = require('./cost_wiring.json');
+  const kit72 = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+  const T72 = await kit72({ call: 'tables' });
+  const OPUS = { node: 'Copywriter', model: 'claude-opus-5-5', max_tokens: 32768, effort: 'medium', streaming: true,
+    prompt_chars: 40000, output_chars: 19000 };
+  const price = (i, o) => +((i / 1e6) * 4 + (o / 1e6) * 20).toFixed(4);
+
+  // ---------- 1. a counted call: the prompt and the answer are MEASURED, only the thinking is modelled ----------
+  const counted = { prompt_tokens: 9000, total_tokens: 14000, rounds: 1, source: 'Anthropic /v1/messages/count_tokens' };
+  const c1 = await kit72({ call: 'callCost', call_spec: { ...OPUS, calls: 1, counted } });
+  console.log('   counted call ->', JSON.stringify(c1));
+  const think1 = Math.round(32768 * T72.THINK_SHARE.medium);
+  check('B-A8: the counter answered, so the call is priced from 9,000 prompt and 5,000 answer tokens — the characters are ignored exactly as a reported usage would ignore them',
+    c1.counted === true && c1.in_tokens === 9000 && c1.out_tokens === 5000 + think1 && c1.think_tokens === think1
+    && c1.usd === price(9000, 5000 + think1), JSON.stringify(c1));
+  check('B-A8: the prompt and the answer land in measured_usd and ONLY the thinking no counter can see lands in estimated_usd — before this, one modelled cent threw the whole call into the estimated half',
+    c1.measured_usd === price(9000, 5000) && c1.estimated_usd === +(c1.usd - price(9000, 5000)).toFixed(4)
+    && c1.estimated_usd > 0 && c1.measured_usd > c1.estimated_usd, JSON.stringify({ m: c1.measured_usd, e: c1.estimated_usd, usd: c1.usd }));
+  check('B-A8: a call with a modelled part is still not called "measured", and its basis names the counter, the two token counts and what the thinking costs',
+    c1.measured === false && c1.counter === 'Anthropic /v1/messages/count_tokens'
+    && /^measured: Anthropic \/v1\/messages\/count_tokens counted 9000 prompt and 5000 answer token\(s\)/.test(c1.basis)
+    && /thinking token\(s\) it cannot see are modelled from the medium effort budget/.test(c1.basis)
+    && /is modelled\)/.test(c1.basis), c1.basis);
+  const c1b = await kit72({ call: 'callCost', call_spec: { node: 'Site Describer', model: 'claude-haiku-4-5', max_tokens: 4096, prompt_chars: 9999, output_chars: 9999, calls: 1, counted } });
+  check('B-A8: a counted call on a node with no thinking budget is measured outright — nothing of it is an estimate',
+    c1b.measured === true && c1b.estimated_usd === 0 && c1b.think_tokens === 0 && c1b.measured_usd === c1b.usd, JSON.stringify(c1b));
+
+  // ---------- 2. what the counter could NOT see is never passed off as measured ----------
+  const c2 = await kit72({ call: 'callCost', call_spec: { ...OPUS, node: 'Editor', calls: 3, counted } });
+  check('B-A8: the Editor runs once per QA round and only the last round is on the main path, so the counted tokens are repeated for the other rounds and those rounds stay MODELLED',
+    c2.counted === true && c2.counted_rounds === 1 && c2.in_tokens === 27000 && c2.measured_usd === price(9000, 5000)
+    && c2.estimated_usd > c1.estimated_usd && / repeated for the 2 round\(s\) the counter did not see/.test(c2.basis), JSON.stringify(c2));
+  for (const [why, bad] of [['neither probe answered', null], ['the prompt count did not answer', { prompt_tokens: 0, total_tokens: 14000 }],
+                            ['the answer count came back no larger than the prompt', { prompt_tokens: 9000, total_tokens: 9000 }]]) {
+    const cf = await kit72({ call: 'callCost', call_spec: { ...OPUS, calls: 1, counted: bad } });
+    check('B-A8: ' + why + ' — the call falls back to the character figure, measures nothing and keeps the old basis (a count that failed must never become a measurement)',
+      cf.counted === false && cf.measured === false && cf.measured_usd === 0 && cf.estimated_usd === cf.usd
+      && cf.in_tokens === Math.ceil(40000 / T72.CHARS_PER_TOKEN) && /^estimated: prompt and answer characters/.test(cf.basis), JSON.stringify(cf));
+  }
+
+  // ---------- 3. the run figure adds the two halves per call ----------
+  const mixed = await kit72({ call: 'runCost', calls: [
+    { ...OPUS, node: 'Strategy Brief', max_tokens: 24576, calls: 1, counted: { prompt_tokens: 11000, total_tokens: 14000, rounds: 1 } },
+    { ...OPUS, node: 'Copywriter', calls: 1, counted },
+    { ...OPUS, node: 'Editor', calls: 1, counted: { prompt_tokens: 12000, total_tokens: 17000, rounds: 1 } },
+    { node: 'Critic', model: 'claude-sonnet-5-5', max_tokens: 16384, effort: 'medium', prompt_chars: 30000, output_chars: 4000, calls: 1 },
+  ] });
+  console.log('   counted page run ->', JSON.stringify({ usd: mixed.usd, m: mixed.measured_usd, e: mixed.estimated_usd, share: mixed.measured_share, counted: mixed.counted_nodes, streaming: mixed.streaming_nodes }));
+  check('B-A8: the three streaming Opus nodes of a page run are now measured apart from their thinking — the run that was 0% measured reports most of its Claude money as measured',
+    mixed.counted_nodes.length === 3 && eq(mixed.counted_nodes.slice().sort(), ['Copywriter', 'Editor', 'Strategy Brief'])
+    && mixed.measured_usd > 0 && mixed.measured_share > 50
+    && +(mixed.measured_usd + mixed.estimated_usd).toFixed(4) === mixed.usd, JSON.stringify({ m: mixed.measured_usd, e: mixed.estimated_usd, share: mixed.measured_share }));
+  check('B-A8: a node whose tokens were counted is no longer listed as "reports no token usage" — only a node nothing measured is',
+    eq(mixed.streaming_nodes, []) && mixed.by_node.Copywriter.counted === true && mixed.by_node.Critic.counted === false
+    && mixed.by_node.Copywriter.measured_usd > 0 && mixed.by_node.Critic.measured_usd === 0, JSON.stringify(mixed.by_node));
+  check('B-A8: the basis names the counter, the nodes it answered for and what is left modelled, so nobody reads the measured half as the whole figure',
+    /Anthropic \/v1\/messages\/count_tokens counted the prompt and the answer of 3 node\(s\)/.test(mixed.basis)
+    && /of thinking is modelled from the effort budget/.test(mixed.basis), mixed.basis);
+  const allCounted = await kit72({ call: 'runCost', calls: [{ ...OPUS, calls: 1, counted }] });
+  check('B-A8: a run in which every call was counted says "measured" first and names only the thinking as modelled',
+    /^measured: Anthropic \/v1\/messages\/count_tokens counted the prompt and the answer of every call/.test(allCounted.basis)
+    && /thinking no counter can see is modelled from the effort budget/.test(allCounted.basis), allCounted.basis);
+
+  // ---------- 4. the measurement is wired where the run can read it ----------
+  const CT72 = CW72.count;
+  check('B-A8: the counter is Anthropic\'s FREE token-counting endpoint, and there are exactly three chains — one per streaming agent',
+    CT72 && CT72.url === 'https://api.anthropic.com/v1/messages/count_tokens' && CT72.free === true
+    && eq(Object.keys(CT72.nodes).sort(), ['Copywriter', 'Editor', 'Strategy Brief']), JSON.stringify(CT72 && Object.keys(CT72.nodes || {})));
+  check('B-A8: each chain sits on the MAIN path behind its agent and hands the agent\'s own items back, so nothing downstream sees the counter (a side branch runs last, or not at all — R17)',
+    Object.entries(CT72.nodes).every(([ag, n]) => n.set === 'Prompt For Count (' + ag + ')' && n.prompt === 'Count Prompt (' + ag + ')'
+      && n.answer === 'Count Answer (' + ag + ')' && n.resume === 'After Count (' + ag + ')' && n.after.length && n.input),
+    JSON.stringify(CT72.nodes));
+  check('B-A8: the chain preserves the pipeline — the agent\'s old successors hang off the resume node (Strategy Brief -> Parse Brief, Copywriter -> Critic, Editor -> Content QA)',
+    eq(CT72.nodes['Strategy Brief'].after, ['Parse Brief']) && eq(CT72.nodes.Copywriter.after, ['Critic'])
+    && eq(CT72.nodes.Editor.after, ['Content QA']), JSON.stringify(Object.fromEntries(Object.entries(CT72.nodes).map(([k, v]) => [k, v.after]))));
+  const streamCalls = CW72.ai_calls.filter(c => c.streaming);
+  check('B-A8: the call table knows which count nodes belong to which agent, so the pricing reads the right two answers',
+    streamCalls.length === 3 && streamCalls.every(c => c.count_prompt === 'Count Prompt (' + c.node + ')' && c.count_answer === 'Count Answer (' + c.node + ')' && c.count_rounds === 1)
+    && CW72.ai_calls.filter(c => !c.streaming).every(c => !c.count_prompt), JSON.stringify(streamCalls.map(c => [c.node, c.count_prompt])));
+  for (const f of ['Build_Word_File.js', 'Run_Ledger_Settle.js']) {
+    const s = src72(f);
+    check('B-A8: ' + f + ' reads the counter\'s two answers before it prices anything, and uses the LAST round of a looping agent',
+      /const __countOf = /.test(s) && /__countOf\(c\.count_prompt\)/.test(s) && /a\[a\.length - 1\]/.test(s)
+      && s.indexOf('const __countOf') < s.indexOf('__countOf(c.count_prompt)'), f);
+  }
+
+  // ---------- 5. B-A5: the run against the account, and only when the account can answer for it ----------
+  const t0 = '2026-10-15T09:00:00.000Z', t1 = '2026-10-15T09:12:00.000Z';
+  const mine72 = { run_id: 'exec-900', created_at: t0, dfs_balance: 13.79, status: 'reserved' };
+  const alone = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0.0521 });
+  console.log('   alone ->', JSON.stringify(alone));
+  check('B-A5: this run was the only one in flight, so the $0.0522 the account actually fell IS this run\'s cost — the day reconciliation could never say that about a single run',
+    alone.alone === true && alone.attributed === true && alone.source === 'account' && alone.usd === 0.0522
+    && alone.within === true && /was the only one in flight between 09:00:00 and 09:12:00/.test(alone.basis)
+    && /the balance fell \$0\.0522/.test(alone.basis), JSON.stringify(alone));
+  const over = await kit72({ call: 'dfsRun', mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0.0521,
+    rows: [{ ...mine72 }, { run_id: 'exec-901', created_at: '2026-10-15T09:05:00.000Z', status: 'reserved' }] });
+  check('B-A5: another run was open across the window, so the account\'s move is SHARED and this run keeps the cost its own tasks reported — and the row names the run it overlapped',
+    over.comparable === true && over.attributed === false && over.source === 'tasks' && over.usd === 0
+    && eq(over.overlapped, ['exec-901']) && /1 other run\(s\) were in flight at the same time \(exec-901\)/.test(over.basis)
+    && /its figure stays the \$0\.0521 its own tasks reported/.test(over.basis), JSON.stringify(over));
+  const closed = await kit72({ call: 'dfsRun', mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0.0521,
+    rows: [{ ...mine72 }, { run_id: 'exec-899', created_at: '2026-10-15T08:40:00.000Z', status: 'done', settled_at: '2026-10-15T08:55:00.000Z' }] });
+  check('B-A5: a run that had already SETTLED before this one reserved did not overlap it, so the account can still answer for this run',
+    closed.attributed === true && eq(closed.overlapped, []), JSON.stringify(closed));
+  const stale = await kit72({ call: 'dfsRun', mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0.0521,
+    rows: [{ ...mine72 }, { run_id: 'exec-898', created_at: '2026-10-15T08:40:00.000Z', status: 'reserved' }] });
+  check('B-A5: a row still open from before this run began overlaps it too — a reservation nobody settled is a run that may still be spending',
+    stale.attributed === false && eq(stale.overlapped, ['exec-898']), JSON.stringify(stale));
+  const noRead = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: { ...mine72, dfs_balance: 0 }, end_balance: 13.7, settled_at: t1, engine_usd: 0.05 });
+  check('B-A5: a missing reading is never filled in — the run keeps its per-task figure and says which end of it the account did not answer',
+    noRead.comparable === false && noRead.attributed === false && /not read at both ends of this run \(no reading when it reserved\)/.test(noRead.basis), noRead.basis);
+  const flat = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: mine72, end_balance: 13.79, settled_at: t1, engine_usd: 0.05 });
+  check('B-A5: the account had not moved when the run settled (DataForSEO posts a moment later) — nothing is attributed and the reason is in the row, never a measured $0',
+    flat.alone === true && flat.attributed === false && /had not moved when it settled/.test(flat.basis), flat.basis);
+  const freeRun = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: mine72, end_balance: 13.7378, settled_at: t1, engine_usd: 0, calls: 0 });
+  check('B-A5: a run that sent no paid task cannot have moved the account, however alone it was — whatever moved it came from somewhere else and is never charged to this run',
+    freeRun.alone === true && freeRun.attributed === false && /sent no paid DataForSEO task/.test(freeRun.basis), freeRun.basis);
+  const outside = await kit72({ call: 'dfsRun', rows: [{ ...mine72 }], mine: mine72, end_balance: 11.0, settled_at: t1, engine_usd: 0.05 });
+  check('B-A5: the account fell far more than every task reported — something outside this engine spends on the same account, so nothing is attributed and the gap is reported instead',
+    outside.attributed === false && /something outside this engine is spending on the same account/.test(outside.basis), outside.basis);
+
+  // ---------- 6. the settle really does it, and the row can hold the answer ----------
+  check('B-A5: seo_run_ledger can say when a row settled, what the account read then and which figure the row carries (through ladder_common.py + sync_tables.py)',
+    ['settled_at', 'dfs_balance_end', 'dfs_source'].every(c => TC72.RUN_LEDGER.includes(c)), TC72.RUN_LEDGER.join(','));
+  check('B-A5: the settle chain takes the second FREE reading and reloads the ledger rows before it settles — the reserve-time load cannot see the runs that started after this one',
+    CW72.run_reconcile && CW72.run_reconcile.balance_end === 'DFS Balance End' && CW72.run_reconcile.load === 'Load Run Ledger (Settle)'
+    && CW72.run_reconcile.window_ms >= 2 * 60 * 60 * 1000
+    && ['settled_at', 'dfs_balance_end', 'dfs_source'].every(c => CW72.run_reconcile.writes.includes(c)), JSON.stringify(CW72.run_reconcile));
+  // the settle stamps `settled_at` from the machine's own clock, so the fixture's window has to be a real one that is now closing
+  const r0 = new Date(Date.now() - 12 * 60000).toISOString(), rMid = new Date(Date.now() - 7 * 60000).toISOString();
+  const LED72 = { run_id: 'exec-900', key: 'app:co_1', mode: 'audit', est_usd: 0, created_at: r0, status: 'reserved', settled_usd: 0,
+    domain: 'northwind-erp.com', heavy: true, dfs_est_usd: 0.09, dfs_usd: 0, dfs_balance: 13.79, cost_mode: 'site_audit|crawl' };
+  mock('Run Ledger Row', [{ json: LED72 }]);
+  mock('Rate Limit', [{ json: { mode: 'audit', domain: 'northwind-erp.com' } }]);
+  mock('Build Audit Report', [{ json: { run_ledger: { dataforseo_usd: 0.0212, dataforseo_calls: 3, dataforseo_estimated_usd: 0.0212,
+    crawl_cost: { basis: 'the crawl was quoted $0.0900 for the 200 pages it asked for and crawled 47' } } } }]);
+  mock('Load Run Ledger', [{ json: {} }]);
+  mock('DFS Balance End', [{ json: { tasks: [{ result: [{ money: { balance: 13.7378 } }] }] } }]);
+  mock('Load Run Ledger (Settle)', [{ json: { ...LED72 } }]);
+  const s1 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   settle (alone) ->', JSON.stringify({ dfs: s1.dfs_usd, src: s1.dfs_source, m: s1.measured_usd, e: s1.estimated_usd, basis: s1.cost_basis }));
+  check('B-A5: the audit that settled a $0.0212 pro-rata ESTIMATE now settles the $0.0522 the account actually lost, as a measurement — the crawl estimate is superseded by the only figure nobody can argue with',
+    s1.dfs_source === 'account' && s1.dfs_usd === 0.0522 && s1.dfs_measured === true && s1.estimated_usd === 0
+    && s1.dfs_balance_end === 13.7378 && s1.dfs_tasks_usd === 0.0212 && s1.dfs_estimated_usd === 0 && /DataForSEO \$0\.0522 measured/.test(s1.cost_basis),
+    JSON.stringify({ src: s1.dfs_source, dfs: s1.dfs_usd, e: s1.estimated_usd, basis: s1.cost_basis }));
+  check('B-A5: and the row stamps when it settled, so the next run can tell whether it overlapped this one',
+    typeof s1.settled_at === 'string' && s1.settled_at > r0 && s1.dfs_run && s1.dfs_run.attributed === true, JSON.stringify([s1.settled_at, !!s1.dfs_run]));
+  mock('Load Run Ledger (Settle)', [{ json: { ...LED72 } }, { json: { run_id: 'exec-901', created_at: rMid, status: 'reserved' } }]);
+  const s2 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   settle (shared) ->', JSON.stringify({ dfs: s2.dfs_usd, src: s2.dfs_source, basis: s2.cost_basis }));
+  check('B-A5: with another run in flight the same settle keeps the pro-rata crawl estimate, stays labelled an estimate and says in the row why the account could not answer for it',
+    s2.dfs_source === 'tasks' && s2.dfs_usd === 0.0212 && s2.estimated_usd > 0
+    && /other run\(s\) were in flight at the same time/.test(s2.cost_basis), JSON.stringify({ src: s2.dfs_source, dfs: s2.dfs_usd, basis: s2.cost_basis }));
+  delete store['DFS Balance End'];
+  const s3 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  check('B-A5: the free probe did not answer — the settle carries on exactly as before, with the per-task figure and no invented reconciliation',
+    s3.dfs_source === 'tasks' && s3.dfs_usd === 0.0212 && s3.dfs_balance_end === 0 && s3.dfs_run.comparable === false, JSON.stringify({ src: s3.dfs_source, bal: s3.dfs_balance_end }));
+  reset();
+});
+
 H.report();
 })();

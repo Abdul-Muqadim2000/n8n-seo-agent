@@ -54,6 +54,28 @@ const dfs = { usd: dfsM ? r4(led.dataforseo_usd) : (dfsKnown ? 0 : r4(row.dfs_es
 let __ledgerRows = []; try { __ledgerRows = $('Load Run Ledger').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) {}
 const dfs_day = CC.dfsDay(__ledgerRows, row);
 
+// B-A5 (2026-10-15, build section 62): the day is not the run. `dfsDay` holds the day's settled rows against the account, which says
+// nothing about any single run — a run can be 100% out while the day still agrees, and *Load Run Ledger* ran at RESERVE time, so it
+// cannot even see the runs that started after this one. *DFS Balance End* takes a second free `appendix/user_data` reading and
+// *Load Run Ledger (Settle)* reloads the rows around this run's window, so the move between this run's two readings is attributed to
+// this run when no other row was open across it — and the run keeps its per-task figure, saying why, when one was.
+const settled_at = new Date().toISOString();
+let __endBalance = 0;
+try { const __b = $('DFS Balance End').first().json || {}; const __t = (__b.tasks || [])[0] || {}; const __r = (__t.result || [])[0] || {};
+  const __v = Number((__r.money || {}).balance); if (Number.isFinite(__v) && __v > 0) __endBalance = +__v.toFixed(6); } catch (e) {}
+let __nowRows = [];
+try { __nowRows = $('Load Run Ledger (Settle)').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { __nowRows = __ledgerRows; }
+const dfs_run = CC.dfsRun({ rows: __nowRows.length ? __nowRows : __ledgerRows, mine: row, end_balance: __endBalance, settled_at,
+  engine_usd: dfs.usd, calls: dfsKnown ? num(led.dataforseo_calls) : null });
+if (dfs_run.attributed) {
+  // the account is the measurement: it supersedes the per-task sum AND the crawl's pro-rata estimate, so nothing of this run's
+  // DataForSEO money is an estimate any more.
+  dfs.usd = dfs_run.usd; dfs.measured = true; dfs.measured_usd = dfs_run.usd;
+  dfs.basis = dfs_run.basis + ' (its own tasks: ' + dfs.basis + ')';
+} else if (dfs_run.comparable) {
+  dfs.basis = dfs.basis + '. ' + dfs_run.basis;
+}
+
 const split = CC.split(ai, dfs);
 // `cost_mode` is "<Claude estimate key>|<DataForSEO estimate key>" — the two keys whose rolling figures this run settles into
 // (Cost Calibration Row). It is on the reserved row already; it is rebuilt from the request when an older row has none.
@@ -68,8 +90,14 @@ return [{ json: {
   cost_basis: (dfs_day.comparable && !dfs_day.within ? split.cost_basis + '. Day check: ' + dfs_day.basis : split.cost_basis).slice(0, 500),
   dfs_balance: +Number(row.dfs_balance || 0).toFixed(6), dfs_day_reconciled: dfs_day.comparable && dfs_day.within,
   dfs_day: dfs_day,
-  // R32: what the crawl was quoted, what it crawled and what it was priced at — the three numbers behind the estimated half
-  dfs_estimated_usd: dfsEst, crawl_cost: crawl,
+  // B-A5: the run's own reconciliation — the second free reading, which figure the row carries and whether the account could answer
+  // for this run alone
+  settled_at, dfs_balance_end: __endBalance, dfs_source: dfs_run.source, dfs_run,
+  dfs_run_reconciled: dfs_run.attributed && dfs_run.within, dfs_tasks_usd: dfsM ? r4(led.dataforseo_usd) : 0,
+  // R32: what the crawl was quoted, what it crawled and what it was priced at — the three numbers behind the estimated half.
+  // B-A5: when the account answered for this run, the crawl's pro-rata estimate is superseded and NO DataForSEO money is an estimate
+  // any more; `crawl_cost` stays on the row as the record of what the crawl was quoted and what it did.
+  dfs_estimated_usd: dfs_run.attributed ? 0 : dfsEst, crawl_cost: crawl,
   // for the execution, the callback and anyone reading it: never stored as if it were measured
   ai_calls: fig ? Number(fig.calls) || 0 : 0, ai_in_tokens: fig ? Number(fig.in_tokens) || 0 : 0, ai_out_tokens: fig ? Number(fig.out_tokens) || 0 : 0,
   ai_estimated: !ai.measured, ai_basis: ai.basis, ai_source: ai.source, ai_nodes_ran: ai.ran, ai_nodes_checked: ai.checked,
