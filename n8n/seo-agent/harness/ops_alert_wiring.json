@@ -114,6 +114,6 @@
   "retryOnFail": true,
   "uses_smtp": false
  },
- "webhook_configured": false,
+ "webhook_placeholder": "__SEO_ALERT_WEBHOOK_URL__",
  "webhook_setting": "SEO_ALERT_WEBHOOK_URL"
 }

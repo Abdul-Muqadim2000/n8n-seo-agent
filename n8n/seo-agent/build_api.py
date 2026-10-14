@@ -171,7 +171,13 @@ _AN = [
   _an('Mark Run Refused (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}')], {'status': 'refused'}), [2200, -460], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
   # P1-1 (2026-10-12): the settle update matches `status = reserved`, so a row settles once and a refused one stays refused; a request that
   # DataForSEO failed (502) settles too — it used to leave its row `reserved` at the estimate for ever
-  _an('Settle Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}'), ('status', 'reserved')], {'status': 'done', 'settled_usd': "={{ Number($('Run Ledger Row (Assess)').first().json.est_usd) || 0 }}"}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
+  # R28 (2026-10-14, FIX_PLAN §3.12): the row is settled with the money the 200 reported, not with the flat reservation — it used to
+  # store `dfs_usd: 0` while telling the caller $0.026, so the one mode that knows what it spent threw the figure away.
+  _acode('Ledger Settle (Assess)', 'Assess_Ledger_Settle.js', [2520, -400]),
+  _an('Settle Run Ledger (Assess)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS, [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
+      {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'ai_usd': '={{ $json.ai_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}',
+       'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
+       'cost_basis': '={{ $json.cost_basis }}'}), [2740, -400], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True),
   _arespond('Respond Assess Bad Request', "={{ JSON.stringify({ ok: false, error: $json.error, errors: $json.errors }) }}", 400, [660, 320]),
   _an('Ensure Cache Table (Assess)', DT_TYPE, DT_VERSION, dt_create_params(CACHE_TABLE, CACHE_COLS), [660, -100], onError='continueRegularOutput', executeOnce=True),
   _an('Load Assess Cache', DT_TYPE, DT_VERSION, dt_get_any_params(CACHE_TABLE, [('key', "={{ 'reach:' + $('Assess Validate').first().json.site_id }}"), ('key', "={{ 'desc:' + $('Assess Validate').first().json.domain }}")]), [880, -100], **_LOAD),
@@ -200,13 +206,14 @@ def _alink(a, b, out=0):
 for _a, _b in [('Assess Webhook', 'Assess Validate'), ('Assess Validate', 'Assess Valid?'), ('Ensure Cache Table (Assess)', 'Load Assess Cache'), ('Load Assess Cache', 'Assess Requests'), ('Assess Requests', 'Run Assess Requests'),
                ('Run Assess Requests', 'Assess Result'), ('Assess Result', 'DataForSEO OK?'), ('Keyword Fit', 'Fit Parsed?'), ('Keyword Fit (Text)', 'Assess Response'), ('Assess Response', 'Respond Assess'), ('Respond Assess', 'Reach Row (Assess)'), ('Reach Row (Assess)', 'New Reach (Assess)?'),
                ('Ensure Run Ledger (Assess)', 'Run Ledger Row (Assess)'), ('Run Ledger Row (Assess)', 'Reserve Run Ledger (Assess)'), ('Reserve Run Ledger (Assess)', 'Load Run Ledger (Assess)'), ('Load Run Ledger (Assess)', 'Assess Limit'),
-               ('Assess Limit', 'Assess Limited?'), ('Respond Assess Limited', 'Mark Run Refused (Assess)'), ('Respond Assess', 'Settle Run Ledger (Assess)')]:
+               ('Assess Limit', 'Assess Limited?'), ('Respond Assess Limited', 'Mark Run Refused (Assess)'),
+               ('Respond Assess', 'Ledger Settle (Assess)'), ('Ledger Settle (Assess)', 'Settle Run Ledger (Assess)')]:
     _alink(_a, _b)
 _alink('Assess Valid?', 'Ensure Run Ledger (Assess)', 0); _alink('Assess Valid?', 'Respond Assess Bad Request', 1)
 _alink('Assess Limited?', 'Respond Assess Limited', 0); _alink('Assess Limited?', 'Ensure Cache Table (Assess)', 1)
 _alink('DataForSEO OK?', 'Keyword Fit', 0); _alink('DataForSEO OK?', 'Respond Assess Upstream Error', 1)
 _alink('Fit Parsed?', 'Assess Response', 0); _alink('Fit Parsed?', 'Keyword Fit (Text)', 1)   # R3: the plain-text fallback runs only when the parser came back empty
-_alink('Respond Assess Upstream Error', 'Settle Run Ledger (Assess)')   # P1-1: an upstream failure settles its row too (it stayed reserved)
+_alink('Respond Assess Upstream Error', 'Ledger Settle (Assess)')   # P1-1: an upstream failure settles its row too (it stayed reserved)
 _alink('New Reach (Assess)?', 'Save Reach (Assess)', 0)
 _AC['Claude — Keyword Fit'] = {'ai_languageModel': [[{'node': 'Keyword Fit', 'type': 'ai_languageModel', 'index': 0}, {'node': 'Keyword Fit (Text)', 'type': 'ai_languageModel', 'index': 0}]]}   # R3: one model node feeds both attempts
 _AC['Parser — Keyword Fit'] = {'ai_outputParser': [[{'node': 'Keyword Fit', 'type': 'ai_outputParser', 'index': 0}]]}
@@ -226,13 +233,16 @@ if os.path.isdir(_code):
         if _n['type'] == 'n8n-nodes-base.code': open(os.path.join(_code, re.sub(r'[^A-Za-z0-9_.-]+', '_', _n['name']) + '.js'), 'w').write(_n['parameters']['jsCode'])
 # P1-1 (2026-10-12): the Keyword Check's half of harness/ledger_wiring.json (written by build_v4.py section 29, read by harness S36)
 _by_name = {n['name']: n for n in _AN}
-_assess_settle = sorted(s for s, o in _AC.items() for _l in (o.get('main') or []) for _t in (_l or []) if _t['node'] == 'Settle Run Ledger (Assess)')
+# R28: the two responders now reach the settle through *Ledger Settle (Assess)*, which prices the request; `settle_from` keeps naming the
+# ends that settle the row (P1-1's meaning, asserted by harness S36), and `settle_via` names the node that computes the figures.
+_assess_settle = sorted(s for s, o in _AC.items() for _l in (o.get('main') or []) for _t in (_l or []) if _t['node'] == 'Ledger Settle (Assess)')
 assert _assess_settle == ['Respond Assess', 'Respond Assess Upstream Error'], _assess_settle
+assert sorted(s for s, o in _AC.items() for _l in (o.get('main') or []) for _t in (_l or []) if _t['node'] == 'Settle Run Ledger (Assess)') == ['Ledger Settle (Assess)']
 _lw_path = os.path.join(_here, 'harness', 'ledger_wiring.json')
 if os.path.isfile(_lw_path):
     _lw = json.load(open(_lw_path))
     _sa, _ra = _by_name['Settle Run Ledger (Assess)']['parameters'], _by_name['Mark Run Refused (Assess)']['parameters']
-    _lw['assess'] = {'settle_node': 'Settle Run Ledger (Assess)', 'settle_from': _assess_settle,
+    _lw['assess'] = {'settle_node': 'Settle Run Ledger (Assess)', 'settle_from': _assess_settle, 'settle_via': 'Ledger Settle (Assess)',
                      'settle_conditions': [[c['keyName'], c['keyValue']] for c in _sa['filters']['conditions']], 'settle_values': _sa['columns']['value'],
                      'refused_conditions': [[c['keyName'], c['keyValue']] for c in _ra['filters']['conditions']], 'refused_values': _ra['columns']['value']}
     # R3 (2026-10-13): the topic-fit call's token budget, its (simpler) schema and the plain-text retry that runs when the parser comes back empty

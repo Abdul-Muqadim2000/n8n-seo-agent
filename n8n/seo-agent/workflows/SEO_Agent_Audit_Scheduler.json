@@ -1112,6 +1112,10 @@
                 "type": "number"
               },
               {
+                "name": "dfs_balance",
+                "type": "number"
+              },
+              {
                 "name": "cost_mode",
                 "type": "string"
               },
@@ -1146,11 +1150,12 @@
           880
         ],
         "onError": "continueRegularOutput",
-        "executeOnce": true
+        "executeOnce": true,
+        "alwaysOutputData": true
       },
       {
         "parameters": {
-          "jsCode": "// R9 (2026-10-13, re-rating RESULTS §3.2): the daily spend guard saw only the main workflow and the Keyword Check. seo_run_ledger had no row at\n// all for the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker (execs 502, 505, 506, 508, 511,\n// 515), although the pulse alone cost $0.084 and the monitors accounted for about $0.18 of that run's $0.578 of DataForSEO — so two\n// customer-facing runs were refused for AI estimates while the measured money went out unguarded.\n// This is the same reservation the main workflow makes (one appended row per execution, settled at the end), hung BESIDE the plan node: a Data\n// Table node answers with the row it wrote, not with its input, so the ledger must never sit in the monitor's own data path. The row is for the\n// record and for the main workflow's guard, which now sees what the schedules spend; a monitor is never refused by it.\n// MODE / EST / HEAVY are written in by the builder at build time (one source: build_monitors.py's WF.run_ledger).\nconst PLAN = 'Audit Schedule Plan';\nconst MODE = 'audit_schedule';\nconst EST = {\"ai\": 0.0, \"dfs\": 0.09};   // { ai: <usd per site>, dfs: <usd per site>, dfs_full?: <usd per site for a full run> }\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\nlet rows = [];\ntry { rows = $(PLAN).all().map(i => i.json || {}).filter(r => !r.nothing_to_do && !r.skip && (r.domain || r.site_id)); } catch (e) { rows = []; }\nconst full = (r) => EST.dfs_full != null && (String(r.mode || '') === 'full' || r.full === true || r.full_report === true);\nconst ai = +(n0(EST.ai) * rows.length).toFixed(4);\nconst dfs = +rows.reduce((s, r) => s + (full(r) ? n0(EST.dfs_full) : n0(EST.dfs)), 0).toFixed(4);\n// one site in the run: name it, as the main workflow's reservation does (P34-5 reads `domain` to refuse a second heavy crawl of the same site)\nconst domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : '';\nreturn [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),\n  status: 'reserved', settled_usd: 0, domain, heavy: false, dfs_est_usd: dfs, dfs_usd: 0,\n  // G23 (2026-10-13): a row must say which part of its money was measured and which estimated; at reservation time none of it is measured.\n  // `cost_mode` is the key of the self-correcting rolling figure in seo_cache (`cost:<kind>:<mode>`) this run will settle into.\n  cost_mode: MODE, ai_usd: 0, measured_usd: 0, estimated_usd: +(ai + dfs).toFixed(4),\n  cost_basis: 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + rows.length + ' site(s) x the per-site figure), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet' } }];\n"
+          "jsCode": "// R9 (2026-10-13, re-rating RESULTS §3.2): the daily spend guard saw only the main workflow and the Keyword Check. seo_run_ledger had no row at\n// all for the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker (execs 502, 505, 506, 508, 511,\n// 515), although the pulse alone cost $0.084 and the monitors accounted for about $0.18 of that run's $0.578 of DataForSEO — so two\n// customer-facing runs were refused for AI estimates while the measured money went out unguarded.\n// This is the same reservation the main workflow makes (one appended row per execution, settled at the end), hung BESIDE the plan node: a Data\n// Table node answers with the row it wrote, not with its input, so the ledger must never sit in the monitor's own data path. The row is for the\n// record and for the main workflow's guard, which now sees what the schedules spend; a monitor is never refused by it.\n// MODE / EST / HEAVY are written in by the builder at build time (one source: build_monitors.py's WF.run_ledger).\nconst PLAN = 'Audit Schedule Plan';\nconst MODE = 'audit_schedule';\nconst EST = {\"ai\": 0.0, \"dfs\": 0.0};   // { ai: <usd per site>, dfs: <usd per site>, dfs_full?: <usd per site for a full run> }\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\nlet rows = [];\ntry { rows = $(PLAN).all().map(i => i.json || {}).filter(r => !r.nothing_to_do && !r.skip && (r.domain || r.site_id)); } catch (e) { rows = []; }\nconst full = (r) => EST.dfs_full != null && (String(r.mode || '') === 'full' || r.full === true || r.full_report === true);\nconst ai = +(n0(EST.ai) * rows.length).toFixed(4);\nconst dfs = +rows.reduce((s, r) => s + (full(r) ? n0(EST.dfs_full) : n0(EST.dfs)), 0).toFixed(4);\n// one site in the run: name it, as the main workflow's reservation does (P34-5 reads `domain` to refuse a second heavy crawl of the same site)\nconst domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : '';\nreturn [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),\n  status: 'reserved', settled_usd: 0, domain, heavy: false, dfs_est_usd: dfs, dfs_usd: 0,\n  // R28 (2026-10-14): the DataForSEO balance at reservation time, read for free by the main workflow from appendix/user_data so the day's\n  // reported spend can be held against the account. A scheduled run does not read it (it would be one more call per site): 0 = not read.\n  dfs_balance: 0,\n  // G23 (2026-10-13): a row must say which part of its money was measured and which estimated; at reservation time none of it is measured.\n  // `cost_mode` is the key of the self-correcting rolling figure in seo_cache (`cost:<kind>:<mode>`) this run will settle into.\n  cost_mode: MODE, ai_usd: 0, measured_usd: 0, estimated_usd: +(ai + dfs).toFixed(4),\n  cost_basis: 'reserved: Claude $' + ai.toFixed(4) + ' ESTIMATED (' + rows.length + ' site(s) x the per-site figure), DataForSEO $' + dfs.toFixed(4) + ' ESTIMATED - nothing measured yet' } }];\n"
         },
         "id": "f5df21bf-0073-580c-afaa-5117c3cad7ec",
         "name": "Run Ledger Row (Audit)",
@@ -1279,6 +1284,16 @@
               {
                 "id": "dfs_usd",
                 "displayName": "dfs_usd",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_balance",
+                "displayName": "dfs_balance",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -1517,6 +1532,16 @@
                 "removed": false
               },
               {
+                "id": "dfs_balance",
+                "displayName": "dfs_balance",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
                 "id": "cost_mode",
                 "displayName": "cost_mode",
                 "required": false,
@@ -1598,6 +1623,19 @@
         "position": [
           -40,
           -420
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "// R17 (2026-10-14, system review FIX_PLAN 3.12): the run ledger reserves its row on the MAIN path now, before the first paid call -\n// it used to hang off the plan node as a side branch and n8n's v1 order ran it last, after all the spending. A Data Table node answers with\n// the row it wrote rather than with its input, so this node hands Audit Schedule Plan's own items back to the pipeline, unchanged and in order.\nreturn $('Audit Schedule Plan').all();\n"
+        },
+        "id": "9a264500-c251-5dc3-8023-0a727d593424",
+        "name": "After Run Ledger (Audit)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          2860,
+          880
         ]
       }
     ],
@@ -1789,11 +1827,6 @@
         "main": [
           [
             {
-              "node": "Fingerprint Rows",
-              "type": "main",
-              "index": 0
-            },
-            {
               "node": "Ensure Run Ledger (Audit)",
               "type": "main",
               "index": 0
@@ -1919,6 +1952,28 @@
           [
             {
               "node": "Settle Run Ledger (Audit)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Reserve Run Ledger (Audit)": {
+        "main": [
+          [
+            {
+              "node": "After Run Ledger (Audit)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "After Run Ledger (Audit)": {
+        "main": [
+          [
+            {
+              "node": "Fingerprint Rows",
               "type": "main",
               "index": 0
             }

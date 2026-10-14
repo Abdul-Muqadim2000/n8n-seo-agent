@@ -19,6 +19,9 @@ const dfs = +rows.reduce((s, r) => s + (full(r) ? n0(EST.dfs_full) : n0(EST.dfs)
 const domain = rows.length === 1 ? String(rows[0].domain || '').toLowerCase() : '';
 return [{ json: { run_id: String($execution.id), key: 'schedule:' + MODE, mode: MODE, est_usd: ai, created_at: new Date().toISOString(),
   status: 'reserved', settled_usd: 0, domain, heavy: false, dfs_est_usd: dfs, dfs_usd: 0,
+  // R28 (2026-10-14): the DataForSEO balance at reservation time, read for free by the main workflow from appendix/user_data so the day's
+  // reported spend can be held against the account. A scheduled run does not read it (it would be one more call per site): 0 = not read.
+  dfs_balance: 0,
   // G23 (2026-10-13): a row must say which part of its money was measured and which estimated; at reservation time none of it is measured.
   // `cost_mode` is the key of the self-correcting rolling figure in seo_cache (`cost:<kind>:<mode>`) this run will settle into.
   cost_mode: MODE, ai_usd: 0, measured_usd: 0, estimated_usd: +(ai + dfs).toFixed(4),

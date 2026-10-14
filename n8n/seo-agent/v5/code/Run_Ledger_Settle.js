@@ -27,6 +27,13 @@ const dfsM = !!(led && num(led.dataforseo_usd) != null && num(led.dataforseo_cal
 const dfs = { usd: dfsM ? r4(led.dataforseo_usd) : r4(row.dfs_est_usd), measured: dfsM,
   basis: dfsM ? 'the cost every DataForSEO task reported' : 'the per-mode reservation: no DataForSEO task reported a cost in this run' };
 
+// R28 (2026-10-14, FIX_PLAN §3.12): the engine's own "measured" DataForSEO figures did not reconcile with the account — +73% in one window
+// of the 2026-10-14 run, +11.6% in another. Every reservation now records the free `appendix/user_data` balance reading (*DFS Balance* ->
+// seo_run_ledger.dfs_balance), so the day's settled rows can be held against the only measurement that cannot be argued with: how far the
+// balance actually fell. Nothing is corrected automatically; when the two disagree the row says so and names the account as the truth.
+let __ledgerRows = []; try { __ledgerRows = $('Load Run Ledger').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) {}
+const dfs_day = CC.dfsDay(__ledgerRows, row);
+
 const split = CC.split(ai, dfs);
 // `cost_mode` is "<Claude estimate key>|<DataForSEO estimate key>" — the two keys whose rolling figures this run settles into
 // (Cost Calibration Row). It is on the reserved row already; it is rebuilt from the request when an older row has none.
@@ -36,7 +43,11 @@ return [{ json: {
   // the guard counts Claude money, so `settled_usd` stays the Claude figure — now the run's own, not a flat per-mode guess
   settled_usd: ai.usd, ai_usd: ai.usd, ai_measured: ai.measured,
   dfs_usd: dfs.usd, dfs_measured: dfs.measured,
-  measured_usd: split.measured_usd, estimated_usd: split.estimated_usd, cost_basis: split.cost_basis,
+  measured_usd: split.measured_usd, estimated_usd: split.estimated_usd,
+  // the day's reconciliation rides on the row's own basis line, so nobody has to go looking for it
+  cost_basis: (dfs_day.comparable && !dfs_day.within ? split.cost_basis + '. Day check: ' + dfs_day.basis : split.cost_basis).slice(0, 500),
+  dfs_balance: +Number(row.dfs_balance || 0).toFixed(6), dfs_day_reconciled: dfs_day.comparable && dfs_day.within,
+  dfs_day: dfs_day,
   // for the execution, the callback and anyone reading it: never stored as if it were measured
   ai_calls: fig ? Number(fig.calls) || 0 : 0, ai_in_tokens: fig ? Number(fig.in_tokens) || 0 : 0, ai_out_tokens: fig ? Number(fig.out_tokens) || 0 : 0,
   ai_estimated: !ai.measured, ai_basis: ai.basis, ai_by_node: fig ? fig.by_node : {}, ai_models: fig ? fig.models : {},

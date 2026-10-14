@@ -264,7 +264,7 @@
   "rotation": "oldest inspection first"
  },
  "table": "seo_page_watch",
- "webhook_configured": false,
+ "webhook_placeholder": "__SEO_ALERT_WEBHOOK_URL__",
  "webhook_setting": "SEO_ALERT_WEBHOOK_URL",
  "workflow": "SEOagentPageWch1"
 }

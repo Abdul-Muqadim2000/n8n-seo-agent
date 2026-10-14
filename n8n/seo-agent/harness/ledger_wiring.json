@@ -54,9 +54,16 @@
   ],
   "settle_node": "Settle Run Ledger (Assess)",
   "settle_values": {
-   "settled_usd": "={{ Number($('Run Ledger Row (Assess)').first().json.est_usd) || 0 }}",
+   "ai_usd": "={{ $json.ai_usd }}",
+   "cost_basis": "={{ $json.cost_basis }}",
+   "cost_mode": "={{ $json.cost_mode }}",
+   "dfs_usd": "={{ $json.dfs_usd }}",
+   "estimated_usd": "={{ $json.estimated_usd }}",
+   "measured_usd": "={{ $json.measured_usd }}",
+   "settled_usd": "={{ $json.settled_usd }}",
    "status": "done"
-  }
+  },
+  "settle_via": "Ledger Settle (Assess)"
  },
  "heavy_audit_pages": 100,
  "ladder_release": {
@@ -126,6 +133,7 @@
    "mode": "ai_growth",
    "plan": "Growth Plan",
    "reserve": "Run Ledger Row (Growth)",
+   "resume": "After Run Ledger (Growth)",
    "settle": "Settle Run Ledger (Growth)",
    "settle_from": [
     "Growth Report"
@@ -140,6 +148,7 @@
    "mode": "ai_pulse",
    "plan": "AI Plan",
    "reserve": "Run Ledger Row (Pulse)",
+   "resume": "After Run Ledger (Pulse)",
    "settle": "Settle Run Ledger (Pulse)",
    "settle_from": [
     "Pulse Alerts"
@@ -154,6 +163,7 @@
    "mode": "ai_visibility",
    "plan": "AI Plan",
    "reserve": "Run Ledger Row (AI)",
+   "resume": "After Run Ledger (AI)",
    "settle": "Settle Run Ledger (AI)",
    "settle_from": [
     "AI Report"
@@ -162,12 +172,13 @@
   "SEO Agent \u2014 Audit Scheduler": {
    "est": {
     "ai": 0.0,
-    "dfs": 0.09
+    "dfs": 0.0
    },
    "measured": "",
    "mode": "audit_schedule",
    "plan": "Audit Schedule Plan",
    "reserve": "Run Ledger Row (Audit)",
+   "resume": "After Run Ledger (Audit)",
    "settle": "Settle Run Ledger (Audit)",
    "settle_from": [
     "Audits Started"
@@ -183,6 +194,7 @@
    "mode": "backlinks",
    "plan": "BL Plan",
    "reserve": "Run Ledger Row (BL)",
+   "resume": "After Run Ledger (BL)",
    "settle": "Settle Run Ledger (BL)",
    "settle_from": [
     "BL Report"
@@ -197,6 +209,7 @@
    "mode": "content_cadence",
    "plan": "Cadence Plan",
    "reserve": "Run Ledger Row (Cadence)",
+   "resume": "After Run Ledger (Cadence)",
    "settle": "Settle Run Ledger (Cadence)",
    "settle_from": [
     "Cadence Note"
@@ -211,6 +224,7 @@
    "mode": "link_builder",
    "plan": "LB Plan",
    "reserve": "Run Ledger Row (LB)",
+   "resume": "After Run Ledger (LB)",
    "settle": "Settle Run Ledger (LB)",
    "settle_from": [
     "LB Report"
@@ -225,6 +239,7 @@
    "mode": "rank_tracker",
    "plan": "Tracker Plan",
    "reserve": "Run Ledger Row (Tracker)",
+   "resume": "After Run Ledger (Tracker)",
    "settle": "Settle Run Ledger (Tracker)",
    "settle_from": [
     "Tracker Report"
@@ -239,6 +254,7 @@
    "mode": "site_tracker",
    "plan": "Site Plan",
    "reserve": "Run Ledger Row (Site)",
+   "resume": "After Run Ledger (Site)",
    "settle": "Settle Run Ledger (Site)",
    "settle_from": [
     "Site Report"

@@ -11,6 +11,7 @@
   "heavy",
   "dfs_est_usd",
   "dfs_usd",
+  "dfs_balance",
   "cost_mode",
   "ai_usd",
   "measured_usd",
