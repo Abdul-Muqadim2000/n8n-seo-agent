@@ -5634,6 +5634,120 @@ log('The money a run reports is the money that happened (2026-10-14, FIX_PLAN §
 
 
 # =============================================================================
+# 61. THE GUARD WATCHES ALL THE MONEY, AND THE ACCOUNT IS THE LIMIT
+#     (2026-10-15, benchmark programme area 13 "Cost control & reliability";
+#      docs/system-review-2026-10-14/BENCHMARKS_2026-10-14.md, the Semrush / Ahrefs comparison)
+#     The rubric compares this area with **server-side limits**: a cap the service enforces for the account, which the customer cannot
+#     exceed and does not have to reason about. Semrush's API answers `ERROR 132 "API units balance is zero"` and, for a per-line report,
+#     returns "the number of lines for which you have enough API units"; Ahrefs charges `max(base_cost, per_row_cost x num_rows)` with a
+#     50-unit floor, reports what each call actually consumed in `x-api-units-cost-total-actual`, and refuses over the limit with a 429.
+#     In both, one meter governs the WHOLE service.
+#
+#     Ours governed a third of it. `ai_budget_usd` (the $6/day Claude guard) was the only cap that could refuse a run, while DataForSEO
+#     is where most of the money goes: **$2.3876 of the $3.63** spent by the 2026-10-14 re-rating (RESULTS §0) and $0.0560 of the $0.069
+#     of that evening's live check. R9 put `dfs_est_usd` on every ledger row and Rate Limit even computed the day's DataForSEO total
+#     (`d.dfs_budget_used_est_usd`) — but nothing ever refused on it. The only real cap was the DataForSEO account balance, and reaching
+#     it does not refuse a run: every paid call inside it starts failing, so the customer gets a part-charged, part-delivered report in
+#     the middle of the night. That is exactly the failure mode a server-side limit exists to prevent.
+#
+#     Three changes, all in the one node that already does the refusing:
+#     (a) **`dfs_budget_usd`**, the same guard over the same period for the data money, with the same shape of refusal — what the period
+#         has used, what this run would add, nothing charged, when it can run again.
+#     (b) **the account is a hard floor.** The free `appendix/user_data` reading R28 put on the ledger chain (it runs before Rate Limit:
+#         live trace of exec 588, `DFS Balance` +0.52 s -> `Run Ledger Row` +1.32 s -> `Rate Limit` +1.94 s) is now read BY the guard: a
+#         run the account cannot pay for, leaving `dfs_balance_floor_usd` behind, is refused before it spends a cent. It fails OPEN —
+#         a probe that did not answer reads 0 and refuses nothing — because a guard that cannot measure must not block the customer.
+#     (c) **the day's DataForSEO total stops reading a settled run's reservation.** It took `Number(r.dfs_usd) || Number(r.dfs_est_usd)`,
+#         so a finished run that really spent $0 fell back to what it had reserved — the free `free_only` backlink check (R31) counted
+#         $0.45 against the day for ever. It now counts a settled row's measured figure and a running one's reservation, exactly as the
+#         Claude side has since R9.
+#     And one number the caller can be told before the work: `run_cost_estimate_usd` is the engine's own calibrated figure for the whole
+#     run (Claude + DataForSEO) with the basis beside it, so what the customer is shown and what the guard reserves can be one number.
+# =============================================================================
+
+# ---------- A. the two new settings ----------
+patch('Normalize Input', "  ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap\n",
+      "  ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap\n"
+      "  // (2026-10-15, benchmark area 13): the same guard for the DataForSEO money, over the same period. It was unguarded until now, and it is\n"
+      "  // where most of the spend is ($2.3876 of the $3.63 the 2026-10-14 re-rating cost). `dfs_balance_floor_usd` is what the account must keep\n"
+      "  // after a run: below it the run is refused rather than started, because a run that exhausts the account mid-flight delivers half a report\n"
+      "  // and charges for all of it. A balance reading that did not answer is 0 and refuses nothing — a guard that cannot measure must not block.\n"
+      "  dfs_budget_usd: 6,\n"
+      "  dfs_balance_floor_usd: 0.5,\n")
+patch('Normalize Input', "    ai_budget_period: CONFIG.ai_budget_period,\n",
+      "    ai_budget_period: CONFIG.ai_budget_period,\n    dfs_budget_usd: CONFIG.dfs_budget_usd,\n    dfs_balance_floor_usd: CONFIG.dfs_balance_floor_usd,\n")
+
+# ---------- B. the guard itself ----------
+patch('Rate Limit', """d.ai_spend_estimate_usd = est;
+d.dfs_spend_estimate_usd = dfs_est;
+d.cost_estimate_source = __ai.source;   // 'calibrated' once the mode has settled runs, 'default' until then
+d.cost_estimate_basis = __ai.basis;
+d.dfs_budget_used_est_usd = +(earlier.filter(r => String(r.created_at || '').startsWith(period)).reduce((s, r) => s + (Number(r.dfs_usd) || Number(r.dfs_est_usd) || 0), 0) + dfs_est).toFixed(2);
+d.ai_budget_used_est_usd = +(spent_est + est).toFixed(2);""",
+      """// ---- the data money, guarded the same way (2026-10-15, benchmark area 13: Semrush / Ahrefs server-side limits) ----
+// Until now `ai_budget_usd` was the only cap that could refuse a run, and it watches CLAUDE money — a third of the bill. DataForSEO was
+// $2.3876 of the $3.63 the 2026-10-14 re-rating spent and $0.0560 of the $0.069 that evening: the larger half, with nothing in front of it
+// but the account balance, and reaching THAT does not refuse a run — it makes every paid call inside one start failing.
+// A settled row counts what it MEASURED and a running one its reservation, as on the Claude side. It used to be
+// `Number(r.dfs_usd) || Number(r.dfs_est_usd)`, so a finished run that genuinely spent $0 — a free_only backlink check (R31) — fell back to
+// the $0.45 it had reserved and held it against the day for ever.
+const dfs_spent = +earlier.filter(r => String(r.created_at || '').startsWith(period))
+  .reduce((s, r) => s + (r.status === 'done' ? (Number(r.dfs_usd) || 0) : (Number(r.dfs_est_usd) || 0)), 0).toFixed(2);
+const dfs_budget = Number(d.dfs_budget_usd || 0);
+if (dfs_budget > 0 && dfs_spent + dfs_est > dfs_budget) {
+  return [{ json: { ...d, validation_error: 'The search-data budget for this ' + (d.ai_budget_period || 'month') + ' is used up (estimated $' + dfs_spent.toFixed(2) + ' of $' + dfs_budget + '; this run would add about $' + dfs_est.toFixed(2) + '). Nothing was charged and nothing was started: this analysis can run again ' + (d.ai_budget_period === 'day' ? 'tomorrow' : 'next month') + ', or the limit for this website can be raised first.' } }];
+}
+// The account itself is the one cap nobody can argue with. *DFS Balance* reads it for free from appendix/user_data on the ledger chain,
+// before this node (exec 588: DFS Balance +0.52 s, Run Ledger Row +1.32 s, Rate Limit +1.94 s), and Run Ledger Row has already parsed it.
+// Fail OPEN: a probe that did not answer is 0 and refuses nothing.
+let dfs_balance = 0;
+try { const __rl = $('Run Ledger Row').first().json || {}; const __v = Number(__rl.dfs_balance); if (Number.isFinite(__v) && __v > 0) dfs_balance = __v; } catch (e) {}
+const dfs_floor = Number.isFinite(Number(d.dfs_balance_floor_usd)) && Number(d.dfs_balance_floor_usd) >= 0 ? Number(d.dfs_balance_floor_usd) : 0;
+if (dfs_balance > 0 && dfs_est > 0 && dfs_balance - dfs_est < dfs_floor) {
+  return [{ json: { ...d, validation_error: 'The search-data account is too low for this run ($' + dfs_balance.toFixed(2) + ' left; this run needs about $' + dfs_est.toFixed(2) + ' and ' + (dfs_floor > 0 ? '$' + dfs_floor.toFixed(2) + ' has to stay for the scheduled checks' : 'would use all of it') + '). Nothing was charged and nothing was started: a run that runs out of data credit half way through delivers half a report and charges for all of it. Top the data account up and start this again.' } }];
+}
+d.ai_spend_estimate_usd = est;
+d.dfs_spend_estimate_usd = dfs_est;
+d.cost_estimate_source = __ai.source;   // 'calibrated' once the mode has settled runs, 'default' until then
+d.cost_estimate_basis = __ai.basis;
+// one number for "what will this run cost", from the same self-correcting estimates the guard reserves against — so what the caller is
+// told before the work and what is held back against the budget can never be two different figures.
+d.run_cost_estimate_usd = +(est + dfs_est).toFixed(2);
+d.run_cost_estimate_basis = ('Claude $' + est.toFixed(2) + ' (' + __ai.basis + '); search data $' + dfs_est.toFixed(2) + ' (' + __dfs.basis + ')').slice(0, 400);
+d.dfs_account_balance_usd = dfs_balance;
+d.dfs_budget_used_est_usd = +(dfs_spent + dfs_est).toFixed(2);
+d.ai_budget_used_est_usd = +(spent_est + est).toFixed(2);""")
+
+assert 'dfs_budget_usd' in code('Rate Limit') and 'dfs_account_balance_usd' in code('Rate Limit'), 'section 61: the data-money guard is not in Rate Limit'
+assert "Number(r.dfs_usd) || Number(r.dfs_est_usd) || 0)" not in code('Rate Limit'), 'section 61: a settled row still falls back to its reservation'
+assert "r.status === 'done' ? (Number(r.dfs_usd) || 0) : (Number(r.dfs_est_usd) || 0)" in code('Rate Limit'), 'section 61: the day\'s data total does not count what a settled run measured'
+assert 'dfs_budget_usd: CONFIG.dfs_budget_usd' in code('Normalize Input'), 'section 61: the setting never reaches Rate Limit'
+
+sticky("""### The guard watches all the money, and the account is the limit (2026-10-15, benchmark area 13)
+**`ai_budget_usd` guarded a third of the bill.** DataForSEO was **$2.3876 of the $3.63** the 2026-10-14 re-rating cost, with nothing in
+front of it. `dfs_budget_usd` is the same guard over the same period for the data money, with the same refusal: what the period used,
+what this run would add, nothing charged, when it can run again.
+**The account is a hard floor.** The free `appendix/user_data` reading R28 put on the ledger chain is read by the guard now: a run the
+account cannot pay for — leaving `dfs_balance_floor_usd` for the scheduled checks — is refused **before** it spends, instead of running
+out of credit half way and delivering half a report. A probe that did not answer reads 0 and refuses nothing.
+**And a settled run stops counting its reservation:** the day's data total took `dfs_usd || dfs_est_usd`, so a free run that really spent
+$0 held its $0.45 against the day for ever.
+`run_cost_estimate_usd` carries the engine's own calibrated figure for the whole run, so what the caller is told and what the guard
+reserves are one number.""",
+    pos('Rate Limit')[0] - 40, pos('Rate Limit')[1] + 420, 1060, 300, 5)
+
+log('The spend guard covers both currencies and the account is a hard floor (2026-10-15, benchmark programme area 13 — the rubric compares '
+    'this area with Semrush / Ahrefs server-side limits, where one meter governs the whole service): ai_budget_usd refused on CLAUDE money '
+    'only, which is a third of the bill (DataForSEO was $2.3876 of the $3.63 the 2026-10-14 re-rating spent and $0.0560 of the $0.069 of the '
+    'evening live check), so CONFIG gains dfs_budget_usd ($6, the same period) and Rate Limit refuses on it in the same words; the free '
+    'appendix/user_data balance R28 put on the ledger chain is now read BY the guard, so a run the account cannot pay for is refused before '
+    'it spends rather than running out of credit half way through and charging for a half-delivered report (dfs_balance_floor_usd, $0.50, '
+    'keeps the scheduled checks alive) — and the check fails OPEN, a probe that did not answer refuses nothing; the day\'s data total counts '
+    'a settled row\'s MEASURED figure instead of falling back to its reservation (a free_only backlink run that spent $0 held $0.45 against '
+    'the day for ever); and run_cost_estimate_usd carries the whole run\'s calibrated estimate with its basis, so what the caller is told '
+    'before the work and what the guard holds back cannot be two different numbers')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
