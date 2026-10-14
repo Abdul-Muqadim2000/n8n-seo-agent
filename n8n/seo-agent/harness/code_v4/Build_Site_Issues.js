@@ -199,6 +199,7 @@ const CATALOG = [
 
 const findings = [];
 const whatWorks = [];
+let schema_flag = null;   // R24: the crawl's structured-data flag, reported in `not_assessed` by a technical audit
 
 for (const c of CATALOG) {
   const affected = pages.filter(p => {
@@ -206,6 +207,9 @@ for (const c of CATALOG) {
     if (v === undefined || v === null) return false;
     return c.invert ? v === false : v === true;
   });
+  // R24 (2026-10-14): a technical audit does not assess structured data, so it emits no Schema finding — the count goes into the
+  // one line that speaks about schema there, `not_assessed`.
+  if (!isFull && c.cat === 'Schema') { if (affected.length > 0) schema_flag = { pages: affected.length, total }; continue; }
   if (affected.length > 0) {
     // A handful of broken URLs on a big site is serious but not "Critical" unless the homepage or >=3% of pages are hit
     let sev = c.sev;
@@ -448,14 +452,14 @@ const drop = [/\(0ms\)/i];
 if (hasOrphans) drop.push(/reachable through internal links/i);
 for (let i = whatWorks.length - 1; i >= 0; i--) if (drop.some(r => r.test(whatWorks[i]))) whatWorks.splice(i, 1);
 
-// ===== 6. Order by likely impact (G26, 2026-10-12): severity x the share of pages affected x the clicks and impressions those pages
-// get in Search Console x their place in the site. Index blockers first, cosmetic items never first, notes about missing data last.
-// The severity label is unchanged and stays visible; the scoring below still groups by severity, so no score changes because of the order.
-IMP.rank(findings, { total_pages: total, search_console: input.search_console || null,
-  key_pages: [...(((input.html_analysis || {}).sampled_pages) || []).map(p => (p && p.url) || p), ...(((input.search_console || {}).top_pages) || []).slice(0, 5).map(p => p.page || p.url)].filter(Boolean) });
-
-// ===== 7. Scoring =====
-const PEN2 = { Critical: 30, High: 15, Medium: 7, Low: 3, Info: 1 };
+// ===== 5b. R24 (2026-10-14, FIX_PLAN §3.12): one story about every category =====
+// The audit of execution 550 said three different things about schema in one report: a Medium finding ranked 8th by impact
+// ("Structured data with errors", 26 of 47 pages), `not_assessed: ["Structured data (schema) …"]`, and `not_compared: ["Schema"]`
+// — while Schema appeared in neither `category_scores` nor `weights`. A technical audit has only the crawler's yes/no
+// `has_micromarkup_errors` flag per page: no property, nothing to act on, nothing a score could be built from. So it assesses no
+// schema, emits no schema finding, and says so once, in `not_assessed`, with the flag's count. The full SEO report — which reads
+// the HTML and checks every schema URL — keeps Schema weighted and compared. This guard keeps the three statements together: a
+// scored finding in a category this audit type does not weight is not emitted at all, it is named in `not_assessed`.
 const WEIGHTS = isFull ? {
   'Crawlability & Indexing': 15, 'On-Page': 14, 'Content': 16, 'Schema': 12,
   'Performance': 13, 'Security': 7, 'Images': 7, 'Technical': 6,
@@ -465,6 +469,23 @@ const WEIGHTS = isFull ? {
   'Performance': 15, 'Security': 10, 'Images': 7, 'Technical': 5,
   'AI Search Readiness': 10
 };
+const unassessed_cats = {};
+for (let i = findings.length - 1; i >= 0; i--) {
+  const f = findings[i];
+  if (f.scoring === false || f.severity === 'Info' || WEIGHTS[f.category]) continue;
+  unassessed_cats[f.category] = (unassessed_cats[f.category] || 0) + 1;
+  findings.splice(i, 1);
+}
+
+// ===== 6. Order by likely impact (G26, 2026-10-12): severity x the share of pages affected x the clicks and impressions those pages
+// get in Search Console x their place in the site. Index blockers first, cosmetic items never first, notes about missing data last.
+// The severity label is unchanged and stays visible; the scoring below still groups by severity, so no score changes because of the order.
+IMP.rank(findings, { total_pages: total, search_console: input.search_console || null,
+  key_pages: [...(((input.html_analysis || {}).sampled_pages) || []).map(p => (p && p.url) || p), ...(((input.search_console || {}).top_pages) || []).slice(0, 5).map(p => p.page || p.url)].filter(Boolean) });
+
+// ===== 7. Scoring =====
+const PEN2 = { Critical: 30, High: 15, Medium: 7, Low: 3, Info: 1 };
+// (the weights are declared above section 5b: a category this audit type does not weight must not reach the fix list either — R24)
 
 const category_scores = {};
 const DECAY = 0.7;   // each further finding of the same severity in a category counts 70% of the previous one
@@ -499,7 +520,10 @@ const grade = health_score >= 90 ? 'Excellent' : health_score >= 75 ? 'Good' : h
 
 // ===== 8. Kya naapa nahi gaya =====
 const not_assessed = [];
-if (!isFull) not_assessed.push('Structured data (schema) and HTML-level checks');
+if (!isFull) not_assessed.push('Structured data (schema) and HTML-level checks: a technical audit reads only the crawler\'s yes/no flag per page'
+  + (schema_flag ? ' (it flagged ' + schema_flag.pages + ' of ' + schema_flag.total + ' crawled pages)' : '')
+  + ', never a single property, so schema is not scored, not listed as a finding and not compared here — the full SEO report checks it');
+for (const _cat of Object.keys(unassessed_cats)) not_assessed.push(_cat + ': ' + unassessed_cats[_cat] + ' observation(s) from the crawl, in a category this report does not weight — not listed as findings and not compared');
 if (!isFull || !input.competitor_benchmark) not_assessed.push('Competitor benchmark (organic keywords, rankings, traffic, domain age)');
 if (!input.pagespeed) not_assessed.push('Core Web Vitals in a lab test (Google PageSpeed / Lighthouse) and the speed comparison with competitors');
 if (!(input.crux && input.crux.available)) not_assessed.push('Core Web Vitals from real Chrome users per template (Chrome UX Report, 75th percentile): ' + ((input.crux && input.crux.not_available) || 'not collected in this run'));

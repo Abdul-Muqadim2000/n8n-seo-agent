@@ -377,6 +377,7 @@
   "severity",
   "title",
   "affected_count",
+  "checked",
   "impact",
   "impact_basis",
   "recheck_state",

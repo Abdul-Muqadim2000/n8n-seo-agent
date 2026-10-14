@@ -1,5 +1,13 @@
 {
  "ai_gate": {
+  "SEO Agent v4": [
+   "GSC Audit Query",
+   "Inspect Retry Plan",
+   "Any Inspect Retries?",
+   "Wait Before Inspect Retry",
+   "GSC Audit Query (Retry)",
+   "GSC Sitemaps (Audit)"
+  ],
   "SEO Agent \u2014 AI Pulse": [
    "Run AI Requests",
    "AI Retry Requests",
@@ -456,6 +464,20 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Fetch Raw Pages",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "Keyword Data (Retry)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "GSC Audit Query (Retry)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }

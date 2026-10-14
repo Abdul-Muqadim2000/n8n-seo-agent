@@ -4694,6 +4694,385 @@ open(os.path.join(OUT_CODE, '_podcast.js'), 'w').write(
     "    stale: j.last === undefined ? null : PC.stale(j.last, j.now), url: PC.searchUrl(j.topic || 'e invoicing uae', !!j.signed), stale_days: PC.STALE_DAYS } }; });\n")
 log('Two more free link sources, asset ideas from the market, and two subjects a batch (2026-10-13, FIX_PLAN L5 / L6 / L7): podcast shows that take guests (a free directory a month -> the show\'s RSS feed -> its own website; pitched only when it is on topic, still publishing, says it takes guests and has a contact on its own domain) and journalist digests (HARO / Source of Sources, parsed by the app from the customer\'s own mailbox into `digest` prospects, nothing until a mailbox is connected) both run through the same gates as every other prospect; the competitors\' most-linked pages (DataForSEO domain_pages, monthly) become at most four linkable-asset ideas, each with the pages that prove it and the referring domains they hold and never a promise of links; and the writer gives every sequence a second subject in the other style, which the draft gate checks and LB Rows hands out in turn (A, B, A, B) so the app can read the reply rate per style, with no verdict under 30 first e-mails per variant (v5/code/_ab.js, mirrored in app/shared/src/outreach.ts). The Podcast Index key stays a placeholder in .env.seo.example: its signed requests need the secret inside a node, which this instance does not allow')
 
+
+# =============================================================================
+# 56. THE ANSWER THAT ARRIVED WITH HTTP 200 AND WAS STILL A FAILURE (2026-10-14, system review FIX_PLAN.md §3.12 R18 / R19 / R24;
+#     evidence docs/system-review-2026-10-14/RESULTS.md §2.3, §2.4 and §3.3)
+#       * R18. n8n's `retryOnFail` fires only when a node FAILS. DataForSEO answers a dead task with HTTP 200 and `status_code`
+#         40101 ("Internal SE Server Error."); Google's URL Inspection answers HTTP 200 with an `error` object. Both look like
+#         success. The only gate that ever looked inside a 200 was `AI_Retry_Requests.js` (the AI paths) and the **50000-only**
+#         IF of section 25 — so in execution 549 `SERP Top 10` and `Facts SERP` both returned **40101**, were billed $0.002 each,
+#         **ran once**, and the run still planned a ladder, scored it "winnable / GO_WITH_CHANGES 68" and wrote a page on a
+#         results page nobody had seen. The rule now lives in one kit (`v5/code/_dfs_retry.js`, RT), every gate uses it, each gate
+#         pauses and re-sends once (SERP, facts search, keyword data) — and, the half that matters more, **where the retry fails
+#         too the evidence is `unavailable` and the verdict carries no number**: no score, no expected visits, no time to rank,
+#         and the reason in the first line of the reasons. A feasibility verdict computed from a SERP that errored twice is worse
+#         than no verdict.
+#       * R19. In execution 550, 31 of 45 URL inspections failed with "Internal error encountered.", were never re-sent, and the
+#         audit's indexing picture rested on 14 pages; the diff then reported `affected 4` against `affected_before 15` as an
+#         improvement **without saying the sample had shrunk from 25 pages to 14** (the full report 18 minutes later inspected all
+#         45 with 0 failures and found 18 not indexed). Now: *Inspect Retry Plan* → *Wait Before Inspect Retry* →
+#         *GSC Audit Query (Retry)* re-sends what a second attempt can fix, every inspection finding carries `checked` /
+#         `checked_of` and says so in its evidence, the count is stored on the finding row, and the diff **refuses to print a
+#         delta** when the two numbers were measured on samples more than 20% apart (RT.comparable) — it says the sample moved.
+#       * R24. One report said three things about schema: a Medium finding ranked 8th by impact ("Structured data with errors",
+#         26 of 47 pages), `not_assessed: ["Structured data (schema) …"]` and `not_compared: ["Schema"]`, while `Schema` was in
+#         neither `category_scores` nor `weights`. **The decision: a technical audit does not assess schema, so it emits no Schema
+#         finding.** It has only DataForSEO's yes/no `has_micromarkup_errors` flag per page — no property, nothing the owner can
+#         act on beyond "go and validate" — which is exactly why the audit's own `not_assessed` list says so. The flag's count now
+#         travels into that one line, and a general guard drops any scored finding in a category this audit type does not weight,
+#         so the three statements cannot diverge again. The full SEO report, which reads the HTML and checks the schema URLs,
+#         keeps Schema weighted (12) and compared.
+# =============================================================================
+DFS_RETRY_SRC = rd('code/_dfs_retry.js').rstrip('\n')
+# the one condition an IF node can carry (it cannot call the kit): the same four cases as RT.dfs, checked by harness S66
+_FAIL56 = ("($json.error || Number($json.status_code) >= 40000 || !Array.isArray($json.tasks)"
+           " || !Number((($json.tasks || [])[0] || {}).status_code)"
+           " || Number((($json.tasks || [])[0] || {}).status_code) >= 40000"
+           " || (Number((($json.tasks || [])[0] || {}).status_code) === 20000 && !(((($json.tasks || [])[0] || {}).result) || [])[0]))")
+# the provider's own message decides whether asking again can help: a dead search engine can, a wrong field or a used-up quota cannot.
+# The two regular expressions are RT.TRANSIENT and RT.PERMANENT of v5/code/_dfs_retry.js, and harness S66 fails if they ever differ.
+_MSG56 = "String((((($json.tasks || [])[0] || {}).status_message) || $json.status_message || ($json.error && ($json.error.message || $json.error)) || ''))"
+_TRANSIENT56 = (r"/internal (?:se )?server error|internal error|server error|timeout|timed out|temporar|try again|unavailable|"
+                r"backend|deadline exceeded|connection|socket|econn|eai_again|rate limit|too many requests|\b(?:429|500|502|503|504)\b/i")
+_PERMANENT56 = (r"/permission|forbidden|unauthor|invalid[_ ]grant|credential|not found|no access|invalid field|unknown field|"
+                r"unsupported|quota|resource_exhausted|insufficient funds|payment|balance/i")
+DFS_FAILED56 = ("{{ !!" + _FAIL56 + " && (!" + _PERMANENT56 + ".test(" + _MSG56 + ") || " + _TRANSIENT56 + ".test(" + _MSG56 + ")) }}")
+
+# ---------- A. every DataForSEO gate takes the widened rule, and pauses before the second attempt ----------
+_W56 = 5   # seconds between the two attempts (the AI gate waits 20 s for a batch of up to 24; one call needs less)
+def _wait56(name, at):
+    # `unit` is written out although typeVersion 1.1 defaults to seconds: the Wait node of @version 1 defaults to HOURS, so an
+    # implicit unit is one typeVersion away from pausing a customer's run for five hours.
+    return add_node(name, 'n8n-nodes-base.wait', 1.1, {'amount': _W56, 'unit': 'seconds'}, at, {'webhookId': nid(name + ':hook')})
+for _gate, _retry, _wait in (('SERP Failed?', 'SERP Top 10 (Retry)', 'Wait Before SERP Retry'),
+                             ('Facts SERP Failed?', 'Facts SERP (Retry)', 'Wait Before Facts Retry')):
+    _c56 = nodes[_gate]['parameters']['conditions']['conditions'][0]
+    assert '50000' in _c56['leftValue'] and '40000' not in _c56['leftValue'], _gate + ': the gate is not the 50000-only one of section 25'
+    _c56['leftValue'] = '=' + DFS_FAILED56
+    _p56 = pos(_retry)
+    _wait56(_wait, [_p56[0] - 150, _p56[1]])
+    disconnect(_gate, _retry); connect(_gate, _wait, 0); connect(_wait, _retry)
+    assert [t['node'] for l in conns[_gate]['main'] for t in l][0] == _wait, _gate
+
+def dfs_gate56(first, dst, gate, retry, wait, base_ref, dy=220):
+    """One DataForSEO call, its in-200 gate, a pause and one second attempt (the shape section 25 gave the SERP calls)."""
+    assert [t['node'] for l in conns[first]['main'] for t in l] == [dst], first + ': unexpected outputs'
+    p0 = pos(first)
+    if_node(gate, DFS_FAILED56, [p0[0] + 110, p0[1] + dy])
+    _wait56(wait, [p0[0] + 300, p0[1] + dy])
+    rn = copy.deepcopy(nodes[first]); rn['name'] = retry; rn['id'] = nid(retry); rn['position'] = [p0[0] + 490, p0[1] + dy]
+    body = rn['parameters']['jsonBody']
+    assert body.count('$json.') >= 3 and '$json.keyword' in body, retry + ': body anchors'
+    rn['parameters']['jsonBody'] = body.replace('$json.', base_ref + '.')   # the gate's item is the failed answer; the request is read upstream
+    rn['onError'] = 'continueRegularOutput'; rn.update(retry_lint.RETRY)
+    assert rn.get('credentials'), retry + ': credential slot'
+    nodes[retry] = rn
+    disconnect(first, dst); connect(first, gate); connect(gate, wait, 0); connect(gate, dst, 1); connect(wait, retry); connect(retry, dst)
+
+dfs_gate56('Keyword Data', 'Has Domain (Authority)?', 'Keyword Data Failed?', 'Keyword Data (Retry)', 'Wait Before Keyword Data Retry',
+           "$('Parse Analysis').first().json")
+assert "$('Parse Analysis').first().json.keyword" in nodes['Keyword Data (Retry)']['parameters']['jsonBody']
+# the cost ledger counts the third retry too (a failed DataForSEO task is billed 0, a retried one is billed once)
+_ln56 = [nm for nm in nodes if "const __LEDGER_NODES = ['SERP Top 10', " in nodes[nm]['parameters'].get('jsCode', '')]
+assert len(_ln56) >= 4, _ln56
+for nm in _ln56: patch(nm, "'Keyword Data', 'Candidate SERP'", "'Keyword Data', 'Keyword Data (Retry)', 'Candidate SERP'")
+# the harness shims: each gate's exact condition, run per item like a Code node (S66 compares them with RT.dfs)
+os.makedirs(OUT_CODE, exist_ok=True)
+for _g56 in ('SERP Failed?', 'Facts SERP Failed?', 'Keyword Data Failed?'):
+    open(os.path.join(OUT_CODE, re.sub(r'[^A-Za-z0-9_.-]+', '_', _g56) + '.js'), 'w').write(
+        "// harness shim (written by build_v4.py section 56): the IF node's condition, true = take the retry branch (R18)\n"
+        "return $input.all().map(i => { const $json = i.json; return { json: { retry: " + DFS_FAILED56[2:-2].strip() + " } }; });\n")
+open(os.path.join(OUT_CODE, '_dfs_retry.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 56): the in-200 retry kit — { answer, retry, api, expect, now, before } -> the\n"
+    "// verdict on one answer, what the two attempts add up to, the sentence a report prints, the evidence block, and the sample test\n"
+    + DFS_RETRY_SRC + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  const o = { api: j.api || 'dataforseo', expect: j.expect };\n"
+    "  const v = RT.check(j.answer, o); const st = RT.one(j.answer, j.retry === undefined ? null : j.retry, o);\n"
+    "  return { json: { ...v, stats: { ...st, answers: undefined }, note: RT.note(st, j.unit || 'request'),\n"
+    "    evidence: RT.evidence(j.what || 'the answer', st, { unit: j.unit || 'request' }),\n"
+    "    comparable: j.now === undefined ? null : RT.comparable(j.now, j.before), drift_limit: RT.MAX_SAMPLE_DRIFT } }; });\n")
+
+# ---------- B. what was actually seen travels with the data (RT.evidence), so a later node can refuse to score on it ----------
+setcode('Analyze Competitor Pages', DFS_RETRY_SRC + '\n' + code('Analyze Competitor Pages'))
+patch('Analyze Competitor Pages', """let serpItems = []; let seCount = null; let serpError = ''; let seenAt = new Date().toISOString();
+try {
+  let sj; try { sj = $('SERP Top 10 (Retry)').first().json; } catch (e) { sj = $('SERP Top 10').first().json; }
+  sj = sj || {}; const t0 = (Array.isArray(sj.tasks) ? sj.tasks[0] : null) || {};
+  if (sj.error || Number(sj.status_code) >= 40000 || !Array.isArray(sj.tasks) || Number(t0.status_code) >= 40000)
+    serpError = String((sj.error && (sj.error.message || sj.error)) || t0.status_message || sj.status_message || 'no answer').slice(0, 120);
+  const res = (t0.result || [])[0] || {}; serpItems = res.items || []; seCount = res.se_results_count ?? null; seenAt = serpSeenAt(sj);
+} catch (e) { serpItems = []; serpError = 'no answer'; }""",
+"""let serpItems = []; let seCount = null; let serpError = ''; let seenAt = new Date().toISOString();
+// R18 (2026-10-14): the first answer and the retry's, judged by the one shared rule (RT, v5/code/_dfs_retry.js). A task error inside
+// an HTTP 200 is a failure, whatever its number — the 50000-only test of section 25 let 40101 through twice in execution 549.
+let serpStats = { asked: 1, answered: 0, failed: 1, failed_first: 1, retried: 0, retry_answered: 0, reasons: ['no answer'], answers: [{}] };
+try {
+  const first0 = (() => { try { return $('SERP Top 10').first().json; } catch (e) { return null; } })();
+  const retry0 = (() => { try { return $('SERP Top 10 (Retry)').first().json; } catch (e) { return null; } })();
+  serpStats = RT.one(first0, retry0);
+  const sj = serpStats.answers[0] || {}; const t0 = (Array.isArray(sj.tasks) ? sj.tasks[0] : null) || {};
+  if (serpStats.failed) serpError = String(serpStats.reasons[0] || 'no answer').slice(0, 160);
+  const res = (t0.result || [])[0] || {}; serpItems = res.items || []; seCount = res.se_results_count ?? null; seenAt = serpSeenAt(sj);
+} catch (e) { serpItems = []; serpError = 'no answer'; }
+const serp_evidence = RT.evidence('the live Google results for this keyword', serpStats, { unit: 'search' });""")
+patch('Analyze Competitor Pages', "if (serpError) Object.assign(serp_features, { unavailable: true, error: serpError, ai_overview: { present: null, text: '', cited_domains: [], seen_at: null } });",
+      "if (serpError) Object.assign(serp_features, { unavailable: true, error: serpError, ai_overview: { present: null, text: '', cited_domains: [], seen_at: null } });\n"
+      "Object.assign(serp_features, { attempts: 1 + (serpStats.retried || 0), retried: !!serpStats.retried });")
+patch('Analyze Competitor Pages', "return [{ json: { ...input, competitors, competitors_read: competitors.length, retried_pages, avg_competitor_words: avg, failed_pages: failed,",
+      "return [{ json: { ...input, competitors, competitors_read: competitors.length, retried_pages, avg_competitor_words: avg, failed_pages: failed, serp_evidence,")
+patch('Analyze Competitor Pages', "const serpDigest = serpError ? 'LIVE GOOGLE RESULTS: unavailable for this run (the search data provider failed: ' + serpError + ').",
+      "const serpDigest = serpError ? 'LIVE GOOGLE RESULTS: unavailable for this run (the search data provider failed' + (serpStats.retried ? ', twice: the search was sent again once and failed again' : '') + ': ' + serpError + ').")
+
+setcode('Collect Facts', DFS_RETRY_SRC + '\n' + code('Collect Facts'))
+patch('Collect Facts', """const prev = $('Analyze Competitor Pages').first().json;
+const res = $input.first().json || {};
+const items = res.tasks?.[0]?.result?.[0]?.items || [];""",
+"""const prev = $('Analyze Competitor Pages').first().json;
+// R18 (2026-10-14): the facts search gets the same gate as the keyword's SERP. When both attempts fail, "no statistics were found"
+// would be a lie — nothing was searched — so the run carries `facts_evidence.unavailable` instead.
+const factsStats = RT.one((() => { try { return $('Facts SERP').first().json; } catch (e) { return $input.first().json || {}; } })(),
+                          (() => { try { return $('Facts SERP (Retry)').first().json; } catch (e) { return null; } })());
+const facts_evidence = RT.evidence('the statistics search for this keyword', factsStats, { unit: 'search' });
+const res = factsStats.answers[0] || $input.first().json || {};
+const items = res.tasks?.[0]?.result?.[0]?.items || [];""")
+patch('Collect Facts', "return [{ json: { ...prev, facts: kept.slice(0, 10), facts_found: facts.length,",
+      "return [{ json: { ...prev, facts: kept.slice(0, 10), facts_found: facts.length, facts_evidence,")
+
+setcode('Merge Keyword Data', DFS_RETRY_SRC + '\n' + code('Merge Keyword Data'))
+patch('Merge Keyword Data', "let res = {}; try { res = $('Keyword Data').first().json || {}; } catch (e) { res = $input.first().json || {}; }",
+      """// R18 (2026-10-14): the keyword's own search data goes through the same gate — the retry's answer when it came, and an honest
+// "could not be read" when neither attempt did (live 549: items_count 0 beside two failed SERP calls, and the run scored anyway).
+const kdStats = RT.one((() => { try { return $('Keyword Data').first().json; } catch (e) { return $input.first().json || {}; } })(),
+                       (() => { try { return $('Keyword Data (Retry)').first().json; } catch (e) { return null; } })());
+const keyword_data_evidence = RT.evidence('search volume, difficulty and cost per click for this keyword', kdStats, { unit: 'request' });
+const res = kdStats.answers[0] || {};""")
+patch('Merge Keyword Data', """} : {
+  note: 'Keyword data not available for this keyword/country'
+};""",
+"""} : {
+  note: keyword_data_evidence.unavailable
+    ? 'Search data for this keyword could not be read: ' + (keyword_data_evidence.error || 'no answer') + (kdStats.retried ? ' (the request was sent again once and failed again)' : '') + '. This is not "no demand": nothing was measured.'
+    : 'Keyword data not available for this keyword/country'
+};""")
+patch('Merge Keyword Data', """    keyword_data,
+    site_authority""", """    keyword_data,
+    keyword_data_evidence,
+    site_authority""")
+
+# ---------- C. the refusal: no score on evidence nobody could read ----------
+patch('Parse Verdict', "const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;",
+"""// ---- R18 (2026-10-14, FIX_PLAN §3.12): a feasibility score computed on a results page nobody could read ----
+// Execution 549: both SERP calls answered 40101 inside an HTTP 200, were billed, ran once — and the run still said
+// "winnable, GO_WITH_CHANGES 68" and wrote a page. The retry is wired above; when it fails too, the competition was never seen,
+// so there is no verdict and no number — only what was tried, and the suggestion to run the check again.
+const EV56 = (() => {
+  const sf = prev.serp_features || {}; const ev = prev.serp_evidence || null; const kd = prev.keyword_data_evidence || null;
+  const out = !!(sf.unavailable || (ev && ev.unavailable));
+  const why = String((ev && ev.error) || sf.error || 'no answer from the search data provider').slice(0, 160);
+  const again = (ev && ev.retried) ? ' The search was sent again once and failed again.' : '';
+  return {
+    withheld: out,
+    evidence: { serp: out ? 'unavailable' : 'read', error: out ? why : '', asked: ev ? ev.asked : 1, checked: ev ? ev.checked : (out ? 0 : 1),
+      retried: ev ? ev.retried : 0, keyword_data: (kd && kd.unavailable) ? 'unavailable' : 'read' },
+    reason: out ? 'No score is given for this keyword: the live Google results could not be read (' + why + ').' + again
+      + ' Nobody has seen the pages that rank, the featured snippet or the AI Overview, so any number here would be invented. Run the check again.' : ''
+  };
+})();
+const EXP = (prev.existing_page && prev.existing_page.url) ? prev.existing_page : null;""")
+patch('Parse Verdict', """    verdict: verdict.verdict,
+    verdict_score: verdict.score ?? null,
+    verdict_reasons: verdict.reasons || [],""",
+"""    verdict: EV56.withheld ? 'NOT_CHECKED' : verdict.verdict,
+    verdict_score: EV56.withheld ? null : (verdict.score ?? null),
+    verdict_evidence: EV56.evidence,
+    score_withheld: EV56.withheld,
+    score_withheld_reason: EV56.reason,
+    verdict_reasons: EV56.withheld ? [EV56.reason, ...(verdict.reasons || [])] : (verdict.reasons || []),""")
+patch('Parse Verdict', """    expected_visits_top3: verdict.expected_monthly_visits_top3 ?? null,
+    time_to_rank_months: verdict.time_to_rank_months ?? null""",
+"""    expected_visits_top3: EV56.withheld ? null : (verdict.expected_monthly_visits_top3 ?? null),
+    time_to_rank_months: EV56.withheld ? null : (verdict.time_to_rank_months ?? null)""")
+# the keyword report and the callback say "not scored", never "N/A" beside a verdict that was never formed
+patch('Build Word File', "const verdictLabel = { GO: 'GO — Target This Keyword', GO_WITH_CHANGES: 'GO, WITH CHANGES', AVOID: 'AVOID' }[d.verdict] || esc(d.verdict);",
+      "const verdictLabel = { GO: 'GO — Target This Keyword', GO_WITH_CHANGES: 'GO, WITH CHANGES', AVOID: 'AVOID', NOT_CHECKED: 'NOT CHECKED — the live Google results could not be read' }[d.verdict] || esc(d.verdict);")
+patch('Build Word File', """    ['Score', d.verdict_score != null ? d.verdict_score + '/100' : 'N/A'],
+    ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')],
+    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : 'N/A'],
+    ['Time to rank', d.time_to_rank_months != null ? d.time_to_rank_months + ' months' : 'N/A']""",
+"""    ['Score', d.verdict_score != null ? d.verdict_score + '/100' : (d.score_withheld ? 'not scored — the live Google results could not be read' : 'N/A')],
+    ['Recommended Page Type', esc(d.recommended_page || d.page_type || 'N/A')],
+    ['Expected visits/month at #1-3', d.expected_visits_top3 != null ? num(d.expected_visits_top3) : (d.score_withheld ? 'not estimated' : 'N/A')],
+    ['Time to rank', d.time_to_rank_months != null ? d.time_to_rank_months + ' months' : (d.score_withheld ? 'not estimated' : 'N/A')]""")
+patch('Build Webhook Response', "    score: d.verdict_score,", "    score: d.verdict_score,\n    score_withheld: !!d.score_withheld,\n    evidence: d.verdict_evidence || null,")
+# the ladder plan prints the same refusal where it would otherwise print "winnable (verdict …, 68/100)"
+patch('Build Ladder Report', "(f.score != null ? ' (verdict ' + esc(f.verdict) + ', ' + f.score + '/100)' : '')",
+      "(f.score != null ? ' (verdict ' + esc(f.verdict) + ', ' + f.score + '/100)' : (f.verdict === 'NOT_CHECKED' ? ' — not scored: the live Google results could not be read in this run, so the competition was never seen' : ''))")
+
+# ---------- D. R19: the failed inspections, asked again; and a count nobody can mistake for a sample ----------
+_gq56 = pos('GSC Audit Query')
+add_node('Inspect Retry Plan', 'n8n-nodes-base.code', 2, {'jsCode': DFS_RETRY_SRC + '\n' + rd('code/Inspect_Retry_Plan.js')}, [_gq56[0] + 110, _gq56[1] + 220])
+if_node('Any Inspect Retries?', '{{ !$json.skip }}', [_gq56[0] + 300, _gq56[1] + 220])
+_wait56('Wait Before Inspect Retry', [_gq56[0] + 490, _gq56[1] + 220])
+_rq56 = copy.deepcopy(nodes['GSC Audit Query']); _rq56['name'] = 'GSC Audit Query (Retry)'; _rq56['id'] = nid('GSC Audit Query (Retry)')
+_rq56['position'] = [_gq56[0] + 680, _gq56[1] + 220]
+assert _rq56.get('credentials') and _rq56['parameters']['url'] == '={{ $json.url }}', 'GSC Audit Query: the request shape moved'
+_rq56.update(retry_lint.RETRY); _rq56['onError'] = 'continueRegularOutput'
+nodes['GSC Audit Query (Retry)'] = _rq56
+disconnect('GSC Audit Query', 'GSC Sitemaps (Audit)')
+connect('GSC Audit Query', 'Inspect Retry Plan'); connect('Inspect Retry Plan', 'Any Inspect Retries?')
+connect('Any Inspect Retries?', 'Wait Before Inspect Retry', 0); connect('Any Inspect Retries?', 'GSC Sitemaps (Audit)', 1)
+connect('Wait Before Inspect Retry', 'GSC Audit Query (Retry)'); connect('GSC Audit Query (Retry)', 'GSC Sitemaps (Audit)')
+assert nodes['GSC Sitemaps (Audit)'].get('executeOnce'), 'GSC Sitemaps (Audit) must still run once whatever reaches it'
+
+setcode('GSC Audit Findings', DFS_RETRY_SRC + '\n' + code('GSC Audit Findings'))
+patch('GSC Audit Findings', "const reqs = grab('GSC Audit Requests'); const res = grab('GSC Audit Query'); const plan1 = reqs[0] || {};",
+"""const reqs = grab('GSC Audit Requests');
+// R19 (2026-10-14, FIX_PLAN §3.12): the answers of the second attempt take the failed ones' place before anything is counted
+// (31 of 45 inspections failed live in execution 550 and were never re-sent; the diff then called the 14 that answered an improvement).
+const retryQ = grab('Inspect Retry Plan').filter(q => q && !q.skip);
+const retryR = grab('GSC Audit Query (Retry)');
+const expectOf = (q) => (q && q.kind === 'inspect') ? 'inspectionResult' : '';
+const res = grab('GSC Audit Query').slice();
+let inspect_retried = 0, inspect_retry_answered = 0;
+retryQ.forEach((q, k) => {
+  const i = Number(q.retry_of); const a = retryR[k]; if (!Number.isFinite(i) || a === undefined) return;
+  const isInspect = (reqs[i] || {}).kind === 'inspect'; if (isInspect) inspect_retried++;
+  if (RT.google(a, expectOf(reqs[i])).ok) { res[i] = a; if (isInspect) inspect_retry_answered++; }
+});
+const plan1 = reqs[0] || {};""")
+patch('GSC Audit Findings', "  const ok = insp.filter(i => !i.error); const coverage = {};",
+"""  const _f19 = findings.length;   // R19: every finding below is measured on the pages Google actually answered for
+  const ok = insp.filter(i => !i.error); const coverage = {};""")
+patch('GSC Audit Findings', """    else if (mobChecked && ok.some(i => i.mobile_usable === true)) works.push('Google reports the ' + mobChecked + ' page(s) it still answers about as mobile-friendly');
+  }
+}""",
+"""    else if (mobChecked && ok.some(i => i.mobile_usable === true)) works.push('Google reports the ' + mobChecked + ' page(s) it still answers about as mobile-friendly');
+  }
+  // ---- R19: how many pages each of those numbers was measured on, said out loud and carried into the stored row and the diff ----
+  const inspection_stats = { asked: insp.length, checked: ok.length, failed: insp.length - ok.length,
+    failed_first: (insp.length - ok.length) + inspect_retry_answered, retried: inspect_retried, retry_answered: inspect_retry_answered,
+    reasons: [...new Set(insp.filter(i => i.error).map(i => String(i.not_checked || i.error)))].slice(0, 3) };
+  inspection_stats.note = RT.note({ ...inspection_stats, answered: inspection_stats.checked }, 'page');   // the kit counts "answered", the audit calls it "checked"
+  search_console.inspection_stats = inspection_stats;
+  for (let _i = _f19; _i < findings.length; _i++) {
+    const f = findings[_i]; f.checked = ok.length; f.checked_of = insp.length;
+    f.evidence = String(f.evidence || '') + ' (measured on the ' + ok.length + ' of ' + insp.length + ' page(s) Google answered for'
+      + (inspection_stats.failed ? '; ' + inspection_stats.failed + ' could not be checked' + (inspect_retried ? ' even after being asked again' : '') : '') + ')';
+  }
+  if (insp.length && inspection_stats.failed) {
+    F('Info', 'Google could not answer for part of the key pages', 'Everything this report says about indexing was measured on the pages Search Console answered for: the rest are unknown, not fine.',
+      'Nothing to fix on the site: run the audit again later, or open those URLs in Search Console\\'s URL inspection yourself.',
+      inspection_stats.note || (inspection_stats.failed + ' of ' + insp.length + ' URL inspections failed'),
+      insp.filter(i => i.error).map(i => i.url), inspection_stats.failed, Math.round(inspection_stats.failed / insp.length * 100));
+    findings[findings.length - 1].scoring = false;   // a note about missing data, never a deduction
+  }
+}""")
+
+# the stored finding row keeps the sample size, so the next audit can tell a real change from a different sample
+patch('Finding Rows', "affected_count: Number(f.affected_count) || 0, impact: Number(f.impact) || 0,",
+      "affected_count: Number(f.affected_count) || 0, checked: Number(f.checked) || 0, impact: Number(f.impact) || 0,")
+assert ('checked', 'number') in AUDIT_FINDINGS_COLS, 'R19: seo_audit_findings needs a `checked` column (ladder_common.py) — run sync_tables.py after deploying'
+
+setcode('Audit Diff', DFS_RETRY_SRC + '\n' + code('Audit Diff'))
+patch('Audit Diff', "const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]) => { const p = prevKeys.get(k); return { title: f.title, category: f.category, severity: f.severity, was: p.severity, affected: f.affected_count ?? null, affected_before: Number(p.affected_count) || null }; }).sort((x, y) => SEV[x.severity] - SEV[y.severity]);",
+"""// R19 (2026-10-14, FIX_PLAN §3.12): two counts measured on samples of different sizes are not a change. The technical audit of
+// execution 550 reported "15 → 4 affected" as an improvement because 31 of 45 URL inspections had failed and the sample had
+// shrunk from 25 pages to 14 — nobody said so. Where the samples differ by more than RT.MAX_SAMPLE_DRIFT (20%), or where the
+// earlier audit did not record its sample at all, the delta is not printed: the report says the sample moved.
+const open = [...curKeys.entries()].filter(([k]) => prevKeys.has(k)).map(([k, f]) => {
+  const p = prevKeys.get(k);
+  const now = f.affected_count ?? null; const before = Number(p.affected_count) || null;
+  const checked = f.checked == null ? null : Number(f.checked); const checkedBefore = Number(p.checked) || null;
+  const cmp = (checked || checkedBefore) ? RT.comparable(checked, checkedBefore) : { comparable: true, why: '' };
+  const moved = !cmp.comparable;
+  return { title: f.title, category: f.category, severity: f.severity, was: p.severity, affected: now,
+    affected_before: moved ? null : before, checked: checked, checked_before: checkedBefore, sample_changed: moved,
+    sample_note: moved ? ((now == null ? '?' : now) + ' now against ' + (before == null ? '?' : before) + ' before, but ' + cmp.why) : '' };
+}).sort((x, y) => SEV[x.severity] - SEV[y.severity]);
+const sample_moved = open.filter(f => f.sample_changed).length;""")
+patch('Audit Diff', """  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, not_compared,
+  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'""",
+"""  score_delta: (Number(a.health_score) || 0) - (Number(prev.health_score) || 0), fixed, new: added, open, not_compared, sample_moved,
+  summary: fixed.length + ' fixed · ' + added.length + ' new · ' + open.length + ' still open (compared with the ' + labelOf(curType) + ' of ' + String(prev.audited_at).slice(0, 10) + ')'
+    + (sample_moved ? '. ' + sample_moved + ' finding(s) are not compared as numbers: they were measured on a different number of pages this time (how many is shown with each).' : '')""")
+# R2's note on Schema is now one line shorter: a technical audit does not emit the finding at all (R24, below)
+patch('Audit Diff', "//   The decision on Schema: a technical audit does NOT get a Schema weight. It only reads DataForSEO's `has_micromarkup_errors` flag per page --\n"
+      "//   it never validates a single property, which is why its own `not_assessed` list says \"Structured data (schema) and HTML-level checks\". A flag\n"
+      "//   with no detail cannot carry a score, so Schema stays in the full report's weights only; a technical audit keeps showing the finding as an\n"
+      "//   observation and the diff leaves it out of fixed / new / still-open on BOTH sides.",
+      "//   The decision on Schema (R24, 2026-10-14): a technical audit does NOT get a Schema weight -- it only reads DataForSEO's\n"
+      "//   `has_micromarkup_errors` flag per page, never a single property -- and since 2026-10-14 it does not emit a Schema finding either\n"
+      "//   (Build Site Issues drops it and says so in `not_assessed`). Schema is assessed, weighted and compared in the full SEO report only.\n"
+      "//   This filter stays for the rows older audits stored, so a finding outside the current weights is never called \"fixed\" or \"new\".")
+# both audit reports print the moved sample instead of a delta drawn from unlike numbers
+for _rn56 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn56, "f.title + (f.affected != null && f.affected_before != null && f.affected !== f.affected_before ? ' — ' + f.affected_before + ' → ' + f.affected + ' affected' : '')",
+          "f.title + (f.sample_changed ? ' — not compared: ' + (f.sample_note || 'measured on a different number of pages') : (f.affected != null && f.affected_before != null && f.affected !== f.affected_before ? ' — ' + f.affected_before + ' → ' + f.affected + ' affected' : ''))")
+
+# ---------- E. R24: one story about schema (and about every other category the audit does not weight) ----------
+_bsi56 = code('Build Site Issues')
+_w56a = _bsi56.index('const WEIGHTS = isFull ? {')
+_w56b = _bsi56.index('\n};\n', _w56a) + len('\n};\n')
+WEIGHTS_BLOCK56 = _bsi56[_w56a:_w56b]
+assert "'Schema': 12" in WEIGHTS_BLOCK56 and WEIGHTS_BLOCK56.count('isFull') == 1, 'R24: the weights block moved'
+setcode('Build Site Issues', _bsi56.replace(WEIGHTS_BLOCK56, "// (the weights are declared above section 5b: a category this audit type does not weight must not reach the fix list either — R24)\n"))
+patch('Build Site Issues', "// ===== 6. Order by likely impact (G26, 2026-10-12)",
+"""// ===== 5b. R24 (2026-10-14, FIX_PLAN §3.12): one story about every category =====
+// The audit of execution 550 said three different things about schema in one report: a Medium finding ranked 8th by impact
+// ("Structured data with errors", 26 of 47 pages), `not_assessed: ["Structured data (schema) …"]`, and `not_compared: ["Schema"]`
+// — while Schema appeared in neither `category_scores` nor `weights`. A technical audit has only the crawler's yes/no
+// `has_micromarkup_errors` flag per page: no property, nothing to act on, nothing a score could be built from. So it assesses no
+// schema, emits no schema finding, and says so once, in `not_assessed`, with the flag's count. The full SEO report — which reads
+// the HTML and checks every schema URL — keeps Schema weighted and compared. This guard keeps the three statements together: a
+// scored finding in a category this audit type does not weight is not emitted at all, it is named in `not_assessed`.
+""" + WEIGHTS_BLOCK56 + """const unassessed_cats = {};
+for (let i = findings.length - 1; i >= 0; i--) {
+  const f = findings[i];
+  if (f.scoring === false || f.severity === 'Info' || WEIGHTS[f.category]) continue;
+  unassessed_cats[f.category] = (unassessed_cats[f.category] || 0) + 1;
+  findings.splice(i, 1);
+}
+
+// ===== 6. Order by likely impact (G26, 2026-10-12)""")
+patch('Build Site Issues', """  if (affected.length > 0) {
+    // A handful of broken URLs on a big site is serious but not "Critical" unless the homepage or >=3% of pages are hit""",
+"""  // R24 (2026-10-14): a technical audit does not assess structured data, so it emits no Schema finding — the count goes into the
+  // one line that speaks about schema there, `not_assessed`.
+  if (!isFull && c.cat === 'Schema') { if (affected.length > 0) schema_flag = { pages: affected.length, total }; continue; }
+  if (affected.length > 0) {
+    // A handful of broken URLs on a big site is serious but not "Critical" unless the homepage or >=3% of pages are hit""")
+patch('Build Site Issues', "const findings = [];\nconst whatWorks = [];",
+      "const findings = [];\nconst whatWorks = [];\nlet schema_flag = null;   // R24: the crawl's structured-data flag, reported in `not_assessed` by a technical audit")
+patch('Build Site Issues', "if (!isFull) not_assessed.push('Structured data (schema) and HTML-level checks');",
+"""if (!isFull) not_assessed.push('Structured data (schema) and HTML-level checks: a technical audit reads only the crawler\\'s yes/no flag per page'
+  + (schema_flag ? ' (it flagged ' + schema_flag.pages + ' of ' + schema_flag.total + ' crawled pages)' : '')
+  + ', never a single property, so schema is not scored, not listed as a finding and not compared here — the full SEO report checks it');
+for (const _cat of Object.keys(unassessed_cats)) not_assessed.push(_cat + ': ' + unassessed_cats[_cat] + ' observation(s) from the crawl, in a category this report does not weight — not listed as findings and not compared');""")
+
+# ---------- F. the asserts: nothing half-wired, and the lints green over the new nodes ----------
+for _n56 in ('Analyze Competitor Pages', 'Collect Facts', 'Merge Keyword Data', 'GSC Audit Findings', 'Audit Diff', 'Inspect Retry Plan'):
+    assert 'const RT = (() => {' in code(_n56), _n56 + ': the in-200 retry kit is not inlined'
+for _n56 in ('SERP Top 10 (Retry)', 'Facts SERP (Retry)', 'Keyword Data (Retry)', 'GSC Audit Query (Retry)'):
+    assert nodes[_n56].get('credentials') and nodes[_n56].get('retryOnFail'), _n56
+for _g56, _w56b2, _r56 in (('SERP Failed?', 'Wait Before SERP Retry', 'SERP Top 10 (Retry)'), ('Facts SERP Failed?', 'Wait Before Facts Retry', 'Facts SERP (Retry)'),
+                           ('Keyword Data Failed?', 'Wait Before Keyword Data Retry', 'Keyword Data (Retry)'), ('Any Inspect Retries?', 'Wait Before Inspect Retry', 'GSC Audit Query (Retry)')):
+    assert [t['node'] for t in conns[_g56]['main'][0]] == [_w56b2] and [t['node'] for t in conns[_w56b2]['main'][0]] == [_r56], _g56 + ': gate -> wait -> retry is not wired'
+    assert '40000' in json.dumps(nodes[_g56]['parameters']) or _g56 == 'Any Inspect Retries?', _g56 + ': the gate still only looks for 50000'
+assert code('Build Site Issues').count('const WEIGHTS = isFull ? {') == 1, 'R24: the weights are declared twice'
+assert 'unassessed_cats' in code('Build Site Issues') and 'schema_flag' in code('Build Site Issues'), 'R24: the schema decision did not reach Build Site Issues'
+assert 'NOT_CHECKED' in code('Parse Verdict') and 'score_withheld' in code('Build Word File'), 'R18: the refusal did not reach the report'
+retry_lint.record_gate('SEO Agent v4', ['GSC Audit Query', 'Inspect Retry Plan', 'Any Inspect Retries?', 'Wait Before Inspect Retry', 'GSC Audit Query (Retry)', 'GSC Sitemaps (Audit)'])
+url_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+retry_lint.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+sticky("""### An answer that arrived with HTTP 200 and was still a failure (R18 / R19 / R24)
+**One rule, one kit** (`v5/code/_dfs_retry.js`): DataForSEO answers a dead task with `status_code` 40101 inside an HTTP 200 and Google's URL Inspection with an `error` object — n8n's `retryOnFail` never sees either. Every gate (SERP, facts search, keyword data, URL inspection) now judges the answer with `RT`, **pauses and asks once more**, and never re-sends what a second attempt cannot fix (permission, property, quota).
+**Where the retry fails too, nothing is scored on it.** The evidence is `unavailable`, the keyword verdict is **NOT CHECKED** with no score, no expected visits and no time to rank, and the first reason says why. A verdict computed on a results page nobody saw is worse than no verdict.
+**Counts carry their sample.** Every indexing finding says how many pages Google actually answered for, the number is stored on the finding row, and the next audit **refuses to print a delta** when the two counts were measured on samples more than 20% apart — it says the sample moved.
+**Schema, once:** a technical audit does not assess it (it has only the crawler's yes/no flag), so it emits no Schema finding and says so in "not assessed". The full SEO report assesses, weights and compares it.""",
+    pos('Build Site Issues')[0] - 40, pos('Build Site Issues')[1] + 340, 1180, 300, 3)
+log('An answer that arrived with HTTP 200 and was still a failure (2026-10-14, FIX_PLAN §3.12 R18 / R19 / R24): the in-200 retry rule moved out of the AI path into one kit (v5/code/_dfs_retry.js) that every DataForSEO and Search Console gate uses — the SERP, facts and keyword-data gates now fire on ANY task error (40101 passed the 50000-only test of section 25 twice in exec 549), each pauses and re-sends once, and the audit re-sends the URL inspections Google failed (31 of 45 in exec 550) unless a second attempt cannot help; where the retry fails too the evidence is marked unavailable and the keyword verdict is NOT_CHECKED with no score, no expected visits and no time to rank (a feasibility verdict on a SERP nobody saw is worse than none); every indexing finding carries how many pages Google answered for, the count is stored on the finding row (seo_audit_findings.checked), and the diff prints "not compared: the sample moved" instead of a delta when the two counts came from samples more than 20% apart; and a technical audit emits no Schema finding at all (it reads only the crawler\'s yes/no flag), naming the flag count in not_assessed, so the report can no longer say three different things about schema')
+
 # =============================================================================
 # 9. WRITE
 # =============================================================================

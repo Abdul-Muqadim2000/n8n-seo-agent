@@ -546,6 +546,10 @@
                 "type": "number"
               },
               {
+                "name": "checked",
+                "type": "number"
+              },
+              {
                 "name": "impact",
                 "type": "number"
               },
@@ -1705,6 +1709,16 @@
               {
                 "id": "affected_count",
                 "displayName": "affected_count",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "checked",
+                "displayName": "checked",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
