@@ -7,6 +7,7 @@ import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { KeyRound, Mail, Pause, Pencil, Play, Plus, ShieldBan, ShieldCheck, Trash2, Wifi } from 'lucide-react';
 import type { DnsCheck, MailboxView, MailProviderInfo } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { useOrgCtx } from '@/lib/context';
 import { useAddSuppression, useDeleteMailbox, useDeleteSuppression, useMailboxAction, useMailboxes, useMailProviders, useStartMailboxOauth, useSuppressions, useTestMailbox, type MailboxTestResult, type Suppression } from '@/lib/queries';
@@ -120,6 +121,7 @@ export function MailboxesTab() {
                       Connect with an app password
                     </Button>
                     <ConnectOauth admin={admin} />
+                    <GuideButton id="mailbox-connect" label="Which one should I pick?" className="mt-2" />
                   </div>
                 ) : (
                   <span className="text-sm text-ink-3">An admin of your company connects it.</span>
@@ -272,6 +274,7 @@ function DnsChecks({ dns }: { dns: DnsCheck | null }) {
         <StatusBadge tone={dmarc[0]}>{dmarc[1]}</StatusBadge>
         {dns.dkim === 'found' ? <StatusBadge tone="good">DKIM found</StatusBadge> : <Badge>DKIM not found at common selectors</Badge>}
         <span className="text-xs text-ink-3">· {fmtDate(dns.checkedAt)}</span>
+        <GuideButton id="email-authentication" variant="link" label="Fix these" className="ml-auto" />
       </div>
       {dns.notes.length > 0 && (
         <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-xs text-ink-2">

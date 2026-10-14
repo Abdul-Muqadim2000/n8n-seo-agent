@@ -57,7 +57,35 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 - `.env` values contain spaces: do not `source` it in a shell; read it with `env_settings.load_env()` (Python). `build_docs.py --pdf` renders the guide through Gotenberg from inside the n8n container (without `--pdf` it writes only the HTML).
 - Spend: `ai_budget_usd` / `ai_budget_period` in *Normalize Input* CONFIG is an estimate-based guard ($6 per day since 2026-10-02, set in `build_v4.py`); the Anthropic Console workspace limit is the real cap. Run reports for people outside the build: `python3 run_report.py --exec <ladder id> --exec <page id>` → styled HTML in `docs/run-reports/` (stages, outputs, page preview, delivered documents, cost; reads n8n through the API). DataForSEO balance was $32.6 on 2026-10-01.
 
-## Status (2026-10-13 evening, every fixable fix-plan item done + first whole-system re-rating — latest)
+## Status (2026-10-14, v4.14 — guided setup: a "Show me how" beside every ask — latest)
+**Built, checked in the browser, committed (web + shared only; `app/server` and n8n untouched).** Asked for: wherever the app asks the
+user for something (Search Console, a file, a profile…), offer a guide that walks them through getting it properly.
+- **26 guides** as data in `app/shared/src/guides.ts` (imported as `@seo/shared/guides`, deliberately out of the barrel so the
+  catalogue is its own 55 KB chunk and never loads on first paint): Search Console property / access / owner check / links export /
+  monthly check-in, GA4 access and property ID, the DNS TXT record and the meta tag (per provider: Cloudflare, GoDaddy, Namecheap,
+  Squarespace, cPanel; per CMS: WordPress, Shopify, Wix, Squarespace, Webflow), the IndexNow key file, publishing a written page,
+  Bing Webmaster, the audit fix pack, mailboxes (one-click vs app password, Gmail, Microsoft 365, any SMTP/IMAP host, SPF/DKIM/DMARC,
+  the footer the law asks for), business profile, business facts, style guide, competitors, brand names, keywords to track, budget,
+  inviting the team. Each: why it matters, where, who can do it, minutes, numbered steps with the person's **own values** in copy
+  boxes, the page to open, notes and warnings, how to tell it worked, "if it does not work", related guides.
+- **The panel** (`app/web/src/components/guide/`, lazy chunk): one step at a time, ticks kept in `localStorage` (opens where you
+  stopped), provider tabs, **Copy all steps** and **Send to a colleague** (mailto with the values filled in — the person with DNS
+  access is usually someone else), and the app's own next action as the closing button ("Check now", "Check the file"). Searchable
+  catalogue from the sidebar and the onboarding header.
+- **Wired into 26 files / ~41 places**: verification (all three methods, plus the "not verified yet" message), Google connection
+  (GSC, GA4, property ID), tracking and business forms (keywords, competitors, brand names, facts), profile and style guide,
+  backlinks sources + the Search Console CSV dialog, IndexNow, mailboxes (provider help, app-password field, server settings,
+  SPF/DKIM/DMARC row), link building (every "connect a mailbox"), content (publish a page), technical (fix pack), overview setup
+  checklist, search / AI pages when Google is not connected, the tool forms for "I published a page" and the check-in, company
+  budget and invitations, and every recommendation that asks for something outside the app (`GUIDE_FOR_RECOMMENDATION`).
+- Checks: shared **170** unit tests (21 new: ids, placeholders declared and used, https-only links, closed markup, plain-text export,
+  search precision), server 217, typecheck, web build; **browser run on the dev stack** (sign-up → website → verify) — 15 checks pass
+  at 1440 and 375, light and dark, no console errors, the guide shows the site's real DNS record and the provider tabs work.
+- Marketing: changelog entry + benefit lines on site tracking / backlinks / audits / AI visibility and a new site-tracking FAQ.
+  **Open decision for the owner:** whether guided setup should also become capability #11 on `/platform` (its own page + mockup).
+- Rule recorded in `app/web/CONVENTIONS.md` → "Setup guides": a new ask without a guide is a bug.
+
+## Status (2026-10-13 evening, every fixable fix-plan item done + first whole-system re-rating — previous)
 **The 2026-10-11 fix plan is finished except what needs the owner.** 95 items fixed, deployed and pushed; the only register rows still open are **D25a** (always-on host), **G13** (CMS choice), **G16** (first live send), **G20** (bigger AI panel), **G17** (needs months of calibration data) and the twelve **O** owner items. Harness **4008 passed, 0 failed** (1717 at the start of the work, 3267 this morning); app typecheck + **366** unit tests; smoke ALL PASSED; deployed 2026-10-13 (main workflow **469 nodes**, **21 published**, 17 new Data Table columns synced).
 **First re-rating: 6/10** (`docs/system-review-2026-10-13/`: `RESULTS.md` 21 runs over two passes for $0.91 + $2.88, `SCORECARD.md` scored by an independent session against the unchanged CRITERIA files). Baseline → now: keywords 5→6, ladders 4.5→5.5, content 5→6, cadence 4.5→5.5, technical audit 4→5, rank tracking 3→6, site tracking 5→7, AI visibility 6.5→7, AI growth 5→6.5, backlinks 5→7, link building 6→6.5, reporting & app 4.5→4.5, cost & reliability 4→4.5 (area mean 4.8→5.92). Recorded in `FIX_PLAN.md` §2 and §6.
 **Fixed after the re-rating found them (R1–R16, `FIX_PLAN.md` §3.11):** a budget-refused run no longer leaves a ladder row promising a page nobody wrote, and the cadence / Rank Tracker / Site Tracker count a page as written only on a `written` content-log row (R1, repair script `fix_phantom_pages.py`); Google's **retired** mobile-usability field reads "not checked" instead of a High finding on every page, no non-Info finding ships with empty evidence, and every finding's clicks / impressions basis is capped at the property's measured totals (R10); a page that exhausts its QA rounds still failing is **"did not pass the quality check — not ready to publish"** with the last round's counts everywhere, and the price mask spares figures a draft declares illustrative (R11); the 25% topic bar and the brand refusal run over every intent bucket and the gap (R13); the AI market row comes from a domain match only (R14); a ladder page keeps its planned slug and planned links (R15); a rung stored before the gate existed is set aside with its reason on the read path (R16, `fix_brand_rungs.py`); plus R2–R9, R12.

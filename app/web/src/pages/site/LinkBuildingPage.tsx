@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { CalendarClock, FlaskConical, Handshake, Mail, MessageSquareReply, Search, Target, Trophy } from 'lucide-react';
 import { formatPercent, type LinkBuildingData } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { paths } from '@/lib/paths';
 import { useLinkBuilding } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
@@ -140,9 +141,12 @@ function LinkBuilding({ d, onRun }: { d: LinkBuildingData; onRun?: () => void })
             title="Pitches cannot go out yet"
             action={
               can('admin') ? (
-                <ButtonLink size="sm" variant="secondary" to={paths.settings(org.id, 'mailboxes')} icon={<Mail className="size-3.5" />}>
-                  Company settings → Mailboxes
-                </ButtonLink>
+                <>
+                  <ButtonLink size="sm" variant="secondary" to={paths.settings(org.id, 'mailboxes')} icon={<Mail className="size-3.5" />}>
+                    Company settings → Mailboxes
+                  </ButtonLink>
+                  <GuideButton id="mailbox-connect" label="How to connect it" />
+                </>
               ) : undefined
             }
           >

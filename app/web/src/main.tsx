@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router';
 import { Toaster } from 'sonner';
 import { TooltipProvider } from '@/components/ui/overlay';
+import { GuideProvider } from '@/components/guide';
 import { ThemeProvider } from '@/lib/theme';
 import { router } from './router';
 // brand fonts, self-hosted (the CSP blocks Google Fonts); unicode-range means browsers fetch only the latin files
@@ -23,7 +24,9 @@ createRoot(document.getElementById('root')!).render(
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <RouterProvider router={router} />
+          <GuideProvider>
+            <RouterProvider router={router} />
+          </GuideProvider>
           <Toaster position="bottom-right" toastOptions={{ className: '!bg-surface !text-ink !border-line' }} />
         </TooltipProvider>
       </QueryClientProvider>

@@ -8,6 +8,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { mailboxSchema, type MailboxView } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { ApiRequestError, errorMessage } from '@/lib/api';
 import { useCreateMailbox, useUpdateMailbox } from '@/lib/queries';
 import { applyServerErrors } from '@/components/site/helpers';
@@ -31,10 +32,13 @@ interface Provider {
   imapSecure: boolean;
   help: ReactNode;
   warn?: boolean;
+  /** the step-by-step guide for this host */
+  guide: string;
 }
 const PROVIDERS: Provider[] = [
   {
     id: 'google',
+    guide: 'gmail-app-password',
     label: 'Gmail / Google Workspace',
     smtpHost: 'smtp.gmail.com',
     smtpPort: 465,
@@ -52,6 +56,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     id: 'microsoft',
+    guide: 'microsoft-app-password',
     label: 'Microsoft 365 / Outlook',
     smtpHost: 'smtp.office365.com',
     smtpPort: 587,
@@ -64,6 +69,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     id: 'zoho',
+    guide: 'smtp-imap-settings',
     label: 'Zoho Mail',
     smtpHost: 'smtp.zoho.com',
     smtpPort: 465,
@@ -75,6 +81,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     id: 'fastmail',
+    guide: 'smtp-imap-settings',
     label: 'Fastmail',
     smtpHost: 'smtp.fastmail.com',
     smtpPort: 465,
@@ -86,6 +93,7 @@ const PROVIDERS: Provider[] = [
   },
   {
     id: 'other',
+    guide: 'smtp-imap-settings',
     label: 'Other',
     smtpHost: '',
     smtpPort: 465,
@@ -262,7 +270,9 @@ export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: str
               <ChoiceCard key={x.id} selected={provider === x.id} onSelect={() => pick(x.id)} title={x.label} />
             ))}
           </div>
-          <Callout tone={p.warn ? 'warning' : 'info'}>{p.help}</Callout>
+          <Callout tone={p.warn ? 'warning' : 'info'} action={<GuideButton id={p.guide} label="Show me how" />}>
+            {p.help}
+          </Callout>
         </fieldset>
         )}
 
@@ -279,7 +289,13 @@ export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: str
             </Field>
           )}
           {!oauth && (
-            <Field label={editing ? 'New app password' : 'App password'} optional={editing} hint={editing ? 'Leave empty to keep the current one' : 'Never shown again after saving'} error={e.password?.message}>
+            <Field
+              label={editing ? 'New app password' : 'App password'}
+              optional={editing}
+              hint={editing ? 'Leave empty to keep the current one' : 'Never shown again after saving'}
+              labelAction={<GuideButton id={p.guide} variant="link" label="How do I get one?" />}
+              error={e.password?.message}
+            >
               {(f) => <Input {...f} type="password" autoComplete="new-password" {...register('password')} />}
             </Field>
           )}
@@ -288,6 +304,7 @@ export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: str
         {!oauth && (
         <fieldset className="space-y-3">
           <legend className="mb-2 text-[13px] font-medium text-ink">Server settings</legend>
+          <GuideButton id="smtp-imap-settings" variant="link" label="Where do I find these?" />
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1fr)_7rem]">
             <Field label="SMTP server (sending)" error={e.smtpHost?.message}>
               {(f) => <Input {...f} placeholder="smtp.example.com" {...register('smtpHost')} />}
@@ -311,7 +328,10 @@ export function MailboxDialog({ orgId, company, mailbox, onClose }: { orgId: str
 
         <fieldset className="space-y-4">
           <legend className="mb-1 text-[13px] font-medium text-ink">Signature and footer</legend>
-          <p className="text-[13px] text-ink-3">Every e-mail ends with who is writing, your postal address and a way to say no: the law asks for them (CAN-SPAM, GDPR, PECR).</p>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[13px] text-ink-3">Every e-mail ends with who is writing, your postal address and a way to say no: the law asks for them (CAN-SPAM, GDPR, PECR).</p>
+            <GuideButton id="mailbox-connect" variant="link" label="What goes in here?" />
+          </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <Field label="Name in the signature" optional hint="Defaults to your name" error={e.signatureName?.message}>
               {(f) => <Input {...f} {...register('signatureName')} />}

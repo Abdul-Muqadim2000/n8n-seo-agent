@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { ArrowUpDown, BarChart3, CalendarRange, CheckCircle2, FileText, FlaskConical, Lightbulb, LineChart, Minus, MousePointerClick, PieChart, Search, Sparkles, Target, TrendingDown, TrendingUp, TriangleAlert, Users } from 'lucide-react';
 import { CHANGE_TEST_METHOD, CHANGE_VERDICT_TONES, compactNumber, titleCase, type Lineage, type MetricsPoint, type SearchData, type TrendPoint } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { fmtAgo, fmtDate } from '@/lib/utils';
@@ -47,7 +48,7 @@ interface Ga {
 }
 
 function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
-  const { org, can, page } = useSitePage();
+  const { org, site, can, page } = useSitePage();
   const S = d.snapshot;
   const metrics = useMemo(() => sortByDate(d.metrics, (m) => m.periodEnd), [d.metrics]);
   const M: MetricsPoint | null = metrics.length ? metrics[metrics.length - 1] : null;
@@ -87,7 +88,20 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
   return (
     <Stagger className="space-y-6">
       {!gscOn && S?.gsc.error && (
-        <Callout tone="warning" title="Search Console is not connected yet" action={can('admin') ? <ButtonLink to={page('settings/verification')} size="sm" variant="secondary">Connect it</ButtonLink> : undefined}>
+        <Callout
+          tone="warning"
+          title="Search Console is not connected yet"
+          action={
+            <>
+              {can('admin') && (
+                <ButtonLink to={page('settings/verification')} size="sm" variant="secondary">
+                  Connect it
+                </ButtonLink>
+              )}
+              <GuideButton id="search-console-access" vars={{ domain: site.domain }} />
+            </>
+          }
+        >
           Add the service account as a user of the Search Console property. Reported error: {S.gsc.error}
         </Callout>
       )}
@@ -227,7 +241,16 @@ function SearchBody({ d, refetching }: { d: SearchData; refetching: boolean }) {
               icon={<BarChart3 className="size-5" />}
               title="Google Analytics is not connected"
               description="Give the service account Viewer access to your GA4 property, then choose the property in tracking settings. Sessions, key events and landing pages appear from the next weekly report."
-              action={can('admin') ? <ButtonLink to={page('settings/tracking')} variant="secondary">Choose a GA4 property</ButtonLink> : undefined}
+              action={
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {can('admin') && (
+                    <ButtonLink to={page('settings/tracking')} variant="secondary">
+                      Choose a GA4 property
+                    </ButtonLink>
+                  )}
+                  <GuideButton id="ga4-access" vars={{ domain: site.domain }} />
+                </div>
+              }
             />
           </Card>
         )}

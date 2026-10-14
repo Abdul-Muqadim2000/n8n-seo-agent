@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { ChoiceCard } from '@/components/ui/field';
 import { CopyButton } from '@/components/ui/misc';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { qk, useProviders, useVerification, useVerifySite } from '@/lib/queries';
 import { useQueryClient } from '@tanstack/react-query';
@@ -172,6 +173,15 @@ export function VerificationPanel({
       </div>
 
       <div className="rounded-xl border border-line bg-surface-2 p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-ink">{METHOD_LABELS[method]}: what to do</h3>
+          <GuideButton
+            id={method === 'search_console' ? 'search-console-owner' : method === 'dns' ? 'dns-txt-record' : 'meta-tag'}
+            vars={{ domain: site.domain, dnsHost: v.dnsRecord.host, dnsValue: v.dnsRecord.value, metaTag: v.metaTag }}
+            label="Show me how, step by step"
+            finish={canEdit && method !== 'search_console' ? { label: 'Check now', onClick: check } : undefined}
+          />
+        </div>
         {method === 'search_console' && (
           <div className="space-y-4">
             <StepList
@@ -240,7 +250,11 @@ export function VerificationPanel({
       </div>
 
       {result && !result.verified && (
-        <Callout tone="critical" title="Not verified yet">
+        <Callout
+          tone="critical"
+          title="Not verified yet"
+          action={<GuideButton id={method === 'dns' ? 'dns-txt-record' : 'meta-tag'} vars={{ domain: site.domain, dnsHost: v.dnsRecord.host, dnsValue: v.dnsRecord.value, metaTag: v.metaTag }} label="Walk me through it" finish={canEdit ? { label: 'Check now', onClick: check } : undefined} />}
+        >
           {result.message}
         </Callout>
       )}

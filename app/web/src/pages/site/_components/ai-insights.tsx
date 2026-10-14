@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { AtSign, Bot, Coins, Globe, Layers, Link2, MessageSquareQuote, PieChart, Plus, Scale, ShieldAlert, ShieldCheck, Target, Users } from 'lucide-react';
 import { compactNumber, formatPercent, titleCase, type AiAccess, type AiGroup, type AiIndex, type AiPerception, type AiTraffic } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { useSiteAdmin } from '@/lib/queries';
 import { cn, fmtDate } from '@/lib/utils';
@@ -28,7 +29,20 @@ export function AiTrafficPanel({ traffic }: { traffic: AiTraffic | null }) {
   if (!traffic.connected)
     return (
       <Panel title="What AI visits are worth" icon={<Coins />} description="Visits, key events and revenue from ChatGPT, Perplexity, Gemini, Copilot, Claude and other assistants (GA4)">
-        <Callout tone="info" title="GA4 is not connected for this website" action={can('admin') ? <ButtonLink to={page('settings/tracking')} size="sm" variant="secondary">Connect GA4</ButtonLink> : undefined}>
+        <Callout
+          tone="info"
+          title="GA4 is not connected for this website"
+          action={
+            <>
+              {can('admin') && (
+                <ButtonLink to={page('settings/tracking')} size="sm" variant="secondary">
+                  Connect GA4
+                </ButtonLink>
+              )}
+              <GuideButton id="ga4-access" />
+            </>
+          }
+        >
           {traffic.error && !/not connected/i.test(traffic.error) ? `${traffic.error}. ` : ''}Give the service account Viewer access to your GA4 property; the next weekly run shows what AI answers are worth.
         </Callout>
       </Panel>

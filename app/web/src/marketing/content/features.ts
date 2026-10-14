@@ -344,6 +344,7 @@ export const features: Feature[] = [
       'A daily check of your key pages: you hear the same day when one disappears, is set to noindex, starts redirecting or changes its canonical, title or robots.txt',
       'A pre-release check your build can call: the same page checks run against a staging address or a list of URLs and answer pass or fail, so a release never takes a page out of Google',
       'Mark a fix done and that one issue is re-checked the next morning, not at the next monthly audit',
+      'The fix pack comes with a guide for putting each file where it belongs — robots.txt, llms.txt, redirects, schema and the internal links',
       'Google’s own view of every key page — indexed or not, the canonical Google chose, its last crawl, mobile usability and rich results',
       'What crawlers see before JavaScript runs: your key pages read twice, so anything only a browser can see is named',
       'A fix list ordered by the traffic each issue puts at risk, with the reason shown',
@@ -433,6 +434,7 @@ export const features: Feature[] = [
       'Every chart marked with what happened: pages you published, technical fixes, Google updates and breaks in Google’s own data',
       'After a page goes live, its trend is compared with the rest of your website, so you hear whether the change likely helped',
       'Dashboards per website for search, traffic, rankings and content',
+      'Every connection has a guide: Search Console, Analytics and the property ID, step by step, with your own values ready to copy',
     ],
     steps: [
       { title: 'Connect', body: 'Add Ascentra’s service account to Search Console and choose your GA4 property.' },
@@ -447,6 +449,10 @@ export const features: Feature[] = [
     ],
     faqs: [
       { q: 'What access does Ascentra need?', a: 'You add Ascentra’s service account as a user in Search Console and GA4. It reads your data; it does not change your settings.' },
+      {
+        q: 'What if nobody here has done this before?',
+        a: 'Every ask in Ascentra has a “Show me how” button next to it. It opens the job as numbered steps you tick off, with your own values in copy boxes, the page to open, and tabs for the provider or CMS you actually use. If the person who can do it is someone else — whoever manages your DNS, usually — one button sends them the whole thing by e-mail, values filled in, no account needed.',
+      },
       {
         q: 'What is a striking-distance keyword?',
         a: 'A keyword where your page already ranks just below the top results. Small improvements there tend to pay off fastest, so the pipeline picks them early.',
@@ -494,6 +500,7 @@ export const features: Feature[] = [
       'Answer Analyst for sentiment and wrong claims, plus AI crawler access and llms.txt',
       'Every rate counts the answers that came back, and the report names any request that failed and was sent again',
       'Wrong claims are checked against your business facts — with no profile on file the report says “not checked”, never “nothing wrong”',
+      'The one file that gets new pages to Bing (and so to Copilot and ChatGPT search) comes with a guide for whichever platform your site runs on',
     ],
     steps: [
       { title: 'Build the panel', body: 'Up to 50 questions your buyers ask, grouped by stage and topic.' },
@@ -544,6 +551,7 @@ export const features: Feature[] = [
       'Link-farm pages and search-results pages are written off, so your best links are the ones that really help',
       'Scored prospects with contacts, outreach drafts and follow-ups after 7 and 14 days',
       'Connect Microsoft 365 or Gmail in one click, with no password to store, or any mail host with an app password',
+      'Guides for the parts that happen outside Ascentra: the app password, the SMTP and IMAP settings, your SPF, DKIM and DMARC records, and Google’s own export of your links',
       'Podcast shows on your topics that take guests, each with a contact on the show’s own website',
       'Journalist requests from the digests in your own mailbox, matched to your topics and kept to their deadline',
       'What kind of page earns links in your market — data study, free tool, template or guide — with the competitor pages that prove it',

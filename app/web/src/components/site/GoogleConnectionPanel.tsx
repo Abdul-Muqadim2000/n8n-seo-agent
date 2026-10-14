@@ -10,6 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Callout, ErrorState, Skeleton } from '@/components/ui/feedback';
 import { ChoiceCard, Field, Input } from '@/components/ui/field';
 import { KeyValue } from '@/components/ui/misc';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { qk, useGoogleConnection, useUpdateSite } from '@/lib/queries';
 import { cn } from '@/lib/utils';
@@ -92,7 +93,7 @@ function ConnectionBody({ orgId, site, conn, canEdit }: { orgId: string; site: S
               ]}
             />
             {restricted && (
-              <Callout tone="warning">
+              <Callout tone="warning" action={<GuideButton id="search-console-access" vars={{ domain: site.domain, serviceAccount: conn.serviceAccountEmail }} label="Show me where" />}>
                 The service account has restricted access. Change it to <strong className="font-medium">Full</strong> in Search Console (Settings → Users and permissions) so
                 audits can read sitemaps and page indexing.
               </Callout>
@@ -100,7 +101,10 @@ function ConnectionBody({ orgId, site, conn, canEdit }: { orgId: string; site: S
           </div>
         ) : (
           <div className="mt-3 space-y-3">
-            <p className="text-sm text-ink-2">Search Console is not connected yet. Add the service account as a user:</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-ink-2">Search Console is not connected yet. Add the service account as a user:</p>
+              <GuideButton id="search-console-access" vars={{ domain: site.domain, serviceAccount: conn.serviceAccountEmail }} />
+            </div>
             <SearchConsoleSteps email={conn.serviceAccountEmail} domain={site.domain} />
             {conn.gsc.error && <p className="text-[13px] text-ink-3">Google said: {conn.gsc.error}</p>}
           </div>
@@ -127,9 +131,12 @@ function ConnectionBody({ orgId, site, conn, canEdit }: { orgId: string; site: S
             <Ga4Picker orgId={orgId} site={site} conn={conn} canEdit={canEdit} />
           ) : (
             <>
-              <p className="text-sm text-ink-2">
-                GA4 adds visits and conversions from search to the weekly report. Give the service account Viewer access, then press “Check again”:
-              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm text-ink-2">
+                  GA4 adds visits and conversions from search to the weekly report. Give the service account Viewer access, then press “Check again”:
+                </p>
+                <GuideButton id="ga4-access" vars={{ domain: site.domain, serviceAccount: conn.serviceAccountEmail }} />
+              </div>
               <Ga4Steps email={conn.serviceAccountEmail} />
               {conn.ga4.error && <p className="text-[13px] text-ink-3">Google said: {conn.ga4.error}</p>}
               <ManualGa4 orgId={orgId} site={site} canEdit={canEdit} />
@@ -238,7 +245,13 @@ function ManualGa4({ orgId, site, canEdit, compact }: { orgId: string; site: Sit
     );
   };
   return (
-    <Field label="GA4 property ID" hint="GA4 → Admin → Property details. Digits only." error={err ?? undefined} className="max-w-md">
+    <Field
+      label="GA4 property ID"
+      hint="GA4 → Admin → Property details. Digits only."
+      labelAction={<GuideButton id="ga4-property-id" vars={{ domain: site.domain }} variant="link" label="Where do I find it?" />}
+      error={err ?? undefined}
+      className="max-w-md"
+    >
       {(p) => (
         <div className="flex gap-2">
           <Input {...p} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} placeholder="543096312" />

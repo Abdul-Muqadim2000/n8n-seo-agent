@@ -11,6 +11,7 @@ import { Callout } from '@/components/ui/feedback';
 import { Field, Input, Select, Textarea } from '@/components/ui/field';
 import { IconTile, ScoreRing } from '@/components/insight';
 import { TagInput } from '@/components/ui/tag-input';
+import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
 import { qk, useStartRun } from '@/lib/queries';
 import { cn } from '@/lib/utils';
@@ -136,7 +137,7 @@ export function useSaveProfile(orgId: string, siteId: string) {
 
 const GROUP_ICON: Record<string, ReactNode> = { Author: <UserRound />, 'Expert reviewer': <BadgeCheck />, Business: <Building2 />, Address: <MapPin /> };
 
-function Group({ title, description, children }: { title: string; description?: ReactNode; children: ReactNode }) {
+function Group({ title, description, guide, children }: { title: string; description?: ReactNode; guide?: ReactNode; children: ReactNode }) {
   return (
     <fieldset className="space-y-4 border-t border-line pt-5 first:border-t-0 first:pt-0">
       <legend className="sr-only">{title}</legend>
@@ -146,10 +147,11 @@ function Group({ title, description, children }: { title: string; description?: 
             {GROUP_ICON[title]}
           </IconTile>
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold text-ink">{title}</h4>
           {description && <p className="mt-0.5 text-[13px] leading-relaxed text-ink-3">{description}</p>}
         </div>
+        {guide && <div className="shrink-0">{guide}</div>}
       </div>
       {children}
     </fieldset>
@@ -231,7 +233,11 @@ export function ProfileForm({
 
   const fields = (
     <fieldset disabled={readOnly} className="min-w-0 space-y-6">
-      <Group title="Author" description="The real person whose name goes on your pages. Google and AI assistants trust content from named, qualified people.">
+      <Group
+        title="Author"
+        description="The real person whose name goes on your pages. Google and AI assistants trust content from named, qualified people."
+        guide={<GuideButton id="business-profile" label="How to fill this in" />}
+      >
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Name" error={errors.author?.name?.message}>
             {(p) => <Input {...p} autoComplete="name" placeholder="Sara Khan" {...register('author.name')} />}
@@ -369,6 +375,7 @@ export function ProfileForm({
       <Group
         title="How you write"
         description="Your house style. Every page we write follows it, and the quality check reports a draft that breaks it — your own name written the wrong way is corrected before delivery, the rest is advice next to the page."
+        guide={<GuideButton id="style-guide" label="How to fill this in" />}
       >
         <Field
           label="How your brand name is written"

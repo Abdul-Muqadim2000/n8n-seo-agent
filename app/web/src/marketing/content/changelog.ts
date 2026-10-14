@@ -14,6 +14,23 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-14',
+    title: 'Every setup step now comes with a guide',
+    summary:
+      'Wherever Ascentra asks you for something it cannot get itself — a Google permission, a DNS record, a file on your site, a mailbox, your business details — there is now a “Show me how” button beside the ask. It opens that one job as numbered steps, with your own values ready to copy.',
+    highlights: [
+      'Twenty-six guides covering everything we ask for: Search Console and Analytics access, proving the domain is yours, the IndexNow file, the links export, mailboxes and their SPF, DKIM and DMARC records, publishing a written page, applying a fix pack, your business profile and style guide',
+      'Your real values, not examples: the DNS record for your domain, your key file, the address to add in Search Console — each in a copy box',
+      'Tabs for the provider you actually use: Cloudflare, GoDaddy, Namecheap, cPanel; WordPress, Shopify, Wix, Squarespace, Webflow',
+      'Tick the steps off as you go — close the panel, come back tomorrow and it opens where you stopped',
+      'Send to a colleague puts the whole guide in an e-mail, values filled in, for whoever manages your DNS or your website',
+      'Each guide ends with how to tell it worked and an “if it does not work” list, and the button that carries on in the app is right there',
+      'A searchable list of all of them in the sidebar and in the setup wizard',
+    ],
+    features: ['site-tracking', 'backlinks', 'technical-audits', 'ai-visibility'],
+    labels: ['Setup'],
+  },
+  {
     date: '2026-10-13',
     title: 'Connect your mailbox without handing over a password',
     summary:

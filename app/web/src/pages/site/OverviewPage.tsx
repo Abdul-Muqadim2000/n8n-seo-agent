@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { Activity, BellRing, Bot, CalendarDays, CheckCircle2, Clock, FileText, Gauge, LayoutDashboard, Lightbulb, Link2, MousePointerClick, PenSquare, TrendingUp } from 'lucide-react';
 import { compactNumber, type OverviewData } from '@seo/shared';
+import { GuideButton } from '@/components/guide';
 import { useSiteData } from '@/lib/queries';
 import { paths } from '@/lib/paths';
 import { cn, fmtDate, fmtDateTime } from '@/lib/utils';
@@ -402,14 +403,19 @@ function SetupChecklist({ d }: { d: OverviewData }) {
       title: 'Weekly tracking',
       icon: <TrendingUp />,
       detail: 'Search Console, Analytics, Google Trends and live rank checks every Monday.',
-      action: can('admin') ? (
-        <ButtonLink to={page('settings/tracking')} size="sm">
-          Start weekly tracking
-        </ButtonLink>
-      ) : (
-        <ToolButton mode="track" size="sm">
-          Start weekly tracking
-        </ToolButton>
+      action: (
+        <div className="flex flex-wrap items-center gap-2">
+          {can('admin') ? (
+            <ButtonLink to={page('settings/tracking')} size="sm">
+              Start weekly tracking
+            </ButtonLink>
+          ) : (
+            <ToolButton mode="track" size="sm">
+              Start weekly tracking
+            </ToolButton>
+          )}
+          <GuideButton id="search-console-access" vars={{ domain: d.site.domain }} label="Connect Google" />
+        </div>
       ),
     },
     { done: !!d.health.latest, title: 'Technical audit', icon: <Gauge />, detail: 'Crawl, health score and a fix pack.', action: <ToolButton mode="audit" size="sm">Run a technical audit</ToolButton> },
