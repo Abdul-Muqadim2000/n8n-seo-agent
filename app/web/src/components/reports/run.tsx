@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Check, Coins, Loader2, Mail } from 'lucide-react';
-import { formatUsd, GOALS, PAGE_TYPES, type ModeId, type Run } from '@seo/shared';
+import { COST_SOURCE_LABEL, formatUsd, GOALS, PAGE_TYPES, runCostEstimate, type ModeId, type Run } from '@seo/shared';
 import { cn, fmtBytes } from '@/lib/utils';
 import { Card } from '@/components/ui/card';
 import { Meter } from '@/components/ui/misc';
@@ -221,14 +221,19 @@ export function retryPrefill(input: Record<string, unknown>): Record<string, unk
   return out;
 }
 
+/**
+ * B-R3: one figure, and whose it is. `runCostEstimate` picks what the run cost, then the engine's own calibrated estimate, then
+ * ours — so a list, the run page and the budget can never show three different numbers for the same run.
+ */
 export function CostLine({ run }: { run: Run }) {
+  const cost = runCostEstimate(run);
   return (
     <span className="inline-flex flex-col items-end gap-1 tabular">
-      <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-2" title="Estimated cost">
+      <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-2" title={cost.basis}>
         <Coins className="size-3 text-ink-3" aria-hidden />
-        {formatUsd(run.estimatedCostUsd)}
+        {formatUsd(cost.usd, cost.source === 'measured' ? 3 : 2)}
       </span>
-      {run.actualCostUsd != null && <span className="block text-xs text-ink-3">data {formatUsd(run.actualCostUsd, 3)}</span>}
+      <span className="block text-xs text-ink-3">{COST_SOURCE_LABEL[cost.source]}</span>
     </span>
   );
 }

@@ -8,6 +8,7 @@ export * from './api';
 export * from './data';
 export * from './format';
 export * from './profile';
+export * from './cost';
 export * from './estimate';
 export * from './pipeline-notices';
 export * from './ladders';
@@ -21,5 +22,6 @@ export * from './annotations';
 export * from './change-test';
 export * from './share';
 export * from './queue';
+export * from './report-delivery';
 // The setup guides are imported from '@seo/shared/guides', not from here: the catalogue is a sizeable chunk of text and only
 // the help panel (and the recommendation → guide map) needs it, so it stays out of every bundle that imports this barrel.

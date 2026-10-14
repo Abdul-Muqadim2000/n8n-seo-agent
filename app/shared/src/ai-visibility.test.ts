@@ -71,10 +71,12 @@ describe('AI growth (v4.12)', () => {
     expect(monitorSettingsSchema.safeParse({ aiPagesPerMonth: 9 }).success).toBe(false);
     expect(monitorsBody({ aiGrowth: false, aiPagesPerMonth: 4 })).toEqual({ ai_growth: false, ai_pages_month: 4 });
   });
-  it('costs: the AI pages ($1.20 each) + weekly drafts; nothing when off; added to the monitoring total', () => {
-    expect(estimateAiGrowthCost().total).toBeCloseTo(2 * 1.2 + 4.33 * 0.03, 2);
+  // B-R3: the price of a written page comes from the one cost table now (MONITOR_COSTS.blogPostEach = modeCostUsd('keyword')),
+  // so this test asks for that figure instead of repeating the 2026-10-02 $1.20 it used to hard-code.
+  it('costs: the AI pages (one written page each) + weekly drafts; nothing when off; added to the monitoring total', () => {
+    expect(estimateAiGrowthCost().total).toBeCloseTo(2 * MONITOR_COSTS.blogPostEach + 4.33 * 0.03, 2);
     expect(estimateAiGrowthCost({ growth: false }).total).toBe(0);
-    expect(estimateAiGrowthCost({ pages: 50 }).pages).toBeCloseTo(8 * 1.2, 2);
+    expect(estimateAiGrowthCost({ pages: 50 }).pages).toBeCloseTo(8 * MONITOR_COSTS.blogPostEach, 2);
     const base = { aiVisibility: true, backlinks: false, auditMonthly: false, blogsPerWeek: 0 };
     expect(estimateMonitoringCost({ ...base, aiGrowth: true, aiPages: 2 }) - estimateMonitoringCost({ ...base, aiGrowth: false })).toBeCloseTo(estimateAiGrowthCost().total, 1);
   });
