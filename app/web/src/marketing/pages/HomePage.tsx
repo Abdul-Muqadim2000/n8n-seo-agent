@@ -488,8 +488,15 @@ function PricingTeaser() {
           </Reveal>
         ))}
       </div>
-      <Reveal className="mt-10 text-center">
-        <ArrowLink to="/pricing">Compare plans</ArrowLink>
+      <Reveal className="mx-auto mt-10 max-w-5xl rounded-xl border border-line bg-page px-6 py-5 text-center">
+        <p className="text-[15px] font-medium text-ink">Nobody on the team to do this?</p>
+        <p className="mx-auto mt-1.5 max-w-2xl text-[14px] leading-relaxed text-ink-2">
+          We can connect the accounts for you, publish the finished pages on your site — any CMS, or a pull request for a React codebase — and fix what the audit finds.
+        </p>
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-x-8 gap-y-3">
+          <ArrowLink to="/pricing#done-for-you">See the done-for-you packages</ArrowLink>
+          <ArrowLink to="/pricing">Compare plans</ArrowLink>
+        </div>
       </Reveal>
     </Section>
   );

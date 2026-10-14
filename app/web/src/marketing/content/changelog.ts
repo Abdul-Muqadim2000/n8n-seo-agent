@@ -15,6 +15,23 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-14',
+    title: 'New plans, and three things we can do for you',
+    summary:
+      'Plans are simpler and cost less: Starter at $39 a month for one website and a page a week, Growth at $129 for the whole engine on up to three websites. And for teams with nobody to do the hands-on work, three done-for-you packages sit alongside them.',
+    highlights: [
+      'Starter $39 a month: one website, research, a page a week written and checked, monthly audits, tracking and the Monday report',
+      'Growth $129 a month: up to three websites, the autopilot pipeline, AI search visibility with the daily pulse, backlinks and link building',
+      'Setup done for you: we connect Search Console and Analytics, fill in your profile and style guide from one call, and run the first audit and ladder',
+      'We publish your pages: WordPress, Shopify, Webflow, Squarespace, Ghost, a headless CMS — or a pull request for a React or Next.js codebase',
+      'We fix what the audit found: the fix pack applied by a person, every change through your review, then a re-audit showing the score before and after',
+      'Managed: the Growth plan and all three services for one monthly number',
+      'A person does the service work, we only ask for access you can withdraw, and nothing goes live without your approval',
+    ],
+    features: ['guided-setup', 'content', 'technical-audits'],
+    labels: ['Pricing'],
+  },
+  {
+    date: '2026-10-14',
     title: 'Every setup step now comes with a guide',
     summary:
       'Wherever Ascentra asks you for something it cannot get itself — a Google permission, a DNS record, a file on your site, a mailbox, your business details — there is now a “Show me how” button beside the ask. It opens that one job as numbered steps, with your own values ready to copy.',

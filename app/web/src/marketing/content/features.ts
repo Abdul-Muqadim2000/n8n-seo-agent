@@ -123,7 +123,7 @@ export const features: Feature[] = [
       { q: 'What happens on Manual?', a: 'The step waits in “Needs you” until someone on your team approves it. Nothing is written before that.' },
       {
         q: 'Does Ascentra publish to my site by itself?',
-        a: 'No. It prepares a publish-ready package — HTML, Markdown and meta data — and can create WordPress drafts. Your team publishes; Ascentra then checks the live page.',
+        a: 'No. It prepares a publish-ready package — HTML, Markdown and meta data — and can create WordPress drafts. Your team publishes; Ascentra then checks the live page. If you would rather not, publishing is one of the done-for-you services on the pricing page.',
       },
       { q: 'Can I change the pace later?', a: 'Yes. Posts per week, the default mode and the ladder limits are website settings you can change at any time.' },
     ],

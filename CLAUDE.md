@@ -86,6 +86,16 @@ user for something (Search Console, a file, a profile…), offer a guide that wa
   capabilities" on its own (`capabilityCount`). Plus the changelog entry, benefit lines on site tracking / backlinks / audits / AI
   visibility and a new site-tracking FAQ.
 - Rule recorded in `app/web/CONVENTIONS.md` → "Setup guides": a new ask without a guide is a bug.
+- **Pricing and packaging reworked the same day (all numbers still PLACEHOLDER, owner to confirm).** Market check (2026): Semrush
+  $139.95/$249.95/$499.95, Ahrefs $129/$249/$449, Surfer ~$89-99, SE Ranking ~$65-129; agency retainers average ≈ $3,200 a month.
+  Plans now **Starter $39** (1 website, a page a week), **Growth $129** (3 websites, up to 3 pages a week, AI visibility + backlinks
+  + link building), Enterprise custom — under every tool-only competitor while including the written pages. New **done-for-you
+  packages** on `/pricing#done-for-you` (`servicePackages` in `content/pricing.ts`): setup $199 one-off, publishing $99 a month for 4
+  pages (any CMS, or a pull request for a React / Next.js codebase; $29 extra each), audit fixes $399 per site ($149 a month
+  ongoing), and **Managed $699 a month** = Growth + all three. Each card states the turnaround, what we need from the customer and
+  that a person does the work; the comparison table has a "Done for you" group and the FAQ answers all three.
+  **Owner must confirm before this goes live:** the prices and the annual discount, who delivers the services and at what capacity,
+  the turnaround promises, which stacks publishing covers, and whether plan prices include the usage or sit on top of it.
 
 ## Status (2026-10-13 evening, every fixable fix-plan item done + first whole-system re-rating — previous)
 **The 2026-10-11 fix plan is finished except what needs the owner.** 95 items fixed, deployed and pushed; the only register rows still open are **D25a** (always-on host), **G13** (CMS choice), **G16** (first live send), **G20** (bigger AI panel), **G17** (needs months of calibration data) and the twelve **O** owner items. Harness **4008 passed, 0 failed** (1717 at the start of the work, 3267 this morning); app typecheck + **366** unit tests; smoke ALL PASSED; deployed 2026-10-13 (main workflow **469 nodes**, **21 published**, 17 new Data Table columns synced).

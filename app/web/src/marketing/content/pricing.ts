@@ -22,40 +22,41 @@ export const pricingTiers: PricingTier[] = [
   {
     id: 'starter',
     name: 'Starter',
-    price: '$149', // PLACEHOLDER — confirm
+    price: '$39', // PLACEHOLDER — confirm
     period: 'per month', // PLACEHOLDER — confirm
-    monthly: 149, // PLACEHOLDER — confirm (keep equal to `price`)
-    description: 'For one website that needs research, audits and a steady weekly rhythm.',
+    monthly: 39, // PLACEHOLDER — confirm (keep equal to `price`)
+    description: 'One website, the whole loop: research, a page a week, monthly audits and the Monday report.',
     // ?plan= is ignored by the sign-up page today; it records which plan the visitor came from
     cta: { label: 'Start free', to: '/signup?plan=starter' },
     features: [
       '1 website', // PLACEHOLDER — confirm
-      'Keyword research and verdicts',
+      'Keyword research, verdicts and difficulty for your site',
       'One active keyword ladder', // PLACEHOLDER — confirm
-      'Content engine with SEO QA, the originality check and the blog package',
-      'Monthly technical audits with a fix pack',
-      'Search Console, GA4 and Trends tracking',
-      'Step-by-step guides for every setup task',
-      'Monday report',
+      'A page a week, written, checked and ready to publish', // PLACEHOLDER — confirm
+      'Monthly technical audit with a fix pack',
+      'Search Console, GA4 and Trends tracking, with weekly rank checks',
+      'Monday report, alerts and share links',
+      'A step-by-step guide for every setup task',
     ],
   },
   {
     id: 'growth',
     name: 'Growth',
-    price: '$449', // PLACEHOLDER — confirm
+    price: '$129', // PLACEHOLDER — confirm
     period: 'per month', // PLACEHOLDER — confirm
-    monthly: 449, // PLACEHOLDER — confirm (keep equal to `price`)
-    description: 'For teams that want the full loop, AI search visibility and backlinks.',
+    monthly: 129, // PLACEHOLDER — confirm (keep equal to `price`)
+    description: 'Everything the engine does, on up to three websites — including AI answers and backlinks.',
     cta: { label: 'Start free', to: '/signup?plan=growth' },
     highlighted: true,
     includesPrevious: 'Everything in Starter, plus:',
     features: [
-      'Up to 5 websites', // PLACEHOLDER — confirm
-      'Autopilot pipeline with several keyword ladders',
+      'Up to 3 websites', // PLACEHOLDER — confirm
+      'Up to three pages a week, with the autopilot pipeline and several ladders', // PLACEHOLDER — confirm
       'AI search visibility: up to 50 questions and the daily AI Pulse',
-      'Backlinks from every source with Ascentra’s own link checks',
-      'Prospects, contacts and outreach drafts from your own mailbox',
+      'Backlinks from every source, with Ascentra’s own link checks',
+      'Link building: prospects, contacts and pitches from your own mailbox',
       'Full SEO reports as PDF or Word',
+      'Daily key-page check and the pre-release check for your build',
     ],
   },
   {
@@ -84,7 +85,106 @@ export const annualMonthly = (monthly: number): number => Math.round(monthly * (
 
 /** one line under the plans: AI and data usage is shown before every run */
 export const pricingUsageNote =
-  'AI and data usage is estimated before every run and checked against your budget, so there are no surprises on the bill.'; // PLACEHOLDER — confirm billing model
+  'Your plan covers the pages and the checks listed above. Anything extra you start by hand shows its cost before it runs and is capped by the budget you set, so the bill cannot run away.'; // PLACEHOLDER — confirm the billing model (plan-included usage vs usage on top)
+
+/**
+ * "Done for you" — the work a person on our team does, on top of any plan. The software does not do these: somebody has to be given
+ * access, open the CMS and review a change. PRICES AND DELIVERY ARE PLACEHOLDERS: confirm what the team can actually commit to
+ * (capacity, turnaround, which stacks, what happens when a job runs long) before this goes live.
+ */
+export interface ServicePackage {
+  id: 'setup' | 'publishing' | 'fixes' | 'managed';
+  name: string;
+  /** shown big */
+  price: string;
+  /** "one-off", "per month", … */
+  period: string;
+  /** one line: what you get out of it */
+  description: string;
+  includes: string[];
+  /** when it is done by */
+  turnaround: string;
+  /** what we need from you */
+  needs: string;
+  cta: { label: string; to: string };
+  highlighted?: boolean;
+}
+
+export const servicePackages: ServicePackage[] = [
+  {
+    id: 'setup',
+    name: 'Setup, done for you',
+    price: '$199', // PLACEHOLDER — confirm
+    period: 'one-off',
+    description: 'We do the connecting and the first run, so your first Monday report is a real one.',
+    includes: [
+      'Ownership proved and Search Console and GA4 connected',
+      'Your business profile, author and style guide filled in from one 30-minute call',
+      'Tracking, keywords, competitors and the monitors you want switched on',
+      'The IndexNow file and your outreach mailbox set up',
+      'Your first technical audit and your first keyword ladder, explained on a call',
+    ],
+    turnaround: 'Within five working days of getting access', // PLACEHOLDER — confirm
+    needs: 'An admin seat in your Ascentra company, plus whoever can edit DNS or your website for one of the steps.',
+    cta: { label: 'Ask about setup', to: '/contact?topic=sales' },
+  },
+  {
+    id: 'publishing',
+    name: 'We publish your pages',
+    price: '$99', // PLACEHOLDER — confirm
+    period: 'per month, up to 4 pages',
+    description: 'The finished pages go live on your site — whatever your site is built with.',
+    includes: [
+      'WordPress, Shopify, Webflow, Squarespace, Ghost or a headless CMS',
+      'A React, Next.js or other codebase: the page arrives as a pull request for your developers to merge',
+      'Title, meta description, images, internal links and structured data all in place',
+      'The live publish check run afterwards, so you see what the CMS changed',
+      'Extra pages beyond four: $29 each', // PLACEHOLDER — confirm
+    ],
+    turnaround: 'Each page live within three working days of approval', // PLACEHOLDER — confirm
+    needs: 'An editor login, or a repository you can give us a branch in. Nothing goes live without your yes.',
+    cta: { label: 'Ask about publishing', to: '/contact?topic=sales' },
+  },
+  {
+    id: 'fixes',
+    name: 'We fix what the audit found',
+    price: '$399', // PLACEHOLDER — confirm
+    period: 'per website, one-off',
+    description: 'The fix pack applied to your site by a person, then audited again so you can see the difference.',
+    includes: [
+      'robots.txt, llms.txt, redirects, structured data and the internal links from the fix pack',
+      'The critical and high findings that can be fixed without redesigning anything',
+      'Every change through your review: a pull request, a staging link or a written list',
+      'A re-audit afterwards, with the health score before and after',
+      'Ongoing technical care afterwards: $149 a month', // PLACEHOLDER — confirm
+    ],
+    turnaround: 'Within ten working days of the audit', // PLACEHOLDER — confirm
+    needs: 'Access to the site or its repository, and someone who can approve a change.',
+    cta: { label: 'Ask about fixes', to: '/contact?topic=sales' },
+  },
+  {
+    id: 'managed',
+    name: 'Managed',
+    price: '$699', // PLACEHOLDER — confirm
+    period: 'per month',
+    description: 'One number for the whole thing: the Growth plan and all three services, running every month.',
+    includes: [
+      'The Growth plan for your website',
+      'Setup included, with a quarterly review of the plan',
+      'Four pages published for you every month',
+      'Audit findings fixed every month, with the score tracked',
+      'One person who knows your site, and a monthly call',
+    ],
+    turnaround: 'Starts the week you sign up', // PLACEHOLDER — confirm
+    needs: 'The same access as the services above, and someone on your side to approve what goes live.',
+    cta: { label: 'Talk to us', to: '/contact?topic=sales' },
+    highlighted: true,
+  },
+];
+
+/** one line under the service cards */
+export const servicesNote =
+  'A person does this work, not a script. We only ask for access you can withdraw at any time, every change goes through your review, and nothing is published or sent without your approval.'; // PLACEHOLDER — confirm the delivery promise
 
 /** a cell in the comparison table: true = included, false = not included, text = included with this limit */
 export type MatrixValue = boolean | string;
@@ -121,7 +221,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
   {
     group: 'Automation',
     rows: [
-      { label: 'Weekly content cadence', values: [true, true, true] },
+      { label: 'Weekly content cadence', hint: 'Pages written, checked and ready to publish', values: ['1 a week', 'Up to 3 a week', 'Custom'] }, // PLACEHOLDER — confirm
       { label: 'Autopilot pipeline (Auto / Manual)', hint: 'Several ladders, “Needs you” queue, 4-week calendar', values: [false, true, true] }, // PLACEHOLDER — confirm
     ],
   },
@@ -150,7 +250,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
   {
     group: 'Platform and control',
     rows: [
-      { label: 'Websites', values: ['1', 'Up to 5', 'Custom'] }, // PLACEHOLDER — confirm
+      { label: 'Websites', values: ['1', 'Up to 3', 'Custom'] }, // PLACEHOLDER — confirm
       { label: 'Roles and invitations', hint: 'Owner, admin, member and viewer', values: [true, true, true] },
       { label: 'Verified website ownership', values: [true, true, true] },
       { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
@@ -158,6 +258,15 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Spend caps per company', values: [true, true, true] },
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm
       { label: 'Onboarding with your team', values: [false, false, true] }, // PLACEHOLDER — confirm
+    ],
+  },
+  {
+    group: 'Done for you (optional)',
+    rows: [
+      { label: 'Setup, done for you', hint: 'Access connected, profile and style guide filled in, first audit and first ladder', values: ['$199 add-on', '$199 add-on', 'Included'] }, // PLACEHOLDER — confirm
+      { label: 'We publish your pages', hint: 'Any CMS, or a pull request for a React / Next.js codebase', values: ['$99 a month', '$99 a month', 'Custom'] }, // PLACEHOLDER — confirm
+      { label: 'We fix what the audit found', hint: 'The fix pack applied by a person, then audited again', values: ['$399 per site', '$399 per site', 'Custom'] }, // PLACEHOLDER — confirm
+      { label: 'Everything managed for you', hint: 'Growth plus all three services, every month', values: ['$699 a month', '$699 a month', 'Custom'] }, // PLACEHOLDER — confirm
     ],
   },
 ];
@@ -194,6 +303,18 @@ export const pricingFaqs: FaqItem[] = [
   {
     q: 'How are AI and data costs handled?',
     a: 'Each run estimates its AI and data usage before it starts and is checked against your company’s budget. Owners set the budget and can lower or raise it at any time.', // PLACEHOLDER — confirm billing model
+  },
+  {
+    q: 'Can you set it up for us?',
+    a: 'Yes, as a paid service. A person connects Search Console and Analytics, proves the domain is yours, fills in your business profile and style guide from one call, switches on the tracking and monitors you want, and runs the first audit and the first keyword ladder. Everything in it is also something you can do yourself: the app has a step-by-step guide beside every ask.', // PLACEHOLDER — confirm the service
+  },
+  {
+    q: 'Do you publish the pages to our site?',
+    a: 'The software does not: it prepares the page as HTML, Markdown and meta data for your team. Our publishing service does, as a paid add-on — WordPress, Shopify, Webflow, Squarespace, Ghost or a headless CMS, and for a React or Next.js codebase the page arrives as a pull request your developers merge. Nothing goes live without your approval.', // PLACEHOLDER — confirm the service
+  },
+  {
+    q: 'Can you fix what the audit finds?',
+    a: 'Yes, as a paid service: the fix pack applied to your site — robots.txt, llms.txt, redirects, structured data and internal links — plus the critical and high findings that do not need a redesign, every change through your review, then a re-audit showing the score before and after.', // PLACEHOLDER — confirm the service
   },
   {
     q: 'What counts as a website?',

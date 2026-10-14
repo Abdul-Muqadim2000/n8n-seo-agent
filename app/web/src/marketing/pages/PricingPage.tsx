@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import {
   Calculator,
   Check,
+  Clock,
   ChevronsLeftRight,
   CircleDollarSign,
   Gauge,
@@ -10,7 +11,11 @@ import {
   Link2,
   Minus,
   Recycle,
+  Rocket,
   ShieldCheck,
+  Sparkles,
+  Upload,
+  Wrench,
   Timer,
   Wallet,
   type LucideIcon,
@@ -28,8 +33,11 @@ import {
   pricingMatrix,
   pricingTiers,
   pricingUsageNote,
+  servicePackages,
+  servicesNote,
   type MatrixValue,
   type PricingTier,
+  type ServicePackage,
 } from '../content/pricing';
 import { useSeo } from '../useSeo';
 
@@ -169,7 +177,7 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
         align="center"
         eyebrow="Pricing"
         title="Plans that grow with your portfolio."
-        lead="Start free. Every run shows its cost before it starts, and budgets keep spend where you set it."
+        lead="Start free. Every plan writes the pages as well as finding the keywords — and every run shows its cost before it starts."
         containerClassName="pb-12 sm:pb-14"
       >
         <div className="mt-9 flex justify-center">
@@ -202,12 +210,103 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
                 <a href="#costs" className="font-medium text-accent-text underline-offset-4 hover:underline">
                   How costs work
                 </a>
+                {' · '}
+                <a href="#done-for-you" className="font-medium text-accent-text underline-offset-4 hover:underline">
+                  Or have us do it for you
+                </a>
               </span>
             </p>
           </Reveal>
         </Container>
       </section>
     </>
+  );
+}
+
+
+const SERVICE_ICONS: Record<ServicePackage['id'], LucideIcon> = { setup: Rocket, publishing: Upload, fixes: Wrench, managed: Sparkles };
+
+/** One done-for-you package: what a person on the team does, what it costs and what we need from you. */
+function ServiceCard({ pack, index }: { pack: ServicePackage; index: number }) {
+  const Icon = SERVICE_ICONS[pack.id];
+  const hi = pack.highlighted;
+  return (
+    <Reveal index={index}>
+      <article
+        aria-labelledby={`service-${pack.id}`}
+        className={cn(
+          'flex h-full flex-col rounded-xl border bg-surface p-6 transition-[transform,box-shadow,border-color] duration-200 ease-brand hover:-translate-y-1 hover:shadow-raised',
+          hi ? 'border-accent shadow-raised ring-1 ring-accent' : 'border-line shadow-card hover:border-line-strong',
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <IconTile icon={Icon} size="sm" />
+          {hi && <span className="rounded-full bg-accent px-2.5 py-1 text-[12px] font-medium leading-none text-accent-ink">Everything together</span>}
+        </div>
+        <h3 id={`service-${pack.id}`} className="mt-4 font-display text-[17px] font-semibold tracking-[-0.01em] text-ink">
+          {pack.name}
+        </h3>
+        <p className="mt-1.5 text-[14px] leading-relaxed text-ink-2">{pack.description}</p>
+        <p className="mt-5 flex flex-wrap items-baseline gap-x-2">
+          <span className="font-display text-[2rem] font-semibold leading-none tracking-[-0.02em] text-ink">{pack.price}</span>
+          <span className="text-[13px] text-ink-3">{pack.period}</span>
+        </p>
+        <ul className="mt-5 flex-1 space-y-2.5 border-t border-line pt-5">
+          {pack.includes.map((line) => (
+            <li key={line} className="flex gap-2.5 text-[13.5px] leading-snug text-ink-2">
+              <span className={cn('mt-px inline-flex size-[18px] shrink-0 items-center justify-center rounded-full', hi ? 'bg-accent text-accent-ink' : 'bg-accent-soft text-accent-text')}>
+                <Check className="size-3" strokeWidth={2.75} aria-hidden />
+              </span>
+              {line}
+            </li>
+          ))}
+        </ul>
+        <dl className="mt-5 space-y-2 border-t border-line pt-4 text-[12.5px] leading-snug text-ink-3">
+          <div className="flex gap-2">
+            <dt className="shrink-0">
+              <Clock className="mt-px size-3.5" aria-hidden />
+              <span className="sr-only">Turnaround</span>
+            </dt>
+            <dd>{pack.turnaround}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="shrink-0">
+              <ShieldCheck className="mt-px size-3.5" aria-hidden />
+              <span className="sr-only">What we need from you</span>
+            </dt>
+            <dd>{pack.needs}</dd>
+          </div>
+        </dl>
+        <ButtonLink to={pack.cta.to} size="md" variant={hi ? 'primary' : 'secondary'} className="mt-6 w-full">
+          {pack.cta.label}
+        </ButtonLink>
+      </article>
+    </Reveal>
+  );
+}
+
+/** "Done for you": the services around the software, for teams with nobody to do this work. */
+function Services() {
+  return (
+    <Section tone="page" id="done-for-you" aria-labelledby="services-title">
+      <SectionHeading
+        id="services-title"
+        eyebrow="Done for you"
+        title="Or let us do the parts you would rather not."
+        lead="The software plans above are self-serve. These are people: we connect the accounts, publish the pages on your site and fix what the audit found. Add any of them to any plan."
+      />
+      <div className="mt-10 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        {servicePackages.map((pack, i) => (
+          <ServiceCard key={pack.id} pack={pack} index={i} />
+        ))}
+      </div>
+      <Reveal className="mt-8">
+        <p className="flex items-start gap-2 text-[13px] leading-relaxed text-ink-3 sm:justify-center sm:text-center">
+          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <span>{servicesNote}</span>
+        </p>
+      </Reveal>
+    </Section>
   );
 }
 
@@ -451,6 +550,7 @@ export default function PricingPage() {
   return (
     <>
       <Plans billing={billing} setBilling={setBilling} />
+      <Services />
       <Comparison billing={billing} />
       <Costs />
       <PricingFaq />
