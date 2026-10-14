@@ -81,8 +81,10 @@ user for something (Search Console, a file, a profile…), offer a guide that wa
 - Checks: shared **170** unit tests (21 new: ids, placeholders declared and used, https-only links, closed markup, plain-text export,
   search precision), server 217, typecheck, web build; **browser run on the dev stack** (sign-up → website → verify) — 15 checks pass
   at 1440 and 375, light and dark, no console errors, the guide shows the site's real DNS record and the provider tabs work.
-- Marketing: changelog entry + benefit lines on site tracking / backlinks / audits / AI visibility and a new site-tracking FAQ.
-  **Open decision for the owner:** whether guided setup should also become capability #11 on `/platform` (its own page + mockup).
+- Marketing: **Guided setup is capability #11** (`/platform/guided-setup`, registry entry + its own `GuideMockup`, in the capability
+  map's "Run" layer, the pricing matrix, the Starter plan list and two solutions); the copy everywhere now reads "Eleven
+  capabilities" on its own (`capabilityCount`). Plus the changelog entry, benefit lines on site tracking / backlinks / audits / AI
+  visibility and a new site-tracking FAQ.
 - Rule recorded in `app/web/CONVENTIONS.md` → "Setup guides": a new ask without a guide is a bug.
 
 ## Status (2026-10-13 evening, every fixable fix-plan item done + first whole-system re-rating — previous)

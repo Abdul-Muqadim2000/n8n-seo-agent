@@ -35,6 +35,7 @@ export const pricingTiers: PricingTier[] = [
       'Content engine with SEO QA, the originality check and the blog package',
       'Monthly technical audits with a fix pack',
       'Search Console, GA4 and Trends tracking',
+      'Step-by-step guides for every setup task',
       'Monday report',
     ],
   },
@@ -152,6 +153,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Websites', values: ['1', 'Up to 5', 'Custom'] }, // PLACEHOLDER — confirm
       { label: 'Roles and invitations', hint: 'Owner, admin, member and viewer', values: [true, true, true] },
       { label: 'Verified website ownership', values: [true, true, true] },
+      { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
       { label: 'Cost estimate before every run', values: [true, true, true] },
       { label: 'Spend caps per company', values: [true, true, true] },
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm

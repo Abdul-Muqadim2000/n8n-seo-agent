@@ -6,6 +6,7 @@ import {
   ChartLine,
   ChartNoAxesColumnIncreasing,
   FileText,
+  LifeBuoy,
   Link2,
   PenLine,
   ScanSearch,
@@ -26,6 +27,7 @@ export type VisualKey =
   | 'content'
   | 'audit'
   | 'workspace'
+  | 'guided-setup'
   | 'growth-loop'
   | 'link-sources'
   | 'ai-engines';
@@ -677,6 +679,60 @@ export const features: Feature[] = [
     story: {
       title: 'Reports people actually read.',
       body: 'The Monday report puts rankings, traffic, AI visibility and links on one page, with what changed and what to do next. Full reports export as PDF or Word for everyone who was not in the room.',
+    },
+  },
+  {
+    slug: 'guided-setup',
+    name: 'Guided setup',
+    shortName: 'Guided setup',
+    tagline: 'Every step we ask of you, with your own values and the page to open.',
+    summary:
+      'SEO work stalls at the same place every time: the part that happens in someone else’s account. Wherever Ascentra needs something from you — a Google permission, a DNS record, a file on your site, a mailbox — the ask carries a guide through that one job, with your own values ready to copy and a way to hand it to whoever can do it.',
+    icon: LifeBuoy,
+    benefits: [
+      'A guide beside every ask: Search Console and Analytics access, proving the domain is yours, the IndexNow file, your links export, letting the AI crawlers in, mailboxes and their SPF, DKIM and DMARC records, publishing a page, applying a fix pack, your business profile and style guide',
+      'Your own values, never a placeholder: the record for your domain, your key file, the exact address to add — each in a box you copy from',
+      'Written for the provider you actually use: Cloudflare, GoDaddy, Namecheap or cPanel for DNS; WordPress, Shopify, Wix, Squarespace or Webflow for the website',
+      'Tick the steps off as you go — close it, come back tomorrow, and it opens where you stopped',
+      'Send the whole guide to the colleague who has to do it, values filled in, with no account needed at their end',
+      'Each one ends with how to tell it worked, what to try when it did not, and the button in Ascentra that checks',
+    ],
+    steps: [
+      { title: 'Ascentra asks for one thing', body: 'A permission, a record, a file — with the reason it is needed and what it unlocks next.' },
+      { title: 'Open the guide beside the ask', body: 'That one job as numbered steps, with your values, the page to open and the tab for your provider.' },
+      { title: 'Do it, or pass it on', body: 'Tick the steps off yourself, or e-mail the guide to whoever manages your DNS, your website or your mailbox.' },
+      { title: 'Ascentra checks the result', body: 'The button at the end runs the check — verified, connected, file found — so nobody is left guessing whether it worked.' },
+    ],
+    facts: [
+      { value: 27, label: 'guides, one for each thing we ask of you' },
+      { value: 'Your values', label: 'in every copy box, not an example' },
+      { value: 'One e-mail', label: 'hands a guide to the person who can do it' },
+    ],
+    faqs: [
+      {
+        q: 'Do we need a developer?',
+        a: 'For most of it, no: the Google permissions, the business details and the mailbox are all done in a browser by whoever has the account. A DNS record or a file at the root of the site usually needs the person who manages those — the guide is written for them too, and goes to them in one click.',
+      },
+      {
+        q: 'Our website is run by an agency. Does that work?',
+        a: 'Yes. Every guide can be sent as an e-mail with your values already in it, so the agency gets the exact steps without an account here. You still see in Ascentra whether the job landed, because the same guide ends with the check.',
+      },
+      {
+        q: 'What if the provider’s screen looks different?',
+        a: 'Providers move things. The guides name what to look for rather than only where it used to be, keep separate instructions for the common providers and CMSs, and end with an “if it does not work” list for the things that usually go wrong.',
+      },
+      {
+        q: 'Is this only for the first week?',
+        a: 'No. The same guides sit on the asks that come up later: the IndexNow file, a new mailbox, the fix pack from an audit, publishing a page that was written for you, the monthly Search Console check-in. There is also a searchable list of all of them in the app.',
+      },
+    ],
+    related: ['site-tracking', 'enterprise', 'technical-audits'],
+    image: 'teamAtDesks',
+    visual: 'guided-setup',
+    story: {
+      eyebrow: 'Why it matters',
+      title: 'What stalls the work is never the SEO.',
+      body: 'It is the Google permission nobody has, the DNS record that needs a colleague, the file that has to sit at the root of the site. Ascentra treats that as part of the product: every ask carries its steps, your own values and a way to hand it to the person who can do it.',
     },
   },
   {

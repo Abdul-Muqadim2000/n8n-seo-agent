@@ -27,8 +27,7 @@ export const changelog: ChangelogEntry[] = [
       'Each guide ends with how to tell it worked and an “if it does not work” list, and the button that carries on in the app is right there',
       'A searchable list of all of them in the sidebar and in the setup wizard',
     ],
-    features: ['site-tracking', 'backlinks', 'technical-audits', 'ai-visibility'],
-    labels: ['Setup'],
+    features: ['guided-setup', 'site-tracking', 'backlinks', 'technical-audits', 'ai-visibility'],
   },
   {
     date: '2026-10-13',
