@@ -10004,13 +10004,19 @@ await guard('S71 the guard covers both currencies and the account is a hard floo
 
   // ---------- A. the two settings reach the guard, beside the Claude ones ----------
   const n71 = await run('Normalize Input', F.forms.webhookVerdict);   // an API verdict run: Claude and DataForSEO money, both small
+  // The AMOUNTS are a setting the owner changes (both raised $6 -> $15 on 2026-10-15: "we don't have issues with paying more cost for
+  // SEO ... the results should be benchmarked like very good"), so this asserts that CONFIG's figures REACH the guard, not what they
+  // are this week — a test that fails when a budget is raised is testing the configuration, not the guard. The behaviour below pins
+  // its own $6 in the fixture, the way every other ledger scenario in this file already does.
   check('the request carries the data-money budget and the account floor exactly as it carries the Claude ones — one source, Normalize Input CONFIG',
-    n71[0].json.dfs_budget_usd === 6 && n71[0].json.dfs_balance_floor_usd === 0.5
-    && n71[0].json.ai_budget_usd === 6 && n71[0].json.ai_budget_period === 'day',
+    typeof n71[0].json.dfs_budget_usd === 'number' && n71[0].json.dfs_budget_usd > 0
+    && n71[0].json.dfs_balance_floor_usd === 0.5
+    && typeof n71[0].json.ai_budget_usd === 'number' && n71[0].json.ai_budget_usd > 0
+    && n71[0].json.ai_budget_period === 'day',
     JSON.stringify({ dfs: n71[0].json.dfs_budget_usd, floor: n71[0].json.dfs_balance_floor_usd, ai: n71[0].json.ai_budget_usd }));
 
   const K71 = 'owner@northwind-erp.com';
-  const IN71 = (o = {}) => [{ json: { ...n71[0].json, email: K71, ...o } }];
+  const IN71 = (o = {}) => [{ json: { ...n71[0].json, email: K71, ai_budget_usd: 6, dfs_budget_usd: 6, ...o } }];
   // one fixture shape: N earlier runs of this period, each holding `est` of DataForSEO money, settled at `measured` when `status` is done
   const dfsRows = (count, est, status, measured) => Array.from({ length: count }, () => ({
     key: 'other@example.com', mode: 'keyword', est_usd: 0, dfs_est_usd: est, created_at: now71, status, settled_usd: 0, dfs_usd: measured }));

@@ -925,7 +925,7 @@ store.ai_budget.spent_est = +(store.ai_budget.spent_est + est).toFixed(2);
 store.ai_budget.runs += 1;
 d.ai_spend_estimate_usd = est;
 d.ai_budget_used_est_usd = store.ai_budget.spent_est;""")
-log('AI spend guard: Rate Limit estimates Claude spend per run and refuses new runs once the period estimate would exceed ai_budget_usd (set to $3 for testing)')
+log('AI spend guard: Rate Limit estimates Claude spend per run and refuses new runs once the period estimate would exceed ai_budget_usd ($15 a day since 2026-10-15; the Anthropic Console workspace limit is the hard cap)')
 
 
 # =============================================================================
@@ -1153,7 +1153,7 @@ log('WordPress (optional, off): finished pages can be created as WordPress draft
 
 # ---------- AI budget cap: 3 → 10 on 2026-10-01 to finish the system test; set to 6 on 2026-10-02 at the user's request ----------
 patch('Normalize Input', "  ai_budget_usd: 3,                 // estimated Claude spend allowed per budget period (see Rate Limit); raise when ready",
-      "  ai_budget_usd: 6,                 // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 since 2026-10-02 at the user's request — the Anthropic Console workspace limit is the hard cap")
+      "  ai_budget_usd: 15,                // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 from 2026-10-02, 15 since 2026-10-15 at the owner's request (cost is not the constraint, the result is) — the Anthropic Console workspace limit is the hard cap")
 
 # ---------- credential slots for the nodes created in this section (the generic pass in 8c-E ran before they existed) ----------
 for n in list(nodes.values()):
@@ -5677,7 +5677,7 @@ patch('Normalize Input', "  ai_budget_period: 'day',          // 'day' | 'month'
       "  // where most of the spend is ($2.3876 of the $3.63 the 2026-10-14 re-rating cost). `dfs_balance_floor_usd` is what the account must keep\n"
       "  // after a run: below it the run is refused rather than started, because a run that exhausts the account mid-flight delivers half a report\n"
       "  // and charges for all of it. A balance reading that did not answer is 0 and refuses nothing — a guard that cannot measure must not block.\n"
-      "  dfs_budget_usd: 6,\n"
+      "  dfs_budget_usd: 15,\n"
       "  dfs_balance_floor_usd: 0.5,\n")
 patch('Normalize Input', "    ai_budget_period: CONFIG.ai_budget_period,\n",
       "    ai_budget_period: CONFIG.ai_budget_period,\n    dfs_budget_usd: CONFIG.dfs_budget_usd,\n    dfs_balance_floor_usd: CONFIG.dfs_balance_floor_usd,\n")
@@ -5744,7 +5744,7 @@ reserves are one number.""",
 log('The spend guard covers both currencies and the account is a hard floor (2026-10-15, benchmark programme area 13 — the rubric compares '
     'this area with Semrush / Ahrefs server-side limits, where one meter governs the whole service): ai_budget_usd refused on CLAUDE money '
     'only, which is a third of the bill (DataForSEO was $2.3876 of the $3.63 the 2026-10-14 re-rating spent and $0.0560 of the $0.069 of the '
-    'evening live check), so CONFIG gains dfs_budget_usd ($6, the same period) and Rate Limit refuses on it in the same words; the free '
+    'evening live check), so CONFIG gains dfs_budget_usd ($15, the same period) and Rate Limit refuses on it in the same words; the free '
     'appendix/user_data balance R28 put on the ledger chain is now read BY the guard, so a run the account cannot pay for is refused before '
     'it spends rather than running out of credit half way through and charging for a half-delivered report (dfs_balance_floor_usd, $0.50, '
     'keeps the scheduled checks alive) — and the check fails OPEN, a probe that did not answer refuses nothing; the day\'s data total counts '
