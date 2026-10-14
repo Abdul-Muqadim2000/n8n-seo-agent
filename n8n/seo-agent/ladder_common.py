@@ -1,4 +1,5 @@
 """Shared definitions for the keyword-ladder feature (used by build_v4.py and build_ladder_extras.py)."""
+import uuid as _uuid
 LADDER_TABLE = 'seo_ladders'
 HISTORY_TABLE = 'seo_rank_history'
 LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('rung', 'number'), ('page_no', 'number'), ('keyword', 'string'),
@@ -302,6 +303,11 @@ RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), 
                    # all and both audits carried est_usd 0 while each crawl cost $0.09. Every row now carries the run's DataForSEO estimate
                    # beside the AI one, and `dfs_usd` is the measured amount where the run knows it (the monitors' own cost_usd).
                    ('dfs_est_usd', 'number'), ('dfs_usd', 'number'),
+                   # R28 (2026-10-14, system review FIX_PLAN §3.12): the DataForSEO account balance read for free from `appendix/user_data`
+                   # at the moment this row was reserved. The engine's own figures did not reconcile with the money (+73% in one window),
+                   # so the day's spend is checked against the only measurement that cannot be argued with — how far the balance actually
+                   # fell between the day's first and last reading. 0 = not read (the Keyword Check and the schedules do not read it).
+                   ('dfs_balance', 'number'),
                    # G23 (2026-10-13, FIX_PLAN): a settled row must say which part of its cost was MEASURED and which ESTIMATED. `settled_usd`
                    # stored the per-mode reservation while every reader took it for a measured cost, and Claude's spend could be stated no
                    # closer than "$1.6-3.0" because the three Opus nodes stream and a streaming call reports no token usage at all.
@@ -322,7 +328,10 @@ LEDGER_EST = {
     'ai_pulse':        {'ai': 0.004, 'dfs': 0.08},   # $0.084 / site / day measured 2026-10-08 and again on 2026-10-13
     'ai_growth':       {'ai': 0.55, 'dfs': 0.05},    # AI pages + outreach drafts (AI_GROWTH_SPEC: ~$2.53 / site / month)
     'backlinks':       {'ai': 0.05, 'dfs': 0.05, 'dfs_full': 0.45},   # Monday light watch vs the monthly full report (~$0.50)
-    'audit_schedule':  {'ai': 0.0,  'dfs': 0.09},    # the 200-page crawl of one audit, measured twice on 2026-10-13
+    # R28 (2026-10-14): the Audit Scheduler *spawns* audits into the main workflow and crawls nothing itself, so its own $0.09 was the
+    # same crawl the spawned run reserves and settles for itself - counted twice. It reserves nothing now, exactly as the Content
+    # Cadence does, and the guard still sees every audit through the row each spawned run makes before its own crawl.
+    'audit_schedule':  {'ai': 0.0,  'dfs': 0.0},     # it plans and spawns; every spawned audit reserves its own row (the crawl is $0.09 there)
     'link_builder':    {'ai': 0.30, 'dfs': 0.05},    # $0.35 / site / month (LINK_BUILDER_SPEC)
     'rank_tracker':    {'ai': 0.0,  'dfs': 0.15},    # the week's SERP checks of one site's ladders
     'site_tracker':    {'ai': 0.03, 'dfs': 0.01},    # the site brief; Search Console / GA4 / Trends are free
@@ -343,6 +352,73 @@ def monitor_ledger_js(v5_dir, mode, plan_node, row_node, measured=''):
     for ph in ('__PLAN__', '__MODE__', '__EST__', '__ROW__', '__MEASURED__'):
         assert ph not in reserve and ph not in settle, ph + ' left in the ledger code for ' + mode
     return reserve, settle
+
+
+# ---- R17 (2026-10-14, system review FIX_PLAN 3.12 / RESULTS 2.11): the reservation must sit on the MAIN path -------------------
+# R9 hung the reserve chain BESIDE the plan node, because a Data Table node answers with the row it wrote rather than with its input. n8n's
+# v1 execution order runs that side branch LAST, so every one of the nine scheduled workflows reserved its row after the whole paid pipeline
+# had run: in exec 568 `Settle Run Ledger (Pulse)` ran at 16:22:15.507 and matched nothing, and `Reserve Run Ledger (Pulse)` inserted a fresh
+# `reserved` row at 16:22:15.584 - so the guard never saw a monitor before it spent, the row counted against the day's cap until the stale
+# release cleared it two hours later, and the measured figure the settle had just computed was thrown away ($1.394 of a $2.388 run).
+# The chain now sits in the data path - plan -> Ensure -> Row -> Reserve -> After Run Ledger -> (what the plan used to feed) - and this one
+# Code node hands the plan's own items back, so nothing downstream ever sees the Data Table rows.
+LEDGER_RESUME_JS = """// R17 (2026-10-14, system review FIX_PLAN 3.12): the run ledger reserves its row on the MAIN path now, before the first paid call -
+// it used to hang off the plan node as a side branch and n8n's v1 order ran it last, after all the spending. A Data Table node answers with
+// the row it wrote rather than with its input, so this node hands __PLAN__'s own items back to the pipeline, unchanged and in order.
+return $('__PLAN__').all();
+"""
+
+
+def ledger_tag(wiring):
+    """The tag of a ledger wiring entry ('Run Ledger Row (Pulse)' -> 'Pulse')."""
+    r = str(wiring['reserve'])
+    assert r.startswith('Run Ledger Row (') and r.endswith(')'), 'unexpected reserve node name: ' + r
+    return r[len('Run Ledger Row ('):-1]
+
+
+_LEDGER_NS = _uuid.UUID('7c1f2a44-0b3e-4e6a-9d21-5e8a1c0f4b77')
+
+
+def ledger_mainline(wfobj, wiring):
+    """R17: move everything the plan node used to feed to the far side of the reserve chain, so no paid node of the workflow can run
+    before the ledger row exists. Called at WRITE time, when every connection of the workflow is already made, and it is the one place
+    the three builders share. It also makes the two Data Table nodes of the chain `alwaysOutputData` + `continueRegularOutput`: they sit
+    in the data path now, so neither may end the run by answering with nothing."""
+    tag = ledger_tag(wiring)
+    conns, nodes = wfobj['connections'], {n['name']: n for n in wfobj['nodes']}
+    plan, ensure = wiring['plan'], 'Ensure Run Ledger (' + tag + ')'
+    reserve, resume = 'Reserve Run Ledger (' + tag + ')', 'After Run Ledger (' + tag + ')'
+    for nm in (plan, ensure, reserve, wiring['settle']):
+        assert nm in nodes, 'R17: ' + nm + ' is missing from ' + str(wfobj.get('name'))
+    assert resume not in nodes, 'R17: ' + resume + ' already exists (ledger_mainline ran twice)'
+    outs = conns.setdefault(plan, {}).setdefault('main', [])
+    while not outs: outs.append([])
+    downstream = [t for t in outs[0] if t['node'] != ensure]
+    assert downstream, 'R17: ' + plan + ' feeds nothing but the ledger - there is no pipeline to put behind the reservation'
+    assert any(t['node'] == ensure for t in outs[0]), 'R17: ' + plan + ' does not start the ledger chain'
+    outs[0] = [{'node': ensure, 'type': 'main', 'index': 0}]
+    x, y = nodes[reserve]['position']
+    wfobj['nodes'].append({'parameters': {'jsCode': LEDGER_RESUME_JS.replace('__PLAN__', plan)},
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + resume)), 'name': resume,
+                           'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [x + 220, y]})
+    router = conns.setdefault(reserve, {}).setdefault('main', [])
+    while not router: router.append([])
+    router[0] = [t for t in router[0] if t['node'] != resume] + [{'node': resume, 'type': 'main', 'index': 0}]
+    conns.setdefault(resume, {})['main'] = [downstream]
+    for nm in (ensure, reserve):
+        nodes[nm]['alwaysOutputData'] = True
+        nodes[nm]['onError'] = 'continueRegularOutput'
+    wiring['resume'] = resume
+    return resume
+
+
+# ---- R29 (2026-10-14, system review FIX_PLAN 3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a SECRET (a Slack incoming webhook is a
+# bearer URL: anyone holding it can post into the channel), and it was baked into the generated node code the way SEO_MAIL_FROM is - so the
+# live URL ended up in workflows/SEO_Agent_Error_Handler.json, workflows/SEO_Agent_Page_Watch.json and harness/code_v4/EH__Alert_*.js, all
+# tracked in a PUBLIC repository. The build bakes this placeholder now and apply_env.py substitutes the real value into the JSON it hands to
+# the import, after the build and before the import, so the repository never carries the secret and the deployed instance still works.
+# A node that still holds the placeholder has no webhook configured: the ops-alert kit treats it as unset (OA.cfgUrl).
+ALERT_WEBHOOK_PLACEHOLDER = '__SEO_ALERT_WEBHOOK_URL__'
 
 
 # ---- ops alerts (D25b, 2026-10-12, FIX_PLAN): the Error Handler had one channel (e-mail), and on 2026-10-10 and 2026-10-12 it failed with a

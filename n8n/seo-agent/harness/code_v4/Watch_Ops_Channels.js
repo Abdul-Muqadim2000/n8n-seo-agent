@@ -18,6 +18,11 @@ const OA = (() => {
   const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',
     S(a.message).toLowerCase().replace(/\d[\d.,:]*/g, '#').replace(/["'`][^"'`]*["'`]/g, '"x"').replace(/\s+/g, ' ').slice(0, 160)].join(' | ');
   const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';
+  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and
+  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still
+  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it
+  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.
+  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };
 
   const plan = (alert, rows, cfg) => {
     const a = alert || {}, c = cfg || {};
@@ -29,7 +34,7 @@ const OA = (() => {
     const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;
     const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;
     const count = prior ? n0(prior.count) + 1 : 1;
-    const webhook_url = S(c.webhook_url);
+    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel
     const email_to = S(c.email_to);
     const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);
     const notify = !repeat;
@@ -52,13 +57,13 @@ const OA = (() => {
     return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };
   };
 
-  return { plan, keyOf, severityOf, DEDUPE_MINUTES };
+  return { plan, keyOf, severityOf, cfgUrl, DEDUPE_MINUTES };
 })();
 const S = (v) => String(v == null ? '' : v).trim();
 const rows = (() => { try { return $('Watch Ops Alert').all().map(i => i.json).filter(r => r && !r.skip && S(r.alert_key)); } catch (e) { return []; } })();
 const sites = (() => { try { return $('Watch Compare').all().map(i => i.json).filter(s => s && !s.skip); } catch (e) { return []; } })();
 const pending = rows.filter(r => S(r.delivered) === 'pending');
-const webhook_url = '';
+const webhook_url = OA.cfgUrl('__SEO_ALERT_WEBHOOK_URL__');   // R29 (2026-10-14): the build bakes a placeholder; apply_env.py substitutes the real URL at import time
 let recorded = true, record_error = '';
 try { const sv = ($('Save Watch Ops Alert').first() || {}).json || {}; if (sv.error) { recorded = false; record_error = String(sv.error.message || sv.error.description || sv.error).slice(0, 200); } }
 catch (e) { recorded = false; record_error = 'the alert rows were not written: ' + String(e.message || e).slice(0, 160); }

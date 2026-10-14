@@ -6,7 +6,8 @@ import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 from ladder_common import (LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, PAGES_TABLE, PAGES_COLS, SITES_TABLE, SITES_COLS,
                            MONITORS_TABLE, MONITORS_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params,
-                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST)   # R9 (2026-10-13)
+                           RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST,   # R9 (2026-10-13)
+                           ledger_mainline)   # R17 (2026-10-14): the reserve chain sits on the MAIN path, before the first paid call
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 _rd0 = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
@@ -41,7 +42,11 @@ def link(conns, a, b, out=0):
     outs = conns.setdefault(a, {}).setdefault('main', [])
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
+LEDGER_WIRING = {}   # R9: filled in when the Rank Tracker's ledger nodes are added, below
+
 def write(wfobj, fname):
+    # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
+    if wfobj.get('name') in LEDGER_WIRING: ledger_mainline(wfobj, LEDGER_WIRING[wfobj['name']])
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
     retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
@@ -140,8 +145,9 @@ N.append(node('Settle Run Ledger (Tracker)', DT_TYPE, DT_VERSION, dt_update_para
 for a, b in [('Tracker Plan', 'Ensure Run Ledger (Tracker)'), ('Ensure Run Ledger (Tracker)', 'Run Ledger Row (Tracker)'), ('Run Ledger Row (Tracker)', 'Reserve Run Ledger (Tracker)'),
              ('Tracker Report', 'Ledger Settle (Tracker)'), ('Ledger Settle (Tracker)', 'Settle Run Ledger (Tracker)')]:
     link(C, a, b)
-LEDGER_WIRING = {'SEO Agent — Rank Tracker': {'mode': 'rank_tracker', 'plan': 'Tracker Plan', 'reserve': 'Run Ledger Row (Tracker)',
-                                              'settle': 'Settle Run Ledger (Tracker)', 'settle_from': ['Tracker Report'], 'measured': '', 'est': LEDGER_EST['rank_tracker']}}
+LEDGER_WIRING['SEO Agent — Rank Tracker'] = {'mode': 'rank_tracker', 'plan': 'Tracker Plan', 'reserve': 'Run Ledger Row (Tracker)',
+                                             'settle': 'Settle Run Ledger (Tracker)', 'settle_from': ['Tracker Report'], 'measured': '', 'est': LEDGER_EST['rank_tracker'],
+                                             'resume': 'After Run Ledger (Tracker)'}   # R17 (2026-10-14): hands Tracker Plan's items back
 _lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
 _lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}
 _lwj.setdefault('monitors', {}).update(LEDGER_WIRING)

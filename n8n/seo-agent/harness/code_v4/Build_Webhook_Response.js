@@ -40,6 +40,7 @@ return [{
     qa_publishable: d.qa_publishable == null ? null : !!d.qa_publishable,
     qa_not_ready: !!d.qa_not_ready, qa_label: d.qa_label || null, qa_reasons: d.qa_reasons || [], qa_quality: d.qa_quality || null,
     run_ledger: d.run_ledger || null,
+    dfs_tasks: (d.run_ledger || {}).dataforseo_tasks ?? null,
     markdown: d.article_markdown || d.page_markdown || null,
     html: d.article_html || null,
     meta: d.article_meta || null,

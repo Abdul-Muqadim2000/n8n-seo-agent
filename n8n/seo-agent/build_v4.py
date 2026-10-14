@@ -2820,9 +2820,11 @@ log('What the numbers are allowed to say (2026-10-12, FIX_PLAN D20 / D21 / G9 / 
 #         "yes" to a manual action no longer raises a critical alert.
 # =============================================================================
 import url_lint as _ul41, retry_lint as _rl41
-from ladder_common import OPS_ALERTS_TABLE, OPS_ALERTS_COLS
+from ladder_common import OPS_ALERTS_TABLE, OPS_ALERTS_COLS, ALERT_WEBHOOK_PLACEHOLDER
 from env_settings import ENV as _ENV41
-ALERT_WEBHOOK_URL = _ENV41.get('SEO_ALERT_WEBHOOK_URL') or ''
+# R29 / R30 (2026-10-14): the build does not read SEO_ALERT_WEBHOOK_URL at all any more — not the value (it is a secret and this
+# repository is public) and not even whether it is set, because that made the generated files depend on the building machine. It bakes
+# ALERT_WEBHOOK_PLACEHOLDER; apply_env.py substitutes the real value into the copy it imports, on the deploying machine only.
 IMPACT_SRC = rd('code/_impact.js').rstrip('\n')
 CHECKIN_TEST_SRC = rd('code/_checkin_test.js').rstrip('\n')
 OPS_ALERT_SRC = rd('code/_ops_alert.js').rstrip('\n')
@@ -2936,7 +2938,10 @@ def _eh_link(src, dst, out=0):
     outs = _ehc.setdefault(src, {}).setdefault('main', [])
     while len(outs) <= out: outs.append([])
     if not any(t['node'] == dst for t in outs[out]): outs[out].append({'node': dst, 'type': 'main', 'index': 0})
-_eh_src = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_URL).replace('__OPS_EMAIL__', OPS_EMAIL)
+# R29 (2026-10-14, FIX_PLAN §3.12, secret handling): the Slack webhook is a bearer URL and this repository is PUBLIC, so the build bakes
+# ALERT_WEBHOOK_PLACEHOLDER and apply_env.py substitutes the real value into the JSON it hands to the import. SEO_OPS_EMAIL and the other
+# non-secret settings are baked exactly as before.
+_eh_src = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER).replace('__OPS_EMAIL__', OPS_EMAIL)
 # the alert payload gains the execution mode (the webhook body and the row carry it)
 _fa41 = _ehn['Format Alert']['parameters']['jsCode']
 if 'mode,' not in _fa41:
@@ -3006,7 +3011,7 @@ assert _ca41['leftValue'].count('manual_action') == 1, 'Checkin Alert?: conditio
 _ca41['leftValue'] = "={{ !$('Parse Check-in').first().json.checkin_is_test && !!(($('Parse Check-in').first().json.checkin_row || {}).manual_action || ($('Parse Check-in').first().json.checkin_row || {}).security_issue) }}"
 
 # what the harness checks (S48): the channels, their order and the fact that the webhook does not hang off the e-mail node
-json.dump({'table': OPS_ALERTS_TABLE, 'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_configured': bool(ALERT_WEBHOOK_URL),
+json.dump({'table': OPS_ALERTS_TABLE, 'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_placeholder': ALERT_WEBHOOK_PLACEHOLDER,   # R30: never whether the setting is filled - that made this tracked fixture depend on the building machine's .env
            'nodes': [_n41['name'] for _n41 in _ehwf['nodes'] if _n41['type'] != 'n8n-nodes-base.stickyNote'],
            'connections': {_s41: [[_t41['node'] for _t41 in _l41] for _l41 in _o41.get('main', [])] for _s41, _o41 in _ehc.items()},
            'email': {'name': 'Email Ops', 'onError': _eho.get('onError'), 'retryOnFail': bool(_eho.get('retryOnFail')), 'maxTries': _eho.get('maxTries'),
@@ -4322,8 +4327,12 @@ return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call 
   if (fn === 'calRow') return { json: CC.calRow(j.kind, j.mode, j.amount, cal, !!j.measured) };
   if (fn === 'split') return { json: CC.split(j.ai || {}, j.dfs || {}) };
   if (fn === 'readCal') return { json: cal };
+  // R28 (2026-10-14, section 55): the DataForSEO money — a task counted once, and the day held against the account
+  if (fn === 'dfsLedger') { const L = CC.dfsLedger(); const added = (j.answers || []).map(a => L.add(a)); return { json: { added, ...L.state } }; }
+  if (fn === 'dfsDay') return { json: CC.dfsDay(j.rows || [], j.mine || {}) };
   if (fn === 'tables') return { json: { EST: CC.EST, DFS_EST: CC.DFS_EST, PRICES: CC.PRICES, UNKNOWN: CC.UNKNOWN, CHARS_PER_TOKEN: CC.CHARS_PER_TOKEN,
-    THINK_SHARE: CC.THINK_SHARE, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY } };
+    THINK_SHARE: CC.THINK_SHARE, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY,
+    RECONCILE_TOLERANCE: CC.RECONCILE_TOLERANCE, RECONCILE_FLOOR: CC.RECONCILE_FLOOR } };
   return { json: { error: 'unknown call ' + fn } }; });
 """)
 _cw51 = {'ai_calls': _AI_CALLS51,
@@ -4830,6 +4839,238 @@ sticky("""### What the second re-rating found (R21 / R20 / R25 / R27, R22's edit
 log('What the second re-rating found in the drafts, the marks and the quotes (2026-10-14, FIX_PLAN §3.12 R21 / R20 / R25 / R27 + R22\'s editor half): a prospect is refused as a rival when its REGISTRABLE domain matches a declared competitor or a domain the rank checks of the last 90 days saw above us (LB Plan keys seo_rank_history.competitors_json that way, reads a row that was truncated mid-JSON with a regex and keeps the host that was really seen for the reason: ae.invoiceq.com ranks #3 for "peppol uae"), a prospect whose own page sells our service is refused on that evidence alone whether or not it is on the declared list (two vendor signals, 45% of our service words and either the title or the measured topic match), the "add us to your list" exemption holds only for a page that really is a list, and the SERP rivals reach every gate call including the podcast, the digest, the stored-prospect sweep and the draft gate (R21); the chart marks compare an audit only with the previous report of the SAME report_type and say when the kind changed instead of printing a health move between unlike reports (R20); every placeholder left in the body is named in the quality reasons and in the Word report, whether or not the count is over placeholder_max, with the R11 delivery gate untouched (R25); Content QA states the cut an over-long draft needs - the words to remove and the sections that carry them - and the editor prompt prints it as the first thing to do, with its own entry in the fix list (R22, editor half); and a podcast show is quoted from its own description, as prose cut on word boundaries with any HTML attribute remains dropped, and is only offered at a 40% topic match instead of the 25% that qualifies a page for a link (R27)')
 
 # =============================================================================
+# 55. THE GUARD THAT GUARDS NOTHING, MONEY THAT DOES NOT ADD UP, AND A SECRET IN A PUBLIC REPOSITORY
+#     (2026-10-14, system review FIX_PLAN.md §3.12 R17 / R28 / R29; docs/system-review-2026-10-14/RESULTS.md §0, §2.11, §3.3, §5)
+#     * R17 **the spend guard never saw a monitor before it spent.** R9 gave every scheduled workflow a seo_run_ledger row, but hung the
+#       reserve chain BESIDE the plan node — a Data Table node answers with the row it wrote, not with its input, so the ledger was kept
+#       out of the data path. n8n's v1 execution order runs that side branch LAST: in exec 568 `Settle Run Ledger (Pulse)` ran at
+#       16:22:15.507 and matched no row, then `Reserve Run Ledger (Pulse)` inserted a fresh `reserved` one at 16:22:15.584 — after all the
+#       spending. The same shape in 561, 563, 564, 570, 572, 574, 578 and 579: every row's `created_at` was the workflow's STOP time, every
+#       row stayed `reserved` until the stale release cleared it two hours later, and the measured figure each settle had just computed
+#       ($0.7895 ai_visibility, $0.3728 backlinks, $0.0840 pulse, $0.0900 the scheduled audit) was thrown away. $1.394 of that run's
+#       $2.388 was attributed to no settled row at all.
+#       The chain is in the data path now (ladder_common.ledger_mainline, called from all three builders at write time):
+#       plan -> Ensure -> Row -> Reserve -> **After Run Ledger** -> everything the plan used to feed, where the one new Code node hands the
+#       plan's own items back so nothing downstream ever sees a Data Table row. Both Data Table nodes of the chain became
+#       `alwaysOutputData` + `continueRegularOutput` in the same move: they sit in the run's path now, so neither may end it by answering
+#       with nothing. No harness scenario can catch this — the harness runs node code, not n8n's branch ordering — so it is asserted in the
+#       build (part D below): a paid node that can be reached without passing through the reservation fails the build.
+#     * R28 **the "measured" DataForSEO figures did not reconcile with the money.** Window C of the live run moved $0.0520 while exec 579
+#       alone reported $0.09 (+73%); window A reported $0.6145 against $0.5506 (+11.6%); and the Keyword Check settled `dfs_usd: 0` while
+#       telling the caller `cost_usd: 0.026`. Three causes, three fixes:
+#       (a) a crawl is billed when the task is CREATED, and DataForSEO repeats that `tasks[].cost` in every later answer about the task —
+#           so each poll of *Get Crawl Summary* / *Get Crawled Pages* / *Run Crawl Extras* charged the engine for the same $0.09 again.
+#           CC.dfsLedger counts a task once, by its own id, and keeps the repeats visible (`dataforseo_tasks_repeated`).
+#       (b) the Audit Scheduler reserved $0.09 of DataForSEO money for a crawl it does not run: it SPAWNS audits into the main workflow,
+#           and each spawned run reserves and settles that crawl for itself. It reserves nothing now, exactly as the Content Cadence does
+#           (ladder_common.LEDGER_EST).
+#       (c) nothing ever checked the sum against the account. Every reservation now records the free `appendix/user_data` balance
+#           (*DFS Balance* -> `seo_run_ledger.dfs_balance`) and *Run Ledger Settle* holds the day's settled rows against how far the
+#           balance actually fell (CC.dfsDay). Nothing is corrected automatically: when the two disagree the row says so and names the
+#           account as the figure to believe. G23's distinction is untouched — an estimate is still labelled an estimate.
+#       And the Keyword Check settles what it told the caller: *Ledger Settle (Assess)* (build_api.py) writes the measured DataForSEO cost
+#       and the Haiku estimate, and `measured_usd + estimated_usd` equals the `cost_usd` in the 200.
+#     * R29 **a secret was baked into files this public repository tracks.** `SEO_ALERT_WEBHOOK_URL` was baked the way SEO_MAIL_FROM is, so
+#       the live Slack webhook (a bearer URL: anyone holding it can post into the channel) sat in workflows/SEO_Agent_Error_Handler.json,
+#       workflows/SEO_Agent_Page_Watch.json and harness/code_v4/EH__Alert_*.js / Watch_Ops_*.js. The build bakes
+#       ALERT_WEBHOOK_PLACEHOLDER now and **apply_env.py substitutes the real value into a copy outside the repository**, after the build
+#       and before the import — chosen over a Data Table row because the alert path must work when the Data Tables are the thing that
+#       broke, and because it keeps the deploy a single command. A node still holding the placeholder has no channel configured
+#       (OA.cfgUrl), which is what an empty setting always meant. Part E fails the build if any webhook-shaped secret reappears in
+#       workflows/ or harness/code_v4/. SEO_MAIL_FROM, SEO_OPS_EMAIL, SEO_BRAND and the Bing / Ahrefs on-flags are unchanged.
+# =============================================================================
+import retry_lint as _rl55
+from ladder_common import ALERT_WEBHOOK_PLACEHOLDER as _PH55, LEDGER_EST as _EST55
+
+# ---------- A. R28 (a): one task, one cost ----------
+_DFS_ONCE55 = r"""    const j = (it && it.json) || {}; let c = 0;
+    // R28 (2026-10-14, FIX_PLAN §3.12): count a task's cost ONCE. DataForSEO bills a crawl when the task is created and then repeats the
+    // same `tasks[].cost` in every later answer about that task, so every poll of the on_page nodes charged the engine for the same $0.09
+    // again: window C of 2026-10-14 reported $0.0900 against $0.0520 of real money (+73%), window A $0.6145 against $0.5506 (+11.6%).
+    if (Array.isArray(j.tasks)) { for (const t of j.tasks) c += __dfsOnce(t); } else if (j.cost) { c += Number(j.cost) || 0; }
+"""
+_DFS_ONCE_DECL55 = r"""
+// R28: a task is counted on its first sighting, by its own id; a repeat is counted as a repeat, and a task with no id is counted (nothing
+// identifies it) and reported, so the figure is never quietly wrong in either direction.
+const __dfsSeen = new Set(); const __dfsRepeats = { n: 0, no_id: 0 };
+const __dfsOnce = (t) => {
+  const cost = Number((t && t.cost) || 0); if (!cost) return 0;
+  const id = String((t && t.id) || '');
+  if (!id) { __dfsRepeats.no_id++; return cost; }
+  if (__dfsSeen.has(id)) { __dfsRepeats.n++; return 0; }
+  __dfsSeen.add(id); return cost;
+};
+"""
+_OLD_SUM55 = """    const j = (it && it.json) || {}; let c = 0;
+    if (Array.isArray(j.tasks)) { for (const t of j.tasks) c += Number((t && t.cost) || 0); } else if (j.cost) { c += Number(j.cost) || 0; }
+"""
+_ledger_nodes55 = sorted(nm for nm in nodes if 'const run_ledger = {' in nodes[nm]['parameters'].get('jsCode', ''))
+assert {'Build Word File', 'Build Full Report', 'Build Audit Report', 'Build Keyword File', 'Build Ladder Report'} <= set(_ledger_nodes55), _ledger_nodes55
+for _n55 in _ledger_nodes55:
+    patch(_n55, _OLD_SUM55, _DFS_ONCE55)
+    patch(_n55, "const run_ledger = { dataforseo_usd: 0,", _DFS_ONCE_DECL55 + "const run_ledger = { dataforseo_usd: 0,")
+    patch(_n55, "run_ledger.dataforseo_usd = +run_ledger.dataforseo_usd.toFixed(4);",
+          "run_ledger.dataforseo_usd = +run_ledger.dataforseo_usd.toFixed(4);\n"
+          "run_ledger.dataforseo_tasks = __dfsSeen.size;\n"
+          "run_ledger.dataforseo_tasks_repeated = __dfsRepeats.n;   // answers about a task already paid for (a crawl is billed once, at creation)\n"
+          "run_ledger.dataforseo_tasks_unidentified = __dfsRepeats.no_id;")
+    assert '__dfsOnce(' in code(_n55) and code(_n55).index('const __dfsOnce') < code(_n55).index('__dfsOnce(t'), _n55 + ': the dedupe is declared after it is used'
+
+# ---------- B. R28 (c): the account itself, read for free, on every reservation ----------
+# appendix/user_data is free and answers in milliseconds; it is the only measurement of this engine's DataForSEO spend that cannot be
+# argued with. It sits on the ledger chain (Load Cost Calibration -> DFS Balance -> Run Ledger Row), so the reading belongs to the row the
+# run reserves, and it can never fail the run: neverError + continueRegularOutput + alwaysOutputData, with G1's retry rule.
+_lcc55 = pos('Load Cost Calibration')
+add_node('DFS Balance', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'GET', 'url': 'https://api.dataforseo.com/v3/appendix/user_data',
+    'authentication': 'genericCredentialType', 'genericAuthType': 'httpBasicAuth',
+    'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+    [_lcc55[0] + 110, _lcc55[1] + 150],
+    dict(credentials={'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
+         onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True, **_rl55.RETRY))
+disconnect('Load Cost Calibration', 'Run Ledger Row')
+connect('Load Cost Calibration', 'DFS Balance'); connect('DFS Balance', 'Run Ledger Row')
+patch('Run Ledger Row', "const HEAVY_PAGES = Number(d.heavy_audit_pages) > 0 ? Number(d.heavy_audit_pages) : 100;",
+      "// R28 (2026-10-14): the DataForSEO account balance at the moment this row is reserved, read for free from appendix/user_data, so the\n"
+      "// day's reported spend can be held against how far the account actually falls (CC.dfsDay in Run Ledger Settle) instead of trusting a\n"
+      "// sum of task costs that was up to 73% out. 0 = the probe did not answer, and the run carries on exactly as before.\n"
+      "let dfs_balance = 0;\n"
+      "try { const __b = $('DFS Balance').first().json || {}; const __t = (__b.tasks || [])[0] || {}; const __r = (__t.result || [])[0] || {};\n"
+      "  const __v = Number((__r.money || {}).balance); if (Number.isFinite(__v) && __v > 0) dfs_balance = +__v.toFixed(6); } catch (e) {}\n"
+      "const HEAVY_PAGES = Number(d.heavy_audit_pages) > 0 ? Number(d.heavy_audit_pages) : 100;")
+patch('Run Ledger Row', "  domain: String(d.domain || '').toLowerCase(), heavy, dfs_est_usd: dfs_est, dfs_usd: 0,",
+      "  domain: String(d.domain || '').toLowerCase(), heavy, dfs_est_usd: dfs_est, dfs_usd: 0, dfs_balance,")
+assert "$('DFS Balance')" in code('Run Ledger Row') and 'dfs_balance,' in code('Run Ledger Row'), 'R28: the reservation does not carry the balance'
+assert code('Run Ledger Row').index('let dfs_balance = 0;') < code('Run Ledger Row').index('dfs_balance,'), 'R28: the balance is used before it is read'
+assert 'CC.dfsDay(' in code('Run Ledger Settle'), 'R28: the settle does not reconcile the day against the account'
+
+# ---------- C. R28: the reconciliation is in the API callback and the run report too ----------
+patch('Build Webhook Response', "    run_ledger: d.run_ledger || null,", "    run_ledger: d.run_ledger || null,\n    dfs_tasks: (d.run_ledger || {}).dataforseo_tasks ?? null,")
+
+# ---------- D. R17: the build refuses a reservation that is not upstream of the first paid call ----------
+# A harness scenario cannot see this (it runs node code, not n8n's branch ordering), so it is checked here, on the generated JSON: walk the
+# main connections from every node with no main input, and refuse to walk past the reservation. Anything paid that is still reachable can
+# run before the row exists — which is exactly what R17 was.
+_PAID_CREDS55 = {'SEOcredDataForSE', 'SEOcredJinaReade', 'SEOcredPageSpeed', 'SEOcredAnthropic', 'SEOcredAhrefsDR', 'SEOcredBingWebm'}
+# a model / parser node hangs off its agent on an ai_* connection, never on `main`: the agent is the node that runs on the main path, and it
+# is the one this check cares about (its model node holds the Anthropic credential but cannot run on its own)
+_SUBNODE55 = ('lmChat', 'outputParser', 'memory', 'embeddings', 'toolWorkflow', 'vectorStore')
+def _subnode55(n): return any(k.lower() in n['type'].lower() for k in _SUBNODE55)
+def _paid55(n):
+    if _subnode55(n): return False
+    if n['type'] == '@n8n/n8n-nodes-langchain.agent': return True       # a model call on the main path
+    if n['type'] == 'n8n-nodes-base.executeWorkflow': return True       # it starts a run that spends
+    for c in (n.get('credentials') or {}).values():
+        if isinstance(c, dict) and c.get('id') in _PAID_CREDS55: return True
+    return False
+def _reach55(conns55, starts, stop_at):
+    seen, stack = set(starts), list(starts)
+    while stack:
+        cur = stack.pop()
+        if cur == stop_at: continue
+        for lst in ((conns55.get(cur) or {}).get('main') or []):
+            for t in (lst or []):
+                if t['node'] not in seen: seen.add(t['node']); stack.append(t['node'])
+    return seen
+def _check_ledger_order55(path, wiring):
+    wf55 = json.load(open(path, encoding='utf-8'))[0]
+    by_name = {n['name']: n for n in wf55['nodes']}
+    c55, nm55 = wf55.get('connections') or {}, wf55.get('name') or path
+    tag55 = wiring['reserve'][len('Run Ledger Row ('):-1]
+    reserve55, resume55 = 'Reserve Run Ledger (' + tag55 + ')', 'After Run Ledger (' + tag55 + ')'
+    for n55 in (wiring['plan'], 'Ensure Run Ledger (' + tag55 + ')', wiring['reserve'], reserve55, resume55, wiring['settle']):
+        assert n55 in by_name, 'R17: ' + nm55 + ' has no node "' + n55 + '"'
+    # the plan feeds the ledger and nothing else: everything it used to feed now hangs off the resume node
+    plan_out55 = [t['node'] for lst in ((c55.get(wiring['plan']) or {}).get('main') or []) for t in (lst or [])]
+    assert plan_out55 == ['Ensure Run Ledger (' + tag55 + ')'], 'R17: ' + nm55 + ': ' + wiring['plan'] + ' feeds ' + str(plan_out55) + ' beside the ledger'
+    targets55 = {t['node'] for o in c55.values() for lst in (o.get('main') or []) for t in (lst or [])}
+    # a start is a node nothing feeds on `main` that itself feeds something on `main` — the triggers, in practice; a sub-node (a model, a
+    # parser) has no main connection at all and can never start a path
+    starts55 = [n['name'] for n in wf55['nodes'] if n['name'] not in targets55 and ((c55.get(n['name']) or {}).get('main'))]
+    early55 = sorted(n for n in _reach55(c55, starts55, reserve55) if n in by_name and _paid55(by_name[n]))
+    assert not early55, 'R17: ' + nm55 + ' can spend before it reserves its ledger row: ' + ', '.join(early55)
+    after55 = _reach55(c55, [reserve55], None)
+    assert wiring['settle'] in after55, 'R17: ' + nm55 + ': ' + wiring['settle'] + ' is not downstream of ' + reserve55
+    assert reserve55 not in _reach55(c55, [wiring['settle']], None), 'R17: ' + nm55 + ': the reservation hangs off the settle'
+    return len(early55)
+
+# ---------- E. R29: no secret may reach the generated files ----------
+_SECRET_SHAPES55 = [
+    ('hooks.slack.com/services/', 'a Slack incoming webhook'),
+    ('discord.com/api/webhooks/', 'a Discord webhook'),
+    ('webhook.office.com/webhookb2/', 'a Microsoft Teams webhook'),
+    ('hooks.zapier.com/hooks/catch/', 'a Zapier catch hook'),
+    ('xoxb-', 'a Slack bot token'), ('sk-ant-', 'an Anthropic API key'), ('AIza', 'a Google API key'),
+    ('-----BEGIN ', 'a private key'),
+]
+def _secret_scan55(roots):
+    hits55 = []
+    for root55 in roots:
+        for dirpath55, _dirs55, files55 in os.walk(root55):
+            for f55 in files55:
+                if not f55.endswith(('.json', '.js', '.txt')): continue
+                fp55 = os.path.join(dirpath55, f55)
+                try: txt55 = open(fp55, encoding='utf-8', errors='ignore').read()
+                except OSError: continue
+                for needle55, what55 in _SECRET_SHAPES55:
+                    if needle55 in txt55:
+                        hits55.append(os.path.relpath(fp55, HERE0) + ': ' + what55 + ' (' + needle55 + ')')
+    return hits55
+
+def _r17_r29_checks():
+    """Run after every workflow is generated (the sub-builds run at the very end of this file)."""
+    lw55 = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    files55 = {w['name']: os.path.join(HERE0, 'workflows', f) for f in os.listdir(os.path.join(HERE0, 'workflows'))
+               if f.endswith('.json') for w in json.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))}
+    checked55 = 0
+    for wname55, wiring55 in sorted((lw55.get('monitors') or {}).items()):
+        assert wname55 in files55, 'R17: no generated workflow called ' + wname55
+        _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
+    assert checked55 == 9, 'R17: ' + str(checked55) + ' scheduled workflows checked, expected 9'
+    hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
+    assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
+    # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
+    # baked must be EXACTLY the placeholder, so a build on a machine whose .env holds the URL produces the same files as a build without
+    # one, and the "no webhook configured" path the harness exercises is the generated node in every checkout.
+    _baked55 = []
+    for _f55 in ('harness/code_v4/EH__Alert_Channels.js', 'harness/code_v4/EH__Alert_Record.js', 'harness/code_v4/EH__Alert_Delivery.js',
+                 'harness/code_v4/Watch_Ops_Alert.js', 'harness/code_v4/Watch_Ops_Channels.js'):
+        _t55 = open(os.path.join(HERE0, _f55), encoding='utf-8').read()
+        _m55 = re.findall(r"webhook_url[:= ]+'([^']*)'", _t55) or re.findall(r"cfgUrl\('([^']*)'\)", _t55)
+        assert _m55 and all(v == _PH55 for v in _m55), 'R30: ' + _f55 + ' does not carry the placeholder but ' + str(_m55)
+        _baked55.append(_f55)
+    assert len(_baked55) == 5, _baked55
+    # what harness S65 reads: the chain the build just proved, so the scenario can assert the shape without a workflow file
+    _main55 = json.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_v4.json'), encoding='utf-8'))[0]
+    _mc55 = _main55['connections']
+    _chain55 = {}
+    for wname55, wiring55 in sorted((lw55.get('monitors') or {}).items()):
+        wf55 = json.load(open(files55[wname55], encoding='utf-8'))[0]
+        tag55 = wiring55['reserve'][len('Run Ledger Row ('):-1]
+        cc55 = wf55['connections']
+        out55 = lambda nd: [t['node'] for lst in ((cc55.get(nd) or {}).get('main') or []) for t in (lst or [])]
+        _chain55[wname55] = {'tag': tag55, 'plan': wiring55['plan'], 'plan_out': out55(wiring55['plan']),
+                             'ensure_out': out55('Ensure Run Ledger (' + tag55 + ')'), 'row_out': out55(wiring55['reserve']),
+                             'reserve_out': out55('Reserve Run Ledger (' + tag55 + ')'),
+                             'resume': 'After Run Ledger (' + tag55 + ')', 'resume_out': out55('After Run Ledger (' + tag55 + ')'),
+                             'settle': wiring55['settle'], 'settle_from': wiring55['settle_from'], 'est': wiring55['est'],
+                             'always_output': sorted(n['name'] for n in wf55['nodes']
+                                                     if n['name'] in ('Ensure Run Ledger (' + tag55 + ')', 'Reserve Run Ledger (' + tag55 + ')') and n.get('alwaysOutputData'))}
+    json.dump({'monitors': _chain55,
+               'main': {'balance_node': 'DFS Balance', 'balance_url': nodes['DFS Balance']['parameters']['url'],
+                        'balance_in': sorted(s for s, o in _mc55.items() for lst in (o.get('main') or []) for t in (lst or []) if t['node'] == 'DFS Balance'),
+                        'balance_out': [t['node'] for lst in ((_mc55.get('DFS Balance') or {}).get('main') or []) for t in (lst or [])],
+                        'ledger_nodes': _ledger_nodes55, 'column': 'dfs_balance'},
+               'secrets': {'placeholder': _PH55, 'needles': [n for n, _w in _SECRET_SHAPES55],
+                           'scanned': ['workflows', 'harness/code_v4'], 'hits': hits55},
+               'audit_schedule_est': _EST55['audit_schedule']},
+              open(os.path.join(HERE0, 'harness', 'ledger_order.json'), 'w'), indent=1, sort_keys=True)
+    print('ledger order (R17): ' + str(checked55) + ' scheduled workflows reserve before their first paid node; no secret in workflows/ or harness/code_v4/ (R29)')
+
+log('The guard reserves before it spends, the money adds up, and no secret reaches the repository (2026-10-14, FIX_PLAN R17 / R28 / R29). R17: every one of the nine scheduled workflows wrote its ledger row at the END of the run and never settled it, because R9 hung the reserve chain beside the plan node and n8n runs a side branch last (exec 568: the settle ran 77 ms BEFORE the reserve, both after all the spending) - the chain is on the main path now, plan -> Ensure -> Row -> Reserve -> After Run Ledger -> the pipeline, and the build refuses any workflow whose paid nodes can be reached without passing the reservation. R28: a DataForSEO task is counted once, by its id (a crawl is billed at creation and repeated in every poll - +73% in one window), the Audit Scheduler reserves nothing for the crawls it only spawns, the Keyword Check settles the figure it reported to the caller, and every reservation records the free appendix/user_data balance so the day is reconciled against the account instead of a sum of task costs - an estimate stays labelled an estimate. R29: SEO_ALERT_WEBHOOK_URL is no longer baked into generated code (it is a bearer URL and this repository is public): the build bakes ' + _PH55 + ' and apply_env.py substitutes the real value into the copy it imports, with a build-time scan that fails if a webhook or key shape ever reappears in workflows/ or harness/code_v4/')
+
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
@@ -4860,4 +5101,7 @@ import subprocess
 for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'build_monitors.py'):
     _r = subprocess.run([sys.executable, os.path.join(HERE0, _s)], cwd=HERE0)
     assert _r.returncode == 0, _s + ' failed'
+
+# section 55 (R17 / R29): both checks need every workflow on disk, so they run here, after the sub-builds
+_r17_r29_checks()
 

@@ -14,6 +14,7 @@ from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, 
                            DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_get_where_params, dt_upsert_params_keys, dt_update_params, dt_get_recent_params)
 from ladder_common import PAGE_WATCH_TABLE, PAGE_WATCH_COLS, AUDIT_FINDINGS_TABLE, AUDIT_FINDINGS_COLS, OPS_ALERTS_TABLE, OPS_ALERTS_COLS   # G11 + G25 (2026-10-13, FIX_PLAN): the daily key-page watch
 from ladder_common import RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
+from ladder_common import ledger_mainline, ALERT_WEBHOOK_PLACEHOLDER   # R17 / R29 (2026-10-14)
 
 # R9 (2026-10-13, re-rating): the reserve / settle side branch, the same one build_monitors.py's WF.run_ledger builds. It hangs BESIDE the plan
 # node, never in the data path, because a Data Table node answers with the row it wrote rather than with its input.
@@ -31,11 +32,14 @@ def ledger_nodes(N_, C_, mode, tag, plan, ends, pos):
     for a_, b_ in ([(plan, 'Ensure Run Ledger (' + tag + ')'), ('Ensure Run Ledger (' + tag + ')', row), (row, 'Reserve Run Ledger (' + tag + ')'),
                     ('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')] + [(e, 'Ledger Settle (' + tag + ')') for e in ends]):
         link(C_, a_, b_)
-    return {'mode': mode, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + tag + ')', 'settle_from': list(ends), 'measured': '', 'est': LEDGER_EST[mode]}
+    return {'mode': mode, 'plan': plan, 'reserve': row, 'settle': 'Settle Run Ledger (' + tag + ')', 'settle_from': list(ends), 'measured': '', 'est': LEDGER_EST[mode],
+            'resume': 'After Run Ledger (' + tag + ')'}   # R17 (2026-10-14): the node that hands the plan's items back to the pipeline
 
 LEDGER_WIRING = {}   # R9: merged into harness/ledger_wiring.json after the last workflow is written
 from env_settings import ENV as _ENV_PW
-ALERT_WEBHOOK_URL = _ENV_PW.get('SEO_ALERT_WEBHOOK_URL') or ''   # D25b's channel: the watch pushes the serious changes to it as well
+# D25b's channel: the watch pushes the serious changes to it as well. R29 / R30 (2026-10-14): this build reads SEO_ALERT_WEBHOOK_URL not at
+# all — neither the value (a secret, and this repository is public) nor whether it is set (that made the generated files depend on the
+# building machine). ALERT_WEBHOOK_PLACEHOLDER is baked; apply_env.py substitutes the real value into the copy it imports.
 HERE = os.path.dirname(os.path.abspath(__file__))
 V5 = os.path.join(HERE, 'v5'); OUT = os.path.join(HERE, 'workflows'); CODE = os.path.join(HERE, 'harness', 'code_v4')
 _rdt = lambda p: open(os.path.join(V5, p), encoding='utf-8').read()
@@ -76,6 +80,8 @@ def link(conns, a, b, out=0):
     while len(outs) <= out: outs.append([])
     outs[out].append({'node': b, 'type': 'main', 'index': 0})
 def write(wfobj, fname):
+    # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
+    if wfobj.get('name') in LEDGER_WIRING: ledger_mainline(wfobj, LEDGER_WIRING[wfobj['name']])
     url_lint.check(wfobj, wfobj.get('name') or fname)   # D15: no node builds a site URL by hand (url_lint.py)
     retry_lint.check(wfobj, wfobj.get('name') or fname)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
     for _n in wfobj['nodes']:   # e-mails retry a transient SMTP / DNS failure (live finding 2026-10-02: EAI_AGAIN smtp.gmail.com)
@@ -525,7 +531,9 @@ write(wf('SEOagentConsole1', 'SEO Agent — Console Alerts', N, C), 'SEO_Agent_C
 #     re-sent. The app shows it on the Alerts page and on the technical page (seo_page_watch), and the Monday report lists the week's changes.
 # =============================================================================
 OPS_ALERT_SRC = _rdt('code/_ops_alert.js').rstrip('\n')
-wsrc = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_URL)
+# R29 (2026-10-14, FIX_PLAN §3.12, secret handling): a placeholder is baked, never the real Slack URL — this repository is public and the
+# generated JSON and harness code are both tracked. apply_env.py substitutes the value from n8n/.env into the JSON it imports.
+wsrc = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER)
 WATCH_GET = {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
              'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.16; +page-watch)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml,text/plain,*/*'}]},
              # redirects are NOT followed: a key page that starts redirecting is itself the change we are watching for
@@ -615,7 +623,7 @@ write(wf('SEOagentPageWch1', 'SEO Agent — Page Watch', N, C), 'SEO_Agent_Page_
 
 # what the harness checks (S53): the watch's wiring, its schedule and the quota the inspections live inside
 json.dump({'workflow': 'SEOagentPageWch1', 'table': PAGE_WATCH_TABLE, 'cache_kind': 'watch', 'schedule': {'hour': 5, 'minute': 45, 'every': 'day'},
-           'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_configured': bool(ALERT_WEBHOOK_URL),
+           'webhook_setting': 'SEO_ALERT_WEBHOOK_URL', 'webhook_placeholder': ALERT_WEBHOOK_PLACEHOLDER,   # R30: never whether the setting is filled - that made this tracked fixture depend on the building machine's .env
            'nodes': [n['name'] for n in N if n['type'] != 'n8n-nodes-base.stickyNote'],
            'connections': {s_: [[t_['node'] for t_ in l_] for l_ in o_.get('main', [])] for s_, o_ in C.items()},
            'fetch': {'name': 'Fetch Watch Page', 'follows_redirects': False, 'response_format': 'text', 'retries': retry_lint.RETRY['maxTries']},

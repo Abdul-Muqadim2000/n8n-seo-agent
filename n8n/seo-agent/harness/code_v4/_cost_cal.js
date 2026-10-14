@@ -250,7 +250,75 @@ const CC = (() => {
       cost_basis: costBasis(ai, dfs) };
   };
 
+  // ---- 5. the DataForSEO money: each task once, and the day checked against the account ------------------------------------
+  // R28 (2026-10-14, FIX_PLAN §3.12; RESULTS §0): the engine's own "measured" DataForSEO figures did not reconcile with the balance —
+  // window C moved $0.0520 while the runs in it reported $0.0900 (+73%), window A $0.5506 against $0.6145 (+11.6%). Two causes, both here.
+  //
+  // (a) **A task was counted on every answer about it.** DataForSEO bills a crawl when the task is CREATED and then repeats the same
+  //     `tasks[].cost` in every later answer about that task, so a polled on_page task was charged again on every poll. `dfsAdd` counts a
+  //     task on its first sighting, by its own id, and keeps the repeats visible rather than silently dropping them.
+  const dfsLedger = () => {
+    const seen = new Set();
+    const st = { usd: 0, tasks: 0, repeated: 0, no_id: 0 };
+    // one DataForSEO answer: adds what has not been counted yet and returns that amount
+    const add = (j) => {
+      let c = 0;
+      const ts = j && Array.isArray(j.tasks) ? j.tasks : null;
+      if (ts) {
+        for (const t of ts) {
+          const cost = n0(t && t.cost); if (!cost) continue;
+          const id = String((t && t.id) || '');
+          if (!id) { st.no_id++; c += cost; continue; }   // nothing identifies it: counted, and said so
+          if (seen.has(id)) { st.repeated++; continue; }
+          seen.add(id); st.tasks++; c += cost;
+        }
+      } else if (j && n0(j.cost)) { c += n0(j.cost); }
+      st.usd = r4(st.usd + c);
+      return r4(c);
+    };
+    return { add, state: st, seen };
+  };
+
+  // (b) **Nothing checked the sum against the money.** Every reservation now records the free `appendix/user_data` balance reading
+  //     (seo_run_ledger.dfs_balance), so the day's reported spend can be held against the only measurement that cannot be argued with:
+  //     how far the account actually fell between the day's first reading and the latest one. `rows` are the day's ledger rows,
+  //     `mine` is this run's own reserved row (its reading is the latest). Nothing is corrected automatically — the engine says so.
+  const RECONCILE_TOLERANCE = 0.1;    // 10% of the move, or 2 cents, whichever is larger: DataForSEO rounds to 4 decimals per task
+  const RECONCILE_FLOOR = 0.02;
+  const dfsDay = (rows, mine) => {
+    const me = mine || {};
+    const day = String(me.created_at || '').slice(0, 10);
+    const read = (rows || []).filter(r => r && String(r.created_at || '').slice(0, 10) === day && n0(r.dfs_balance) > 0)
+      .sort((a, b) => String(a.created_at || '').localeCompare(String(b.created_at || '')));
+    const mineBalance = n0(me.dfs_balance);
+    const from = read[0] || null;
+    const to = mineBalance > 0 ? { created_at: String(me.created_at || ''), dfs_balance: mineBalance } : (read.length > 1 ? read[read.length - 1] : null);
+    const out = { comparable: false, day, readings: read.length + (mineBalance > 0 && (!read.length || read[read.length - 1].created_at !== me.created_at) ? 1 : 0),
+      from: from ? String(from.created_at) : '', to: to ? String(to.created_at) : '',
+      balance_usd: 0, engine_usd: 0, diff_usd: 0, diff_pct: null, within: true, basis: '' };
+    if (!from || !to || String(from.created_at) >= String(to.created_at)) {
+      out.basis = read.length ? 'the day has only one balance reading so far, so nothing can be compared yet'
+        : 'no balance reading for the day (appendix/user_data was not answered), so the figures are the engine\'s own sums only';
+      return out;
+    }
+    // what the engine says the runs between the two readings cost, settled rows only (a reserved row has spent nothing yet)
+    const between = (rows || []).filter(r => r && String(r.status || '') === 'done'
+      && String(r.created_at || '') >= String(from.created_at) && String(r.created_at || '') < String(to.created_at));
+    out.engine_usd = r4(between.reduce((s, r) => s + n0(r.dfs_usd), 0));
+    out.balance_usd = r4(Math.max(0, n0(from.dfs_balance) - n0(to.dfs_balance)));
+    out.diff_usd = r4(out.engine_usd - out.balance_usd);
+    out.diff_pct = out.balance_usd > 0 ? +((out.diff_usd / out.balance_usd) * 100).toFixed(1) : null;
+    out.within = Math.abs(out.diff_usd) <= Math.max(RECONCILE_FLOOR, out.balance_usd * RECONCILE_TOLERANCE);
+    out.comparable = true;
+    out.settled_rows = between.length;
+    out.basis = 'the account fell $' + out.balance_usd.toFixed(4) + ' between ' + out.from.slice(11, 19) + ' and ' + out.to.slice(11, 19)
+      + ' while ' + between.length + ' settled run(s) report $' + out.engine_usd.toFixed(4)
+      + (out.within ? ' — they agree' : ' — they do NOT agree ($' + out.diff_usd.toFixed(4) + (out.diff_pct == null ? '' : ', ' + out.diff_pct + '%') + '); the account is the figure to believe');
+    return out;
+  };
+
   return { PRICES, UNKNOWN, CHARS_PER_TOKEN, THINK_SHARE, EST, DFS_EST, ALPHA, HEADROOM, KEEP, CAP, FACTOR_KEY, MODEL_PREFIX,
+    RECONCILE_TOLERANCE, RECONCILE_FLOOR, dfsLedger, dfsDay,
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
 return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call || ''); const cal = CC.readCal(j.rows || []);
@@ -261,6 +329,10 @@ return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call 
   if (fn === 'calRow') return { json: CC.calRow(j.kind, j.mode, j.amount, cal, !!j.measured) };
   if (fn === 'split') return { json: CC.split(j.ai || {}, j.dfs || {}) };
   if (fn === 'readCal') return { json: cal };
+  // R28 (2026-10-14, section 55): the DataForSEO money — a task counted once, and the day held against the account
+  if (fn === 'dfsLedger') { const L = CC.dfsLedger(); const added = (j.answers || []).map(a => L.add(a)); return { json: { added, ...L.state } }; }
+  if (fn === 'dfsDay') return { json: CC.dfsDay(j.rows || [], j.mine || {}) };
   if (fn === 'tables') return { json: { EST: CC.EST, DFS_EST: CC.DFS_EST, PRICES: CC.PRICES, UNKNOWN: CC.UNKNOWN, CHARS_PER_TOKEN: CC.CHARS_PER_TOKEN,
-    THINK_SHARE: CC.THINK_SHARE, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY } };
+    THINK_SHARE: CC.THINK_SHARE, ALPHA: CC.ALPHA, HEADROOM: CC.HEADROOM, KEEP: CC.KEEP, CAP: CC.CAP, FACTOR_KEY: CC.FACTOR_KEY,
+    RECONCILE_TOLERANCE: CC.RECONCILE_TOLERANCE, RECONCILE_FLOOR: CC.RECONCILE_FLOOR } };
   return { json: { error: 'unknown call ' + fn } }; });

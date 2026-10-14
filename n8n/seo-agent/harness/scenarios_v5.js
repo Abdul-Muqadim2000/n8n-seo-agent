@@ -5711,10 +5711,19 @@ await guard('crux, impact priority, alert channels and test check-ins', async ()
     && eq(OW.connections['Save Ops Alert'][0], ['Alert Channels']) && OW.table === 'seo_ops_alerts' && OW.webhook_setting === 'SEO_ALERT_WEBHOOK_URL',
     JSON.stringify(OW.connections));
   // the channel that is not configured is skipped, and nothing fails
-  const chUnset = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels' }))[0].json;   // the generated node: no webhook URL in this worktree's .env
-  check('D25b: an unset channel is simply skipped — the generated node has no webhook URL in this worktree, so no request is built, nothing throws, the other channel still goes out and the row is still written',
+  // R30 (2026-10-14, FIX_PLAN §3.12): this read "no webhook URL in this worktree's .env" and therefore tested the ENVIRONMENT, not the
+  // behaviour — on a machine whose .env held the URL the generated node carried the live Slack webhook and this check asserted it would
+  // POST to the customer's channel. R29 bakes `__SEO_ALERT_WEBHOOK_URL__` in every build and apply_env.py substitutes the real value into
+  // the copy it imports, so the generated node is the UNSET case in every checkout and `EH__Alert_Channels_Webhook` is the configured one.
+  const chUnsetSrc = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'EH__Alert_Channels.js'), 'utf8');
+  check('R29 / R30: what the build bakes is a placeholder, never a URL — so the generated node is the unset case in every checkout and no build can produce a node that posts to a customer\'s Slack',
+    /webhook_url: '__SEO_ALERT_WEBHOOK_URL__'/.test(chUnsetSrc) && !/https?:\/\//.test((chUnsetSrc.match(/const CFG = \{[^\n]*/) || [''])[0]),
+    (chUnsetSrc.match(/const CFG = \{[^\n]*/) || [''])[0]);
+  const chUnset = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels' }))[0].json;   // the generated node: the placeholder, which is not a channel
+  check('D25b + R30: an unset channel is simply skipped — an un-substituted placeholder is not a URL, so no request is built, nothing throws, the other channel still goes out and the row is still written',
     chUnset.send_webhook === false && chUnset.webhook_url === '' && !chUnset.channels.includes('webhook') && chUnset.channels.includes('data_table')
-    && chUnset.send_email === true && chUnset.recorded === true && chUnset.alert_key === row1.alert_key,
+    && chUnset.send_email === true && chUnset.recorded === true && chUnset.alert_key === row1.alert_key
+    && !/__SEO_ALERT_WEBHOOK_URL__/.test(JSON.stringify(chUnset)),
     JSON.stringify({ send: chUnset.send_webhook, channels: chUnset.channels, note: chUnset.note }));
   // the same failure again: counted on the row, not re-sent; the same failure after the window: sent again, first_seen_at kept
   const mins = (n) => new Date(Date.now() - n * 60000).toISOString();
@@ -6783,9 +6792,14 @@ await guard('page watch + url inspection', async () => {
     && eq(ops2.map(r => r.severity).sort(), ['critical', 'critical', 'critical', 'high', 'high']) && !ops2.some(r => /title/i.test(r.message)), JSON.stringify(ops2.map(r => [r.severity, r.node])));
   mock('Save Watch Ops Alert', ops2.map(r => ({ json: r })));
   const ch2 = (await run('Watch Ops Channels', store['Save Watch Ops Alert']))[0].json;
-  check('the webhook body carries the day\'s changes for Slack / Teams / any POST endpoint and needs no SMTP; with no webhook configured the changes are still on record',
+  // R30 (2026-10-14, FIX_PLAN §3.12): this used to compare against `WIRE.webhook_configured`, i.e. against whatever n8n/.env held on the
+  // machine that built — so the skip path was only exercised where the setting happened to be empty, and where it was set the generated
+  // node carried the live Slack URL and this check asserted it would POST to it. R29 bakes a placeholder into the generated node in every
+  // build, so the unset path is now deterministic here and the configured path is the `_Webhook` variant with its example URL.
+  check('the webhook body carries the day\'s changes for Slack / Teams / any POST endpoint and needs no SMTP; with no webhook configured (the generated node holds the placeholder) the changes are still on record',
     ch2.alerts === 5 && /key-page watch/.test(ch2.webhook_body.text) && ch2.webhook_body.alerts.length === 5 && ch2.recorded === true
-    && ch2.send_webhook === !!WIRE.webhook_configured, JSON.stringify({ send: ch2.send_webhook, note: ch2.note }));
+    && ch2.send_webhook === false && !/__SEO_ALERT_WEBHOOK_URL__/.test(JSON.stringify(ch2)) && /no alert webhook is configured/.test(ch2.note),
+    JSON.stringify({ send: ch2.send_webhook, note: ch2.note }));
   // the same changes an hour later, inside the dedupe window: recorded, not re-sent
   watchLoads({ watch: stored, cache: [{ json: { key: 'watch:' + SITE, kind: 'watch', site_id: SITE, value: cache1[0].value, updated_at: daysAgo(1) } }], ops: ops2.map(r => ({ json: { ...r, last_seen_at: new Date().toISOString() } })) });
   const ops3 = (await run('Watch Ops Alert', store['Watch Compare'])).map(x => x.json);
@@ -8241,8 +8255,11 @@ await guard('the re-rating defects R1..R9', async () => {
     && pulseRow.dfs_est_usd === 0.16 && pulseRow.est_usd === 0.008 && pulseRow.heavy === false && pulseRow.domain === '', JSON.stringify(pulseRow));
   mock('Audit Schedule Plan', [{ json: { site_id: SITE, domain: D, run: true } }]);
   const oneSite = (await run('Run Ledger Row (Audit)', EMPTY, { code: 'Run_Ledger_Row_Audit_' }))[0].json;
-  check('R9: a run covering one website names it on the row, and the Audit Scheduler reserves the $0.09 its crawl really costs',
-    oneSite.domain === D && oneSite.dfs_est_usd === 0.09 && oneSite.est_usd === 0 && oneSite.mode === 'audit_schedule', JSON.stringify(oneSite));
+  // R28 (2026-10-14): the Audit Scheduler used to reserve $0.09 of DataForSEO money for a crawl it does not run — it SPAWNS audits into
+  // the main workflow, and each spawned run reserves and settles that crawl for itself, so the same money was on two rows. It reserves
+  // nothing now, exactly as the Content Cadence does; the guard still sees every audit, through the row the spawned run makes.
+  check('R9 + R28: a run covering one website names it on the row, and the Audit Scheduler reserves nothing for the crawls it only spawns (each spawned audit reserves its own $0.09)',
+    oneSite.domain === D && oneSite.dfs_est_usd === 0 && oneSite.est_usd === 0 && oneSite.mode === 'audit_schedule', JSON.stringify(oneSite));
   mock('Run Ledger Row (Pulse)', [{ json: { ...pulseRow, id: 7 } }]);
   mock('Pulse Metrics', [{ json: { site_id: SITE, day_row: { cost_usd: 0.0841 } } }, { json: { site_id: 'site_techand-ai', day_row: { cost_usd: 0.0802 } } }]);
   const settled = (await run('Ledger Settle (Pulse)', EMPTY, { code: 'Pulse__Ledger_Settle_Pulse_' }))[0].json;
@@ -8250,8 +8267,9 @@ await guard('the re-rating defects R1..R9', async () => {
   check('R9: the settle writes the MEASURED DataForSEO cost where the run knows it (the two sites\' tasks added up) and keeps the Claude estimate as the settled figure',
     settled.status === 'done' && settled.dfs_usd === 0.1643 && settled.dfs_measured === true && settled.settled_usd === 0.008 && settled.run_id === 'test-exec', JSON.stringify(settled));
   const settledEst = (await run('Ledger Settle (Audit)', [{ json: { ...oneSite, id: 8 } }], { code: 'Ledger_Settle_Audit_' }))[0].json;
-  check('R9: a workflow with no measured figure settles its own estimate and says so, instead of inventing a number',
-    settledEst.dfs_usd === 0.09 && settledEst.dfs_measured === false && settledEst.status === 'done', JSON.stringify(settledEst));
+  check('R9 + R28: a workflow with no measured figure settles its own estimate and says so, instead of inventing a number — and the Audit Scheduler\'s estimate is now nothing, because the crawl belongs to the run it spawned',
+    settledEst.dfs_usd === 0 && settledEst.dfs_measured === false && settledEst.status === 'done'
+    && /DataForSEO \$0\.0000 ESTIMATED \(this workflow reports no cost of its own\)/.test(settledEst.cost_basis), JSON.stringify(settledEst));
   // G23 (2026-10-13) moved the two estimate tables into the shared cost kit (one source for the guard, the settle, the self-correcting
   // figure and the reconciliation) and raised the Keyword Check's DataForSEO reservation to the $0.0254 a check really measured.
   check('R9: the main workflow\'s and the Keyword Check\'s own reservations carry the same two columns',
@@ -9332,6 +9350,170 @@ await guard('r23-r22-r26-no-answer-without-data', async () => {
     bKd.search_data_known === true && bKd.difficulty_known === false && bKd.chance && /DataForSEO has no difficulty for this keyword, so it was counted as your reach \+ 10\.$/.test(bKd.chance_text)
     && bKd.plan_assumed === true, JSON.stringify({ label: bKd.label, t: bKd.chance_text }));
 });
+
+// ===================================================================================
+// S65 (2026-10-14, system review FIX_PLAN §3.12 R17 / R28 / R29; docs/system-review-2026-10-14/RESULTS.md §0, §2.11, §5)
+// The guard that guarded nothing, money that did not add up, and a secret in a public repository.
+// Every check below fails on the build of 2026-10-14 morning: the nine scheduled workflows wrote their ledger row at the END of the run
+// (exec 568: the settle at 16:22:15.507 matched nothing, the reserve inserted a fresh `reserved` row at .584 — after all the spending);
+// a crawl's $0.09 was charged again on every poll of its task (+73% in one window, +11.6% in another); the Keyword Check settled
+// `dfs_usd: 0` while telling the caller $0.026; and the live Slack webhook was baked into two workflow files and five harness files.
+// The ORDERING itself cannot be tested here — the harness runs node code, not n8n's branch ordering — so the build asserts it and this
+// scenario reads what the build proved (harness/ledger_order.json).
+// ===================================================================================
+await guard('R17 R28 R29 ledger order, money and secrets', async () => {
+  reset(); const SN = 'S65 R17 R28 R29 — the ledger row is reserved before the first paid call, a DataForSEO task is counted once and the day is checked against the account, and no secret reaches the generated files';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const LO = require('./ledger_order.json');
+  const LW = require('./ledger_wiring.json');
+  const TC65 = require('./table_cols.json');
+  const kit = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+
+  // ---------- 1. R28 (a): a crawl is billed when the task is created, not on every poll ----------
+  // The real shape of execution 579: on_page/task_post answers with the task and its cost, and every later answer ABOUT that task
+  // (summary, pages, extras) repeats the same cost. The old loop added it every time.
+  const CRAWL = { id: '10121234-5678-0000-0000-abcdef012345', cost: 0.09 };
+  const SERP = { id: '10121234-5678-1111-1111-abcdef012345', cost: 0.002 };
+  const answers = [
+    { tasks: [{ ...CRAWL, status_code: 20100 }] },        // Start Crawl: billed here
+    { tasks: [{ ...CRAWL, status_code: 20000 }] },        // Get Crawl Summary, poll 1
+    { tasks: [{ ...CRAWL, status_code: 20000 }] },        // Get Crawl Summary, poll 2
+    { tasks: [{ ...CRAWL, status_code: 20000 }] },        // Get Crawled Pages
+    { tasks: [{ ...CRAWL, status_code: 20000 }] },        // Run Crawl Extras
+    { tasks: [{ ...SERP, status_code: 20000 }] },         // a different task: counted
+  ];
+  const once = await kit({ call: 'dfsLedger', answers });
+  console.log('   crawl ledger ->', JSON.stringify(once));
+  check('R28: the crawl is counted ONCE, on the answer that created it — the four later answers about the same task add nothing (that is the +73% window C reported)',
+    once.usd === 0.092 && once.tasks === 2 && once.repeated === 4 && eq(once.added, [0.09, 0, 0, 0, 0, 0.002]),
+    JSON.stringify(once));
+  check('R28: the old behaviour (summing every answer) would have reported $0.452 for $0.092 of real money, so the dedupe is what the live run was missing',
+    +(answers.reduce((s, a) => s + a.tasks.reduce((x, t) => x + t.cost, 0), 0)).toFixed(4) === 0.452 && once.usd < 0.1,
+    String(once.usd));
+  const noId = await kit({ call: 'dfsLedger', answers: [{ tasks: [{ cost: 0.01 }] }, { tasks: [{ cost: 0.01 }] }] });
+  check('R28: a task with no id is counted (nothing identifies it) and reported as unidentified rather than quietly dropped or quietly doubled',
+    noId.usd === 0.02 && noId.no_id === 2 && noId.repeated === 0, JSON.stringify(noId));
+  const bare = await kit({ call: 'dfsLedger', answers: [{ cost: 0.004 }] });
+  check('R28: an answer that carries a cost but no task list (the shape some endpoints use) still counts', bare.usd === 0.004, JSON.stringify(bare));
+
+  // ---------- 2. R28 (c): the day is reconciled against the account, not against a sum of task costs ----------
+  const T65 = await kit({ call: 'tables' });
+  const day = '2026-10-14';
+  const row = (t, bal, dfs, status) => ({ run_id: 'x' + t, created_at: day + 'T16:' + t + ':00.000Z', dfs_balance: bal, dfs_usd: dfs, status: status || 'done' });
+  // the real window C: the balance moved $0.0520 while the runs in it reported $0.0900
+  const windowC = await kit({ call: 'dfsDay', rows: [row('30', 14.8, 0, 'done'), row('40', 14.748, 0.09, 'done')], mine: { created_at: day + 'T16:40:42.000Z', dfs_balance: 14.748 } });
+  console.log('   window C ->', JSON.stringify(windowC));
+  check('R28: the day is held against the account — window C of the live run reported $0.0900 while the balance fell $0.0520, and the engine now says so instead of presenting its own sum as measured',
+    windowC.comparable === true && windowC.balance_usd === 0.052 && windowC.engine_usd === 0.09 && windowC.within === false
+    && windowC.diff_usd === 0.038 && /do NOT agree/.test(windowC.basis) && /the account is the figure to believe/.test(windowC.basis),
+    JSON.stringify(windowC));
+  const agree = await kit({ call: 'dfsDay', rows: [row('00', 16.235543, 0, 'done'), row('18', 15.684953, 0.5506, 'done')], mine: { created_at: day + 'T16:18:04.000Z', dfs_balance: 15.684953 } });
+  check('R28: a day whose figures match the account is reported as agreeing, and nothing is "corrected" behind anyone\'s back',
+    agree.comparable === true && agree.within === true && agree.engine_usd === 0.5506 && agree.balance_usd === 0.5506 && /they agree/.test(agree.basis),
+    JSON.stringify(agree));
+  const oneRead = await kit({ call: 'dfsDay', rows: [row('00', 16.2, 0, 'done')], mine: { created_at: day + 'T16:00:00.000Z', dfs_balance: 16.2 } });
+  check('R28: one reading is not a comparison — the first run of the day says so instead of inventing a difference',
+    oneRead.comparable === false && oneRead.balance_usd === 0 && /only one balance reading/.test(oneRead.basis), JSON.stringify(oneRead));
+  const noRead = await kit({ call: 'dfsDay', rows: [{ run_id: 'a', created_at: day + 'T16:00:00.000Z', dfs_usd: 0.1, status: 'done' }], mine: { created_at: day + 'T16:20:00.000Z', dfs_balance: 0 } });
+  check('R28: when appendix/user_data did not answer there is nothing to reconcile against, and the row says that rather than claiming agreement',
+    noRead.comparable === false && /no balance reading/.test(noRead.basis), JSON.stringify(noRead));
+  const reserved = await kit({ call: 'dfsDay', rows: [row('00', 16.2, 0, 'done'), row('05', 16.15, 0.05, 'done'), row('10', 16.14, 0.3, 'reserved')], mine: { created_at: day + 'T16:12:00.000Z', dfs_balance: 16.14 } });
+  check('R28: a row that is still `reserved` has spent nothing yet and is left out of the day\'s reported total',
+    reserved.engine_usd === 0.05 && reserved.balance_usd === 0.06 && reserved.within === true, JSON.stringify(reserved));
+  check('R28: the tolerance is stated, not implicit — 10% of the move or two cents, whichever is larger (DataForSEO rounds each task to four decimals)',
+    T65.RECONCILE_TOLERANCE === 0.1 && T65.RECONCILE_FLOOR === 0.02, JSON.stringify({ t: T65.RECONCILE_TOLERANCE, f: T65.RECONCILE_FLOOR }));
+
+  // ---------- 3. R28: the Keyword Check settles the figure it told the caller ----------
+  const assessSettle = async (result, response) => {
+    mock('Run Ledger Row (Assess)', [{ json: { run_id: 'test-exec', mode: 'assess', est_usd: 0.002, dfs_est_usd: 0.034, cost_mode: 'assess' } }]);
+    mock('Assess Result', [{ json: result }]);
+    if (response) mock('Assess Response', [{ json: response }]); else delete store['Assess Response'];
+    return (await run('Ledger Settle (Assess)', [{ json: {} }]))[0].json;
+  };
+  const ok200 = await assessSettle({ dfs_cost: 0.0241 }, { status: 200, body: { ok: true, cost_usd: 0.0261 } });
+  console.log('   assess settle ->', JSON.stringify(ok200));
+  check('R28: the Keyword Check settles with the money it reported — the DataForSEO cost is measured, the Haiku call is the rest, and measured + estimated is exactly the cost_usd in the 200 (it used to settle dfs_usd: 0 against a reported $0.026)',
+    ok200.dfs_usd === 0.0241 && ok200.dfs_measured === true && ok200.ai_usd === 0.002 && ok200.settled_usd === 0.002
+    && ok200.measured_usd === 0.0241 && +(ok200.measured_usd + ok200.estimated_usd).toFixed(4) === 0.0261 && ok200.reported_usd === 0.0261
+    && ok200.status === 'done', JSON.stringify(ok200));
+  check('R28 / G23: the Keyword Check\'s row still keeps measured and estimated money apart in words — the Haiku call is labelled an estimate, the DataForSEO cost measured',
+    /Claude \$0\.0020 ESTIMATED/.test(ok200.cost_basis) && /DataForSEO \$0\.0241 measured/.test(ok200.cost_basis)
+    && /the same figure the 200 reported as cost_usd/.test(ok200.cost_basis), ok200.cost_basis);
+  const retried = await assessSettle({ dfs_cost: 0.0507 }, { status: 200, body: { ok: true, cost_usd: 0.0547 } });
+  check('R28: a check whose topic call needed the plain-text retry settles the two model calls it was charged for, not one',
+    retried.ai_usd === 0.004 && +(retried.measured_usd + retried.estimated_usd).toFixed(4) === 0.0547, JSON.stringify(retried));
+  const upstream = await assessSettle({ ok: false, error: 'DataForSEO keyword overview failed', dfs_cost: 0 }, null);
+  check('P1-1 + R28: a request DataForSEO failed still settles its row — at nothing spent on the model, with the measured DataForSEO cost, and it says no answer was sent',
+    upstream.status === 'done' && upstream.ai_usd === 0 && upstream.dfs_usd === 0 && upstream.reported_usd === null
+    && /no model call was made/.test(upstream.cost_basis) && /failed upstream/.test(upstream.cost_basis), JSON.stringify(upstream));
+  check('P1-1: the two ends that settle the Keyword Check are unchanged (the answer and the upstream failure); they reach the row through the node that prices the request',
+    eq(LW.assess.settle_from, ['Respond Assess', 'Respond Assess Upstream Error']) && LW.assess.settle_via === 'Ledger Settle (Assess)'
+    && eq(LW.assess.settle_conditions, [['run_id', '={{ $execution.id }}'], ['status', 'reserved']]),
+    JSON.stringify({ from: LW.assess.settle_from, via: LW.assess.settle_via }));
+  check('R28: the settle writes the figures, not the flat reservation it used to copy from the row',
+    ['settled_usd', 'ai_usd', 'dfs_usd', 'measured_usd', 'estimated_usd', 'cost_basis'].every(k => String(LW.assess.settle_values[k] || '').includes('$json.' + k)),
+    JSON.stringify(LW.assess.settle_values));
+
+  // ---------- 4. R17: what the build proved about every scheduled workflow ----------
+  const MON = Object.keys(LO.monitors).sort();
+  check('R17: all nine scheduled workflows are covered — the AI Visibility Tracker, the AI Pulse, AI Growth, the Backlink Monitor, the Audit Scheduler, the Link Builder, the Rank Tracker, the Site Tracker and the Content Cadence',
+    MON.length === 9 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker']
+      .every(n => MON.some(m => m.endsWith(n))), JSON.stringify(MON));
+  const badChain = MON.filter(w => {
+    const c = LO.monitors[w];
+    return !eq(c.plan_out, ['Ensure Run Ledger (' + c.tag + ')'])
+      || !eq(c.ensure_out, ['Run Ledger Row (' + c.tag + ')'])
+      || !eq(c.row_out, ['Reserve Run Ledger (' + c.tag + ')'])
+      || !eq(c.reserve_out, [c.resume])
+      || !c.resume_out.length;
+  });
+  check('R17: the reservation is on the MAIN path in every one of them — the plan feeds the ledger and nothing else, and everything it used to feed now hangs off "After Run Ledger", on the far side of the insert',
+    badChain.length === 0, JSON.stringify(badChain.map(w => [w, LO.monitors[w]])));
+  const notGuarded = MON.filter(w => LO.monitors[w].always_output.length !== 2);
+  check('R17: both Data Table nodes of the chain answer even when they fail — they sit in the run\'s own path now, so neither may end it by answering with nothing',
+    notGuarded.length === 0, JSON.stringify(notGuarded));
+  const noSettle = MON.filter(w => !LO.monitors[w].settle || !LO.monitors[w].settle_from.length);
+  check('R17: every one of them still settles its row at the end, with the figures the run measured (exec 568 settled before it reserved, so the settle matched nothing and the measured cost was thrown away)',
+    noSettle.length === 0, JSON.stringify(noSettle));
+  check('R28: the Audit Scheduler reserves nothing for the crawls it only spawns — each spawned audit reserves and settles that $0.09 itself, and counting it twice is what window C reported',
+    eq(LO.audit_schedule_est, { ai: 0, dfs: 0 }) && eq(LO.monitors[MON.find(m => m.endsWith('Audit Scheduler'))].est, { ai: 0, dfs: 0 }),
+    JSON.stringify(LO.audit_schedule_est));
+
+  // ---------- 5. R28 (c): the main workflow reads the account for free, before it reserves ----------
+  check('R28: the balance probe is on the ledger chain, before the row is written, and it is the free appendix/user_data endpoint',
+    LO.main.balance_url === 'https://api.dataforseo.com/v3/appendix/user_data'
+    && eq(LO.main.balance_in, ['Load Cost Calibration']) && eq(LO.main.balance_out, ['Run Ledger Row']),
+    JSON.stringify(LO.main));
+  check('R28: the reading is stored on the row (seo_run_ledger.dfs_balance), so any later run and any reader can reconcile the day',
+    TC65.RUN_LEDGER.includes('dfs_balance') && LO.main.column === 'dfs_balance', JSON.stringify(TC65.RUN_LEDGER));
+  check('R28: every report builder that carries a run ledger counts its DataForSEO tasks the deduped way',
+    LO.main.ledger_nodes.length === 5 && ['Build Word File', 'Build Full Report', 'Build Audit Report', 'Build Keyword File', 'Build Ladder Report'].every(n => LO.main.ledger_nodes.includes(n)),
+    JSON.stringify(LO.main.ledger_nodes));
+
+  // ---------- 6. R29: the secret is not in the repository, and the placeholder is not a channel ----------
+  check('R29: the build scans the generated workflows and harness code for webhook and key shapes, and found none — the live Slack URL used to sit in two workflow files and five harness files of a PUBLIC repository',
+    eq(LO.secrets.hits, []) && LO.secrets.needles.includes('hooks.slack.com/services/') && LO.secrets.needles.includes('sk-ant-')
+    && eq(LO.secrets.scanned, ['workflows', 'harness/code_v4']), JSON.stringify(LO.secrets));
+  check('R29: what is baked is a placeholder, which apply_env.py substitutes into the copy it imports — the repository never carries the value',
+    LO.secrets.placeholder === '__SEO_ALERT_WEBHOOK_URL__', LO.secrets.placeholder);
+  const src65 = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'EH__Alert_Channels.js'), 'utf8');
+  check('R29: the generated alert node holds the placeholder and nothing that looks like a URL',
+    src65.includes("webhook_url: '__SEO_ALERT_WEBHOOK_URL__'") && !/hooks\.slack\.com/.test(src65), (src65.match(/webhook_url:[^\n]*/) || [''])[0]);
+  // the generated node (no .env in this worktree) must read the placeholder as "no channel configured" — S48 runs the same node and
+  // asserts send_webhook === false, so the two scenarios agree on what an unset channel means
+  mock('Format Alert', [{ json: { subject: 's', html: '<p>h</p>', node: 'Keyword Data', workflow: 'SEO Agent v4', execution_id: '1', execution_url: 'http://x/1', message: 'boom', mode: 'trigger', when: new Date().toISOString() } }]);
+  mock('Load Ops Alerts', [{ json: {} }]);
+  const rec65 = (await run('Alert Record', store['Load Ops Alerts'], { code: 'EH__Alert_Record' }))[0].json;
+  mock('Save Ops Alert', [{ json: { ...rec65, id: 1 } }]);
+  const ch65 = (await run('Alert Channels', store['Save Ops Alert'], { code: 'EH__Alert_Channels' }))[0].json;
+  check('R29: a node still holding the placeholder has NO webhook channel — it is not a URL, so nothing is posted to it, the alert is still recorded and the e-mail still goes out',
+    ch65.send_webhook === false && ch65.webhook_url === '' && !ch65.channels.includes('webhook') && ch65.channels.includes('data_table')
+    && ch65.recorded === true && !/__SEO_ALERT_WEBHOOK_URL__/.test(JSON.stringify(ch65)),
+    JSON.stringify({ send: ch65.send_webhook, url: ch65.webhook_url, channels: ch65.channels }));
+});
+
 
 H.report();
 })();

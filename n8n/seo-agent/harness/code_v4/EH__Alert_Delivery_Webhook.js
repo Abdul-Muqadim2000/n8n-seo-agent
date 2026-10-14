@@ -20,6 +20,11 @@ const OA = (() => {
   const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',
     S(a.message).toLowerCase().replace(/\d[\d.,:]*/g, '#').replace(/["'`][^"'`]*["'`]/g, '"x"').replace(/\s+/g, ' ').slice(0, 160)].join(' | ');
   const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';
+  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and
+  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still
+  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it
+  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.
+  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };
 
   const plan = (alert, rows, cfg) => {
     const a = alert || {}, c = cfg || {};
@@ -31,7 +36,7 @@ const OA = (() => {
     const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;
     const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;
     const count = prior ? n0(prior.count) + 1 : 1;
-    const webhook_url = S(c.webhook_url);
+    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel
     const email_to = S(c.email_to);
     const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);
     const notify = !repeat;
@@ -54,11 +59,13 @@ const OA = (() => {
     return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };
   };
 
-  return { plan, keyOf, severityOf, DEDUPE_MINUTES };
+  return { plan, keyOf, severityOf, cfgUrl, DEDUPE_MINUTES };
 })();
 const alert = $('Format Alert').first().json;
 let rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}
-const CFG = { webhook_url: 'https://hooks.example.test/seo-agent-alerts', email_to: 'devaicondeveloper3@gmail.com' };   // baked from n8n/.env at build time ($env is blocked in nodes)
+// R29 / R30 (2026-10-14): a placeholder is baked, never the URL (it is a secret and this repository is public); apply_env.py substitutes
+// the real value at import time and an un-substituted placeholder reads as "no webhook configured" (OA.cfgUrl).
+const CFG = { webhook_url: 'https://hooks.example.test/seo-agent-alerts', email_to: 'devaicondeveloper3@gmail.com' };
 const p = OA.plan(alert, rows, CFG);
 // a node that did not run in this execution throws when it is referenced
 const state = (name) => {
