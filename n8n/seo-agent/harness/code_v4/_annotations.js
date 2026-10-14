@@ -27,7 +27,8 @@ const AN = (() => {
     return true; };
   const mark = (kind, date, label, o) => { const x = o || {};
     return { kind, date: day(date), date_end: day(x.date_end) || day(date), label: S(label), detail: S(x.detail), url: S(x.url), source: S(x.source),
-      tone: (KINDS[kind] || {}).tone || 'neutral', kind_label: (KINDS[kind] || {}).label || kind }; };
+      tone: (KINDS[kind] || {}).tone || 'neutral', kind_label: (KINDS[kind] || {}).label || kind,
+      ...(x.report_type ? { report_type: S(x.report_type) } : {}) }; };   // R20: which kind of audit a `fix` mark came from
   // every event inside [from, to]. `published`: seo_content_log rows; `audits`: seo_audits rows (oldest first or any order);
   // `links`: won links with their first sighting. Everything optional - what is missing simply produces no marks.
   const marks = (o) => {
@@ -39,19 +40,37 @@ const AN = (() => {
       out.push(mark('publish', d, kw ? 'Published: "' + kw + '"' : 'Page published', { url: S(p.published_url || p.publishedUrl || p.url), source: 'seo_content_log',
         detail: S(p.source) === 'ladder' ? 'a keyword-ladder page' : S(p.source) === 'cadence' ? 'a page of the weekly cadence' : S(p.source) ? 'source: ' + S(p.source) : '' }));
     }
+    // R20 (2026-10-14, the second re-rating): the feed chained every audit to the one before it, whatever kind of report it was. With a
+    // full SEO report (health 68) sitting between two technical audits (health 80) the same day, the owner read "Technical audit health
+    // 80 → 68 · 24 more findings", "Audit fixes: 24 findings gone — health 68 → 80" and "Technical audit health 80 → 80" as three events
+    // — three invented moves. The two reports check different things and score differently (D2 / R2 fixed exactly this inside the audit's
+    // own diff). A delta is now computed only against the previous report OF THE SAME KIND, and a change of kind is said, never scored.
+    const kindOfAudit = (a) => { const t = S(a.report_type || a.reportType || a.type).toLowerCase().trim();
+      return /^(full|full_report|full_seo|seo_report)$/.test(t) ? 'full' : /^(site_audit|audit|technical|tech_audit|site)$/.test(t) ? 'site_audit' : (t || 'site_audit'); };
+    const AUDIT_LABEL = { site_audit: 'Technical audit', full: 'Full SEO report' };
+    const auditName = (k) => (AUDIT_LABEL[k] || 'Audit (' + k + ')');
     const audits = (x.audits || []).filter(a => day(a.audited_at || a.auditedAt)).slice()
       .sort((a, b) => day(a.audited_at || a.auditedAt).localeCompare(day(b.audited_at || b.auditedAt)));
+    const lastOf = new Map(); let lastAny = null;
     for (let i = 0; i < audits.length; i++) {
-      const a = audits[i], prev = audits[i - 1];
+      const a = audits[i]; const kind = kindOfAudit(a);
+      const prev = lastOf.get(kind) || null; const prevAny = lastAny;
+      lastOf.set(kind, a); lastAny = a;
       const d = day(a.audited_at || a.auditedAt);
       if (!inRange(from, to, d, d)) continue;
       const nFind = Number(a.findings == null ? a.findingsCount : a.findings), pFind = prev ? Number(prev.findings == null ? prev.findingsCount : prev.findings) : NaN;
       const hs = Number(a.health_score == null ? a.healthScore : a.health_score), ps = prev ? Number(prev.health_score == null ? prev.healthScore : prev.health_score) : NaN;
       const fixed = (Number.isFinite(nFind) && Number.isFinite(pFind)) ? pFind - nFind : null;
+      const name = auditName(kind); const lower = name.toLowerCase();
+      const switched = !prev && prevAny && kindOfAudit(prevAny) !== kind
+        ? 'the report before it was a ' + auditName(kindOfAudit(prevAny)).toLowerCase() + (Number.isFinite(Number(prevAny.health_score)) ? ' (' + Number(prevAny.health_score) + '/100)' : '')
+          + ': different checks, so the two scores are not comparable' : '';
       const detail = [Number.isFinite(hs) ? (Number.isFinite(ps) ? 'health ' + ps + ' → ' + hs : 'health ' + hs + '/100') : '',
         fixed == null ? '' : fixed > 0 ? fixed + ' fewer finding' + (fixed === 1 ? '' : 's') + ' than the audit before'
-          : fixed < 0 ? Math.abs(fixed) + ' more finding' + (fixed === -1 ? '' : 's') + ' than the audit before' : 'the same findings as the audit before'].filter(Boolean).join(' · ');
-      out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' : 'Technical audit', { detail, source: 'seo_audits' }));
+          : fixed < 0 ? Math.abs(fixed) + ' more finding' + (fixed === -1 ? '' : 's') + ' than the audit before' : 'the same findings as the audit before',
+        switched || (!prev ? 'the first ' + lower + ' on record: nothing to compare it with' : '')].filter(Boolean).join(' · ');
+      out.push(mark('fix', d, fixed != null && fixed > 0 ? 'Audit fixes: ' + fixed + ' finding' + (fixed === 1 ? '' : 's') + ' gone' + (kind === 'site_audit' ? '' : ' (' + lower + ')') : name,
+        { detail, source: 'seo_audits', report_type: kind }));
     }
     for (const l of (x.links || [])) {
       const d = day(l.t0 || l.first_seen || l.date);

@@ -27,6 +27,7 @@ import { stopInEngine } from './sites';
 import { monitorsFromRow } from '../services/data';
 import { sendMail } from '../lib/mailer';
 import { acceptInvitation } from '../services/invitations';
+import { deliveryOverview, listDeliveries, saveSettings, sendTest } from '../services/reportDelivery';
 import { monthStart } from '../services/runs';
 
 export function toOrg(o: OrgRow, role: Role): Org {
@@ -134,20 +135,23 @@ export async function orgRoutes(app: FastifyInstance) {
     const a = await orgAccess(req, (req.params as { orgId: string }).orgId);
     const since = monthStart();
     const runs = await db
-      .select({ mode: schema.runs.mode, est: schema.runs.estimatedCostUsd, act: schema.runs.actualCostUsd, status: schema.runs.status, createdAt: schema.runs.createdAt })
+      .select({ mode: schema.runs.mode, own: schema.runs.estimatedCostUsd, engine: schema.runs.engineCostEstimateUsd, act: schema.runs.actualCostUsd, status: schema.runs.status, createdAt: schema.runs.createdAt })
       .from(schema.runs)
       .where(and(eq(schema.runs.orgId, a.org.id), gte(schema.runs.createdAt, since), ne(schema.runs.status, 'failed')));
     const byMode = new Map<string, { runs: number; est: number }>();
     const daily = new Map<string, { runs: number; est: number }>();
+    // B-R3: a run counts at what it cost, else at the engine's own calibrated figure, else at ours - the same order as the budget
+    // check in spend.ts and as the figure shown on the run itself, so the three can never disagree.
+    const costOf = (r: { own: number; engine: number | null; act: number | null }) => r.act ?? r.engine ?? r.own;
     for (const r of runs) {
       const m = byMode.get(r.mode) ?? { runs: 0, est: 0 };
       m.runs += 1;
-      m.est += r.est;
+      m.est += costOf(r);
       byMode.set(r.mode, m);
       const day = r.createdAt.toISOString().slice(0, 10);
       const d = daily.get(day) ?? { runs: 0, est: 0 };
       d.runs += 1;
-      d.est += r.est;
+      d.est += costOf(r);
       daily.set(day, d);
     }
     // keyword checks (the "New keyword ladder" flow) count in the month and per day, not as runs
@@ -172,7 +176,7 @@ export async function orgRoutes(app: FastifyInstance) {
           return estimateMonitoringCost({ aiVisibility: m?.aiVisibility ?? true, backlinks: m?.backlinks ?? true, auditMonthly: m?.auditMonthly ?? true, blogsPerWeek: s.blogsPerWeek, aiPrompts: m?.aiPromptsMax, aiEngines: m?.aiEngines, aiPulse: m?.aiPulse, linkBuilder: m?.linkBuilder ?? true });
         }),
     );
-    const estimated = runs.reduce((t, r) => t + r.est, 0) + checksUsd;
+    const estimated = runs.reduce((t, r) => t + costOf(r), 0) + checksUsd;
     const round = (x: number) => Math.round(x * 100) / 100;
     return {
       month: since.toISOString().slice(0, 7),
@@ -186,6 +190,33 @@ export async function orgRoutes(app: FastifyInstance) {
       monitoringMonthlyUsd: round(monitoring.reduce((t, x) => t + x, 0)),
       keywordChecks: { checks: checks.length, usd: round(checksUsd) },
     };
+  });
+
+  // ---------- B-R1: report delivery ----------
+  // Where this company's finished reports are pushed. Reading it needs membership (a viewer may see where reports go); changing it
+  // or sending a test is an owner's decision, like the budget, because it sends mail in the company's name and can carry a share
+  // link to anyone with the address.
+  app.get('/api/orgs/:orgId/delivery', async (req) => {
+    const a = await orgAccess(req, (req.params as { orgId: string }).orgId);
+    return deliveryOverview(a.org);
+  });
+
+  app.put('/api/orgs/:orgId/delivery', async (req) => {
+    const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'owner');
+    const settings = await saveSettings(a.org, req.body);
+    const fresh = await db.query.organizations.findFirst({ where: eq(schema.organizations.id, a.org.id) });
+    return { ...(await deliveryOverview(fresh ?? a.org)), settings };
+  });
+
+  app.post('/api/orgs/:orgId/delivery/test', { config: { rateLimit: { max: 6, timeWindow: '1 minute' } } }, async (req) => {
+    const a = await orgAccess(req, (req.params as { orgId: string }).orgId, 'owner');
+    const outcomes = await sendTest(a.org, req.log);
+    return { outcomes, delivered: outcomes.some((o) => o.ok) };
+  });
+
+  app.get('/api/orgs/:orgId/deliveries', async (req) => {
+    const a = await orgAccess(req, (req.params as { orgId: string }).orgId);
+    return { deliveries: await listDeliveries(a.org.id, Number((req.query as { limit?: string }).limit) || 50) };
   });
 
   // ---------- team ----------

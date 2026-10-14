@@ -1,6 +1,27 @@
 {
  "cache_kind": "watch",
  "connections": {
+  "After Run Ledger (Watch)": [
+   [
+    "Run Allowed? (Watch)"
+   ]
+  ],
+  "Alert Retry Plan (Watch)": [
+   [
+    "Any Alert Retry (Watch)?"
+   ]
+  ],
+  "Alert Retry Result (Watch)": [
+   [
+    "Save Alert Retry (Watch)"
+   ]
+  ],
+  "Any Alert Retry (Watch)?": [
+   [
+    "Post Alert Retry (Watch)"
+   ],
+   []
+  ],
   "Any Ops Alerts (Watch)?": [
    [
     "Save Watch Ops Alert"
@@ -41,6 +62,16 @@
     "Nothing To Watch"
    ]
   ],
+  "DFS Balance (Watch)": [
+   [
+    "Load Open Runs (Watch)"
+   ]
+  ],
+  "DFS Balance End (Watch)": [
+   [
+    "Load Run Ledger (Watch)"
+   ]
+  ],
   "Daily Schedule": [
    [
     "Ensure Sites Table (Watch)"
@@ -61,6 +92,11 @@
     "Ensure Ops Alerts Table (Watch)"
    ]
   ],
+  "Ensure Ops Alerts (Watch)": [
+   [
+    "Load Open Alerts (Watch)"
+   ]
+  ],
   "Ensure Ops Alerts Table (Watch)": [
    [
     "Load Sites (Watch)"
@@ -76,6 +112,11 @@
     "Ensure Page Watch Table"
    ]
   ],
+  "Ensure Run Ledger (Watch)": [
+   [
+    "DFS Balance (Watch)"
+   ]
+  ],
   "Ensure Sites Table (Watch)": [
    [
     "Ensure Pages Table (Watch)"
@@ -86,9 +127,24 @@
     "Watch Read"
    ]
   ],
+  "Ledger Settle (Watch)": [
+   [
+    "Settle Run Ledger (Watch)"
+   ]
+  ],
   "Load Ladders (Watch)": [
    [
     "Load Pages (Watch)"
+   ]
+  ],
+  "Load Open Alerts (Watch)": [
+   [
+    "Alert Retry Plan (Watch)"
+   ]
+  ],
+  "Load Open Runs (Watch)": [
+   [
+    "Run Ledger Row (Watch)"
    ]
   ],
   "Load Ops Alerts (Watch)": [
@@ -111,6 +167,11 @@
     "Load Ops Alerts (Watch)"
    ]
   ],
+  "Load Run Ledger (Watch)": [
+   [
+    "Ledger Settle (Watch)"
+   ]
+  ],
   "Load Sites (Watch)": [
    [
     "Load Ladders (Watch)"
@@ -119,6 +180,44 @@
   "Load Watch Cache": [
    [
     "Load Recheck Requests"
+   ]
+  ],
+  "Nothing To Watch": [
+   [
+    "DFS Balance End (Watch)"
+   ]
+  ],
+  "Post Alert Retry (Watch)": [
+   [
+    "Alert Retry Result (Watch)"
+   ]
+  ],
+  "Post Watch Alert": [
+   [
+    "Watch Ops Delivery"
+   ]
+  ],
+  "Refuse Run Ledger (Watch)": [
+   [
+    "DFS Balance End (Watch)"
+   ]
+  ],
+  "Reserve Run Ledger (Watch)": [
+   [
+    "After Run Ledger (Watch)"
+   ]
+  ],
+  "Run Allowed? (Watch)": [
+   [
+    "Any Watch Targets?"
+   ],
+   [
+    "Refuse Run Ledger (Watch)"
+   ]
+  ],
+  "Run Ledger Row (Watch)": [
+   [
+    "Reserve Run Ledger (Watch)"
    ]
   ],
   "Save Finding Recheck": [
@@ -146,12 +245,22 @@
     "Watch Ops Channels"
    ]
   ],
+  "Save Watch Ops Delivery": [
+   [
+    "DFS Balance End (Watch)"
+   ]
+  ],
   "Send Watch Webhook?": [
    [
     "Post Watch Alert"
    ],
    [
     "Watched"
+   ]
+  ],
+  "Settle Run Ledger (Watch)": [
+   [
+    "Ensure Ops Alerts (Watch)"
    ]
   ],
   "Watch Alerts": [
@@ -179,9 +288,14 @@
     "Send Watch Webhook?"
    ]
   ],
+  "Watch Ops Delivery": [
+   [
+    "Save Watch Ops Delivery"
+   ]
+  ],
   "Watch Plan": [
    [
-    "Any Watch Targets?"
+    "Ensure Run Ledger (Watch)"
    ]
   ],
   "Watch Read": [
@@ -202,6 +316,11 @@
   "Watch Run": [
    [
     "Ensure Sites Table (Watch)"
+   ]
+  ],
+  "Watched": [
+   [
+    "DFS Balance End (Watch)"
    ]
   ]
  },
@@ -251,7 +370,28 @@
   "Watch Ops Channels",
   "Send Watch Webhook?",
   "Post Watch Alert",
-  "Watched"
+  "Watch Ops Delivery",
+  "Save Watch Ops Delivery",
+  "Watched",
+  "Ensure Run Ledger (Watch)",
+  "Run Ledger Row (Watch)",
+  "Reserve Run Ledger (Watch)",
+  "Ledger Settle (Watch)",
+  "Settle Run Ledger (Watch)",
+  "DFS Balance (Watch)",
+  "Load Open Runs (Watch)",
+  "After Run Ledger (Watch)",
+  "Run Allowed? (Watch)",
+  "Refuse Run Ledger (Watch)",
+  "DFS Balance End (Watch)",
+  "Load Run Ledger (Watch)",
+  "Ensure Ops Alerts (Watch)",
+  "Load Open Alerts (Watch)",
+  "Alert Retry Plan (Watch)",
+  "Any Alert Retry (Watch)?",
+  "Post Alert Retry (Watch)",
+  "Alert Retry Result (Watch)",
+  "Save Alert Retry (Watch)"
  ],
  "schedule": {
   "every": "day",
@@ -264,7 +404,7 @@
   "rotation": "oldest inspection first"
  },
  "table": "seo_page_watch",
- "webhook_configured": false,
+ "webhook_placeholder": "__SEO_ALERT_WEBHOOK_URL__",
  "webhook_setting": "SEO_ALERT_WEBHOOK_URL",
  "workflow": "SEOagentPageWch1"
 }

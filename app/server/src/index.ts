@@ -5,6 +5,7 @@ import { runMigrations, sqlClient } from './db';
 import { AUTO_START, runAutoStart } from './services/autoStart';
 import { checkEngineFailures } from './services/engineFailures';
 import { autoApproveTick, pollTick, senderTick } from './services/outreachJobs';
+import { deliveryTick, retryTick } from './services/reportDelivery';
 import { expireStaleRuns } from './services/runs';
 
 async function main() {
@@ -38,6 +39,15 @@ async function main() {
   const autoStartFirst = config.autoStartLadders ? setTimeout(autoStart, AUTO_START.firstAfterMs) : null;
   const autoStartTimer = config.autoStartLadders ? setInterval(autoStart, AUTO_START.everyMs) : null;
   app.log.info({ autoStartLadders: config.autoStartLadders }, config.autoStartLadders ? 'automatic ladder starts on (every 6 hours)' : 'automatic ladder starts off (AUTO_START_LADDERS)');
+  // B-R1: the scheduled report delivery. Every five minutes it asks which companies are due a daily / weekly / monthly summary and
+  // retries the deliveries that failed; companies on "as each report arrives" are served by the callback itself, not by this timer.
+  const delivery = () =>
+    deliveryTick(app.log)
+      .then((n) => n && app.log.info({ companies: n }, 'scheduled report summaries delivered'))
+      .catch((err) => app.log.warn({ err: String(err) }, 'scheduled report delivery failed'))
+      .then(() => retryTick(app.log).catch((err) => app.log.warn({ err: String(err) }, 'report delivery retry failed')));
+  const deliveryTimer = setInterval(() => void delivery(), 5 * 60 * 1000);
+
   // v4.13 Link Builder: the sender (every minute), the inbox (every 3 minutes) and automatic approval (every 10 minutes); LINK_BUILDER_JOBS=false stops them
   const lbTimers = config.linkBuilderJobs
     ? [setInterval(() => void senderTick(app.log), 60 * 1000), setInterval(() => void pollTick(app.log), 3 * 60 * 1000), setInterval(() => void autoApproveTick(app.log), 10 * 60 * 1000)]
@@ -47,6 +57,7 @@ async function main() {
     for (const t of lbTimers) clearInterval(t);
     if (autoStartFirst) clearTimeout(autoStartFirst);
     if (autoStartTimer) clearInterval(autoStartTimer);
+    clearInterval(deliveryTimer);
     clearInterval(failureTimer);
     clearInterval(timer);
     clearInterval(staleTimer);

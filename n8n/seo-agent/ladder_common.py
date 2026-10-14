@@ -1,4 +1,14 @@
 """Shared definitions for the keyword-ladder feature (used by build_v4.py and build_ladder_extras.py)."""
+import json as _json
+import os as _os
+import uuid as _uuid
+
+_V5 = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'v5')
+
+
+def read_v5(path):
+    """Read a file from v5/ (the one copy of a shared kit or node, used by every builder)."""
+    return open(_os.path.join(_V5, path), encoding='utf-8').read()
 LADDER_TABLE = 'seo_ladders'
 HISTORY_TABLE = 'seo_rank_history'
 LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('rung', 'number'), ('page_no', 'number'), ('keyword', 'string'),
@@ -227,6 +237,10 @@ LINK_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('import_id', 
 AUDITS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('report_type', 'string'), ('health_score', 'number'), ('grade', 'string'), ('pages_crawled', 'number'),
                ('findings', 'number'), ('critical', 'number'), ('high', 'number'), ('medium', 'number'), ('low', 'number'), ('scheduled', 'boolean'), ('request_id', 'string')]
 AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number'),
+                       # R19 (2026-10-14, FIX_PLAN §3.12): how many pages the count above was measured on. 31 of 45 URL inspections failed in
+                       # execution 550, so a finding measured on 14 pages was compared with one measured on 25 and called an improvement.
+                       # With the sample stored, the next audit prints "not compared: the sample moved" instead of a delta (run sync_tables.py).
+                       ('checked', 'number'),
                        # G26 (2026-10-12, FIX_PLAN): the impact weight that ordered the fix list (severity x pages affected x their clicks and
                        # impressions x their place in the site) and the one sentence that explains it, so the app can order the same way
                        ('impact', 'number'), ('impact_basis', 'string'),
@@ -302,6 +316,11 @@ RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), 
                    # all and both audits carried est_usd 0 while each crawl cost $0.09. Every row now carries the run's DataForSEO estimate
                    # beside the AI one, and `dfs_usd` is the measured amount where the run knows it (the monitors' own cost_usd).
                    ('dfs_est_usd', 'number'), ('dfs_usd', 'number'),
+                   # R28 (2026-10-14, system review FIX_PLAN §3.12): the DataForSEO account balance read for free from `appendix/user_data`
+                   # at the moment this row was reserved. The engine's own figures did not reconcile with the money (+73% in one window),
+                   # so the day's spend is checked against the only measurement that cannot be argued with — how far the balance actually
+                   # fell between the day's first and last reading. 0 = not read (the Keyword Check and the schedules do not read it).
+                   ('dfs_balance', 'number'),
                    # G23 (2026-10-13, FIX_PLAN): a settled row must say which part of its cost was MEASURED and which ESTIMATED. `settled_usd`
                    # stored the per-mode reservation while every reader took it for a measured cost, and Claude's spend could be stated no
                    # closer than "$1.6-3.0" because the three Opus nodes stream and a streaming call reports no token usage at all.
@@ -309,7 +328,13 @@ RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), 
                    # (`cost:<kind>:<mode>`); `ai_usd` is the run's own Claude figure, priced by v5/code/_cost_cal.js from the characters the
                    # prompts really interpolated, the characters the models answered with and the thinking budget; and `cost_basis` says in
                    # words which half of measured_usd + estimated_usd is which.
-                   ('cost_mode', 'string'), ('ai_usd', 'number'), ('measured_usd', 'number'), ('estimated_usd', 'number'), ('cost_basis', 'string')]
+                   ('cost_mode', 'string'), ('ai_usd', 'number'), ('measured_usd', 'number'), ('estimated_usd', 'number'), ('cost_basis', 'string'),
+                   # B-A5 (2026-10-15, build section 62): only the DAY was reconciled against the account, never the run — and a run cannot
+                   # say what it truly cost unless it happens to be the only one in flight. Every settle now takes a second free
+                   # `appendix/user_data` reading (`dfs_balance_end`) and stamps the moment it settled (`settled_at`), so the move between
+                   # a row's two readings can be attributed to that row when no other row was open across its window, and `dfs_source`
+                   # says which figure the row carries: 'account' (measured against the balance) or 'tasks' (its own per-task sum).
+                   ('settled_at', 'string'), ('dfs_balance_end', 'number'), ('dfs_source', 'string')]
 
 # ---- R9 (2026-10-13, re-rating): every scheduled run reserves and settles a seo_run_ledger row too. Before this the ledger held nothing for
 # the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker, so the day's guard refused
@@ -322,27 +347,362 @@ LEDGER_EST = {
     'ai_pulse':        {'ai': 0.004, 'dfs': 0.08},   # $0.084 / site / day measured 2026-10-08 and again on 2026-10-13
     'ai_growth':       {'ai': 0.55, 'dfs': 0.05},    # AI pages + outreach drafts (AI_GROWTH_SPEC: ~$2.53 / site / month)
     'backlinks':       {'ai': 0.05, 'dfs': 0.05, 'dfs_full': 0.45},   # Monday light watch vs the monthly full report (~$0.50)
-    'audit_schedule':  {'ai': 0.0,  'dfs': 0.09},    # the 200-page crawl of one audit, measured twice on 2026-10-13
+    # R28 (2026-10-14): the Audit Scheduler *spawns* audits into the main workflow and crawls nothing itself, so its own $0.09 was the
+    # same crawl the spawned run reserves and settles for itself - counted twice. It reserves nothing now, exactly as the Content
+    # Cadence does, and the guard still sees every audit through the row each spawned run makes before its own crawl.
+    'audit_schedule':  {'ai': 0.0,  'dfs': 0.0},     # it plans and spawns; every spawned audit reserves its own row (the crawl is $0.09 there)
     'link_builder':    {'ai': 0.30, 'dfs': 0.05},    # $0.35 / site / month (LINK_BUILDER_SPEC)
     'rank_tracker':    {'ai': 0.0,  'dfs': 0.15},    # the week's SERP checks of one site's ladders
     'site_tracker':    {'ai': 0.03, 'dfs': 0.01},    # the site brief; Search Console / GA4 / Trends are free
     'content_cadence': {'ai': 0.0,  'dfs': 0.0},     # it plans and spawns; every page run reserves its own row
+    # R32's companion (2026-10-14, FIX_PLAN §3.13): the daily key-page watch spends nothing (25 plain GETs, no DataForSEO, no Claude) but
+    # kept no row at all, so it was invisible to the guard and to the day's reconciliation. It reserves nothing and settles nothing.
+    'page_watch':      {'ai': 0.0,  'dfs': 0.0},
 }
 
 
 def monitor_ledger_js(v5_dir, mode, plan_node, row_node, measured=''):
     """R9: the reserve and settle Code-node sources for one scheduled workflow, filled in from v5/code/Monitor_Ledger_*.js.
     `plan_node` knows how many sites this run covers, `row_node` is the reserve node's own name, and `measured` is the node that
-    carries the run's real DataForSEO cost as `cost_usd` ('' when the workflow has none)."""
+    carries the run's real DataForSEO cost as `cost_usd` ('' when the workflow has none).
+    R31 (2026-10-14, FIX_PLAN §3.13): the settle carries the shared cost kit and the list of this workflow's Claude nodes, so a run in
+    which no model ran settles nothing instead of the figure it reserved. `__AI_NODES__` is filled in at WRITE time by
+    ledger_mainline(), which is the first moment the whole workflow — model nodes and all — exists."""
     import json as _json, os as _os
     assert mode in LEDGER_EST, 'no ledger estimate for ' + mode
     rd = lambda f: open(_os.path.join(v5_dir, 'code', f), encoding='utf-8').read()
+    cost_cal = rd('_cost_cal.js').rstrip('\n')
+    tag = ledger_tag({'reserve': row_node})
     reserve = (rd('Monitor_Ledger_Row.js').replace('__PLAN__', plan_node).replace('__MODE__', mode)
+               .replace('__BALANCE__', 'DFS Balance (' + tag + ')')
                .replace('__EST__', _json.dumps(LEDGER_EST[mode], sort_keys=True)))
-    settle = rd('Monitor_Ledger_Settle.js').replace('__ROW__', row_node).replace('__MEASURED__', measured)
-    for ph in ('__PLAN__', '__MODE__', '__EST__', '__ROW__', '__MEASURED__'):
+    settle = (rd('Monitor_Ledger_Settle.js').replace('/*__COST_CAL__*/', cost_cal)
+              .replace('__ROW__', row_node).replace('__MEASURED__', measured))
+    for ph in ('__PLAN__', '__MODE__', '__EST__', '__ROW__', '__MEASURED__', '__BALANCE__', '/*__COST_CAL__*/'):
         assert ph not in reserve and ph not in settle, ph + ' left in the ledger code for ' + mode
+    assert '__AI_NODES__' in settle, 'R31: the settle has nowhere to learn this workflow\'s Claude nodes'
+    # B-A5 (2026-10-15, section 62): the settle's two new inputs are named at WRITE time by ledger_mainline(), where the tag is known
+    # and the nodes are built — exactly as __AI_NODES__ is.
+    assert '__BAL_END__' in settle and '__LEDGER__' in settle, 'B-A5: the settle cannot reach the account or the ledger rows'
     return reserve, settle
+
+
+# ---- R17 (2026-10-14, system review FIX_PLAN 3.12 / RESULTS 2.11): the reservation must sit on the MAIN path -------------------
+# R9 hung the reserve chain BESIDE the plan node, because a Data Table node answers with the row it wrote rather than with its input. n8n's
+# v1 execution order runs that side branch LAST, so every one of the nine scheduled workflows reserved its row after the whole paid pipeline
+# had run: in exec 568 `Settle Run Ledger (Pulse)` ran at 16:22:15.507 and matched nothing, and `Reserve Run Ledger (Pulse)` inserted a fresh
+# `reserved` row at 16:22:15.584 - so the guard never saw a monitor before it spent, the row counted against the day's cap until the stale
+# release cleared it two hours later, and the measured figure the settle had just computed was thrown away ($1.394 of a $2.388 run).
+# The chain now sits in the data path - plan -> Ensure -> Row -> Reserve -> After Run Ledger -> (what the plan used to feed) - and this one
+# Code node hands the plan's own items back, so nothing downstream ever sees the Data Table rows.
+LEDGER_RESUME_JS = """// R17 (2026-10-14, system review FIX_PLAN 3.12): the run ledger reserves its row on the MAIN path now, before the first paid call -
+// it used to hang off the plan node as a side branch and n8n's v1 order ran it last, after all the spending. A Data Table node answers with
+// the row it wrote rather than with its input, so this node hands __PLAN__'s own items back to the pipeline, unchanged and in order.
+// B-A9 (2026-10-15, build section 64): and it is the gate. R17 put the reservation in front of the spending; nothing ever LOOKED at what was
+// already running, so a scheduled monitor could not be refused for concurrency however much was in flight - the one guard every API run
+// passes (*Rate Limit*) had no counterpart here. The rules are shared with it (v5/code/_run_guard.js): a run of the same monitor still in
+// flight, a heavy crawl of the same site, too many analyses at once, or an account that cannot pay for this run. A refusal costs nothing -
+// it happens after the row exists and before the first paid node, and the row is marked `refused` so it never holds a cent of the day.
+/*__RUN_GUARD__*/
+const plan = $('__PLAN__').all();
+let rows = []; try { rows = $('__LEDGER__').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { rows = []; }
+let mine = {}; try { mine = $('__RESERVE__').first().json || {}; } catch (e) { mine = {}; }
+if (mine && mine.error) mine = {};
+const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id) });
+if (g.allowed) return plan;
+return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: new Date().toISOString(),
+  cost_basis: ('refused before any spending: ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
+  reason: g.reason, refusal: g.refusal, basis: g.basis, open_runs: g.open_runs, open: g.open, max_open: g.max_open,
+  stale_ignored: g.stale_ignored, mode: g.mode, where: g.where } }];
+"""
+
+# ---- B-A7 / B-A9 (2026-10-15, build section 64): the kits the ledger chain inlines, read once from v5/ ----
+OPS_ALERT_SRC = read_v5('code/_ops_alert.js').rstrip('\n')
+ALERT_RETRY_SRC = read_v5('code/_alert_retry.js').rstrip('\n')
+RUN_GUARD_SRC = read_v5('code/_run_guard.js').rstrip('\n')
+
+
+def inline_kits(src):
+    """Replace the kit markers with the one copy of each kit (the same markers every builder uses)."""
+    return (src.replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC)
+               .replace('/*__ALERT_RETRY__*/', ALERT_RETRY_SRC)
+               .replace('/*__RUN_GUARD__*/', RUN_GUARD_SRC))
+
+
+def _if_params(nid, expr):
+    """A boolean IF node's parameters (the same shape all three builders write)."""
+    return {'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3},
+                           'conditions': [{'id': nid, 'leftValue': '=' + expr, 'rightValue': '',
+                                           'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'},
+            'looseTypeValidation': True, 'options': {}}
+
+
+def ledger_tag(wiring):
+    """The tag of a ledger wiring entry ('Run Ledger Row (Pulse)' -> 'Pulse')."""
+    r = str(wiring['reserve'])
+    assert r.startswith('Run Ledger Row (') and r.endswith(')'), 'unexpected reserve node name: ' + r
+    return r[len('Run Ledger Row ('):-1]
+
+
+_LEDGER_NS = _uuid.UUID('7c1f2a44-0b3e-4e6a-9d21-5e8a1c0f4b77')
+
+
+#  R31 / R32 (2026-10-14, FIX_PLAN §3.13): the free balance probe every scheduled run now takes, and the list of this workflow's own
+#  Claude nodes that its settle checks before it settles a cent. Both are filled in at write time, when the whole workflow exists.
+DFS_BALANCE_URL = 'https://api.dataforseo.com/v3/appendix/user_data'   # free, answers in milliseconds, no cost to the account
+
+
+def _ai_nodes_of(wfobj):
+    """Every Claude node of this workflow, as the names that appear in the run data: an `lmChatAnthropic` model node never runs on the
+    main path (it hangs off its agent on an `ai_languageModel` connection and has no items of its own), so the AGENT is what a settle can
+    ask about; an HTTP node that carries the Anthropic credential is itself the call."""
+    conns, out = wfobj.get('connections') or {}, set()
+    for n in wfobj['nodes']:
+        t = str(n.get('type') or '')
+        if 'lmChatAnthropic' in t:
+            for lst in ((conns.get(n['name']) or {}).get('ai_languageModel') or []):
+                for tgt in (lst or []): out.add(tgt['node'])
+        elif 'lmChat' not in t and any(isinstance(c, dict) and c.get('id') == 'SEOcredAnthropic'
+                                       for c in (n.get('credentials') or {}).values()):
+            out.add(n['name'])
+    return sorted(out)
+
+
+def ledger_mainline(wfobj, wiring):
+    """R17: move everything the plan node used to feed to the far side of the reserve chain, so no paid node of the workflow can run
+    before the ledger row exists. Called at WRITE time, when every connection of the workflow is already made, and it is the one place
+    the three builders share. It also makes the two Data Table nodes of the chain `alwaysOutputData` + `continueRegularOutput`: they sit
+    in the data path now, so neither may end the run by answering with nothing.
+    R31 / R32 (2026-10-14): it also teaches the settle which Claude nodes this workflow has (so a run that called none settles none) and
+    puts the free `appendix/user_data` balance reading on the chain, so a scheduled run's spend reaches the day's reconciliation too —
+    until now only main-workflow runs took a reading, and the monitors are where most of the DataForSEO money goes."""
+    tag = ledger_tag(wiring)
+    conns, nodes = wfobj['connections'], {n['name']: n for n in wfobj['nodes']}
+    plan, ensure = wiring['plan'], 'Ensure Run Ledger (' + tag + ')'
+    reserve, resume = 'Reserve Run Ledger (' + tag + ')', 'After Run Ledger (' + tag + ')'
+    for nm in (plan, ensure, reserve, wiring['settle']):
+        assert nm in nodes, 'R17: ' + nm + ' is missing from ' + str(wfobj.get('name'))
+    # ---- R31: the settle learns this workflow's Claude nodes ----
+    settle_code = 'Ledger Settle (' + tag + ')'
+    assert settle_code in nodes, 'R31: ' + settle_code + ' is missing from ' + str(wfobj.get('name'))
+    ai_nodes = _ai_nodes_of(wfobj)
+    src = nodes[settle_code]['parameters']['jsCode']
+    assert '__AI_NODES__' in src, 'R31: ' + settle_code + ' does not read the workflow\'s Claude nodes'
+    nodes[settle_code]['parameters']['jsCode'] = src.replace('__AI_NODES__', _json.dumps(ai_nodes), 1)
+    wiring['ai_nodes'] = ai_nodes
+    # ---- R32 / the day's reconciliation: the free balance reading, between Ensure and Row ----
+    balance = 'DFS Balance (' + tag + ')'
+    if balance not in nodes:
+        bx, by = nodes[ensure]['position']
+        wfobj['nodes'].append({'parameters': {'method': 'GET', 'url': DFS_BALANCE_URL, 'authentication': 'genericCredentialType',
+                                              'genericAuthType': 'httpBasicAuth',
+                                              'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+                               'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + balance)), 'name': balance,
+                               'type': 'n8n-nodes-base.httpRequest', 'typeVersion': 4.5, 'position': [bx + 110, by - 150],
+                               'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
+                               'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True,
+                               'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+        eo = conns.setdefault(ensure, {}).setdefault('main', [])
+        while not eo: eo.append([])
+        assert any(t['node'] == wiring['reserve'] for t in eo[0]), 'R32: ' + ensure + ' does not feed ' + wiring['reserve']
+        eo[0] = [t for t in eo[0] if t['node'] != wiring['reserve']] + [{'node': balance, 'type': 'main', 'index': 0}]
+        conns.setdefault(balance, {})['main'] = [[{'node': wiring['reserve'], 'type': 'main', 'index': 0}]]
+        nodes[balance] = wfobj['nodes'][-1]
+    wiring['balance'] = balance
+    # ---- B-A9 (2026-10-15, build section 64): what else is running, read before this run reserves its own row ----
+    # The same order *Rate Limit* uses on the API side: the ledger is read first, the row is inserted next, and the gate counts the rows
+    # with a lower id than its own, so row order breaks ties and no run slips past while another is counting.
+    openrun = 'Load Open Runs (' + tag + ')'
+    if openrun not in nodes:
+        ox, oy = nodes[balance]['position']
+        wfobj['nodes'].append({'parameters': dt_get_all_where_params(RUN_LEDGER_TABLE, [
+                                   ('created_at', 'gte', '={{ new Date(Date.now() - ' + str(LEDGER_WINDOW_MS) + ').toISOString() }}')]),
+                               'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + openrun)), 'name': openrun,
+                               'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [ox + 110, oy + 150],
+                               'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+        conns.setdefault(balance, {})['main'] = [[{'node': openrun, 'type': 'main', 'index': 0}]]
+        conns.setdefault(openrun, {})['main'] = [[{'node': wiring['reserve'], 'type': 'main', 'index': 0}]]
+        nodes[openrun] = wfobj['nodes'][-1]
+    wiring['open_runs'] = openrun
+    assert resume not in nodes, 'R17: ' + resume + ' already exists (ledger_mainline ran twice)'
+    outs = conns.setdefault(plan, {}).setdefault('main', [])
+    while not outs: outs.append([])
+    downstream = [t for t in outs[0] if t['node'] != ensure]
+    assert downstream, 'R17: ' + plan + ' feeds nothing but the ledger - there is no pipeline to put behind the reservation'
+    assert any(t['node'] == ensure for t in outs[0]), 'R17: ' + plan + ' does not start the ledger chain'
+    outs[0] = [{'node': ensure, 'type': 'main', 'index': 0}]
+    x, y = nodes[reserve]['position']
+    wfobj['nodes'].append({'parameters': {'jsCode': inline_kits(LEDGER_RESUME_JS)
+                                          .replace('__PLAN__', plan).replace('__LEDGER__', openrun).replace('__RESERVE__', reserve)
+                                          .replace('__MODE__', str(wiring['mode'])).replace('__WHERE__', str(wfobj.get('name') or tag))},
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + resume)), 'name': resume,
+                           'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [x + 220, y]})
+    nodes[resume] = wfobj['nodes'][-1]
+    router = conns.setdefault(reserve, {}).setdefault('main', [])
+    while not router: router.append([])
+    router[0] = [t for t in router[0] if t['node'] != resume] + [{'node': resume, 'type': 'main', 'index': 0}]
+    # ---- B-A9: the gate's two ways out. The pipeline hangs off "yes"; "no" marks the row refused and the run ends there, having spent
+    # nothing (a `refused` row is skipped by every count, so a skipped run never holds a cent of the day's budget either).
+    allow, refuse = 'Run Allowed? (' + tag + ')', 'Refuse Run Ledger (' + tag + ')'
+    assert allow not in nodes and refuse not in nodes, 'B-A9: the guard of ' + str(wfobj.get('name')) + ' is already built'
+    wfobj['nodes'].append({'parameters': _if_params(str(_uuid.uuid5(_LEDGER_NS, allow + ':cond')), '{{ !$json.run_refused }}'),
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + allow)), 'name': allow,
+                           'type': 'n8n-nodes-base.if', 'typeVersion': 2.3, 'position': [x + 440, y]})
+    wfobj['nodes'].append({'parameters': dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
+                               [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
+                               {'status': 'refused', 'settled_usd': 0, 'dfs_usd': 0, 'measured_usd': 0, 'estimated_usd': 0,
+                                'settled_at': '={{ $json.refused_at }}', 'cost_basis': '={{ $json.cost_basis }}'}),
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + refuse)), 'name': refuse,
+                           'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [x + 660, y + 200],
+                           'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+    nodes[allow], nodes[refuse] = wfobj['nodes'][-2], wfobj['nodes'][-1]
+    conns.setdefault(resume, {})['main'] = [[{'node': allow, 'type': 'main', 'index': 0}]]
+    conns.setdefault(allow, {})['main'] = [downstream, [{'node': refuse, 'type': 'main', 'index': 0}]]
+    for nm in (ensure, reserve):
+        nodes[nm]['alwaysOutputData'] = True
+        nodes[nm]['onError'] = 'continueRegularOutput'
+    wiring['resume'] = resume
+    wiring['guard'] = {'load': openrun, 'gate': resume, 'if': allow, 'refuse': refuse, 'kit': 'RG'}
+    # ---- R31 (2026-10-14, FIX_PLAN §3.13): every end of the run reaches the settle ----
+    # The settle hung off the report node only, so a run that found nothing to do (the `Nothing To Do (…)` branch every monitor has)
+    # reserved a row and then finished without ever settling it — the row sat `reserved` against the guard until *Release Stale Runs*
+    # cleared it two hours later. A crashed run is what the stale release is for; a run that simply had nothing to do is not. Walk
+    # forward from the resume node, refusing to pass anything that already feeds the settle: whatever still ends with no outgoing
+    # connection is wired into the settle here, in the one place the three builders share.
+    settle_code = 'Ledger Settle (' + tag + ')'
+    outs_of = lambda nd: [t['node'] for lst in ((conns.get(nd) or {}).get('main') or []) for t in (lst or [])]
+    blocked = set(wiring.get('settle_from') or []) | {settle_code, wiring['settle']}
+    seen, stack = {resume}, [resume]
+    while stack:
+        cur = stack.pop()
+        if cur in blocked: continue
+        for t in outs_of(cur):
+            if t not in seen: seen.add(t); stack.append(t)
+    loose = sorted(n for n in seen if n not in blocked and n in nodes and not outs_of(n))
+    for nm in loose:
+        o = conns.setdefault(nm, {}).setdefault('main', [])
+        while not o: o.append([])
+        o[0] = o[0] + [{'node': settle_code, 'type': 'main', 'index': 0}]
+    wiring['settle_from'] = sorted(set(wiring.get('settle_from') or []) | set(loose))
+    wiring['settle_from_ends'] = loose   # the branches that used to finish without settling
+    _ledger_settle_chain(wfobj, wiring, tag, settle_code, conns, nodes)
+    _alert_retry_chain(wfobj, wiring, tag, conns, nodes)
+    return resume
+
+
+#  B-A7 (2026-10-15, build section 64): the sweep that re-attempts an undelivered alert.
+#  An alert got one attempt per channel. If that attempt failed - and SMTP failed on 2026-10-10 and again on 2026-10-12, which is why the
+#  webhook channel exists at all - the row sat at `pending` or `failed` and nobody was ever told. Rule 3 of INVARIANTS.md ends on the clause
+#  that matters: *a failure that reaches no human is not handled.*
+#  A retry needs a clock. Rather than invent one, it borrows the ten that already exist: the LAST thing every scheduled run does, after its
+#  row is settled and when there is nothing left to spend or delay, is ask whether an alert is still waiting and re-send up to five of them.
+#  Page Watch runs daily at 05:45, the AI Pulse daily at 06:30, six more between 07:00 and 11:00 on Mondays, the Audit Scheduler monthly -
+#  and the Error Handler carries the same chain, so a second failure also sweeps the first one's undelivered alert.
+#  It sits behind the settle on purpose: it can never delay the run's own work, and it runs on the branches that found nothing to do too.
+def _alert_retry_chain(wfobj, wiring, tag, conns, nodes):
+    settle = wiring['settle']
+    names = ['Ensure Ops Alerts (' + tag + ')', 'Load Open Alerts (' + tag + ')', 'Alert Retry Plan (' + tag + ')',
+             'Any Alert Retry (' + tag + ')?', 'Post Alert Retry (' + tag + ')', 'Alert Retry Result (' + tag + ')',
+             'Save Alert Retry (' + tag + ')']
+    assert not any(n in nodes for n in names), 'B-A7: the alert sweep of ' + str(wfobj.get('name')) + ' is already built'
+    ensure_t, load_t, plan_t, if_t, post_t, result_t, save_t = names
+    sx, sy = nodes[settle]['position']
+    nid = lambda n: str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + n))
+    add = lambda spec: (wfobj['nodes'].append(spec), nodes.__setitem__(spec['name'], spec))
+    add({'parameters': dt_create_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS), 'id': nid(ensure_t), 'name': ensure_t,
+         'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [sx + 220, sy], 'onError': 'continueRegularOutput', 'executeOnce': True})
+    # only the rows a retry could still help: an alert nobody has had for a week is past AR.MAX_ATTEMPTS by a wide margin
+    add({'parameters': dt_get_all_where_params(OPS_ALERTS_TABLE, [
+             ('last_seen_at', 'gte', '={{ new Date(Date.now() - 7 * 864e5).toISOString() }}')]),
+         'id': nid(load_t), 'name': load_t, 'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [sx + 440, sy],
+         'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+    add({'parameters': {'jsCode': inline_kits(read_v5('code/Alert_Retry_Plan.js')).replace('__LOAD__', load_t)
+                        .replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER).replace('__WHERE__', str(wfobj.get('name') or tag))},
+         'id': nid(plan_t), 'name': plan_t, 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [sx + 660, sy],
+         'onError': 'continueRegularOutput', 'executeOnce': True})
+    add({'parameters': _if_params(str(_uuid.uuid5(_LEDGER_NS, if_t + ':cond')), '{{ !$json.skip }}'), 'id': nid(if_t), 'name': if_t,
+         'type': 'n8n-nodes-base.if', 'typeVersion': 2.3, 'position': [sx + 880, sy]})
+    # fullResponse + neverError: the status code is the evidence of delivery, and a 404 from a revoked hook never reads as success
+    add({'parameters': {'method': 'POST', 'url': '={{ $json.webhook_url }}', 'sendBody': True, 'specifyBody': 'json',
+                        'jsonBody': '={{ JSON.stringify($json.webhook_body) }}',
+                        'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 400}}, 'timeout': 15000,
+                                    'response': {'response': {'fullResponse': True, 'neverError': True}}}},
+         'id': nid(post_t), 'name': post_t, 'type': 'n8n-nodes-base.httpRequest', 'typeVersion': 4.5, 'position': [sx + 1100, sy],
+         'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+    add({'parameters': {'jsCode': inline_kits(read_v5('code/Alert_Retry_Result.js')).replace('__PLAN__', plan_t)},
+         'id': nid(result_t), 'name': result_t, 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [sx + 1320, sy],
+         'onError': 'continueRegularOutput'})
+    add({'parameters': dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
+             {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'severity': '={{ $json.severity }}',
+              'attempts': '={{ $json.attempts }}', 'last_attempt_at': '={{ $json.last_attempt_at }}',
+              'next_attempt_at': '={{ $json.next_attempt_at }}', 'attempt_log': '={{ $json.attempt_log }}', 'notes': '={{ $json.notes }}'}),
+         'id': nid(save_t), 'name': save_t, 'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [sx + 1540, sy],
+         'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+    for a, b in ((settle, ensure_t), (ensure_t, load_t), (load_t, plan_t), (plan_t, if_t), (post_t, result_t), (result_t, save_t)):
+        o = conns.setdefault(a, {}).setdefault('main', [])
+        while not o: o.append([])
+        o[0] = [t for t in o[0] if t['node'] != b] + [{'node': b, 'type': 'main', 'index': 0}]
+    g = conns.setdefault(if_t, {}).setdefault('main', [])
+    while len(g) < 2: g.append([])
+    g[0] = [{'node': post_t, 'type': 'main', 'index': 0}]
+    wiring['alert_retry'] = {'from': settle, 'load': load_t, 'plan': plan_t, 'gate': if_t, 'post': post_t,
+                             'result': result_t, 'save': save_t, 'table': OPS_ALERTS_TABLE}
+
+
+#  B-A5 (2026-10-15, build section 62): a run cannot say what it truly cost unless it happens to be the only one in flight.
+#  R28 put one free `appendix/user_data` reading on the RESERVE chain, which is enough to reconcile the DAY (CC.dfsDay) and says nothing
+#  about any single run: a run can be out by 100% while the day still agrees. The settle chain now takes a SECOND free reading and loads
+#  the ledger rows around this run's window, so CC.dfsRun can attribute the move between the two readings to this run when no other row
+#  was open across it, and keep the run's per-task figure — saying why — when one was. Both nodes sit on the MAIN path in front of the
+#  settle code, for the same reason R17 moved the reservation there: a side branch runs last, or not at all.
+LEDGER_WINDOW_MS = 6 * 60 * 60 * 1000   # how far back the settle loads rows: longer than the longest run and than the stale-release limit
+
+
+def _ledger_settle_chain(wfobj, wiring, tag, settle_code, conns, nodes):
+    bal_end, load = 'DFS Balance End (' + tag + ')', 'Load Run Ledger (' + tag + ')'
+    assert bal_end not in nodes and load not in nodes, 'B-A5: the settle chain of ' + str(wfobj.get('name')) + ' is already built'
+    sx, sy = nodes[settle_code]['position']
+    wfobj['nodes'].append({'parameters': {'method': 'GET', 'url': DFS_BALANCE_URL, 'authentication': 'genericCredentialType',
+                                          'genericAuthType': 'httpBasicAuth',
+                                          'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + bal_end)), 'name': bal_end,
+                           'type': 'n8n-nodes-base.httpRequest', 'typeVersion': 4.5, 'position': [sx - 440, sy],
+                           'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
+                           'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True,
+                           'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+    wfobj['nodes'].append({'parameters': dt_get_all_where_params(RUN_LEDGER_TABLE, [
+                               ('created_at', 'gte', '={{ new Date(Date.now() - ' + str(LEDGER_WINDOW_MS) + ').toISOString() }}')]),
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + load)), 'name': load,
+                           'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [sx - 220, sy],
+                           'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+    nodes[bal_end], nodes[load] = wfobj['nodes'][-2], wfobj['nodes'][-1]
+    # everything that fed the settle code now feeds the chain that ends in it
+    fed = False
+    for nm in list(conns.keys()):
+        if nm in (bal_end, load): continue
+        for lst in ((conns.get(nm) or {}).get('main') or []):
+            for t in (lst or []):
+                if t['node'] == settle_code: t['node'] = bal_end; fed = True
+    assert fed, 'B-A5: nothing feeds ' + settle_code + ' in ' + str(wfobj.get('name'))
+    conns.setdefault(bal_end, {})['main'] = [[{'node': load, 'type': 'main', 'index': 0}]]
+    conns.setdefault(load, {})['main'] = [[{'node': settle_code, 'type': 'main', 'index': 0}]]
+    src = nodes[settle_code]['parameters']['jsCode']
+    assert '__BAL_END__' in src and '__LEDGER__' in src, 'B-A5: ' + settle_code + ' does not read the account or the ledger rows'
+    nodes[settle_code]['parameters']['jsCode'] = src.replace('__BAL_END__', bal_end).replace('__LEDGER__', load)
+    # the row keeps what the account said about this run, and when it settled
+    upd = nodes[wiring['settle']]['parameters']['columns']['value']
+    upd.update({'settled_at': '={{ $json.settled_at }}', 'dfs_balance_end': '={{ $json.dfs_balance_end }}',
+                'dfs_source': '={{ $json.dfs_source }}'})
+    wiring['balance_end'], wiring['ledger_load'] = bal_end, load
+
+
+# ---- R29 (2026-10-14, system review FIX_PLAN 3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a SECRET (a Slack incoming webhook is a
+# bearer URL: anyone holding it can post into the channel), and it was baked into the generated node code the way SEO_MAIL_FROM is - so the
+# live URL ended up in workflows/SEO_Agent_Error_Handler.json, workflows/SEO_Agent_Page_Watch.json and harness/code_v4/EH__Alert_*.js, all
+# tracked in a PUBLIC repository. The build bakes this placeholder now and apply_env.py substitutes the real value into the JSON it hands to
+# the import, after the build and before the import, so the repository never carries the secret and the deployed instance still works.
+# A node that still holds the placeholder has no webhook configured: the ops-alert kit treats it as unset (OA.cfgUrl).
+ALERT_WEBHOOK_PLACEHOLDER = '__SEO_ALERT_WEBHOOK_URL__'
 
 
 # ---- ops alerts (D25b, 2026-10-12, FIX_PLAN): the Error Handler had one channel (e-mail), and on 2026-10-10 and 2026-10-12 it failed with a
@@ -352,4 +712,11 @@ def monitor_ledger_js(v5_dir, mode, plan_node, row_node, measured=''):
 OPS_ALERTS_TABLE = 'seo_ops_alerts'
 OPS_ALERTS_COLS = [('alert_key', 'string'), ('workflow', 'string'), ('node', 'string'), ('message', 'string'), ('execution_id', 'string'), ('execution_url', 'string'),
                    ('mode', 'string'), ('severity', 'string'), ('first_seen_at', 'string'), ('last_seen_at', 'string'), ('count', 'number'),
-                   ('channels', 'string'), ('delivered', 'string'), ('notes', 'string')]
+                   ('channels', 'string'), ('delivered', 'string'), ('notes', 'string'),
+                   # B-A7 (2026-10-15, build section 64): R6 recorded WHETHER an alert was delivered and nothing ever acted on it — one
+                   # attempt per channel, no second try, no escalation, and no ops alert has ever reached a human. These four columns are
+                   # what the retry sweep in every scheduled workflow reads and writes: how many times this alert has been SENT (not
+                   # sighted — `count` is sightings), when the last attempt was, the earliest moment it may be tried again, and one line
+                   # per attempt so the row carries the whole history rather than only its last line.
+                   # New columns reach an existing table only through sync_tables.py (apply_env.py runs it).
+                   ('attempts', 'number'), ('last_attempt_at', 'string'), ('next_attempt_at', 'string'), ('attempt_log', 'string')]

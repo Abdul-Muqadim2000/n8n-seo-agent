@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { estimateMonitoringCost, MODE_IDS } from './constants';
+import { estimateMonitoringCost, MODE_IDS, MONITOR_COSTS } from './constants';
 import { cleanDomain, domainOk, n8nSiteId, parseDomainList, urlOnDomain } from './domain';
 import { buildN8nPayload, type SiteContext } from './payload';
 import { auditInput, createSiteSchema, keywordInput, parseRunInput, RUN_SCHEMAS } from './schemas';
@@ -137,7 +137,7 @@ describe('estimateMonitoringCost', () => {
   it('adds blog posts per week to the monitors', () => {
     const base = estimateMonitoringCost({ aiVisibility: false, backlinks: false, auditMonthly: false, blogsPerWeek: 0 });
     const withPosts = estimateMonitoringCost({ aiVisibility: false, backlinks: false, auditMonthly: false, blogsPerWeek: 1 });
-    expect(withPosts - base).toBeCloseTo(4.33 * 1.2, 1);
+    expect(withPosts - base).toBeCloseTo(4.33 * MONITOR_COSTS.blogPostEach, 1);   // B-R3: the one cost table, not a repeated price
   });
 });
 

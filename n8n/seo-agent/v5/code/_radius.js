@@ -90,5 +90,25 @@ const RAD = (() => {
   const line = (t) => !t ? '' : LABEL[t.verdict] + ' — ' + t.reason + ' (' + (t.evidence || []).join('; ') + ')';
   /** the rows a report prints, in reading order: within reach, then the stretches, then what is out of reach for now */
   const rows = (radius) => { const rad = radius || {}; return [...(rad.in_reach || []), ...(rad.stretch || []), ...(rad.far || [])]; };
-  return { of, pick, rows, line, LABEL, CFG, tokens };
+  /**
+   * R23 (2026-10-14, FIX_PLAN.md §3.12): the radius test for ONE pair — is this keyword on the topic of the ladder's head keyword?
+   * The ladder pool already asks for one shared word with the head, which is how "azure api management monetization" (volume 10,
+   * trend -100%) became the single rung of a ladder for "azure cloud migration dubai" in exec 549: "azure" was enough. Half of the
+   * head's meaningful words have to be in the keyword (at least one). A head of one or two meaningful words is too short to judge a
+   * topic by, so one shared word is enough there — the AI relevance screen and the fit gate stay the other two filters.
+   * -> { ok, shared, need, head_words, reason }   (reason is empty when it passes; it is the sentence the plan prints when it does not)
+   */
+  const headFit = (headKw, kw) => {
+    const h = tokens(headKw), k = tokens(kw);
+    if (!h.length || !k.length) return { ok: true, shared: [], need: 0, head_words: h, reason: '' };
+    const common = shared(h, k);
+    const need = Math.max(1, Math.ceil(h.length / 2));
+    const q = (list) => list.map(t => '"' + t + '"').join(', ');
+    if (common.length >= need) return { ok: true, shared: common, need, head_words: h, reason: '' };
+    return { ok: false, shared: common, need, head_words: h,
+      reason: common.length
+        ? 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" (' + common.length + ' of the ' + h.length + ' words that matter, ' + need + ' needed)'
+        : 'it is not on this ladder\'s topic: it shares none of the words that matter in "' + S(headKw) + '" (' + q(h) + ')' };
+  };
+  return { of, pick, rows, line, headFit, LABEL, CFG, tokens };
 })();

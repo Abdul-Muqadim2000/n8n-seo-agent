@@ -4,7 +4,10 @@
 /*__OPS_ALERT__*/
 const alert = $('Format Alert').first().json;
 let rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}
-const CFG = { webhook_url: '__ALERT_WEBHOOK_URL__', email_to: '__OPS_EMAIL__' };   // baked from n8n/.env at build time ($env is blocked in nodes)
+// R29 / R30 (2026-10-14): the webhook URL is a SECRET and this repository is public, so the build bakes a placeholder and apply_env.py
+// substitutes the real value into the JSON it imports; an un-substituted placeholder reads as "no webhook configured" (OA.cfgUrl), so no
+// build can produce a node that posts to a customer's Slack. The ops address is not a secret and is baked as before ($env is blocked in nodes).
+const CFG = { webhook_url: '__ALERT_WEBHOOK_URL__', email_to: '__OPS_EMAIL__' };
 const p = OA.plan(alert, rows, CFG);
 // did the row reach the table? (a Data Table node with onError: continueRegularOutput answers with an error item instead of failing)
 let recorded = true, record_error = '';
