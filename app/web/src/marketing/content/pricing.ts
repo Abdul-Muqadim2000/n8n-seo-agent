@@ -203,6 +203,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Weekly rank tracking', hint: 'Every rung and the head term, desktop and phone', values: [true, true, true] },
       { label: 'Search features per keyword', hint: 'AI Overview, snippet, People Also Ask, local pack, video', values: [true, true, true] },
       { label: 'Competitor positions and share of voice', hint: 'The sites above you on page one, per keyword', values: [true, true, true] },
+      { label: 'Topic radius and re-plan proposals', hint: 'A ladder that has stalled gets a proposal; it is never applied for you', values: [true, true, true] },
     ],
   },
   {
@@ -215,6 +216,8 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Coverage target from the best competitor', hint: 'With the subtopics that page covers', values: [true, true, true] },
       { label: 'Three images made with every page', hint: 'WebP, with the alt text and file names', values: [true, true, true] },
       { label: 'Blog package and WordPress drafts', hint: 'HTML, Markdown, meta.json and the images', values: [true, true, true] },
+      { label: 'Your house style, applied and checked', hint: 'How your name is written, British or American spelling, words to avoid and the tone', values: [true, true, true] },
+      { label: 'Refreshes instead of duplicates', hint: 'A search one of your live pages already answers is queued as a refresh of that page', values: [true, true, true] },
       { label: 'Live publish check', hint: 'Verifies the page once it is live', values: [true, true, true] },
     ],
   },
@@ -231,17 +234,28 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Technical audits with fix pack', values: ['Monthly', 'Monthly', 'Monthly'] },
       { label: 'Crawl depth', hint: 'JavaScript rendering included', values: ['200 pages', '500 pages', '1,000 pages'] }, // PLACEHOLDER — confirm
       { label: 'Daily key-page check and pre-release check', hint: 'Your build asks whether a release candidate is safe to publish', values: [true, true, true] },
+      { label: 'What only appears after JavaScript', hint: 'Key pages read twice, so content a crawler cannot see is flagged', values: [true, true, true] },
       { label: 'Search Console, GA4 and Trends', values: [true, true, true] },
       { label: 'AI search visibility', hint: 'ChatGPT, Gemini, Perplexity, Claude, AI Mode, AI Overviews', values: [false, 'Up to 50 questions', 'Up to 50 questions'] }, // PLACEHOLDER — confirm
       { label: 'Daily AI Pulse', hint: 'Alerts only on statistically real changes', values: [false, true, true] },
+      { label: 'AI growth, every week', hint: 'New pages sent to Bing and IndexNow, key pages scored for AI readiness, the questions to win queued', values: [false, true, true] },
+      { label: 'Earned media', hint: 'The exact pages AI cites without naming you, with a draft for each', values: [false, true, true] },
       { label: 'Backlinks from every source', hint: 'Nine sources, every link checked by Ascentra', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Prospects, contacts and outreach drafts from your own mailbox', values: [false, true, true] },
+      { label: 'Mailbox connected without a password', hint: 'Microsoft 365 or Gmail on their own sign-in screen; an app password works for any other host', values: [false, true, true] },
+      { label: 'Listings you can add yourself', hint: 'Directories and marketplaces worth being on, checked and kept up to date', values: [false, true, true] },
+      { label: 'Journalist requests, podcasts and broken-link reclaim', hint: 'Free sources read every week, matched to your topics', values: [false, true, true] },
+      { label: 'Replies read and answered', hint: 'Each reply classed and summarised with a suggested answer, and your link checked', values: [false, true, true] },
+      { label: 'What each won link did', hint: 'The page compared with your other pages over the same weeks — likely helped, never “caused”', values: [false, true, true] },
     ],
   },
   {
     group: 'Reports and alerts',
     rows: [
       { label: 'Monday report', values: [true, true, true] },
+      { label: 'Charts marked with what happened', hint: 'Pages you published, technical fixes, Google updates and breaks in Google’s own data', values: [true, true, true] },
+      { label: 'Where every figure came from', hint: 'Each number names its source, its period and when it was read', values: [true, true, true] },
+      { label: 'Alerts only when a change is real', hint: 'A fall is called a fall once it is beyond normal week-to-week variation', values: [true, true, true] },
       { label: 'Full SEO report (PDF / Word)', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Share a report by link', hint: 'Read-only, no account needed, expires on the day you choose and can be turned off at any time', values: [true, true, true] },
       { label: 'Search Console alert watcher and monthly check-ins', values: [false, false, true] }, // PLACEHOLDER — confirm
@@ -266,7 +280,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Setup, done for you', hint: 'Access connected, profile and style guide filled in, first audit and first ladder', values: ['$199 add-on', '$199 add-on', 'Included'] }, // PLACEHOLDER — confirm
       { label: 'We publish your pages', hint: 'Any CMS, or a pull request for a React / Next.js codebase', values: ['$99 a month', '$99 a month', 'Custom'] }, // PLACEHOLDER — confirm
       { label: 'We fix what the audit found', hint: 'The fix pack applied by a person, then audited again', values: ['$399 per site', '$399 per site', 'Custom'] }, // PLACEHOLDER — confirm
-      { label: 'Everything managed for you', hint: 'Growth plus all three services, every month', values: ['$699 a month', '$699 a month', 'Custom'] }, // PLACEHOLDER — confirm
+      { label: 'Everything managed for you', hint: 'The Growth plan plus all three services, every month', values: [false, '$699 a month', 'Custom'] }, // PLACEHOLDER — confirm
     ],
   },
 ];

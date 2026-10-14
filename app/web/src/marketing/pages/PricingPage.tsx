@@ -48,6 +48,9 @@ const discountLabel = `Save ${Math.round(annualDiscount * 100)}%`;
 
 const ALL_PLANS = ['Search Console, GA4 and Trends tracking', 'A cost estimate before every run', 'Roles and invitations', 'Monthly audits with a fix pack'];
 
+/** The jobs one subscription covers — each is a capability on /platform, not a claim about another product. */
+const REPLACES = ['Keyword research', 'Rank tracking', 'Site crawler', 'Content writing with SEO QA', 'AI answer tracking', 'Backlink index', 'Outreach'];
+
 const COST_ICONS: LucideIcon[] = [Calculator, Wallet, Gauge, Recycle, Link2];
 
 /** Price for a tier in the chosen billing period: the big figure, the line under it and the struck-through monthly price. */
@@ -199,6 +202,16 @@ function Plans({ billing, setBilling }: { billing: Billing; setBilling: (b: Bill
                   <li key={t} className="flex items-center gap-2 text-[13px] text-ink-2">
                     <Check className="size-3.5 text-accent-text" strokeWidth={2.5} aria-hidden />
                     {t}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="mt-5 rounded-xl border border-line bg-surface px-6 py-5 text-center">
+              <p className="text-[13px] font-medium text-ink">One subscription instead of a tool for each job</p>
+              <ul className="mt-3 flex flex-wrap justify-center gap-2">
+                {REPLACES.map((r) => (
+                  <li key={r} className="rounded-full border border-line-strong bg-page px-3 py-1 text-[12.5px] text-ink-2">
+                    {r}
                   </li>
                 ))}
               </ul>
