@@ -60,11 +60,11 @@ Enterprise SEO automation built as n8n workflows: keyword research, keyword verd
 ## Status (2026-10-14, v4.14 — guided setup: a "Show me how" beside every ask — latest)
 **Built, checked in the browser, committed (web + shared only; `app/server` and n8n untouched).** Asked for: wherever the app asks the
 user for something (Search Console, a file, a profile…), offer a guide that walks them through getting it properly.
-- **26 guides** as data in `app/shared/src/guides.ts` (imported as `@seo/shared/guides`, deliberately out of the barrel so the
+- **27 guides** as data in `app/shared/src/guides.ts` (imported as `@seo/shared/guides`, deliberately out of the barrel so the
   catalogue is its own 55 KB chunk and never loads on first paint): Search Console property / access / owner check / links export /
   monthly check-in, GA4 access and property ID, the DNS TXT record and the meta tag (per provider: Cloudflare, GoDaddy, Namecheap,
   Squarespace, cPanel; per CMS: WordPress, Shopify, Wix, Squarespace, Webflow), the IndexNow key file, publishing a written page,
-  Bing Webmaster, the audit fix pack, mailboxes (one-click vs app password, Gmail, Microsoft 365, any SMTP/IMAP host, SPF/DKIM/DMARC,
+  Bing Webmaster, the audit fix pack, letting the AI crawlers read the site, mailboxes (one-click vs app password, Gmail, Microsoft 365, any SMTP/IMAP host, SPF/DKIM/DMARC,
   the footer the law asks for), business profile, business facts, style guide, competitors, brand names, keywords to track, budget,
   inviting the team. Each: why it matters, where, who can do it, minutes, numbered steps with the person's **own values** in copy
   boxes, the page to open, notes and warnings, how to tell it worked, "if it does not work", related guides.

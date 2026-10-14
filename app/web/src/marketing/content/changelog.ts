@@ -19,7 +19,7 @@ export const changelog: ChangelogEntry[] = [
     summary:
       'Wherever Ascentra asks you for something it cannot get itself — a Google permission, a DNS record, a file on your site, a mailbox, your business details — there is now a “Show me how” button beside the ask. It opens that one job as numbered steps, with your own values ready to copy.',
     highlights: [
-      'Twenty-six guides covering everything we ask for: Search Console and Analytics access, proving the domain is yours, the IndexNow file, the links export, mailboxes and their SPF, DKIM and DMARC records, publishing a written page, applying a fix pack, your business profile and style guide',
+      'Twenty-seven guides covering everything we ask for: Search Console and Analytics access, proving the domain is yours, the IndexNow file, the links export, letting the AI crawlers in, mailboxes and their SPF, DKIM and DMARC records, publishing a written page, applying a fix pack, your business profile and style guide',
       'Your real values, not examples: the DNS record for your domain, your key file, the address to add in Search Console — each in a copy box',
       'Tabs for the provider you actually use: Cloudflare, GoDaddy, Namecheap, cPanel; WordPress, Shopify, Wix, Squarespace, Webflow',
       'Tick the steps off as you go — close the panel, come back tomorrow and it opens where you stopped',

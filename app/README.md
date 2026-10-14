@@ -82,7 +82,7 @@ steps you tick off (kept per browser), **your own values** in copy boxes (the re
 account address), the page to open, tabs for the provider or CMS you actually use (Cloudflare / GoDaddy / Namecheap / cPanel,
 WordPress / Shopify / Wix / Squarespace / Webflow), an "If it does not work" list, and **Copy all steps** / **Send to a colleague**
 — the person who can edit DNS is usually not the person reading the screen. The sidebar and the onboarding header open the
-searchable catalogue of all 26 guides.
+searchable catalogue of all 27 guides.
 
 Content is data in `shared/src/guides.ts` (imported as `@seo/shared/guides`), rendered by `web/src/components/guide/`. Adding an
 ask without a guide is a bug: see `web/CONVENTIONS.md` → "Setup guides".

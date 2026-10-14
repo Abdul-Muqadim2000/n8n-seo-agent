@@ -449,6 +449,55 @@ export const GUIDES = [
     keywords: ['indexnow', 'bing', 'key file', 'crawl', 'ai search'],
   },
   {
+    id: 'ai-crawler-access',
+    area: 'website',
+    title: 'Let the AI assistants read your site',
+    why: 'An assistant can only name a page its crawler is allowed to fetch. A crawler turned away at the door is the one problem no amount of good content fixes — and most sites block one by accident.',
+    where: 'Your robots.txt and your CDN or firewall',
+    who: 'Whoever can edit the site files and the CDN rules',
+    minutes: 15,
+    vars: [V.domain],
+    steps: [
+      {
+        title: 'Open your robots.txt',
+        body: 'It is a plain text file at the root of the site. If it answers 404, nothing is blocked by it — but it is worth adding one anyway.',
+        copy: [{ label: 'The address to open', value: 'https://{{domain}}/robots.txt' }],
+      },
+      {
+        title: 'Decide which crawlers you want',
+        body: 'They fall into two groups, and the table above says which ones can reach you today. **Answer crawlers** fetch a page because someone asked a question right now — those are the ones that get you cited. **Training crawlers** collect pages to train a model, which is a separate decision and costs you nothing in visibility if you refuse.',
+        note: 'Refusing the training crawlers while allowing the answer crawlers is a perfectly normal position, and the report never pushes you either way.',
+      },
+      {
+        title: 'Allow the ones you want, by name',
+        body: 'Add a block per crawler. A rule naming a crawler wins over the catch-all `User-agent: *`, so this is enough even when the catch-all is restrictive.',
+        copy: [{ label: 'For example', value: 'User-agent: OAI-SearchBot\nAllow: /', hint: 'One block per crawler, with a blank line between blocks' }],
+        warn: 'Check the catch-all while you are there: a `User-agent: *` block with `Disallow: /` takes the whole site out of every search engine, not only the AI ones.',
+      },
+      {
+        title: 'Check the firewall or CDN too',
+        body: 'This is the one people miss: robots.txt can say yes while Cloudflare, a WAF or a bot-protection rule turns the crawler away. The homepage test above is exactly that check — a crawler marked “turned away” with a status like 403 is being blocked by your edge, not by robots.txt.',
+        choices: [
+          { label: 'Cloudflare', body: 'Open **Security → Bots** and let verified bots through, then check **Security → WAF** for a rule that matches the user agent. Super Bot Fight Mode blocks most AI crawlers by default.' },
+          { label: 'Another CDN or WAF', body: 'Look for bot management, rate limiting or a user-agent rule, and allow the crawlers you chose. Your host can usually see which rule produced the 403.' },
+          { label: 'No CDN', body: 'Then robots.txt is the only gate, and there is nothing else to change.' },
+        ],
+      },
+      {
+        title: 'Optional: add an llms.txt',
+        body: 'A plain-text file at the root listing your best pages with one line each about what they answer. It is not a standard the engines promise to follow, and it is minutes of work: a clean map of your site for anything that reads it.',
+      },
+      { title: 'Check it again', body: 'The weekly run re-checks every crawler, robots.txt and the homepage test, so the next report tells you whether the door is open.' },
+    ],
+    done: 'Every crawler you chose shows as allowed, and the homepage test returns 200 for each of them.',
+    trouble: [
+      { q: 'We have no robots.txt at all', a: 'Then nothing is blocked by it. Adding one is still worth it: it is where your sitemap is announced and where these rules will live when you need them.' },
+      { q: 'A crawler is allowed but still turned away', a: 'That is the CDN or firewall, not robots.txt. The status in the homepage test — 403, 429, a challenge page — tells your host which rule to look for.' },
+    ],
+    related: ['indexnow-key-file', 'fix-pack'],
+    keywords: ['robots.txt', 'llms.txt', 'gptbot', 'crawler', 'blocked', 'cloudflare', 'ai'],
+  },
+  {
     id: 'publish-page',
     area: 'website',
     title: 'Publish a page Ascentra wrote',

@@ -185,6 +185,7 @@ export function PerceptionPanel({ perception }: { perception: AiPerception | nul
 
 /** Whether the AI crawlers may read the site: robots.txt per bot, llms.txt, and a firewall / CDN test of the homepage. */
 export function AccessPanel({ access }: { access: AiAccess | null }) {
+  const { site } = useSitePage();
   if (!access) return null;
   const a = access;
   const answer = a.bots.filter((b) => b.group === 'answer'), training = a.bots.filter((b) => b.group === 'training');
@@ -212,10 +213,11 @@ export function AccessPanel({ access }: { access: AiAccess | null }) {
       iconTone={a.ok ? 'good' : 'critical'}
       flush
     >
-      <div className="flex flex-wrap gap-2 px-4 pb-3">
+      <div className="flex flex-wrap items-center gap-2 px-4 pb-3">
         {a.ok ? <StatusBadge tone="good">AI search crawlers can read the site</StatusBadge> : <StatusBadge tone="critical">Some AI crawlers are blocked</StatusBadge>}
         <Badge>robots.txt {a.robotsFound ? 'found' : 'missing'}</Badge>
         <Badge>llms.txt {a.llmsTxt ? 'found' : 'missing'}</Badge>
+        {(!a.ok || !a.robotsFound || !a.llmsTxt) && <GuideButton id="ai-crawler-access" vars={{ domain: site.domain }} label="How to open the door" className="ml-auto" />}
       </div>
       {a.issues.length > 0 && (
         <ul className="space-y-2 px-4 pb-3">
