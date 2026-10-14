@@ -581,6 +581,16 @@ const CAL = CC.readCal(__calRows());
 const __ai = CC.pick('ai', d, CAL), __dfs = CC.pick('dfs', d, CAL);
 let est = __ai.usd;          // Claude money: what ai_budget_usd guards
 let dfs_est = __dfs.usd;     // DataForSEO money: carried on the row, settled with the measured amount (R9)
+// B-R3 (2026-10-15, section 63): one number for "what will this run cost", from the same self-correcting estimates the guard reserves
+// against — so what the caller is told before the work and what is held back against the budget can never be two different figures.
+// It is worked out HERE, above the four refusals below, because a refused run has to carry the same figure as an accepted one: it used
+// to be assigned after them, so every `return` with a validation_error dropped it.
+// Rule 1 (INVARIANTS.md): it says what it is. This can never be a measurement — what the run really spent is settled at the end, on
+// the ledger row — so it travels as `modelled`, with the basis naming what it was modelled from.
+d.run_cost_estimate_usd = +(est + dfs_est).toFixed(2);
+d.run_cost_estimate_state = 'modelled';
+d.run_cost_estimate_basis = ('modelled before the run, from what runs of this kind have recently cost: Claude $' + est.toFixed(2)
+  + ' (' + __ai.basis + '); search data $' + dfs_est.toFixed(2) + ' (' + __dfs.basis + ')').slice(0, 400);
 const period = (d.ai_budget_period === 'day') ? today : today.slice(0, 7);
 const spent_est = +earlier.filter(r => String(r.created_at || '').startsWith(period)).reduce((s, r) => s + (r.status === 'done' ? (Number(r.settled_usd) || 0) : (Number(r.est_usd) || 0)), 0).toFixed(2);   // a finished run counts what it settled, a running or crashed one its reservation
 const budget = Number(d.ai_budget_usd || 0);
@@ -614,10 +624,7 @@ d.ai_spend_estimate_usd = est;
 d.dfs_spend_estimate_usd = dfs_est;
 d.cost_estimate_source = __ai.source;   // 'calibrated' once the mode has settled runs, 'default' until then
 d.cost_estimate_basis = __ai.basis;
-// one number for "what will this run cost", from the same self-correcting estimates the guard reserves against — so what the caller is
-// told before the work and what is held back against the budget can never be two different figures.
-d.run_cost_estimate_usd = +(est + dfs_est).toFixed(2);
-d.run_cost_estimate_basis = ('Claude $' + est.toFixed(2) + ' (' + __ai.basis + '); search data $' + dfs_est.toFixed(2) + ' (' + __dfs.basis + ')').slice(0, 400);
+// (the run's cost estimate is set above, before the guards, so a refused run carries it too — B-R3, section 63)
 d.dfs_account_balance_usd = dfs_balance;
 d.dfs_budget_used_est_usd = +(dfs_spent + dfs_est).toFixed(2);
 d.ai_budget_used_est_usd = +(spent_est + est).toFixed(2);

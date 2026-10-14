@@ -29,8 +29,47 @@ if (!b.callback_url && !b.email) errors.push('callback_url (https) or email is r
 if (b.callback_url && !/^(https:\/\/\S+|http:\/\/(localhost|127\.0\.0\.1|host\.docker\.internal|n8n)(:\d+)?\/\S*)$/.test(String(b.callback_url))) errors.push('callback_url must be an https URL (http only for localhost while testing)');
 const request_id = $execution.id;
 const eta = mode === 'audit' ? 20 : (['verdict', 'check'].includes(mode) ? 4 : mode === 'ladder' ? 8 : mode === 'track' ? 3 : mode === 'published' || mode === 'checkin' || mode === 'profile' ? 1 : mode === 'case_study' ? 15 : mode === 'ai_visibility' ? 10 : mode === 'backlinks' ? 5 : 10);
+
+// ---- B-A6 (2026-10-15, build section 63): the key a repeated POST is recognised by -------------------------------------------
+// A POST that arrives twice — a caller that timed out and retried, a proxy or a webhook delivered twice, a double submit — started a
+// SECOND run and spent a second time. That got dearer on 2026-10-15, when both daily ceilings went from $6 to $15.
+// `request_id` could not be the key for it, whatever it looks like: it is minted HERE, `$execution.id` of this front-door run, and it
+// overwrites anything the caller sent, so two deliveries of one request have two different ids by construction.
+// So the key is the request itself. In order of preference:
+//   1. what the caller calls it — `request_id` / `idempotency_key` in the body, or an `Idempotency-Key` header. A caller that wants a
+//      genuinely new run sends a new key, which is the whole point of an idempotency key.
+//   2. a fingerprint of the request: every field of the body (minus the three fields above) plus the caller's own identity, in a
+//      canonical form so key order cannot change it. Identical body from the same caller = the same request. Anything different about
+//      it — a different keyword, a different callback, a different company — is a different request and must run.
+// `force_new: true` opts out entirely and is given a key nothing can match, so the row still records that the request arrived.
+const IDEM_WINDOW_MIN = 5;   // see the sticky note: long enough to cover any "I never saw the answer" retry, short enough that a
+                             // deliberate second run of the same analysis is not refused the reply it asked for.
+const canon = (v) => {
+  if (v === null || v === undefined) return 'n';
+  if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+  if (typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';
+  return JSON.stringify(v);
+};
+// two independent 32-bit mixes of the same text, printed as 16 hex characters. No `crypto` and no `URL` (the n8n Code sandbox has
+// neither), and a collision would have to land on the same caller inside the same five minutes to matter at all.
+const fp = (s) => {
+  let h1 = 0x811c9dc5, h2 = 0x7fffffff;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 16777619) >>> 0;
+    h2 = (Math.imul(h2 + ch, 2654435761) ^ (h2 >>> 13)) >>> 0;
+  }
+  return ('00000000' + h1.toString(16)).slice(-8) + ('00000000' + h2.toString(16)).slice(-8);
+};
+const IDEM_OWN = ['request_id', 'idempotency_key', 'force_new'];
+const idemGiven = String(b.request_id || b.idempotency_key || hdr['idempotency-key'] || hdr['x-idempotency-key'] || '').trim();
+const idemBody = Object.keys(b).filter(k => !IDEM_OWN.includes(k)).sort().reduce((o, k) => { o[k] = b[k]; return o; }, {});
+const forceNew = b.force_new === true || /^(true|1|yes)$/i.test(String(b.force_new == null ? '' : b.force_new));
+const idem_key = forceNew ? '' : (idemGiven ? 'k:' + idemGiven.slice(0, 80) : mode + ':' + fp(canon({ by: client_ip, body: idemBody })));
+
 return [{ json: {
   ok: errors.length === 0, error: errors.join('; '), request_id, mode, keyword: b.keyword || null, domain: b.domain || null, country: b.country || null,
   delivery: b.callback_url ? 'POST to callback_url when finished' : 'email when finished', estimated_minutes: eta,
+  idem_key, idem_window_min: IDEM_WINDOW_MIN, idem_source: forceNew ? 'force_new' : (idemGiven ? 'caller' : 'request fingerprint'),
   forward: { ...raw, body: { ...b, request_id, client_ip } }
 } }];
