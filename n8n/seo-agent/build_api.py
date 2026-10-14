@@ -1,6 +1,11 @@
-import json, uuid
+import json, re, uuid
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
+# B-A6 (2026-10-15, build section 63): the idempotency log lives in seo_cache, which is where this engine already keeps
+# keyed-with-a-lifetime values (`sitemap:`, `age:`, `desc:`, `reach:`, `cost:`). See the long note beside the nodes for why NOT
+# seo_run_ledger, which the brief for this work assumed.
+from ladder_common import (CACHE_TABLE, CACHE_COLS, DT_TYPE, DT_VERSION,
+                           dt_create_params, dt_insert_params, dt_get_all_where_params, dt_delete_where_params)
 nid = lambda: str(uuid.uuid4())
 webhook = {"httpMethod": "POST", "path": "seo-keyword-check", "authentication": "headerAuth", "responseMode": "responseNode", "options": {}}
 QV = r"""// Fast validation so callers get an immediate, useful 400. The full validation happens again in the main workflow.
@@ -34,40 +39,209 @@ if (!b.callback_url && !b.email) errors.push('callback_url (https) or email is r
 if (b.callback_url && !/^(https:\/\/\S+|http:\/\/(localhost|127\.0\.0\.1|host\.docker\.internal|n8n)(:\d+)?\/\S*)$/.test(String(b.callback_url))) errors.push('callback_url must be an https URL (http only for localhost while testing)');
 const request_id = $execution.id;
 const eta = mode === 'audit' ? 20 : (['verdict', 'check'].includes(mode) ? 4 : mode === 'ladder' ? 8 : mode === 'track' ? 3 : mode === 'published' || mode === 'checkin' || mode === 'profile' ? 1 : mode === 'case_study' ? 15 : mode === 'ai_visibility' ? 10 : mode === 'backlinks' ? 5 : 10);
+
+// ---- B-A6 (2026-10-15, build section 63): the key a repeated POST is recognised by -------------------------------------------
+// A POST that arrives twice — a caller that timed out and retried, a proxy or a webhook delivered twice, a double submit — started a
+// SECOND run and spent a second time. That got dearer on 2026-10-15, when both daily ceilings went from $6 to $15.
+// `request_id` could not be the key for it, whatever it looks like: it is minted HERE, `$execution.id` of this front-door run, and it
+// overwrites anything the caller sent, so two deliveries of one request have two different ids by construction.
+// So the key is the request itself. In order of preference:
+//   1. what the caller calls it — `request_id` / `idempotency_key` in the body, or an `Idempotency-Key` header. A caller that wants a
+//      genuinely new run sends a new key, which is the whole point of an idempotency key.
+//   2. a fingerprint of the request: every field of the body (minus the three fields above) plus the caller's own identity, in a
+//      canonical form so key order cannot change it. Identical body from the same caller = the same request. Anything different about
+//      it — a different keyword, a different callback, a different company — is a different request and must run.
+// `force_new: true` opts out entirely and is given a key nothing can match, so the row still records that the request arrived.
+const IDEM_WINDOW_MIN = 5;   // see the sticky note: long enough to cover any "I never saw the answer" retry, short enough that a
+                             // deliberate second run of the same analysis is not refused the reply it asked for.
+const canon = (v) => {
+  if (v === null || v === undefined) return 'n';
+  if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
+  if (typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';
+  return JSON.stringify(v);
+};
+// two independent 32-bit mixes of the same text, printed as 16 hex characters. No `crypto` and no `URL` (the n8n Code sandbox has
+// neither), and a collision would have to land on the same caller inside the same five minutes to matter at all.
+const fp = (s) => {
+  let h1 = 0x811c9dc5, h2 = 0x7fffffff;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 16777619) >>> 0;
+    h2 = (Math.imul(h2 + ch, 2654435761) ^ (h2 >>> 13)) >>> 0;
+  }
+  return ('00000000' + h1.toString(16)).slice(-8) + ('00000000' + h2.toString(16)).slice(-8);
+};
+const IDEM_OWN = ['request_id', 'idempotency_key', 'force_new'];
+const idemGiven = String(b.request_id || b.idempotency_key || hdr['idempotency-key'] || hdr['x-idempotency-key'] || '').trim();
+const idemBody = Object.keys(b).filter(k => !IDEM_OWN.includes(k)).sort().reduce((o, k) => { o[k] = b[k]; return o; }, {});
+const forceNew = b.force_new === true || /^(true|1|yes)$/i.test(String(b.force_new == null ? '' : b.force_new));
+const idem_key = forceNew ? '' : (idemGiven ? 'k:' + idemGiven.slice(0, 80) : mode + ':' + fp(canon({ by: client_ip, body: idemBody })));
+
 return [{ json: {
   ok: errors.length === 0, error: errors.join('; '), request_id, mode, keyword: b.keyword || null, domain: b.domain || null, country: b.country || null,
   delivery: b.callback_url ? 'POST to callback_url when finished' : 'email when finished', estimated_minutes: eta,
+  idem_key, idem_window_min: IDEM_WINDOW_MIN, idem_source: forceNew ? 'force_new' : (idemGiven ? 'caller' : 'request fingerprint'),
   forward: { ...raw, body: { ...b, request_id, client_ip } }
 } }];"""
+# =============================================================================
+# B-A6 (2026-10-15, build section 63): no idempotency on the front door.
+#
+# **What was wrong.** `POST /webhook/seo-keyword-check` answered 202 and started a run. Nothing looked at whether it had just started
+# that same run: an app that timed out and retried, a proxy that re-delivered, a double submit, each bought a second run of the same
+# analysis. The owner raised both daily ceilings from $6 to $15 on 2026-10-15, so a duplicate now costs more than it used to.
+#
+# **Where the log lives, and why it is not `seo_run_ledger`.** The obvious home is the run ledger, and it is the wrong one. Every row
+# of that table is, by construction, a RUN that can be open or settled, and `CC.dfsRun` (v5/code/_cost_cal.js, B-A5, shipped the same
+# day) decides whether a run may be costed against the DataForSEO account by asking whether any other ledger row was open across its
+# window — `if (String(r.status || '') !== 'done') return true;`. A front-door row is not a run and has no status that answers that
+# question honestly: 'accepted' reads as "still open", so every settle would find a neighbour and fall back to its per-task figure, and
+# giving it `status: 'done'` would make a request that arrives mid-run look like an overlapping run instead. Either way a non-run row
+# in that table silently takes B-A5's run-level attribution away. `seo_cache` is the engine's keyed store with a lifetime and nothing
+# reads it as a run: its readers all filter on their own key prefixes, so `idem:` rows are invisible to every one of them.
+#
+# **How the race is settled.** The same idiom D1 established for the ledger, for the same reason: INSERT first, then read back, and the
+# LOWEST id wins. Two deliveries that arrive in the same millisecond both insert; both then read the same two rows and both agree on
+# which of them was first. A read-then-write check could not do that.
+#
+# **It fails open, every time it cannot be sure.** No id of its own (the insert did not get through), no row older than its own, a
+# stored value it cannot read, no request id in it — each of those starts the run. Refusing a run the customer asked for, to save a
+# duplicate we are not certain of, is the worse error of the two.
+IDEM_ROW = r"""// B-A6: one seo_cache row per request that arrived, written BEFORE the 202 so a repeat can see it.
+// Exactly the seo_cache columns, in the table's own order: the insert node auto-maps every field of this item.
+const q = $('Quick Validate').first().json || {};
+const now = new Date().toISOString();
+// `force_new` (and only it) leaves idem_key empty. The row is still written — a request that arrived is worth recording — but under a
+// key nothing else can ever carry, so it can neither be matched nor match anything.
+const key = 'idem:' + (q.idem_key || ('none:' + q.request_id));
+return [{ json: {
+  key,
+  kind: 'idem',
+  site_id: String(q.domain || ''),
+  value: JSON.stringify({ request_id: String(q.request_id || ''), mode: q.mode || '', domain: q.domain || null,
+                          keyword: q.keyword || null, country: q.country || null, source: q.idem_source || '', at: now }).slice(0, 2000),
+  updated_at: now,
+} }];"""
+
+IDEM_DECIDE = r"""// B-A6: is this the first delivery of this request, or a repeat of one already running?
+// Insert-then-read-back, lowest id wins (the idiom D1 put on the run ledger, for the same concurrency reason). Everything below is
+// written to FAIL OPEN: when it cannot be certain this is a repeat, it starts the run.
+const q = $('Quick Validate').first().json || {};
+let mine = {}; try { mine = $('Record Request').first().json || {}; } catch (e) {}
+let rows = []; try { rows = $('Load Requests').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}
+const myKey = String(($('Request Row').first().json || {}).key || '');
+const myId = Number(mine.id);
+
+// every row under my own key that was written before mine. The Data Table read is already bounded to the window
+// (updated_at >= now - idem_window_min), so anything that comes back is recent enough to be a retry of this request.
+const before = (myId > 0 && myKey && !/^idem:none:/.test(myKey))
+  ? rows.filter(r => String(r.key) === myKey && Number(r.id) > 0 && Number(r.id) < myId).sort((a, b) => Number(a.id) - Number(b.id))
+  : [];
+let first = null;
+for (const r of before) {
+  let v = null;
+  try { v = JSON.parse(String(r.value || '')); } catch (e) { v = null; }
+  // a row whose stored request id cannot be read is no use: the whole point is to answer with the FIRST run's id, and inventing one
+  // would be worse than starting a second run.
+  if (v && v.request_id) { first = { row: r, at: String(r.updated_at || ''), request_id: String(v.request_id) }; break; }
+}
+
+const win = Number(q.idem_window_min) || 5;
+const out = { ...q, duplicate: false, first_seen_at: null, note: '', idem_rows_before: before.length };
+if (first) {
+  out.duplicate = true;
+  out.first_seen_at = first.at || null;
+  out.request_id = first.request_id;   // the caller gets the id of the run that is already doing this work
+  out.note = 'This request was already received' + (first.at ? ' at ' + first.at : '')
+    + ' and is being worked on, so it was not started a second time. `request_id` is that first run\'s id, and its result will be '
+    + 'delivered as agreed. Send a different `request_id` (or `force_new: true`) to ask for a genuinely new run of the same analysis.';
+} else {
+  out.note = 'Accepted. A repeat of this exact request within ' + win + ' minutes returns this same run instead of starting another.';
+}
+return [{ json: out }];"""
+
 wf = {"id": "SEOagentAPIentry", "name": "SEO Agent — API", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl"}, "tags": [],
  "nodes": [
   {"parameters": webhook, "id": nid(), "name": "Webhook Trigger", "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [0, 0], "webhookId": "67a01e9b-0eb4-54ad-863e-005660fbaac7", "credentials": {"httpHeaderAuth": {"id": "SEOcredApiHeader", "name": "SEO API Key"}}},
   {"parameters": {"jsCode": QV}, "id": nid(), "name": "Quick Validate", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [240, 0]},
   {"parameters": {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 3}, "conditions": [{"id": nid(), "leftValue": "={{ $json.ok }}", "rightValue": "", "operator": {"type": "boolean", "operation": "true", "singleValue": True}}], "combinator": "and"}, "looseTypeValidation": True, "options": {}}, "id": nid(), "name": "Valid?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [480, 0]},
-  {"parameters": {"respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'accepted', request_id: $json.request_id, mode: $json.mode, keyword: $json.keyword, domain: $json.domain, country: $json.country, delivery: $json.delivery, estimated_minutes: $json.estimated_minutes }) }}", "options": {"responseCode": 202}}, "id": nid(), "name": "Respond Accepted", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [720, -100]},
-  {"parameters": {"jsCode": "return [{ json: $input.first().json.forward }];"}, "id": nid(), "name": "Prepare Payload", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [960, -100]},
-  {"parameters": {"source": "database", "workflowId": {"__rl": True, "mode": "id", "value": "SEOagentV4Full01"}, "mode": "once", "options": {"waitForSubWorkflow": False}}, "id": nid(), "name": "Start SEO Run", "type": "n8n-nodes-base.executeWorkflow", "typeVersion": 1.2, "position": [1200, -100]},
+  # ---- B-A6: the idempotency log, all of it in front of the 202 (see the note above) ----
+  {"parameters": dt_create_params(CACHE_TABLE, CACHE_COLS), "id": nid(), "name": "Ensure Request Log", "type": DT_TYPE, "typeVersion": DT_VERSION, "position": [720, -100], "onError": "continueRegularOutput", "alwaysOutputData": True, "executeOnce": True},
+  {"parameters": {"jsCode": IDEM_ROW}, "id": nid(), "name": "Request Row", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [900, -100]},
+  {"parameters": dt_insert_params(CACHE_TABLE, CACHE_COLS), "id": nid(), "name": "Record Request", "type": DT_TYPE, "typeVersion": DT_VERSION, "position": [1080, -100], "onError": "continueRegularOutput", "alwaysOutputData": True},
+  {"parameters": dt_get_all_where_params(CACHE_TABLE, [("key", "eq", "={{ $('Request Row').first().json.key }}"),
+                                                       ("updated_at", "gte", "={{ new Date(Date.now() - (Number($('Quick Validate').first().json.idem_window_min) || 5) * 60000).toISOString() }}")]),
+   "id": nid(), "name": "Load Requests", "type": DT_TYPE, "typeVersion": DT_VERSION, "position": [1260, -100], "onError": "continueRegularOutput", "alwaysOutputData": True, "executeOnce": True},
+  {"parameters": {"jsCode": IDEM_DECIDE}, "id": nid(), "name": "First Or Repeat", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1440, -100]},
+  {"parameters": {"respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'accepted', request_id: $json.request_id, mode: $json.mode, keyword: $json.keyword, domain: $json.domain, country: $json.country, delivery: $json.delivery, estimated_minutes: $json.estimated_minutes, duplicate: $json.duplicate === true, first_seen_at: $json.first_seen_at, note: $json.note }) }}", "options": {"responseCode": 202}}, "id": nid(), "name": "Respond Accepted", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [1620, -100]},
+  {"parameters": {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "loose", "version": 3}, "conditions": [{"id": nid(), "leftValue": "={{ $json.duplicate }}", "rightValue": "", "operator": {"type": "boolean", "operation": "false", "singleValue": True}}], "combinator": "and"}, "looseTypeValidation": True, "options": {}}, "id": nid(), "name": "Start Needed?", "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [1800, -100]},
+  {"parameters": {"jsCode": "return [{ json: $input.first().json.forward }];"}, "id": nid(), "name": "Prepare Payload", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [1980, -200]},
+  {"parameters": {"source": "database", "workflowId": {"__rl": True, "mode": "id", "value": "SEOagentV4Full01"}, "mode": "once", "options": {"waitForSubWorkflow": False}}, "id": nid(), "name": "Start SEO Run", "type": "n8n-nodes-base.executeWorkflow", "typeVersion": 1.2, "position": [2160, -200]},
+  # retention: the log only ever grows, and a row older than a day can answer nothing (the window is minutes). Last on both branches,
+  # so it can never delay the 202 or the run.
+  {"parameters": dt_delete_where_params(CACHE_TABLE, [("kind", "eq", "idem"), ("updated_at", "lt", "={{ new Date(Date.now() - 86400000).toISOString() }}")]),
+   "id": nid(), "name": "Forget Old Requests", "type": DT_TYPE, "typeVersion": DT_VERSION, "position": [2340, -100], "onError": "continueRegularOutput", "alwaysOutputData": True, "executeOnce": True},
   {"parameters": {"respondWith": "json", "responseBody": "={{ JSON.stringify({ status: 'rejected', request_id: $json.request_id, error: $json.error }) }}", "options": {"responseCode": 400}}, "id": nid(), "name": "Respond Bad Request", "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1, "position": [720, 120]},
-  {"parameters": {"content": "## SEO Agent — API front door\n`POST /webhook/seo-keyword-check` (header auth: credential **SEO API Key**, header `X-API-Key`).\n\nBody: `mode` (keyword | verdict | audit | discover | describe | **ladder** | **track** | **published** | **checkin**), `keyword`, `country` (name or ISO-2), `domain`, `business`, `customers`, `page_type`, `competitors`, `email`, `callback_url` (https). Ladder: `pages_now` (1-3, pages written now). Track: `domain`, optional `keywords` (array, up to 20), `ga4_property_id`, `blogs_per_week` (0-3, written every Monday by the Content Cadence and delivered as HTML + Markdown + meta.json in the `content` callback); answers `stage: site_tracker_setup`, then one `stage: site_tracker` callback per weekly report (Search Console, GA4, trends, live checks, actions, PDF) and `stage: content_cadence` notes. Published: `domain`, `published_url`, `keyword` or `content_request_id` → `stage: published` (live publish check, link suggestions, stored). Check-in: `domain`, `manual_action`, `security_issue` (booleans), optional `notes` and `pages_csv` (the Search Console Pages export as text) → `stage: console_checkin`. Profile (v4.4): `domain`, `author` {name, job_title, credentials, bio, url, same_as[], image_url, knows_about[]}, `reviewer` {name, job_title, url}, `business_name`, `business_type`, `address` {street, city, region, postal_code, country}, `phone`, `public_email`, `opening_hours` ('Mo-Fr 09:00-18:00'), `service_areas`, `map_url`, `logo_url` → `stage: profile` (empty fields keep the stored value, '-' clears). Case study: `domain`, `country`, `case_study` {client_name, client_public, industry, location, service, challenge, solution, timeline, results, quote, quote_by}, optional `keyword` → `stage: case_study_started`, then the page as a `content` callback. AI visibility / backlinks (v4.5): `domain`, `country`, optional `competitors` → `stage: ai_visibility_started` / `backlinks_started`, then the report as `stage: ai_visibility` / `backlinks`. Track: optional `competitors` and `monitors` {ai_visibility, ai_engines, ai_prompts_max, backlinks, audit_monthly, audit_pages, audit_js, brand_names}. Audit: optional `crawl_pages` (50-1000) and `crawl_js` (JavaScript rendering, max 500 pages); the callback carries `audit_diff`, `internal_links`, `entity` and `fix_pack`. Keyword runs also take `page_type` 'Pillar Page' / 'Local Page' (+ `local_area`) / 'Case Study', `video` {url, transcript, title, upload_date, duration, placement} or `video_url` + `video_transcript`, and an `author` / `reviewer` override. Optional everywhere: `wordpress_url` (draft publishing when enabled). Ladder callbacks: stage `ladder_plan` (plan JSON + PDF/Word), then one `content` callback per page with `ladder_id` and `ladder_rung`; the Rank Tracker later POSTs `stage: rank_tracker` progress.\n\nAnswers **202** `{status:'accepted', request_id, …}` at once and starts **SEO Agent v4** in the background (Execute Workflow, no wait). The finished result (verdict, keyword data, PDF + Word file as base64, run_ledger) is POSTed to `callback_url` with the same `request_id`, and/or emailed. Malformed requests get **400**; requests rejected later in the main run are POSTed as `{status:'rejected'}`.\n\nWhy separate: n8n rejects Respond-to-Webhook nodes downstream of a Form Trigger, and the main workflow is form-driven.", "height": 460, "width": 700, "color": 4}, "id": nid(), "name": "Note", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [-40, -480]}
+  {"parameters": {"content": "## SEO Agent — API front door\n`POST /webhook/seo-keyword-check` (header auth: credential **SEO API Key**, header `X-API-Key`).\n\nBody: `mode` (keyword | verdict | audit | discover | describe | **ladder** | **track** | **published** | **checkin**), `keyword`, `country` (name or ISO-2), `domain`, `business`, `customers`, `page_type`, `competitors`, `email`, `callback_url` (https). Ladder: `pages_now` (1-3, pages written now). Track: `domain`, optional `keywords` (array, up to 20), `ga4_property_id`, `blogs_per_week` (0-3, written every Monday by the Content Cadence and delivered as HTML + Markdown + meta.json in the `content` callback); answers `stage: site_tracker_setup`, then one `stage: site_tracker` callback per weekly report (Search Console, GA4, trends, live checks, actions, PDF) and `stage: content_cadence` notes. Published: `domain`, `published_url`, `keyword` or `content_request_id` → `stage: published` (live publish check, link suggestions, stored). Check-in: `domain`, `manual_action`, `security_issue` (booleans), optional `notes` and `pages_csv` (the Search Console Pages export as text) → `stage: console_checkin`. Profile (v4.4): `domain`, `author` {name, job_title, credentials, bio, url, same_as[], image_url, knows_about[]}, `reviewer` {name, job_title, url}, `business_name`, `business_type`, `address` {street, city, region, postal_code, country}, `phone`, `public_email`, `opening_hours` ('Mo-Fr 09:00-18:00'), `service_areas`, `map_url`, `logo_url` → `stage: profile` (empty fields keep the stored value, '-' clears). Case study: `domain`, `country`, `case_study` {client_name, client_public, industry, location, service, challenge, solution, timeline, results, quote, quote_by}, optional `keyword` → `stage: case_study_started`, then the page as a `content` callback. AI visibility / backlinks (v4.5): `domain`, `country`, optional `competitors` → `stage: ai_visibility_started` / `backlinks_started`, then the report as `stage: ai_visibility` / `backlinks`. Track: optional `competitors` and `monitors` {ai_visibility, ai_engines, ai_prompts_max, backlinks, audit_monthly, audit_pages, audit_js, brand_names}. Audit: optional `crawl_pages` (50-1000) and `crawl_js` (JavaScript rendering, max 500 pages); the callback carries `audit_diff`, `internal_links`, `entity` and `fix_pack`. Keyword runs also take `page_type` 'Pillar Page' / 'Local Page' (+ `local_area`) / 'Case Study', `video` {url, transcript, title, upload_date, duration, placement} or `video_url` + `video_transcript`, and an `author` / `reviewer` override. Optional everywhere: `wordpress_url` (draft publishing when enabled). Ladder callbacks: stage `ladder_plan` (plan JSON + PDF/Word), then one `content` callback per page with `ladder_id` and `ladder_rung`; the Rank Tracker later POSTs `stage: rank_tracker` progress.\n\nAnswers **202** `{status:'accepted', request_id, duplicate, first_seen_at, note, …}` at once and starts **SEO Agent v4** in the background (Execute Workflow, no wait). The finished result (verdict, keyword data, PDF + Word file as base64, run_ledger, and `run_cost_estimate_usd` + `run_cost_estimate_basis` + `run_cost_estimate_state: 'modelled'` — the engine's own calibrated figure for the whole run, the one its guard reserved) is POSTed to `callback_url` with the same `request_id`, and/or emailed. Malformed requests get **400**; requests rejected later in the main run are POSTed as `{status:'rejected'}`.\n\n**Sent twice? It runs once** (B-A6, 2026-10-15). Every request is logged to `seo_cache` (`idem:…`, kind `idem`) **before** the 202. A second POST of the same request within **5 minutes** is answered `202 {duplicate: true, request_id: <the first run's id>, first_seen_at, note}` and starts nothing — a caller that timed out and retried, a proxy that re-delivered or a double submit no longer buys a second run at up to $15 a day. The request is recognised by the caller's own `request_id` / `idempotency_key` in the body or an `Idempotency-Key` header; with none, by a fingerprint of the whole body plus the caller's identity, so anything genuinely different runs. **To ask for a real second run of the same analysis**, send a different `request_id` or `force_new: true`. Five minutes is long enough to cover any retry by a caller that never saw the answer and short enough that a deliberate repeat is not refused. Whenever it cannot be sure — the log write did not get through, no earlier row, a stored row it cannot read — it **starts the run**.\n\nWhy separate: n8n rejects Respond-to-Webhook nodes downstream of a Form Trigger, and the main workflow is form-driven.", "height": 460, "width": 700, "color": 4}, "id": nid(), "name": "Note", "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [-40, -480]}
  ],
  "connections": {
   "Webhook Trigger": {"main": [[{"node": "Quick Validate", "type": "main", "index": 0}]]},
   "Quick Validate": {"main": [[{"node": "Valid?", "type": "main", "index": 0}]]},
-  "Valid?": {"main": [[{"node": "Respond Accepted", "type": "main", "index": 0}], [{"node": "Respond Bad Request", "type": "main", "index": 0}]]},
-  "Respond Accepted": {"main": [[{"node": "Prepare Payload", "type": "main", "index": 0}]]},
-  "Prepare Payload": {"main": [[{"node": "Start SEO Run", "type": "main", "index": 0}]]}
+  # B-A6: every one of these runs before the 202, because the answer itself depends on the outcome — a repeat is told the id of the
+  # run that is already doing the work, and `Start SEO Run` is never reached.
+  "Valid?": {"main": [[{"node": "Ensure Request Log", "type": "main", "index": 0}], [{"node": "Respond Bad Request", "type": "main", "index": 0}]]},
+  "Ensure Request Log": {"main": [[{"node": "Request Row", "type": "main", "index": 0}]]},
+  "Request Row": {"main": [[{"node": "Record Request", "type": "main", "index": 0}]]},
+  "Record Request": {"main": [[{"node": "Load Requests", "type": "main", "index": 0}]]},
+  "Load Requests": {"main": [[{"node": "First Or Repeat", "type": "main", "index": 0}]]},
+  "First Or Repeat": {"main": [[{"node": "Respond Accepted", "type": "main", "index": 0}]]},
+  "Respond Accepted": {"main": [[{"node": "Start Needed?", "type": "main", "index": 0}]]},
+  "Start Needed?": {"main": [[{"node": "Prepare Payload", "type": "main", "index": 0}], [{"node": "Forget Old Requests", "type": "main", "index": 0}]]},
+  "Prepare Payload": {"main": [[{"node": "Start SEO Run", "type": "main", "index": 0}]]},
+  "Start SEO Run": {"main": [[{"node": "Forget Old Requests", "type": "main", "index": 0}]]}
  }}
 import os
 _here = os.path.dirname(os.path.abspath(__file__))
 _out = os.path.join(_here, 'workflows', 'SEO_Agent_API.json') if os.path.isdir(os.path.join(_here, 'workflows')) else 'SEO_Agent_API.json'
 url_lint.check(wf)   # D15: no node builds a site URL by hand (url_lint.py)
 retry_lint.check(wf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
+
+# ---- B-A6: the build proves the order, the way section 55 proves the ledger's (INVARIANTS.md: the lint proves the class) ----
+# A wiring mistake here is invisible in a harness scenario, which runs node code and not n8n's branch ordering — and it is exactly how
+# R17 happened. So it is checked on the generated JSON: walk `main` forward from the trigger, refuse to pass the node that decides,
+# and nothing that starts a run or answers the caller may still be reachable.
+def _api_idem_order(wfobj):
+    c = wfobj['connections']
+    out = lambda nd: [t['node'] for lst in ((c.get(nd) or {}).get('main') or []) for t in (lst or [])]
+    def reach(stop):
+        seen, stack = {'Webhook Trigger'}, ['Webhook Trigger']
+        while stack:
+            cur = stack.pop()
+            if cur == stop: continue
+            for t in out(cur):
+                if t not in seen: seen.add(t); stack.append(t)
+        return seen
+    early = reach('First Or Repeat')
+    for n in ('Start SEO Run', 'Prepare Payload', 'Respond Accepted'):
+        assert n not in early, 'B-A6: ' + n + ' can run before the front door has decided whether this request is a repeat'
+    # the log is written before anything reads it, and read before anything decides on it
+    assert reach('Record Request').isdisjoint({'Load Requests', 'First Or Repeat'}), 'B-A6: the request log is read before it is written'
+    assert out('Start Needed?')[:1] == ['Prepare Payload'], 'B-A6: the "not a repeat" branch does not start the run'
+    assert out('Start Needed?')[1:] == ['Forget Old Requests'], 'B-A6: the repeat branch starts something'
+    assert out('Start SEO Run') == ['Forget Old Requests'], 'B-A6: retention does not run after the run is started'
+_api_idem_order(wf)
+assert "const request_id = $execution.id;" in QV and 'idem_key' in QV, 'B-A6: Quick Validate does not mint the idempotency key'
+
 json.dump([wf], open(_out, 'w'), indent=2, ensure_ascii=False)
-print('API workflow written:', len(wf['nodes']), 'nodes')
-# the harness runs Quick Validate too (scenario S23: the web app's request bodies)
+print('API workflow written:', len(wf['nodes']), 'nodes (B-A6: a repeat inside '
+      + re.search(r'IDEM_WINDOW_MIN = (\d+)', QV).group(1) + ' minutes returns the first run)')
+# the harness runs Quick Validate too (scenario S23: the web app's request bodies), and S73 runs the two idempotency nodes
 _code = os.path.join(_here, 'harness', 'code_v4')
+_fname = lambda n: re.sub(r'[^A-Za-z0-9_.-]+', '_', n) + '.js'   # the sanitiser build_v4.py and harness.js both use
 if os.path.isdir(_code):
     open(os.path.join(_code, 'Quick_Validate.js'), 'w').write(QV)
+    for _n in ('Request Row', 'First Or Repeat'):
+        _src = next(x['parameters']['jsCode'] for x in wf['nodes'] if x['name'] == _n)
+        open(os.path.join(_code, _fname(_n)), 'w').write(_src)
 
 # =============================================================================
 # SEO Agent — Admin API (v4.7, 2026-10-03): the web app's door to Site Admin. POST /webhook/seo-site-admin (same header credential as the

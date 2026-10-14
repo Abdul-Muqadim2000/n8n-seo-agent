@@ -10257,5 +10257,156 @@ await guard('B-A8 counted tokens and B-A5 the run against the account', async ()
   reset();
 });
 
+// ===================================================================================
+// S73 (2026-10-15, benchmark items B-R3 and B-A6; docs/system-review-2026-10-14/INVARIANTS.md rule 1, build section 63)
+// Two things the engine knew and nobody else did.
+//   B-R3 — it priced every run (Claude + DataForSEO, from the self-correcting estimates its own guard reserves against) and shipped
+//          the number to no one: `run_cost_estimate_usd` lived in the *Rate Limit* node and a sticky note, and not one of the eleven
+//          callbacks carried it. Held here: a refused run carries the same figure as an accepted one (it used to be assigned below
+//          the refusals, so every `return` dropped it), the stamp reaches a callback whatever the builder put on it, and the figure
+//          arrives saying it is MODELLED — or `not_available` with a reason and a null amount, never a 0.
+//   B-A6 — the front door had no idempotency, so a retry after a timeout, a webhook delivered twice or a double submit each bought a
+//          second run, at up to $15 a day since 2026-10-15. Held here: the key cannot be `request_id` (minted from `$execution.id`
+//          and overwriting whatever the caller sent), identical requests share a key and different ones do not, a repeat is answered
+//          with the FIRST run's id, and every uncertainty starts the run rather than refusing one the customer asked for.
+// ===================================================================================
+await guard('S73 the run cost reaches the caller, and a request sent twice runs once', async () => {
+  reset(); const SN = 'S73 B-R3 B-A6 — the run cost the engine told nobody, and a request sent twice';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const TC73 = require('./table_cols.json');
+  const P73 = require('./fixtures_platform.json');
+  const base = P73.find(f => f.body.mode === 'keyword');
+  const qv = async (body, headers) => (await run('Quick Validate', { headers: headers || base.headers, body }))[0].json;
+
+  // ---------- A. B-A6: what a repeat is recognised BY ----------
+  const a1 = await qv(base.body); delete store['Start Form'];
+  const a2 = await qv(base.body); delete store['Start Form'];
+  check('B-A6: `request_id` could never have been the key — it is minted here from $execution.id and overwrites whatever the caller sent, so two real deliveries would carry two different ids while the request itself is unchanged',
+    a1.request_id === a2.request_id && a1.forward.body.request_id === a1.request_id && a1.idem_key === a2.idem_key && a1.idem_source === 'request fingerprint',
+    JSON.stringify({ rid: a1.request_id, k1: a1.idem_key, k2: a2.idem_key, src: a1.idem_source }));
+  // the body's key ORDER must not change the fingerprint: a caller that serialises its JSON differently on the retry is still the
+  // same request (canonical form, keys sorted, recursively)
+  const shuffled = Object.keys(base.body).sort().reverse().reduce((o, k) => { o[k] = base.body[k]; return o; }, {});
+  const a3 = await qv(shuffled); delete store['Start Form'];
+  check('B-A6: the same body with its keys in another order is the same request — the fingerprint is canonical, so a caller that re-serialises on the retry is not charged twice',
+    a3.idem_key === a1.idem_key, JSON.stringify({ k: a3.idem_key, want: a1.idem_key }));
+  const a4 = await qv({ ...base.body, keyword: 'erp for wholesalers' }); delete store['Start Form'];
+  const a5 = await qv(base.body, { 'x-forwarded-for': 'app:another-company' }); delete store['Start Form'];
+  check('B-A6: a different keyword is a different request, and so is the same request from a different company — anything that changes what the run does, or who it is for, runs',
+    a4.idem_key !== a1.idem_key && a5.idem_key !== a1.idem_key, JSON.stringify({ kw: a4.idem_key, co: a5.idem_key, first: a1.idem_key }));
+  const a6 = await qv({ ...base.body, request_id: 'caller-abc' }); delete store['Start Form'];
+  const a7 = await qv({ ...base.body, keyword: 'anything else', idempotency_key: 'caller-abc' }); delete store['Start Form'];
+  const a8 = (await run('Quick Validate', { headers: { ...base.headers, 'idempotency-key': 'caller-abc' }, body: base.body }))[0].json; delete store['Start Form'];
+  check('B-A6: a caller that names its own request is believed — body `request_id`, body `idempotency_key` and the `Idempotency-Key` header all key on what the caller called it, whatever else is in the body',
+    a6.idem_key === 'k:caller-abc' && a7.idem_key === 'k:caller-abc' && a8.idem_key === 'k:caller-abc' && a6.idem_source === 'caller',
+    JSON.stringify([a6.idem_key, a7.idem_key, a8.idem_key, a6.idem_source]));
+  const a9 = await qv({ ...base.body, force_new: true }); delete store['Start Form'];
+  check('B-A6: `force_new: true` asks for a genuinely new run of the same analysis and gets one — no key, so nothing can match it',
+    a9.idem_key === '' && a9.idem_source === 'force_new' && a9.ok, JSON.stringify({ k: a9.idem_key, src: a9.idem_source }));
+  check('B-A6: and the window travels with the request, so the node that decides and the answer the caller reads cannot disagree about it',
+    a1.idem_window_min === 5, String(a1.idem_window_min));
+
+  // ---------- B. the row that is written before the 202 ----------
+  const rowOf = async (q) => { mock('Quick Validate', [{ json: q }]); return (await run('Request Row', [{ json: { id: 'tbl', name: 'seo_cache' } }]))[0].json; };
+  const r1 = await rowOf(a1);
+  const eq73 = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  check('B-A6: the request is logged with exactly the seo_cache columns in the table\'s own order — the insert auto-maps every field of the item, so an extra one would be a failed insert on the live table',
+    eq73(Object.keys(r1), TC73.CACHE) && r1.kind === 'idem' && r1.key === 'idem:' + a1.idem_key && r1.site_id === 'northwind-erp.com',
+    JSON.stringify({ cols: Object.keys(r1), want: TC73.CACHE, key: r1.key }));
+  check('B-A6: and the row carries the request id the repeat will be answered with',
+    JSON.parse(r1.value).request_id === String(a1.request_id), r1.value);
+  const r9 = await rowOf(a9);
+  check('B-A6: a `force_new` request is still recorded — a request that arrived is worth having — but under a key nothing else can ever carry, so it neither matches nor is matched',
+    /^idem:none:/.test(r9.key) && r9.key.endsWith(String(a9.request_id)), r9.key);
+
+  // ---------- C. first delivery, repeat, and every way of being unsure ----------
+  // insert-then-read-back, lowest id wins: `Record Request` is this delivery's own row, `Load Requests` the window's rows under that key
+  const decide = async (q, rowKey, mineRow, loaded) => {
+    mock('Quick Validate', [{ json: q }]);
+    mock('Request Row', [{ json: { key: rowKey } }]);
+    mock('Record Request', [{ json: mineRow }]);
+    mock('Load Requests', loaded.length ? loaded.map(x => ({ json: x })) : [{ json: {} }]);
+    return (await run('First Or Repeat', [{ json: {} }]))[0].json;
+  };
+  const KEY = 'idem:' + a1.idem_key;
+  const firstRow = { id: 41, key: KEY, kind: 'idem', updated_at: '2026-10-15T09:00:00.000Z', value: JSON.stringify({ request_id: '777', mode: 'keyword' }) };
+  const mineRow = { id: 42, key: KEY, kind: 'idem', updated_at: '2026-10-15T09:00:04.000Z' };
+
+  const c1 = await decide(a1, KEY, { id: 41, key: KEY }, [firstRow]);
+  check('B-A6: the FIRST delivery sees only its own row and starts the run, and the answer tells the caller the rule it is now under',
+    c1.duplicate === false && c1.request_id === a1.request_id && /A repeat of this exact request within 5 minutes/.test(c1.note),
+    JSON.stringify({ dup: c1.duplicate, rid: c1.request_id, note: c1.note }));
+  const c2 = await decide(a1, KEY, mineRow, [firstRow, { ...mineRow }]);
+  check('B-A6: the SECOND delivery of the same request is a repeat — it is answered with the FIRST run\'s id, not its own, and nothing is started a second time',
+    c2.duplicate === true && c2.request_id === '777' && c2.first_seen_at === '2026-10-15T09:00:00.000Z'
+    && /already received/.test(c2.note) && /force_new/.test(c2.note), JSON.stringify({ dup: c2.duplicate, rid: c2.request_id, at: c2.first_seen_at }));
+  const c3 = await decide(a1, KEY, mineRow, [firstRow, { ...mineRow }, { id: 43, key: KEY, updated_at: '2026-10-15T09:00:09.000Z', value: JSON.stringify({ request_id: '999' }) }]);
+  check('B-A6: a THIRD delivery still names the first run and not the second — lowest id wins, which is why the row is inserted before it is read (two deliveries in the same millisecond both insert, both read the same rows, and both agree)',
+    c3.duplicate === true && c3.request_id === '777', JSON.stringify({ dup: c3.duplicate, rid: c3.request_id }));
+  // ---- and every way of not being sure starts the run ----
+  const open = [
+    ['the log write did not get through, so this delivery has no id of its own and cannot be placed in the order',
+      await decide(a1, KEY, {}, [firstRow])],
+    ['the window holds nothing earlier (the first row has already aged out, or this really is the first)',
+      await decide(a1, KEY, mineRow, [{ ...mineRow }])],
+    ['the earlier row\'s stored value cannot be read, so there is no first run id to answer with — and inventing one would be worse than a second run',
+      await decide(a1, KEY, mineRow, [{ ...firstRow, value: 'not json at all' }, { ...mineRow }])],
+    ['the earlier row holds no request id',
+      await decide(a1, KEY, mineRow, [{ ...firstRow, value: JSON.stringify({ mode: 'keyword' }) }, { ...mineRow }])],
+    ['the table could not be read at all',
+      await decide(a1, KEY, mineRow, [])],
+    ['`force_new` was asked for, so the `idem:none:` key matches nothing however many rows come back',
+      await decide(a9, 'idem:none:' + a9.request_id, { id: 42, key: 'idem:none:' + a9.request_id }, [firstRow, { ...mineRow }])],
+  ];
+  for (const [why, out] of open) check('B-A6 fails open: ' + why + ' — the run starts', out.duplicate === false, JSON.stringify(out).slice(0, 200));
+
+  // ---------- D. B-R3: a refused run carries the same figure as an accepted one ----------
+  reset();
+  const n73 = await run('Normalize Input', F.forms.webhookVerdict);
+  const IN73 = (o = {}) => [{ json: { ...n73[0].json, email: 'owner@northwind-erp.com', ai_budget_usd: 6, dfs_budget_usd: 6, ...o } }];
+  const now73 = new Date().toISOString();
+  ledgerReset(); const d1 = await ledgerRun(IN73());
+  const want = d1[0].json.run_cost_estimate_usd;
+  check('B-R3: an accepted run carries one total for what it will cost, with the basis naming what it was modelled from and the state saying it is MODELLED — the engine\'s figure can never be a measurement, because what a run really spent is settled at the end',
+    want === +(d1[0].json.ai_spend_estimate_usd + d1[0].json.dfs_spend_estimate_usd).toFixed(2)
+    && d1[0].json.run_cost_estimate_state === 'modelled'
+    && /^modelled before the run/.test(String(d1[0].json.run_cost_estimate_basis))
+    && /Claude \$/.test(String(d1[0].json.run_cost_estimate_basis)) && /search data \$/.test(String(d1[0].json.run_cost_estimate_basis)),
+    JSON.stringify({ usd: want, state: d1[0].json.run_cost_estimate_state, basis: d1[0].json.run_cost_estimate_basis }));
+  const held = Array.from({ length: 3 }, () => ({ key: 'other@example.com', mode: 'keyword', est_usd: 2, dfs_est_usd: 0, created_at: now73, status: 'reserved', settled_usd: 0, dfs_usd: 0 }));
+  ledgerReset(held); const d2 = await ledgerRun(IN73());
+  check('B-R3: and a run the budget REFUSES carries the same figure — it used to be assigned below the four guards, so every refusal returned without it and the one case where a caller most wants the number was the one case that never had it',
+    /The AI budget for this day is used up/.test(d2[0].json.validation_error || '') && d2[0].json.run_cost_estimate_usd === want
+    && d2[0].json.run_cost_estimate_state === 'modelled',
+    JSON.stringify({ e: d2[0].json.validation_error, usd: d2[0].json.run_cost_estimate_usd, want }));
+
+  // ---------- E. B-R3: the stamp that puts it on the callback ----------
+  // every one of the eleven builders funnels through *Has Callback?*, and each names its fields one by one — six carry `run_ledger`,
+  // five carry nothing about money at all — so this node is the only place that reaches all of them.
+  const payload = { status: 'completed', stage: 'console_checkin', request_id: '555', domain: 'northwind-erp.com', callback_url: 'https://example.test/hook' };
+  mock('Rate Limit', [{ json: d1[0].json }]);
+  const e1 = (await run('Run Cost (Callback)', [{ json: payload, binary: { data: { data: 'AAA=', mimeType: 'application/pdf' } } }]))[0];
+  check('B-R3: a callback that carried nothing about money now carries the engine\'s own figure for the run, with its basis and its state, and every field the builder put on it is untouched',
+    e1.json.run_cost_estimate_usd === want && e1.json.run_cost_estimate_state === 'modelled'
+    && /^modelled before the run/.test(e1.json.run_cost_estimate_basis)
+    && Object.entries(payload).every(([k, v]) => e1.json[k] === v), JSON.stringify(e1.json));
+  check('B-R3: and the report\'s files still ride through on the binary — a Code node drops them unless it hands them back, and the PDF and the Word document of a report go out on this same item',
+    !!(e1.binary && e1.binary.data && e1.binary.data.data === 'AAA='), JSON.stringify(e1.binary || null));
+  delete store['Rate Limit'];
+  const e2 = (await run('Run Cost (Callback)', [{ json: payload }]))[0].json;
+  check('B-R3 (INVARIANTS rule 1): where the guard never priced the run the amount is NULL with the reason in its place — not a 0, which would say the run costs nothing, and not a figure invented to fill the field',
+    e2.run_cost_estimate_usd === null && e2.run_cost_estimate_state === 'not_available'
+    && /^not available:/.test(e2.run_cost_estimate_basis) && e2.status === 'completed', JSON.stringify(e2));
+  mock('Rate Limit', [{ json: { ...d1[0].json, run_cost_estimate_usd: undefined, run_cost_estimate_basis: undefined } }]);
+  const e3 = (await run('Run Cost (Callback)', [{ json: payload }]))[0].json;
+  check('B-R3: a run that reached the guard and came back unpriced says exactly that, and still says nothing it cannot support',
+    e3.run_cost_estimate_usd === null && e3.run_cost_estimate_state === 'not_available' && /reached the guard but carried no estimate/.test(e3.run_cost_estimate_basis), JSON.stringify(e3));
+  const e4 = (await run('Run Cost (Callback)', [{ json: { ...payload, run_cost_estimate_usd: 99, run_cost_estimate_state: 'measured' } }]))[0].json;
+  check('B-R3: and a figure a builder had put on the payload itself is replaced by the guard\'s, never left to travel as a "measured" cost of a run that has not finished',
+    e4.run_cost_estimate_usd === null && e4.run_cost_estimate_state === 'not_available', JSON.stringify(e4));
+  reset();
+});
+
 H.report();
 })();

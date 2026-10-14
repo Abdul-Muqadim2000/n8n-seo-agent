@@ -5959,6 +5959,159 @@ log('Claude tokens are counted by Anthropic and a run is costed against the acco
     'dfs_balance_end and dfs_source so a reader can always tell which figure a row carries')
 
 # =============================================================================
+# 63. THE RUN COST THE ENGINE WORKED OUT AND TOLD NOBODY, AND A REQUEST SENT TWICE
+#     (2026-10-15, benchmark programme items B-R3 and B-A6; docs/system-review-2026-10-14/INVARIANTS.md rule 1)
+#
+#     **B-R3 — the figure that reached no one.** Section 61 gave the guard one number for what a run will cost — Claude plus
+#     DataForSEO, from the same self-correcting per-mode estimates it reserves against, with the basis beside it. It then kept it.
+#     On 2026-10-15 `run_cost_estimate_usd` appeared in exactly two places in every generated workflow: the *Rate Limit* node that
+#     computes it, and a sticky note about that node. **No callback carried it**, so no caller and no customer ever saw it, and the
+#     app (`app/shared/src/cost.ts`, built to prefer the engine's figure over its own) had nothing to prefer.
+#     Two changes, and the second is the one that matters:
+#     (a) the figure is worked out BEFORE the four guards can return, so a run that is refused carries the same number as one that is
+#         accepted. It used to be assigned below them, which is part of why it never travelled: every refusal path returned without it.
+#     (b) one node, *Run Cost (Callback)*, between *Has Callback?* and *POST Callback*. Every one of the eleven `Build … Response`
+#         nodes funnels through that IF, and each builds its payload field by field — six carry `run_ledger`, five carry nothing about
+#         money at all — so stamping it there is the only place that reaches all of them, and the only place that cannot be forgotten
+#         by the twelfth builder somebody writes. *Rate Limit* is a strict chokepoint for every callback in this workflow (proved
+#         below by walking `main` from both triggers), so the node can always read it.
+#     **It arrives saying what it is.** Rule 1: measured, modelled, or not available, and which. This figure can never be a
+#     measurement — what the run really spent is `run_ledger`, settled at the end — so it travels as `run_cost_estimate_state:
+#     'modelled'` with `run_cost_estimate_basis` naming what it was modelled from, and as `'not_available'`, with the reason and a
+#     null amount, when the guard did not price the run. An estimate that arrives dressed as a measurement is worse than one that
+#     never arrives.
+#     **Where it is NOT put, deliberately:** the 202 from the API front door cannot carry it. *Rate Limit* runs inside the main
+#     workflow, which starts after the front door has already answered, and the only way to put a number on the 202 would be a second
+#     estimator in the front door — which is precisely the two-tables-that-disagree bug B-R3/B-B1 exists to kill. One estimator, told
+#     to the caller the moment it exists. The rejection callback is left alone too: `run_cost_estimate_usd` on a `status: 'rejected'`
+#     payload reads like a charge for a run that spent nothing, and the refusal already says the amount in words.
+#
+#     **B-A6 — a request sent twice ran twice.** In build_api.py; the note there carries the reasoning, including why the log is in
+#     `seo_cache` and not in `seo_run_ledger`, which would have taken B-A5's run-level attribution away the day it shipped.
+# =============================================================================
+
+# ---------- A. the estimate is worked out before any guard can return with it missing ----------
+patch('Rate Limit', """let dfs_est = __dfs.usd;     // DataForSEO money: carried on the row, settled with the measured amount (R9)""",
+      """let dfs_est = __dfs.usd;     // DataForSEO money: carried on the row, settled with the measured amount (R9)
+// B-R3 (2026-10-15, section 63): one number for "what will this run cost", from the same self-correcting estimates the guard reserves
+// against — so what the caller is told before the work and what is held back against the budget can never be two different figures.
+// It is worked out HERE, above the four refusals below, because a refused run has to carry the same figure as an accepted one: it used
+// to be assigned after them, so every `return` with a validation_error dropped it.
+// Rule 1 (INVARIANTS.md): it says what it is. This can never be a measurement — what the run really spent is settled at the end, on
+// the ledger row — so it travels as `modelled`, with the basis naming what it was modelled from.
+d.run_cost_estimate_usd = +(est + dfs_est).toFixed(2);
+d.run_cost_estimate_state = 'modelled';
+d.run_cost_estimate_basis = ('modelled before the run, from what runs of this kind have recently cost: Claude $' + est.toFixed(2)
+  + ' (' + __ai.basis + '); search data $' + dfs_est.toFixed(2) + ' (' + __dfs.basis + ')').slice(0, 400);""")
+
+patch('Rate Limit', """// one number for "what will this run cost", from the same self-correcting estimates the guard reserves against — so what the caller is
+// told before the work and what is held back against the budget can never be two different figures.
+d.run_cost_estimate_usd = +(est + dfs_est).toFixed(2);
+d.run_cost_estimate_basis = ('Claude $' + est.toFixed(2) + ' (' + __ai.basis + '); search data $' + dfs_est.toFixed(2) + ' (' + __dfs.basis + ')').slice(0, 400);
+""", """// (the run's cost estimate is set above, before the guards, so a refused run carries it too — B-R3, section 63)
+""")
+
+assert code('Rate Limit').count('d.run_cost_estimate_usd') == 1, 'B-R3: the run cost estimate is set in two places in Rate Limit'
+assert code('Rate Limit').index('d.run_cost_estimate_usd') < code('Rate Limit').index('The AI budget for this '), \
+    'B-R3: the run cost estimate is still worked out after the guards can refuse'
+
+# ---------- B. the one place every callback of this workflow passes through ----------
+RUN_COST_JS = r"""// B-R3 (2026-10-15, build section 63): the engine's own calibrated figure for this run, put on the callback.
+// Until today it reached nobody: `run_cost_estimate_usd` existed only inside *Rate Limit* and a sticky note, while the app was built
+// to prefer the engine's figure over its own pre-flight table and had nothing to prefer. Every `Build … Response` node builds its
+// payload field by field and funnels through *Has Callback?*, so this is the one node that reaches all eleven of them — and the
+// twelfth, whenever somebody writes it.
+// Rule 1 (INVARIANTS.md): measured, modelled, or not available, and it says which. This figure is MODELLED by definition — what the
+// run really spent is `run_ledger`, settled at the end from the tasks it paid for and the model calls it made. It is never called
+// anything else here, and when the guard did not price this run the amount is null and the reason travels in its place.
+const item = $input.first();
+const out = { ...(item.json || {}) };
+let rl = null;
+try { rl = $('Rate Limit').first().json || null; } catch (e) { rl = null; }
+const usd = rl ? Number(rl.run_cost_estimate_usd) : NaN;
+if (Number.isFinite(usd) && usd >= 0) {
+  out.run_cost_estimate_usd = +usd.toFixed(2);
+  out.run_cost_estimate_state = 'modelled';
+  out.run_cost_estimate_basis = String(rl.run_cost_estimate_basis || '').slice(0, 400)
+    || 'modelled before the run, from what runs of this kind have recently cost';
+} else {
+  // never a 0 here: 0 is a run that costs nothing, and "we did not price it" is a different statement.
+  out.run_cost_estimate_usd = null;
+  out.run_cost_estimate_state = 'not_available';
+  out.run_cost_estimate_basis = 'not available: this run was never priced by the spend guard'
+    + (rl ? ' (it reached the guard but carried no estimate)' : ' (the guard did not run for it)');
+}
+// files ride on the binary, not the json (the PDF and the Word document of a report): a Code node drops them unless they are returned.
+return [{ json: out, binary: item.binary }];"""
+_hc = pos('Has Callback?')
+add_node('Run Cost (Callback)', 'n8n-nodes-base.code', 2, {'jsCode': RUN_COST_JS}, [_hc[0] + 110, _hc[1] + 140])
+disconnect('Has Callback?', 'POST Callback')
+connect('Has Callback?', 'Run Cost (Callback)')
+connect('Run Cost (Callback)', 'POST Callback')
+
+# ---------- C. the build proves it, so the next builder cannot forget (INVARIANTS: the lint proves the class) ----------
+# A harness scenario runs node code, not n8n's wiring: it can prove the node stamps correctly and nothing about whether every callback
+# goes through it. That part is proved here, on the graph, exactly as section 55 proves the ledger's order.
+def _b_r3_checks63():
+    _builders63 = sorted(n for n in nodes if n.startswith('Build ') and n.endswith('Response'))
+    assert len(_builders63) >= 11, 'B-R3: expected the eleven callback builders, found ' + str(len(_builders63))
+    for _b63 in _builders63:
+        _o63 = [t['node'] for lst in ((conns.get(_b63) or {}).get('main') or []) for t in (lst or [])]
+        assert _o63 == ['Has Callback?'], 'B-R3: ' + _b63 + ' does not funnel through Has Callback? but into ' + str(_o63)
+    _hcout63 = [t['node'] for lst in ((conns.get('Has Callback?') or {}).get('main') or []) for t in (lst or [])]
+    assert _hcout63 == ['Run Cost (Callback)'], 'B-R3: Has Callback? feeds ' + str(_hcout63) + ' beside the cost stamp'
+    assert [t['node'] for lst in ((conns.get('Run Cost (Callback)') or {}).get('main') or []) for t in (lst or [])] == ['POST Callback'], \
+        'B-R3: the cost stamp does not feed POST Callback'
+    # and *Rate Limit* really is a chokepoint: walk main from every trigger, refusing to pass it, and no callback may still be reached
+    _tgt63 = {t['node'] for o in conns.values() for lst in (o.get('main') or []) for t in (lst or [])}
+    _start63 = [n for n in nodes if n not in _tgt63 and (conns.get(n) or {}).get('main')]
+    _seen63, _stack63 = set(_start63), list(_start63)
+    while _stack63:
+        _cur63 = _stack63.pop()
+        if _cur63 == 'Rate Limit': continue
+        for _lst63 in ((conns.get(_cur63) or {}).get('main') or []):
+            for _t63 in (_lst63 or []):
+                if _t63['node'] not in _seen63: _seen63.add(_t63['node']); _stack63.append(_t63['node'])
+    _loose63 = sorted(n for n in _seen63 if n == 'POST Callback' or n in _builders63)
+    assert not _loose63, 'B-R3: these can answer a caller without passing the node that prices the run: ' + ', '.join(_loose63)
+_b_r3_checks63()
+
+sticky("""### The run cost the engine worked out and told nobody (2026-10-15, B-R3)
+`run_cost_estimate_usd` — Claude plus DataForSEO, from the same self-correcting estimates the guard reserves against — existed in
+**two** places in every generated workflow: *Rate Limit*, and a sticky note about *Rate Limit*. No callback carried it, so no caller
+and no customer ever saw it, while the app had already been built to prefer the engine's figure over its own.
+It is now worked out **above** the four refusals (a refused run carried none, because every `return` happened first), and stamped on
+to every callback by **Run Cost (Callback)**, the one node between *Has Callback?* and *POST Callback* that all eleven response
+builders funnel through. The build walks `main` from both triggers and fails if a builder or *POST Callback* can be reached without
+passing *Rate Limit*, so the twelfth builder cannot quietly ship without it.
+**It says what it is** (INVARIANTS rule 1): `run_cost_estimate_state: 'modelled'`, with the basis naming what it was modelled from —
+or `'not_available'` with the reason and a **null** amount, never a 0. What the run really spent stays `run_ledger`, settled at the end.
+**Not on the 202:** *Rate Limit* runs after the front door has answered, and a second estimator there is the very bug B-R3 exists to
+kill.""",
+    _hc[0] - 40, _hc[1] + 320, 1060, 300, 5)
+
+log('The run cost the engine works out now reaches the caller, and a request sent twice runs once (2026-10-15, benchmark items B-R3 and '
+    'B-A6; INVARIANTS rule 1). B-R3: run_cost_estimate_usd - the whole run priced from the same self-correcting per-mode estimates the '
+    'guard reserves against - appeared in exactly two places in every generated workflow, the Rate Limit node that computes it and a sticky '
+    'note about that node, so no callback carried it and the app, built to prefer the engine\'s figure over its own pre-flight table, had '
+    'nothing to prefer; it is now computed ABOVE the four refusals (every refusal returned before the old assignment, so a refused run '
+    'carried no figure at all) and stamped on to every callback by one new node, Run Cost (Callback), between Has Callback? and POST '
+    'Callback - the single point all eleven Build ... Response nodes funnel through - with the build walking main from both triggers and '
+    'failing if any builder or POST Callback can be reached without passing Rate Limit; it travels as run_cost_estimate_state "modelled" '
+    'with the basis beside it, or "not_available" with the reason and a null amount (never a 0, which means a run that costs nothing), '
+    'because what the run really spent is run_ledger, settled at the end. It is deliberately NOT on the 202: Rate Limit runs after the API '
+    'front door has answered, and the only way to put a number there would be a second estimator, which is the two-tables-disagree bug '
+    'B-R3 exists to kill. B-A6: the front door had no idempotency, so an app that timed out and retried, a proxy that re-delivered or a '
+    'double submit each bought a second run - dearer since both daily ceilings went from $6 to $15 the same day; request_id could not be '
+    'the key (it is minted in Quick Validate from $execution.id and overwrites whatever the caller sent, so two deliveries have two ids by '
+    'construction), so the key is the caller\'s own request_id / idempotency_key / Idempotency-Key header, or a canonical fingerprint of '
+    'the whole body plus the caller\'s identity, logged to seo_cache (idem:, kind idem) BEFORE the 202 with insert-then-read-back and '
+    'lowest id wins - the idiom D1 put on the run ledger - so a repeat inside five minutes is answered 202 {duplicate: true, request_id: '
+    'the first run\'s id, first_seen_at, note} and starts nothing, force_new or a fresh request_id asks for a genuine second run, the log '
+    'is NOT in seo_run_ledger because a non-run row there reads as an open run to CC.dfsRun and would take B-A5\'s run-level account '
+    'attribution away, and every uncertainty - no id of its own, no earlier row, an unreadable stored value - starts the run')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
