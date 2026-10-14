@@ -1,4 +1,5 @@
 """Shared definitions for the keyword-ladder feature (used by build_v4.py and build_ladder_extras.py)."""
+import json as _json
 import uuid as _uuid
 LADDER_TABLE = 'seo_ladders'
 HISTORY_TABLE = 'seo_rank_history'
@@ -340,21 +341,32 @@ LEDGER_EST = {
     'rank_tracker':    {'ai': 0.0,  'dfs': 0.15},    # the week's SERP checks of one site's ladders
     'site_tracker':    {'ai': 0.03, 'dfs': 0.01},    # the site brief; Search Console / GA4 / Trends are free
     'content_cadence': {'ai': 0.0,  'dfs': 0.0},     # it plans and spawns; every page run reserves its own row
+    # R32's companion (2026-10-14, FIX_PLAN §3.13): the daily key-page watch spends nothing (25 plain GETs, no DataForSEO, no Claude) but
+    # kept no row at all, so it was invisible to the guard and to the day's reconciliation. It reserves nothing and settles nothing.
+    'page_watch':      {'ai': 0.0,  'dfs': 0.0},
 }
 
 
 def monitor_ledger_js(v5_dir, mode, plan_node, row_node, measured=''):
     """R9: the reserve and settle Code-node sources for one scheduled workflow, filled in from v5/code/Monitor_Ledger_*.js.
     `plan_node` knows how many sites this run covers, `row_node` is the reserve node's own name, and `measured` is the node that
-    carries the run's real DataForSEO cost as `cost_usd` ('' when the workflow has none)."""
+    carries the run's real DataForSEO cost as `cost_usd` ('' when the workflow has none).
+    R31 (2026-10-14, FIX_PLAN §3.13): the settle carries the shared cost kit and the list of this workflow's Claude nodes, so a run in
+    which no model ran settles nothing instead of the figure it reserved. `__AI_NODES__` is filled in at WRITE time by
+    ledger_mainline(), which is the first moment the whole workflow — model nodes and all — exists."""
     import json as _json, os as _os
     assert mode in LEDGER_EST, 'no ledger estimate for ' + mode
     rd = lambda f: open(_os.path.join(v5_dir, 'code', f), encoding='utf-8').read()
+    cost_cal = rd('_cost_cal.js').rstrip('\n')
+    tag = ledger_tag({'reserve': row_node})
     reserve = (rd('Monitor_Ledger_Row.js').replace('__PLAN__', plan_node).replace('__MODE__', mode)
+               .replace('__BALANCE__', 'DFS Balance (' + tag + ')')
                .replace('__EST__', _json.dumps(LEDGER_EST[mode], sort_keys=True)))
-    settle = rd('Monitor_Ledger_Settle.js').replace('__ROW__', row_node).replace('__MEASURED__', measured)
-    for ph in ('__PLAN__', '__MODE__', '__EST__', '__ROW__', '__MEASURED__'):
+    settle = (rd('Monitor_Ledger_Settle.js').replace('/*__COST_CAL__*/', cost_cal)
+              .replace('__ROW__', row_node).replace('__MEASURED__', measured))
+    for ph in ('__PLAN__', '__MODE__', '__EST__', '__ROW__', '__MEASURED__', '__BALANCE__', '/*__COST_CAL__*/'):
         assert ph not in reserve and ph not in settle, ph + ' left in the ledger code for ' + mode
+    assert '__AI_NODES__' in settle, 'R31: the settle has nowhere to learn this workflow\'s Claude nodes'
     return reserve, settle
 
 
@@ -383,17 +395,68 @@ def ledger_tag(wiring):
 _LEDGER_NS = _uuid.UUID('7c1f2a44-0b3e-4e6a-9d21-5e8a1c0f4b77')
 
 
+#  R31 / R32 (2026-10-14, FIX_PLAN §3.13): the free balance probe every scheduled run now takes, and the list of this workflow's own
+#  Claude nodes that its settle checks before it settles a cent. Both are filled in at write time, when the whole workflow exists.
+DFS_BALANCE_URL = 'https://api.dataforseo.com/v3/appendix/user_data'   # free, answers in milliseconds, no cost to the account
+
+
+def _ai_nodes_of(wfobj):
+    """Every Claude node of this workflow, as the names that appear in the run data: an `lmChatAnthropic` model node never runs on the
+    main path (it hangs off its agent on an `ai_languageModel` connection and has no items of its own), so the AGENT is what a settle can
+    ask about; an HTTP node that carries the Anthropic credential is itself the call."""
+    conns, out = wfobj.get('connections') or {}, set()
+    for n in wfobj['nodes']:
+        t = str(n.get('type') or '')
+        if 'lmChatAnthropic' in t:
+            for lst in ((conns.get(n['name']) or {}).get('ai_languageModel') or []):
+                for tgt in (lst or []): out.add(tgt['node'])
+        elif 'lmChat' not in t and any(isinstance(c, dict) and c.get('id') == 'SEOcredAnthropic'
+                                       for c in (n.get('credentials') or {}).values()):
+            out.add(n['name'])
+    return sorted(out)
+
+
 def ledger_mainline(wfobj, wiring):
     """R17: move everything the plan node used to feed to the far side of the reserve chain, so no paid node of the workflow can run
     before the ledger row exists. Called at WRITE time, when every connection of the workflow is already made, and it is the one place
     the three builders share. It also makes the two Data Table nodes of the chain `alwaysOutputData` + `continueRegularOutput`: they sit
-    in the data path now, so neither may end the run by answering with nothing."""
+    in the data path now, so neither may end the run by answering with nothing.
+    R31 / R32 (2026-10-14): it also teaches the settle which Claude nodes this workflow has (so a run that called none settles none) and
+    puts the free `appendix/user_data` balance reading on the chain, so a scheduled run's spend reaches the day's reconciliation too —
+    until now only main-workflow runs took a reading, and the monitors are where most of the DataForSEO money goes."""
     tag = ledger_tag(wiring)
     conns, nodes = wfobj['connections'], {n['name']: n for n in wfobj['nodes']}
     plan, ensure = wiring['plan'], 'Ensure Run Ledger (' + tag + ')'
     reserve, resume = 'Reserve Run Ledger (' + tag + ')', 'After Run Ledger (' + tag + ')'
     for nm in (plan, ensure, reserve, wiring['settle']):
         assert nm in nodes, 'R17: ' + nm + ' is missing from ' + str(wfobj.get('name'))
+    # ---- R31: the settle learns this workflow's Claude nodes ----
+    settle_code = 'Ledger Settle (' + tag + ')'
+    assert settle_code in nodes, 'R31: ' + settle_code + ' is missing from ' + str(wfobj.get('name'))
+    ai_nodes = _ai_nodes_of(wfobj)
+    src = nodes[settle_code]['parameters']['jsCode']
+    assert '__AI_NODES__' in src, 'R31: ' + settle_code + ' does not read the workflow\'s Claude nodes'
+    nodes[settle_code]['parameters']['jsCode'] = src.replace('__AI_NODES__', _json.dumps(ai_nodes), 1)
+    wiring['ai_nodes'] = ai_nodes
+    # ---- R32 / the day's reconciliation: the free balance reading, between Ensure and Row ----
+    balance = 'DFS Balance (' + tag + ')'
+    if balance not in nodes:
+        bx, by = nodes[ensure]['position']
+        wfobj['nodes'].append({'parameters': {'method': 'GET', 'url': DFS_BALANCE_URL, 'authentication': 'genericCredentialType',
+                                              'genericAuthType': 'httpBasicAuth',
+                                              'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+                               'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + balance)), 'name': balance,
+                               'type': 'n8n-nodes-base.httpRequest', 'typeVersion': 4.5, 'position': [bx + 110, by - 150],
+                               'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
+                               'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True,
+                               'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+        eo = conns.setdefault(ensure, {}).setdefault('main', [])
+        while not eo: eo.append([])
+        assert any(t['node'] == wiring['reserve'] for t in eo[0]), 'R32: ' + ensure + ' does not feed ' + wiring['reserve']
+        eo[0] = [t for t in eo[0] if t['node'] != wiring['reserve']] + [{'node': balance, 'type': 'main', 'index': 0}]
+        conns.setdefault(balance, {})['main'] = [[{'node': wiring['reserve'], 'type': 'main', 'index': 0}]]
+        nodes[balance] = wfobj['nodes'][-1]
+    wiring['balance'] = balance
     assert resume not in nodes, 'R17: ' + resume + ' already exists (ledger_mainline ran twice)'
     outs = conns.setdefault(plan, {}).setdefault('main', [])
     while not outs: outs.append([])
@@ -413,6 +476,28 @@ def ledger_mainline(wfobj, wiring):
         nodes[nm]['alwaysOutputData'] = True
         nodes[nm]['onError'] = 'continueRegularOutput'
     wiring['resume'] = resume
+    # ---- R31 (2026-10-14, FIX_PLAN §3.13): every end of the run reaches the settle ----
+    # The settle hung off the report node only, so a run that found nothing to do (the `Nothing To Do (…)` branch every monitor has)
+    # reserved a row and then finished without ever settling it — the row sat `reserved` against the guard until *Release Stale Runs*
+    # cleared it two hours later. A crashed run is what the stale release is for; a run that simply had nothing to do is not. Walk
+    # forward from the resume node, refusing to pass anything that already feeds the settle: whatever still ends with no outgoing
+    # connection is wired into the settle here, in the one place the three builders share.
+    settle_code = 'Ledger Settle (' + tag + ')'
+    outs_of = lambda nd: [t['node'] for lst in ((conns.get(nd) or {}).get('main') or []) for t in (lst or [])]
+    blocked = set(wiring.get('settle_from') or []) | {settle_code, wiring['settle']}
+    seen, stack = {resume}, [resume]
+    while stack:
+        cur = stack.pop()
+        if cur in blocked: continue
+        for t in outs_of(cur):
+            if t not in seen: seen.add(t); stack.append(t)
+    loose = sorted(n for n in seen if n not in blocked and n in nodes and not outs_of(n))
+    for nm in loose:
+        o = conns.setdefault(nm, {}).setdefault('main', [])
+        while not o: o.append([])
+        o[0] = o[0] + [{'node': settle_code, 'type': 'main', 'index': 0}]
+    wiring['settle_from'] = sorted(set(wiring.get('settle_from') or []) | set(loose))
+    wiring['settle_from_ends'] = loose   # the branches that used to finish without settling
     return resume
 
 

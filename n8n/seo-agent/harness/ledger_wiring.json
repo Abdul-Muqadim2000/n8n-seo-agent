@@ -125,6 +125,10 @@
  },
  "monitors": {
   "SEO Agent \u2014 AI Growth": {
+   "ai_nodes": [
+    "AI Outreach Writer"
+   ],
+   "balance": "DFS Balance (Growth)",
    "est": {
     "ai": 0.55,
     "dfs": 0.05
@@ -136,10 +140,16 @@
    "resume": "After Run Ledger (Growth)",
    "settle": "Settle Run Ledger (Growth)",
    "settle_from": [
-    "Growth Report"
+    "Growth Report",
+    "Nothing To Do (Growth)"
+   ],
+   "settle_from_ends": [
+    "Nothing To Do (Growth)"
    ]
   },
   "SEO Agent \u2014 AI Pulse": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Pulse)",
    "est": {
     "ai": 0.004,
     "dfs": 0.08
@@ -151,10 +161,20 @@
    "resume": "After Run Ledger (Pulse)",
    "settle": "Settle Run Ledger (Pulse)",
    "settle_from": [
+    "Nothing To Do (Pulse)",
     "Pulse Alerts"
+   ],
+   "settle_from_ends": [
+    "Nothing To Do (Pulse)"
    ]
   },
   "SEO Agent \u2014 AI Visibility Tracker": {
+   "ai_nodes": [
+    "AI Brief",
+    "Answer Analyst",
+    "Prompt Writer"
+   ],
+   "balance": "DFS Balance (AI)",
    "est": {
     "ai": 0.27,
     "dfs": 0.6
@@ -166,10 +186,16 @@
    "resume": "After Run Ledger (AI)",
    "settle": "Settle Run Ledger (AI)",
    "settle_from": [
-    "AI Report"
+    "AI Report",
+    "Nothing To Do (AI)"
+   ],
+   "settle_from_ends": [
+    "Nothing To Do (AI)"
    ]
   },
   "SEO Agent \u2014 Audit Scheduler": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Audit)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
@@ -182,9 +208,15 @@
    "settle": "Settle Run Ledger (Audit)",
    "settle_from": [
     "Audits Started"
-   ]
+   ],
+   "settle_from_ends": []
   },
   "SEO Agent \u2014 Backlink Monitor": {
+   "ai_nodes": [
+    "Link Analyst",
+    "Outreach Writer"
+   ],
+   "balance": "DFS Balance (BL)",
    "est": {
     "ai": 0.05,
     "dfs": 0.05,
@@ -197,10 +229,16 @@
    "resume": "After Run Ledger (BL)",
    "settle": "Settle Run Ledger (BL)",
    "settle_from": [
-    "BL Report"
+    "BL Report",
+    "Nothing To Do (BL)"
+   ],
+   "settle_from_ends": [
+    "Nothing To Do (BL)"
    ]
   },
   "SEO Agent \u2014 Content Cadence": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Cadence)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
@@ -212,10 +250,24 @@
    "resume": "After Run Ledger (Cadence)",
    "settle": "Settle Run Ledger (Cadence)",
    "settle_from": [
-    "Cadence Note"
+    "Cadence Note",
+    "Nothing To Write",
+    "POST Cadence Note",
+    "Planned Only",
+    "Send Cadence Note"
+   ],
+   "settle_from_ends": [
+    "Nothing To Write",
+    "POST Cadence Note",
+    "Planned Only",
+    "Send Cadence Note"
    ]
   },
   "SEO Agent \u2014 Link Builder": {
+   "ai_nodes": [
+    "Outreach Sequence Writer"
+   ],
+   "balance": "DFS Balance (LB)",
    "est": {
     "ai": 0.3,
     "dfs": 0.05
@@ -227,10 +279,36 @@
    "resume": "After Run Ledger (LB)",
    "settle": "Settle Run Ledger (LB)",
    "settle_from": [
-    "LB Report"
+    "LB Report",
+    "Nothing To Do (LB)"
+   ],
+   "settle_from_ends": [
+    "Nothing To Do (LB)"
    ]
   },
+  "SEO Agent \u2014 Page Watch": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Watch)",
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "measured": "",
+   "mode": "page_watch",
+   "plan": "Watch Plan",
+   "reserve": "Run Ledger Row (Watch)",
+   "resume": "After Run Ledger (Watch)",
+   "settle": "Settle Run Ledger (Watch)",
+   "settle_from": [
+    "Nothing To Watch",
+    "Post Watch Alert",
+    "Watched"
+   ],
+   "settle_from_ends": []
+  },
   "SEO Agent \u2014 Rank Tracker": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Tracker)",
    "est": {
     "ai": 0.0,
     "dfs": 0.15
@@ -242,10 +320,18 @@
    "resume": "After Run Ledger (Tracker)",
    "settle": "Settle Run Ledger (Tracker)",
    "settle_from": [
+    "Nothing To Track",
     "Tracker Report"
+   ],
+   "settle_from_ends": [
+    "Nothing To Track"
    ]
   },
   "SEO Agent \u2014 Site Tracker": {
+   "ai_nodes": [
+    "Site Brief"
+   ],
+   "balance": "DFS Balance (Site)",
    "est": {
     "ai": 0.03,
     "dfs": 0.01
@@ -257,7 +343,11 @@
    "resume": "After Run Ledger (Site)",
    "settle": "Settle Run Ledger (Site)",
    "settle_from": [
+    "Nothing To Track (Site)",
     "Site Report"
+   ],
+   "settle_from_ends": [
+    "Nothing To Track (Site)"
    ]
   }
  },

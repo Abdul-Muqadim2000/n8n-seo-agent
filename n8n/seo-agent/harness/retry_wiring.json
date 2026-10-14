@@ -552,6 +552,13 @@
     "name": "POST Growth Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Pulse": [
@@ -573,6 +580,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Run AI Retries",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Pulse)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -633,6 +647,13 @@
     "name": "Run AI Retries",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (AI)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 API": [],
@@ -642,6 +663,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Fetch Sitemap (Schedule)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Audit)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -758,6 +786,13 @@
     "name": "POST BL Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (BL)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Console Alerts": [
@@ -776,6 +811,13 @@
     "name": "POST Cadence Note",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Cadence)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Error Handler": [
@@ -838,6 +880,13 @@
     "name": "POST LB Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (LB)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Link Builder API": [],
@@ -853,6 +902,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "Post Watch Alert",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Watch)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -889,6 +945,13 @@
     "name": "POST Progress",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Tracker)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Reply Reader": [
@@ -1006,6 +1069,13 @@
     "name": "POST Site Report",
     "retryOnFail": false,
     "waitBetweenTries": null
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Test Runner": []

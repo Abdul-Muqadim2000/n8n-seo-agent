@@ -1,0 +1,334 @@
+{
+ "crawl": {
+  "default_request": 200,
+  "fields": [
+   "crawl_cost",
+   "dataforseo_estimated_usd"
+  ],
+  "ledger_nodes": [
+   "Build Audit Report",
+   "Build Full Report",
+   "Build Keyword File",
+   "Build Ladder Report",
+   "Build Word File"
+  ],
+  "pages_node": "Check Crawl",
+  "quote_node": "Start Crawl"
+ },
+ "free_only": {
+  "reserves": 0,
+  "source": "v5/code/Monitor_Ledger_Row.js"
+ },
+ "monitors": {
+  "SEO Agent \u2014 AI Growth": {
+   "ai_nodes": [
+    "AI Outreach Writer"
+   ],
+   "balance": "DFS Balance (Growth)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.55,
+    "dfs": 0.05
+   },
+   "settle": "Settle Run Ledger (Growth)",
+   "settle_from": [
+    "Growth Report",
+    "Nothing To Do (Growth)"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Growth"
+  },
+  "SEO Agent \u2014 AI Pulse": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Pulse)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.004,
+    "dfs": 0.08
+   },
+   "settle": "Settle Run Ledger (Pulse)",
+   "settle_from": [
+    "Nothing To Do (Pulse)",
+    "Pulse Alerts"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Pulse"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker": {
+   "ai_nodes": [
+    "AI Brief",
+    "Answer Analyst",
+    "Prompt Writer"
+   ],
+   "balance": "DFS Balance (AI)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.27,
+    "dfs": 0.6
+   },
+   "settle": "Settle Run Ledger (AI)",
+   "settle_from": [
+    "AI Report",
+    "Nothing To Do (AI)"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "AI"
+  },
+  "SEO Agent \u2014 Audit Scheduler": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Audit)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "settle": "Settle Run Ledger (Audit)",
+   "settle_from": [
+    "Audits Started"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Audit"
+  },
+  "SEO Agent \u2014 Backlink Monitor": {
+   "ai_nodes": [
+    "Link Analyst",
+    "Outreach Writer"
+   ],
+   "balance": "DFS Balance (BL)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.05,
+    "dfs": 0.05,
+    "dfs_full": 0.45
+   },
+   "settle": "Settle Run Ledger (BL)",
+   "settle_from": [
+    "BL Report",
+    "Nothing To Do (BL)"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "BL"
+  },
+  "SEO Agent \u2014 Content Cadence": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Cadence)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "settle": "Settle Run Ledger (Cadence)",
+   "settle_from": [
+    "Cadence Note",
+    "Nothing To Write",
+    "POST Cadence Note",
+    "Planned Only",
+    "Send Cadence Note"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Cadence"
+  },
+  "SEO Agent \u2014 Link Builder": {
+   "ai_nodes": [
+    "Outreach Sequence Writer"
+   ],
+   "balance": "DFS Balance (LB)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.3,
+    "dfs": 0.05
+   },
+   "settle": "Settle Run Ledger (LB)",
+   "settle_from": [
+    "LB Report",
+    "Nothing To Do (LB)"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "LB"
+  },
+  "SEO Agent \u2014 Page Watch": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Watch)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.0
+   },
+   "settle": "Settle Run Ledger (Watch)",
+   "settle_from": [
+    "Nothing To Watch",
+    "Post Watch Alert",
+    "Watched"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Watch"
+  },
+  "SEO Agent \u2014 Rank Tracker": {
+   "ai_nodes": [],
+   "balance": "DFS Balance (Tracker)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.0,
+    "dfs": 0.15
+   },
+   "settle": "Settle Run Ledger (Tracker)",
+   "settle_from": [
+    "Nothing To Track",
+    "Tracker Report"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Tracker"
+  },
+  "SEO Agent \u2014 Site Tracker": {
+   "ai_nodes": [
+    "Site Brief"
+   ],
+   "balance": "DFS Balance (Site)",
+   "dead_ends": [],
+   "est": {
+    "ai": 0.03,
+    "dfs": 0.01
+   },
+   "settle": "Settle Run Ledger (Site)",
+   "settle_from": [
+    "Nothing To Track (Site)",
+    "Site Report"
+   ],
+   "settle_writes": [
+    "ai_usd",
+    "cost_basis",
+    "cost_mode",
+    "dfs_usd",
+    "estimated_usd",
+    "measured_usd",
+    "settled_usd",
+    "status"
+   ],
+   "tag": "Site"
+  }
+ },
+ "open_ends": [],
+ "page_watch": {
+  "est": {
+   "ai": 0.0,
+   "dfs": 0.0
+  },
+  "in_ledger": true
+ },
+ "settle": {
+  "ai_calls": 11,
+  "ai_nodes": [
+   "Competitor Analyzer",
+   "Content Reviewer",
+   "Copywriter",
+   "Critic",
+   "Editor",
+   "Keyword Relevance",
+   "Keyword Seeds",
+   "Ladder Keyword Relevance",
+   "Site Describer",
+   "Strategy Brief",
+   "Verdict Agent"
+  ],
+  "ends": [
+   "Build Audit Report",
+   "Build Full Report",
+   "Build Keyword File",
+   "Build Ladder Report",
+   "Build Word File"
+  ],
+  "node": "Run Ledger Settle",
+  "prices_every_branch": true,
+  "writes": [
+   "ai_usd",
+   "cost_basis",
+   "cost_mode",
+   "dfs_usd",
+   "estimated_usd",
+   "measured_usd",
+   "settled_usd",
+   "status"
+  ]
+ }
+}

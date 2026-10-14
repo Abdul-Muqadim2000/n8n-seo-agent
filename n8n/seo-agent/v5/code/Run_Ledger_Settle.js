@@ -4,6 +4,12 @@
 // stated no closer than "$1.6-3.0". The report builders now price every Claude call from the characters its prompt really interpolated, the
 // characters it answered with and the thinking budget of its effort level (v5/code/_cost_cal.js, on `run_ledger.ai_cost`), and this node
 // writes that figure, the measured DataForSEO cost, the split and the one line that says which half is which.
+//
+// R33 (2026-10-14, FIX_PLAN §3.13): that pricing reached only the five report builders, so every other branch settled its RESERVATION —
+// `describe` (exec 591) settled $0.06 where its own Haiku node reported 4,874 / 1,306 tokens = $0.0114, with `ai_measured: false` and
+// "this branch priced no model call of its own". The same per-call pricing now runs HERE, over this run's own Claude nodes, so `describe`,
+// `track`, `profile`, `published`, `checkin` and `case_study` settle what they used. R31: a run in which no model node ran at all settles
+// **nothing** for Claude instead of the figure it reserved (CC.aiRun).
 /*__COST_CAL__*/
 const ENDS = __ENDS__;   // the nodes that carry run_ledger (the five report builders), written in at build time
 const first = (name) => { try { const it = $(name).first(); return (it && it.json) || null; } catch (e) { return null; } };
@@ -14,18 +20,32 @@ for (const n of ENDS) { const j = first(n); if (j && j.run_ledger) { led = j.run
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const r4 = (v) => +Number(num(v) || 0).toFixed(4);
 
-// ---- Claude: the per-call figure where the run produced one, otherwise the reservation (and it says so) ----
-const fig = led && led.ai_cost ? led.ai_cost : null;
+// ---- Claude: this run's own calls, priced from what the run can see ----
+// R33: the block below is written in by build_v4.py section 59 — the same call table the report builders use, baked from the real model
+// nodes, so a branch that ends anywhere else still prices every Claude node that ran in it.
+let __ownAi = null, __aiRan = [], __aiChecked = 0;
+/*__RUN_AI_COST__*/
 // Part of a content run IS measured (the Sonnet calls report usage) while its three streaming Opus nodes can only be estimated, so the
 // run figure's own split travels through rather than the whole amount being labelled one or the other.
-const ai = fig && (num(fig.calls) > 0)
-  ? { usd: r4(fig.usd), measured: fig.estimated === false, measured_usd: r4(fig.measured_usd), basis: String(fig.basis || '') }
-  : { usd: r4(row.est_usd), measured: false, measured_usd: 0, basis: 'the per-mode reservation: this branch priced no model call of its own' };
+const fig = (led && led.ai_cost && num(led.ai_cost.calls) > 0) ? led.ai_cost : (__ownAi && num(__ownAi.calls) > 0 ? __ownAi : (led && led.ai_cost) || null);
+const ai = CC.aiRun({ figure: fig, reserved: row.est_usd, ran: __aiRan, checked: __aiChecked });
 
-// ---- DataForSEO: measured whenever a paid node answered with a cost, otherwise the reservation ----
-const dfsM = !!(led && num(led.dataforseo_usd) != null && num(led.dataforseo_calls) > 0);
-const dfs = { usd: dfsM ? r4(led.dataforseo_usd) : r4(row.dfs_est_usd), measured: dfsM,
-  basis: dfsM ? 'the cost every DataForSEO task reported' : 'the per-mode reservation: no DataForSEO task reported a cost in this run' };
+// ---- DataForSEO: measured whenever a paid node answered with a cost, except the crawl, which is only ever quoted ----
+// R32 (2026-10-14, FIX_PLAN §3.13): the on_page crawl is billed for the pages it crawls and DataForSEO reports only the quote for the
+// pages it was ASKED for, so the report builders price it pro rata (CC.crawlCost) and hand the estimated part over as
+// `run_ledger.dataforseo_estimated_usd`. Everything else in the figure is the cost each task reported.
+// R31's shape on the DataForSEO side: a run whose ledger says no paid node ran spent nothing, and settles nothing — the reservation is
+// only fallen back on where this branch carries no ledger at all and the run therefore cannot know.
+const dfsKnown = !!(led && num(led.dataforseo_calls) != null);
+const dfsM = dfsKnown && num(led.dataforseo_calls) > 0 && num(led.dataforseo_usd) != null;
+const dfsEst = dfsM ? r4(led.dataforseo_estimated_usd) : 0;
+const crawl = (led && led.crawl_cost) || null;
+const dfs = { usd: dfsM ? r4(led.dataforseo_usd) : (dfsKnown ? 0 : r4(row.dfs_est_usd)), measured: dfsKnown && dfsEst <= 0,
+  measured_usd: dfsM ? Math.max(0, r4(r4(led.dataforseo_usd) - dfsEst)) : 0,
+  basis: dfsM
+    ? ('the cost every DataForSEO task reported' + (dfsEst > 0 && crawl ? '; the crawl is priced from the pages it crawled — ' + String(crawl.basis || '') : ''))
+    : dfsKnown ? 'no DataForSEO call ran in this run, so nothing is settled against the $' + r4(row.dfs_est_usd).toFixed(4) + ' it reserved'
+    : r4(row.dfs_est_usd) > 0 ? 'the per-mode reservation: this branch carries no ledger of its own' : 'no DataForSEO money was reserved or spent' };
 
 // R28 (2026-10-14, FIX_PLAN §3.12): the engine's own "measured" DataForSEO figures did not reconcile with the account — +73% in one window
 // of the 2026-10-14 run, +11.6% in another. Every reservation now records the free `appendix/user_data` balance reading (*DFS Balance* ->
@@ -48,8 +68,11 @@ return [{ json: {
   cost_basis: (dfs_day.comparable && !dfs_day.within ? split.cost_basis + '. Day check: ' + dfs_day.basis : split.cost_basis).slice(0, 500),
   dfs_balance: +Number(row.dfs_balance || 0).toFixed(6), dfs_day_reconciled: dfs_day.comparable && dfs_day.within,
   dfs_day: dfs_day,
+  // R32: what the crawl was quoted, what it crawled and what it was priced at — the three numbers behind the estimated half
+  dfs_estimated_usd: dfsEst, crawl_cost: crawl,
   // for the execution, the callback and anyone reading it: never stored as if it were measured
   ai_calls: fig ? Number(fig.calls) || 0 : 0, ai_in_tokens: fig ? Number(fig.in_tokens) || 0 : 0, ai_out_tokens: fig ? Number(fig.out_tokens) || 0 : 0,
-  ai_estimated: !ai.measured, ai_basis: ai.basis, ai_by_node: fig ? fig.by_node : {}, ai_models: fig ? fig.models : {},
+  ai_estimated: !ai.measured, ai_basis: ai.basis, ai_source: ai.source, ai_nodes_ran: ai.ran, ai_nodes_checked: ai.checked,
+  ai_by_node: fig ? fig.by_node : {}, ai_models: fig ? fig.models : {},
   ai_streaming_nodes: fig ? (fig.streaming_nodes || []) : [],
 } }];

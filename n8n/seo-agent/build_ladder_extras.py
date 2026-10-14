@@ -140,7 +140,12 @@ N.append(node('Run Ledger Row (Tracker)', 'n8n-nodes-base.code', 2, {'jsCode': _
 N.append(node('Reserve Run Ledger (Tracker)', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [1670, 480], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
 N.append(node('Ledger Settle (Tracker)', 'n8n-nodes-base.code', 2, {'jsCode': _lrs}, [1450, 640], executeOnce=True))
 N.append(node('Settle Run Ledger (Tracker)', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
-    [('run_id', '={{ $execution.id }}'), ('status', 'reserved')], {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}'}),
+    [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
+    # R31 (2026-10-14, FIX_PLAN §3.13): the honest split the settle computes (G23) never reached the row here — only the status and two
+    # figures were written back. The same columns build_monitors.py writes are written now.
+    {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}', 'ai_usd': '={{ $json.ai_usd }}',
+     'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
+     'cost_basis': '={{ $json.cost_basis }}'}),
     [1670, 640], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
 for a, b in [('Tracker Plan', 'Ensure Run Ledger (Tracker)'), ('Ensure Run Ledger (Tracker)', 'Run Ledger Row (Tracker)'), ('Run Ledger Row (Tracker)', 'Reserve Run Ledger (Tracker)'),
              ('Tracker Report', 'Ledger Settle (Tracker)'), ('Ledger Settle (Tracker)', 'Settle Run Ledger (Tracker)')]:
@@ -148,11 +153,13 @@ for a, b in [('Tracker Plan', 'Ensure Run Ledger (Tracker)'), ('Ensure Run Ledge
 LEDGER_WIRING['SEO Agent — Rank Tracker'] = {'mode': 'rank_tracker', 'plan': 'Tracker Plan', 'reserve': 'Run Ledger Row (Tracker)',
                                              'settle': 'Settle Run Ledger (Tracker)', 'settle_from': ['Tracker Report'], 'measured': '', 'est': LEDGER_EST['rank_tracker'],
                                              'resume': 'After Run Ledger (Tracker)'}   # R17 (2026-10-14): hands Tracker Plan's items back
+write(wf('SEOagentTracker1', 'SEO Agent — Rank Tracker', N, C), 'SEO_Agent_Rank_Tracker.json')
+# R31 (2026-10-14): written AFTER the workflow, because ledger_mainline() fills `ai_nodes` (the Claude nodes the settle checks) and
+# `balance` (the free account reading) into the wiring entry at write time.
 _lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
 _lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}
 _lwj.setdefault('monitors', {}).update(LEDGER_WIRING)
 json.dump(_lwj, open(_lw9, 'w'), indent=1, sort_keys=True)
-write(wf('SEOagentTracker1', 'SEO Agent — Rank Tracker', N, C), 'SEO_Agent_Rank_Tracker.json')
 # harness shim (S47): the results-page kit as a runnable script, one call per item
 os.makedirs(CODE, exist_ok=True)
 open(os.path.join(CODE, '_rank_serp.js'), 'w').write(

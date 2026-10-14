@@ -4881,6 +4881,7 @@ log('What the second re-rating found in the drafts, the marks and the quotes (20
 # =============================================================================
 import retry_lint as _rl55
 from ladder_common import ALERT_WEBHOOK_PLACEHOLDER as _PH55, LEDGER_EST as _EST55
+from ladder_common import DFS_BALANCE_URL as _BALANCE_URL55   # R32 (section 59): the one free DataForSEO endpoint, read on the ledger chain
 
 # ---------- A. R28 (a): one task, one cost ----------
 _DFS_ONCE55 = r"""    const j = (it && it.json) || {}; let c = 0;
@@ -4958,6 +4959,10 @@ _SUBNODE55 = ('lmChat', 'outputParser', 'memory', 'embeddings', 'toolWorkflow', 
 def _subnode55(n): return any(k.lower() in n['type'].lower() for k in _SUBNODE55)
 def _paid55(n):
     if _subnode55(n): return False
+    # R32 (2026-10-14, section 59): the one free DataForSEO endpoint. `appendix/user_data` is the account balance, costs nothing and is
+    # read ON the ledger chain (between Ensure and Row), so it is the single node that may carry the DataForSEO credential upstream of
+    # the reservation. The URL is checked, not the name, so a paid node cannot slip through by being called "DFS Balance".
+    if n['type'] == 'n8n-nodes-base.httpRequest' and str(n['parameters'].get('url') or '') == _BALANCE_URL55: return False
     if n['type'] == '@n8n/n8n-nodes-langchain.agent': return True       # a model call on the main path
     if n['type'] == 'n8n-nodes-base.executeWorkflow': return True       # it starts a run that spends
     for c in (n.get('credentials') or {}).values():
@@ -5026,7 +5031,9 @@ def _r17_r29_checks():
     for wname55, wiring55 in sorted((lw55.get('monitors') or {}).items()):
         assert wname55 in files55, 'R17: no generated workflow called ' + wname55
         _check_ledger_order55(files55[wname55], wiring55); checked55 += 1
-    assert checked55 == 9, 'R17: ' + str(checked55) + ' scheduled workflows checked, expected 9'
+    # R32's companion (section 59): Page Watch joined the chain, so it is ten — the nine that spend plus the daily watch, which keeps a
+    # $0 row so the guard and the day's reconciliation can see that it ran at all.
+    assert checked55 == 10, 'R17: ' + str(checked55) + ' scheduled workflows checked, expected 10 (the nine of R17 plus Page Watch)'
     hits55 = _secret_scan55([os.path.join(HERE0, 'workflows'), os.path.join(HERE0, 'harness', 'code_v4')])
     assert not hits55, 'R29: a secret reached the generated files:\n  ' + '\n  '.join(hits55)
     # R30 (2026-10-14): a shape scan only catches the secrets we thought of. The alert channel is checked positively as well — what is
@@ -5450,6 +5457,183 @@ sticky("""### An answer that arrived with HTTP 200 and was still a failure (R18 
 log('An answer that arrived with HTTP 200 and was still a failure (2026-10-14, FIX_PLAN §3.12 R18 / R19 / R24): the in-200 retry rule moved out of the AI path into one kit (v5/code/_dfs_retry.js) that every DataForSEO and Search Console gate uses — the SERP, facts and keyword-data gates now fire on ANY task error (40101 passed the 50000-only test of section 25 twice in exec 549), each pauses and re-sends once, and the audit re-sends the URL inspections Google failed (31 of 45 in exec 550) unless a second attempt cannot help; where the retry fails too the evidence is marked unavailable and the keyword verdict is NOT_CHECKED with no score, no expected visits and no time to rank (a feasibility verdict on a SERP nobody saw is worse than none); every indexing finding carries how many pages Google answered for, the count is stored on the finding row (seo_audit_findings.checked), and the diff prints "not compared: the sample moved" instead of a delta when the two counts came from samples more than 20% apart; and a technical audit emits no Schema finding at all (it reads only the crawler\'s yes/no flag), naming the flag count in not_assessed, so the report can no longer say three different things about schema')
 
 # =============================================================================
+# 59. A NUMBER THE SYSTEM REPORTS ABOUT ITSELF IS THE NUMBER THAT HAPPENED
+#     (2026-10-14, system review FIX_PLAN.md §3.13 R31 / R32 / R33; evidence docs/system-review-2026-10-11/LIVE_CHECK_R17-R30_2026-10-14.md)
+#     The live check of R17-R30 cost $0.069 and found three ways the engine still told itself a number that was not the one that happened.
+#     R28 had just made a task count once and made the Keyword Check settle what it reports ($0.024 settled against $0.024 of balance
+#     movement); these are the three places the same rule had not reached.
+#     * R32 **the crawl settled the price it was QUOTED, labelled "measured".** Audit 588 settled `dfs_usd 0.09 measured` — what
+#       DataForSEO quotes when an on_page task is created for the **200 pages it was asked for** — while **47** were crawled and the
+#       account fell **$0.031950**: +181%. DataForSEO bills a crawl for the work it does and never reports that final amount per task
+#       (every later answer repeats the creation quote), so a run cannot measure it. What the run does know is the quote, the pages it
+#       asked for and the pages the crawl itself reported — the figure is priced pro rata from those three (CC.crawlCost), labelled
+#       **ESTIMATED**, and the three numbers travel in its basis. The rest of the DataForSEO money is still the cost each task reported,
+#       so the settled row now carries a measured half and an estimated half instead of one word for both.
+#     * R31 **a free run settled money it never spent.** The `free_only` backlink check of exec 586 reserved $0.05 Claude + $0.45
+#       DataForSEO and settled **$0.05 of Claude** although no model node ran at all (`Link Analyst` had an empty queue), while telling
+#       the caller `cost_usd: 0` — the ledger and the customer-facing figure said different things about the same run. Two halves: a
+#       `free_only` site now reserves **nothing** (it calls no paid API and no model), and every monitor settle knows its own Claude
+#       nodes (written in at build time from the workflow itself) and settles **$0** when none of them ran, saying so in the row.
+#     * R33 **`describe` settled its reservation while its own node reported its tokens.** Exec 591 settled the **$0.06** it reserved
+#       where *Claude — Site Describer* reports 4,874 in / 1,306 out ≈ **$0.0114** — 5.3x — with `ai_measured: false` and "this branch
+#       priced no model call of its own". G23's per-call pricing only ever ran inside the five report builders, so `describe`, `track`,
+#       `profile`, `published`, `checkin` and `case_study` never priced anything. The same call table now runs in *Run Ledger Settle*
+#       itself, over whichever Claude nodes ran in this execution, so a reservation is never settled as if it were a measurement.
+#     Also seen in the same check, and fixed here because they are the same rule:
+#     * **only main-workflow runs took a balance reading**, so a Monday of monitor spend reconciled against nothing. Every scheduled run
+#       now takes the free `appendix/user_data` reading on its own ledger chain (ladder_common.ledger_mainline; it is the one free
+#       DataForSEO endpoint, so section 55's "nothing paid before the reservation" proof exempts it **by URL**, never by name).
+#     * **Page Watch kept no ledger row at all** — the one workflow invisible to the guard, to the concurrency check and to the day's
+#       reconciliation. It reserves $0 and settles $0 (25 plain GETs), which is exactly the point: the day a check here starts calling a
+#       paid API, the guard already sees the run. The ledger-order proof therefore covers ten workflows now, not nine.
+#     * **the nine rows left `reserved` by the morning run** were R17's old shape (written at the END of a run, never settled) and are
+#       already fixed: today's rows are created before the work and settled after it. What can still leave a row open is a run that
+#       crashes before its settle, and that is what *Release Stale Runs* is for — so this section does not invent a second mechanism; it
+#       checks instead that every workflow's settle is reachable from the far side of its reservation (part D), which is what makes the
+#       stale release the only remaining way to leave one open.
+# =============================================================================
+
+# ---------- A. R32: the crawl is priced from the pages it crawled, and says so ----------
+_CRAWL_PRICE59 = r"""
+// R32 (2026-10-14, FIX_PLAN §3.13): a crawl is billed for the pages it crawls, not for the pages it was asked for. DataForSEO quotes the
+// task when it is created (audit 588: $0.0900 for the 200 pages requested) and repeats that same quote in every later answer about it,
+// while the account fell $0.0320 for the 47 pages the crawl actually did. The quote is therefore not a measurement: the crawl is priced
+// pro rata from what the crawl itself reported and labelled ESTIMATED, with the quote, the pages asked for and the pages crawled in its
+// basis. `dataforseo_estimated_usd` is the part of this run's DataForSEO money that is an estimate; the rest is what each task reported.
+run_ledger.dataforseo_estimated_usd = 0;
+const __crawlQuote = Number(run_ledger.by_node['Start Crawl'] || 0);
+if (__crawlQuote > 0) {
+  let __crawlDone = null, __crawlAsked = 0;
+  try {
+    const __cc = $('Check Crawl').all(); const __cj = (__cc[__cc.length - 1] || {}).json || {};
+    if (__cj.pages_crawled !== undefined && __cj.pages_crawled !== null) __crawlDone = Number(__cj.pages_crawled);
+    __crawlAsked = Number(__cj.crawl_max_pages) || 0;
+  } catch (e) {}
+  if (!__crawlAsked) { try { __crawlAsked = Number($('Normalize Input').first().json.crawl_max_pages) || 0; } catch (e) {} }
+  const __cp = CC.crawlCost({ quoted: __crawlQuote, pages_crawled: __crawlDone, pages_requested: __crawlAsked });
+  run_ledger.crawl_cost = __cp;
+  run_ledger.by_node['Start Crawl'] = __cp.usd;
+  run_ledger.dataforseo_usd = +(run_ledger.dataforseo_usd - __crawlQuote + __cp.usd).toFixed(4);
+  run_ledger.dataforseo_estimated_usd = __cp.usd;   // a quote is never measured money
+}
+"""
+_ledger_nodes59 = sorted(nm for nm in nodes if 'const run_ledger = {' in nodes[nm]['parameters'].get('jsCode', ''))
+assert _ledger_nodes59 == _ledger_nodes55, 'R32: the report builders that carry a run ledger moved since section 55'
+for _n59 in _ledger_nodes59:
+    patch(_n59, "run_ledger.dataforseo_tasks_unidentified = __dfsRepeats.no_id;",
+          "run_ledger.dataforseo_tasks_unidentified = __dfsRepeats.no_id;\n" + _CRAWL_PRICE59)
+    _c59 = code(_n59)
+    assert 'CC.crawlCost(' in _c59 and _c59.index('const CC = (() =>') < _c59.index('CC.crawlCost('), _n59 + ': the cost kit is not in scope where the crawl is priced'
+    assert _c59.index('run_ledger.dataforseo_usd = +run_ledger.dataforseo_usd.toFixed(4);') < _c59.index('CC.crawlCost('), _n59 + ': the crawl is priced before the total exists'
+assert 'crawlCost' in COST_SRC and 'pages_crawled' in COST_SRC, 'R32: the cost kit cannot price a crawl'
+
+# ---------- B. R33: every branch prices its own Claude calls, and a run that called none settles none ----------
+# The same call table the five report builders use (section 51, baked from the real model nodes), run in the settle itself — so the
+# branches that end nowhere near a report builder (`describe`, `track`, `profile`, `published`, `checkin`, `case_study`) stop settling
+# the figure they reserved. `__ownAi` / `__aiRan` / `__aiChecked` are declared in v5/code/Run_Ledger_Settle.js above the placeholder.
+_AI_OWN59 = ("const run_ledger = {};   // R33 (2026-10-14, FIX_PLAN §3.13): this run's own Claude calls, priced exactly as a report builder prices them\n"
+             + AI_COST_JS51.replace('__AI_CALLS_JSON__', json.dumps(_AI_CALLS51))
+             + "__ownAi = run_ledger.ai_cost;\n"
+             + "__aiRan = __costCalls.map(c => String(c.node));     // the Claude nodes that produced something in THIS execution\n"
+             + "__aiChecked = __AI_CALLS.length;                     // and how many this workflow has, so 'none ran' is a measurement, not a guess\n")
+patch('Run Ledger Settle', '/*__RUN_AI_COST__*/', _AI_OWN59)
+_rls59 = code('Run Ledger Settle')
+assert 'CC.aiRun(' in _rls59 and 'CC.runCost(' in _rls59, 'R33: the settle does not price this run\'s own Claude calls'
+assert '__AI_CALLS' in _rls59 and _rls59.index('__AI_CALLS =') < _rls59.index('__aiChecked = __AI_CALLS.length'), 'R33: the call table is used before it is declared'
+assert 'crawl_cost' in _rls59 and 'dfs_estimated_usd' in _rls59, 'R32: the settle does not carry the crawl\'s own figures'
+assert 'aiRun' in COST_SRC and 'no model call ran in this run' in COST_SRC, 'R31: the cost kit cannot settle a run that called no model'
+
+# ---------- C. R31 / R32: what the schedules now do, proved on the generated workflows ----------
+def _r31_checks():
+    """Run after the sub-builds, next to section 55's: every scheduled workflow knows its Claude nodes, takes the free balance reading,
+    and can reach its settle from the far side of its reservation."""
+    lw59 = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    files59 = {w['name']: os.path.join(HERE0, 'workflows', f) for f in os.listdir(os.path.join(HERE0, 'workflows'))
+               if f.endswith('.json') for w in json.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))}
+    out59, open_ends59 = {}, []
+    for wname59, wiring59 in sorted((lw59.get('monitors') or {}).items()):
+        wf59 = json.load(open(files59[wname59], encoding='utf-8'))[0]
+        by59 = {n['name']: n for n in wf59['nodes']}
+        tag59 = wiring59['reserve'][len('Run Ledger Row ('):-1]
+        settle_code59 = 'Ledger Settle (' + tag59 + ')'
+        src59 = by59[settle_code59]['parameters']['jsCode']
+        assert '__AI_NODES__' not in src59, 'R31: ' + wname59 + ' settles without knowing its Claude nodes'
+        assert 'CC.aiRun(' in src59 and 'const CC = (() =>' in src59, 'R31: ' + wname59 + ' does not settle through the cost kit'
+        ai59 = wiring59.get('ai_nodes') or []
+        assert json.dumps(ai59) in src59, 'R31: ' + wname59 + ' baked a different list of Claude nodes than its wiring records'
+        for a59 in ai59: assert a59 in by59, 'R31: ' + wname59 + ' checks a Claude node it does not have: ' + a59
+        # the free balance reading, on the chain, before the row is written
+        bal59 = wiring59.get('balance') or ''
+        assert bal59 in by59, 'R32: ' + wname59 + ' takes no balance reading'
+        assert by59[bal59]['parameters']['url'] == _BALANCE_URL55, 'R32: ' + wname59 + "'s balance node is not the free endpoint"
+        assert by59[bal59].get('onError') == 'continueRegularOutput' and by59[bal59].get('alwaysOutputData'), 'R32: ' + wname59 + "'s balance reading can end the run"
+        c59 = wf59['connections']
+        outs59 = lambda nd: [t['node'] for lst in ((c59.get(nd) or {}).get('main') or []) for t in (lst or [])]
+        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [wiring59['reserve']], \
+            'R32: ' + wname59 + "'s balance reading is not between the ensure and the row"
+        assert "$('" + bal59 + "')" in by59[wiring59['reserve']]['parameters']['jsCode'], 'R32: ' + wname59 + ' does not store the reading on its row'
+        # Every end of the run reaches the settle, so the only way to leave a row `reserved` is a run that crashed (which is what
+        # *Release Stale Runs* is for). Walk forward from the resume node, refusing to pass a node that feeds the settle: anything that
+        # still ends with no outgoing connection is a branch that would finish without settling — the shape that left nine rows open on
+        # 2026-10-14 (every monitor's "Nothing To Do" branch).
+        blocked59 = set(wiring59.get('settle_from') or []) | {settle_code59, wiring59['settle']}
+        reach59, stack59 = {wiring59['resume']}, [wiring59['resume']]
+        while stack59:
+            cur59 = stack59.pop()
+            if cur59 in blocked59: continue
+            for t59 in outs59(cur59):
+                if t59 not in reach59: reach59.add(t59); stack59.append(t59)
+        ends59 = sorted(n for n in reach59 if n in by59 and n not in blocked59 and not outs59(n))
+        assert not ends59, 'R31: ' + wname59 + ' can finish without settling its ledger row: ' + ', '.join(ends59)
+        if ends59: open_ends59.append([wname59, ends59])
+        out59[wname59] = {'tag': tag59, 'ai_nodes': ai59, 'balance': bal59, 'settle': wiring59['settle'],
+                          'settle_from': wiring59['settle_from'], 'est': wiring59['est'],
+                          'settle_writes': sorted((by59[wiring59['settle']]['parameters'].get('columns') or {}).get('value', {}).keys()),
+                          'dead_ends': ends59}
+    json.dump({'monitors': out59,
+               'crawl': {'ledger_nodes': _ledger_nodes59, 'quote_node': 'Start Crawl', 'pages_node': 'Check Crawl',
+                         'fields': ['crawl_cost', 'dataforseo_estimated_usd'], 'default_request': 200},
+               'settle': {'node': 'Run Ledger Settle', 'ai_calls': len(_AI_CALLS51),
+                          'ai_nodes': sorted({c['node'] for c in _AI_CALLS51}),
+                          'ends': _ends51, 'prices_every_branch': True,
+                          'writes': sorted(nodes['Settle Run Ledger']['parameters']['columns']['value'].keys())},
+               'free_only': {'reserves': 0, 'source': 'v5/code/Monitor_Ledger_Row.js'},
+               'page_watch': {'in_ledger': 'SEO Agent — Page Watch' in out59, 'est': _EST55['page_watch']},
+               'open_ends': open_ends59},
+              open(os.path.join(HERE0, 'harness', 'cost_truth.json'), 'w'), indent=1, sort_keys=True)
+    print('cost truth (R31 / R32 / R33): ' + str(len(out59)) + ' scheduled workflows know their Claude nodes and take the free balance reading; '
+          + str(sum(len(v['ai_nodes']) for v in out59.values())) + ' Claude nodes checked before a cent is settled')
+
+# ---------- D. the harness shim learns the two new calls (S69) ----------
+_shim59 = os.path.join(OUT_CODE, '_cost_cal.js')
+_shimsrc59 = open(_shim59, encoding='utf-8').read()
+_NEWCALLS59 = ("  // R31 / R32 (2026-10-14, section 59): the crawl priced from the pages it crawled, and the Claude money a run settles\n"
+               "  if (fn === 'crawlCost') return { json: CC.crawlCost(j.crawl || {}) };\n"
+               "  if (fn === 'aiRun') return { json: CC.aiRun(j.ai_run || {}) };\n")
+assert _shimsrc59.count("  if (fn === 'tables')") == 1, 'R32: the cost shim changed shape'
+open(_shim59, 'w').write(_shimsrc59.replace("  if (fn === 'tables')", _NEWCALLS59 + "  if (fn === 'tables')", 1))
+
+sticky("""### The money a run reports is the money that happened (R31 / R32 / R33, 2026-10-14)
+**A crawl is billed for what it does.** DataForSEO quotes an on_page task when it is created — $0.0900 for the **200 pages asked for** — and repeats that quote in every later answer; audit 588 settled it as *measured* while **47** pages were crawled and the account fell **$0.0320** (+181%). The crawl is priced from the pages the crawl itself reported (`CC.crawlCost`), labelled **ESTIMATED**, with the quote, the request and the pages crawled in its basis. The rest of the DataForSEO figure is still what each task reported, so a settled row carries a measured half and an estimated half.
+**A run that called no model settles nothing.** The `free_only` backlink check settled $0.05 of Claude with no model node in its trace while telling the caller $0. Every monitor settle now knows its own Claude nodes (written in at build time from the workflow) and a free site reserves nothing at all.
+**Every branch prices its own calls.** G23's per-call pricing ran only inside the five report builders, so `describe` settled the $0.06 it reserved where its Haiku node reported 4,874 / 1,306 tokens ($0.0114). The same call table runs in **Run Ledger Settle**: a reservation is a guard, a settlement is a measurement.
+**And the schedules joined the reconciliation:** every scheduled run takes the free `appendix/user_data` reading on its ledger chain, and **Page Watch** keeps a $0 row — free today, visible the day it is not.""",
+    pos('Run Ledger Settle')[0] - 120, pos('Run Ledger Settle')[1] + 200, 1120, 300, 4)
+
+log('The money a run reports is the money that happened (2026-10-14, FIX_PLAN §3.13 R31 / R32 / R33, found by the live check of R17-R30): '
+    'the on-page crawl is priced from the pages it CRAWLED and labelled ESTIMATED instead of settling the quote DataForSEO gives for the '
+    'pages it was asked for (audit 588 settled $0.0900 "measured" for 47 pages of a 200-page request while the account fell $0.0320, +181%); '
+    'a run that called no model settles nothing - every monitor settle is given its own Claude nodes at build time and a free_only site '
+    'reserves no money at all (exec 586 settled $0.05 of Claude with no model node in its 89-node trace while telling the caller $0); and '
+    'Run Ledger Settle prices every Claude node of the run with the same call table the five report builders use, so describe / track / '
+    'profile / published / checkin / case_study settle what they used rather than what they reserved (exec 591: $0.06 settled against '
+    '4,874 / 1,306 reported tokens = $0.0114, 5.3x). Also: every scheduled run takes the free appendix/user_data balance reading on its own '
+    'ledger chain (only main-workflow runs did, so a Monday of monitor spend reconciled against nothing), Page Watch keeps a $0 ledger row '
+    'so the guard and the reconciliation can see it at all, and the ledger-order proof of section 55 now covers ten workflows and exempts '
+    'the free balance endpoint by URL, never by node name')
+
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
@@ -5483,4 +5667,6 @@ for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'b
 
 # section 55 (R17 / R29): both checks need every workflow on disk, so they run here, after the sub-builds
 _r17_r29_checks()
+# section 59 (R31 / R32 / R33): the same, for what the schedules settle and what they read
+_r31_checks()
 

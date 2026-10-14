@@ -8267,9 +8267,10 @@ await guard('the re-rating defects R1..R9', async () => {
   check('R9: the settle writes the MEASURED DataForSEO cost where the run knows it (the two sites\' tasks added up) and keeps the Claude estimate as the settled figure',
     settled.status === 'done' && settled.dfs_usd === 0.1643 && settled.dfs_measured === true && settled.settled_usd === 0.008 && settled.run_id === 'test-exec', JSON.stringify(settled));
   const settledEst = (await run('Ledger Settle (Audit)', [{ json: { ...oneSite, id: 8 } }], { code: 'Ledger_Settle_Audit_' }))[0].json;
+  // R31 (2026-10-14, section 59): $0 is never called an estimate — a figure of nothing says "nothing spent" and carries the reason.
   check('R9 + R28: a workflow with no measured figure settles its own estimate and says so, instead of inventing a number — and the Audit Scheduler\'s estimate is now nothing, because the crawl belongs to the run it spawned',
     settledEst.dfs_usd === 0 && settledEst.dfs_measured === false && settledEst.status === 'done'
-    && /DataForSEO \$0\.0000 ESTIMATED \(this workflow reports no cost of its own\)/.test(settledEst.cost_basis), JSON.stringify(settledEst));
+    && /DataForSEO \$0\.0000 nothing spent \(this workflow reports no cost of its own\)/.test(settledEst.cost_basis), JSON.stringify(settledEst));
   // G23 (2026-10-13) moved the two estimate tables into the shared cost kit (one source for the guard, the settle, the self-correcting
   // figure and the reconciliation) and raised the Keyword Check's DataForSEO reservation to the $0.0254 a check really measured.
   check('R9: the main workflow\'s and the Keyword Check\'s own reservations carry the same two columns',
@@ -8718,12 +8719,17 @@ await guard('G23 cost and G21 delivery', async () => {
     /Claude \$[\d.]+ PARTLY ESTIMATED: \$[\d.]+ measured, \$[\d.]+ estimated/.test(st.cost_basis) && /DataForSEO \$[\d.]+ measured/.test(st.cost_basis), st.cost_basis);
   check('G23: the row carries the estimate keys it was priced on, so the settle can teach the right rolling figures',
     st.cost_mode === 'content|content', st.cost_mode);
-  // a short branch that wrote no report node falls back to its reservation and says so, instead of claiming $0 was measured
+  // R33 (2026-10-14, FIX_PLAN §3.13, build section 59): this check used to read "a branch that priced no model call settles its
+  // reservation". That was the defect: `describe` settled the $0.06 it reserved while its own Haiku node reported its tokens. A run in
+  // which no Claude node ran at all now settles NOTHING for Claude and names how many nodes it checked; the DataForSEO reservation still
+  // stands, because this branch carries no ledger of its own to measure.
   delete store['Build Word File'];
   const shortRun = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
-  check('G23: a branch that priced no model call settles its reservation and says that is what it is — never a measured $0',
-    shortRun.ai_usd === 0.8 && shortRun.ai_measured === false && shortRun.dfs_measured === false && shortRun.measured_usd === 0
-    && shortRun.estimated_usd === 0.84 && /priced no model call/.test(shortRun.ai_basis), JSON.stringify(shortRun));
+  check('G23 + R33: a branch in which no model node ran settles nothing for Claude — never the $0.80 it reserved and never a measured $0 either; it says which nodes it checked',
+    shortRun.ai_usd === 0 && shortRun.ai_source === 'none' && shortRun.ai_nodes_checked >= 11 && shortRun.ai_nodes_ran.length === 0
+    && shortRun.dfs_measured === false && shortRun.measured_usd === 0 && shortRun.estimated_usd === 0.04
+    && /no model call ran in this run/.test(shortRun.ai_basis) && /nothing is settled against the \$0\.8000 it reserved/.test(shortRun.ai_basis),
+    JSON.stringify(shortRun));
   check('G23: seo_run_ledger really has the columns that split a cost (they reach the live table through ladder_common.py + sync_tables.py)',
     ['cost_mode', 'ai_usd', 'measured_usd', 'estimated_usd', 'cost_basis'].every(c => TC.RUN_LEDGER.includes(c)), TC.RUN_LEDGER.join(','));
 
@@ -9458,13 +9464,17 @@ await guard('R17 R28 R29 ledger order, money and secrets', async () => {
 
   // ---------- 4. R17: what the build proved about every scheduled workflow ----------
   const MON = Object.keys(LO.monitors).sort();
-  check('R17: all nine scheduled workflows are covered — the AI Visibility Tracker, the AI Pulse, AI Growth, the Backlink Monitor, the Audit Scheduler, the Link Builder, the Rank Tracker, the Site Tracker and the Content Cadence',
-    MON.length === 9 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker']
+  // R32 (2026-10-14, section 59): Page Watch joined them — free today (25 plain GETs), and the one workflow the guard and the day's
+  // reconciliation could not see at all.
+  check('R17: all ten scheduled workflows are covered — the AI Visibility Tracker, the AI Pulse, AI Growth, the Backlink Monitor, the Audit Scheduler, the Link Builder, the Rank Tracker, the Site Tracker, the Content Cadence and Page Watch',
+    MON.length === 10 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch']
       .every(n => MON.some(m => m.endsWith(n))), JSON.stringify(MON));
   const badChain = MON.filter(w => {
     const c = LO.monitors[w];
+    // R32: the free `appendix/user_data` reading sits between the ensure and the row, so a scheduled run's spend reaches the day's
+    // reconciliation too (S69 checks the endpoint itself and that it feeds the row).
     return !eq(c.plan_out, ['Ensure Run Ledger (' + c.tag + ')'])
-      || !eq(c.ensure_out, ['Run Ledger Row (' + c.tag + ')'])
+      || !eq(c.ensure_out, ['DFS Balance (' + c.tag + ')'])
       || !eq(c.row_out, ['Reserve Run Ledger (' + c.tag + ')'])
       || !eq(c.reserve_out, [c.resume])
       || !c.resume_out.length;
@@ -9764,6 +9774,213 @@ await guard('r18-r19-r24-failures-inside-http-200', async () => {
   check('R19: and the delivered report prints "not compared" with the reason where it used to print "15 → 4 affected"',
     /not compared: 4 now against 15 before/.test(rep66) && !/15 → 4 affected/.test(rep66) && dsh66.sample_moved === 1,
     (rep66.match(/still open[\s\S]{0,320}/) || [''])[0].slice(0, 320));
+});
+
+// ===================================================================================
+// S69 R31 / R32 / R33 (2026-10-14, system review FIX_PLAN.md §3.13; evidence
+// docs/system-review-2026-10-11/LIVE_CHECK_R17-R30_2026-10-14.md §3 and §4)
+// A number the system reports about itself has to be the number that happened. Three places where it still was not, each check written
+// from the live shapes of that evening: audit 588 settled the $0.0900 **quote** for a 200-page request as "measured" while 47 pages were
+// crawled and the account fell $0.0320 (+181%); the free backlink check 586 settled $0.0500 of Claude with no model node anywhere in its
+// 89-node trace while telling the caller `cost_usd: 0`; and `describe` 591 settled the $0.06 it reserved where *Claude — Site Describer*
+// reported 4,874 in / 1,306 out = $0.0114 (5.3x). Every check below fails on the build of that evening.
+// ===================================================================================
+await guard('R31 R32 R33 the money a run reports is the money that happened', async () => {
+  reset(); const SN = 'S69 R31 R32 R33 — a crawl is priced from the pages it crawled, a run that called no model settles nothing, and every branch prices its own Claude calls';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const near = (a, b, tol) => Math.abs(Number(a) - Number(b)) <= (tol === undefined ? 0.0002 : tol);
+  const CT = require('./cost_truth.json');
+  const kit69 = async (j) => (await run('Cost Kit', [{ json: j }], { code: '_cost_cal' }))[0].json;
+  const fs69 = require('fs'), path69 = require('path');
+  const CODE69 = process.env.CODE_DIR || path69.join(__dirname, 'code');
+  const srcOf69 = (f) => fs69.readFileSync(path69.join(CODE69, f), 'utf8');
+
+  // ---------- 1. R32: a crawl is billed for what it does, and the quote is not a measurement ----------
+  // The real shape of audit 588: `Start Crawl` quoted $0.0900 for max_crawl_pages 200, `Check Crawl` reported 47 crawled, the account
+  // fell $0.031950. The engine used to settle the quote and call it measured.
+  const LIVE_QUOTE = 0.09, LIVE_ASKED = 200, LIVE_DONE = 47, LIVE_ACCOUNT = 0.03195;
+  const c47 = await kit69({ call: 'crawlCost', crawl: { quoted: LIVE_QUOTE, pages_crawled: LIVE_DONE, pages_requested: LIVE_ASKED } });
+  console.log('   crawl 47/200 ->', JSON.stringify(c47));
+  check('R32: the crawl of audit 588 is priced from the 47 pages it crawled, not from the 200 it asked for — $0.0212 instead of the $0.0900 quote',
+    c47.applies === true && near(c47.usd, +(LIVE_QUOTE * LIVE_DONE / LIVE_ASKED).toFixed(4)) && c47.usd < LIVE_QUOTE
+    && c47.pages_crawled === 47 && c47.pages_requested === 200 && c47.quoted === 0.09, JSON.stringify(c47));
+  check('R32: and it is five times closer to the money than the quote was (the account fell $0.0320 for that crawl; the quote was +181%)',
+    Math.abs(c47.usd - LIVE_ACCOUNT) < Math.abs(LIVE_QUOTE - LIVE_ACCOUNT) / 4, JSON.stringify({ priced: c47.usd, quote: LIVE_QUOTE, account: LIVE_ACCOUNT }));
+  check('R32: it is labelled an ESTIMATE and its basis carries all three numbers, because DataForSEO never reports what it finally charged for the task',
+    c47.estimated === true && /\$0\.0900/.test(c47.basis) && /200 pages/.test(c47.basis) && /crawled 47/.test(c47.basis)
+    && /ESTIMATED/.test(c47.basis), c47.basis);
+  const cFull = await kit69({ call: 'crawlCost', crawl: { quoted: LIVE_QUOTE, pages_crawled: 200, pages_requested: 200 } });
+  check('R32: a crawl that really did every page it asked for keeps the whole quote — and is still an estimate, never "measured"',
+    cFull.usd === LIVE_QUOTE && cFull.estimated === true, JSON.stringify(cFull));
+  const cOver = await kit69({ call: 'crawlCost', crawl: { quoted: LIVE_QUOTE, pages_crawled: 260, pages_requested: 200 } });
+  check('R32: a page count above the request cannot price the crawl above its quote',
+    cOver.usd === LIVE_QUOTE && cOver.pages_crawled === 200, JSON.stringify(cOver));
+  const cUnknown = await kit69({ call: 'crawlCost', crawl: { quoted: LIVE_QUOTE, pages_requested: 200 } });
+  check('R32: when the crawl never said how far it got, the quote stands and the row says that is what it is — nothing is invented downwards either',
+    cUnknown.usd === LIVE_QUOTE && cUnknown.estimated === true && cUnknown.pages_crawled === null && /never reported how many pages/.test(cUnknown.basis),
+    JSON.stringify(cUnknown));
+  const cNone = await kit69({ call: 'crawlCost', crawl: { quoted: 0, pages_crawled: 0, pages_requested: 200 } });
+  check('R32: a run with no crawl in it prices no crawl', cNone.applies === false && cNone.usd === 0, JSON.stringify(cNone));
+  check('R32: every report builder that carries a run ledger prices the crawl that way, from the pages `Check Crawl` reported',
+    CT.crawl.ledger_nodes.length === 5 && CT.crawl.quote_node === 'Start Crawl' && CT.crawl.pages_node === 'Check Crawl'
+    && CT.crawl.ledger_nodes.every(n => {
+      const s = srcOf69(n.replace(/[^A-Za-z0-9_.-]+/g, '_') + '.js');
+      return /CC\.crawlCost\(/.test(s) && /run_ledger\.by_node\['Start Crawl'\]/.test(s) && /\$\('Check Crawl'\)/.test(s)
+        && /run_ledger\.dataforseo_estimated_usd/.test(s);
+    }), JSON.stringify(CT.crawl));
+
+  // the settle carries that split: the crawl's money is the estimated half, the rest is what each task reported
+  const crawlFig = { quoted: 0.09, usd: 0.0212, pages_crawled: 47, pages_requested: 200, estimated: true, applies: true,
+    basis: 'the crawl was quoted $0.0900 for the 200 pages it asked for and crawled 47' };
+  mock('Run Ledger Row', [{ json: { run_id: 'test-exec', mode: 'audit', est_usd: 0, dfs_est_usd: 0.09, cost_mode: 'site_audit|crawl', dfs_balance: 0 } }]);
+  mock('Rate Limit', [{ json: { mode: 'audit', domain: 'techand.ai' } }]);
+  mock('Build Audit Report', [{ json: { run_ledger: { dataforseo_usd: 0.0212, dataforseo_calls: 7, dataforseo_tasks: 1, dataforseo_tasks_repeated: 0,
+    dataforseo_estimated_usd: 0.0212, crawl_cost: crawlFig, by_node: { 'Start Crawl': 0.0212 } } } }]);
+  const auditSettle = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   audit settle ->', JSON.stringify({ dfs: auditSettle.dfs_usd, measured: auditSettle.dfs_measured, basis: auditSettle.cost_basis }));
+  check('R32: the audit settles the priced crawl and no longer calls it measured — audit 588 stored `dfs_usd 0.09 measured` for $0.0320 of real money',
+    auditSettle.dfs_usd === 0.0212 && auditSettle.dfs_measured === false && auditSettle.measured_usd === 0
+    && auditSettle.estimated_usd === 0.0212 && auditSettle.dfs_estimated_usd === 0.0212, JSON.stringify(auditSettle));
+  check('R32: and the row says in words how that figure was reached, so nobody has to go and find the crawl',
+    /DataForSEO \$0\.0212 ESTIMATED/.test(auditSettle.cost_basis) && /priced from the pages it crawled/.test(auditSettle.cost_basis)
+    && /crawled 47/.test(auditSettle.cost_basis), auditSettle.cost_basis);
+  mock('Build Audit Report', [{ json: { run_ledger: { dataforseo_usd: 0.4094, dataforseo_calls: 19, dataforseo_estimated_usd: 0,
+    by_node: { 'Ranked Keywords': 0.4094 } } } }]);
+  const paidSettle = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  check('R32: a run with no crawl in it is measured exactly as before — the estimated half only appears where a crawl was priced',
+    paidSettle.dfs_usd === 0.4094 && paidSettle.dfs_measured === true && paidSettle.measured_usd === 0.4094
+    && /DataForSEO \$0\.4094 measured/.test(paidSettle.cost_basis), JSON.stringify(paidSettle));
+
+  // ---------- 2. R33: every branch prices its own Claude calls ----------
+  // `describe` (exec 591): *Claude — Site Describer* reported 4,874 prompt / 1,306 completion tokens = $0.0114 at Haiku 4.5's prices,
+  // and the row settled the $0.06 the mode reserves. The prompt below is built to the same size, so the figure lands on the same cent.
+  reset();
+  const TEMPLATE69 = CT.settle.ai_calls > 0 ? 1881 : 0;   // the Site Describer prompt template, baked from the real node
+  const FIELDS69 = { domain: 'techand.ai', page_title: 'Tech&', site_pages: [] };
+  const fixed69 = TEMPLATE69 + FIELDS69.domain.length + FIELDS69.page_title.length + JSON.stringify(FIELDS69.site_pages).length;
+  mock('Site Pages', [{ json: { ...FIELDS69, site_text: 'x'.repeat(18031 - fixed69) } }]);
+  mock('Site Describer', [{ json: { output: 'y'.repeat(4832) } }]);          // 1,306 tokens of answer
+  mock('Load Cost Calibration', [{ json: {} }]);
+  mock('Run Ledger Row', [{ json: { run_id: 'test-exec', mode: 'site_description', est_usd: 0.06, dfs_est_usd: 0, cost_mode: 'describe|', dfs_balance: 0 } }]);
+  mock('Rate Limit', [{ json: { mode: 'site_description', domain: 'techand.ai' } }]);
+  const desc69 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  console.log('   describe settle ->', JSON.stringify({ ai: desc69.ai_usd, calls: desc69.ai_calls, in: desc69.ai_in_tokens, out: desc69.ai_out_tokens, src: desc69.ai_source }));
+  check('R33: `describe` settles the call it made, not the $0.06 it reserved — 4,874 in / 1,306 out at Haiku 4.5\'s prices is $0.0114, which is what exec 591 really used',
+    desc69.ai_source === 'priced' && desc69.ai_calls === 1 && desc69.ai_in_tokens === 4874 && desc69.ai_out_tokens === 1306
+    && near(desc69.ai_usd, 0.0114) && desc69.settled_usd === desc69.ai_usd && desc69.ai_usd < 0.02,
+    JSON.stringify({ ai: desc69.ai_usd, in: desc69.ai_in_tokens, out: desc69.ai_out_tokens }));
+  check('R33: the node that made the call is named on the row, and the figure is still labelled an estimate — a Code node cannot read the token usage, so this is characters priced at the list prices',
+    eq(desc69.ai_nodes_ran, ['Site Describer']) && desc69.ai_estimated === true && desc69.ai_measured === false
+    && !!desc69.ai_by_node['Site Describer'] && desc69.ai_by_node['Site Describer'].estimated === true, JSON.stringify(desc69.ai_nodes_ran));
+  check('R33: the settle prices every Claude node of the workflow, not only the five report builders it used to read',
+    CT.settle.node === 'Run Ledger Settle' && CT.settle.ai_calls >= 11 && CT.settle.prices_every_branch === true
+    && CT.settle.ai_nodes.includes('Site Describer') && CT.settle.ends.length === 5
+    && /CC\.aiRun\(/.test(srcOf69('Run_Ledger_Settle.js')) && /CC\.runCost\(/.test(srcOf69('Run_Ledger_Settle.js')),
+    JSON.stringify({ calls: CT.settle.ai_calls, ends: CT.settle.ends.length }));
+  // and a branch that still ends in a report builder keeps that builder's own figure, loops and all
+  mock('Build Word File', [{ json: { run_ledger: { dataforseo_usd: 0.0221, dataforseo_calls: 7, dataforseo_estimated_usd: 0,
+    ai_cost: { usd: 0.587, measured_usd: 0.149, estimated_usd: 0.438, estimated: true, calls: 9, in_tokens: 120000, out_tokens: 30000,
+      by_node: { Copywriter: { usd: 0.3 } }, models: { opus: 0.438 }, streaming_nodes: ['Copywriter'], basis: 'estimated: prompt and answer characters' } } } }]);
+  const page69 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
+  check('R33: a page run still settles the report builder\'s figure (its QA rounds and streaming nodes are counted there), so the new pricing adds branches instead of replacing them',
+    page69.ai_usd === 0.587 && page69.ai_calls === 9 && page69.ai_source === 'priced' && page69.measured_usd === +(0.149 + 0.0221).toFixed(4),
+    JSON.stringify({ ai: page69.ai_usd, calls: page69.ai_calls, m: page69.measured_usd }));
+
+  // ---------- 3. R31: a run that called no model settles nothing, and a free run reserves nothing ----------
+  // Backlink Monitor 586: `free_only: true`, no `Claude — …` node in the 89-node trace (`Link Analyst Jobs` → `Any Link Analyst?` empty),
+  // ledger row 73 `settled_usd 0.05, ai_usd 0.05, estimated_usd 0.05`, callback `cost_usd: 0`.
+  reset();
+  const BLROW = { run_id: 'test-exec', mode: 'backlinks', est_usd: 0.05, dfs_est_usd: 0.45, cost_mode: 'backlinks', status: 'reserved' };
+  mock('Run Ledger Row (BL)', [{ json: { ...BLROW, id: 73 } }]);
+  mock('Parse Backlinks', [{ json: { site_id: 'site_techand-ai', cost_usd: 0 } }]);
+  const free69 = (await run('Ledger Settle (BL)', [{ json: {} }], { code: 'Ledger_Settle_BL_' }))[0].json;
+  console.log('   free backlink settle ->', JSON.stringify(free69));
+  check('R31: the free backlink run settles $0 of Claude — row 73 settled $0.0500 while the callback told the caller $0, for a run with no model node in it at all',
+    free69.settled_usd === 0 && free69.ai_usd === 0 && free69.estimated_usd === 0 && free69.measured_usd === 0 && free69.status === 'done',
+    JSON.stringify(free69));
+  check('R31: and it says why, naming how many Claude nodes it checked — "nothing spent" is a measurement here, not a missing figure',
+    free69.ai_source === 'none' && free69.ai_nodes_checked === 2 && eq(free69.ai_nodes_ran, [])
+    && /no model call ran in this run/.test(free69.ai_basis) && /nothing is settled against the \$0\.0500 it reserved/.test(free69.ai_basis)
+    && /Claude \$0\.0000 nothing spent/.test(free69.cost_basis), free69.cost_basis);
+  check('R31: the workflow\'s own Claude nodes are written into the settle at build time, so the check can never go stale when a node is added or renamed',
+    eq(CT.monitors['SEO Agent — Backlink Monitor'].ai_nodes, ['Link Analyst', 'Outreach Writer'])
+    && !/__AI_NODES__/.test(srcOf69('Ledger_Settle_BL_.js'))
+    && /const AI_NODES = \["Link Analyst", ?"Outreach Writer"\]/.test(srcOf69('Ledger_Settle_BL_.js')),
+    JSON.stringify(CT.monitors['SEO Agent — Backlink Monitor'].ai_nodes));
+  mock('Link Analyst', [{ json: { output: 'the five links worth keeping …' } }]);
+  const paid69 = (await run('Ledger Settle (BL)', [{ json: {} }], { code: 'Ledger_Settle_BL_' }))[0].json;
+  check('R31: a run in which the Link Analyst DID run still settles the per-site reservation and still calls it an estimate (a monitor\'s agents report no token usage)',
+    paid69.ai_usd === 0.05 && paid69.ai_source === 'reserved' && eq(paid69.ai_nodes_ran, ['Link Analyst'])
+    && /Claude \$0\.0500 ESTIMATED/.test(paid69.cost_basis) && /1 model node\(s\) ran \(Link Analyst\)/.test(paid69.cost_basis),
+    JSON.stringify(paid69));
+
+  // the other half: a free_only site reserves nothing in the first place
+  reset();
+  mock('DFS Balance (BL)', [{ json: { tasks: [{ result: [{ money: { balance: 13.847929 } }] }] } }]);
+  mock('BL Plan', [{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'free', free_only: true } }]);
+  const freeRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  console.log('   free reservation ->', JSON.stringify(freeRow));
+  check('R31: a `free_only` backlink check reserves nothing at all — it calls no paid API and no model, and exec 586 held back $0.05 + $0.45 of the day\'s budget for it',
+    freeRow.est_usd === 0 && freeRow.dfs_est_usd === 0 && freeRow.estimated_usd === 0
+    && /free-only site\(s\) reserve nothing/.test(freeRow.cost_basis), JSON.stringify(freeRow));
+  check('R32: and a scheduled run takes the free account reading too, so a Monday of monitor spend can be reconciled against the balance',
+    freeRow.dfs_balance === 13.847929, JSON.stringify({ balance: freeRow.dfs_balance }));
+  mock('BL Plan', [{ json: { site_id: 's2', domain: 'azdan.com', mode: 'light' } }, { json: { site_id: 's3', domain: 'peppol.org', mode: 'full' } }]);
+  const paidRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  check('R31: a paid watch is unchanged — two sites, the light one at $0.05 of DataForSEO and the monthly full one at $0.45',
+    paidRow.est_usd === 0.1 && paidRow.dfs_est_usd === 0.5, JSON.stringify(paidRow));
+  mock('BL Plan', [{ json: { site_id: 's2', domain: 'azdan.com', mode: 'light' } }, { json: { site_id: 'site_techand-ai', domain: 'techand.ai', mode: 'free', free_only: true } }]);
+  const mixedRow = (await run('Run Ledger Row (BL)', [{ json: {} }], { code: 'Run_Ledger_Row_BL_' }))[0].json;
+  check('R31: a run covering one paid site and one free one reserves for the paid one only',
+    mixedRow.est_usd === 0.05 && mixedRow.dfs_est_usd === 0.05 && /1 free-only site\(s\)/.test(mixedRow.cost_basis), JSON.stringify(mixedRow));
+
+  // ---------- 4. what the build proved about the schedules (the three "also seen" items of the live check) ----------
+  const MON69 = Object.keys(CT.monitors).sort();
+  check('R32: all ten scheduled workflows take the free `appendix/user_data` reading on their own ledger chain — until now only main-workflow runs did, so the monitors (where most of the DataForSEO money goes) reconciled against nothing',
+    MON69.length === 10 && MON69.every(w => CT.monitors[w].balance === 'DFS Balance (' + CT.monitors[w].tag + ')'),
+    JSON.stringify(MON69.map(w => CT.monitors[w].balance)));
+  check('R31: every one of them settles through the shared cost kit and knows its own Claude nodes (eight across the ten workflows)',
+    MON69.every(w => Array.isArray(CT.monitors[w].ai_nodes))
+    && MON69.reduce((s, w) => s + CT.monitors[w].ai_nodes.length, 0) === 8
+    && eq(CT.monitors['SEO Agent — AI Visibility Tracker'].ai_nodes, ['AI Brief', 'Answer Analyst', 'Prompt Writer']),
+    JSON.stringify(MON69.map(w => [w, CT.monitors[w].ai_nodes])));
+  check('R31: no branch of a scheduled run can finish without settling its row any more — every "Nothing To Do" end feeds the settle, so a row left `reserved` means a run that crashed, which is what Release Stale Runs is for',
+    eq(CT.open_ends, []) && MON69.every(w => CT.monitors[w].settle_from.length >= 1)
+    && ['SEO Agent — Backlink Monitor', 'SEO Agent — AI Growth', 'SEO Agent — Rank Tracker', 'SEO Agent — Site Tracker']
+      .every(w => CT.monitors[w].settle_from.some(n => /^Nothing To /.test(n))),
+    JSON.stringify(MON69.map(w => [w, CT.monitors[w].settle_from])));
+  check('R31: and every one of them writes the whole split back on the row — the Rank Tracker and the Site Tracker used to store only the status and two figures, so the basis the settle computed was thrown away',
+    MON69.every(w => ['status', 'settled_usd', 'ai_usd', 'dfs_usd', 'cost_mode', 'measured_usd', 'estimated_usd', 'cost_basis']
+      .every(c => CT.monitors[w].settle_writes.includes(c))),
+    JSON.stringify(MON69.map(w => [w, CT.monitors[w].settle_writes.length])));
+  check('R32: Page Watch keeps a ledger row of its own — free today (25 plain GETs), and the one workflow the guard, the concurrency check and the day\'s reconciliation could not see at all',
+    CT.page_watch.in_ledger === true && eq(CT.page_watch.est, { ai: 0, dfs: 0 })
+    && eq(CT.monitors['SEO Agent — Page Watch'].ai_nodes, []), JSON.stringify(CT.page_watch));
+  const watchRow = async (plan) => { reset(); mock('DFS Balance (Watch)', [{ json: {} }]); mock('Watch Plan', plan);
+    return (await run('Run Ledger Row (Watch)', [{ json: {} }], { code: 'Run_Ledger_Row_Watch_' }))[0].json; };
+  const wrow = await watchRow([{ json: { site_id: 'site_techand-ai', domain: 'techand.ai', url: 'https://www.techand.ai/' } }]);
+  check('R32: a Page Watch run reserves $0 and names the site it watched, so the row proves the run without holding back a cent of the budget',
+    wrow.est_usd === 0 && wrow.dfs_est_usd === 0 && wrow.mode === 'page_watch' && wrow.status === 'reserved'
+    && wrow.domain === 'techand.ai' && wrow.dfs_balance === 0, JSON.stringify(wrow));
+  reset();
+  mock('Run Ledger Row (Watch)', [{ json: { run_id: 'test-exec', mode: 'page_watch', est_usd: 0, dfs_est_usd: 0, cost_mode: 'page_watch' } }]);
+  const wsettle = (await run('Ledger Settle (Watch)', [{ json: {} }], { code: 'Ledger_Settle_Watch_' }))[0].json;
+  check('R32: and it settles that row at nothing, measured — a free run is not an estimate',
+    wsettle.status === 'done' && wsettle.settled_usd === 0 && wsettle.dfs_usd === 0 && wsettle.estimated_usd === 0
+    && /nothing spent/.test(wsettle.cost_basis), JSON.stringify(wsettle));
+
+  // ---------- 5. the kit's own rule, stated once ----------
+  const noneRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.05, ran: [], checked: 2 } });
+  const pricedRun = await kit69({ call: 'aiRun', ai_run: { figure: { usd: 0.0114, calls: 1, measured_usd: 0, estimated: true, basis: 'characters' }, reserved: 0.06, ran: ['Site Describer'], checked: 11 } });
+  const reservedRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.05, ran: ['Link Analyst'], checked: 2 } });
+  const blindRun = await kit69({ call: 'aiRun', ai_run: { figure: null, reserved: 0.3, ran: [], checked: 0 } });
+  check('R31 / R33: one rule, in one place — a priced figure wins, a workflow whose model nodes all stayed idle settles nothing, a model that ran without a priced figure keeps the reservation labelled, and a branch with nothing to check falls back exactly as before',
+    noneRun.usd === 0 && noneRun.source === 'none' && pricedRun.usd === 0.0114 && pricedRun.source === 'priced'
+    && reservedRun.usd === 0.05 && reservedRun.source === 'reserved' && blindRun.usd === 0.3 && blindRun.source === 'reserved'
+    && /priced no model call of its own/.test(blindRun.basis),
+    JSON.stringify({ none: noneRun.usd, priced: pricedRun.usd, reserved: reservedRun.usd, blind: blindRun.usd }));
 });
 
 H.report();
