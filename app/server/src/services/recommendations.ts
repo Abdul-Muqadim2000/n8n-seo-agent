@@ -19,6 +19,13 @@ import {
   type SiteSettingsData,
   type TechnicalData,
   urlOnHost,
+  impactFromAuditWeight,
+  impactFromClicks,
+  impactFromPoints,
+  queueOrder,
+  ruleScoreFor,
+  scoreOf,
+  type ScoreInput,
 } from '@seo/shared';
 import type { OrgRow, SiteRow } from '../db/schema';
 import { aiData, alertsData, backlinksData, contentData, rankingsData, searchData, settingsData, technicalData } from './data';
@@ -106,10 +113,21 @@ const PRIORITY_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 const CAT_RANK: Record<RecommendationCategory, number> = { setup: 0, technical: 1, search: 2, content: 3, rankings: 4, ai: 5, backlinks: 6 };
 const fmtPos = (p: number) => (Number.isInteger(p) ? String(p) : p.toFixed(1));
 
+/** REP 3.3 (benchmark pass 2026-10-14): what the Search Console CTR benchmarks say a query could earn at a better position.
+ * These are the public click-through benchmarks, not this site's own numbers, so everything derived from them is `modelled`. */
+const CTR_AT = { top3: 0.27, page1: 0.1, healthy: 0.05 };
+/** 28 Search Console days scaled to a month, so every impact in the queue is "clicks a month". */
+const TO_MONTH = 30 / 28;
+
 export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   const out: Recommendation[] = [];
-  const add = (r: Recommendation) => {
-    if (!out.some((o) => o.id === r.id)) out.push(r);
+  // REP 3.3: every item carries what it is worth. Where the caller measured a quantity it passes one; where it did not, the visible
+  // rule table in `queue.ts` answers for the whole family; where neither can, the item says "not ranked" with the reason and drops
+  // to the bottom band instead of being given a number nobody can defend.
+  const add = (r: Recommendation, score?: ScoreInput) => {
+    if (out.some((o) => o.id === r.id)) return;
+    const input = score ?? ruleScoreFor(r.id) ?? { impact: null, confidence: 'rule' as const, effort: 'session' as const, basis: '', reason: 'nothing measured for it yet' };
+    out.push({ ...r, score: scoreOf(input) });
   };
   const tracked = site.trackingStatus === 'active' || x.settings.tracking.tracked;
 
@@ -166,6 +184,12 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       detail: q.page ? `It already ranks with ${q.page.replace(/^https?:\/\/(www\.)?/, '')}. Improving that page (depth, intent match, internal links) is the fastest win.` : 'It already earns impressions; a focused page can win clicks.',
       evidence: `position ${fmtPos(q.position)} · ${q.impressions} impressions · ${q.clicks} clicks in the last period`,
       action: { label: q.page ? 'Improve the page' : 'Write the page', mode: 'keyword', prefill: { keyword: q.query, ...(q.page && urlOnHost(q.page, site.domain) ? { existingPageUrl: q.page } : {}), receiveReport: true, receiveContent: true } },
+    }, {
+      // the impressions and the CTR are this site's own; the CTR it could reach is a published benchmark, so the whole figure is modelled
+      impact: impactFromClicks(Math.max(0, (onPage1 ? CTR_AT.top3 : CTR_AT.page1) - q.ctr) * q.impressions * TO_MONTH),
+      confidence: 'modelled',
+      effort: 'session',
+      basis: `${q.impressions} impressions at ${formatPercent(q.ctr, 1, true)} from position ${fmtPos(q.position)} (Search Console, last period), against the ${onPage1 ? 'top-3' : 'page-one'} click-through benchmark`,
     });
   }
   const lowCtr = queries.filter((q) => q.position > 0 && q.position <= 5 && q.impressions >= 100 && q.ctr < 0.02).slice(0, 3);
@@ -178,6 +202,11 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       detail: 'It ranks near the top but few searchers click. A sharper title and meta description that match the intent usually lift CTR.',
       evidence: `position ${fmtPos(q.position)} · CTR ${formatPercent(q.ctr, 1, true)} · ${q.impressions} impressions`,
       action: q.page ? { label: 'Open the page', href: q.page } : undefined,
+    }, {
+      impact: impactFromClicks(Math.max(0, CTR_AT.healthy - q.ctr) * q.impressions * TO_MONTH),
+      confidence: 'modelled',
+      effort: 'hour',
+      basis: `${q.impressions} impressions at ${formatPercent(q.ctr, 1, true)} from position ${fmtPos(q.position)} (Search Console, last period), against a healthy ${formatPercent(CTR_AT.healthy, 0, true)}`,
     });
   const falling = queries.filter((q) => q.prevClicks >= 5 && q.clicks <= q.prevClicks * 0.5).sort((a, b) => b.prevClicks - b.clicks - (a.prevClicks - a.clicks)).slice(0, 3);
   for (const q of falling)
@@ -189,6 +218,12 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       detail: 'Clicks fell by half or more against the previous period. Check the ranking page for changes, competitors and SERP features.',
       evidence: `${q.prevClicks} → ${q.clicks} clicks · position ${fmtPos(q.prevPosition)} → ${fmtPos(q.position)}`,
       action: { label: 'Refresh the page', mode: 'keyword', prefill: { keyword: q.query, ...(q.page && urlOnHost(q.page, site.domain) ? { existingPageUrl: q.page } : {}) } },
+    }, {
+      // nothing modelled here: the clicks were earned and then were not
+      impact: impactFromClicks(Math.max(0, q.prevClicks - q.clicks) * TO_MONTH),
+      confidence: 'measured',
+      effort: 'session',
+      basis: `${q.prevClicks - q.clicks} clicks a period already lost (Search Console, this period against the last)`,
     });
 
   // ---------- engine actions (weekly reports) ----------
@@ -209,6 +244,12 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       detail: a.why,
       evidence: `from the ${a.source.replace('_', ' ')} report`,
       action,
+    }, {
+      // the weekly report ranked its own actions; the queue keeps that order inside the family instead of re-deriving it
+      impact: a.priority <= 1 ? 5 : a.priority === 2 ? 3.5 : 2,
+      confidence: 'rule',
+      effort: 'session',
+      basis: `the ${a.source.replace('_', ' ')} report put this ${a.priority <= 1 ? 'first' : `${a.priority}${a.priority === 2 ? 'nd' : a.priority === 3 ? 'rd' : 'th'}`} in its own list`,
     });
   }
 
@@ -234,14 +275,23 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
       detail: `${f.category} · ${f.severity}${f.status === 'new' ? ' · new since the last audit' : ''}. The audit report explains the fix; the fix pack has ready files where one applies.`,
       evidence: f.impactBasis || (f.affectedCount ? `${f.affectedCount} page(s) affected` : undefined),
       action: { label: 'Open technical health', page: 'technical' },
-    });
+    }, f.impact != null
+      ? { impact: impactFromAuditWeight(Number(f.impact)), confidence: f.impactBasis ? 'measured' : 'modelled', effort: 'session', basis: f.impactBasis || `the audit weighted this finding at ${f.impact}` }
+      // G26 weighted nothing for this row (an audit written before it, or no Search Console): the severity alone is not a quantity
+      : { impact: null, confidence: 'rule', effort: 'session', basis: '', reason: `the audit could not weigh it — ${f.severity} severity on ${f.affectedCount || 'some'} page(s), with no traffic figure behind it` });
   if (latestAudit && Date.now() - Date.parse(latestAudit.auditedAt) > 45 * 864e5)
     add({ id: 'tech:stale', category: 'technical', priority: 'low', title: 'Re-audit the site', detail: 'The last audit is more than 45 days old; the monthly scheduler re-audits only when the sitemap changed.', action: { label: 'Run audit', mode: 'audit' } });
 
   // ---------- AI visibility ----------
   const lastAi = x.ai.runs[x.ai.runs.length - 1];
   if (lastAi && lastAi.mentionRate < 20)
-    add({ id: 'ai:low', category: 'ai', priority: 'high', title: `AI assistants name you in ${formatPercent(lastAi.mentionRate, 0)} of buyer answers`, detail: 'Competitors are recommended instead. Pages that answer these questions directly, with proof and clear entity signals, are what AI engines cite.', evidence: `${lastAi.answers} answers checked · share of voice ${formatPercent(lastAi.shareOfVoice, 0)}`, action: { label: 'See the questions', page: 'ai' } });
+    add({ id: 'ai:low', category: 'ai', priority: 'high', title: `AI assistants name you in ${formatPercent(lastAi.mentionRate, 0)} of buyer answers`, detail: 'Competitors are recommended instead. Pages that answer these questions directly, with proof and clear entity signals, are what AI engines cite.', evidence: `${lastAi.answers} answers checked · share of voice ${formatPercent(lastAi.shareOfVoice, 0)}`, action: { label: 'See the questions', page: 'ai' } }, {
+      // the mention rate is measured; what winning those answers is worth in visits is not, so the effort band carries the doubt
+      impact: impactFromPoints(Math.min(40, 100 - lastAi.mentionRate)),
+      confidence: 'modelled',
+      effort: 'days',
+      basis: `named in ${formatPercent(lastAi.mentionRate, 0)} of ${lastAi.answers} answers we asked for ourselves`,
+    });
   // the AI report's own actions already cover its lost questions; without a delivered report, the stored gaps stand in
   for (const g of x.ai.report ? [] : (x.ai.latest?.gaps ?? []).slice(0, 3))
     add({
@@ -260,7 +310,12 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   const REASON: Record<string, string> = { link_removed: 'the link was removed from the page', page_gone: 'the linking page is gone', domain_gone: 'the linking site no longer exists', not_seen: 'no source has seen it for 4 months' };
   const confirmed = (bl.latest?.lost ?? []).filter((l) => !l.pending && l.reason !== 'domain_gone' && (l.domainRank >= 100 || l.reason));
   for (const l of confirmed.filter((l) => l.domainRank >= 100 || bl.refs.find((r) => r.refDomain === l.fromDomain && r.seoValue >= 35)).slice(0, 3))
-    add({ id: `bl:lost:${l.fromDomain}`, category: 'backlinks', priority: 'high', title: `Win back the link from ${l.fromDomain}`, detail: `Checked twice on the page: ${REASON[l.reason ?? ''] ?? 'the link is gone'}. The outreach pipeline has a draft asking to restore it.`, evidence: `authority ${l.domainRank}${l.lastSeen ? ` · last seen ${l.lastSeen}` : ''}`, action: { label: 'Open backlinks', page: 'backlinks' } });
+    add({ id: `bl:lost:${l.fromDomain}`, category: 'backlinks', priority: 'high', title: `Win back the link from ${l.fromDomain}`, detail: `Checked twice on the page: ${REASON[l.reason ?? ''] ?? 'the link is gone'}. The outreach pipeline has a draft asking to restore it.`, evidence: `authority ${l.domainRank}${l.lastSeen ? ` · last seen ${l.lastSeen}` : ''}`, action: { label: 'Open backlinks', page: 'backlinks' } }, {
+      impact: impactFromPoints(Math.min(20, l.domainRank / 30)),
+      confidence: 'modelled',
+      effort: 'hour',
+      basis: `authority ${l.domainRank} in the backlink index, and our own two checks of the page agree it is gone`,
+    });
   for (const r of (bl.report?.reclaim ?? []).slice(0, 2))
     add({ id: `bl:reclaim:${r.brokenUrl}`, category: 'backlinks', priority: 'medium', title: `Redirect ${r.brokenUrl.replace(/^https?:\/\/[^/]+/, '') || '/'} — ${r.links} link(s) point to a broken page`, detail: `A 301 redirect to ${r.redirectTo.replace(/^https?:\/\/[^/]+/, '') || '/'} keeps the value of those links.`, evidence: r.domains.slice(0, 3).join(', '), action: { label: 'Open backlinks', page: 'backlinks' } });
   if (lastBl && lastBl.spammyNew > 2)
@@ -296,7 +351,8 @@ export function recommend(site: SiteRow, x: SiteBundle): Recommendation[] {
   for (const k of x.rankings.keywords.filter((k) => k.previousPosition && k.latestPosition != null && (k.latestPosition === 0 || k.latestPosition - k.previousPosition >= 5)).slice(0, 3))
     add({ id: `rank:drop:${k.keyword}`, category: 'rankings', priority: 'medium', title: `"${k.keyword}" dropped`, detail: 'Check the ranking page and what moved above it.', evidence: `position ${k.previousPosition} → ${k.latestPosition === 0 ? 'out of the top 50' : k.latestPosition}`, action: { label: 'Refresh the page', mode: 'keyword', prefill: { keyword: k.keyword, ...(k.url && urlOnHost(k.url, site.domain) ? { existingPageUrl: k.url } : {}) } } });
 
-  return out.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || CAT_RANK[a.category] - CAT_RANK[b.category]).slice(0, 60);
+  // One queue: blocking setup first, then by impact x confidence / effort, then the items nothing measured yet (`queue.ts`).
+  return queueOrder(out).slice(0, 60);
 }
 
 // ---------------- overview ----------------

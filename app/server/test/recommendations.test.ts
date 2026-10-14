@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { queueOrder } from '@seo/shared';
 import type { SiteRow } from '../src/db/schema';
 import { actionFromApiBody, recommend, type SiteBundle } from '../src/services/recommendations';
 
@@ -98,10 +99,25 @@ describe('recommend', () => {
     expect(recs.find((r) => r.id === 'rank:next:lad_1')?.action).toEqual({ label: 'Open the ladder', page: 'pipeline/ladders/lad_1' });
   });
 
-  it('sorts by priority', () => {
+  // REP 3.3 (benchmark pass 2026-10-14): the list is no longer sorted by the hand-set priority — it is the one queue, ordered by
+  // impact x confidence / effort (`@seo/shared/queue`). The guarantee these two tests keep is the new one.
+  it('returns the one queue in its own order: blocking setup first, then by value, then whatever nothing measured', () => {
     const recs = recommend(site, bundle({ settings: { ...bundle().settings, readiness: { score: 20, missing: ['Author name'] } }, alerts: { alerts: [], checkins: [], checkinDue: true } }));
-    const ranks = recs.map((r) => ({ high: 0, medium: 1, low: 2 })[r.priority]);
-    expect([...ranks].sort()).toEqual(ranks);
+    expect(recs).toEqual(queueOrder(recs));
+    const band = (r: (typeof recs)[number]) => (r.score?.blocking ? 0 : r.score?.ranked ? 1 : 2);
+    expect(recs.map(band)).toEqual([...recs.map(band)].sort());
+    const values = recs.filter((r) => band(r) === 1).map((r) => (r.score && r.score.ranked ? r.score.value : 0));
+    expect(values).toEqual([...values].sort((a, b) => b - a));
+  });
+
+  it('gives every recommendation a score, and never a number without a basis', () => {
+    const recs = recommend(site, bundle({ settings: { ...bundle().settings, readiness: { score: 20, missing: ['Author name'] } }, alerts: { alerts: [], checkins: [], checkinDue: true } }));
+    expect(recs.length).toBeGreaterThan(0);
+    for (const r of recs) {
+      expect(r.score, r.id).toBeDefined();
+      if (r.score && r.score.ranked) expect(r.score.basis.length, r.id).toBeGreaterThan(0);
+      else if (r.score) expect(r.score.reason.length, r.id).toBeGreaterThan(0);
+    }
   });
 });
 

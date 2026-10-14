@@ -14,6 +14,21 @@ export interface ChangelogEntry {
 
 export const changelog: ChangelogEntry[] = [
   {
+    date: '2026-10-15',
+    title: 'One to-do list, ranked by what each step is worth',
+    summary:
+      'Recommendations used to be ordered by a priority label and then by the part of the system that found them, so a small technical fix could sit above a search opportunity worth ten times the clicks. Now every website has one queue across audits, search, rankings, AI answers and links, ordered by impact, confidence and effort — and every step says which figure put it there.',
+    highlights: [
+      'One list across every area, not one list per area — group it by worth, by priority or by area, whichever you prefer',
+      'Each step shows what it is worth, with the figure behind it: "340 impressions at 1.2% from position 7, against the page-one click-through benchmark"',
+      'Confidence is separate from impact: a number measured on your own Search Console data outranks the same number modelled from an index',
+      'Effort counts too, so a five-minute job beats a week-long one of the same size',
+      'Setup steps that have to happen before anything can be measured come first, and say so',
+      'A step with no measured figure behind it goes to the bottom with the reason — never a score nobody can defend',
+    ],
+    features: ['reports'],
+  },
+  {
     date: '2026-10-14',
     title: 'New plans, and three things we can do for you',
     summary:

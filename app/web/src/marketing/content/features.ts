@@ -635,6 +635,8 @@ export const features: Feature[] = [
       'A Monday report: rankings, traffic, AI visibility and links in one read',
       'A Search Console alert watcher for Google’s notification e-mails',
       'A monthly check-in for manual actions and security issues',
+      'One to-do list across audits, search, rankings, AI answers and links — ranked by what each step is worth, not by which part of the system found it',
+      'Every step shows the figure behind it, how confident Ascentra is and how much work it is; a step nothing has measured yet says so instead of being given a score',
       'Prioritised recommendations you can start with one click',
       'Every number says where it came from, over what period and from how big a sample',
       'A share link for one report: it expires on the day you choose, you can turn it off at any time, and the person you send it to needs no account',
@@ -643,7 +645,7 @@ export const features: Feature[] = [
     steps: [
       { title: 'Collect', body: 'Search, traffic, AI answers, links and audits feed one picture of each website.' },
       { title: 'Explain', body: 'What changed, why it matters, how sure Ascentra is — and where each number came from.' },
-      { title: 'Recommend', body: 'A prioritised list of next steps, each one ready to run.' },
+      { title: 'Recommend', body: 'One list of next steps across every area, ranked by impact, confidence and effort — each one ready to run.' },
       { title: 'Share', body: 'Send one report as a link that expires, or export it as PDF or Word. Past runs keep their report and files.' },
     ],
     facts: [
@@ -665,7 +667,7 @@ export const features: Feature[] = [
       { q: 'What is the monthly check-in?', a: 'A short checklist for what Google does not expose through its API, such as manual actions and security issues.' },
       {
         q: 'Are recommendations ranked?',
-        a: 'Yes. Recommendations are listed in priority order, and each one can be started as a run with its cost shown first.',
+        a: 'Yes, and it is one list, not one list per area. Every step carries what it is worth — the impact, how confident Ascentra is in the figure behind it, and how much work it is — and the list is ordered by all three. Setup steps that have to happen before anything can be measured come first and say why. A step with no measured figure behind it is put at the bottom with the reason, rather than given a number nobody can defend. Each step can be started as a run with its cost shown first.',
       },
       {
         q: 'Can I see where a number came from?',
