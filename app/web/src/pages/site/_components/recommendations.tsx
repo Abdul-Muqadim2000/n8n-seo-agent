@@ -2,11 +2,11 @@
 // Recommendations page; the Overview builds its top-5 rows from the same parts.
 import type { ReactNode } from 'react';
 import { Activity, ArrowRight, Bot, ExternalLink as ExternalIcon, Gauge, Link2, PenSquare, Settings, TrendingUp } from 'lucide-react';
-import { MODES, type Priority, type Recommendation, type RecommendationAction, type RecommendationCategory } from '@seo/shared';
+import { MODES, queueOrder, scoreNote, type Priority, type Recommendation, type RecommendationAction, type RecommendationCategory } from '@seo/shared';
 import { GUIDE_FOR_RECOMMENDATION } from '@seo/shared/guides';
 import { cn } from '@/lib/utils';
 import { buttonClass, ButtonLink } from '@/components/ui/button';
-import { InsightItem } from '@/components/insight';
+import { InfoTip, InsightItem } from '@/components/insight';
 import { GuideButton } from '@/components/guide';
 import { PriorityBadge, useSitePage } from './kit';
 
@@ -23,8 +23,38 @@ export const CATEGORY_ORDER: RecommendationCategory[] = ['setup', 'search', 'ran
 export const PRIORITY_ORDER: Priority[] = ['high', 'medium', 'low'];
 const PRIO_RANK: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
 
+/**
+ * REP 3.3 (benchmark pass 2026-10-14): the one queue's order is `queueOrder` in `@seo/shared` — blocking setup first, then by
+ * impact x confidence / effort, then the items nothing has measured yet. The server already returns them in that order; this
+ * keeps a client-side list (a filtered view, an older cached payload) in the same one. Rows with no score at all — written
+ * before the queue existed — fall back to the old priority-then-category order among themselves.
+ */
 export function sortRecommendations(recs: readonly Recommendation[]): Recommendation[] {
-  return [...recs].sort((a, b) => (PRIO_RANK[a.priority] ?? 3) - (PRIO_RANK[b.priority] ?? 3) || CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
+  if (!recs.some((r) => r.score)) return [...recs].sort((a, b) => (PRIO_RANK[a.priority] ?? 3) - (PRIO_RANK[b.priority] ?? 3) || CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
+  return queueOrder(recs);
+}
+
+/**
+ * What this item is worth and why it sits where it does. A ranked item shows the number the queue sorted by; an unranked one says
+ * so in words rather than borrowing a number it does not have.
+ */
+export function WorthChip({ rec, className }: { rec: Recommendation; className?: string }) {
+  const s = rec.score;
+  if (!s) return null;
+  return (
+    <span className={cn('inline-flex items-center gap-1 text-xs text-ink-3', className)}>
+      {s.ranked ? (
+        <>
+          <span className="font-mono tabular">Worth {s.value}</span>
+          <span aria-hidden>·</span>
+          <span>{s.effortLabel}</span>
+        </>
+      ) : (
+        <span>Not ranked · {s.effortLabel}</span>
+      )}
+      <InfoTip label="How this is ranked">{scoreNote(s)}</InfoTip>
+    </span>
+  );
 }
 
 const NUDGE = 'size-3.5 transition-transform duration-200 ease-brand group-hover/rec:translate-x-0.5';
@@ -83,6 +113,7 @@ export function RecommendationItem({ rec }: { rec: Recommendation }) {
         <>
           <PriorityBadge priority={rec.priority} />
           <span className="text-xs text-ink-3">{meta.label}</span>
+          <WorthChip rec={rec} />
         </>
       }
       title={<span className="text-[15px] leading-snug">{rec.title}</span>}
@@ -113,6 +144,7 @@ export function RecommendationRows({ recs }: { recs: readonly Recommendation[] }
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <PriorityBadge priority={rec.priority} short />
               <span className="text-xs text-ink-3">{(CATEGORY_META[rec.category] ?? CATEGORY_META.setup).label}</span>
+              <WorthChip rec={rec} />
             </div>
             <p className="mt-1 line-clamp-2 text-sm font-medium leading-snug text-ink">{rec.title}</p>
             {rec.evidence ? <p className="mt-0.5 truncate text-xs text-ink-3 tabular">{rec.evidence}</p> : <p className="mt-0.5 line-clamp-1 text-xs text-ink-3">{rec.detail}</p>}
