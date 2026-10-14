@@ -989,6 +989,25 @@ that run: I found it while checking what the credential refresh had left in the 
 **Still present from earlier rounds:** R4 (partly — R21 is its subdomain gap), R8 (partly — R22), R16 (the stored "facts erp" rung,
 waiting on `fix_brand_rungs.py --apply --brand facts.ae`).
 
+### 3.13 Defects found by the R17–R30 live check (R31-R33, 2026-10-14 evening)
+
+Evidence: `LIVE_CHECK_R17-R30_2026-10-14.md` (5 runs, executions 582-591, **$0.069**: DataForSEO $0.055950 measured against the
+account, Claude $0.0131 from reported tokens). That check proved R17, R24, R26, R29 and R30 live, R19 for the sample basis and
+R28 for the Keyword Check and for the day's reconciliation; R18 and R19's retry could not fire (no DataForSEO or Search Console
+call failed) and were not provoked.
+
+| ID | Title | Impact | Where | Fix | Status |
+|---|---|---|---|---|---|
+| R31 | A **`free_only` monitor run settles money it never spent**: the free backlink check (exec 586) reserves $0.05 Claude + $0.45 DataForSEO and settles **$0.05 Claude** although no model node ran at all, while telling the caller `cost_usd: 0` | Low | `v5/code/Monitor_Ledger_Settle.js` (`ai_usd = row.est_usd` unconditionally); `BL Plan` does not lower the reservation for `free_only` | settle $0 when no model node ran in the run, and reserve the free figure when `free_only` is on | open |
+| R32 | **The on-page crawl's quoted cost is settled as "measured"**: audit 588 reports `dfs_usd 0.09 measured` — the price quoted at task creation for the **200 pages requested** — while 47 were crawled and the account fell **$0.031950** (+181%). R28's dedupe works (`dataforseo_tasks 1`, `tasks_repeated 0`); the amount, and the 7 poll calls' own cost, do not | Low-Medium | `v5/code/_cost_cal.js` `CC.dfsLedger` and the crawl branch's cost summing | price the crawl from the pages actually crawled (or read the task's final cost on the summary call) and count the poll endpoints; until then label it ESTIMATED, not measured | open |
+| R33 | **A Claude call that does report its tokens is still settled from the reservation** on every branch that does not end in one of the five report builders: `describe` (exec 591) settled $0.06 where *Claude — Site Describer* reports 4,874 / 1,306 tokens = $0.0114 (5.3×), with `ai_measured: false` and "this branch priced no model call of its own" | Low-Medium | `v5/code/Run_Ledger_Settle.js`: the Claude figure is read only from `run_ledger.ai_cost` of `ENDS`, so `describe` / `track` / `profile` / `published` / `checkin` / `case_study` never price their own calls | price every Claude node of the run from the run data, not only the report builders' | open |
+
+**Two structural limits of R28's reconciliation as deployed** (not defects of their own, recorded so they are not re-discovered):
+only main-workflow runs take a balance reading (the monitors and the Keyword Check write `dfs_balance: 0`), and the reading is
+taken at **reserve** time, so a run can never reconcile its own spend — the audit's +181% only surfaced on the next run that took
+a reading. **Page Watch** keeps no ledger row at all (it is not one of the nine workflows `ledger_mainline` wires); it spends
+nothing, but it is invisible to the guard and to the reconciliation.
+
 ### 3.6 Cross-check: nothing from the inputs is lost
 
 | SCORECARD fix | Register items | | SCORECARD fix | Register items |
