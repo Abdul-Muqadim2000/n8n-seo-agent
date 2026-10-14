@@ -43,6 +43,13 @@
       "when": 1791911608435,
       "tag": "0005_lumpy_phantom_reporter",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792012267570,
+      "tag": "0006_groovy_pretty_boy",
+      "breakpoints": true
     }
   ]
 }

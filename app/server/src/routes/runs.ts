@@ -6,6 +6,7 @@ import { config } from '../config';
 import { db, schema } from '../db';
 import type { FileRow } from '../db/schema';
 import { HttpError, notFound, validationError } from '../lib/errors';
+import { deliverReport } from '../services/reportDelivery';
 import { createRun, filesFor, getRunOrThrow, reportsList, toReport, toRun } from '../services/runs';
 import { createShare, listShares, markOpened, revokeShare, sharedFile, sharedReport, shareByToken } from '../services/shareLinks';
 
@@ -110,6 +111,19 @@ export async function runRoutes(app: FastifyInstance) {
     const f = await db.query.files.findFirst({ where: and(eq(schema.files.orgId, a.org.id), eq(schema.files.id, p.fileId)) });
     if (!f) throw notFound('File not found');
     return sendFile(reply, f, (req.query as { download?: string }).download === '1');
+  });
+
+  /**
+   * B-R1: send one report now, to the channels the company set up. Admins only (it sends mail in the company's name), and it still
+   * goes through the same readiness decision as an automatic delivery — "send it anyway" is not offered, because a report the run
+   * marked not ready is not a report yet, whoever asks.
+   */
+  app.post('/api/orgs/:orgId/reports/:reportId/deliver', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const p = req.params as P;
+    const a = await orgAccess(req, p.orgId, 'admin');
+    if (!isUuid(p.reportId)) throw notFound('Report not found');
+    const res = await deliverReport(a.org.id, p.reportId, req.log, { force: true });
+    return res;
   });
 
   // ---- G15: expiring, revocable, read-only links to ONE report, for somebody with no account ----

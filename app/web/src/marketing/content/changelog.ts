@@ -15,6 +15,35 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-15',
+    title: 'Reports now come to you, and the ones that are not ready stay put',
+    summary:
+      'Every finished report used to wait in Ascentra until somebody logged in. You can now have each one sent as it arrives, or collected into a daily, weekly or monthly summary — by e-mail with its figures and files, or to a webhook your team already watches. The reports an analysis marked as not ready are deliberately held back, with the reason stated.',
+    highlights: [
+      'Four schedules: as each report arrives, or one summary a day, a week or a month, on the day and hour you choose',
+      'E-mail with the report’s own figures in the message, its PDF and documents attached, and both links to open it',
+      'A webhook that posts the report as JSON and also reads as a message in Slack, Teams and Discord, signed with your own secret',
+      'Each delivery can carry the expiring, revocable share link, so a report reaches a client without an account',
+      'A page that failed its quality check, a plan the engine refused or a verdict it could not check is never sent — it waits in Ascentra with the reason',
+      'A delivery log showing what went out, what was held back and what failed',
+      '“Send it now” on any report, which runs the same check before sending',
+    ],
+    features: ['report-delivery', 'reports'],
+  },
+  {
+    date: '2026-10-15',
+    title: 'One cost figure, and it is the engine’s',
+    summary:
+      'The app carried its own table of what an analysis costs, written in October 2026 and never corrected against the money. It read up to two and a half times high, which is the wrong direction for a budget: real work was refused that would have cost a fraction of what was held back. There is now one table, it matches the engine’s own calibrated figures, and the engine’s number replaces it the moment a run reports one.',
+    highlights: [
+      'A one-page keyword ladder, a technical audit, a written page and a full SEO report all cost less than the app used to claim',
+      'Every run shows what it actually cost once it finishes, model calls included — the old figure counted only the search data',
+      'Each figure says whether it is actual, the engine’s estimate or ours, with the reasoning behind it',
+      'A finished run counts against your monthly budget at what it cost, not at what was reserved for it',
+    ],
+    features: ['enterprise', 'reports'],
+  },
+  {
+    date: '2026-10-15',
     title: 'One to-do list, ranked by what each step is worth',
     summary:
       'Recommendations used to be ordered by a priority label and then by the part of the system that found them, so a small technical fix could sit above a search opportunity worth ten times the clicks. Now every website has one queue across audits, search, rankings, AI answers and links, ordered by impact, confidence and effort — and every step says which figure put it there.',

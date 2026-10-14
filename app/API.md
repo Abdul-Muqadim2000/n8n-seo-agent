@@ -33,6 +33,10 @@ Roles: `viewer` (read) < `member` (start runs) < `admin` (sites, team, site sett
 | PATCH | /api/orgs/:orgId/onboarding | `{ step, done? }` (admin) | `Org` |
 | PATCH | /api/orgs/:orgId/budget | `{ monthlyBudgetUsd }` (owner) | `Org` |
 | GET | /api/orgs/:orgId/usage | | `Usage` |
+| GET | /api/orgs/:orgId/delivery | | `{ settings: DeliverySettings, nextAt, mailReady, signingReady, recent: DeliveryRecord[] }` |
+| PUT | /api/orgs/:orgId/delivery | `DeliverySettings` (+ `webhook.secret`; owner) | the same shape |
+| POST | /api/orgs/:orgId/delivery/test | (owner) | `{ delivered, outcomes: [{ channel, ok, target, error }] }` |
+| GET | /api/orgs/:orgId/deliveries?limit= | | `{ deliveries: DeliveryRecord[] }` |
 | GET | /api/orgs/:orgId/members | | `{ members: Member[], invitations: Invitation[] }` |
 | POST | /api/orgs/:orgId/invitations | `inviteSchema` (admin) | `Invitation` with `inviteUrl` |
 | DELETE | /api/orgs/:orgId/invitations/:id | (admin) | `{ ok }` |
@@ -174,11 +178,50 @@ Keyword checks count in the company's spend everywhere runs do: the budget check
 | GET | /api/orgs/:orgId/reports?siteId=&stage=&limit=&before= | | `Report[]` |
 | GET | /api/orgs/:orgId/reports/:reportId | | `ReportDetail` |
 | GET | /api/orgs/:orgId/files/:fileId?download=1 | | the file (inline unless `download=1`) |
+| POST | /api/orgs/:orgId/reports/:reportId/deliver | (admin) | `{ delivered, reason, outcomes }` — sends this one report now; a report the run marked not ready is refused with the reason |
 | POST | /api/orgs/:orgId/reports/:reportId/shares | `{ days?: 1-90 }` (admin; default 14) | `ShareLink` **plus `url`** — the only time the token is returned |
 | GET | /api/orgs/:orgId/reports/:reportId/shares | (admin) | `{ items: ShareLink[], defaultDays, minDays, maxDays }` (no tokens) |
 | DELETE | /api/orgs/:orgId/reports/:reportId/shares/:shareId | (admin) | `ShareLink` with `state: 'revoked'` |
 | GET | /api/share/:token | no session | `{ report: SharedReport }` |
 | GET | /api/share/:token/files/:fileId?download=1 | no session | that report's file (same headers and sandbox as the route above) |
+
+### Report delivery (B-R1, `shared/src/report-delivery.ts`, benchmark area 12 §4 G-1)
+
+Finished reports leave the app on the company's own schedule: `each` (as a report arrives), or a `daily` / `weekly` / `monthly`
+summary at a chosen weekday, day of month and UTC hour. Two channels, both at once if asked: **e-mail** (the report's headline
+figures in the message, its PDF / Word / zip attached up to 12 MB, and links that open it) and a **webhook** (`POST` of JSON with a
+`text` line so Slack, Teams and Discord render it unmapped; with a stored secret every body carries
+`X-Ascentra-Signature: sha256=<hmac over "<timestamp>.<body>">` and `X-Ascentra-Timestamp`). The signing secret is sealed with
+`MAILBOX_KEY` and **never returned** — the API answers `webhook.hasSecret`; sending `webhook.secret: ''` removes it, leaving the
+field out keeps what is stored. Reading the settings needs membership; changing them, and sending a test, need **owner**.
+
+**What is never delivered**, whoever asks and whatever the settings say (`deliveryDecision`, 38 unit tests): a rejected run; a run
+whose status is not a completed report; a `*_started` acknowledgement or `site_tracker_setup`; a page the quality gate failed
+(`qa_not_ready` / `qa_publishable: false`, R11); a ladder the engine refused to plan (`planned: false`, R22 / R23); and evidence the
+engine could not read — `verdict: 'NOT_CHECKED'` (R18), `feasibility.status: 'not_checked'`, `serp_features.unavailable`,
+`site_read_failed`. Each of those keeps a `held` row in `report_deliveries` with the reason, is named in the summary message that
+went out beside it, and stays readable in the app. `POST …/deliver` runs the same decision: there is no override.
+
+Each report in a delivery can carry a **G15 share link** (30 days) when `shareLinks` is on — the same table, token hash, expiry and
+revocation as a link a person creates, created with no `createdBy`, and not created once that report has its ten live links.
+
+The webhook address must be **https on a public host**: private, loopback, link-local and `.internal` / `.local` names are
+refused (`webhookUrlOk`), because the server fetches whatever is stored there and must not be usable to reach its own neighbours.
+Plain `http` is accepted only for `localhost` / `127.0.0.1`, for a developer testing against their own machine.
+
+`report_deliveries` keeps one row per report per channel (a retry updates it; `attempts`, `nextAttemptAt`), plus a row per summary.
+A failed attempt is retried every 10 minutes up to 3 times by the same timer that sends the summaries (every 5 minutes); a summary
+is not replayed, because by then its window has moved.
+
+### Cost figures (B-R3, `shared/src/cost.ts`)
+
+One table of per-mode prices, mirroring the engine's calibrated defaults (`n8n/seo-agent/v5/code/_cost_cal.js`). `MODES[].costUsd`
+and `estimateRunCost()` both read it, so the mode list, the forms and the budget cannot disagree. **The engine's figure wins**:
+`runCostEstimate()` prefers `actualCostUsd` (what the run reported spending), then `engineCostEstimateUsd`
+(`run_cost_estimate_usd` on a callback, with `run_cost_estimate_basis`), then the app's table — and every figure is shown with which
+of the three it is. `ledgerCost` now counts the model calls (`run_ledger.ai_usd` / `ai_cost.usd`) as well as the search data, and
+carries `estimated` when any part of it is the engine's own estimate. The company's monthly spend and `GET …/usage` count a run at
+the same `coalesce(actual, engine, app)`, so a finished run stops being held against the budget at what was reserved for it.
 
 ### Share links (G15, `shared/src/share.ts`, criterion REP 3.7)
 An expiring, revocable, **read-only** link to **one report**, for somebody with no account (the page is `/share/:token`).

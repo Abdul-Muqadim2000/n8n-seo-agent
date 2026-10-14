@@ -7,7 +7,7 @@ const GROUPS: { label: string; slugs: string[] }[] = [
   { label: 'Plan', slugs: ['keyword-research', 'keyword-ladders'] },
   { label: 'Create', slugs: ['content', 'autopilot'] },
   { label: 'Measure', slugs: ['technical-audits', 'site-tracking', 'ai-visibility', 'backlinks'] },
-  { label: 'Run', slugs: ['reports', 'guided-setup', 'enterprise'] },
+  { label: 'Run', slugs: ['reports', 'report-delivery', 'guided-setup', 'enterprise'] },
 ];
 
 /** Every capability as one system, in four layers (plan, create, measure, run); each tile jumps to its section on /platform. */

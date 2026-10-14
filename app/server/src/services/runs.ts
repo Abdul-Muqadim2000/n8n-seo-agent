@@ -33,8 +33,9 @@ import { insertRows, invalidateSite, siteRows, startRun, updateRows } from '../n
 import { assertGa4ForDomain } from './google';
 import { extractFiles } from './files';
 import { applyLadderPrefs, markLadderWon } from './ladderSettings';
+import { deliverReport } from './reportDelivery';
 import { assertBudget, lockCompany } from './spend';
-import { ledgerCost, stageOf, summarize, titleFor } from './summaries';
+import { engineCostEstimate, ledgerCost, stageOf, summarize, titleFor } from './summaries';
 
 export const estimateCost = (input: RunInput): number => estimateRunCost(input.mode, input as unknown as Record<string, unknown>);
 export const etaFor = (input: RunInput): number => estimateRunMinutes(input.mode, input as unknown as Record<string, unknown>);
@@ -345,6 +346,12 @@ export async function orgByHookToken(token: string): Promise<OrgRow | null> {
   return org && safeEqual(org.hookToken, token) ? org : null;
 }
 
+/** `deliverReport` wants a logger; a callback has no request logger to hand, so delivery notes go to the process log. */
+const deliveryLog = {
+  info: (o: object, msg: string) => console.log(JSON.stringify({ level: 'info', msg, ...o })),
+  error: (o: object, msg: string) => console.error(JSON.stringify({ level: 'error', msg, ...o })),
+};
+
 export async function ingestCallback(
   org: OrgRow,
   body: Record<string, unknown>,
@@ -390,8 +397,18 @@ export async function ingestCallback(
       const info = MODES[run.mode as ModeId];
       // increments in SQL: several callbacks of one run (ladder pages) may arrive at the same moment
       const patch: Record<string, unknown> = { reportCount: sql`${schema.runs.reportCount} + 1`, lastStage: stage };
+      // B-R3: whatever the engine says about money replaces what the app guessed. `ledgerCost` is what the run reported spending
+      // (search data + the model calls it priced), `engineCostEstimate` its own calibrated reservation with the sentence behind it.
       const cost = ledgerCost(body);
-      if (cost != null) patch.actualCostUsd = sql`coalesce(${schema.runs.actualCostUsd}, 0) + ${cost}`;
+      if (cost != null) {
+        patch.actualCostUsd = sql`coalesce(${schema.runs.actualCostUsd}, 0) + ${cost.usd}`;
+        if (cost.estimated) patch.actualCostEstimated = true;
+      }
+      const engineEstimate = engineCostEstimate(body);
+      if (engineEstimate != null) {
+        patch.engineCostEstimateUsd = engineEstimate.usd;
+        if (engineEstimate.basis) patch.engineCostBasis = engineEstimate.basis.slice(0, 500);
+      }
       if (stage === 'rejected') {
         if (run.status !== 'completed') Object.assign(patch, { status: 'failed', error: String(body.error ?? 'Rejected by the SEO engine'), completedAt: new Date() });
       } else if (info?.finalStages.includes(stage)) {
@@ -406,6 +423,10 @@ export async function ingestCallback(
     return rep.id;
   });
   if (domain) invalidateSite(domain);
+  // B-R1: push it. `deliverReport` decides for itself whether this report may leave the app (a page that failed its quality gate,
+  // a refused plan or evidence the engine could not read is held with its reason), and a delivery that goes wrong is logged, never
+  // allowed to lose the callback we have just stored.
+  void deliverReport(org.id, reportId, deliveryLog).catch(() => undefined);
   // the rank tracker says a ladder is won (main keyword top 3 in 4 checks): its settings row says so, so the cadence stops writing it
   // and the app keeps showing Won once the tracker stops checking it (not for a ladder the person paused)
   let ladderWon: boolean | undefined;
@@ -436,6 +457,9 @@ export function toRun(r: RunRow, extra: { siteDomain?: string | null; userName?:
     error: r.error,
     estimatedCostUsd: r.estimatedCostUsd,
     actualCostUsd: r.actualCostUsd,
+    engineCostEstimateUsd: r.engineCostEstimateUsd,
+    engineCostBasis: r.engineCostBasis,
+    actualCostEstimated: r.actualCostEstimated,
     etaMinutes: r.etaMinutes,
     input: r.input as unknown as RunInput,
     createdAt: r.createdAt.toISOString(),

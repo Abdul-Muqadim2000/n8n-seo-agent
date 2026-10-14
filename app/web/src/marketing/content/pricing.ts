@@ -36,6 +36,7 @@ export const pricingTiers: PricingTier[] = [
       'Monthly technical audit with a fix pack',
       'Search Console, GA4 and Trends tracking, with weekly rank checks',
       'Monday report, alerts and share links',
+      'Reports delivered by e-mail or webhook, on your schedule',
       'A step-by-step guide for every setup task',
     ],
   },
@@ -57,6 +58,7 @@ export const pricingTiers: PricingTier[] = [
       'Link building: prospects, contacts and pitches from your own mailbox',
       'Full SEO reports as PDF or Word',
       'Daily key-page check and the pre-release check for your build',
+      'Signed webhook deliveries into your own systems',
     ],
   },
   {
@@ -258,6 +260,9 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Alerts only when a change is real', hint: 'A fall is called a fall once it is beyond normal week-to-week variation', values: [true, true, true] },
       { label: 'Full SEO report (PDF / Word)', values: [false, true, true] }, // PLACEHOLDER — confirm
       { label: 'Share a report by link', hint: 'Read-only, no account needed, expires on the day you choose and can be turned off at any time', values: [true, true, true] },
+      { label: 'Reports delivered to you', hint: 'As each one arrives, or a daily, weekly or monthly summary — by e-mail with the figures and files, and to a webhook', values: [true, true, true] },
+      { label: 'Reports that are not ready are held back', hint: 'A page that failed its quality check or a verdict the analysis could not make is never sent, and the reason is stated', values: [true, true, true] },
+      { label: 'Signed webhook deliveries', hint: 'Every body signed with your own secret, so your systems can tell the message is ours', values: [false, true, true] },
       { label: 'Search Console alert watcher and monthly check-ins', values: [false, false, true] }, // PLACEHOLDER — confirm
     ],
   },
@@ -268,7 +273,7 @@ export const pricingMatrix: { group: string; rows: { label: string; hint?: strin
       { label: 'Roles and invitations', hint: 'Owner, admin, member and viewer', values: [true, true, true] },
       { label: 'Verified website ownership', values: [true, true, true] },
       { label: 'Step-by-step guides for every setup task', hint: 'Your own values, instructions for the provider you use, and a copy you can e-mail to a colleague', values: [true, true, true] },
-      { label: 'Cost estimate before every run', values: [true, true, true] },
+      { label: 'Cost estimate before every run', hint: 'The analysis engine’s own figure, corrected against what runs really cost, and replaced with the actual cost when the work finishes', values: [true, true, true] },
       { label: 'Spend caps per company', values: [true, true, true] },
       { label: 'Multi-company workspaces', values: [false, false, true] }, // PLACEHOLDER — confirm
       { label: 'Onboarding with your team', values: [false, false, true] }, // PLACEHOLDER — confirm

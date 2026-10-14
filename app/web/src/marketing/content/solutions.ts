@@ -82,6 +82,7 @@ export const solutions: Solution[] = [
       { feature: 'technical-audits', title: 'Audits with a fix pack', body: 'Monthly audits show what changed, and the fix pack goes straight to your developers.' },
       { feature: 'site-tracking', title: 'One weekly view', body: 'Search Console, GA4 and Trends together, with striking-distance keywords called out.' },
       { feature: 'guided-setup', title: 'Nothing waits on a ticket', body: 'Every connection we ask for comes with its steps and your own values — and goes to IT or the agency as an e-mail when the job is theirs.' },
+      { feature: 'report-delivery', title: 'The report reaches the people who decide', body: 'Each week’s report goes to the list you choose and into the channel your team already watches, with an expiring link for anyone outside it.' },
     ],
     outcomes: [
       'A planned, steady publishing rhythm',
@@ -157,6 +158,7 @@ export const solutions: Solution[] = [
       { feature: 'site-tracking', title: 'Tracking per website', body: 'Search Console, GA4 and live rank checks for each website you run — including whether a local pack was on the page and whether your listing was in it.' },
       { feature: 'enterprise', title: 'One account for every brand', body: 'Separate companies for separate brands, with one team and one login.' },
       { feature: 'guided-setup', title: 'Set up without an agency', body: 'Search Console, Analytics, the records on your domain: each one is a short guide with your own values, written for the provider you actually use.' },
+      { feature: 'report-delivery', title: 'You do not have to remember to look', body: 'The Monday report arrives in your inbox with the numbers in the message — and nothing arrives that the analysis itself flagged as not ready.' },
     ],
     outcomes: [
       'Consistent business details on every local page',

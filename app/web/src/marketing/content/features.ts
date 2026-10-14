@@ -7,6 +7,7 @@ import {
   ChartNoAxesColumnIncreasing,
   FileText,
   LifeBuoy,
+  Send,
   Link2,
   PenLine,
   ScanSearch,
@@ -28,6 +29,7 @@ export type VisualKey =
   | 'audit'
   | 'workspace'
   | 'guided-setup'
+  | 'report-delivery'
   | 'growth-loop'
   | 'link-sources'
   | 'ai-engines';
@@ -735,6 +737,60 @@ export const features: Feature[] = [
       eyebrow: 'Why it matters',
       title: 'What stalls the work is never the SEO.',
       body: 'It is the Google permission nobody has, the DNS record that needs a colleague, the file that has to sit at the root of the site. Ascentra treats that as part of the product: every ask carries its steps, your own values and a way to hand it to the person who can do it.',
+    },
+  },
+  {
+    slug: 'report-delivery',
+    name: 'Report delivery',
+    shortName: 'Delivery',
+    tagline: 'Your reports arrive where you already are — and the ones that are not ready do not.',
+    summary:
+      'A report nobody opens is worth nothing. Every finished report can be sent to you as it arrives, or collected into a daily, weekly or monthly summary: by e-mail with its figures and its files, or to a webhook your team already watches. And the report an analysis itself marked as not ready is never sent — it waits in Ascentra with the reason on it.',
+    icon: Send,
+    benefits: [
+      'As each report arrives, or one summary a day, a week or a month — on the day and at the hour you choose',
+      'By e-mail with the report’s own figures in the message, its PDF and documents attached, and a link that opens it',
+      'To a webhook as JSON your systems can read, which Slack, Teams and Discord also render as a message',
+      'Every message can carry an expiring, revocable link so a report can be forwarded to a client or a colleague with no account',
+      'A report that failed its own quality check, a plan the engine refused or a figure it could not verify is held back, and the reason is stated rather than hidden',
+      'A log of everything sent, everything held and everything that failed — so you can tell the difference between quiet and broken',
+    ],
+    steps: [
+      { title: 'Choose when and where', body: 'A frequency, the people who should receive it, a webhook if your team lives in one — and which reports you actually want.' },
+      { title: 'A report finishes', body: 'The work runs on its own schedule: the Monday tracking report, the monthly audit, a page that was written for you.' },
+      { title: 'It is checked before it is sent', body: 'Anything the analysis marked as not ready stays here. Everything else goes out with its figures, its files and its link.' },
+      { title: 'You read it where you already were', body: 'In your inbox or your team channel. Open the full report in Ascentra, or forward the link to somebody without an account.' },
+    ],
+    facts: [
+      { value: 'Four', label: 'schedules: each report, daily, weekly or monthly' },
+      { value: 'Two', label: 'channels: e-mail and webhook, at the same time' },
+      { value: 'Never', label: 'a report the analysis marked as not ready' },
+    ],
+    faqs: [
+      {
+        q: 'What does “not ready” actually mean?',
+        a: 'It is the analysis’s own verdict, not a guess by the delivery. A written page that used up its quality rounds and still failed, a keyword plan the engine refused to make, a verdict it could not check because the search results could not be read, a run that was rejected. Each of those is still in Ascentra, with what went wrong on it — it is simply not pushed to anyone as finished work.',
+      },
+      {
+        q: 'Can somebody outside the company read the report?',
+        a: 'Only if you let them. Each delivery can carry a link that opens one report and nothing else: no dashboard, no other report, no settings, read-only, expiring, and revocable at any time. Leave it switched off and the message only links back into Ascentra, where an account is needed.',
+      },
+      {
+        q: 'What arrives at the webhook?',
+        a: 'A JSON POST with the report, its figures, its files and its links, plus a plain summary line so Slack, Teams and Discord show something readable with no mapping. Set a signing secret and every body is signed, so your receiver can tell the message came from us.',
+      },
+      {
+        q: 'Will this send me something every day?',
+        a: 'Only what you ask for. You can pick the reports you care about — the weekly tracking report but not every rank check, say — and collect the rest into one summary. The default is off: nothing is sent until you switch a channel on.',
+      },
+    ],
+    related: ['reports', 'site-tracking', 'enterprise'],
+    image: 'teamAtDesks',
+    visual: 'report-delivery',
+    story: {
+      eyebrow: 'Why it matters',
+      title: 'The best report is the one that reached you.',
+      body: 'Work that lands in a dashboard waits to be discovered. Work that lands in your inbox or your team channel gets read, argued with and acted on — which is the only way an SEO programme ever turns into traffic.',
     },
   },
   {
