@@ -232,7 +232,9 @@ const CC = (() => {
     const m = r4(Math.min(usd, o.measured_usd != null ? n0(o.measured_usd) : (o.measured ? usd : 0)));
     return { usd, measured_usd: m, estimated_usd: r4(usd - m) };
   };
-  const word = (p, basis) => p.usd <= 0 ? 'nothing spent'
+  // R31 (2026-10-14): "nothing spent" carries its reason when there is one — a free run has to say WHY it settles nothing, or the row
+  // reads exactly like a run whose figure was never computed.
+  const word = (p, basis) => p.usd <= 0 ? 'nothing spent' + (basis ? ' (' + basis + ')' : '')
     : p.estimated_usd <= 0 ? 'measured'
     : p.measured_usd <= 0 ? 'ESTIMATED (' + (basis || 'per-mode estimate') + ')'
     : 'PARTLY ESTIMATED: $' + p.measured_usd.toFixed(4) + ' measured, $' + p.estimated_usd.toFixed(4) + ' estimated (' + (basis || 'per-mode estimate') + ')';
@@ -277,6 +279,56 @@ const CC = (() => {
     return { add, state: st, seen };
   };
 
+  // (a2) R32 (2026-10-14, FIX_PLAN §3.13): **a crawl was settled at the price it was QUOTED, labelled "measured".** Audit 588 settled
+  //      `dfs_usd 0.09 measured` — what DataForSEO quotes when an on_page task is created for the **200 pages it was asked for** — while
+  //      47 were crawled and the account fell $0.031950 (+181%). DataForSEO bills a crawl for the work it does and never reports that
+  //      final amount per task (every later answer repeats the creation quote), so the run cannot measure it. What the run does know is
+  //      the quote, the pages it asked for and the pages the crawl reported: the figure is priced pro rata from those and is labelled an
+  //      ESTIMATE with all three numbers in its basis. Nothing here is ever called measured.
+  const crawlCost = (c) => {
+    const o = c || {};
+    const quoted = r4(o.quoted), req = Math.round(n0(o.pages_requested)), got = Math.round(n0(o.pages_crawled));
+    const out = { applies: false, usd: quoted, quoted, pages_requested: req, pages_crawled: got, per_page: 0, estimated: false, basis: '' };
+    if (quoted <= 0) { out.usd = 0; out.basis = 'no crawl was billed in this run'; return out; }
+    out.applies = true; out.estimated = true;
+    if (!(req > 0) || o.pages_crawled == null || !Number.isFinite(Number(o.pages_crawled))) {
+      out.pages_crawled = null;
+      out.basis = 'the crawl was quoted $' + quoted.toFixed(4) + ' when the task was created and never reported how many pages it crawled, '
+        + 'so the quote stands and is an ESTIMATE (DataForSEO bills a crawl for the pages it does, not for the pages it was asked for)';
+      return out;
+    }
+    const capped = Math.max(0, Math.min(got, req));
+    out.pages_crawled = capped;
+    out.per_page = +(quoted / req).toFixed(6);
+    out.usd = r4(quoted * (capped / req));
+    out.basis = 'the crawl was quoted $' + quoted.toFixed(4) + ' for the ' + req + ' pages it asked for and crawled ' + capped
+      + ', so it is priced at $' + out.usd.toFixed(4) + ' ($' + out.per_page + ' a page) — ESTIMATED: DataForSEO bills a crawl for the pages '
+      + 'it does and reports only the quote (audit 588 settled the $0.0900 quote as measured while the account fell $0.0320)';
+    return out;
+  };
+
+  // ---- 5b. the Claude money a run settles: what it priced, nothing at all, or the reservation (and it says which) -------------------
+  // R31 / R33 (2026-10-14, FIX_PLAN §3.13): a settle used to take the per-mode RESERVATION whenever the branch carried no priced figure —
+  // so a `free_only` backlink run that called no model at all settled $0.05 while telling the caller $0, and `describe` settled the $0.06
+  // it reserved where its own Haiku node reported 4,874 / 1,306 tokens ($0.0114). A reservation is a guard; a settlement is a measurement.
+  // `ran` is the model nodes of THIS execution that produced items, `checked` how many the workflow has: when a workflow has model nodes
+  // and none of them ran, the run spent nothing on Claude and settles nothing.
+  const aiRun = (o) => {
+    const x = o || {}, fig = x.figure || null, reserved = r4(x.reserved);
+    const ran = (x.ran || []).map(String).filter(Boolean);
+    const checked = Math.max(Math.round(n0(x.checked)), ran.length);
+    // a priced figure wins: calls it counted are calls that happened, whatever the node-by-node sweep could see
+    if (fig && n0(fig.calls) > 0) return { usd: r4(fig.usd), measured: fig.estimated === false, measured_usd: r4(fig.measured_usd),
+      source: 'priced', ran, checked, basis: String(fig.basis || '') };
+    if (checked > 0 && !ran.length) return { usd: 0, measured: true, measured_usd: 0, source: 'none', ran, checked,
+      basis: 'no model call ran in this run (all ' + checked + ' Claude node(s) of this workflow were checked)'
+        + (reserved > 0 ? ', so nothing is settled against the $' + reserved.toFixed(4) + ' it reserved' : '') };
+    return { usd: reserved, measured: false, measured_usd: 0, source: 'reserved', ran, checked,
+      basis: 'the per-mode reservation: ' + (ran.length
+        ? ran.length + ' model node(s) ran (' + ran.slice(0, 4).join(', ') + ') and this branch prices no call of its own'
+        : 'this branch priced no model call of its own') };
+  };
+
   // (b) **Nothing checked the sum against the money.** Every reservation now records the free `appendix/user_data` balance reading
   //     (seo_run_ledger.dfs_balance), so the day's reported spend can be held against the only measurement that cannot be argued with:
   //     how far the account actually fell between the day's first reading and the latest one. `rows` are the day's ledger rows,
@@ -316,7 +368,7 @@ const CC = (() => {
   };
 
   return { PRICES, UNKNOWN, CHARS_PER_TOKEN, THINK_SHARE, EST, DFS_EST, ALPHA, HEADROOM, KEEP, CAP, FACTOR_KEY, MODEL_PREFIX,
-    RECONCILE_TOLERANCE, RECONCILE_FLOOR, dfsLedger, dfsDay,
+    RECONCILE_TOLERANCE, RECONCILE_FLOOR, dfsLedger, dfsDay, crawlCost, aiRun,
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
 // ---- results-page observations (2026-10-11, FIX_PLAN D26): an AI Overview (and every other SERP feature) is what ONE Google query showed at
@@ -380,6 +432,29 @@ run_ledger.dataforseo_usd = +run_ledger.dataforseo_usd.toFixed(4);
 run_ledger.dataforseo_tasks = __dfsSeen.size;
 run_ledger.dataforseo_tasks_repeated = __dfsRepeats.n;   // answers about a task already paid for (a crawl is billed once, at creation)
 run_ledger.dataforseo_tasks_unidentified = __dfsRepeats.no_id;
+
+// R32 (2026-10-14, FIX_PLAN §3.13): a crawl is billed for the pages it crawls, not for the pages it was asked for. DataForSEO quotes the
+// task when it is created (audit 588: $0.0900 for the 200 pages requested) and repeats that same quote in every later answer about it,
+// while the account fell $0.0320 for the 47 pages the crawl actually did. The quote is therefore not a measurement: the crawl is priced
+// pro rata from what the crawl itself reported and labelled ESTIMATED, with the quote, the pages asked for and the pages crawled in its
+// basis. `dataforseo_estimated_usd` is the part of this run's DataForSEO money that is an estimate; the rest is what each task reported.
+run_ledger.dataforseo_estimated_usd = 0;
+const __crawlQuote = Number(run_ledger.by_node['Start Crawl'] || 0);
+if (__crawlQuote > 0) {
+  let __crawlDone = null, __crawlAsked = 0;
+  try {
+    const __cc = $('Check Crawl').all(); const __cj = (__cc[__cc.length - 1] || {}).json || {};
+    if (__cj.pages_crawled !== undefined && __cj.pages_crawled !== null) __crawlDone = Number(__cj.pages_crawled);
+    __crawlAsked = Number(__cj.crawl_max_pages) || 0;
+  } catch (e) {}
+  if (!__crawlAsked) { try { __crawlAsked = Number($('Normalize Input').first().json.crawl_max_pages) || 0; } catch (e) {} }
+  const __cp = CC.crawlCost({ quoted: __crawlQuote, pages_crawled: __crawlDone, pages_requested: __crawlAsked });
+  run_ledger.crawl_cost = __cp;
+  run_ledger.by_node['Start Crawl'] = __cp.usd;
+  run_ledger.dataforseo_usd = +(run_ledger.dataforseo_usd - __crawlQuote + __cp.usd).toFixed(4);
+  run_ledger.dataforseo_estimated_usd = __cp.usd;   // a quote is never measured money
+}
+
 
 // ---- what Claude cost this run (G23, 2026-10-13): priced per call from what the run can actually see ----
 // A streaming call reports no token usage, so there is nothing to read; what the run does know is the prompt it built, the answer it got

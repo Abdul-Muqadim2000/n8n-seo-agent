@@ -1,6 +1,11 @@
 {
  "cache_kind": "watch",
  "connections": {
+  "After Run Ledger (Watch)": [
+   [
+    "Any Watch Targets?"
+   ]
+  ],
   "Any Ops Alerts (Watch)?": [
    [
     "Save Watch Ops Alert"
@@ -41,6 +46,11 @@
     "Nothing To Watch"
    ]
   ],
+  "DFS Balance (Watch)": [
+   [
+    "Run Ledger Row (Watch)"
+   ]
+  ],
   "Daily Schedule": [
    [
     "Ensure Sites Table (Watch)"
@@ -76,6 +86,11 @@
     "Ensure Page Watch Table"
    ]
   ],
+  "Ensure Run Ledger (Watch)": [
+   [
+    "DFS Balance (Watch)"
+   ]
+  ],
   "Ensure Sites Table (Watch)": [
    [
     "Ensure Pages Table (Watch)"
@@ -84,6 +99,11 @@
   "Fetch Watch Page": [
    [
     "Watch Read"
+   ]
+  ],
+  "Ledger Settle (Watch)": [
+   [
+    "Settle Run Ledger (Watch)"
    ]
   ],
   "Load Ladders (Watch)": [
@@ -119,6 +139,26 @@
   "Load Watch Cache": [
    [
     "Load Recheck Requests"
+   ]
+  ],
+  "Nothing To Watch": [
+   [
+    "Ledger Settle (Watch)"
+   ]
+  ],
+  "Post Watch Alert": [
+   [
+    "Ledger Settle (Watch)"
+   ]
+  ],
+  "Reserve Run Ledger (Watch)": [
+   [
+    "After Run Ledger (Watch)"
+   ]
+  ],
+  "Run Ledger Row (Watch)": [
+   [
+    "Reserve Run Ledger (Watch)"
    ]
   ],
   "Save Finding Recheck": [
@@ -181,7 +221,7 @@
   ],
   "Watch Plan": [
    [
-    "Any Watch Targets?"
+    "Ensure Run Ledger (Watch)"
    ]
   ],
   "Watch Read": [
@@ -202,6 +242,11 @@
   "Watch Run": [
    [
     "Ensure Sites Table (Watch)"
+   ]
+  ],
+  "Watched": [
+   [
+    "Ledger Settle (Watch)"
    ]
   ]
  },
@@ -251,7 +296,14 @@
   "Watch Ops Channels",
   "Send Watch Webhook?",
   "Post Watch Alert",
-  "Watched"
+  "Watched",
+  "Ensure Run Ledger (Watch)",
+  "Run Ledger Row (Watch)",
+  "Reserve Run Ledger (Watch)",
+  "Ledger Settle (Watch)",
+  "Settle Run Ledger (Watch)",
+  "DFS Balance (Watch)",
+  "After Run Ledger (Watch)"
  ],
  "schedule": {
   "every": "day",

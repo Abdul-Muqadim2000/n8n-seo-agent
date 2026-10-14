@@ -4,6 +4,12 @@
 // stated no closer than "$1.6-3.0". The report builders now price every Claude call from the characters its prompt really interpolated, the
 // characters it answered with and the thinking budget of its effort level (v5/code/_cost_cal.js, on `run_ledger.ai_cost`), and this node
 // writes that figure, the measured DataForSEO cost, the split and the one line that says which half is which.
+//
+// R33 (2026-10-14, FIX_PLAN §3.13): that pricing reached only the five report builders, so every other branch settled its RESERVATION —
+// `describe` (exec 591) settled $0.06 where its own Haiku node reported 4,874 / 1,306 tokens = $0.0114, with `ai_measured: false` and
+// "this branch priced no model call of its own". The same per-call pricing now runs HERE, over this run's own Claude nodes, so `describe`,
+// `track`, `profile`, `published`, `checkin` and `case_study` settle what they used. R31: a run in which no model node ran at all settles
+// **nothing** for Claude instead of the figure it reserved (CC.aiRun).
 // Shared cost kit (G23 + the estimate recalibration, 2026-10-13; FIX_PLAN G23, RESULTS §0b / §2.10).
 //
 // Two things were wrong with the money this engine reports.
@@ -238,7 +244,9 @@ const CC = (() => {
     const m = r4(Math.min(usd, o.measured_usd != null ? n0(o.measured_usd) : (o.measured ? usd : 0)));
     return { usd, measured_usd: m, estimated_usd: r4(usd - m) };
   };
-  const word = (p, basis) => p.usd <= 0 ? 'nothing spent'
+  // R31 (2026-10-14): "nothing spent" carries its reason when there is one — a free run has to say WHY it settles nothing, or the row
+  // reads exactly like a run whose figure was never computed.
+  const word = (p, basis) => p.usd <= 0 ? 'nothing spent' + (basis ? ' (' + basis + ')' : '')
     : p.estimated_usd <= 0 ? 'measured'
     : p.measured_usd <= 0 ? 'ESTIMATED (' + (basis || 'per-mode estimate') + ')'
     : 'PARTLY ESTIMATED: $' + p.measured_usd.toFixed(4) + ' measured, $' + p.estimated_usd.toFixed(4) + ' estimated (' + (basis || 'per-mode estimate') + ')';
@@ -283,6 +291,56 @@ const CC = (() => {
     return { add, state: st, seen };
   };
 
+  // (a2) R32 (2026-10-14, FIX_PLAN §3.13): **a crawl was settled at the price it was QUOTED, labelled "measured".** Audit 588 settled
+  //      `dfs_usd 0.09 measured` — what DataForSEO quotes when an on_page task is created for the **200 pages it was asked for** — while
+  //      47 were crawled and the account fell $0.031950 (+181%). DataForSEO bills a crawl for the work it does and never reports that
+  //      final amount per task (every later answer repeats the creation quote), so the run cannot measure it. What the run does know is
+  //      the quote, the pages it asked for and the pages the crawl reported: the figure is priced pro rata from those and is labelled an
+  //      ESTIMATE with all three numbers in its basis. Nothing here is ever called measured.
+  const crawlCost = (c) => {
+    const o = c || {};
+    const quoted = r4(o.quoted), req = Math.round(n0(o.pages_requested)), got = Math.round(n0(o.pages_crawled));
+    const out = { applies: false, usd: quoted, quoted, pages_requested: req, pages_crawled: got, per_page: 0, estimated: false, basis: '' };
+    if (quoted <= 0) { out.usd = 0; out.basis = 'no crawl was billed in this run'; return out; }
+    out.applies = true; out.estimated = true;
+    if (!(req > 0) || o.pages_crawled == null || !Number.isFinite(Number(o.pages_crawled))) {
+      out.pages_crawled = null;
+      out.basis = 'the crawl was quoted $' + quoted.toFixed(4) + ' when the task was created and never reported how many pages it crawled, '
+        + 'so the quote stands and is an ESTIMATE (DataForSEO bills a crawl for the pages it does, not for the pages it was asked for)';
+      return out;
+    }
+    const capped = Math.max(0, Math.min(got, req));
+    out.pages_crawled = capped;
+    out.per_page = +(quoted / req).toFixed(6);
+    out.usd = r4(quoted * (capped / req));
+    out.basis = 'the crawl was quoted $' + quoted.toFixed(4) + ' for the ' + req + ' pages it asked for and crawled ' + capped
+      + ', so it is priced at $' + out.usd.toFixed(4) + ' ($' + out.per_page + ' a page) — ESTIMATED: DataForSEO bills a crawl for the pages '
+      + 'it does and reports only the quote (audit 588 settled the $0.0900 quote as measured while the account fell $0.0320)';
+    return out;
+  };
+
+  // ---- 5b. the Claude money a run settles: what it priced, nothing at all, or the reservation (and it says which) -------------------
+  // R31 / R33 (2026-10-14, FIX_PLAN §3.13): a settle used to take the per-mode RESERVATION whenever the branch carried no priced figure —
+  // so a `free_only` backlink run that called no model at all settled $0.05 while telling the caller $0, and `describe` settled the $0.06
+  // it reserved where its own Haiku node reported 4,874 / 1,306 tokens ($0.0114). A reservation is a guard; a settlement is a measurement.
+  // `ran` is the model nodes of THIS execution that produced items, `checked` how many the workflow has: when a workflow has model nodes
+  // and none of them ran, the run spent nothing on Claude and settles nothing.
+  const aiRun = (o) => {
+    const x = o || {}, fig = x.figure || null, reserved = r4(x.reserved);
+    const ran = (x.ran || []).map(String).filter(Boolean);
+    const checked = Math.max(Math.round(n0(x.checked)), ran.length);
+    // a priced figure wins: calls it counted are calls that happened, whatever the node-by-node sweep could see
+    if (fig && n0(fig.calls) > 0) return { usd: r4(fig.usd), measured: fig.estimated === false, measured_usd: r4(fig.measured_usd),
+      source: 'priced', ran, checked, basis: String(fig.basis || '') };
+    if (checked > 0 && !ran.length) return { usd: 0, measured: true, measured_usd: 0, source: 'none', ran, checked,
+      basis: 'no model call ran in this run (all ' + checked + ' Claude node(s) of this workflow were checked)'
+        + (reserved > 0 ? ', so nothing is settled against the $' + reserved.toFixed(4) + ' it reserved' : '') };
+    return { usd: reserved, measured: false, measured_usd: 0, source: 'reserved', ran, checked,
+      basis: 'the per-mode reservation: ' + (ran.length
+        ? ran.length + ' model node(s) ran (' + ran.slice(0, 4).join(', ') + ') and this branch prices no call of its own'
+        : 'this branch priced no model call of its own') };
+  };
+
   // (b) **Nothing checked the sum against the money.** Every reservation now records the free `appendix/user_data` balance reading
   //     (seo_run_ledger.dfs_balance), so the day's reported spend can be held against the only measurement that cannot be argued with:
   //     how far the account actually fell between the day's first reading and the latest one. `rows` are the day's ledger rows,
@@ -322,7 +380,7 @@ const CC = (() => {
   };
 
   return { PRICES, UNKNOWN, CHARS_PER_TOKEN, THINK_SHARE, EST, DFS_EST, ALPHA, HEADROOM, KEEP, CAP, FACTOR_KEY, MODEL_PREFIX,
-    RECONCILE_TOLERANCE, RECONCILE_FLOOR, dfsLedger, dfsDay,
+    RECONCILE_TOLERANCE, RECONCILE_FLOOR, dfsLedger, dfsDay, crawlCost, aiRun,
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
 const ENDS = ["Build Audit Report", "Build Full Report", "Build Keyword File", "Build Ladder Report", "Build Word File"];   // the nodes that carry run_ledger (the five report builders), written in at build time
@@ -334,18 +392,62 @@ for (const n of ENDS) { const j = first(n); if (j && j.run_ledger) { led = j.run
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 const r4 = (v) => +Number(num(v) || 0).toFixed(4);
 
-// ---- Claude: the per-call figure where the run produced one, otherwise the reservation (and it says so) ----
-const fig = led && led.ai_cost ? led.ai_cost : null;
+// ---- Claude: this run's own calls, priced from what the run can see ----
+// R33: the block below is written in by build_v4.py section 59 — the same call table the report builders use, baked from the real model
+// nodes, so a branch that ends anywhere else still prices every Claude node that ran in it.
+let __ownAi = null, __aiRan = [], __aiChecked = 0;
+const run_ledger = {};   // R33 (2026-10-14, FIX_PLAN §3.13): this run's own Claude calls, priced exactly as a report builder prices them
+
+// ---- what Claude cost this run (G23, 2026-10-13): priced per call from what the run can actually see ----
+// A streaming call reports no token usage, so there is nothing to read; what the run does know is the prompt it built, the answer it got
+// and the thinking budget of the node's effort level. Every figure here is an ESTIMATE and says so (ai_cost.estimated / .basis), and the
+// per-model correction factors the monthly reconciliation writes into seo_cache are applied before the prices are.
+const __calRows = () => { try { return $('Load Cost Calibration').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) { return []; } };
+const __AI_CALLS = [{"node": "Keyword Seeds", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 1913, "input": "Route Mode", "fields": ["audience", "business", "country", "domain", "goal", "language_name", "site_description"], "from": [], "loop": false}, {"node": "Competitor Analyzer", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 4016, "input": "Collect Facts", "fields": ["avg_competitor_words", "competitor_digest", "competitor_questions", "competitors_read", "country", "existing_page", "existing_page_text", "facts", "goal", "keyword", "language_name", "page_type", "serp_digest", "stats_seen", "term_digest"], "from": [], "loop": false}, {"node": "Content Reviewer", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 2388, "input": "Build Content Prompt", "fields": ["content_prompt_comp", "content_prompt_our", "country", "domain", "language_name"], "from": [], "loop": false}, {"node": "Copywriter", "model": "claude-opus-5-5", "max_tokens": 32768, "effort": "medium", "streaming": true, "template_chars": 9555, "input": "Parse Brief", "fields": ["ai_target", "audience", "business", "business_facts", "content_brief", "country", "eeat_context", "existing_page", "existing_page_text", "goal", "keyword", "language_name", "page_type", "proof_context", "role_writer", "site_description", "spelling", "tone", "video_context"], "from": [], "loop": false}, {"node": "Critic", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 6212, "input": "Copywriter", "fields": ["output"], "from": [["Parse Brief", "audience"], ["Parse Brief", "business_facts"], ["Parse Brief", "case_facts_text"], ["Parse Brief", "content_brief.client_facts"], ["Parse Brief", "content_brief.evidence_plan"], ["Parse Brief", "content_brief.information_gain"], ["Parse Brief", "content_brief.objections"], ["Parse Brief", "content_brief.snippet_targets"], ["Parse Brief", "content_brief.target_audience"], ["Parse Brief", "content_brief.target_word_count"], ["Parse Brief", "content_brief.terms_to_use"], ["Parse Brief", "content_brief.unique_angle"], ["Parse Brief", "goal"], ["Parse Brief", "keyword"], ["Parse Brief", "page_type"], ["Parse Brief", "site_description"]], "loop": true}, {"node": "Editor", "model": "claude-opus-5-5", "max_tokens": 32768, "effort": "medium", "streaming": true, "template_chars": 6153, "input": "Needs Revision?", "fields": ["content_brief", "content_qa.length_instruction", "content_qa.main_content_words", "content_qa.missing_terms", "content_qa.target_word_count", "content_qa.warnings", "critique", "keyword", "language_name", "output", "spelling"], "from": [], "loop": true}, {"node": "Keyword Relevance", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "low", "streaming": false, "template_chars": 2242, "input": "Relevance Chunks", "fields": ["audience", "business", "chunk_index", "chunk_size", "chunk_total", "country", "goal", "keywords_text", "other_brands", "services"], "from": [], "loop": false}, {"node": "Ladder Keyword Relevance", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "low", "streaming": false, "template_chars": 2242, "input": "Ladder Relevance Chunks", "fields": ["audience", "business", "chunk_index", "chunk_size", "chunk_total", "country", "goal", "keywords_text", "other_brands", "services"], "from": [], "loop": false}, {"node": "Site Describer", "model": "claude-haiku-4-5-20251001", "max_tokens": 4096, "effort": "", "streaming": false, "template_chars": 1881, "input": "Site Pages", "fields": ["domain", "page_title", "pages_text", "site_pages", "site_text"], "from": [], "loop": false}, {"node": "Strategy Brief", "model": "claude-opus-5-5", "max_tokens": 24576, "effort": "medium", "streaming": true, "template_chars": 12497, "input": "Brief Context", "fields": ["ai_target", "angle_rules", "audience", "business", "business_facts", "client_pages", "client_signals", "competitor_analysis", "competitors_summary", "country", "coverage_digest", "cta", "currency", "domain", "eeat_context", "existing_page", "facts", "facts_list", "goal", "internal_link_candidates", "keyword", "keyword_data", "ladder_head", "ladder_links", "ladder_rung", "language_name", "page_notes", "page_type", "planned_link_targets", "proof_context", "recommended_page", "role_brief", "serp_features", "site_description", "spelling", "term_digest", "tone", "verdict", "verdict_reasons", "verdict_score", "video_context"], "from": [], "loop": false}, {"node": "Verdict Agent", "model": "claude-sonnet-5-5", "max_tokens": 16384, "effort": "medium", "streaming": false, "template_chars": 4379, "input": "Merge Keyword Data", "fields": ["audience", "business", "competitor_analysis", "competitors_summary", "country", "domain", "existing_page", "goal", "keyword", "keyword_data", "language_name", "page_type", "serp_digest", "site_authority"], "from": [], "loop": false}];
+const __chars = (v) => v == null ? 0 : (typeof v === 'string' ? v.length : JSON.stringify(v).length);
+const __at = (o, p) => String(p).split('.').reduce((v, k) => (v == null ? v : v[k]), o);
+const __jsonOf = (n) => { try { return ($(n).all() || []).map(i => (i && i.json) || {}); } catch (e) { return null; } };
+const __qaRounds = () => { try { return Math.max(1, Number($('Content QA').first().json.qa_round) || 1); } catch (e) { return 1; } };
+const __costCalls = [];
+for (const c of __AI_CALLS) {
+  const answers = __jsonOf(c.node);
+  if (!answers || !answers.length) continue;   // the node did not run in this execution
+  let prompt_chars = c.template_chars;
+  const own = c.input ? (__jsonOf(c.input) || [])[0] : null;
+  for (const f of c.fields) prompt_chars += __chars(__at(own || {}, f));
+  for (const p of c.from) prompt_chars += __chars(__at((__jsonOf(p[0]) || [])[0] || {}, p[1]));
+  const output_chars = answers.reduce((s, j) => s + (typeof j.output === 'string' ? j.output.length : __chars(j)), 0);
+  __costCalls.push({ node: c.node, model: c.model, max_tokens: c.max_tokens, effort: c.effort, streaming: c.streaming,
+    prompt_chars, output_chars, calls: answers.length * (c.loop ? __qaRounds() : 1) });
+}
+run_ledger.ai_cost = CC.runCost(__costCalls, CC.readCal(__calRows()).factors);
+run_ledger.ai_usd = run_ledger.ai_cost.usd;
+run_ledger.ai_cost_estimated = run_ledger.ai_cost.estimated;
+__ownAi = run_ledger.ai_cost;
+__aiRan = __costCalls.map(c => String(c.node));     // the Claude nodes that produced something in THIS execution
+__aiChecked = __AI_CALLS.length;                     // and how many this workflow has, so 'none ran' is a measurement, not a guess
+
 // Part of a content run IS measured (the Sonnet calls report usage) while its three streaming Opus nodes can only be estimated, so the
 // run figure's own split travels through rather than the whole amount being labelled one or the other.
-const ai = fig && (num(fig.calls) > 0)
-  ? { usd: r4(fig.usd), measured: fig.estimated === false, measured_usd: r4(fig.measured_usd), basis: String(fig.basis || '') }
-  : { usd: r4(row.est_usd), measured: false, measured_usd: 0, basis: 'the per-mode reservation: this branch priced no model call of its own' };
+const fig = (led && led.ai_cost && num(led.ai_cost.calls) > 0) ? led.ai_cost : (__ownAi && num(__ownAi.calls) > 0 ? __ownAi : (led && led.ai_cost) || null);
+const ai = CC.aiRun({ figure: fig, reserved: row.est_usd, ran: __aiRan, checked: __aiChecked });
 
-// ---- DataForSEO: measured whenever a paid node answered with a cost, otherwise the reservation ----
-const dfsM = !!(led && num(led.dataforseo_usd) != null && num(led.dataforseo_calls) > 0);
-const dfs = { usd: dfsM ? r4(led.dataforseo_usd) : r4(row.dfs_est_usd), measured: dfsM,
-  basis: dfsM ? 'the cost every DataForSEO task reported' : 'the per-mode reservation: no DataForSEO task reported a cost in this run' };
+// ---- DataForSEO: measured whenever a paid node answered with a cost, except the crawl, which is only ever quoted ----
+// R32 (2026-10-14, FIX_PLAN §3.13): the on_page crawl is billed for the pages it crawls and DataForSEO reports only the quote for the
+// pages it was ASKED for, so the report builders price it pro rata (CC.crawlCost) and hand the estimated part over as
+// `run_ledger.dataforseo_estimated_usd`. Everything else in the figure is the cost each task reported.
+// R31's shape on the DataForSEO side: a run whose ledger says no paid node ran spent nothing, and settles nothing — the reservation is
+// only fallen back on where this branch carries no ledger at all and the run therefore cannot know.
+const dfsKnown = !!(led && num(led.dataforseo_calls) != null);
+const dfsM = dfsKnown && num(led.dataforseo_calls) > 0 && num(led.dataforseo_usd) != null;
+const dfsEst = dfsM ? r4(led.dataforseo_estimated_usd) : 0;
+const crawl = (led && led.crawl_cost) || null;
+const dfs = { usd: dfsM ? r4(led.dataforseo_usd) : (dfsKnown ? 0 : r4(row.dfs_est_usd)), measured: dfsKnown && dfsEst <= 0,
+  measured_usd: dfsM ? Math.max(0, r4(r4(led.dataforseo_usd) - dfsEst)) : 0,
+  basis: dfsM
+    ? ('the cost every DataForSEO task reported' + (dfsEst > 0 && crawl ? '; the crawl is priced from the pages it crawled — ' + String(crawl.basis || '') : ''))
+    : dfsKnown ? 'no DataForSEO call ran in this run, so nothing is settled against the $' + r4(row.dfs_est_usd).toFixed(4) + ' it reserved'
+    : r4(row.dfs_est_usd) > 0 ? 'the per-mode reservation: this branch carries no ledger of its own' : 'no DataForSEO money was reserved or spent' };
 
 // R28 (2026-10-14, FIX_PLAN §3.12): the engine's own "measured" DataForSEO figures did not reconcile with the account — +73% in one window
 // of the 2026-10-14 run, +11.6% in another. Every reservation now records the free `appendix/user_data` balance reading (*DFS Balance* ->
@@ -368,8 +470,11 @@ return [{ json: {
   cost_basis: (dfs_day.comparable && !dfs_day.within ? split.cost_basis + '. Day check: ' + dfs_day.basis : split.cost_basis).slice(0, 500),
   dfs_balance: +Number(row.dfs_balance || 0).toFixed(6), dfs_day_reconciled: dfs_day.comparable && dfs_day.within,
   dfs_day: dfs_day,
+  // R32: what the crawl was quoted, what it crawled and what it was priced at — the three numbers behind the estimated half
+  dfs_estimated_usd: dfsEst, crawl_cost: crawl,
   // for the execution, the callback and anyone reading it: never stored as if it were measured
   ai_calls: fig ? Number(fig.calls) || 0 : 0, ai_in_tokens: fig ? Number(fig.in_tokens) || 0 : 0, ai_out_tokens: fig ? Number(fig.out_tokens) || 0 : 0,
-  ai_estimated: !ai.measured, ai_basis: ai.basis, ai_by_node: fig ? fig.by_node : {}, ai_models: fig ? fig.models : {},
+  ai_estimated: !ai.measured, ai_basis: ai.basis, ai_source: ai.source, ai_nodes_ran: ai.ran, ai_nodes_checked: ai.checked,
+  ai_by_node: fig ? fig.by_node : {}, ai_models: fig ? fig.models : {},
   ai_streaming_nodes: fig ? (fig.streaming_nodes || []) : [],
 } }];

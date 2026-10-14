@@ -27,7 +27,12 @@ def ledger_nodes(N_, C_, mode, tag, plan, ends, pos):
     N_.append(node('Reserve Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_insert_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS), [x + 440, y], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
     N_.append(node('Ledger Settle (' + tag + ')', 'n8n-nodes-base.code', 2, {'jsCode': set_js}, [x + 220, y + 160], executeOnce=True))
     N_.append(node('Settle Run Ledger (' + tag + ')', DT_TYPE, DT_VERSION, dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
-        [('run_id', '={{ $execution.id }}'), ('status', 'reserved')], {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}'}),
+        [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
+        # R31 (2026-10-14, FIX_PLAN §3.13): these workflows wrote back only the status and two figures, so the honest split the settle
+        # computes (G23) never reached the row — the same columns build_monitors.py has always written are written here too.
+        {'status': 'done', 'settled_usd': '={{ $json.settled_usd }}', 'dfs_usd': '={{ $json.dfs_usd }}', 'ai_usd': '={{ $json.ai_usd }}',
+         'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
+         'cost_basis': '={{ $json.cost_basis }}'}),
         [x + 440, y + 160], onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True))
     for a_, b_ in ([(plan, 'Ensure Run Ledger (' + tag + ')'), ('Ensure Run Ledger (' + tag + ')', row), (row, 'Reserve Run Ledger (' + tag + ')'),
                     ('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')] + [(e, 'Ledger Settle (' + tag + ')') for e in ends]):
@@ -466,10 +471,8 @@ link(C, 'Any Ladder Marks?', 'Mark Ladder Writing', 0); link(C, 'Any Ladder Mark
 link(C, 'Any AI Marks?', 'Mark AI Target Writing', 0); link(C, 'Any AI Marks?', 'Cadence Note', 1)
 link(C, 'Has Email (Cadence)?', 'Send Cadence Note', 0); link(C, 'Has Callback (Cadence)?', 'POST Cadence Note', 0)
 LEDGER_WIRING['SEO Agent — Content Cadence'] = ledger_nodes(N, C, 'content_cadence', 'Cadence', 'Cadence Plan', ['Cadence Note'], at(11, 4))
-_lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
-_lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}
-_lwj.setdefault('monitors', {}).update(LEDGER_WIRING)
-json.dump(_lwj, open(_lw9, 'w'), indent=1, sort_keys=True)
+# R31 (2026-10-14): the merge into harness/ledger_wiring.json moved to the END of this builder — ledger_mainline() fills each entry's
+# `ai_nodes` and `balance` at write time, and the Page Watch's entry does not exist until its own workflow is built below.
 # R16 (2026-10-13, FIX_PLAN §3.11, build_v4.py section 53): the cadence runs the fit gate over the STORED rungs, so a competitor's brand
 # planned before the gate existed is set aside with its reason instead of written, and the row is marked `set_aside` for everything else.
 _cadcode = {n['name']: n['parameters']['jsCode'] for n in N if n['type'] == 'n8n-nodes-base.code'}
@@ -612,6 +615,12 @@ link(C, 'Any Rechecks?', 'Save Finding Recheck', 0); link(C, 'Any Rechecks?', 'W
 link(C, 'Any Watch Alerts?', 'Save Watch Alerts', 0); link(C, 'Any Watch Alerts?', 'Watch Ops Alert', 1)
 link(C, 'Any Ops Alerts (Watch)?', 'Save Watch Ops Alert', 0); link(C, 'Any Ops Alerts (Watch)?', 'Watched', 1)
 link(C, 'Send Watch Webhook?', 'Post Watch Alert', 0); link(C, 'Send Watch Webhook?', 'Watched', 1)
+# R32's companion (2026-10-14, FIX_PLAN §3.13, the live check's third observation): Page Watch kept no ledger row at all — it was the one
+# workflow invisible to the spend guard, to the concurrency guard and to the day's reconciliation. It is free today (25 plain GETs), which
+# is exactly why it reserves $0 and settles $0: the row proves the run happened and costs nothing, and the day a check here starts calling
+# a paid API the guard already sees it. Its ends are the three places a watch run finishes.
+LEDGER_WIRING['SEO Agent — Page Watch'] = ledger_nodes(N, C, 'page_watch', 'Watch', 'Watch Plan',
+                                                       ['Watched', 'Nothing To Watch', 'Post Watch Alert'], at(15, 4))
 _wcode = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 'n8n-nodes-base.code'}
 for _n in ('Watch Plan', 'Watch Read', 'Watch Compare', 'Watch Rows', 'Watch Alerts'):
     assert 'const PW = (() => {' in _wcode[_n], _n + ': the page-watch kit is not inlined'
@@ -629,3 +638,10 @@ json.dump({'workflow': 'SEOagentPageWch1', 'table': PAGE_WATCH_TABLE, 'cache_kin
            'fetch': {'name': 'Fetch Watch Page', 'follows_redirects': False, 'response_format': 'text', 'retries': retry_lint.RETRY['maxTries']},
            'site_tracker_inspections': {'cap': 150, 'quota_per_day': 2000, 'rotation': 'oldest inspection first'}},
           open(os.path.join(HERE, 'harness', 'page_watch_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+# R9 / R31: the ledger wiring of every workflow this builder makes, AFTER they are written — ledger_mainline() fills `resume`,
+# `ai_nodes` (R31: the Claude nodes the settle checks before it settles a cent) and `balance` (R32: the free account reading) at write time.
+_lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
+_lwj = json.load(open(_lw9)) if os.path.exists(_lw9) else {}
+_lwj.setdefault('monitors', {}).update(LEDGER_WIRING)
+json.dump(_lwj, open(_lw9, 'w'), indent=1, sort_keys=True)
