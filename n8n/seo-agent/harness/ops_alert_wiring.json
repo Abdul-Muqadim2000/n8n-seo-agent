@@ -17,6 +17,21 @@
     "Save Ops Alert"
    ]
   ],
+  "Alert Retry Plan": [
+   [
+    "Any Alert Retry?"
+   ]
+  ],
+  "Alert Retry Result": [
+   [
+    "Save Alert Retry"
+   ]
+  ],
+  "Any Alert Retry?": [
+   [
+    "Post Alert Retry"
+   ]
+  ],
   "Email Ops": [
    [
     "Alert Delivery"
@@ -37,14 +52,29 @@
     "Ensure Ops Alerts Table"
    ]
   ],
+  "Load Open Alerts": [
+   [
+    "Alert Retry Plan"
+   ]
+  ],
   "Load Ops Alerts": [
    [
     "Alert Record"
    ]
   ],
+  "Post Alert Retry": [
+   [
+    "Alert Retry Result"
+   ]
+  ],
   "Post Alert Webhook": [
    [
     "Alert Delivery"
+   ]
+  ],
+  "Save Alert Delivery": [
+   [
+    "Load Open Alerts"
    ]
   ],
   "Save Ops Alert": [
@@ -79,9 +109,14 @@
   ],
   "row_update": "Save Alert Delivery",
   "writes": [
-   "delivered",
+   "attempt_log",
+   "attempts",
    "channels",
-   "notes"
+   "delivered",
+   "last_attempt_at",
+   "next_attempt_at",
+   "notes",
+   "severity"
   ]
  },
  "email": {
@@ -104,10 +139,57 @@
   "Post Alert Webhook",
   "Send Email?",
   "Alert Delivery",
-  "Save Alert Delivery"
+  "Save Alert Delivery",
+  "Load Open Alerts",
+  "Alert Retry Plan",
+  "Any Alert Retry?",
+  "Post Alert Retry",
+  "Alert Retry Result",
+  "Save Alert Retry"
  ],
+ "retry": {
+  "columns": [
+   "alert_key",
+   "workflow",
+   "node",
+   "message",
+   "execution_id",
+   "execution_url",
+   "mode",
+   "severity",
+   "first_seen_at",
+   "last_seen_at",
+   "count",
+   "channels",
+   "delivered",
+   "notes",
+   "attempts",
+   "last_attempt_at",
+   "next_attempt_at",
+   "attempt_log"
+  ],
+  "from": "Save Alert Delivery",
+  "gate": "Any Alert Retry?",
+  "load": "Load Open Alerts",
+  "plan": "Alert Retry Plan",
+  "post": "Post Alert Retry",
+  "post_full_response": true,
+  "result": "Alert Retry Result",
+  "save": "Save Alert Retry",
+  "writes": [
+   "attempt_log",
+   "attempts",
+   "channels",
+   "delivered",
+   "last_attempt_at",
+   "next_attempt_at",
+   "notes",
+   "severity"
+  ]
+ },
  "table": "seo_ops_alerts",
  "webhook": {
+  "full_response": true,
   "maxTries": 3,
   "name": "Post Alert Webhook",
   "onError": "continueRegularOutput",

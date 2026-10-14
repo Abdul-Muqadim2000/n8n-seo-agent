@@ -536,7 +536,8 @@ write(wf('SEOagentConsole1', 'SEO Agent — Console Alerts', N, C), 'SEO_Agent_C
 OPS_ALERT_SRC = _rdt('code/_ops_alert.js').rstrip('\n')
 # R29 (2026-10-14, FIX_PLAN §3.12, secret handling): a placeholder is baked, never the real Slack URL — this repository is public and the
 # generated JSON and harness code are both tracked. apply_env.py substitutes the value from n8n/.env into the JSON it imports.
-wsrc = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER)
+ALERT_RETRY_SRC = _rdt('code/_alert_retry.js').rstrip('\n')   # B-A7 (2026-10-15, build section 64): the retry / escalation rules
+wsrc = lambda p: rd(p).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('/*__ALERT_RETRY__*/', ALERT_RETRY_SRC).replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER)
 WATCH_GET = {'method': 'GET', 'url': '={{ $json.url }}', 'sendHeaders': True,
              'headerParameters': {'parameters': [{'name': 'User-Agent', 'value': 'Mozilla/5.0 (compatible; SEO-Agent/4.16; +page-watch)'}, {'name': 'Accept', 'value': 'text/html,application/xhtml+xml,text/plain,*/*'}]},
              # redirects are NOT followed: a key page that starts redirecting is itself the change we are watching for
@@ -586,9 +587,18 @@ N.append(iff('Any Ops Alerts (Watch)?', '{{ !$json.skip }}', at(32, 0)))
 N.append(node('Save Watch Ops Alert', DT_TYPE, DT_VERSION, dt_upsert_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, 'alert_key'), at(33, 0), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(code('Watch Ops Channels', wsrc('code/Watch_Ops_Channels.js'), at(34, 0), **SAFE))
 N.append(iff('Send Watch Webhook?', '{{ $json.send_webhook }}', at(35, 0)))
+# B-A7 (2026-10-15, build section 64): fullResponse, so the POST's status code is on the item. Without it a 404 from a revoked webhook
+# arrived as an item with no error and the digest counted as delivered (INVARIANTS rule 4).
 N.append(node('Post Watch Alert', 'n8n-nodes-base.httpRequest', 4.5, {'method': 'POST', 'url': '={{ $json.webhook_url }}', 'sendBody': True, 'specifyBody': 'json',
-    'jsonBody': '={{ JSON.stringify($json.webhook_body) }}', 'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+    'jsonBody': '={{ JSON.stringify($json.webhook_body) }}', 'options': {'timeout': 15000, 'response': {'response': {'fullResponse': True, 'neverError': True}}}},
     at(36, 0), onError='continueRegularOutput', **retry_lint.RETRY))
+# B-A7: the watch posted its digest and wrote nothing back, so every row it raised stayed `pending` for ever - indistinguishable from a post
+# that never arrived, and the retry sweep would have re-sent a digest that had already landed.
+N.append(code('Watch Ops Delivery', wsrc('code/Watch_Ops_Delivery.js'), at(37, 0), **SAFE))
+N.append(node('Save Watch Ops Delivery', DT_TYPE, DT_VERSION, dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
+    {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'severity': '={{ $json.severity }}', 'attempts': '={{ $json.attempts }}',
+     'last_attempt_at': '={{ $json.last_attempt_at }}', 'next_attempt_at': '={{ $json.next_attempt_at }}', 'attempt_log': '={{ $json.attempt_log }}',
+     'notes': '={{ $json.notes }}'}), at(38, 0), onError='continueRegularOutput', alwaysOutputData=True))
 N.append(node('Watched', 'n8n-nodes-base.noOp', 1, {}, at(36, 1)))
 N.append(sticky('Note Watch', f"""## SEO Agent — Page Watch (G11, v4.16)
 Runs **every day at 05:45** (n8n's clock) and on demand through *Watch Run* (`{{ domain | site_id, finding_key? }}`; the web app uses it for a single re-check). Free: one plain **GET** per key page plus `/robots.txt`, no JavaScript, no paid API, at most 25 pages a site.
@@ -607,7 +617,7 @@ for a, b in [('Daily Schedule', 'Ensure Sites Table (Watch)'), ('Watch Run', 'En
              ('Save Page Watch', 'Watch Cache Rows'), ('Watch Cache Rows', 'Save Watch Cache'), ('Save Watch Cache', 'Watch Recheck Rows'),
              ('Watch Recheck Rows', 'Any Rechecks?'), ('Save Finding Recheck', 'Watch Alerts'), ('Watch Alerts', 'Any Watch Alerts?'),
              ('Save Watch Alerts', 'Watch Ops Alert'), ('Watch Ops Alert', 'Any Ops Alerts (Watch)?'), ('Save Watch Ops Alert', 'Watch Ops Channels'),
-             ('Watch Ops Channels', 'Send Watch Webhook?')]:
+             ('Watch Ops Channels', 'Send Watch Webhook?'), ('Post Watch Alert', 'Watch Ops Delivery'), ('Watch Ops Delivery', 'Save Watch Ops Delivery')]:
     link(C, a, b)
 link(C, 'Any Watch Targets?', 'Fetch Watch Page', 0); link(C, 'Any Watch Targets?', 'Nothing To Watch', 1)
 link(C, 'Any Watch Rows?', 'Save Page Watch', 0); link(C, 'Any Watch Rows?', 'Watch Cache Rows', 1)
@@ -620,13 +630,15 @@ link(C, 'Send Watch Webhook?', 'Post Watch Alert', 0); link(C, 'Send Watch Webho
 # is exactly why it reserves $0 and settles $0: the row proves the run happened and costs nothing, and the day a check here starts calling
 # a paid API the guard already sees it. Its ends are the three places a watch run finishes.
 LEDGER_WIRING['SEO Agent — Page Watch'] = ledger_nodes(N, C, 'page_watch', 'Watch', 'Watch Plan',
-                                                       ['Watched', 'Nothing To Watch', 'Post Watch Alert'], at(15, 4))
+                                                       ['Watched', 'Nothing To Watch', 'Save Watch Ops Delivery'], at(15, 4))
 _wcode = {n['name']: n['parameters'].get('jsCode', '') for n in N if n['type'] == 'n8n-nodes-base.code'}
 for _n in ('Watch Plan', 'Watch Read', 'Watch Compare', 'Watch Rows', 'Watch Alerts'):
     assert 'const PW = (() => {' in _wcode[_n], _n + ': the page-watch kit is not inlined'
 assert 'const SM = (() => {' in _wcode['Watch Plan'], 'Watch Plan: the site model kit is not inlined'
-for _n in ('Watch Ops Alert', 'Watch Ops Channels'):
+for _n in ('Watch Ops Alert', 'Watch Ops Channels', 'Watch Ops Delivery'):
     assert 'const OA = (() => {' in _wcode[_n], _n + ': the ops-alert kit is not inlined'
+assert 'const AR = (() => {' in _wcode['Watch Ops Delivery'], 'Watch Ops Delivery: the alert-retry kit is not inlined'
+assert '/*__ALERT_RETRY__*/' not in _wcode['Watch Ops Delivery'], 'Watch Ops Delivery: marker left'
 assert not any(('/*__PAGE_WATCH__*/' in c_) or ('/*__OPS_ALERT__*/' in c_) for c_ in _wcode.values()), 'placeholder left in the Page Watch'
 write(wf('SEOagentPageWch1', 'SEO Agent — Page Watch', N, C), 'SEO_Agent_Page_Watch.json')
 

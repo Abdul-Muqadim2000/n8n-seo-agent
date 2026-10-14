@@ -128,48 +128,88 @@
    "ai_nodes": [
     "AI Outreach Writer"
    ],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Growth)",
+    "gate": "Any Alert Retry (Growth)?",
+    "load": "Load Open Alerts (Growth)",
+    "plan": "Alert Retry Plan (Growth)",
+    "post": "Post Alert Retry (Growth)",
+    "result": "Alert Retry Result (Growth)",
+    "save": "Save Alert Retry (Growth)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (Growth)",
    "balance_end": "DFS Balance End (Growth)",
    "est": {
     "ai": 0.55,
     "dfs": 0.05
    },
+   "guard": {
+    "gate": "After Run Ledger (Growth)",
+    "if": "Run Allowed? (Growth)",
+    "kit": "RG",
+    "load": "Load Open Runs (Growth)",
+    "refuse": "Refuse Run Ledger (Growth)"
+   },
    "ledger_load": "Load Run Ledger (Growth)",
    "measured": "Growth Metrics",
    "mode": "ai_growth",
+   "open_runs": "Load Open Runs (Growth)",
    "plan": "Growth Plan",
    "reserve": "Run Ledger Row (Growth)",
    "resume": "After Run Ledger (Growth)",
    "settle": "Settle Run Ledger (Growth)",
    "settle_from": [
     "Growth Report",
-    "Nothing To Do (Growth)"
+    "Nothing To Do (Growth)",
+    "Refuse Run Ledger (Growth)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (Growth)"
+    "Nothing To Do (Growth)",
+    "Refuse Run Ledger (Growth)"
    ]
   },
   "SEO Agent \u2014 AI Pulse": {
    "ai_nodes": [],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Pulse)",
+    "gate": "Any Alert Retry (Pulse)?",
+    "load": "Load Open Alerts (Pulse)",
+    "plan": "Alert Retry Plan (Pulse)",
+    "post": "Post Alert Retry (Pulse)",
+    "result": "Alert Retry Result (Pulse)",
+    "save": "Save Alert Retry (Pulse)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (Pulse)",
    "balance_end": "DFS Balance End (Pulse)",
    "est": {
     "ai": 0.004,
     "dfs": 0.08
    },
+   "guard": {
+    "gate": "After Run Ledger (Pulse)",
+    "if": "Run Allowed? (Pulse)",
+    "kit": "RG",
+    "load": "Load Open Runs (Pulse)",
+    "refuse": "Refuse Run Ledger (Pulse)"
+   },
    "ledger_load": "Load Run Ledger (Pulse)",
    "measured": "Pulse Metrics",
    "mode": "ai_pulse",
+   "open_runs": "Load Open Runs (Pulse)",
    "plan": "AI Plan",
    "reserve": "Run Ledger Row (Pulse)",
    "resume": "After Run Ledger (Pulse)",
    "settle": "Settle Run Ledger (Pulse)",
    "settle_from": [
     "Nothing To Do (Pulse)",
-    "Pulse Alerts"
+    "Pulse Alerts",
+    "Refuse Run Ledger (Pulse)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (Pulse)"
+    "Nothing To Do (Pulse)",
+    "Refuse Run Ledger (Pulse)"
    ]
   },
   "SEO Agent \u2014 AI Visibility Tracker": {
@@ -178,52 +218,103 @@
     "Answer Analyst",
     "Prompt Writer"
    ],
+   "alert_retry": {
+    "from": "Settle Run Ledger (AI)",
+    "gate": "Any Alert Retry (AI)?",
+    "load": "Load Open Alerts (AI)",
+    "plan": "Alert Retry Plan (AI)",
+    "post": "Post Alert Retry (AI)",
+    "result": "Alert Retry Result (AI)",
+    "save": "Save Alert Retry (AI)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (AI)",
    "balance_end": "DFS Balance End (AI)",
    "est": {
     "ai": 0.27,
     "dfs": 0.6
    },
+   "guard": {
+    "gate": "After Run Ledger (AI)",
+    "if": "Run Allowed? (AI)",
+    "kit": "RG",
+    "load": "Load Open Runs (AI)",
+    "refuse": "Refuse Run Ledger (AI)"
+   },
    "ledger_load": "Load Run Ledger (AI)",
    "measured": "AI Metrics",
    "mode": "ai_visibility",
+   "open_runs": "Load Open Runs (AI)",
    "plan": "AI Plan",
    "reserve": "Run Ledger Row (AI)",
    "resume": "After Run Ledger (AI)",
    "settle": "Settle Run Ledger (AI)",
    "settle_from": [
     "AI Report",
-    "Nothing To Do (AI)"
+    "Nothing To Do (AI)",
+    "Refuse Run Ledger (AI)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (AI)"
+    "Nothing To Do (AI)",
+    "Refuse Run Ledger (AI)"
    ]
   },
   "SEO Agent \u2014 Audit Scheduler": {
    "ai_nodes": [],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Audit)",
+    "gate": "Any Alert Retry (Audit)?",
+    "load": "Load Open Alerts (Audit)",
+    "plan": "Alert Retry Plan (Audit)",
+    "post": "Post Alert Retry (Audit)",
+    "result": "Alert Retry Result (Audit)",
+    "save": "Save Alert Retry (Audit)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (Audit)",
    "balance_end": "DFS Balance End (Audit)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
    },
+   "guard": {
+    "gate": "After Run Ledger (Audit)",
+    "if": "Run Allowed? (Audit)",
+    "kit": "RG",
+    "load": "Load Open Runs (Audit)",
+    "refuse": "Refuse Run Ledger (Audit)"
+   },
    "ledger_load": "Load Run Ledger (Audit)",
    "measured": "",
    "mode": "audit_schedule",
+   "open_runs": "Load Open Runs (Audit)",
    "plan": "Audit Schedule Plan",
    "reserve": "Run Ledger Row (Audit)",
    "resume": "After Run Ledger (Audit)",
    "settle": "Settle Run Ledger (Audit)",
    "settle_from": [
-    "Audits Started"
+    "Audits Started",
+    "Refuse Run Ledger (Audit)"
    ],
-   "settle_from_ends": []
+   "settle_from_ends": [
+    "Refuse Run Ledger (Audit)"
+   ]
   },
   "SEO Agent \u2014 Backlink Monitor": {
    "ai_nodes": [
     "Link Analyst",
     "Outreach Writer"
    ],
+   "alert_retry": {
+    "from": "Settle Run Ledger (BL)",
+    "gate": "Any Alert Retry (BL)?",
+    "load": "Load Open Alerts (BL)",
+    "plan": "Alert Retry Plan (BL)",
+    "post": "Post Alert Retry (BL)",
+    "result": "Alert Retry Result (BL)",
+    "save": "Save Alert Retry (BL)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (BL)",
    "balance_end": "DFS Balance End (BL)",
    "est": {
@@ -231,32 +322,60 @@
     "dfs": 0.05,
     "dfs_full": 0.45
    },
+   "guard": {
+    "gate": "After Run Ledger (BL)",
+    "if": "Run Allowed? (BL)",
+    "kit": "RG",
+    "load": "Load Open Runs (BL)",
+    "refuse": "Refuse Run Ledger (BL)"
+   },
    "ledger_load": "Load Run Ledger (BL)",
    "measured": "Parse Backlinks",
    "mode": "backlinks",
+   "open_runs": "Load Open Runs (BL)",
    "plan": "BL Plan",
    "reserve": "Run Ledger Row (BL)",
    "resume": "After Run Ledger (BL)",
    "settle": "Settle Run Ledger (BL)",
    "settle_from": [
     "BL Report",
-    "Nothing To Do (BL)"
+    "Nothing To Do (BL)",
+    "Refuse Run Ledger (BL)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (BL)"
+    "Nothing To Do (BL)",
+    "Refuse Run Ledger (BL)"
    ]
   },
   "SEO Agent \u2014 Content Cadence": {
    "ai_nodes": [],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Cadence)",
+    "gate": "Any Alert Retry (Cadence)?",
+    "load": "Load Open Alerts (Cadence)",
+    "plan": "Alert Retry Plan (Cadence)",
+    "post": "Post Alert Retry (Cadence)",
+    "result": "Alert Retry Result (Cadence)",
+    "save": "Save Alert Retry (Cadence)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (Cadence)",
    "balance_end": "DFS Balance End (Cadence)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
    },
+   "guard": {
+    "gate": "After Run Ledger (Cadence)",
+    "if": "Run Allowed? (Cadence)",
+    "kit": "RG",
+    "load": "Load Open Runs (Cadence)",
+    "refuse": "Refuse Run Ledger (Cadence)"
+   },
    "ledger_load": "Load Run Ledger (Cadence)",
    "measured": "",
    "mode": "content_cadence",
+   "open_runs": "Load Open Runs (Cadence)",
    "plan": "Cadence Plan",
    "reserve": "Run Ledger Row (Cadence)",
    "resume": "After Run Ledger (Cadence)",
@@ -266,12 +385,14 @@
     "Nothing To Write",
     "POST Cadence Note",
     "Planned Only",
+    "Refuse Run Ledger (Cadence)",
     "Send Cadence Note"
    ],
    "settle_from_ends": [
     "Nothing To Write",
     "POST Cadence Note",
     "Planned Only",
+    "Refuse Run Ledger (Cadence)",
     "Send Cadence Note"
    ]
   },
@@ -279,95 +400,176 @@
    "ai_nodes": [
     "Outreach Sequence Writer"
    ],
+   "alert_retry": {
+    "from": "Settle Run Ledger (LB)",
+    "gate": "Any Alert Retry (LB)?",
+    "load": "Load Open Alerts (LB)",
+    "plan": "Alert Retry Plan (LB)",
+    "post": "Post Alert Retry (LB)",
+    "result": "Alert Retry Result (LB)",
+    "save": "Save Alert Retry (LB)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (LB)",
    "balance_end": "DFS Balance End (LB)",
    "est": {
     "ai": 0.3,
     "dfs": 0.05
    },
+   "guard": {
+    "gate": "After Run Ledger (LB)",
+    "if": "Run Allowed? (LB)",
+    "kit": "RG",
+    "load": "Load Open Runs (LB)",
+    "refuse": "Refuse Run Ledger (LB)"
+   },
    "ledger_load": "Load Run Ledger (LB)",
    "measured": "",
    "mode": "link_builder",
+   "open_runs": "Load Open Runs (LB)",
    "plan": "LB Plan",
    "reserve": "Run Ledger Row (LB)",
    "resume": "After Run Ledger (LB)",
    "settle": "Settle Run Ledger (LB)",
    "settle_from": [
     "LB Report",
-    "Nothing To Do (LB)"
+    "Nothing To Do (LB)",
+    "Refuse Run Ledger (LB)"
    ],
    "settle_from_ends": [
-    "Nothing To Do (LB)"
+    "Nothing To Do (LB)",
+    "Refuse Run Ledger (LB)"
    ]
   },
   "SEO Agent \u2014 Page Watch": {
    "ai_nodes": [],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Watch)",
+    "gate": "Any Alert Retry (Watch)?",
+    "load": "Load Open Alerts (Watch)",
+    "plan": "Alert Retry Plan (Watch)",
+    "post": "Post Alert Retry (Watch)",
+    "result": "Alert Retry Result (Watch)",
+    "save": "Save Alert Retry (Watch)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (Watch)",
    "balance_end": "DFS Balance End (Watch)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
    },
+   "guard": {
+    "gate": "After Run Ledger (Watch)",
+    "if": "Run Allowed? (Watch)",
+    "kit": "RG",
+    "load": "Load Open Runs (Watch)",
+    "refuse": "Refuse Run Ledger (Watch)"
+   },
    "ledger_load": "Load Run Ledger (Watch)",
    "measured": "",
    "mode": "page_watch",
+   "open_runs": "Load Open Runs (Watch)",
    "plan": "Watch Plan",
    "reserve": "Run Ledger Row (Watch)",
    "resume": "After Run Ledger (Watch)",
    "settle": "Settle Run Ledger (Watch)",
    "settle_from": [
     "Nothing To Watch",
-    "Post Watch Alert",
+    "Refuse Run Ledger (Watch)",
+    "Save Watch Ops Delivery",
     "Watched"
    ],
-   "settle_from_ends": []
+   "settle_from_ends": [
+    "Refuse Run Ledger (Watch)"
+   ]
   },
   "SEO Agent \u2014 Rank Tracker": {
    "ai_nodes": [],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Tracker)",
+    "gate": "Any Alert Retry (Tracker)?",
+    "load": "Load Open Alerts (Tracker)",
+    "plan": "Alert Retry Plan (Tracker)",
+    "post": "Post Alert Retry (Tracker)",
+    "result": "Alert Retry Result (Tracker)",
+    "save": "Save Alert Retry (Tracker)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (Tracker)",
    "balance_end": "DFS Balance End (Tracker)",
    "est": {
     "ai": 0.0,
     "dfs": 0.15
    },
+   "guard": {
+    "gate": "After Run Ledger (Tracker)",
+    "if": "Run Allowed? (Tracker)",
+    "kit": "RG",
+    "load": "Load Open Runs (Tracker)",
+    "refuse": "Refuse Run Ledger (Tracker)"
+   },
    "ledger_load": "Load Run Ledger (Tracker)",
    "measured": "",
    "mode": "rank_tracker",
+   "open_runs": "Load Open Runs (Tracker)",
    "plan": "Tracker Plan",
    "reserve": "Run Ledger Row (Tracker)",
    "resume": "After Run Ledger (Tracker)",
    "settle": "Settle Run Ledger (Tracker)",
    "settle_from": [
     "Nothing To Track",
+    "Refuse Run Ledger (Tracker)",
     "Tracker Report"
    ],
    "settle_from_ends": [
-    "Nothing To Track"
+    "Nothing To Track",
+    "Refuse Run Ledger (Tracker)"
    ]
   },
   "SEO Agent \u2014 Site Tracker": {
    "ai_nodes": [
     "Site Brief"
    ],
+   "alert_retry": {
+    "from": "Settle Run Ledger (Site)",
+    "gate": "Any Alert Retry (Site)?",
+    "load": "Load Open Alerts (Site)",
+    "plan": "Alert Retry Plan (Site)",
+    "post": "Post Alert Retry (Site)",
+    "result": "Alert Retry Result (Site)",
+    "save": "Save Alert Retry (Site)",
+    "table": "seo_ops_alerts"
+   },
    "balance": "DFS Balance (Site)",
    "balance_end": "DFS Balance End (Site)",
    "est": {
     "ai": 0.03,
     "dfs": 0.01
    },
+   "guard": {
+    "gate": "After Run Ledger (Site)",
+    "if": "Run Allowed? (Site)",
+    "kit": "RG",
+    "load": "Load Open Runs (Site)",
+    "refuse": "Refuse Run Ledger (Site)"
+   },
    "ledger_load": "Load Run Ledger (Site)",
    "measured": "",
    "mode": "site_tracker",
+   "open_runs": "Load Open Runs (Site)",
    "plan": "Site Plan",
    "reserve": "Run Ledger Row (Site)",
    "resume": "After Run Ledger (Site)",
    "settle": "Settle Run Ledger (Site)",
    "settle_from": [
     "Nothing To Track (Site)",
+    "Refuse Run Ledger (Site)",
     "Site Report"
    ],
    "settle_from_ends": [
-    "Nothing To Track (Site)"
+    "Nothing To Track (Site)",
+    "Refuse Run Ledger (Site)"
    ]
   }
  },

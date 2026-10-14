@@ -138,6 +138,22 @@
               {
                 "name": "notes",
                 "type": "string"
+              },
+              {
+                "name": "attempts",
+                "type": "number"
+              },
+              {
+                "name": "last_attempt_at",
+                "type": "string"
+              },
+              {
+                "name": "next_attempt_at",
+                "type": "string"
+              },
+              {
+                "name": "attempt_log",
+                "type": "string"
               }
             ]
           },
@@ -180,7 +196,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// D25b (2026-10-12, system review FIX_PLAN.md): the seo_ops_alerts row for this failure (exact columns - the Data Table node auto-maps every\n// field it is given). The row is written BEFORE anything is sent, so a failed run is on record even when every channel is down.\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and\n  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still\n  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it\n  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      delivered: notify ? 'pending' : 'deduped',\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, cfgUrl, DEDUPE_MINUTES };\n})();\nconst alert = $('Format Alert').first().json;\nlet rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}\n// R29 / R30 (2026-10-14): a placeholder is baked, never the URL (it is a secret and this repository is public); apply_env.py substitutes\n// the real value at import time and an un-substituted placeholder reads as \"no webhook configured\" (OA.cfgUrl).\nconst CFG = { webhook_url: '__SEO_ALERT_WEBHOOK_URL__', email_to: 'devaicondeveloper3@gmail.com' };\nreturn [{ json: OA.plan(alert, rows, CFG).row }];\n"
+          "jsCode": "// D25b (2026-10-12, system review FIX_PLAN.md): the seo_ops_alerts row for this failure (exact columns - the Data Table node auto-maps every\n// field it is given). The row is written BEFORE anything is sent, so a failed run is on record even when every channel is down.\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  // B-A7 (2026-10-15): the moment a first attempt may be re-tried if nothing records a delivery. It must equal AR.RETRY_MINUTES — the\n  // sweep (v5/code/_alert_retry.js) is what acts on it — and build section 64 fails if the two ever drift apart.\n  const RETRY_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n  // B-A7: a row is \"carried\" when `delivered` NAMES the channel that took it ('webhook', 'email', 'webhook,email'). Everything else -\n  // pending, failed, not_sent, deduped - means the same thing to a human: nobody has it. The same rule as AR.carried.\n  const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');\n  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and\n  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still\n  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it\n  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      // B-A7 (2026-10-15): a repeat used to write `deduped` over whatever the row said, including over the channels that had CARRIED the\n      // alert — so a delivered alert looked undelivered and an undelivered one looked handled. A repeat of an alert something carried\n      // keeps that state; only an alert nobody has is marked deduped.\n      delivered: notify ? 'pending' : (prior && carried(prior) ? S(prior.delivered) : 'deduped'),\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500),\n      // B-A7: the retry state. `attempts` is 0 here on purpose — this row is written BEFORE anything is sent, and an attempt exists when it\n      // is made, not when it is planned (INVARIANTS rule 4). *Alert Delivery* writes the real count and the log a moment later; if the\n      // execution dies before it does, `next_attempt_at` has already booked the row for the next sweep, so the failure is not stranded.\n      attempts: n0(prior && prior.attempts),\n      last_attempt_at: S(prior && prior.last_attempt_at),\n      next_attempt_at: notify ? new Date(now.getTime() + RETRY_MINUTES * 60000).toISOString() : S(prior && prior.next_attempt_at),\n      attempt_log: S(prior && prior.attempt_log)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };\n})();\nconst alert = $('Format Alert').first().json;\nlet rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}\n// R29 / R30 (2026-10-14): a placeholder is baked, never the URL (it is a secret and this repository is public); apply_env.py substitutes\n// the real value at import time and an un-substituted placeholder reads as \"no webhook configured\" (OA.cfgUrl).\nconst CFG = { webhook_url: '__SEO_ALERT_WEBHOOK_URL__', email_to: 'devaicondeveloper3@gmail.com' };\nreturn [{ json: OA.plan(alert, rows, CFG).row }];\n"
         },
         "id": "07359c91-c322-5544-82f9-b7d42d6e9a76",
         "name": "Alert Record",
@@ -354,6 +370,46 @@
                 "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "attempts",
+                "displayName": "attempts",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_attempt_at",
+                "displayName": "last_attempt_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "next_attempt_at",
+                "displayName": "next_attempt_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "attempt_log",
+                "displayName": "attempt_log",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,
@@ -374,7 +430,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// D25b (2026-10-12, system review FIX_PLAN.md): decides what to send after the alert is on record. Two independent channels - a webhook\n// (no SMTP involved: it is the one that still works when the mail server refuses the connection, as it did on 2026-10-10 and 2026-10-12) and\n// the ops e-mail. A channel that is not configured is skipped, a repeat within OA.DEDUPE_MINUTES is not re-sent, and neither can fail the run.\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and\n  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still\n  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it\n  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      delivered: notify ? 'pending' : 'deduped',\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, cfgUrl, DEDUPE_MINUTES };\n})();\nconst alert = $('Format Alert').first().json;\nlet rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}\n// R29 / R30 (2026-10-14): the webhook URL is a SECRET and this repository is public, so the build bakes a placeholder and apply_env.py\n// substitutes the real value into the JSON it imports; an un-substituted placeholder reads as \"no webhook configured\" (OA.cfgUrl), so no\n// build can produce a node that posts to a customer's Slack. The ops address is not a secret and is baked as before ($env is blocked in nodes).\nconst CFG = { webhook_url: '__SEO_ALERT_WEBHOOK_URL__', email_to: 'devaicondeveloper3@gmail.com' };\nconst p = OA.plan(alert, rows, CFG);\n// did the row reach the table? (a Data Table node with onError: continueRegularOutput answers with an error item instead of failing)\nlet recorded = true, record_error = '';\ntry { const s = ($('Save Ops Alert').first() || {}).json || {}; if (s.error) { recorded = false; record_error = String(s.error.message || s.error.description || s.error).slice(0, 200); } }\ncatch (e) { recorded = false; record_error = 'the alert row was not written: ' + String(e.message || e).slice(0, 160); }\nreturn [{ json: {\n  subject: alert.subject, html: alert.html, plain: p.plain, alert_key: p.alert_key, severity: p.severity,\n  notify: p.notify, repeat: p.repeat, seen_count: p.row.count, channels: p.channels, channels_text: p.channels.join(', '),\n  webhook_url: p.webhook_url, webhook_body: p.webhook_body, email_to: p.email_to,\n  send_webhook: !!(p.notify && p.webhook_url), send_email: !!(p.notify && p.email_to),\n  recorded, record_error,\n  note: p.notify\n    ? (p.channels.filter(c => c !== 'data_table').length ? 'sending to ' + p.channels.filter(c => c !== 'data_table').join(' and ') : 'no channel is configured - the alert is only on record in seo_ops_alerts')\n    : 'the same failure was alerted less than ' + p.DEDUPE_MINUTES + ' minutes ago: recorded (' + p.row.count + 'x), not re-sent'\n} }];\n"
+          "jsCode": "// D25b (2026-10-12, system review FIX_PLAN.md): decides what to send after the alert is on record. Two independent channels - a webhook\n// (no SMTP involved: it is the one that still works when the mail server refuses the connection, as it did on 2026-10-10 and 2026-10-12) and\n// the ops e-mail. A channel that is not configured is skipped, a repeat within OA.DEDUPE_MINUTES is not re-sent, and neither can fail the run.\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  // B-A7 (2026-10-15): the moment a first attempt may be re-tried if nothing records a delivery. It must equal AR.RETRY_MINUTES — the\n  // sweep (v5/code/_alert_retry.js) is what acts on it — and build section 64 fails if the two ever drift apart.\n  const RETRY_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n  // B-A7: a row is \"carried\" when `delivered` NAMES the channel that took it ('webhook', 'email', 'webhook,email'). Everything else -\n  // pending, failed, not_sent, deduped - means the same thing to a human: nobody has it. The same rule as AR.carried.\n  const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');\n  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and\n  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still\n  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it\n  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      // B-A7 (2026-10-15): a repeat used to write `deduped` over whatever the row said, including over the channels that had CARRIED the\n      // alert — so a delivered alert looked undelivered and an undelivered one looked handled. A repeat of an alert something carried\n      // keeps that state; only an alert nobody has is marked deduped.\n      delivered: notify ? 'pending' : (prior && carried(prior) ? S(prior.delivered) : 'deduped'),\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500),\n      // B-A7: the retry state. `attempts` is 0 here on purpose — this row is written BEFORE anything is sent, and an attempt exists when it\n      // is made, not when it is planned (INVARIANTS rule 4). *Alert Delivery* writes the real count and the log a moment later; if the\n      // execution dies before it does, `next_attempt_at` has already booked the row for the next sweep, so the failure is not stranded.\n      attempts: n0(prior && prior.attempts),\n      last_attempt_at: S(prior && prior.last_attempt_at),\n      next_attempt_at: notify ? new Date(now.getTime() + RETRY_MINUTES * 60000).toISOString() : S(prior && prior.next_attempt_at),\n      attempt_log: S(prior && prior.attempt_log)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };\n})();\nconst alert = $('Format Alert').first().json;\nlet rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}\n// R29 / R30 (2026-10-14): the webhook URL is a SECRET and this repository is public, so the build bakes a placeholder and apply_env.py\n// substitutes the real value into the JSON it imports; an un-substituted placeholder reads as \"no webhook configured\" (OA.cfgUrl), so no\n// build can produce a node that posts to a customer's Slack. The ops address is not a secret and is baked as before ($env is blocked in nodes).\nconst CFG = { webhook_url: '__SEO_ALERT_WEBHOOK_URL__', email_to: 'devaicondeveloper3@gmail.com' };\nconst p = OA.plan(alert, rows, CFG);\n// did the row reach the table? (a Data Table node with onError: continueRegularOutput answers with an error item instead of failing)\nlet recorded = true, record_error = '';\ntry { const s = ($('Save Ops Alert').first() || {}).json || {}; if (s.error) { recorded = false; record_error = String(s.error.message || s.error.description || s.error).slice(0, 200); } }\ncatch (e) { recorded = false; record_error = 'the alert row was not written: ' + String(e.message || e).slice(0, 160); }\nreturn [{ json: {\n  subject: alert.subject, html: alert.html, plain: p.plain, alert_key: p.alert_key, severity: p.severity,\n  notify: p.notify, repeat: p.repeat, seen_count: p.row.count, channels: p.channels, channels_text: p.channels.join(', '),\n  webhook_url: p.webhook_url, webhook_body: p.webhook_body, email_to: p.email_to,\n  send_webhook: !!(p.notify && p.webhook_url), send_email: !!(p.notify && p.email_to),\n  recorded, record_error,\n  note: p.notify\n    ? (p.channels.filter(c => c !== 'data_table').length ? 'sending to ' + p.channels.filter(c => c !== 'data_table').join(' and ') : 'no channel is configured - the alert is only on record in seo_ops_alerts')\n    : 'the same failure was alerted less than ' + p.DEDUPE_MINUTES + ' minutes ago: recorded (' + p.row.count + 'x), not re-sent'\n} }];\n"
         },
         "id": "c7199223-cbef-5a1a-88bf-a18be9964b58",
         "name": "Alert Channels",
@@ -431,7 +487,8 @@
             "timeout": 15000,
             "response": {
               "response": {
-                "neverError": true
+                "neverError": true,
+                "fullResponse": true
               }
             }
           }
@@ -486,7 +543,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// R6 (2026-10-13, re-rating RESULTS §3.2): no ops alert had ever recorded a delivery. All three rows in seo_ops_alerts sat at\n// `delivered: \"pending\"` — including the two of 2026-10-12 18:34 whose e-mail Gmail had **accepted** (execs 464/465) — because nothing wrote\n// the result back after *Post Alert Webhook* / *Email Ops*. A delivery rate (G21) cannot be measured from rows that never leave \"pending\".\n// This node runs after whichever channel branch finished (both have onError: continueRegularOutput, so a failure arrives as an item with\n// `error`) and writes back what carried the alert. It may run twice — once per branch — and the later run sees both channels, so the last\n// write is the complete one; the update matches on alert_key, so repeating it is harmless.\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and\n  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still\n  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it\n  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      delivered: notify ? 'pending' : 'deduped',\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, cfgUrl, DEDUPE_MINUTES };\n})();\nconst alert = $('Format Alert').first().json;\nlet rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}\n// R29 / R30 (2026-10-14): a placeholder is baked, never the URL (it is a secret and this repository is public); apply_env.py substitutes\n// the real value at import time and an un-substituted placeholder reads as \"no webhook configured\" (OA.cfgUrl).\nconst CFG = { webhook_url: '__SEO_ALERT_WEBHOOK_URL__', email_to: 'devaicondeveloper3@gmail.com' };\nconst p = OA.plan(alert, rows, CFG);\n// a node that did not run in this execution throws when it is referenced\nconst state = (name) => {\n  let items = null;\n  try { items = ($(name).all() || []).map(i => (i && i.json) || {}); } catch (e) { return { ran: false, ok: null, detail: 'not attempted' }; }\n  if (!items.length) return { ran: false, ok: null, detail: 'not attempted' };\n  const bad = items.find(x => x && x.error);\n  if (bad) return { ran: true, ok: false, detail: String((bad.error && (bad.error.message || bad.error.description)) || bad.error).replace(/\\s+/g, ' ').slice(0, 200) };\n  const accepted = items.flatMap(x => Array.isArray(x.accepted) ? x.accepted : []);\n  return { ran: true, ok: true, detail: accepted.length ? 'accepted by ' + accepted.length + ' recipient(s)' : 'sent' };\n};\nconst wh = state('Post Alert Webhook'), em = state('Email Ops');\nconst carried = [wh.ok ? 'webhook' : '', em.ok ? 'email' : ''].filter(Boolean);\nconst failed = [wh.ran && !wh.ok ? 'webhook failed (' + wh.detail + ')' : '', em.ran && !em.ok ? 'email failed (' + em.detail + ')' : ''].filter(Boolean);\nconst delivered = carried.length ? carried.join(',') : failed.length ? 'failed' : p.notify ? 'not_sent' : 'deduped';\nconst notes = [carried.length ? 'delivered by ' + carried.map(c => c + ' (' + (c === 'webhook' ? wh.detail : em.detail) + ')').join(' and ') : '', ...failed,\n  carried.length || failed.length ? '' : 'no channel ran: the alert is only on record in ' + 'seo_ops_alerts',\n  'recorded in seo_ops_alerts (attempt ' + p.row.count + ')'].filter(Boolean).join('; ').slice(0, 500);\nreturn [{ json: { alert_key: p.alert_key, delivered, channels: p.channels.join(','), notes,\n  // not written to the table, but visible in the execution and useful to a person reading it\n  carried_by: carried, failed_channels: failed, severity: p.severity, workflow: p.row.workflow, node: p.row.node } }];\n"
+          "jsCode": "// R6 (2026-10-13, re-rating RESULTS §3.2): no ops alert had ever recorded a delivery. All three rows in seo_ops_alerts sat at\n// `delivered: \"pending\"` — including the two of 2026-10-12 18:34 whose e-mail Gmail had **accepted** (execs 464/465) — because nothing wrote\n// the result back after *Post Alert Webhook* / *Email Ops*. A delivery rate (G21) cannot be measured from rows that never leave \"pending\".\n// This node runs after whichever channel branch finished (both have onError: continueRegularOutput, so a failure arrives as an item with\n// `error`) and writes back what carried the alert. It may run twice — once per branch — and the later run sees both channels, so the last\n// write is the complete one; the update matches on alert_key, so repeating it is harmless.\n// B-A7 (2026-10-15, build section 64): and it now books the next attempt. Two things changed with it:\n//   * the webhook is judged on its STATUS CODE. *Post Alert Webhook* is `neverError`, so a 404 from a revoked Slack hook used to arrive as\n//     an item with no `error` and was written down as a delivery. `fullResponse` puts the code on the item and AR.posted reads it: a row is\n//     marked delivered only on evidence of delivery (INVARIANTS rule 4), never on the attempt having been made.\n//   * every attempt is on the row — the number, the time, the one-line outcome in `attempt_log`, and `next_attempt_at`, which is what the\n//     sweep in every scheduled workflow looks for. A failure that reaches no human is not handled (rule 3).\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  // B-A7 (2026-10-15): the moment a first attempt may be re-tried if nothing records a delivery. It must equal AR.RETRY_MINUTES — the\n  // sweep (v5/code/_alert_retry.js) is what acts on it — and build section 64 fails if the two ever drift apart.\n  const RETRY_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n  // B-A7: a row is \"carried\" when `delivered` NAMES the channel that took it ('webhook', 'email', 'webhook,email'). Everything else -\n  // pending, failed, not_sent, deduped - means the same thing to a human: nobody has it. The same rule as AR.carried.\n  const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');\n  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and\n  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still\n  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it\n  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      // B-A7 (2026-10-15): a repeat used to write `deduped` over whatever the row said, including over the channels that had CARRIED the\n      // alert — so a delivered alert looked undelivered and an undelivered one looked handled. A repeat of an alert something carried\n      // keeps that state; only an alert nobody has is marked deduped.\n      delivered: notify ? 'pending' : (prior && carried(prior) ? S(prior.delivered) : 'deduped'),\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500),\n      // B-A7: the retry state. `attempts` is 0 here on purpose — this row is written BEFORE anything is sent, and an attempt exists when it\n      // is made, not when it is planned (INVARIANTS rule 4). *Alert Delivery* writes the real count and the log a moment later; if the\n      // execution dies before it does, `next_attempt_at` has already booked the row for the next sweep, so the failure is not stranded.\n      attempts: n0(prior && prior.attempts),\n      last_attempt_at: S(prior && prior.last_attempt_at),\n      next_attempt_at: notify ? new Date(now.getTime() + RETRY_MINUTES * 60000).toISOString() : S(prior && prior.next_attempt_at),\n      attempt_log: S(prior && prior.attempt_log)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };\n})();\n// ---- B-A7 (2026-10-15, build section 64): an undelivered alert is re-attempted, escalated, and never called delivered ----\n// D25b gave the alert a second channel and a row of its own; R6 put the delivery result back on that row. Nothing ever acted on it: one\n// attempt per channel, no second try, no escalation — and the blunt evidence is that **no ops alert has ever reached a human**. Rule 3 of\n// docs/system-review-2026-10-14/INVARIANTS.md ends on exactly this clause: *a failure that reaches no human is not handled.*\n//\n// What this kit decides, and nothing else does:\n//  * **which rows are still open.** Not `delivered === 'pending'` — a row is open when nothing in `delivered` NAMES a channel that carried\n//    it (AR.carried). `pending`, `failed`, `not_sent` and `deduped` all mean the same thing to a human: nobody has it. That matters because\n//    OA.plan writes `deduped` over the state of a repeat, so judging on one magic word would have made a repeated failure unretryable.\n//  * **when.** RETRY_MINUTES after the last attempt, flat — never exponential. The sweepers ARE the schedule (every run of every scheduled\n//    workflow and every run of the Error Handler), so the interval only has to be long enough not to fight OA.DEDUPE_MINUTES.\n//  * **how loud.** From ESCALATE_AFTER attempts the row is `critical` whatever it started as, and the payload leads with how long it has\n//    been undelivered, so when it finally lands it lands as the outage it is.\n//  * **when to stop.** MAX_ATTEMPTS, after which the row is `abandoned` with the reason. Rule 4: it is never marked delivered. Stopping is\n//    not hiding — the row is the record of last resort and it still says, in words, that it reached nobody.\n//  * **every attempt, not just the last.** `attempt_log` keeps one line per attempt; MAX_ATTEMPTS lines fit inside the cap, so the log a\n//    row carries is complete, never a window onto the end of a longer history.\nconst AR = (() => {\n  const RETRY_MINUTES = 30;    // N — see the note above OA.DEDUPE_MINUTES: a retry must never be a flood\n  const ESCALATE_AFTER = 3;    // K — attempt 1 is the live send; 2 and 3 are catch-up. Three is no longer a blip, it is a broken channel.\n  const MAX_ATTEMPTS = 10;\n  const PER_SWEEP = 5;         // one run never posts more than this, so a bad day cannot turn into a hundred posts\n  const LOG_MAX = 1200;        // 10 attempts x ~70 characters: the whole history fits, by construction\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  const ms = (v) => { const t = Date.parse(S(v)); return Number.isFinite(t) && t > 0 ? t : 0; };\n  const iso = (t) => new Date(t).toISOString();\n\n  // R29 / R30: an un-substituted placeholder is not a URL and is not a channel (the same rule as OA.cfgUrl, repeated here so this kit can\n  // be inlined on its own in a workflow that has no OA)\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n  // what counts as delivered: Alert Delivery writes the channels that carried it ('webhook', 'email', 'webhook,email').\n  const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');\n  const abandoned = (r) => S(r && r.delivered).toLowerCase() === 'abandoned';\n  const attemptsOf = (r) => Math.max(0, n0(r && r.attempts));\n  // when this row may be tried again: what the last attempt booked, else the last attempt / sighting plus the interval. A row written\n  // before this existed carries neither, so its `last_seen_at` is what schedules it — it is retried, not stranded.\n  const dueAt = (r) => ms(r && r.next_attempt_at) || ((ms(r && r.last_attempt_at) || ms(r && r.last_seen_at)) + RETRY_MINUTES * 60000);\n  const isOpen = (r) => !!(r && !r.error && S(r.alert_key) && !carried(r) && !abandoned(r));\n  const retryable = (r, nowMs) => isOpen(r) && attemptsOf(r) < MAX_ATTEMPTS && dueAt(r) > 0 && dueAt(r) <= nowMs;\n  const severityFor = (r, attempts) => (attempts >= ESCALATE_AFTER ? 'critical' : (S(r && r.severity) || 'high'));\n  const ageMinutes = (r, nowMs) => { const t = ms(r && r.first_seen_at) || ms(r && r.last_seen_at); return t ? Math.round((nowMs - t) / 60000) : 0; };\n  const ageText = (min) => min >= 1440 ? (Math.round(min / 144) / 10) + ' days' : min >= 60 ? (Math.round(min / 6) / 10) + ' hours' : min + ' minutes';\n\n  // one line per attempt, oldest first; the newest is appended and nothing earlier is ever rewritten\n  const logLines = (r) => S(r && r.attempt_log).split('\\n').map(x => x.trim()).filter(Boolean);\n  const addAttempt = (r, attempt, atIso, channel, ok, detail) => {\n    const line = (attempt + ' ' + S(atIso).replace(/\\.\\d+Z$/, 'Z') + ' ' + channel + ' ' + (ok ? 'delivered' : 'failed') + (detail ? ': ' + S(detail) : '')).slice(0, 160);\n    const lines = logLines(r).concat([line]);\n    let out = lines.join('\\n');\n    while (out.length > LOG_MAX && lines.length > 1) { lines.splice(1, 1); out = lines.join('\\n'); }   // the first attempt and the recent ones are what a reader needs\n    return out;\n  };\n\n  // what the POST said. `fullResponse` + `neverError` means the node always answers with a status code, so delivery is judged on the\n  // status and never on \"the node did not throw\" — a 404 from a revoked Slack hook used to read as a delivery (Rule 4).\n  const posted = (item) => {\n    const x = (item && item.json) || item || {};\n    if (x.error) return { ok: false, detail: S(x.error.message || x.error.description || x.error).replace(/\\s+/g, ' ').slice(0, 160) };\n    const code = Number(x.statusCode);\n    if (Number.isFinite(code) && code > 0) {\n      if (code >= 200 && code < 300) return { ok: true, detail: 'HTTP ' + code };\n      const body = typeof x.body === 'string' ? x.body : (x.body ? JSON.stringify(x.body) : '');\n      return { ok: false, detail: ('HTTP ' + code + (body ? ': ' + body : '')).replace(/\\s+/g, ' ').slice(0, 160) };\n    }\n    return { ok: false, detail: 'no status code came back, so nothing confirms it arrived' };\n  };\n\n  const payload = (r, attempt, severity, nowMs) => {\n    const min = ageMinutes(r, nowMs);\n    const head = (attempt >= ESCALATE_AFTER ? 'STILL UNDELIVERED after ' + attempt + ' attempts over ' + ageText(min) : 'Undelivered alert, attempt ' + attempt + ' of ' + MAX_ATTEMPTS);\n    const subject = '[' + severity + '] ' + head + ' — ' + (S(r.workflow) || 'unknown workflow');\n    const plain = [subject, S(r.workflow) + ' failed at \"' + S(r.node) + '\"',\n      'Execution ' + (S(r.execution_id) || '?') + (S(r.mode) ? ' (' + S(r.mode) + ')' : ''), S(r.execution_url), S(r.message),\n      'First seen ' + S(r.first_seen_at) + ', seen ' + n0(r.count) + ' time(s); this alert has reached nobody.'].filter(Boolean).join('\\n');\n    return { subject, plain, body: {\n      text: plain, content: plain, summary: subject,\n      alert: { key: S(r.alert_key), workflow: S(r.workflow), node: S(r.node), message: S(r.message), execution_id: S(r.execution_id),\n        execution_url: S(r.execution_url), mode: S(r.mode), severity, seen_count: n0(r.count), first_seen_at: S(r.first_seen_at),\n        attempt, of: MAX_ATTEMPTS, undelivered_for_minutes: min, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),\n        source: 'seo-agent-alert-retry' } } };\n  };\n\n  // the rows this sweep will re-send, oldest first. `where` names the workflow doing the sweeping, for the row's notes.\n  const plan = (rows, cfg) => {\n    const c = cfg || {};\n    const nowMs = ms(c.now) || Date.now();\n    const url = cfgUrl(c.webhook_url);\n    const all = (rows || []).filter(r => r && !r.error && S(r.alert_key));\n    const open = all.filter(isOpen);\n    const ready = open.filter(r => retryable(r, nowMs)).sort((a, b) => dueAt(a) - dueAt(b));\n    const spent = open.filter(r => isOpen(r) && attemptsOf(r) >= MAX_ATTEMPTS);\n    const take = ready.slice(0, PER_SWEEP);\n    const items = take.map(r => {\n      const attempt = attemptsOf(r) + 1;\n      const severity = severityFor(r, attempt);\n      const p = payload(r, attempt, severity, nowMs);\n      return { alert_key: S(r.alert_key), attempt, severity, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),\n        row: r, webhook_url: url, webhook_body: p.body, subject: p.subject, plain: p.plain, sweeper: S(c.where) };\n    });\n    return { items, open: open.length, due: ready.length, posting: url ? items.length : 0, spent: spent.length,\n      webhook_url: url, now: iso(nowMs), where: S(c.where),\n      reason: !open.length ? 'no alert is waiting for delivery'\n        : !ready.length ? open.length + ' alert(s) are waiting, none of them due for another try yet (' + RETRY_MINUTES + ' minutes between tries)'\n        : !url ? ready.length + ' alert(s) have reached nobody and there is no channel to try: SEO_ALERT_WEBHOOK_URL is not set'\n        : 'retrying ' + items.length + ' of ' + ready.length + ' undelivered alert(s)' };\n  };\n\n  // what to write back after the POSTs: one row per attempt, with the whole history and the honest state.\n  const settle = (planned, responses) => (planned || []).map((p, i) => {\n    const r = p.row || {}, res = posted((responses || [])[i]);\n    const attempt = n0(p.attempt), sev = S(p.severity) || 'high';\n    const giveUp = !res.ok && attempt >= MAX_ATTEMPTS;\n    const nowMs = ms(p.at) || Date.now();\n    return {\n      alert_key: S(p.alert_key),\n      // Rule 4: delivered only on the evidence of a 2xx; otherwise the row keeps saying nobody has it.\n      delivered: res.ok ? 'webhook' : giveUp ? 'abandoned' : 'failed',\n      channels: S(r.channels) || 'data_table',\n      severity: res.ok ? sev : severityFor(r, attempt),\n      attempts: attempt,\n      last_attempt_at: iso(nowMs),\n      next_attempt_at: res.ok || giveUp ? '' : iso(nowMs + RETRY_MINUTES * 60000),\n      attempt_log: addAttempt(r, attempt, iso(nowMs), 'webhook', res.ok, res.detail),\n      notes: (res.ok\n        ? 'delivered by webhook on attempt ' + attempt + ' (' + res.detail + '), re-sent by ' + (S(p.sweeper) || 'a later run')\n        : giveUp\n          ? 'given up after ' + attempt + ' attempts over ' + ageText(ageMinutes(r, nowMs)) + ' — this alert reached nobody and is on record here only (' + res.detail + ')'\n          : 'attempt ' + attempt + ' of ' + MAX_ATTEMPTS + ' failed (' + res.detail + '), next try after ' + RETRY_MINUTES + ' minutes'\n            + (attempt >= ESCALATE_AFTER ? '; raised to critical: ' + attempt + ' attempts over ' + ageText(ageMinutes(r, nowMs)) + ' have reached nobody' : '')\n      ).slice(0, 500),\n      ok: res.ok, detail: res.detail, escalated: !res.ok && attempt >= ESCALATE_AFTER, gave_up: giveUp\n    };\n  });\n\n  return { plan, settle, posted, carried, isOpen, retryable, attemptsOf, dueAt, severityFor, addAttempt, logLines, cfgUrl, ageText,\n           RETRY_MINUTES, ESCALATE_AFTER, MAX_ATTEMPTS, PER_SWEEP };\n})();\nconst alert = $('Format Alert').first().json;\nlet rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}\n// R29 / R30 (2026-10-14): a placeholder is baked, never the URL (it is a secret and this repository is public); apply_env.py substitutes\n// the real value at import time and an un-substituted placeholder reads as \"no webhook configured\" (OA.cfgUrl).\nconst CFG = { webhook_url: '__SEO_ALERT_WEBHOOK_URL__', email_to: 'devaicondeveloper3@gmail.com' };\nconst p = OA.plan(alert, rows, CFG);\n// a node that did not run in this execution throws when it is referenced\nconst state = (name, judge) => {\n  let items = null;\n  try { items = ($(name).all() || []).map(i => (i && i.json) || {}); } catch (e) { return { ran: false, ok: null, detail: 'not attempted' }; }\n  if (!items.length) return { ran: false, ok: null, detail: 'not attempted' };\n  return judge(items);\n};\n// the webhook: a status code, or nothing that proves anything\nconst wh = state('Post Alert Webhook', (items) => {\n  const bad = items.map(x => AR.posted(x)).find(r => !r.ok);\n  if (bad) return { ran: true, ok: false, detail: bad.detail };\n  const first = AR.posted(items[0]);\n  return { ran: true, ok: true, detail: first.detail === 'HTTP 200' ? 'sent' : first.detail };\n});\n// the e-mail: n8n's Send Email answers with the recipients the server accepted\nconst em = state('Email Ops', (items) => {\n  const bad = items.find(x => x && x.error);\n  if (bad) return { ran: true, ok: false, detail: String((bad.error && (bad.error.message || bad.error.description)) || bad.error).replace(/\\s+/g, ' ').slice(0, 200) };\n  const accepted = items.flatMap(x => Array.isArray(x.accepted) ? x.accepted : []);\n  return { ran: true, ok: true, detail: accepted.length ? 'accepted by ' + accepted.length + ' recipient(s)' : 'sent' };\n});\nconst carried = [wh.ok ? 'webhook' : '', em.ok ? 'email' : ''].filter(Boolean);\nconst failed = [wh.ran && !wh.ok ? 'webhook failed (' + wh.detail + ')' : '', em.ran && !em.ok ? 'email failed (' + em.detail + ')' : ''].filter(Boolean);\nconst delivered = carried.length ? carried.join(',') : failed.length ? 'failed' : p.notify ? 'not_sent' : 'deduped';\n// B-A7: this execution made an attempt whenever a channel ran at all; it is the next one in the row's own history, so the escalation\n// ladder keeps counting across sightings instead of restarting at 1 every time the same failure comes back.\nconst tried = wh.ran || em.ran;\nconst attempts = AR.attemptsOf(p.row) + (tried ? 1 : 0);\nconst nowIso = new Date().toISOString();\n// one line, one attempt: which channels were tried, and what each of them said\nconst channels_tried = [wh.ran ? 'webhook' : '', em.ran ? 'email' : ''].filter(Boolean).join('+');\nconst log = tried ? AR.addAttempt(p.row, attempts, nowIso, channels_tried, carried.length > 0,\n  [wh.ran ? 'webhook ' + wh.detail : '', em.ran ? 'email ' + em.detail : ''].filter(Boolean).join('; ')) : String(p.row.attempt_log || '');\nconst settled = carried.length > 0;\nconst giveUp = !settled && tried && attempts >= AR.MAX_ATTEMPTS;\nconst notes = [carried.length ? 'delivered by ' + carried.map(c => c + ' (' + (c === 'webhook' ? wh.detail : em.detail) + ')').join(' and ') : '', ...failed,\n  carried.length || failed.length ? '' : 'no channel ran: the alert is only on record in ' + 'seo_ops_alerts',\n  'recorded in seo_ops_alerts (sighting ' + p.row.count + ', delivery attempt ' + attempts + ')',\n  settled || !tried ? '' : giveUp ? 'given up after ' + attempts + ' attempts' : 'the next run of any workflow tries again after ' + AR.RETRY_MINUTES + ' minutes'\n  ].filter(Boolean).join('; ').slice(0, 500);\nreturn [{ json: { alert_key: p.alert_key, delivered: giveUp ? 'abandoned' : delivered, channels: p.channels.join(','), notes,\n  // B-A7: the retry state the sweep reads. A delivered alert books no next attempt; one nobody has books the next one.\n  severity: settled ? p.severity : AR.severityFor(p.row, attempts), attempts,\n  last_attempt_at: tried ? nowIso : String(p.row.last_attempt_at || ''),\n  next_attempt_at: settled || giveUp ? '' : new Date(Date.now() + AR.RETRY_MINUTES * 60000).toISOString(),\n  attempt_log: log,\n  // not written to the table, but visible in the execution and useful to a person reading it\n  carried_by: carried, failed_channels: failed, workflow: p.row.workflow, node: p.row.node } }];\n"
         },
         "id": "4aeb7cd1-9007-573f-90a0-abf1dae58698",
         "name": "Alert Delivery",
@@ -521,6 +578,376 @@
             "value": {
               "delivered": "={{ $json.delivered }}",
               "channels": "={{ $json.channels }}",
+              "notes": "={{ $json.notes }}",
+              "severity": "={{ $json.severity }}",
+              "attempts": "={{ $json.attempts }}",
+              "last_attempt_at": "={{ $json.last_attempt_at }}",
+              "next_attempt_at": "={{ $json.next_attempt_at }}",
+              "attempt_log": "={{ $json.attempt_log }}"
+            },
+            "matchingColumns": [],
+            "schema": [
+              {
+                "id": "alert_key",
+                "displayName": "alert_key",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "workflow",
+                "displayName": "workflow",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "node",
+                "displayName": "node",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "message",
+                "displayName": "message",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "execution_id",
+                "displayName": "execution_id",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "execution_url",
+                "displayName": "execution_url",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "mode",
+                "displayName": "mode",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "severity",
+                "displayName": "severity",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "first_seen_at",
+                "displayName": "first_seen_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_seen_at",
+                "displayName": "last_seen_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "count",
+                "displayName": "count",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "channels",
+                "displayName": "channels",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "delivered",
+                "displayName": "delivered",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "notes",
+                "displayName": "notes",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "attempts",
+                "displayName": "attempts",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_attempt_at",
+                "displayName": "last_attempt_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "next_attempt_at",
+                "displayName": "next_attempt_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "attempt_log",
+                "displayName": "attempt_log",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": true,
+            "convertFieldsToString": false
+          },
+          "options": {}
+        },
+        "id": "4c391255-3580-5ca0-9f38-92d975a51f22",
+        "name": "Save Alert Delivery",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          2240,
+          0
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "get",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ops_alerts"
+          },
+          "returnAll": true,
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "last_seen_at",
+                "condition": "gte",
+                "keyValue": "={{ new Date(Date.now() - 7 * 864e5).toISOString() }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "be66204f-3ec2-584d-99b8-dee998d23565",
+        "name": "Load Open Alerts",
+        "type": "n8n-nodes-base.dataTable",
+        "typeVersion": 1.1,
+        "position": [
+          480,
+          300
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true,
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "jsCode": "// B-A7 (2026-10-15, build section 64): the sweep. Every run of every scheduled workflow, and every run of the Error Handler, ends by asking\n// one question — is there an alert that has reached nobody and is due another try? That is what \"re-attempted by the next run of any\n// workflow\" means: the retry needs no scheduler of its own, because ten schedules and every failure already run.\n// The node names are written in at build time (Load Open Alerts = the Data Table read in front of this node, SEO Agent — Error Handler = the workflow doing the\n// sweeping, so the row records who re-sent it).\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  // B-A7 (2026-10-15): the moment a first attempt may be re-tried if nothing records a delivery. It must equal AR.RETRY_MINUTES — the\n  // sweep (v5/code/_alert_retry.js) is what acts on it — and build section 64 fails if the two ever drift apart.\n  const RETRY_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n  // B-A7: a row is \"carried\" when `delivered` NAMES the channel that took it ('webhook', 'email', 'webhook,email'). Everything else -\n  // pending, failed, not_sent, deduped - means the same thing to a human: nobody has it. The same rule as AR.carried.\n  const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');\n  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and\n  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still\n  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it\n  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      // B-A7 (2026-10-15): a repeat used to write `deduped` over whatever the row said, including over the channels that had CARRIED the\n      // alert — so a delivered alert looked undelivered and an undelivered one looked handled. A repeat of an alert something carried\n      // keeps that state; only an alert nobody has is marked deduped.\n      delivered: notify ? 'pending' : (prior && carried(prior) ? S(prior.delivered) : 'deduped'),\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500),\n      // B-A7: the retry state. `attempts` is 0 here on purpose — this row is written BEFORE anything is sent, and an attempt exists when it\n      // is made, not when it is planned (INVARIANTS rule 4). *Alert Delivery* writes the real count and the log a moment later; if the\n      // execution dies before it does, `next_attempt_at` has already booked the row for the next sweep, so the failure is not stranded.\n      attempts: n0(prior && prior.attempts),\n      last_attempt_at: S(prior && prior.last_attempt_at),\n      next_attempt_at: notify ? new Date(now.getTime() + RETRY_MINUTES * 60000).toISOString() : S(prior && prior.next_attempt_at),\n      attempt_log: S(prior && prior.attempt_log)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };\n})();\n// ---- B-A7 (2026-10-15, build section 64): an undelivered alert is re-attempted, escalated, and never called delivered ----\n// D25b gave the alert a second channel and a row of its own; R6 put the delivery result back on that row. Nothing ever acted on it: one\n// attempt per channel, no second try, no escalation — and the blunt evidence is that **no ops alert has ever reached a human**. Rule 3 of\n// docs/system-review-2026-10-14/INVARIANTS.md ends on exactly this clause: *a failure that reaches no human is not handled.*\n//\n// What this kit decides, and nothing else does:\n//  * **which rows are still open.** Not `delivered === 'pending'` — a row is open when nothing in `delivered` NAMES a channel that carried\n//    it (AR.carried). `pending`, `failed`, `not_sent` and `deduped` all mean the same thing to a human: nobody has it. That matters because\n//    OA.plan writes `deduped` over the state of a repeat, so judging on one magic word would have made a repeated failure unretryable.\n//  * **when.** RETRY_MINUTES after the last attempt, flat — never exponential. The sweepers ARE the schedule (every run of every scheduled\n//    workflow and every run of the Error Handler), so the interval only has to be long enough not to fight OA.DEDUPE_MINUTES.\n//  * **how loud.** From ESCALATE_AFTER attempts the row is `critical` whatever it started as, and the payload leads with how long it has\n//    been undelivered, so when it finally lands it lands as the outage it is.\n//  * **when to stop.** MAX_ATTEMPTS, after which the row is `abandoned` with the reason. Rule 4: it is never marked delivered. Stopping is\n//    not hiding — the row is the record of last resort and it still says, in words, that it reached nobody.\n//  * **every attempt, not just the last.** `attempt_log` keeps one line per attempt; MAX_ATTEMPTS lines fit inside the cap, so the log a\n//    row carries is complete, never a window onto the end of a longer history.\nconst AR = (() => {\n  const RETRY_MINUTES = 30;    // N — see the note above OA.DEDUPE_MINUTES: a retry must never be a flood\n  const ESCALATE_AFTER = 3;    // K — attempt 1 is the live send; 2 and 3 are catch-up. Three is no longer a blip, it is a broken channel.\n  const MAX_ATTEMPTS = 10;\n  const PER_SWEEP = 5;         // one run never posts more than this, so a bad day cannot turn into a hundred posts\n  const LOG_MAX = 1200;        // 10 attempts x ~70 characters: the whole history fits, by construction\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  const ms = (v) => { const t = Date.parse(S(v)); return Number.isFinite(t) && t > 0 ? t : 0; };\n  const iso = (t) => new Date(t).toISOString();\n\n  // R29 / R30: an un-substituted placeholder is not a URL and is not a channel (the same rule as OA.cfgUrl, repeated here so this kit can\n  // be inlined on its own in a workflow that has no OA)\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n  // what counts as delivered: Alert Delivery writes the channels that carried it ('webhook', 'email', 'webhook,email').\n  const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');\n  const abandoned = (r) => S(r && r.delivered).toLowerCase() === 'abandoned';\n  const attemptsOf = (r) => Math.max(0, n0(r && r.attempts));\n  // when this row may be tried again: what the last attempt booked, else the last attempt / sighting plus the interval. A row written\n  // before this existed carries neither, so its `last_seen_at` is what schedules it — it is retried, not stranded.\n  const dueAt = (r) => ms(r && r.next_attempt_at) || ((ms(r && r.last_attempt_at) || ms(r && r.last_seen_at)) + RETRY_MINUTES * 60000);\n  const isOpen = (r) => !!(r && !r.error && S(r.alert_key) && !carried(r) && !abandoned(r));\n  const retryable = (r, nowMs) => isOpen(r) && attemptsOf(r) < MAX_ATTEMPTS && dueAt(r) > 0 && dueAt(r) <= nowMs;\n  const severityFor = (r, attempts) => (attempts >= ESCALATE_AFTER ? 'critical' : (S(r && r.severity) || 'high'));\n  const ageMinutes = (r, nowMs) => { const t = ms(r && r.first_seen_at) || ms(r && r.last_seen_at); return t ? Math.round((nowMs - t) / 60000) : 0; };\n  const ageText = (min) => min >= 1440 ? (Math.round(min / 144) / 10) + ' days' : min >= 60 ? (Math.round(min / 6) / 10) + ' hours' : min + ' minutes';\n\n  // one line per attempt, oldest first; the newest is appended and nothing earlier is ever rewritten\n  const logLines = (r) => S(r && r.attempt_log).split('\\n').map(x => x.trim()).filter(Boolean);\n  const addAttempt = (r, attempt, atIso, channel, ok, detail) => {\n    const line = (attempt + ' ' + S(atIso).replace(/\\.\\d+Z$/, 'Z') + ' ' + channel + ' ' + (ok ? 'delivered' : 'failed') + (detail ? ': ' + S(detail) : '')).slice(0, 160);\n    const lines = logLines(r).concat([line]);\n    let out = lines.join('\\n');\n    while (out.length > LOG_MAX && lines.length > 1) { lines.splice(1, 1); out = lines.join('\\n'); }   // the first attempt and the recent ones are what a reader needs\n    return out;\n  };\n\n  // what the POST said. `fullResponse` + `neverError` means the node always answers with a status code, so delivery is judged on the\n  // status and never on \"the node did not throw\" — a 404 from a revoked Slack hook used to read as a delivery (Rule 4).\n  const posted = (item) => {\n    const x = (item && item.json) || item || {};\n    if (x.error) return { ok: false, detail: S(x.error.message || x.error.description || x.error).replace(/\\s+/g, ' ').slice(0, 160) };\n    const code = Number(x.statusCode);\n    if (Number.isFinite(code) && code > 0) {\n      if (code >= 200 && code < 300) return { ok: true, detail: 'HTTP ' + code };\n      const body = typeof x.body === 'string' ? x.body : (x.body ? JSON.stringify(x.body) : '');\n      return { ok: false, detail: ('HTTP ' + code + (body ? ': ' + body : '')).replace(/\\s+/g, ' ').slice(0, 160) };\n    }\n    return { ok: false, detail: 'no status code came back, so nothing confirms it arrived' };\n  };\n\n  const payload = (r, attempt, severity, nowMs) => {\n    const min = ageMinutes(r, nowMs);\n    const head = (attempt >= ESCALATE_AFTER ? 'STILL UNDELIVERED after ' + attempt + ' attempts over ' + ageText(min) : 'Undelivered alert, attempt ' + attempt + ' of ' + MAX_ATTEMPTS);\n    const subject = '[' + severity + '] ' + head + ' — ' + (S(r.workflow) || 'unknown workflow');\n    const plain = [subject, S(r.workflow) + ' failed at \"' + S(r.node) + '\"',\n      'Execution ' + (S(r.execution_id) || '?') + (S(r.mode) ? ' (' + S(r.mode) + ')' : ''), S(r.execution_url), S(r.message),\n      'First seen ' + S(r.first_seen_at) + ', seen ' + n0(r.count) + ' time(s); this alert has reached nobody.'].filter(Boolean).join('\\n');\n    return { subject, plain, body: {\n      text: plain, content: plain, summary: subject,\n      alert: { key: S(r.alert_key), workflow: S(r.workflow), node: S(r.node), message: S(r.message), execution_id: S(r.execution_id),\n        execution_url: S(r.execution_url), mode: S(r.mode), severity, seen_count: n0(r.count), first_seen_at: S(r.first_seen_at),\n        attempt, of: MAX_ATTEMPTS, undelivered_for_minutes: min, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),\n        source: 'seo-agent-alert-retry' } } };\n  };\n\n  // the rows this sweep will re-send, oldest first. `where` names the workflow doing the sweeping, for the row's notes.\n  const plan = (rows, cfg) => {\n    const c = cfg || {};\n    const nowMs = ms(c.now) || Date.now();\n    const url = cfgUrl(c.webhook_url);\n    const all = (rows || []).filter(r => r && !r.error && S(r.alert_key));\n    const open = all.filter(isOpen);\n    const ready = open.filter(r => retryable(r, nowMs)).sort((a, b) => dueAt(a) - dueAt(b));\n    const spent = open.filter(r => isOpen(r) && attemptsOf(r) >= MAX_ATTEMPTS);\n    const take = ready.slice(0, PER_SWEEP);\n    const items = take.map(r => {\n      const attempt = attemptsOf(r) + 1;\n      const severity = severityFor(r, attempt);\n      const p = payload(r, attempt, severity, nowMs);\n      return { alert_key: S(r.alert_key), attempt, severity, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),\n        row: r, webhook_url: url, webhook_body: p.body, subject: p.subject, plain: p.plain, sweeper: S(c.where) };\n    });\n    return { items, open: open.length, due: ready.length, posting: url ? items.length : 0, spent: spent.length,\n      webhook_url: url, now: iso(nowMs), where: S(c.where),\n      reason: !open.length ? 'no alert is waiting for delivery'\n        : !ready.length ? open.length + ' alert(s) are waiting, none of them due for another try yet (' + RETRY_MINUTES + ' minutes between tries)'\n        : !url ? ready.length + ' alert(s) have reached nobody and there is no channel to try: SEO_ALERT_WEBHOOK_URL is not set'\n        : 'retrying ' + items.length + ' of ' + ready.length + ' undelivered alert(s)' };\n  };\n\n  // what to write back after the POSTs: one row per attempt, with the whole history and the honest state.\n  const settle = (planned, responses) => (planned || []).map((p, i) => {\n    const r = p.row || {}, res = posted((responses || [])[i]);\n    const attempt = n0(p.attempt), sev = S(p.severity) || 'high';\n    const giveUp = !res.ok && attempt >= MAX_ATTEMPTS;\n    const nowMs = ms(p.at) || Date.now();\n    return {\n      alert_key: S(p.alert_key),\n      // Rule 4: delivered only on the evidence of a 2xx; otherwise the row keeps saying nobody has it.\n      delivered: res.ok ? 'webhook' : giveUp ? 'abandoned' : 'failed',\n      channels: S(r.channels) || 'data_table',\n      severity: res.ok ? sev : severityFor(r, attempt),\n      attempts: attempt,\n      last_attempt_at: iso(nowMs),\n      next_attempt_at: res.ok || giveUp ? '' : iso(nowMs + RETRY_MINUTES * 60000),\n      attempt_log: addAttempt(r, attempt, iso(nowMs), 'webhook', res.ok, res.detail),\n      notes: (res.ok\n        ? 'delivered by webhook on attempt ' + attempt + ' (' + res.detail + '), re-sent by ' + (S(p.sweeper) || 'a later run')\n        : giveUp\n          ? 'given up after ' + attempt + ' attempts over ' + ageText(ageMinutes(r, nowMs)) + ' — this alert reached nobody and is on record here only (' + res.detail + ')'\n          : 'attempt ' + attempt + ' of ' + MAX_ATTEMPTS + ' failed (' + res.detail + '), next try after ' + RETRY_MINUTES + ' minutes'\n            + (attempt >= ESCALATE_AFTER ? '; raised to critical: ' + attempt + ' attempts over ' + ageText(ageMinutes(r, nowMs)) + ' have reached nobody' : '')\n      ).slice(0, 500),\n      ok: res.ok, detail: res.detail, escalated: !res.ok && attempt >= ESCALATE_AFTER, gave_up: giveUp\n    };\n  });\n\n  return { plan, settle, posted, carried, isOpen, retryable, attemptsOf, dueAt, severityFor, addAttempt, logLines, cfgUrl, ageText,\n           RETRY_MINUTES, ESCALATE_AFTER, MAX_ATTEMPTS, PER_SWEEP };\n})();\nlet rows = [];\ntry { rows = $('Load Open Alerts').all().map(i => i.json).filter(r => r && !r.error && r.alert_key); } catch (e) { rows = []; }\n// R29 / R30 (2026-10-14): a placeholder is baked, never the URL (it is a secret and this repository is public); apply_env.py substitutes\n// the real value at import time and an un-substituted placeholder reads as \"no webhook configured\".\nconst p = AR.plan(rows, { webhook_url: '__SEO_ALERT_WEBHOOK_URL__', where: 'SEO Agent — Error Handler' });\nif (!p.posting) return [{ json: { skip: true, reason: p.reason, open: p.open, due: p.due, spent: p.spent, where: p.where } }];\nreturn p.items.map(it => ({ json: it }));\n"
+        },
+        "id": "a961b757-fe06-534d-8a49-38ae3c3c4ad2",
+        "name": "Alert Retry Plan",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          700,
+          300
+        ],
+        "onError": "continueRegularOutput",
+        "executeOnce": true
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "loose",
+              "version": 3
+            },
+            "conditions": [
+              {
+                "id": "4e607897-2160-5fbb-9479-d2c326a8c876",
+                "leftValue": "={{ !$json.skip }}",
+                "rightValue": "",
+                "operator": {
+                  "type": "boolean",
+                  "operation": "true",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "looseTypeValidation": true,
+          "options": {}
+        },
+        "id": "f06eecd4-0a8f-57b0-8471-19cb0449579e",
+        "name": "Any Alert Retry?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.3,
+        "position": [
+          920,
+          300
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $json.webhook_url }}",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify($json.webhook_body) }}",
+          "options": {
+            "batching": {
+              "batch": {
+                "batchSize": 1,
+                "batchInterval": 400
+              }
+            },
+            "timeout": 15000,
+            "response": {
+              "response": {
+                "fullResponse": true,
+                "neverError": true
+              }
+            }
+          }
+        },
+        "id": "0e09b202-f96f-5774-83ca-4460fa910c84",
+        "name": "Post Alert Retry",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1140,
+          300
+        ],
+        "onError": "continueRegularOutput",
+        "alwaysOutputData": true,
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000
+      },
+      {
+        "parameters": {
+          "jsCode": "// B-A7 (2026-10-15, build section 64): what the re-send actually did, written back on the same seo_ops_alerts row — the attempt number, the\n// time, the next time it may be tried, the whole attempt history and, from AR.ESCALATE_AFTER attempts, a severity of `critical`.\n// The row is marked delivered ONLY on a 2xx (Rule 4 of INVARIANTS.md: a record says a thing exists only when it exists). The POST node is\n// `neverError` + `fullResponse`, so a 404 from a revoked webhook arrives as an item with a status code, not as a success.\n// ---- the ops alert and its channels (D25b, 2026-10-12, system review FIX_PLAN.md) ----\n// The Error Handler had a single channel: *Email Ops*. On 2026-10-10 and again on 2026-10-12 it failed with a connection error (the Console\n// Alerts watcher triggers the handler), so a failed run told nobody. Now every alert is **recorded first** in the Data Table\n// seo_ops_alerts - the record of last resort, which survives both channels being down - and then sent to two independent channels: a webhook\n// (SEO_ALERT_WEBHOOK_URL: Slack, Teams or anything that takes a POST; no SMTP involved) and the e-mail. Repeats of the same failure within\n// OA.DEDUPE_MINUTES are recorded (count + 1) but not re-sent, so one broken credential cannot flood either channel. An unset channel is\n// simply skipped, and neither channel can fail the run.\nconst OA = (() => {\n  const DEDUPE_MINUTES = 30;\n  // B-A7 (2026-10-15): the moment a first attempt may be re-tried if nothing records a delivery. It must equal AR.RETRY_MINUTES — the\n  // sweep (v5/code/_alert_retry.js) is what acts on it — and build section 64 fails if the two ever drift apart.\n  const RETRY_MINUTES = 30;\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  // the identity of a failure: the workflow, the node and the message with numbers, ids and quoted values removed, so \"timeout after 30012ms\"\n  // and \"timeout after 31004ms\" at the same node are one alert\n  const keyOf = (a) => [S(a.workflow) || 'unknown workflow', S(a.node) || 'unknown node',\n    S(a.message).toLowerCase().replace(/\\d[\\d.,:]*/g, '#').replace(/[\"'`][^\"'`]*[\"'`]/g, '\"x\"').replace(/\\s+/g, ' ').slice(0, 160)].join(' | ');\n  const severityOf = (a) => /credential|unauthor|forbidden|payment|credit|quota|balance/i.test(S(a.message)) ? 'critical' : 'high';\n  // B-A7: a row is \"carried\" when `delivered` NAMES the channel that took it ('webhook', 'email', 'webhook,email'). Everything else -\n  // pending, failed, not_sent, deduped - means the same thing to a human: nobody has it. The same rule as AR.carried.\n  const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');\n  // R29 (2026-10-14, FIX_PLAN §3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a bearer URL, so the build bakes a PLACEHOLDER and\n  // apply_env.py substitutes the real value into the JSON it imports — the public repository never carries the secret. A node still\n  // holding the placeholder (an un-applied build, and every harness run) has no webhook configured: it is not a URL, and posting to it\n  // would be a request to nowhere. Anything that still looks like __A_PLACEHOLDER__ therefore reads as unset.\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n\n  const plan = (alert, rows, cfg) => {\n    const a = alert || {}, c = cfg || {};\n    const now = new Date();\n    const nowIso = now.toISOString();\n    const alert_key = keyOf(a);\n    const prior = (rows || []).filter(r => r && S(r.alert_key) === alert_key)\n      .sort((x, y) => S(y.last_seen_at).localeCompare(S(x.last_seen_at)))[0] || null;\n    const sinceMin = prior && S(prior.last_seen_at) ? (now - new Date(S(prior.last_seen_at))) / 60000 : Infinity;\n    const repeat = !!prior && Number.isFinite(sinceMin) && sinceMin < DEDUPE_MINUTES;\n    const count = prior ? n0(prior.count) + 1 : 1;\n    const webhook_url = cfgUrl(c.webhook_url);   // R29: an un-substituted placeholder is not a channel\n    const email_to = S(c.email_to);\n    const channels = [webhook_url ? 'webhook' : '', email_to ? 'email' : '', 'data_table'].filter(Boolean);\n    const notify = !repeat;\n    const plain = [S(a.workflow) + ' failed at \"' + S(a.node) + '\"', 'Execution ' + (S(a.execution_id) || '?') + (S(a.mode) ? ' (' + S(a.mode) + ')' : ''),\n      S(a.execution_url), S(a.message)].filter(Boolean).join('\\n');\n    const row = {\n      alert_key, workflow: S(a.workflow).slice(0, 200), node: S(a.node).slice(0, 200), message: S(a.message).slice(0, 800),\n      execution_id: S(a.execution_id), execution_url: S(a.execution_url), mode: S(a.mode), severity: severityOf(a),\n      first_seen_at: prior && S(prior.first_seen_at) ? S(prior.first_seen_at) : nowIso, last_seen_at: nowIso, count,\n      channels: channels.join(','),\n      // B-A7 (2026-10-15): a repeat used to write `deduped` over whatever the row said, including over the channels that had CARRIED the\n      // alert — so a delivered alert looked undelivered and an undelivered one looked handled. A repeat of an alert something carried\n      // keeps that state; only an alert nobody has is marked deduped.\n      delivered: notify ? 'pending' : (prior && carried(prior) ? S(prior.delivered) : 'deduped'),\n      notes: (repeat ? 'repeat within ' + DEDUPE_MINUTES + ' minutes (' + Math.round(sinceMin) + ' min after the last one), recorded but not re-sent' : count > 1 ? 'seen ' + count + ' times, last alert more than ' + DEDUPE_MINUTES + ' minutes ago' : 'first time').slice(0, 500),\n      // B-A7: the retry state. `attempts` is 0 here on purpose — this row is written BEFORE anything is sent, and an attempt exists when it\n      // is made, not when it is planned (INVARIANTS rule 4). *Alert Delivery* writes the real count and the log a moment later; if the\n      // execution dies before it does, `next_attempt_at` has already booked the row for the next sweep, so the failure is not stranded.\n      attempts: n0(prior && prior.attempts),\n      last_attempt_at: S(prior && prior.last_attempt_at),\n      next_attempt_at: notify ? new Date(now.getTime() + RETRY_MINUTES * 60000).toISOString() : S(prior && prior.next_attempt_at),\n      attempt_log: S(prior && prior.attempt_log)\n    };\n    // the webhook payload: `text` works for Slack and Teams, `content` for Discord, and `alert` carries the structured fields for anything else\n    const body = {\n      text: S(a.subject) + '\\n' + plain, content: S(a.subject) + '\\n' + plain, summary: S(a.subject),\n      alert: { key: alert_key, workflow: row.workflow, node: row.node, message: row.message, execution_id: row.execution_id,\n        execution_url: row.execution_url, mode: row.mode, severity: row.severity, seen_count: count, at: nowIso, source: 'seo-agent-error-handler' }\n    };\n    return { row, notify, repeat, channels, webhook_url, email_to, webhook_body: body, plain, alert_key, severity: row.severity, DEDUPE_MINUTES };\n  };\n\n  return { plan, keyOf, severityOf, cfgUrl, carried, DEDUPE_MINUTES, RETRY_MINUTES };\n})();\n// ---- B-A7 (2026-10-15, build section 64): an undelivered alert is re-attempted, escalated, and never called delivered ----\n// D25b gave the alert a second channel and a row of its own; R6 put the delivery result back on that row. Nothing ever acted on it: one\n// attempt per channel, no second try, no escalation — and the blunt evidence is that **no ops alert has ever reached a human**. Rule 3 of\n// docs/system-review-2026-10-14/INVARIANTS.md ends on exactly this clause: *a failure that reaches no human is not handled.*\n//\n// What this kit decides, and nothing else does:\n//  * **which rows are still open.** Not `delivered === 'pending'` — a row is open when nothing in `delivered` NAMES a channel that carried\n//    it (AR.carried). `pending`, `failed`, `not_sent` and `deduped` all mean the same thing to a human: nobody has it. That matters because\n//    OA.plan writes `deduped` over the state of a repeat, so judging on one magic word would have made a repeated failure unretryable.\n//  * **when.** RETRY_MINUTES after the last attempt, flat — never exponential. The sweepers ARE the schedule (every run of every scheduled\n//    workflow and every run of the Error Handler), so the interval only has to be long enough not to fight OA.DEDUPE_MINUTES.\n//  * **how loud.** From ESCALATE_AFTER attempts the row is `critical` whatever it started as, and the payload leads with how long it has\n//    been undelivered, so when it finally lands it lands as the outage it is.\n//  * **when to stop.** MAX_ATTEMPTS, after which the row is `abandoned` with the reason. Rule 4: it is never marked delivered. Stopping is\n//    not hiding — the row is the record of last resort and it still says, in words, that it reached nobody.\n//  * **every attempt, not just the last.** `attempt_log` keeps one line per attempt; MAX_ATTEMPTS lines fit inside the cap, so the log a\n//    row carries is complete, never a window onto the end of a longer history.\nconst AR = (() => {\n  const RETRY_MINUTES = 30;    // N — see the note above OA.DEDUPE_MINUTES: a retry must never be a flood\n  const ESCALATE_AFTER = 3;    // K — attempt 1 is the live send; 2 and 3 are catch-up. Three is no longer a blip, it is a broken channel.\n  const MAX_ATTEMPTS = 10;\n  const PER_SWEEP = 5;         // one run never posts more than this, so a bad day cannot turn into a hundred posts\n  const LOG_MAX = 1200;        // 10 attempts x ~70 characters: the whole history fits, by construction\n  const S = (v) => String(v == null ? '' : v).trim();\n  const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\n  const ms = (v) => { const t = Date.parse(S(v)); return Number.isFinite(t) && t > 0 ? t : 0; };\n  const iso = (t) => new Date(t).toISOString();\n\n  // R29 / R30: an un-substituted placeholder is not a URL and is not a channel (the same rule as OA.cfgUrl, repeated here so this kit can\n  // be inlined on its own in a workflow that has no OA)\n  const cfgUrl = (v) => { const s = S(v); return !s || /^__[A-Z0-9_]+__$/.test(s) ? '' : s; };\n  // what counts as delivered: Alert Delivery writes the channels that carried it ('webhook', 'email', 'webhook,email').\n  const carried = (r) => S(r && r.delivered).toLowerCase().split(',').map(x => x.trim()).some(x => x === 'webhook' || x === 'email');\n  const abandoned = (r) => S(r && r.delivered).toLowerCase() === 'abandoned';\n  const attemptsOf = (r) => Math.max(0, n0(r && r.attempts));\n  // when this row may be tried again: what the last attempt booked, else the last attempt / sighting plus the interval. A row written\n  // before this existed carries neither, so its `last_seen_at` is what schedules it — it is retried, not stranded.\n  const dueAt = (r) => ms(r && r.next_attempt_at) || ((ms(r && r.last_attempt_at) || ms(r && r.last_seen_at)) + RETRY_MINUTES * 60000);\n  const isOpen = (r) => !!(r && !r.error && S(r.alert_key) && !carried(r) && !abandoned(r));\n  const retryable = (r, nowMs) => isOpen(r) && attemptsOf(r) < MAX_ATTEMPTS && dueAt(r) > 0 && dueAt(r) <= nowMs;\n  const severityFor = (r, attempts) => (attempts >= ESCALATE_AFTER ? 'critical' : (S(r && r.severity) || 'high'));\n  const ageMinutes = (r, nowMs) => { const t = ms(r && r.first_seen_at) || ms(r && r.last_seen_at); return t ? Math.round((nowMs - t) / 60000) : 0; };\n  const ageText = (min) => min >= 1440 ? (Math.round(min / 144) / 10) + ' days' : min >= 60 ? (Math.round(min / 6) / 10) + ' hours' : min + ' minutes';\n\n  // one line per attempt, oldest first; the newest is appended and nothing earlier is ever rewritten\n  const logLines = (r) => S(r && r.attempt_log).split('\\n').map(x => x.trim()).filter(Boolean);\n  const addAttempt = (r, attempt, atIso, channel, ok, detail) => {\n    const line = (attempt + ' ' + S(atIso).replace(/\\.\\d+Z$/, 'Z') + ' ' + channel + ' ' + (ok ? 'delivered' : 'failed') + (detail ? ': ' + S(detail) : '')).slice(0, 160);\n    const lines = logLines(r).concat([line]);\n    let out = lines.join('\\n');\n    while (out.length > LOG_MAX && lines.length > 1) { lines.splice(1, 1); out = lines.join('\\n'); }   // the first attempt and the recent ones are what a reader needs\n    return out;\n  };\n\n  // what the POST said. `fullResponse` + `neverError` means the node always answers with a status code, so delivery is judged on the\n  // status and never on \"the node did not throw\" — a 404 from a revoked Slack hook used to read as a delivery (Rule 4).\n  const posted = (item) => {\n    const x = (item && item.json) || item || {};\n    if (x.error) return { ok: false, detail: S(x.error.message || x.error.description || x.error).replace(/\\s+/g, ' ').slice(0, 160) };\n    const code = Number(x.statusCode);\n    if (Number.isFinite(code) && code > 0) {\n      if (code >= 200 && code < 300) return { ok: true, detail: 'HTTP ' + code };\n      const body = typeof x.body === 'string' ? x.body : (x.body ? JSON.stringify(x.body) : '');\n      return { ok: false, detail: ('HTTP ' + code + (body ? ': ' + body : '')).replace(/\\s+/g, ' ').slice(0, 160) };\n    }\n    return { ok: false, detail: 'no status code came back, so nothing confirms it arrived' };\n  };\n\n  const payload = (r, attempt, severity, nowMs) => {\n    const min = ageMinutes(r, nowMs);\n    const head = (attempt >= ESCALATE_AFTER ? 'STILL UNDELIVERED after ' + attempt + ' attempts over ' + ageText(min) : 'Undelivered alert, attempt ' + attempt + ' of ' + MAX_ATTEMPTS);\n    const subject = '[' + severity + '] ' + head + ' — ' + (S(r.workflow) || 'unknown workflow');\n    const plain = [subject, S(r.workflow) + ' failed at \"' + S(r.node) + '\"',\n      'Execution ' + (S(r.execution_id) || '?') + (S(r.mode) ? ' (' + S(r.mode) + ')' : ''), S(r.execution_url), S(r.message),\n      'First seen ' + S(r.first_seen_at) + ', seen ' + n0(r.count) + ' time(s); this alert has reached nobody.'].filter(Boolean).join('\\n');\n    return { subject, plain, body: {\n      text: plain, content: plain, summary: subject,\n      alert: { key: S(r.alert_key), workflow: S(r.workflow), node: S(r.node), message: S(r.message), execution_id: S(r.execution_id),\n        execution_url: S(r.execution_url), mode: S(r.mode), severity, seen_count: n0(r.count), first_seen_at: S(r.first_seen_at),\n        attempt, of: MAX_ATTEMPTS, undelivered_for_minutes: min, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),\n        source: 'seo-agent-alert-retry' } } };\n  };\n\n  // the rows this sweep will re-send, oldest first. `where` names the workflow doing the sweeping, for the row's notes.\n  const plan = (rows, cfg) => {\n    const c = cfg || {};\n    const nowMs = ms(c.now) || Date.now();\n    const url = cfgUrl(c.webhook_url);\n    const all = (rows || []).filter(r => r && !r.error && S(r.alert_key));\n    const open = all.filter(isOpen);\n    const ready = open.filter(r => retryable(r, nowMs)).sort((a, b) => dueAt(a) - dueAt(b));\n    const spent = open.filter(r => isOpen(r) && attemptsOf(r) >= MAX_ATTEMPTS);\n    const take = ready.slice(0, PER_SWEEP);\n    const items = take.map(r => {\n      const attempt = attemptsOf(r) + 1;\n      const severity = severityFor(r, attempt);\n      const p = payload(r, attempt, severity, nowMs);\n      return { alert_key: S(r.alert_key), attempt, severity, escalated: attempt >= ESCALATE_AFTER, at: iso(nowMs),\n        row: r, webhook_url: url, webhook_body: p.body, subject: p.subject, plain: p.plain, sweeper: S(c.where) };\n    });\n    return { items, open: open.length, due: ready.length, posting: url ? items.length : 0, spent: spent.length,\n      webhook_url: url, now: iso(nowMs), where: S(c.where),\n      reason: !open.length ? 'no alert is waiting for delivery'\n        : !ready.length ? open.length + ' alert(s) are waiting, none of them due for another try yet (' + RETRY_MINUTES + ' minutes between tries)'\n        : !url ? ready.length + ' alert(s) have reached nobody and there is no channel to try: SEO_ALERT_WEBHOOK_URL is not set'\n        : 'retrying ' + items.length + ' of ' + ready.length + ' undelivered alert(s)' };\n  };\n\n  // what to write back after the POSTs: one row per attempt, with the whole history and the honest state.\n  const settle = (planned, responses) => (planned || []).map((p, i) => {\n    const r = p.row || {}, res = posted((responses || [])[i]);\n    const attempt = n0(p.attempt), sev = S(p.severity) || 'high';\n    const giveUp = !res.ok && attempt >= MAX_ATTEMPTS;\n    const nowMs = ms(p.at) || Date.now();\n    return {\n      alert_key: S(p.alert_key),\n      // Rule 4: delivered only on the evidence of a 2xx; otherwise the row keeps saying nobody has it.\n      delivered: res.ok ? 'webhook' : giveUp ? 'abandoned' : 'failed',\n      channels: S(r.channels) || 'data_table',\n      severity: res.ok ? sev : severityFor(r, attempt),\n      attempts: attempt,\n      last_attempt_at: iso(nowMs),\n      next_attempt_at: res.ok || giveUp ? '' : iso(nowMs + RETRY_MINUTES * 60000),\n      attempt_log: addAttempt(r, attempt, iso(nowMs), 'webhook', res.ok, res.detail),\n      notes: (res.ok\n        ? 'delivered by webhook on attempt ' + attempt + ' (' + res.detail + '), re-sent by ' + (S(p.sweeper) || 'a later run')\n        : giveUp\n          ? 'given up after ' + attempt + ' attempts over ' + ageText(ageMinutes(r, nowMs)) + ' — this alert reached nobody and is on record here only (' + res.detail + ')'\n          : 'attempt ' + attempt + ' of ' + MAX_ATTEMPTS + ' failed (' + res.detail + '), next try after ' + RETRY_MINUTES + ' minutes'\n            + (attempt >= ESCALATE_AFTER ? '; raised to critical: ' + attempt + ' attempts over ' + ageText(ageMinutes(r, nowMs)) + ' have reached nobody' : '')\n      ).slice(0, 500),\n      ok: res.ok, detail: res.detail, escalated: !res.ok && attempt >= ESCALATE_AFTER, gave_up: giveUp\n    };\n  });\n\n  return { plan, settle, posted, carried, isOpen, retryable, attemptsOf, dueAt, severityFor, addAttempt, logLines, cfgUrl, ageText,\n           RETRY_MINUTES, ESCALATE_AFTER, MAX_ATTEMPTS, PER_SWEEP };\n})();\nlet planned = [];\ntry { planned = $('Alert Retry Plan').all().map(i => i.json).filter(j => j && j.alert_key && !j.skip); } catch (e) { planned = []; }\nif (!planned.length) return [{ json: { skip: true, reason: 'nothing was re-sent' } }];\nconst rows = AR.settle(planned, $input.all());\n// the Data Table update auto-maps every field it is given, so only the columns it writes may travel\nreturn rows.map(r => ({ json: { alert_key: r.alert_key, delivered: r.delivered, channels: r.channels, severity: r.severity,\n  attempts: r.attempts, last_attempt_at: r.last_attempt_at, next_attempt_at: r.next_attempt_at, attempt_log: r.attempt_log, notes: r.notes } }));\n"
+        },
+        "id": "316c5cd0-adab-57f0-a032-e2277a578bd9",
+        "name": "Alert Retry Result",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1360,
+          300
+        ],
+        "onError": "continueRegularOutput"
+      },
+      {
+        "parameters": {
+          "resource": "row",
+          "operation": "update",
+          "dataTableId": {
+            "__rl": true,
+            "mode": "name",
+            "value": "seo_ops_alerts"
+          },
+          "matchType": "allConditions",
+          "filters": {
+            "conditions": [
+              {
+                "keyName": "alert_key",
+                "condition": "eq",
+                "keyValue": "={{ $json.alert_key }}"
+              }
+            ]
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "delivered": "={{ $json.delivered }}",
+              "channels": "={{ $json.channels }}",
+              "severity": "={{ $json.severity }}",
+              "attempts": "={{ $json.attempts }}",
+              "last_attempt_at": "={{ $json.last_attempt_at }}",
+              "next_attempt_at": "={{ $json.next_attempt_at }}",
+              "attempt_log": "={{ $json.attempt_log }}",
               "notes": "={{ $json.notes }}"
             },
             "matchingColumns": [],
@@ -664,6 +1091,46 @@
                 "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "attempts",
+                "displayName": "attempts",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "last_attempt_at",
+                "displayName": "last_attempt_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "next_attempt_at",
+                "displayName": "next_attempt_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "attempt_log",
+                "displayName": "attempt_log",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,
@@ -671,13 +1138,13 @@
           },
           "options": {}
         },
-        "id": "4c391255-3580-5ca0-9f38-92d975a51f22",
-        "name": "Save Alert Delivery",
+        "id": "8675517d-3d84-52f4-bc47-95e2c7ef78d7",
+        "name": "Save Alert Retry",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
         "position": [
-          2240,
-          0
+          1580,
+          300
         ],
         "onError": "continueRegularOutput",
         "alwaysOutputData": true
@@ -818,6 +1285,72 @@
           [
             {
               "node": "Save Alert Delivery",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Save Alert Delivery": {
+        "main": [
+          [
+            {
+              "node": "Load Open Alerts",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Open Alerts": {
+        "main": [
+          [
+            {
+              "node": "Alert Retry Plan",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert Retry Plan": {
+        "main": [
+          [
+            {
+              "node": "Any Alert Retry?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Any Alert Retry?": {
+        "main": [
+          [
+            {
+              "node": "Post Alert Retry",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Post Alert Retry": {
+        "main": [
+          [
+            {
+              "node": "Alert Retry Result",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Alert Retry Result": {
+        "main": [
+          [
+            {
+              "node": "Save Alert Retry",
               "type": "main",
               "index": 0
             }

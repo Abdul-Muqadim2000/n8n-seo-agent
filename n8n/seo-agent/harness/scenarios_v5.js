@@ -8176,7 +8176,9 @@ await guard('the re-rating defects R1..R9', async () => {
     if (email !== undefined) mock('Email Ops', [{ json: email }]);
     return (await run('Alert Delivery', EMPTY, { code: 'EH__Alert_Delivery_Webhook' }))[0].json;
   };
-  const dBoth = await delivery({ ok: true }, { accepted: ['ops@example.com'], rejected: [] });
+  // B-A7 (2026-10-15): *Post Alert Webhook* is `fullResponse` now, so the webhook branch answers with a status code — that code is the
+  // evidence of delivery, and S74 checks what happens when it is a 404 (it used to be written down as a success).
+  const dBoth = await delivery({ statusCode: 200, headers: {}, body: { ok: true } }, { accepted: ['ops@example.com'], rejected: [] });
   console.log('   alert delivery ->', JSON.stringify({ delivered: dBoth.delivered, channels: dBoth.channels, notes: dBoth.notes }));
   check('R6: the row records WHICH channel carried the alert, so a delivery rate becomes measurable (all three live rows sat at "pending", two of them already accepted by Gmail)',
     dBoth.delivered === 'webhook,email' && /delivered by webhook \(sent\) and email \(accepted by 1 recipient\(s\)\)/.test(dBoth.notes)
@@ -8190,7 +8192,8 @@ await guard('the re-rating defects R1..R9', async () => {
   check('R6: a run where no channel ran at all says so instead of waiting for a delivery that can never come',
     dNone.delivered === 'not_sent' && /only on record in seo_ops_alerts/.test(dNone.notes), JSON.stringify(dNone));
   check('R6: the result is written back on the same row (alert_key) with the delivered state, the channels and the note, and every path through the two gates reaches it',
-    OW.delivery && OW.delivery.code === 'Alert Delivery' && OW.delivery.row_update === 'Save Alert Delivery' && eq(OW.delivery.writes, ['delivered', 'channels', 'notes'])
+    OW.delivery && OW.delivery.code === 'Alert Delivery' && OW.delivery.row_update === 'Save Alert Delivery'
+    && ['delivered', 'channels', 'notes'].every(k => OW.delivery.writes.includes(k))   // B-A7 adds the retry state beside them (S74)
     && eq(OW.delivery.from.slice().sort(), ['Email Ops', 'Post Alert Webhook', 'Send Email?', 'Send Webhook?']), JSON.stringify(OW.delivery));
 
   // ---------- R7: an FAQ section, never FAQPage schema ----------
@@ -10254,6 +10257,238 @@ await guard('B-A8 counted tokens and B-A5 the run against the account', async ()
   const s3 = (await run('Run Ledger Settle', [{ json: {} }]))[0].json;
   check('B-A5: the free probe did not answer — the settle carries on exactly as before, with the per-task figure and no invented reconciliation',
     s3.dfs_source === 'tasks' && s3.dfs_usd === 0.0212 && s3.dfs_balance_end === 0 && s3.dfs_run.comparable === false, JSON.stringify({ src: s3.dfs_source, bal: s3.dfs_balance_end }));
+  reset();
+});
+
+// ===================================================================================
+// S74 (2026-10-15, benchmark items B-A7 and B-A9; docs/system-review-2026-10-14/INVARIANTS.md rules 3 and 4)
+// An alert nobody received, and ten schedules that could not be refused.
+// Every check below fails on the build of 2026-10-15 morning: an alert got ONE attempt per channel and whatever the row then said was the
+// end of it (no ops alert has ever reached a human); a 404 from a revoked webhook was written down as a delivery because the POST node is
+// `neverError` and nothing read its status; the Page Watch posted its digest and wrote nothing back at all; a repeat inside the dedupe
+// window wrote `deduped` over the channel that had carried an alert; and a scheduled monitor could not be refused for concurrency however
+// much was already running, because the ten reserve chains R17 put on the main path never LOOKED at the ledger they wrote to.
+// ===================================================================================
+await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrency gate', async () => {
+  reset(); const SN = 'S74 B-A7 B-A9 — an undelivered alert is re-attempted by the next run of any workflow, escalated after three tries and never called delivered without a 2xx, and a scheduled monitor passes the same concurrency gate an API run passes';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const TC74 = require('./table_cols.json');
+  const WIRE74 = require('./alert_retry_wiring.json');
+  const OW74 = require('./ops_alert_wiring.json');
+  const PW74 = require('./page_watch_wiring.json');
+  const EMPTY74 = [{ json: {} }];
+  const ar = async (j) => (await run('Alert Retry', [{ json: j }], { code: '_alert_retry' }))[0].json;
+  const rg = async (j) => (await run('Run Guard', [{ json: j }], { code: '_run_guard' }))[0].json;
+  const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
+  const WEBHOOK = 'https://hooks.example.test/seo-agent-alerts';
+  const ALERT_ROW = (o) => ({ alert_key: 'SEO Agent v4 | Keyword Data | dataforseo #', workflow: 'SEO Agent v4', node: 'Keyword Data',
+    message: 'DataForSEO 40101', execution_id: '549', execution_url: 'http://localhost:5678/x/549', mode: 'webhook', severity: 'high',
+    first_seen_at: ago(90), last_seen_at: ago(90), count: 1, channels: 'webhook,email,data_table', delivered: 'failed', notes: '',
+    attempts: 1, last_attempt_at: ago(90), next_attempt_at: ago(60), attempt_log: '1 ' + ago(90).replace(/\.\d+Z$/, 'Z') + ' webhook failed: ENOTFOUND', ...o });
+
+  // ---------- 0. the constants, and that the two kits agree on the one they share ----------
+  const T74 = await ar({ call: 'tables' });
+  console.log('   constants ->', JSON.stringify(T74));
+  check('B-A7: N = 30 minutes between attempts and K = 3 attempts before the alert is escalated, with a hard stop at 10 and at most 5 re-sends in one sweep',
+    T74.RETRY_MINUTES === 30 && T74.ESCALATE_AFTER === 3 && T74.MAX_ATTEMPTS === 10 && T74.PER_SWEEP === 5
+    && WIRE74.n_minutes === 30 && WIRE74.k_attempts === 3, JSON.stringify(T74));
+  check('B-A7: N is the dedupe window, so a retry can never be a flood — the one number the two kits share is the same number in both',
+    T74.RETRY_MINUTES === T74.DEDUPE_MINUTES && T74.OA_RETRY_MINUTES === T74.RETRY_MINUTES, JSON.stringify([T74.RETRY_MINUTES, T74.DEDUPE_MINUTES, T74.OA_RETRY_MINUTES]));
+  check('B-A7: seo_ops_alerts carries the retry state — how many times it was SENT (not sighted), when, when it may be tried again, and one line per attempt',
+    ['attempts', 'last_attempt_at', 'next_attempt_at', 'attempt_log'].every(c => TC74.OPS_ALERTS.includes(c))
+    && eq(TC74.OPS_ALERTS.slice(-4), ['attempts', 'last_attempt_at', 'next_attempt_at', 'attempt_log']), JSON.stringify(TC74.OPS_ALERTS));
+
+  // ---------- 1. what counts as delivered, and what counts as open ----------
+  const carried = async (row) => await ar({ call: 'carried', row });
+  const states = {};
+  for (const d of ['pending', 'failed', 'not_sent', 'deduped', 'webhook', 'email', 'webhook,email', 'abandoned']) states[d] = await carried({ ...ALERT_ROW({ delivered: d }) });
+  console.log('   open by state ->', JSON.stringify(Object.fromEntries(Object.entries(states).map(([k, v]) => [k, v.open]))));
+  check('B-A7: a row is "carried" only when `delivered` NAMES a channel — pending, failed, not_sent and deduped all mean the same thing to a human: nobody has it',
+    ['pending', 'failed', 'not_sent', 'deduped'].every(d => states[d].open === true && states[d].carried === false)
+    && ['webhook', 'email', 'webhook,email'].every(d => states[d].open === false && states[d].carried === true),
+    JSON.stringify(Object.fromEntries(Object.entries(states).map(([k, v]) => [k, [v.open, v.carried]]))));
+  check('B-A7: a row the engine gave up on is not retried again and is never called delivered either',
+    states.abandoned.open === false && states.abandoned.carried === false, JSON.stringify(states.abandoned));
+
+  // ---------- 2. when a row is due ----------
+  const due = async (row, now) => await ar({ call: 'retryable', row, now });
+  const dueNow = await due(ALERT_ROW({}), new Date().toISOString());
+  const notYet = await due(ALERT_ROW({ next_attempt_at: new Date(Date.now() + 10 * 60000).toISOString() }), new Date().toISOString());
+  const legacy = await due({ alert_key: 'k', delivered: 'pending', last_seen_at: ago(120) }, new Date().toISOString());
+  const spent = await due(ALERT_ROW({ attempts: 10 }), new Date().toISOString());
+  check('B-A7: a row whose next attempt is in the past is due; one booked for later is not',
+    dueNow.retryable === true && notYet.retryable === false, JSON.stringify([dueNow, notYet]));
+  check('B-A7: a row written before any of this existed carries no retry state at all — its last sighting schedules it, so the three alerts that have been sitting at "pending" since 2026-10-12 are picked up rather than stranded',
+    legacy.retryable === true, JSON.stringify(legacy));
+  check('B-A7: and a row that has had its ten attempts is not tried an eleventh time',
+    spent.retryable === false, JSON.stringify(spent));
+
+  // ---------- 3. the sweep itself ----------
+  const rows74 = [
+    ALERT_ROW({ alert_key: 'a1', first_seen_at: ago(200), last_seen_at: ago(200), next_attempt_at: ago(120) }),
+    ALERT_ROW({ alert_key: 'a2', next_attempt_at: ago(60) }),
+    ALERT_ROW({ alert_key: 'a3', delivered: 'webhook,email', next_attempt_at: '' }),             // carried: never re-sent
+    ALERT_ROW({ alert_key: 'a4', next_attempt_at: new Date(Date.now() + 9e5).toISOString() }),   // not due yet
+    ALERT_ROW({ alert_key: 'a5', delivered: 'abandoned', attempts: 10 }),                        // given up
+  ];
+  const sweep = await ar({ call: 'plan', rows: rows74, cfg: { webhook_url: WEBHOOK, where: 'SEO Agent — AI Pulse' } });
+  console.log('   sweep ->', JSON.stringify({ open: sweep.open, due: sweep.due, posting: sweep.posting, keys: sweep.items.map(i => i.alert_key), reason: sweep.reason }));
+  check('B-A7: the sweep takes the alerts nobody has and that are due, oldest first, and leaves the delivered, the not-yet-due and the abandoned alone',
+    eq(sweep.items.map(i => i.alert_key), ['a1', 'a2']) && sweep.open === 3 && sweep.due === 2 && sweep.posting === 2,
+    JSON.stringify({ keys: sweep.items.map(i => i.alert_key), open: sweep.open, due: sweep.due }));
+  check('B-A7: each one is posted as the NEXT attempt in its own history, not as a fresh alert',
+    sweep.items.every(i => i.attempt === 2) && sweep.items[0].webhook_body.alert.of === 10
+    && sweep.items[0].webhook_body.alert.source === 'seo-agent-alert-retry' && /Keyword Data/.test(sweep.items[0].plain),
+    JSON.stringify(sweep.items.map(i => [i.alert_key, i.attempt, i.severity])));
+  const many = await ar({ call: 'plan', rows: Array.from({ length: 12 }, (_, i) => ALERT_ROW({ alert_key: 'k' + i })), cfg: { webhook_url: WEBHOOK } });
+  check('B-A7: one run never posts more than five, so a bad day cannot turn into a hundred messages',
+    many.items.length === 5 && many.due === 12 && /retrying 5 of 12/.test(many.reason), JSON.stringify({ n: many.items.length, due: many.due, reason: many.reason }));
+  const noChannel = await ar({ call: 'plan', rows: rows74, cfg: { webhook_url: '__SEO_ALERT_WEBHOOK_URL__' } });
+  check('R29 / B-A7: a node still holding the placeholder has no channel, so nothing is posted and the reason says SEO_ALERT_WEBHOOK_URL is not set',
+    noChannel.posting === 0 && noChannel.webhook_url === '' && /SEO_ALERT_WEBHOOK_URL is not set/.test(noChannel.reason), JSON.stringify(noChannel.reason));
+  const quiet = await ar({ call: 'plan', rows: [rows74[2]], cfg: { webhook_url: WEBHOOK } });
+  check('B-A7: a sweep with nothing waiting says so and posts nothing — the common case, on every one of the ten schedules',
+    quiet.posting === 0 && quiet.open === 0 && /no alert is waiting/.test(quiet.reason), JSON.stringify(quiet.reason));
+
+  // ---------- 4. the evidence of delivery (INVARIANTS rule 4) ----------
+  const p404 = await ar({ call: 'posted', item: { statusCode: 404, body: 'no_service' } });
+  const p200 = await ar({ call: 'posted', item: { statusCode: 200, body: 'ok' } });
+  const pErr = await ar({ call: 'posted', item: { error: { message: 'getaddrinfo ENOTFOUND hooks.example.test' } } });
+  const pBare = await ar({ call: 'posted', item: { ok: true } });
+  console.log('   posted ->', JSON.stringify([p404, p200, pErr, pBare]));
+  check('B-A7 (rule 4): a 404 from a revoked webhook is a FAILURE with its reason — the POST node is `neverError`, so without the status code it arrived as an item with no error and was written down as a delivery',
+    p404.ok === false && /HTTP 404/.test(p404.detail) && /no_service/.test(p404.detail) && p200.ok === true, JSON.stringify([p404, p200]));
+  check('B-A7: a DNS failure is a failure, and so is an answer with no status at all — nothing but a 2xx is evidence that it arrived',
+    pErr.ok === false && /ENOTFOUND/.test(pErr.detail) && pBare.ok === false && /nothing confirms it arrived/.test(pBare.detail), JSON.stringify([pErr, pBare]));
+
+  // ---------- 5. what the sweep writes back: the escalation ladder, and giving up without lying ----------
+  const settle = async (rows, responses) => (await ar({ call: 'settle', planned: rows, responses })).rows;
+  const ok1 = (await settle(sweep.items, [{ statusCode: 204 }, { statusCode: 404, body: 'gone' }]));
+  console.log('   settle ->', JSON.stringify(ok1.map(r => [r.alert_key, r.delivered, r.attempts, r.severity])));
+  check('B-A7: the one that landed is recorded as delivered BY WEBHOOK, books no further attempt and says which run re-sent it',
+    ok1[0].delivered === 'webhook' && ok1[0].next_attempt_at === '' && ok1[0].attempts === 2
+    && /delivered by webhook on attempt 2/.test(ok1[0].notes) && /AI Pulse/.test(ok1[0].notes), JSON.stringify(ok1[0]));
+  check('B-A7: the one that 404ed stays "failed", books the next try and keeps BOTH attempts on the row — the history, not only its last line',
+    ok1[1].delivered === 'failed' && ok1[1].attempts === 2 && ok1[1].next_attempt_at > new Date().toISOString()
+    && ok1[1].attempt_log.split('\n').length === 2 && /^1 .* webhook failed: ENOTFOUND$/m.test(ok1[1].attempt_log)
+    && /^2 .* webhook failed: HTTP 404/m.test(ok1[1].attempt_log), JSON.stringify(ok1[1].attempt_log));
+  const third = await settle([{ ...sweep.items[1], attempt: 3, severity: 'critical', row: ALERT_ROW({ attempts: 2, severity: 'high' }) }], [{ statusCode: 500 }]);
+  check('B-A7 (K = 3): from the third failed attempt the row is `critical` whatever it started as, and the note says how long it has reached nobody',
+    third[0].severity === 'critical' && /raised to critical/.test(third[0].notes) && /3 attempts over/.test(third[0].notes), JSON.stringify(third[0].notes));
+  const escalated = await ar({ call: 'plan', rows: [ALERT_ROW({ attempts: 3, severity: 'critical', first_seen_at: ago(600), next_attempt_at: ago(5) })], cfg: { webhook_url: WEBHOOK } });
+  check('B-A7: an escalated alert leads with the outage, so when it finally lands it lands as the thing it is',
+    /^\[critical\] STILL UNDELIVERED after 4 attempts over 10 hours/.test(escalated.items[0].subject)
+    && escalated.items[0].webhook_body.alert.escalated === true && escalated.items[0].webhook_body.alert.undelivered_for_minutes === 600,
+    escalated.items[0].subject);
+  const last = await settle([{ ...sweep.items[0], attempt: 10, severity: 'critical', row: ALERT_ROW({ attempts: 9, first_seen_at: ago(3000) }) }], [{ statusCode: 500 }]);
+  check('B-A7 (rule 4): after ten attempts it stops — and says it gave up and reached nobody, which is not the same as saying it was delivered',
+    last[0].delivered === 'abandoned' && last[0].next_attempt_at === '' && /given up after 10 attempts/.test(last[0].notes)
+    && /reached nobody/.test(last[0].notes), JSON.stringify(last[0].notes));
+
+  // ---------- 6. the Error Handler: the first attempt is judged on the status, and the row books the retry ----------
+  const ALERT74 = { subject: '[SEO Agent] Run failed at "Keyword Data" — SEO Agent v4', html: '<p>x</p>', node: 'Keyword Data', workflow: 'SEO Agent v4',
+    execution_id: '412', execution_url: 'http://localhost:5678/x', message: 'DataForSEO 40100', mode: 'webhook', when: new Date().toISOString() };
+  const delivery74 = async (webhook, email) => {
+    reset(); mock('Format Alert', [{ json: ALERT74 }]); mock('Load Ops Alerts', EMPTY74);
+    if (webhook !== undefined) mock('Post Alert Webhook', [{ json: webhook }]);
+    if (email !== undefined) mock('Email Ops', [{ json: email }]);
+    return (await run('Alert Delivery', EMPTY74, { code: 'EH__Alert_Delivery_Webhook' }))[0].json;
+  };
+  const d404 = await delivery74({ statusCode: 404, body: 'no_service' }, { error: { message: 'ECONNREFUSED smtp.gmail.com' } });
+  console.log('   EH delivery (404) ->', JSON.stringify({ delivered: d404.delivered, attempts: d404.attempts, next: !!d404.next_attempt_at }));
+  check('B-A7: the live exec 516 shape — both channels refused — is recorded as failed, as attempt 1, with the next try booked 30 minutes out instead of the row simply stopping there',
+    d404.delivered === 'failed' && d404.attempts === 1 && d404.next_attempt_at > new Date().toISOString()
+    && /webhook failed \(HTTP 404/.test(d404.notes) && /tries again after 30 minutes/.test(d404.notes)
+    && /^1 \S+ webhook\+email failed: webhook HTTP 404: no_service; email ECONNREFUSED smtp\.gmail\.com$/.test(d404.attempt_log), JSON.stringify(d404));
+  const dOk = await delivery74({ statusCode: 200, body: 'ok' }, { accepted: ['ops@example.com'] });
+  check('B-A7: a delivered alert books no retry at all, so the sweep never re-sends something that arrived',
+    dOk.delivered === 'webhook,email' && dOk.next_attempt_at === '' && dOk.attempts === 1, JSON.stringify({ d: dOk.delivered, n: dOk.next_attempt_at }));
+
+  // ---------- 7. a repeat no longer writes "deduped" over the channel that carried it ----------
+  const record = async (rows) => await ar({ call: 'record', alert: ALERT74, rows, cfg: { webhook_url: WEBHOOK, email_to: 'ops@example.com' } });
+  const first74 = await record([]);
+  const repeatOfDelivered = await record([{ ...first74, delivered: 'webhook,email', last_seen_at: new Date().toISOString(), attempts: 1 }]);
+  const DUE74 = ago(1);
+  const repeatOfFailed = await record([{ ...first74, delivered: 'failed', last_seen_at: new Date().toISOString(), attempts: 1, next_attempt_at: DUE74 }]);
+  console.log('   repeat ->', JSON.stringify([repeatOfDelivered.delivered, repeatOfFailed.delivered]));
+  check('B-A7: a repeat inside the dedupe window keeps the channel that CARRIED the alert instead of writing "deduped" over it, so a delivered alert stops looking undelivered',
+    repeatOfDelivered.delivered === 'webhook,email' && repeatOfDelivered.count === 2, JSON.stringify(repeatOfDelivered));
+  check('B-A7: and a repeat of an alert that reached nobody is labelled "deduped" but is still OPEN to the sweep, with its attempt count and its booked retry untouched — the dedupe label can never turn an unhandled failure into a handled-looking one',
+    repeatOfFailed.delivered === 'deduped' && (await carried(repeatOfFailed)).open === true
+    && repeatOfFailed.attempts === 1 && repeatOfFailed.next_attempt_at === DUE74
+    && (await due(repeatOfFailed, new Date().toISOString())).retryable === true, JSON.stringify(repeatOfFailed));
+  check('B-A7: a brand new alert books its first retry before anything is sent, so a run that dies between the record and the send leaves no stranded row — and claims no attempt it has not made',
+    first74.attempts === 0 && first74.attempt_log === '' && first74.delivered === 'pending'
+    && first74.next_attempt_at > new Date().toISOString() && eq(Object.keys(first74), TC74.OPS_ALERTS), JSON.stringify(Object.keys(first74)));
+
+  // ---------- 8. the wiring: every scheduled workflow sweeps, and the Page Watch records its own delivery ----------
+  const MON74 = Object.keys(WIRE74.monitors).sort();
+  check('B-A7: all ten scheduled workflows end by sweeping the alerts nobody has — that is the retry\'s schedule: Page Watch daily at 05:45, the AI Pulse daily at 06:30, six more on Monday morning, the Audit Scheduler monthly',
+    MON74.length === 10 && ['AI Growth', 'AI Pulse', 'AI Visibility Tracker', 'Audit Scheduler', 'Backlink Monitor', 'Content Cadence', 'Link Builder', 'Rank Tracker', 'Site Tracker', 'Page Watch']
+      .every(n => MON74.some(m => m.endsWith(n))), JSON.stringify(MON74));
+  const badSweep = MON74.filter(w => { const r = WIRE74.monitors[w].retry; return !r.post_full_response && false || !['attempts', 'attempt_log', 'next_attempt_at', 'delivered', 'severity'].every(k => WIRE74.monitors[w].writes.includes(k)); });
+  check('B-A7: each of them writes the whole retry state back on the row, not just whether it worked',
+    badSweep.length === 0, JSON.stringify(badSweep));
+  check('B-A7: the Error Handler carries the same chain, so a second failure also sweeps the first one\'s undelivered alert',
+    OW74.retry && OW74.retry.from === 'Save Alert Delivery' && OW74.retry.post === 'Post Alert Retry' && OW74.retry.post_full_response === true
+    && OW74.webhook.full_response === true, JSON.stringify(OW74.retry));
+  check('B-A7: the Page Watch records what its own POST did — it used to post the day\'s digest and write nothing back, so every row it raised sat at "pending" for ever and the sweep would have re-sent a digest that had already landed',
+    PW74.nodes.includes('Watch Ops Delivery') && PW74.nodes.includes('Save Watch Ops Delivery')
+    && eq(PW74.connections['Post Watch Alert'], [['Watch Ops Delivery']]) && eq(PW74.connections['Watch Ops Delivery'], [['Save Watch Ops Delivery']]),
+    JSON.stringify(PW74.connections['Post Watch Alert']));
+
+  // ---------- 9. B-A9: the concurrency gate the ten schedules now pass ----------
+  const G74 = await rg({ call: 'tables' });
+  const row74 = (o) => ({ id: o.id, run_id: o.run_id || ('e' + o.id), mode: o.mode || 'ai_visibility', status: o.status || 'reserved',
+    created_at: o.created_at || ago(5), domain: o.domain || '', heavy: o.heavy || false });
+  const mine74 = { id: 100, run_id: 'e100', mode: 'ai_visibility', dfs_balance: 14.5, dfs_est_usd: 0.95 };
+  const gate = async (rows, extra) => await rg({ call: 'gate', args: { rows, mine: mine74, mode: 'ai_visibility', where: 'SEO Agent — AI Visibility Tracker', run_id: 'e100', ...extra } });
+  const alone = await gate([row74({ id: 1, status: 'done' })]);
+  console.log('   gate (alone) ->', JSON.stringify({ allowed: alone.allowed, open: alone.open_runs, basis: alone.basis }));
+  check('B-A9: with nothing else running the scheduled monitor goes ahead, and says what it saw — the ten schedules used to say nothing at all, because nothing ever read the ledger they wrote to',
+    alone.allowed === true && alone.open_runs === 0 && /0 other run\(s\) in flight/.test(alone.basis), JSON.stringify(alone));
+  const twin = await gate([row74({ id: 7, mode: 'ai_visibility', created_at: ago(40) })]);
+  check('B-A9: the same monitor still in flight refuses the new one — it would read the same tables, write the same rows and bill the same APIs twice, and the one still going is the one with the data',
+    twin.allowed === false && twin.reason === 'same_mode' && /previous ai visibility run \(execution e7/.test(twin.refusal)
+    && /Nothing was charged and nothing was started/.test(twin.refusal), JSON.stringify([twin.reason, twin.refusal]));
+  const staleTwin = await gate([row74({ id: 7, mode: 'ai_visibility', created_at: ago(200) })]);
+  check('B-A9: a reservation older than two hours is a crashed run, not a running one — the same rule Rate Limit uses, so a crash never blocks a schedule for ever',
+    staleTwin.allowed === true && staleTwin.stale_ignored === 1, JSON.stringify(staleTwin));
+  const crowd = await gate([row74({ id: 1, mode: 'backlinks' }), row74({ id: 2, mode: 'rank_tracker' }), row74({ id: 3, mode: 'content_cadence' })]);
+  check('B-A9: more analyses in flight than the limit refuses this one and says the next scheduled run goes ahead as usual',
+    crowd.allowed === false && crowd.reason === 'too_many_open' && crowd.open_runs === 3 && crowd.max_open === G74.MAX_OPEN
+    && /the next one goes ahead as usual/.test(crowd.refusal), JSON.stringify([crowd.reason, crowd.open_runs]));
+  const later = await gate([row74({ id: 101, mode: 'backlinks' }), row74({ id: 102, mode: 'rank_tracker' }), row74({ id: 103, mode: 'audit_schedule' })]);
+  check('B-A9: only the rows with a LOWER id than this run\'s own count, so row order decides ties and two runs starting together cannot both refuse each other',
+    later.allowed === true && later.open_runs === 0, JSON.stringify(later));
+  const heavy = await gate([row74({ id: 5, mode: 'keyword', domain: 'techand.ai', heavy: true })], { domain: 'techand.ai', heavy: true });
+  check('B-A9 (P34-5, shared with Rate Limit): a second heavy crawl of a site that is already being crawled is refused — two 200-page audits at once stalled the task runner and both were cancelled at the 90-minute timeout',
+    heavy.allowed === false && heavy.reason === 'heavy_busy' && /large audit of techand\.ai is already running/.test(heavy.refusal), JSON.stringify(heavy.reason));
+  const broke = await gate([], { balance_usd: 0.6, dfs_est_usd: 0.95, balance_floor_usd: 0.5 });
+  const probeOff = await gate([], { balance_usd: 0, dfs_est_usd: 0.95, balance_floor_usd: 0.5 });
+  check('B-A9: an account that cannot pay for the run refuses it before it spends — a run that runs out of credit half way through delivers half a report and charges for all of it',
+    broke.allowed === false && broke.reason === 'account_low' && /\$0\.60 left/.test(broke.refusal), JSON.stringify(broke.reason));
+  check('B-A9: and the balance check fails OPEN — a free probe that did not answer refuses nothing',
+    probeOff.allowed === true, JSON.stringify(probeOff));
+  const free = await gate([], { balance_usd: 0.6, dfs_est_usd: 0, balance_floor_usd: 0.5 });
+  check('B-A9: a run that spends no data money is never refused for the account (Page Watch, the Content Cadence, the Audit Scheduler)',
+    free.allowed === true, JSON.stringify(free));
+
+  // ---------- 10. the gate is wired where it can refuse before the money and never after it ----------
+  const badGate = MON74.filter(w => { const g = WIRE74.monitors[w].guard; return !g || g.kit !== 'RG' || !g.refuse || !WIRE74.monitors[w].if_outputs[0].length || !eq(WIRE74.monitors[w].if_outputs[1], [g.refuse]); });
+  check('B-A9: all ten carry the gate on the main path, with the pipeline behind "yes" and the ledger refusal behind "no" — section 55 still proves no paid node can be reached without passing the reservation, and the gate sits between the two',
+    badGate.length === 0 && MON74.every(w => WIRE74.monitors[w].guard.gate.startsWith('After Run Ledger (')), JSON.stringify(badGate));
+  check('B-A9: a refused schedule marks its own reserved row `refused` and settles nothing, so a skipped run holds no part of the day\'s budget',
+    MON74.every(w => WIRE74.monitors[w].refuse_values.includes('status') && WIRE74.monitors[w].refuse_values.includes('cost_basis')
+      && WIRE74.monitors[w].refuse_values.includes('settled_usd')), JSON.stringify(WIRE74.monitors[MON74[0]].refuse_values));
+  const rl74 = require('fs').readFileSync(require('path').join(process.env.CODE_DIR || require('path').join(__dirname, 'code'), 'Rate_Limit.js'), 'utf8');
+  check('B-A9: Rate Limit runs the SAME kit, so the API side and the schedule side cannot drift apart (INVARIANTS rule 2: a gate applied in one place is a gate that does not exist in the other)',
+    /const RG = \(\(\) => \{/.test(rl74) && /RG\.isStale\(/.test(rl74) && /RG\.heavyBusy\(/.test(rl74), (rl74.match(/RG\.[a-zA-Z]+\(/g) || []).join(' '));
+  check('B-A9: and it refuses a schedule on CONCURRENCY only — never on the Claude or DataForSEO budget, because a budget refusal would silently cost a customer their week',
+    ['same_mode', 'heavy_busy', 'too_many_open', 'account_low'].includes(twin.reason) && !/budget/i.test(JSON.stringify([twin, crowd, heavy, broke])),
+    JSON.stringify([twin.reason, crowd.reason, heavy.reason, broke.reason]));
   reset();
 });
 

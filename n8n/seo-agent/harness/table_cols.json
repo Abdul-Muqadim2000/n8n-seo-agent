@@ -419,7 +419,11 @@
   "count",
   "channels",
   "delivered",
-  "notes"
+  "notes",
+  "attempts",
+  "last_attempt_at",
+  "next_attempt_at",
+  "attempt_log"
  ],
  "PAGE_WATCH": [
   "site_id",
