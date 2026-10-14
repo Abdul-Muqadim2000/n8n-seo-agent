@@ -345,24 +345,41 @@ const OK = (() => {
   // A list page ("best X", a directory, a mention, a journalist request) stays pitchable even on a rival's domain: the ask there is "add us to
   // your list", which is legitimate; pitching their guide or resource page is not.
   const LIST_TYPES = new Set(['list', 'listing', 'ai_list', 'mention', 'press']);
-  const domOf = (c) => String((c && typeof c === 'object' ? (c.domain || c.d) : c) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '');
+  const domOf = (c) => String((c && typeof c === 'object' ? (c.domain || c.d || c.host) : c) || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[\/?#].*$/, '').replace(/\.$/, '');
+  // R21 (2026-10-14, the second re-rating): three prospects that sell exactly what the owner sells reached `ready`, two of them as drafted
+  // pitches waiting for the owner. `ae.invoiceq.com` had been recorded ABOVE techand.ai for "peppol uae" on two days, yet `invoiceq.com`
+  // was pitched for a brand link to the home page: the stored SERP host was matched as it stands, so a rival on a SUBDOMAIN was a
+  // different site. Every host on both sides is now reduced to its registrable domain before it is matched (the host the rank check
+  // really saw is quoted in the reason), and a prospect whose own page sells our service is refused on that evidence alone - whether or
+  // not it is on the declared list and whether or not the rank checks happened to see it.
+  const rivalEntry = (c, label) => {
+    const x = domOf(c); if (!x) return null;
+    const o = (c && typeof c === 'object') ? c : {};
+    const pos = Number(o.position || o.p) || 0; const kw = String(o.keyword || '').slice(0, 60);
+    const reg = LK.regDomain(x) || x;
+    const seen = String(o.host || '').toLowerCase().replace(/^www\./, '').replace(/\.$/, '') || x;   // the host the rank check really showed
+    const where = ((seen !== reg ? seen + ' ranks ' : '') + (pos ? '#' + pos : '') + (kw ? ' for "' + kw + '"' : '')).trim();
+    return { domain: reg, host: seen, why: label + ((pos || seen !== reg) ? ' (' + where + ')' : '') };
+  };
   function rivalOf(o) {
-    const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
+    const d = String(o.domain || '').toLowerCase().replace(/^www\./, ''); const dr = LK.regDomain(d);
     const hit = (list, label) => {
-      for (const c of (list || [])) { const x = domOf(c);
-        if (x && (LK.sameSite(d, x) || LK.sameSite(x, d) || LK.regDomain(d) === LK.regDomain(x)))
-          return { domain: x, why: label + ((c && typeof c === 'object' && c.position) ? ' (#' + c.position + ' for "' + String(c.keyword || '').slice(0, 60) + '")' : '') };
+      for (const c of (list || [])) { const x = domOf(c); if (!x || !d) continue;
+        if (LK.sameSite(d, x) || LK.sameSite(x, d) || (dr && dr === LK.regDomain(x))) return rivalEntry(c, label);
       }
       return null;
     };
     return hit(o.competitors, 'a competitor of yours') || hit(o.serp_rivals, 'a site that outranks you for one of your own keywords');
   }
+  // a rival's "best X" list is still fair game - but only when the page really IS such a list. A mention, a resource page or the rival's
+  // own front page is not: "add us to your list" has somewhere to go, "link to our guide" has not.
+  const ROUNDUP_RE = /\b(best|top\s*\d+|top ten|alternatives?|round-?up|shortlist|directory|listing|list of|compar(?:e|ed|ison)|vs)\b/i;
+  const isRoundup = (o) => ROUNDUP_RE.test(String(o.title || '')) || ROUNDUP_RE.test(String(o.url || o.page_url || '').replace(/[\/_?.&=-]+/g, ' '));
   function sellsSame(o) {
+    const type = String(o.type || '');
     const rival = rivalOf(o);
-    if (rival && LIST_TYPES.has(String(o.type || ''))) return '';   // asking a rival's "best X" list to add you is fair game
+    if (rival && LIST_TYPES.has(type) && isRoundup(o)) return '';   // asking a rival's "best X" list to add you is fair game
     if (rival) return 'a competing site of yours (' + rival.domain + '): ' + rival.why + ', and a competitor does not link to your page';
-    const d = String(o.domain || '').toLowerCase().replace(/^www\./, '');
-    if (SELL_EXEMPT.has(String(o.type || ''))) return '';
     const terms = [...new Set((o.terms || []).flatMap(t => words(t).map(stem)))];
     if (terms.length < 2) return '';
     const title = String(o.title || ''); const text = String(o.text || '').slice(0, 30000);
@@ -370,8 +387,13 @@ const OK = (() => {
     const share = terms.filter(t => T.has(t)).length / terms.length;
     const signals = [...new Set((text.match(VENDOR_RE) || []).map(x => x.toLowerCase().replace(/\s+/g, ' ').trim()))];
     const theirs = THEIRS_RE.test(title) && words(title).map(stem).some(w => terms.includes(w));
-    return (share >= 0.45 && signals.length >= 2 && theirs)
-      ? 'a competing provider: their page sells what you sell (' + Math.round(share * 100) + '% of your service words, "' + signals.slice(0, 2).join('", "') + '")' : '';
+    const topic = Number(o.fit) > 0 ? Number(o.fit) : 0;   // the topic match this run measured on their page, where it read one
+    // their page sells our service: our words AND the signals of a vendor selling them, confirmed by the title or by that measured match
+    // (deloitte.com at 54% and alaan.com at 65% were `ready` on 2026-10-14 with no title THEIRS_RE could read)
+    if (!(signals.length >= 2 && share >= 0.45 && (theirs || topic >= 0.5))) return '';
+    if (SELL_EXEMPT.has(type) && (!LIST_TYPES.has(type) || isRoundup(o))) return '';   // a roundup, a journalist request, a podcast, a lost link: the ask there is not "link to our guide"
+    return 'a competing provider: their page sells what you sell (' + Math.round(share * 100) + '% of your service words'
+      + (topic ? ', topic match ' + Math.round(topic * 100) + '%' : '') + ', "' + signals.slice(0, 2).join('", "') + '")';
   }
   // does a page name the business? Punctuation in a name ("Tech&") breaks \b, so every name is matched by its letter / digit runs with a
   // little punctuation allowed between them, and the domain counts as a name too.
@@ -428,7 +450,7 @@ const OK = (() => {
     return { ok: false, why: 'off topic for you: neither its name, its page nor its country ties it to ' + (String(x.topic_label || '') || 'your topics') };
   }
   return { OFF_TOPIC, isGov, words, stem, fit, contactsIn, rankContacts, authorUrl, contactForm, sellSignals, countryOf, pickTarget, kindOf,
-    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, rivalOf, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
+    badHost, isHomeUrl, homepageOnly, accreditedList, accredited, sellsSame, rivalOf, isRoundup, LIST_TYPES, namesUs, nameRe, MIN_NAME_RUN, noPitch, gapTopic, SELLWORD };
 })();
 
 // ---- which stored outreach draft may still be offered (P34-1, live 2026-10-12; inlined by build_monitors.py) ----

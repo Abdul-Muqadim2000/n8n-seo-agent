@@ -31,7 +31,7 @@ inputs.forEach((job, i) => {
     const v = DQ.check({ type: j.type, steps: raw.map((x, k) => ({ step: k, subject: k === 0 ? clean(x.subject, 90) : '', body: clean(x.body, k === 0 ? 2200 : 900) })),
       to: j.to || '', prospect_domain: j.prospect_domain, page_url: j.page_url, page_title: j.page_title, evidence: j.evidence, dead: j.dead },
       { facts: job.facts, signer: job.signer, brand: p.brand || job.business, brand_known: !!p.brand_known, domain: p.domain || job.domain, canonical_host: p.canonical_host || p.domain || job.domain,
-        target_url: j.target_url, competitors: p.competitors || [], accredited: OK.accredited(p.accreditation) });
+        target_url: j.target_url, competitors: p.competitors || [], serp_rivals: p.serp_rivals || [], accredited: OK.accredited(p.accreditation) });   // R21: the last gate sees the SERP rivals too
     const waits = press ? [0, 3] : [0, 4, 8];
     const alt = press ? '' : clean(sq.subject_b, 90);   // a journalist answer keeps "Re: " + their request: there is nothing to test there
     const altWhy = press ? '' : AB.altOk(alt, v.steps[0] ? v.steps[0].subject : '');
