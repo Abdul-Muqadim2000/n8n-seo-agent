@@ -320,7 +320,13 @@ RUN_LEDGER_COLS = [('run_id', 'string'), ('key', 'string'), ('mode', 'string'), 
                    # (`cost:<kind>:<mode>`); `ai_usd` is the run's own Claude figure, priced by v5/code/_cost_cal.js from the characters the
                    # prompts really interpolated, the characters the models answered with and the thinking budget; and `cost_basis` says in
                    # words which half of measured_usd + estimated_usd is which.
-                   ('cost_mode', 'string'), ('ai_usd', 'number'), ('measured_usd', 'number'), ('estimated_usd', 'number'), ('cost_basis', 'string')]
+                   ('cost_mode', 'string'), ('ai_usd', 'number'), ('measured_usd', 'number'), ('estimated_usd', 'number'), ('cost_basis', 'string'),
+                   # B-A5 (2026-10-15, build section 62): only the DAY was reconciled against the account, never the run — and a run cannot
+                   # say what it truly cost unless it happens to be the only one in flight. Every settle now takes a second free
+                   # `appendix/user_data` reading (`dfs_balance_end`) and stamps the moment it settled (`settled_at`), so the move between
+                   # a row's two readings can be attributed to that row when no other row was open across its window, and `dfs_source`
+                   # says which figure the row carries: 'account' (measured against the balance) or 'tasks' (its own per-task sum).
+                   ('settled_at', 'string'), ('dfs_balance_end', 'number'), ('dfs_source', 'string')]
 
 # ---- R9 (2026-10-13, re-rating): every scheduled run reserves and settles a seo_run_ledger row too. Before this the ledger held nothing for
 # the AI Pulse, the Rank Tracker, the Content Cadence, the Link Builder, AI Growth or the Site Tracker, so the day's guard refused
@@ -367,6 +373,9 @@ def monitor_ledger_js(v5_dir, mode, plan_node, row_node, measured=''):
     for ph in ('__PLAN__', '__MODE__', '__EST__', '__ROW__', '__MEASURED__', '__BALANCE__', '/*__COST_CAL__*/'):
         assert ph not in reserve and ph not in settle, ph + ' left in the ledger code for ' + mode
     assert '__AI_NODES__' in settle, 'R31: the settle has nowhere to learn this workflow\'s Claude nodes'
+    # B-A5 (2026-10-15, section 62): the settle's two new inputs are named at WRITE time by ledger_mainline(), where the tag is known
+    # and the nodes are built — exactly as __AI_NODES__ is.
+    assert '__BAL_END__' in settle and '__LEDGER__' in settle, 'B-A5: the settle cannot reach the account or the ledger rows'
     return reserve, settle
 
 
@@ -498,7 +507,55 @@ def ledger_mainline(wfobj, wiring):
         o[0] = o[0] + [{'node': settle_code, 'type': 'main', 'index': 0}]
     wiring['settle_from'] = sorted(set(wiring.get('settle_from') or []) | set(loose))
     wiring['settle_from_ends'] = loose   # the branches that used to finish without settling
+    _ledger_settle_chain(wfobj, wiring, tag, settle_code, conns, nodes)
     return resume
+
+
+#  B-A5 (2026-10-15, build section 62): a run cannot say what it truly cost unless it happens to be the only one in flight.
+#  R28 put one free `appendix/user_data` reading on the RESERVE chain, which is enough to reconcile the DAY (CC.dfsDay) and says nothing
+#  about any single run: a run can be out by 100% while the day still agrees. The settle chain now takes a SECOND free reading and loads
+#  the ledger rows around this run's window, so CC.dfsRun can attribute the move between the two readings to this run when no other row
+#  was open across it, and keep the run's per-task figure — saying why — when one was. Both nodes sit on the MAIN path in front of the
+#  settle code, for the same reason R17 moved the reservation there: a side branch runs last, or not at all.
+LEDGER_WINDOW_MS = 6 * 60 * 60 * 1000   # how far back the settle loads rows: longer than the longest run and than the stale-release limit
+
+
+def _ledger_settle_chain(wfobj, wiring, tag, settle_code, conns, nodes):
+    bal_end, load = 'DFS Balance End (' + tag + ')', 'Load Run Ledger (' + tag + ')'
+    assert bal_end not in nodes and load not in nodes, 'B-A5: the settle chain of ' + str(wfobj.get('name')) + ' is already built'
+    sx, sy = nodes[settle_code]['position']
+    wfobj['nodes'].append({'parameters': {'method': 'GET', 'url': DFS_BALANCE_URL, 'authentication': 'genericCredentialType',
+                                          'genericAuthType': 'httpBasicAuth',
+                                          'options': {'timeout': 15000, 'response': {'response': {'neverError': True}}}},
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + bal_end)), 'name': bal_end,
+                           'type': 'n8n-nodes-base.httpRequest', 'typeVersion': 4.5, 'position': [sx - 440, sy],
+                           'credentials': {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}},
+                           'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True,
+                           'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+    wfobj['nodes'].append({'parameters': dt_get_all_where_params(RUN_LEDGER_TABLE, [
+                               ('created_at', 'gte', '={{ new Date(Date.now() - ' + str(LEDGER_WINDOW_MS) + ').toISOString() }}')]),
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + load)), 'name': load,
+                           'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [sx - 220, sy],
+                           'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+    nodes[bal_end], nodes[load] = wfobj['nodes'][-2], wfobj['nodes'][-1]
+    # everything that fed the settle code now feeds the chain that ends in it
+    fed = False
+    for nm in list(conns.keys()):
+        if nm in (bal_end, load): continue
+        for lst in ((conns.get(nm) or {}).get('main') or []):
+            for t in (lst or []):
+                if t['node'] == settle_code: t['node'] = bal_end; fed = True
+    assert fed, 'B-A5: nothing feeds ' + settle_code + ' in ' + str(wfobj.get('name'))
+    conns.setdefault(bal_end, {})['main'] = [[{'node': load, 'type': 'main', 'index': 0}]]
+    conns.setdefault(load, {})['main'] = [[{'node': settle_code, 'type': 'main', 'index': 0}]]
+    src = nodes[settle_code]['parameters']['jsCode']
+    assert '__BAL_END__' in src and '__LEDGER__' in src, 'B-A5: ' + settle_code + ' does not read the account or the ledger rows'
+    nodes[settle_code]['parameters']['jsCode'] = src.replace('__BAL_END__', bal_end).replace('__LEDGER__', load)
+    # the row keeps what the account said about this run, and when it settled
+    upd = nodes[wiring['settle']]['parameters']['columns']['value']
+    upd.update({'settled_at': '={{ $json.settled_at }}', 'dfs_balance_end': '={{ $json.dfs_balance_end }}',
+                'dfs_source': '={{ $json.dfs_source }}'})
+    wiring['balance_end'], wiring['ledger_load'] = bal_end, load
 
 
 # ---- R29 (2026-10-14, system review FIX_PLAN 3.12, secret handling): SEO_ALERT_WEBHOOK_URL is a SECRET (a Slack incoming webhook is a

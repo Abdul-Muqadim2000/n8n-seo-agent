@@ -156,6 +156,18 @@
               {
                 "name": "cost_basis",
                 "type": "string"
+              },
+              {
+                "name": "settled_at",
+                "type": "string"
+              },
+              {
+                "name": "dfs_balance_end",
+                "type": "number"
+              },
+              {
+                "name": "dfs_source",
+                "type": "string"
               }
             ]
           },
@@ -176,7 +188,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// v4.14 (FIX_PLAN D1): the Keyword Check's reservation in the run ledger (seo_run_ledger, exact columns; mode 'assess' keeps it out of the main\n// workflow's limits), inserted before Assess Limit counts, so parallel requests see each other. est_usd = the Claude Haiku call (~$0.002).\nconst v = $('Assess Validate').first().json || {};\n// P34-5: the row carries the site it is about (`heavy` is false: a keyword check crawls nothing), so every seo_run_ledger row has the same shape.\nreturn [{ json: { run_id: String($execution.id), key: String(v.caller || 'anon').toLowerCase(), mode: 'assess', est_usd: 0.002, created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,\n  domain: String(v.domain || '').toLowerCase(), heavy: false,\n  // R9 (2026-10-13): the DataForSEO estimate beside the AI one -- a keyword check pays for the overview, the site's position and (without a\n  // stored reach) the reach measurement. G23 recalibrated it from the money: the three checks of 2026-10-13 cost $0.0761 together, so\n  // $0.0254 each, and the estimate may never sit below what the mode has recently cost (it was $0.024, under the measured figure).\n  dfs_est_usd: 0.034, dfs_usd: 0,\n  // R28 (2026-10-14): the main workflow records the DataForSEO balance here so the day can be reconciled against the account; the Keyword\n  // Check does not read it (the request is synchronous and must answer in seconds), so its rows carry 0 = not read.\n  dfs_balance: 0,\n  // G23: which part of a settled row's cost is measured and which is estimated. Nothing is measured at reservation time.\n  cost_mode: 'assess', ai_usd: 0, measured_usd: 0, estimated_usd: 0.036,\n  cost_basis: 'reserved: Claude $0.0020 ESTIMATED (one Haiku call), DataForSEO $0.0340 ESTIMATED (the per-check figure measured on 2026-10-13) - nothing measured yet' } }];\n"
+          "jsCode": "// v4.14 (FIX_PLAN D1): the Keyword Check's reservation in the run ledger (seo_run_ledger, exact columns; mode 'assess' keeps it out of the main\n// workflow's limits), inserted before Assess Limit counts, so parallel requests see each other. est_usd = the Claude Haiku call (~$0.002).\nconst v = $('Assess Validate').first().json || {};\n// P34-5: the row carries the site it is about (`heavy` is false: a keyword check crawls nothing), so every seo_run_ledger row has the same shape.\nreturn [{ json: { run_id: String($execution.id), key: String(v.caller || 'anon').toLowerCase(), mode: 'assess', est_usd: 0.002, created_at: new Date().toISOString(), status: 'reserved', settled_usd: 0,\n  domain: String(v.domain || '').toLowerCase(), heavy: false,\n  // R9 (2026-10-13): the DataForSEO estimate beside the AI one -- a keyword check pays for the overview, the site's position and (without a\n  // stored reach) the reach measurement. G23 recalibrated it from the money: the three checks of 2026-10-13 cost $0.0761 together, so\n  // $0.0254 each, and the estimate may never sit below what the mode has recently cost (it was $0.024, under the measured figure).\n  dfs_est_usd: 0.034, dfs_usd: 0,\n  // R28 (2026-10-14): the main workflow records the DataForSEO balance here so the day can be reconciled against the account; the Keyword\n  // Check does not read it (the request is synchronous and must answer in seconds), so its rows carry 0 = not read.\n  dfs_balance: 0,\n  // G23: which part of a settled row's cost is measured and which is estimated. Nothing is measured at reservation time.\n  cost_mode: 'assess', ai_usd: 0, measured_usd: 0, estimated_usd: 0.036,\n  cost_basis: 'reserved: Claude $0.0020 ESTIMATED (one Haiku call), DataForSEO $0.0340 ESTIMATED (the per-check figure measured on 2026-10-13) - nothing measured yet',\n  // B-A5 (2026-10-15, build section 62): a reserved row has not settled, has taken no second balance reading and carries the cost its\n  // own tasks report. `settled_at` is stamped by the settle, and it is what lets ANOTHER run tell whether this one overlapped it:\n  // a `done` row with no settled_at is treated as having been open the whole time, which is the safe answer, not the useful one.\n  settled_at: '', dfs_balance_end: 0, dfs_source: 'tasks' } }];\n"
         },
         "id": "9ff3e471-0436-512c-a68f-d6b61aff0eb8",
         "name": "Run Ledger Row (Assess)",
@@ -364,6 +376,36 @@
               {
                 "id": "cost_basis",
                 "displayName": "cost_basis",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "settled_at",
+                "displayName": "settled_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_balance_end",
+                "displayName": "dfs_balance_end",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_source",
+                "displayName": "dfs_source",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,
@@ -687,6 +729,36 @@
                 "type": "string",
                 "canBeUsedToMatch": true,
                 "removed": false
+              },
+              {
+                "id": "settled_at",
+                "displayName": "settled_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_balance_end",
+                "displayName": "dfs_balance_end",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_source",
+                "displayName": "dfs_source",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
               }
             ],
             "attemptToConvertTypes": true,
@@ -708,7 +780,7 @@
       },
       {
         "parameters": {
-          "jsCode": "// R28 (2026-10-14, system review FIX_PLAN §3.12; RESULTS §0 / §2.11): the Keyword Check told the caller `cost_usd: 0.026` and settled its\n// seo_run_ledger row with `dfs_usd: 0` and the flat $0.002 reservation — so the one mode that KNOWS what it spent (DataForSEO reports the\n// cost of every task it answers, and the Haiku call is a fixed, tiny amount) was the one that threw the figure away. The row is now settled\n// with exactly the money the 200 reported, split the way every other settled row is split: `settled_usd` stays the Claude figure (that is\n// what ai_budget_usd guards), `dfs_usd` the measured DataForSEO cost, and measured_usd + estimated_usd add up to the caller's `cost_usd`.\n//\n// It runs on both ends of the request: after *Respond Assess* (the 200) and after *Respond Assess Upstream Error* (the 502, where\n// DataForSEO failed — its tasks still report their cost, usually 0, and no model call was made). P1-1's rule is unchanged: the update\n// matches `status = reserved`, so a row settles once and a refused row stays refused.\nconst first = (name) => { try { const it = $(name).first(); return (it && it.json) || null; } catch (e) { return null; } };\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\nconst r4 = (v) => +n0(v).toFixed(4);\n\nconst row = first('Run Ledger Row (Assess)') || {};\nconst res = first('Assess Result') || {};\nconst ans = (first('Assess Response') || {}).body || null;   // null on the 502 path: the answer was never built\n\n// DataForSEO: measured in every case — Assess Result sums the cost of each task of this request's answers (one answer per endpoint,\n// nothing polled, so no task can be counted twice here).\nconst dfs_usd = r4(res.dfs_cost);\nconst dfs_measured = res.dfs_cost != null;\n// Claude: whatever the caller's figure has left over after the DataForSEO cost, which is the Haiku call (or two, when the plain-text retry\n// ran). It is a list-price estimate, not reported usage, and says so.\nconst reported = ans && Number.isFinite(Number(ans.cost_usd)) ? r4(ans.cost_usd) : null;\nconst ai_usd = reported == null ? 0 : r4(Math.max(0, reported - dfs_usd));\nconst total = reported == null ? dfs_usd : reported;\n\nconst cost_basis = ('Claude $' + ai_usd.toFixed(4) + ' ' + (ai_usd > 0 ? 'ESTIMATED (the Haiku topic-fit call at the list prices)' : 'nothing spent (no model call was made)')\n  + '; DataForSEO $' + dfs_usd.toFixed(4) + ' ' + (dfs_measured ? 'measured (the cost every task reported)' : 'ESTIMATED (no task reported a cost)')\n  + '; total $' + r4(total).toFixed(4) + (reported == null ? ' — the request failed upstream, so no answer was sent' : ' — the same figure the 200 reported as cost_usd')).slice(0, 500);\n\nreturn [{ json: {\n  run_id: String($execution.id), mode: String(row.mode || 'assess'), status: 'done',\n  cost_mode: String(row.cost_mode || 'assess'),\n  settled_usd: ai_usd, ai_usd, dfs_usd, dfs_measured,\n  dfs_est_usd: r4(row.dfs_est_usd),\n  measured_usd: dfs_measured ? dfs_usd : 0,\n  estimated_usd: r4(total - (dfs_measured ? dfs_usd : 0)),\n  reported_usd: reported,   // what the caller was told; measured_usd + estimated_usd must equal it\n  cost_basis,\n} }];\n"
+          "jsCode": "// R28 (2026-10-14, system review FIX_PLAN §3.12; RESULTS §0 / §2.11): the Keyword Check told the caller `cost_usd: 0.026` and settled its\n// seo_run_ledger row with `dfs_usd: 0` and the flat $0.002 reservation — so the one mode that KNOWS what it spent (DataForSEO reports the\n// cost of every task it answers, and the Haiku call is a fixed, tiny amount) was the one that threw the figure away. The row is now settled\n// with exactly the money the 200 reported, split the way every other settled row is split: `settled_usd` stays the Claude figure (that is\n// what ai_budget_usd guards), `dfs_usd` the measured DataForSEO cost, and measured_usd + estimated_usd add up to the caller's `cost_usd`.\n//\n// It runs on both ends of the request: after *Respond Assess* (the 200) and after *Respond Assess Upstream Error* (the 502, where\n// DataForSEO failed — its tasks still report their cost, usually 0, and no model call was made). P1-1's rule is unchanged: the update\n// matches `status = reserved`, so a row settles once and a refused row stays refused.\nconst first = (name) => { try { const it = $(name).first(); return (it && it.json) || null; } catch (e) { return null; } };\nconst n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };\nconst r4 = (v) => +n0(v).toFixed(4);\n\nconst row = first('Run Ledger Row (Assess)') || {};\nconst res = first('Assess Result') || {};\nconst ans = (first('Assess Response') || {}).body || null;   // null on the 502 path: the answer was never built\n\n// DataForSEO: measured in every case — Assess Result sums the cost of each task of this request's answers (one answer per endpoint,\n// nothing polled, so no task can be counted twice here).\nconst dfs_usd = r4(res.dfs_cost);\nconst dfs_measured = res.dfs_cost != null;\n// Claude: whatever the caller's figure has left over after the DataForSEO cost, which is the Haiku call (or two, when the plain-text retry\n// ran). It is a list-price estimate, not reported usage, and says so.\nconst reported = ans && Number.isFinite(Number(ans.cost_usd)) ? r4(ans.cost_usd) : null;\nconst ai_usd = reported == null ? 0 : r4(Math.max(0, reported - dfs_usd));\nconst total = reported == null ? dfs_usd : reported;\n\nconst cost_basis = ('Claude $' + ai_usd.toFixed(4) + ' ' + (ai_usd > 0 ? 'ESTIMATED (the Haiku topic-fit call at the list prices)' : 'nothing spent (no model call was made)')\n  + '; DataForSEO $' + dfs_usd.toFixed(4) + ' ' + (dfs_measured ? 'measured (the cost every task reported)' : 'ESTIMATED (no task reported a cost)')\n  + '; total $' + r4(total).toFixed(4) + (reported == null ? ' — the request failed upstream, so no answer was sent' : ' — the same figure the 200 reported as cost_usd')).slice(0, 500);\n\nreturn [{ json: {\n  run_id: String($execution.id), mode: String(row.mode || 'assess'), status: 'done',\n  cost_mode: String(row.cost_mode || 'assess'),\n  settled_usd: ai_usd, ai_usd, dfs_usd, dfs_measured,\n  dfs_est_usd: r4(row.dfs_est_usd),\n  measured_usd: dfs_measured ? dfs_usd : 0,\n  estimated_usd: r4(total - (dfs_measured ? dfs_usd : 0)),\n  reported_usd: reported,   // what the caller was told; measured_usd + estimated_usd must equal it\n  // B-A5 (2026-10-15, section 62): the Keyword Check takes no balance reading (it has to answer in seconds), so it can never be costed\n  // against the account — but it MUST stamp when it settled, or every run whose window it touches is treated as having overlapped an\n  // open row and loses its own reconciliation.\n  settled_at: new Date().toISOString(), dfs_source: 'tasks',\n  cost_basis,\n} }];\n"
         },
         "id": "9f4061f7-e48b-5e10-a240-2b3b78ca8da5",
         "name": "Ledger Settle (Assess)",
@@ -920,6 +992,36 @@
               {
                 "id": "cost_basis",
                 "displayName": "cost_basis",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "settled_at",
+                "displayName": "settled_at",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_balance_end",
+                "displayName": "dfs_balance_end",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "number",
+                "canBeUsedToMatch": true,
+                "removed": false
+              },
+              {
+                "id": "dfs_source",
+                "displayName": "dfs_source",
                 "required": false,
                 "defaultMatch": false,
                 "display": true,

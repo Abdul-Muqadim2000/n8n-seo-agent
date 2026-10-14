@@ -8,14 +8,20 @@
 // written in at build time from the workflow itself; when none of them produced anything in this execution the run settles **nothing**
 // for Claude and says why (CC.aiRun). When one did run, the figure is still the reservation and is still labelled an ESTIMATE: a monitor's
 // agents report no token usage, which is the whole reason _cost_cal.js exists.
-// MEASURED / ROW / AI_NODES are written in by the builder at build time.
+//
+// B-A5 (2026-10-15, build section 62): the day was reconciled against the account, the RUN never was — and a run cannot say what it
+// truly cost unless it happens to be the only one in flight. *DFS Balance End (…)* takes a second free `appendix/user_data` reading on
+// the settle chain and *Load Run Ledger (…)* loads the rows around this run's window, so CC.dfsRun can attribute the move between the
+// two readings to this run when no other row was open across it — and say so plainly when one was.
+// MEASURED / ROW / AI_NODES / BAL_END / LEDGER are written in by the builder at build time.
 // Shared cost kit (G23 + the estimate recalibration, 2026-10-13; FIX_PLAN G23, RESULTS §0b / §2.10).
 //
 // Two things were wrong with the money this engine reports.
 //
 // 1. **Claude's cost was a range, not a number.** Three Opus nodes stream (`streaming: true`, required above ~21k tokens because the
-//    Anthropic SDK's 10-minute rule), and a streaming call reports no token usage at all — the run can see only `tokenUsageEstimate`,
-//    which a Code node cannot read either (usage rides the `ai_languageModel` connection). The whole-system re-rating could therefore put
+//    Anthropic SDK's 10-minute rule: `calculateNonstreamingTimeout` throws above 128000 * 10/60 = 21,333), and n8n records only
+//    `tokenUsageEstimate` for them — which a Code node cannot read either, nor can it read the real `tokenUsage` of the non-streaming
+//    nodes, because usage rides the `ai_languageModel` connection and the data proxy only ever reads `main`. The re-rating could put
 //    Claude's spend no closer than "$1.6-3.0", and `seo_run_ledger.settled_usd` stored the per-mode *reservation* while every reader took
 //    it for a measured cost. CC.callCost / CC.runCost price every Claude call from what the run really knows — the characters the prompt
 //    actually interpolates, the characters the node answered with, and the thinking budget of its effort level — and every figure they
@@ -34,8 +40,13 @@
 //    month's ledger rows per model, then writes one correction factor per model family into `seo_cache` (`cost:factor:claude`).
 //    CC.readCal picks those factors up and CC.callCost applies them, so the next month's estimates are already corrected.
 //
+// 4. **B-A8 / B-A5 (2026-10-15, build section 62).** Two of those figures stopped being estimates. The free Anthropic token counter now
+//    counts the exact prompt and the exact answer of the three streaming Opus nodes on the main path, where a Code node can read them
+//    (CC.countUsage, section 0b below), so only the thinking those calls did is still modelled; and every settle takes a second free
+//    `appendix/user_data` reading so a run that was ALONE in flight is costed from the account itself (CC.dfsRun, section 5c).
+//
 // Used by: Rate Limit and Run Ledger Row (the guard), the five report builders' run ledger, Run Ledger Settle, Cost Calibration Row,
-// the monitors' ledger settle, reconcile_claude_cost.py and harness scenario S60.
+// the monitors' ledger settle, reconcile_claude_cost.py and harness scenarios S60 and S72.
 const CC = (() => {
   // Anthropic list prices per MILLION tokens (the baseline the re-rating priced its token counts at). A model we do not know is priced
   // at the dearest one we use: an unknown model must never make a run look cheaper than it is.
@@ -61,44 +72,110 @@ const CC = (() => {
   const priceOf = (model) => PRICES[String(model || '')] || PRICES[String(model || '').replace(/-\d{8}$/, '')] || UNKNOWN;
   const tokensOf = (chars) => Math.ceil(n0(chars) / CHARS_PER_TOKEN);
 
+  // ---- 0b. B-A8 (2026-10-15): the tokens Anthropic itself counted -------------------------------------------------------------
+  // Everything below used to be an estimate, because nothing a Code node can reach reports token usage. That was checked against the
+  // running instance on 2026-10-15 rather than assumed, and the three places it dies are:
+  //   * `@langchain/anthropic` 1.5.6 `_generate`: for a STREAMING call it returns `{ generations: [{ text, message }] }` with **no
+  //     `llmOutput`** at all — the usage Anthropic sends on `message_delta` survives only on `message.usage_metadata`;
+  //   * n8n's `LmChatAnthropic` reads `result?.llmOutput?.usage`, finds nothing and falls back to `{input_tokens: 0, output_tokens: 0}`,
+  //     so `N8nLlmTracing` records `tokenUsageEstimate` (a tiktoken guess) instead of `tokenUsage`;
+  //   * and even for the NON-streaming nodes, where n8n does record real `tokenUsage`, it lands on the model node's `ai_languageModel`
+  //     connection — and `WorkflowDataProxy` only ever reads `taskData.data.main`, so `$('Claude - Critic')` throws "No data found from
+  //     `main` input". No Code node in any workflow can read a single reported token.
+  // So the measurement has to arrive on the main path, and it does: *Count Prompt (…)* / *Count Answer (…)* ask Anthropic's **free**
+  // `/v1/messages/count_tokens` endpoint to count the exact prompt the run rendered and that prompt plus the exact answer it got back.
+  // `counted` carries the two answers; the difference is the answer's own tokens, counted by the same tokeniser that bills them.
+  // What a counter cannot see is the THINKING the model did before answering: those tokens are billed as output and are never returned.
+  // They stay modelled from the node's effort budget and are the only part of such a call that is still an estimate — Rule 1: a figure
+  // is measured and says what measured it, modelled and says from what, or not available and says why.
+  const COUNTER = 'Anthropic /v1/messages/count_tokens';
+  const countUsage = (c) => {
+    const o = (c || {}).counted;
+    if (!o || typeof o !== 'object') return null;
+    const p = Math.round(n0(o.prompt_tokens)), t = Math.round(n0(o.total_tokens));
+    if (!(p > 0) || !(t > p)) return null;          // one of the two probes did not answer: nothing usable, fall back and say so
+    return { in_tokens: p, out_tokens: t - p, source: String(o.source || COUNTER) };
+  };
+
   // ---- 1. one Claude call ----------------------------------------------------------------------------------------------------
-  // `call`: { node, model, prompt_chars, output_chars, max_tokens, effort, streaming, calls, usage }
-  // `usage` (promptTokens / completionTokens) is used when n8n ever reports it — then the call is MEASURED and no character estimate is
-  // used. Streaming calls never report it, which is the whole reason this kit exists.
+  // `call`: { node, model, prompt_chars, output_chars, max_tokens, effort, streaming, calls, usage, counted }
+  // Three ways to price it, best first, and the answer always says which one it used:
+  //   `usage`    — reported token usage (promptTokens / completionTokens). Whole call MEASURED, characters ignored. n8n never hands
+  //                this to a Code node today (see above), but a call that ever does report it must never be replaced by an estimate.
+  //   `counted`  — B-A8: { prompt_tokens, total_tokens } from the free token counter. Input and answer are MEASURED; only the thinking
+  //                budget stays modelled, and only that part lands in `estimated_usd`.
+  //   characters — the fallback, everything estimated, exactly as before.
   const callCost = (call, factors) => {
     const c = call || {}, f = factors || {};
     const model = String(c.model || ''), fam = family(model), price = priceOf(model);
     const factor = n0(f[fam]) > 0 ? Number(f[fam]) : 1;
     const calls = Math.max(1, Math.round(n0(c.calls) || 1));
     const u = c.usage && (n0(c.usage.promptTokens) || n0(c.usage.completionTokens)) ? c.usage : null;
-    const think = u ? 0 : (c.effort ? Math.round(n0(c.max_tokens) * (THINK_SHARE[String(c.effort)] || 0)) * calls : 0);
-    const inTok = u ? n0(u.promptTokens) : tokensOf(c.prompt_chars) * calls;
-    const outTok = u ? n0(u.completionTokens) : tokensOf(c.output_chars) * calls + think;
-    const usd = r4((inTok / 1e6) * price.in * factor + (outTok / 1e6) * price.out * factor);
+    const cnt = u ? null : countUsage(c);
+    // how many of this node's `calls` the two counts actually cover. The Editor runs once per QA round and only the last round's
+    // prompt and answer are on the main path, so the other rounds are REPEATED from it and are modelled, not measured.
+    const rounds = cnt ? Math.min(calls, Math.max(1, Math.round(n0((c.counted || {}).rounds) || 1))) : 0;
+    const budget = c.effort ? Math.round(n0(c.max_tokens) * (THINK_SHARE[String(c.effort)] || 0)) * calls : 0;
+    const think = u ? 0 : budget;
+    const inTok = u ? n0(u.promptTokens) : cnt ? cnt.in_tokens * calls : tokensOf(c.prompt_chars) * calls;
+    const outTok = u ? n0(u.completionTokens) : (cnt ? cnt.out_tokens * calls : tokensOf(c.output_chars) * calls) + think;
+    const price1 = (i, o) => r4((n0(i) / 1e6) * price.in * factor + (n0(o) / 1e6) * price.out * factor);
+    const usd = price1(inTok, outTok);
+    // which half of THIS call is a measurement. A reported usage measures everything; a counted call measures the rounds the counter
+    // saw, minus the thinking it cannot see; a character-priced call measures nothing.
+    const measured_usd = u ? usd : cnt ? price1(cnt.in_tokens * rounds, cnt.out_tokens * rounds) : 0;
+    const estimated_usd = r4(usd - measured_usd);
     return { node: String(c.node || ''), model, family: fam, calls, in_tokens: inTok, out_tokens: outTok, think_tokens: think,
-      usd, measured: !!u, streaming: !!c.streaming, factor };
+      usd, measured_usd, estimated_usd, measured: !!(u || cnt) && estimated_usd <= 0,
+      counted: !!cnt, counted_rounds: rounds, counter: cnt ? cnt.source : '', streaming: !!c.streaming, factor,
+      basis: u ? 'measured: the token usage this call reported'
+        : cnt ? 'measured: ' + cnt.source + ' counted ' + cnt.in_tokens + ' prompt and ' + cnt.out_tokens + ' answer token(s)'
+            + (calls > rounds ? ', repeated for the ' + (calls - rounds) + ' round(s) the counter did not see' : '')
+            + (think > 0 ? '; the ' + think + ' thinking token(s) it cannot see are modelled from the '
+              + String(c.effort) + ' effort budget' : '')
+            + (estimated_usd > 0 ? ' ($' + estimated_usd.toFixed(4) + ' of $' + usd.toFixed(4) + ' is modelled)' : '')
+        : 'estimated: prompt and answer characters at ' + CHARS_PER_TOKEN + ' characters a token'
+            + (think > 0 ? ' plus the thinking budget' : '') };
   };
 
   // ---- 2. one run's Claude cost ---------------------------------------------------------------------------------------------
   // Measured and estimated money are kept apart and both are reported; `estimated` is true as soon as one cent of it is an estimate.
+  // B-A8 (2026-10-15): the split is now taken PER CALL, not per call-bucket. A node whose tokens Anthropic counted contributes its
+  // prompt and answer to `measured_usd` and only its modelled thinking budget to `estimated_usd` — before this, one estimated cent
+  // anywhere in a call threw the whole call's money into the estimated half.
   const runCost = (calls, factors) => {
     const out = { usd: 0, measured_usd: 0, estimated_usd: 0, estimated: false, calls: 0, in_tokens: 0, out_tokens: 0,
-      by_node: {}, models: {}, streaming_nodes: [], basis: '' };
+      by_node: {}, models: {}, streaming_nodes: [], counted_nodes: [], think_usd: 0, basis: '' };
+    const charNodes = [];
     for (const c of (calls || [])) {
       const r = callCost(c, factors);
       if (!r.usd && !r.calls) continue;
       out.usd = r4(out.usd + r.usd);
-      if (r.measured) out.measured_usd = r4(out.measured_usd + r.usd); else out.estimated_usd = r4(out.estimated_usd + r.usd);
+      out.measured_usd = r4(out.measured_usd + r.measured_usd);
+      out.estimated_usd = r4(out.estimated_usd + r.estimated_usd);
       out.calls += r.calls; out.in_tokens += r.in_tokens; out.out_tokens += r.out_tokens;
-      if (r.node) out.by_node[r.node] = { usd: r.usd, model: r.model, in_tokens: r.in_tokens, out_tokens: r.out_tokens, estimated: !r.measured };
+      if (r.node) out.by_node[r.node] = { usd: r.usd, model: r.model, in_tokens: r.in_tokens, out_tokens: r.out_tokens,
+        measured_usd: r.measured_usd, estimated_usd: r.estimated_usd, estimated: !r.measured, counted: r.counted, basis: r.basis };
       out.models[r.family] = r4((out.models[r.family] || 0) + r.usd);
-      if (r.streaming && !r.measured && r.node) out.streaming_nodes.push(r.node);
+      if (r.counted) { if (r.node) out.counted_nodes.push(r.node); out.think_usd = r4(out.think_usd + r.estimated_usd); }
+      else if (r.measured_usd <= 0 && r.node) charNodes.push(r.node);
+      // "reports no token usage" is only true of a streaming node nothing measured; a counted one reports its tokens through the counter
+      if (r.streaming && !r.counted && !r.measured && r.node) out.streaming_nodes.push(r.node);
     }
     out.estimated = out.estimated_usd > 0;
+    out.measured_share = out.usd > 0 ? +((out.measured_usd / out.usd) * 100).toFixed(1) : null;
+    const counted = out.counted_nodes.length
+      ? '; $' + out.measured_usd.toFixed(4) + ' of it is measured — ' + COUNTER + ' counted the prompt and the answer of '
+        + out.counted_nodes.length + ' node(s) (' + out.counted_nodes.join(', ') + ')'
+        + (out.think_usd > 0 ? ' and only their $' + out.think_usd.toFixed(4) + ' of thinking is modelled from the effort budget' : '')
+      : '';
     out.basis = out.estimated
-      ? 'estimated: prompt and answer characters at ' + CHARS_PER_TOKEN + ' characters a token plus the thinking budget, at the Anthropic list prices'
-        + (out.streaming_nodes.length ? ' (' + out.streaming_nodes.length + ' streaming node(s) report no token usage: ' + out.streaming_nodes.join(', ') + ')' : '')
-        + (out.measured_usd > 0 ? '; $' + out.measured_usd.toFixed(4) + ' of it is measured token usage' : '')
+      ? (charNodes.length || !out.counted_nodes.length
+          ? 'estimated: prompt and answer characters at ' + CHARS_PER_TOKEN + ' characters a token plus the thinking budget, at the Anthropic list prices'
+            + (out.streaming_nodes.length ? ' (' + out.streaming_nodes.length + ' streaming node(s) report no token usage: ' + out.streaming_nodes.join(', ') + ')' : '')
+            + (counted ? counted : (out.measured_usd > 0 ? '; $' + out.measured_usd.toFixed(4) + ' of it is measured token usage' : ''))
+          : 'measured: ' + COUNTER + ' counted the prompt and the answer of every call (' + out.counted_nodes.join(', ')
+            + '); the $' + out.think_usd.toFixed(4) + ' of thinking no counter can see is modelled from the effort budget')
       : out.usd > 0 ? 'measured: reported token usage at the Anthropic list prices' : 'no Claude call ran';
     return out;
   };
@@ -378,13 +455,89 @@ const CC = (() => {
     return out;
   };
 
+  // (c) B-A5 (2026-10-15): **only the DAY was reconciled, never the run.** `dfsDay` holds the day's settled rows against how far the
+  //     account fell, which is the right check for the day and says nothing about any single run: a run could be out by 100% and the
+  //     day still agree. A run CAN be measured against the account, but only when it was alone — so every settle takes a second free
+  //     `appendix/user_data` reading and this decides whether the move between the two readings belongs to this run.
+  //     A row was OPEN during this run's window when it was reserved before this run settled and had not already settled before this
+  //     run reserved. If any was, the account's move is shared and this run keeps the cost its own tasks reported — and says so.
+  //     Nothing here ever invents a figure: when the account cannot settle the question (a reading missing, the account not moved, or
+  //     moved far more than every task reported, which means something outside this engine spends on the same account) it says which.
+  const RUN_OVERSPEND = 10;       // the account moved more than ten times what every task reported: not this run's money
+  const dfsRun = (o) => {
+    const x = o || {}, mine = x.mine || {};
+    const start = n0(mine.dfs_balance), end = n0(x.end_balance);
+    const from = String(mine.created_at || ''), to = String(x.settled_at || '');
+    const engine = r4(x.engine_usd);
+    const out = { attributed: false, alone: false, comparable: false, usd: 0, engine_usd: engine, account_usd: 0,
+      diff_usd: 0, diff_pct: null, within: true, overlapped: [], overlapped_n: 0, from, to,
+      start_balance: +start.toFixed(6), end_balance: +end.toFixed(6), source: 'tasks', basis: '' };
+    const mineId = String(mine.run_id || '');
+    // every other row that was open while this run was in flight
+    const open = (x.rows || []).filter((r) => {
+      if (!r || !r.run_id || r.error || String(r.run_id) === mineId) return false;
+      const c = String(r.created_at || '');
+      if (!c || (to && c >= to)) return false;                       // reserved after this run had already settled
+      if (String(r.status || '') !== 'done') return true;            // still reserved or stale: it was open the whole time
+      const s = String(r.settled_at || '');
+      return !s || !from || s > from;                                // settled, but only after this run reserved: it overlapped
+    });
+    out.overlapped = open.map((r) => String(r.run_id)).slice(0, 20);
+    out.overlapped_n = open.length;
+    if (!(start > 0) || !(end > 0) || !from || !to || from >= to) {
+      out.basis = 'the account was not read at both ends of this run' + (start > 0 ? ' (no reading when it settled)' : ' (no reading when it reserved)')
+        + ', so its DataForSEO figure is the cost its own tasks reported';
+      return out;
+    }
+    out.comparable = true;
+    out.account_usd = r4(Math.max(0, start - end));
+    if (open.length) {
+      out.basis = open.length + ' other run(s) were in flight at the same time (' + out.overlapped.slice(0, 4).join(', ')
+        + '), so the $' + out.account_usd.toFixed(4) + ' the account moved is shared and cannot be attributed to this run; '
+        + 'its figure stays the $' + engine.toFixed(4) + ' its own tasks reported';
+      return out;
+    }
+    out.alone = true;
+    // a run that sent no paid task cannot have moved the account, however alone it was: whatever moved it came from somewhere else
+    // (the owner's own probe, another tool on the same account). Attributing it here would invent a cost out of thin air.
+    if (x.calls != null && Math.round(n0(x.calls)) <= 0) {
+      out.basis = 'this run sent no paid DataForSEO task, so the $' + out.account_usd.toFixed(4) + ' the account moved while it ran is '
+        + 'not its money — nothing is attributed to it';
+      return out;
+    }
+    if (out.account_usd <= 0) {
+      out.basis = 'this run was the only one in flight but the account had not moved when it settled (DataForSEO posts a charge a '
+        + 'moment later), so its figure stays the $' + engine.toFixed(4) + ' its own tasks reported';
+      return out;
+    }
+    if (engine > 0 && out.account_usd > Math.max(0.5, engine * RUN_OVERSPEND)) {
+      out.basis = 'this run was the only one of ours in flight, but the account fell $' + out.account_usd.toFixed(4)
+        + ' against the $' + engine.toFixed(4) + ' its tasks reported — something outside this engine is spending on the same account, '
+        + 'so nothing is attributed to this run and the gap is reported instead';
+      return out;
+    }
+    out.attributed = true;
+    out.source = 'account';
+    out.usd = out.account_usd;
+    out.diff_usd = r4(engine - out.account_usd);
+    out.diff_pct = out.account_usd > 0 ? +((out.diff_usd / out.account_usd) * 100).toFixed(1) : null;
+    out.within = Math.abs(out.diff_usd) <= Math.max(RECONCILE_FLOOR, out.account_usd * RECONCILE_TOLERANCE);
+    out.basis = 'measured against the account: this run was the only one in flight between ' + from.slice(11, 19) + ' and '
+      + to.slice(11, 19) + ', and the balance fell $' + out.account_usd.toFixed(4) + ' — its own tasks report $' + engine.toFixed(4)
+      + (out.within ? ', which agrees' : ' ($' + out.diff_usd.toFixed(4) + (out.diff_pct == null ? '' : ', ' + out.diff_pct + '%')
+        + ' out); the account is the figure to believe');
+    return out;
+  };
+
   return { PRICES, UNKNOWN, CHARS_PER_TOKEN, THINK_SHARE, EST, DFS_EST, ALPHA, HEADROOM, KEEP, CAP, FACTOR_KEY, MODEL_PREFIX,
-    RECONCILE_TOLERANCE, RECONCILE_FLOOR, dfsLedger, dfsDay, crawlCost, aiRun,
+    RECONCILE_TOLERANCE, RECONCILE_FLOOR, RUN_OVERSPEND, COUNTER, countUsage, dfsLedger, dfsDay, dfsRun, crawlCost, aiRun,
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
 const ROW = 'Run Ledger Row (LB)';
 const MEASURED = '';   // '' when this workflow has no measured figure
 const AI_NODES = ["Outreach Sequence Writer"];     // every Claude node of this workflow (the agents a model node is wired to), '[]' when it calls none
+const BAL_END = 'DFS Balance End (LB)';     // the free balance probe on the settle chain
+const LEDGER = 'Load Run Ledger (LB)';       // the run-ledger rows around this run's window
 const n0 = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
 let row = {}; try { row = $(ROW).first().json || {}; } catch (e) { row = {}; }
 const costOf = (x) => {
@@ -405,13 +558,33 @@ const ranAi = AI_NODES.filter(n => { try { return ($(n).all() || []).length > 0;
 // G23 (2026-10-13): the settled row says which part of its money was measured and which is an estimate.
 const ai = CC.aiRun({ figure: null, reserved: row.est_usd, ran: ranAi, checked: AI_NODES.length });
 const ai_usd = ai.usd;
-const dfs_usd = measured == null ? (n0(row.dfs_est_usd) || 0) : measured;
-const dfs = { usd: dfs_usd, measured: measured != null,
-  basis: measured == null ? 'this workflow reports no cost of its own' : 'the cost of every task it sent' };
+const taskUsd = measured == null ? (n0(row.dfs_est_usd) || 0) : measured;
+
+// ---- B-A5: this run against the account, when the account can answer for this run alone ----
+const settled_at = new Date().toISOString();
+let endBalance = 0;
+try { const b = $(BAL_END).first().json || {}; const t = (b.tasks || [])[0] || {}; const r = (t.result || [])[0] || {};
+  const v = Number((r.money || {}).balance); if (Number.isFinite(v) && v > 0) endBalance = +v.toFixed(6); } catch (e) {}
+let ledgerRows = [];
+try { ledgerRows = $(LEDGER).all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { ledgerRows = []; }
+// `calls`: this workflow reports a measured figure only when it sent paid tasks, so a measured $0 means it sent none and the account
+// cannot be charged to it. A workflow with no measured figure at all passes null and the other guards decide.
+const dfsAtt = CC.dfsRun({ rows: ledgerRows, mine: row, end_balance: endBalance, settled_at, engine_usd: taskUsd,
+  calls: measured == null ? null : (measured > 0 ? 1 : 0) });
+
+const dfs_usd = dfsAtt.attributed ? dfsAtt.usd : taskUsd;
+const taskBasis = measured == null ? 'this workflow reports no cost of its own' : 'the cost of every task it sent';
+// the reconciliation only speaks when it has something to say: both readings taken. Nothing is added to the row when the account was
+// never read, because "we could not check" is not information the customer needs on every free run.
+const dfs = { usd: dfs_usd, measured: dfsAtt.attributed || measured != null,
+  basis: dfsAtt.attributed ? dfsAtt.basis + ' (its own tasks: ' + taskBasis + ')'
+    : dfsAtt.comparable ? taskBasis + '. ' + dfsAtt.basis : taskBasis };
 const split = CC.split(ai, dfs);
 return [{ json: { run_id: String($execution.id), mode: String(row.mode || ''), status: 'done',
   settled_usd: ai_usd, ai_usd, ai_measured: ai.measured, ai_basis: ai.basis, ai_source: ai.source,
   ai_nodes_ran: ranAi, ai_nodes_checked: AI_NODES.length,
   cost_mode: String(row.cost_mode || row.mode || ''),
-  dfs_usd: +Number(dfs_usd).toFixed(4), dfs_measured: measured != null, dfs_est_usd: +Number(row.dfs_est_usd || 0).toFixed(4),
+  dfs_usd: +Number(dfs_usd).toFixed(4), dfs_measured: dfs.measured, dfs_est_usd: +Number(row.dfs_est_usd || 0).toFixed(4),
+  // B-A5: what the account said about THIS run, and which figure the row therefore carries
+  settled_at, dfs_balance_end: endBalance, dfs_source: dfsAtt.source, dfs_run: dfsAtt, dfs_tasks_usd: +Number(taskUsd).toFixed(4),
   measured_usd: split.measured_usd, estimated_usd: split.estimated_usd, cost_basis: split.cost_basis } }];

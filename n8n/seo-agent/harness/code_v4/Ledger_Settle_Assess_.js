@@ -37,5 +37,9 @@ return [{ json: {
   measured_usd: dfs_measured ? dfs_usd : 0,
   estimated_usd: r4(total - (dfs_measured ? dfs_usd : 0)),
   reported_usd: reported,   // what the caller was told; measured_usd + estimated_usd must equal it
+  // B-A5 (2026-10-15, section 62): the Keyword Check takes no balance reading (it has to answer in seconds), so it can never be costed
+  // against the account — but it MUST stamp when it settled, or every run whose window it touches is treated as having overlapped an
+  // open row and loses its own reconciliation.
+  settled_at: new Date().toISOString(), dfs_source: 'tasks',
   cost_basis,
 } }];

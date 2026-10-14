@@ -559,6 +559,13 @@
     "name": "DFS Balance (Growth)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Growth)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 AI Pulse": [
@@ -587,6 +594,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Pulse)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Pulse)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -654,6 +668,13 @@
     "name": "DFS Balance (AI)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (AI)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 API": [],
@@ -670,6 +691,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Audit)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Audit)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -793,6 +821,13 @@
     "name": "DFS Balance (BL)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (BL)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Console Alerts": [
@@ -816,6 +851,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Cadence)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Cadence)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -887,6 +929,13 @@
     "name": "DFS Balance (LB)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (LB)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
    }
   ],
   "SEO Agent \u2014 Link Builder API": [],
@@ -909,6 +958,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Watch)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Watch)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -950,6 +1006,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Tracker)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Tracker)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }
@@ -1074,6 +1137,13 @@
     "allowed": false,
     "maxTries": 3,
     "name": "DFS Balance (Site)",
+    "retryOnFail": true,
+    "waitBetweenTries": 5000
+   },
+   {
+    "allowed": false,
+    "maxTries": 3,
+    "name": "DFS Balance End (Site)",
     "retryOnFail": true,
     "waitBetweenTries": 5000
    }

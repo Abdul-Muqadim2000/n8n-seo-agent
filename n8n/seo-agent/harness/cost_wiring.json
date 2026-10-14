@@ -67,6 +67,9 @@
    "template_chars": 2388
   },
   {
+   "count_answer": "Count Answer (Copywriter)",
+   "count_prompt": "Count Prompt (Copywriter)",
+   "count_rounds": 1,
    "effort": "medium",
    "fields": [
     "ai_target",
@@ -178,6 +181,9 @@
    "template_chars": 6212
   },
   {
+   "count_answer": "Count Answer (Editor)",
+   "count_prompt": "Count Prompt (Editor)",
+   "count_rounds": 1,
    "effort": "medium",
    "fields": [
     "content_brief",
@@ -266,6 +272,9 @@
    "template_chars": 1881
   },
   {
+   "count_answer": "Count Answer (Strategy Brief)",
+   "count_prompt": "Count Prompt (Strategy Brief)",
+   "count_rounds": 1,
    "effort": "medium",
    "fields": [
     "ai_target",
@@ -356,6 +365,48 @@
   "save": "Save Cost Calibration",
   "table": "seo_cache"
  },
+ "count": {
+  "free": true,
+  "nodes": {
+   "Copywriter": {
+    "after": [
+     "Critic"
+    ],
+    "answer": "Count Answer (Copywriter)",
+    "input": "Parse Brief",
+    "model": "claude-opus-5-5",
+    "prompt": "Count Prompt (Copywriter)",
+    "resume": "After Count (Copywriter)",
+    "rounds": 1,
+    "set": "Prompt For Count (Copywriter)"
+   },
+   "Editor": {
+    "after": [
+     "Content QA"
+    ],
+    "answer": "Count Answer (Editor)",
+    "input": "Needs Revision?",
+    "model": "claude-opus-5-5",
+    "prompt": "Count Prompt (Editor)",
+    "resume": "After Count (Editor)",
+    "rounds": 1,
+    "set": "Prompt For Count (Editor)"
+   },
+   "Strategy Brief": {
+    "after": [
+     "Parse Brief"
+    ],
+    "answer": "Count Answer (Strategy Brief)",
+    "input": "Brief Context",
+    "model": "claude-opus-5-5",
+    "prompt": "Count Prompt (Strategy Brief)",
+    "resume": "After Count (Strategy Brief)",
+    "rounds": 1,
+    "set": "Prompt For Count (Strategy Brief)"
+   }
+  },
+  "url": "https://api.anthropic.com/v1/messages/count_tokens"
+ },
  "intake": {
   "ensure": "Ensure Cost Cache",
   "from": "Ensure Run Ledger Table",
@@ -363,6 +414,25 @@
   "load": "Load Cost Calibration",
   "table": "seo_cache",
   "to": "Run Ledger Row"
+ },
+ "run_reconcile": {
+  "balance_end": "DFS Balance End",
+  "load": "Load Run Ledger (Settle)",
+  "settle": "Run Ledger Settle",
+  "window_ms": 21600000,
+  "writes": [
+   "ai_usd",
+   "cost_basis",
+   "cost_mode",
+   "dfs_balance_end",
+   "dfs_source",
+   "dfs_usd",
+   "estimated_usd",
+   "measured_usd",
+   "settled_at",
+   "settled_usd",
+   "status"
+  ]
  },
  "settle": {
   "code": "Run Ledger Settle",

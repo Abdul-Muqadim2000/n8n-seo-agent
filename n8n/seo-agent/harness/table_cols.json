@@ -16,7 +16,10 @@
   "ai_usd",
   "measured_usd",
   "estimated_usd",
-  "cost_basis"
+  "cost_basis",
+  "settled_at",
+  "dfs_balance_end",
+  "dfs_source"
  ],
  "AI_PAGES": [
   "site_id",

@@ -129,10 +129,12 @@
     "AI Outreach Writer"
    ],
    "balance": "DFS Balance (Growth)",
+   "balance_end": "DFS Balance End (Growth)",
    "est": {
     "ai": 0.55,
     "dfs": 0.05
    },
+   "ledger_load": "Load Run Ledger (Growth)",
    "measured": "Growth Metrics",
    "mode": "ai_growth",
    "plan": "Growth Plan",
@@ -150,10 +152,12 @@
   "SEO Agent \u2014 AI Pulse": {
    "ai_nodes": [],
    "balance": "DFS Balance (Pulse)",
+   "balance_end": "DFS Balance End (Pulse)",
    "est": {
     "ai": 0.004,
     "dfs": 0.08
    },
+   "ledger_load": "Load Run Ledger (Pulse)",
    "measured": "Pulse Metrics",
    "mode": "ai_pulse",
    "plan": "AI Plan",
@@ -175,10 +179,12 @@
     "Prompt Writer"
    ],
    "balance": "DFS Balance (AI)",
+   "balance_end": "DFS Balance End (AI)",
    "est": {
     "ai": 0.27,
     "dfs": 0.6
    },
+   "ledger_load": "Load Run Ledger (AI)",
    "measured": "AI Metrics",
    "mode": "ai_visibility",
    "plan": "AI Plan",
@@ -196,10 +202,12 @@
   "SEO Agent \u2014 Audit Scheduler": {
    "ai_nodes": [],
    "balance": "DFS Balance (Audit)",
+   "balance_end": "DFS Balance End (Audit)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
    },
+   "ledger_load": "Load Run Ledger (Audit)",
    "measured": "",
    "mode": "audit_schedule",
    "plan": "Audit Schedule Plan",
@@ -217,11 +225,13 @@
     "Outreach Writer"
    ],
    "balance": "DFS Balance (BL)",
+   "balance_end": "DFS Balance End (BL)",
    "est": {
     "ai": 0.05,
     "dfs": 0.05,
     "dfs_full": 0.45
    },
+   "ledger_load": "Load Run Ledger (BL)",
    "measured": "Parse Backlinks",
    "mode": "backlinks",
    "plan": "BL Plan",
@@ -239,10 +249,12 @@
   "SEO Agent \u2014 Content Cadence": {
    "ai_nodes": [],
    "balance": "DFS Balance (Cadence)",
+   "balance_end": "DFS Balance End (Cadence)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
    },
+   "ledger_load": "Load Run Ledger (Cadence)",
    "measured": "",
    "mode": "content_cadence",
    "plan": "Cadence Plan",
@@ -268,10 +280,12 @@
     "Outreach Sequence Writer"
    ],
    "balance": "DFS Balance (LB)",
+   "balance_end": "DFS Balance End (LB)",
    "est": {
     "ai": 0.3,
     "dfs": 0.05
    },
+   "ledger_load": "Load Run Ledger (LB)",
    "measured": "",
    "mode": "link_builder",
    "plan": "LB Plan",
@@ -289,10 +303,12 @@
   "SEO Agent \u2014 Page Watch": {
    "ai_nodes": [],
    "balance": "DFS Balance (Watch)",
+   "balance_end": "DFS Balance End (Watch)",
    "est": {
     "ai": 0.0,
     "dfs": 0.0
    },
+   "ledger_load": "Load Run Ledger (Watch)",
    "measured": "",
    "mode": "page_watch",
    "plan": "Watch Plan",
@@ -309,10 +325,12 @@
   "SEO Agent \u2014 Rank Tracker": {
    "ai_nodes": [],
    "balance": "DFS Balance (Tracker)",
+   "balance_end": "DFS Balance End (Tracker)",
    "est": {
     "ai": 0.0,
     "dfs": 0.15
    },
+   "ledger_load": "Load Run Ledger (Tracker)",
    "measured": "",
    "mode": "rank_tracker",
    "plan": "Tracker Plan",
@@ -332,10 +350,12 @@
     "Site Brief"
    ],
    "balance": "DFS Balance (Site)",
+   "balance_end": "DFS Balance End (Site)",
    "est": {
     "ai": 0.03,
     "dfs": 0.01
    },
+   "ledger_load": "Load Run Ledger (Site)",
    "measured": "",
    "mode": "site_tracker",
    "plan": "Site Plan",
