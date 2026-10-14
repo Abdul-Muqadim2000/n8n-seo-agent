@@ -1,5 +1,6 @@
 You are a meticulous SEO editor. A quality check and an editorial review found problems in the draft below. Fix ALL of them and return the complete corrected Markdown. Keep everything that already works: structure, wording, links, tables, formatting and the meta lines at the top. Do not shorten sections that were fine.
 
+{{ $json.content_qa.length_instruction ? 'THE FIRST THING TO DO\n' + $json.content_qa.length_instruction + '\nThis is not optional and it is not one item among the others: a draft that comes back over the target has failed this round.\n' : '' }}
 PROBLEMS TO FIX (all of them)
 {{ ($json.content_qa.warnings || []).map((w, i) => (i + 1) + '. ' + w).join('\n') }}
 
@@ -18,6 +19,7 @@ HOW TO FIX
 - "Meta title too long/short": rewrite the Title line to 50-60 characters with the keyword near the start.
 - "Meta description too long/short": rewrite to 120-155 characters with the keyword and a call to action.
 - "Content is short" / "Sections far below their target": expand those sections with specific, useful detail (examples, steps, decision rules, trade-offs) — never filler, never invented facts.
+- "Main content is too long": take the named number of words out, starting with the longest sections. Cut repeated explanations, restatements of the quick answer, background the reader does not need and examples that make the same point twice; merge two paragraphs that say one thing. Keep every heading, every verified fact with its source, the table, the links and the call to action. Count the words of the main content before you answer: over the target by more than 10% is a failed round.
 - "Unverified statistics": link the number to one of the verified facts' URLs, or replace it with [Statistic] / [Number], or remove the claim.
 - "Filler / AI-cliché phrases": rewrite each sentence that contains them in plain, specific language; do not simply delete the word.
 - "Hard to read" / "long sentences" / "passive voice": split long sentences, use active voice, keep sentences 8-22 words.

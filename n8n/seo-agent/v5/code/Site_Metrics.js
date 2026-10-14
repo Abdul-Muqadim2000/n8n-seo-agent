@@ -162,7 +162,10 @@ return sites.map((s, idx) => {
   const annotations = AN.marks({ from: R.previous.start, to: R.current.end,
     published: [...publishedLogs.map(r => ({ published_at: r.published_at, keyword: r.keyword, published_url: r.published_url, source: r.source })),
       ...found.filter(f => !loggedKw.has(kwKey(f.keyword))).map(f => ({ published_at: (det && det.checked_at) || now, keyword: f.keyword, published_url: f.url, source: f.ladder_id ? 'ladder' : 'detected' }))],
-    audits: auditRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain) });
+    // R20 (2026-10-14): the report type travels with every audit row, so a full SEO report between two technical audits is marked as a
+    // report of another kind instead of chaining its health score to theirs (three invented moves in one day, live on 2026-10-11)
+    audits: auditRowsAll.filter(r => r.site_id === s.site_id || normD(r.domain) === s.domain)
+      .map(r => ({ audited_at: r.audited_at, report_type: r.report_type || 'site_audit', health_score: r.health_score, findings: r.findings })) });
   const data_breaks = AN.breakBetween(R.previous.start, R.current.end);
   // ---- G29 (2026-10-13): where every figure in this report came from, over what period, from how big a sample ----
   const lineage = [];

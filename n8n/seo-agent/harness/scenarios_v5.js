@@ -8137,8 +8137,8 @@ await guard('the re-rating defects R1..R9', async () => {
     g[2].refusal === '' && g[2].rival && g[2].rival.domain === 'flick.network', JSON.stringify(g[2]));
   check('R4: a subdomain of a rival is the same registrable domain, so its guide is refused too', !!g[3].refusal && /flick\.network/.test(g[3].refusal), g[3].refusal);
   check('R4: a publisher on our topic who is neither a declared competitor nor a SERP rival is still pitched', g[4].refusal === '' && g[4].rival === null, JSON.stringify(g[4]));
-  check('R4: the SERP rivals reach the gate from the plan (the last 90 days of seo_rank_history) and the assembly passes them to both gate calls',
-    /competitors_json/.test(srcOf('LB_Plan.js')) && /serp_rivals/.test(srcOf('LB_Plan.js')) && srcOf('LB_Assemble.js').split('serp_rivals: p.serp_rivals').length === 3, 'LB Plan / LB Assemble');
+  check('R4: the SERP rivals reach the gate from the plan (the last 90 days of seo_rank_history) and the assembly passes them to every gate call (two in R4, four since R21)',
+    /competitors_json/.test(srcOf('LB_Plan.js')) && /serp_rivals/.test(srcOf('LB_Plan.js')) && srcOf('LB_Assemble.js').split('serp_rivals: p.serp_rivals').length === 5, 'LB Plan / LB Assemble');
 
   // ---------- R5: a trigger-mode failure keeps its cause ----------
   const fa = async (payload) => (await run('Format Alert', [{ json: payload }], { code: 'EH__Format_Alert' }))[0].json;
@@ -8967,6 +8967,214 @@ await guard('l4-l7-podcasts-digests-asset-ideas-subject-ab', async () => {
     && RP61.asset_ideas.length === 3 && RP61.podcasts.length === 1
     && RP61.lineage.some(l => /kind of page earns links/.test(l.figure) && /never a forecast/.test(l.note))
     && RP61.lineage.some(l => /Podcast shows/.test(l.figure) && /own domain/.test(l.note)), JSON.stringify(RP61.lineage.map(l => l.figure)));
+});
+// ===================================================================================
+// S68 R21 / R20 / R25 / R27 and R22's editor half (2026-10-14, the second re-rating: docs/system-review-2026-10-14/RESULTS.md §3.3;
+// register rows in docs/system-review-2026-10-11/FIX_PLAN.md §3.12). Every check below fails against the build of that run.
+// ===================================================================================
+await guard('r21-r20-r25-r27-r22-editor', async () => {
+  const SN = 'S68 R21 R20 R25 R27 R22e — a rival on a subdomain is refused, a full report between two audits moves no health score, a masked figure is named to the owner, an over-long draft is told what to cut, and a show is quoted from its own description';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 500))); };
+  const fs68 = require('fs'), path68 = require('path');
+  const CODE68 = process.env.CODE_DIR || path68.join(__dirname, 'code_v4');
+  const src68 = (f) => fs68.readFileSync(path68.join(CODE68, f), 'utf8');
+  const F68 = require('./fixtures_lb413'); const L68 = require('./fixtures_lb_l47');
+
+  // ---------- 1. R21: the rival on a subdomain, and the prospect that sells what we sell ----------
+  // Live (exec 561): `ae.invoiceq.com` was in seo_rank_history.competitors_json ABOVE techand.ai for "peppol uae" on 2026-10-12 and
+  // again on 2026-10-14, and invoiceq.com still got a `ready` brand-anchor pitch to our home page.
+  const RANKS68 = [
+    { json: { ladder_id: 'lad_p', keyword: 'peppol uae', checked_at: F68.iso(2), position: 47, url: F68.HUB, domain: F68.DOMAIN, rung: 1,
+      competitors_json: JSON.stringify({ our_position: 47, above: [{ d: 'ae.invoiceq.com', p: 3, t: false }, { d: 'www.cleartax.com', p: 5, t: true }], competitors: [], shares: {}, tracked: [], method: 'ctr' }) } },
+    // a row RS.pack cut to the column limit mid-JSON: the hosts are still readable, and the gate may not lose them
+    { json: { ladder_id: 'lad_t', keyword: 'e invoicing in uae', checked_at: F68.iso(3), position: 21, url: F68.HUB, domain: F68.DOMAIN, rung: 4,
+      competitors_json: '{"our_position":21,"above":[{"d":"flick.network","p":1,"t":true},{"d":"alaan.com","p":2' } },
+  ];
+  mock('Load Sites', F68.sites()); mock('Load Ladders', F68.ladders()); mock('Load Monitors', F68.monitors()); mock('Load Profiles', F68.profiles());
+  mock('Load Link Prospects', F68.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', F68.outreachPrev().map(j => ({ json: j })));
+  mock('Load Listings', F68.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', [{ json: {} }]);
+  mock('Load Backlinks', F68.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F68.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]);
+  mock('Load AI Targets', F68.targets().map(j => ({ json: j }))); mock('Load Query History', F68.queries().map(j => ({ json: j })));
+  mock('Load Rank History', RANKS68); mock('Load Cache (Links)', F68.cache().map(j => ({ json: j }))); delete store['Manual Run'];
+  const P68 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  const riv68 = (d) => (P68.serp_rivals || []).find(r => r.domain === d) || null;
+  console.log('   serp rivals ->', JSON.stringify((P68.serp_rivals || []).map(r => [r.domain, r.host, r.position, r.keyword])));
+  check('R21: the SERP rivals are keyed on the REGISTRABLE domain, so a rival seen on a subdomain is the same site — and the host the check really saw is kept for the reason',
+    !!riv68('invoiceq.com') && riv68('invoiceq.com').host === 'ae.invoiceq.com' && riv68('invoiceq.com').position === 3 && riv68('invoiceq.com').keyword === 'peppol uae'
+    && !(P68.serp_rivals || []).some(r => r.domain === 'ae.invoiceq.com'), JSON.stringify(P68.serp_rivals));
+  check('R21: a competitors_json row that was cut to the column limit mid-JSON is still read, instead of silently emptying the rival list',
+    !!riv68('flick.network') && riv68('flick.network').position === 1 && !!riv68('alaan.com'), JSON.stringify((P68.serp_rivals || []).map(r => r.domain)));
+  const gate68 = async (items) => (await run('_outreach_gate', items.map(json => ({ json })))).map(i => i.json);
+  const TERMS68 = ['e invoicing', 'peppol integration', 'e invoicing consulting'];
+  const SELLS68 = 'Book a demo of our e invoicing platform. Our software connects your ERP to Peppol. Request a quote and start for free. '
+    + 'We implement e invoicing consulting projects across the UAE, with pricing plans per user / month.';
+  const g68 = await gate68([
+    { type: 'resource', domain: 'invoiceq.com', competitors: P68.competitors, serp_rivals: P68.serp_rivals, title: 'Peppol UAE guide', text: 'A guide to peppol in the uae.', terms: TERMS68, url: 'https://invoiceq.com/blog/peppol-uae/' },
+    { type: 'mention', domain: 'invoiceq.com', competitors: [], serp_rivals: P68.serp_rivals, title: 'E-invoicing providers we work with', text: 'We mention several providers.', terms: TERMS68, url: 'https://invoiceq.com/partners/' },
+    { type: 'list', domain: 'invoiceq.com', competitors: [], serp_rivals: P68.serp_rivals, title: 'Best e invoicing software in the UAE', text: 'Our pick of the best e invoicing software.', terms: TERMS68, url: 'https://invoiceq.com/best-e-invoicing-software-uae/' },
+    { type: 'resource', domain: 'deloitte.com', competitors: [], serp_rivals: [], title: 'E invoicing consulting services | Deloitte Middle East', text: SELLS68, terms: TERMS68, fit: 0.54, url: 'https://deloitte.com/ae/e-invoicing-services/' },
+    { type: 'resource', domain: 'alaan.com', competitors: [], serp_rivals: [], title: 'Alaan — spend management and e invoicing for the UAE', text: SELLS68, terms: TERMS68, fit: 0.65, url: 'https://alaan.com/e-invoicing/' },
+    { type: 'resource', domain: 'uaetaxnews.ae', competitors: [], serp_rivals: P68.serp_rivals, title: 'UAE e-invoicing resources for finance teams', text: 'Resources on e invoicing and peppol integration in the UAE for finance teams.', terms: TERMS68, fit: 0.62, url: 'https://uaetaxnews.ae/resources/' },
+  ]);
+  console.log('   gate ->', JSON.stringify(g68.map((x, i) => [i, x.refusal ? x.refusal.slice(0, 80) : 'allowed'])));
+  check('R21: the pitch to invoiceq.com is refused, naming the subdomain the rank check saw above us and the keyword (live: a `ready` brand-anchor pitch to their home page, one of nine drafts waiting for the owner)',
+    /^a competing site of yours \(invoiceq\.com\): a site that outranks you for one of your own keywords \(ae\.invoiceq\.com ranks #3 for "peppol uae"\), and a competitor does not link to your page$/.test(g68[0].refusal)
+    && g68[0].rival.domain === 'invoiceq.com' && g68[0].rival.host === 'ae.invoiceq.com', g68[0].refusal);
+  check('R21: a mention on that same rival is refused too — only a page that really is a list keeps the "add us to your list" ask',
+    !!g68[1].refusal && /invoiceq\.com/.test(g68[1].refusal) && g68[2].refusal === '' && g68[2].rival.domain === 'invoiceq.com', JSON.stringify([g68[1].refusal, g68[2].refusal]));
+  check('R21: a prospect whose own page sells what you sell is refused on that evidence alone — neither deloitte.com nor alaan.com is on any list, and both were `ready` on 2026-10-14',
+    /^a competing provider: their page sells what you sell \(\d+% of your service words, topic match 54%, "book a demo", "our software"\)$/.test(g68[3].refusal)
+    && /^a competing provider: their page sells what you sell \(\d+% of your service words, topic match 65%, "book a demo", "our software"\)$/.test(g68[4].refusal), JSON.stringify([g68[3].refusal, g68[4].refusal]));
+  check('R21: a publisher on the same topic with no vendor signals is still pitched, rival list or not',
+    g68[5].refusal === '' && g68[5].rival === null, JSON.stringify(g68[5]));
+  check('R21: every gate call of the Link Builder sees the SERP rivals — the qualification, the digest, the stored-prospect sweep and the draft gate, the last check before a pitch is written',
+    src68('LB_Assemble.js').split('serp_rivals: p.serp_rivals').length === 5 && /serp_rivals: p\.serp_rivals \|\| \[\]/.test(src68('LB_Draft_QA.js'))
+    && /serp_rivals: c\.serp_rivals/.test(src68('LB_Draft_QA.js')), 'LB Assemble / LB Draft QA');
+
+  // ---------- 2. R20: a full report between two technical audits moves no health score ----------
+  // Live 2026-10-11 the annotation feed printed three same-day events: "80 → 68 · 24 more findings", "24 findings gone — 68 → 80"
+  // and "80 → 80", because aud_mv40sm450bi (full, 68) sits between two site_audits of 80.
+  const AM68 = async (input) => (await run('_annotations', [{ json: input }]))[0].json;
+  const a68 = await AM68({ from: '2026-10-01', to: '2026-10-31', audits: [
+    { audited_at: '2026-10-11T06:00:00Z', report_type: 'site_audit', health_score: 80, findings: 44 },
+    { audited_at: '2026-10-11T09:00:00Z', report_type: 'full', health_score: 68, findings: 68 },
+    { audited_at: '2026-10-11T11:00:00Z', report_type: 'site_audit', health_score: 80, findings: 44 } ] });
+  const fx68 = a68.marks.filter(m => m.kind === 'fix');
+  console.log('   audit marks ->', JSON.stringify(fx68.map(m => [m.label, m.detail])));
+  check('R20: no mark chains the two kinds of report together — "80 → 68", "68 → 80" and the 24 findings that never moved are gone',
+    fx68.length === 3 && !fx68.some(m => /80 → 68|68 → 80|24 (more|fewer) findings/.test(m.detail))
+    && !fx68.some(m => /Audit fixes/.test(m.label)), JSON.stringify(fx68.map(m => m.detail)));
+  const full68 = fx68.find(m => m.report_type === 'full') || {}; const tech68 = fx68.filter(m => m.report_type === 'site_audit');
+  check('R20: the full SEO report is marked as the other kind of report it is, and says why its score may not be compared with the audit before it',
+    full68.label === 'Full SEO report' && /health 68\/100/.test(full68.detail)
+    && /the report before it was a technical audit \(80\/100\): different checks, so the two scores are not comparable/.test(full68.detail), full68.detail);
+  check('R20: the second technical audit is compared with the FIRST technical audit — the same 44 findings and a health score that did not move',
+    tech68.length === 2 && tech68[1].label === 'Technical audit' && /health 80 → 80/.test(tech68[1].detail) && /the same findings as the audit before/.test(tech68[1].detail)
+    && /first technical audit on record/.test(tech68[0].detail), JSON.stringify(tech68.map(m => m.detail)));
+  const a68b = await AM68({ from: '2026-08-01', to: '2026-10-31', audits: [
+    { audited_at: '2026-08-01T06:00:00Z', report_type: 'site_audit', health_score: 64, findings: 40 },
+    { audited_at: '2026-09-18T06:00:00Z', report_type: 'site_audit', health_score: 81, findings: 34 } ] });
+  const fxb68 = a68b.marks.filter(m => m.kind === 'fix');
+  check('R20: two audits of the same kind still read exactly as before — the findings cleared and the health score either side (G12 unchanged)',
+    fxb68.length === 2 && fxb68[1].label === 'Audit fixes: 6 findings gone' && /health 64 → 81/.test(fxb68[1].detail)
+    && /6 fewer findings than the audit before/.test(fxb68[1].detail), JSON.stringify(fxb68.map(m => [m.label, m.detail])));
+  check('R20: the Site Tracker hands the report type to the marks, so the feed can tell the two kinds of report apart at all',
+    /report_type: r\.report_type \|\| 'site_audit'/.test(src68('Site_Metrics.js')), 'Site Metrics');
+
+  // ---------- 3. R25 + R22 (editor half): Content QA on a draft with one masked figure, and on an over-long one ----------
+  reset(); begin(SN);
+  const D68 = 'northwind-erp.com', SITE68 = 'site_northwind-erp-com';
+  const BODY68 = (extra) => ['Title: APIM monetization: the 2026 guide',
+    'Meta Description: Monetize an Azure API Management gateway with a clear plan: products, quotas, billing rules and the questions to ask.',
+    'Slug: azure-api-management-monetization', '', '# Azure API management monetization', '',
+    'Monetizing an API programme starts with the product you sell, not with the gateway settings, and this guide walks through each decision.', '',
+    '**Quick answer:** Decide what a caller pays for, model it as a product with quotas, then wire the billing rules. Start with two tiers, measure for a month and only then add the rest.', '',
+    '## What do you actually sell?', '',
+    'A product is a bundle of APIs with one quota and one price. ' + extra, '',
+    'For example, a logistics platform sells a tracking product and a rating product separately. Keep the free tier small enough to be a trial.', '',
+    '## How do you price a tier?', '',
+    'Start from the cost per call and the value of the call. Step 1: measure the calls. Step 2: group them. Step 3: set the quota.', '',
+    '| Tier | Suits |', '|---|---|', '| Free | Trials and tests |', '| Standard | Production traffic |', '',
+    '## Which mistakes cost the most?', '',
+    'Teams publish a tier they cannot measure. A rule of thumb: no tier without a counter, and one owner per product.', '',
+    '## Talk to us', '',
+    'Book a working session and we will map your API products against your own traffic in one workshop.'].join('\n');
+  const PB68 = { keyword: 'azure api management monetization', domain: D68, country: 'United Arab Emirates', currency: 'AED', page_type: 'Service Page', page_role: 'standard', article_like: false,
+    include_content: true, qa_max_rounds: 2,
+    content_brief: { slug: 'azure-api-management-monetization', target_word_count: 240, outline: [], terms_to_use: [{ term: 'quota', min_count: 1 }], snippet_targets: [], secondary_keywords: [], evidence_plan: [] },
+    facts: [], business: 'Microsoft Dynamics 365 partner in the UAE', business_facts: '', site_profile: null, site_description: {}, internal_link_candidates: [], site_urls: [], hub_pages: [] };
+  mock('Site Model', [{ json: { site_model: { site_id: SITE68, domain: D68, canonical_host: 'www.' + D68, business_name: 'Northwind ERP', brand_names: ['Northwind ERP'], pages: [] } } }]);
+  const qa68 = async (md, runIndex, over) => { mock('Parse Brief', { ...PB68, ...(over || {}) }); return (await run('Content QA', [{ json: { output: md, critique: null } }], { runIndex }))[0].json; };
+  // the delivered body of exec 554: ONE masked figure, under the limit of five — counted, never named
+  const MASKED68 = await qa68(BODY68("Microsoft's highest APIM SLA ([Statistic]) applies to Premium deployments."), 1);
+  const QM68 = MASKED68.content_qa;
+  console.log('   masked figure ->', JSON.stringify({ ph: QM68.placeholder_count, max: QM68.placeholder_max, not_ready: QM68.not_ready, note: QM68.placeholder_note, reasons: QM68.not_ready_reasons }));
+  check('R25: the one masked figure left in the body is named to the owner although the count is under placeholder_max — live it was counted (placeholder_count: 1) and left out of every reason',
+    QM68.placeholder_count === 1 && QM68.placeholder_count <= QM68.placeholder_max && QM68.placeholders[0].token === '[Statistic]'
+    && QM68.placeholder_note === '1 masked figure(s) still in the text: [Statistic] — fill each one in, or rewrite the sentence so it does not need the figure, before you publish'
+    && QM68.not_ready_reasons.some(r => /\[Statistic\]/.test(r)) && QM68.quality.placeholders_in_body.join() === '[Statistic]', JSON.stringify(QM68.not_ready_reasons));
+  check('R25: the R11 delivery gate is untouched — one placeholder under the limit is still not what makes the page unpublishable, and over the limit still reads as the publishing bar',
+    QM68.placeholder_max === 5 && !/at most 5 can be published/.test(QM68.placeholder_note)
+    && /placeholder_count > PH_MAX/.test(src68('Content_QA.js')), JSON.stringify({ note: QM68.placeholder_note, max: QM68.placeholder_max }));
+  const CLEAN68 = await qa68(BODY68('A tier without a counter is a tier you cannot bill for.'), 0);
+  check('R25: a body with no bracket left says nothing about masked figures',
+    CLEAN68.content_qa.placeholder_count === 0 && CLEAN68.content_qa.placeholder_note === '', JSON.stringify(CLEAN68.content_qa.placeholder_note));
+  const BW68 = (await run('Build Word File', [{ json: MASKED68 }]))[0];
+  check('R25: the delivered report carries the masked figure through to the owner (the callback too), instead of only counting it',
+    BW68.json.qa_placeholder_note === QM68.placeholder_note && /\[Statistic\]/.test(Buffer.from(BW68.binary.data.data, 'base64').toString('utf8')), JSON.stringify({ note: BW68.json.qa_placeholder_note }));
+  // R22's editor half: the live page shipped 2,648 words against 1,800 (+47%) after two rounds, with over-length only a warning
+  const LONG68 = await qa68(BODY68('A tier without a counter is a tier you cannot bill for. ' + ('The quota is the unit you bill, and the product is the bundle you sell to one kind of caller. ').repeat(40)), 0,
+    { content_brief: { ...PB68.content_brief, target_word_count: 300, outline: [{ h2: 'What do you actually sell?', target_words: 120 }, { h2: 'How do you price a tier?', target_words: 90 }] } });
+  const QL68 = LONG68.content_qa;
+  console.log('   over length ->', JSON.stringify({ words: QL68.main_content_words, target: QL68.target_word_count, over: QL68.over_pct, instruction: QL68.length_instruction.slice(0, 120) }));
+  check('R22 (editor half): an over-long draft produces an instruction of its own — how many words to cut, how far over it is, and which section carries them',
+    QL68.over_words === QL68.main_content_words - QL68.target_word_count && QL68.over_pct > 25
+    && new RegExp('^CUT ' + QL68.over_words + ' words: the main content is ' + QL68.main_content_words + ' words against a target of 300 \\(\\+' + QL68.over_pct + '%\\)').test(QL68.length_instruction)
+    && /The longest sections are "What do you actually sell\?" \(\d+ words against 120\)/.test(QL68.length_instruction)
+    && /Do not add a single word, and do not stop above 330 words/.test(QL68.length_instruction), QL68.length_instruction);
+  check('R22 (editor half): a draft on target gets no cut instruction, and the editor is not asked to shorten a page that is the right length',
+    CLEAN68.content_qa.length_instruction === '' && CLEAN68.content_qa.over_words === 0, JSON.stringify({ w: CLEAN68.content_qa.main_content_words, t: CLEAN68.content_qa.target_word_count }));
+  const EP68 = src68('Editor.prompt.txt');
+  check('R22 (editor half): the editor prompt prints that instruction as the first thing to do and has its own entry for an over-long draft — it used to be one line in a list of up to twenty warnings',
+    /THE FIRST THING TO DO/.test(EP68) && /content_qa\.length_instruction/.test(EP68) && EP68.indexOf('THE FIRST THING TO DO') < EP68.indexOf('PROBLEMS TO FIX')
+    && /- "Main content is too long": take the named number of words out/.test(EP68) && /over the target by more than 10% is a failed round/.test(EP68), EP68.slice(0, 200));
+
+  // ---------- 4. R27: the show is quoted from its own description, and a 29% show is not offered ----------
+  const PC68 = async (input) => (await run('_podcast', [{ json: input }]))[0].json;
+  const DIRT68 = 'b-0"> Efficient Hiring Process We respect your time by managing streamlined, back-to-back interview schedules for every candidate we send.';
+  const q68 = await PC68({ quote: DIRT68 });
+  const pr68 = await PC68({ html_text: 'class="row b-0"> Efficient Hiring Process data-id="x7"> We run interviews every week.' });
+  console.log('   quote ->', JSON.stringify([q68.quote, pr68.prose]));
+  check('R27: the attribute fragment the live report quoted ("b-0\\"> Efficient Hiring Process …") never reaches the owner — the leftovers are stripped and the quote starts on a word',
+    !/["']\s*>/.test(String(q68.quote || '')) && !/b-0/.test(String(q68.quote || '')) && /^Efficient Hiring Process/.test(q68.quote)
+    && !/b-0|data-id/.test(pr68.prose), JSON.stringify([q68.quote, pr68.prose]));
+  const g68a = await PC68({ texts: ['<div class="t b-0"> Efficient Hiring Process We respect your time by managing streamlined, back-to-back interview schedules. We also run interviews with founders.'] });
+  check('R27: a guest signal found in a page full of markup still quotes prose, never the markup around it',
+    g68a.guest.ok === true && !/["']\s*>/.test(g68a.guest.quote) && !/b-0/.test(g68a.guest.quote), JSON.stringify(g68a.guest));
+  const pick68 = await PC68({ feed_signal: { ok: true, strength: 'interviews', quote: 'Every week Layla interviews finance leaders in the Gulf.', from: 'the show’s own description' },
+    site_signal: { ok: true, strength: 'interviews', quote: 'back-to-back interview schedules for every candidate', from: 'the show’s website' } });
+  const pick68b = await PC68({ feed_signal: { ok: true, strength: 'interviews', quote: 'We interview one practitioner a week.', from: 'the show’s own description' },
+    site_signal: { ok: true, strength: 'invites', quote: 'Be a guest on the show: pitch yourself here.', from: 'the show’s website' } });
+  check('R27: with both to choose from, the quote comes from the show\'s OWN description — the website only wins when it carries a stronger signal (a guest invitation)',
+    pick68.picked.from === 'the show’s own description' && /Layla interviews finance leaders/.test(pick68.picked.quote)
+    && pick68b.picked.strength === 'invites' && pick68b.picked.from === 'the show’s website', JSON.stringify([pick68.picked, pick68b.picked]));
+  check('R27: a guest appearance needs more of the owner\'s topic than a link does — 40%, against the 25% that qualifies a page for a link',
+    (await PC68({})).min_fit === 0.4, JSON.stringify((await PC68({})).min_fit));
+
+  // the whole podcast path, on the fixtures of S61 but with the show's website full of the markup the live site served
+  reset(); begin(SN);
+  mock('Load Sites', F68.sites()); mock('Load Ladders', F68.ladders()); mock('Load Monitors', F68.monitors()); mock('Load Profiles', F68.profiles());
+  mock('Load Link Prospects', F68.prospects().map(j => ({ json: j }))); mock('Load Link Outreach', F68.outreachPrev().map(j => ({ json: j })));
+  mock('Load Listings', F68.listingsPrev().map(j => ({ json: j }))); mock('Load Link Impact', [{ json: {} }]);
+  mock('Load Backlinks', F68.ledger().map(j => ({ json: j }))); mock('Load Backlink Snapshots', F68.snaps().map(j => ({ json: j }))); mock('Load Content Log', [{ json: {} }]);
+  mock('Load AI Targets', F68.targets().map(j => ({ json: j }))); mock('Load Query History', F68.queries().map(j => ({ json: j })));
+  mock('Load Rank History', F68.ranks().map(j => ({ json: j }))); mock('Load Cache (Links)', F68.cache().map(j => ({ json: j }))); delete store['Manual Run'];
+  const PP68 = (await run('LB Plan', store['Load Cache (Links)']))[0].json;
+  const SRP68 = (await run('LB Source Requests', [{ json: PP68 }])).map(r => r.json);
+  mock('Fetch LB Sources', SRP68.map(r => r.kind === 'podcast_search' ? L68.podcastSearch() : r.kind === 'press' ? F68.bsky([]) : r.kind === 'wayback' ? F68.cdx() : F68.searx([])));
+  const DRP68 = (await run('LB DFS Requests', [{ json: PP68 }])).map(r => r.json);
+  mock('Run LB DFS', DRP68.map(() => F68.dfsBroken()));
+  const PRP68 = (await run('LB Page Requests', [{ json: {} }])).map(r => r.json);
+  mock('Fetch LB Pages', PRP68.map(r => L68.fetchPage(r.url)));
+  const S2P68 = (await run('LB Second Requests', [{ json: {} }])).map(r => r.json);
+  // the live page of 2026-10-14: a stripper that cuts at the first ">" leaves `b-0">` in the text, and the words around it belong to a
+  // recruitment page that has nothing to do with the show
+  const DIRTY_SITE68 = '<!doctype html><html lang="en"><head><title>The Gulf Finance Podcast</title></head><body><main>'
+    + '<div class="card b-0"> Efficient Hiring Process We respect your time by managing streamlined, back-to-back interview schedules for every candidate.'
+    + '<p>Contact the host: <a href="mailto:press@gulffinancepodcast.ae">press@gulffinancepodcast.ae</a></p></div></main></body></html>';
+  mock('Fetch LB Second', S2P68.map(r => r.url === 'https://gulffinancepodcast.ae/'
+    ? { statusCode: 200, headers: { 'content-type': 'text/html' }, data: DIRTY_SITE68 } : L68.fetchPage(r.url)));
+  const ASP68 = (await run('LB Assemble', [{ json: {} }]))[0].json;
+  const pod68 = (d) => ASP68.outreach_rows.find(o => o.prospect_domain === d && o.type === 'podcast') || {};
+  console.log('   shows ->', JSON.stringify(ASP68.outreach_rows.filter(o => o.type === 'podcast').map(o => [o.prospect_domain, o.status, Math.round(o.fit * 100) + '%', (o.evidence || '').slice(0, 70)])));
+  check('R27: the show offered to the owner is quoted from its own description and says so — no attribute fragment from an unrelated page of its site reaches the report (live: `They say: "b-0\\"> Efficient Hiring Process …"`)',
+    pod68('gulffinancepodcast.ae').status === 'ready' && /They say \(the show’s own description\)/.test(pod68('gulffinancepodcast.ae').evidence)
+    && !/b-0|Efficient Hiring Process|["']\s*>/.test(pod68('gulffinancepodcast.ae').evidence)
+    && /guest/i.test(pod68('gulffinancepodcast.ae').evidence), pod68('gulffinancepodcast.ae').evidence);
+  check('R27: a show below the topic bar is not offered at all (live it was "Alchemy Uncensored" at 29%), and the reason says what a guest appearance needs',
+    pod68('deserttrailrunning.ae').status === 'not_fit' && /the show is off your topics \(\d+% match; a guest appearance needs at least 40%\)/.test(pod68('deserttrailrunning.ae').fit_reason)
+    && pod68('gulffinancepodcast.ae').fit >= 0.4, JSON.stringify([pod68('deserttrailrunning.ae').fit_reason, pod68('gulffinancepodcast.ae').fit]));
 });
 
 

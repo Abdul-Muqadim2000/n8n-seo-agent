@@ -4695,6 +4695,81 @@ open(os.path.join(OUT_CODE, '_podcast.js'), 'w').write(
 log('Two more free link sources, asset ideas from the market, and two subjects a batch (2026-10-13, FIX_PLAN L5 / L6 / L7): podcast shows that take guests (a free directory a month -> the show\'s RSS feed -> its own website; pitched only when it is on topic, still publishing, says it takes guests and has a contact on its own domain) and journalist digests (HARO / Source of Sources, parsed by the app from the customer\'s own mailbox into `digest` prospects, nothing until a mailbox is connected) both run through the same gates as every other prospect; the competitors\' most-linked pages (DataForSEO domain_pages, monthly) become at most four linkable-asset ideas, each with the pages that prove it and the referring domains they hold and never a promise of links; and the writer gives every sequence a second subject in the other style, which the draft gate checks and LB Rows hands out in turn (A, B, A, B) so the app can read the reply rate per style, with no verdict under 30 first e-mails per variant (v5/code/_ab.js, mirrored in app/shared/src/outreach.ts). The Podcast Index key stays a placeholder in .env.seo.example: its signed requests need the secret inside a node, which this instance does not allow')
 
 # =============================================================================
+# 58. A PITCH TO A COMPETITOR, A CHART MARK THAT INVENTS A MOVE, A MASKED FIGURE NOBODY IS TOLD ABOUT AND A QUOTE OF MARKUP
+#     (2026-10-14, the second re-rating: docs/system-review-2026-10-14/RESULTS.md §3.3; register rows R21 / R20 / R25 / R27 and R22's
+#     editor half in docs/system-review-2026-10-11/FIX_PLAN.md §3.12)
+#     * R21 — we pitched a competitor. `ae.invoiceq.com` sat in `seo_rank_history.competitors_json` ABOVE techand.ai for "peppol uae"
+#       on two days, and exec 561 still drafted a brand-anchor pitch asking `invoiceq.com` for a link to the home page: R4's gate
+#       matched the stored host as it stands, so a rival on a subdomain was a different site. Every host on both sides is reduced to
+#       its REGISTRABLE domain before it is matched (LB Plan keys the 90 days of SERP rivals that way and still quotes the host the
+#       check really saw; a `competitors_json` that was cut to the column limit mid-JSON is read with a regex instead of being lost),
+#       a prospect whose own page sells our service is refused on that evidence alone - with or without the declared list - and the
+#       "add us to your list" exemption only holds for a page that really is a list. The SERP rivals now reach every gate call,
+#       including the podcast, the digest, the stored-prospect sweep and the draft gate (the last check before a pitch is written).
+#     * R20 — the chart marks invented a story. The Site Tracker's annotation feed chained every audit to the one before it, whatever
+#       kind of report it was, so a full SEO report (health 68) between two technical audits (health 80) printed "80 - 68 - 24 more
+#       findings", "24 findings gone - 68 - 80" and "80 - 80" as three same-day events. D2 / R2 fixed exactly this inside the audit's
+#       own diff; the feed now computes a delta only against the previous report OF THE SAME KIND and says when the kind changed.
+#     * R25 — a masked figure went out unannounced: "Microsoft's highest APIM SLA ([Statistic])" stayed in the delivered body and the
+#       failure reasons named only the 11 profile brackets. Every body placeholder that is left is named in the reasons, whether or
+#       not the count is over `placeholder_max` - and on a page that is otherwise deliverable the Word report says it too. The R11
+#       delivery gate is untouched: PH_MAX still decides what may not be published.
+#     * R22 (editor half) — the delivered page ran 2,648 words against a 1,800 target (+47%) after two editor rounds, because being
+#       over length was only ever one warning among twenty. Content QA now computes the cut - how many words, and which sections carry
+#       them - and the editor prompt prints it as the first thing to do. (The rung's missing word target is R22's other half.)
+#     * R27 — the podcast source quoted `"b-0"> Efficient Hiring Process …`, an HTML attribute from an unrelated page, as what a show
+#       "says"; the show was offered at a 29% topic match. The quote comes from the show's OWN description first, every quote is read
+#       as prose and cut on word boundaries, a quote that is still markup is dropped, and a guest appearance needs PC.MIN_FIT (40%).
+# =============================================================================
+_K58 = {p: _rd0('code/' + p + '.js') for p in ('_outreach_kit', 'LB_Plan', 'LB_Assemble', 'LB_Draft_QA', '_draft_qa', '_annotations', 'Site_Metrics', '_podcast')}
+# R21: the registrable domain on both sides, the vendor evidence on its own, and a list exemption only for a real list
+assert 'rivalEntry' in _K58['_outreach_kit'] and 'dr === LK.regDomain(x)' in _K58['_outreach_kit'], 'R21: the rival gate does not reduce the stored host to its registrable domain'
+assert 'isRoundup' in _K58['_outreach_kit'] and 'LIST_TYPES.has(type) && isRoundup(o)' in _K58['_outreach_kit'], 'R21: a rival page still passes as a list without being one'
+assert 'theirs || topic >= 0.5' in _K58['_outreach_kit'], 'R21: a competing provider is still refused only through the declared list'
+assert 'rivalHosts' in _K58['LB_Plan'] and 'LK.regDomain(host)' in _K58['LB_Plan'], 'R21: the SERP rivals are not keyed on the registrable domain'
+assert _K58['LB_Assemble'].count('serp_rivals: p.serp_rivals') == 4 and 'fit: o.fit' in _K58['LB_Assemble'], 'R21: a gate call in LB Assemble is still blind to the SERP rivals'
+assert 'serp_rivals: p.serp_rivals || []' in _K58['LB_Draft_QA'] and 'serp_rivals: c.serp_rivals' in _K58['_draft_qa'], 'R21: the draft gate is blind to the SERP rivals'
+# R20: the report type decides what may be compared, and a change of type is said instead of scored
+assert 'kindOfAudit' in _K58['_annotations'] and 'not comparable' in _K58['_annotations'] and 'lastOf' in _K58['_annotations'], 'R20: the audit marks are still chained across report types'
+assert "report_type: r.report_type || 'site_audit'" in _K58['Site_Metrics'], 'R20: the Site Tracker does not pass the report type to the marks'
+# R27: the quote is prose from the show's own description, and the topic bar is its own number
+assert 'cleanQuote' in _K58['_podcast'] and 'pickSignal' in _K58['_podcast'] and 'MIN_FIT = 0.4' in _K58['_podcast'], 'R27: the podcast quote is still taken as it is found'
+assert 'PC.MIN_FIT' in _K58['LB_Assemble'] and 'PC.cleanQuote(' in _K58['LB_Assemble'] and 'PC.pickSignal(' in _K58['LB_Assemble'], 'R27: the show is still offered on the link-gate topic bar'
+# R25 + R22: the masked figures by name, and the cut as an instruction
+assert 'placeholder_note' in code('Content QA') and 'masked figure(s) still in the text' in code('Content QA'), 'R25: the body placeholders are not named in the reasons'
+assert 'placeholder_count > PH_MAX' in code('Content QA') and 'const too_many_placeholders' in code('Content QA'), 'R25: the R11 delivery gate was loosened'
+assert 'length_instruction' in code('Content QA') and "'CUT ' + over_words" in code('Content QA'), 'R22: Content QA does not state the cut'
+_ED58 = nodes['Editor']['parameters']['text']
+assert 'content_qa.length_instruction' in _ED58 and 'THE FIRST THING TO DO' in _ED58 and '"Main content is too long"' in _ED58, 'R22: the editor is not told to cut, only warned'
+# R25: a page that is otherwise deliverable still says which figures are masked
+patch('Build Word File', """    ...(qa.not_ready ? [['Why it is not ready', '<span class="bad">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first""",
+      """    ...(qa.not_ready ? [['Why it is not ready', '<span class="bad">' + (qa.not_ready_reasons || []).map(esc).join('<br>') + '</span>']] : []),   // R11 (2026-10-13): the LAST round's reasons, on the page the owner reads first
+    ...(qa.placeholder_note && !qa.not_ready ? [['Figures still masked', '<span class="bad">' + esc(qa.placeholder_note) + '</span>']] : []),   // R25 (2026-10-14): a masked figure in the body is named even when the page is otherwise deliverable""")
+patch('Build Word File', "    qa_placeholders: qa.placeholders_total == null ? null : qa.placeholders_total,",
+      "    qa_placeholders: qa.placeholders_total == null ? null : qa.placeholders_total,\n"
+      "    qa_placeholder_note: (qa.quality || {}).placeholder_note || '',   // R25 (2026-10-14): the app and the callback name the masked figures too")
+# the harness shim (S68): the podcast kit again, now with the quote cleaner, the signal picker and the topic bar it was given
+open(os.path.join(OUT_CODE, '_podcast.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 58, R27; it replaces section 52's): the podcast kit — a search answer (Apple or\n"
+    "// Podcast Index), an RSS feed, the guest signal with the quote it may show, the choice between the feed and the website, and the\n"
+    "// staleness and topic rules\n"
+    + _K58['_podcast'] + "\nreturn $input.all().map(i => { const j = i.json || {};\n"
+    "  return { json: { shows: j.search ? PC.shows(j.search) : [], feed: j.xml ? PC.feed(j.xml) : null, guest: j.texts ? PC.guestSignal(j.texts) : null,\n"
+    "    picked: j.feed_signal || j.site_signal ? PC.pickSignal(j.feed_signal, j.site_signal) : null,\n"
+    "    quote: j.quote === undefined ? null : PC.cleanQuote(j.quote, j.max), prose: j.html_text === undefined ? null : PC.prose(j.html_text),\n"
+    "    stale: j.last === undefined ? null : PC.stale(j.last, j.now), url: PC.searchUrl(j.topic || 'e invoicing uae', !!j.signed),\n"
+    "    stale_days: PC.STALE_DAYS, min_fit: PC.MIN_FIT } }; });\n")
+_cq58 = pos('Content QA')
+sticky("""### What the second re-rating found (R21 / R20 / R25 / R27, R22's editor half — 2026-10-14)
+**R21:** a prospect is a rival when its **registrable** domain matches a declared competitor or a domain the rank checks saw above us (`ae.invoiceq.com` → `invoiceq.com`), and a page that **sells what you sell** is refused on its own evidence, list or no list; "add us to your list" survives only on a page that really is a list.
+**R20:** chart marks compare an audit only with the previous report **of the same kind** — a full report between two technical audits is marked as a different report, never as a score move.
+**R25:** every bracketed figure left in the body is named to the owner, not only when there are more than five of them (the publish gate is unchanged).
+**R22 (editor):** over length is an instruction — how many words to cut and from which sections — not one warning among twenty.
+**R27:** a show's quote is prose from its **own description**, cut on word boundaries, and a guest appearance needs a 40% topic match.""",
+    _cq58[0] - 60, _cq58[1] + 560, 1120, 240, 5)
+log('What the second re-rating found in the drafts, the marks and the quotes (2026-10-14, FIX_PLAN §3.12 R21 / R20 / R25 / R27 + R22\'s editor half): a prospect is refused as a rival when its REGISTRABLE domain matches a declared competitor or a domain the rank checks of the last 90 days saw above us (LB Plan keys seo_rank_history.competitors_json that way, reads a row that was truncated mid-JSON with a regex and keeps the host that was really seen for the reason: ae.invoiceq.com ranks #3 for "peppol uae"), a prospect whose own page sells our service is refused on that evidence alone whether or not it is on the declared list (two vendor signals, 45% of our service words and either the title or the measured topic match), the "add us to your list" exemption holds only for a page that really is a list, and the SERP rivals reach every gate call including the podcast, the digest, the stored-prospect sweep and the draft gate (R21); the chart marks compare an audit only with the previous report of the SAME report_type and say when the kind changed instead of printing a health move between unlike reports (R20); every placeholder left in the body is named in the quality reasons and in the Word report, whether or not the count is over placeholder_max, with the R11 delivery gate untouched (R25); Content QA states the cut an over-long draft needs - the words to remove and the sections that carry them - and the editor prompt prints it as the first thing to do, with its own entry in the fix list (R22, editor half); and a podcast show is quoted from its own description, as prose cut on word boundaries with any HTML attribute remains dropped, and is only offered at a 40% topic match instead of the 25% that qualifies a page for a link (R27)')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())

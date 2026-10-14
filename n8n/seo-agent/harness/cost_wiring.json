@@ -181,6 +181,7 @@
    "effort": "medium",
    "fields": [
     "content_brief",
+    "content_qa.length_instruction",
     "content_qa.main_content_words",
     "content_qa.missing_terms",
     "content_qa.target_word_count",
@@ -198,7 +199,7 @@
    "model": "claude-opus-5-5",
    "node": "Editor",
    "streaming": true,
-   "template_chars": 5413
+   "template_chars": 6153
   },
   {
    "effort": "low",
