@@ -50,6 +50,12 @@ const CONFIG = {
   default_country: 'United States',
   ai_budget_usd: 6,                 // estimated Claude spend allowed per budget period (see Rate Limit); 3 → 10 on 2026-10-01 for the system test, 6 since 2026-10-02 at the user's request — the Anthropic Console workspace limit is the hard cap
   ai_budget_period: 'day',          // 'day' | 'month' — daily window while testing; the Anthropic Console workspace limit is the hard cap
+  // (2026-10-15, benchmark area 13): the same guard for the DataForSEO money, over the same period. It was unguarded until now, and it is
+  // where most of the spend is ($2.3876 of the $3.63 the 2026-10-14 re-rating cost). `dfs_balance_floor_usd` is what the account must keep
+  // after a run: below it the run is refused rather than started, because a run that exhausts the account mid-flight delivers half a report
+  // and charges for all of it. A balance reading that did not answer is 0 and refuses nothing — a guard that cannot measure must not block.
+  dfs_budget_usd: 6,
+  dfs_balance_floor_usd: 0.5,
   // P34-5 (2026-10-12): how long a run may hold its budget reservation before it is released as `stale` (two audits killed by the
   // task runner held $0.77 of the day's estimate for ever), and the crawl size from which only one audit of a site may run at a time.
   // G5 (2026-10-13): how much of a draft may be word for word the same as ONE page it was written from (the 10-15% convention of
@@ -420,6 +426,8 @@ return [{
     qa_max_rounds: CONFIG.qa_max_rounds,
     ai_budget_usd: CONFIG.ai_budget_usd,
     ai_budget_period: CONFIG.ai_budget_period,
+    dfs_budget_usd: CONFIG.dfs_budget_usd,
+    dfs_balance_floor_usd: CONFIG.dfs_balance_floor_usd,
     originality_max_overlap_pct: CONFIG.originality_max_overlap_pct,
     run_stale_hours: CONFIG.run_stale_hours,
     live_serp_checks: CONFIG.live_serp_checks,

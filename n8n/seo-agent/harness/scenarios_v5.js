@@ -9983,5 +9983,91 @@ await guard('R31 R32 R33 the money a run reports is the money that happened', as
     JSON.stringify({ none: noneRun.usd, priced: pricedRun.usd, reserved: reservedRun.usd, blind: blindRun.usd }));
 });
 
+// ===================================================================================
+// S71 (2026-10-15, benchmark programme area 13 "Cost control & reliability", build section 61;
+//      docs/system-review-2026-10-14/BENCHMARKS_2026-10-14.md)
+// The rubric compares this area with Semrush / Ahrefs **server-side limits**: one meter that governs the whole service and that the
+// customer cannot exceed. Ours governed a third of it — `ai_budget_usd` refuses on Claude money, while DataForSEO was $2.3876 of the
+// $3.63 the 2026-10-14 re-rating spent and $0.0560 of the $0.069 of that evening's live check. The data money had a running total
+// (`dfs_budget_used_est_usd`) that nothing ever refused on, and the only real cap — the account balance — does not refuse a run at all:
+// it makes every paid call inside one start failing, which is a half-delivered report charged for in full.
+// Four rules are held here: the data money is refused on the same way, a run the account cannot pay for is refused BEFORE it spends,
+// the check fails OPEN when the free probe did not answer, and a settled run counts what it measured instead of what it reserved.
+// ===================================================================================
+await guard('S71 the guard covers both currencies and the account is a hard floor', async () => {
+  reset(); const SN = 'S71 — the spend guard covers both currencies and the account is a hard floor';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const now71 = new Date().toISOString();
+  const err71 = (r) => r[0].json.validation_error || '';
+  delete store['Start Form']; delete store['DFS Balance'];
+
+  // ---------- A. the two settings reach the guard, beside the Claude ones ----------
+  const n71 = await run('Normalize Input', F.forms.webhookVerdict);   // an API verdict run: Claude and DataForSEO money, both small
+  check('the request carries the data-money budget and the account floor exactly as it carries the Claude ones — one source, Normalize Input CONFIG',
+    n71[0].json.dfs_budget_usd === 6 && n71[0].json.dfs_balance_floor_usd === 0.5
+    && n71[0].json.ai_budget_usd === 6 && n71[0].json.ai_budget_period === 'day',
+    JSON.stringify({ dfs: n71[0].json.dfs_budget_usd, floor: n71[0].json.dfs_balance_floor_usd, ai: n71[0].json.ai_budget_usd }));
+
+  const K71 = 'owner@northwind-erp.com';
+  const IN71 = (o = {}) => [{ json: { ...n71[0].json, email: K71, ...o } }];
+  // one fixture shape: N earlier runs of this period, each holding `est` of DataForSEO money, settled at `measured` when `status` is done
+  const dfsRows = (count, est, status, measured) => Array.from({ length: count }, () => ({
+    key: 'other@example.com', mode: 'keyword', est_usd: 0, dfs_est_usd: est, created_at: now71, status, settled_usd: 0, dfs_usd: measured }));
+
+  // ---------- B. a clean run is told ONE number for what it will cost ----------
+  ledgerReset(); const c71 = await ledgerRun(IN71());
+  const j71 = c71[0].json, DE = j71.dfs_spend_estimate_usd, money = (v) => '$' + Number(v).toFixed(2);
+  check('a clean run passes and carries one total for what it will cost — the same self-correcting estimates the guard holds back, with the basis beside them, so what the caller is told and what is reserved cannot be two numbers',
+    !err71(c71) && DE > 0 && j71.run_cost_estimate_usd === +(j71.ai_spend_estimate_usd + DE).toFixed(2)
+    && /Claude \$/.test(String(j71.run_cost_estimate_basis)) && /search data \$/.test(String(j71.run_cost_estimate_basis))
+    && j71.dfs_budget_used_est_usd === DE,
+    JSON.stringify({ e: err71(c71), total: j71.run_cost_estimate_usd, ai: j71.ai_spend_estimate_usd, dfs: DE, used: j71.dfs_budget_used_est_usd }));
+
+  // ---------- C. the data money is a budget now, not only a running total ----------
+  ledgerReset(dfsRows(3, 2, 'reserved', 0)); const d1 = await ledgerRun(IN71());
+  check('three reserved runs holding $2.00 of DataForSEO each: the day\'s $6 data budget is used up and the run is refused — nothing ever refused on this figure before section 61',
+    new RegExp('search-data budget for this day is used up \\(estimated \\$6\\.00 of \\$6; this run would add about \\' + money(DE) + '\\)').test(err71(d1))
+    && /Nothing was charged and nothing was started/.test(err71(d1)) && /run again tomorrow/.test(err71(d1)), err71(d1));
+  ledgerReset(dfsRows(3, 2, 'reserved', 0)); const d2 = await ledgerRun(IN71({ ai_budget_usd: 0 }));
+  check('and it is a guard of its own: with the Claude budget switched off the data budget still refuses, so neither currency rides on the other',
+    /search-data budget/.test(err71(d2)), err71(d2));
+  ledgerReset(dfsRows(3, 2, 'reserved', 0)); const d3 = await ledgerRun(IN71({ dfs_budget_usd: 0 }));
+  check('dfs_budget_usd 0 switches the data guard off entirely — the shape every other limit in this node already has', !err71(d3), err71(d3));
+
+  // ---------- D. a settled run counts what it MEASURED, not what it reserved ----------
+  ledgerReset(dfsRows(3, 2, 'done', 0)); const d4 = await ledgerRun(IN71());
+  check('the same three runs finished having spent nothing (done, dfs_usd 0): the day is free again — the total read `dfs_usd || dfs_est_usd`, so a free_only backlink check that really spent $0 held its reservation against the day for ever (R31)',
+    !err71(d4) && d4[0].json.dfs_budget_used_est_usd === DE, JSON.stringify([err71(d4), d4[0].json.dfs_budget_used_est_usd]));
+  ledgerReset(dfsRows(3, 0.1, 'done', 2)); const d5 = await ledgerRun(IN71());
+  check('and a settled run that really did spend counts its MEASURED figure: 3 x $2.00 measured against 3 x $0.10 reserved refuses the next run, where the reservation alone would have waved it through',
+    /search-data budget for this day is used up \(estimated \$6\.00 of \$6/.test(err71(d5)), err71(d5));
+
+  // ---------- E. the account itself: refused before it spends, and fail-open when it cannot be read ----------
+  const balance = (usd) => mock('DFS Balance', [{ json: { tasks: [{ result: [{ money: { balance: usd } }] }] }, pairedItem: 0 }]);
+  balance(0.4); ledgerReset(); const b1 = await ledgerRun(IN71());
+  check('the account holds $0.40, this run needs about ' + money(DE) + ' and $0.50 has to stay for the scheduled checks: refused BEFORE it spends, with every figure in the message',
+    new RegExp('search-data account is too low for this run \\(\\$0\\.40 left; this run needs about \\' + money(DE) + ' and \\$0\\.50 has to stay for the scheduled checks\\)').test(err71(b1))
+    && /half a report and charges for all of it/.test(err71(b1)), err71(b1));
+  balance(5); ledgerReset(); const b2 = await ledgerRun(IN71());
+  check('the account holds $5.00: the run passes and carries the reading it was judged on',
+    !err71(b2) && b2[0].json.dfs_account_balance_usd === 5, JSON.stringify([err71(b2), b2[0].json.dfs_account_balance_usd]));
+  balance(0.4); ledgerReset(); const b3 = await ledgerRun(IN71({ dfs_balance_floor_usd: 0 }));
+  check('with no floor asked for, $0.40 covers a ' + money(DE) + ' run and it passes — the floor is a setting, never a hidden rule', !err71(b3), err71(b3));
+  mock('DFS Balance', [{ json: { statusCode: 500, message: 'probe failed' } }]); ledgerReset(); const b4 = await ledgerRun(IN71());
+  check('the free balance probe did not answer: the guard FAILS OPEN and refuses nothing — a guard that cannot measure must not block a customer (the rule a failed ledger read already follows)',
+    !err71(b4) && b4[0].json.dfs_account_balance_usd === 0, JSON.stringify([err71(b4), b4[0].json.dfs_account_balance_usd]));
+  balance(0.01); ledgerReset(); const b5 = await ledgerRun(IN71({ mode: 'published' }));
+  check('a mode that spends no data money is never refused by the account floor, however low the account is — it reserves $0, so there is nothing to refuse',
+    !err71(b5) && b5[0].json.dfs_spend_estimate_usd === 0, JSON.stringify([err71(b5), b5[0].json.dfs_spend_estimate_usd]));
+
+  // ---------- F. the Claude guard is untouched ----------
+  delete store['DFS Balance'];
+  ledgerReset(Array.from({ length: 3 }, () => ({ key: 'other@example.com', mode: 'keyword', est_usd: 2, dfs_est_usd: 0, created_at: now71, status: 'reserved', settled_usd: 0, dfs_usd: 0 })));
+  const f71 = await ledgerRun(IN71());
+  check('the Claude budget still refuses in its own words, unchanged by section 61',
+    /The AI budget for this day is used up \(estimated \$6\.00 of \$6;/.test(err71(f71)), err71(f71));
+});
+
 H.report();
 })();

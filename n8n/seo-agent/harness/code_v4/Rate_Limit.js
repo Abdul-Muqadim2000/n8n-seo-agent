@@ -442,11 +442,38 @@ const __room = __ai.room;   // reject the case-study intake at once when the pag
 if (budget > 0 && spent_est + est + __room > budget) {
   return [{ json: { ...d, validation_error: 'The AI budget for this ' + (d.ai_budget_period || 'month') + ' is used up (estimated $' + spent_est.toFixed(2) + ' of $' + budget + '; this run would add about $' + (est + __room).toFixed(2) + '). Nothing was charged and nothing was started: this analysis can run again ' + (d.ai_budget_period === 'day' ? 'tomorrow' : 'next month') + ', or the daily limit for this website can be raised first.' } }];
 }
+// ---- the data money, guarded the same way (2026-10-15, benchmark area 13: Semrush / Ahrefs server-side limits) ----
+// Until now `ai_budget_usd` was the only cap that could refuse a run, and it watches CLAUDE money — a third of the bill. DataForSEO was
+// $2.3876 of the $3.63 the 2026-10-14 re-rating spent and $0.0560 of the $0.069 that evening: the larger half, with nothing in front of it
+// but the account balance, and reaching THAT does not refuse a run — it makes every paid call inside one start failing.
+// A settled row counts what it MEASURED and a running one its reservation, as on the Claude side. It used to be
+// `Number(r.dfs_usd) || Number(r.dfs_est_usd)`, so a finished run that genuinely spent $0 — a free_only backlink check (R31) — fell back to
+// the $0.45 it had reserved and held it against the day for ever.
+const dfs_spent = +earlier.filter(r => String(r.created_at || '').startsWith(period))
+  .reduce((s, r) => s + (r.status === 'done' ? (Number(r.dfs_usd) || 0) : (Number(r.dfs_est_usd) || 0)), 0).toFixed(2);
+const dfs_budget = Number(d.dfs_budget_usd || 0);
+if (dfs_budget > 0 && dfs_spent + dfs_est > dfs_budget) {
+  return [{ json: { ...d, validation_error: 'The search-data budget for this ' + (d.ai_budget_period || 'month') + ' is used up (estimated $' + dfs_spent.toFixed(2) + ' of $' + dfs_budget + '; this run would add about $' + dfs_est.toFixed(2) + '). Nothing was charged and nothing was started: this analysis can run again ' + (d.ai_budget_period === 'day' ? 'tomorrow' : 'next month') + ', or the limit for this website can be raised first.' } }];
+}
+// The account itself is the one cap nobody can argue with. *DFS Balance* reads it for free from appendix/user_data on the ledger chain,
+// before this node (exec 588: DFS Balance +0.52 s, Run Ledger Row +1.32 s, Rate Limit +1.94 s), and Run Ledger Row has already parsed it.
+// Fail OPEN: a probe that did not answer is 0 and refuses nothing.
+let dfs_balance = 0;
+try { const __rl = $('Run Ledger Row').first().json || {}; const __v = Number(__rl.dfs_balance); if (Number.isFinite(__v) && __v > 0) dfs_balance = __v; } catch (e) {}
+const dfs_floor = Number.isFinite(Number(d.dfs_balance_floor_usd)) && Number(d.dfs_balance_floor_usd) >= 0 ? Number(d.dfs_balance_floor_usd) : 0;
+if (dfs_balance > 0 && dfs_est > 0 && dfs_balance - dfs_est < dfs_floor) {
+  return [{ json: { ...d, validation_error: 'The search-data account is too low for this run ($' + dfs_balance.toFixed(2) + ' left; this run needs about $' + dfs_est.toFixed(2) + ' and ' + (dfs_floor > 0 ? '$' + dfs_floor.toFixed(2) + ' has to stay for the scheduled checks' : 'would use all of it') + '). Nothing was charged and nothing was started: a run that runs out of data credit half way through delivers half a report and charges for all of it. Top the data account up and start this again.' } }];
+}
 d.ai_spend_estimate_usd = est;
 d.dfs_spend_estimate_usd = dfs_est;
 d.cost_estimate_source = __ai.source;   // 'calibrated' once the mode has settled runs, 'default' until then
 d.cost_estimate_basis = __ai.basis;
-d.dfs_budget_used_est_usd = +(earlier.filter(r => String(r.created_at || '').startsWith(period)).reduce((s, r) => s + (Number(r.dfs_usd) || Number(r.dfs_est_usd) || 0), 0) + dfs_est).toFixed(2);
+// one number for "what will this run cost", from the same self-correcting estimates the guard reserves against — so what the caller is
+// told before the work and what is held back against the budget can never be two different figures.
+d.run_cost_estimate_usd = +(est + dfs_est).toFixed(2);
+d.run_cost_estimate_basis = ('Claude $' + est.toFixed(2) + ' (' + __ai.basis + '); search data $' + dfs_est.toFixed(2) + ' (' + __dfs.basis + ')').slice(0, 400);
+d.dfs_account_balance_usd = dfs_balance;
+d.dfs_budget_used_est_usd = +(dfs_spent + dfs_est).toFixed(2);
 d.ai_budget_used_est_usd = +(spent_est + est).toFixed(2);
 
 return [{ json: { ...d, run_number_today: used + 1 } }];
