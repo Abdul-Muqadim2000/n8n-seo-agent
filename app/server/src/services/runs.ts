@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
   buildN8nPayload,
   cleanDomain,
@@ -173,6 +173,23 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
       .returning();
     return failed;
   }
+  // B-A6 (2026-10-15): the engine recognised a repeat of a request already running, did not start a second run and did not spend
+  // again, and answered with the FIRST run's id. Two of our rows would then carry one request id, and a callback matches the newest
+  // of them — so the repeat row would take the result and the original would stay pending for ever. The repeat never existed as a
+  // run, so we do not keep a row claiming it did (INVARIANTS Rule 4): we drop ours and hand back the run that is really going.
+  if (repeatResolvesToOriginal(res)) {
+    const original = await db.query.runs.findFirst({
+      where: and(eq(schema.runs.orgId, org.id), eq(schema.runs.requestId, res.requestId), ne(schema.runs.id, run.id)),
+      orderBy: asc(schema.runs.createdAt),
+    });
+    if (original) {
+      await db.delete(schema.runs).where(eq(schema.runs.id, run.id));
+      return original;
+    }
+    // the first run is not ours (started outside this app, or already cleaned up): keep this row, it is the only one that can
+    // receive the callback — but never claim it started work the engine did not do.
+  }
+
   const [accepted] = await db
     .update(schema.runs)
     .set({ status: 'accepted', requestId: res.requestId, acceptedAt: new Date(), etaMinutes: Math.max(run.etaMinutes, res.etaMinutes ?? 0) })
@@ -201,6 +218,13 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
       .where(eq(schema.sites.id, site.id));
   }
   return accepted;
+}
+
+/** B-A6: should this start resolve to a run that is already going, instead of keeping a row of its own?
+ *  Only when the engine actually recognised the repeat AND told us which run it belongs to. A missing or false `duplicate`
+ *  (an older engine that does not send the field) means the run really started, so we keep our row. */
+export function repeatResolvesToOriginal(res: { duplicate?: boolean; requestId: string | null }): boolean {
+  return res.duplicate === true && typeof res.requestId === 'string' && res.requestId !== '';
 }
 
 async function recordPageInEngine(site: SiteRow, input: Extract<RunInput, { mode: 'keyword' }>, requestId: string) {

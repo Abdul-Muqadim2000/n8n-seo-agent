@@ -43,7 +43,7 @@
    ],
    "resume": "After Run Ledger (Growth)",
    "resume_out": [
-    "Any Sites (Growth)?"
+    "Run Allowed? (Growth)"
    ],
    "row_out": [
     "Reserve Run Ledger (Growth)"
@@ -51,7 +51,8 @@
    "settle": "Settle Run Ledger (Growth)",
    "settle_from": [
     "Growth Report",
-    "Nothing To Do (Growth)"
+    "Nothing To Do (Growth)",
+    "Refuse Run Ledger (Growth)"
    ],
    "tag": "Growth"
   },
@@ -76,7 +77,7 @@
    ],
    "resume": "After Run Ledger (Pulse)",
    "resume_out": [
-    "Any Sites (Pulse)?"
+    "Run Allowed? (Pulse)"
    ],
    "row_out": [
     "Reserve Run Ledger (Pulse)"
@@ -84,7 +85,8 @@
    "settle": "Settle Run Ledger (Pulse)",
    "settle_from": [
     "Nothing To Do (Pulse)",
-    "Pulse Alerts"
+    "Pulse Alerts",
+    "Refuse Run Ledger (Pulse)"
    ],
    "tag": "Pulse"
   },
@@ -109,7 +111,7 @@
    ],
    "resume": "After Run Ledger (AI)",
    "resume_out": [
-    "Any Sites (AI)?"
+    "Run Allowed? (AI)"
    ],
    "row_out": [
     "Reserve Run Ledger (AI)"
@@ -117,7 +119,8 @@
    "settle": "Settle Run Ledger (AI)",
    "settle_from": [
     "AI Report",
-    "Nothing To Do (AI)"
+    "Nothing To Do (AI)",
+    "Refuse Run Ledger (AI)"
    ],
    "tag": "AI"
   },
@@ -142,14 +145,15 @@
    ],
    "resume": "After Run Ledger (Audit)",
    "resume_out": [
-    "Fingerprint Rows"
+    "Run Allowed? (Audit)"
    ],
    "row_out": [
     "Reserve Run Ledger (Audit)"
    ],
    "settle": "Settle Run Ledger (Audit)",
    "settle_from": [
-    "Audits Started"
+    "Audits Started",
+    "Refuse Run Ledger (Audit)"
    ],
    "tag": "Audit"
   },
@@ -175,7 +179,7 @@
    ],
    "resume": "After Run Ledger (BL)",
    "resume_out": [
-    "Any Sites (BL)?"
+    "Run Allowed? (BL)"
    ],
    "row_out": [
     "Reserve Run Ledger (BL)"
@@ -183,7 +187,8 @@
    "settle": "Settle Run Ledger (BL)",
    "settle_from": [
     "BL Report",
-    "Nothing To Do (BL)"
+    "Nothing To Do (BL)",
+    "Refuse Run Ledger (BL)"
    ],
    "tag": "BL"
   },
@@ -208,7 +213,7 @@
    ],
    "resume": "After Run Ledger (Cadence)",
    "resume_out": [
-    "Any Pages?"
+    "Run Allowed? (Cadence)"
    ],
    "row_out": [
     "Reserve Run Ledger (Cadence)"
@@ -219,6 +224,7 @@
     "Nothing To Write",
     "POST Cadence Note",
     "Planned Only",
+    "Refuse Run Ledger (Cadence)",
     "Send Cadence Note"
    ],
    "tag": "Cadence"
@@ -244,7 +250,7 @@
    ],
    "resume": "After Run Ledger (LB)",
    "resume_out": [
-    "Any Sites (LB)?"
+    "Run Allowed? (LB)"
    ],
    "row_out": [
     "Reserve Run Ledger (LB)"
@@ -252,7 +258,8 @@
    "settle": "Settle Run Ledger (LB)",
    "settle_from": [
     "LB Report",
-    "Nothing To Do (LB)"
+    "Nothing To Do (LB)",
+    "Refuse Run Ledger (LB)"
    ],
    "tag": "LB"
   },
@@ -277,7 +284,7 @@
    ],
    "resume": "After Run Ledger (Watch)",
    "resume_out": [
-    "Any Watch Targets?"
+    "Run Allowed? (Watch)"
    ],
    "row_out": [
     "Reserve Run Ledger (Watch)"
@@ -285,7 +292,8 @@
    "settle": "Settle Run Ledger (Watch)",
    "settle_from": [
     "Nothing To Watch",
-    "Post Watch Alert",
+    "Refuse Run Ledger (Watch)",
+    "Save Watch Ops Delivery",
     "Watched"
    ],
    "tag": "Watch"
@@ -311,7 +319,7 @@
    ],
    "resume": "After Run Ledger (Tracker)",
    "resume_out": [
-    "Any Checks?"
+    "Run Allowed? (Tracker)"
    ],
    "row_out": [
     "Reserve Run Ledger (Tracker)"
@@ -319,6 +327,7 @@
    "settle": "Settle Run Ledger (Tracker)",
    "settle_from": [
     "Nothing To Track",
+    "Refuse Run Ledger (Tracker)",
     "Tracker Report"
    ],
    "tag": "Tracker"
@@ -344,7 +353,7 @@
    ],
    "resume": "After Run Ledger (Site)",
    "resume_out": [
-    "Any Sites?"
+    "Run Allowed? (Site)"
    ],
    "row_out": [
     "Reserve Run Ledger (Site)"
@@ -352,6 +361,7 @@
    "settle": "Settle Run Ledger (Site)",
    "settle_from": [
     "Nothing To Track (Site)",
+    "Refuse Run Ledger (Site)",
     "Site Report"
    ],
    "tag": "Site"

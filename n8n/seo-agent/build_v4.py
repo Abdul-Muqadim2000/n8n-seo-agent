@@ -5041,12 +5041,13 @@ def _r17_r29_checks():
     # one, and the "no webhook configured" path the harness exercises is the generated node in every checkout.
     _baked55 = []
     for _f55 in ('harness/code_v4/EH__Alert_Channels.js', 'harness/code_v4/EH__Alert_Record.js', 'harness/code_v4/EH__Alert_Delivery.js',
-                 'harness/code_v4/Watch_Ops_Alert.js', 'harness/code_v4/Watch_Ops_Channels.js'):
+                 'harness/code_v4/Watch_Ops_Alert.js', 'harness/code_v4/Watch_Ops_Channels.js',
+                 'harness/code_v4/EH__Alert_Retry_Plan.js'):   # B-A7 (2026-10-15): the sweep posts to the same channel
         _t55 = open(os.path.join(HERE0, _f55), encoding='utf-8').read()
         _m55 = re.findall(r"webhook_url[:= ]+'([^']*)'", _t55) or re.findall(r"cfgUrl\('([^']*)'\)", _t55)
         assert _m55 and all(v == _PH55 for v in _m55), 'R30: ' + _f55 + ' does not carry the placeholder but ' + str(_m55)
         _baked55.append(_f55)
-    assert len(_baked55) == 5, _baked55
+    assert len(_baked55) == 6, _baked55
     # what harness S65 reads: the chain the build just proved, so the scenario can assert the shape without a workflow file
     _main55 = json.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_v4.json'), encoding='utf-8'))[0]
     _mc55 = _main55['connections']
@@ -5574,8 +5575,11 @@ def _r31_checks():
         assert by59[bal59].get('onError') == 'continueRegularOutput' and by59[bal59].get('alwaysOutputData'), 'R32: ' + wname59 + "'s balance reading can end the run"
         c59 = wf59['connections']
         outs59 = lambda nd: [t['node'] for lst in ((c59.get(nd) or {}).get('main') or []) for t in (lst or [])]
-        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [wiring59['reserve']], \
-            'R32: ' + wname59 + "'s balance reading is not between the ensure and the row"
+        # B-A9 (2026-10-15, build section 64): the concurrency gate's read of the open runs sits between the balance and the row, for the
+        # same reason *Rate Limit* reads the ledger before it inserts — the row this run is about to write must not be in its own count.
+        open59 = wiring59.get('open_runs') or ''
+        assert outs59('Ensure Run Ledger (' + tag59 + ')') == [bal59] and outs59(bal59) == [open59] and outs59(open59) == [wiring59['reserve']], \
+            'R32 / B-A9: ' + wname59 + "'s balance reading and open-run read are not between the ensure and the row"
         assert "$('" + bal59 + "')" in by59[wiring59['reserve']]['parameters']['jsCode'], 'R32: ' + wname59 + ' does not store the reading on its row'
         # Every end of the run reaches the settle, so the only way to leave a row `reserved` is a run that crashed (which is what
         # *Release Stale Runs* is for). Walk forward from the resume node, refusing to pass a node that feeds the settle: anything that
@@ -6110,6 +6114,206 @@ log('The run cost the engine works out now reaches the caller, and a request sen
     'the first run\'s id, first_seen_at, note} and starts nothing, force_new or a fresh request_id asks for a genuine second run, the log '
     'is NOT in seo_run_ledger because a non-run row there reads as an open run to CC.dfsRun and would take B-A5\'s run-level account '
     'attribution away, and every uncertainty - no id of its own, no earlier row, an unreadable stored value - starts the run')
+# 64. AN ALERT NOBODY RECEIVED, AND NINE SCHEDULES THAT COULD NOT BE REFUSED
+#     (2026-10-15, benchmark items B-A7 and B-A9; docs/system-review-2026-10-14/INVARIANTS.md rules 3 and 4)
+#     * B-A7 **an undelivered alert was never retried and never escalated.** D25b gave the alert path a second channel and a row of its
+#       own; R6 put the delivery result back on that row. Nothing ever acted on it: one attempt per channel, and whatever the row then
+#       said, that was the end of it — which is why the blunt fact still holds that **no ops alert has ever reached a human**. Rule 3 ends
+#       on the clause that matters: *a failure that reaches no human is not handled.* Four things change here:
+#       (a) `seo_ops_alerts` gains `attempts`, `last_attempt_at`, `next_attempt_at` and `attempt_log` — the row records EVERY attempt, one
+#           line each, not only the last one (run sync_tables.py, which apply_env.py does, to add them to the live table).
+#       (b) **the retry has no scheduler of its own: it borrows the ten that exist.** The last thing every scheduled run does — after its
+#           ledger row is settled, where it can delay nothing and spend nothing — is ask whether an alert is still waiting and re-send up
+#           to five. Page Watch runs daily at 05:45, the AI Pulse daily at 06:30, six more between 07:00 and 11:00 on Mondays, the Audit
+#           Scheduler monthly; the Error Handler carries the same chain, so a second failure sweeps the first one's undelivered alert too.
+#           N = 30 minutes between attempts (equal to OA.DEDUPE_MINUTES: the earliest moment a re-send is not a flood) and K = 3 attempts
+#           before the row is `critical` whatever it started as and the payload leads with how long it has reached nobody.
+#       (c) **a row is marked delivered only on evidence of delivery** (rule 4). *Post Alert Webhook* is `neverError`, so a 404 from a
+#           revoked Slack hook arrived as an item with no `error` and was written down as a success; `fullResponse` puts the status code on
+#           the item and AR.posted reads it. The Page Watch, which posted its digest and wrote nothing back at all, gets the same record.
+#       (d) a repeat inside the dedupe window no longer writes `deduped` over the channels that CARRIED an alert, so a delivered alert
+#           stops looking undelivered — and, the half that matters, an undelivered one stops looking handled.
+#     * B-A9 **the ten schedules sat outside every guard.** R17 proved the reservation happens before the first paid call; nothing ever
+#       LOOKED at what was already running, so a scheduled monitor could not be refused for concurrency however much was in flight. The
+#       rules now live in one kit (v5/code/_run_guard.js) used by *Rate Limit* AND by the resume node of every scheduled workflow: a run of
+#       the same monitor still in flight, P34-5's heavy crawl of the same site, more than RG.MAX_OPEN analyses at once, or an account that
+#       cannot pay for this run. It deliberately does NOT refuse a schedule on the Claude or DataForSEO budget — cost is not the
+#       constraint and a budget refusal would silently cost a customer their week; the account balance is a fact, not a policy.
+#       The gate sits where R17 put the resume node, so the ordering proof of section 55 still holds: refusal happens after the row exists
+#       and before the first paid node, and the row is marked `refused`, which every count already skips.
+# =============================================================================
+from ladder_common import ALERT_RETRY_SRC as _AR64, RUN_GUARD_SRC as _RG64, OPS_ALERTS_COLS as _OAC64
+_eh_src64 = lambda p: _eh_src(p).replace('/*__ALERT_RETRY__*/', _AR64)
+
+# ---------- A. the two kits agree on the one number they share ----------
+assert "const RETRY_MINUTES = 30;" in _AR64 and "const RETRY_MINUTES = 30;" in OPS_ALERT_SRC, \
+    'B-A7: OA.RETRY_MINUTES and AR.RETRY_MINUTES must be the same number — the first books the retry, the second acts on it'
+assert "const ESCALATE_AFTER = 3;" in _AR64 and "const MAX_ATTEMPTS = 10;" in _AR64, 'B-A7: the escalation constants moved'
+assert [c for c, _t in _OAC64][-4:] == ['attempts', 'last_attempt_at', 'next_attempt_at', 'attempt_log'], 'B-A7: seo_ops_alerts has no retry state'
+
+# ---------- B. the Error Handler: evidence of delivery, and its own sweep ----------
+_whn64 = _ehn['Post Alert Webhook']['parameters']['options']['response']['response']
+assert _whn64.get('neverError') is True, 'B-A7: Post Alert Webhook no longer answers on a non-2xx'
+_whn64['fullResponse'] = True   # the status code is the evidence; without it a 404 reads as a delivery
+_eh_add('Alert Delivery', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src64('code/Alert_Delivery.js')}, _ehn['Alert Delivery']['position'])
+assert 'const AR = (() => {' in _ehn['Alert Delivery']['parameters']['jsCode'], 'B-A7: Alert Delivery does not carry the retry kit'
+_ehn['Save Alert Delivery']['parameters']['columns']['value'].update({
+    'severity': '={{ $json.severity }}', 'attempts': '={{ $json.attempts }}', 'last_attempt_at': '={{ $json.last_attempt_at }}',
+    'next_attempt_at': '={{ $json.next_attempt_at }}', 'attempt_log': '={{ $json.attempt_log }}'})
+_EHY64 = _EHY + 300
+_eh_add('Load Open Alerts', DT_TYPE, DT_VERSION, dt_get_all_where_params(OPS_ALERTS_TABLE, [
+    ('last_seen_at', 'gte', '={{ new Date(Date.now() - 7 * 864e5).toISOString() }}')]), [480, _EHY64],
+    {'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+_eh_add('Alert Retry Plan', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src64('code/Alert_Retry_Plan.js')
+        .replace('__LOAD__', 'Load Open Alerts').replace('__WHERE__', 'SEO Agent — Error Handler')}, [700, _EHY64],
+    {'onError': 'continueRegularOutput', 'executeOnce': True})
+_eh_add('Any Alert Retry?', 'n8n-nodes-base.if', 2.3, {'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3},
+        'conditions': [{'id': _ehnid('Any Alert Retry?:cond'), 'leftValue': '={{ !$json.skip }}', 'rightValue': '', 'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'},
+        'looseTypeValidation': True, 'options': {}}, [920, _EHY64])
+_eh_add('Post Alert Retry', 'n8n-nodes-base.httpRequest', 4.5, {
+    'method': 'POST', 'url': '={{ $json.webhook_url }}', 'sendBody': True, 'specifyBody': 'json', 'jsonBody': '={{ JSON.stringify($json.webhook_body) }}',
+    'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 400}}, 'timeout': 15000,
+                'response': {'response': {'fullResponse': True, 'neverError': True}}}}, [1140, _EHY64],
+    dict(onError='continueRegularOutput', alwaysOutputData=True, **_rl41.RETRY))
+_eh_add('Alert Retry Result', 'n8n-nodes-base.code', 2, {'jsCode': _eh_src64('code/Alert_Retry_Result.js').replace('__PLAN__', 'Alert Retry Plan')},
+        [1360, _EHY64], {'onError': 'continueRegularOutput'})
+_eh_add('Save Alert Retry', DT_TYPE, DT_VERSION, dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
+    {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'severity': '={{ $json.severity }}',
+     'attempts': '={{ $json.attempts }}', 'last_attempt_at': '={{ $json.last_attempt_at }}', 'next_attempt_at': '={{ $json.next_attempt_at }}',
+     'attempt_log': '={{ $json.attempt_log }}', 'notes': '={{ $json.notes }}'}), [1580, _EHY64],
+    {'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+for _a64, _b64 in [('Save Alert Delivery', 'Load Open Alerts'), ('Load Open Alerts', 'Alert Retry Plan'), ('Alert Retry Plan', 'Any Alert Retry?'),
+                   ('Any Alert Retry?', 'Post Alert Retry'), ('Post Alert Retry', 'Alert Retry Result'), ('Alert Retry Result', 'Save Alert Retry')]:
+    _eh_link(_a64, _b64)
+_ehwf['nodes'] = list(_ehn.values())
+_ehnames64 = set(_ehn)
+for _s64, _o64 in _ehc.items():
+    assert _s64 in _ehnames64, _s64
+    for _l64 in _o64.get('main', []):
+        for _t64 in _l64: assert _t64['node'] in _ehnames64, _t64['node']
+_rl41.check(_ehwf, _ehwf.get('name') or 'SEO Agent — Error Handler')
+_ul41.check(_ehwf, _ehwf.get('name') or 'SEO Agent — Error Handler')
+json.dump(_ehw41, open(_eh41, 'w', encoding='utf-8'), indent=2, ensure_ascii=False)
+for _n64 in _ehwf['nodes']:
+    if _n64['type'] == 'n8n-nodes-base.code':
+        open(os.path.join(OUT_CODE, 'EH__' + re.sub(r'[^A-Za-z0-9_.-]+', '_', _n64['name']) + '.js'), 'w').write(_n64['parameters']['jsCode'])
+# the harness copies with a webhook configured (the harness has no n8n/.env, so these play what a filled .env gives)
+for _nm64, _fp64, _sub64 in (('Alert_Delivery', 'code/Alert_Delivery.js', {}),
+                             ('Alert_Retry_Plan', 'code/Alert_Retry_Plan.js', {'__LOAD__': 'Load Open Alerts', '__WHERE__': 'SEO Agent — Error Handler'}),
+                             ('Alert_Retry_Result', 'code/Alert_Retry_Result.js', {'__PLAN__': 'Alert Retry Plan'})):
+    _t64 = rd(_fp64).replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC).replace('/*__ALERT_RETRY__*/', _AR64) \
+        .replace('__ALERT_WEBHOOK_URL__', 'https://hooks.example.test/seo-agent-alerts').replace('__OPS_EMAIL__', OPS_EMAIL)
+    for _k64, _v64 in _sub64.items(): _t64 = _t64.replace(_k64, _v64)
+    open(os.path.join(OUT_CODE, 'EH__' + _nm64 + '_Webhook.js'), 'w').write(_t64)
+
+# ---------- C. B-A9: Rate Limit and the ten schedules share one concurrency gate ----------
+setcode('Rate Limit', "// B-A9 (2026-10-15, build section 64): the concurrency rules, shared with the resume node of every scheduled workflow.\n"
+        + _RG64 + "\n" + code('Rate Limit'))
+patch('Rate Limit', """const STALE_H = Number(d.run_stale_hours) > 0 ? Number(d.run_stale_hours) : 2;
+const staleBefore = Date.now() - STALE_H * 3600000;
+const isStale = (r) => { const st = String(r.status || ''); if (st === 'stale') return true;
+  const t = Date.parse(String(r.created_at || '')); return st === 'reserved' && t > 0 && t < staleBefore; };""",
+      """const STALE_H = Number(d.run_stale_hours) > 0 ? Number(d.run_stale_hours) : RG.STALE_HOURS;
+const __now64 = Date.now();
+// B-A9 (2026-10-15): one rule, in one place (v5/code/_run_guard.js) — the ten schedules apply exactly this one now.
+const isStale = (r) => RG.isStale(r, __now64, STALE_H);""")
+patch('Rate Limit', """  const busy = earlier.find(r => String(r.status || '') === 'reserved' && yesNo(r.heavy) && String(r.domain || '').toLowerCase() === myDomain);""",
+      """  const busy = RG.heavyBusy(ledger, { now: new Date(__now64).toISOString(), my_id: myId, run_id: String($execution.id), stale_hours: STALE_H, domain: myDomain, heavy: mine.heavy });""")
+assert 'RG.isStale(' in code('Rate Limit') and 'RG.heavyBusy(' in code('Rate Limit') and 'const RG = (() => {' in code('Rate Limit'), \
+    'B-A9: Rate Limit does not use the shared gate'
+_ul41.check({'nodes': list(nodes.values()), 'name': 'SEO Agent v4'})
+
+# ---------- D. the harness shims (S74) ----------
+open(os.path.join(OUT_CODE, '_alert_retry.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 64, B-A7): the retry / escalation kit as a runnable script. One item in, one call out:\n"
+    "// { call: 'plan' | 'settle' | 'posted' | 'carried' | 'retryable' | 'record' | 'tables', ... }\n"
+    + OPS_ALERT_SRC + "\n" + _AR64 + """
+return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call || '');
+  if (fn === 'plan') return { json: AR.plan(j.rows || [], j.cfg || {}) };
+  if (fn === 'settle') return { json: { rows: AR.settle(j.planned || [], j.responses || []) } };
+  if (fn === 'posted') return { json: AR.posted(j.item) };
+  if (fn === 'carried') return { json: { carried: AR.carried(j.row || {}), open: AR.isOpen(j.row || {}), attempts: AR.attemptsOf(j.row || {}) } };
+  if (fn === 'retryable') return { json: { retryable: AR.retryable(j.row || {}, Date.parse(j.now) || Date.now()), due_at: new Date(AR.dueAt(j.row || {})).toISOString() } };
+  if (fn === 'record') return { json: OA.plan(j.alert || {}, j.rows || [], j.cfg || {}).row };
+  return { json: { RETRY_MINUTES: AR.RETRY_MINUTES, ESCALATE_AFTER: AR.ESCALATE_AFTER, MAX_ATTEMPTS: AR.MAX_ATTEMPTS, PER_SWEEP: AR.PER_SWEEP,
+                   DEDUPE_MINUTES: OA.DEDUPE_MINUTES, OA_RETRY_MINUTES: OA.RETRY_MINUTES } };
+});
+""")
+open(os.path.join(OUT_CODE, '_run_guard.js'), 'w').write(
+    "// harness shim (written by build_v4.py section 64, B-A9): the concurrency gate every scheduled run and every API run passes.\n"
+    "// { call: 'gate' | 'isStale' | 'heavyBusy' | 'live' | 'tables', ... }\n"
+    + _RG64 + """
+return $input.all().map(i => { const j = i.json || {}; const fn = String(j.call || '');
+  if (fn === 'gate') return { json: RG.gate(j.args || {}) };
+  if (fn === 'isStale') return { json: { stale: RG.isStale(j.row || {}, Date.parse(j.now) || Date.now(), j.stale_hours) } };
+  if (fn === 'heavyBusy') return { json: { busy: RG.heavyBusy(j.rows || [], j.args || {}) } };
+  if (fn === 'live') return { json: { live: RG.liveRuns(j.rows || [], j.args || {}).map(r => r.run_id) } };
+  return { json: { STALE_HOURS: RG.STALE_HOURS, MAX_OPEN: RG.MAX_OPEN } };
+});
+""")
+_ops64 = json.load(open(os.path.join(HERE0, 'harness', 'ops_alert_wiring.json')))
+_ops64['nodes'] = [_n64['name'] for _n64 in _ehwf['nodes'] if _n64['type'] != 'n8n-nodes-base.stickyNote']
+_ops64['connections'] = {_s64: [[_t64['node'] for _t64 in _l64] for _l64 in _o64.get('main', [])] for _s64, _o64 in _ehc.items()}
+_ops64['delivery']['writes'] = sorted(_ehn['Save Alert Delivery']['parameters']['columns']['value'].keys())
+_ops64['webhook']['full_response'] = True
+_ops64['retry'] = {'load': 'Load Open Alerts', 'plan': 'Alert Retry Plan', 'gate': 'Any Alert Retry?', 'post': 'Post Alert Retry',
+                   'result': 'Alert Retry Result', 'save': 'Save Alert Retry', 'from': 'Save Alert Delivery',
+                   'writes': sorted(_ehn['Save Alert Retry']['parameters']['columns']['value'].keys()),
+                   'post_full_response': True, 'columns': [c for c, _t in _OAC64]}
+json.dump(_ops64, open(os.path.join(HERE0, 'harness', 'ops_alert_wiring.json'), 'w'), indent=1, sort_keys=True)
+sticky("""### An alert nobody received, and nine schedules that could not be refused (B-A7 / B-A9, 2026-10-15)
+**Every alert is re-attempted until something receives it, or until the row says it gave up.** `seo_ops_alerts` carries `attempts`, `last_attempt_at`, `next_attempt_at` and one line per attempt in `attempt_log`. The retry has no schedule of its own: the last thing every scheduled run does — and every run of the Error Handler — is sweep up to 5 alerts that have reached nobody and re-send them (30 minutes between tries, `critical` from the 3rd, given up after 10 and never called delivered). A row is marked delivered **only on a 2xx**: `Post Alert Webhook` is `neverError`, so without `fullResponse` a 404 from a revoked hook read as a success.
+**The ten schedules pass the same concurrency gate as the API runs** (`v5/code/_run_guard.js`, shared with *Rate Limit*): the same monitor already in flight, a heavy crawl of the same site, more than 3 analyses at once, or an account that cannot pay for the run. A refused schedule marks its ledger row `refused` before the first paid node and ends there; it is never refused on the Claude or DataForSEO budget.""", CX - 60, CY - 660, 1040, 280, 3)
+log('An undelivered alert is retried, escalated and never called delivered, and the ten schedules pass the same concurrency gate as the API runs (2026-10-15, benchmark items B-A7 / B-A9; INVARIANTS rules 3 and 4). B-A7: seo_ops_alerts gains attempts / last_attempt_at / next_attempt_at / attempt_log (one line per attempt, so the row holds the whole history), every scheduled run and every Error Handler run ends by re-sending up to 5 alerts that have reached nobody (30 minutes apart, critical from the third attempt, given up after ten and never marked delivered), the webhook is judged on its status code instead of on the node not throwing (a 404 from a revoked hook used to count as a delivery), the Page Watch records its own delivery instead of leaving every row at "pending" for ever, and a repeat inside the dedupe window no longer writes "deduped" over the channel that carried an alert. B-A9: one concurrency gate (v5/code/_run_guard.js) used by Rate Limit and by the resume node of all ten scheduled workflows - the same monitor still running, P34-5\'s heavy crawl of the same site, more than 3 analyses at once, or an account that cannot pay for the run - refusing after the ledger row exists and before the first paid node, so section 55\'s ordering proof still holds; a schedule is never refused on a budget, because cost is not the constraint')
+
+
+def _b64_checks():
+    """Run after the sub-builds: the sweep and the gate are in every scheduled workflow, and neither can be skipped."""
+    lw64 = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    files64 = {w['name']: os.path.join(HERE0, 'workflows', f) for f in os.listdir(os.path.join(HERE0, 'workflows'))
+               if f.endswith('.json') for w in json.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))}
+    out64 = {}
+    for wname64, wiring64 in sorted((lw64.get('monitors') or {}).items()):
+        wf64 = json.load(open(files64[wname64], encoding='utf-8'))[0]
+        by64 = {n['name']: n for n in wf64['nodes']}
+        c64 = wf64['connections']
+        outs64 = lambda nd: [t['node'] for lst in ((c64.get(nd) or {}).get('main') or []) for t in (lst or [])]
+        g64, r64 = wiring64.get('guard') or {}, wiring64.get('alert_retry') or {}
+        assert g64 and r64, 'B-A7 / B-A9: ' + wname64 + ' has neither the gate nor the sweep'
+        for nm64 in [g64['load'], g64['gate'], g64['if'], g64['refuse'], r64['load'], r64['plan'], r64['gate'], r64['post'], r64['result'], r64['save']]:
+            assert nm64 in by64, 'B-A9: ' + wname64 + ' has no node "' + nm64 + '"'
+        # the gate: the resume node carries the shared kit, and its "no" ends in the refusal, not in the pipeline
+        src64 = by64[g64['gate']]['parameters']['jsCode']
+        assert 'const RG = (() => {' in src64 and 'RG.gate(' in src64, 'B-A9: ' + wname64 + ' does not run the shared gate'
+        assert outs64(g64['gate']) == [g64['if']], 'B-A9: ' + wname64 + "'s gate does not feed its own IF"
+        if64 = [[t['node'] for t in (lst or [])] for lst in ((c64.get(g64['if']) or {}).get('main') or [])]
+        assert len(if64) == 2 and if64[1] == [g64['refuse']], 'B-A9: ' + wname64 + "'s refusal branch does not mark the row refused"
+        assert if64[0], 'B-A9: ' + wname64 + ' has no pipeline behind its gate'
+        ref64 = by64[g64['refuse']]['parameters']
+        assert [c['keyValue'] for c in ref64['filters']['conditions']][1] == 'reserved' \
+            and ref64['columns']['value']['status'] == 'refused', 'B-A9: ' + wname64 + ' does not refuse its own reserved row'
+        # the sweep: behind the settle, judged on the status code, writing the whole retry state back
+        assert r64['from'] == wiring64['settle'] and outs64(wiring64['settle'])[0] == 'Ensure Ops Alerts (' + g64['gate'][len('After Run Ledger ('):-1] + ')', \
+            'B-A7: ' + wname64 + ' does not sweep after it settles'
+        psrc64 = by64[r64['plan']]['parameters']['jsCode']
+        assert 'const AR = (() => {' in psrc64 and 'AR.plan(' in psrc64, 'B-A7: ' + wname64 + ' does not plan its retries through the kit'
+        assert ALERT_WEBHOOK_PLACEHOLDER in psrc64, 'R29 / B-A7: ' + wname64 + "'s sweep does not carry the placeholder"
+        post64 = by64[r64['post']]['parameters']['options']['response']['response']
+        assert post64.get('fullResponse') is True and post64.get('neverError') is True, \
+            'B-A7: ' + wname64 + "'s retry cannot tell a 404 from a delivery"
+        assert by64[r64['post']].get('maxTries') == 3, 'G1: ' + wname64 + "'s retry POST carries no retry rule"
+        wr64 = sorted(by64[r64['save']]['parameters']['columns']['value'].keys())
+        assert all(k in wr64 for k in ('attempts', 'attempt_log', 'next_attempt_at', 'delivered', 'severity')), \
+            'B-A7: ' + wname64 + ' does not write the retry state back: ' + str(wr64)
+        out64[wname64] = {'guard': g64, 'retry': r64, 'writes': wr64, 'if_outputs': if64,
+                          'refuse_values': sorted(ref64['columns']['value'].keys())}
+    assert len(out64) == 10, 'B-A7 / B-A9: ' + str(len(out64)) + ' scheduled workflows carry the gate and the sweep, expected 10'
+    json.dump({'monitors': out64, 'n_minutes': 30, 'k_attempts': 3, 'max_attempts': 10, 'per_sweep': 5,
+               'error_handler': _ops64['retry'], 'columns': [c for c, _t in _OAC64],
+               'page_watch_delivery': {'code': 'Watch Ops Delivery', 'save': 'Save Watch Ops Delivery'}},
+              open(os.path.join(HERE0, 'harness', 'alert_retry_wiring.json'), 'w'), indent=1, sort_keys=True)
+    print('alert retry + run guard (B-A7 / B-A9): ' + str(len(out64)) + ' scheduled workflows sweep undelivered alerts and pass the shared concurrency gate')
+
 
 # =============================================================================
 # 9. WRITE
@@ -6147,4 +6351,6 @@ for _s in ('build_api.py', 'build_ladder_extras.py', 'build_site_tracker.py', 'b
 _r17_r29_checks()
 # section 59 (R31 / R32 / R33): the same, for what the schedules settle and what they read
 _r31_checks()
+# section 64 (B-A7 / B-A9): the sweep and the concurrency gate, in every scheduled workflow
+_b64_checks()
 

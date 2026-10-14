@@ -1,6 +1,14 @@
 """Shared definitions for the keyword-ladder feature (used by build_v4.py and build_ladder_extras.py)."""
 import json as _json
+import os as _os
 import uuid as _uuid
+
+_V5 = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), 'v5')
+
+
+def read_v5(path):
+    """Read a file from v5/ (the one copy of a shared kit or node, used by every builder)."""
+    return open(_os.path.join(_V5, path), encoding='utf-8').read()
 LADDER_TABLE = 'seo_ladders'
 HISTORY_TABLE = 'seo_rank_history'
 LADDER_COLS = [('ladder_id', 'string'), ('domain', 'string'), ('head_keyword', 'string'), ('rung', 'number'), ('page_no', 'number'), ('keyword', 'string'),
@@ -390,8 +398,43 @@ def monitor_ledger_js(v5_dir, mode, plan_node, row_node, measured=''):
 LEDGER_RESUME_JS = """// R17 (2026-10-14, system review FIX_PLAN 3.12): the run ledger reserves its row on the MAIN path now, before the first paid call -
 // it used to hang off the plan node as a side branch and n8n's v1 order ran it last, after all the spending. A Data Table node answers with
 // the row it wrote rather than with its input, so this node hands __PLAN__'s own items back to the pipeline, unchanged and in order.
-return $('__PLAN__').all();
+// B-A9 (2026-10-15, build section 64): and it is the gate. R17 put the reservation in front of the spending; nothing ever LOOKED at what was
+// already running, so a scheduled monitor could not be refused for concurrency however much was in flight - the one guard every API run
+// passes (*Rate Limit*) had no counterpart here. The rules are shared with it (v5/code/_run_guard.js): a run of the same monitor still in
+// flight, a heavy crawl of the same site, too many analyses at once, or an account that cannot pay for this run. A refusal costs nothing -
+// it happens after the row exists and before the first paid node, and the row is marked `refused` so it never holds a cent of the day.
+/*__RUN_GUARD__*/
+const plan = $('__PLAN__').all();
+let rows = []; try { rows = $('__LEDGER__').all().map(i => i.json).filter(r => r && r.run_id && !r.error); } catch (e) { rows = []; }
+let mine = {}; try { mine = $('__RESERVE__').first().json || {}; } catch (e) { mine = {}; }
+if (mine && mine.error) mine = {};
+const g = RG.gate({ rows, mine, mode: '__MODE__', where: '__WHERE__', run_id: String($execution.id) });
+if (g.allowed) return plan;
+return [{ json: { run_refused: true, run_id: String($execution.id), refused_at: new Date().toISOString(),
+  cost_basis: ('refused before any spending: ' + g.refusal + ' [' + g.basis + ']').slice(0, 400),
+  reason: g.reason, refusal: g.refusal, basis: g.basis, open_runs: g.open_runs, open: g.open, max_open: g.max_open,
+  stale_ignored: g.stale_ignored, mode: g.mode, where: g.where } }];
 """
+
+# ---- B-A7 / B-A9 (2026-10-15, build section 64): the kits the ledger chain inlines, read once from v5/ ----
+OPS_ALERT_SRC = read_v5('code/_ops_alert.js').rstrip('\n')
+ALERT_RETRY_SRC = read_v5('code/_alert_retry.js').rstrip('\n')
+RUN_GUARD_SRC = read_v5('code/_run_guard.js').rstrip('\n')
+
+
+def inline_kits(src):
+    """Replace the kit markers with the one copy of each kit (the same markers every builder uses)."""
+    return (src.replace('/*__OPS_ALERT__*/', OPS_ALERT_SRC)
+               .replace('/*__ALERT_RETRY__*/', ALERT_RETRY_SRC)
+               .replace('/*__RUN_GUARD__*/', RUN_GUARD_SRC))
+
+
+def _if_params(nid, expr):
+    """A boolean IF node's parameters (the same shape all three builders write)."""
+    return {'conditions': {'options': {'caseSensitive': True, 'leftValue': '', 'typeValidation': 'loose', 'version': 3},
+                           'conditions': [{'id': nid, 'leftValue': '=' + expr, 'rightValue': '',
+                                           'operator': {'type': 'boolean', 'operation': 'true', 'singleValue': True}}], 'combinator': 'and'},
+            'looseTypeValidation': True, 'options': {}}
 
 
 def ledger_tag(wiring):
@@ -466,6 +509,21 @@ def ledger_mainline(wfobj, wiring):
         conns.setdefault(balance, {})['main'] = [[{'node': wiring['reserve'], 'type': 'main', 'index': 0}]]
         nodes[balance] = wfobj['nodes'][-1]
     wiring['balance'] = balance
+    # ---- B-A9 (2026-10-15, build section 64): what else is running, read before this run reserves its own row ----
+    # The same order *Rate Limit* uses on the API side: the ledger is read first, the row is inserted next, and the gate counts the rows
+    # with a lower id than its own, so row order breaks ties and no run slips past while another is counting.
+    openrun = 'Load Open Runs (' + tag + ')'
+    if openrun not in nodes:
+        ox, oy = nodes[balance]['position']
+        wfobj['nodes'].append({'parameters': dt_get_all_where_params(RUN_LEDGER_TABLE, [
+                                   ('created_at', 'gte', '={{ new Date(Date.now() - ' + str(LEDGER_WINDOW_MS) + ').toISOString() }}')]),
+                               'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + openrun)), 'name': openrun,
+                               'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [ox + 110, oy + 150],
+                               'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+        conns.setdefault(balance, {})['main'] = [[{'node': openrun, 'type': 'main', 'index': 0}]]
+        conns.setdefault(openrun, {})['main'] = [[{'node': wiring['reserve'], 'type': 'main', 'index': 0}]]
+        nodes[openrun] = wfobj['nodes'][-1]
+    wiring['open_runs'] = openrun
     assert resume not in nodes, 'R17: ' + resume + ' already exists (ledger_mainline ran twice)'
     outs = conns.setdefault(plan, {}).setdefault('main', [])
     while not outs: outs.append([])
@@ -474,17 +532,37 @@ def ledger_mainline(wfobj, wiring):
     assert any(t['node'] == ensure for t in outs[0]), 'R17: ' + plan + ' does not start the ledger chain'
     outs[0] = [{'node': ensure, 'type': 'main', 'index': 0}]
     x, y = nodes[reserve]['position']
-    wfobj['nodes'].append({'parameters': {'jsCode': LEDGER_RESUME_JS.replace('__PLAN__', plan)},
+    wfobj['nodes'].append({'parameters': {'jsCode': inline_kits(LEDGER_RESUME_JS)
+                                          .replace('__PLAN__', plan).replace('__LEDGER__', openrun).replace('__RESERVE__', reserve)
+                                          .replace('__MODE__', str(wiring['mode'])).replace('__WHERE__', str(wfobj.get('name') or tag))},
                            'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + resume)), 'name': resume,
                            'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [x + 220, y]})
+    nodes[resume] = wfobj['nodes'][-1]
     router = conns.setdefault(reserve, {}).setdefault('main', [])
     while not router: router.append([])
     router[0] = [t for t in router[0] if t['node'] != resume] + [{'node': resume, 'type': 'main', 'index': 0}]
-    conns.setdefault(resume, {})['main'] = [downstream]
+    # ---- B-A9: the gate's two ways out. The pipeline hangs off "yes"; "no" marks the row refused and the run ends there, having spent
+    # nothing (a `refused` row is skipped by every count, so a skipped run never holds a cent of the day's budget either).
+    allow, refuse = 'Run Allowed? (' + tag + ')', 'Refuse Run Ledger (' + tag + ')'
+    assert allow not in nodes and refuse not in nodes, 'B-A9: the guard of ' + str(wfobj.get('name')) + ' is already built'
+    wfobj['nodes'].append({'parameters': _if_params(str(_uuid.uuid5(_LEDGER_NS, allow + ':cond')), '{{ !$json.run_refused }}'),
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + allow)), 'name': allow,
+                           'type': 'n8n-nodes-base.if', 'typeVersion': 2.3, 'position': [x + 440, y]})
+    wfobj['nodes'].append({'parameters': dt_update_params(RUN_LEDGER_TABLE, RUN_LEDGER_COLS,
+                               [('run_id', '={{ $execution.id }}'), ('status', 'reserved')],
+                               {'status': 'refused', 'settled_usd': 0, 'dfs_usd': 0, 'measured_usd': 0, 'estimated_usd': 0,
+                                'settled_at': '={{ $json.refused_at }}', 'cost_basis': '={{ $json.cost_basis }}'}),
+                           'id': str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + refuse)), 'name': refuse,
+                           'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [x + 660, y + 200],
+                           'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+    nodes[allow], nodes[refuse] = wfobj['nodes'][-2], wfobj['nodes'][-1]
+    conns.setdefault(resume, {})['main'] = [[{'node': allow, 'type': 'main', 'index': 0}]]
+    conns.setdefault(allow, {})['main'] = [downstream, [{'node': refuse, 'type': 'main', 'index': 0}]]
     for nm in (ensure, reserve):
         nodes[nm]['alwaysOutputData'] = True
         nodes[nm]['onError'] = 'continueRegularOutput'
     wiring['resume'] = resume
+    wiring['guard'] = {'load': openrun, 'gate': resume, 'if': allow, 'refuse': refuse, 'kit': 'RG'}
     # ---- R31 (2026-10-14, FIX_PLAN §3.13): every end of the run reaches the settle ----
     # The settle hung off the report node only, so a run that found nothing to do (the `Nothing To Do (…)` branch every monitor has)
     # reserved a row and then finished without ever settling it — the row sat `reserved` against the guard until *Release Stale Runs*
@@ -508,7 +586,67 @@ def ledger_mainline(wfobj, wiring):
     wiring['settle_from'] = sorted(set(wiring.get('settle_from') or []) | set(loose))
     wiring['settle_from_ends'] = loose   # the branches that used to finish without settling
     _ledger_settle_chain(wfobj, wiring, tag, settle_code, conns, nodes)
+    _alert_retry_chain(wfobj, wiring, tag, conns, nodes)
     return resume
+
+
+#  B-A7 (2026-10-15, build section 64): the sweep that re-attempts an undelivered alert.
+#  An alert got one attempt per channel. If that attempt failed - and SMTP failed on 2026-10-10 and again on 2026-10-12, which is why the
+#  webhook channel exists at all - the row sat at `pending` or `failed` and nobody was ever told. Rule 3 of INVARIANTS.md ends on the clause
+#  that matters: *a failure that reaches no human is not handled.*
+#  A retry needs a clock. Rather than invent one, it borrows the ten that already exist: the LAST thing every scheduled run does, after its
+#  row is settled and when there is nothing left to spend or delay, is ask whether an alert is still waiting and re-send up to five of them.
+#  Page Watch runs daily at 05:45, the AI Pulse daily at 06:30, six more between 07:00 and 11:00 on Mondays, the Audit Scheduler monthly -
+#  and the Error Handler carries the same chain, so a second failure also sweeps the first one's undelivered alert.
+#  It sits behind the settle on purpose: it can never delay the run's own work, and it runs on the branches that found nothing to do too.
+def _alert_retry_chain(wfobj, wiring, tag, conns, nodes):
+    settle = wiring['settle']
+    names = ['Ensure Ops Alerts (' + tag + ')', 'Load Open Alerts (' + tag + ')', 'Alert Retry Plan (' + tag + ')',
+             'Any Alert Retry (' + tag + ')?', 'Post Alert Retry (' + tag + ')', 'Alert Retry Result (' + tag + ')',
+             'Save Alert Retry (' + tag + ')']
+    assert not any(n in nodes for n in names), 'B-A7: the alert sweep of ' + str(wfobj.get('name')) + ' is already built'
+    ensure_t, load_t, plan_t, if_t, post_t, result_t, save_t = names
+    sx, sy = nodes[settle]['position']
+    nid = lambda n: str(_uuid.uuid5(_LEDGER_NS, str(wfobj.get('id')) + ':' + n))
+    add = lambda spec: (wfobj['nodes'].append(spec), nodes.__setitem__(spec['name'], spec))
+    add({'parameters': dt_create_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS), 'id': nid(ensure_t), 'name': ensure_t,
+         'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [sx + 220, sy], 'onError': 'continueRegularOutput', 'executeOnce': True})
+    # only the rows a retry could still help: an alert nobody has had for a week is past AR.MAX_ATTEMPTS by a wide margin
+    add({'parameters': dt_get_all_where_params(OPS_ALERTS_TABLE, [
+             ('last_seen_at', 'gte', '={{ new Date(Date.now() - 7 * 864e5).toISOString() }}')]),
+         'id': nid(load_t), 'name': load_t, 'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [sx + 440, sy],
+         'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'executeOnce': True})
+    add({'parameters': {'jsCode': inline_kits(read_v5('code/Alert_Retry_Plan.js')).replace('__LOAD__', load_t)
+                        .replace('__ALERT_WEBHOOK_URL__', ALERT_WEBHOOK_PLACEHOLDER).replace('__WHERE__', str(wfobj.get('name') or tag))},
+         'id': nid(plan_t), 'name': plan_t, 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [sx + 660, sy],
+         'onError': 'continueRegularOutput', 'executeOnce': True})
+    add({'parameters': _if_params(str(_uuid.uuid5(_LEDGER_NS, if_t + ':cond')), '{{ !$json.skip }}'), 'id': nid(if_t), 'name': if_t,
+         'type': 'n8n-nodes-base.if', 'typeVersion': 2.3, 'position': [sx + 880, sy]})
+    # fullResponse + neverError: the status code is the evidence of delivery, and a 404 from a revoked hook never reads as success
+    add({'parameters': {'method': 'POST', 'url': '={{ $json.webhook_url }}', 'sendBody': True, 'specifyBody': 'json',
+                        'jsonBody': '={{ JSON.stringify($json.webhook_body) }}',
+                        'options': {'batching': {'batch': {'batchSize': 1, 'batchInterval': 400}}, 'timeout': 15000,
+                                    'response': {'response': {'fullResponse': True, 'neverError': True}}}},
+         'id': nid(post_t), 'name': post_t, 'type': 'n8n-nodes-base.httpRequest', 'typeVersion': 4.5, 'position': [sx + 1100, sy],
+         'onError': 'continueRegularOutput', 'alwaysOutputData': True, 'retryOnFail': True, 'maxTries': 3, 'waitBetweenTries': 5000})
+    add({'parameters': {'jsCode': inline_kits(read_v5('code/Alert_Retry_Result.js')).replace('__PLAN__', plan_t)},
+         'id': nid(result_t), 'name': result_t, 'type': 'n8n-nodes-base.code', 'typeVersion': 2, 'position': [sx + 1320, sy],
+         'onError': 'continueRegularOutput'})
+    add({'parameters': dt_update_params(OPS_ALERTS_TABLE, OPS_ALERTS_COLS, [('alert_key', '={{ $json.alert_key }}')],
+             {'delivered': '={{ $json.delivered }}', 'channels': '={{ $json.channels }}', 'severity': '={{ $json.severity }}',
+              'attempts': '={{ $json.attempts }}', 'last_attempt_at': '={{ $json.last_attempt_at }}',
+              'next_attempt_at': '={{ $json.next_attempt_at }}', 'attempt_log': '={{ $json.attempt_log }}', 'notes': '={{ $json.notes }}'}),
+         'id': nid(save_t), 'name': save_t, 'type': DT_TYPE, 'typeVersion': DT_VERSION, 'position': [sx + 1540, sy],
+         'onError': 'continueRegularOutput', 'alwaysOutputData': True})
+    for a, b in ((settle, ensure_t), (ensure_t, load_t), (load_t, plan_t), (plan_t, if_t), (post_t, result_t), (result_t, save_t)):
+        o = conns.setdefault(a, {}).setdefault('main', [])
+        while not o: o.append([])
+        o[0] = [t for t in o[0] if t['node'] != b] + [{'node': b, 'type': 'main', 'index': 0}]
+    g = conns.setdefault(if_t, {}).setdefault('main', [])
+    while len(g) < 2: g.append([])
+    g[0] = [{'node': post_t, 'type': 'main', 'index': 0}]
+    wiring['alert_retry'] = {'from': settle, 'load': load_t, 'plan': plan_t, 'gate': if_t, 'post': post_t,
+                             'result': result_t, 'save': save_t, 'table': OPS_ALERTS_TABLE}
 
 
 #  B-A5 (2026-10-15, build section 62): a run cannot say what it truly cost unless it happens to be the only one in flight.
@@ -574,4 +712,11 @@ ALERT_WEBHOOK_PLACEHOLDER = '__SEO_ALERT_WEBHOOK_URL__'
 OPS_ALERTS_TABLE = 'seo_ops_alerts'
 OPS_ALERTS_COLS = [('alert_key', 'string'), ('workflow', 'string'), ('node', 'string'), ('message', 'string'), ('execution_id', 'string'), ('execution_url', 'string'),
                    ('mode', 'string'), ('severity', 'string'), ('first_seen_at', 'string'), ('last_seen_at', 'string'), ('count', 'number'),
-                   ('channels', 'string'), ('delivered', 'string'), ('notes', 'string')]
+                   ('channels', 'string'), ('delivered', 'string'), ('notes', 'string'),
+                   # B-A7 (2026-10-15, build section 64): R6 recorded WHETHER an alert was delivered and nothing ever acted on it — one
+                   # attempt per channel, no second try, no escalation, and no ops alert has ever reached a human. These four columns are
+                   # what the retry sweep in every scheduled workflow reads and writes: how many times this alert has been SENT (not
+                   # sighted — `count` is sightings), when the last attempt was, the earliest moment it may be tried again, and one line
+                   # per attempt so the row carries the whole history rather than only its last line.
+                   # New columns reach an existing table only through sync_tables.py (apply_env.py runs it).
+                   ('attempts', 'number'), ('last_attempt_at', 'string'), ('next_attempt_at', 'string'), ('attempt_log', 'string')]

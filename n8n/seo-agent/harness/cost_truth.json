@@ -33,7 +33,8 @@
    "settle": "Settle Run Ledger (Growth)",
    "settle_from": [
     "Growth Report",
-    "Nothing To Do (Growth)"
+    "Nothing To Do (Growth)",
+    "Refuse Run Ledger (Growth)"
    ],
    "settle_writes": [
     "ai_usd",
@@ -61,7 +62,8 @@
    "settle": "Settle Run Ledger (Pulse)",
    "settle_from": [
     "Nothing To Do (Pulse)",
-    "Pulse Alerts"
+    "Pulse Alerts",
+    "Refuse Run Ledger (Pulse)"
    ],
    "settle_writes": [
     "ai_usd",
@@ -93,7 +95,8 @@
    "settle": "Settle Run Ledger (AI)",
    "settle_from": [
     "AI Report",
-    "Nothing To Do (AI)"
+    "Nothing To Do (AI)",
+    "Refuse Run Ledger (AI)"
    ],
    "settle_writes": [
     "ai_usd",
@@ -120,7 +123,8 @@
    },
    "settle": "Settle Run Ledger (Audit)",
    "settle_from": [
-    "Audits Started"
+    "Audits Started",
+    "Refuse Run Ledger (Audit)"
    ],
    "settle_writes": [
     "ai_usd",
@@ -152,7 +156,8 @@
    "settle": "Settle Run Ledger (BL)",
    "settle_from": [
     "BL Report",
-    "Nothing To Do (BL)"
+    "Nothing To Do (BL)",
+    "Refuse Run Ledger (BL)"
    ],
    "settle_writes": [
     "ai_usd",
@@ -183,6 +188,7 @@
     "Nothing To Write",
     "POST Cadence Note",
     "Planned Only",
+    "Refuse Run Ledger (Cadence)",
     "Send Cadence Note"
    ],
    "settle_writes": [
@@ -213,7 +219,8 @@
    "settle": "Settle Run Ledger (LB)",
    "settle_from": [
     "LB Report",
-    "Nothing To Do (LB)"
+    "Nothing To Do (LB)",
+    "Refuse Run Ledger (LB)"
    ],
    "settle_writes": [
     "ai_usd",
@@ -241,7 +248,8 @@
    "settle": "Settle Run Ledger (Watch)",
    "settle_from": [
     "Nothing To Watch",
-    "Post Watch Alert",
+    "Refuse Run Ledger (Watch)",
+    "Save Watch Ops Delivery",
     "Watched"
    ],
    "settle_writes": [
@@ -270,6 +278,7 @@
    "settle": "Settle Run Ledger (Tracker)",
    "settle_from": [
     "Nothing To Track",
+    "Refuse Run Ledger (Tracker)",
     "Tracker Report"
    ],
    "settle_writes": [
@@ -300,6 +309,7 @@
    "settle": "Settle Run Ledger (Site)",
    "settle_from": [
     "Nothing To Track (Site)",
+    "Refuse Run Ledger (Site)",
     "Site Report"
    ],
    "settle_writes": [

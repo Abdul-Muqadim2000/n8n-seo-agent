@@ -3,8 +3,24 @@
  "connections": {
   "After Run Ledger (Watch)": [
    [
-    "Any Watch Targets?"
+    "Run Allowed? (Watch)"
    ]
+  ],
+  "Alert Retry Plan (Watch)": [
+   [
+    "Any Alert Retry (Watch)?"
+   ]
+  ],
+  "Alert Retry Result (Watch)": [
+   [
+    "Save Alert Retry (Watch)"
+   ]
+  ],
+  "Any Alert Retry (Watch)?": [
+   [
+    "Post Alert Retry (Watch)"
+   ],
+   []
   ],
   "Any Ops Alerts (Watch)?": [
    [
@@ -48,7 +64,7 @@
   ],
   "DFS Balance (Watch)": [
    [
-    "Run Ledger Row (Watch)"
+    "Load Open Runs (Watch)"
    ]
   ],
   "DFS Balance End (Watch)": [
@@ -74,6 +90,11 @@
   "Ensure Findings Table (Watch)": [
    [
     "Ensure Ops Alerts Table (Watch)"
+   ]
+  ],
+  "Ensure Ops Alerts (Watch)": [
+   [
+    "Load Open Alerts (Watch)"
    ]
   ],
   "Ensure Ops Alerts Table (Watch)": [
@@ -116,6 +137,16 @@
     "Load Pages (Watch)"
    ]
   ],
+  "Load Open Alerts (Watch)": [
+   [
+    "Alert Retry Plan (Watch)"
+   ]
+  ],
+  "Load Open Runs (Watch)": [
+   [
+    "Run Ledger Row (Watch)"
+   ]
+  ],
   "Load Ops Alerts (Watch)": [
    [
     "Watch Plan"
@@ -156,7 +187,17 @@
     "DFS Balance End (Watch)"
    ]
   ],
+  "Post Alert Retry (Watch)": [
+   [
+    "Alert Retry Result (Watch)"
+   ]
+  ],
   "Post Watch Alert": [
+   [
+    "Watch Ops Delivery"
+   ]
+  ],
+  "Refuse Run Ledger (Watch)": [
    [
     "DFS Balance End (Watch)"
    ]
@@ -164,6 +205,14 @@
   "Reserve Run Ledger (Watch)": [
    [
     "After Run Ledger (Watch)"
+   ]
+  ],
+  "Run Allowed? (Watch)": [
+   [
+    "Any Watch Targets?"
+   ],
+   [
+    "Refuse Run Ledger (Watch)"
    ]
   ],
   "Run Ledger Row (Watch)": [
@@ -196,12 +245,22 @@
     "Watch Ops Channels"
    ]
   ],
+  "Save Watch Ops Delivery": [
+   [
+    "DFS Balance End (Watch)"
+   ]
+  ],
   "Send Watch Webhook?": [
    [
     "Post Watch Alert"
    ],
    [
     "Watched"
+   ]
+  ],
+  "Settle Run Ledger (Watch)": [
+   [
+    "Ensure Ops Alerts (Watch)"
    ]
   ],
   "Watch Alerts": [
@@ -227,6 +286,11 @@
   "Watch Ops Channels": [
    [
     "Send Watch Webhook?"
+   ]
+  ],
+  "Watch Ops Delivery": [
+   [
+    "Save Watch Ops Delivery"
    ]
   ],
   "Watch Plan": [
@@ -306,6 +370,8 @@
   "Watch Ops Channels",
   "Send Watch Webhook?",
   "Post Watch Alert",
+  "Watch Ops Delivery",
+  "Save Watch Ops Delivery",
   "Watched",
   "Ensure Run Ledger (Watch)",
   "Run Ledger Row (Watch)",
@@ -313,9 +379,19 @@
   "Ledger Settle (Watch)",
   "Settle Run Ledger (Watch)",
   "DFS Balance (Watch)",
+  "Load Open Runs (Watch)",
   "After Run Ledger (Watch)",
+  "Run Allowed? (Watch)",
+  "Refuse Run Ledger (Watch)",
   "DFS Balance End (Watch)",
-  "Load Run Ledger (Watch)"
+  "Load Run Ledger (Watch)",
+  "Ensure Ops Alerts (Watch)",
+  "Load Open Alerts (Watch)",
+  "Alert Retry Plan (Watch)",
+  "Any Alert Retry (Watch)?",
+  "Post Alert Retry (Watch)",
+  "Alert Retry Result (Watch)",
+  "Save Alert Retry (Watch)"
  ],
  "schedule": {
   "every": "day",

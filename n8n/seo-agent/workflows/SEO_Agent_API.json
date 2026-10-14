@@ -17,7 +17,7 @@
           "responseMode": "responseNode",
           "options": {}
         },
-        "id": "64f3da3a-fe16-4efe-84a0-186d6aa92f12",
+        "id": "c8744d19-9e28-4747-9bb0-e427d6bf97e1",
         "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 2,
@@ -37,7 +37,7 @@
         "parameters": {
           "jsCode": "// Fast validation so callers get an immediate, useful 400. The full validation happens again in the main workflow.\nconst raw = $input.first().json || {};\nconst b = (raw.body && typeof raw.body === 'object' && !Array.isArray(raw.body)) ? raw.body : {};\nconst hdr = raw.headers || {};\nconst client_ip = String(hdr['x-forwarded-for'] || hdr['x-real-ip'] || hdr['cf-connecting-ip'] || '').split(',')[0].trim();\nconst errors = [];\nconst mode = String(b.mode || 'keyword').toLowerCase();\nif (!['keyword', 'verdict', 'check', 'audit', 'discover', 'describe', 'ladder', 'track', 'published', 'checkin', 'profile', 'case_study', 'ai_visibility', 'backlinks'].includes(mode)) errors.push('mode must be one of: keyword, verdict, audit, discover, describe, ladder, track, published, checkin, profile, case_study, ai_visibility, backlinks');\nif (['keyword', 'verdict', 'check', 'ladder'].includes(mode) && !b.keyword) errors.push('keyword is required');\nif (['audit', 'describe', 'ladder', 'track', 'published', 'checkin', 'profile', 'case_study', 'ai_visibility', 'backlinks'].includes(mode) && !b.domain) errors.push('domain is required');\nif (b.crawl_pages != null && !(Number(b.crawl_pages) >= 50 && Number(b.crawl_pages) <= 1000)) errors.push('crawl_pages must be between 50 and 1000');\nif (b.crawl_js && Number(b.crawl_pages || 200) > 500) errors.push('crawl_js (JavaScript rendering) allows at most 500 crawl_pages');\nif (b.competitors != null && !Array.isArray(b.competitors) && typeof b.competitors !== 'string') errors.push('competitors must be an array of domains or a comma-separated string');\nif (b.monitors != null && (typeof b.monitors !== 'object' || Array.isArray(b.monitors))) errors.push('monitors must be an object');\nconst cs = (b.case_study && typeof b.case_study === 'object') ? b.case_study : null;\nif (mode === 'case_study' && !(cs && cs.challenge && (cs.solution || cs.what_we_did) && cs.results)) errors.push('case_study.challenge, case_study.solution and case_study.results are required');\nif (mode === 'case_study' && !b.keyword && !(cs && cs.service)) errors.push('case_study.service (or keyword) is required');\nif (mode === 'profile' && !((b.author && b.author.name) || b.business_name || b.street_address || (b.address && b.address.street) || b.phone || (b.reviewer && b.reviewer.name))) errors.push('profile needs at least author.name or the business details (business_name, address, phone)');\nif (b.video != null && !(b.video && /^https?:\\/\\/\\S+$/i.test(String(b.video.url || '')))) errors.push('video.url (https://...) is required when video is given');\nif (b.video_url != null && !/^https?:\\/\\/\\S+$/i.test(String(b.video_url))) errors.push('video_url must be a full https:// link');\nif (mode === 'track' && b.blogs_per_week != null && !(Number(b.blogs_per_week) >= 0 && Number(b.blogs_per_week) <= 3)) errors.push('blogs_per_week must be 0, 1, 2 or 3');\nif (mode === 'published' && !/^https?:\\/\\/\\S+$/i.test(String(b.published_url || b.url || ''))) errors.push('published_url (https://...) is required');\nif (mode === 'published' && !b.keyword && !b.content_request_id) errors.push('keyword or content_request_id is required');\nif (mode === 'track' && b.keywords != null && !Array.isArray(b.keywords) && typeof b.keywords !== 'string') errors.push('keywords must be an array of strings or a comma-separated string');\nif (mode === 'ladder' && b.pages_now != null && !(Number(b.pages_now) >= 1 && Number(b.pages_now) <= 3)) errors.push('pages_now must be 1, 2 or 3');\nif (mode === 'discover' && !b.business && !b.domain) errors.push('business or domain is required');\nif (!['describe', 'profile'].includes(mode) && !b.country) errors.push('country is required (name or ISO-2 code)');\nif (!b.callback_url && !b.email) errors.push('callback_url (https) or email is required so the result can be delivered');\nif (b.callback_url && !/^(https:\\/\\/\\S+|http:\\/\\/(localhost|127\\.0\\.0\\.1|host\\.docker\\.internal|n8n)(:\\d+)?\\/\\S*)$/.test(String(b.callback_url))) errors.push('callback_url must be an https URL (http only for localhost while testing)');\nconst request_id = $execution.id;\nconst eta = mode === 'audit' ? 20 : (['verdict', 'check'].includes(mode) ? 4 : mode === 'ladder' ? 8 : mode === 'track' ? 3 : mode === 'published' || mode === 'checkin' || mode === 'profile' ? 1 : mode === 'case_study' ? 15 : mode === 'ai_visibility' ? 10 : mode === 'backlinks' ? 5 : 10);\n\n// ---- B-A6 (2026-10-15, build section 63): the key a repeated POST is recognised by -------------------------------------------\n// A POST that arrives twice — a caller that timed out and retried, a proxy or a webhook delivered twice, a double submit — started a\n// SECOND run and spent a second time. That got dearer on 2026-10-15, when both daily ceilings went from $6 to $15.\n// `request_id` could not be the key for it, whatever it looks like: it is minted HERE, `$execution.id` of this front-door run, and it\n// overwrites anything the caller sent, so two deliveries of one request have two different ids by construction.\n// So the key is the request itself. In order of preference:\n//   1. what the caller calls it — `request_id` / `idempotency_key` in the body, or an `Idempotency-Key` header. A caller that wants a\n//      genuinely new run sends a new key, which is the whole point of an idempotency key.\n//   2. a fingerprint of the request: every field of the body (minus the three fields above) plus the caller's own identity, in a\n//      canonical form so key order cannot change it. Identical body from the same caller = the same request. Anything different about\n//      it — a different keyword, a different callback, a different company — is a different request and must run.\n// `force_new: true` opts out entirely and is given a key nothing can match, so the row still records that the request arrived.\nconst IDEM_WINDOW_MIN = 5;   // see the sticky note: long enough to cover any \"I never saw the answer\" retry, short enough that a\n                             // deliberate second run of the same analysis is not refused the reply it asked for.\nconst canon = (v) => {\n  if (v === null || v === undefined) return 'n';\n  if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';\n  if (typeof v === 'object') return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}';\n  return JSON.stringify(v);\n};\n// two independent 32-bit mixes of the same text, printed as 16 hex characters. No `crypto` and no `URL` (the n8n Code sandbox has\n// neither), and a collision would have to land on the same caller inside the same five minutes to matter at all.\nconst fp = (s) => {\n  let h1 = 0x811c9dc5, h2 = 0x7fffffff;\n  for (let i = 0; i < s.length; i++) {\n    const ch = s.charCodeAt(i);\n    h1 = Math.imul(h1 ^ ch, 16777619) >>> 0;\n    h2 = (Math.imul(h2 + ch, 2654435761) ^ (h2 >>> 13)) >>> 0;\n  }\n  return ('00000000' + h1.toString(16)).slice(-8) + ('00000000' + h2.toString(16)).slice(-8);\n};\nconst IDEM_OWN = ['request_id', 'idempotency_key', 'force_new'];\nconst idemGiven = String(b.request_id || b.idempotency_key || hdr['idempotency-key'] || hdr['x-idempotency-key'] || '').trim();\nconst idemBody = Object.keys(b).filter(k => !IDEM_OWN.includes(k)).sort().reduce((o, k) => { o[k] = b[k]; return o; }, {});\nconst forceNew = b.force_new === true || /^(true|1|yes)$/i.test(String(b.force_new == null ? '' : b.force_new));\nconst idem_key = forceNew ? '' : (idemGiven ? 'k:' + idemGiven.slice(0, 80) : mode + ':' + fp(canon({ by: client_ip, body: idemBody })));\n\nreturn [{ json: {\n  ok: errors.length === 0, error: errors.join('; '), request_id, mode, keyword: b.keyword || null, domain: b.domain || null, country: b.country || null,\n  delivery: b.callback_url ? 'POST to callback_url when finished' : 'email when finished', estimated_minutes: eta,\n  idem_key, idem_window_min: IDEM_WINDOW_MIN, idem_source: forceNew ? 'force_new' : (idemGiven ? 'caller' : 'request fingerprint'),\n  forward: { ...raw, body: { ...b, request_id, client_ip } }\n} }];"
         },
-        "id": "a692a249-3326-43dc-ab34-44be8d5a1a67",
+        "id": "69645b5b-1304-40f5-96b1-ba7b3f02fa70",
         "name": "Quick Validate",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -57,7 +57,7 @@
             },
             "conditions": [
               {
-                "id": "d0206a50-7b71-45f4-87cc-028999d238cc",
+                "id": "5902d857-56a4-46c2-915a-9f2f5ef270e4",
                 "leftValue": "={{ $json.ok }}",
                 "rightValue": "",
                 "operator": {
@@ -72,7 +72,7 @@
           "looseTypeValidation": true,
           "options": {}
         },
-        "id": "749ba1c4-dc61-478c-948b-27c7189f5ebe",
+        "id": "57e51811-8b8d-41f4-988b-e0c963f12577",
         "name": "Valid?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.3,
@@ -114,7 +114,7 @@
             "createIfNotExists": true
           }
         },
-        "id": "5cb81e8c-3ba7-449c-81e1-d7a04fb7c417",
+        "id": "9da51fc5-d596-49bf-a134-ebfabfe327ce",
         "name": "Ensure Request Log",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -130,7 +130,7 @@
         "parameters": {
           "jsCode": "// B-A6: one seo_cache row per request that arrived, written BEFORE the 202 so a repeat can see it.\n// Exactly the seo_cache columns, in the table's own order: the insert node auto-maps every field of this item.\nconst q = $('Quick Validate').first().json || {};\nconst now = new Date().toISOString();\n// `force_new` (and only it) leaves idem_key empty. The row is still written — a request that arrived is worth recording — but under a\n// key nothing else can ever carry, so it can neither be matched nor match anything.\nconst key = 'idem:' + (q.idem_key || ('none:' + q.request_id));\nreturn [{ json: {\n  key,\n  kind: 'idem',\n  site_id: String(q.domain || ''),\n  value: JSON.stringify({ request_id: String(q.request_id || ''), mode: q.mode || '', domain: q.domain || null,\n                          keyword: q.keyword || null, country: q.country || null, source: q.idem_source || '', at: now }).slice(0, 2000),\n  updated_at: now,\n} }];"
         },
-        "id": "5de4e80b-16cc-4b01-8193-3d4598817c6c",
+        "id": "d14af1d8-130b-4e41-9421-ccd162b828e3",
         "name": "Request Row",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -209,7 +209,7 @@
           },
           "options": {}
         },
-        "id": "02a0ac0f-e5b3-4955-8038-a801baffbe79",
+        "id": "3c1dc7b9-ec44-4e45-b112-588908b5d98c",
         "name": "Record Request",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -247,7 +247,7 @@
           },
           "options": {}
         },
-        "id": "303ddc8c-92df-4582-800b-a3ea43f367aa",
+        "id": "a6f12aed-377a-4f6f-8119-82ba2c12cde1",
         "name": "Load Requests",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -263,7 +263,7 @@
         "parameters": {
           "jsCode": "// B-A6: is this the first delivery of this request, or a repeat of one already running?\n// Insert-then-read-back, lowest id wins (the idiom D1 put on the run ledger, for the same concurrency reason). Everything below is\n// written to FAIL OPEN: when it cannot be certain this is a repeat, it starts the run.\nconst q = $('Quick Validate').first().json || {};\nlet mine = {}; try { mine = $('Record Request').first().json || {}; } catch (e) {}\nlet rows = []; try { rows = $('Load Requests').all().map(i => i.json).filter(r => r && r.key && !r.error); } catch (e) {}\nconst myKey = String(($('Request Row').first().json || {}).key || '');\nconst myId = Number(mine.id);\n\n// every row under my own key that was written before mine. The Data Table read is already bounded to the window\n// (updated_at >= now - idem_window_min), so anything that comes back is recent enough to be a retry of this request.\nconst before = (myId > 0 && myKey && !/^idem:none:/.test(myKey))\n  ? rows.filter(r => String(r.key) === myKey && Number(r.id) > 0 && Number(r.id) < myId).sort((a, b) => Number(a.id) - Number(b.id))\n  : [];\nlet first = null;\nfor (const r of before) {\n  let v = null;\n  try { v = JSON.parse(String(r.value || '')); } catch (e) { v = null; }\n  // a row whose stored request id cannot be read is no use: the whole point is to answer with the FIRST run's id, and inventing one\n  // would be worse than starting a second run.\n  if (v && v.request_id) { first = { row: r, at: String(r.updated_at || ''), request_id: String(v.request_id) }; break; }\n}\n\nconst win = Number(q.idem_window_min) || 5;\nconst out = { ...q, duplicate: false, first_seen_at: null, note: '', idem_rows_before: before.length };\nif (first) {\n  out.duplicate = true;\n  out.first_seen_at = first.at || null;\n  out.request_id = first.request_id;   // the caller gets the id of the run that is already doing this work\n  out.note = 'This request was already received' + (first.at ? ' at ' + first.at : '')\n    + ' and is being worked on, so it was not started a second time. `request_id` is that first run\\'s id, and its result will be '\n    + 'delivered as agreed. Send a different `request_id` (or `force_new: true`) to ask for a genuinely new run of the same analysis.';\n} else {\n  out.note = 'Accepted. A repeat of this exact request within ' + win + ' minutes returns this same run instead of starting another.';\n}\nreturn [{ json: out }];"
         },
-        "id": "234efd8c-4d68-443e-af3f-20dd0d669301",
+        "id": "c10d6ac4-22d4-424f-8639-6136a7a6691e",
         "name": "First Or Repeat",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -280,7 +280,7 @@
             "responseCode": 202
           }
         },
-        "id": "225a7280-f81b-4b52-8582-1b1f6fd45615",
+        "id": "b7b0a8d9-6eb4-43f2-be76-065728437894",
         "name": "Respond Accepted",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -300,7 +300,7 @@
             },
             "conditions": [
               {
-                "id": "acded8a9-0801-4466-81d5-7e6fe514fbfc",
+                "id": "966a206a-4a49-4b9e-943a-143a98f4d9ee",
                 "leftValue": "={{ $json.duplicate }}",
                 "rightValue": "",
                 "operator": {
@@ -315,7 +315,7 @@
           "looseTypeValidation": true,
           "options": {}
         },
-        "id": "4d7fbc6e-1987-4be5-b4b3-5dc4a4fac282",
+        "id": "54e87649-0b05-4593-bce8-a0d271cbb983",
         "name": "Start Needed?",
         "type": "n8n-nodes-base.if",
         "typeVersion": 2.3,
@@ -328,7 +328,7 @@
         "parameters": {
           "jsCode": "return [{ json: $input.first().json.forward }];"
         },
-        "id": "d7c4d162-de3e-43ab-bfc6-5e97a02d54f5",
+        "id": "7f6122f9-e202-4ce8-b3a4-2157895a77a4",
         "name": "Prepare Payload",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -350,7 +350,7 @@
             "waitForSubWorkflow": false
           }
         },
-        "id": "ac23f5c5-0e07-442d-a807-31d45b64801c",
+        "id": "973d12d9-4a43-4508-b748-0c2cf9e454e0",
         "name": "Start SEO Run",
         "type": "n8n-nodes-base.executeWorkflow",
         "typeVersion": 1.2,
@@ -385,7 +385,7 @@
           },
           "options": {}
         },
-        "id": "22e5157a-6e18-4946-9834-cd3e56bd4ece",
+        "id": "53a57fc8-9d7f-472a-a4be-2721adccec03",
         "name": "Forget Old Requests",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -405,7 +405,7 @@
             "responseCode": 400
           }
         },
-        "id": "3d0701fb-45fc-4190-885e-db6c0ea5f272",
+        "id": "be1b8843-131a-480a-bf04-56e8c87dc2dc",
         "name": "Respond Bad Request",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -421,7 +421,7 @@
           "width": 700,
           "color": 4
         },
-        "id": "758cf81a-f2a0-41e7-8569-83617ce35feb",
+        "id": "f750dde2-bdc7-48da-851a-a569df552dd7",
         "name": "Note",
         "type": "n8n-nodes-base.stickyNote",
         "typeVersion": 1,
