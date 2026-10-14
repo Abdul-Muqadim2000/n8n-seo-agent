@@ -1008,6 +1008,25 @@ taken at **reserve** time, so a run can never reconcile its own spend — the au
 a reading. **Page Watch** keeps no ledger row at all (it is not one of the nine workflows `ledger_mainline` wires); it spends
 nothing, but it is invisible to the guard and to the reconciliation.
 
+### 3.14 Benchmark programme findings (B items, 2026-10-15)
+
+Evidence: `../system-review-2026-10-14/BENCHMARKS_2026-10-14.md`, written against the leaders' own documentation with every page opened.
+A1-A4 were built in the same pass (build section 61, harness S71). What follows is what is left.
+
+| ID | Title | Impact | Where | Fix | Status |
+|---|---|---|---|---|---|
+| B-A8 | **The streaming nodes' token usage is thrown away, not absent.** Anthropic reports usage on `message_delta` (cumulative) and `@langchain/anthropic` carries it; n8n's tracing drops it — so three Opus nodes are priced from characters and **32% of the Claude figure is an estimate**. CLAUDE.md recorded the opposite as fact until today | **High** (it is the last large estimate) | the Anthropic nodes' token parsing; `v5/code/_cost_cal.js` | read the final `message_delta.usage` (a thin HTTP call, or a patched tokens parser) and settle measured tokens; keep the estimate only as the fallback | open |
+| B-A7 | **An undelivered alert is never retried or escalated** — one attempt per channel, no second try, no escalation. No ops alert has ever reached a human | **High** | the alert delivery path, `seo_ops_alerts` | a row still `pending` / `failed` after N minutes is re-attempted by the next run of any workflow, severity rises after K attempts, and the row records every attempt | open |
+| B-A6 | **No idempotency on the front door**: a repeated POST (an app timeout-and-retry, or a webhook delivered twice) starts a second run and spends again | Medium | the API front door; `seo_run_ledger` | dedupe on the `request_id` the API already carries: a repeat inside the window returns the first run's id instead of spending | open |
+| B-A5 | **Only the day is reconciled, not the run**: a run cannot say what it truly cost unless it is the only one in flight | Medium | `ledger_mainline`'s settle side | a second free `appendix/user_data` reading on settle, with the delta attributed to the run only when no other ledger row was open | open |
+| B-A9 | **The nine schedules sit outside `Rate Limit`**, so a monitor can never be refused for concurrency however much is already running | Medium | the monitor workflows' guard path | put the scheduled runs through the same gate the API runs use | open |
+| B-B1 | **Two estimates disagree**: `app/shared/src/constants.ts` / `estimate.ts` still carry the 2026-10-02 table, 1.3x-2.5x high — which is why real runs were refused at "$5.74 of $6". The engine now publishes a calibrated `run_cost_estimate_usd` | Medium | the app's estimate table | the app shows the engine's figure instead of its own | open |
+| B-B4 | **No published reliability statement** — what we commit to, measured how, with the named failure modes. Needs D25a first | Low | docs + the app | after D25a: state it, measure it, show it | open (needs D25a) |
+
+**Owner items this pass confirmed:** **D25a** is the ceiling for this area — without an always-on host, criterion 3.8 ("delivery rate >= 99%, measured") cannot be scored above 5 whatever we build. The Anthropic cost export (B-B3) is still wanted. `SEO_ALERT_WEBHOOK_URL` (B-B2) **is now set** — the benchmark agent worked in a worktree whose `.env` lacked it.
+
+**Deliberately refused:** a credit or unit currency of our own. Semrush and Ahrefs meter in units because they resell their own index at a margin; we resell DataForSEO and Anthropic at cost, and a synthetic currency would hide the one number a customer can check. **Where we judged the leaders wrong:** refusing a report beats Semrush-style partial delivery, and on reliability neither leader is a benchmark at all — `status.ahrefs.com` returns 404 and Semrush publishes no status page, so the comparison used is PagerDuty.
+
 ### 3.6 Cross-check: nothing from the inputs is lost
 
 | SCORECARD fix | Register items | | SCORECARD fix | Register items |
