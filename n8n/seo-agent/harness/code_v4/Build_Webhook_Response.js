@@ -29,6 +29,8 @@ return [{
     execution_id: $execution.id,
     verdict: d.verdict,
     score: d.verdict_score,
+    score_withheld: !!d.score_withheld,
+    evidence: d.verdict_evidence || null,
     reasons: d.verdict_reasons || [],
     risks: d.verdict_risks || [],
     recommended_page: d.recommended_page,

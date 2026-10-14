@@ -9515,5 +9515,256 @@ await guard('R17 R28 R29 ledger order, money and secrets', async () => {
 });
 
 
+// ===================================================================================
+// S66 R18 / R19 / R24 (2026-10-14, system review FIX_PLAN.md §3.12; evidence docs/system-review-2026-10-14/RESULTS.md §2.3, §2.4):
+// an answer that arrived with HTTP 200 and was still a failure. In execution 549 `SERP Top 10` and `Facts SERP` both returned
+// DataForSEO `status_code 40101 "Internal SE Server Error."` inside an HTTP 200, were billed, ran once — and the run still scored
+// the keyword "winnable 68" and wrote a page. In execution 550, 31 of 45 URL inspections failed with Google's "Internal error
+// encountered.", were never re-sent, and the diff reported the 14 that answered as an improvement. And one audit said three
+// different things about schema. This scenario holds the three fixes: one retry rule in one kit, evidence marked unavailable and
+// refused as a score, every indexing count carrying its sample, a diff that will not compare unlike samples, schema said once.
+// ===================================================================================
+await guard('r18-r19-r24-failures-inside-http-200', async () => {
+  const SN = 'S66 R18 R19 R24 — a task error inside HTTP 200 is retried once and then marked unavailable, no verdict score is emitted on it, every indexing finding says how many pages Google answered for, a shrunken sample is not printed as a delta, and a technical audit says one thing about schema';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 600))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const T66 = require('./fixtures_tracking');
+  const TC66 = require('./table_cols.json');
+  // DataForSEO's answer in execution 549: HTTP 200, the task dead, the call billed. 40101 passed the 50000-only gate of section 25.
+  const taskErr = (code, msg) => ({ version: '0.1.20261014', status_code: 20000, status_message: 'Ok.', cost: 0.002, tasks_count: 1, tasks_error: 1,
+    tasks: [{ id: 'x', status_code: code, status_message: msg, time: '0 sec.', cost: 0.002, result: null }] });
+  const SE_ERR = taskErr(40101, 'Internal SE Server Error.');
+
+  // ---------- 1. one rule, in the gate and in the kit ----------
+  const CASES = [
+    ['a good answer is not retried', F.serpTop, false],
+    ['40101 "Internal SE Server Error." inside HTTP 200 (exec 549: billed, never retried)', SE_ERR, true],
+    ['the 50000 envelope the old gate did catch', { version: '0.1.2026', status_code: 50000, status_message: 'Internal Server Error.', tasks: null }, true],
+    ['an HTTP-level failure the node passed through', { error: { message: 'The connection timed out' } }, true],
+    ['a task that answered 20000 with no result', { status_code: 20000, tasks: [{ status_code: 20000, status_message: 'Ok.', result: null }] }, true],
+    ['a wrong request is NOT asked again (nothing can change)', taskErr(40501, 'Invalid Field: target.'), false],
+    ['an exhausted quota is NOT asked again', taskErr(40202, 'Daily quota exceeded.'), false],
+  ];
+  const gate66 = await run('SERP Failed?', CASES.map(c => c[1]));
+  check('R18: the SERP gate fires on ANY task error inside an HTTP 200 — 40101, the one that cost execution 549 its whole SERP, included — and not on a wrong request or an exhausted quota',
+    eq(gate66.map(i => i.json.retry), CASES.map(c => c[2])), JSON.stringify(CASES.map((c, i) => [c[0], gate66[i].json.retry])));
+  const kit66 = await run('_dfs_retry', CASES.map(c => ({ answer: c[1] })));
+  check('R18: the gate expression and the shared kit (v5/code/_dfs_retry.js) decide the same thing about every one of them — one rule, not two',
+    eq(kit66.map(i => !i.json.ok && i.json.retryable), CASES.map(c => c[2])), JSON.stringify(kit66.map((i, k) => [CASES[k][0], i.json.ok, i.json.retryable, i.json.why])));
+  check('R18: the reason a report prints is the provider\'s own message, not our paraphrase of it',
+    kit66[1].json.why === 'Internal SE Server Error.' && kit66[2].json.why === 'Internal Server Error.' && kit66[5].json.why === 'Invalid Field: target.',
+    JSON.stringify(kit66.map(i => i.json.why)));
+  const gateF66 = await run('Facts SERP Failed?', [SE_ERR, V.factsSerp]);
+  const gateK66 = await run('Keyword Data Failed?', [SE_ERR, F.keywordOverview]);
+  check('R18: the facts search and the keyword data go through the same gate — the three paid DataForSEO calls of one keyword run, one rule',
+    eq(gateF66.map(i => i.json.retry), [true, false]) && eq(gateK66.map(i => i.json.retry), [true, false]),
+    JSON.stringify([gateF66.map(i => i.json.retry), gateK66.map(i => i.json.retry)]));
+  check('R18: a call that failed and failed again is one asked, none answered — "unavailable", not "none"',
+    kit66[1].json.stats.asked === 1 && kit66[1].json.stats.answered === 0 && kit66[1].json.evidence.unavailable === true,
+    JSON.stringify([kit66[1].json.stats, kit66[1].json.evidence]));
+  const answered66 = (await run('_dfs_retry', [{ answer: SE_ERR, retry: F.serpTop, unit: 'search' }]))[0].json;
+  check('R18: when the second attempt answers, the evidence is "read" again: one asked, one answered, one retried, one answered on the retry',
+    answered66.evidence.unavailable === false && answered66.stats.answered === 1 && answered66.stats.retried === 1 && answered66.stats.retry_answered === 1,
+    JSON.stringify(answered66.evidence));
+
+  // ---------- 2. the half that matters more: nothing is scored on evidence nobody could read ----------
+  reset();
+  mock('Start Form', F.forms.startVerdict);
+  const n66 = await run('Normalize Input', F.forms.pageVerdict); mock('Route Mode', n66);
+  await run('Prepare Keyword Run', n66); mock('Fetch Sitemaps', []); await run('Collect Site URLs', []);
+  mock('SERP Top 10', SE_ERR); mock('SERP Top 10 (Retry)', SE_ERR);   // execution 549: both attempts, the same 40101
+  await run('Pick Top 6', store['SERP Top 10 (Retry)']);
+  mock('Read Competitor Pages', [{ error: { message: 'Invalid URL' } }]); delete store['Retry Blocked Pages']; delete store['Blocked Page Items'];
+  await run('Find Blocked Pages', store['Read Competitor Pages']);
+  const a66 = (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json;
+  check('R18: after two failed attempts the live results are "unavailable" with the provider\'s own message, the attempts are counted, and the AI Overview stays unknown (null), never "not shown"',
+    a66.serp_features.unavailable === true && a66.serp_features.error === 'Internal SE Server Error.' && a66.serp_features.attempts === 2
+    && a66.serp_features.retried === true && a66.serp_features.ai_overview.present === null
+    && a66.serp_evidence.unavailable === true && a66.serp_evidence.checked === 0 && a66.serp_evidence.retried === 1,
+    JSON.stringify({ f: a66.serp_features, e: a66.serp_evidence }));
+  check('R18: the digest the analyst reads says the search failed twice and forbids any assumption about the results page',
+    /failed, twice: the search was sent again once and failed again/.test(a66.serp_digest) && /do not state or assume/.test(a66.serp_digest), a66.serp_digest.slice(0, 300));
+  mock('Facts SERP', SE_ERR); mock('Facts SERP (Retry)', SE_ERR);
+  const cf66 = (await run('Collect Facts', store['Facts SERP (Retry)']))[0].json;
+  check('R18: "no statistics were found" would be a lie when nothing was searched — the facts search carries its own evidence instead',
+    cf66.facts_found === 0 && cf66.facts_evidence.unavailable === true && cf66.facts_evidence.checked === 0, JSON.stringify(cf66.facts_evidence));
+  mock('Competitor Analyzer', { output: F.competitorAnalysis }); await run('Parse Analysis', store['Competitor Analyzer']);
+  mock('Keyword Data', SE_ERR); mock('Keyword Data (Retry)', SE_ERR);
+  const mk66 = (await run('Merge Keyword Data', store['Keyword Data (Retry)']))[0].json;
+  check('R18: search data that could not be read is not "no demand" — the note says what happened, and the evidence travels with it',
+    mk66.keyword_data_evidence.unavailable === true && /could not be read/.test(mk66.keyword_data.note) && /not "no demand"/.test(mk66.keyword_data.note)
+    && /sent again once/.test(mk66.keyword_data.note), JSON.stringify([mk66.keyword_data.note, mk66.keyword_data_evidence]));
+  mock('Verdict Agent', { output: F.verdictGo });
+  const pv66 = (await run('Parse Verdict', store['Verdict Agent']))[0].json;
+  check('R18: the model still answered "GO_WITH_CHANGES 66" and the run refuses to pass it on — NOT_CHECKED, no score, no expected visits, no time to rank (execution 549 shipped "winnable 68" on exactly this evidence)',
+    F.verdictGo.score === 66 && pv66.verdict === 'NOT_CHECKED' && pv66.verdict_score === null && pv66.expected_visits_top3 === null
+    && pv66.time_to_rank_months === null && pv66.score_withheld === true && pv66.verdict_evidence.serp === 'unavailable'
+    && pv66.verdict_evidence.keyword_data === 'unavailable',
+    JSON.stringify({ verdict: pv66.verdict, score: pv66.verdict_score, visits: pv66.expected_visits_top3, months: pv66.time_to_rank_months, ev: pv66.verdict_evidence }));
+  check('R18: and the first reason says why, in the owner\'s words, with what to do about it',
+    /^No score is given for this keyword: the live Google results could not be read \(Internal SE Server Error\.\)\./.test(pv66.verdict_reasons[0])
+    && /sent again once and failed again/.test(pv66.verdict_reasons[0]) && /Run the check again/.test(pv66.verdict_reasons[0])
+    && pv66.verdict_reasons.length === F.verdictGo.reasons.length + 1, JSON.stringify(pv66.verdict_reasons));
+  const wf66 = await run('Build Word File', [{ json: { ...pv66, include_seo_report: true } }]); const doc66 = decode(wf66);
+  const vsec66 = (doc66.match(/Keyword Verdict[\s\S]{0,1400}/) || [''])[0];
+  check('R18: the keyword report prints "NOT CHECKED" and "not scored", and no number anywhere in the verdict block',
+    /NOT CHECKED — the live Google results could not be read/.test(vsec66) && /not scored — the live Google results could not be read/.test(vsec66)
+    && !/\/100/.test(vsec66) && /not estimated/.test(vsec66), vsec66.slice(0, 600));
+  scanHtml('keyword report, verdict withheld', doc66);
+  const wr66 = (await run('Build Webhook Response', [{ json: pv66 }]))[0].json;
+  check('R18: the callback the app stores carries the same refusal — no score, the evidence beside it',
+    wr66.score === null && wr66.score_withheld === true && wr66.evidence && wr66.evidence.serp === 'unavailable',
+    JSON.stringify({ score: wr66.score, withheld: wr66.score_withheld, ev: wr66.evidence }));
+  // the second attempt answers: its data is used everywhere and the verdict is scored again
+  mock('SERP Top 10 (Retry)', F.serpTop);
+  const t66 = await run('Pick Top 6', store['SERP Top 10 (Retry)']);
+  mock('Read Competitor Pages', t66.map((t, i) => ({ page_text: F.compPage(i, 300) })));
+  await run('Find Blocked Pages', store['Read Competitor Pages']);
+  const a66b = (await run('Analyze Competitor Pages', store['Read Competitor Pages']))[0].json;
+  check('R18: when the second attempt answers, the run uses its data and says the search was read — one asked, one answered, one retried',
+    !a66b.serp_features.unavailable && a66b.serp_features.attempts === 2 && a66b.serp_evidence.checked === 1 && a66b.serp_evidence.retry_answered === 1
+    && a66b.competitors_read > 0, JSON.stringify({ f: { unavailable: a66b.serp_features.unavailable, attempts: a66b.serp_features.attempts }, e: a66b.serp_evidence }));
+  mock('Collect Facts', [{ json: { ...a66b, facts: [], facts_found: 0 } }]);
+  mock('Competitor Analyzer', { output: F.competitorAnalysis }); await run('Parse Analysis', store['Competitor Analyzer']);
+  mock('Keyword Data', F.keywordOverview); delete store['Keyword Data (Retry)'];
+  await run('Merge Keyword Data', store['Keyword Data']);
+  mock('Verdict Agent', { output: F.verdictGo });
+  const pv66b = (await run('Parse Verdict', store['Verdict Agent']))[0].json;
+  check('R18: with the results page read, the verdict and its score are emitted exactly as before — the refusal is about missing evidence, not about verdicts',
+    pv66b.verdict === 'GO_WITH_CHANGES' && pv66b.verdict_score === 66 && pv66b.score_withheld === false && pv66b.verdict_evidence.serp === 'read'
+    && pv66b.verdict_reasons.length === F.verdictGo.reasons.length, JSON.stringify({ v: pv66b.verdict, s: pv66b.verdict_score, ev: pv66b.verdict_evidence }));
+
+  // ---------- 3. R19 + R24: the technical audit — inspections asked again, the sample said out loud, schema said once ----------
+  reset();
+  mock('Start Form', F.forms.startAudit);
+  const na66 = await run('Normalize Input', F.forms.pageAuditTech); mock('Route Mode', na66);
+  await run('Save Task ID', F.crawlTaskPost); await run('Check Crawl', F.summaryDone, { runIndex: 2 });
+  // R24: the crawler flags structured-data errors on half the crawled pages — the only thing a technical audit knows about schema
+  const pages66 = JSON.parse(JSON.stringify(F.crawledPagesRes));
+  let flagged66 = 0;
+  pages66.tasks[0].result[0].items.forEach((p, i) => { if (i % 2 === 0 && p.checks) { p.checks.has_micromarkup_errors = true; flagged66++; } });
+  mock('Get Crawled Pages', pages66);
+  await run('Crawl Extra Requests', store['Get Crawled Pages']); mock('Run Crawl Extras', F.extrasRes); await run('Collect Crawl Extras', store['Run Crawl Extras']);
+  await run('Build Probes'); await run('Content Probes', store['Collect Crawl Extras']);
+  const all66 = F.probeResults('apex');
+  mock('Run Probes', [all66[0], all66[2], all66[3], all66[4]]);
+  mock('Run Content Probes', [all66[0], all66[1], all66[5], all66[6], all66[7], all66[8], ...all66.slice(9)]);
+  const ap66 = await run('Analyze Probes', store['Run Content Probes']);
+  await runGscAudit(ap66, 'ok');
+  const reqs66 = store['GSC Audit Requests'].map(i => i.json);
+  const inspectIdx = reqs66.map((q, i) => q.kind === 'inspect' ? i : -1).filter(i => i >= 0);
+  // Google's answers (exec 550): an internal error for most of the inspections, a permission error for one, and real answers for two
+  const GINT = { error: { code: 500, message: 'Internal error encountered.', status: 'INTERNAL' } };
+  const GDENY = { error: { code: 403, message: 'User does not have sufficient permission for site.', status: 'PERMISSION_DENIED' } };
+  const inspected = (url, indexed) => ({ inspectionResult: { indexStatusResult: { verdict: indexed ? 'PASS' : 'NEUTRAL',
+    coverageState: indexed ? 'Submitted and indexed' : 'Crawled - currently not indexed', robotsTxtState: 'ALLOWED', indexingState: 'INDEXING_ALLOWED',
+    lastCrawlTime: '2026-09-27T10:11:12Z', pageFetchState: indexed ? 'SUCCESSFUL' : 'PAGE_FETCH_STATE_UNSPECIFIED', googleCanonical: url, userCanonical: url, crawledAs: 'MOBILE' } } });
+  const denyAt = inspectIdx[inspectIdx.length - 1];
+  const answerAtOnce = new Set(inspectIdx.slice(0, 2));
+  const goodAnswers66 = reqs66.map((q, i) => q.kind === 'inspect' ? inspected(q.inspect_url, inspectIdx.indexOf(i) % 3 !== 1) : T66.gscAuditResponse(q));
+  mock('GSC Audit Query', goodAnswers66);
+  const skip66 = await run('Inspect Retry Plan', store['GSC Audit Query']);
+  check('R19: with every answer good, the gate skips — the second attempt costs nothing when Google answered',
+    skip66.length === 1 && skip66[0].json.skip === true && /every Search Console call answered/.test(skip66[0].json.reason), JSON.stringify(skip66[0].json));
+  const answers66 = reqs66.map((q, i) => q.kind !== 'inspect' ? T66.gscAuditResponse(q)
+    : i === denyAt ? GDENY : (answerAtOnce.has(i) ? goodAnswers66[i] : GINT));
+  mock('GSC Audit Query', answers66);
+  const plan66 = await run('Inspect Retry Plan', store['GSC Audit Query']);
+  const failedFirst66 = inspectIdx.length - answerAtOnce.size;
+  check('R19: every inspection Google failed with "Internal error encountered." is asked again once — and the one it refused for permissions is not, because asking again cannot change it',
+    plan66.length === failedFirst66 - 1 && plan66.every(q => q.json.kind === 'inspect' && q.json.url && q.json.body && Number.isFinite(q.json.retry_of))
+    && !plan66.some(q => q.json.retry_of === denyAt) && plan66[0].json.failed_total === failedFirst66
+    && /Internal error encountered/.test(plan66[0].json.retry_reason),
+    JSON.stringify({ asked: inspectIdx.length, failed: failedFirst66, retried: plan66.length, reason: plan66[0].json.retry_reason }));
+  const retryOk66 = Math.ceil(plan66.length / 2);   // half of the second attempts answer, the rest fail again
+  mock('GSC Audit Query (Retry)', plan66.map((q, k) => k < retryOk66 ? inspected(q.json.inspect_url, k % 3 !== 1) : GINT));
+  const gf66 = await run('GSC Audit Findings', store['GSC Sitemaps (Audit)']);
+  const sc66 = gf66[0].json.search_console; const is66 = sc66.inspection_stats;
+  check('R19: the second attempt\'s answers take the failed ones\' place, and the run counts what it actually saw — asked, checked, failed, retried, answered on the retry',
+    is66.asked === inspectIdx.length && is66.checked === answerAtOnce.size + retryOk66 && is66.failed === inspectIdx.length - answerAtOnce.size - retryOk66
+    && is66.retried === plan66.length && is66.retry_answered === retryOk66 && sc66.inspections.filter(i => !i.error).length === is66.checked,
+    JSON.stringify(is66));
+  check('R19: and it says so in one sentence, naming Google\'s reason — "only the ones that answered are counted below"',
+    /could not be checked \(sent again once, \d+ answered\)/.test(is66.note) && /Internal error encountered/.test(is66.note)
+    && /Only the \d+ that answered are counted below/.test(is66.note), is66.note);
+  const idxF66 = gf66[0].json.extra_findings.filter(f => f.checked != null);
+  check('R19: every finding drawn from the inspections carries the sample it was measured on — as a number of its own and in its evidence',
+    idxF66.length > 0 && idxF66.every(f => f.checked === is66.checked && f.checked_of === is66.asked)
+    && idxF66.every(f => new RegExp('measured on the ' + is66.checked + ' of ' + is66.asked + ' page\\(s\\) Google answered for').test(f.evidence))
+    && idxF66.every(f => /could not be checked even after being asked again/.test(f.evidence)),
+    JSON.stringify(idxF66.map(f => [f.title, f.checked, f.checked_of, String(f.evidence).slice(-140)])));
+  const note66 = gf66[0].json.extra_findings.find(f => /could not answer for part of the key pages/i.test(f.title));
+  check('R19: the report carries an unscored note that the rest are unknown, not fine — nobody can read the indexing picture as the whole site again',
+    !!note66 && note66.severity === 'Info' && note66.scoring === false && note66.affected_count === is66.failed && /unknown, not fine/.test(note66.why),
+    JSON.stringify(note66 && { sev: note66.severity, scoring: note66.scoring, n: note66.affected_count }));
+  const bsi66 = await run('Build Site Issues', gf66); const au66 = bsi66[0].json.site_audit;
+  check('R24: a technical audit emits NO Schema finding (it has only the crawler\'s yes/no flag), and Schema is in neither the weights nor the category scores — the three statements can no longer differ',
+    flagged66 >= 5 && !au66.findings.some(f => f.category === 'Schema') && !au66.weights.Schema && !au66.category_scores.Schema
+    && !au66.findings.some(f => /structured data with errors/i.test(f.title)),
+    JSON.stringify({ flagged: flagged66, schema: au66.findings.filter(f => f.category === 'Schema').map(f => f.title), weights: Object.keys(au66.weights) }));
+  check('R24: it says so once, in "not assessed", with the number the crawler did see — nothing is hidden, it is simply not a finding here',
+    au66.not_assessed.some(x => /^Structured data \(schema\)/.test(x) && /flagged \d+ of \d+ crawled pages/.test(x)
+      && /not scored, not listed as a finding and not compared here/.test(x) && /the full SEO report checks it/.test(x)),
+    JSON.stringify(au66.not_assessed.filter(x => /schema/i.test(x))));
+  check('R24: and every finding that IS listed sits in a category this audit type weights — the guard that keeps the three statements together',
+    au66.findings.filter(f => f.scoring !== false && f.severity !== 'Info').every(f => !!au66.weights[f.category]),
+    JSON.stringify([...new Set(au66.findings.filter(f => f.scoring !== false && f.severity !== 'Info').map(f => f.category))]));
+  const chk66 = store['Check Crawl'][0].json;
+  mock('Check Crawl', [{ json: { ...chk66, audit_level: 'full' } }]);
+  const full66 = (await run('Build Site Issues', gf66))[0].json.site_audit;
+  mock('Check Crawl', [{ json: chk66 }]);
+  check('R24: the other half of the decision — the full SEO report, which reads the HTML and checks every schema URL, DOES assess schema: the same flag is a weighted finding there, scored and compared',
+    full66.weights.Schema === 12 && full66.category_scores.Schema != null
+    && full66.findings.some(f => f.category === 'Schema' && /structured data with errors/i.test(f.title))
+    && !full66.not_assessed.some(x => /^Structured data \(schema\)/.test(x)),
+    JSON.stringify({ weight: full66.weights.Schema, score: full66.category_scores.Schema, findings: full66.findings.filter(f => f.category === 'Schema').map(f => f.title) }));
+  const adoc66 = decode(await run('Build Audit Report', bsi66));
+  check('R24: the delivered technical audit names no structured-data finding anywhere, and its "not assessed" line carries the flag count',
+    !/Structured data with errors/.test(adoc66) && /Structured data \(schema\)/.test(adoc66) && /flagged \d+ of \d+ crawled pages/.test(adoc66),
+    (adoc66.match(/Structured data[\s\S]{0,260}/) || [''])[0].slice(0, 260));
+  scanHtml('technical audit, schema said once', adoc66);
+
+  // ---------- 4. R19: a count measured on a different sample is not a change ----------
+  const D66 = 'northwind-erp.com'; const SITE66 = 'site_northwind-erp-com';
+  const WT66 = { 'Crawlability & Indexing': 22, 'On-Page': 18, 'Content': 13, 'Performance': 15, 'Security': 10, 'Images': 7, 'Technical': 5, 'AI Search Readiness': 10 };
+  const TITLE66 = 'A large share of important pages is not indexed by Google';
+  const diff66 = async (now, before) => {
+    reset();
+    mock('Check Crawl', [{ json: { domain: D66 } }]);
+    mock('Get Crawled Pages', [{ json: { tasks: [{ result: [{ items: [] }] }] } }]);
+    mock('Load Audit History', [{ json: { id: 1, site_id: SITE66, audit_id: 'aud_prev', audited_at: new Date(Date.now() - 30 * 864e5).toISOString(), report_type: 'site_audit', health_score: 80, grade: 'B', findings: 20 } }]);
+    mock('Load Audit Findings', [{ json: { id: 1, site_id: SITE66, audit_id: 'aud_prev', category: 'Crawlability & Indexing', title: TITLE66, severity: 'High',
+      finding_key: 'Crawlability & Indexing|a large share of important pages is not indexed by google', affected_count: before.affected, checked: before.checked } }]);
+    mock('Build Site Issues', [{ json: { domain: D66, site_audit: { audit_level: 'site_audit', health_score: 83, grade: 'B', weights: WT66, issue_counts: {}, findings: [
+      { category: 'Crawlability & Indexing', title: TITLE66, severity: 'High', affected_count: now.affected, affected_pct: 29, checked: now.checked }] } } }]);
+    return (await run('Audit Diff', [{ json: {} }]))[0].json.site_audit.audit_diff;
+  };
+  const shrunk66 = await diff66({ affected: 4, checked: 14 }, { affected: 15, checked: 25 });
+  check('R19: execution 550\'s own numbers — 4 affected of 14 pages checked against 15 of 25 — are NOT printed as an improvement: the finding says the sample moved and carries both sample sizes',
+    shrunk66.open[0].sample_changed === true && shrunk66.open[0].affected_before === null && shrunk66.open[0].affected === 4
+    && shrunk66.open[0].checked === 14 && shrunk66.open[0].checked_before === 25 && /4 now against 15 before/.test(shrunk66.open[0].sample_note)
+    && /different samples \(25 then, 14 now\)/.test(shrunk66.open[0].sample_note) && shrunk66.sample_moved === 1
+    && /not compared as numbers/.test(shrunk66.summary), JSON.stringify(shrunk66.open[0]));
+  const same66 = await diff66({ affected: 4, checked: 24 }, { affected: 15, checked: 25 });
+  check('R19: two counts measured on the same sample are compared exactly as before — the refusal is about unlike samples, not about progress',
+    same66.open[0].sample_changed === false && same66.open[0].affected_before === 15 && same66.open[0].affected === 4
+    && !same66.sample_moved && !/not compared as numbers/.test(same66.summary), JSON.stringify(same66.open[0]));
+  const unknown66 = await diff66({ affected: 4, checked: 14 }, { affected: 15, checked: 0 });
+  check('R19: an older audit that never stored its sample is not compared either — "how many pages each number was measured on was not recorded"',
+    unknown66.open[0].sample_changed === true && unknown66.open[0].affected_before === null && /was not recorded/.test(unknown66.open[0].sample_note),
+    JSON.stringify(unknown66.open[0]));
+  const rows66 = (await run('Finding Rows', [{ json: {} }])).map(r => r.json);
+  check('R19: the finding row stores the sample it was measured on, with exactly the columns of seo_audit_findings',
+    rows66[0].checked === 14 && rows66[0].affected_count === 4 && eq(Object.keys(rows66[0]).sort(), [...TC66.AUDIT_FINDINGS].sort()),
+    JSON.stringify(Object.keys(rows66[0])));
+  const dsh66 = await diff66({ affected: 4, checked: 14 }, { affected: 15, checked: 25 });
+  const rep66 = decode(await run('Build Audit Report', [{ json: { ...store['Audit Diff'][0].json,
+    site_audit: { ...store['Audit Diff'][0].json.site_audit, findings: [], what_works: [], category_scores: {}, weights: WT66, issue_counts: {} } } }]));
+  check('R19: and the delivered report prints "not compared" with the reason where it used to print "15 → 4 affected"',
+    /not compared: 4 now against 15 before/.test(rep66) && !/15 → 4 affected/.test(rep66) && dsh66.sample_moved === 1,
+    (rep66.match(/still open[\s\S]{0,320}/) || [''])[0].slice(0, 320));
+});
+
 H.report();
 })();

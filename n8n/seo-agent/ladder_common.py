@@ -228,6 +228,10 @@ LINK_IMPORTS_COLS = [('site_id', 'string'), ('domain', 'string'), ('import_id', 
 AUDITS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('report_type', 'string'), ('health_score', 'number'), ('grade', 'string'), ('pages_crawled', 'number'),
                ('findings', 'number'), ('critical', 'number'), ('high', 'number'), ('medium', 'number'), ('low', 'number'), ('scheduled', 'boolean'), ('request_id', 'string')]
 AUDIT_FINDINGS_COLS = [('site_id', 'string'), ('domain', 'string'), ('audit_id', 'string'), ('audited_at', 'string'), ('finding_key', 'string'), ('category', 'string'), ('severity', 'string'), ('title', 'string'), ('affected_count', 'number'),
+                       # R19 (2026-10-14, FIX_PLAN §3.12): how many pages the count above was measured on. 31 of 45 URL inspections failed in
+                       # execution 550, so a finding measured on 14 pages was compared with one measured on 25 and called an improvement.
+                       # With the sample stored, the next audit prints "not compared: the sample moved" instead of a delta (run sync_tables.py).
+                       ('checked', 'number'),
                        # G26 (2026-10-12, FIX_PLAN): the impact weight that ordered the fix list (severity x pages affected x their clicks and
                        # impressions x their place in the site) and the one sentence that explains it, so the app can order the same way
                        ('impact', 'number'), ('impact_basis', 'string'),
