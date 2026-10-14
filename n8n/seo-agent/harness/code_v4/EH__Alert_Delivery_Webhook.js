@@ -58,7 +58,7 @@ const OA = (() => {
 })();
 const alert = $('Format Alert').first().json;
 let rows = []; try { rows = $('Load Ops Alerts').all().map(i => i.json).filter(r => r && !r.error); } catch (e) {}
-const CFG = { webhook_url: 'https://hooks.example.test/seo-agent-alerts', email_to: 'kinnngahmed@gmail.com' };   // baked from n8n/.env at build time ($env is blocked in nodes)
+const CFG = { webhook_url: 'https://hooks.example.test/seo-agent-alerts', email_to: 'devaicondeveloper3@gmail.com' };   // baked from n8n/.env at build time ($env is blocked in nodes)
 const p = OA.plan(alert, rows, CFG);
 // a node that did not run in this execution throws when it is referenced
 const state = (name) => {

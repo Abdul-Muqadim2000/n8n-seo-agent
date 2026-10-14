@@ -27,7 +27,7 @@ const CK = (() => {
 // Google data is read for the last 28 complete days ending 3 days ago (Search Console data is final after about 3 days),
 // against the 28 days before and the same 28 days a year earlier.
 const CONFIG = {
-  service_account_email: 'devai-seo@techand-site.iam.gserviceaccount.com',   // filled from n8n/.env (SEO_GOOGLE_SA_EMAIL) at build time; shown in the connect instructions
+  service_account_email: 'seo-agent@seo-tool-511608.iam.gserviceaccount.com',   // filled from n8n/.env (SEO_GOOGLE_SA_EMAIL) at build time; shown in the connect instructions
   max_sites_per_run: 25, max_tracked_keywords: 40, max_gsc_keyword_requests: 30, max_trend_keywords: 4, max_serp_checks: 20,
   // G25 (2026-10-13, FIX_PLAN): URL Inspection used to see 20 ladder pages a week. Google allows 2,000 inspections a day and 600 a minute
   // per property, so one weekly run asks about up to 150 key pages (7.5% of a day's quota, free) and the pages rotate oldest-first;

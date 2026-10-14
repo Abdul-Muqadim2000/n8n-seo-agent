@@ -1597,7 +1597,7 @@
             "parameters": [
               {
                 "name": "User-Agent",
-                "value": "SEOAgentLinkMonitor/4.10 (Dev SEO; backlink monitor; mailto:kinnngahmed@gmail.com)"
+                "value": "SEOAgentLinkMonitor/4.10 (Dev SEO; backlink monitor; mailto:devaicondeveloper3@gmail.com)"
               }
             ]
           }
@@ -1792,7 +1792,7 @@
             "parameters": [
               {
                 "name": "User-Agent",
-                "value": "SEOAgentAIGrowth/4.12 (Dev SEO; entity check; mailto:kinnngahmed@gmail.com)"
+                "value": "SEOAgentAIGrowth/4.12 (Dev SEO; entity check; mailto:devaicondeveloper3@gmail.com)"
               },
               {
                 "name": "Accept",
@@ -3343,7 +3343,7 @@
       },
       {
         "parameters": {
-          "fromEmail": "Dev SEO <kinnngahmed@gmail.com>",
+          "fromEmail": "Dev SEO <devaicondeveloper3@gmail.com>",
           "toEmail": "={{ $json.email }}",
           "subject": "={{ $json.subject }}",
           "emailFormat": "html",

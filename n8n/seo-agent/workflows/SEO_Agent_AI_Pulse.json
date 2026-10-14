@@ -1508,7 +1508,7 @@
       },
       {
         "parameters": {
-          "fromEmail": "Dev SEO <kinnngahmed@gmail.com>",
+          "fromEmail": "Dev SEO <devaicondeveloper3@gmail.com>",
           "toEmail": "={{ $json.email }}",
           "subject": "={{ $json.subject }}",
           "emailFormat": "html",

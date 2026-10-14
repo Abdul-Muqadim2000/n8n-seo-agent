@@ -5264,8 +5264,8 @@ await guard('p2-live-check', async () => {
   mock('Attach PDF Ladder', [{ json: { ladder: L7, domain: D, keyword: 'erp software uae', country: 'United Arab Emirates', location_code: LOC, language_code: 'en', email: '', callback_url: '', request_id: 'r-442' } }]);
   const rows7 = (await run('Ladder Rows', EMPTY)).map(i => i.json);
   const topRow = rows7.find(r => r.rung === 4) || {};
-  check('P2-7: the stored seo_ladders row carries target_words and has exactly the table columns (run sync_tables.py when deploying)',
-    eq(Object.keys(topRow).sort(), [...TC.LADDER].sort()) && topRow.target_words === 2100 && rows7.filter(r => r.rung !== 4).every(r => r.target_words === 0), JSON.stringify(rows7.map(r => [r.rung, r.target_words])));
+  check('P2-7 + R22: the stored seo_ladders row carries target_words and has exactly the table columns (run sync_tables.py when deploying) — the main page the verdict\'s own number, every rung page a target of its own (0 was R22, exec 549)',
+    eq(Object.keys(topRow).sort(), [...TC.LADDER].sort()) && topRow.target_words === 2100 && rows7.filter(r => r.rung !== 4).every(r => r.target_words > 0), JSON.stringify(rows7.map(r => [r.rung, r.target_words])));
   const spawn = (await run('Spawn Page Runs', [{ json: planItem }])).map(i => i.json.body);
   check('P2-7: the page run the ladder starts is given that target (ladder_words)', spawn.length >= 1 && spawn.every(b => b.ladder_words === 2100 && b.force_content === true), JSON.stringify(spawn.map(b => [b.keyword, b.ladder_words])));
   const niRun = async (body) => (await run('Normalize Input', [{ json: { headers: { 'content-type': 'application/json' }, params: {}, query: {}, body } }]))[0].json;
@@ -8969,6 +8969,161 @@ await guard('l4-l7-podcasts-digests-asset-ideas-subject-ab', async () => {
     && RP61.lineage.some(l => /Podcast shows/.test(l.figure) && /own domain/.test(l.note)), JSON.stringify(RP61.lineage.map(l => l.figure)));
 });
 
+// ===================================================================================
+// S67 R23 R22 R26 (2026-10-14, system review FIX_PLAN.md §3.12; evidence docs/system-review-2026-10-14/RESULTS.md §2.1 and §2.3):
+// the system may say "I could not check this"; it may not quietly produce a number instead. Exec 549 planned, scored
+// ("winnable / GO_WITH_CHANGES 68") and WROTE a ladder from a pool of one keyword while both SERP calls had failed with 40101 and
+// the keyword data came back empty — the single rung, "azure api management monetization", is not even the head's topic. Every
+// check below fails against the code of that run.
+// ===================================================================================
+await guard('r23-r22-r26-no-answer-without-data', async () => {
+  const SN = 'S67 R23 R22 R26 — no ladder plan on a pool below the minimum or a results page that was never read, every rung keyword measured against the head\'s topic, no rung page with a word target of 0, and a keyword check with no search data that says so in its label';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const D = 'techand.ai', SITE = 'site_techand-ai', LOC = 2784, EMPTY = [{ json: {} }];
+  const HEAD = 'azure cloud migration dubai';
+  const OFF = 'azure api management monetization';   // the rung exec 549 planned: one word of four in common with the head
+  const ago57 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+  // six pages read on the head term's results page; `wc` false = the run read no length for them (a failed or skipped page read)
+  const serp57 = (wc) => ['cloudshift.ae', 'migratenow.example', 'azurepartner.example', 'gulfcloud.ae', 'dubaicloud.example', 'cloudworks.example']
+    .map((domain, i) => ({ rank: i + 1, domain, url: 'https://' + domain + '/azure-migration', title: 'Azure cloud migration', word_count: wc ? [1200, 1500, 1600, 1800, 2000, 2400][i] : 0, headings: ['What it costs'] }));
+  const SF_OK = { se_results_count: 980000, checked_at: '2026-10-14T16:03:47.000Z', people_also_ask: ['How long does an Azure migration take?'], related_searches: ['azure migration cost'], forum_threads: [],
+    featured_snippet: null, ai_overview: { present: false, text: '', cited_domains: [], seen_at: '2026-10-14T16:03:47.000Z' }, features_present: ['people_also_ask'], video_results: false, shopping_results: false, local_pack: false };
+  const SF_OUT = { ...SF_OK, unavailable: true, error: 'Internal SE Server Error.', ai_overview: { present: null, text: '', cited_domains: [], seen_at: null } };   // DataForSEO 40101 inside an HTTP 200, exec 549
+  const PV = (o = {}) => ({ keyword: HEAD, domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads', email: '', callback_url: '', request_id: 'r-549', ladder_id: 'lad_s67', pages_now: 2,
+    page_type: 'Service Page', recommended_page: 'Service Page', competitors: [], competitors_summary: serp57(true), serp_features: SF_OK,
+    business: 'Microsoft cloud and ERP partner in the GCC', services: ['Azure cloud migration', 'Dynamics 365 Business Central'],
+    site_description: { business_description: 'Microsoft cloud and ERP partner in the GCC', products_or_services: ['Azure cloud migration', 'Dynamics 365 Business Central'] },
+    keyword_data: { search_volume: 170, cpc: 9.4, keyword_difficulty: 45, google_intent: 'commercial', competitor_backlink_strength: { avg_referring_domains: 30 } },
+    verdict: 'GO_WITH_CHANGES', verdict_score: 68, verdict_reasons: ['The live Google results could not be checked because the data provider failed.'],
+    verdict_changes: ['Write a service page of about 2,100 words with a cost section'], verdict_risks: [], secondary_keywords: ['azure migration dubai'],
+    competitor_analysis: { recommended_word_count: 1900 }, site_authority: { organic_keywords: 60, top3: 1, top10: 6, est_monthly_traffic: 300 },
+    site_urls: ['https://' + D + '/', 'https://' + D + '/whatwedo/'], expected_visits_top3: 60, time_to_rank_months: 6, ...o });
+  const POOL57 = ['azure cloud migration cost', 'azure migration services dubai', 'azure cloud migration checklist', 'cloud migration partner dubai', 'azure migration tools',
+    'azure cloud migration uae', 'azure migration assessment', 'cloud migration cost dubai', 'azure cloud migration case study', OFF];
+  const ladderRun = async (o = {}) => {
+    delete store['Site Model'];
+    mock('Parse Verdict', PV(o.pv || {}));
+    mock('Ladder Requests', [{ kind: 'suggestions', label: 'suggestions for ' + HEAD, body: [{ keyword: HEAD }] }, { kind: 'ranked', label: 'keywords ' + D + ' ranks for', domain: D, body: [{ target: D }] }]);
+    mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 35, method: 'size', p75: null, size_reach: 35, sample: 2, top10: 6, organic_keywords: 60, location_code: LOC }), updated_at: ago57(3) } }]);
+    mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+    const lp = (await run('Ladder Pool', [V.task({ seed_keyword: HEAD, items: (o.pool || POOL57).map((k, i) => V.kwItem(k, i)) }), V.task({ target: D, items: [] })]))[0].json;
+    const ch = await run('Ladder Relevance Chunks', [{ json: lp }]);
+    mock('Ladder Keyword Relevance', ch.map(c => V.ladderRelevance(c.json)));
+    const item = (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json;
+    return { item, L: item.ladder, pool: lp };
+  };
+
+  // ---- 1. R23: a pool below the minimum is refused — no plan, no score, no page run, no stored row ----
+  const thin = await ladderRun({ pool: [OFF] });
+  console.log('   thin pool ->', JSON.stringify({ pool: thin.L.stats.pool_size, planned: thin.L.planned, refusal: thin.L.refusal, label: thin.L.label, write_now: thin.L.write_now.length }));
+  check('R23: a ladder built on one keyword (exec 549: pool_size 1) is refused, and the reason names the count and the minimum',
+    thin.L.planned === false && thin.L.stats.pool_size === 1 && (thin.L.refusal || {}).reason === 'thin_data' && thin.L.refusal.pool_size === 1 && thin.L.refusal.minimum === 3
+    && /returned only 1 keyword around "azure cloud migration dubai"/.test(thin.L.refusal.message) && /at least 3 to pick rungs from/.test(thin.L.refusal.message), JSON.stringify(thin.L.refusal));
+  check('R23: the refused plan has no pages and no feasibility score — "winnable 68" is gone, the status says it was not checked',
+    thin.L.write_now.length === 0 && thin.L.stats.pages_total === 0 && thin.L.rungs.every(r => !r.pages.length) && thin.L.feasibility.score === null && thin.L.feasibility.status === 'not_checked'
+    && thin.L.feasibility.scored === false && thin.L.feasibility.verdict === null && /not enough data/.test(thin.L.feasibility.not_scored_reason)
+    && thin.L.label === 'No ladder planned · the keyword research returned too little data' && thin.L.chance === null, JSON.stringify({ f: thin.L.feasibility, label: thin.L.label, pages: thin.L.stats.pages_total }));
+  const spawnThin = await run('Spawn Page Runs', [{ json: thin.item }]);
+  mock('Attach PDF Ladder', [{ json: thin.item }]);
+  const rowsThin = (await run('Ladder Rows', EMPTY)).map(r => r.json);
+  check('R23: nothing is written and nothing is stored for a refused ladder (no page run, one skip row with the reason)',
+    spawnThin.length === 0 && rowsThin.length === 1 && rowsThin[0].skip === true && rowsThin[0].reason === 'thin_data', JSON.stringify({ spawn: spawnThin.length, rows: rowsThin }));
+  check('R23: the data check travels with the plan, so the app and the report can say what was missing',
+    eq(thin.L.data_check, { pool_size: 1, minimum_pool: 3, head_measured: true, serp_checked: true, serp_error: '', enough: false }), JSON.stringify(thin.L.data_check));
+
+  // the second floor: a pool that is only thin-ish is refused when the head keyword itself was never measured (exec 549:
+  // `Keyword Data` answered items_count 0), and planned when it was — a narrow topic with real data is not a refusal
+  const weak = await ladderRun({ pool: POOL57.slice(0, 4), pv: { keyword_data: { note: 'Keyword data not available for this keyword/country' } } });
+  check('R23: four keywords and no volume and no difficulty for the head term itself is "not enough data", and the reason says both',
+    weak.L.planned === false && (weak.L.refusal || {}).reason === 'thin_data' && weak.L.refusal.head_measured === false
+    && /only 4 keywords around "azure cloud migration dubai"/.test(weak.L.refusal.message) && /no search volume and no difficulty for "azure cloud migration dubai" itself/.test(weak.L.refusal.message)
+    && weak.L.feasibility.score === null, JSON.stringify(weak.L.refusal));
+  const narrow = await ladderRun({ pool: POOL57.slice(0, 4) });
+  check('R23: the same four keywords with real data for the head term are still planned — a narrow topic is not a refusal (a main page is a valid ladder)',
+    narrow.L.planned === true && narrow.L.refusal === null && narrow.L.feasibility.score === 68 && narrow.L.stats.pool_size === 4 && narrow.L.write_now.length >= 1,
+    JSON.stringify({ planned: narrow.L.planned, pool: narrow.L.stats.pool_size, write: narrow.L.write_now.map(w => w.keyword) }));
+
+  // ---- 2. R23: the live results page could not be read -> no plan and no score, whatever the research found ----
+  const noSerp = await ladderRun({ pv: { serp_features: SF_OUT, competitors_summary: [] } });
+  console.log('   serp unchecked ->', JSON.stringify({ pool: noSerp.L.stats.pool_size, planned: noSerp.L.planned, reason: (noSerp.L.refusal || {}).reason, score: noSerp.L.feasibility.score }));
+  check('R23: a ladder on a results page that failed (40101 inside an HTTP 200) is refused although the research is full, and the reason says what could not be read',
+    noSerp.L.stats.pool_size >= 5 && noSerp.L.planned === false && (noSerp.L.refusal || {}).reason === 'serp_unchecked' && /Internal SE Server Error/.test(noSerp.L.refusal.message)
+    && /none was planned/i.test(noSerp.L.refusal.message) && noSerp.L.data_check.serp_checked === false, JSON.stringify(noSerp.L.refusal));
+  check('R23: an unchecked results page produces no feasibility score, no expected visits and no page run',
+    noSerp.L.feasibility.score === null && noSerp.L.feasibility.status === 'not_checked' && noSerp.L.feasibility.expected_visits_top3 === null && noSerp.L.feasibility.time_to_rank_months === null
+    && noSerp.L.write_now.length === 0 && (await run('Spawn Page Runs', [{ json: noSerp.item }])).length === 0, JSON.stringify(noSerp.L.feasibility));
+  mock('Ladder Plan', [{ json: noSerp.item }]);
+  const htmlNo = decode(await run('Build Ladder Report', EMPTY));
+  save('ladder-plan-r23-refused.doc.html', htmlNo); scanHtml('ladder plan refused for missing data (R23)', htmlNo);
+  check('R23: the report says it plainly — not scored, no ladder, and why — instead of "Winnable" and a number',
+    /Not scored — the data this rests on was missing/.test(htmlNo) && /none — the live Google results could not be checked/.test(htmlNo)
+    && /No ladder planned\.<\/b> The live Google results for &quot;azure cloud migration dubai&quot; could not be read|No ladder planned\.<\/b> The live Google results for "azure cloud migration dubai" could not be read/.test(htmlNo)
+    && !/Winnable/.test(htmlNo) && !/68\/100/.test(htmlNo), (htmlNo.match(/Is it realistic\?[\s\S]{0,260}/) || [''])[0]);
+
+  // ---- 3. R23: the topic radius on every rung keyword, against the head ----
+  const full = await ladderRun();
+  const L3 = full.L;
+  const rungKw = L3.rungs.flatMap(r => r.pages.flatMap(p => [p.keyword, ...(p.supporting || [])]));
+  const linkKw = [...L3.top.links_to.map(l => l.keyword), ...L3.rungs.flatMap(r => r.pages.flatMap(p => (p.links_to || []).map(l => l.keyword)))];
+  console.log('   rung keywords ->', JSON.stringify(rungKw), '| off topic:', JSON.stringify(L3.off_topic_keywords));
+  check('R23 (control): the ladder pool itself still lets the off-topic keyword through — one shared word with the head is all it asks for',
+    full.pool.research.candidates.some(c => c.keyword === OFF) && full.pool.research.pool_size >= 5, JSON.stringify(full.pool.research.candidates.map(c => c.keyword)));
+  check('R23: the topic radius leaves "azure api management monetization" out of the ladder for "azure cloud migration dubai", with the reason and the words it shares',
+    L3.planned === true && !rungKw.includes(OFF) && !linkKw.includes(OFF) && !(L3.later || []).some(k => k.keyword === OFF)
+    && (L3.off_topic_keywords || []).some(x => x.keyword === OFF && /shares only "azure"/.test(x.reason) && /1 of the 4 words that matter, 2 needed/.test(x.reason) && eq(x.shared, ['azure']))
+    && L3.stats.off_topic_keywords === 1, JSON.stringify(L3.off_topic_keywords));
+  check('R23: the plan says so where the owner reads it, and the keywords that ARE on the head\'s topic still become pages',
+    L3.notes.some(n => /not on this ladder's topic \("azure cloud migration dubai"\)/.test(n) && /azure api management monetization/.test(n))
+    && rungKw.length >= 3 && rungKw.every(k => /azure|cloud|migration/.test(k)) && L3.stats.on_topic === L3.stats.relevant - 1, JSON.stringify({ notes: L3.notes, on_topic: L3.stats.on_topic, relevant: L3.stats.relevant }));
+  check('R23: with a full pool and a results page that was read, the plan is emitted and scored exactly as before',
+    L3.planned === true && L3.refusal === null && L3.feasibility.score === 68 && L3.feasibility.status === 'winnable' && L3.feasibility.scored === true
+    && L3.data_check.enough === true && L3.write_now.length === 2, JSON.stringify({ f: L3.feasibility, write: L3.write_now.map(w => w.keyword) }));
+
+  // ---- 4. R22: a rung page never carries a word target of 0, and says where the target came from ----
+  const rungPages = L3.rungs.flatMap(r => r.pages);
+  const spawn4 = (await run('Spawn Page Runs', [{ json: full.item }])).map(r => r.json.body);
+  console.log('   words ->', JSON.stringify(L3.words), '| rung targets', JSON.stringify(rungPages.map(p => p.target_words)), '| spawn', JSON.stringify(spawn4.map(b => [b.keyword, b.ladder_words])));
+  check('R22: every rung page takes the median length of the pages read on the topic\'s results page (1,700 of 6), capped by the main page\'s own target',
+    rungPages.length >= 2 && rungPages.every(p => p.target_words === 1700 && /median length of the 6 page\(s\)/.test(p.target_words_source))
+    && L3.words.rung === 1700 && L3.words.main === 2100 && L3.words.main_source === 'the verdict' && /median length of the 6 page\(s\)/.test(L3.words.rung_source), JSON.stringify({ w: L3.words, t: rungPages.map(p => p.target_words) }));
+  check('R22: the page run is started with that target — `ladder_words: 0` (exec 549) is gone',
+    spawn4.length === 2 && spawn4.every(b => Number(b.ladder_words) > 0) && L3.write_now.every(w => Number(w.target_words) > 0), JSON.stringify(spawn4.map(b => [b.keyword, b.ladder_words])));
+  const noLen = (await ladderRun({ pv: { competitors_summary: serp57(false) } })).L;
+  const noLenPages = noLen.rungs.flatMap(r => r.pages);
+  check('R22: with no length read on the results page the rung target falls back to the main page\'s own target — never 0 — and says so',
+    noLenPages.length >= 2 && noLenPages.every(p => p.target_words === 2100 && /the main page of this ladder \(no results page was read for the rung keywords\)/.test(p.target_words_source))
+    && noLen.words.rung === 2100, JSON.stringify({ w: noLen.words, t: noLenPages.map(p => [p.keyword, p.target_words]) }));
+  const noData = (await ladderRun({ pv: { competitors_summary: serp57(false), verdict_changes: ['Write a service page with a cost section'], competitor_analysis: {} } })).L;
+  const noDataPages = noData.rungs.flatMap(r => r.pages);
+  check('R22: with no length anywhere in the run the rung target is the stated default, not 0, and the plan names it as the default',
+    noDataPages.length >= 2 && noDataPages.every(p => p.target_words === 1200 && /default length for a supporting page/.test(p.target_words_source))
+    && noData.words.rung === 1200 && noData.words.main === 0 && noData.words.main_source === 'not measured', JSON.stringify({ w: noData.words, t: noDataPages.map(p => p.target_words) }));
+
+  // ---- 5. R26: a Keyword Check with no search data says so in the label and gives no chance band ----
+  const AR57 = (o = {}) => ({ ok: true, keyword: 'business central partner uae', domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en',
+    volume: null, kd: null, cpc: null, intent: null, known: false, position: null, position_url: null,
+    reach_info: { reach: 15, method: 'size', p75: null, size_reach: 15, sample: 2, top10: 6, organic_keywords: 60, cached: true, cached_at: ago57(3) }, reach_errors: [], cache_row: null,
+    dfs_cost: 0.026, business: 'Microsoft cloud and ERP partner in the GCC', services: ['Dynamics 365 Business Central'], existing_keywords: [], business_source: 'request', services_source: 'request', ...o });
+  const assess57 = async (o) => { mock('Assess Result', AR57(o)); return (await run('Assess Response', [{ json: { output: { fit: 2, navigational: false, alternatives: [] } } }]))[0].json.body; };
+  const bNo = await assess57();
+  console.log('   keyword check (no data) ->', JSON.stringify({ label: bNo.label, chance: bNo.chance, known: bNo.search_data_known }));
+  check('R26: "no search data" is in the label itself, where the customer reads it — not only in `warnings` (exec: "Reachable for your site · Short ladder · 4-8 months")',
+    /· no search data$/.test(bNo.label) && /^Reachable for your site · Short ladder/.test(bNo.label) && bNo.search_data_known === false && bNo.difficulty_known === false
+    && bNo.warnings.some(w => /DataForSEO has no data for this keyword/.test(w)), JSON.stringify({ label: bNo.label, warnings: bNo.warnings }));
+  check('R26: no confident chance band on a difficulty nobody measured — the band is gone and the sentence says why',
+    bNo.chance === null && /^No estimated chance: DataForSEO has no search volume and no difficulty for "business central partner uae" in United Arab Emirates/.test(bNo.chance_text)
+    && /counted as your reach \+ 10/.test(bNo.chance_text) && bNo.plan_assumed === true && !/fair \(30-50%\)/.test(bNo.chance_text), JSON.stringify({ c: bNo.chance, t: bNo.chance_text }));
+  const bOk = await assess57({ volume: 320, kd: 40, cpc: 6.5, intent: 'commercial', known: true });
+  check('R26: a keyword DataForSEO does know is untouched — the label has no suffix and the chance band is the plan\'s own',
+    !/no search data/.test(bOk.label) && bOk.search_data_known === true && bOk.difficulty_known === true && bOk.chance && bOk.chance.band && bOk.plan_assumed === undefined
+    && /^Estimated chance of reaching the top 10 within/.test(bOk.chance_text), JSON.stringify({ label: bOk.label, chance: bOk.chance }));
+  const bKd = await assess57({ volume: 320, kd: null, known: true });
+  check('R26: a keyword with a volume but no difficulty keeps its band and says what the band was computed on',
+    bKd.search_data_known === true && bKd.difficulty_known === false && bKd.chance && /DataForSEO has no difficulty for this keyword, so it was counted as your reach \+ 10\.$/.test(bKd.chance_text)
+    && bKd.plan_assumed === true, JSON.stringify({ label: bKd.label, t: bKd.chance_text }));
+});
 
 H.report();
 })();
