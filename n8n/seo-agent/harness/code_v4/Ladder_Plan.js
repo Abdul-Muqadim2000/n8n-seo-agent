@@ -441,6 +441,120 @@ const SM = (() => {
 // pages, then the main page), full (rungs 1-3 + main page, as before; very hard = stretch with the alternatives first) or none (not realistic:
 // alternatives only, no pages). Keywords that already belong to another ladder of the site are never planned again (same search: equal stemmed
 // word sets or 75%+ in common), and a main keyword that duplicates another ladder's main keyword is refused.
+// ---- topic radius (G32, 2026-10-13, system review FIX_PLAN.md G32; criterion K12 in CRITERIA_keywords_content.md) ----
+// "Which topics is this website close enough to win, and which are a stretch?" — until now the system answered that per keyword
+// (difficulty for your site, `_reach.js`) but never per TOPIC, so a plan could quietly wander off what the site actually sells: the
+// 2026-10-11 review found the topic check was a warning on one keyword, never a picture of the radius (K12 scored 5 of 10).
+// RAD.of() groups this run's keywords into topics and gives each one a verdict with the evidence behind it:
+//   in_reach — the difficulty sits inside the site's reach (or the site already ranks in the top 20 for it), and something the site
+//              sells or has a page about names the topic;
+//   stretch  — within sight but above the reach, or nothing the site sells names it: possible, but it needs the easier topics (and
+//              links) first;
+//   far      — very hard for this site today, or not realistic at all (another company's brand, a government portal: `_fit_gate.js`
+//              already refuses those keywords, so this is only about difficulty).
+// Nothing here blocks anything on its own: it is the block of evidence a plan, a report and the app show, and `RAD.pick()` answers
+// "is this topic inside the radius?" for a caller that wants to warn or to ask for a confirmation.
+// It needs the reach kit in the same node (`difficultyForYou`, REACH_CFG, REACH_DIFF_LABEL) — the build asserts that.
+const RAD = (() => {
+  const CFG = { max_topics: 40, in_reach: ['easy', 'reachable'], stretch: ['hard'], min_service_tokens: 1 };
+  const LABEL = { in_reach: 'Within reach', stretch: 'A stretch', far: 'Out of reach for now' };
+  const STOP = new Set(['the', 'a', 'an', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'at', 'from', 'near', 'me', 'vs', 'is', 'are', 'what', 'how', 'best', 'top', 'your', 'my', 'our', 'service', 'services', 'company', 'companies', 'solution', 'solutions', 'provider', 'providers', 'software', 'system', 'systems']);
+  const S = (v) => String(v == null ? '' : v);
+  const num = (v) => (v === '' || v == null || typeof v === 'boolean' || !Number.isFinite(Number(v))) ? null : Number(v);
+  const tokens = (s) => { const out = []; for (const t of S(s).toLowerCase().split(/[^a-z0-9]+/)) { if (t.length <= 2 || STOP.has(t)) continue;
+    const w = t.replace(/ies$/, 'y').replace(/(ing|ed|es|s)$/, ''); if (w && !out.includes(w)) out.push(w); } return out; };
+  const shared = (a, b) => { const sb = new Set(b); return a.filter(t => sb.has(t)); };
+  // what the site sells / already writes about, as one token set per source, so the evidence can name the matching one
+  const anchors = (o) => {
+    const list = [];
+    for (const sv of (o.services || [])) if (S(sv).trim()) list.push({ kind: 'service', label: S(sv).trim(), tokens: tokens(sv) });
+    for (const pg of (o.pages || [])) { const label = S(pg.title || pg.url); if (label) list.push({ kind: 'page', label, url: S(pg.url), tokens: tokens([pg.title, pg.keyword, S(pg.url).replace(/^https?:\/\/[^/]+/i, '')].join(' ')) }); }
+    for (const tp of (o.site_topics || [])) if (S(tp).trim()) list.push({ kind: 'topic', label: S(tp).trim(), tokens: tokens(tp) });
+    return list.filter(a => a.tokens.length);
+  };
+  // one topic's verdict and the evidence behind it
+  const judge = (t, reach, anchorList, o) => {
+    const kd = num(t.kd), pos = num(t.your_position);
+    const diff = difficultyForYou(kd, reach, { position: pos });
+    const toks = tokens([t.topic, t.primary_keyword, (t.keywords || []).map(k => S(k.keyword || k)).join(' ')].join(' '));
+    const hits = anchorList.map(a => ({ a, common: shared(toks, a.tokens) })).filter(x => x.common.length >= CFG.min_service_tokens)
+      .sort((x, y) => y.common.length - x.common.length);
+    const near = hits[0] || null;
+    const evidence = [];
+    if (pos != null && pos >= 1 && pos <= REACH_CFG.easy_position) evidence.push('you already rank #' + pos + ' for "' + t.primary_keyword + '"');
+    evidence.push(kd == null ? 'no difficulty figure for "' + t.primary_keyword + '" (counted as ' + (reach + REACH_CFG.unknown_kd) + ', your reach is ' + reach + ')'
+      : 'difficulty ' + kd + ' against your reach ' + reach);
+    if (near) evidence.push(near.a.kind === 'service' ? 'it matches what you sell: "' + near.a.label + '"'
+      : near.a.kind === 'page' ? 'you already have a page on it: ' + (near.a.url || near.a.label)
+      : 'it is one of your topics: "' + near.a.label + '"');
+    else if (anchorList.length) evidence.push('nothing you sell or have a page about names this topic');
+    if (num(t.volume) != null) evidence.push(Number(t.volume).toLocaleString('en-GB') + ' searches a month across ' + (num(t.keyword_count) || 1) + ' keyword(s)');
+    let verdict = CFG.in_reach.includes(diff) ? 'in_reach' : CFG.stretch.includes(diff) ? 'stretch' : 'far';
+    let reason = verdict === 'in_reach' ? REACH_DIFF_LABEL[diff] : verdict === 'stretch' ? 'above your reach today, but within sight' : REACH_DIFF_LABEL[diff] || 'very hard for your site today';
+    // off what the site sells: a topic can be easy to rank for and still be the wrong topic, so it is a stretch at best
+    if (verdict === 'in_reach' && !near && anchorList.length && !(pos != null && pos >= 1 && pos <= REACH_CFG.easy_position)) {
+      verdict = 'stretch'; reason = 'the difficulty is inside your reach, but nothing you sell or write about names this topic';
+    }
+    return { topic: t.topic, primary_keyword: t.primary_keyword, kd: kd, volume: num(t.volume), keyword_count: num(t.keyword_count) || (t.keywords || []).length || 1,
+      your_position: pos, difficulty_for_you: diff, verdict, verdict_label: LABEL[verdict], reason, basis: near ? near.a.kind : 'none', matched: near ? near.a.label : '', evidence };
+  };
+  /**
+   * o: { reach, reach_method?, topics: [{ topic, primary_keyword, kd, volume, keyword_count, your_position?, keywords? }],
+   *      services?, pages?, site_topics?, checked_at?, domain? }
+   * -> { reach, in_reach: [], stretch: [], far: [], topics: [], summary, note, measured }
+   */
+  const of = (o) => {
+    const x = o || {};
+    const reach = num(x.reach) == null ? null : Number(x.reach);
+    const r = reach == null ? 10 : reach;
+    const anchorList = anchors(x);
+    const topics = (x.topics || []).filter(t => t && S(t.topic || t.primary_keyword)).slice(0, CFG.max_topics)
+      .map(t => judge({ topic: S(t.topic || t.primary_keyword), primary_keyword: S(t.primary_keyword || t.topic), kd: t.kd, volume: t.volume, keyword_count: t.keyword_count, your_position: t.your_position, keywords: t.keywords }, r, anchorList, x));
+    const pick1 = (v) => topics.filter(t => t.verdict === v);
+    const inR = pick1('in_reach'), st = pick1('stretch'), far = pick1('far');
+    const name = (list, k) => list.slice(0, k).map(t => '"' + t.topic + '"').join(', ');
+    const summary = !topics.length ? 'Not enough keyword data to draw your topic radius yet.'
+      : (inR.length ? inR.length + ' topic(s) are within reach for ' + S(x.domain || 'your site') + ' today (' + name(inR, 3) + (inR.length > 3 ? ' …' : '') + ')' : 'No topic in this research is within reach today')
+        + (st.length ? '; ' + st.length + ' are a stretch (' + name(st, 3) + (st.length > 3 ? ' …' : '') + ')' : '')
+        + (far.length ? '; ' + far.length + ' are out of reach for now (' + name(far, 2) + (far.length > 2 ? ' …' : '') + ')' : '') + '.';
+    const note = reach == null
+      ? 'Your reach could not be measured this run, so these verdicts use the smallest default (' + r + '): treat them as provisional.'
+      : 'Your reach is the difficulty your site already wins — the 75th percentile of the difficulty of the keywords it ranks in the top 10 for'
+        + (x.reach_method === 'size' ? ' (measured from the size of your ranking profile this time)' : x.reach_method === 'default' ? ' (no ranking data: the default for a new site)' : '')
+        + '. A stretch topic is not a no: it is the one to come back to once the topics within reach are won and links have been earned.';
+    return { reach, reach_method: S(x.reach_method), measured: reach != null, topics, in_reach: inR, stretch: st, far, summary, note, checked_at: S(x.checked_at) };
+  };
+  /** is one topic (or keyword) inside the radius? -> the topic's verdict, or null when it is not among the topics */
+  const pick = (radius, topic) => { const t = tokens(topic); if (!t.length) return null;
+    const all = ((radius || {}).topics || []).map(x => ({ x, common: shared(t, tokens([x.topic, x.primary_keyword].join(' '))) }))
+      .filter(o => o.common.length).sort((a, b) => b.common.length - a.common.length);
+    return all.length ? all[0].x : null; };
+  /** one topic's verdict as a sentence (a plan's notes, a tooltip): "A stretch — … (difficulty 55 against your reach 28; …)" */
+  const line = (t) => !t ? '' : LABEL[t.verdict] + ' — ' + t.reason + ' (' + (t.evidence || []).join('; ') + ')';
+  /** the rows a report prints, in reading order: within reach, then the stretches, then what is out of reach for now */
+  const rows = (radius) => { const rad = radius || {}; return [...(rad.in_reach || []), ...(rad.stretch || []), ...(rad.far || [])]; };
+  /**
+   * R23 (2026-10-14, FIX_PLAN.md §3.12): the radius test for ONE pair — is this keyword on the topic of the ladder's head keyword?
+   * The ladder pool already asks for one shared word with the head, which is how "azure api management monetization" (volume 10,
+   * trend -100%) became the single rung of a ladder for "azure cloud migration dubai" in exec 549: "azure" was enough. Half of the
+   * head's meaningful words have to be in the keyword (at least one). A head of one or two meaningful words is too short to judge a
+   * topic by, so one shared word is enough there — the AI relevance screen and the fit gate stay the other two filters.
+   * -> { ok, shared, need, head_words, reason }   (reason is empty when it passes; it is the sentence the plan prints when it does not)
+   */
+  const headFit = (headKw, kw) => {
+    const h = tokens(headKw), k = tokens(kw);
+    if (!h.length || !k.length) return { ok: true, shared: [], need: 0, head_words: h, reason: '' };
+    const common = shared(h, k);
+    const need = Math.max(1, Math.ceil(h.length / 2));
+    const q = (list) => list.map(t => '"' + t + '"').join(', ');
+    if (common.length >= need) return { ok: true, shared: common, need, head_words: h, reason: '' };
+    return { ok: false, shared: common, need, head_words: h,
+      reason: common.length
+        ? 'it is not on this ladder\'s topic: it shares only ' + q(common) + ' with "' + S(headKw) + '" (' + common.length + ' of the ' + h.length + ' words that matter, ' + need + ' needed)'
+        : 'it is not on this ladder\'s topic: it shares none of the words that matter in "' + S(headKw) + '" (' + q(h) + ')' };
+  };
+  return { of, pick, rows, line, headFit, LABEL, CFG, tokens };
+})();
 const base = $('Parse Verdict').first().json;
 const pool = $('Ladder Pool').first().json;
 const chunks = $('Ladder Relevance Chunks').all().map(i => i.json);
@@ -511,6 +625,19 @@ const kws = ((pool.research || {}).candidates || []).filter(k => { const g = fit
   const t = takenBy(k.keyword); if (!t) return true;
   excluded.push({ keyword: k.keyword, ladder_id: t.ladder_id, head: t.head, as: t.keyword }); return false;
 }).sort((a, b) => b.opportunity - a.opportunity);
+// ---- R23 (2026-10-14, FIX_PLAN.md §3.12): every rung keyword has to be on this ladder's own topic ----
+// Exec 549 planned "azure api management monetization" (volume 10, informational, quarterly trend -100%) as the ONE rung of a ladder
+// whose head is "azure cloud migration dubai" — another topic, and no UAE in it. *Ladder Pool*'s own filter only asks for one shared
+// word with the head ("azure"), and the AI screen judges relevance to the business, not distance to the head. The topic radius
+// (v5/code/_radius.js, the kit discovery draws its radius with) is applied here, keyword by keyword, against the head: a keyword that
+// fails it is left out WITH ITS REASON instead of becoming a page, a supporting keyword or an internal link.
+const offTopic = [];
+const onTopic = kws.filter(k => {
+  const t = RAD.headFit(head, k.keyword);
+  if (t.ok) return true;
+  offTopic.push({ keyword: k.keyword, volume: k.volume, kd: k.kd, shared: t.shared, reason: t.reason });
+  return false;
+});
 
 // ---- rung bands relative to reach (unknown difficulty = reach + 10) ----
 const kdOf = (k) => k.kd == null ? reach + REACH_CFG.unknown_kd : k.kd;
@@ -518,7 +645,7 @@ const longTail = (k) => k.words >= 3 || (k.words >= 2 && k.volume < 200);
 const BAND = { 1: reach, 2: reach + 15, 3: reach + 30 };
 const rungOf = (k) => { const kd = kdOf(k); if (kd <= BAND[1] && k.volume >= 20 && longTail(k)) return 1; if (kd <= BAND[2]) return 2; if (kd <= BAND[3]) return 3; return 0; };   // 0 = later
 const byRung = { 1: [], 2: [], 3: [] }; const later = [];
-for (const k of kws) { const r = rungOf(k); if (r) byRung[r].push(k); else later.push(k); }
+for (const k of onTopic) { const r = rungOf(k); if (r) byRung[r].push(k); else later.push(k); }
 
 // ---- existing pages on the site (the site model's page inventory, this run's sitemap, or the URL that already ranks) ----
 // 2026-10-12 (FIX_PLAN D11): the old rule scored the keyword's words against the slug's with Jaccard >= 0.5, so 3 keyword words in a
@@ -597,11 +724,31 @@ const altPool = [...(base.verdict_changes || []).filter(s => /["“”]/.test(St
 const altPages = [...rungs[2].pages, ...rungs[1].pages, ...rungs[0].pages].map(p => p.keyword);
 const alternatives = status === 'winnable' ? [] : (altPool.length ? altPool : altPages.slice(0, 3));
 
-// ---- refusals: a duplicate main keyword, or a destination that is not realistic -> no ladder pages ----
+// ---- R23: the data a plan rests on. A ladder is scored, written and published on the strength of this run's research and of the
+//      live results page; when either is missing the honest answer is "I could not check this", not a plan with a score on it.
+//      Exec 549 produced "winnable / GO_WITH_CHANGES 68" and wrote a page from a pool of ONE keyword while both SERP calls had
+//      failed (40101) and the keyword data came back empty. A refusal here also stops the page run: `write_now` stays empty. ----
+// Two floors, so a genuinely narrow topic with real data still gets its plan (a main page is a valid ladder: "peppol uae",
+// 2026-10-08) while a run whose data never arrived does not: fewer than LADDER_MIN_POOL keywords is too thin whatever else is
+// known, and fewer than LADDER_WEAK_POOL counts as nothing at all when the head keyword itself has no volume and no difficulty.
+const LADDER_MIN_POOL = 3, LADDER_WEAK_POOL = 5;
+const poolSize = Number((pool.research || {}).pool_size) || ((pool.research || {}).candidates || []).length;
+const headMeasured = (kd.search_volume ?? null) != null || (kd.keyword_difficulty ?? null) != null;
+const thinPool = poolSize < LADDER_MIN_POOL || (poolSize < LADDER_WEAK_POOL && !headMeasured);
+const serpOut = (base.serp_features && base.serp_features.unavailable === true) ? String(base.serp_features.error || 'no answer').slice(0, 160) : '';
+
+// ---- refusals: a duplicate main keyword, a destination that is not realistic, or data we do not have -> no ladder pages ----
 let refusal = null;
 if (dupHead) refusal = { reason: 'duplicate', ladder_id: dupHead.ladder_id, head: dupHead.head,
   message: 'This website already has a keyword ladder for "' + dupHead.head + '" (' + dupHead.ladder_id + '). One search needs one page, so no second ladder was planned: continue that ladder instead.' };
 else if (plan.plan_type === 'none') refusal = { reason: 'not_realistic', message: '"' + head + '" is not a realistic main keyword for ' + domain + ' (' + (other_brand ? 'it is another company\'s brand: ' + headGate.detail : navigational ? 'people searching it look for one particular website or brand' + (!headGate.ok ? ': ' + headGate.detail : '') : 'the verdict is AVOID') + '). No ladder pages were planned; pick one of the alternatives as the main keyword instead.' };
+else if (serpOut) refusal = { reason: 'serp_unchecked', short: 'the live Google results could not be checked', detail: serpOut,
+  message: 'The live Google results for "' + head + '" could not be read on this run (' + serpOut + '), so nothing is known about who ranks for it, how strong those pages are or which results-page features take the clicks. A ladder plan is a bet on that competition, so none was planned, nothing was scored and no page was written. Run it again once the search data provider answers.' };
+else if (thinPool) refusal = { reason: 'thin_data', short: 'the keyword research returned too little data', pool_size: poolSize, minimum: LADDER_MIN_POOL, head_measured: headMeasured,
+  message: 'The keyword research returned only ' + poolSize + ' keyword' + (poolSize === 1 ? '' : 's') + ' around "' + head + '" in ' + (base.country || 'this market')
+    + (headMeasured ? ' (a ladder needs at least ' + LADDER_MIN_POOL + ' to pick rungs from)' : ', and the search data provider has no search volume and no difficulty for "' + head + '" itself')
+    + ', so there is not enough data to plan one. No pages were planned and none was written: check the destination keyword, or run it again if the search data provider was failing.' };
+const dataRefused = !!(refusal && (refusal.reason === 'serp_unchecked' || refusal.reason === 'thin_data'));
 const plan_type = refusal ? 'none' : plan.plan_type;
 const planned = !refusal;
 
@@ -614,6 +761,27 @@ for (const r of rungs) {
   r.pages = keep;
 }
 const rungPages = rungs.flatMap(r => r.pages);
+// ---- R22 (2026-10-14, FIX_PLAN.md §3.12): a rung page may never carry a word target of 0 ----
+// The rung rows of exec 549 carried `target_words: 0`, so *Spawn Page Runs* passed `ladder_words: 0` and the clamp protected only the
+// main page (1,800 from the competitor analysis). The rung page then shipped 2,648 words — +47% — after two editor rounds. The target
+// comes from the pages that actually rank for this ladder's topic (the median of the lengths this run read, because a rung keyword is
+// an easier search than the head term and its pages are shorter); with no SERP length data it falls back to the main page's own
+// target, then to the competitor analysis, and last to a stated default — and the row always says WHICH of them it was.
+const RUNG_WORDS = { floor: 700, fallback: 1200 };
+const serpWordCounts = (base.competitors_summary || []).map(c => Number(c.word_count) || 0).filter(w => w >= 200 && w <= 12000).sort((a, b) => a - b);
+const rungWords = (() => {
+  if (serpWordCounts.length) {
+    const mid = serpWordCounts.length >> 1;
+    const med = serpWordCounts.length % 2 ? serpWordCounts[mid] : Math.round((serpWordCounts[mid - 1] + serpWordCounts[mid]) / 2);
+    const words = Math.max(RUNG_WORDS.floor, Math.min(Math.round(med / 100) * 100, top.target_words || Infinity));
+    return { words, source: 'the median length of the ' + serpWordCounts.length + ' page(s) read on this topic\'s results page' };
+  }
+  if (top.target_words) return { words: top.target_words, source: 'the main page of this ladder (no results page was read for the rung keywords)' };
+  if (analysisWords) return { words: analysisWords, source: 'the competitor analysis' };
+  return { words: RUNG_WORDS.fallback, source: 'the default length for a supporting page (nothing in this run measured one)' };
+})();
+for (const r of rungs) for (const pg of (r.pages || [])) if (!Number(pg.target_words)) { pg.target_words = rungWords.words; pg.target_words_source = rungWords.source; }
+top.target_words_source = verdictWords ? 'the verdict' : analysisWords ? 'the competitor analysis' : 'not measured';
 // no supporting page in the data (a narrow topic: the research found no long-tail keywords, live 2026-10-08 "peppol uae"): the main page is the
 // whole ladder for now, so it is written first whatever the plan type — the Content Cadence's gate opens too when a ladder has no supporting page
 const mainFirst = plan_type === 'direct' || (planned && !rungPages.length);
@@ -659,8 +827,12 @@ else if (plan_type === 'full') {
 }
 
 const bl = kd.competitor_backlink_strength || {};
-const feasibility = { status, verdict, score: base.verdict_score ?? null, reasons: base.verdict_reasons || [], what_must_change: base.verdict_changes || [], alternatives,
-  expected_visits_top3: base.expected_visits_top3 ?? null, time_to_rank_months: base.time_to_rank_months ?? null, navigational };
+// R23: a feasibility score is a reading of the competition. With no results page and no research there is nothing to read, so the
+// status is "not checked" and the score is empty — never the verdict's number next to the word "winnable".
+const feasibility = { status: dataRefused ? 'not_checked' : status, verdict: dataRefused ? null : verdict, score: dataRefused ? null : (base.verdict_score ?? null),
+  reasons: base.verdict_reasons || [], what_must_change: base.verdict_changes || [], alternatives,
+  expected_visits_top3: dataRefused ? null : (base.expected_visits_top3 ?? null), time_to_rank_months: dataRefused ? null : (base.time_to_rank_months ?? null), navigational,
+  scored: !dataRefused, not_scored_reason: dataRefused ? refusal.message : '' };
 
 // ---- what else is needed besides the pages ----
 const requirements = [];
@@ -678,7 +850,8 @@ const pages_total = planned ? rungPages.length + 1 : 0;
 const stats = { pool_size: (pool.research || {}).pool_size || 0, ai_reviewed: rel.size, relevant: kws.length, pages_total, rung_pages: planned ? rungPages.length : 0,
   keywords_covered: planned ? rungPages.reduce((s, p) => s + 1 + p.supporting.length, 0) + 1 + top.supporting.length : 0,
   traffic_potential_total: planned ? rungPages.reduce((s, p) => s + (p.traffic_potential || 0), 0) + (top.traffic_potential || 0) : 0,
-  site_rankings_found: SR.count || 0, research_failures: (pool.research || {}).failures || [], excluded_keywords: excluded.length, refused_keywords: poolRefused.length };
+  site_rankings_found: SR.count || 0, research_failures: (pool.research || {}).failures || [], excluded_keywords: excluded.length, refused_keywords: poolRefused.length,
+  off_topic_keywords: offTopic.length, on_topic: onTopic.length };
 const notes = [];
 if (refusal) notes.push(refusal.message);
 if (poolRefused.length) notes.push(poolRefused.length + ' keyword(s) were left out of the ladder because they are other companies\' brands, government or portal searches, or navigational: ' + poolRefused.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason + ')').join(', ') + (poolRefused.length > 6 ? ' …' : '') + '.');
@@ -687,6 +860,7 @@ if (planned && plan_type === 'full' && rungPages.length) for (const r of rungs) 
 if (planned && plan_type === 'direct' && rungPages.length < 2) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned around the main keyword; add more as the site grows.');
 if (planned && plan_type !== 'direct' && !rungPages.length) notes.push('No supporting keywords were found for "' + head + '" in ' + base.country + ' (the topic is narrow in the search data), so the main page is the whole ladder for now and is written first. Supporting pages can be added as the site grows.');
 else if (planned && plan_type === 'short' && rungPages.length < 3) notes.push('Only ' + rungPages.length + ' supporting page(s) could be planned before the main page.');
+if (offTopic.length) notes.push(offTopic.length + ' keyword(s) were left out because they are not on this ladder\'s topic ("' + head + '"): ' + offTopic.slice(0, 6).map(x => '"' + x.keyword + '" (' + x.reason.replace(/^it is not on this ladder's topic: /, '') + ')').join(', ') + (offTopic.length > 6 ? ' …' : '') + '.');
 if (excluded.length) notes.push(excluded.length + ' keyword(s) already belong to other ladders of this site and were left out (one search, one page): ' + excluded.slice(0, 6).map(x => '"' + x.keyword + '" (ladder "' + x.head + '")').join(', ') + (excluded.length > 6 ? ' …' : '') + '.');
 if (headTakenAsPage) notes.push('The main keyword is also planned as a page of the ladder "' + headTakenAsPage.head + '" (' + headTakenAsPage.ladder_id + '): publish only one page for it.');
 if (plan.stretch && planned) notes.push('Very hard for this site today: consider one of the alternatives first (' + alternatives.join(', ') + ').');
@@ -695,9 +869,11 @@ const ladder = { ladder_id: ladderId, head: { keyword: head, volume: top.volume,
   domain, country: base.country, goal: base.goal || 'leads', feasibility, rungs, top, link_map, timeline, write_now, pages_now: pagesNow,
   later: later.slice(0, 12).map(k => ({ keyword: k.keyword, volume: k.volume, kd: k.kd, ...(k.held_back ? { held_back: true } : {}) })), requirements, stats, notes,
   plan_type, difficulty_for_you, reach, months: planned ? plan.months : '', months_range: planned ? plan.months_range : null, stretch: planned && plan.stretch, planned, refusal, order: order_text,
-  label: planned ? reachLabel(difficulty_for_you, plan) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
+  label: planned ? reachLabel(difficulty_for_you, plan) : dataRefused ? ('No ladder planned · ' + refusal.short) : (REACH_DIFF_LABEL[difficulty_for_you] + ' · no ladder'),
   chance: planned ? plan.chance : null, chance_text: planned ? reachChanceText(plan) : '', base_rate: REACH_BASE_RATE, refused_keywords: poolRefused.slice(0, 40),
   reach_info: { reach, method: reachInfo.method, p75: reachInfo.p75 ?? null, size_reach: reachInfo.size_reach ?? null, sample: reachInfo.sample ?? null, top10: reachInfo.top10 ?? null, organic_keywords: reachInfo.organic_keywords ?? null, cached: !!reachInfo.cached, cached_at: reachInfo.cached_at || null },
-  excluded_keywords: excluded.slice(0, 40),
+  excluded_keywords: excluded.slice(0, 40), off_topic_keywords: offTopic.slice(0, 20),   // R23: what the topic radius left out, with the reason
+  words: { main: top.target_words || 0, rung: rungWords.words, main_source: top.target_words_source, rung_source: rungWords.source },   // R22: where each page's length target came from
+  data_check: { pool_size: poolSize, minimum_pool: LADDER_MIN_POOL, head_measured: headMeasured, serp_checked: !serpOut, serp_error: serpOut, enough: !dataRefused },   // R23
   tracker: { cadence: base.tracker_cadence || 'weekly', auto_next_rung: !!base.auto_next_rung, stop_rule: 'once the top rung holds the top 3 for 4 checks it is checked monthly (with the published pages)' }, created_at: new Date().toISOString() };
 return [{ json: { ...base, ladder, site_rankings: pool.site_rankings || null, reach_cache_row } }];

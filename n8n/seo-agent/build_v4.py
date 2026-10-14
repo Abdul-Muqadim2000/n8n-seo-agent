@@ -3785,6 +3785,67 @@ sticky("""### Annotations, change tests and lineage (G12 + G29)
 log('Annotations, change tests and lineage on every number (2026-10-13, FIX_PLAN G12 + G29; criteria 3.4 / 3.5 / 2.12 / 3.11): one dated event registry (v5/data/seo_events.json) feeds the chart marks (v5/code/_annotations.js: published pages from seo_content_log, audit fixes from seo_audits, Google updates and the September 2025 num=100 data break), the G28 alert context (_site_stats.js) and the app (app/shared/src/seo-events.generated.ts); the Link Builder\'s control-group impact became the shared change test (v5/code/_change_test.js) and now also reads what a PAGE CHANGE did (seo_link_impact kind=page_change + change columns, "What your page changes did" in the Link Builder report) with graded verdicts and no causal wording; and every figure group in the weekly, AI-visibility, AI-growth, backlink, link-building, rank-tracker, ladder-plan and full reports carries its source, period, sample and basis (v5/code/_lineage.js) inline and in a "Where these numbers come from" table, with "source not recorded" where the lineage is genuinely unknown')
 
 # =============================================================================
+# 57. NOTHING CONFIDENT WITHOUT THE DATA UNDER IT (2026-10-14, system review FIX_PLAN.md §3.12 R23 / R22 / R26;
+#     evidence docs/system-review-2026-10-14/RESULTS.md §2.1 and §2.3)
+#     * R23 — a whole ladder planned, scored and written from ONE keyword. Exec 549: `pool_size: 1, ai_reviewed: 1, relevant: 1`,
+#       both SERP calls failed with 40101 inside an HTTP 200, `Keyword Data` answered `items_count: 0` — and the run still emitted
+#       "winnable / GO_WITH_CHANGES 68" and spawned a page for "azure api management monetization" (volume 10, trend -100%) under
+#       the head "azure cloud migration dubai": another topic, and no UAE in it. *Ladder Plan* now refuses to emit a plan (and with
+#       it the page run: `write_now` stays empty, so *Spawn Page Runs* has nothing to start and *Ladder Rows* stores nothing) when
+#       the research pool is under LADDER_MIN_POOL or the live results page could not be read; it says which, in the refusal, in the
+#       plan's label and in the report, and emits NO feasibility score for either case. Every rung keyword is additionally put
+#       through the topic radius against the head keyword (v5/code/_radius.js `RAD.headFit`, the kit the keyword research draws its
+#       radius with): the pool's own filter only asks for one shared word, so "azure" was enough — half of the head's meaningful
+#       words are needed now, and what is left out is listed with its reason in `ladder.off_topic_keywords` and in the notes.
+#     * R22 — a rung row carried `target_words: 0`, so the spawn passed `ladder_words: 0`, P2-7's clamp protected only the main page
+#       (1,800 "from the competitor analysis") and the rung page shipped 2,648 words, +47%, after two editor rounds. A rung page now
+#       takes the median length of the pages this run read on the topic's results page, and with no SERP length data falls back to
+#       the main page's target, then the competitor analysis, then a stated default — never 0 — and the plan records WHICH it was
+#       (`ladder.words.rung_source`, `page.target_words_source`). The editor-instruction half of R22 is not in this section.
+#     * R26 — a Keyword Check with `volume`, `kd`, `intent` and `cpc` all null still answered "Reachable for your site · Short
+#       ladder · 4-8 months" with "estimated chance fair (30-50%)", the missing data mentioned only in `warnings`. R3 put an unknown
+#       topic fit into the label; this puts "no search data" there too, and suppresses the chance band (there is no difficulty to
+#       estimate it from) with a sentence that says so.
+# =============================================================================
+_RADIUS57 = _rd0('code/_radius.js').rstrip('\n')
+# the radius kit goes into *Ladder Plan* beside the reach kit it needs; section 49 (G32) inlines the same kit where it is present,
+# so this never adds a second copy
+if 'const RAD = (() => {' not in code('Ladder Plan'):
+    patch('Ladder Plan', "const base = $('Parse Verdict').first().json;", _RADIUS57 + "\nconst base = $('Parse Verdict').first().json;")
+assert 'const RAD = (() => {' in code('Ladder Plan'), 'R23: the topic-radius kit (_radius.js) is not inlined into Ladder Plan'
+assert 'function difficultyForYou(' in code('Ladder Plan'), 'R23: the radius kit needs the reach kit in the same node'
+assert 'RAD.headFit(head, k.keyword)' in code('Ladder Plan'), 'R23: the topic radius is not applied to the rung keywords'
+assert 'for (const k of onTopic)' in code('Ladder Plan'), 'R23: an off-topic keyword can still reach a rung'
+for _a57 in ("const LADDER_MIN_POOL = 3, LADDER_WEAK_POOL = 5;", 'const thinPool =', "reason: 'serp_unchecked'", "reason: 'thin_data'", 'const dataRefused =',
+             "status: dataRefused ? 'not_checked' : status", 'score: dataRefused ? null :'):
+    assert _a57 in code('Ladder Plan'), 'R23: Ladder Plan is missing ' + _a57
+for _a57 in ('const RUNG_WORDS =', 'target_words_source', 'rung_source: rungWords.source'):
+    assert _a57 in code('Ladder Plan'), 'R22: Ladder Plan is missing ' + _a57
+# a refused plan cannot spawn a page: the page runs come from write_now and nothing else
+assert code('Spawn Page Runs').count('(L.write_now || []).slice(0, n)') == 1 and 'ladder_words: Number(p.target_words) || 0' in code('Spawn Page Runs'), \
+    'R23 / R22: the page runs no longer come from write_now with the rung page\'s own word target'
+assert "if (L.planned === false) return [{ json: { skip: true" in code('Ladder Rows'), 'R23: a refused ladder would still store rows'
+# the report: the refusal in its own words, and no "Winnable" on a plan nothing was measured for
+patch('Build Ladder Report', "const statusLabel = { winnable: 'Winnable', stretch: 'A stretch — possible with authority building', unrealistic: 'Not realistic as the top rung' }[f.status] || esc(f.status);",
+      "const statusLabel = { winnable: 'Winnable', stretch: 'A stretch — possible with authority building', unrealistic: 'Not realistic as the top rung',\n"
+      "  not_checked: 'Not scored — the data this rests on was missing' }[f.status] || esc(f.status);   // R23 (2026-10-14)")
+patch('Build Ladder Report', "'none — ' + esc((L.refusal || {}).reason === 'duplicate' ? 'this website already has a ladder for this keyword' : 'not realistic for this site')",
+      "'none — ' + esc((L.refusal || {}).short || ((L.refusal || {}).reason === 'duplicate' ? 'this website already has a ladder for this keyword' : 'not realistic for this site'))")
+assert 'not_checked:' in code('Build Ladder Report') and "(L.refusal || {}).short" in code('Build Ladder Report'), 'R23: the ladder report does not say why there is no plan'
+# the Keyword Check: the unknown in the label, not only in the warnings (R3's rule, one field over). *Assess Response* belongs to the
+# Keyword Check workflow (build_api.py inlines this same file), so the source is what is asserted here.
+_ASSESS57 = _rd0('code/Assess_Response.js')
+for _a57 in ("const NO_DATA = 'no search data';", 'body.search_data_known = !(a.volume == null && a.kd == null);',
+             "body.label = body.label + ' \\u00b7 ' + NO_DATA;", 'body.chance = null;', 'body.plan_assumed = true;'):
+    assert _a57 in _ASSESS57, 'R26: v5/code/Assess_Response.js is missing ' + _a57
+sticky("""### Nothing confident without the data under it (R23 · R22 · R26)
+A ladder is a bet on the competition for one search. When the **live results page could not be read**, or the keyword research came back with fewer than 5 keywords around the head term, the plan is **refused**: no rungs, no score, no page run — the reason is in the plan, in its label and in the report ("Not scored — the data this rests on was missing"). Exec 549 planned, scored *winnable 68* and wrote a page from **one** keyword on a results page that had failed twice.
+Every rung keyword is measured against the **head's own topic** (`_radius.js` `RAD.headFit`): half of the head's meaningful words have to be there. "azure api management monetization" is not a rung of "azure cloud migration dubai"; what is left out is listed with its reason.
+A rung page's **length target is never 0** — the median of the pages read on the topic's results page, else the main page's target, else the competitor analysis, else a stated default — and the plan says which. The **Keyword Check** carries "no search data" in the label and gives no chance band when volume and difficulty are both unknown.""",
+    pos('Ladder Plan')[0] - 40, pos('Ladder Plan')[1] + 260, 1120, 280, 3)
+log('Nothing confident without the data under it (2026-10-14, FIX_PLAN §3.12 R23 / R22 / R26): a keyword ladder is refused — no rungs, no feasibility score, no page run and no stored rows — when the live results page could not be read or the keyword research returned fewer than 5 keywords around the head term, with the reason in the plan, the label ("No ladder planned · …") and the report ("Not scored — the data this rests on was missing") instead of a plan with a number on it (R23); every rung keyword is put through the topic radius against the head keyword (v5/code/_radius.js RAD.headFit: half of the head\'s meaningful words, so "azure api management monetization" is no longer a rung of "azure cloud migration dubai") and what it leaves out is listed with its reason (R23); a rung page\'s word target is the median length of the pages read on the topic\'s results page, else the main page\'s target, else the competitor analysis, else a stated default — never 0 — and the plan records which (R22); and a Keyword Check with no search volume and no difficulty carries "no search data" in the label itself and gives no chance band, with a sentence saying why (R26, R3\'s rule one field over)')
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
