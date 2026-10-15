@@ -4,7 +4,10 @@ const V = require('./fixtures_v5');
 const { run, mock, begin, expectError, save, scanHtml, store } = H;
 (async () => {
 const decode = (items) => Buffer.from(items[0].binary.data.data, 'base64').toString('utf8');
-const guard = async (name, fn) => { try { await fn(); } catch (e) { const msg = (e.message || e).split('\n')[0]; console.log(`   !! scenario "${name}" aborted at: ${msg}`); if (e.stack) console.log('      ' + String(e.stack).split('\n').slice(1, 4).map(x => x.trim()).join(' | ')); H.results.push({ scenario: name, node: 'scenario aborted', ok: false, ms: 0, error: msg, items: [] }); } };   // an aborted scenario is a failure (it was silent before 2026-10-08)
+// ONLY_S=<regex> runs only the guarded scenarios whose name matches (a quick fails-before / passes-after check of one fix; the full run
+// without it is still what decides '0 failed'). Unguarded blocks still run.
+const ONLY_S = process.env.ONLY_S ? new RegExp(process.env.ONLY_S) : null;
+const guard = async (name, fn) => { if (ONLY_S && !ONLY_S.test(name)) return; try { await fn(); } catch (e) { const msg = (e.message || e).split('\n')[0]; console.log(`   !! scenario "${name}" aborted at: ${msg}`); if (e.stack) console.log('      ' + String(e.stack).split('\n').slice(1, 4).map(x => x.trim()).join(' | ')); H.results.push({ scenario: name, node: 'scenario aborted', ok: false, ms: 0, error: msg, items: [] }); } };   // an aborted scenario is a failure (it was silent before 2026-10-08)
 const reset = () => { for (const k of Object.keys(store)) delete store[k]; };
 let pvS1 = null;   // Parse Verdict output of S1, reused by S18 (page types)
 // v4.14 (FIX_PLAN D1): the run ledger (seo_run_ledger) replaced the static-data counters. `ledgerRun` plays one execution's intake as n8n runs
