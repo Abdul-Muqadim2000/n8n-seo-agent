@@ -14524,5 +14524,134 @@ await guard('the pages the crawl never reached, and a queue that starts with wha
 });
 
 
+// ---------- S122-S125 (fixer A8, 2026-10-16): the verdict reads the whole customer page before it says what the page lacks (R38), the accrediting body (R48), the pages-read titles (R52) ----------
+const A8 = require('./fixtures_r_a8');
+const a8fs = require('fs'), a8path = require('path'); const A8CD = process.env.CODE_DIR || a8path.join(__dirname, 'code_v4');
+// the prompt a node would send: each {{ expression }} evaluated against the node's input, as n8n does (an expression that throws renders empty)
+const a8render = (file, $json) => a8fs.readFileSync(a8path.join(A8CD, file), 'utf8').replace(/\{\{([\s\S]*?)\}\}/g, (m, ex) => { try { const v = new Function('$json', 'return (' + ex + ')')($json); return v == null ? '' : String(v); } catch (e) { return ''; } });
+const a8reqs = [{ kind: 'existing', url: A8.EXISTING }, { kind: 'home', url: A8.W + '/' }, { kind: 'related', url: A8.W + '/insights/the-cost-of-non-compliance' }];
+const a8ctx = { keyword: 'e invoicing software uae', domain: 'techand.ai', country: 'United Arab Emirates', mode: 'verdict', page_type: 'Service Page', location_code: 2784, existing_page: { url: A8.EXISTING, source: 'page inventory' }, existing_page_url: A8.EXISTING };
+const a8collect = async (htmlItems) => {
+  mock('Collect Site URLs', [{ json: a8ctx }]);
+  mock('Client Page Requests', a8reqs.map(r => ({ json: r })));
+  mock('Read Client Pages', [{ page_text: A8.readerText }, { page_text: 'Title: Home\n\nMarkdown Content:\n' + A8.readerText.slice(0, 1200) }, { page_text: 'Title: Related\n\nMarkdown Content:\n' + A8.readerText.slice(0, 1500) }]);
+  mock('Read Client Page HTML', htmlItems);
+  return (await run('Collect Client Pages', store['Read Client Page HTML']))[0].json;
+};
+await guard('S122 R38 the whole existing page is read and its facts measured', async () => {
+  reset(); const SN = 'S122 R38 the whole existing page is read and its facts measured';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const wordsOf = (t) => String(t || '').split(/\s+/).filter(Boolean).length;
+  const c = await a8collect([{ page_html: A8.html }, { page_html: A8.shellHtml }, { error: { message: 'timeout' } }]);
+  const d = c.existing_page_digest || {};
+  check('R38: the existing page is kept whole, well past the live 9,000-character cut (exec 608 lost 1/3 of a ~2,100-word page)', c.existing_page_text.length > 13000 && wordsOf(c.existing_page_text) >= 2000, JSON.stringify({ chars: c.existing_page_text.length, words: wordsOf(c.existing_page_text) }));
+  check('R38: the digest has the dates written in the body text (the live ones sat at character ~7,000)', Array.isArray(d.dates) && d.dates.includes('30 October 2026') && d.dates.includes('1 January 2027'), JSON.stringify(d.dates));
+  check('R38: the digest counts the 3 tables from the page\'s own HTML (the reader flattens them to plain lines)', d.tables === 3 && d.structure_reliable === true && d.tables_text.length === 3, JSON.stringify({ tables: d.tables, reliable: d.structure_reliable }));
+  check('R38: the digest finds the byline, the publication date and the call to action outside the site header', d.author === 'A. Author' && d.published === '2026-09-26' && d.cta === false, JSON.stringify({ author: d.author, published: d.published, cta: d.cta }));
+  check('R38: the facts the models read are in words: dates, "Tables on the page: 3", the author, the publication date', /30 October 2026/.test(c.existing_page_facts_text) && /Tables on the page: 3/.test(c.existing_page_facts_text) && /Author \/ byline: A\. Author/.test(c.existing_page_facts_text) && /published 2026-09-26/.test(c.existing_page_facts_text), c.existing_page_facts_text);
+  check('R38: the tables come back as rows, for the prompts (existing_page_tables)', /TABLES ON THE PAGE/.test(c.existing_page_tables) && /Structured invoicing 1 \| Creates machine-readable invoice data/.test(c.existing_page_tables), c.existing_page_tables.slice(0, 200));
+  const cShell = await a8collect([{ page_html: A8.shellHtml }, { page_html: A8.shellHtml }, { page_html: A8.shellHtml }]);
+  const ds = cShell.existing_page_digest;
+  check('R38: a client-rendered shell cannot prove an absence: tables / author / date are NOT CHECKED, never "none found"', ds.structure_reliable === false && ds.tables === null && ds.author === '' && /NOT CHECKED/.test(cShell.existing_page_facts_text) && !/Tables on the page/.test(cShell.existing_page_facts_text), cShell.existing_page_facts_text);
+  const cFail = await a8collect([{ error: { message: 'timeout' } }, { error: { message: 'timeout' } }, { error: { message: 'timeout' } }]);
+  check('R38: a failed HTML read leaves the text path as it was (whole text, dates, NOT CHECKED for structure)', cFail.existing_page_text.length > 13000 && cFail.existing_page_digest.dates.includes('30 October 2026') && cFail.existing_page_digest.structure_reliable === false, JSON.stringify({ n: cFail.existing_page_text.length }));
+  const cPlain = await a8collect([{ page_html: A8.plainHtml }, { page_html: A8.plainHtml }, { page_html: A8.plainHtml }]);
+  check('R38: a page whose real HTML has no table and no byline says "none found" (the absence is provable, so it stays claimable)', cPlain.existing_page_digest.tables === 0 && cPlain.existing_page_digest.author === '' && cPlain.existing_page_digest.structure_reliable === true && /Tables on the page: 0/.test(cPlain.existing_page_facts_text) && /none found in the page's HTML/.test(cPlain.existing_page_facts_text), cPlain.existing_page_facts_text);
+  // the older wiring (the Jina answers straight into the node) still works: no digest HTML, the text still whole
+  mock('Read Client Pages', [{ page_text: A8.readerText }]); mock('Client Page Requests', [{ json: a8reqs[0] }]);
+  const cOld = (await run('Collect Client Pages', store['Read Client Pages']))[0].json;
+  check('R38: fed Jina directly (no HTML node) the node still returns the whole text and marks the structure NOT CHECKED', cOld.existing_page_text.length > 13000 && cOld.existing_page_digest.structure_reliable === false, JSON.stringify({ n: cOld.existing_page_text.length }));
+});
+
+await guard('S123 R38 the analyzer, the verdict and the copywriter are given the page', async () => {
+  reset(); const SN = 'S123 R38 the analyzer, the verdict and the copywriter are given the page';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const c = await a8collect([{ page_html: A8.html }, { page_html: A8.shellHtml }, { page_html: A8.shellHtml }]);
+  const pa = a8render('Competitor_Analyzer.prompt.txt', { ...c, competitors_read: 6, avg_competitor_words: 1800, serp_digest: 'x', facts: [], competitor_digest: 'x', language_name: 'English' });
+  check('R38 (acceptance a): the rendered analyzer prompt contains "30 October 2026" (it was beyond the 3,500-character slice)', /30 October 2026/.test(pa), pa.slice(pa.indexOf('CLIENT'), pa.indexOf('CLIENT') + 200));
+  check('R38: the analyzer prompt carries the measured tables and byline, and the page text well past 3,500 characters', /Tables on the page: 3/.test(pa) && /Author \/ byline: A\. Author/.test(pa) && /TABLES ON THE PAGE/.test(pa) && pa.indexOf('In the UAE, an amendment moved the ASP') > 0 && /Tech& AI can support the broader technology conversation/.test(pa), pa.length);
+  check('R38: the analyzer is told it may claim only the absences the facts prove, and never to write "in the excerpt provided"', /only claim an ABSENCE that PAGE FACTS and the text above prove/.test(pa) && /never write "in the excerpt provided"/.test(pa), '');
+  const pv = a8render('Verdict_Agent.prompt.txt', { ...c, keyword: 'e invoicing software uae', competitor_analysis: { existing_page_gaps: [] }, competitors_summary: [], keyword_data: {}, language_name: 'English' });
+  check('R38: the verdict prompt carries WHAT THE CLIENT\'S PAGE HAS (the same facts) and the rule that only they may say what the page lacks', /WHAT THE CLIENT'S PAGE HAS/.test(pv) && /Tables on the page: 3/.test(pv) && /Never state as a fact that the client's own page lacks something/.test(pv), pv.slice(0, 80));
+  const pw = a8render('Copywriter.prompt.txt', { ...c, content_brief: {}, site_description: {}, spelling: 'British English' });
+  check('R38: the copywriter rewriting the page sees past 5,000 characters (its "keep every true fact" could not keep facts it never saw), with the facts and the tables', /30 October 2026/.test(pw) && /Tech& AI can support the broader technology conversation|ASP appointment deadline/.test(pw) && /TABLES ON THE PAGE/.test(pw), pw.length);
+});
+
+const a8pv = async (prev, answer) => { mock('Merge Keyword Data', [{ json: prev }]); return (await run('Parse Verdict', [{ json: { output: JSON.stringify(answer) } }]))[0].json; };
+const A8_LIVE = { verdict: 'GO_WITH_CHANGES', score: 58, risks: [], recommended_page: 'Service Page', expected_monthly_visits_top3: 90, time_to_rank_months: 8, secondary_keywords: ['e invoicing software dubai'],
+  reasons: ['The existing insights article at the target URL is a CFO-framed Peppol features piece. Its visible text has no mandate dates, no PINT-AE or 5-corner explanation, no tables, no lead CTA and no author or date. Its intent is a poor match for a service page, so the page needs rework before it can rank.',
+    'The top pages are service pages from ASPs, and competitor pages have no author boxes.'],
+  what_must_change: ['Rework the page into a service page'] };
+await guard('S124 R38 a claim about the customer\'s page that the page contradicts never reaches the customer', async () => {
+  reset(); const SN = 'S124 R38 a claim about the customer\'s page that the page contradicts never reaches the customer';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const c = await a8collect([{ page_html: A8.html }, { page_html: A8.shellHtml }, { page_html: A8.shellHtml }]);
+  const GAPS = ['The visible text does not state the mandate dates, such as 30 Oct 2026 or 1 Jan 2027, in the excerpt provided.', 'No comparison table is visible in the text provided.',
+    'No visible trust signals: author, date or reviewer.', 'There is no PINT-AE or 5-corner explanation.', 'The page has no section on penalties.'];
+  // 1. the analyzer's gaps, checked before Keyword Data / Merge Keyword Data / the verdict read them
+  mock('Parse Analysis', [{ json: { ...c, competitor_analysis: { existing_page_gaps: GAPS, search_intent: 'commercial', trust_signals_needed: ['Accredited ASP status (an FTA-accredited provider)'] } } }]);
+  const cc = (await run('Check Page Claims', store['Parse Analysis']))[0].json;
+  const kept = cc.competitor_analysis.existing_page_gaps;
+  check('R38: the three false gaps (dates, table, author / date) are removed from the analysis; the two that are true (no PINT-AE, no penalties section) stay', kept.length === 2 && kept.some(g => /PINT-AE/.test(g)) && kept.some(g => /penalties/.test(g)), JSON.stringify(kept));
+  check('R38: what was removed is recorded with the reason (page_claims_dropped), for the run record', cc.page_claims_dropped.length === 3 && cc.page_claims_dropped.every(x => x.why && x.topic), JSON.stringify(cc.page_claims_dropped.map(x => x.topic + ': ' + x.why)));
+  check('R38: the rest of the item travels on unchanged (keyword, digest, other analysis fields)', cc.keyword === c.keyword && cc.existing_page_digest.tables === 3 && cc.competitor_analysis.search_intent === 'commercial', JSON.stringify(Object.keys(cc).slice(0, 8)));
+  check('R48: the analyzer\'s own wording is corrected as well ("FTA-accredited" -> the Ministry of Finance\'s accreditation)', /Ministry of Finance-accredited provider/.test(cc.competitor_analysis.trust_signals_needed[0]) && !/FTA-accredited/.test(JSON.stringify(cc)), JSON.stringify(cc.competitor_analysis.trust_signals_needed));
+  // an analysis with no page to compare: nothing to check, nothing changed
+  mock('Parse Analysis', [{ json: { keyword: 'k', competitor_analysis: { existing_page_gaps: [] } } }]);
+  check('R38: a run with no existing page passes through', (await run('Check Page Claims', store['Parse Analysis']))[0].json.page_claims_dropped.length === 0, '');
+  // negative control: the claim is true when the page has none of it and the HTML was read in full
+  const cp = await a8collect([{ page_html: A8.plainHtml }, { page_html: A8.shellHtml }, { page_html: A8.shellHtml }]);
+  mock('Parse Analysis', [{ json: { ...cp, existing_page_digest: { ...cp.existing_page_digest, dates: [] }, competitor_analysis: { existing_page_gaps: ['No comparison table is visible on the page.', 'No visible author or date.'] } } }]);
+  const ccp = (await run('Check Page Claims', store['Parse Analysis']))[0].json;
+  check('R38: an absence the digest PROVES (HTML read in full: 0 tables, no byline) is not removed - the check is not a gag', ccp.competitor_analysis.existing_page_gaps.length === 2 && ccp.page_claims_dropped.length === 0, JSON.stringify(ccp.page_claims_dropped));
+  // 2. the verdict's own sentences (acceptance b: the verdict makes no claim that the page lacks dates, tables or an author)
+  const CTX = { keyword: 'e invoicing software uae', domain: 'techand.ai', country: 'United Arab Emirates', location_code: 2784, page_type: 'Service Page', existing_page: { url: A8.EXISTING, source: 'page inventory', matched_by: 'slug', match: 1 } };
+  const out = await a8pv({ ...CTX, existing_page_digest: c.existing_page_digest }, A8_LIVE);
+  const reasons = out.verdict_reasons.join(' ');
+  check('R38 (acceptance b): the verdict\'s reason no longer says the page has no dates, no tables, no author or date', !/no mandate dates|no tables|no lead CTA|no author or date/i.test(reasons), JSON.stringify(out.verdict_reasons));
+  check('R38: what the verdict said about the page that is NOT a false absence survives (the article\'s type and the intent mismatch)', /CFO-framed Peppol features piece/.test(reasons) && /intent is a poor match for a service page/.test(reasons), JSON.stringify(out.verdict_reasons));
+  check('R38: a sentence about the COMPETITORS ("competitor pages have no author boxes") is not a claim about the client\'s page and stays', /competitor pages have no author boxes/.test(reasons), JSON.stringify(out.verdict_reasons));
+  check('R38: the dropped sentence is listed (page_claims_dropped) with its reason', out.page_claims_dropped.length >= 1 && out.page_claims_dropped.some(x => /table|date|author/.test(x.topic) && x.why), JSON.stringify(out.page_claims_dropped));
+  const outNone = await a8pv(CTX, A8_LIVE);
+  check('R38: with no digest (nobody read the page) the verdict is exactly what the model wrote - no claim is checked that cannot be', outNone.verdict_reasons.join(' ').includes('no mandate dates, no PINT-AE') && outNone.page_claims_dropped.length === 0, JSON.stringify(outNone.verdict_reasons));
+  const outShell = await a8pv({ ...CTX, existing_page_digest: { ...c.existing_page_digest, dates: [], published: '', structure_reliable: false, tables: null, author: '', cta: null } }, { ...A8_LIVE, reasons: ['The existing page has no tables and no author.'] });
+  check('R38: when the page\'s HTML could not be read, "the page has no tables / no author" is not said at all (could not be checked)', outShell.verdict_reasons.length === 0 && outShell.page_claims_dropped.length === 1 && /could not be checked/.test(outShell.page_claims_dropped[0].why), JSON.stringify({ r: outShell.verdict_reasons, d: outShell.page_claims_dropped }));
+});
+
+await guard('S125 R48 R52 the accrediting body, and the titles of the pages read', async () => {
+  reset(); const SN = 'S125 R48 R52 the accrediting body, and the titles of the pages read';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 500), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  // ---- R48 ----
+  const CTX = { keyword: 'e invoicing software uae', domain: 'techand.ai', country: 'United Arab Emirates', location_code: 2784, page_type: 'Service Page' };
+  const out = await a8pv(CTX, { verdict: 'GO_WITH_CHANGES', score: 60, reasons: ['Businesses must appoint an FTA-accredited ASP, and every ranking page says so.'], risks: ['Tech& must be honest about its accreditation. If it is not an FTA-accredited ASP, the page has to position it as an implementation partner.'],
+    recommended_page: 'Service Page', what_must_change: ['State plainly whether Tech& is an FTA accredited provider or a partner of one'], secondary_keywords: [] });
+  const all = JSON.stringify([out.verdict_reasons, out.verdict_risks, out.verdict_changes]);
+  check('R48: the verdict no longer calls an ASP "FTA-accredited" in its reasons, risks or changes (accreditation is the Ministry of Finance\'s)', !/FTA[- ]accredited/i.test(all) && /Ministry of Finance-accredited ASP/.test(out.verdict_reasons[0]) && /Ministry of Finance-accredited ASP/.test(out.verdict_risks[0]), all);
+  const pv = a8fs.readFileSync(a8path.join(A8CD, 'Verdict_Agent.prompt.txt'), 'utf8'), pa = a8fs.readFileSync(a8path.join(A8CD, 'Competitor_Analyzer.prompt.txt'), 'utf8'), pw = a8fs.readFileSync(a8path.join(A8CD, 'Copywriter.prompt.txt'), 'utf8');
+  check('R48: the verdict, analyzer and copywriter prompts all say the Ministry of Finance accredits e-invoicing service providers',
+    [pv, pa, pw].every(p => /Ministry of Finance/.test(p) && /FTA-accredited/.test(p)), '');
+  // ---- R52 ----
+  mock('Clean Site Text', [{ json: { domain: 'techand.ai', page_title: A8.HOME_TITLE, site_text: '## Home\n\nEmpowering enterprise transformation.' } }]);
+  mock('Nav Pages Plan', A8.navPlan.map(p => ({ json: p })));
+  mock('Read Nav Pages', A8.navReads);
+  const sp = (await run('Site Pages', store['Read Nav Pages']))[0].json;
+  const titles = sp.site_pages.filter(p => p.kind === 'nav').map(p => p.title);
+  console.log('   pages read ->', JSON.stringify(titles));
+  check('R52: five menu pages the reader titled with the application\'s one generic title are named by five different titles', new Set(titles).size === 5 && !titles.some(t => t === A8.GENERIC), JSON.stringify(titles));
+  check('R52: the title is the menu link text, and a link text too short to name a page ("AI") gives way to the page\'s own first heading', titles.includes('Banking Financial Services') && titles.includes('Cloud Services') && titles.includes('Business Applications') && titles.includes('Tech& Capabilities') && !titles.includes('AI'), JSON.stringify(titles));
+  check('R52: the PAGE blocks the describer reads carry the same titles', /--- PAGE: Banking Financial Services \(/.test(sp.pages_text) && !new RegExp('--- PAGE: ' + A8.GENERIC.replace(/[|&]/g, '\\$&')).test(sp.pages_text), sp.pages_text.slice(0, 120));
+  // a title the page really has is kept
+  mock('Read Nav Pages', A8.navReads.map((r, i) => ({ page_text: r.page_text.replace(A8.GENERIC, ['Industries We Serve | Tech&', 'Cloud Services | Tech&', 'Capabilities | Tech&', 'Business Applications | Tech&', 'Data & Analytics | Tech&'][i]) })));
+  const sp2 = (await run('Site Pages', store['Read Nav Pages']))[0].json;
+  check('R52: when each page has its own title (as the live server HTML does) the reader\'s title is kept untouched', JSON.stringify(sp2.site_pages.filter(p => p.kind === 'nav').map(p => p.title)) === JSON.stringify(['Industries We Serve | Tech&', 'Cloud Services | Tech&', 'Capabilities | Tech&', 'Business Applications | Tech&', 'Data & Analytics | Tech&']), JSON.stringify(sp2.site_pages.map(p => p.title)));
+  const sp3 = (await (async () => { mock('Read Nav Pages', A8.navReads.map((r, i) => ({ page_text: r.page_text.replace(A8.GENERIC, i === 0 ? A8.HOME_TITLE : 'Distinct page ' + i) }))); return run('Site Pages', store['Read Nav Pages']); })())[0].json;
+  check('R52: a reader title that is the HOMEPAGE\'s title is the site\'s, not the page\'s, and is replaced too', sp3.site_pages[1].title === 'Banking Financial Services' && sp3.site_pages[2].title === 'Distinct page 1', JSON.stringify(sp3.site_pages.map(p => p.title)));
+});
+
+
 H.report();
 })();
