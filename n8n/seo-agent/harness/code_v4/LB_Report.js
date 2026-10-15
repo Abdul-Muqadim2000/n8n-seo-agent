@@ -95,6 +95,25 @@ const LN = (() => {
   const note = (l) => { const x = l || {}; const lbl = x.source_label || MISSING;
     return [lbl, x.period, x.sample, x.basis_label === lbl ? '' : x.basis_label, x.note].filter(Boolean).join(' · '); };
   const isHonest = (l) => !!l && (l.basis !== 'unknown' || note(l).indexOf(MISSING) >= 0);
+  // ---- the evidence half of the same rule (R10, promoted to the class by lineage_lint.py, 2026-10-15) ----
+  // A finding is a figure like any other: it may not be shown without the thing that shows it. R10 was exactly this - Google
+  // retired the Mobile Usability report, the API answered VERDICT_UNSPECIFIED for every page, and the audit raised a HIGH finding
+  // on 45 of 47 pages whose evidence string was "/:  | /whatwedo/ai-automation: " - punctuation and nothing else. So the test is
+  // not `evidence !== ''`: a string that is only separators, brackets or a bare "0" carries no evidence either.
+  const hasEvidence = (f) => {
+    const ev = S((f || {}).evidence).replace(/<[^>]*>/g, ' ');     // markup is not evidence
+    return /[A-Za-z]|[1-9]/.test(ev.replace(/[\s;|,.:·\-–—()\[\]\/]+/g, ' '));
+  };
+  // the findings that may be shown, and the titles of the ones held back. `allow` names a title that is evidence in itself
+  // (a count in the title, a note about data that could not be collected); everything else has to carry its own.
+  const unevidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    return (list || []).filter(f => f && !hasEvidence(f) && allow.indexOf(S(f.title)) < 0).map(f => S(f.title || f.id || 'untitled')); };
+  const evidenced = (list, o) => { const x = o || {}; const allow = (x.allow || []).map(S);
+    const keep = (list || []).filter(f => f && (hasEvidence(f) || allow.indexOf(S(f.title)) >= 0));
+    if (typeof x.onDrop === 'function') { const d = unevidenced(list, o); if (d.length) x.onDrop(d); }
+    return keep; };
+  const evidenceNote = (dropped) => (dropped || []).length
+    ? (dropped.length + ' finding(s) were left out because nothing was measured to show them: ' + dropped.slice(0, 5).join(', ')) : '';
   const html = (l) => '<span style="color:#64748b;font-size:11px">' + esc1(note(l)) + '</span>';
   const line = (l) => '<div style="color:#64748b;font-size:11px;margin-top:2px">' + esc1(note(l)) + '</div>';
   // the block under a report: one row per figure, so no number is left without a source, a period and a sample
@@ -109,7 +128,8 @@ const LN = (() => {
         + '</td><td ' + td + '>' + esc1(l.sample || '—') + '</td><td ' + td + '>' + esc1([l.basis_label, l.note].filter(Boolean).join(' — ')) + '</td></tr>').join('')
       + '</table><p style="color:#64748b;font-size:11px;margin:4px 0">' + esc1(x.footer || 'A figure marked "' + BASIS.modelled + '" is computed, not counted; "' + MISSING + '" means the figure reached this report without its source and should be treated as unverified.') + '</p>';
   };
-  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, SOURCES, BASIS, MISSING };
+  return { of, unknown, note, html, line, block, range, asOf, days, sample, isHonest, hasEvidence, evidenced, unevidenced,
+    evidenceNote, SOURCES, BASIS, MISSING };
 })();
 // ---- change test (G12, 2026-10-13, system review FIX_PLAN.md; CRITERIA_technical_tracking_reporting_ai_links.md 3.4) ----
 // "We changed the page and clicks went up" is not a result: seasonality and Google's own updates move every page on a site at once

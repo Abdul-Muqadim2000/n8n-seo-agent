@@ -1200,6 +1200,35 @@ Three corrections, each against something this register or the brief asserted:
   itself, so gating it would refuse the one question every site must ask) and a question the **owner typed themselves**. Both are kept
   and flagged.
 
+**INVARIANTS rule 1 is enforced, and the five defects the inventory found (2026-10-15, build section 72, `lineage_lint.py`, S82).**
+No new node can compose a delivered document without `_lineage.js`, hand on findings without `LN.evidenced`, subtract a stored report
+figure without the `report_type` and sample guards, or show a score with no refusal path. Kits are stripped before judging — inlining
+`_lineage.js` would otherwise make any node a "report builder", and `_page_watch.js` had made eleven nodes look like delta nodes. It was
+broken six ways and each was caught by name. Coverage today: lineage 10/16, evidence 1/2, like-for-like 4/6, withheld 3/4, with 9 nodes
+on `harness/lineage_baseline.json`. **What it does not prove is written into the baseline note**: that each individual figure inside a
+passing node carries its own lineage — `LN.of()` proves the node was built to say where a number came from, never that the number beside
+it did.
+
+**Paid on the way in, not registered as debt:** `addDomain` shipped **seven** audit findings — SSL, HTTPS redirect, sitemap, robots.txt,
+404, directory browsing, HTTP/2 — with literally `evidence: ''`, scored and ranked. `LN.evidenced` now runs at the sink (*Build Site
+Issues*, before scoring) with held-back titles named in the notes. And the **technical site audit** gained the "Where these numbers come
+from" table that the full report has carried since G29, travelling in the callback.
+
+**A correction to this register:** its own sub-rule "no finding ships with an empty evidence string" was written as a description of R10.
+It is not — R10's evidence string had words in it; what was wrong there was that Google had answered nothing, which `PW.inspection` owns.
+The empty-string defect was real but lived elsewhere, in the seven findings above.
+
+| ID | Title | Impact | Where | Fix | Status |
+|---|---|---|---|---|---|
+| B-L4 | **AI visibility deltas are computed across panels of different sizes.** *AI Metrics* subtracts the previous run's `share_of_voice` and `visibility_score` without checking the question panel is the same size — and the panel is settable from 3 to 50, so changing it reads as a change in visibility. R19's shape on a different figure | **High** (a wrong number a customer acts on) | *AI Metrics*, AI Visibility Tracker | carry the panel size with the figure and refuse the delta when it moved, as R19 did for the URL-inspection sample | **open**, held on the ratchet |
+| B-L5 | **A spam-score alert compares two unlike snapshots.** *Parse Backlinks* alerts on a 15-point move between snapshots without checking they are the same kind; a `free_only` snapshot is built from a different set of sources than a full one. R20's shape on a different figure | **High** (a false alert about a customer's backlink profile) | *Parse Backlinks*, Backlink Monitor | compare only snapshots of the same kind, or say the kinds differ and withhold | **open**, held on the ratchet |
+| B-L1 | **The written page package prints QA counts and readability / originality scores with no source line** — and prints them whether or not the check that produced them ran | Medium | *Blog Package* | lineage on the counts, and "not checked" when the check did not run | **open**, held on the ratchet |
+| B-L2 | **The keyword strategy prints searches per month, difficulty and cost per click as facts.** They are provider estimates for a single keyword; the section says so in prose, not as lineage, and when the strategy ships on its own there is no table at all | Medium | *Build Keyword Strategy* | the G29 lineage table on the strategy document too | **open**, held on the ratchet |
+| B-L3 | **The Word attachment carries the numbers without their sources** — *Build Word File* re-prints the figures and the lineage block does not travel into the `.doc`, so the customer who opens the attachment sees figures with no provenance | Medium | *Build Word File* | carry the lineage block into the Word rendering | **open**, held on the ratchet |
+
+The other four baseline entries are small or already covered at their sink (*Analyze Probes* delivers only through *Build Site Issues*;
+three cadence / Console Alert e-mails state counts with no source line). They stay listed rather than excused.
+
 **A process defect this batch found (B-P1).** `isolation: "worktree"` cut both agents' worktrees from `edca460` — the last merge to
 `main` — which is **47 commits behind** the branch tip: no build sections 55–66, no S67–S74, and `docs/system-review-2026-10-14/` did
 not exist, so the brief's own required reading was missing. Both agents detected it independently and merged the tip before starting,

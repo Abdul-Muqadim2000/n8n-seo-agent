@@ -11728,5 +11728,121 @@ await guard('read-path fit gate over stored rungs', async () => {
   reset();
 });
 
+// S82 (2026-10-15, docs/system-review-2026-10-14/INVARIANTS.md rule 1 — build section 72) — a number we report is measured, or
+// it says what it is. ~19 of the 81 defects were this one class: a High finding on 45 of 47 pages from a field Google no longer
+// answers (R10), an impact basis of 22,860 impressions for a property that measured 5,295 (R10), "no page of yours answers this
+// search" beside the page ranking #6.2 for it (R12), 19,579 citing AI answers from a four-character name match (R14), "winnable
+// 68" from two SERP calls that both failed (R18 / R23), a health score chained across unlike report types (R20), a crawl settled
+// at the price quoted for 200 pages when 47 were crawled (R32).
+//
+// `lineage_lint.py` walks the GENERATED workflow JSON, so it cannot be exercised by running node code: the build runs the lint's
+// own self-test and records it, exactly as S44 reads retry_wiring.json and S79 reads gate_pairs.json, and this scenario asserts
+// what was recorded. The two debts section 72 PAID are asserted the other way round — by running the real node code.
+// ===================================================================================
+await guard('INVARIANTS rule 1 — lineage, evidence, like-for-like deltas and withheld scores', async () => {
+  reset(); const SN = 'S82 INVARIANTS rule 1 — a figure a customer reads says where it came from, a finding with nothing to show for it is held back, a delta compares like with like, and a score can be withheld';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const LG = require('./lineage.json');
+  const LB = require('./lineage_baseline.json');
+  const F = require('./fixtures');
+
+  // ---------- 1. the lint's own ways of being broken, each one caught ----------
+  const ST = LG.selftest;
+  check('rule 1: a report that carries the lineage kit, calls it and lets it travel passes — the lint costs a correct node nothing',
+    ST.a_report_with_lineage_passes.caught === true && ST.a_report_with_lineage_passes.fails.length === 0
+    && ST.a_report_with_lineage_passes.subject.includes('lineage'), JSON.stringify(ST.a_report_with_lineage_passes));
+  check('rule 1 broken way 1: the same report WITHOUT lineage -> caught (this is every report but the AI-visibility one before G29: "1,240 impressions" and "#8" side by side, one a 28-day Google count and the other one live sample)',
+    ST.the_report_loses_its_lineage.caught === true && ST.the_report_loses_its_lineage.fails.includes('lineage'),
+    JSON.stringify(ST.the_report_loses_its_lineage));
+  check('rule 1 broken way 2: findings handed on with no evidence guard -> caught (R10: a High finding on 45 of 47 pages whose evidence string was separators and nothing else)',
+    ST.findings_with_no_evidence_guard.caught === true && ST.findings_with_no_evidence_guard.fails.includes('evidence')
+    && ST.findings_run_through_the_guard.fails.includes('evidence') === false, JSON.stringify([ST.findings_with_no_evidence_guard, ST.findings_run_through_the_guard]));
+  check('rule 1 broken way 3: a delta against a stored earlier report with no report_type and no sample guard -> caught (R20 chained a health score across unlike report types; R19 read a smaller sample as an improvement)',
+    ST.a_delta_against_an_unlike_previous_report.caught === true && ST.a_delta_against_an_unlike_previous_report.fails.includes('like_for_like')
+    && ST.a_delta_that_compares_like_with_like.fails.includes('like_for_like') === false,
+    JSON.stringify([ST.a_delta_against_an_unlike_previous_report, ST.a_delta_that_compares_like_with_like]));
+  check('rule 1 broken way 4: a score with no path that withholds it -> caught (R18 / R23: "winnable 68" from two SERP calls that both failed)',
+    ST.a_score_that_cannot_be_withheld.caught === true && ST.a_score_that_cannot_be_withheld.fails.includes('withheld')
+    && ST.a_score_that_can_be_withheld.fails.includes('withheld') === false, JSON.stringify([ST.a_score_that_cannot_be_withheld, ST.a_score_that_can_be_withheld]));
+  check('rule 1 broken way 5: the kit renames what the lint looks for, so the lint would silently check nothing -> caught',
+    ST.the_kit_renames_its_entry_point.caught === true, JSON.stringify(ST.the_kit_renames_its_entry_point));
+
+  // ---------- 2. what the lint found in the real workflows, and the ratchet that holds the rest ----------
+  check('rule 1: the four checks are live over the generated workflows, and every one of them has nodes that pass it',
+    ['lineage', 'evidence', 'like_for_like', 'withheld'].every(k => LG.counts[k].subject > 0 && LG.counts[k].pass > 0)
+    && LG.counts.lineage.subject >= 15, JSON.stringify(LG.counts));
+  const unpaid82 = Object.keys(LG.unpaid).flatMap(k => LG.unpaid[k].map(c => k + ' :: ' + c));
+  const listed82 = Object.keys(LB).filter(k => k !== '_note').flatMap(k => (LB[k].fails || []).map(c => k + ' :: ' + c));
+  check('rule 1: every node that fails a check is named in the ratchet baseline, so the debt cannot grow — a new one fails the build',
+    unpaid82.every(x => listed82.includes(x)) && unpaid82.length === listed82.length,
+    JSON.stringify(unpaid82.filter(x => !listed82.includes(x))));
+  check('rule 1: every baselined node carries the reason it is there, and the real defects are registered (B-L1..B-L5), not excused',
+    Object.keys(LB).filter(k => k !== '_note').every(k => String(LB[k].why || '').length > 40)
+    && ['B-L1', 'B-L2', 'B-L3', 'B-L4', 'B-L5'].every(id => JSON.stringify(LB).includes(id)), JSON.stringify(Object.keys(LB).length));
+  check('rule 1: the baseline says plainly what it does NOT prove — that every figure inside a passing node carries its own lineage',
+    /never that the number beside it did/.test(String(LB._note || '')), String(LB._note || '').slice(0, 120));
+  check('rule 1: the nine report builders that already carry lineage still do (the full report, the ladder plan, the weekly, AI visibility, AI growth, backlinks, link building, the rank tracker)',
+    ['Build Full Report', 'Build Ladder Report', 'Site Report', 'Tracker Report', 'AI Report', 'Growth Report', 'BL Report', 'LB Report', 'LB Doc']
+      .every(n => Object.keys(LG.nodes).some(k => k.endsWith('/ ' + n) && !LG.nodes[k].fails.includes('lineage'))),
+    JSON.stringify(Object.keys(LG.nodes).filter(k => LG.nodes[k].fails.includes('lineage'))));
+
+  // ---------- 3. paid in section 72: the audit's site-wide findings say what was checked ----------
+  const DOM82 = 'northwind-erp.com';
+  const page82 = (p) => ({ resource_type: 'html', status_code: 200, url: 'https://' + DOM82 + p, click_depth: p === '/' ? 0 : 1, checks: {}, page_timing: { largest_contentful_paint: 1500, time_to_interactive: 2500, waiting_time: 200 }, meta: { title: 'Northwind ERP — ' + p, description: 'A description that is long enough to pass the length check on every page of this fixture.', htags: { h1: ['Northwind'] }, internal_links_count: 4, external_links_count: 1, images_count: 2, content: { plain_text_word_count: 800 } } });
+  // the checks that produce the seven site-wide findings: three of them turned off, so three findings are raised
+  mock('Check Crawl', [{ json: { domain: DOM82, audit_level: 'site_audit', pages_crawled: 3, crawl_summary: { domain_info: { checks: { ssl: false, sitemap: false, http2: false, robots_txt: true, test_page_not_found: true, test_directory_browsing: true, test_https_redirect: true } }, page_metrics: {} } } }]);
+  mock('Get Crawled Pages', { tasks: [{ result: [{ items: ['/', '/services/', '/contact/'].map(page82) }] }] });
+  mock('Collect Crawl Extras', [{ json: { crawl_extras: {} } }]);
+  // one finding with real evidence, and two with none: an EMPTY evidence string (what addDomain shipped for seven findings until
+  // today) and one that is separators and nothing else. R10's own string — "/:  | /whatwedo/ai-automation: " — is NOT this class:
+  // it has words in it, and what was wrong with it was that Google had answered nothing, which is why PW.inspection still decides
+  // that one. This guard is the sub-rule the register names: nothing shipped with an empty evidence string.
+  const GHOST82 = { category: 'Mobile', severity: 'High', title: 'Pages Google reports as not mobile-friendly', why: 'w', fix: 'f', evidence: '', affected_count: 45, affected_pct: 96, sample_urls: [], scope: 'page' };
+  const SEPS82 = { category: 'Performance', severity: 'High', title: 'Slow pages', why: 'w', fix: 'f', evidence: ' ;  |  ·  ', affected_count: 3, affected_pct: 100, sample_urls: [], scope: 'page' };
+  const REAL82 = { category: 'Content', severity: 'Medium', title: 'Thin content on key pages', why: 'w', fix: 'f', evidence: '3 of 3 crawled pages under 300 words', affected_count: 3, affected_pct: 100, sample_urls: [], scope: 'page' };
+  const bsi82 = await run('Build Site Issues', [{ json: { probe: { findings: [GHOST82, SEPS82, REAL82], what_works: [], measurements: {} }, extra_findings: [], extra_works: [] } }]);
+  const a82 = bsi82[0].json.site_audit;
+  const site82 = a82.findings.filter(f => f.scope === 'site');
+  check('rule 1 (paid): the site-wide findings are raised as before — SSL, sitemap and HTTP/2 are off in this crawl',
+    ['Invalid SSL certificate', 'No XML sitemap found', 'HTTP/2 not enabled'].every(t => site82.some(f => f.title === t)),
+    JSON.stringify(site82.map(f => f.title)));
+  check('rule 1 (paid): and not one of them ships with an empty evidence string any more — each names the site-wide check that produced it, the answer it gave and that it is ONE answer for the whole site, not a count of pages',
+    site82.length > 0 && site82.every(f => /site-wide check (ssl|sitemap|http2|robots_txt|test_\w+) answered "failed" for northwind-erp\.com — one answer for the whole site, not a count of pages/.test(f.evidence)),
+    JSON.stringify(site82.map(f => [f.title, f.evidence])));
+
+  // ---------- 4. paid in section 72: a finding with nothing to show for it never reaches the report ----------
+  check('rule 1 (paid, R10 as the class): the finding whose evidence is separators and nothing else is NOT in the report — it was held back at the sink, before anything was scored',
+    !a82.findings.some(f => f.title === GHOST82.title) && !a82.findings.some(f => f.title === SEPS82.title),
+    JSON.stringify(a82.findings.map(f => f.title)));
+  check('rule 1 (paid): the finding with real evidence is untouched — the guard drops what cannot be shown, never what can',
+    a82.findings.some(f => f.title === REAL82.title && f.evidence === REAL82.evidence), JSON.stringify(a82.findings.filter(f => f.category === 'Content')));
+  check('rule 1 (paid): held back is said out loud — the withheld title is named in the audit and in the report notes, so nothing vanishes quietly',
+    (a82.evidence_withheld || []).includes(GHOST82.title) && (a82.evidence_withheld || []).includes(SEPS82.title)
+    && (a82.notes || []).some(n => /left out because nothing was measured to show them/.test(n) && n.includes(GHOST82.title)),
+    JSON.stringify([a82.evidence_withheld, a82.notes]));
+  check('rule 1 (paid): and it did not deduct a point on its way out — the High is gone from the counts as well as from the list',
+    !Object.keys(a82.issue_counts).some(k => k === GHOST82.title) && a82.findings.every(f => f.evidence && /[A-Za-z]|[1-9]/.test(f.evidence)),
+    JSON.stringify([a82.issue_counts, a82.findings.filter(f => !f.evidence).map(f => f.title)]));
+
+  // ---------- 5. paid in section 72: the technical site audit says where its numbers come from ----------
+  const rep82 = await run('Build Audit Report', bsi82);
+  const lin82 = rep82[0].json.lineage || [];
+  const doc82 = decode(rep82);
+  check('rule 1 (paid): the technical site audit now carries the lineage table the full report has had since G29 — every figure group with its source, period, sample and how it was arrived at',
+    lin82.length >= 6 && lin82.every(l => l.figure && l.source_label && l.basis_label)
+    && lin82.filter(l => l.basis !== 'unknown').every(l => l.period && l.sample),
+    JSON.stringify(lin82.map(l => [l.figure, l.source_label, l.basis_label])));
+  check('rule 1 (paid): the health score says it is MODELLED, not a Google figure, and names the sample it was computed over',
+    lin82.some(l => /Health score/.test(l.figure) && l.basis === 'modelled' && /pages crawled/.test(l.sample)), JSON.stringify(lin82[0]));
+  check('rule 1 (paid): a source that could not answer is "not available" WITH ITS REASON — never a borrowed source and never a silent zero',
+    lin82.some(l => l.source === 'none' && l.basis === 'unknown' && String(l.note || '').length > 5),
+    JSON.stringify(lin82.filter(l => l.source === 'none')));
+  check('rule 1 (paid): it is in the document the customer opens, in the contents list, and it travels in the callback payload',
+    /Where these numbers come from/.test(doc82) && /6a\. Where these numbers come from/.test(doc82)
+    && /Where these numbers come from \(6a\)/.test(doc82) && Array.isArray(rep82[0].json.lineage), String(/Where these numbers come from/.test(doc82)));
+  reset();
+});
+
 H.report();
 })();
