@@ -8015,6 +8015,127 @@ log('The keyword verdict\'s own two numbers, and a difficulty measured on the to
 #       850 — above the valuable rotation and inside the light run's budget — so the status written on one path is acted on on the
 #       other (INVARIANTS rule 2).
 # =============================================================================
+# 82. A SUBMISSION IS A NOTIFICATION, AND A WIN IS NOT FOR EVER (2026-10-15, benchmark programme area 9 —
+#     docs/system-review-2026-10-14/BENCH_AREA9_ai_growth.md; register rows B9-1 / B9-2 / B9-3 / B9-4 / B9-5)
+#
+#     Area 9 is the ACTING half of AI search: getting a site named and cited, not measuring whether it is. The rubric names
+#     Profound Actions and AthenaHQ, and both were opened in this pass. Profound's own launch of Actions (10 Jul 2025) is a
+#     brief generator and says so — "We don't generate content for you" — and its 2026 successor Aim is "an always-on background
+#     agent" that routes work to agents "while keeping marketers in control of every approval"
+#     (https://www.tryprofound.com/blog/introducing-actions, https://www.tryprofound.com/newsroom/profound-launches-aim-to-transform-ai-search-data-into-marketing-execution).
+#     AthenaHQ "tells you what to fix" and publishes only through a customer's own CMS connection (https://athenahq.ai/).
+#     So the leaders stage and recommend; the human approves. We already do that — nothing here sends, publishes or places a
+#     citation, and Google's spam policies are the reason it stays that way: scaled content abuse is "many pages ... generated
+#     for the primary purpose of manipulating search rankings ... no matter how it's created", link spam includes "using
+#     automated programs or services to create links to your site", and spam now covers attempts "to manipulate generative AI
+#     responses in Google Search" (https://developers.google.com/search/docs/essentials/spam-policies).
+#
+#     What this pass found is not a missing feature. It is five claims the engine was making that its own data did not support.
+#
+#     * B9-1 — **we told customers a submission reaches ChatGPT.** "N page(s) sent to Bing (ChatGPT search, Copilot)" was in the
+#       weekly report, the node comments and the sticky. OpenAI's crawler documentation says OAI-SearchBot "is used to surface
+#       websites in search results in ChatGPT's search features" and never mentions Bing
+#       (https://developers.openai.com/api/docs/bots); Bing's index is what Bing and Microsoft Copilot answer from, and Bing
+#       Webmaster Tools reports those citations in AI Performance, a dashboard with no API
+#       (https://blogs.bing.com/webmaster/2026/2/Introducing-AI-Performance-in-Bing-Webmaster-Tools-Public-Preview/, and its
+#       Topics Portfolio beta of 13 Oct 2026). IndexNow's own FAQ states that "Submitting a URL does not guarantee immediate
+#       indexing" and that each engine "makes its own decision about whether to index it", over Amazon, Bing, Naver, Seznam.cz,
+#       Yandex and Yep — Google does not take part (https://www.indexnow.org/faq). The report now says exactly that, and the
+#       word "sent" is never dressed up as "indexed".
+#     * B9-2 — **nothing ever went back to look.** "16 pages sent to Bing" was the headline of a week's work and no run ever
+#       asked what became of them: GetUrlInfo was called for the 12 pages of the readiness rotation only. Every page submitted
+#       in the last 45 days that Bing has not crawled is now asked about again (free), and the report states how many Bing has
+#       SINCE crawled, how long the rest have waited, and how many were not asked about — or, with the site outside the Bing
+#       account, that the figure is not available and why (INVARIANTS rule 4, then rule 1).
+#     * B9-3 — **"can AI read and quote this page" was answered by a browser.** The key pages were fetched with a Chrome
+#       User-Agent and robots.txt was never read on this path, so a page the AI fetchers are forbidden to touch could score
+#       90/100 and be sent to Bing and IndexNow on top. robots.txt is now read first and matched per page by Google's documented
+#       rules for OAI-SearchBot, ChatGPT-User, PerplexityBot, Claude-SearchBot, Googlebot and Bingbot: closed to all six and
+#       there is NO score (not a zero — a refusal with the rule quoted), closed to some and the score is capped with that block
+#       as the first fix, and a robots.txt that could not be read is "not checked", never "allowed".
+#     * B9-4 — **a win was one observation, and once won it could never be lost.** A target became `won` because its question
+#       was absent from the latest run's gap list — which also happens when the question was not asked at all — and a stored
+#       `won` row stayed `won` even while the gap list said the question was lost again. A win now needs at least two answers of
+#       the last eight days naming the business (the weekly run and the daily pulse both write them), the count travels with the
+#       status into the report and the alert, and a question that is lost again goes back in the queue with both dates and a
+#       medium alert.
+#     * B9-6 — **"writing" was a promise nobody ever kept.** The Content Cadence marks a target `writing` and stamps `written_at`
+#       when it STARTS a page run, nothing ever sets `written`, and nothing writes the row back when the run is refused or fails —
+#       the R1 class, in the one table R1 did not cover. The read path now believes a `writing` row only against a content-log row
+#       for the same run that says written or published; after two weeks without one the question is queued again with the reason
+#       and a medium alert. The write-side release belongs to the cadence and is registered for area 4.
+#     * B9-5 — **a refresh queue with no decay in it.** Refreshes were chosen by age and by our own readiness score; the thing
+#       the leaders rank them by is citation decay. A page cited in earlier weekly checks and in neither of the last two is now
+#       raised as a refresh with the counts and the date it was last cited — measured from runs we already store.
+# =============================================================================
+def _b82_checks():
+    """Area 9 over the generated AI Growth workflow: the sourced wording, the follow-up, the robots gate on BOTH the scoring and
+    the submitting path, the measured win, and the decay. Walks the built workflow and its main connections, because R17's lesson
+    was that the code can be right while the wiring is not."""
+    import json as _j82
+    _p82 = os.path.join(HERE0, 'workflows', 'SEO_Agent_AI_Growth.json')
+    assert os.path.exists(_p82), 'SEO_Agent_AI_Growth.json was not generated'
+    _wf82 = _j82.load(open(_p82, encoding='utf-8'))[0]
+    _code82 = {n['name']: (n.get('parameters') or {}).get('jsCode') or '' for n in (_wf82.get('nodes') or []) if (n.get('parameters') or {}).get('jsCode')}
+    _want82 = {
+        'Growth Plan': ('B9-2 / B9-4 / B9-5 / B9-6', ('win_min_answers: 2', 'follow_up_days: 45', 'const obsOf =', 'obsLine', 'const wasWon =',
+                                                      'won_lost.push', 'const decayOf =', 'const follow_up =', 'const logByReq =', 'stalled_targets.push')),
+        'Robots Verdicts (Growth)': ('B9-3', ("{ bot: 'OAI-SearchBot'", "{ bot: 'Bingbot'", 'const rulesFor =', 'blocked_all:', 'unavailable', 'bing_ok:')),
+        'AI Readiness': ('B9-3', ("$('Robots Verdicts (Growth)')", 'score_withheld', 'score = null', "key: 'ai_fetchable'", 'robots_note')),
+        'Bing Submit Requests': ('B9-1 / B9-2 / B9-3', ('OAI-SearchBot', 'refused', 'blockedFor', "x.q.why === 'checked this week'")),
+        'IndexNow Requests': ('B9-1 / B9-3', ('does not guarantee immediate indexing', 'blocked_all', 'refused')),
+        'Bing Growth Requests': ('B9-2', ('p.follow_up', "'submitted '", 'submitted_days')),
+        'Growth Metrics': ('B9-2 / B9-3 / B9-4 / B9-5 / B9-6', ('const outcome =', "basis: 'not available'", 'crawlOf', 'r.score != null',
+                                                                "type: 'robots'", "type: 'decay'", 'won_lost', 'refusedSub', 'stalled_targets')),
+        'Growth Report': ('B9-1 / B9-2 / B9-3 / B9-4', ('a submission is a notification, not indexing', 'Bing, Yandex, Naver, Seznam, Yep',
+                                                        'OAI-SearchBot', 'have since been crawled by Bing', 'not scored', 'crawled by Bing after we submitted them')),
+    }
+    for _node82, (_row82, _needs82) in _want82.items():
+        _js82 = _code82.get(_node82) or ''
+        assert _js82, 'area 9: node %s not found in the AI Growth workflow' % _node82
+        for _t82 in _needs82:
+            assert _t82 in _js82, '%s: %s no longer carries %r' % (_row82, _node82, _t82)
+    # B9-1: the claim that a Bing submission reaches ChatGPT may not come back anywhere in this workflow, code or sticky
+    _all82 = '\n'.join(_code82.values()) + '\n' + '\n'.join(((n.get('parameters') or {}).get('content') or '') for n in (_wf82.get('nodes') or []))
+    assert '(ChatGPT search, Copilot)' not in _all82, 'B9-1: a Bing submission is being sold as reaching ChatGPT search again'
+    # B9-2: the outcome has a refusal path and is never derived from the submissions themselves
+    _gm82 = _code82['Growth Metrics']
+    assert "if (!BING) return { basis: 'not available'" in _gm82 and "if (!inAccount) return { basis: 'not available'" in _gm82, \
+        'B9-2: the submission outcome has no refusal path — it would print a figure for a site Bing cannot be asked about'
+    assert 'crawled: crawled.length' in _gm82 and "source: 'Bing Webmaster Tools (GetUrlInfo)'" in _gm82, 'B9-2: the outcome no longer says what measured it'
+    # B9-4: a lost question may not keep a stored "won"
+    _gp82 = _code82['Growth Plan']
+    assert "['writing', 'written', 'won'].includes(old.status) ? old.status" not in _gp82, 'B9-4: a question that is lost again is being left at "won" again'
+    assert 'o.named >= CONFIG.win_min_answers' in _gp82, 'B9-4: a win is being declared without counting the answers behind it'
+    # B9-6: a stored "writing" row is believed only against a content-log row for the same run
+    assert "if (l && ['written', 'published'].includes(String(l.status))) return null;" in _gp82, \
+        'B9-6: a target marked "writing" by the cadence is being trusted again without the page run that proves it'
+    # B9-3, the wiring: every path from a trigger to the scoring and the submitting nodes runs through the robots verdicts.
+    # Proved by deleting that node from the graph and showing the three consumers become unreachable (R17's lesson).
+    _conns82 = _wf82.get('connections') or {}
+    def _reach82(skip):
+        _seen, _stack = set(), [n['name'] for n in (_wf82.get('nodes') or []) if n['type'].endswith(('scheduleTrigger', 'executeWorkflowTrigger'))]
+        while _stack:
+            _cur = _stack.pop()
+            if _cur in _seen or _cur == skip:
+                continue
+            _seen.add(_cur)
+            for _lst in ((_conns82.get(_cur) or {}).get('main') or []):
+                for _t in (_lst or []):
+                    _stack.append(_t['node'])
+        return _seen
+    _full82 = _reach82(None)
+    for _consumer82 in ('AI Readiness', 'Bing Submit Requests', 'IndexNow Requests', 'Growth Metrics'):
+        assert _consumer82 in _full82, 'area 9: %s is not on the AI Growth main path at all' % _consumer82
+    _without82 = _reach82('Robots Verdicts (Growth)')
+    for _consumer82 in ('AI Readiness', 'Bing Submit Requests', 'IndexNow Requests'):
+        assert _consumer82 not in _without82, \
+            'B9-3 (INVARIANTS rule 2): %s can be reached without passing Robots Verdicts (Growth) — the gate exists in the code and not in the wiring' % _consumer82
+
+log('A submission is a notification, and a win is not for ever (2026-10-15, benchmark area 9, rows B9-1 ... B9-5; BENCH_AREA9_ai_growth.md). The leaders of the ACTING half stage and recommend and the human approves - Profound Actions says "We don\'t generate content for you", its 2026 successor Aim keeps "marketers in control of every approval", AthenaHQ "tells you what to fix" - and Google\'s spam policies now cover attempts "to manipulate generative AI responses in Google Search", so what this pass changed is not what we do but what we CLAIM. B9-1: the weekly report said "N page(s) sent to Bing (ChatGPT search, Copilot)" while OpenAI\'s own crawler page documents OAI-SearchBot for ChatGPT search and never mentions Bing; it now names Bing and Microsoft Copilot for Bing\'s index, lists IndexNow\'s engines (Amazon, Bing, Naver, Seznam, Yandex, Yep - not Google) and quotes IndexNow\'s own "does not guarantee immediate indexing", so a submission is never dressed up as an indexing. B9-2: nothing ever went back to look at the pages we sent - GetUrlInfo was asked only about the readiness rotation - so every page submitted in the last 45 days that Bing has not crawled is asked about again (free) and the report states how many Bing has SINCE crawled, how long the rest have waited and how many were not asked about, or that the figure is not available and why. B9-3: "can AI read and quote this page" was answered by a Chrome User-Agent with robots.txt never read on this path, so a page the AI fetchers may not touch could score 90/100 and be submitted on top; robots.txt is read first and matched per page by Google\'s documented rules for the six answer fetchers - closed to all six means NO score and no submission (a refusal with the rule quoted, not a zero), closed to some caps the score with that block as the first fix, and a robots.txt that could not be read is "not checked", never "allowed" - and the build proves the gate is in the WIRING by deleting the node and showing AI Readiness, Bing Submit Requests and IndexNow Requests become unreachable. B9-4: a win was one observation and, once won, could never be lost - a target became won because its question was absent from the latest gap list (which also covers a question nobody asked) and a stored won row survived the question being lost again; a win now needs at least two answers of the last eight days naming the business, the count travels into the report and the alert, and a question lost again returns to the queue with both dates and a medium alert. B9-6: "writing" was a promise nobody kept - the Content Cadence stamps a target writing and written_at when it STARTS a page run, nothing ever sets written and nothing writes the row back when the run is refused, so a question could sit being written for ever (the R1 class in the one table R1 did not cover); the read path now believes a writing row only against a content-log row for the SAME run that says written or published, and after two weeks without one the question is queued again with the reason and a medium alert, while the write-side release is registered for the cadence. B9-5: refreshes were ranked by age and by our own score, never by citation decay - a page cited in earlier weekly checks and in neither of the last two is now raised with the counts and the date it was last cited, measured from runs we already store')
+
+
+# =============================================================================
 def _b79_checks():
     """Area 10 over the generated Backlink Monitor: freshness, the measured liveness rate, one set for the anchors, and a silence
     that is no longer a loss. Walks the built workflow, so a change that never reaches a node cannot pass."""
@@ -8202,6 +8323,8 @@ _b74_checks()
 _b73_checks()
 # section 78 (B6-1 ... B6-5): benchmark area 6, on the generated Rank Tracker and the dated event registry
 _b78_checks()
+# section 82 (B9-1 ... B9-5): benchmark area 9, on the generated AI Growth workflow and its main-path wiring
+_b82_checks()
 
 # section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
 # and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.
