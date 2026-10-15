@@ -35,8 +35,9 @@ Two things a browser cannot honestly do for a domain nobody owns. Both are named
    the test domain. That is what makes the brand chain in screenshots 20–22 real rather than mocked: the server really reads a
    profile row, really takes two fields of it, and the page really draws them. The dashboards therefore show their **empty states**,
    which is what a new customer sees anyway.
-   The logo image itself is served by the browser (`page.route`) so the pass does not depend on the public internet; the host in
-   the profile does not resolve, which is exactly what screenshot 21 needs.
+   The stand-in is `scripts/stub_n8n.py` (its header says how to start it and how to point the dev server at it). The logo image
+   itself is served by the browser (`page.route`) so the pass does not depend on the public internet; the host in the profile does
+   not resolve, which is exactly what screenshot 21 needs.
 
 ## What passed
 
@@ -85,7 +86,7 @@ and failed the suite. Its one slow test now carries an explicit 30 s timeout; th
 | Typecheck | `shared`, `server`, `web` — clean |
 | Unit tests | **shared 265** (11 new in `brand.test.ts`), **server 254** (11 new in `shareBrand.test.ts`) |
 | Web build | clean |
-| `scripts/smoke.py` | **ALL PASSED** — with the stand-in engine running. Without it, four checks fail on `N8N_API_KEY is not configured`, in any worktree, with or without this change (the same `n8n/.env` gap as B-F5). The cleanup note at the end of a smoke run ("could not remove the smoke upload rows from n8n") has the same cause |
+| `scripts/smoke.py` | **ALL PASSED** — with the stand-in engine (`scripts/stub_n8n.py`) running. Without it, four checks fail on `N8N_API_KEY is not configured`, in any worktree, with or without this change (the same `n8n/.env` gap as B-F5). The cleanup note at the end of a smoke run ("could not remove the smoke upload rows from n8n") has the same cause |
 
 ## What this pass did **not** cover
 
