@@ -10642,5 +10642,160 @@ await guard('B-A7 B-A9 the alert retry, the escalation and the shared concurrenc
   reset();
 });
 
+// ===================================================================================
+// S76 B2-1 / B2-2 / B2-3 (2026-10-15, benchmark programme area 2 — docs/system-review-2026-10-14/BENCH_AREA2_ladders.md):
+// a topical plan has to be measured on ITS OWN topic. Ours used one reach per website, cached 30 days, so the reach measured on
+// e-invoicing research on 2026-10-08 decided the plan for "erp implementation dubai" on 2026-10-13 (lad_mv5pjt5y4aoa, exec 494).
+// Every check below fails against the code of that run.
+// ===================================================================================
+await guard('b2-topic-authority-inventory-and-order', async () => {
+  const SN = 'S76 B2-1 B2-2 B2-3 — a ladder measured against the reach for its own topic (and told plainly when it is not), the inventory of what the site already has on that topic, and the figures that put every page where it is';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const D = 'techand.ai', SITE = 'site_techand-ai', LOC = 2784, EMPTY = [{ json: {} }];
+  const HEAD = 'erp implementation dubai';
+  const ago76 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+
+  // ---------- 1. the kit on its own: what counts as evidence on a topic, and what does not ----------
+  const RT = { code: '_reach_topic' };
+  const topicOf = async (ranked, o = {}) => (await run('Topic Reach', [{ json: { ranked, head: o.head || HEAD, reach: o.reach === undefined ? 35 : o.reach, domain: D } }], RT))[0].json;
+  const onKw = (keyword, position, kd) => ({ keyword, position, kd });
+  const FIVE = [onKw('erp implementation cost', 3, 8), onKw('erp implementation checklist', 5, 10), onKw('erp implementation partner dubai', 7, 12),
+    onKw('erp implementation timeline', 9, 14), onKw('erp implementation steps', 2, 16)];
+  const OFF = [onKw('e invoicing software uae', 4, 40), onKw('peppol access point uae', 6, 44), onKw('northwind erp login', 1, 5)];
+  const five = await topicOf([...FIVE, ...OFF]);
+  console.log('   topic reach (5 on-topic top-10) ->', JSON.stringify({ used: five.used, reach: five.reach, topic: five.topic_reach, site: five.site_reach, on: five.on_topic, top10: five.top10 }));
+  check('B2-1: five on-topic keywords in the top 10 are enough to measure a reach ON THE TOPIC, and that is what the plan is measured against — not the site-wide number',
+    five.used === true && five.topic_reach === 14 && five.reach === 14 && five.site_reach === 35 && five.on_topic === 5 && five.top10 === 5 && five.sample === 5,
+    JSON.stringify(five));
+  check('B2-1: a keyword that merely shares one word with the head ("northwind erp login") is not evidence about this topic, and the off-topic top-10 keywords are named as where the site-wide reach came from',
+    five.on_topic === 5 && !five.examples.some(e => /login|invoicing|peppol/.test(e.keyword)) && five.examples[0].position === 2
+    && /75% of the 5 keyword\(s\) about "erp implementation dubai"/.test(five.note) && /difficulty of 14 or lower/.test(five.note), JSON.stringify([five.examples, five.note]));
+  const four = await topicOf([...FIVE.slice(0, 4), ...OFF]);
+  check('B2-1: four is below the bar the site-wide measurement itself uses, so the site reach stays — and the reason says how many were found, not nothing',
+    four.used === false && four.reach === 35 && four.topic_reach === null && four.top10 === 4
+    && /4 keyword\(s\) on this topic are in the top 10 - fewer than the 5 needed/.test(four.reason)
+    && /optimistic case/.test(four.note), JSON.stringify([four.reason, four.note]));
+  const none = await topicOf(OFF);
+  check('B2-2 / B2-1: a site with nothing on the topic keeps its site-wide reach and is told so — absence of on-topic wins never invents a penalty of its own',
+    none.used === false && none.reach === 35 && none.on_topic === 0 && /nothing techand\.ai ranks for is on this topic/.test(none.reason)
+    && none.other_topics.includes('northwind erp login'), JSON.stringify([none.reason, none.other_topics]));
+  const near = await topicOf([onKw('erp implementation cost', 18, 20), onKw('erp implementation risks', 24, 22)]);
+  check('B2-1: on-topic keywords that rank but not in the top 10 are counted and named with the best position, and still do not move the reach',
+    near.used === false && near.on_topic === 2 && near.top10 === 0 && near.best.position === 18
+    && /none of them in the top 10 \(best #18\)/.test(near.reason), JSON.stringify([near.reason, near.best]));
+  const blind = await topicOf(null);
+  check('B2-1: when the ranked-keywords pull failed there is no topic evidence at all, and the plan says that rather than reporting zero',
+    blind.used === false && blind.reach === 35 && /could not be read on this run/.test(blind.reason), JSON.stringify(blind.reason));
+
+  // ---------- 2. the whole ladder: the same site, with and without a record on the topic ----------
+  const rankedTask = (rows) => V.task({ target: D, items: rows.map(r => ({ se_type: 'google',
+    keyword_data: { keyword: r.keyword, keyword_info: { search_volume: 90, cpc: 6, competition: 0.4, monthly_searches: [], search_volume_trend: { yearly: 4, quarterly: 1 } },
+      keyword_properties: { keyword_difficulty: r.kd, words_count: r.keyword.split(' ').length }, search_intent_info: { main_intent: 'commercial' },
+      serp_info: { serp_item_types: ['organic'] }, avg_backlinks_info: { referring_domains: 30 } },
+    ranked_serp_element: { serp_item: { type: 'organic', rank_group: r.position, rank_absolute: r.position, domain: D, url: 'https://www.' + D + '/' + r.keyword.replace(/\s+/g, '-') + '/' } } })) });
+  const POOL76 = ['erp implementation cost dubai', 'erp implementation partner dubai', 'erp implementation checklist', 'erp implementation services dubai',
+    'erp implementation timeline', 'erp implementation plan dubai', 'erp implementation steps', 'erp implementation risks', 'erp implementation training', 'erp software uae'];
+  const SERP76 = ['gulferp.ae', 'erppartner.example', 'dubaierp.example', 'nextgenerp.example'].map((domain, i) => ({ rank: i + 1, domain, url: 'https://' + domain + '/erp-implementation', title: 'ERP implementation in Dubai', word_count: [1400, 1600, 1800, 2000][i], headings: ['What it costs'] }));
+  const PV76 = (o = {}) => ({ keyword: HEAD, domain: D, country: 'United Arab Emirates', location_code: LOC, language_code: 'en', goal: 'leads', email: '', callback_url: '', request_id: 'r-b2', ladder_id: 'lad_s76', pages_now: 2,
+    page_type: 'Service Page', recommended_page: 'Service Page', competitors: [], competitors_summary: SERP76,
+    serp_features: { se_results_count: 420000, checked_at: ago76(0), people_also_ask: [], related_searches: [], forum_threads: [], featured_snippet: null, ai_overview: { present: false, text: '', cited_domains: [], seen_at: ago76(0) }, features_present: [], video_results: false, shopping_results: false, local_pack: false },
+    business: 'ERP implementation partner in the UAE', services: ['ERP implementation', 'Dynamics 365 Business Central'],
+    site_description: { business_description: 'ERP implementation partner in the UAE', products_or_services: ['ERP implementation', 'Dynamics 365 Business Central'] },
+    keyword_data: { search_volume: 210, cpc: 11, keyword_difficulty: 45, google_intent: 'commercial', competitor_backlink_strength: { avg_referring_domains: 28 } },
+    verdict: 'GO_WITH_CHANGES', verdict_score: 68, verdict_reasons: ['The top pages are regional ERP partners.'], verdict_changes: ['Write a service page of about 1,900 words'], verdict_risks: [],
+    secondary_keywords: ['erp partner dubai'], competitor_analysis: { recommended_word_count: 1900 }, site_authority: { organic_keywords: 60, top3: 2, top10: 8, est_monthly_traffic: 300 },
+    site_urls: ['https://www.' + D + '/', 'https://www.' + D + '/insights/erp-implementation-dubai-guide/'],
+    expected_visits_top3: 70, time_to_rank_months: 6, ...o });
+  const ladder76 = async (ranked, o = {}) => {
+    delete store['Site Model'];
+    mock('Parse Verdict', PV76(o.pv || {}));
+    mock('Ladder Requests', [{ kind: 'suggestions', label: 'suggestions for ' + HEAD, body: [{ keyword: HEAD }] }, { kind: 'ranked', label: 'keywords ' + D + ' ranks for', domain: D, body: [{ target: D }] }]);
+    mock('Load Site Cache', [{ json: { id: 1, key: 'reach:' + SITE, kind: 'reach', site_id: SITE, value: JSON.stringify({ reach: 35, method: 'size', p75: null, size_reach: 35, sample: 0, top10: 8, organic_keywords: 60, location_code: LOC }), updated_at: ago76(3) } }]);
+    mock('Load Domain Ladders', EMPTY); mock('Load Domain Ladder Settings', EMPTY);
+    const lp = (await run('Ladder Pool', [V.task({ seed_keyword: HEAD, items: POOL76.map((k, i) => V.kwItem(k, i)) }), rankedTask(ranked)]))[0].json;
+    const ch = await run('Ladder Relevance Chunks', [{ json: lp }]);
+    mock('Ladder Keyword Relevance', ch.map(c => V.ladderRelevance(c.json)));
+    const item = (await run('Ladder Plan', store['Ladder Keyword Relevance']))[0].json;
+    return { item, L: item.ladder };
+  };
+
+  const proven = await ladder76([...FIVE, ...OFF]);
+  const TA = proven.L.topic_authority || {};
+  console.log('   ladder with a record on the topic ->', JSON.stringify({ reach: proven.L.reach, site: (proven.L.reach_info || {}).reach, used: TA.used, plan: proven.L.plan_type, diff: proven.L.difficulty_for_you }));
+  check('B2-1: the ladder is measured against the reach for its own topic (14), while `reach_info` still carries the site-wide measurement (35) it was cached from — the two numbers never overwrite each other',
+    proven.L.reach === 14 && (proven.L.reach_info || {}).reach === 35 && TA.used === true && TA.topic_reach === 14 && TA.site_reach === 35,
+    JSON.stringify({ reach: proven.L.reach, info: proven.L.reach_info, ta: { used: TA.used, topic: TA.topic_reach, site: TA.site_reach } }));
+  check('B2-1: and the plan CHANGES because of it — difficulty 45 is "reachable" against a site-wide 35 and "hard" against the 14 this site has really proved on this topic, so the short ladder becomes a full one',
+    proven.L.difficulty_for_you === 'hard' && proven.L.plan_type === 'full' && proven.L.months === '9-15',
+    JSON.stringify([proven.L.difficulty_for_you, proven.L.plan_type, proven.L.months]));
+  check('B2-1: the owner reads which of the two numbers was used and why, in the plan notes',
+    (proven.L.notes || []).some(n => /Measured on this topic/.test(n) && /not against the site-wide reach of 35/.test(n)), JSON.stringify(proven.L.notes.slice(0, 3)));
+
+  // the same site before it had anything on this topic: no on-topic ranking keyword and no on-topic page (the homepage, which has no
+  // words of its own, must not count as "a page about it" — that would give every site a page on every topic)
+  const cold = await ladder76(OFF, { pv: { site_urls: ['https://www.' + D + '/', 'https://www.' + D + '/insights/peppol-access-point-uae/'] } });
+  const TC = cold.L.topic_authority || {};
+  console.log('   ladder with no record on the topic ->', JSON.stringify({ reach: cold.L.reach, used: TC.used, plan: cold.L.plan_type, pages: (cold.L.stats || {}).pages_total }));
+  check('B2-1: a site with nothing on this topic keeps its site-wide reach, and the plan says so instead of presenting it as a measurement of this topic',
+    cold.L.reach === 35 && TC.used === false && TC.on_topic === 0 && cold.L.plan_type === 'short'
+    && (cold.L.notes || []).some(n => /site-wide reach \(35\)/.test(n) && /optimistic case/.test(n)), JSON.stringify([cold.L.reach, TC.used, cold.L.notes[0]]));
+  check('B2-1: the site measurement is never rewritten by the topic one, so the next run still caches and reads the same site reach',
+    (cold.L.reach_info || {}).reach === 35 && (cold.L.reach_info || {}).method === 'size' && cold.item.reach_cache_row == null, JSON.stringify(cold.L.reach_info));
+
+  // ---------- 3. B2-2: what the site already has on this topic, counted before the new pages ----------
+  const COV = TA.coverage || {};
+  console.log('   coverage ->', JSON.stringify(COV));
+  check('B2-2: the plan opens with the inventory — the pages the site already has on the topic, the searches it ranks for, the best position — all from data the run already had',
+    COV.pages_on_site >= 1 && COV.pages.some(p => /erp-implementation-dubai-guide/.test(p.url)) && COV.ranked_keywords === 5 && COV.top10_keywords === 5
+    && COV.best_position === 2 && COV.best_keyword === 'erp implementation steps', JSON.stringify(COV));
+  check('B2-2: and it states its own improve-vs-new split, which has to add up to the pages it planned',
+    COV.planned_total === (proven.L.stats || {}).pages_total && COV.planned_improve + COV.planned_new === COV.planned_total && COV.planned_total > 0
+    && /Of the \d+ page\(s\) in this plan/.test(COV.summary) && /never given a second page/.test(COV.summary), JSON.stringify([COV.planned_total, COV.planned_improve, COV.planned_new]));
+  check('B2-2: a site starting the topic from zero is told exactly that — and its homepage, which has no words of its own, is not counted as a page about the topic',
+    (TC.coverage || {}).pages_on_site === 0 && (TC.coverage || {}).ranked_keywords === 0
+    && /Nothing on techand\.ai is about "erp implementation dubai" yet/.test((TC.coverage || {}).summary)
+    && /starts from zero/.test((TC.coverage || {}).summary), JSON.stringify((TC.coverage || {}).summary));
+
+  // ---------- 4. B2-3: every planned page carries the figures that put it there ----------
+  const planned76 = [...proven.L.rungs.flatMap(r => r.pages), proven.L.top];
+  console.log('   why ->', JSON.stringify(planned76.slice(0, 3).map(p => [p.page_no, p.keyword, p.why])));
+  check('B2-3: every planned page — rungs and destination alike — carries a reason naming its difficulty against the reach actually used, its keywords, its volume and whether it is new or an improvement',
+    planned76.length > 1 && planned76.every(p => typeof p.why === 'string' && p.why.length > 40 && /against the reach this plan is measured against \(14\), measured on this topic/.test(p.why)
+      && /keyword\(s\)/.test(p.why) && /(a page you do not have yet|improves https)/.test(p.why)),
+    JSON.stringify(planned76.map(p => p.why).slice(0, 2)));
+  check('B2-3: the destination page says it is the destination, and a rung says which rung it is — the order of the plan is readable from the pages themselves',
+    /^The destination page: /.test(proven.L.top.why) && proven.L.rungs.flatMap(r => r.pages).every(p => new RegExp('^Rung ' + p.rung + ': ').test(p.why)),
+    JSON.stringify([proven.L.top.why.slice(0, 60), (proven.L.rungs.flatMap(r => r.pages)[0] || {}).why]));
+  check('B2-3: the factors travel as data as well as prose, so the app and the callback can show them without re-deriving anything',
+    planned76.every(p => p.why_factors && p.why_factors.reach === 14 && p.why_factors.keywords >= 1 && ['new', 'improve'].includes(p.why_factors.status)
+      && ['easy', 'reachable', 'hard', 'very_hard', 'not_realistic'].includes(p.why_factors.difficulty_for_you)), JSON.stringify(planned76[0].why_factors));
+  check('B2-3: and the pages started now carry it too — the first thing a customer reads is why this page is first',
+    (proven.L.write_now || []).length >= 1 && proven.L.write_now.every(w => w.why && w.why.length > 40), JSON.stringify((proven.L.write_now || []).map(w => [w.keyword, (w.why || '').slice(0, 50)])));
+  check('B2-3: a page whose keyword has no difficulty figure says it was counted, never that it is easy',
+    !planned76.some(p => p.kd == null && !/difficulty unknown, counted as/.test(p.why)), JSON.stringify(planned76.filter(p => p.kd == null).map(p => p.why)));
+
+  // ---------- 5. the delivered documents and the callback ----------
+  mock('Ladder Plan', [{ json: proven.item }]);
+  const html76 = decode(await run('Build Ladder Report', EMPTY));
+  save('ladder-plan-b2-topic-authority.doc.html', html76); scanHtml('ladder plan with topic authority (B2)', html76);
+  check('B2-1: the report prints the site-wide reach as the site-wide reach, and the topic sentence beside it — it never passes the topic number off as the cached site measurement',
+    /Your site's reach is difficulty <b>35<\/b>/.test(html76) && /Measured on this topic/.test(html76) && /not against the site-wide reach of 35/.test(html76),
+    (html76.match(/Your site&#39;s reach[\s\S]{0,320}|Your site's reach[\s\S]{0,320}/) || [''])[0]);
+  check('B2-2: the report has a section of its own for what the site already has on the topic, with the pages named',
+    /What you already have on this topic/.test(html76) && /erp-implementation-dubai-guide/.test(html76) && /Best position today/.test(html76)
+    && /Searches you rank for on this topic/.test(html76), (html76.match(/What you already have[\s\S]{0,300}/) || [''])[0]);
+  check('B2-3: and every page in the ladder table carries its reason under the keyword, including the destination row',
+    (html76.match(/against the reach this plan is measured against/g) || []).length >= planned76.length && /Why here/.test(html76),
+    String((html76.match(/against the reach this plan is measured against/g) || []).length));
+  mock('Attach PDF Ladder', [{ json: proven.item }]);
+  const resp76 = (await run('Build Ladder Response', [{ json: proven.item }]))[0].json;
+  check('B2-1 / B2-2 / B2-3: the callback carries the topic measurement, its inventory and the reason per page, so the app shows the same numbers as the document',
+    resp76.topic_authority && resp76.topic_authority.used === true && resp76.topic_authority.coverage.planned_total === COV.planned_total
+    && (resp76.top_page || {}).why && (resp76.top_page || {}).why_factors.reach === 14
+    && resp76.rungs.flatMap(r => r.pages).every(p => p.why && p.why_factors), JSON.stringify({ ta: !!resp76.topic_authority, top: ((resp76.top_page || {}).why || '').slice(0, 40) }));
+  reset();
+});
+
 H.report();
 })();
