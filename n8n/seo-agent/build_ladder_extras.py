@@ -181,6 +181,31 @@ _js9 = _js9.replace(_sum9, "head_line: headSerp ? headSerp.line : '', mobile_che
     "      note: checkEvidence.note || '', cost_usd: checkEvidence.cost_usd ?? null, cost_basis: checkEvidence.cost_basis || '' } : null };", 1)
 _tr9['parameters']['jsCode'] = _js9
 assert "$('SERP Check Answers')" in _js9 and 'checks: checkEvidence' in _js9, 'B-A10: the Rank Tracker report cannot see what the checks did'
+# ---- B6-1 / B6-2 / B6-3 / B6-5 (2026-10-15, benchmark area 6 - docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md) ----
+# A position is one reading of one results page at one moment; the leaders answer "what happened on a volatile day" with a
+# market-wide index (Semrush Sensor 0-10, AccuRanker's Google Grump over ~1,000,000 keywords). Ours now answers it for THIS
+# keyword, measured from the snapshots the check already stores, and every move is printed with it.
+_rs6 = _rd0('code/_rank_serp.js')
+assert 'const AIO_KEEP = [0.420, 0.492, 0.536,' in _rs6 and 'ORGANIC_LEFT_WITH_AIO' not in _rs6, \
+    'B6-1: the share of voice still cuts every position by the flat April 2025 AI Overview factor'
+assert 'https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/' in _rs6 and 'December 2025 data (published 2026-02-04)' in _rs6, \
+    'B6-1: a measured click loss must carry the study and the date it was measured on'
+assert 'const churn = (prev, cur, o) =>' in _rs6 and 'const churnNone = (reason) =>' in _rs6, 'B6-2: the page-movement kit is missing'
+assert "churnNone('no earlier reading of this results page is stored" in _rs6, 'B6-2: a missing earlier reading must not come back as no movement'
+assert "stated rule, not a measurement" in _rs6, 'B6-2: the still / some / high labels must say they are a rule and not a measurement'
+_tr6 = _tracker_nodes['Tracker Report']
+for _a6, _m6 in (("const changes = new Map(rowsK.map(r => [r.keyword,", 'B6-2: the report does not measure how much each results page moved'),
+                 ('const drops = rowsK.filter(r => r.delta != null && r.delta <= -5).map(withMove);', 'B6-2: a drop is still printed with nothing beside it'),
+                 ('const gains = rowsK.filter(r => r.delta != null && r.delta >= 5).map(withMove);', 'B6-2: a gain is still printed with nothing beside it'),
+                 ('RS.churnNone(\'no check was bought for this keyword this week', 'B6-2: a keyword nobody checked this week must say so, not report no movement'),
+                 ('const updateLine = sinceMarks.length ?', 'B6-3: a Google update inside the compared window is not named'),
+                 ('const staleRead = (r) =>', 'B6-2: the "Before" column never says how old it is'),
+                 ('const costHtml = (() => {', 'B6-5: the week\'s checks are costed for nobody (criterion 2.14)'),
+                 ('serp_change: changes.get(r.keyword) || null', 'B6-2: the movement never reaches the app through the callback'),
+                 ("LN.unknown('How much the results page itself moved'", 'B6-2: the new figure has no lineage row for the case where it could not be measured')):
+    assert _a6 in _tr6, _m6
+assert "page_movement: { compared:" in _tr6 and "labels_basis: RS.CHURN.labels_basis" in _tr6, 'B6-2: the ladder summary carries no movement figure with its basis'
+assert 'The provider reported no cost for these calls' in _tr6, 'B6-5: a cost the provider did not report must not be invented'
 retry_lint.check_in200(_wf_tracker)
 write(_wf_tracker, 'SEO_Agent_Rank_Tracker.json')
 # R31 (2026-10-14): written AFTER the workflow, because ledger_mainline() fills `ai_nodes` (the Claude nodes the settle checks) and
@@ -199,7 +224,11 @@ open(os.path.join(CODE, '_rank_serp.js'), 'w').write(
     "  const voice = RS.voice(landscape, features, j.domain, mine.position); const snapshot = RS.snapshot(a, landscape, features, j.device || 'desktop');\n"
     "  return { json: { read: { ok: a.ok, error: a.error, seen_at: a.seen_at, results_count: a.results_count }, rank: mine, types: RS.typeList(a),\n"
     "    features, landscape, voice, snapshot, packed: RS.pack(snapshot, j.max || 1800), chips: RS.featureChips(features),\n"
-    "    line: RS.featureLine(features, j.obs || []), method: RS.METHOD, ctr: RS.CTR } }; });\n")
+    "    line: RS.featureLine(features, j.obs || []), method: RS.METHOD, ctr: RS.CTR, aio_keep: RS.AIO_KEEP,\n"
+    # B6-2 (2026-10-15, benchmark area 6): how much the results page itself moved, from the two stored snapshots (S88)
+    "    change: RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {}),\n"
+    "    change_text: RS.churnText(RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})),\n"
+    "    move_note: RS.moveNote(j.delta === undefined ? null : j.delta, RS.churn(j.prev_snapshot === undefined ? null : j.prev_snapshot, j.cur_snapshot === undefined ? RS.pack(snapshot, j.max || 1800) : j.cur_snapshot, j.churn_opts || {})) } }; });\n")
 
 # =============================================================================
 # 2. SEO Agent — Publish to WordPress (optional; stays inactive, called through Execute Workflow)

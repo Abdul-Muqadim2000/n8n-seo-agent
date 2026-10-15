@@ -1,14 +1,18 @@
 {
-  "_doc": "The dated event registry (G12, 2026-10-13). THE one place to add a Google update or a data break: build_v4.py inlines it into v5/code/_annotations.js and v5/code/_site_stats.js and writes app/shared/src/seo-events.generated.ts for the app's charts. Add an entry, rebuild, done. Dates are the start and the end of the rollout as Google announced it (Google Search Status dashboard); an event still rolling out keeps today's date as its end.",
-  "updated": "2026-10-13",
+  "_doc": "The dated event registry (G12, 2026-10-13). THE one place to add a Google update or a data break: build_v4.py inlines it into v5/code/_annotations.js and v5/code/_site_stats.js and writes app/shared/src/seo-events.generated.ts for the app's charts. Add an entry, rebuild, done. SOURCE (B6-4, re-read 2026-10-15): Google's Search Status Dashboard ranking history, https://status.search.google.com/products/rGHU1u87FJnkP6W2GwMi/history — the only first-party list. It publishes each update's START and its DURATION, so the `end` below is the start plus that duration and is derived, not quoted. Copy the name Google uses: a 'core update' and a 'spam update' are different systems, and naming one as the other tells a customer their fall came from something that never ran. Nothing goes in here that is not on that page.",
+  "updated": "2026-10-15",
   "google_updates": [
-    { "name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-27" },
-    { "name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-17" },
-    { "name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-22" },
-    { "name": "December 2025 core update", "start": "2025-12-02", "end": "2025-12-18" },
-    { "name": "March 2026 core update", "start": "2026-03-10", "end": "2026-03-26" },
-    { "name": "June 2026 core update", "start": "2026-06-23", "end": "2026-07-08" },
-    { "name": "September 2026 core update", "start": "2026-09-15", "end": "2026-09-30" }
+    { "name": "March 2025 core update", "start": "2025-03-13", "end": "2025-03-26" },
+    { "name": "June 2025 core update", "start": "2025-06-30", "end": "2025-07-16" },
+    { "name": "August 2025 spam update", "start": "2025-08-26", "end": "2025-09-21" },
+    { "name": "December 2025 core update", "start": "2025-12-11", "end": "2025-12-29" },
+    { "name": "February 2026 Discover update", "start": "2026-02-05", "end": "2026-02-26" },
+    { "name": "March 2026 spam update", "start": "2026-03-24", "end": "2026-03-24" },
+    { "name": "March 2026 core update", "start": "2026-03-27", "end": "2026-04-08" },
+    { "name": "May 2026 core update", "start": "2026-05-21", "end": "2026-06-01" },
+    { "name": "June 2026 spam update", "start": "2026-06-24", "end": "2026-06-26" },
+    { "name": "August 2026 spam update", "start": "2026-08-18", "end": "2026-08-20" },
+    { "name": "September 2026 spam update", "start": "2026-09-24", "end": "2026-10-07" }
   ],
   "data_breaks": [
     {

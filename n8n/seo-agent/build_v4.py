@@ -7771,6 +7771,78 @@ log('The other half of every Claude figure, and three nodes that advised from wh
 #       was ~1.5x too generous. The four other features have no measurement we could verify, so they keep their values and are
 #       labelled a STATED RULE, named in `KWI.CLICK_LOSS` and printed with the figure they moved.
 # =============================================================================
+# 78. A POSITION IS ONE READING, AND NOTHING SAID WHAT THE PAGE ITSELF DID (2026-10-15, benchmark programme area 6 —
+#     docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md; register rows B6-1 / B6-2 / B6-3 / B6-4 / B6-5)
+#
+#     The rank trackers are judged on what they do on a volatile day. The leaders answer with a MARKET-WIDE index computed on
+#     somebody else's keywords: Semrush's Sensor is "SERP volatility on a scale of 0-10" over a fixed keyword set, banded
+#     "0-2 low, 2-5 normal, 5-8 high and 8-10 very high" (https://www.semrush.com/kb/652-sensor), and AccuRanker's Google Grump
+#     "calculates the average number of rank changes across the top 30 results for ~1,000,000 high-volume keywords"
+#     (https://accuranker.com/grump). Neither of those tells an owner whether THEIR results page moved. Ours said nothing at all:
+#     exec 570 (2026-10-14) printed "peppol uae (not in top 50 -> #47)" and exec 505 printed its drops the same way — a number and
+#     an arrow, with no way to tell a page that slipped from a page that was pushed down by a results page rewritten under it.
+#
+#     * B6-2 — **the proof was already in the table and nobody read it.** G6 stores `snapshot_json`, the top ten with their URLs,
+#       for every check (criterion 2.2). `RS.churn` compares this reading with the previous one for the same keyword and the same
+#       device: how many of the top places changed occupant, how many URLs came in and left, and how far the URLs in both readings
+#       moved. It is MEASURED, free, and specific to the keyword instead of to a market. Every gain and every drop now carries the
+#       answer ("the whole results page moved that week (7 of the top 10 places changed), so this is not necessarily about your
+#       page" / "the rest of the results page barely moved, so this move is your page"), and the three labels say in the same
+#       breath that they are a stated rule, because no tool publishes a per-keyword threshold. A keyword with no earlier stored
+#       reading, a check that could not be read, two readings of different devices and a snapshot trimmed below the comparable
+#       depth all come back `available: false` **with the reason** — never a quiet 0, which would read as "it did not move".
+#     * B6-1 — **the share of voice still cut every position by 0.65**, Ahrefs' MARCH 2025 figure, which the keyword research had
+#       already left behind the same day (B1-3). The current study — 300,000 keywords, December 2025 data, published 2026-02-04
+#       (https://ahrefs.com/blog/ai-overviews-reduce-clicks-update/) — measures the loss position by position, and it is both
+#       bigger and very uneven: 58.0% of the clicks gone at #1, 50.8% at #2, 46.4% at #3, 19.4% at #10. A flat factor was wrong
+#       twice: it understated the loss by about half, and because it hit every position equally it very nearly cancelled out of a
+#       share, so an AI Overview cost the top of page 1 almost nothing in our own numbers.
+#     * B6-3 — **a Google update inside the compared window was never named beside the moves** (criterion 2.12). The marks were
+#       computed for the chart at the bottom of the mail over the ladder's whole life; the drops at the top had no context at all.
+#     * B6-4 — **two of the Google updates in the registry never happened.** `v5/data/seo_events.json` carried a "June 2026 core
+#       update" and a "September 2026 core update" that are on no Google page, and misdated the December 2025 and March 2026 core
+#       updates by weeks. Google's own ranking history
+#       (https://status.search.google.com/products/rGHU1u87FJnkP6W2GwMi/history) has a May 2026 core update (21 May - 1 Jun), a
+#       September 2026 **spam** update (24 Sep - 7 Oct) and a December 2025 core update from 11 Dec, not 2 Dec. The registry feeds
+#       the Rank Tracker's marks, the Site Tracker's alert text (`ST.updateNote`) and the app's charts, so an invented update was
+#       being handed to customers as the context for a real fall. Re-read from the dashboard, names copied as Google writes them.
+#     * B6-5 — **the week's checks were costed for nobody** (criterion 2.14). The in-200 gate (B-A10) already reads the provider's
+#       own cost for exactly these calls and it reached the callback; nothing printed it. It is printed now, with what a keyword
+#       costs a month at this frequency — and when the provider reported no cost, the line says that instead of inventing one.
+# =============================================================================
+def _b78_checks():
+    """Benchmark area 6: the movement, the corrected loss, the update context and the cost, on the generated Rank Tracker."""
+    import json as _j
+    _wf = _j.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_Rank_Tracker.json')))[0]
+    _code = {n['name']: n['parameters'].get('jsCode', '') for n in _wf['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    for _n in ('Parse Positions', 'Tracker Report'):
+        assert 'const churn = (prev, cur, o) =>' in _code[_n], 'B6-2: %s does not carry the page-movement kit' % _n
+        assert 'const AIO_KEEP = [0.420,' in _code[_n] and 'ORGANIC_LEFT_WITH_AIO' not in _code[_n], \
+            'B6-1: %s still carries the April 2025 AI Overview factor' % _n
+    _r = _code['Tracker Report']
+    assert 'RS.churn(r.prev_row ? r.prev_row.snapshot_json : null' in _r, 'B6-2: the report does not compare the two stored readings'
+    assert '.map(withMove);' in _r and _r.count('.map(withMove);') == 2, 'B6-2: a gain or a drop is still printed with nothing beside it'
+    assert 'serp_change: changes.get(r.keyword) || null' in _r and 'page_movement: { compared:' in _r, \
+        'B6-2: the movement does not reach the app'
+    assert 'const updateLine = sinceMarks.length ?' in _r and 'cannot be proven from these positions' in _r, \
+        'B6-3: a Google update in the compared window is not named beside the moves'
+    assert 'const costHtml' in _r and 'The provider reported no cost for these calls' in _r, \
+        'B6-5: the week\'s checks are costed for nobody, or a cost nobody reported is invented'
+    # B6-4: nothing in the registry that Google's own ranking history does not have, and every name copied as Google writes it
+    _ev = _j.load(open(os.path.join(HERE0, 'v5', 'data', 'seo_events.json')))
+    assert 'status.search.google.com' in _ev['_doc'], 'B6-4: the registry does not name the first-party source it was read from'
+    _gone = [u['name'] for u in _ev['google_updates'] if u['name'] in ('June 2026 core update', 'September 2026 core update')]
+    assert not _gone, 'B6-4: the registry still carries a Google update that never ran: %r' % _gone
+    for _u in _ev['google_updates']:
+        assert _u['start'] <= _u['end'], 'B6-4: %s ends before it starts' % _u['name']
+        assert ('core update' in _u['name'] or 'spam update' in _u['name'] or 'Discover update' in _u['name']), \
+            'B6-4: %s is not named the way Google names its updates' % _u['name']
+    print('benchmark area 6 (rank tracking): page movement measured from the stored snapshots, the AI Overview loss measured per '
+          'position, the update window named, %d Google updates in the registry, all from the Search Status dashboard'
+          % len(_ev['google_updates']))
+
+
+# =============================================================================
 REACH_SRC_77 = _rd0('code/_reach.js').rstrip('\n')
 # B1-3: the corrected click loss is in the shared kit, so discovery, the ladder and the verdict apply the same one
 assert "const AIO_CTR_2025 = { 1: 0.420, 2: 0.492, 3: 0.536 };" in KW_INPUTS_SRC, 'B1-3: the measured AI Overview click loss is not in the discovery kit'
@@ -8128,6 +8200,9 @@ _b74_checks()
 
 # section 73 (B-L1 ... B-L5): the five real defects the rule-1 lint found, each proved on the generated node
 _b73_checks()
+# section 78 (B6-1 ... B6-5): benchmark area 6, on the generated Rank Tracker and the dated event registry
+_b78_checks()
+
 # section 69 (B-F5 + INVARIANTS rule 2): deterministic node ids over every generated workflow, the settings refusal's self-test,
 # and the gate-pair lint. Last, because the id freeze rewrites the files the checks above have just finished reading.
 _b79_checks()

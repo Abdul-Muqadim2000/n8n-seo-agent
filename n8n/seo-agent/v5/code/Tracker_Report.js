@@ -61,10 +61,13 @@ for (const d of ((plan[0] || {}).deferred_pages || [])) { if (isMob(d) || !byLad
 const asideAll = ((plan[0] || {}).set_aside_pages) || [];
 const out = [];
 for (const [id, items] of byLadder) {
-  const prevOf = (kw) => { const h = deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && Number(x.position) >= 0).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0]; return h ? Number(h.position) : null; };
-  const rowsK = items.map(it => { const cur = Number(it.result.position); const prev = it.deferred ? cur : prevOf(it.keyword);
+  // B6-2 (2026-10-15, benchmark area 6): the whole previous row, not only its position — its snapshot is what says how much the
+  // results page itself moved, and its date is what says how old the "Before" column really is.
+  const prevRowOf = (kw) => deskHist.filter(x => x.ladder_id === id && x.keyword === kw && String(x.checked_at) < nowCheck && Number(x.position) >= 0).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0] || null;
+  const prevOf = (kw) => { const h = prevRowOf(kw); return h ? Number(h.position) : null; };
+  const rowsK = items.map(it => { const pr = it.deferred ? null : prevRowOf(it.keyword); const cur = Number(it.result.position); const prev = it.deferred ? cur : (pr ? Number(pr.position) : null);
     const delta = (cur > 0 && prev > 0) ? prev - cur : (cur > 0 && prev === 0) ? 100 : (cur === 0 && prev > 0) ? -100 : null;
-    return { ...it, current: cur, previous: prev, delta, url: it.result.url || '' }; }).sort((a, b) => a.rung - b.rung || a.page_no - b.page_no);
+    return { ...it, current: cur, previous: prev, delta, prev_row: pr, prev_at: pr ? String(pr.checked_at) : '', url: it.result.url || '' }; }).sort((a, b) => a.rung - b.rung || a.page_no - b.page_no);
   const head = rowsK.find(r => r.rung === 4) || rowsK[0];
   // ---- G6: the results page of each keyword, read back from the row that was just stored ----
   const serpOf = (r) => {
@@ -85,9 +88,24 @@ for (const [id, items] of byLadder) {
   };
   const serps = new Map(rowsK.map(r => [r.keyword, serpOf(r)]));
   const mobiles = new Map(rowsK.map(r => [r.keyword, mobileOf(r.keyword)]));
+  // ---- B6-2: how much each results page itself moved since the previous reading, measured from the stored snapshots ----
+  // A position is one reading of one page at one moment. Until now a fall of seven places was printed with nothing beside it, so a
+  // page that slipped and a page that was simply pushed down by a rewritten results page read identically. The proof was already
+  // stored (criterion 2.2): `snapshot_json` keeps the top 10 with their URLs for every check. Nothing extra is bought.
+  const changes = new Map(rowsK.map(r => [r.keyword, r.deferred ? RS.churnNone('no check was bought for this keyword this week — it is checked monthly until its page is live')
+    : RS.churn(r.prev_row ? r.prev_row.snapshot_json : null, r.result.snapshot_json, {})]));
+  const moveNoteOf = (r) => RS.moveNote(r.delta, changes.get(r.keyword));
+  const withMove = (r) => { const n = moveNoteOf(r); return r.keyword + ' (' + posText(r.previous) + ' \u2192 ' + posText(r.current) + (n ? '; ' + n : '') + ')'; };
+  // how old the oldest reading this report compares against is, and what Google did in between (criterion 2.12)
+  const prevDays = rowsK.map(r => r.prev_at).filter(Boolean).sort();
+  const windowStart = prevDays.length ? prevDays[0].slice(0, 10) : '';
+  const sinceMarks = windowStart ? AN.marks({ from: windowStart, to: String(nowCheck).slice(0, 10) }).filter(m => m.kind === 'google_update' || m.kind === 'data_break') : [];
+  const updateLine = sinceMarks.length ? 'Google changed its ranking systems inside the window these positions are compared over ('
+    + windowStart + ' to ' + String(nowCheck).slice(0, 10) + '): ' + sinceMarks.map(m => String(m.label).replace(/^Google: /, '') + ' (' + m.date + (m.date_end && m.date_end !== m.date ? ' to ' + m.date_end : '') + ')').join(' and ')
+    + '. A move in this window may be part of the cause, which cannot be proven from these positions.' : '';
   const rungs = [1, 2, 3].map(r => { const ps = rowsK.filter(x => x.rung === r); return { rung: r, pages: ps.length, top10: ps.filter(x => x.current > 0 && x.current <= 10).length, top3: ps.filter(x => x.current > 0 && x.current <= 3).length, reached: ps.length > 0 && ps.every(x => x.current > 0 && x.current <= 10) }; }).filter(r => r.pages);
-  const drops = rowsK.filter(r => r.delta != null && r.delta <= -5).map(r => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + ')');
-  const gains = rowsK.filter(r => r.delta != null && r.delta >= 5).map(r => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + ')');
+  const drops = rowsK.filter(r => r.delta != null && r.delta <= -5).map(withMove);
+  const gains = rowsK.filter(r => r.delta != null && r.delta >= 5).map(withMove);
   const topTop3Before = deskHist.filter(x => x.ladder_id === id && x.keyword === head.keyword && String(x.checked_at) < nowCheck && Number(x.position) > 0 && Number(x.position) <= 3).length;
   const done = head.current > 0 && head.current <= 3 && topTop3Before >= 3;
   const rowOf = (kw) => ladderRows.find(l => l.ladder_id === id && l.keyword === kw) || {};
@@ -179,19 +197,48 @@ for (const [id, items] of byLadder) {
   const firstPending = (next.pages || []).find(p => !(p.status === 'writing' && writtenOf(p.keyword))) || (next.pages || [])[0];   // R1: a `writing` row with no written page is still to be written
   const apiBody = firstPending ? { mode: 'keyword', keyword: firstPending.keyword, page_type: firstPending.page_type || 'Service Page', country: head.country || '', domain: head.domain, existing_page_url: (next.action === 'improve_top' || firstPending.covered_by) ? (firstPending.target_url || '') : '', email: head.email, ladder_id: id, ladder_rung: next.rung, ladder_head: head.head_keyword, force_content: true } : null;   // D11: a covered keyword is written as a refresh of the page that exists
   const formLink = FORM_URL + '?' + encodeURIComponent('What do you want?') + '=' + encodeURIComponent('I know my keyword');
+  // B6-2: a reading from a month ago is not "before" in the sense a weekly table implies — a won ladder and an unpublished rung are
+  // both checked monthly, and the column said nothing about it.
+  const staleRead = (r) => !!r.prev_at && (new Date(nowCheck).getTime() - new Date(r.prev_at).getTime()) / 864e5 > RS.CHURN.stale_days;
   const table = '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Rung</th><th align="left" ' + td + '>Keyword</th><th ' + td + '>Now</th><th ' + td + '>Before</th><th align="left" ' + td + '>Ranking URL</th></tr>' +
-    rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + (r.deferred ? ' <span style="color:#64748b;font-size:11px">(not published yet: checked monthly, last ' + esc(String(r.last_checked || '').slice(0, 10)) + ')</span>' : '') + '</td><td align="center" ' + td + '>' + esc(posText(r.current)) + '</td><td align="center" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous))) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';
+    rowsK.map(r => '<tr><td ' + td + '>' + (r.rung === 4 ? 'Top' : r.rung) + '</td><td ' + td + '>' + esc(r.keyword) + (r.deferred ? ' <span style="color:#64748b;font-size:11px">(not published yet: checked monthly, last ' + esc(String(r.last_checked || '').slice(0, 10)) + ')</span>' : '') + '</td><td align="center" ' + td + '>' + esc(posText(r.current)) + '</td><td align="center" ' + td + '>' + (r.previous == null ? 'first check' : esc(posText(r.previous)) + (staleRead(r) ? ' <span style="color:#64748b;font-size:11px">(' + esc(r.prev_at.slice(0, 10)) + ')</span>' : '')) + '</td><td ' + td + '>' + esc(r.url || '—') + '</td></tr>').join('') + '</table>';
   // ---- G6: what the results pages looked like, who is above us and the share of voice ----
   const mobText = (m) => !m ? '—' : posText(m.position) + (m.fresh ? '' : ' <span style="color:#64748b;font-size:11px">(' + esc(String(m.checked_at || '').slice(0, 10)) + ')</span>');
   const serpRows = rowsK.filter(r => serps.get(r.keyword) || mobiles.get(r.keyword));
-  const serpTable = serpRows.length ? '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Keyword</th><th align="left" ' + td + '>What the page showed</th><th ' + td + '>Share of voice</th><th ' + td + '>Mobile</th><th align="left" ' + td + '>Above you</th></tr>' +
+  const serpTable = serpRows.length ? '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Keyword</th><th align="left" ' + td + '>What the page showed</th><th ' + td + '>Share of voice</th><th ' + td + '>Mobile</th><th align="left" ' + td + '>Page movement</th><th align="left" ' + td + '>Above you</th></tr>' +
     serpRows.map(r => { const s = serps.get(r.keyword), m = mobiles.get(r.keyword);
       const ab = s && s.above.length ? s.above.slice(0, 3).map(a => esc(a.domain) + ' (#' + a.position + ')' + (a.tracked ? ' *' : '')).join(', ') + (s.above.length > 3 ? ' +' + (s.above.length - 3) + ' more' : '') : (s && r.current > 0 && r.current <= 10 ? 'nobody on page 1' : '—');
-      return '<tr><td ' + td + '>' + esc(r.keyword) + '</td><td ' + td + '>' + esc(s ? (s.chips.join(' · ') || 'plain results, no features') : 'not checked this week') + '</td><td align="center" ' + td + '>' + (s && s.share_of_voice != null ? s.share_of_voice + '%' : '—') + '</td><td align="center" ' + td + '>' + mobText(m) + '</td><td ' + td + '>' + ab + '</td></tr>'; }).join('') + '</table>' : '';
+      const ch = changes.get(r.keyword);
+      const chCell = ch && ch.available ? esc(ch.changed + ' of top ' + ch.depth + ' changed') + ' <span style="color:#64748b;font-size:11px">(' + esc(ch.band) + ')</span>'
+        : '<span style="color:#64748b;font-size:11px">not available</span>';
+      return '<tr><td ' + td + '>' + esc(r.keyword) + '</td><td ' + td + '>' + esc(s ? (s.chips.join(' \u00b7 ') || 'plain results, no features') : 'not checked this week') + '</td><td align="center" ' + td + '>' + (s && s.share_of_voice != null ? s.share_of_voice + '%' : '\u2014') + '</td><td align="center" ' + td + '>' + mobText(m) + '</td><td ' + td + '>' + chCell + '</td><td ' + td + '>' + ab + '</td></tr>'; }).join('') + '</table>' : '';
   const headSerp = serps.get(head.keyword) || null;
+  const headChange = changes.get(head.keyword) || null;
+  // ---- B6-5 (2026-10-15, benchmark area 6, criterion 2.14): what this week's checks cost, and what a keyword costs a month ----
+  // The gate (B-A10) already reads the provider's own cost for these calls; it reached the callback and nothing printed it. A figure
+  // the provider did not report is not invented here: the line then says the cost was not reported.
+  const weekChecks = (() => { try { return checkEvidence || null; } catch (e) { return null; } })();
+  const costHtml = (() => {
+    if (!weekChecks) return '';
+    // the gate's own evidence block names them `checked` and `retried`; B-A10's summary renames them `read` and `sent_again`
+    const asked = Number(weekChecks.asked) || 0;
+    const read = Number(weekChecks.read != null ? weekChecks.read : weekChecks.checked) || 0;
+    const sentAgain = Number(weekChecks.sent_again != null ? weekChecks.sent_again : weekChecks.retried) || 0;
+    const usd = weekChecks.cost_usd == null ? null : Number(weekChecks.cost_usd);
+    const per = (usd != null && asked > 0) ? (usd / asked * (365 / 7 / 12)) : null;
+    return '<p style="color:#64748b;font-size:12px">This week\u2019s checks: ' + asked + ' results page' + (asked === 1 ? '' : 's') + ' asked for, ' + read + ' read'
+      + (Number(weekChecks.failed) ? ', ' + Number(weekChecks.failed) + ' could not be read' + (sentAgain ? ' and ' + sentAgain + ' of them sent again' : '') : '')
+      + (usd == null ? '. The provider reported no cost for these calls, so none is shown.'
+        : '. Cost $' + usd.toFixed(4) + (weekChecks.cost_basis ? ' (' + esc(String(weekChecks.cost_basis)) + ')' : ' (measured: the provider\u2019s own figure for these calls)')
+          + (per != null ? ' \u2014 about $' + per.toFixed(3) + ' per keyword per month at a weekly check, modelled from this week\u2019s figure.' : '.'))
+      + '</p>';
+  })();
   const serpHtml = serpTable ? '<p style="margin-top:14px"><b>The results page itself</b> (the same check, no extra cost):</p>' + serpTable +
     (headSerp ? '<p style="font-size:12px;color:#334155">' + esc(headSerp.line) + '</p>' : '') +
-    '<p style="color:#64748b;font-size:12px">Share of voice is an estimate of the clicks page 1 offers, not measured clicks: ' + esc(RS.METHOD) + ' Domains marked * are the competitors on your list. Mobile is checked weekly for the main keywords (only about 13% of sites hold the same position on both devices).</p>' : '';
+    (headChange && headChange.available ? '<p style="font-size:12px;color:#334155">' + esc(RS.churnText(headChange)) + '</p>' : '') +
+    (updateLine ? '<p style="font-size:12px;color:#b45309">' + esc(updateLine) + '</p>' : '') +
+    '<p style="color:#64748b;font-size:12px">Share of voice is an estimate of the clicks page 1 offers, not measured clicks: ' + esc(RS.METHOD) + ' Domains marked * are the competitors on your list. Mobile is checked weekly for the main keywords (only about 13% of sites hold the same position on both devices). ' +
+    'Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one. ' + esc(RS.CHURN.labels_basis) + '.</p>' + costHtml : '';
   // ---- G12 (2026-10-13): the events of the tracked window (pages that went live, Google updates, data breaks), for the charts ----
   const firstCheck = [...deskHist.filter(x => x.ladder_id === id).map(x => String(x.checked_at)), nowCheck].sort()[0];
   const windowFrom = (String((rowOf(head.keyword) || {}).start_date || head.start_date || '').slice(0, 10) || String(firstCheck).slice(0, 10));
@@ -203,6 +250,11 @@ for (const [id, items] of byLadder) {
     LN.of('Position per keyword', 'serp', { basis: 'one_sample', period: LN.asOf(nowCheck), sample: LN.sample(rowsK.length, 'keywords, one results page each (top 50, desktop)'),
       note: 'one country and one device at one moment: it will differ from a Search Console average' }),
     LN.of('Share of voice', 'model', { basis: 'modelled', period: LN.asOf(nowCheck), sample: LN.sample(rowsK.map(r => serps.get(r.keyword)).filter(s => s && s.share_of_voice != null).length, 'results pages read'), note: RS.METHOD }),
+    [...changes.values()].some(c => c.available)
+      ? LN.of('How much the results page itself moved', 'serp', { basis: 'measured', period: (windowStart || String(nowCheck).slice(0, 10)) + ' to ' + String(nowCheck).slice(0, 10),
+          sample: LN.sample([...changes.values()].filter(c => c.available).length, 'results pages with a stored earlier reading to compare against'),
+          note: 'counted from the two stored top-ten readings; ' + RS.CHURN.labels_basis })
+      : LN.unknown('How much the results page itself moved', 'no earlier stored reading of these results pages to compare with yet'),
     mobileChecked ? LN.of('Mobile position', 'serp', { basis: 'one_sample', period: LN.asOf(nowCheck), sample: LN.sample(mobileChecked, 'main keywords checked on mobile') })
       : LN.unknown('Mobile position', 'no mobile check was bought for this ladder this week'),
     myPub.length ? LN.of('The dates your pages went live', 'own_check', { basis: 'measured', period: windowFrom + ' onwards', sample: LN.sample(myPub.length, 'published pages recorded') })
@@ -239,6 +291,14 @@ for (const [id, items] of byLadder) {
       featured_snippet: fcount(f => f.featured_snippet.shown), snippet_ours: fcount(f => f.featured_snippet.ours),
       people_also_ask: fcount(f => f.people_also_ask.shown), local_pack: fcount(f => f.local_pack.shown),
       video: fcount(f => f.video.shown), shopping: fcount(f => f.shopping.shown), not_read: rowsK.filter(r => (serps.get(r.keyword) || {}).features && serps.get(r.keyword).features.unavailable).length },
+    // B6-2 / B6-3: how much the results pages themselves moved, and what Google did inside the window these positions are compared over
+    page_movement: { compared: [...changes.values()].filter(c => c.available).length, not_available: [...changes.values()].filter(c => !c.available).length,
+      high: [...changes.values()].filter(c => c.available && c.band === 'high').length, some: [...changes.values()].filter(c => c.available && c.band === 'some').length,
+      still: [...changes.values()].filter(c => c.available && c.band === 'still').length,
+      basis: 'measured: the stored top ten of this reading against the stored top ten of the previous one', labels_basis: RS.CHURN.labels_basis,
+      window_from: windowStart || null, head: headChange },
+    updates_in_window: sinceMarks, update_note: updateLine,
+    week_checks: weekChecks,
     head_line: headSerp ? headSerp.line : '', mobile_checked: rowsK.filter(r => (mobiles.get(r.keyword) || {}).fresh).length };
   out.push({ json: { ladder_id: id, domain: head.domain, head_keyword: head.head_keyword, email: head.email || '', callback_url: head.callback_url || '', request_id: head.request_id || '',
     subject, html, status: 'progress', stage: 'rank_tracker', checked_at: nowCheck,
@@ -246,7 +306,9 @@ for (const [id, items] of byLadder) {
       return { rung: r.rung, keyword: r.keyword, position: r.current, previous: r.previous, delta: r.delta, url: r.url, device: 'desktop',
         mobile_position: m ? m.position : null, mobile_checked_at: m ? m.checked_at : null,
         features: s ? s.features : null, feature_labels: s ? s.chips : [], results_page: s ? s.line : '',
-        share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null }; }),
+        share_of_voice: s ? s.share_of_voice : null, above: s ? s.above : [], competitors: s ? s.competitors : [], snapshot_at: s ? s.snapshot_at : null,
+        previous_checked_at: r.prev_at || null, previous_is_stale: staleRead(r),
+        serp_change: changes.get(r.keyword) || null, move_note: moveNoteOf(r) }; }),
     rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, set_aside: aside, api_body: apiBody, done, won, stuck,
     stuck_weeks: stuckWeeks, replan } });   // G32: the proposal, never applied here
 }

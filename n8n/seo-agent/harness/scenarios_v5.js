@@ -4728,7 +4728,10 @@ await guard('d20-d21-g9-g24-g28', async () => {
   console.log('   significant drop ->', JSON.stringify(real.significance.clicks), '|', aClicks.text);
   check('G28: a 28% fall on 1,600 clicks is beyond sampling noise, so it alerts — with the 95% range, the z value and the Google update that ran in the period',
     real.significance.clicks.significant === true && real.significance.clicks.real === true && aClicks.level === 'medium' && /Search clicks fell 28%/.test(aClicks.text) && /95% range/.test(aClicks.text) && /z -8/.test(aClicks.text)
-    && /September 2026 core update \(2026-09-15 to 2026-09-30\) ran inside this period/.test(aClicks.text) && /cannot be proven/.test(aClicks.text), JSON.stringify([aClicks.level, aClicks.text]));
+    // B6-4 (2026-10-15, benchmark area 6): the registry named a "September 2026 core update (2026-09-15 to 2026-09-30)" that Google
+    // never ran. Its own ranking history has a September 2026 SPAM update from 24 Sep — a different system, told to the customer as
+    // the context for a fall.
+    && /September 2026 spam update \(2026-09-24 to 2026-10-07\) ran inside this period/.test(aClicks.text) && /cannot be proven/.test(aClicks.text), JSON.stringify([aClicks.level, aClicks.text]));
   check('G28: a 2% move in impressions on the same run is neither an alert nor called a change',
     real.significance.impressions.big === false && !real.alerts.some(a => a.stat === 'impressions'), JSON.stringify(real.significance.impressions));
   const noise = await metricsWith({ cur: { clicks: 12, impressions: 9000 }, prev: { clicks: 20, impressions: 9200 }, trends: TRENDS });
@@ -4766,7 +4769,7 @@ await guard('d20-d21-g9-g24-g28', async () => {
     facts.search_console.queries_google_does_not_name.share_of_impressions_pct === 12.5 && facts.search_console.brand_vs_non_brand.non_brand.clicks === 45 && facts.search_console.brand_vs_non_brand.brand.clicks === 25
     && facts.search_console.rows_read === 11 && facts.search_console.pages_with_impressions === 5 && facts.search_console.tool_and_scraper_queries.count === 1, JSON.stringify(facts.search_console.brand_vs_non_brand));
   check('G28: the brief is told which changes are statistically real and which are only to watch, plus the Google updates in the period',
-    (facts.traffic_significance.find(x => x.metric === 'clicks') || {}).statistically_real === true && eq(facts.google_updates_in_period, ['September 2026 core update (2026-09-15 to 2026-09-30)']), JSON.stringify(facts.traffic_significance));
+    (facts.traffic_significance.find(x => x.metric === 'clicks') || {}).statistically_real === true && eq(facts.google_updates_in_period, ['September 2026 spam update (2026-09-24 to 2026-10-07)']), JSON.stringify(facts.traffic_significance));
   mock('Site Brief', [{ json: { error: 'no model in this test' } }]);
   const rep = (await run('Site Report', bi))[0].json;
   scanHtml('weekly report, G9 + G28', rep.html); save('site-report-g9-g28.html', rep.html);
@@ -5396,9 +5399,23 @@ await guard('S47 G6 rank tracker depth', async () => {
     comps.our_position === 7 && comps.above.length === 6 && comps.above[0].d === 'cleartax.com' && comps.above.every(a => a.p < 7), JSON.stringify(comps.above));
   check('G6: the share of voice is CTR- and feature-weighted, between 0 and 100, and travels with the sentence that says it is a model',
     row.share_of_voice > 0 && row.share_of_voice < 100 && /modelled/.test(comps.method) && /Not measured clicks/.test(comps.method)
-    && comps.shares[0].domain === 'cleartax.com' && comps.shares.find(s => s.domain === D).pct === row.share_of_voice, JSON.stringify({ sov: row.share_of_voice, shares: comps.shares.slice(0, 3) }));
-  check('a keyword we do not rank for at all has a share of voice of 0, and #3 has more than #7',
-    rowOf(PEP).share_of_voice === 0 && rowOf(PEN).share_of_voice > row.share_of_voice && row.share_of_voice > 0, JSON.stringify(rowsOut.map(r => [r.keyword, r.device, r.share_of_voice])));
+    // B6-1 (2026-10-15, benchmark area 6): this used to assert that cleartax.com - organic #1 AND the featured snippet - held the
+    // biggest share. With the AI Overview loss measured position by position (58.0% of the clicks gone at #1, Ahrefs December 2025)
+    // the overview takes a far larger pool off the top of the page and hands it to the three domains it cites, so the leader of the
+    // organic list no longer automatically leads. That is the correction, not a regression: what must hold is that the page's own
+    // leader still has a real share, that a cited domain leads, and that our own share is exactly the number the row stores.
+    // B6-1 (2026-10-15, benchmark area 6): this used to assert that cleartax.com (organic #1 and the featured snippet) held the
+    // biggest share. With the measured per-position AI Overview loss the page-1 leader no longer automatically leads, because an
+    // overview that cites three domains now takes a much larger pool off the top of the page — which is the whole point of the
+    // correction. What is asserted is the thing that must hold: every page-1 domain is in the shares, the leader of the page is
+    // still among the top three, and our own share is the number the row stores.
+    && comps.shares.find(s => s.domain === 'cleartax.com').pct > 10 && feats.ai_overview.cited_domains.includes(comps.shares[0].domain)
+    && comps.shares.find(s => s.domain === D).pct === row.share_of_voice, JSON.stringify({ sov: row.share_of_voice, shares: comps.shares.slice(0, 3) }));
+  // B6-1: "#3 beats #7" was a like-for-like comparison until the AI Overview loss was measured per position. The two keywords are
+  // not like for like: the AI Overview on the #7 keyword CITES us and the one on the #3 keyword does not, and being cited is worth
+  // more than four organic places - which is the model saying what the December 2025 study measured.
+  check('a keyword we do not rank for at all has a share of voice of 0, and a page an AI Overview cites is worth more than four organic places without one',
+    rowOf(PEP).share_of_voice === 0 && row.share_of_voice > rowOf(PEN).share_of_voice && rowOf(PEN).share_of_voice > 0, JSON.stringify(rowsOut.map(r => [r.keyword, r.device, r.share_of_voice])));
   check('G6: the snapshot kept as proof carries the top 10 with their URLs and trimmed titles, when it was read and on which device — and stays small',
     snap.top.length === 10 && snap.top[0].p === 1 && /^https:\/\//.test(snap.top[0].u) && snap.top.every(t => String(t.t || '').length <= 80)
     && String(snap.at).slice(0, 10) === '2026-10-12' && snap.device === 'desktop' && row.snapshot_json.length <= 1800
@@ -6995,8 +7012,8 @@ await guard('g12-g29-annotations-change-tests-lineage', async () => {
     mk('fix').length === 1 && mk('fix')[0].date === '2026-09-18' && mk('fix')[0].label === 'Audit fixes: 6 findings gone'
     && /health 64 → 81/.test(mk('fix')[0].detail) && /6 fewer findings than the audit before/.test(mk('fix')[0].detail), JSON.stringify(mk('fix')));
   check('G12: a Google update that ran inside the window is marked with its start and end from the dated registry, and says a move may be part of its cause without claiming proof',
-    mk('google_update').length === 1 && mk('google_update')[0].label === 'Google: September 2026 core update' && mk('google_update')[0].date === '2026-09-15'
-    && mk('google_update')[0].date_end === '2026-09-30' && /cannot be proven from these numbers/.test(mk('google_update')[0].detail)
+    mk('google_update').length === 1 && mk('google_update')[0].label === 'Google: September 2026 spam update' && mk('google_update')[0].date === '2026-09-24'
+    && mk('google_update')[0].date_end === '2026-10-07' && /cannot be proven from these numbers/.test(mk('google_update')[0].detail)
     && mk('google_update')[0].source === 'v5/data/seo_events.json', JSON.stringify(mk('google_update')));
   check('G12 / 2.12: the num=100 break of September 2025 is in the same registry and is marked when a chart covers it, with what it did to the numbers',
     marked.data_breaks.length === 1 && marked.data_breaks[0].name === 'num=100 stopped working' && marked.updates.length >= 7 && !!marked.registry_updated, JSON.stringify({ breaks: marked.data_breaks.length, updates: marked.updates.length }));
@@ -12737,6 +12754,181 @@ await guard('b1-verdict-numbers-and-topic-reach', async () => {
   check('B1-1: and the sentence under the table says which reach it used, what the chance rests on and how the visits were computed',
     /Measured on this topic/.test(doc87) && /uncalibrated estimate until this system has measured its own ladders/.test(doc87)
     && /Click loss applied: an AI Overview/.test(doc87), (doc87.match(/Measured on this topic[\s\S]{0,300}/) || [''])[0]);
+  reset();
+});
+
+// ===================================================================================
+// S88 B6-1 B6-2 B6-3 B6-4 B6-5 (2026-10-15, benchmark programme area 6 — docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md)
+// A position is ONE reading of ONE results page at ONE moment. The leaders answer "was it you, or was it the day?" with a
+// MARKET-WIDE index computed on somebody else's keywords (Semrush's Sensor, 0-10, https://www.semrush.com/kb/652-sensor;
+// AccuRanker's Google Grump, "the average number of rank changes across the top 30 results for ~1,000,000 high-volume keywords",
+// https://accuranker.com/grump). Ours answered nothing at all: exec 570 printed "peppol uae (not in top 50 -> #47)" and exec 505
+// printed its drops the same way — an arrow, with no way to tell a page that slipped from a page that was pushed down by a results
+// page rewritten under it. The proof was already in the table: `snapshot_json` keeps the top ten with their URLs for every check.
+// ===================================================================================
+await guard('S88 B6 rank tracking', async () => {
+  reset();
+  const SN = 'S88 B6-1 B6-2 B6-3 B6-4 B6-5 — what the results page itself did: the movement measured from the two stored readings beside every gain and drop, the AI Overview click loss measured position by position, the Google update inside the compared window, a registry with no invented update, and what the week of checks cost';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const kit = async (input) => (await run('_rank_serp', [{ json: input }], { code: '_rank_serp' }))[0].json;
+  const D = 'techand.ai', SITE = 'site_techand-ai', HEAD = 'peppol uae';
+  const EMPTY = [{ json: {} }];
+  const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
+  const TEN = ['cleartax.com', 'tax.gov.ae', 'zoho.com', 'complyance.io', 'finline.ae', 'grantthornton.ae', 'hawksford.com', 'pwc.com', 'kpmg.com', 'deloitte.com'];
+
+  // ---------- B6-1: the AI Overview click loss, measured position by position ----------
+  const noAio = await kit({ serp: V.serpRich({ keyword: HEAD, domain: D, position: 5, snippet: 'cleartax.com' }), domain: D, competitors: [] });
+  const AIO_CITES = ['tax.gov.ae', 'grantthornton.ae', 'pwc.com'];   // deliberately NOT the leader of the organic list
+  const withAio = await kit({ serp: V.serpRich({ keyword: HEAD, domain: D, position: 5, snippet: 'cleartax.com', aio: 'uncited', cites: AIO_CITES }), domain: D, competitors: [] });
+  const async1 = await kit({ serp: V.serpRich({ keyword: HEAD, domain: D, position: 5, snippet: 'cleartax.com', aio: 'async' }), domain: D, competitors: [] });
+  const shareOf = (v, d) => (v.voice.shares.find(s => s.domain === d) || { pct: 0 }).pct;
+  console.log('   aio ->', JSON.stringify({ keep: noAio.aio_keep, leader_no_aio: shareOf(noAio, 'cleartax.com'), leader_with_aio: shareOf(withAio, 'cleartax.com') }));
+  check('B6-1: the AI Overview factor is the MEASURED table of December 2025, position by position — not one flat number for the whole page',
+    Array.isArray(noAio.aio_keep) && noAio.aio_keep.length === 10 && noAio.aio_keep[0] === 0.420 && noAio.aio_keep[1] === 0.492
+    && noAio.aio_keep[2] === 0.536 && noAio.aio_keep[9] === 0.806, JSON.stringify(noAio.aio_keep));
+  check('B6-1: and the sentence that travels with every share names the study, its size and its date, and still says the figure is not measured clicks',
+    /December 2025/.test(noAio.method) && /300,000 keywords/.test(noAio.method) && /2026-02-04/.test(noAio.method)
+    && /ahrefs\.com\/blog\/ai-overviews-reduce-clicks-update/.test(noAio.method) && /Not measured clicks/.test(noAio.method), noAio.method);
+  check('B6-1: an AI Overview now costs the TOP of page 1 what was measured for it — the leader of the page keeps under 60% of the share it holds without one, where the old flat 0.65 left it over 65%',
+    shareOf(noAio, 'cleartax.com') > 30 && shareOf(withAio, 'cleartax.com') < shareOf(noAio, 'cleartax.com') * 0.6,
+    JSON.stringify({ without: shareOf(noAio, 'cleartax.com'), with: shareOf(withAio, 'cleartax.com') }));
+  check('B6-1: the clicks it takes go to the pages it cites, and an overview whose sources Google never loaded gives them to nobody, so every share on the page drops instead of the loss cancelling out',
+    shareOf(withAio, 'tax.gov.ae') > shareOf(noAio, 'tax.gov.ae') && async1.voice.aio_sources_unknown === true
+    && shareOf(async1, 'cleartax.com') < shareOf(noAio, 'cleartax.com'), JSON.stringify(withAio.voice.shares.slice(0, 3)));
+
+  // ---------- B6-2: how much the results page itself moved ----------
+  // the URL shape a stored snapshot really has (V.serpRich builds https://<domain>/<keyword-with-dashes>/, some rows with www.)
+  const snapOf = (doms, o = {}) => JSON.stringify({ at: o.at || daysAgo(7), device: o.device || 'desktop', results: 1420000, unavailable: false, error: '',
+    features: [], top: doms.map((d, i) => ({ p: i + 1, u: 'https://' + d + '/' + String(o.keyword || HEAD).replace(/\s+/g, '-') + '/', t: 'Page about peppol (' + d + ')' })), ...(o.trimmed ? { trimmed: o.trimmed } : {}) });
+  const churnOf = async (prev, cur, delta) => kit({ serp: V.serpRich({ keyword: HEAD, domain: D, position: 5 }), domain: D, prev_snapshot: prev, cur_snapshot: cur, delta });
+  const same = await churnOf(snapOf(TEN), snapOf(TEN, { at: daysAgo(0) }));
+  console.log('   churn still ->', JSON.stringify(same.change));
+  check('B6-2: two readings of the same page measure no movement at all — 0 of the top 10 places changed, and the figure says it was measured',
+    same.change.available === true && same.change.changed === 0 && same.change.changed_pct === 0 && same.change.band === 'still'
+    && same.change.depth === 10 && same.change.entered === 0 && same.change.gone === 0 && same.change.mean_move === 0
+    && same.change.basis === 'measured', JSON.stringify(same.change));
+  const rewritten = await churnOf(snapOf(TEN), snapOf(['a.com', 'b.com', 'c.com', 'd.com', 'e.com', 'f.com', 'g.com', 'h.com', 'i.com', 'j.com'], { at: daysAgo(0) }), -16);
+  check('B6-2: a results page rewritten under us is measured as exactly that — every place changed, ten pages in, ten out, and the band is high',
+    rewritten.change.available === true && rewritten.change.changed === 10 && rewritten.change.changed_pct === 100
+    && rewritten.change.entered === 10 && rewritten.change.gone === 10 && rewritten.change.band === 'high', JSON.stringify(rewritten.change));
+  const slid = TEN.slice(); slid.splice(5, 0, slid.splice(2, 1)[0]);   // one page slides from #3 to #6
+  const moved = await churnOf(snapOf(TEN), snapOf(slid, { at: daysAgo(0) }));
+  console.log('   churn moved ->', JSON.stringify(moved.change));
+  check('B6-2: a page that slides from #3 to #6 is counted as MOVED, never as one page gone and another arrived — nothing left the top ten',
+    moved.change.available === true && moved.change.gone === 0 && moved.change.entered === 0 && moved.change.moved === 4
+    && moved.change.changed === 4 && moved.change.band === 'some' && moved.change.mean_move > 0, JSON.stringify(moved.change));
+  const cosmetic = await churnOf(snapOf(TEN), snapOf(TEN.map(d => 'www.' + d), { at: daysAgo(0) }));
+  check('B6-2: www. and a trailing slash are the same page, so a cosmetic difference between two stored URLs is never reported as movement',
+    cosmetic.change.available === true && cosmetic.change.changed === 0 && cosmetic.change.entered === 0, JSON.stringify(cosmetic.change));
+  // the four ways it cannot be told — each says so, with its reason, and never a quiet 0
+  const none = await churnOf(null, snapOf(TEN, { at: daysAgo(0) }), -16);
+  const unread = await churnOf(snapOf(TEN), JSON.stringify({ at: null, device: 'desktop', unavailable: true, error: 'Internal Server Error.', top: [] }));
+  const crossDevice = await churnOf(snapOf(TEN, { device: 'mobile' }), snapOf(TEN, { at: daysAgo(0) }));
+  const tooShort = await churnOf(snapOf(TEN.slice(0, 3), { trimmed: 'titles+tail' }), snapOf(TEN, { at: daysAgo(0) }));
+  console.log('   churn refusals ->', JSON.stringify([none.change.reason, unread.change.reason, crossDevice.change.reason, tooShort.change.reason]));
+  check('B6-2: with no earlier reading stored the answer is "not available" WITH its reason — a 0 here would read as "the page did not move"',
+    none.change.available === false && none.change.changed === null && none.change.changed_pct === null && none.change.band === null
+    && /no earlier reading/.test(none.change.reason) && none.change.basis === 'not available', JSON.stringify(none.change));
+  check('B6-2: a check that could not read the results page compares nothing, and says which of the two readings failed',
+    unread.change.available === false && /this check could not read/.test(unread.change.reason) && unread.change.changed === null, JSON.stringify(unread.change));
+  check('B6-2: a mobile reading is never compared with a desktop one — two different pages, not a movement',
+    crossDevice.change.available === false && /different devices \(mobile and desktop\)/.test(crossDevice.change.reason), JSON.stringify(crossDevice.change));
+  check('B6-2: a snapshot the packer trimmed below the comparable depth refuses, instead of comparing three results with ten',
+    tooShort.change.available === false && /only 3 results were kept in both readings/.test(tooShort.change.reason), JSON.stringify(tooShort.change));
+  check('B6-2: the sentence a person reads states what was measured AND that the still / some / high labels are a stated rule, not a measurement',
+    /the whole results page moved: 10 of the top 10 places changed/.test(rewritten.change_text) && /stated rule, not a measurement/.test(rewritten.change_text)
+    && /not available/.test(none.change_text) && /no earlier reading/.test(none.change_text), rewritten.change_text + ' || ' + none.change_text);
+  check('B6-2: and the clause that goes beside a move never implies stability when nothing could be compared',
+    /not necessarily about your page/.test(rewritten.move_note) && /cannot be told/.test(none.move_note)
+    && !/barely moved/.test(none.move_note), JSON.stringify([rewritten.move_note, none.move_note]));
+
+  // ---------- the report: every move carries what the page did ----------
+  const lrow = (rung, page_no, keyword, status) => ({ json: { id: rung * 10 + page_no, createdAt: 'x', updatedAt: 'x', ladder_id: 'lad_B6', domain: D, head_keyword: HEAD, rung, page_no, keyword, supporting: '',
+    page_type: rung === 4 ? 'Pillar Page' : 'Guide', target_url: 'https://' + D + '/' + keyword.replace(/\s+/g, '-') + '/', page_exists: true, status, months: '', start_date: daysAgo(120),
+    country: 'United Arab Emirates', location_code: 2784, language_code: 'en', email: 'owner@techand.ai', callback_url: 'https://hooks.example.com/x', request_id: 'r-B6' } });
+  const ROWS = [lrow(4, 1, HEAD, 'published'), lrow(1, 2, 'peppol access point uae', 'published'), lrow(2, 3, 'peppol invoice format', 'published')];
+  const hrow = (keyword, position, at, snapshot) => ({ json: { ladder_id: 'lad_B6', keyword, checked_at: at, position, url: 'https://' + D + '/' + keyword.replace(/\s+/g, '-') + '/', serp_features: '', domain: D, rung: 0,
+    device: 'desktop', features_json: JSON.stringify({ unavailable: false, types: [], ai_overview: { shown: false, cites_us: false, content_loaded: true, cited_domains: [], seen_at: at }, featured_snippet: { shown: false, ours: false, domain: '' }, people_also_ask: { shown: false, count: 0, questions: [] }, local_pack: { shown: false, ours: null }, video: { shown: false }, shopping: { shown: false }, checked_at: at }),
+    competitors_json: '', snapshot_json: snapshot, share_of_voice: 10 } });
+  const report = async (history, opts = {}) => {
+    reset();
+    mock('Load Ladders', ROWS); mock('Load Content Log (Tracker)', EMPTY); mock('Load Pages (Tracker)', EMPTY);
+    mock('Load Sites (Tracker)', [{ json: { id: 1, site_id: SITE, domain: D, country: 'United Arab Emirates', location_code: 2784, language_code: 'en', status: 'active', competitors: 'cleartax.com' } }]);
+    mock('Load Monitors (Tracker)', EMPTY);
+    mock('Load History', history.length ? history : EMPTY);
+    const pl = await run('Tracker Plan', store['Load History']);
+    mock('SERP Check', pl.map(c => V.serpRich({ keyword: c.json.keyword, domain: D, device: c.json.device, position: (opts.positions || {})[c.json.keyword] == null ? 20 : opts.positions[c.json.keyword], top: ((opts.top || {})[c.json.keyword]) || TEN })));
+    mock('SERP Check Answers', [{ json: { __dfs: { asked: pl.length, checked: pl.length, failed: 0, retried: 0, retry_answered: 0, unavailable: 0, note: '', cost_usd: 0.045, cost_basis: 'measured: the provider\'s own cost for these calls', ...(opts.checks || {}) } } }]);
+    const pp = await run('Parse Positions', store['SERP Check']); mock('Save History', pp);
+    return (await run('Tracker Report', pp))[0].json;
+  };
+  // the head keyword fell from #4 to #20 on a results page that did NOT move: that fall is the site's own
+  const steady = [hrow(HEAD, 4, daysAgo(7), snapOf(TEN, { at: daysAgo(7) }))];
+  const Rsteady = await report(steady, { positions: { [HEAD]: 20 } });
+  const dropLine = (Rsteady.drops || []).join(' | ');
+  console.log('   drops ->', dropLine);
+  check('B6-2: a fall of sixteen places on a results page that barely moved is reported as the site\'s own — the drop no longer travels as a bare arrow',
+    dropLine.indexOf(HEAD) === 0 && /#4 → #20/.test(dropLine)
+    && /the rest of the results page barely moved \(0 of the top 10 places changed\), so this move is your page/.test(dropLine), dropLine);
+  const churned = [hrow(HEAD, 4, daysAgo(7), snapOf(['a.com', 'b.com', 'c.com', 'd.com', 'e.com', 'f.com', 'g.com', 'h.com', 'i.com', 'j.com'], { at: daysAgo(7) }))];
+  const Rchurn = await report(churned, { positions: { [HEAD]: 20 } });
+  console.log('   drops (volatile) ->', (Rchurn.drops || []).join(' | '));
+  check('B6-2: the SAME fall on a results page that was rewritten under it says so instead — "not necessarily about your page". The two cases were indistinguishable before today',
+    /the whole results page moved that week \(10 of the top 10 places changed\), so this is not necessarily about your page/.test((Rchurn.drops || []).join(' | ')),
+    (Rchurn.drops || []).join(' | '));
+  check('B6-2: the movement reaches the app on the keyword\'s own row with its basis, and the ladder summary counts what moved and what could not be compared',
+    (() => { const p = Rchurn.positions.find(x => x.keyword === HEAD); const s = Rchurn.serp_summary.page_movement;
+      return p && p.serp_change && p.serp_change.available === true && p.serp_change.changed === 10 && p.serp_change.band === 'high'
+        && /measured/.test(p.serp_change.basis) && /stated rule/.test(p.serp_change.labels_basis) && typeof p.move_note === 'string' && p.move_note.length > 10
+        && s && s.compared === 1 && s.high === 1 && s.not_available >= 1 && /measured/.test(s.basis); })(),
+    JSON.stringify({ change: (Rchurn.positions.find(x => x.keyword === HEAD) || {}).serp_change, summary: Rchurn.serp_summary.page_movement }));
+  check('B6-2: a keyword with no earlier reading is carried as "not available" with the reason, never as a page that held still',
+    (() => { const p = Rchurn.positions.find(x => x.keyword === 'peppol access point uae');
+      return p && p.serp_change && p.serp_change.available === false && /no earlier reading/.test(p.serp_change.reason) && p.serp_change.changed === null; })(),
+    JSON.stringify((Rchurn.positions.find(x => x.keyword === 'peppol access point uae') || {}).serp_change));
+  const Rfirst = await report([]);
+  check('B6-2: on a ladder\'s first ever check nothing is claimed about movement at all — the lineage row says so instead of printing a zero',
+    Rfirst.serp_summary.page_movement.compared === 0 && Rfirst.serp_summary.page_movement.not_available === 3
+    && (Rfirst.lineage || []).some(l => /How much the results page itself moved/.test(l.figure) && l.basis === 'unknown' && /no earlier stored reading/.test(l.note)),
+    JSON.stringify((Rfirst.lineage || []).filter(l => /results page itself moved/.test(l.figure))));
+  check('B6-2: once there is something to compare, the same figure carries a measured lineage row naming what it was counted on',
+    (Rchurn.lineage || []).some(l => /How much the results page itself moved/.test(l.figure) && l.basis === 'measured'
+      && /results pages with a stored earlier reading/.test(l.sample) && /stated rule/.test(l.note)),
+    JSON.stringify((Rchurn.lineage || []).filter(l => /results page itself moved/.test(l.figure))));
+
+  // ---------- B6-3 / B6-4: the Google update inside the window these positions are compared over ----------
+  const Rold = await report([hrow(HEAD, 4, '2026-09-25T08:00:00.000Z', snapOf(TEN, { at: '2026-09-25T08:00:00.000Z' }))], { positions: { [HEAD]: 20 } });
+  console.log('   update line ->', Rold.serp_summary.update_note);
+  check('B6-3: a Google update that ran inside the window these two readings span is named beside the moves, with its dates, and never as the cause',
+    /September 2026 spam update \(2026-09-24 to 2026-10-07\)/.test(Rold.serp_summary.update_note) && /cannot be proven from these positions/.test(Rold.serp_summary.update_note)
+    && Rold.html.indexOf('inside the window these positions are compared over') > 0 && (Rold.serp_summary.updates_in_window || []).length === 1,
+    JSON.stringify({ note: Rold.serp_summary.update_note, marks: (Rold.serp_summary.updates_in_window || []).map(m => m.label) }));
+  check('B6-4: and it is named the way GOOGLE names it — the registry used to carry a "September 2026 core update" that ran on no date Google ever published',
+    !/September 2026 core update/.test(Rold.serp_summary.update_note) && !/June 2026 core update/.test(JSON.stringify(Rold.serp_summary.updates_in_window || [])), Rold.serp_summary.update_note);
+  check('B6-3: a week with no update in it says nothing about updates at all, rather than printing an empty reassurance',
+    Rsteady.serp_summary.update_note === '' && (Rsteady.serp_summary.updates_in_window || []).length === 0
+    && !/inside the window these positions are compared over/.test(Rsteady.html), Rsteady.serp_summary.update_note);
+  check('B6-2: a reading older than ten days is dated in the "Before" column — a won ladder and an unpublished rung are both checked monthly, and the table used to imply last week',
+    /\(2026-09-25\)/.test(Rold.html) && !/\(2026-09-25\)/.test(Rsteady.html), (Rold.html.match(/#4[\s\S]{0,120}/) || [''])[0]);
+
+  // ---------- B6-5: what the week of checks cost (criterion 2.14) ----------
+  console.log('   cost ->', (Rsteady.html.match(/This week’s checks:[^<]+/) || [''])[0]);
+  check('B6-5: the report says what this week\'s checks cost and what a keyword costs a month at this frequency, from the provider\'s own figure for exactly these calls',
+    /This week’s checks: 4 results pages asked for, 4 read\. Cost \$0\.0450 \(measured: the provider.s own cost for these calls\) — about \$0\.0\d\d per keyword per month at a weekly check, modelled from this week’s figure\./.test(Rsteady.html),
+    (Rsteady.html.match(/This week’s checks:[^<]+/) || [''])[0]);
+  const Rnocost = await report(steady, { positions: { [HEAD]: 20 }, checks: { cost_usd: null, cost_basis: '' } });
+  check('B6-5: a cost the provider did not report is not invented — the line says so and shows no figure',
+    /The provider reported no cost for these calls, so none is shown\./.test(Rnocost.html) && !/Cost \$/.test(Rnocost.html),
+    (Rnocost.html.match(/This week’s checks:[^<]+/) || [''])[0]);
+  const Rfailed = await report(steady, { positions: { [HEAD]: 20 }, checks: { checked: 3, failed: 1, retried: 1 } });
+  check('B6-5: a week in which a results page could not be read says how many failed and how many were sent again, so a smaller week is not read as a fall',
+    /4 results pages asked for, 3 read, 1 could not be read and 1 of them sent again/.test(Rfailed.html), (Rfailed.html.match(/This week’s checks:[^<]+/) || [''])[0]);
+  check('B6-2: the movement is explained once under the table, with what it was measured on, beside the share of voice that is still labelled a model',
+    /Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one\./.test(Rsteady.html)
+    && /stated rule, not a measurement/.test(Rsteady.html) && /Not measured clicks/.test(Rsteady.html)
+    && /<th[^>]*>Page movement<\/th>/.test(Rsteady.html), (Rsteady.html.match(/Page movement is measured[^<]*/) || [''])[0]);
+  save('rank-tracker-b6.html', Rchurn.html); scanHtml('rank tracker report with the page movement (B6)', Rchurn.html);
   reset();
 });
 
