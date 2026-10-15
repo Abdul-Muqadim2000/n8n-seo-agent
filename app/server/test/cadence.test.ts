@@ -278,3 +278,50 @@ describe('cadence mirror: pages the website already has (D11)', () => {
     expect(p.coveredByLivePages).toEqual([]);
   });
 });
+
+// v4.16 (B4-3, benchmark area 4): the same situations as the n8n harness scenario S77 — a page the Site Tracker's test confirmed
+// is losing traffic is refreshed ahead of a striking-distance query, and the states the evidence refused are never written.
+describe('cadence mirror: a page losing traffic is refreshed (B4-3)', () => {
+  const P = 'https://www.northwind-erp.com/guides/erp-implementation-checklist/';
+  const decaying = (o: Partial<SitePageRow> = {}) =>
+    ({
+      site_id: 'site_northwind-erp-com', url: P, title: '', h1: '', source: 'gsc', lastmod: '', updated_at: '', measured_at: daysAgo(0),
+      queries_json: JSON.stringify([{ query: 'erp implementation checklist', impressions: 9000, clicks: 300 }]),
+      clicks: 400, impressions: 13000, position: 9, prev_clicks: 900, yoy_clicks: 1000,
+      decay_state: 'decaying', decay_pct: -56, decay_lost: 500, decay_kind: 'visibility', decay_basis: 'Search Console clicks for this page, the last 28 days against the 28 days before (900 → 400).',
+      ...o,
+    }) as SitePageRow;
+  const striking = (page: string) =>
+    [{ domain: D, period_end: '2026-10-07', query: 'erp pricing uae', position: 8, impressions: 400, clicks: 5, page } as unknown as QueryRow];
+
+  it('a confirmed decaying page is queued as a refresh of that URL, ahead of the striking-distance guess', () => {
+    const p = planCadence(input({ pagesPerWeek: 2, pages: [decaying()], queries: striking('https://www.northwind-erp.com/erp-pricing/') }), NOW);
+    expect(p.picks.map((x) => [x.source, x.existingPageUrl])).toEqual([
+      ['decay', P],
+      ['striking', 'https://www.northwind-erp.com/erp-pricing/'],
+    ]);
+    expect(p.picks[0].keyword).toBe('erp implementation checklist');
+    expect(p.picks[0].decayLost).toBe(500);
+    expect(p.picks[0].why).toContain('500 clicks lost in 28 days (900 → 400)');
+  });
+
+  it('seasonal, watch and too-small pages are never rewritten', () => {
+    for (const state of ['seasonal', 'watch', 'too_small', 'steady', '']) {
+      const p = planCadence(input({ pagesPerWeek: 2, pages: [decaying({ decay_state: state })] }), NOW);
+      expect(p.picks.some((x) => x.source === 'decay')).toBe(false);
+    }
+  });
+
+  it('a page refreshed inside the settle window, or with no search behind it, is left alone', () => {
+    const settled = planCadence(input({ pagesPerWeek: 2, pages: [decaying()], logs: [logRow('anything', { existing_page_url: P, started_at: daysAgo(20) })] }), NOW);
+    expect(settled.picks.some((x) => x.source === 'decay')).toBe(false);
+    const blind = planCadence(input({ pagesPerWeek: 2, pages: [decaying({ queries_json: '[]' })] }), NOW);
+    expect(blind.picks.some((x) => x.source === 'decay')).toBe(false);
+  });
+
+  it('one page is one piece of work: it is not queued as a refresh and as a striking-distance page', () => {
+    const p = planCadence(input({ pagesPerWeek: 3, pages: [decaying()], queries: striking(P) }), NOW);
+    expect(p.picks.filter((x) => x.existingPageUrl === P)).toHaveLength(1);
+    expect(p.picks.map((x) => x.source)).toEqual(['decay']);
+  });
+});

@@ -4648,7 +4648,9 @@ await guard('d20-d21-g9-g24-g28', async () => {
   const paged = greq.filter(q => q.json.paged);
   console.log('   gsc requests ->', JSON.stringify(greq.map(q => q.json.kind + (q.json.paged ? ':' + q.json.body.rowLimit + '@' + q.json.body.startRow : ''))));
   check('G9: the query and page kinds ask for Search Console\'s maximum of 25,000 rows from row 0 (it was a 500-row sample)',
-    paged.length === 4 && eq(paged.map(q => q.json.kind).sort(), ['pages_cur', 'pages_prev', 'queries_cur', 'queries_prev']) && paged.every(q => q.json.body.rowLimit === 25000 && q.json.body.startRow === 0 && q.json.page === 1 && q.json.max_pages === 3), JSON.stringify(paged.map(q => [q.json.kind, q.json.body.rowLimit, q.json.max_pages])));
+    // B4-1 (2026-10-15, benchmark area 4): `pages_yoy` joins them — the same 28 days a year earlier, per page, free, and the only
+    // thing that can tell a decaying page from weeks that are quiet every year
+    paged.length === 5 && eq(paged.map(q => q.json.kind).sort(), ['pages_cur', 'pages_prev', 'pages_yoy', 'queries_cur', 'queries_prev']) && paged.every(q => q.json.body.rowLimit === 25000 && q.json.body.startRow === 0 && q.json.page === 1 && q.json.max_pages === 3), JSON.stringify(paged.map(q => [q.json.kind, q.json.body.rowLimit, q.json.max_pages])));
   // the paging itself, on a page size of 2 so the fixtures stay small
   const PAGE_A = W + '/erp-implementation-dubai/', PAGE_B = W + '/', PAGE_C = W + '/e-invoicing-uae/', PAGE_D = W + '/contact/', PAGE_E = W + '/wms/';
   const qrow = (keys, clicks, impressions, position) => ({ keys, clicks, impressions, ctr: impressions ? clicks / impressions : 0, position });
@@ -10794,6 +10796,198 @@ await guard('b2-topic-authority-inventory-and-order', async () => {
     resp76.topic_authority && resp76.topic_authority.used === true && resp76.topic_authority.coverage.planned_total === COV.planned_total
     && (resp76.top_page || {}).why && (resp76.top_page || {}).why_factors.reach === 14
     && resp76.rungs.flatMap(r => r.pages).every(p => p.why && p.why_factors), JSON.stringify({ ta: !!resp76.topic_authority, top: ((resp76.top_page || {}).why || '').slice(0, 40) }));
+  reset();
+});
+
+// ===================================================================================
+// S77 B4-1 / B4-2 / B4-3 (2026-10-15, benchmark programme area 4 — docs/system-review-2026-10-14/BENCH_AREA4_cadence.md):
+// "this page is decaying" was a 25% fall on 10 earlier clicks, computed in one run and buried in one e-mail. The leader compares
+// a page against THE SAME WEEKS A YEAR EARLIER (Clearscope, https://www.clearscope.io/support/content-decay) and lets you act on
+// the view. Every check below fails against the code as it stood this morning.
+// ===================================================================================
+await guard('b4-decay-tested-stored-and-written', async () => {
+  const SN = 'S77 B4-1 B4-2 B4-3 — a page is decaying only when the fall is tested AND is not the dip it had a year ago, the judgement is stored on the page row, and the cadence writes the refresh instead of recommending it';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const TC = require('./table_cols.json');
+  const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  const D = 'northwind-erp.com', SITE = 'site_northwind-erp-com', W = 'https://www.' + D;
+  const ago77 = (d) => new Date(Date.now() - d * 864e5).toISOString();
+
+  // ---------- 1. the test on its own: what is a decay, what is a season, and what cannot be measured at all ----------
+  const DK = { code: '_decay' };
+  const judge = async (o) => (await run('Decay', [{ json: o }], DK))[0].json;
+
+  // the exact case the old rule called a decaying page: 10 clicks down to 7
+  const tiny = await judge({ clicks: 7, prev_clicks: 10, impressions: 300, prev_impressions: 320 });
+  console.log('   10 -> 7 clicks ->', JSON.stringify({ state: tiny.state, z: tiny.change.z, pct: tiny.pct }));
+  check('B4-1: 10 clicks falling to 7 is a 30% "decay" under the old rule and pure chance under the test (z -0.73) — it is reported as too_small, with the clicks it was measured on, and nothing is claimed',
+    tiny.state === 'too_small' && tiny.change.z === -0.73 && /17 over both periods together, against the 40/.test(tiny.basis) && /No fall is claimed/.test(tiny.basis),
+    JSON.stringify([tiny.state, tiny.basis]));
+
+  // a fall that is real, and really a fall: down on the weeks before AND down on last year
+  const real = await judge({ clicks: 1100, prev_clicks: 1600, yoy_clicks: 1900, impressions: 40000, prev_impressions: 52000 });
+  console.log('   1600 -> 1100 (1900 a year ago) ->', JSON.stringify({ state: real.state, kind: real.kind, lost: real.lost }));
+  check('B4-1: 1,600 clicks down to 1,100 is a 31% fall the test calls real, it is down against a year ago too, and the basis carries the test, the period and the confidence',
+    real.state === 'decaying' && real.lost === 500 && real.pct === -31 && real.change.significant === true
+    && /two-sample Poisson z-test/.test(real.basis) && /outside 95% sampling noise/.test(real.basis) && /the same 28 days a year earlier: 1900 clicks/.test(real.basis),
+    JSON.stringify([real.state, real.basis]));
+  check('B4-1: and it names the KIND of fall — impressions fell with the clicks, so this is lost visibility and the page is the work',
+    real.kind === 'visibility' && /this is lost visibility, not a snippet problem/.test(real.basis), JSON.stringify([real.kind, real.impressions.text]));
+
+  // the same shape of fall, on a page that is quieter every year at this time
+  const season = await judge({ clicks: 300, prev_clicks: 600, yoy_clicks: 250, impressions: 9000, prev_impressions: 17000 });
+  console.log('   600 -> 300 (250 a year ago) ->', JSON.stringify({ state: season.state, pct: season.pct }));
+  check('B4-1: a page down 50% on the weeks before but UP 20% on the same weeks a year earlier is seasonal, not decay — the comparison the old 28-day rule could not make and the leader is built on',
+    season.state === 'seasonal' && season.change.real === true && /these weeks are simply quieter than the ones before them every year. Not decay/.test(season.basis)
+    && /up 20%/.test(season.basis), JSON.stringify([season.state, season.basis]));
+
+  // clicks lost while the page is still shown as often: a different job
+  const ctr = await judge({ clicks: 200, prev_clicks: 500, yoy_clicks: 520, impressions: 10000, prev_impressions: 10100 });
+  check('B4-1: clicks down 60% while impressions held is a CLICK-THROUGH loss — the advice is the title and the description, not a rewrite',
+    ctr.state === 'decaying' && ctr.kind === 'clickthrough' && /look at the title and the description before rewriting the page/.test(ctr.basis),
+    JSON.stringify([ctr.kind, ctr.basis]));
+
+  // no year-ago reading: say so rather than pretend the check was made
+  const blind = await judge({ clicks: 1100, prev_clicks: 1600, impressions: 40000, prev_impressions: 52000 });
+  check('B4-1: with no year-ago figure the fall is still reported, and the basis says outright that a seasonal dip could not be ruled out',
+    blind.state === 'decaying' && blind.yoy_clicks === null && /was not read, so a seasonal dip cannot be ruled out/.test(blind.basis), JSON.stringify(blind.basis));
+
+  // big, measurable, and still inside sampling noise
+  const watch = await judge({ clicks: 18, prev_clicks: 25, impressions: 900, prev_impressions: 950 });
+  check('B4-1: a 28% fall that is still inside 95% sampling noise is a "watch", never a fall — the same rule G28 put on every other alert',
+    watch.state === 'watch' && watch.pct === -28 && /inside 95% sampling noise/.test(watch.basis), JSON.stringify([watch.state, watch.basis]));
+  const up = await judge({ clicks: 60, prev_clicks: 40, yoy_clicks: 30, impressions: 2000, prev_impressions: 1800 });
+  check('B4-1: a page that went UP has no fall to explain and carries no decay kind', up.state === 'steady' && up.kind === null, JSON.stringify(up.state));
+
+  // ---------- 2. Parse GSC: every page judged, the hits ranked by the clicks lost, the refusals still reported ----------
+  const RANGES77 = { current: { start: '2026-09-10', end: '2026-10-07' }, previous: { start: '2026-08-13', end: '2026-09-09' }, yoy: { start: '2025-09-10', end: '2025-10-07' } };
+  const CFG77 = { max_gsc_keyword_requests: 30, max_gsc_pages: 3, striking_min_impressions: 30, ctr_gap_min_impressions: 100,
+    decay_min_click_events: 40, decay_min_pct: 20, alert_drop_pct: 30, alert_min_pct: 10, alert_min_click_events: 40, alert_min_impression_events: 400, alert_min_session_events: 40, service_account_email: 'svc@example.com' };
+  const SITE77 = { site_id: SITE, domain: D, gsc_property: 'sc-domain:' + D, gsc_connected: true, gsc_permission: 'siteFullUser', gsc_error: null, country: 'United Arab Emirates', location_code: 2784, language_code: 'en',
+    email: '', callback_url: '', request_id: '', source: 'form', status: 'active', created_at: '2026-01-01T00:00:00.000Z', keywords: [], tracked: [],
+    ladder_pages: [], ladder_heads: [], serp_positions: {}, pending_publish: [], console_alerts: [], last_checkin: null, checkin_due: false, ranges: RANGES77, on_demand: false, checked_at: new Date().toISOString(), config: CFG77 };
+  const P_DECAY = W + '/guides/erp-implementation-checklist/', P_SEASON = W + '/guides/year-end-close/', P_TINY = W + '/contact/', P_UP = W + '/erp-implementation-dubai/';
+  const row77 = (keys, clicks, impressions, position) => ({ keys, clicks, impressions, ctr: impressions ? clicks / impressions : 0, position });
+  const REQ77 = [
+    { json: { site_idx: 0, site_id: SITE, kind: 'by_date', url: 'https://gsc/q', body: { dimensions: ['date'] }, paged: false, page: 1, max_pages: 3, page_rows: 25000 } },
+    { json: { site_idx: 0, site_id: SITE, kind: 'queries_cur', url: 'https://gsc/q', body: { dimensions: ['query', 'page'], rowLimit: 25000, startRow: 0 }, paged: true, page: 1, max_pages: 3, page_rows: 25000 } },
+    { json: { site_idx: 0, site_id: SITE, kind: 'pages_cur', url: 'https://gsc/q', body: { dimensions: ['page'], rowLimit: 25000, startRow: 0 }, paged: true, page: 1, max_pages: 3, page_rows: 25000 } },
+    { json: { site_idx: 0, site_id: SITE, kind: 'pages_prev', url: 'https://gsc/q', body: { dimensions: ['page'], rowLimit: 25000, startRow: 0 }, paged: true, page: 1, max_pages: 3, page_rows: 25000 } },
+    { json: { site_idx: 0, site_id: SITE, kind: 'pages_yoy', url: 'https://gsc/q', body: { dimensions: ['page'], rowLimit: 25000, startRow: 0 }, paged: true, page: 1, max_pages: 3, page_rows: 25000 } },
+  ];
+  const RES77 = [
+    { rows: [row77([RANGES77.current.start], 900, 20000, 8), row77([RANGES77.previous.start], 1100, 24000, 7)] },
+    { rows: [row77(['erp implementation checklist', P_DECAY], 300, 9000, 9), row77(['erp implementation steps', P_DECAY], 100, 4000, 11),
+      row77(['year end close checklist', P_SEASON], 300, 9000, 6), row77(['contact northwind', P_TINY], 7, 300, 4)] },
+    { rows: [row77([P_DECAY], 400, 13000, 9), row77([P_SEASON], 300, 9000, 6), row77([P_TINY], 7, 300, 4), row77([P_UP], 60, 2000, 5)] },
+    { rows: [row77([P_DECAY], 900, 25000, 6), row77([P_SEASON], 600, 17000, 5), row77([P_TINY], 10, 320, 4), row77([P_UP], 40, 1800, 6)] },
+    { rows: [row77([P_DECAY], 1000, 26000, 6), row77([P_SEASON], 250, 8000, 7), row77([P_UP], 30, 1500, 7)] },
+  ];
+  mock('Resolve Properties', [{ json: SITE77 }]); mock('GSC Requests', REQ77); mock('GSC Query', RES77.map(r => ({ json: r })));
+  mock('GSC More Requests', []); mock('GSC Query (More)', []);
+  const MODEL77 = (await run('_site_model', [{ json: { site_row: { site_id: SITE, domain: D, canonical_host: 'www.' + D, business_name: 'Northwind ERP', model_updated_at: new Date().toISOString() } } }]))[0].json.model;
+  mock('Site Model (Site)', [{ json: { site_id: SITE, domain: D, model: MODEL77 } }]);
+  const PG77 = (await run('Parse GSC', store['GSC Query']))[0].json;
+  console.log('   parse gsc decay ->', JSON.stringify({ decaying: PG77.decaying_pages.map(p => [p.page.replace(W, ''), p.lost]), summary: PG77.decay_summary }));
+  check('B4-1: of four pages only the one whose fall is real AND worse than a year ago is called decaying; it carries the clicks lost, the kind and the basis',
+    PG77.decaying_pages.length === 1 && PG77.decaying_pages[0].page === P_DECAY && PG77.decaying_pages[0].lost === 500
+    && PG77.decaying_pages[0].kind === 'visibility' && /two-sample Poisson/.test(PG77.decaying_pages[0].basis),
+    JSON.stringify(PG77.decaying_pages.map(p => [p.page, p.lost, p.kind])));
+  check('B4-1: the page that halved but is ahead of the same weeks last year is reported as seasonal and NEVER as decay — under the old rule it was a decaying page with 300 clicks lost',
+    !PG77.decaying_pages.some(p => p.page === P_SEASON) && PG77.not_decay.some(p => p.page === P_SEASON && p.state === 'seasonal') && PG77.decay_summary.seasonal === 1,
+    JSON.stringify(PG77.not_decay.map(p => [p.page, p.state])));
+  check('B4-1: the 10 → 7 page is neither decaying nor hidden: it is counted as too small to test, and the summary says how many pages each verdict covers',
+    !PG77.decaying_pages.some(p => p.page === P_TINY) && PG77.decay_summary.tested === 4 && PG77.decay_summary.decaying === 1 && PG77.decay_summary.too_small === 1
+    && PG77.decay_summary.yoy_read === true && /tested against the 28 days before and the same 28 days a year earlier/.test(PG77.decay_summary.note),
+    JSON.stringify(PG77.decay_summary));
+  check('B4-2: every page Search Console reported is handed on with its measurement, so something downstream can store it',
+    PG77.page_perf.length === 4 && PG77.page_perf.every(p => p.state && p.basis) && (PG77.page_perf.find(p => p.page === P_DECAY) || {}).yoy_clicks === 1000
+    && (PG77.page_perf.find(p => p.page === P_UP) || {}).state === 'steady', JSON.stringify(PG77.page_perf.map(p => [p.page.replace(W, ''), p.state, p.yoy_clicks])));
+  // a year-ago request that never ran must not read as "0 clicks a year ago"
+  mock('GSC Requests', REQ77.filter(q => q.json.kind !== 'pages_yoy')); mock('GSC Query', RES77.filter((_, i) => i !== 4).map(r => ({ json: r })));
+  const PGno = (await run('Parse GSC', store['GSC Query']))[0].json;
+  check('B4-1: without the year-ago request every page carries yoy_clicks null and the summary says a seasonal dip cannot be ruled out — a missing reading is never a zero',
+    PGno.decay_summary.yoy_read === false && PGno.page_perf.every(p => p.yoy_clicks === null)
+    && /could not be read this week, so a seasonal dip cannot be ruled out/.test(PGno.decay_summary.note)
+    && PGno.decaying_pages.some(p => p.page === P_SEASON), JSON.stringify([PGno.decay_summary.yoy_read, PGno.decay_summary.note]));
+
+  // ---------- 3. the judgement is stored on the page row, not left in the report ----------
+  mock('GSC Requests', REQ77); mock('GSC Query', RES77.map(r => ({ json: r })));
+  const PGok = (await run('Parse GSC', store['GSC Query']))[0].json;
+  mock('Parse GSC', [{ json: PGok }]);
+  mock('Detect Published', [{ json: { site_id: SITE, inventory: [{ url: P_DECAY, lastmod: '2025-02-01' }, { url: P_SEASON }, { url: P_TINY }, { url: P_UP }], detected: [], page_titles: [{ url: P_DECAY, title: 'ERP implementation checklist', h1: 'ERP implementation checklist' }], sitemap: { ok: true } } }]);
+  mock('Load AI Pages (Site)', [{ json: {} }]); mock('Load Pages (Site)', [{ json: {} }]);
+  const INV77 = (await run('Page Inventory (Site)', store['Load Pages (Site)']))[0].json;
+  const rowOf = (u) => INV77.rows.find(r => r.url === u) || null;
+  console.log('   inventory rows ->', JSON.stringify(INV77.rows.map(r => [r.url.replace(W, ''), r.decay_state, r.decay_lost])), '| measured', INV77.measured);
+  check('B4-2: the inventory row carries the week\'s measurement and the judgement, with EXACTLY the seo_pages columns (a Data Table node auto-maps every field it is given)',
+    INV77.rows.length >= 4 && INV77.rows.every(r => eq(Object.keys(r).sort(), [...TC.PAGES].sort()))
+    && (rowOf(P_DECAY) || {}).decay_state === 'decaying' && (rowOf(P_DECAY) || {}).decay_lost === 500 && (rowOf(P_DECAY) || {}).yoy_clicks === 1000
+    && (rowOf(P_SEASON) || {}).decay_state === 'seasonal' && (rowOf(P_TINY) || {}).decay_state === 'too_small',
+    JSON.stringify(rowOf(P_DECAY)));
+  check('B4-2: and the run says how many pages it measured and how many are really losing traffic',
+    INV77.measured === 4 && INV77.decaying === 1 && INV77.decay_summary && INV77.decay_summary.seasonal === 1, JSON.stringify([INV77.measured, INV77.decaying]));
+  // a week Search Console says nothing about must not blank a judgement that still stands
+  const stored77 = INV77.rows.map(r => ({ json: { ...r, id: 1 } }));
+  mock('Parse GSC', [{ json: { ...PGok, page_perf: [], decaying_pages: [], not_decay: [], queries: [], pages: [] } }]);
+  mock('Load Pages (Site)', stored77);
+  const INVkeep = (await run('Page Inventory (Site)', store['Load Pages (Site)']))[0].json;
+  check('B4-2: a week with no Search Console answer changes nothing — the stored judgement is kept with the date it was measured on, so no row is rewritten and none is blanked',
+    INVkeep.rows.length === 0 && INVkeep.measured === 0, JSON.stringify(INVkeep.rows.map(r => [r.url, r.decay_state])));
+
+  // ---------- 4. and the cadence WRITES the refresh instead of recommending it ----------
+  const pageRow = (url, o = {}) => ({ json: { id: 1, site_id: SITE, url, title: '', h1: '', source: 'gsc', lastmod: '', updated_at: ago77(0), measured_at: ago77(0),
+    queries_json: JSON.stringify(o.queries || [{ query: 'erp implementation checklist', impressions: 9000, clicks: 300, position: 9 }]),
+    clicks: 400, impressions: 13000, position: 9, prev_clicks: 900, yoy_clicks: 1000, decay_state: 'decaying', decay_pct: -56, decay_lost: 500, decay_kind: 'visibility',
+    decay_basis: 'Search Console clicks for this page, the last 28 days against the 28 days before (900 → 400).', ...o.over } });
+  const cadLoads77 = (o = {}) => {
+    mock('Load Sites', [{ json: { site_id: SITE, domain: D, country: 'United Arab Emirates', status: 'active', email: '', callback_url: '' } }]);
+    mock('Load Cadence', [{ json: { site_id: SITE, domain: D, pages_per_week: o.pages == null ? 1 : o.pages, status: 'active' } }]);
+    mock('Load Ladders', o.ladders || [{ json: {} }]); mock('Load Trends', [{ json: {} }]);
+    mock('Load Query History', o.queries || [{ json: { site_id: SITE, domain: D, period_end: '2026-10-07', query: 'erp pricing uae', position: 8, impressions: 400, clicks: 5, page: W + '/erp-pricing/' } }]);
+    mock('Load Content Log', o.logs || [{ json: {} }]); mock('Load Ladder Settings', o.settings || [{ json: {} }]); mock('Load Main Keyword Ranks', [{ json: {} }]);
+    mock('Load AI Targets (Cadence)', [{ json: {} }]); mock('Load Monitors (Cadence)', [{ json: { site_id: SITE, ai_visibility: false, ai_growth: false } }]);
+    mock('Load Pages (Cadence)', o.pageRows || [pageRow(P_DECAY)]);
+    mock('Manual Run', [{ json: {} }]);
+  };
+  cadLoads77({ pages: 2 });
+  const cad77 = (await run('Cadence Plan', store['Load Pages (Cadence)'])).map(r => r.json);
+  console.log('   cadence ->', JSON.stringify(cad77.map(x => [x.source, x.keyword, (x.existing_page_url || '').replace(W, '')])));
+  const dec77 = cad77.find(x => x.source === 'decay');
+  check('B4-3: the decaying page is WRITTEN as a refresh of that URL — until today the verdict reached the owner as a priority-3 line in an e-mail and nothing in the system ever acted on it',
+    !!dec77 && dec77.existing_page_url === P_DECAY && dec77.keyword === 'erp implementation checklist' && dec77.body.existing_page_url === P_DECAY
+    && dec77.body.mode === 'keyword' && dec77.body.force_content === true, JSON.stringify(dec77 && dec77.body));
+  check('B4-3: and it is queued BEFORE the striking-distance guess, with the clicks it is losing and the basis in its own reason',
+    cad77[0].source === 'decay' && /500 clicks lost in 28 days \(900 → 400\)/.test(dec77.why) && /Search Console clicks for this page/.test(dec77.why)
+    && dec77.decay.decaying === 1 && dec77.decay.queued === 1 && dec77.decay.pages[0].lost === 500,
+    JSON.stringify([cad77.map(x => x.source), dec77.why]));
+  // the states the evidence refused are never written
+  cadLoads77({ pages: 2, pageRows: [pageRow(P_SEASON, { over: { decay_state: 'seasonal' } }), pageRow(P_TINY, { over: { decay_state: 'too_small' } }), pageRow(P_UP, { over: { decay_state: 'watch' } })] });
+  const cadNo = (await run('Cadence Plan', store['Load Pages (Cadence)'])).map(r => r.json);
+  check('B4-3: seasonal, watch and too-small pages are never rewritten — a quiet month is not a reason to touch a page',
+    !cadNo.some(x => x.source === 'decay') && (cadNo[0].decay || {}).decaying === 0, JSON.stringify(cadNo.map(x => [x.source, (x.decay || {}).decaying])));
+  // a page refreshed recently is left to settle
+  cadLoads77({ pages: 2, logs: [{ json: { site_id: SITE, domain: D, keyword: 'something else', source: 'decay', status: 'written', existing_page_url: P_DECAY, started_at: ago77(20) } }] });
+  const cadSettle = (await run('Cadence Plan', store['Load Pages (Cadence)'])).map(r => r.json);
+  check('B4-3: a page refreshed 20 days ago is not refreshed again — a refresh needs time before anyone can tell whether it worked (Semrush: wait two months)',
+    !cadSettle.some(x => x.source === 'decay') && (cadSettle[0].decay || {}).skipped === 1, JSON.stringify(cadSettle.map(x => [x.source, (x.decay || {}).skipped])));
+  // a decaying page with no search behind it is reported, never written blind
+  cadLoads77({ pages: 2, pageRows: [pageRow(P_DECAY, { queries: [] })] });
+  const cadBlind = (await run('Cadence Plan', store['Load Pages (Cadence)'])).map(r => r.json);
+  check('B4-3: a decaying page Search Console names no query for is counted and left alone — a refresh with no search behind it is a rewrite nobody asked for',
+    !cadBlind.some(x => x.source === 'decay') && (cadBlind[0].decay || {}).decaying === 1 && (cadBlind[0].decay || {}).queued === 0, JSON.stringify(cadBlind.map(x => [x.source, (x.decay || {}).queued])));
+  // one page is one piece of work
+  cadLoads77({ pages: 3, queries: [{ json: { site_id: SITE, domain: D, period_end: '2026-10-07', query: 'erp implementation steps', position: 11, impressions: 4000, clicks: 100, page: P_DECAY } }] });
+  const cadOne = (await run('Cadence Plan', store['Load Pages (Cadence)'])).map(r => r.json);
+  check('B4-3: the same page is not queued twice, once as a refresh and once as a striking-distance page',
+    cadOne.filter(x => (x.existing_page_url || '') === P_DECAY).length === 1 && cadOne.some(x => x.source === 'decay') && !cadOne.some(x => x.source === 'striking'),
+    JSON.stringify(cadOne.map(x => [x.source, (x.existing_page_url || '').replace(W, '')])));
+  // the pile-up guard still outranks everything
+  cadLoads77({ pages: 2, logs: ['a', 'b', 'c'].map(k => ({ json: { site_id: SITE, domain: D, keyword: 'waiting ' + k, source: 'ladder', status: 'written', started_at: ago77(5) } })) });
+  const cadPile = (await run('Cadence Plan', store['Load Pages (Cadence)'])).map(r => r.json);
+  check('B4-3: the pile-up guard holds the refresh too — nothing new is written while three written pages wait to be published',
+    !cadPile.some(x => x.source === 'decay' && !x.nothing_to_do) && cadPile[0].paused_reason === 'pileup', JSON.stringify(cadPile.map(x => [x.source, x.paused_reason])));
   reset();
 });
 

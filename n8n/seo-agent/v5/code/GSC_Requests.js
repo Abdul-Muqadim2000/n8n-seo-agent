@@ -20,6 +20,10 @@ sites.forEach((s, idx) => {
   pagedReq('queries_prev', { startDate: R.previous.start, endDate: R.previous.end, dimensions: ['query'] });
   pagedReq('pages_cur', { startDate: R.current.start, endDate: R.current.end, dimensions: ['page'] });
   pagedReq('pages_prev', { startDate: R.previous.start, endDate: R.previous.end, dimensions: ['page'] });
+  // B4-1 (2026-10-15, benchmark area 4): the same 28 days A YEAR EARLIER, per page. Free, one more request on a quota measured in
+  // thousands, and it is the only thing that can tell a decaying page from weeks that are quiet every year — the comparison
+  // Clearscope's Content Decay view is built on and the one ours did not have. Search Console keeps 16 months, so it answers today.
+  pagedReq('pages_yoy', { startDate: R.yoy.start, endDate: R.yoy.end, dimensions: ['page'] });
   (s.tracked || []).slice(0, cfg.max_gsc_keyword_requests || 30).forEach(t => {
     const f = { dimensionFilterGroups: [{ filters: [{ dimension: 'query', operator: 'equals', expression: t.keyword }] }] };
     req('kw_cur', { startDate: R.current.start, endDate: R.current.end, dimensions: ['page'], rowLimit: 5, ...f }, { keyword: t.keyword });

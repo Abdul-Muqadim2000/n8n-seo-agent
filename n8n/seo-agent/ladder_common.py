@@ -59,7 +59,14 @@ SITES_COLS = [('site_id', 'string'), ('domain', 'string'), ('gsc_property', 'str
 # by D11; `queries_json` holds the Search Console queries the page gets impressions for. SM.matchPage() reads it.
 PAGES_TABLE = 'seo_pages'
 PAGES_COLS = [('site_id', 'string'), ('url', 'string'), ('title', 'string'), ('h1', 'string'), ('source', 'string'), ('lastmod', 'string'),
-              ('queries_json', 'string'), ('updated_at', 'string')]
+              ('queries_json', 'string'), ('updated_at', 'string'),
+              # B4-1 / B4-2 (2026-10-15, benchmark area 4, BENCH_AREA4_cadence.md): the page's own Search Console measurement and the
+              # decay judgement made of it. Until now the decay verdict lived for the length of one Site Tracker run and died in an
+              # e-mail; stored here, the Content Cadence reads it and WRITES the refresh. `decay_state` is one of
+              # decaying / seasonal / watch / steady / too_small; `decay_basis` is the sentence that must travel with the number.
+              ('clicks', 'number'), ('impressions', 'number'), ('position', 'number'), ('prev_clicks', 'number'), ('yoy_clicks', 'number'),
+              ('decay_state', 'string'), ('decay_pct', 'number'), ('decay_lost', 'number'), ('decay_kind', 'string'),
+              ('decay_basis', 'string'), ('measured_at', 'string')]
 METRICS_COLS = [('site_id', 'string'), ('domain', 'string'), ('period_start', 'string'), ('period_end', 'string'), ('checked_at', 'string'), ('gsc_connected', 'boolean'), ('ga4_connected', 'boolean'),
                 ('clicks', 'number'), ('impressions', 'number'), ('ctr', 'number'), ('position', 'number'), ('prev_clicks', 'number'), ('prev_impressions', 'number'), ('prev_ctr', 'number'), ('prev_position', 'number'),
                 ('yoy_clicks', 'number'), ('yoy_impressions', 'number'), ('sessions', 'number'), ('engaged_sessions', 'number'), ('key_events', 'number'), ('prev_sessions', 'number'), ('prev_engaged_sessions', 'number'),

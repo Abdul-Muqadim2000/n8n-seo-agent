@@ -67,5 +67,46 @@ const ST = (() => {
       basis: 'Search Console average position, the last 28 days against the 28 days before, on ' + impPrev + ' then ' + imp + ' impressions'
         + (measurable ? '' : ' (under ' + minImp + ' impressions in a period one search can move the average several places)') };
   };
-  return { z, band, change, position, tested, updatesIn, updateNote, UPDATES };
+  // ---- B4-1 (2026-10-15, benchmark area 4 — docs/system-review-2026-10-14/BENCH_AREA4_cadence.md): IS THIS PAGE REALLY LOSING
+  // TRAFFIC, OR ARE THESE WEEKS QUIET EVERY YEAR? Clearscope's Content Decay view compares a page's clicks over 90 days against
+  // THE SAME 90 DAYS A YEAR EARLIER and names the two figures "seasonal difference" and "seasonal growth"
+  // (https://www.clearscope.io/support/content-decay); Ahrefs tells you to flag pages down more than 20% YEAR OVER YEAR
+  // (https://ahrefs.com/blog/content-decay/). Ours compared 28 days with the 28 before and called any 25% fall on 10 earlier
+  // clicks a "decaying page" — the one window that cannot tell a decay from a seasonal dip, at a volume this file's own test
+  // rejects (10 -> 7 clicks is z = -0.73, well inside chance). decay() tests the fall first and then, when the year-ago figure
+  // was read, refuses to call a fall "decay" that the same page also had a year ago.
+  // Two falls are NOT the same thing and need different work, so they are told apart here and nowhere else: clicks down while
+  // impressions held is a click-through loss (title and snippet), clicks down WITH impressions is lost visibility (the page).
+  // o: { clicks, prev_clicks, yoy_clicks, impressions, prev_impressions, min_events, min_pct, period, yoy_period }
+  const decay = (o) => {
+    const x = o || {}; const cur = num(x.clicks), prev = num(x.prev_clicks);
+    const yoy = (x.yoy_clicks === '' || x.yoy_clicks == null) ? null : num(x.yoy_clicks);
+    const minEvents = x.min_events == null ? 40 : num(x.min_events), minPct = x.min_pct == null ? 20 : num(x.min_pct);
+    const per = String(x.period || 'the last 28 days against the 28 days before');
+    const yper = String(x.yoy_period || 'the same 28 days a year earlier');
+    const ch = change(cur, prev, { min_events: minEvents, min_pct: minPct });
+    const imps = change(num(x.impressions), num(x.prev_impressions), { min_events: minEvents * 10, min_pct: minPct });
+    const yc = yoy == null ? null : change(cur, yoy, { min_events: minEvents, min_pct: minPct });
+    const lost = Math.max(0, prev - cur);
+    const kind = ch.direction === 'down' ? ((imps.direction === 'down' && imps.significant) ? 'visibility' : 'clickthrough') : null;
+    const kindNote = kind === 'visibility' ? ' Impressions fell with the clicks (' + imps.text + '), so the page is being shown less often: this is lost visibility, not a snippet problem.'
+      : kind === 'clickthrough' ? ' Impressions held (' + imps.text + '), so the page is still being shown and fewer people click it: look at the title and the description before rewriting the page.' : '';
+    const base = (state, note) => ({ state, lost, pct: ch.pct, kind: (state === 'decaying' || state === 'watch') ? kind : null,
+      clicks: cur, prev_clicks: prev, yoy_clicks: yoy, change: ch, yoy_change: yc, impressions: imps,
+      basis: 'Search Console clicks for this page, ' + per + ' (' + prev + ' → ' + cur + ')'
+        + (yoy == null ? '; ' + yper + ' was not read, so a seasonal dip cannot be ruled out' : '; ' + yper + ': ' + yoy + ' clicks')
+        + '.' + note });
+    if (!ch.measurable) return base('too_small', ' Not enough clicks to test: ' + (cur + prev) + ' over both periods together, against the ' + minEvents + ' this test needs. No fall is claimed.');
+    if (ch.direction !== 'down') return base('steady', ' No fall to explain (' + ch.text + ').');
+    if (ch.real) {
+      if (yc && yc.measurable && yc.direction !== 'down')
+        return base('seasonal', ' But against ' + yper + ' the page is ' + yc.text + ', so these weeks are simply quieter than the ones before them every year. Not decay.'
+          + tested(yc, { source: 'Search Console', period: 'the last 28 days against ' + yper }));
+      return base('decaying', kindNote + tested(ch, { source: 'Search Console', period: per })
+        + (yc ? ' Against ' + yper + ' it is ' + yc.text + '.' : ''));
+    }
+    if (ch.watch) return base('watch', ' Large but inside 95% sampling noise (z ' + ch.z + '), so it is something to watch, not a fall.' + kindNote);
+    return base('steady', ' The fall is smaller than the ' + minPct + '% worth acting on (' + ch.text + ').');
+  };
+  return { z, band, change, position, decay, tested, updatesIn, updateNote, UPDATES };
 })();

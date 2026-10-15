@@ -4,7 +4,9 @@
 // are merged here; the queries Search Console withholds are reported as the anonymised share (the period totals minus the sum of the rows);
 // brand and non-brand are split with the site model's / seo_monitors' brand names; scraper queries (search operators) are counted apart with
 // the same rule the audit uses (GQ, v5/code/_gsc_queries.js, shared with D24 / P1-3) and never shown as customer searches.
+// 2026-10-15 (B4-1, benchmark area 4): a decaying page is now a TESTED and SEASONAL judgement (ST.decay), not a 25% threshold.
 /*__GSC_QUERIES__*/
+/*__SITE_STATS__*/
 const reqs = $('GSC Requests').all().map(i => i.json);
 const res = (() => { try { return $('GSC Query').all().map(i => i.json); } catch (e) { return $input.all().map(i => i.json); } })();
 const moreReqs = (() => { try { return $('GSC More Requests').all().map(i => i.json).filter(q => q && !q.skip); } catch (e) { return []; } })();
@@ -20,7 +22,7 @@ const pct = (cur, prev) => prev > 0 ? Math.round((cur - prev) / prev * 100) : (c
 const acc = new Map();
 const take = (q, r) => {
   if (!q || q.skip) return;
-  if (!acc.has(q.site_idx)) acc.set(q.site_idx, { site_idx: q.site_idx, site_id: q.site_id, errors: [], by_date: [], yoy: null, queries_cur: [], queries_prev: [], pages_cur: [], pages_prev: [], kw: {}, paging: {} });
+  if (!acc.has(q.site_idx)) acc.set(q.site_idx, { site_idx: q.site_idx, site_id: q.site_id, errors: [], by_date: [], yoy: null, queries_cur: [], queries_prev: [], pages_cur: [], pages_prev: [], pages_yoy: [], kw: {}, paging: {} });
   const a = acc.get(q.site_idx); const e = errOf(r);
   if (e) { a.errors.push(q.kind + (q.keyword ? ' "' + q.keyword + '"' : '') + (q.page > 1 ? ' page ' + q.page : '') + ': ' + e); return; }
   const rows = rowsOf(r);
@@ -58,8 +60,34 @@ for (const a of acc.values()) {
   const striking = queries.filter(q => q.position >= 4 && q.position <= 20 && q.impressions >= (cfg.striking_min_impressions || 30) && !isBrand(q.query)).slice(0, 15);
   const ctrGaps = queries.filter(q => q.position > 0 && q.position <= 10 && q.impressions >= (cfg.ctr_gap_min_impressions || 100) && !isBrand(q.query)).map(q => ({ ...q, expected_ctr: EXPECTED_CTR[Math.max(0, Math.min(9, Math.round(q.position) - 1))] })).filter(q => q.ctr < q.expected_ctr * 0.5).sort((x, y) => (y.impressions * (y.expected_ctr - y.ctr)) - (x.impressions * (x.expected_ctr - x.ctr))).slice(0, 10);
   const prevP = new Map(a.pages_prev.map(r => [r.keys[0], r]));
-  const pages = a.pages_cur.map(r => { const p = prevP.get(r.keys[0]); return { page: r.keys[0], clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: +r.position.toFixed(1), prev_clicks: p ? p.clicks : 0, prev_impressions: p ? p.impressions : 0, clicks_delta: r.clicks - (p ? p.clicks : 0) }; }).sort((x, y) => y.clicks - x.clicks);
-  const decaying = pages.filter(p => p.prev_clicks >= 10 && -p.clicks_delta / p.prev_clicks * 100 >= (cfg.decay_drop_pct || 25)).sort((x, y) => x.clicks_delta - y.clicks_delta).slice(0, 10);
+  // B4-1: the same 28 days a year earlier, per page. `yoy_read` says whether Google answered at all, so a page missing from the
+  // year-ago rows is "0 clicks a year ago" when the request worked and "not read" when it did not — the two mean opposite things.
+  const yoyP = new Map(a.pages_yoy.map(r => [r.keys[0], r]));
+  const yoy_read = !a.errors.some(e => /^pages_yoy/.test(String(e))) && reqs.concat(moreReqs).some(q => q.site_idx === a.site_idx && q.kind === 'pages_yoy');
+  const pages = a.pages_cur.map(r => { const p = prevP.get(r.keys[0]), y = yoyP.get(r.keys[0]);
+    return { page: r.keys[0], clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: +r.position.toFixed(1), prev_clicks: p ? p.clicks : 0, prev_impressions: p ? p.impressions : 0, clicks_delta: r.clicks - (p ? p.clicks : 0),
+      yoy_clicks: yoy_read ? (y ? y.clicks : 0) : null, yoy_impressions: yoy_read ? (y ? y.impressions : 0) : null }; }).sort((x, y) => y.clicks - x.clicks);
+  // B4-1: a page is "decaying" only when the fall survives the two-sample Poisson test AND is not the dip the same weeks had a
+  // year ago (ST.decay). Ranked by the clicks actually lost, which is what Clearscope sorts its Content Decay report by
+  // (https://www.clearscope.io/blog/content-decay-report). Everything the old 25% rule would have called decay is still reported,
+  // under the state the evidence supports, so nothing goes quiet: `seasonal`, `watch` and `too_small` each say why.
+  const decayCfg = { min_events: Number(cfg.decay_min_click_events) || 40, min_pct: Number(cfg.decay_min_pct) || 20,
+    period: 'the last 28 days against the 28 days before', yoy_period: 'the same 28 days a year earlier' };
+  const judged = pages.map(p => ({ ...p, decay: ST.decay({ clicks: p.clicks, prev_clicks: p.prev_clicks, yoy_clicks: p.yoy_clicks, impressions: p.impressions, prev_impressions: p.prev_impressions, ...decayCfg }) }));
+  const byLost = (x, y) => y.decay.lost - x.decay.lost;
+  const decaying = judged.filter(p => p.decay.state === 'decaying').sort(byLost).slice(0, 10)
+    .map(p => ({ page: p.page, clicks: p.clicks, prev_clicks: p.prev_clicks, yoy_clicks: p.yoy_clicks, impressions: p.impressions, prev_impressions: p.prev_impressions, lost: p.decay.lost, pct: p.decay.pct, kind: p.decay.kind, basis: p.decay.basis, state: 'decaying' }));
+  const not_decay = judged.filter(p => p.decay.state === 'seasonal' || (p.decay.state === 'watch' && p.decay.lost > 0)).sort(byLost).slice(0, 10)
+    .map(p => ({ page: p.page, clicks: p.clicks, prev_clicks: p.prev_clicks, yoy_clicks: p.yoy_clicks, lost: p.decay.lost, pct: p.decay.pct, state: p.decay.state, basis: p.decay.basis }));
+  // every page Search Console reported anything for, with its judgement — the Site Tracker stores this in seo_pages so the
+  // Content Cadence can write the refresh instead of only recommending it (B4-2 / B4-3)
+  const page_perf = judged.filter(p => p.clicks > 0 || p.prev_clicks > 0 || p.impressions > 0).sort((x, y) => (y.clicks + y.prev_clicks) - (x.clicks + x.prev_clicks)).slice(0, 500)
+    .map(p => ({ page: p.page, clicks: p.clicks, impressions: p.impressions, position: p.position, prev_clicks: p.prev_clicks, yoy_clicks: p.yoy_clicks, state: p.decay.state, pct: p.decay.pct, lost: p.decay.lost, kind: p.decay.kind, basis: p.decay.basis }));
+  const decay_summary = { tested: judged.length, decaying: judged.filter(p => p.decay.state === 'decaying').length,
+    seasonal: judged.filter(p => p.decay.state === 'seasonal').length, watch: judged.filter(p => p.decay.state === 'watch').length,
+    too_small: judged.filter(p => p.decay.state === 'too_small').length, yoy_read, min_click_events: decayCfg.min_events, min_pct: decayCfg.min_pct,
+    note: yoy_read ? 'Every page with clicks was tested against the 28 days before and the same 28 days a year earlier.'
+      : 'The year-ago page rows could not be read this week, so a seasonal dip cannot be ruled out for any page.' };
   const rising = pages.filter(p => p.clicks_delta >= 5 && (p.prev_clicks === 0 || p.clicks_delta / p.prev_clicks >= 0.3)).sort((x, y) => y.clicks_delta - x.clicks_delta).slice(0, 10);
   // ---- G9: what Search Console does not name, and who searched the brand ----
   const anonymised = { current: GQ.anonymised(cur, [...qmapAll.values()].flatMap(m => m.rows)), previous: GQ.anonymised(prev, a.queries_prev) };
@@ -75,7 +103,7 @@ for (const a of acc.values()) {
   const tracked = Object.values(a.kw).map(k => ({ keyword: k.keyword, position: k.cur && k.cur.impressions ? k.cur.position : 0, prev_position: k.prev && k.prev.impressions ? k.prev.position : 0, clicks: k.cur ? k.cur.clicks : 0, impressions: k.cur ? k.cur.impressions : 0, prev_clicks: k.prev ? k.prev.clicks : 0, prev_impressions: k.prev ? k.prev.impressions : 0, ctr: k.cur ? k.cur.ctr : 0, page: k.cur ? k.cur.page : '' }));
   out.push({ json: { site_idx: a.site_idx, site_id: a.site_id, errors: a.errors, totals: { cur, prev, yoy: a.yoy || null },
     deltas: { clicks_pct: pct(cur.clicks, prev.clicks), impressions_pct: pct(cur.impressions, prev.impressions), position: (prev.position && cur.position) ? +(prev.position - cur.position).toFixed(1) : null, ctr_pts: +((cur.ctr - prev.ctr) * 100).toFixed(2), yoy_clicks_pct: a.yoy ? pct(cur.clicks, a.yoy.clicks) : null },
-    daily, query_count: queries.length, queries: queries.slice(0, 100), winners, losers, new_queries: newQ, lost_queries: lost, striking, ctr_gaps: ctrGaps, pages: pages.slice(0, 20), decaying_pages: decaying, rising_pages: rising, tracked,
+    daily, query_count: queries.length, queries: queries.slice(0, 100), winners, losers, new_queries: newQ, lost_queries: lost, striking, ctr_gaps: ctrGaps, pages: pages.slice(0, 20), decaying_pages: decaying, not_decay, decay_summary, page_perf, rising_pages: rising, tracked,
     anonymised, brand_split, scraper_queries, page_count: pages.length, rows_read, paging, truncated } });   // G9: every row read, the anonymised share, brand vs non-brand, scraper queries apart
 }
 return out.length ? out : [{ json: { skip: true, reason: 'no Search Console data came back' } }];

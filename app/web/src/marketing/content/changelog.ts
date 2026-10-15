@@ -15,6 +15,21 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-15',
+    title: 'A page losing traffic now gets refreshed, not just reported',
+    summary:
+      'Ascentra used to tell you a page was decaying and leave it there. It now proves the fall before claiming it — and then writes the refresh. A page counts as losing traffic only when the drop is beyond normal variation and the page is genuinely worse off than it was in the same weeks a year earlier, so a quiet season is never mistaken for a decline.',
+    highlights: [
+      'Every page with search traffic is compared both with the weeks before and with the same weeks a year earlier',
+      'A fall that the same weeks also had last year is named as seasonal and left alone',
+      'A drop too small to tell apart from chance says so, with the clicks it was measured on — it is never called a decline',
+      'Clicks down while the page is still shown as often is called out as a title-and-description job, not a rewrite',
+      'The pages that really are losing traffic are refreshed by the weekly pipeline, ranked by the clicks at stake, ahead of newer guesses',
+      'At most two refreshes a week, and a page is left to settle for 60 days before it is touched again',
+    ],
+    features: ['autopilot', 'site-tracking', 'content'],
+  },
+  {
+    date: '2026-10-15',
     title: 'Reports now come to you, and the ones that are not ready stay put',
     summary:
       'Every finished report used to wait in Ascentra until somebody logged in. You can now have each one sent as it arrives, or collected into a daily, weekly or monthly summary — by e-mail with its figures and files, or to a webhook your team already watches. The reports an analysis marked as not ready are deliberately held back, with the reason stated.',

@@ -98,10 +98,11 @@ export const features: Feature[] = [
     shortName: 'Autopilot',
     tagline: 'A weekly growth loop that plans, writes and checks. You approve what matters.',
     summary:
-      'Ascentra runs your SEO as a weekly loop. Each Monday it picks the next posts — a ladder rung first, then keywords close to page one, then rising trends — writes them, notices what you published and puts every decision that needs a person in one queue. Each step runs on Auto or waits for you.',
+      'Ascentra runs your SEO as a weekly loop. Each Monday it picks the next posts — a ladder rung first, then pages that are measurably losing traffic, then keywords close to page one, then rising trends — writes them, notices what you published and puts every decision that needs a person in one queue. Each step runs on Auto or waits for you.',
     icon: Workflow,
     benefits: [
-      'Blog posts per week set per website, picked in a fixed order: ladder rung, striking distance, rising trend',
+      'Blog posts per week set per website, picked in a fixed order: ladder rung, a page losing traffic, striking distance, rising trend',
+      'A page that is really losing traffic is refreshed, not just reported — ranked by the clicks it is actually losing',
       'Auto or Manual for every step, per ladder and per website',
       'A “Needs you” queue for briefs, pages and decisions waiting on a person',
       'A 4-week calendar and every schedule with its next and last run',
@@ -111,7 +112,7 @@ export const features: Feature[] = [
     ],
     steps: [
       { title: 'Set the pace', body: 'Choose blog posts per week, the default mode — Auto or Manual — and how many ladders are written at once.' },
-      { title: 'Ascentra picks the work', body: 'Every Monday the next ladder rung comes first, then keywords just off page one, then rising trends.' },
+      { title: 'Ascentra picks the work', body: 'Every Monday the next ladder rung comes first, then any page losing traffic, then keywords just off page one, then rising trends.' },
       { title: 'Write, check, queue', body: 'Pages are written and checked. Anything set to Manual waits in “Needs you” until someone approves it.' },
       { title: 'Publish and learn', body: 'When a planned page goes live, Ascentra notices, tracks its rank and plans the next step.' },
     ],
@@ -435,6 +436,7 @@ export const features: Feature[] = [
       'A weekly report every Monday with the changes that matter',
       'Notices when you publish a page from the plan',
       'A weekly list of the pages your site has, so the advice says “refresh this page” instead of “publish another one”',
+      'Pages losing traffic are tested, not guessed: a fall counts only when it is beyond chance and the page is not simply quieter at this time of year than it was last year',
       'Every chart marked with what happened: pages you published, technical fixes, Google updates and breaks in Google’s own data',
       'After a page goes live, its trend is compared with the rest of your website, so you hear whether the change likely helped',
       'Dashboards per website for search, traffic, rankings and content',

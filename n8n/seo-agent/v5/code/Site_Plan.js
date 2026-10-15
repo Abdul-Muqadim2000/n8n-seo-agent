@@ -12,7 +12,11 @@ const CONFIG = {
   max_gsc_pages: 4,                 // G9: Search Console serves 25,000 rows per request; up to 4 pages per kind = 100,000 query / page rows
   striking_min_impressions: 30,     // "striking distance": position 4-20 with at least this many impressions in 28 days
   ctr_gap_min_impressions: 100,     // CTR gap: top-10 position, at least this many impressions, CTR under half the expected rate for the position
-  decay_drop_pct: 25,               // decaying page: clicks down by this much vs the previous 28 days (and at least 10 clicks before)
+  // B4-1 (2026-10-15, benchmark area 4): a flat 25% drop on a 10-click floor was the last fixed threshold in the site
+  // tracking. A decaying page now needs a fall that survives the two-sample Poisson test (ST.decay) and is not the dip the same
+  // weeks had a year ago. min_click_events = what both 28-day periods must carry together before anything is claimed (40, the
+  // same bar as a traffic alert); min_pct = the size worth acting on (20%, the bar Ahrefs publishes for a year-over-year flag).
+  decay_min_click_events: 40, decay_min_pct: 20,
   // G28: a drop is an alert when it is statistically real (two-sample Poisson z, 95%) AND at least alert_min_pct; alert_drop_pct only decides
   // whether that alert is "high" or "medium". min_*_events = the events both periods must carry together before anything is claimed at all.
   // G28 follow-up (2026-10-13): a position alert needs volume too — both 28-day periods must carry alert_min_position_impressions

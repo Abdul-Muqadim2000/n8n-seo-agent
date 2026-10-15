@@ -6378,6 +6378,105 @@ log('A ladder plan measured on its own topic, with the inventory it starts from 
 
 
 # =============================================================================
+# 67. A DECAYING PAGE IS A TESTED, SEASONAL JUDGEMENT — AND THEN IT IS WORK (2026-10-15, benchmark programme area 4 —
+#     docs/system-review-2026-10-14/BENCH_AREA4_cadence.md; register rows B4-1 / B4-2 / B4-3)
+#     The leader of content inventory and decay is still Clearscope. Its Content Decay view compares a page's clicks over 90 days
+#     against THE SAME 90 DAYS A YEAR EARLIER and names the two figures "seasonal difference" and "seasonal growth"
+#     (https://www.clearscope.io/support/content-decay); its Content Decay report ranks pages by the clicks actually lost
+#     (https://www.clearscope.io/blog/content-decay-report); its Content Inventory stores clicks, impressions and average position
+#     per page from Search Console and rescans monthly (https://www.clearscope.io/support/getting-started-content-inventory), for
+#     50 pages at $129 a month or 300 at $399 (https://www.clearscope.io/pricing). Ahrefs tells you to flag pages down more than
+#     20% YEAR OVER YEAR (https://ahrefs.com/blog/content-decay/); Semrush's own content-audit guide says to allow for seasonality
+#     and to wait two months before judging a refresh (https://www.semrush.com/blog/content-audit/).
+#     * B4-1 — ours compared 28 days with the 28 before and called any 25% fall on 10 earlier clicks a "decaying page"
+#       (`Parse_GSC.js`, `decay_drop_pct: 25`). That is the one window that cannot tell a decay from a seasonal dip, at a volume
+#       this system's own test rejects: 10 -> 7 clicks is z = -0.73. On techand.ai, which took 34 clicks site-wide in the 28 days
+#       of exec 581 (2026-10-14), the 10-click floor is reachable by at most three pages and nothing at that volume can be
+#       measured at all. `ST.decay` now tests the fall (two-sample Poisson, the machinery G28 built) and, with the new free
+#       `pages_yoy` request, refuses to call a fall "decay" that the same page also had a year ago. It also separates the two
+#       falls that need different work: clicks down while impressions held is a click-through loss (title and snippet), clicks
+#       down WITH impressions is lost visibility. `seasonal`, `watch` and `too_small` are reported with their reason, never acted on.
+#     * B4-2 — that verdict used to live for the length of one Site Tracker run and die in an e-mail. The page inventory
+#       `seo_pages` now carries the measurement and the judgement (clicks, impressions, position, prev_clicks, yoy_clicks,
+#       decay_state / pct / lost / kind / basis, measured_at), so something downstream can act on it.
+#     * B4-3 — and the Content Cadence does: a confirmed decaying page is queued as a REFRESH of that URL, ranked by the clicks
+#       actually lost, ahead of striking distance and rising trends — Clearscope generates a Draft straight from its decay view
+#       and Siteimprove.ai Content Strategy sells "a prioritized plan of what to create, refresh, or optimize"
+#       (https://www.siteimprove.com/marketmuse/). Ladder rungs still come first: they are the plan the owner chose.
+#     NOTE FOR THE DEPLOY: `seo_pages` gains eleven columns, so `sync_tables.py` must run (apply_env.py does).
+# =============================================================================
+for _a67 in ('const decay = (o) =>', 'yoy_clicks', "base('seasonal'", "base('too_small'", "base('decaying'", "'clickthrough'"):
+    assert _a67 in _rd0('code/_site_stats.js'), 'B4-1: the decay test is not in the shared statistics kit (' + _a67 + ')'
+assert 'return { z, band, change, position, decay, tested' in _rd0('code/_site_stats.js'), 'B4-1: ST.decay is not exported'
+# the fall is tested, never thresholded, and the year-ago window is actually asked for
+assert "pagedReq('pages_yoy'" in _rd0('code/GSC_Requests.js'), 'B4-1: the year-ago page rows are never requested'
+assert 'R.yoy.start' in _rd0('code/GSC_Requests.js'), 'B4-1: the year-ago request does not use the year-ago range'
+_pg67 = _rd0('code/Parse_GSC.js')
+assert 'ST.decay({' in _pg67 and '/*__SITE_STATS__*/' in _pg67, 'B4-1: Parse GSC does not judge decay through the statistics kit'
+assert 'decay_drop_pct' not in _pg67 and 'decay_drop_pct' not in _rd0('code/Site_Plan.js'), \
+    'B4-1: the fixed 25% decay threshold is still in the Site Tracker'
+assert "p.decay.state === 'decaying'" in _pg67 and 'byLost' in _pg67, 'B4-1: decaying pages are not selected by the test and ranked by the clicks lost'
+assert 'page_perf' in _pg67 and 'decay_summary' in _pg67, 'B4-2: Parse GSC does not hand the per-page measurement on'
+assert 'yoy_read' in _pg67, 'B4-1: a page missing from the year-ago rows cannot be told from a year-ago request that never ran'
+# the measurement is stored, so the cadence can read it
+assert [c for c, _t in PAGES_COLS].count('decay_state') == 1 and [c for c, _t in PAGES_COLS].count('yoy_clicks') == 1, \
+    'B4-2: seo_pages does not carry the decay judgement'
+_pi67 = _rd0('code/Page_Inventory_Site.js')
+assert 'gsc.page_perf' in _pi67 and 'EMPTY_PERF' in _pi67 and 'PERF.every(' in _pi67, \
+    'B4-2: the page inventory does not store (or does not compare) the measurement'
+for _c67, _t67 in PAGES_COLS:
+    assert _c67 in _pi67 or _c67 in _rd0('code/_site_model.js'), 'B4-2: seo_pages column ' + _c67 + ' is written by nothing'
+# and the cadence writes the refresh rather than recommending it
+_cp67 = _rd0('code/Cadence_Plan.js')
+assert "source: 'decay'" in _cp67 and "String(r.decay_state || '') === 'decaying'" in _cp67, \
+    'B4-3: the Content Cadence does not queue a decaying page'
+assert 'decay_per_week' in _cp67 and 'decay_refresh_days' in _cp67, 'B4-3: the refresh has no weekly cap or settle period'
+assert _cp67.index("source: 'decay'") < _cp67.index("source: 'striking'"), \
+    'B4-3: a measured loss must be queued before a striking-distance guess'
+assert 'decayUrls.has(' in _cp67, 'B4-3: one page could be queued twice, as a refresh and as a striking-distance page'
+# the app mirrors the rule, or the Pipeline page promises a page n8n will not write
+_ct67 = open(os.path.join(HERE0, '..', '..', 'app', 'server', 'src', 'services', 'cadence.ts'), encoding='utf-8').read()
+assert "source: 'decay'" in _ct67 and 'decayPerWeek' in _ct67 and 'decayRefreshDays' in _ct67, \
+    'B4-3: app/server/src/services/cadence.ts does not mirror the decay rule (Cadence_Plan.js and it must change together)'
+assert _ct67.index("source: 'decay'") < _ct67.index("source: 'striking'"), 'B4-3: the app orders the queue differently from n8n'
+# harness shim (S77): the decay test as a runnable script, one judgement per item
+os.makedirs(OUT_CODE, exist_ok=True)
+open(os.path.join(OUT_CODE, '_decay.js'), 'w').write(
+    "// generated by build_v4.py section 67 — the decay test as a runnable node for the harness (S77)\n"
+    + seo_events.inline(_rd0('code/_site_stats.js')).rstrip('\n')
+    + "\nreturn $input.all().map(i => ({ json: ST.decay(i.json || {}) }));\n")
+
+
+def _b67_checks():
+    """Run after the sub-builds: the Site Tracker really asks Google for the year-ago page rows, really inlines the statistics
+    kit into Parse GSC, and really stores the judgement — and the Content Cadence really reads seo_pages."""
+    _f67 = {w['name']: w for f in os.listdir(os.path.join(HERE0, 'workflows')) if f.endswith('.json')
+            for w in json.load(open(os.path.join(HERE0, 'workflows', f), encoding='utf-8'))}
+    _st67 = {n['name']: n for n in _f67['SEO Agent — Site Tracker']['nodes']}
+    _gsc67 = _st67['Parse GSC']['parameters']['jsCode']
+    assert 'const ST = (() => {' in _gsc67, 'B4-1: the statistics kit is not inlined into Parse GSC'
+    assert '/*__SITE_STATS__*/' not in _gsc67, 'B4-1: the statistics placeholder is left in Parse GSC'
+    assert "pagedReq('pages_yoy'" in _st67['GSC Requests']['parameters']['jsCode'], 'B4-1: the deployed Site Tracker never asks for the year-ago page rows'
+    _inv67 = _st67['Page Inventory (Site)']['parameters']['jsCode']
+    assert 'decay_state' in _inv67, 'B4-2: the deployed inventory does not store the judgement'
+    _save67 = _st67['Save Pages (Site)']['parameters']['columns']['schema']
+    assert {c['id'] for c in _save67} == {c for c, _t in PAGES_COLS}, \
+        'B4-2: the seo_pages upsert does not carry exactly the table columns (a Data Table node auto-maps every field it is given)'
+    _cad67 = {n['name']: n for n in _f67['SEO Agent — Content Cadence']['nodes']}
+    assert "source: 'decay'" in _cad67['Cadence Plan']['parameters']['jsCode'], 'B4-3: the deployed cadence cannot write a refresh'
+    assert 'Load Pages (Cadence)' in _cad67, 'B4-3: the cadence has nothing to read the judgement from'
+    print('decay: tested and seasonal (B4-1), stored on the page row (B4-2), written by the cadence (B4-3)')
+
+
+sticky("""### A page losing traffic is tested, then refreshed (B4-1 · B4-2 · B4-3, 2026-10-15)
+**The old rule called any 25% fall on 10 earlier clicks a "decaying page"** — the one window that cannot tell a decay from a seasonal dip, at a volume this system's own test rejects (10 → 7 clicks is z = −0.73). A page is now decaying only when the fall survives the **two-sample Poisson test** *and* is not the dip the same weeks had **a year ago** (one more free Search Console request). Clicks down while impressions held is named a **click-through** loss — title and description first, not a rewrite.
+**What is refused is still reported**: seasonal, watch and too-small each say so, with the clicks they were measured on.
+**And then it becomes work.** The judgement is stored on the page's `seo_pages` row, and the Content Cadence writes the **refresh** of that URL — ranked by the clicks actually lost, ahead of striking distance and rising trends, at most 2 a week, never within 60 days of the last refresh. Ladder rungs still come first.""",
+    pos('Rate Limit')[0] - 40, pos('Rate Limit')[1] + 620, 1120, 280, 6)
+log('A decaying page is a tested, seasonal judgement - and then it is work (2026-10-15, benchmark area 4, rows B4-1 / B4-2 / B4-3; BENCH_AREA4_cadence.md). B4-1: ST.decay (v5/code/_site_stats.js) replaces the fixed decay_drop_pct 25% / 10-click rule with the two-sample Poisson test G28 already uses, plus the seasonal comparison the leader is built on - a new free pages_yoy Search Console request gives every page the same 28 days a year earlier, and a fall the page also had last year is reported as `seasonal`, not decay; a fall at a volume too small to test is `too_small` with the clicks it was measured on; clicks down while impressions held is `clickthrough` (title and description), clicks down with impressions is `visibility`. B4-2: the judgement and the measurement behind it (clicks, impressions, position, prev_clicks, yoy_clicks, decay_state / pct / lost / kind / basis, measured_at) are stored on the seo_pages row by the weekly Site Tracker, instead of dying in the e-mail that recommended the refresh. B4-3: the Content Cadence queues a confirmed decaying page as a refresh of that URL, ranked by the clicks actually lost, ahead of striking distance and rising trends, capped at decay_per_week and never within decay_refresh_days of the last refresh - mirrored rule for rule in app/server/src/services/cadence.ts. Needs sync_tables.py for the eleven new seo_pages columns')
+
+
+# =============================================================================
 # 9. WRITE
 # =============================================================================
 w['nodes'] = list(nodes.values())
@@ -6415,4 +6514,6 @@ _r17_r29_checks()
 _r31_checks()
 # section 64 (B-A7 / B-A9): the sweep and the concurrency gate, in every scheduled workflow
 _b64_checks()
+# section 67 (B4-1 / B4-2 / B4-3): the decay test, what stores it and what acts on it, in the Site Tracker and the Cadence
+_b67_checks()
 
