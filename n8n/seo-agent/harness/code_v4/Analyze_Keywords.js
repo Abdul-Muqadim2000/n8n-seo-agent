@@ -2,6 +2,18 @@ const base = $('Competitor Analysis').first().json;
 const targets = $('KW Targets').all().map(i => i.json);
 const ranked = $('Ranked Keywords Answers').all().map(i => i.json);
 const ideasRes = $input.first().json || {};
+// B-A11 (2026-10-15, INVARIANTS rule 1): the in-200 retry gate (rule 3) marks an answer `unavailable` when BOTH attempts
+// failed, and attaches that block to every item as `__dfs`. Nothing below may rank, score or advise from one.
+const __ev76 = (list, node) => { try { const a = (node ? $(node).all().map(i => i.json) : list) || []; return (a.find(x => x && x.__dfs) || {}).__dfs || null; } catch (e) { return null; } };
+// A refusal fires on an evidence block that SAYS `unavailable`, never on the absence of one: a path with no gate attached
+// (and every harness fixture) has no `__dfs`, and inventing a failure out of silence is the same mistake in the other
+// direction. This is how the nine nodes that already refuse read it too (Assess Result falls back when `__dfs` is absent).
+const __read76 = (ev) => !ev || !ev.unavailable;
+const rankedEv76 = __ev76(ranked), ideasEv76 = __ev76([ideasRes]);
+// the two reads behind every number below: what this site and its rivals rank for, and the keyword ideas. A finding
+// built on a read that failed twice reads as a measurement ("you rank for 0 informational keywords") and is not one.
+const rankedRead76 = __read76(rankedEv76), ideasRead76 = __read76(ideasEv76);
+const keywords_evidence = { ranked: rankedEv76, ideas: ideasEv76, unavailable: !rankedRead76 && !ideasRead76 };
 const seeds = $('Fallback Queries').all().map(i => i.json.query).filter(Boolean);
 const INTENTS = ['informational', 'navigational', 'commercial', 'transactional'];
 const brand = base.domain.split('.')[0].toLowerCase();
@@ -372,14 +384,22 @@ const F = (severity, title, evidence, why, fix) => findings.push({
   sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site'
 });
 
-if (keyword_gap.length) {
+if (!rankedRead76 && !ideasRead76) {
+  findings.push({ category: 'Authority', severity: 'Info', title: 'The keyword research could not be read',
+    evidence: 'The search data provider did not answer the ranked-keyword and keyword-idea requests, asked twice'
+      + ((rankedEv76 && rankedEv76.error) || (ideasEv76 && ideasEv76.error) ? ': ' + ((rankedEv76 && rankedEv76.error) || ideasEv76.error) : '') + '.',
+    why: 'The keyword gap, the easy wins and the rankings comparison are left out of this report: nothing was measured. This is not "no demand".',
+    fix: 'No action needed — the research is repeated on the next run.',
+    sample_urls: [], affected_count: null, affected_pct: 100, scope: 'site', scoring: false });
+}
+if (rankedRead76 && keyword_gap.length) {
   F('High', 'Keyword gap: searches competitors win and you do not',
     keyword_gap.length + ' keywords where competitors rank in the top 10 and you are not in the top 20. Top: ' +
     keyword_gap.slice(0, 5).map(g => '"' + g.keyword + '" (' + (g.volume || 0) + '/mo)').join(', '),
     'Each of these is proven demand in your market that is currently going to competitors.',
     'Create or improve a dedicated page for the highest-volume, lowest-difficulty gap keywords first.');
 }
-INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4: "no rankings for navigational searches" counted other companies' brands — never a goal for this site
+if (rankedRead76) INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4: "no rankings for navigational searches" counted other companies' brands — never a goal for this site
   const med = median(comps.map(c => c.by_intent[x]));
   if ((you.by_intent[x] || 0) === 0 && med != null && med >= 5) {
     F('Medium', 'No rankings for ' + x + ' searches',
@@ -391,19 +411,19 @@ INTENTS.filter(x => x !== 'navigational').forEach(x => {   // P1-4: "no rankings
       'Make sure branded searches lead clearly to your site.');
   }
 });
-if (easy_wins.length) {
+if (ideasRead76 && easy_wins.length) {
   F('Low', 'Low-difficulty keywords you can target now',
     easy_wins.slice(0, 5).map(k => '"' + k.keyword + '" (' + k.volume + '/mo, difficulty ' + k.difficulty + ')').join(', '),
     'These searches have real demand and weak competition, the best starting point for a young site.',
     'Build or optimise one focused page per keyword group, starting with the highest volume.');
 }
-if (striking_distance.length) {
+if (rankedRead76 && striking_distance.length) {
   F('Low', 'Keywords close to page 1 (positions 11-20)',
     striking_distance.slice(0, 5).map(k => '"' + k.keyword + '" #' + k.position).join(', '),
     'These are the fastest wins: small improvements can move them onto page 1.',
     'Improve the ranking page (depth, internal links, title) for each of these keywords.');
 }
-if (you.top10 > 0) works.push('Ranks in the Google top 10 for ' + you.top10 + ' keywords');
+if (rankedRead76 && you.top10 > 0) works.push('Ranks in the Google top 10 for ' + you.top10 + ' keywords');
 
 return [{
   json: {
@@ -416,7 +436,8 @@ return [{
       easy_wins,
       keyword_gap,
       striking_distance,
-      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40)
+      refused: refused.filter((r, i, a) => a.findIndex(x => x.keyword === r.keyword) === i).slice(0, 40),
+      evidence: keywords_evidence
     },
     extra_findings: [...(base.extra_findings || []), ...findings],
     extra_works: [...(base.extra_works || []), ...works]

@@ -1,6 +1,10 @@
 {
  "ai_calls": [
   {
+   "count_answer": "Count Answer (Keyword Seeds)",
+   "count_per_item": false,
+   "count_prompt": "Count Prompt (Keyword Seeds)",
+   "count_rounds": 1,
    "effort": "medium",
    "fields": [
     "audience",
@@ -21,6 +25,10 @@
    "template_chars": 1913
   },
   {
+   "count_answer": "Count Answer (Competitor Analyzer)",
+   "count_per_item": false,
+   "count_prompt": "Count Prompt (Competitor Analyzer)",
+   "count_rounds": 1,
    "effort": "medium",
    "fields": [
     "avg_competitor_words",
@@ -49,6 +57,10 @@
    "template_chars": 4016
   },
   {
+   "count_answer": "Count Answer (Content Reviewer)",
+   "count_per_item": false,
+   "count_prompt": "Count Prompt (Content Reviewer)",
+   "count_rounds": 1,
    "effort": "medium",
    "fields": [
     "content_prompt_comp",
@@ -102,6 +114,10 @@
    "template_chars": 9555
   },
   {
+   "count_answer": "Count Answer (Critic)",
+   "count_per_item": false,
+   "count_prompt": "Count Prompt (Critic)",
+   "count_rounds": 1,
    "effort": "medium",
    "fields": [
     "output"
@@ -173,7 +189,7 @@
     ]
    ],
    "input": "Copywriter",
-   "loop": true,
+   "loop": false,
    "max_tokens": 16384,
    "model": "claude-sonnet-5-5",
    "node": "Critic",
@@ -208,6 +224,10 @@
    "template_chars": 6153
   },
   {
+   "count_answer": "Count Answer (Keyword Relevance)",
+   "count_per_item": true,
+   "count_prompt": "Count Prompt (Keyword Relevance)",
+   "count_rounds": 0,
    "effort": "low",
    "fields": [
     "audience",
@@ -231,6 +251,10 @@
    "template_chars": 2242
   },
   {
+   "count_answer": "Count Answer (Ladder Keyword Relevance)",
+   "count_per_item": true,
+   "count_prompt": "Count Prompt (Ladder Keyword Relevance)",
+   "count_rounds": 0,
    "effort": "low",
    "fields": [
     "audience",
@@ -254,6 +278,10 @@
    "template_chars": 2242
   },
   {
+   "count_answer": "Count Answer (Site Describer)",
+   "count_per_item": false,
+   "count_prompt": "Count Prompt (Site Describer)",
+   "count_rounds": 1,
    "effort": "",
    "fields": [
     "domain",
@@ -329,6 +357,10 @@
    "template_chars": 12497
   },
   {
+   "count_answer": "Count Answer (Verdict Agent)",
+   "count_per_item": false,
+   "count_prompt": "Count Prompt (Verdict Agent)",
+   "count_rounds": 1,
    "effort": "medium",
    "fields": [
     "audience",
@@ -406,6 +438,156 @@
    }
   },
   "url": "https://api.anthropic.com/v1/messages/count_tokens"
+ },
+ "count_gap": {
+  "why": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow",
+  "workflows": [
+   "SEO_Agent_AI_Growth.json",
+   "SEO_Agent_AI_Visibility.json",
+   "SEO_Agent_Backlink_Monitor.json",
+   "SEO_Agent_Keyword_Check.json",
+   "SEO_Agent_Link_Builder.json",
+   "SEO_Agent_Reply_Reader.json",
+   "SEO_Agent_Site_Tracker.json"
+  ]
+ },
+ "count_nonstream": {
+  "Competitor Analyzer": {
+   "after": [
+    "Parse Analysis"
+   ],
+   "answer": "Count Answer (Competitor Analyzer)",
+   "branch": 0,
+   "fed_by": "Collect Facts",
+   "input": "Collect Facts",
+   "loop": false,
+   "model": "claude-sonnet-5-5",
+   "per_item": false,
+   "prompt": "Count Prompt (Competitor Analyzer)",
+   "ref": "$('Collect Facts').first(0).json",
+   "resume": "After Count (Competitor Analyzer)",
+   "rounds": 1,
+   "set": "Prompt For Count (Competitor Analyzer)"
+  },
+  "Content Reviewer": {
+   "after": [
+    "Parse Content Review"
+   ],
+   "answer": "Count Answer (Content Reviewer)",
+   "branch": 0,
+   "fed_by": "Build Content Prompt",
+   "input": "Build Content Prompt",
+   "loop": false,
+   "model": "claude-sonnet-5-5",
+   "per_item": false,
+   "prompt": "Count Prompt (Content Reviewer)",
+   "ref": "$('Build Content Prompt').first(0).json",
+   "resume": "After Count (Content Reviewer)",
+   "rounds": 1,
+   "set": "Prompt For Count (Content Reviewer)"
+  },
+  "Critic": {
+   "after": [
+    "Parse Critique"
+   ],
+   "answer": "Count Answer (Critic)",
+   "branch": 0,
+   "fed_by": "After Count (Copywriter)",
+   "input": "Copywriter",
+   "loop": false,
+   "model": "claude-sonnet-5-5",
+   "per_item": false,
+   "prompt": "Count Prompt (Critic)",
+   "ref": "$('After Count (Copywriter)').first(0).json",
+   "resume": "After Count (Critic)",
+   "rounds": 1,
+   "set": "Prompt For Count (Critic)"
+  },
+  "Keyword Relevance": {
+   "after": [
+    "Rank Keywords"
+   ],
+   "answer": "Count Answer (Keyword Relevance)",
+   "branch": null,
+   "fed_by": "Relevance Chunks",
+   "input": "Relevance Chunks",
+   "loop": false,
+   "model": "claude-sonnet-5-5",
+   "per_item": true,
+   "prompt": "Count Prompt (Keyword Relevance)",
+   "ref": "$('Relevance Chunks').item.json",
+   "resume": "After Count (Keyword Relevance)",
+   "rounds": 0,
+   "set": "Prompt For Count (Keyword Relevance)"
+  },
+  "Keyword Seeds": {
+   "after": [
+    "Seed List"
+   ],
+   "answer": "Count Answer (Keyword Seeds)",
+   "branch": 1,
+   "fed_by": "Route Mode",
+   "input": "Route Mode",
+   "loop": false,
+   "model": "claude-sonnet-5-5",
+   "per_item": false,
+   "prompt": "Count Prompt (Keyword Seeds)",
+   "ref": "$('Route Mode').first(1).json",
+   "resume": "After Count (Keyword Seeds)",
+   "rounds": 1,
+   "set": "Prompt For Count (Keyword Seeds)"
+  },
+  "Ladder Keyword Relevance": {
+   "after": [
+    "Ladder Plan"
+   ],
+   "answer": "Count Answer (Ladder Keyword Relevance)",
+   "branch": null,
+   "fed_by": "Ladder Relevance Chunks",
+   "input": "Ladder Relevance Chunks",
+   "loop": false,
+   "model": "claude-sonnet-5-5",
+   "per_item": true,
+   "prompt": "Count Prompt (Ladder Keyword Relevance)",
+   "ref": "$('Ladder Relevance Chunks').item.json",
+   "resume": "After Count (Ladder Keyword Relevance)",
+   "rounds": 0,
+   "set": "Prompt For Count (Ladder Keyword Relevance)"
+  },
+  "Site Describer": {
+   "after": [
+    "Parse Description"
+   ],
+   "answer": "Count Answer (Site Describer)",
+   "branch": 0,
+   "fed_by": "Site Pages",
+   "input": "Site Pages",
+   "loop": false,
+   "model": "claude-haiku-4-5-20251001",
+   "per_item": false,
+   "prompt": "Count Prompt (Site Describer)",
+   "ref": "$('Site Pages').first(0).json",
+   "resume": "After Count (Site Describer)",
+   "rounds": 1,
+   "set": "Prompt For Count (Site Describer)"
+  },
+  "Verdict Agent": {
+   "after": [
+    "Parse Verdict"
+   ],
+   "answer": "Count Answer (Verdict Agent)",
+   "branch": 0,
+   "fed_by": "Merge Keyword Data",
+   "input": "Merge Keyword Data",
+   "loop": false,
+   "model": "claude-sonnet-5-5",
+   "per_item": false,
+   "prompt": "Count Prompt (Verdict Agent)",
+   "ref": "$('Merge Keyword Data').first(0).json",
+   "resume": "After Count (Verdict Agent)",
+   "rounds": 1,
+   "set": "Prompt For Count (Verdict Agent)"
+  }
  },
  "intake": {
   "ensure": "Ensure Cost Cache",

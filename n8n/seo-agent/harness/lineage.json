@@ -12,21 +12,60 @@
    "pass": 13,
    "subject": 16
   },
+  "refusal": {
+   "pass": 14,
+   "subject": 33
+  },
   "withheld": {
    "pass": 4,
    "subject": 4
   }
  },
  "nodes": {
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / AI Visibility": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "AI Visibility",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze Backlinks": {
+   "fails": [],
+   "markup": 0,
+   "node": "Analyze Backlinks",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze Keywords": {
+   "fails": [],
+   "markup": 0,
+   "node": "Analyze Keywords",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze Probes": {
    "evidence": false,
    "fails": [
-    "evidence"
+    "evidence",
+    "refusal"
    ],
    "markup": 1,
    "node": "Analyze Probes",
+   "refusal": false,
    "subject": [
-    "evidence"
+    "evidence",
+    "refusal"
    ],
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
@@ -38,8 +77,20 @@
    },
    "markup": 0,
    "node": "Audit Diff",
+   "refusal": true,
    "subject": [
-    "like_for_like"
+    "like_for_like",
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Backlink Gap Retry Plan": {
+   "fails": [],
+   "markup": 0,
+   "node": "Backlink Gap Retry Plan",
+   "refusal": true,
+   "subject": [
+    "refusal"
    ],
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
@@ -100,8 +151,10 @@
    },
    "markup": 53,
    "node": "Build Keyword Strategy",
+   "refusal": true,
    "subject": [
-    "lineage"
+    "lineage",
+    "refusal"
    ],
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
@@ -124,8 +177,10 @@
    "fails": [],
    "markup": 0,
    "node": "Build Site Issues",
+   "refusal": true,
    "subject": [
-    "evidence"
+    "evidence",
+    "refusal"
    ],
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
@@ -145,6 +200,174 @@
    "withheld": true,
    "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
   },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Collect Research": {
+   "fails": [],
+   "markup": 0,
+   "node": "Collect Research",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Competitor Analysis": {
+   "fails": [],
+   "markup": 0,
+   "node": "Competitor Analysis",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / CrUX Targets": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "CrUX Targets",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Domain Ages": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Domain Ages",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Entity Check": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Entity Check",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Fallback Queries": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Fallback Queries",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Fix Pack": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Fix Pack",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / GSC Audit Plan": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "GSC Audit Plan",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Keyword Ideas Retry Plan": {
+   "fails": [],
+   "markup": 0,
+   "node": "Keyword Ideas Retry Plan",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Merge Keyword Data": {
+   "fails": [],
+   "markup": 0,
+   "node": "Merge Keyword Data",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Pick Competitors": {
+   "fails": [],
+   "markup": 0,
+   "node": "Pick Competitors",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Pick Key Pages": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Pick Key Pages",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Reach (Discovery)": {
+   "fails": [],
+   "markup": 0,
+   "node": "Reach (Discovery)",
+   "refusal": true,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Render Diff": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 3,
+   "node": "Render Diff",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Render Diff Targets": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Render Diff Targets",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content"
+  },
   "SEO Agent \u2014 AI Growth / Growth Report": {
    "fails": [],
    "lineage": {
@@ -159,6 +382,18 @@
    ],
    "workflow": "SEO Agent \u2014 AI Growth"
   },
+  "SEO Agent \u2014 AI Pulse / Pulse Metrics": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 4,
+   "node": "Pulse Metrics",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Pulse"
+  },
   "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": {
    "fails": [],
    "like_for_like": {
@@ -167,8 +402,10 @@
    },
    "markup": 0,
    "node": "AI Metrics",
+   "refusal": true,
    "subject": [
-    "like_for_like"
+    "like_for_like",
+    "refusal"
    ],
    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
   },
@@ -186,6 +423,54 @@
    ],
    "workflow": "SEO Agent \u2014 AI Visibility Tracker"
   },
+  "SEO Agent \u2014 AI Visibility Tracker / Analyst Jobs": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Analyst Jobs",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / Apply Analysis": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Apply Analysis",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / Prompt Jobs": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Prompt Jobs",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
+  "SEO Agent \u2014 AI Visibility Tracker / Prompt Rows": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Prompt Rows",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 AI Visibility Tracker"
+  },
   "SEO Agent \u2014 Backlink Monitor / BL Report": {
    "fails": [],
    "lineage": {
@@ -200,6 +485,18 @@
    ],
    "workflow": "SEO Agent \u2014 Backlink Monitor"
   },
+  "SEO Agent \u2014 Backlink Monitor / Gap Requests": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Gap Requests",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 Backlink Monitor"
+  },
   "SEO Agent \u2014 Backlink Monitor / Parse Backlinks": {
    "fails": [],
    "like_for_like": {
@@ -210,6 +507,18 @@
    "node": "Parse Backlinks",
    "subject": [
     "like_for_like"
+   ],
+   "workflow": "SEO Agent \u2014 Backlink Monitor"
+  },
+  "SEO Agent \u2014 Backlink Monitor / Verify Requests": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "Verify Requests",
+   "refusal": false,
+   "subject": [
+    "refusal"
    ],
    "workflow": "SEO Agent \u2014 Backlink Monitor"
   },
@@ -275,6 +584,18 @@
    ],
    "workflow": "SEO Agent \u2014 Link Builder"
   },
+  "SEO Agent \u2014 Link Builder / LB Page Requests": {
+   "fails": [
+    "refusal"
+   ],
+   "markup": 0,
+   "node": "LB Page Requests",
+   "refusal": false,
+   "subject": [
+    "refusal"
+   ],
+   "workflow": "SEO Agent \u2014 Link Builder"
+  },
   "SEO Agent \u2014 Link Builder / LB Report": {
    "fails": [],
    "lineage": {
@@ -302,9 +623,11 @@
    },
    "markup": 23,
    "node": "Tracker Report",
+   "refusal": true,
    "subject": [
     "lineage",
-    "like_for_like"
+    "like_for_like",
+    "refusal"
    ],
    "workflow": "SEO Agent \u2014 Rank Tracker"
   },
@@ -385,6 +708,24 @@
     "withheld"
    ]
   },
+  "acts_on_a_gated_read_and_can_refuse": {
+   "caught": true,
+   "fails": [],
+   "subject": [
+    "lineage",
+    "refusal"
+   ]
+  },
+  "acts_on_a_gated_read_with_no_refusal": {
+   "caught": true,
+   "fails": [
+    "refusal"
+   ],
+   "subject": [
+    "lineage",
+    "refusal"
+   ]
+  },
   "findings_run_through_the_guard": {
    "caught": true,
    "fails": [],
@@ -417,8 +758,60 @@
   }
  },
  "unpaid": {
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / AI Visibility": [
+   "refusal"
+  ],
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Analyze Probes": [
-   "evidence"
+   "evidence",
+   "refusal"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / CrUX Targets": [
+   "refusal"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Domain Ages": [
+   "refusal"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Entity Check": [
+   "refusal"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Fallback Queries": [
+   "refusal"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Fix Pack": [
+   "refusal"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / GSC Audit Plan": [
+   "refusal"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Pick Key Pages": [
+   "refusal"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Render Diff": [
+   "refusal"
+  ],
+  "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Render Diff Targets": [
+   "refusal"
+  ],
+  "SEO Agent \u2014 AI Pulse / Pulse Metrics": [
+   "refusal"
+  ],
+  "SEO Agent \u2014 AI Visibility Tracker / Analyst Jobs": [
+   "refusal"
+  ],
+  "SEO Agent \u2014 AI Visibility Tracker / Apply Analysis": [
+   "refusal"
+  ],
+  "SEO Agent \u2014 AI Visibility Tracker / Prompt Jobs": [
+   "refusal"
+  ],
+  "SEO Agent \u2014 AI Visibility Tracker / Prompt Rows": [
+   "refusal"
+  ],
+  "SEO Agent \u2014 Backlink Monitor / Gap Requests": [
+   "refusal"
+  ],
+  "SEO Agent \u2014 Backlink Monitor / Verify Requests": [
+   "refusal"
   ],
   "SEO Agent \u2014 Console Alerts / Alert Target": [
    "lineage"
@@ -428,6 +821,9 @@
   ],
   "SEO Agent \u2014 Content Cadence / Cadence Status": [
    "lineage"
+  ],
+  "SEO Agent \u2014 Link Builder / LB Page Requests": [
+   "refusal"
   ]
  }
 }

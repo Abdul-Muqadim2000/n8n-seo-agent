@@ -1,0 +1,112 @@
+{
+ "SEO_Agent_AI_Growth.json / AI Outreach Writer": {
+  "counted": false,
+  "model": "claude-sonnet-5-5",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_AI_Visibility.json / AI Brief": {
+  "counted": false,
+  "model": "claude-sonnet-5-5",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_AI_Visibility.json / Answer Analyst": {
+  "counted": false,
+  "model": "claude-sonnet-5-5",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_AI_Visibility.json / Prompt Writer": {
+  "counted": false,
+  "model": "claude-sonnet-5-5",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_Backlink_Monitor.json / Link Analyst": {
+  "counted": false,
+  "model": "claude-sonnet-5-5",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_Backlink_Monitor.json / Outreach Writer": {
+  "counted": false,
+  "model": "claude-sonnet-5-5",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_Keyword_Check.json / Keyword Fit": {
+  "counted": false,
+  "model": "claude-haiku-4-5-20251001",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_Keyword_Check.json / Keyword Fit (Text)": {
+  "counted": false,
+  "model": "claude-haiku-4-5-20251001",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_Link_Builder.json / Outreach Sequence Writer": {
+  "counted": false,
+  "model": "claude-sonnet-5-5",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_Reply_Reader.json / Reply Reader": {
+  "counted": false,
+  "model": "claude-haiku-4-5-20251001",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_Site_Tracker.json / Site Brief": {
+  "counted": false,
+  "model": "claude-sonnet-5-5",
+  "why_not": "priced from the run RESERVATION (CC.aiRun), not from this node and not from characters: a monitor settles its reserved Claude figure and labels it ESTIMATED. Counting it needs a per-workflow call table in its own builder (build_monitors.py / build_site_tracker.py / build_api.py), which is not built \u2014 B-F1 covered the main workflow"
+ },
+ "SEO_Agent_v4.json / Competitor Analyzer": {
+  "counted": true,
+  "model": "claude-sonnet-5-5",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Content Reviewer": {
+  "counted": true,
+  "model": "claude-sonnet-5-5",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Copywriter": {
+  "counted": true,
+  "model": "claude-opus-5-5",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Critic": {
+  "counted": true,
+  "model": "claude-sonnet-5-5",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Editor": {
+  "counted": true,
+  "model": "claude-opus-5-5",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Keyword Relevance": {
+  "counted": true,
+  "model": "claude-sonnet-5-5",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Keyword Seeds": {
+  "counted": true,
+  "model": "claude-sonnet-5-5",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Ladder Keyword Relevance": {
+  "counted": true,
+  "model": "claude-sonnet-5-5",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Site Describer": {
+  "counted": true,
+  "model": "claude-haiku-4-5-20251001",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Strategy Brief": {
+  "counted": true,
+  "model": "claude-opus-5-5",
+  "why_not": ""
+ },
+ "SEO_Agent_v4.json / Verdict Agent": {
+  "counted": true,
+  "model": "claude-sonnet-5-5",
+  "why_not": ""
+ }
+}
