@@ -6315,6 +6315,119 @@ def _b64_checks():
     print('alert retry + run guard (B-A7 / B-A9): ' + str(len(out64)) + ' scheduled workflows sweep undelivered alerts and pass the shared concurrency gate')
 
 
+
+# =============================================================================
+# 65. ONE CAUSE, NOT FIVE SYMPTOMS — AND THE LINKS NOTHING CAN FOLLOW
+#     (2026-10-15, benchmark area 5, the technical audit; docs/system-review-2026-10-14/BENCH_AREA5_technical_audit.md,
+#      register rows B5-1 / B5-2 / B5-3; CRITERIA_technical… 1.2 / 1.4 / 1.6 / 1.12)
+#     The audit crawl runs WITHOUT JavaScript by default (`enable_javascript: false`, CONFIG.crawl_js), so every page figure it
+#     reports — the H1, the word count, the title, the canonical, the links — is read from the first response. On a site that
+#     renders in the browser that is the right reading to take (it is what the AI crawlers get, and what Google gets on its first
+#     pass), but it was never SAID, and the findings drawn from it named the wrong cause and gave the wrong fix: "Missing H1
+#     heading — add one clear H1 per page" on a page whose H1 exists and is written by a script, and "Thin content — expand these
+#     pages" on 900 words no crawler can see. Sitebulb's own 2024 corpus puts that case at 18.3% of pages for the H1 alone
+#     (sitebulb.com/javascript-seo/2024-report/sitebulb-data/), so it is the common case, not the exotic one.
+#       * B5-2. Where the response-versus-render check (G14) PROVED the figure is written by JavaScript — on at least half of the
+#         key pages it read twice — the crawl-wide symptom is merged into that cause: one finding, the higher of the two
+#         severities, the crawl's own count and sample, the rendering fix, and both sentences of evidence. The score deducts once,
+#         for the cause, instead of twice for a symptom and its explanation. Nothing is dropped: `merged_titles` keeps every title.
+#       * B5-3. And when the crawl did not render, the audit says so in its notes whatever the render check found, so no reader
+#         takes a page figure for a statement about the page rather than about its first response.
+#       * B5-1. *Render Diff* also reads what no crawler can follow out of the HTML it has already fetched (Screaming Frog v24's
+#         "Find Uncrawlable Links", screamingfrog.co.uk/seo-spider-24/): <a> tags with no href or a javascript: href that navigate
+#         on click, and div / span / li / button / tr elements carrying a page address in an onclick or a data-href. That is the
+#         usual cause of the orphan pages the crawl reports, which the audit used to name as a symptom and guess at in prose.
+#     No new request, no new credential, no cost: every byte of this was already fetched for the render diff.
+# =============================================================================
+# ---------- A. B5-1: the uncrawlable links reached Render Diff through v5/code/Render_Diff.js; here is what the build asserts ----------
+_rd65 = code('Render Diff')
+for _need65 in ('const uncrawlable = (html) =>', "kind: 'javascript_href'", "kind: 'element_as_link'",
+                'uncrawlable_links', "figure: figure || ''", 'crawl_js: !!plan.crawl_js'):
+    assert _need65 in _rd65, 'B5-1: Render Diff does not carry ' + _need65
+assert "F('Crawlability & Indexing', sev," in _rd65, 'B5-1: Render Diff raises no finding for the links nothing can follow'
+assert 'looksLikeUrl(t)' in _rd65, 'B5-1: an element is counted as a link without a readable address'
+
+# ---------- B. B5-2 / B5-3: Build Site Issues joins the symptom to the cause, and says what the crawl read ----------
+patch('Build Site Issues', "// ===== 5. What works =====",
+r"""// ===== 4c. B5-2 (2026-10-15, benchmark area 5): one cause, not five symptoms =====
+// The crawl reads the first response unless CONFIG.crawl_js is on. Where the response-versus-render check proved that a figure is
+// written by JavaScript on at least half the key pages it read twice, the crawl-wide finding is not a second problem: it is the same
+// problem, counted over the whole crawl. Merging keeps the bigger sample and the right fix, deducts once, and keeps both titles.
+const RDF = input.render_diff || null;
+const renderMerges = [];
+if (RDF && RDF.available && RDF.crawl_js === false) {
+  const rdChecked = (RDF.pages || []).filter(p => p && p.checked);
+  const SYMPTOM_OF = {
+    h1: [/^missing h1 heading$/i],
+    words: [/^thin content/i, /^light content/i, /^very little text on the page$/i, /^low text-to-html ratio$/i],
+    title: [/^missing title tag$/i],
+    canonical: [/^missing canonical tag$/i],
+    links: [/^few internal links pointing to the page$/i, /^orphan pages/i]
+  };
+  const PROVED_SHARE = 0.5;   // on half the key pages read twice, or it is one odd page and not how the site is built
+  for (const key of Object.keys(SYMPTOM_OF)) {
+    const proved = rdChecked.filter(p => (p.js_only || []).includes(key));
+    if (!proved.length || !rdChecked.length || proved.length / rdChecked.length < PROVED_SHARE) continue;
+    const cause = findings.find(f => f.source === 'render_diff' && f.figure === key && f.scoring !== false);
+    if (!cause) continue;
+    for (let i = findings.length - 1; i >= 0; i--) {
+      const s = findings[i];
+      if (s === cause || s.source === 'render_diff' || s.scoring === false) continue;
+      if (!SYMPTOM_OF[key].some(re => re.test(String(s.title || '')))) continue;
+      if (SEV_ORDER[s.severity] < SEV_ORDER[cause.severity]) cause.severity = s.severity;
+      cause.evidence = [cause.evidence, 'the crawl of ' + total + ' pages, which read only the first response, reports "' + s.title + '" on '
+        + (s.affected_count == null ? 'them' : s.affected_count + ' of them')].filter(Boolean).join('; ');
+      if ((Number(s.affected_count) || 0) > (Number(cause.affected_count) || 0)) { cause.affected_count = s.affected_count; cause.affected_pct = s.affected_pct; }
+      cause.sample_urls = [...new Set([...(cause.sample_urls || []), ...(s.sample_urls || [])])].slice(0, 10);
+      cause.merged_titles = [...(cause.merged_titles || [cause.title]), s.title];
+      cause.caused_by = 'javascript_rendering';
+      cause.why = String(cause.why || '') + ' The crawl did not run JavaScript, so it reports this as "' + String(s.title).toLowerCase()
+        + '" on the pages it read — the same problem, seen from the other side.';
+      renderMerges.push({ figure: key, symptom: s.title, affected: s.affected_count == null ? null : s.affected_count, proved_on: proved.length, of: rdChecked.length });
+      findings.splice(i, 1);
+    }
+  }
+}
+const render_merge = renderMerges.length ? { merged: renderMerges.length, items: renderMerges,
+  method: 'A finding the crawl drew from the first response was joined to the rendering problem that causes it, where the two readings of the key pages proved the figure is written by JavaScript on at least half of them. The joined finding keeps the crawl\'s own count, the higher severity of the two and both titles, and the score deducts once for the cause instead of twice.' } : null;
+
+// ===== 5. What works =====""")
+patch('Build Site Issues', "      render_diff: input.render_diff || null,\n", "      render_diff: input.render_diff || null,\n      render_merge,\n")
+# B5-3: what the crawl itself read is said in the audit's own notes, whether or not the render check could be made
+patch('Build Site Issues', "notes: [probe.note,",
+      "notes: [probe.note, base.crawl_js === false ? 'Every page figure in this report was read from the first response: the crawl did not run JavaScript. That is what a crawler which does not render sees — every AI crawler today, and Google on its first pass — so a heading, a text or a link that a script writes is reported here as missing.'"
+      " + (RDF && RDF.available ? ' The ' + RDF.pages_checked + ' key page(s) of the response-versus-render check were read both ways' + (render_merge ? ', and ' + render_merge.merged + ' finding(s) were joined to the rendering that causes them' : '') + '.' : '') : '',")
+for _need65 in ('const RDF = input.render_diff', 'renderMerges', 'render_merge', "caused_by = 'javascript_rendering'"):
+    assert _need65 in code('Build Site Issues'), 'B5-2: ' + _need65 + ' did not reach Build Site Issues'
+assert code('Build Site Issues').index('const RDF = input.render_diff') < code('Build Site Issues').index('IMP.rank(findings'), \
+    'B5-2: the merge must happen before the fix list is ordered and before the score is computed'
+
+# ---------- C. both audit reports name the links nothing can follow, next to the render table ----------
+UNC_SECTION_JS = r"""// ---- the links nothing can follow (B5-1, 2026-10-15, benchmark area 5) ----
+const uncrawlableSection = (a) => {
+  const rdf = a.render_diff || null; const u = rdf && rdf.uncrawlable_links;
+  if (!u || !u.total) return '';
+  const e4 = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const rows = (rdf.pages || []).filter(p => p.uncrawlable).map(p =>
+    `<tr><td>${e4(p.path)}</td><td>${p.uncrawlable}</td><td class="small">${e4((p.uncrawlable_samples || []).map(x => '<' + x.tag + '>' + (x.detail ? ' -> ' + x.detail : '')).join(', '))}</td></tr>`).join('');
+  return `<h3>Links nothing can follow</h3><table class="ct"><tr><th>Page</th><th>Found</th><th>Examples</th></tr>${rows}</table>`
+    + `<p class="small">${e4(u.method)}${u.orphan_pages ? ' The crawl found ' + u.orphan_pages + ' orphan page(s) with no crawlable internal link.' : ''}</p>`;
+};
+"""
+for _rn65 in ('Build Audit Report', 'Build Full Report'):
+    patch(_rn65, "const findings = a.findings || [];", UNC_SECTION_JS + "const findings = a.findings || [];")
+    patch(_rn65, "html += cwvSection(a)", "html += uncrawlableSection(a);\nhtml += cwvSection(a)")
+    assert code(_rn65).count('html += uncrawlableSection(a);') == 1 and 'const uncrawlableSection = (a) =>' in code(_rn65), \
+        _rn65 + ': the uncrawlable section is not printed once'
+
+sticky("""### One cause, not five symptoms — and the links nothing can follow (B5-1 / B5-2 / B5-3)
+**The crawl reads the first response** (JavaScript off by default), so an H1 a script writes was reported as *"Missing H1 heading — add one clear H1 per page"* on a page whose H1 exists. Sitebulb's 2024 corpus puts that at **18.3% of pages**.
+**Now:** where the response-versus-render check proved the figure is written by JavaScript on **half or more** of the key pages it read twice, the crawl-wide symptom is **joined to the cause** — one finding, the higher severity, the crawl's own count, the rendering fix, both titles kept in `merged_titles`, and **one deduction instead of two**.
+**And the audit says what it read**: "Every page figure in this report was read from the first response."
+**Links nothing can follow** (Screaming Frog v24 parity, free): `<a>` with no href or a `javascript:` href that navigates on click, and div / span / li / button / tr carrying an address in `onclick` or `data-href` — read from HTML already fetched, and named as the usual cause of the orphan pages the crawl reports.""",
+    pos('Render Diff')[0] - 40, pos('Render Diff')[1] + 340, 1180, 290, 4)
+log('One cause, not five symptoms, and the links nothing can follow (2026-10-15, benchmark area 5, B5-1 / B5-2 / B5-3): the audit crawl reads the first response unless crawl_js is on, so an H1, a text or a link a script writes was reported as missing with the wrong fix - where the response-versus-render check proves the figure is written by JavaScript on at least half the key pages it read twice, the crawl-wide symptom is now merged into the rendering finding (higher severity, the crawl\'s count, the rendering fix, every title kept, one deduction instead of two), the audit says in its notes that every page figure came from the first response, and Render Diff reads the links nothing can follow (<a> with no href or a javascript: href, div / span / li / button / tr navigating from onclick or data-href) out of the HTML it already fetched, naming them as the usual cause of the orphan pages the crawl reports')
+
 # =============================================================================
 # 66. A PLAN MEASURED ON ITS OWN TOPIC, AND AN ORDER THAT SAYS WHY (2026-10-15, benchmark programme area 2 —
 #     docs/system-review-2026-10-14/BENCH_AREA2_ladders.md; register rows B2-1 / B2-2 / B2-3)
