@@ -37,12 +37,36 @@ const before1 = md;
 md = md.replace(/\s*\((placeholders?|placeholder for [^)]*)\)/gi, '').replace(/\b(indicative\s+)?price placeholders?\b/gi, 'prices').replace(/\bplaceholders?\b/gi, 'details');
 if (md !== before1) fixes.push('Removed the word "placeholder" from text');
 
+// 2b. The source text this run really read, keyed by URL (B3-1, 2026-10-15, benchmark area 3). This used to be built in §9b only, which left
+//     the money mask below reading a NARROWER corpus than the figure check forty lines later: the mask knew only `prev.facts`, so an amount
+//     printed in a page the run fetched was destroyed while a percentage in the very same sentence of the very same source was kept. Both
+//     checks now read the same map. It is built here because the mask runs first and rewrites `md` irreversibly.
+const srcText = new Map();
+const ownFacts = String(prev.business || '') + ' ' + String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '');   // the client's own numbers vouch for themselves
+const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim()) return; srcText.set(k, ((srcText.get(k) || '') + ' ' + String(t)).slice(0, 12000)); };
+(prev.facts || []).forEach(f => addSrc(f && f.url, [f && f.text, f && f.claim, f && f.title].filter(Boolean).join(' ')));
+(brief.evidence_plan || []).forEach(e => addSrc(e && e.source_url, e && e.fact));
+(prev.competitors || []).forEach(c => addSrc(c && c.url, [c && c.content_full, c && c.content, c && c.snippet].filter(Boolean).join(' ')));
+// the sources a sentence itself cites, and whether one of them states this amount (same rule as §9b: the figure is looked up only in the
+// pages that sentence links to, never in the whole run's reading).
+// A link target is full of full stops (`…/cabinet-decision-106.pdf`), and a sentence finder that splits on "." splits inside it — which
+// cuts the citation off the very sentence that needs it. Boundaries are therefore taken on a shadow copy with every link TARGET blanked,
+// and the text is then read back out of the original at those same offsets, so the link survives whole.
+const linkRe = () => /\]\((https?:\/\/[^)\s]+)\)/g;
+const shadowOf = (t) => String(t).replace(linkRe(), (m) => '](' + ' '.repeat(Math.max(0, m.length - 3)) + ')');
+const amountInCitedSource = (amt, sent) => { const f = SRC.valueOf(String(amt).trim()); if (!f) return null;
+  for (const m of String(sent).matchAll(linkRe())) { const t = srcText.get(SRC.key(m[1])); if (t && SRC.hasFigure(f, t)) return SRC.host(m[1]); }
+  return null; };
+
 // 3. Prices become [Price] unless the user gave prices (business facts / description). v4.9 (live 2026-10-02 and 2026-10-08): an amount the
 //    verified facts state stays as written (official fines and thresholds, with their source link); an unsourced amount that is not about the
 //    business's own prices (a revenue threshold, a fine, a market figure, or anything in millions) becomes [Confirm: AED 50m], so the reviewer
 //    sees the figure to check instead of a misleading "[Price]m"; every other amount is an invented price and becomes [Price].
 const userText = String(prev.business || '') + ' ' + String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '');   // case-study facts (v4.4) are the client's own numbers
 const userGavePrices = /\d/.test(userText) && /(\$|£|€|₹|\b(aed|sar|pkr|inr|usd|gbp|eur|zar|brl|mxn|rs)\b)/i.test(userText);
+// B3-2 (2026-10-15): what the mask took out, with the sentence it took it from. [Price] carries no value, so until now the owner was told
+// only that "a [Price] is somewhere in the copy" and could never confirm or reject the number that had been removed.
+const masked_amounts = [], flagged_amounts = [], sourced_amounts = [];
 if (!userGavePrices) {
   const sym = { GBP: '£', USD: '\\$', CAD: '\\$', AUD: '\\$', NZD: '\\$', SGD: '\\$', PKR: '(?:Rs\\.?|PKR)', INR: '(?:Rs\\.?|₹|INR)', AED: '(?:AED|Dh)', SAR: '(?:SAR|SR)', EUR: '€', ZAR: 'R', BRL: 'R\\$', MXN: '\\$' }[prev.currency] || '[£$€]';
   const unit = '(?:\\s?(?:k|K|m|M|bn|BN|million|Million|billion|Billion|thousand))?\\b';
@@ -52,7 +76,14 @@ if (!userGavePrices) {
   const verified = (amt) => { const n = numsOf(amt); return n.length > 0 && n.every(x => new RegExp(sym + '\\s?' + x.replace('.', '\\.') + '(?![\\d])', 'i').test(factsText)); };
   const PRICE_WORDS = /\b(price[sd]?|pricing|cost[s]?|fees?|quotes?|packages?|plans?|investment|budget|starting|subscriptions?|rates?|charge[sd]?|pay|paid|per (user|seat|hour|day|project))\b/i;
   const OTHER_WORDS = /\b(revenue|turnover|threshold|fines?|penalt(y|ies)|tax|vat|levy|duty|salary|salaries|wages?|market|funding|raised|valuation|gdp|economy|exports?|imports?|sales of)\b/i;
-  const sentenceAt = (text, at, len) => { let a = at, b = at + len; while (a > 0 && !/[.!?\n|]/.test(text[a - 1])) a--; while (b < text.length && !/[.!?\n|]/.test(text[b])) b++; return text.slice(a, b); };
+  // B3-2 (2026-10-15, benchmark area 3): a statutory amount is never OUR price, so a price VERB must not decide it. Live, the delivered
+  // "uae e invoicing penalties" page said the penalty "costs [Price] per month" and its comparison table's Fine column read "[Price] per
+  // month" 43 times -- because the guard was `(big || OTHER_WORDS) && !PRICE_WORDS`, and "costs" is a PRICE_WORD. [Price] destroys the
+  // number; [Confirm: AED 5,000] keeps it in front of the reviewer, which is the whole point of the marker. These subjects always win.
+  const STATUTORY_WORDS = /\b(fines?|fined|penalt(y|ies)|penalised|penalized|threshold|levy|levies|duty|duties|violations?|non-?compliance|sanctions?|administrative penalt(y|ies))\b/i;
+  const mdShadow = shadowOf(md);   // B3-1: the link targets blanked, so a full stop inside a URL cannot end a sentence
+  const sentenceAt = (text, at, len) => { const g = text.length === mdShadow.length ? mdShadow : text;
+    let a = at, b = at + len; while (a > 0 && !/[.!?\n|]/.test(g[a - 1])) a--; while (b < g.length && !/[.!?\n|]/.test(g[b])) b++; return text.slice(a, b); };
   // R11 (2026-10-13, re-rating §3.11): a passage the draft itself declares illustrative or hypothetical keeps its figures. Live, the mask
   // turned a worked example into "40 fee-earners at an average rate of [Price] per hour" and "billings of [Price] a week (40 × 22.5 ×
   // [Price])" two lines under "All figures are illustrative assumptions for a hypothetical firm", so the arithmetic of the whole example
@@ -66,18 +97,25 @@ if (!userGavePrices) {
     return out;
   })();
   const inIllustrative = (at) => illustrativeZones.some(z => at >= z[0] && at < z[1]);
-  let masked = 0, flagged = 0, kept = 0, illustrative = 0;
+  let masked = 0, flagged = 0, kept = 0, illustrative = 0, sourced = 0;
   md = md.replace(priceRe, (amt, _r, _s, at, whole) => {
     if (inIllustrative(at)) { illustrative++; return amt; }
     if (verified(amt)) { kept++; return amt; }
     const sent = sentenceAt(whole, at, amt.length);
+    // B3-1: the amount is in a page THIS SENTENCE cites and the run really read — the same test §9b applies to every other figure.
+    const host = amountInCitedSource(amt, sent);
+    if (host) { sourced++; sourced_amounts.push({ amount: amt.trim(), source: host }); return amt; }
     const big = /(m|M|bn|BN|million|Million|billion|Billion)\b\s*$/.test(amt);
-    if ((big || OTHER_WORDS.test(sent)) && !PRICE_WORDS.test(sent)) { flagged++; return '[Confirm: ' + amt.trim() + ']'; }   // a price sentence keeps the guard
-    masked++; return '[Price]';
+    const context = plain(sent).trim().slice(0, 110);
+    if (STATUTORY_WORDS.test(sent) || ((big || OTHER_WORDS.test(sent)) && !PRICE_WORDS.test(sent))) {   // B3-2: a fine is never our price
+      flagged++; flagged_amounts.push({ amount: amt.trim(), context }); return '[Confirm: ' + amt.trim() + ']';
+    }
+    masked++; masked_amounts.push({ amount: amt.trim(), context }); return '[Price]';
   });
   if (masked) fixes.push(`Replaced ${masked} invented price(s) with [Price]`);
   if (flagged) fixes.push(`Marked ${flagged} unsourced amount(s) (thresholds, fines, market figures) as [Confirm: …] for review`);
   if (kept) fixes.push(`Kept ${kept} amount(s) stated in the verified facts`);
+  if (sourced) fixes.push(`Kept ${sourced} amount(s) that the source cited in the same sentence states (${[...new Set(sourced_amounts.map(a => a.source))].slice(0, 4).join(', ')})`);
   if (illustrative) fixes.push(`Kept ${illustrative} amount(s) inside a passage the draft labels illustrative or hypothetical (a worked example has to keep its arithmetic)`);
 }
 
@@ -202,12 +240,7 @@ const stats = [...statHits].filter(s => !/^(19|20)\d\d/.test(s)).filter(s => !cl
 //     so a figure that is not there was not read anywhere: it is marked [Confirm: …] in the copy and listed in the report. Formatting does not
 //     matter (separators, "m" / "million", "AED 50m" vs "AED 50 million"); small bare numbers ("3 steps") are never treated as claims; a figure
 //     the client's own facts carry needs no external source; a sentence whose sources we never read is left alone (nothing to check against).
-const srcText = new Map();
-const ownFacts = String(prev.business || '') + ' ' + String(prev.business_facts || '') + ' ' + String(prev.case_facts_text || '');   // the client's own numbers vouch for themselves
-const addSrc = (u, t) => { const k = SRC.key(u); if (!k || !String(t || '').trim()) return; srcText.set(k, ((srcText.get(k) || '') + ' ' + String(t)).slice(0, 12000)); };
-(prev.facts || []).forEach(f => addSrc(f && f.url, [f && f.text, f && f.claim, f && f.title].filter(Boolean).join(' ')));
-(brief.evidence_plan || []).forEach(e => addSrc(e && e.source_url, e && e.fact));
-(prev.competitors || []).forEach(c => addSrc(c && c.url, [c && c.content_full, c && c.content, c && c.snippet].filter(Boolean).join(' ')));
+// (`srcText` / `ownFacts` are built in §2b, above the money mask, so both checks read the same source corpus — B3-1.)
 const unverified_figures = [];
 {
   const pad = (x) => ' '.repeat(x.length);
@@ -523,9 +556,15 @@ const length_instruction = (target && mainWords > target * 1.1)
 // profile, so nobody was ever told that a figure in the text is a placeholder. Every body placeholder that is still there is named,
 // whether or not the count is over PH_MAX (the delivery gate itself is unchanged: PH_MAX still decides what cannot be published).
 const placeholder_list = placeholders.slice(0, 4).map(p => p.token + (p.count > 1 ? ' x' + p.count : '')).join(', ');
-const placeholder_note = !placeholder_count ? ''
-  : too_many_placeholders ? placeholder_count + ' placeholder(s) left in the copy (at most ' + PH_MAX + ' can be published): ' + placeholder_list
-    : placeholder_count + ' masked figure(s) still in the text: ' + placeholder_list + ' — fill each one in, or rewrite the sentence so it does not need the figure, before you publish';
+// B3-2 (2026-10-15): name the amounts the mask removed. "[Price] x43" tells the owner nothing they can act on; the number it replaced,
+// with the sentence it came from, is a question they can answer in one reading.
+const removed_note = !masked_amounts.length ? ''
+  : ' The amount(s) removed: ' + masked_amounts.slice(0, 4).map(a => '"' + a.amount + '" in "' + a.context + '"').join('; ')
+    + (masked_amounts.length > 4 ? ' and ' + (masked_amounts.length - 4) + ' more' : '')
+    + ' — nothing on file and no source cited in that sentence states them, so give us the figure or let the sentence drop it.';
+const placeholder_note = !placeholder_count ? (removed_note ? removed_note.trim() : '')
+  : (too_many_placeholders ? placeholder_count + ' placeholder(s) left in the copy (at most ' + PH_MAX + ' can be published): ' + placeholder_list
+    : placeholder_count + ' masked figure(s) still in the text: ' + placeholder_list + ' — fill each one in, or rewrite the sentence so it does not need the figure, before you publish') + removed_note;
 // P2-6: `passed_copy` judges the text and decides the editor round; `passed` judges the page the owner receives, so the author box's
 // bracketed fields keep it false — the honest answer to "can I publish this as it is?".
 const passed_copy = warnings.length === 0 && content_score >= 80 && Math.abs(mainWords - target) <= target * 0.25 && !too_many_placeholders && !too_long;
@@ -567,6 +606,7 @@ return [{ json: { ...prev, output: md, qa_round: round, meta: { title: metaTitle
   content_qa: { ai_ready, round, passed, editor_needed, content_score, quality, publishable: passed, not_ready, quality_label, not_ready_reasons, max_rounds, rounds_left, score_breakdown: { structure: Math.round(structure_pts), coverage: Math.round(coverage_pts), readability: Math.round(readability_pts), specificity: Math.round(specificity_pts), clean_language: Math.round(banned_pts), length: Math.round(length_pts) },
     total_words: totalWords, main_content_words: mainWords, faq_words: faqWords, target_word_count: target, sections, placeholders, placeholder_count, placeholder_max: PH_MAX, review_notes, business_name: bizName, nap_source,
     placeholder_note, length_instruction, over_words, over_pct, longest_sections: fat_sections,   // R25 / R22: the masked figures by name, and the cut the editor is asked to make
+    masked_amounts, flagged_amounts, sourced_amounts,   // B3-1 / B3-2: what the money mask removed, what it left for review, and what a cited source vouched for
     passed_copy, profile_placeholders, profile_placeholder_fields: PROFILE_PH, placeholders_total: placeholder_count + profile_placeholders,
     keyword_mentions: kwCount, keyword_density_pct: density, h2_count: h2s.length, faq_count: validFaqs.length, question_headings: questionHeadings, answered_questions: answeredQuestions, internal_links: internalLinks, external_links: externalLinks, sources_cited: externalUrls.slice(0, 15),
     source_quality: externalUrls.reduce((m, e) => ({ ...m, [e.tier]: (m[e.tier] || 0) + 1 }), {}), weak_sources_unlinked: [...new Set(weakRepeats)], links_to_add_when_published: plannedLinksQA.map(p => ({ keyword: p.keyword || '', url: p.url, role: p.role, anchor: anchorText(p) })),

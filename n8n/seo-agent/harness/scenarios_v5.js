@@ -10998,5 +10998,122 @@ await guard('b2-topic-authority-inventory-and-order', async () => {
   reset();
 });
 
+// ===================================================================================
+// S78 B3-1 / B3-2 / B3-3 (2026-10-15, benchmark programme area 3 — docs/system-review-2026-10-14/BENCH_AREA3_content.md):
+// the money mask ran before everything else and judged an amount against a NARROWER corpus than the figure check forty lines
+// later, so one sentence of one fetched page kept its percentage and lost its currency amounts; "costs" is a price word, so a
+// statutory penalty was erased instead of being shown to the reviewer; and *Originality Check* runs after *Content QA* has
+// already finalised the delivery gate, so on the last round a plagiarised page went out labelled "passed the quality check".
+// Every check below fails against the code as it stood before this section.
+// ===================================================================================
+await guard('b3-sourced-amounts-and-a-gate-that-refuses', async () => {
+  const SN = 'S78 B3-1 B3-2 B3-3 — an amount the cited source states is kept (and named), a fine is never erased as a price, and an originality failure refuses the page instead of labelling it';
+  reset(); begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const D78 = 'techand.ai';
+  const URL78 = 'https://mof.gov.ae/cabinet-decision-106-of-2025.pdf';
+  // the text of that page, exactly as this run would have fetched it into the brief's evidence plan
+  const SRC78 = 'Cabinet Decision No. 106 of 2025 sets an administrative penalty of AED 5,000 per month for failure to implement '
+    + 'the electronic invoicing system, and AED 500 for each electronic invoice that is not issued on time. '
+    + 'Around 42% of VAT-registered businesses fall into the first phase.';
+  const PB78 = { keyword: 'uae e invoicing penalties', domain: D78, currency: 'AED', page_type: 'Blog Post / Guide',
+    business: 'Tech& is a UAE technology consultancy.', business_facts: '', case_facts_text: '', qa_max_rounds: 2, facts: [], competitors: [],
+    content_brief: { target_word_count: 400, outline: [], terms_to_use: [], evidence_plan: [{ source_url: URL78, fact: SRC78 }] } };
+  const cite = (t) => '[the decision](' + URL78 + ') ' + t;
+  const DRAFT78 = [
+    'Title: UAE E-Invoicing Penalties: The Confirmed Fines',
+    'Meta Description: The confirmed UAE e-invoicing fines under Cabinet Decision 106 of 2025, what each one costs and how to avoid them.',
+    'Slug: uae-e-invoicing-penalties', '', '# UAE E-Invoicing Penalties', '',
+    // (a) cited, and the source states every one of these: two amounts and a percentage, in one sentence
+    'Under ' + cite('a missing system costs AED 5,000 per month, each late invoice costs AED 500, and 42% of businesses are in the first phase.'), '',
+    // (b) cited, but the source says nothing of these: a currency amount and a percentage, which must both still be held
+    'Under ' + cite('a repeat penalty of AED 750,000 applies, and 91% of filers already use an accredited provider.'), '',
+    // (c) a statutory fine with no citation, written with the verb "costs" — the number must survive for the reviewer
+    'A late-filing penalty costs AED 2,000 per invoice.', '',
+    // (d) our own invented price, with no citation and no statutory subject — the number must go, and be reported
+    'Our implementation package costs AED 18,000 for a mid-sized finance team.', '',
+    '## Talk to us', '', 'Book a readiness check with our team and we will walk you through the deadlines.',
+  ].join('\n');
+
+  mock('Parse Brief', [{ json: PB78 }]);
+  const out78 = (await run('Content QA', [{ json: { output: DRAFT78, critique: null } }], { runIndex: 0 }))[0].json;
+  const Q78 = out78.content_qa, BODY78 = out78.output;
+  console.log('   amounts ->', JSON.stringify({ kept: Q78.sourced_amounts, review: Q78.flagged_amounts.map(a => a.amount), removed: Q78.masked_amounts.map(a => a.amount) }));
+
+  check('B3-1: an amount the source cited IN THAT SENTENCE really states survives the money mask, and the source is named',
+    /costs AED 5,000 per month/.test(BODY78) && /costs AED 500/.test(BODY78)
+    && Q78.sourced_amounts.length === 2 && Q78.sourced_amounts.every(a => a.source === 'mof.gov.ae')
+    && Q78.sourced_amounts.map(a => a.amount).join('|') === 'AED 5,000|AED 500'
+    && (Q78.auto_fixes || []).some(f => /^Kept 2 amount\(s\) that the source cited in the same sentence states \(mof\.gov\.ae\)$/.test(f)),
+    JSON.stringify({ sourced: Q78.sourced_amounts, fixes: Q78.auto_fixes }));
+  check('B3-1: the currency amount and the percentage in that one sentence are now judged by the same evidence — before this, "42%" was kept and every AED figure beside it was destroyed',
+    /42% of businesses/.test(BODY78) && !/\[Price\][^\n]*42%/.test(BODY78)
+    && !(Q78.unverified_figures || []).some(f => String(f.figure).indexOf('42') === 0),
+    JSON.stringify({ body: (BODY78.match(/Under .*first phase\./) || [''])[0], unverified: Q78.unverified_figures }));
+  check('B3-1: citing a page is not a licence — an amount that source does NOT carry is still held, and so is a percentage it does not carry, so the fix loosened nothing',
+    /\[Confirm: AED 750,000\]/.test(BODY78) && !/AED 750,000[^\]]/.test(BODY78)
+    && Q78.sourced_amounts.every(a => a.amount !== 'AED 750,000')
+    && (Q78.unverified_figures || []).some(f => /^91%$/.test(String(f.figure))) && /\[Confirm: 91%\]/.test(BODY78),
+    JSON.stringify({ body: (BODY78.match(/Under .*provider\./) || [''])[0], unverified: Q78.unverified_figures }));
+  check('B3-2: a statutory penalty written with the verb "costs" keeps its number for the reviewer — a price word no longer decides a subject that can never be our price',
+    /A late-filing penalty costs \[Confirm: AED 2,000\] per invoice\./.test(BODY78)
+    && Q78.flagged_amounts.some(a => a.amount === 'AED 2,000' && /late-filing penalty/.test(a.context))
+    && !Q78.masked_amounts.some(a => a.amount === 'AED 2,000'),
+    JSON.stringify({ flagged: Q78.flagged_amounts, body: (BODY78.match(/A late-filing[^\n]*/) || [''])[0] }));
+  check('B3-2: an invented price of our own is still destroyed — the guard that the mask exists for is untouched',
+    /Our implementation package costs \[Price\] for a mid-sized finance team\./.test(BODY78)
+    && !/AED 18,000/.test(BODY78) && Q78.masked_amounts.length === 1 && Q78.masked_amounts[0].amount === 'AED 18,000'
+    && (Q78.auto_fixes || []).some(f => /^Replaced 1 invented price\(s\) with \[Price\]$/.test(f)),
+    JSON.stringify({ masked: Q78.masked_amounts, fixes: Q78.auto_fixes }));
+  check('B3-2: and the owner is told WHICH amount was taken out and from which sentence — "[Price]" on its own is not a question anyone can answer',
+    /The amount\(s\) removed: "AED 18,000" in "Our implementation package costs AED 18,000 for a mid-sized finance team"/.test(Q78.placeholder_note)
+    && /1 masked figure\(s\) still in the text: \[Price\]/.test(Q78.placeholder_note)
+    && /give us the figure or let the sentence drop it/.test(Q78.placeholder_note)
+    && Q78.quality.placeholder_note === Q78.placeholder_note,
+    JSON.stringify(Q78.placeholder_note));
+
+  // ---------- B3-3: the gate Content QA finalised is re-decided by the check that runs after it ----------
+  reset();
+  const CP78 = 'Every accredited service provider validates the invoice against the Federal Tax Authority schema before it moves on, '
+    + 'and the buyer receives a structured file rather than a PDF attachment, which is the whole point of the reform and the reason '
+    + 'the rollout is phased across revenue bands over three separate years with a distinct deadline for each group of businesses.';
+  mock('Analyze Competitor Pages', [{ json: { competitors: [{ domain: 'cleartax.ae', url: 'https://cleartax.ae/uae-e-invoicing', rank: 2, content_full: CP78 + ' ' + CP78 }] } }]);
+  mock('Collect Client Pages', [{ json: { client_pages: [] } }]);
+  // content_qa exactly as *Content QA* emits it when the COPY passed: the gate is already finalised by the time this node runs
+  const passedGate = (roundsLeft) => ({ passed: true, passed_copy: true, editor_needed: false, content_score: 88,
+    round: roundsLeft ? 1 : 2, max_rounds: 2, rounds_left: roundsLeft, not_ready: false, publishable: true,
+    quality_label: 'passed the quality check', not_ready_reasons: [], warnings: [],
+    quality: { passed: true, publishable: true, not_ready: false, label: 'passed the quality check', reasons: [], content_score: 88 } });
+  const origRun = (md, gate, over) => run('Originality Check', [{ json: { output: md, keyword: 'e invoicing uae', domain: D78,
+    content_qa: JSON.parse(JSON.stringify(gate)), ...(over || {}) } }]);
+
+  const last78 = (await origRun(CP78 + '\n\n' + CP78, passedGate(0)))[0].json.content_qa;
+  console.log('   last round ->', JSON.stringify({ pct: last78.originality.highest_pct, publishable: last78.publishable, not_ready: last78.not_ready, label: last78.quality_label }));
+  check('B3-3: a draft that repeats a competitor page word for word, on the LAST round, is refused — not delivered carrying "passed the quality check"',
+    last78.originality.passed === false && last78.passed === false && last78.publishable === false
+    && last78.not_ready === true && last78.quality_label === 'did not pass the quality check — not ready to publish',
+    JSON.stringify({ passed: last78.passed, publishable: last78.publishable, not_ready: last78.not_ready, label: last78.quality_label }));
+  check('B3-3: the nested `quality` object is the one the file name, the package banner, meta.json, the callback and the app all read — it has to say the same thing, with the reason and the note',
+    last78.quality.passed === false && last78.quality.publishable === false && last78.quality.not_ready === true
+    && last78.quality.label === last78.quality_label
+    && last78.quality.reasons[0] === 'it repeats 100% of the competitor page cleartax.ae word for word (the limit is 15%)'
+    && last78.not_ready_reasons[0] === last78.quality.reasons[0]
+    && /delivered as a draft to finish by hand/.test(last78.quality.note),
+    JSON.stringify(last78.quality));
+  const more78 = (await origRun(CP78 + '\n\n' + CP78, passedGate(1)))[0].json.content_qa;
+  check('B3-3: with a round still left the page goes back to the editor and is not called ready either — it is never "not ready to publish" while a round can still fix it',
+    more78.editor_needed === true && more78.publishable === false && more78.not_ready === false
+    && more78.quality_label === 'needs another editing round before it can be published'
+    && more78.quality.passed === false && more78.quality.note === '',
+    JSON.stringify({ not_ready: more78.not_ready, label: more78.quality_label, q: more78.quality }));
+  const clean78 = (await origRun('A UAE finance team has to appoint an accredited provider well before its own go-live date, and the sooner it tests the connection the fewer surprises the first live month brings.\n', passedGate(0)))[0].json.content_qa;
+  check('B3-3: a draft that passes the originality check leaves the gate exactly as Content QA set it — nothing is downgraded by a check that found nothing',
+    clean78.originality.passed === true && clean78.passed === true && clean78.publishable === true
+    && clean78.not_ready === false && clean78.quality_label === 'passed the quality check'
+    && clean78.quality.passed === true && clean78.quality.label === 'passed the quality check',
+    JSON.stringify({ passed: clean78.passed, publishable: clean78.publishable, label: clean78.quality_label }));
+  reset();
+});
+
 H.report();
 })();
