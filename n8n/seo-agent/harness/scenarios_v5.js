@@ -11308,5 +11308,82 @@ await guard('b4-decay-tested-stored-and-written', async () => {
   reset();
 });
 
+// ===================================================================================
+// S79 (2026-10-15, FIX_PLAN §3.15 B-F5 + docs/system-review-2026-10-14/INVARIANTS.md rule 2) — the two build-time checks of
+// build section 69. Neither can be exercised by running node code: one is about a Python build refusing to start, the other walks
+// the generated workflow JSON. So the build runs each check's own self-test and records the result, exactly as S44 reads
+// retry_wiring.json and S65 reads ledger_order.json, and this scenario asserts what was recorded.
+//
+// B-F5: `env_settings.load_env()` returned {} for a missing n8n/.env without a word, and the build then baked brand "Dev SEO", a
+// sender and an ops address belonging to nobody and an EMPTY Google service-account e-mail into eleven workflows and exited 0. A
+// git worktree never has n8n/.env (it is gitignored), so every worktree agent of the five days to 2026-10-15 built that way.
+// INVARIANTS rule 2: a gate applied where a row is WRITTEN must also run where that row is READ BACK, because stored data
+// predates every gate we will ever write. ~16 defects came from that class (D3, D8, P2-3, R16, R21, R1/R15).
+// ===================================================================================
+await guard('B-F5 the build refuses a missing .env, and rule 2 gate pairs', async () => {
+  reset(); const SN = 'S79 B-F5 + INVARIANTS rule 2 — a build with no settings file refuses instead of inventing them, node ids are deterministic, and a gate that runs on the way in has to run on the way out';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const EG = require('./env_guard.json');
+  const GP = require('./gate_pairs.json');
+  const GB = require('./gate_pairs_baseline.json');
+
+  // ---------- 1. B-F5 (a): the refusal fires, and says enough to act on ----------
+  check('B-F5: the four settings the build bakes are named, so a missing one is a refusal and not a silent fallback',
+    JSON.stringify(EG.baked) === JSON.stringify(['SEO_BRAND', 'SEO_MAIL_FROM', 'SEO_OPS_EMAIL', 'SEO_GOOGLE_SA_EMAIL']), JSON.stringify(EG.baked));
+  check('B-F5: no settings file at all -> the build refuses, names the path it looked for and says what to do',
+    EG.cases.missing_file.refused === true && EG.cases.missing_file.says_path === true && EG.cases.missing_file.says_what_to_do === true,
+    JSON.stringify(EG.cases.missing_file));
+  check('B-F5: the file is there but every baked setting is empty -> still a refusal (an empty value is what "Dev SEO" grew out of)',
+    EG.cases.empty_setting.refused === true, JSON.stringify(EG.cases.empty_setting));
+  check('B-F5: ONE empty setting is enough to refuse, and it is named — SEO_GOOGLE_SA_EMAIL defaulted to "" and that is no Google data at all',
+    EG.cases.one_empty_setting.refused === true && JSON.stringify(EG.cases.one_empty_setting.missing) === JSON.stringify(['SEO_GOOGLE_SA_EMAIL']),
+    JSON.stringify(EG.cases.one_empty_setting));
+  check('B-F5: every setting present -> the build runs, so the guard costs a correct build nothing',
+    EG.cases.all_present.refused === false && EG.cases.all_present.missing.length === 0, JSON.stringify(EG.cases.all_present));
+  check('B-F5: a deliberate offline build is still possible — both --no-env and SEO_BUILD_ALLOW_DEFAULTS=1 come back instead of refusing',
+    EG.cases.opt_out_flag.refused === false && EG.cases.opt_out_flag.opt_out === '--no-env'
+    && EG.cases.opt_out_variable.refused === false && EG.cases.opt_out_variable.opt_out === 'SEO_BUILD_ALLOW_DEFAULTS',
+    JSON.stringify([EG.cases.opt_out_flag, EG.cases.opt_out_variable]));
+  check('B-F5: the recorded path is the relative one (R29: a file the harness reads must not carry the building machine) and no setting VALUE is recorded',
+    EG.env_file === 'n8n/.env' && !JSON.stringify(EG).includes('@'), EG.env_file);
+  check('B-F5 (b): the id rule reached every generated workflow, so an unchanged rebuild is byte-identical',
+    Number(EG.this_build.frozen_workflows) >= 20, JSON.stringify(EG.this_build.frozen_workflows));
+
+  // ---------- 2. INVARIANTS rule 2: the lint's own three ways of being broken ----------
+  const ST = GP.selftest;
+  check('rule 2: a pair gated on both sides passes — one writer calling fitGate, one reader calling fitStored',
+    ST.a_gated_pair_passes.caught === false && ST.a_gated_pair_passes.gated.length === 1 && ST.a_gated_pair_passes.writers.length === 1,
+    JSON.stringify(ST.a_gated_pair_passes));
+  check('rule 2 broken way 1: the only read path loses its gate -> caught (this is R16 before its fix: the rung was gated when planned and never again)',
+    ST.the_only_reader_loses_its_gate.caught === true && ST.the_only_reader_loses_its_gate.gated.length === 0,
+    JSON.stringify(ST.the_only_reader_loses_its_gate));
+  check('rule 2 broken way 2: a NEW reader of the stored rows appears with no gate -> caught, which is how the class spreads',
+    ST.a_new_ungated_reader_appears.caught === true && ST.a_new_ungated_reader_appears.ungated.length === 1,
+    JSON.stringify(ST.a_new_ungated_reader_appears));
+  check('rule 2 broken way 3: the kit renames its entry point, so the lint would silently check nothing -> caught',
+    ST.the_kit_renames_its_entry_point.caught === true, JSON.stringify(ST.the_kit_renames_its_entry_point));
+
+  // ---------- 3. what the lint found in the real workflows ----------
+  const pairs79 = Object.keys(GP.pairs).filter(k => (GP.pairs[k].writers || []).length);
+  check('rule 2: the gate pairs are live — each one has a write path and at least one gated read path, over the real generated workflows',
+    pairs79.length >= 4 && pairs79.every(k => Object.values(GP.pairs[k].readers).some(Boolean)),
+    JSON.stringify(pairs79.map(k => [k, (GP.pairs[k].writers || []).length, Object.values(GP.pairs[k].readers).filter(Boolean).length])));
+  check('rule 2 (R16, the one already paid): the Rank Tracker and the Content Cadence both read stored ladder rows through fitStored',
+    ['SEO Agent — Rank Tracker / Tracker Plan', 'SEO Agent — Rank Tracker / Tracker Report', 'SEO Agent — Content Cadence / Cadence Plan']
+      .every(n => GP.pairs['keyword fit | seo_ladders'].readers[n] === true),
+    JSON.stringify(GP.pairs['keyword fit | seo_ladders'].readers));
+  // the ratchet: every unguarded reader is named in the baseline, so the debt is visible and the build fails on a new one
+  const unpaid79 = Object.keys(GP.unpaid).flatMap(k => GP.unpaid[k].map(n => k + ' :: ' + n));
+  const listed79 = Object.keys(GB).filter(k => k !== '_note').flatMap(k => (GB[k].ungated || []).map(n => k + ' :: ' + n));
+  check('rule 2: every unguarded read path is on the ratchet baseline, so it cannot grow — a new one fails the build',
+    unpaid79.every(n => listed79.includes(n)) && unpaid79.length === listed79.length, JSON.stringify(unpaid79.filter(n => !listed79.includes(n))));
+  check('rule 2: the three real defects of this batch are registered, not excused (B-F6 AI Plan, B-F7 Growth Plan, B-F8 Site Plan — each turns a stored rung into a question asked, a page planned or a rank check bought)',
+    ['AI Visibility Tracker / AI Plan', 'AI Pulse / AI Plan', 'AI Growth / Growth Plan', 'Site Tracker / Site Plan']
+      .every(n => listed79.some(x => x.includes(n))) && String(GB._note || '').includes('B-F6'),
+    JSON.stringify(listed79.length));
+  reset();
+});
+
 H.report();
 })();

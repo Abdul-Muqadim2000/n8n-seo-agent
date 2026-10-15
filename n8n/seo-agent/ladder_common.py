@@ -727,3 +727,58 @@ OPS_ALERTS_COLS = [('alert_key', 'string'), ('workflow', 'string'), ('node', 'st
                    # per attempt so the row carries the whole history rather than only its last line.
                    # New columns reach an existing table only through sync_tables.py (apply_env.py runs it).
                    ('attempts', 'number'), ('last_attempt_at', 'string'), ('next_attempt_at', 'string'), ('attempt_log', 'string')]
+
+
+# =============================================================================
+# B-F5 (2026-10-15, FIX_PLAN §3.15): one id rule, so that a rebuild of unchanged sources is byte-identical
+# -----------------------------------------------------------------------------
+# `build_api.py` minted a fresh uuid4 for every node on every build, so SEO_Agent_API.json and SEO_Agent_Admin_API.json came out
+# dirty after any rebuild whether or not anything had changed. That is not cosmetic: today's containment for the missing-.env
+# hazard is "always rebuild in the main worktree after a merge and read the diff", and a defaults-bake cannot be told apart from id
+# churn by eye.
+# The rule: a node's id is uuid5(NS, '<workflow name>:<node name>') -- the natural key, since n8n requires node names to be unique
+# inside a workflow and wires `connections` by name, never by id. The ids inside a node's parameters that n8n also wants unique (an
+# IF node's conditions, an Assignment node's values) are keyed on the same pair plus where they sit.
+# `webhookId` is NOT touched: it is a separate field, it is the public URL path of a Webhook or Form node, and a script-created
+# webhook node must keep the one it was given (CLAUDE.md), so changing it would move a live endpoint.
+_ID_NS = _uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
+_ID_FIELDS = ('conditions', 'assignments', 'values', 'fields')
+
+
+def node_id(workflow_name, node_name):
+    return str(_uuid.uuid5(_ID_NS, str(workflow_name) + ':' + str(node_name)))
+
+
+def _freeze_inner(obj, stem, path=''):
+    """Re-key every `id` inside a node's parameters on (workflow, node, where it sits), so it too is the same on every build."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in _ID_FIELDS and isinstance(v, list):
+                for i, el in enumerate(v):
+                    if isinstance(el, dict) and isinstance(el.get('id'), str):
+                        el['id'] = str(_uuid.uuid5(_ID_NS, stem + '|' + path + '/' + k + '[' + str(i) + ']'))
+                    _freeze_inner(el, stem, path + '/' + k + '[' + str(i) + ']')
+            else:
+                _freeze_inner(v, stem, path + '/' + str(k))
+    elif isinstance(obj, list):
+        for i, el in enumerate(obj):
+            _freeze_inner(el, stem, path + '[' + str(i) + ']')
+
+
+def freeze_ids(workflow):
+    """Called by every builder immediately before it writes a workflow. Returns the workflow."""
+    name = workflow.get('name') or workflow.get('id') or ''
+    seen = set()
+    for n in workflow.get('nodes') or []:
+        nm = n.get('name')
+        assert nm not in seen, 'two nodes called %r in %r: a node name is the id key, so it must be unique' % (nm, name)
+        seen.add(nm)
+        n['id'] = node_id(name, nm)
+        _freeze_inner(n.get('parameters') or {}, str(name) + ':' + str(nm))
+    return workflow
+
+
+def ids_are_frozen(workflow):
+    """-> the nodes whose id is not the one the rule gives. Build section 69 asserts this over every generated workflow."""
+    name = workflow.get('name') or workflow.get('id') or ''
+    return sorted(n.get('name') for n in (workflow.get('nodes') or []) if n.get('id') != node_id(name, n.get('name')))

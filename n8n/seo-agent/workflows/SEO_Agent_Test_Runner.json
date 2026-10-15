@@ -20,7 +20,7 @@
           "responseMode": "responseNode",
           "options": {}
         },
-        "id": "cb0a5b0e-c36b-5855-9909-580dc6ef2f73",
+        "id": "0c539824-3fec-575e-8b70-f0bc813b56f1",
         "name": "Test Webhook",
         "type": "n8n-nodes-base.webhook",
         "typeVersion": 2,
@@ -40,7 +40,7 @@
         "parameters": {
           "jsCode": "// body.workflow picks the target (default: SEO Agent v4); the rest of the body is forwarded like the API does.\nconst raw = $input.first().json || {}; const b = (raw.body && typeof raw.body === 'object') ? raw.body : {};\nconst target = String(b.workflow || 'SEOagentV4Full01');\nconst request_id = String(b.request_id || $execution.id);\nreturn [{ json: { target, request_id, forward: { headers: raw.headers || {}, body: { ...b, workflow: undefined, request_id, client_ip: 'test-runner' } } } }];"
         },
-        "id": "c03b6554-f4c6-5459-af56-4e89ad5e744c",
+        "id": "ffea1bc0-04c6-5b97-b33e-3475839647f8",
         "name": "Route Test",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -57,7 +57,7 @@
             "responseCode": 202
           }
         },
-        "id": "efb3e5a1-7176-575d-b5fd-e9f3cb907a5f",
+        "id": "cd0e4022-f5df-5084-ad77-48eaddfaafcb",
         "name": "Respond Started",
         "type": "n8n-nodes-base.respondToWebhook",
         "typeVersion": 1.1,
@@ -70,7 +70,7 @@
         "parameters": {
           "jsCode": "return [{ json: $input.first().json.forward }];"
         },
-        "id": "2f8c7721-512e-566e-a204-e4c94aaa44bd",
+        "id": "5d3768d0-7c52-573a-a51d-3aa9e86bd0c0",
         "name": "Prepare Forward",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -92,7 +92,7 @@
             "waitForSubWorkflow": false
           }
         },
-        "id": "2fe9886e-e161-5fc2-bb16-3e4b43548cfc",
+        "id": "a5f179a0-74f4-5af3-9b4a-31f52709abd0",
         "name": "Run Target",
         "type": "n8n-nodes-base.executeWorkflow",
         "typeVersion": 1.2,
@@ -108,7 +108,7 @@
           "width": 760,
           "color": 3
         },
-        "id": "64819fbc-4066-52e1-9dfd-e18f577c7dfd",
+        "id": "e2ccea15-dc6d-5e02-b1a9-59aa7cfe8e07",
         "name": "Note",
         "type": "n8n-nodes-base.stickyNote",
         "typeVersion": 1,

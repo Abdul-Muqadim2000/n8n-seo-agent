@@ -3,6 +3,8 @@
 SEO Agent — Test Runner (local testing only). Code nodes are also written to harness/code_v4 for the offline harness."""
 import json, os, re, uuid, sys
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
+import env_settings as _env   # B-F5 (2026-10-15): a build with no n8n/.env must refuse, not bake its fallbacks
+_env.require_settings('build_ladder_extras.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
 from ladder_common import (LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, PAGES_TABLE, PAGES_COLS, SITES_TABLE, SITES_COLS,
                            MONITORS_TABLE, MONITORS_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params,

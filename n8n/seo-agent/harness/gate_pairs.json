@@ -1,0 +1,174 @@
+{
+ "pairs": {
+  "competitor | seo_link_outreach": {
+   "gate": "competitor",
+   "read": "OK.sellsSame",
+   "readers": {
+    "SEO Agent \u2014 Link Builder / LB Assemble": true,
+    "SEO Agent \u2014 Link Builder / LB Page Requests": false,
+    "SEO Agent \u2014 Link Builder / LB Plan": false
+   },
+   "table": "seo_link_outreach",
+   "why": "a prospect stored before the gate (or on a rival subdomain) is pitched anyway (R21)",
+   "write": "OK.sellsSame",
+   "writers": [
+    "SEO Agent \u2014 Link Builder / LB Assemble",
+    "SEO Agent \u2014 Link Builder / LB Draft QA"
+   ]
+  },
+  "competitor | seo_link_prospects": {
+   "gate": "competitor",
+   "read": "OK.sellsSame",
+   "readers": {
+    "SEO Agent \u2014 AI Growth / Earned Media": true,
+    "SEO Agent \u2014 AI Visibility Tracker / AI Metrics": false,
+    "SEO Agent \u2014 Backlink Monitor / BL Plan": false,
+    "SEO Agent \u2014 Backlink Monitor / BL Report": false,
+    "SEO Agent \u2014 Backlink Monitor / Contact Requests": false,
+    "SEO Agent \u2014 Backlink Monitor / Link Merge": false,
+    "SEO Agent \u2014 Backlink Monitor / Outreach Jobs": false,
+    "SEO Agent \u2014 Backlink Monitor / Prospect Rows": false,
+    "SEO Agent \u2014 Backlink Monitor / Verify Requests": false,
+    "SEO Agent \u2014 Link Builder / LB Assemble": true,
+    "SEO Agent \u2014 Link Builder / LB Page Requests": false,
+    "SEO Agent \u2014 Link Builder / LB Plan": false,
+    "SEO Agent \u2014 Site Admin / Prospect Rows (Admin)": false
+   },
+   "table": "seo_link_prospects",
+   "why": "a prospect stored before the gate (or on a rival subdomain) is pitched anyway (R21)",
+   "write": "OK.sellsSame",
+   "writers": [
+    "SEO Agent \u2014 AI Growth / Earned Media",
+    "SEO Agent \u2014 Link Builder / LB Assemble",
+    "SEO Agent \u2014 Link Builder / LB Draft QA"
+   ]
+  },
+  "keyword fit | seo_ladders": {
+   "gate": "keyword fit",
+   "read": "fitStored(",
+   "readers": {
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Plan": false,
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Settings Rows": false,
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Publish Check": false,
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Rank Keywords": false,
+    "SEO Agent \u2014 AI Growth / Growth Plan": false,
+    "SEO Agent \u2014 AI Pulse / AI Plan": false,
+    "SEO Agent \u2014 AI Visibility Tracker / AI Plan": false,
+    "SEO Agent \u2014 Audit Scheduler / Audit Candidates": false,
+    "SEO Agent \u2014 Backlink Monitor / BL Plan": false,
+    "SEO Agent \u2014 Console Alerts / Alert Target": false,
+    "SEO Agent \u2014 Content Cadence / Cadence Plan": true,
+    "SEO Agent \u2014 Link Builder / LB Plan": false,
+    "SEO Agent \u2014 Page Watch / Watch Plan": false,
+    "SEO Agent \u2014 Rank Tracker / Tracker Plan": true,
+    "SEO Agent \u2014 Rank Tracker / Tracker Report": true,
+    "SEO Agent \u2014 Site Tracker / Publish Candidates": false,
+    "SEO Agent \u2014 Site Tracker / Site Plan": false
+   },
+   "table": "seo_ladders",
+   "why": "a rung stored before the gate existed is still a competitor brand, a government portal or an off-topic search (D4 / D8 / R16)",
+   "write": "fitGate(",
+   "writers": [
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Plan",
+    "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Pool",
+    "SEO Agent \u2014 Content Cadence / Cadence Plan"
+   ]
+  },
+  "link spam / footprint | seo_backlinks": {
+   "gate": "link spam / footprint",
+   "read": "LK.footprints",
+   "readers": {
+    "SEO Agent \u2014 Backlink Monitor / BL Plan": false,
+    "SEO Agent \u2014 Backlink Monitor / Ledger Rows": false,
+    "SEO Agent \u2014 Backlink Monitor / Link Merge": true,
+    "SEO Agent \u2014 Link Builder / LB Assemble": true,
+    "SEO Agent \u2014 Link Builder / LB Page Requests": false,
+    "SEO Agent \u2014 Link Builder / LB Plan": true
+   },
+   "table": "seo_backlinks",
+   "why": "a link-farm or scraper page already in the ledger is read back as one of the best links (D3)",
+   "write": "LK.footprints",
+   "writers": [
+    "SEO Agent \u2014 Backlink Monitor / Link Merge",
+    "SEO Agent \u2014 Backlink Monitor / Parse Backlinks"
+   ]
+  }
+ },
+ "selftest": {
+  "a_gated_pair_passes": {
+   "caught": false,
+   "gated": [
+    "W / Read"
+   ],
+   "ungated": [],
+   "writers": [
+    "W / Plan"
+   ]
+  },
+  "a_new_ungated_reader_appears": {
+   "caught": true,
+   "gated": [
+    "W / Read"
+   ],
+   "ungated": [
+    "V / New Reader"
+   ],
+   "writers": [
+    "W / Plan"
+   ]
+  },
+  "the_kit_renames_its_entry_point": {
+   "caught": true
+  },
+  "the_only_reader_loses_its_gate": {
+   "caught": true,
+   "gated": [],
+   "ungated": [
+    "W / Read"
+   ],
+   "writers": [
+    "W / Plan"
+   ]
+  }
+ },
+ "unpaid": {
+  "competitor | seo_link_outreach": [
+   "SEO Agent \u2014 Link Builder / LB Page Requests",
+   "SEO Agent \u2014 Link Builder / LB Plan"
+  ],
+  "competitor | seo_link_prospects": [
+   "SEO Agent \u2014 AI Visibility Tracker / AI Metrics",
+   "SEO Agent \u2014 Backlink Monitor / BL Plan",
+   "SEO Agent \u2014 Backlink Monitor / BL Report",
+   "SEO Agent \u2014 Backlink Monitor / Contact Requests",
+   "SEO Agent \u2014 Backlink Monitor / Link Merge",
+   "SEO Agent \u2014 Backlink Monitor / Outreach Jobs",
+   "SEO Agent \u2014 Backlink Monitor / Prospect Rows",
+   "SEO Agent \u2014 Backlink Monitor / Verify Requests",
+   "SEO Agent \u2014 Link Builder / LB Page Requests",
+   "SEO Agent \u2014 Link Builder / LB Plan",
+   "SEO Agent \u2014 Site Admin / Prospect Rows (Admin)"
+  ],
+  "keyword fit | seo_ladders": [
+   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Plan",
+   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Ladder Settings Rows",
+   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Publish Check",
+   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Rank Keywords",
+   "SEO Agent \u2014 AI Growth / Growth Plan",
+   "SEO Agent \u2014 AI Pulse / AI Plan",
+   "SEO Agent \u2014 AI Visibility Tracker / AI Plan",
+   "SEO Agent \u2014 Audit Scheduler / Audit Candidates",
+   "SEO Agent \u2014 Backlink Monitor / BL Plan",
+   "SEO Agent \u2014 Console Alerts / Alert Target",
+   "SEO Agent \u2014 Link Builder / LB Plan",
+   "SEO Agent \u2014 Page Watch / Watch Plan",
+   "SEO Agent \u2014 Site Tracker / Publish Candidates",
+   "SEO Agent \u2014 Site Tracker / Site Plan"
+  ],
+  "link spam / footprint | seo_backlinks": [
+   "SEO Agent \u2014 Backlink Monitor / BL Plan",
+   "SEO Agent \u2014 Backlink Monitor / Ledger Rows",
+   "SEO Agent \u2014 Link Builder / LB Page Requests"
+  ]
+ }
+}

@@ -16,7 +16,7 @@
         "parameters": {
           "inputSource": "passthrough"
         },
-        "id": "be293a7e-e808-512f-94f5-cabbf2e2fd12",
+        "id": "ca8f94ee-b377-5420-8327-fe8847c57201",
         "name": "Admin Run",
         "type": "n8n-nodes-base.executeWorkflowTrigger",
         "typeVersion": 1.2,
@@ -62,7 +62,7 @@
             "createIfNotExists": true
           }
         },
-        "id": "90ae8844-744e-5dad-8650-100722ea7ee6",
+        "id": "75b1d376-49de-5b4e-8d5d-45e52fb35d14",
         "name": "Ensure Cadence Table (Admin)",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -141,7 +141,7 @@
             "createIfNotExists": true
           }
         },
-        "id": "00487899-a7eb-5011-ae2f-22b3c09be764",
+        "id": "650df024-0e58-59e5-ae8e-99207f6a233f",
         "name": "Ensure Log Table (Admin)",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -276,7 +276,7 @@
             "createIfNotExists": true
           }
         },
-        "id": "2a235e64-5d96-51ca-a939-b39b6be9fa65",
+        "id": "1d5f939f-36bf-5fda-ae4c-6d925bea7e6f",
         "name": "Ensure Sites Table (Admin)",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -371,7 +371,7 @@
             "createIfNotExists": true
           }
         },
-        "id": "b4561609-14b8-552c-ab16-472a2b7a4d56",
+        "id": "85ace3f6-d301-5658-9dd5-f518b8700658",
         "name": "Ensure Monitors Table (Admin)",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -498,7 +498,7 @@
             "createIfNotExists": true
           }
         },
-        "id": "ed420900-11ec-5c20-a80b-2acf5442c5a4",
+        "id": "65e1b6d2-5306-5422-9114-984b2d34fedf",
         "name": "Ensure Prospects Table (Admin)",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -581,7 +581,7 @@
             "createIfNotExists": true
           }
         },
-        "id": "875707dd-aa1f-5225-a6ab-2a68a13a9e5f",
+        "id": "60f4eae3-4074-5d09-92ef-3bd928294fe6",
         "name": "Ensure AI Prompts Table (Admin)",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -595,7 +595,7 @@
         "parameters": {
           "jsCode": "// Site admin: delete | pause | resume | cadence (pages_per_week 0-3) | unpublish (keyword) | monitors (AI visibility / backlinks / monthly audit settings)\n// | prospect (prospect_domain + status contacted / replied / won / rejected / ignored / new, note, contact_email; replied: v4.13) | ai_prompts (add custom questions, switch some off) — by site_id or domain.\n// The table-ensure nodes before this one output table objects, so the request is read from the trigger (live finding 2026-10-02).\nlet t = {}; try { t = (($('Admin Run').first() || {}).json) || {}; } catch (e) { t = ($input.first() || {}).json || {}; }\nif (t.body && typeof t.body === 'object') t = { ...t, ...t.body };\nconst action = String(t.action || '').toLowerCase();\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst domain = normD(t.domain) || String(t.site_id || '').replace(/^site_/, '').replace(/-/g, '.');\nconst site_id = String(t.site_id || '').trim() || (normD(t.domain) ? 'site_' + normD(t.domain).replace(/[^a-z0-9]+/g, '-') : '');\nif (!['delete', 'pause', 'resume', 'cadence', 'unpublish', 'monitors', 'prospect', 'ai_prompts'].includes(action)) throw new Error('action must be delete, pause, resume, cadence, unpublish, monitors, prospect or ai_prompts');\nif (!site_id) throw new Error('site_id or domain is required');\nconst pages = Math.min(3, Math.max(0, Number(t.pages_per_week == null ? t.blogs_per_week : t.pages_per_week) || 0));\nif (action === 'cadence' && t.pages_per_week == null && t.blogs_per_week == null) throw new Error('pages_per_week (0-3) is required for action cadence');\nconst keyword = String(t.keyword || '').trim().toLowerCase().replace(/\\s+/g, ' ');\nif (action === 'unpublish' && !keyword) throw new Error('keyword is required for action unpublish');\nconst prospect_domain = normD(t.prospect_domain);\nconst pstatus = String(t.status || '').toLowerCase();\nif (action === 'prospect' && !prospect_domain) throw new Error('prospect_domain is required for action prospect');\nif (action === 'prospect' && pstatus && !['new', 'contacted', 'replied', 'won', 'rejected', 'ignored'].includes(pstatus)) throw new Error('status must be new, contacted, replied, won, rejected or ignored');\nconst add_prompts = (Array.isArray(t.add) ? t.add : (Array.isArray(t.prompts) ? t.prompts : [])).map(x => String(typeof x === 'object' ? x.prompt : x).trim()).filter(x => x.length >= 10).slice(0, 15);\nconst off_prompts = (Array.isArray(t.remove) ? t.remove : []).map(x => String(x).trim()).filter(Boolean);\nif (action === 'ai_prompts' && !add_prompts.length && !off_prompts.length) throw new Error('add (questions to track) or remove (prompt ids or texts) is required for action ai_prompts');\nconst monitors = (t.monitors && typeof t.monitors === 'object') ? t.monitors : (action === 'monitors' ? t : {});\nreturn [{ json: { action, site_id, domain: normD(t.domain) || '', status: action === 'pause' ? 'paused' : 'active', pages_per_week: pages, cadence_status: pages > 0 ? 'active' : 'off', keyword, prospect_domain, prospect_type: String(t.type || '').toLowerCase(), prospect_status: pstatus, contact_email: /^[^@\\s]+@[^@\\s]+\\.[a-z]{2,}$/i.test(String(t.contact_email || '').trim()) ? String(t.contact_email).trim().toLowerCase() : '', note: t.note == null ? null : String(t.note).slice(0, 500), add_prompts, off_prompts, monitors, updated_at: new Date().toISOString(), request_id: String(t.request_id || '') } }];\n"
         },
-        "id": "e044e561-ffd1-5e5e-8992-1e3228ee45b4",
+        "id": "eb47ded5-1710-5c9d-ab25-141518fc1e1d",
         "name": "Admin Action",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -626,7 +626,7 @@
           },
           "options": {}
         },
-        "id": "57b9f658-f3dd-5945-a031-4f117e94b426",
+        "id": "d1b07cf9-7818-5170-86f7-1ef5ee84c2f8",
         "name": "Load Monitors (Admin)",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -642,7 +642,7 @@
         "parameters": {
           "jsCode": "// Site Admin \"monitors\": merges the given settings over the stored seo_monitors row (exact columns). Settings: ai_visibility, ai_engines\n// (chatgpt, perplexity, gemini, claude, ai_overview, ai_mode, copilot), ai_prompts_max (3-50), ai_pulse (daily AI Pulse, v4.9), ai_growth (weekly AI Growth loop) + ai_pages_month (0-8, v4.12), link_builder (weekly Link Builder, v4.13), stuck_weeks (2-26, G32), backlinks, audit_monthly, audit_pages (50-1000), audit_js,\n// competitors (domains), brand_names.\nconst a = $('Admin Action').first().json; const m = a.monitors || {};\nlet old = {}; try { old = $('Load Monitors (Admin)').all().map(i => i.json).find(x => x && x.site_id === a.site_id) || {}; } catch (e) {}\nconst has = (k) => m[k] !== undefined && m[k] !== null && m[k] !== '';\nconst b = (k, dflt) => has(k) ? !/^(false|0|no|off)$/i.test(String(m[k])) : (old[k] === undefined || old[k] === null || old[k] === '' ? dflt : !(old[k] === false || old[k] === 'false'));\nconst list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[\\n,;]+/)).map(x => String(x).trim()).filter(Boolean);\nconst normD = (x) => String(x || '').toLowerCase().trim().replace(/^https?:\\/\\//, '').replace(/^www\\./, '').replace(/[\\/?#].*$/, '');\nconst ENG = ['chatgpt', 'perplexity', 'gemini', 'claude', 'ai_overview', 'ai_mode', 'copilot'];\nconst __row = { site_id: a.site_id, domain: a.domain || old.domain || '', ai_visibility: b('ai_visibility', true), ai_engines: has('ai_engines') ? list(m.ai_engines).map(e => e.toLowerCase()).filter(e => ENG.includes(e)).join(', ') : String(old.ai_engines || ''),\n  ai_prompts_max: has('ai_prompts_max') ? Math.min(50, Math.max(3, parseInt(m.ai_prompts_max, 10) || 20)) : (Number(old.ai_prompts_max) || 20), ai_pulse: b('ai_pulse', true), ai_growth: b('ai_growth', true),\n  ai_pages_month: has('ai_pages_month') ? Math.min(8, Math.max(0, parseInt(m.ai_pages_month, 10) || 0)) : (old.ai_pages_month === '' || old.ai_pages_month == null ? null : Number(old.ai_pages_month)), backlinks: b('backlinks', true), audit_monthly: b('audit_monthly', true), link_builder: b('link_builder', true),\n  audit_pages: has('audit_pages') ? Math.min(1000, Math.max(50, parseInt(m.audit_pages, 10) || 200)) : (Number(old.audit_pages) || 200), audit_js: b('audit_js', false),\n  competitors: has('competitors') ? list(m.competitors).map(normD).filter(Boolean).slice(0, 5).join(', ') : String(old.competitors || ''), brand_names: has('brand_names') ? list(m.brand_names).join(', ') : String(old.brand_names || ''),\n  // G32: weeks without a position gain before a ladder is called stuck and gets a re-plan proposal (empty = 8, kept between 2 and 26)\n  stuck_weeks: has('stuck_weeks') ? Math.min(26, Math.max(2, parseInt(m.stuck_weeks, 10) || 8)) : (old.stuck_weeks === '' || old.stuck_weeks == null ? null : Number(old.stuck_weeks)),\n  updated_at: a.updated_at, request_id: a.request_id || '' };\nif (__row.audit_js && __row.audit_pages > 500) __row.audit_pages = 500;   // JavaScript rendering is limited to 500 pages per audit\nreturn [{ json: __row }];\n"
         },
-        "id": "80266f01-ece0-5661-af44-14a2c6591616",
+        "id": "8c6bce25-376d-5118-9c48-3d6b4a981aea",
         "name": "Monitor Row (Admin)",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -861,7 +861,7 @@
           },
           "options": {}
         },
-        "id": "c6be570b-6865-57d8-a1ad-66d2f6cc89b4",
+        "id": "b8b8f5c8-2544-5b5e-a8b5-16c8e7f49d4f",
         "name": "Set Monitors",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -894,7 +894,7 @@
           },
           "options": {}
         },
-        "id": "1dc69369-820a-509f-ac3b-5707e41ad943",
+        "id": "597f29ce-17a9-5a4c-a990-5ba8057a5c5e",
         "name": "Load Link Prospects (Admin)",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -910,7 +910,7 @@
         "parameters": {
           "jsCode": "// Site Admin \"prospect\": sets the status (and note) of a link prospect for the site — every type of that domain unless `type` is given.\n// Rows keep all other fields (exact seo_link_prospects columns). Status won also stamps won_at; contacted stamps contacted_at (v4.10: the\n// Backlink Monitor drafts follow-up 1 after 7 days and follow-up 2 after 14 days without a reply).\nconst a = $('Admin Action').first().json;\nlet rows = []; try { rows = $('Load Link Prospects (Admin)').all().map(i => i.json).filter(x => x && x.site_id === a.site_id && x.prospect_domain === a.prospect_domain && (!a.prospect_type || x.type === a.prospect_type)); } catch (e) {}\nconst COLS = ['site_id', 'domain', 'prospect_domain', 'type', 'rank', 'spam_score', 'detail', 'source_url', 'target_url', 'status', 'first_seen', 'last_seen', 'won_at', 'outreach_subject', 'outreach_body', 'note',\n  'score', 'origin', 'contact_email', 'contact_url', 'contacted_at', 'followup_step', 'followup_subject', 'followup_body', 'verified_at', 'drafted_at'];\nconst NUM = ['rank', 'spam_score', 'score', 'followup_step'];\nif (!rows.length) rows = [{ site_id: a.site_id, domain: a.domain, prospect_domain: a.prospect_domain, type: a.prospect_type || 'manual', rank: 0, spam_score: 0, detail: 'added by hand', source_url: '', target_url: '', status: 'new', first_seen: a.updated_at, last_seen: a.updated_at, won_at: '', outreach_subject: '', outreach_body: '', note: '', score: 0, origin: 'manual', contact_email: '', contact_url: '', contacted_at: '', followup_step: 0, followup_subject: '', followup_body: '', verified_at: '', drafted_at: '' }];\nreturn rows.map(r => { const o = {}; for (const c of COLS) o[c] = r[c] == null ? (NUM.includes(c) ? 0 : '') : r[c];\n  if (a.prospect_status) { o.status = a.prospect_status; if (a.prospect_status === 'won' && !o.won_at) o.won_at = a.updated_at;\n    if (a.prospect_status === 'contacted' && r.status !== 'contacted') { o.contacted_at = a.updated_at; o.followup_step = 0; o.followup_subject = ''; o.followup_body = ''; } }\n  if (a.contact_email) o.contact_email = a.contact_email;\n  if (a.note !== null && a.note !== undefined) o.note = a.note; return { json: o }; });\n"
         },
-        "id": "ed2cd03b-6ab4-5361-b3ae-ba6d6604b5c4",
+        "id": "51b88dbc-7ed0-5665-90fb-63f732ff18e0",
         "name": "Prospect Rows (Admin)",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -1219,7 +1219,7 @@
           },
           "options": {}
         },
-        "id": "5edcb620-5285-5af9-a51f-f0f7ec84a97c",
+        "id": "48741d65-eed5-58de-b0f7-d125c56e8959",
         "name": "Set Prospects",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -1252,7 +1252,7 @@
           },
           "options": {}
         },
-        "id": "91b5a83b-81d4-5685-ae0b-62d43adc0822",
+        "id": "5f7dcebd-b247-56f9-b881-aa4f85b7ff07",
         "name": "Load AI Prompts (Admin)",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -1268,7 +1268,7 @@
         "parameters": {
           "jsCode": "// Site Admin \"ai_prompts\": adds custom buyer questions (source custom, tracked weekly before the automatic ones) and switches questions off\n// (by prompt id or exact text). Exact seo_ai_prompts columns (v4.9: stage, cluster, volume, origin, updated_at); upsert by prompt_id.\nconst a = $('Admin Action').first().json;\nlet rows = []; try { rows = $('Load AI Prompts (Admin)').all().map(i => i.json).filter(x => x && x.site_id === a.site_id); } catch (e) {}\nconst hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };\nconst norm = (t) => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();\nconst out = [];\nfor (const q of a.add_prompts) { const id = 'p_' + hash(a.site_id + '|' + norm(q)); const old = rows.find(r => r.prompt_id === id);\n  out.push({ prompt_id: id, site_id: a.site_id, domain: a.domain || (old || {}).domain || '', prompt: q, kind: 'custom', topic: (old || {}).topic || '', keyword: (old || {}).keyword || norm(q).split(' ').slice(0, 5).join(' '), source: 'custom', status: 'active', created_at: (old || {}).created_at || a.updated_at,\n    stage: (old || {}).stage || 'consideration', cluster: (old || {}).cluster || '', volume: (old || {}).volume === undefined || (old || {}).volume === '' ? null : (old || {}).volume, origin: 'custom', updated_at: a.updated_at }); }\nfor (const x of a.off_prompts) for (const r of rows.filter(r => r.prompt_id === x || norm(r.prompt) === norm(x))) out.push({ prompt_id: r.prompt_id, site_id: r.site_id, domain: r.domain, prompt: r.prompt, kind: r.kind, topic: r.topic, keyword: r.keyword, source: r.source, status: 'off', created_at: r.created_at,\n  stage: r.stage || '', cluster: r.cluster || '', volume: r.volume === undefined || r.volume === '' ? null : r.volume, origin: r.origin || '', updated_at: a.updated_at });\nreturn out.length ? out.map(r => ({ json: r })) : [{ json: { skip: true } }];\n"
         },
-        "id": "418dabbe-34a8-5469-b1d8-5adfa9f1cc4b",
+        "id": "158e4b3b-4e27-5ea3-8a85-3f009b55c741",
         "name": "AI Prompt Rows (Admin)",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -1457,7 +1457,7 @@
           },
           "options": {}
         },
-        "id": "0da4d9a2-a69b-5d12-9af1-34a4b8c6e774",
+        "id": "dd97be18-69f5-5387-a1d7-e1ff07a5031e",
         "name": "Set AI Prompts",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -1482,7 +1482,7 @@
                   },
                   "conditions": [
                     {
-                      "id": "00925555-a64d-5a48-ab6d-587ffff43278",
+                      "id": "045944b6-744f-5150-a7f6-ec689da6542f",
                       "leftValue": "={{ $json.action === 'delete' }}",
                       "rightValue": "",
                       "operator": {
@@ -1507,7 +1507,7 @@
                   },
                   "conditions": [
                     {
-                      "id": "6f0e03f0-9128-5d26-b78f-3b15a6964755",
+                      "id": "1630c52c-c73d-57d3-ba6a-479306a7b2db",
                       "leftValue": "={{ $json.action === 'pause' || $json.action === 'resume' }}",
                       "rightValue": "",
                       "operator": {
@@ -1532,7 +1532,7 @@
                   },
                   "conditions": [
                     {
-                      "id": "35aad49e-da9e-5f29-803c-2df8588adf97",
+                      "id": "81f5ddbc-51da-5088-bbd9-7345ff6cd2ff",
                       "leftValue": "={{ $json.action === 'cadence' }}",
                       "rightValue": "",
                       "operator": {
@@ -1557,7 +1557,7 @@
                   },
                   "conditions": [
                     {
-                      "id": "5a68a353-4137-51fb-9d7b-b01dc5045998",
+                      "id": "a630fe0a-852c-570d-aaef-c6a59903a177",
                       "leftValue": "={{ $json.action === 'unpublish' }}",
                       "rightValue": "",
                       "operator": {
@@ -1582,7 +1582,7 @@
                   },
                   "conditions": [
                     {
-                      "id": "6541f4d4-7ece-55b0-95b9-48d0155e4cab",
+                      "id": "67246540-170e-5b15-bfda-a965dcda4d57",
                       "leftValue": "={{ $json.action === 'monitors' }}",
                       "rightValue": "",
                       "operator": {
@@ -1607,7 +1607,7 @@
                   },
                   "conditions": [
                     {
-                      "id": "50648f37-6a49-559b-b865-06830d8b25e1",
+                      "id": "09e02c0c-d550-51a5-b47a-558e04976be2",
                       "leftValue": "={{ $json.action === 'prospect' }}",
                       "rightValue": "",
                       "operator": {
@@ -1632,7 +1632,7 @@
                   },
                   "conditions": [
                     {
-                      "id": "7fc1ab66-62f8-5c56-854d-f8b0815f81cb",
+                      "id": "23bf38f6-8f59-5a38-a367-f7a90a899324",
                       "leftValue": "={{ $json.action === 'ai_prompts' }}",
                       "rightValue": "",
                       "operator": {
@@ -1652,7 +1652,7 @@
           "looseTypeValidation": true,
           "options": {}
         },
-        "id": "5e17d801-52c1-55a2-935f-07ddab620367",
+        "id": "b3dd9fca-0a3c-521a-b77e-57dd21d2551c",
         "name": "Admin Route",
         "type": "n8n-nodes-base.switch",
         "typeVersion": 3.4,
@@ -1682,7 +1682,7 @@
           },
           "options": {}
         },
-        "id": "37675b3c-4036-5276-93b9-33cd8e49c9cb",
+        "id": "8a7bdede-eae1-558f-82cc-88530604773f",
         "name": "Delete Site",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -2005,7 +2005,7 @@
           },
           "options": {}
         },
-        "id": "0e0d809a-b17f-5fc3-b115-8a5ca482906d",
+        "id": "607fb855-3ae0-5fed-804c-bd168d235ca7",
         "name": "Set Site Status",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -2020,7 +2020,7 @@
         "parameters": {
           "jsCode": "// seo_cadence row for the admin action \"cadence\" (upserted by site_id).\nconst a = $('Admin Action').first().json;\nreturn [{ json: { site_id: a.site_id, domain: a.domain, pages_per_week: a.pages_per_week, status: a.cadence_status, updated_at: a.updated_at, request_id: a.request_id } }];\n"
         },
-        "id": "4eee5815-bea8-571a-b09c-8ff7ed36069a",
+        "id": "e71bda01-ca01-55c7-b438-4a476a5fdb21",
         "name": "Cadence Row (Admin)",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -2119,7 +2119,7 @@
           },
           "options": {}
         },
-        "id": "6de0459b-a616-53c4-bae8-daef3119099d",
+        "id": "08cb1c09-370b-5598-aece-5d0c099a0fdd",
         "name": "Set Cadence",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -2309,7 +2309,7 @@
           },
           "options": {}
         },
-        "id": "96745f96-30cc-58a5-9d3c-da52aa0aa7e0",
+        "id": "8d10be79-1ca2-57b0-b3d1-6d8b9c9a16bf",
         "name": "Unpublish Log",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -2568,7 +2568,7 @@
           },
           "options": {}
         },
-        "id": "dcbce07f-b2ad-5fbd-ad77-61c5356aab59",
+        "id": "adc32ceb-3c34-5b36-b550-3212141e442b",
         "name": "Unpublish Ladder",
         "type": "n8n-nodes-base.dataTable",
         "typeVersion": 1.1,
@@ -2583,7 +2583,7 @@
         "parameters": {
           "jsCode": "// Rows affected by the admin action (0 = no site / row with that id or keyword).\nconst a = $('Admin Action').first().json; const rows = $input.all().map(i => i.json).filter(r => r && typeof r === 'object');\nconst err = rows.find(r => r.error);\nreturn [{ json: { ...a, affected: rows.filter(r => r.site_id || r.ladder_id).length, error: err ? String((err.error.message || err.error.description || err.error)).slice(0, 200) : null } }];\n"
         },
-        "id": "cd1a0cd7-1588-5380-b9ec-7877364f511d",
+        "id": "4659a5df-3888-5085-91e0-507bbe38ec11",
         "name": "Admin Result",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
@@ -2599,7 +2599,7 @@
           "width": 900,
           "color": 7
         },
-        "id": "b29e0ebf-1db1-5344-a84b-4f1a99c64291",
+        "id": "55ff5e06-f374-513b-9856-52162eef1b8f",
         "name": "Note",
         "type": "n8n-nodes-base.stickyNote",
         "typeVersion": 1,
