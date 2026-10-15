@@ -1153,9 +1153,9 @@ was really a correction. **Deploy note: eleven new `seo_pages` columns need `syn
 |---|---|---|---|---|---|
 | B-F5 | **A worktree has no `n8n/.env` and the build did not fail without it** — it exited 0 having baked "Dev SEO", the old sender and ops address and an empty service-account e-mail into eleven workflows. Every worktree agent of the last five days was exposed, and the containment ("rebuild in main and check the diff") was useless because `build_api.py` regenerated a uuid4 per node per build | **High** (process) | `env_settings.py`, `ladder_common.py`, every builder | `env_settings.require_settings` refuses a missing file or an empty load-bearing setting and names what it wanted; `--no-env` / an environment variable opts out loudly for a deliberate offline build. `ladder_common.freeze_ids` makes every node id `uuid5(workflow:node)`, so two builds of unchanged sources are **byte-identical** (verified: same SHA-256 over `workflows/` + `code_v4/` across two runs) and a real difference can no longer hide in churn. `webhookId` untouched; nothing references a node id | fixed 2026-10-15 (build section 69, S79); not deployed |
 | B-I2 | **INVARIANTS rule 2 had no enforcement**: ~16 defects came from a gate applied where data is written but not where it is read, and R16's fix did it for one gate only | **High** (a class, not an instance) | `gate_lint.py`, build section 69 | the lint walks the **generated** workflows and fails the build when a gate kit is inlined on a write path but not on the matching read path: 4 live pairs (the fit gate on `seo_ladders`, `LK.footprints` on `seo_backlinks`, `OK.sellsSame` on `seo_link_prospects` and the outreach table), 9 read paths gated, 30 on a ratchet baseline so the debt cannot grow. Proved to bite five ways: a removed `fitStored`, an ungated ladder reader, a renamed `footprints(`, a reintroduced `uuid4`, a `build_api` that stopped freezing | fixed 2026-10-15 (build section 69, S79); not deployed |
-| B-G1 | **The AI question panel is built from stored ladder rungs with no gate** (*AI Plan* in both the AI Visibility Tracker and the AI Pulse, every rung but rung 4), so a competitor's brand or a government portal stored as a rung becomes a question we ask ChatGPT — and then score ourselves against. This is exactly R16's shape, which was fixed for the Rank Tracker and the Content Cadence only | **High** (it advises and scores from ungated stored data) | *AI Plan*, both workflows | apply the fit / competitor gate on the read path, as R16 did for its two | **open**, held on the ratchet |
-| B-G2 | **AI Growth turns the same ungated stored rungs into "questions to win"** — and into pages the Content Cadence then writes | **High** | *Growth Plan* | the same read-path gate | **open**, held on the ratchet |
-| B-G3 | **The Site Tracker adds every stored rung to the tracked keywords**, so a rung set aside for being a competitor's brand still buys a live rank check every week and still appears in the weekly report | Medium | *Site Plan* | the same read-path gate | **open**, held on the ratchet |
+| B-G1 | **The AI question panel is built from stored ladder rungs with no gate** (*AI Plan* in both the AI Visibility Tracker and the AI Pulse, every rung but rung 4), so a competitor's brand or a government portal stored as a rung becomes a question we ask ChatGPT — and then score ourselves against. This is exactly R16's shape, which was fixed for the Rank Tracker and the Content Cadence only | **High** (it advises and scores from ungated stored data) | *AI Plan*, both workflows | apply the fit / competitor gate on the read path, as R16 did for its two | fixed 2026-10-15 (build section 71, S81) |
+| B-G2 | **AI Growth turns the same ungated stored rungs into "questions to win"** — and into pages the Content Cadence then writes | **High** | *Growth Plan* | the same read-path gate | fixed 2026-10-15 (build section 71, S81) |
+| B-G3 | **The Site Tracker adds every stored rung to the tracked keywords**, so a rung set aside for being a competitor's brand still buys a live rank check every week and still appears in the weekly report | Medium | *Site Plan* | the same read-path gate | fixed 2026-10-15 (build section 71, S81) |
 
 The other nine baseline entries are reads that do not advise from the keyword or the host (settings rows, publish matching, the e-mail /
 callback lookup, audit-site discovery). They stay listed rather than excused, so the next person to make one of them advise has to look
@@ -1180,6 +1180,25 @@ taken by the 2026-10-15 batch, and the note has been corrected to B-G1/B-G2/B-G3
 **One decision left open (B2-7).** B2-6's re-baseline (top 7, 40%) is implemented **on the ladder path only**. Discovery still clusters on
 3 of the top 10, so the two paths now apply different rules to the same question — the drift INVARIANTS rule 2 exists to prevent, though
 here it is a threshold rather than a gate. Aligning discovery moves a second scored area and S52's fixtures, so it is the owner's call.
+
+**B-G1..B-G3 closed, and what closing them found (2026-10-15, build section 71, S81).** One shared `FITR` (ctx / rungs / line) in
+`_fit_gate.js` now serves all four read paths, and a row it sets aside is **printed with its reason** ("Not asked" / "Set aside")
+rather than quietly missing from a shorter list. Four entries left the ratchet baseline for ever (AI Visibility Tracker / *AI Plan*,
+AI Pulse / *AI Plan*, AI Growth / *Growth Plan*, Site Tracker / *Site Plan*): 30 -> 26, with gated read paths 9 -> 13.
+
+Three corrections, each against something this register or the brief asserted:
+
+- **The AI Pulse does not share *AI Plan*'s code**, although `CLAUDE.md` says the Pulse shares the AI Visibility Tracker's node code.
+  Its plan node is `Pulse_Plan.js` and it reads the stored **question panel** (`seo_ai_prompts`), not ladder rungs — the lint had only
+  flagged it through `_monitor_sites.js`. The stored panel is now gated in both AI workflows, which is a wider fix than B-G1 described.
+- **`gate_lint.py` had a hole, and it was the dangerous kind.** Adding the shared loop to `_fit_gate.js` put the gate's own text into
+  every node that merely **inlines** the kit, so *Ladder Plan* and *Rank Keywords* flipped to "gated" without gaining a gate — and the
+  ratchet's rule is that an entry which gains its gate is dropped **for ever**. The lint now cuts the kit's own source out before asking
+  whether a node calls the gate. The same hole existed on the **write** side, which is why *Cadence Plan* had been miscounted as a
+  writer. A ratchet that can be fooled is worse than no ratchet, because it is trusted.
+- **Two rows must never be gated**, found by S19 regressions: the **brand question** (the gate's first rule is that it names the website
+  itself, so gating it would refuse the one question every site must ask) and a question the **owner typed themselves**. Both are kept
+  and flagged.
 
 **A process defect this batch found (B-P1).** `isolation: "worktree"` cut both agents' worktrees from `edca460` — the last merge to
 `main` — which is **47 commits behind** the branch tip: no build sections 55–66, no S67–S74, and `docs/system-review-2026-10-14/` did

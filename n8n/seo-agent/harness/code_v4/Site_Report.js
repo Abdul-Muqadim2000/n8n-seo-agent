@@ -260,6 +260,10 @@ return metrics.map((m, i) => {
   }
   if (m.tracked.length) html += h3('Tracked keywords') + table(['Keyword', 'Source', 'Search Console avg', 'Before', 'Live Google check', 'Clicks', 'Impr.', 'Ranking page'], m.tracked.map(t => [esc(t.keyword), esc(t.source === 'ladder' ? (t.rung === 4 ? 'ladder top' : 'ladder rung ' + t.rung) : t.source === 'blog' ? 'blog page' : 'your list'),
     G.connected ? posS(t.gsc_position) : '<span style="color:#94a3b8">connect GSC</span>', G.connected ? posS(t.gsc_prev_position) : '—', t.serp_position == null ? '—' : (t.serp_position > 0 ? '#' + t.serp_position : t.serp_position === 0 ? 'not in top 50' : 'check failed') + (t.serp_checked_at ? '<br><span style="color:#94a3b8;font-size:11px">' + esc(String(t.serp_checked_at).slice(0, 10)) + '</span>' : ''), n(t.clicks), n(t.impressions), link(t.page || t.serp_url)]));
+  // B-G3 (2026-10-15, INVARIANTS rule 1 + 2): a rung the read-path fit gate set aside bought no rank check and is not in the table
+  // above — so it is named here, with its reason, rather than leaving a shorter list nobody can explain.
+  if ((m.set_aside || []).length) html += '<p style="margin:2px 0 8px;font-size:12px;color:#b45309"><b>Set aside</b> (planned before the keyword rule existed): '
+    + m.set_aside.map(x => esc(x.note || (x.keyword + ' — ' + x.detail))).join(' | ') + '</p>';
   const linLine = (re) => { const l = linOf(re); return l ? '<p style="margin:2px 0 8px;font-size:11px;color:#64748b">' + esc(LN.note(l)) + '</p>' : ''; };
   if (m.tracked.length) html += linLine(/^Live Google check/) || linLine(/^Clicks, impressions/);
   const C = m.console || { notices: [], last_checkin: null, checkin_due: false };
