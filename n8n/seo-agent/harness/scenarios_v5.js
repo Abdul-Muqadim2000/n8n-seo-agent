@@ -11378,10 +11378,13 @@ await guard('B-F5 the build refuses a missing .env, and rule 2 gate pairs', asyn
   const listed79 = Object.keys(GB).filter(k => k !== '_note').flatMap(k => (GB[k].ungated || []).map(n => k + ' :: ' + n));
   check('rule 2: every unguarded read path is on the ratchet baseline, so it cannot grow — a new one fails the build',
     unpaid79.every(n => listed79.includes(n)) && unpaid79.length === listed79.length, JSON.stringify(unpaid79.filter(n => !listed79.includes(n))));
-  check('rule 2: the three real defects of this batch are registered, not excused (B-F6 AI Plan, B-F7 Growth Plan, B-F8 Site Plan — each turns a stored rung into a question asked, a page planned or a rank check bought)',
-    ['AI Visibility Tracker / AI Plan', 'AI Pulse / AI Plan', 'AI Growth / Growth Plan', 'Site Tracker / Site Plan']
-      .every(n => listed79.some(x => x.includes(n))) && String(GB._note || '').includes('B-F6'),
-    JSON.stringify(listed79.length));
+  // 2026-10-15, build section 71 / S81: the three defects this lint found on its first run (B-G1 / B-G2 / B-G3) are FIXED, so the
+  // four read paths left the ratchet. The rule is that they can never come back: the lint fails the build if one appears again.
+  check('rule 2: the four read paths of B-G1 / B-G2 / B-G3 are off the ratchet for good — gated, and named nowhere in the baseline',
+    ['SEO Agent — AI Visibility Tracker / AI Plan', 'SEO Agent — AI Pulse / AI Plan', 'SEO Agent — AI Growth / Growth Plan', 'SEO Agent — Site Tracker / Site Plan']
+      .every(n => GP.pairs['keyword fit | seo_ladders'].readers[n] === true && !listed79.some(x => x.endsWith(' :: ' + n)))
+      && String(GB._note || '').includes('MAY NEVER RETURN'),
+    JSON.stringify(Object.entries(GP.pairs['keyword fit | seo_ladders'].readers).filter(([n]) => /AI Plan|Growth Plan|Site Plan/.test(n))));
   reset();
 });
 
@@ -11568,6 +11571,160 @@ await guard('b2-serp-clusters-and-domain-diversity', async () => {
   check('B2-5: fewer than five results read is too little of the page to judge — the band is unknown, nothing is adjusted and the plan says so',
     (noSerpDv.L.serp_diversity || {}).checked === false && noSerpDv.L.feasibility.score === 68
     && /could not be read on this run|not available/.test((noSerpDv.L.serp_diversity || {}).basis || ''), JSON.stringify(noSerpDv.L.serp_diversity));
+  reset();
+});
+
+
+// S81 B-G1 / B-G2 / B-G3 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2) — the three read paths that acted on stored ladder rungs
+// with no gate, although the write path gates them. R16's exact shape, found by the gate-pair lint of build section 69 on its first
+// run. Every check below fails against the code before this pass: the refused rungs were topics, questions, targets and weekly rank
+// checks, and nothing anywhere said why.
+//
+// The fixture is a `seo_ladders` table as it really is: four rows written BEFORE the fit gate existed —
+//   * "e invoicing in uae"      the ladder's own top rung, published            -> kept, silently (nothing to say)
+//   * "cleartax pricing uae"    a DECLARED competitor's brand, still planned    -> set aside, dropped, reason "other brand"
+//   * "emaratax portal login"   a government portal, still planned              -> set aside, dropped, reason "government"
+//   * "azentio erp"             a competitor's brand whose PAGE IS WRITTEN      -> kept and FLAGGED (that page is live work)
+// and the stored question panel built from them, including one question the owner typed themselves.
+// ===================================================================================
+await guard('read-path fit gate over stored rungs', async () => {
+  reset();
+  const SN = 'S81 B-G1 B-G2 B-G3 — a rung stored before the gate existed is set aside on every read path, with its reason, and the three paths agree';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 400), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 300))); };
+  const M = require('./fixtures_monitors'), T = require('./fixtures_tracking');
+  const D81 = M.DOMAIN, S81 = M.SITE, HEAD = 'e invoicing in uae';
+  const BRAND = 'cleartax pricing uae', GOV = 'emaratax portal login', LIVE = 'azentio erp', OK81 = HEAD;
+  const rung = (o) => ({ json: { ladder_id: 'lad_1', domain: D81, head_keyword: HEAD, email: 'owner@' + D81, location_code: 2784, language_code: 'en', page_exists: false, status: 'planned', ...o } });
+  const LADDERS81 = [
+    rung({ rung: 4, page_no: 5, keyword: OK81, target_url: 'https://' + D81 + '/e-invoicing-uae/', page_exists: true, status: 'published' }),
+    rung({ rung: 1, page_no: 1, keyword: BRAND, target_url: 'https://' + D81 + '/cleartax-pricing-uae/' }),
+    rung({ rung: 2, page_no: 2, keyword: GOV, target_url: 'https://' + D81 + '/emaratax-portal-login/' }),
+    rung({ rung: 3, page_no: 3, keyword: LIVE, target_url: 'https://' + D81 + '/azentio-erp/', page_exists: true, status: 'published' })];
+  // the panel the weekly run stored from exactly those rungs (seo_ai_prompts predates the gate for the same reason)
+  const q81 = (i, kw, o = {}) => ({ json: { prompt_id: 'p_' + i, site_id: S81, domain: D81, prompt: 'Question ' + i + ' about ' + kw + '?', kind: 'recommend', topic: HEAD, keyword: kw, source: 'auto', status: 'active', stage: 'decision', cluster: HEAD, volume: 200, origin: 'writer', created_at: '2026-10-01', ...o } });
+  const PROMPTS81 = [q81(0, OK81), q81(1, BRAND), q81(2, GOV), q81(3, BRAND, { source: 'custom', origin: 'custom' })];
+  const MON81 = M.monitors();   // declares azentio.com and cleartax.com as competitors
+  const refusedOf = (a) => [...new Set((a || []).filter(x => x.dropped).map(x => x.keyword))].sort();   // the weekly run gates two kinds of stored row (the rung and the panel question written from it), so the same keyword can be refused twice
+  const reasonOf = (a, kw) => ((a || []).find(x => x.keyword === kw) || {}).reason || '';
+
+  // ---------- 1. B-G1 (a): the AI Visibility Tracker's AI Plan ----------
+  mock('Load Sites', M.sites()); mock('Load Ladders', LADDERS81); mock('Load Monitors', MON81); mock('Load Profiles', M.profiles());
+  mock('Load AI Prompts', PROMPTS81); mock('Load AI Visibility', [{ json: {} }]); mock('Load AI Daily', [{ json: {} }]);
+  mock('Load Cache (AI)', [{ json: {} }]); mock('Load Query History', [{ json: {} }]);
+  const ai = (await run('AI Plan', store['Load Query History']))[0].json;
+  const aiRefused = refusedOf(ai.set_aside);
+  check('B-G1: the AI question panel sets aside the competitor brand and the government portal stored as rungs — and nothing else',
+    JSON.stringify(aiRefused) === JSON.stringify([BRAND, GOV].sort()), JSON.stringify(ai.set_aside));
+  check('B-G1: each refusal names the rule that refused it — a competitor\'s brand and a public body, not "no demand"',
+    reasonOf(ai.set_aside, BRAND) === 'other brand' && reasonOf(ai.set_aside, GOV) === 'government', JSON.stringify(ai.set_aside.map(x => x.keyword + ':' + x.reason)));
+  check('B-G1: neither refused rung reaches the topics discovery and the market view are built from',
+    !ai.topics.includes(BRAND) && !ai.topics.includes(GOV) && ai.topics.includes(HEAD), JSON.stringify(ai.topics));
+  check('B-G1: the stored panel question written from the competitor\'s brand is not asked either',
+    !ai.prompts.some(p => p.keyword === BRAND && p.source === 'auto'), JSON.stringify(ai.prompts.map(p => p.keyword + ':' + p.source)));
+  check('B-G1: a question the owner typed themselves is KEPT and only flagged — their choice, not ours to hide',
+    ai.prompts.some(p => p.keyword === BRAND && p.source === 'custom') && ai.set_aside.some(x => x.prompt_id === 'p_3' && !x.dropped),
+    JSON.stringify({ kept: ai.prompts.map(p => p.source + ':' + p.keyword), aside: ai.set_aside.map(x => x.prompt_id + ':' + x.dropped) }));
+  check('B-G1: a rung whose page is already written stays (it is live work) and is flagged with the reason, never dropped',
+    ai.topics.includes(LIVE) && ai.set_aside.some(x => x.keyword === LIVE && !x.dropped && x.written && /already written/.test(x.note || '')),
+    JSON.stringify(ai.set_aside.filter(x => x.keyword === LIVE)));
+  check('B-G1 (INVARIANTS rule 1): the panel says why it is shorter, in words a reader can act on',
+    /set aside/.test(ai.set_aside_note) && ai.set_aside_note.includes(BRAND) && ai.set_aside_note.includes(GOV) && /not asked of the AI engines/.test(ai.set_aside_note), ai.set_aside_note);
+  // everything the plan carries except the refusal record and the one question the owner typed themselves (which is kept on purpose)
+  const aiRest = JSON.stringify({ ...ai, set_aside: null, set_aside_note: null, prompts: ai.prompts.filter(p => p.source !== 'custom'), volume_keywords: null });
+  check('B-G1: and the refused keywords appear NOWHERE else in the plan — not a topic, not an auto question, not a page we check',
+    !aiRest.includes(BRAND) && !aiRest.includes(GOV) && !aiRest.includes('emaratax-portal-login') && !aiRest.includes('cleartax-pricing-uae'),
+    JSON.stringify({ brand: aiRest.includes(BRAND), gov: aiRest.includes(GOV), topics: ai.topics }));
+
+  // ---------- 2. B-G1 (b): the AI Pulse asks the same panel six mornings a week ----------
+  const PN81 = { code: 'Pulse__AI_Plan' };
+  const pulse = (await run('AI Plan', store['Load Query History'], PN81))[0].json;
+  check('B-G1 (Pulse): the daily run refuses the same stored questions as the weekly one — one gate, not two',
+    JSON.stringify(refusedOf(pulse.set_aside)) === JSON.stringify(refusedOf(ai.set_aside)),
+    JSON.stringify({ pulse: refusedOf(pulse.set_aside), weekly: refusedOf(ai.set_aside) }));
+  check('B-G1 (Pulse): the refused questions are not asked, the owner\'s own one is, and the mail says so',
+    !pulse.prompts.some(p => p.keyword === BRAND && p.source === 'auto') && !pulse.prompts.some(p => p.keyword === GOV)
+    && pulse.prompts.some(p => p.source === 'custom' && p.keyword === BRAND) && /set aside/.test(pulse.set_aside_note),
+    JSON.stringify({ asked: pulse.prompts.map(p => p.source + ':' + p.keyword), note: pulse.set_aside_note }));
+
+  // ---------- 3. B-G2: AI Growth turns rungs into questions to win and then into pages ----------
+  mock('Load AI Answers', [{ json: {} }]); mock('Load AI Pages', [{ json: {} }]); mock('Load AI Targets', [{ json: {} }]);
+  mock('Load AI Growth', [{ json: {} }]); mock('Load Cache (Growth)', [{ json: {} }]); mock('Load Content Log', [{ json: {} }]);
+  const gr = (await run('Growth Plan', store['Load Cache (Growth)']))[0].json;
+  check('B-G2: AI Growth sets aside the same two rungs, with the same reasons as the AI panel',
+    refusedOf(gr.set_aside).includes(BRAND) && refusedOf(gr.set_aside).includes(GOV)
+    && reasonOf(gr.set_aside, BRAND) === reasonOf(ai.set_aside, BRAND) && reasonOf(gr.set_aside, GOV) === reasonOf(ai.set_aside, GOV),
+    JSON.stringify(gr.set_aside.map(x => x.keyword + ':' + x.reason)));
+  check('B-G2: no refused rung becomes a key page, a question to win or a page the cadence writes',
+    !JSON.stringify({ ...gr, set_aside: null, set_aside_note: null }).includes(BRAND)
+    && !JSON.stringify({ ...gr, set_aside: null, set_aside_note: null }).includes('cleartax-pricing-uae')
+    && !JSON.stringify({ ...gr, set_aside: null, set_aside_note: null }).includes('emaratax-portal-login'),
+    JSON.stringify({ key_pages: gr.key_pages.map(p => p.url), targets: gr.targets.map(t => t.keyword) }));
+  check('B-G2 (INVARIANTS rule 1): the growth report is told why, in the gate\'s own words',
+    /not turned into a question to win or a page to write/.test(gr.set_aside_note) && gr.set_aside_note.includes(BRAND), gr.set_aside_note);
+  check('B-G2: the written page of the flagged rung is still a key page — a gate on the read path never deletes live work',
+    gr.key_pages.some(p => /azentio-erp/.test(p.url)) && gr.set_aside.some(x => x.keyword === LIVE && !x.dropped),
+    JSON.stringify(gr.key_pages.map(p => p.url)));
+
+  // ---------- 4. B-G3: the Site Tracker buys a live rank check for every tracked keyword ----------
+  reset();
+  mock('Load Sites', T.sitesRows()); mock('Load Ladders', LADDERS81); mock('Load Monitors (Site)', MON81);
+  mock('Load Rank History', [{ json: {} }]); mock('Load Site Metrics', [{ json: {} }]); mock('Load Query History', [{ json: {} }]);
+  mock('Load Content Log', [{ json: {} }]); mock('Load Console Alerts', [{ json: {} }]); mock('Load Check-ins', [{ json: {} }]);
+  const st = (await run('Site Plan', store['Load Query History']))[0].json;
+  check('B-G3: a rung set aside for being a competitor\'s brand or a government portal buys no weekly rank check',
+    !st.tracked.some(t => t.keyword === BRAND) && !st.tracked.some(t => t.keyword === GOV) && st.tracked.some(t => t.keyword === OK81),
+    JSON.stringify(st.tracked.map(t => t.source + ':' + t.keyword)));
+  check('B-G3: and its page is not inspected either — the URL of a page nobody should write is not a page to check',
+    !st.ladder_pages.some(p => /cleartax-pricing-uae|emaratax-portal-login/.test(p.url)), JSON.stringify(st.ladder_pages.map(p => p.url)));
+  check('B-G3: the owner\'s OWN keyword list is never judged here — "northwind erp login" is their explicit choice and stays tracked',
+    st.tracked.some(t => t.source === 'site' && t.keyword === 'northwind erp login'), JSON.stringify(st.tracked.filter(t => t.source === 'site').map(t => t.keyword)));
+  check('B-G3 (INVARIANTS rule 1): the weekly report is told which keywords went and why',
+    /not tracked or given a live rank check/.test(st.set_aside_note) && st.set_aside_note.includes(BRAND) && st.set_aside_note.includes(GOV), st.set_aside_note);
+
+  // ---------- 5. the three paths agree with each other ----------
+  const sets = { 'AI panel': ai.set_aside, 'AI pulse': pulse.set_aside, 'AI growth': gr.set_aside, 'site tracking': st.set_aside };
+  const refusedEach = Object.fromEntries(Object.entries(sets).map(([k, v]) => [k, refusedOf(v).join('|')]));
+  check('all four read paths refuse exactly the same stored keywords for exactly the same reasons — one shared gate, not four copies',
+    new Set(Object.values(refusedEach)).size === 1
+    && new Set(Object.values(sets).map(v => reasonOf(v, BRAND))).size === 1
+    && new Set(Object.values(sets).map(v => reasonOf(v, GOV))).size === 1,
+    JSON.stringify(refusedEach));
+  check('every refusal carries the sentence a human reads, on every path, and it names the keyword and the reason',
+    Object.values(sets).every(v => v.filter(x => x.dropped).every(x => x.note && x.note.includes(x.keyword) && x.note.includes(x.detail))),
+    JSON.stringify(Object.entries(sets).map(([k, v]) => k + ': ' + v.filter(x => x.dropped).map(x => x.note).join(' | ')).join('\n')));
+  check('each refusal says which read path set it aside, so a report can be traced back to the run that refused',
+    Object.values(sets).every(v => v.every(x => x.where)), JSON.stringify(Object.values(sets).flat().map(x => x.where)));
+
+  // ---------- 6. the hole this fix opened in the lint, and closed ----------
+  // Putting the shared loop in the kit made `fitStored(` appear in every node that merely INLINES _fit_gate.js, so two readers that
+  // call neither (*Ladder Plan*, *Rank Keywords*) flipped to "gated" without a line changing — and the ratchet would have dropped
+  // them for ever. gate_lint now cuts the kit out before it asks, on the write side too, and counts `FITR.rungs(` as the gate.
+  const GP81 = require('./gate_pairs.json'), GB81 = require('./gate_pairs_baseline.json');
+  const readers81 = GP81.pairs['keyword fit | seo_ladders'].readers;
+  check('the lint reads the node\'s OWN code: a node that only inlines the fit gate is NOT gated by it',
+    readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan'] === false
+    && readers81['SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'] === false,
+    JSON.stringify(readers81));
+  check('and both are still named on the ratchet, where this fix found them — nothing left the baseline that did not earn it',
+    (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Ladder Plan')
+    && (GB81['keyword fit | seo_ladders'].ungated || []).includes('SEO Agent v4 — Audit, Keywords, Verdict & Content / Rank Keywords'),
+    JSON.stringify(GB81['keyword fit | seo_ladders'].ungated));
+  check('the shared loop counts as the gate, so the four fixed read paths are gated and off the baseline for good',
+    GP81.pairs['keyword fit | seo_ladders'].read.includes('FITR.rungs(')
+    && ['SEO Agent — AI Visibility Tracker / AI Plan', 'SEO Agent — AI Pulse / AI Plan', 'SEO Agent — AI Growth / Growth Plan', 'SEO Agent — Site Tracker / Site Plan']
+      .every(n => readers81[n] === true && !(GB81['keyword fit | seo_ladders'].ungated || []).includes(n)),
+    GP81.pairs['keyword fit | seo_ladders'].read);
+
+  // ---------- 7. the gate costs a clean ladder nothing ----------
+  reset();
+  mock('Load Sites', M.sites()); mock('Load Ladders', [LADDERS81[0]]); mock('Load Monitors', MON81); mock('Load Profiles', M.profiles());
+  mock('Load AI Prompts', [PROMPTS81[0]]); mock('Load AI Visibility', [{ json: {} }]); mock('Load AI Daily', [{ json: {} }]);
+  mock('Load Cache (AI)', [{ json: {} }]); mock('Load Query History', [{ json: {} }]);
+  const clean = (await run('AI Plan', store['Load Query History']))[0].json;
+  check('a ladder with nothing wrong loses nothing and says nothing: no refusal, no note, the topic kept',
+    clean.set_aside.length === 0 && clean.set_aside_note === '' && clean.topics.includes(HEAD) && clean.prompts.length === 1,
+    JSON.stringify({ aside: clean.set_aside, note: clean.set_aside_note, topics: clean.topics }));
   reset();
 });
 

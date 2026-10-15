@@ -2,6 +2,10 @@
 // "Track my site" / API mode "track") plus every domain that has a keyword ladder (registered automatically, e-mail from the ladder).
 // Google data is read for the last 28 complete days ending 3 days ago (Search Console data is final after about 3 days),
 // against the 28 days before and the same 28 days a year earlier.
+// B-G3 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): every stored rung used to join the tracked keywords with no gate, so a rung set
+// aside for being a competitor's brand still bought a live rank check every week and still appeared in the weekly report. The same shared
+// read-path gate the Rank Tracker and the Content Cadence use (FITR, _fit_gate.js) runs here, and what it sets aside is named with its reason.
+/*__FIT_GATE__*/
 const CONFIG = {
   service_account_email: '__SA_EMAIL__',   // filled from n8n/.env (SEO_GOOGLE_SA_EMAIL) at build time; shown in the connect instructions
   max_sites_per_run: 25, max_tracked_keywords: 40, max_gsc_keyword_requests: 30, max_trend_keywords: 4, max_serp_checks: 20,
@@ -36,6 +40,7 @@ const history = rowsOf('Load Rank History').filter(r => r.keyword && r.checked_a
 const logRows = rowsOf('Load Content Log').filter(r => r.keyword && r.domain);   // pages written by the Content Cadence / reported as published
 const alertRows = rowsOf('Load Console Alerts').filter(r => r.domain && r.kind);     // Search Console notification mails + check-in flags
 const checkinRows = rowsOf('Load Check-ins').filter(r => r.site_id && r.month);     // monthly owner check-ins (manual action / security / Pages export)
+const monRows = rowsOf('Load Monitors (Site)');   // B-G3: the declared competitors the fit gate needs on the read path
 const byDomain = new Map();
 for (const s of sites) { const d = normD(s.domain); if (d && !byDomain.has(d)) byDomain.set(d, { ...s, domain: d, keywords: kwList(s.keywords), virtual: false }); }
 for (const l of ladders) { const d = normD(l.domain); if (d && !byDomain.has(d)) byDomain.set(d, { site_id: siteIdFor(d), domain: d, gsc_property: '', ga4_property_id: '', country: l.country || '', location_code: Number(l.location_code) || 0, language_code: l.language_code || 'en', email: l.email || '', callback_url: l.callback_url || '', keywords: [], status: 'active', source: 'ladder', created_at: '', last_run_at: '', request_id: l.request_id || '', virtual: true }); }
@@ -52,7 +57,13 @@ const iso = (d) => d.toISOString().slice(0, 10); const addDays = (d, n) => new D
 const ranges = { current: { start: iso(addDays(end, -27)), end: iso(end) }, previous: { start: iso(addDays(end, -55)), end: iso(addDays(end, -28)) }, yoy: { start: iso(addDays(end, -27 - 364)), end: iso(addDays(end, -364)) } };
 const now = new Date().toISOString();
 return list.slice(0, CONFIG.max_sites_per_run).map(s => {
-  const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort((a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0) || (Number(a.page_no) || 0) - (Number(b.page_no) || 0));
+  const lrowsAll = ladders.filter(l => normD(l.domain) === s.domain).sort((a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0) || (Number(a.page_no) || 0) - (Number(b.page_no) || 0));
+  // B-G3: the read-path gate. The site's OWN keyword list is the owner's explicit choice and is never judged here — only the stored rungs.
+  const mon = monRows.find(m => m.site_id === s.site_id || normD(m.domain) === s.domain) || {};
+  const fitCtx = FITR.ctx({ own_domain: s.domain, competitors: kwList(mon.competitors).map(normD),
+    heads: lrowsAll.map(l => l.head_keyword), keywords: s.keywords || [] });
+  const fitS = FITR.rungs(lrowsAll, fitCtx, { where: 'weekly site tracking' });
+  const lrows = fitS.keep; const set_aside = fitS.set_aside;
   const tracked = []; const seen = new Set();
   for (const k of s.keywords) if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'site', rung: 0, ladder_id: '', head_keyword: '' }); }
   for (const l of lrows) { const k = String(l.keyword).toLowerCase().trim(); if (!seen.has(k)) { seen.add(k); tracked.push({ keyword: k, source: 'ladder', rung: Number(l.rung) || 0, ladder_id: l.ladder_id, head_keyword: String(l.head_keyword || '').toLowerCase() }); } }
@@ -81,5 +92,7 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   return { json: { site_id: s.site_id, domain: s.domain, gsc_property_hint: s.gsc_property || '', ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, ''), country: s.country || '', location_code: Number(s.location_code) || 0, language_code: s.language_code || 'en',
     email: s.email || '', callback_url: s.callback_url || '', request_id: String(trigger.request_id || s.request_id || ''), source: s.source || 'form', status: s.status || 'active', created_at: s.created_at || now, first_run: !s.last_run_at, virtual: !!s.virtual,
     keywords: s.keywords, tracked: tracked.slice(0, CONFIG.max_tracked_keywords), ladder_pages: pages.slice(0, CONFIG.max_inspections), ladder_heads: [...new Set(lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()).filter(Boolean))],
+    // B-G3: what the gate refused, with its reason, so the weekly report names it instead of printing a shorter list (INVARIANTS rule 1)
+    set_aside, set_aside_note: FITR.line(set_aside, 'tracked or given a live rank check'),
     serp_positions: serp, pending_publish, console_alerts, last_checkin, checkin_due, ranges, on_demand, checked_at: now, config: CONFIG } };
 });

@@ -8,8 +8,12 @@
 //   * the earned-media list: the exact third-party pages AI cited in answers that did not name the business (articles, lists, reviews, threads),
 //     fetched next to see whether they name the business or its competitors (the strongest lever on AI mentions: earned media);
 //   * the monthly entity check (Wikidata).
+// B-G2 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): the stored ladder rungs reached this plan with no gate, so a rung that is a
+// competitor's brand or a government portal became a "question to win" and then a page the Content Cadence writes. The same shared
+// read-path gate R16 built now runs here (FITR, _fit_gate.js) before any rung is read for a target, a key page or a submission.
 /*__MONITOR_SITES__*/
 /*__SITE_MODEL__*/
+/*__FIT_GATE__*/
 const CONFIG = { audit_per_week: 12, recheck_days: 25, max_key_pages: 40, submit_max: 50, resubmit_days: 30, recent_days: 8, earned_fetch: 10, max_targets: 6, refresh_after_days: 90,
   stage_weight: { decision: 1, consideration: 0.8, awareness: 0.6 } };
 const { list, on_demand, want, total } = monitorSites('ai');
@@ -51,7 +55,11 @@ for (const s of sites) {
   const gaps = v ? parse(v.gaps_json, []) : []; const cited = v ? parse(v.pages_json, []) : []; const compRows = v ? parse(v.competitors_json, []) : [];
   const comps = [...new Set([...s.settings.competitors, ...compRows.filter(c => c && /\./.test(c.domain || '')).map(c => c.domain)])];
   const myPrompts = prompts.filter(p => p.site_id === s.site_id); const promptOf = new Map(myPrompts.map(p => [p.prompt_id, p]));
-  const slog = logs.filter(l => normD(l.domain) === dom); const lrows = ladders.filter(l => normD(l.domain) === dom);
+  const slog = logs.filter(l => normD(l.domain) === dom); const lrowsAll = ladders.filter(l => normD(l.domain) === dom);
+  // B-G2: the read-path gate, before a rung can become a key page, a target's page or the ladder page a question is handed to.
+  const fitCtx = FITR.ctx({ own_domain: dom, competitors: comps, heads: lrowsAll.map(l => l.head_keyword), services: SM.services(site_model) });
+  const fitG = FITR.rungs(lrowsAll, fitCtx, { where: 'AI growth targets' });
+  const lrows = fitG.keep; const set_aside = fitG.set_aside;
   const sqAll = qh.filter(q => q.site_id === s.site_id && q.page); const lastPeriod = sqAll.reduce((m, q) => String(q.period_end || '') > m ? String(q.period_end || '') : m, '');
   const sq = sqAll.filter(q => String(q.period_end || '') === lastPeriod);   // the latest Search Console period only
   const stored = new Map(pagesStored.filter(p => p.site_id === s.site_id).map(p => [keyOf(p.url), p]));
@@ -148,6 +156,8 @@ for (const s of sites) {
   const business_name = String(s.profile.business_name || '').trim() || (modelName && SM.helpers.bare(modelName) !== dom ? modelName : '');
   out.push({ json: { site_id: s.site_id, domain: dom, site_host, country: s.country || '', email: s.email || '', callback_url: s.callback_url || '', request_id: s.request_id || '', on_demand, business_name, profile: s.profile,
     link_builder: !!s.settings.link_builder, services: SM.services(site_model), accreditation: SM.facts(site_model).accreditation,
+    // B-G2: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
+    set_aside, set_aside_note: FITR.line(set_aside, 'turned into a question to win or a page to write'),
     brand_names, competitors: comps.slice(0, 12), ai_pages_month: s.settings.ai_pages_month, run_id: 'grow_' + iso.slice(0, 10).replace(/-/g, '') + '_' + s.site_id.replace(/^site_/, ''), checked_at: iso,
     vis_checked_at: v ? v.checked_at : '', key_pages: keyPages, audit, submit: [...submit.entries()].slice(0, CONFIG.submit_max).map(([url, why]) => ({ url, why })), targets, earned, earned_fetch: earned.filter(e => e.kind !== 'competitor').slice(0, CONFIG.earned_fetch).map(e => e.url),
     indexnow_key, indexnow_new: !kRow, indexnow_verified_at: kv.verified_at || '', entity_due, previous_entity: prevEntity, previous: prevG ? { checked_at: prevG.checked_at, avg_score: Number(prevG.avg_score) || null, earned: parse(prevG.earned_json, []) } : null,

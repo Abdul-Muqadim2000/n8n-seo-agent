@@ -5,9 +5,14 @@
 // brand question), question discovery (Search Console questions + real questions from the AI-answer database), search volumes, the market-wide
 // index (the DataForSEO AI-answer database: your share against the competitors across every answer, not only the panel), AI referral traffic from
 // GA4 (visits, key events and revenue from ChatGPT, Perplexity, Gemini, Copilot, Claude …) and the AI-crawler access check. (v4.9)
+// B-G1 (2026-10-15, FIX_PLAN §3.16; INVARIANTS rule 2): the question panel used to be built from EVERY stored ladder keyword, so a rung
+// that is a competitor's brand or a government portal — exactly what the fit gate refuses when a rung is planned — became a question we
+// ask ChatGPT and then score ourselves against. The stored rungs now go through the same read-path gate R16 built (FITR, _fit_gate.js),
+// and every rung set aside travels with the plan so the report can name it with its reason instead of quietly shortening the list.
 /*__MONITOR_SITES__*/
 /*__COUNTRIES__*/
 /*__SITE_MODEL__*/
+/*__FIT_GATE__*/
 const CONFIG = { max_sites_per_run: 15, max_topics: 8, monthly_engines: ['claude'],   // v4.9: Gemini moved to the weekly set (the real gemini.google.com answer costs $0.004 through the scraper)
   gsc_questions: 15, pulse_days: 7 };
 const { list, on_demand, want, total } = monitorSites('ai');
@@ -20,17 +25,34 @@ const QUESTION = /^(how|what|which|who|why|when|where|is|are|can|does|do|should|
 return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   const label = s.domain.split('.')[0];
   const brand_names = [...new Set([s.domain, s.business_name || '', ...(s.settings.brand_names || []), ...(label.length >= 5 ? [label] : [])].map(x => String(x).trim()).filter(x => x.length >= 3))];   // P34-6: the model's name is a brand name too
-  const lrows = ladders.filter(l => normD(l.domain) === s.domain).sort((a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0));
+  const lrowsAll = ladders.filter(l => normD(l.domain) === s.domain).sort((a, b) => (Number(a.rung) || 0) - (Number(b.rung) || 0));
   const asked = on_demand ? listOf(trigger.topics).map(x => x.toLowerCase()) : [];   // "Main services or products" on the on-demand form / API `topics`
-  const topics = [...new Set([...asked, ...lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()), ...(s.keywords || []), ...lrows.filter(l => Number(l.rung) !== 4).map(l => String(l.keyword || '').toLowerCase().trim())].filter(Boolean))].slice(0, CONFIG.max_topics);
-  const mine = promptRows.filter(p => p.site_id === s.site_id && String(p.status || 'active') !== 'off' && p.prompt);
-  const custom = mine.filter(p => p.source === 'custom'), auto = mine.filter(p => p.source !== 'custom');
+  // D15 (system review 2026-10-11): the plan carries the site's canonical host (the site model, SITE_MODEL_SPEC.md §6), so every URL the run
+  // emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
+  const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
+  const mineAll = promptRows.filter(p => p.site_id === s.site_id && String(p.status || 'active') !== 'off' && p.prompt);
   const mineVis = visRows.filter(v => v.site_id === s.site_id).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
   const prev = mineVis[0] || null;
   // brand names AI uses for competitors (learned by the Answer Analyst: "ClearTax" -> cleartax.in), so a competitor named without its website still counts
   const aliasRow = cache.find(c => c.key === 'ai_brands:' + s.site_id); const aliases = aliasRow ? parse(aliasRow.value, {}) : {};
   const autoRivals = prev ? (parse(prev.competitors_json, []) || []).filter(c => c && c.domain && c.auto && (c.mentions || 0) >= 2 && /\./.test(c.domain)).map(c => c.domain) : [];
   const competitors = [...new Set([...s.settings.competitors, ...autoRivals])].slice(0, 8);
+  // B-G1: the read-path gate, before a single stored rung can become a topic, a question or a page we check for AI readiness.
+  // Protected so the ladder's own subject can never read as somebody's brand: the head terms, the site's services and its own keywords.
+  const fitCtx = FITR.ctx({ own_domain: s.domain, competitors, brands: aliases, heads: lrowsAll.map(l => l.head_keyword),
+    services: SM.services(site_model), keywords: s.keywords || [] });
+  const fit = FITR.rungs(lrowsAll, fitCtx, { where: 'AI question panel' });
+  const lrows = fit.keep;
+  // and the panel rows ALREADY stored from those rungs (seo_ai_prompts predates the gate too): an auto-written question whose keyword is
+  // a competitor's brand is dropped, a question the owner added themselves is kept and only flagged — it is their deliberate choice.
+  // The brand question is deliberately about the site itself ("What is X and what does it offer?"), so it is never judged here — the
+  // gate's first rule is "names the website itself", and running it over that question would refuse the one question that must stay.
+  const fitQ = FITR.rungs(mineAll.filter(p => p.kind !== 'brand'), fitCtx, { where: 'AI question panel', keyword: (p) => p.keyword || p.topic || '', live: (p) => p.source === 'custom' });
+  const refusedQ = new Set(fitQ.set_aside.filter(x => x.dropped).map(x => x.prompt_id));
+  const mine = mineAll.filter(p => p.kind === 'brand' || !refusedQ.has(p.prompt_id));   // the stored order is kept: it is the panel's order
+  const set_aside = [...fit.set_aside, ...fitQ.set_aside];
+  const custom = mine.filter(p => p.source === 'custom'), auto = mine.filter(p => p.source !== 'custom');
+  const topics =[...new Set([...asked, ...lrows.map(l => String(l.head_keyword || '').toLowerCase().trim()), ...(s.keywords || []), ...lrows.filter(l => Number(l.rung) !== 4).map(l => String(l.keyword || '').toLowerCase().trim())].filter(Boolean))].slice(0, CONFIG.max_topics);
   // full run = the first run of the month (or any on-demand run): every engine + the brand question + discovery + the market-wide index
   const isFull = (v) => String(v.run_kind || '') === 'full' || String(v.run_kind || '') === 'on_demand' || (!v.run_kind && (() => { const e = parse(v.engines_json, {}); return ['gemini', 'claude'].some(k => e[k] && Number(e[k].asked) > 0 && !e[k].carried); })());
   const lastFull = mineVis.find(isFull) || null;
@@ -55,9 +77,6 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
   // pages that must stay fetchable for AI: the ones AI cited last time and the keyword-ladder pages (checked against robots.txt per AI bot)
   const pathOf = (u) => { const m = String(u || '').match(/^https?:\/\/[^\/?#]+(\/[^?#]*)?/i); return m ? (m[1] || '/') : (String(u || '').startsWith('/') ? String(u) : ''); };
   const key_paths = [...new Set([...(prev ? (parse(prev.pages_json, []) || []).map(x => pathOf(x && x.url)) : []), ...lrows.map(l => pathOf(l.target_url))].filter(x => x && x !== '/'))].slice(0, 8);
-// D15 (system review 2026-10-11): the plan carries the site's canonical host (the site model, SITE_MODEL_SPEC.md §6), so every URL the run
-// emits is on the host the site really serves; with no model yet the bare domain keeps today's behaviour.
-  const site_model = SM.stored(s) || { domain: s.domain, canonical_host: s.domain };
   return { json: { site_id: s.site_id, domain: s.domain, canonical_host: site_model.canonical_host || s.domain, country: s.country || '', location_code, language_code: s.language_code || 'en', country_iso: isoOf(location_code), email: s.email || '', callback_url: s.callback_url || '',
     request_id: s.request_id || '', on_demand, adhoc: !!s.adhoc, business_name: s.business_name || ''   /* P34-6: the site model's name (monitorSites nameOf), not seo_profiles alone */, business_type: s.profile.business_type || '', city: s.profile.city || '', profile: s.profile,
     // G10 (2026-10-11 system review): the Answer Analyst can only call a claim wrong against facts on file, so the site model's
@@ -69,6 +88,8 @@ return list.slice(0, CONFIG.max_sites_per_run).map(s => {
     need_prompts: need > 0, prompts_needed: need, need_site_text: need > 0 && !topics.length && !s.business_name, gsc_questions,
     discovery_due: !!topics.length && (full_due || need > 0), volume_keywords, index_due: full_due, market_due: !!topics.length && (!prev || String(prev.market_month || '') !== month), market_keyword: topics[0] || '',
     ga4_property_id: String(s.ga4_property_id || '').replace(/^properties\//, '').trim(), pulse_rows, key_paths,
+    // B-G1: what the gate refused, with its reason, so the report names it instead of printing a shorter list (INVARIANTS rule 1)
+    set_aside, set_aside_note: FITR.line(set_aside, 'asked of the AI engines or scored against'),
     previous: prev ? { checked_at: prev.checked_at, mention_rate: prevMention, samples: prevSamples, mentioned_k: Math.round(prevMention * prevSamples / 100), citation_rate: Number(prev.citation_rate), share_of_voice: Number(prev.share_of_voice), avg_rank: Number(prev.avg_rank),
       visibility_score: prev.visibility_score === '' || prev.visibility_score == null ? null : Number(prev.visibility_score), sentiment_score: prev.sentiment_score === '' || prev.sentiment_score == null ? null : Number(prev.sentiment_score),
       engines: parse(prev.engines_json, {}), market_month: prev.market_month || '', market: parse(prev.market_json, null), index: parse(prev.index_json, null), perception: parse(prev.perception_json, null), traffic: parse(prev.traffic_json, null), access: parse(prev.access_json, null),
