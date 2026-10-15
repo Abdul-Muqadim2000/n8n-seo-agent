@@ -77,13 +77,6 @@
   "markup": 0,
   "why": "refusal (B-A11, 2026-10-15): builds the NEXT request from the previous answer and scores, ranks or advises nothing itself: when less was read it simply asks for less, and the node that acts on the result is where the refusal belongs. Listed rather than excused, so the next person who makes it derive a figure has to read this file."
  },
- "SEO Agent \u2014 AI Pulse / Pulse Metrics": {
-  "fails": [
-   "refusal"
-  ],
-  "markup": 4,
-  "why": "refusal (B-A11, 2026-10-15): derives a figure or a recommendation from the answers and cannot yet say they could not be read. Real debt of the B-A11 class, one workflow at a time. Same class as AI Visibility, on the daily panel."
- },
  "SEO Agent \u2014 AI Visibility Tracker / Analyst Jobs": {
   "fails": [
    "refusal"

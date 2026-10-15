@@ -75,6 +75,82 @@ const indexNameRow = (name, mentions, o) => {
 };
 const mergeBrands = (entries, aliases) => { const doms = entries.map(([k]) => k).filter(k => /\./.test(k)); const out = new Map();   // [[key, value]] -> Map with names folded into domains (min for positions, sum for counts via the caller)
   for (const [k, v] of entries) { const key = brandKey(k, doms, aliases); out.set(key, out.has(key) ? [...out.get(key), v] : [v]); } return out; };
+// ---- B8-1 ... B8-4 (2026-10-15, benchmark programme area 8 - docs/system-review-2026-10-14/BENCH_AREA8_ai_visibility.md) ----
+// Every headline figure in this area is a proportion of a small, deliberately noisy sample: the same question asked twice returns a
+// different brand list (SparkToro measured the same list coming back under 1% of the time). The mention rate has carried its 95% range
+// and a two-proportion z-test since v4.9 - the citation rate, the share of voice, the visibility score and the per-question win rate
+// did not, and were printed as bare arrows beside it. One shape for all of them: a change is tested, or it says it was not tested.
+// INVARIANTS rule 1 - measured, modelled or not available, and it says which.
+const MIN_RATE_SAMPLES = 12;        // under this a rate is a straw poll: it is shown with its range and no verdict is drawn from it
+const MIN_Q_SAMPLES = 4;            // a per-question win rate: 1 of 1 is not "named in 100% of answers"
+/** a rate with the sample it was measured on: the figure, its 95% Wilson range, and whether there were enough answers to mean anything */
+const rateOf = (k, n, o) => {
+  const opt = o || {}; const min = opt.min == null ? MIN_RATE_SAMPLES : opt.min;
+  const kk = Math.max(0, Number(k) || 0), nn = Math.max(0, Number(n) || 0);
+  const unit = String(opt.unit || 'answer');
+  return { rate: nn ? Math.round(1000 * kk / nn) / 10 : null, k: kk, n: nn, ci: wilson(kk, nn), min,
+    basis: nn ? 'measured' : 'not_available', enough: nn >= min,
+    why: !nn ? 'no ' + unit + ' came back, so there is no rate' : nn >= min ? ''
+      : 'measured on ' + nn + ' ' + unit + (nn === 1 ? '' : 's') + ' only - a rate needs ' + min + ' before it says anything' };
+};
+/** the one test every proportion change goes through: significant, not significant, or not testable - each with the words for why */
+const changeOf = (k1, n1, k2, n2, o) => {
+  const opt = o || {}; const minPts = opt.min_points == null ? 5 : opt.min_points; const z0 = opt.z == null ? 1.96 : opt.z;
+  const a = Math.max(0, Number(n1) || 0), b = Math.max(0, Number(n2) || 0);
+  if (!a || !b) return { delta: null, significant: null, z: null, basis: 'not_available', samples: a, samples_before: b,
+    why: 'nothing to compare: ' + (!a && !b ? 'neither reading has a sample' : !a ? 'this reading has no answers' : 'the earlier reading recorded no sample size') };
+  const d = Math.round(1000 * (k1 / a - k2 / b)) / 10;
+  const z = Math.round(100 * zTest(k1, a, k2, b)) / 100;
+  const sig = Math.abs(z) >= z0 && Math.abs(d) >= minPts;
+  return { delta: d, significant: sig, z, basis: 'measured', samples: a, samples_before: b, min_points: minPts,
+    why: sig ? 'beyond sampling noise (z ' + z + ' over ' + a + ' answers now and ' + b + ' before)'
+      : 'within sampling noise (z ' + z + '; a change counts at |z| ' + z0 + ' and ' + minPts + ' points - ' + a + ' answers now, ' + b + ' before)' };
+};
+/** The visibility score is a WEIGHTED MEAN of per-answer scores, not a proportion, so Wilson does not apply to it. Its uncertainty is
+ *  the standard error of that weighted mean over Kish's effective sample size, reported as a 95% band on the same 0-100 scale. A change
+ *  is only called one when it clears this run's own band - we do not store the earlier run's, and inventing one would be the defect. */
+const scoreBand = (answers, volumeOf) => {
+  const xs = [], ws = [];
+  for (const a of (answers || [])) { const x = answerScore(a); if (x === null) continue; xs.push(x); ws.push(volWeight(volumeOf ? volumeOf(a) : 0)); }
+  const n = xs.length; const W = ws.reduce((s, w) => s + w, 0);
+  if (!n || !W) return { score: null, lo: null, hi: null, half: null, n: 0, n_eff: 0, basis: 'not_available', why: 'no answer could be scored' };
+  const mean = xs.reduce((s, x, i) => s + x * ws[i], 0) / W;
+  const W2 = ws.reduce((s, w) => s + w * w, 0);
+  const n_eff = W2 ? (W * W) / W2 : n;                                     // Kish: how many equally weighted answers this sample is worth
+  const varW = n > 1 ? (xs.reduce((s, x, i) => s + ws[i] * (x - mean) * (x - mean), 0) / W) * (n / (n - 1)) : 0;
+  const se = n_eff > 0 ? Math.sqrt(varW / n_eff) : 0;
+  const half = Math.round(1000 * 1.96 * se) / 10;                          // on the 0-100 scale the score is printed on
+  const s100 = Math.round(1000 * mean) / 10;
+  return { score: s100, half, lo: Math.max(0, Math.round(10 * (s100 - half)) / 10), hi: Math.min(100, Math.round(10 * (s100 + half)) / 10),
+    n, n_eff: Math.round(10 * n_eff) / 10, basis: 'modelled',
+    why: 'position and demand weighted over ' + n + ' scored answer' + (n === 1 ? '' : 's') + ' (worth ' + (Math.round(10 * n_eff) / 10) + ' equally weighted ones)' };
+};
+/** a change in the score, judged against the band above - never against a band we did not measure */
+const scoreChange = (now, before, band) => {
+  if (now == null || before == null) return { delta: null, significant: null, basis: 'not_available', why: 'there is no earlier score to compare' };
+  const d = Math.round(10 * (now - before)) / 10;
+  const half = band && band.half != null ? band.half : null;
+  if (half == null) return { delta: d, significant: null, basis: 'modelled', why: 'how wide this run\'s score could be was not measured, so the change is not called one' };
+  const sig = Math.abs(d) > half;
+  return { delta: d, significant: sig, basis: 'modelled', half,
+    why: sig ? 'larger than this run\'s own 95% band (+/-' + half + ' points)' : 'inside this run\'s own 95% band (+/-' + half + ' points), so it is not a change we can call' };
+};
+/** B8-2 / B8-3: two readings of a NOISY PANEL are the same measurement only when the same questions were asked of the same engines.
+ *  B-L4 put this guard on the weekly tracker the same day and left the daily pulse pooling seven days of baseline with no check at
+ *  all - so adding twelve questions, or switching an engine on, moved the pooled rate and fired a 99% "a real drop, not sampling
+ *  noise". The engine set has to match exactly (a different engine is a different measurement); the panel may drift by a fifth, the
+ *  same tolerance R19 set for a sample. Returns the days that may be pooled and, for each one left out, the reason in words. */
+const PANEL_DRIFT = 0.2;            // the same tolerance R19 set for a sample that moved under a comparison
+const sameBasis = (day, now) => {
+  const a = [...new Set(day.engines || [])].sort(), b = [...new Set(now.engines || [])].sort();
+  if (!a.length) return { ok: false, why: 'which engines answered that day was not recorded' };
+  if (a.join('+') !== b.join('+')) return { ok: false, why: 'answered by ' + a.join(', ') + ', today by ' + (b.join(', ') || 'no engine') };
+  const p = Math.max(0, Number(day.size) || 0), q = Math.max(0, Number(now.size) || 0);
+  if (!p || !q) return { ok: false, why: 'how many answers that reading was measured on was not recorded' };
+  const drift = Math.abs(p - q) / Math.max(p, q);
+  if (drift > PANEL_DRIFT) return { ok: false, why: p + ' answers that day against ' + q + ' today — a different panel, not a different result' };
+  return { ok: true, why: '' };
+};
 
 const COLS = ['site_id', 'domain', 'run_id', 'checked_at', 'prompt_id', 'prompt', 'kind', 'topic', 'engine', 'answered', 'mentioned', 'cited', 'rank', 'our_urls', 'competitors', 'sources', 'excerpt', 'cost', 'error', 'run_kind', 'sentiment', 'brands', 'issues', 'fanout', 'cited_urls'];
 const plans = $('AI Plan').all().map(i => i.json).filter(p => !p.nothing_to_do);
@@ -101,9 +177,37 @@ return plans.map(p => {
   const topN = (o, k) => Object.fromEntries(Object.entries(o).sort((a, b) => b[1] - a[1]).slice(0, k));
   const vol = new Map(p.prompts.map(q => [q.prompt_id, Number(q.volume) || 0]));
   const visibility = visibilityScore(A, (a) => vol.get(a.prompt_id) || 0);
-  const B = p.baseline || []; const bn = B.reduce((s, d) => s + d.samples, 0), bm = B.reduce((s, d) => s + d.mentioned, 0);
+  // ---- B8-3 (2026-10-15, benchmark area 8, INVARIANTS rule 1 + 3): what could not be read today. The in-200 retry gate has already
+  // re-sent every failed request once (D19); what is left is evidence nobody has. An engine that returned nothing changes the mix
+  // today's rate is measured on, and under the rate floor there is no rate to draw a conclusion from at all.
+  const dead = p.pulse_engines.filter(e => (Number(engines[e].asked) || 0) > 0 && !(Number(engines[e].answered) || 0)).map(e => ENG[e] || e);
+  const todayRate = rateOf(m, n, { min: MIN_RATE_SAMPLES });
+  const readable = { what: 'today\'s AI answers', asked: R.length, checked: n, failed: errors, retried: retry.asked, retry_answered: retry.answered,
+    unavailable: !R.length || n === 0, partial: n > 0 && (errors > 0 || dead.length > 0), engines_silent: dead, enough: todayRate.enough,
+    note: !n ? 'No answer came back at all today (' + R.length + ' request(s), ' + errors + ' could not be read), so today has no figures.'
+      : dead.length ? dead.join(', ') + ' returned nothing today, so today\'s rate is measured on ' + (p.pulse_engines.length - dead.length) + ' of ' + p.pulse_engines.length + ' engines and is not the same measurement as a full day.'
+      : errors ? errors + ' of ' + R.length + ' requests could not be read, so today\'s rate is measured on the ' + n + ' answers that came back.'
+      : todayRate.enough ? '' : todayRate.why + '.' };
+  // ---- B8-2 (2026-10-15, benchmark area 8, INVARIANTS rule 1): the daily z-test pooled SEVEN days of baseline with no check that
+  // they measured the same thing. B-L4 put exactly this guard on the weekly tracker the same day and left the pulse without it — so
+  // raising the panel from 8 questions to 20, or switching an engine on, moved the pooled rate and fired a 99% "a real drop, not
+  // sampling noise" at an owner whose visibility had not moved at all. A day is pooled only when the same engines answered it and
+  // it was measured on a comparable number of answers; every day left out is named with its reason.
+  const nowBasis = { engines: p.pulse_engines.filter(e => (Number(engines[e].answered) || 0) > 0).sort(), size: n };
+  const judged = (p.baseline || []).map(d => ({ d, v: sameBasis({ engines: d.engines, size: d.samples, panel: d.panel }, nowBasis) }));
+  const B = judged.filter(x => x.v.ok).map(x => x.d);
+  const baseline_set_aside = judged.filter(x => !x.v.ok).map(x => ({ date: x.d.date, samples: x.d.samples, why: x.v.why }));
+  const bn = B.reduce((s, d) => s + d.samples, 0), bm = B.reduce((s, d) => s + d.mentioned, 0);
+  const baseline_note = !judged.length ? 'There is no earlier pulse day to compare today with.'
+    : !B.length ? 'Today is not compared with any earlier day: ' + baseline_set_aside.slice(0, 3).map(x => x.date + ' — ' + x.why).join('; ') + '.'
+    : baseline_set_aside.length ? B.length + ' of the past ' + judged.length + ' days are comparable; ' + baseline_set_aside.length + ' left out (' + baseline_set_aside.slice(0, 3).map(x => x.date + ' — ' + x.why).join('; ') + ').' : '';
   const alerts = [];
-  if (n >= 20 && bn >= 40 && Math.abs(zTest(m, n, bm, bn)) >= 2.58 && pct(m, n) < pct(bm, bn) - 10) alerts.push({ level: 'high', text: 'Named in ' + pct(m, n) + '% of today\'s AI answers vs ' + pct(bm, bn) + '% over the past ' + B.length + ' days (' + n + ' answers today; a real drop, not sampling noise).' });
+  // a drop is only called one from a day we could read, on a baseline measured the same way
+  if (!readable.unavailable && todayRate.enough && n >= 20 && bn >= 40 && Math.abs(zTest(m, n, bm, bn)) >= 2.58 && pct(m, n) < pct(bm, bn) - 10) alerts.push({ level: 'high', text: 'Named in ' + pct(m, n) + '% of today\'s AI answers vs ' + pct(bm, bn) + '% over ' + B.length + ' comparable day(s) (' + n + ' answers today; a real drop, not sampling noise).' });
+  // B8-3 (INVARIANTS rule 3): a morning that could not be read used to send nothing at all — a quiet day and a broken one looked
+  // identical from the outside. A failure that reaches no human is not handled, so it is the one thing that always goes out.
+  if (readable.unavailable) alerts.push({ level: 'high', text: readable.note + ' ' + (error_list.length ? error_list.map(e => e.engine + ' — ' + e.message).slice(0, 3).join('; ') : 'No engine answered.') });
+  else if (dead.length) alerts.push({ level: 'medium', text: readable.note });
   const seen = new Set(B.flatMap(d => Object.keys(d.competitors || {})));
   for (const [d, k] of Object.entries(competitors).filter(([d0, k0]) => B.length >= 3 && !seen.has(d0) && n >= 20 && k0 >= Math.max(3, n * 0.3)).sort((a, b) => b[1] - a[1]).slice(0, 3)) alerts.push({ level: 'medium', text: d + ' appears in ' + k + ' of today\'s ' + n + ' AI answers and was not named in the past ' + B.length + ' days.' });
   for (const q of p.prompts) for (const e of p.pulse_engines) { const now = (prompts[q.prompt_id] || {})[e]; if (!now || now === 'n' || now === 'e') continue;
@@ -121,8 +225,13 @@ return plans.map(p => {
     // the figures above — the mail says so with the reason instead of leaving a smaller panel unexplained.
     ((p.set_aside || []).filter(x => x.dropped).length ? '<p style="font-size:12px;color:#b45309;margin:6px 0"><b>Not asked</b> (set aside by the keyword rule): '
       + p.set_aside.filter(x => x.dropped).map(x => esc(x.note || (x.keyword + ' — ' + x.detail))).join(' | ') + '</p>' : '') +
-    '<p style="font-size:12px;color:#64748b">The weekly AI visibility report (Monday) adds these daily answers to its figures. Answers vary from one ask to the next; an alert is sent only when a change is beyond that noise.</p></div>';
+    // B8-2 / B8-3: what today was measured on, and which earlier days it could honestly be compared with
+    ((readable.note || baseline_note) ? '<p style="font-size:12px;color:#b45309;margin:6px 0">' + (readable.note ? '<b>' + esc(readable.note) + '</b>' : '') + (readable.note && baseline_note ? ' ' : '') + esc(baseline_note) + '</p>' : '') +
+    '<p style="font-size:12px;color:#64748b">The weekly AI visibility report (Monday) adds these daily answers to its figures. Answers vary from one ask to the next; an alert is sent only when a change is beyond that noise, measured against earlier days that asked the same questions of the same engines.</p></div>';
   return { json: { site_id: p.site_id, domain: p.domain, date: p.date, email: p.email, callback_url: p.callback_url, request_id: p.request_id, on_demand: p.on_demand, alerts, daily_row, answer_rows, subject, html,
     set_aside: p.set_aside || [], set_aside_note: p.set_aside_note || '',   // B-G2 / B-G1: the refusals travel to the app and the callback too
-    samples: n, mention_rate: pct(m, n), mention_ci: [lo, hi], citation_rate: pct(c, n), visibility_score: visibility, engines, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered, status: 'progress', stage: 'ai_pulse', checked_at: p.checked_at } };
+    samples: n, mention_rate: pct(m, n), mention_ci: [lo, hi], citation_rate: pct(c, n), visibility_score: visibility, engines, errors, error_rate, errors_list: error_list, retried: retry.asked, retry_answered: retry.answered,
+    // B8-2 / B8-3: what today could be read, and which earlier days it is honestly comparable with — both travel to the app and the callback
+    readable, today_rate: todayRate, baseline_days: B.length, baseline_of: judged.length, baseline_set_aside, baseline_note,
+    status: 'progress', stage: 'ai_pulse', checked_at: p.checked_at } };
 });

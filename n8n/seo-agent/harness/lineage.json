@@ -13,7 +13,7 @@
    "subject": 16
   },
   "refusal": {
-   "pass": 14,
+   "pass": 15,
    "subject": 33
   },
   "withheld": {
@@ -383,12 +383,10 @@
    "workflow": "SEO Agent \u2014 AI Growth"
   },
   "SEO Agent \u2014 AI Pulse / Pulse Metrics": {
-   "fails": [
-    "refusal"
-   ],
+   "fails": [],
    "markup": 4,
    "node": "Pulse Metrics",
-   "refusal": false,
+   "refusal": true,
    "subject": [
     "refusal"
    ],
@@ -790,9 +788,6 @@
    "refusal"
   ],
   "SEO Agent v4 \u2014 Audit, Keywords, Verdict & Content / Render Diff Targets": [
-   "refusal"
-  ],
-  "SEO Agent \u2014 AI Pulse / Pulse Metrics": [
    "refusal"
   ],
   "SEO Agent \u2014 AI Visibility Tracker / Analyst Jobs": [
