@@ -18,7 +18,8 @@ from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_para
                            AI_PAGES_TABLE, AI_PAGES_COLS, AI_TARGETS_TABLE, AI_TARGETS_COLS, AI_GROWTH_TABLE, AI_GROWTH_COLS,
                            LINK_OUTREACH_TABLE, LINK_OUTREACH_COLS, LISTINGS_TABLE, LISTINGS_COLS, LINK_IMPACT_TABLE, LINK_IMPACT_COLS, HISTORY_TABLE, METRICS_TABLE,
                            RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST,   # R9 (2026-10-13): every scheduled run reserves and settles a ledger row
-                           ledger_mainline)   # R17 (2026-10-14): and reserves it on the MAIN path, before the first paid call
+                           ledger_mainline,   # R17 (2026-10-14): and reserves it on the MAIN path, before the first paid call
+                           ledger_tag)   # B-C2 (2026-10-15): …and settles a MEASURED Claude figure into it, not the reservation
 from env_settings import SENDER, ENV, BRAND, OPS_EMAIL
 BING_ON = bool((ENV.get('SEO_BING_WEBMASTER_API_KEY') or '').strip())   # v4.10: optional free sources, baked in at build time (apply_env.py rebuilds)
 AHREFS_ON = bool((ENV.get('SEO_AHREFS_API_KEY') or '').strip())
@@ -45,6 +46,22 @@ def src(p):   # a Code node source with the shared snippets inlined
     assert '/*__' not in s and '_ENABLED__' not in s, p + ': placeholder left'
     return s.replace('__FORM_URL__', FORM_URL).replace('__API_URL__', API_URL)
 LEDGER_WIRING = {}   # R9: workflow name -> its ledger nodes; merged into harness/ledger_wiring.json at the end (S57)
+
+# ---- B-C2 (2026-10-15, build section 84): the free token counter behind every Claude agent of a scheduled workflow ---------------
+# The engine has 22 Claude agents. Eight live in the main workflow and have been counted by Anthropic's free `count_tokens` since build
+# sections 62 and 76; the eleven in the other workflows were never priced from tokens at all — a monitor settled its RESERVATION
+# (`CC.aiRun` with no figure), so the Claude cost it reported to the owner and to the day's guard was a guess wearing the clothes of a
+# measurement. The seven agents of the six workflows built here are counted now, by the same two free calls on the same MAIN path.
+from ladder_common import ANTHROPIC_COUNT_URL as COUNT_URL   # one definition of the free endpoint; _ai_nodes_of excludes it by URL
+AI_CALLS = {}   # workflow name -> its Claude call table, baked from the real agent nodes and read by that workflow's settle
+
+
+def _roots(paths):
+    """`{'facts', 'facts.name'}` -> `['facts']`: a field is counted once, at its root-most prefix (build section 51's rule)."""
+    out = []
+    for p in sorted(paths, key=lambda s: (s.count('.'), s)):
+        if not any(p == q or p.startswith(q + '.') for q in out): out.append(p)
+    return sorted(out)
 NS = uuid.UUID('5e0a9e1e-2a1f-4c0b-9d8e-0000a9e0c0de')
 SMTP = {'smtp': {'id': 'SEOcredSmtpGmail', 'name': 'Gmail SMTP (SEO Agent)'}}
 DFS = {'httpBasicAuth': {'id': 'SEOcredDataForSE', 'name': 'DataForSEO'}}
@@ -75,6 +92,105 @@ class WF:
         self.node('Parser — ' + name, '@n8n/n8n-nodes-langchain.outputParserStructured', 1.3, {'schemaType': 'manual', 'inputSchema': json.dumps(schema)}, [pos[0] + 120, pos[1] + 200])
         self.C['Claude — ' + name] = {'ai_languageModel': [[{'node': name, 'type': 'ai_languageModel', 'index': 0}]]}
         self.C['Parser — ' + name] = {'ai_outputParser': [[{'node': name, 'type': 'ai_outputParser', 'index': 0}]]}
+    def count_node(self, name, body, pos):
+        """One free `/v1/messages/count_tokens` call. Free or not it is an EXTERNAL HTTP call, so it carries the retry rule
+        (INVARIANTS rule 3) and can never fail a run: `neverError` keeps a non-200 out of the error path, `continueRegularOutput`
+        keeps a transport failure out of it, and `alwaysOutputData` means the next node still runs. A call that does not answer
+        simply has no `input_tokens`, and its call falls back to characters with that basis (rule 1)."""
+        return self.node(name, 'n8n-nodes-base.httpRequest', 4.5, {
+            'method': 'POST', 'url': COUNT_URL,
+            'authentication': 'predefinedCredentialType', 'nodeCredentialType': 'anthropicApi',
+            'sendHeaders': True, 'headerParameters': {'parameters': [{'name': 'anthropic-version', 'value': '2023-06-01'}]},
+            'sendBody': True, 'specifyBody': 'json', 'jsonBody': body,
+            'options': {'timeout': 20000, 'response': {'response': {'neverError': True}}}}, pos,
+            credentials=ANTHROPIC, onError='continueRegularOutput', alwaysOutputData=True, **retry_lint.RETRY)
+
+    def count_chain(self):
+        """B-C2 (2026-10-15, build section 84): put the two free counts on the MAIN path behind every Claude agent of this workflow
+        and return the call table its settle prices with. Called at WRITE time, when every connection exists.
+
+        Four things this had to get right, and each one is asserted rather than assumed:
+          * **the chain is on the main path, never beside it.** R17's lesson: n8n's v1 order runs a side branch last, or not at all.
+            *After Count (…)* hands the agent's own items straight back, so nothing downstream ever sees the counter.
+          * **the prompt is re-read against the node that FED the agent.** The agent's prompt is an expression over `$json`; one node
+            later `$json` is the agent's answer. Every monitor agent is fed one job item per SITE, so the reference is `.item` through
+            pairedItem (`$('X').first()` would price site 1's prompt for all of them) — and the output index it hangs off is recorded
+            for the fallback read, because `$('X').all()` defaults to the output the ACTIVE node is connected to and the settle is
+            connected to none of these (the trap that caught section 62 out with *Keyword Seeds* on output 1 of *Route Mode*).
+          * **the agent's own prompt is not touched.** Only a copy of the expression goes into the Set node, so the prompt the model
+            receives is byte-for-byte what it was.
+          * **every call is on the main path**, because these agents do not loop: one job in, one answer out, so the counter sees all
+            of them and `rounds` can carry no cap."""
+        nodes = {n['name']: n for n in self.N}
+        table = []
+        for mn, m in sorted(nodes.items()):
+            if m['type'] != '@n8n/n8n-nodes-langchain.lmChatAnthropic': continue
+            o = m['parameters'].get('options') or {}
+            model = m['parameters']['model']['value']
+            for ag in [t['node'] for l in ((self.C.get(mn) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
+                assert ag in nodes, 'B-C2: ' + self.name + ' wires ' + mn + ' to a missing agent ' + ag
+                txt = str(nodes[ag]['parameters'].get('text') or '')
+                assert txt.startswith('='), 'B-C2: ' + ag + "'s prompt is not an expression"
+                pre = sorted({s for s, outs in self.C.items() for l in (outs.get('main') or []) for t in (l or []) if t['node'] == ag})
+                assert len(pre) == 1, 'B-C2: ' + ag + ' has ' + str(len(pre)) + ' main inputs, so $json is not one node'
+                fed = pre[0]
+                branch = next((i for i, l in enumerate((self.C.get(fed) or {}).get('main') or []) if any(t['node'] == ag for t in (l or []))), None)
+                assert branch is not None, 'B-C2: no main connection from ' + fed + ' to ' + ag
+                ref = "$('" + fed + "').item.json"
+                prompt = re.sub(r'\$json\b', lambda _m: ref, txt)
+                assert '$json.' not in prompt and prompt != txt, 'B-C2: ' + ag + "'s prompt still reads $json after the rewrite"
+                set_n, cp = 'Prompt For Count (' + ag + ')', 'Count Prompt (' + ag + ')'
+                ca, af = 'Count Answer (' + ag + ')', 'After Count (' + ag + ')'
+                px, py = nodes[ag]['position']
+                # what the agent really sent and what it really answered, one item per call. It fails open like the rest of the chain:
+                # an expression that cannot resolve leaves __prompt empty and the count comes back with no input_tokens.
+                self.node(set_n, 'n8n-nodes-base.set', 3.4, {'mode': 'manual', 'includeOtherFields': True, 'options': {}, 'assignments': {'assignments': [
+                    {'id': str(uuid.uuid5(NS, 'bc2:' + self.prefix + ':' + ag + ':prompt')), 'name': '__prompt', 'value': prompt, 'type': 'string'},
+                    {'id': str(uuid.uuid5(NS, 'bc2:' + self.prefix + ':' + ag + ':answer')), 'name': '__answer',
+                     'value': "={{ String($json.output ?? '') }}", 'type': 'string'}]}},
+                    [px, py + 320], onError='continueRegularOutput', alwaysOutputData=True)
+                mdl, own = json.dumps(model), "$('" + set_n + "').item.json"
+                self.count_node(cp, '={{ JSON.stringify({ model: ' + mdl + ', messages: [{ role: "user", content: String($json.__prompt || "") }] }) }}',
+                                [px + 200, py + 320])
+                self.count_node(ca, '={{ JSON.stringify({ model: ' + mdl + ', messages: ['
+                                + '{ role: "user", content: String(' + own + '.__prompt || "") }, '
+                                + '{ role: "assistant", content: String(' + own + '.__answer || "") }] }) }}', [px + 400, py + 320])
+                self.code(af, "// B-C2 (2026-10-15, build section 84): the two free token counts are taken; hand " + ag + "'s own items\n"
+                              "// back to the pipeline, unchanged and in order, so nothing downstream sees the counter (the R17 resume pattern).\n"
+                              "return $('" + ag + "').all();\n", [px + 600, py + 320])
+                outs = (self.C.get(ag) or {}).get('main') or []
+                assert len(outs) == 1, 'B-C2: ' + ag + ' has ' + str(len(outs)) + ' main outputs'
+                succ = [t['node'] for t in (outs[0] or [])]
+                assert succ, 'B-C2: ' + ag + ' feeds nothing'
+                self.C[ag]['main'] = [[]]
+                self.link(ag, set_n); self.chain(set_n, cp, ca, af)
+                for s in succ: self.link(af, s)
+                table.append({'node': ag, 'model': model, 'max_tokens': int(o.get('maxTokensToSample') or 0),
+                              'effort': o.get('effort') or '', 'streaming': bool(o.get('streaming')),
+                              'template_chars': len(txt), 'input': fed, 'branch': branch, 'ref': ref,
+                              'fields': _roots(re.findall(r"\$json\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", txt)),
+                              'from': [[a, b] for a, b in sorted({(a, b) for a, b in re.findall(
+                                  r"\$\('([^']+)'\)\.(?:first\(\)|item)\.json\.([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", txt)})],
+                              'count_prompt': cp, 'count_answer': ca, 'count_set': set_n, 'count_resume': af,
+                              'count_rounds': 0,        # no cap: every call of a monitor agent is on the main path (it does not loop)
+                              'count_per_item': True, 'after': succ})
+        return table
+
+    def bake_calls(self):
+        """B-C2: the call table and the calibration node go into this workflow's settle, which is the only node that prices them."""
+        w, tag = LEDGER_WIRING[self.name], ledger_tag(LEDGER_WIRING[self.name])
+        n = next(x for x in self.N if x['name'] == 'Ledger Settle (' + tag + ')')
+        src_js, table = n['parameters']['jsCode'], AI_CALLS[self.name]
+        assert '/*__AI_CALLS__*/[]' in src_js and "/*__CAL__*/''" in src_js, 'B-C2: ' + self.name + "'s settle has nowhere to learn its Claude calls"
+        # both defaults are valid JS on their own (`[]` and `''`), so a workflow whose builder has not been taught this keeps exactly
+        # R31's behaviour instead of carrying a placeholder into a running node
+        n['parameters']['jsCode'] = (src_js.replace('/*__AI_CALLS__*/[]', json.dumps(table, sort_keys=True), 1)
+                                     .replace("/*__CAL__*/''", json.dumps(w['cost_cal']), 1))
+        # the pricing table and R31's "did any model run" sweep must name the same agents, or one of the two is stale
+        assert sorted(c['node'] for c in table) == sorted(w['ai_nodes']), \
+            'B-C2: ' + self.name + ' prices ' + str([c['node'] for c in table]) + ' but sweeps ' + str(w['ai_nodes'])
+        w['ai_calls'] = table
+
     def pdf_chain(self, tag, pos, keep_extra=False):
         x, y = pos
         self.code('Prepare PDF ' + tag, "// Copy of each report HTML named index.html for the PDF renderer (Gotenberg requires that exact file name); one item per site.\nreturn $input.all().map(item => { const doc = (item.binary || {}).data; if (!doc) return item; return { json: item.json, binary: { ...(item.binary || {}), html: { ...doc, fileName: 'index.html', mimeType: 'text/html', fileExtension: 'html' } } }; });", [x, y])
@@ -126,11 +242,18 @@ class WF:
              'cost_mode': '={{ $json.cost_mode }}', 'measured_usd': '={{ $json.measured_usd }}', 'estimated_usd': '={{ $json.estimated_usd }}',
              'cost_basis': '={{ $json.cost_basis }}'}), [x + 440, y + 160],
             onError='continueRegularOutput', alwaysOutputData=True, executeOnce=True)
+        # B-C2 (2026-10-15): the per-model correction factors the monthly reconciliation writes into seo_cache (`cost:factor:claude`,
+        # reconcile_claude_cost.py). The main workflow has priced through them since section 51; a monitor priced through nothing,
+        # because it settled a reservation. Now that it settles a measurement it reads the same factors, so one engine reports one
+        # price. Free (a local table) and fail-open: no rows, or no table yet, and the Anthropic list prices stand.
+        cal_node = 'Load Cost Factors (' + tag + ')'
+        self.node(cal_node, DT_TYPE, DT_VERSION, dt_get_where_params(CACHE_TABLE, 'kind', 'eq', 'cost'), [x, y + 160], **LOAD)
         self.chain(plan, 'Ensure Run Ledger (' + tag + ')', row_node, 'Reserve Run Ledger (' + tag + ')')
-        for e in ends: self.link(e, 'Ledger Settle (' + tag + ')')
-        self.chain('Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')
+        for e in ends: self.link(e, cal_node)
+        self.chain(cal_node, 'Ledger Settle (' + tag + ')', 'Settle Run Ledger (' + tag + ')')
         LEDGER_WIRING[self.name] = {'mode': mode, 'plan': plan, 'reserve': row_node, 'settle': 'Settle Run Ledger (' + tag + ')',
                                     'settle_from': list(ends), 'measured': measured, 'est': LEDGER_EST[mode],
+                                    'cost_cal': cal_node,   # B-C2: where the settle reads the reconciliation's correction factors
                                     'resume': 'After Run Ledger (' + tag + ')'}   # R17: the node that hands the plan's items back
 
     def sticky(self, content, pos, w, h, color=5): return self.node('Note', 'n8n-nodes-base.stickyNote', 1, {'content': content, 'height': h, 'width': w, 'color': color}, pos)
@@ -150,8 +273,12 @@ class WF:
         return g
     def write(self, fname):
         # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
+        # B-C2 (2026-10-15, build section 84): and so does the free token counter behind every Claude agent — only in a workflow that
+        # HAS a ledger row, because a measurement with nowhere to settle is a number nobody reads.
         if self.name in LEDGER_WIRING:
+            AI_CALLS[self.name] = self.count_chain()
             ledger_mainline({'id': self.wid, 'name': self.name, 'nodes': self.N, 'connections': self.C}, LEDGER_WIRING[self.name])
+            self.bake_calls()   # after ledger_mainline: it is what fills in __AI_NODES__, and the two lists are asserted equal
         names = {n['name'] for n in self.N}; assert len(names) == len(self.N), 'duplicate node names in ' + fname
         for s, outs in self.C.items():
             assert s in names, s

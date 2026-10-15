@@ -7584,7 +7584,9 @@ def _b76_checks():
                 for _ag in [t['node'] for l in ((_cn.get(_mn) or {}).get('ai_languageModel') or [[]]) for t in (l or [])]:
                     _counted = ('Count Prompt (' + _ag + ')') in _nm and ('Count Answer (' + _ag + ')') in _nm
                     _out76[_f + ' / ' + _ag] = {'counted': _counted, 'model': _m['parameters']['model']['value'],
-                                                'why_not': '' if _counted else _WHY_NOT76}
+                                                # B-C2 (section 84): each uncounted workflow carries ITS OWN reason, not one shared
+                                                # sentence — three of the four left are left for different reasons entirely
+                                                'why_not': '' if _counted else (_cw51['count_gap'].get('reasons') or {}).get(_f, _WHY_NOT76)}
                     if not _counted:
                         _gap76.append(_f + ' / ' + _ag)
     _listed76 = set(_cw51['count_gap']['workflows'])
@@ -8520,6 +8522,191 @@ def _b80_checks():
 log('A method we published and a test we never ran (2026-10-15, benchmark area 7, rows B7-1 / B7-2 / B7-3; BENCH_AREA7_site_tracking.md). B7-1: since G12 the Site Tracker has inlined the change-test kit and shipped its METHOD sentence in every weekly callback (change_method) while running no test at all - CT.compare was called by the Link Builder and by nobody else - which is INVARIANTS rule 4 in the one place criterion 3.4 is scored (control group or counterfactual, capped at links only); every dated change now buys its OWN two windows, the 28 complete days after it and the 28 before it over the whole site, because the report\'s 28-vs-28 both sit after a change made three months ago and would measure nothing, and the page under test and the control group of every other page are read from the same two free requests - the clicks with the rate ratio (expected = prev x the control group\'s ratio, 95% range carrying the control group\'s own sampling error) and the position with CT.compare, with five refusals so that a lift computed on nothing is never printed as no effect, and a Google update inside the window named rather than refused because it moves the control group too. B7-2: the Search Analytics API has answered device and country since it existed and we asked for neither, so a site whose phone clicks halved while desktop held read as one flat site-wide figure - four tiny free requests, every device and country tested on the same statistical bar as the other alerts, and a split Google did not ANSWER marked unavailable while a split it answered with no rows is a measured zero. B7-3: cannibalisation (criterion 2.10, a report of its own at SEOTesting and a tab at Semrush) was computed by nobody although the query x page rows have been read in full since G9 - two of the site\'s own pages shown for one non-brand search are now named with the share of impressions each takes, the page Google shows most often beside the page that ranks better when it is shown, and the action merges or differentiates them and never asks for a third page')
 
 
+# =============================================================================
+# 84. A MONITOR'S CLAUDE FIGURE WAS ITS RESERVATION WEARING THE CLOTHES OF A MEASUREMENT
+#     (2026-10-15, FIX_PLAN.md §3.16 row B-C2; docs/system-review-2026-10-14/INVARIANTS.md rule 1.)
+#
+#     Sections 62 and 76 counted the main workflow's eleven Claude calls with Anthropic's free `/v1/messages/count_tokens` and
+#     recorded, rather than implied, what they had not reached: **the engine has 22 Claude agents, not eight.** The other eleven
+#     live in seven workflows, and they were not merely character-priced — they were not priced by this engine's cost kit at all.
+#     A monitor settled `CC.aiRun` with no figure, which returns the per-mode RESERVATION: the number the guard holds back BEFORE
+#     a run, labelled ESTIMATED, standing in for a measurement nobody ever took. `seo_run_ledger.ai_usd`, the day's reconciliation
+#     and every report that reads the row all carried it. A full deep run graded a reservation.
+#
+#     Seven of the eleven are counted here — the agents of the six scheduled workflows `build_monitors.py` writes — by the same
+#     chain, not a second one: *Prompt For Count (…)* → *Count Prompt (…)* → *Count Answer (…)* → *After Count (…)*, on the **main**
+#     path behind the agent, every node `neverError` + `continueRegularOutput` + `alwaysOutputData` with the retry rule (rule 3:
+#     free or not, it is an external HTTP call and it may never fail a run), and a count that does not answer falls back to the
+#     character figure with its old basis. Three things differ from section 76 and each is asserted, not assumed:
+#       * **every call is on the main path.** A monitor agent is fed one job item per SITE and does not loop, so the counter sees
+#         all of its calls: the counts are summed and `rounds` carries no cap. Section 76 needed a cap because only the Editor's
+#         LAST round is on the main path.
+#       * **the prompt is read per item.** `$('X').first()` would price site 1's prompt for every site, so the expression is
+#         re-pointed through `pairedItem` at `$('<the node that fed the agent>').item.json`; the output index it hangs off is
+#         recorded all the same, because the character FALLBACK reads the job items with `$('X').all(<index>)` from the settle,
+#         which is connected to none of them (section 62's trap, found by section 76 on *Keyword Seeds*).
+#       * **the settle prices, and it is the only node that does.** `Monitor_Ledger_Settle.js` carries the workflow's own call
+#         table, baked from its real agent nodes at build time, and hands `CC.runCost` to `CC.aiRun` as `figure` — the parameter
+#         R31 wrote for exactly this and nothing had ever filled in. The row gains `ai_calls`, `ai_counted_nodes`,
+#         `ai_measured_usd`, `ai_measured_share`, `ai_think_usd` and `ai_by_node`, so a reader can tell a measurement from a model
+#         without reading the basis. And *Load Cost Factors (…)* puts the monthly reconciliation's correction factors on the settle
+#         chain, so the monitors and the main workflow now price at the same prices.
+#
+#     **What stays modelled, and why — a result, not an omission.** The THINKING a model does before answering is billed as output
+#     and is never returned by any counter, so it stays modelled from the node's effort budget; all seven are Sonnet with an
+#     adaptive `low` budget, so none of them can reach 100% measured, and the basis says exactly which part is which.
+#
+#     **The four agents still on their reservation, each for its own reason** (recorded in `harness/claude_count.json`, and each
+#     reason PROVED against the generated workflow by `_b84_checks` below, so none of them can quietly become untrue):
+#       * *Reply Reader* — it has **no run-ledger row at all**: a synchronous reply classification reserves nothing and settles
+#         nothing, so there is no figure for a measurement to replace. Counting it would produce a number with nowhere to go.
+#       * *Keyword Fit* and *Keyword Fit (Text)* (the Keyword Check) — they answer the web app **synchronously**, between its
+#         request and `Respond Assess`, so two more round-trips per agent would land on the caller's clock rather than on a
+#         schedule's; and `build_api.py` was outside this change (four agents worked in parallel on one branch).
+#       * *Site Brief* (the Site Tracker) — `build_site_tracker.py` was outside this change. Nothing else is in the way: its
+#         *Ledger Settle (Site)* already carries the empty call table this section's code reads, waiting for the bake.
+# =============================================================================
+import ladder_common as _lc84
+assert COUNT_URL62 == _lc84.ANTHROPIC_COUNT_URL, 'B-C2: the free counter endpoint is defined twice and the two disagree'
+
+# Why each remaining workflow is not counted. One sentence per workflow, not one shared sentence for all of them: the reasons are
+# genuinely different, and a shared one would hide that three of these four need no work beyond someone owning the file.
+_GAP84 = {
+    'SEO_Agent_Reply_Reader.json':
+        'NOT counted, and nothing to count it into: the Reply Reader has no seo_run_ledger row at all - a synchronous reply '
+        'classification reserves nothing and settles nothing, so there is no figure for a measurement to replace. Proved by '
+        '_b84_checks: the workflow contains no Ledger Settle node.',
+    'SEO_Agent_Keyword_Check.json':
+        'NOT counted: the Keyword Check answers the web app SYNCHRONOUSLY - both Haiku agents sit between the request and Respond '
+        "Assess - so the two free count_tokens round-trips per agent would land on the caller's clock rather than on a schedule's, "
+        'and that is a decision for whoever owns the response-time budget. build_api.py was also outside build section 84 (four '
+        'agents worked in parallel). Neither agent has a thinking budget, so counting them would make them 100% measured. Proved by '
+        '_b84_checks: both agents lie on a main path from the webhook to a Respond node.',
+    'SEO_Agent_Site_Tracker.json':
+        'NOT counted only because build_site_tracker.py was outside build section 84 (four agents worked in parallel on one branch). '
+        'Nothing is in the way: Ledger Settle (Site) already carries the empty call table Monitor_Ledger_Settle.js reads, so baking '
+        "Site Brief's table into it is the whole of the work. Proved by _b84_checks: that settle exists and its call table is empty.",
+}
+_cw51['count_gap'] = {'why': _WHY_NOT76, 'workflows': sorted(_GAP84), 'reasons': _GAP84,
+                      'counted_here': ['SEO_Agent_AI_Growth.json', 'SEO_Agent_AI_Visibility.json',
+                                       'SEO_Agent_Backlink_Monitor.json', 'SEO_Agent_Link_Builder.json']}
+json.dump(_cw51, open(os.path.join(HERE0, 'harness', 'cost_wiring.json'), 'w'), indent=1, sort_keys=True)
+
+
+def _b84_checks():
+    """B-C2 over the generated workflows: the chain is on the MAIN path behind every agent of the six scheduled workflows, the
+    settle prices from it, and each of the four agents left on its reservation can still show the reason it is. Runs after the
+    sub-builds, like every other ratchet, because that is the first moment all the workflows exist on disk."""
+    import json as _j84
+    _dir84 = os.path.join(HERE0, 'workflows')
+    _load84 = lambda f: _j84.load(open(os.path.join(_dir84, f), encoding='utf-8'))[0]
+    _lw84 = _j84.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))
+    _want84 = {'SEO Agent — AI Visibility Tracker': ['AI Brief', 'Answer Analyst', 'Prompt Writer'],
+               'SEO Agent — AI Pulse': [], 'SEO Agent — Audit Scheduler': [],
+               'SEO Agent — Backlink Monitor': ['Link Analyst', 'Outreach Writer'],
+               'SEO Agent — AI Growth': ['AI Outreach Writer'],
+               'SEO Agent — Link Builder': ['Outreach Sequence Writer']}
+    _files84 = {w['name']: f for f in sorted(os.listdir(_dir84)) if f.endswith('.json')
+                for w in _j84.load(open(os.path.join(_dir84, f), encoding='utf-8'))}
+    _n84 = 0
+    for _wname84, _agents84 in sorted(_want84.items()):
+        assert _wname84 in _files84, 'B-C2: no generated workflow called ' + _wname84
+        _wf84 = _load84(_files84[_wname84])
+        _by84 = {n['name']: n for n in _wf84['nodes']}
+        _c84 = _wf84.get('connections') or {}
+        _w84 = (_lw84.get('monitors') or {}).get(_wname84) or {}
+        _tag84 = _w84['reserve'][len('Run Ledger Row ('):-1]
+        _settle84 = _by84['Ledger Settle (' + _tag84 + ')']['parameters']['jsCode']
+        # the call table is baked, the placeholder is gone, and the settle hands it to the kit as a FIGURE (not a reservation)
+        assert '/*__AI_CALLS__*/' not in _settle84 and "'__CAL__'" not in _settle84, 'B-C2: ' + _wname84 + "'s settle kept a placeholder"
+        assert 'CC.runCost(__costCalls' in _settle84 and 'CC.aiRun({ figure: aiFig' in _settle84, \
+            'B-C2: ' + _wname84 + ' still settles its reservation instead of what it priced'
+        _tbl84 = _j84.loads(re.search(r'const AI_CALLS = (\[.*?\]);\n', _settle84, re.S).group(1))
+        assert sorted(c['node'] for c in _tbl84) == sorted(_agents84), \
+            'B-C2: ' + _wname84 + ' prices ' + str(sorted(c['node'] for c in _tbl84)) + ', expected ' + str(sorted(_agents84))
+        assert _w84.get('cost_cal') in _by84, 'B-C2: ' + _wname84 + ' does not read the reconciliation factors'
+        # and the factor node is on the MAIN path into the settle chain, not beside it (R17's lesson, every time)
+        assert any(t['node'] in ('Ledger Settle (' + _tag84 + ')', 'DFS Balance End (' + _tag84 + ')')
+                   for l in ((_c84.get(_w84['cost_cal']) or {}).get('main') or []) for t in (l or [])), \
+            'B-C2: ' + _wname84 + "'s cost factors hang beside the settle chain, so n8n's v1 order runs them last"
+        _main84 = lambda s: [t['node'] for l in ((_c84.get(s) or {}).get('main') or []) for t in (l or [])]
+        for _c in _tbl84:
+            _ag84 = _c['node']
+            _set84, _cp84 = 'Prompt For Count (' + _ag84 + ')', 'Count Prompt (' + _ag84 + ')'
+            _ca84, _af84 = 'Count Answer (' + _ag84 + ')', 'After Count (' + _ag84 + ')'
+            for _nm84 in (_set84, _cp84, _ca84, _af84):
+                assert _nm84 in _by84, 'B-C2: ' + _wname84 + ' has no node "' + _nm84 + '"'
+            assert _main84(_ag84) == [_set84] and _main84(_set84) == [_cp84] and _main84(_cp84) == [_ca84] \
+                and _main84(_ca84) == [_af84], 'B-C2: ' + _ag84 + "'s counter is not the whole of its main path"
+            assert _main84(_af84) == _c['after'] and _c['after'], \
+                'B-C2: ' + _ag84 + "'s pipeline does not hang off its resume node: " + str(_main84(_af84))
+            assert _by84[_af84]['parameters']['jsCode'].rstrip().endswith("return $('" + _ag84 + "').all();"), \
+                'B-C2: ' + _af84 + ' does not hand the agent its own items back'
+            # rule 3: free or not, these are external HTTP calls — they retry, they never error, and they always answer
+            for _nm84 in (_cp84, _ca84):
+                _h84 = _by84[_nm84]
+                assert _h84['parameters']['url'] == COUNT_URL62, 'B-C2: ' + _nm84 + ' does not call the free counter'
+                assert _h84.get('retryOnFail') and _h84.get('maxTries') == 3 and _h84.get('alwaysOutputData') \
+                    and _h84.get('onError') == 'continueRegularOutput' \
+                    and _h84['parameters']['options']['response']['response']['neverError'] is True, \
+                    'B-C2: ' + _nm84 + ' can fail a run'
+            # the prompt is a COPY: the agent still sends exactly what it sent before, read against the node that fed it
+            assert '$json' in str(_by84[_ag84]['parameters']['text']), 'B-C2: ' + _ag84 + "'s own prompt was rewritten"
+            _pv84 = next(a['value'] for a in _by84[_set84]['parameters']['assignments']['assignments'] if a['name'] == '__prompt')
+            assert _c['ref'] in _pv84 and '$json.' not in _pv84, 'B-C2: ' + _set84 + " does not read the agent's own input"
+            assert _c['count_rounds'] == 0 and _c['count_per_item'] is True, \
+                'B-C2: ' + _ag84 + ' is capped like a looping agent, but every one of its calls is on the main path'
+            _n84 += 1
+        # the whole chain sits behind the reservation: a counted call is a call that was allowed to happen
+        _after84 = _reach55(_c84, ['Reserve Run Ledger (' + _tag84 + ')'], None)
+        for _c in _tbl84:
+            assert 'Count Prompt (' + _c['node'] + ')' in _after84, 'B-C2: ' + _c['node'] + "'s counter runs before the run is allowed"
+    # ---- the four left behind, each still able to show its reason ----
+    _rr84 = _load84('SEO_Agent_Reply_Reader.json')
+    assert not [n for n in _rr84['nodes'] if n['name'].startswith('Ledger Settle (')], \
+        'B-C2: the Reply Reader has a settle now, so its recorded reason ("no ledger row to settle into") is stale'
+    _kc84 = _load84('SEO_Agent_Keyword_Check.json')
+    _kcc84 = _kc84.get('connections') or {}
+    _resp84 = {n['name'] for n in _kc84['nodes'] if n['type'] == 'n8n-nodes-base.respondToWebhook'}
+    for _ag84 in ('Keyword Fit', 'Keyword Fit (Text)'):
+        assert _resp84 & _reach55(_kcc84, [_ag84], None), \
+            'B-C2: ' + _ag84 + ' no longer answers the caller synchronously, so its recorded reason is stale'
+    _st84 = _load84('SEO_Agent_Site_Tracker.json')
+    _sj84 = next(n['parameters']['jsCode'] for n in _st84['nodes'] if n['name'] == 'Ledger Settle (Site)')
+    assert 'const AI_CALLS = /*__AI_CALLS__*/[];' in _sj84 and "const CAL = /*__CAL__*/'';" in _sj84, \
+        'B-C2: the Site Tracker settle no longer carries the empty call table, so its recorded reason is stale'
+    print('B-C2 (a monitor settles a measurement, not its reservation): %d Claude agent(s) across %d scheduled workflow(s) are '
+          'counted on the main path and priced into their ledger row; 4 stay on the reservation, each with its own recorded reason'
+          % (_n84, len([a for a in _want84.values() if a])))
+
+
+log("A monitor's Claude figure was its reservation wearing the clothes of a measurement (2026-10-15, FIX_PLAN.md §3.16 B-C2; "
+    "INVARIANTS rule 1). Sections 62 and 76 counted the main workflow's eleven Claude calls with Anthropic's free "
+    '/v1/messages/count_tokens and recorded what they had not reached: the engine has 22 Claude agents, not eight, and the other '
+    'eleven were not character-priced - they were not priced at all. A monitor called CC.aiRun with no figure, which returns the '
+    'PER-MODE RESERVATION: the number the guard holds back before a run, labelled ESTIMATED, standing in for a measurement nobody '
+    'took, and seo_run_ledger.ai_usd, the day reconciliation and every report reading that row all carried it - a full deep run '
+    'graded a reservation. The seven agents of the six scheduled workflows build_monitors.py writes are counted now by the same '
+    'chain and not a second one (Prompt For Count -> Count Prompt -> Count Answer -> After Count, on the MAIN path behind the agent, '
+    'every node neverError + continueRegularOutput + alwaysOutputData with the retry rule, because free or not it is an external HTTP '
+    'call and may never fail a run), and a count that does not answer leaves its call on characters with the old basis. Three things '
+    'differ from section 76, each asserted rather than assumed: every call is on the main path, because a monitor agent is fed one job '
+    'item per SITE and does not loop, so the counts are summed and rounds carries no cap; the prompt is read per item through '
+    "pairedItem ($('<the node that fed the agent>').item.json), since first() would price site 1's prompt for every site, while the "
+    'output index it hangs off is still recorded because the character FALLBACK reads the job items with .all(<index>) from the settle, '
+    "which is connected to none of them; and the settle is the only node that prices, carrying the workflow's own call table baked from "
+    'its real agent nodes and handing CC.runCost to CC.aiRun as `figure` - the parameter R31 wrote for exactly this and nothing had ever '
+    'filled in - so the row gains ai_calls, ai_counted_nodes, ai_measured_usd, ai_measured_share, ai_think_usd and ai_by_node, and '
+    "Load Cost Factors puts the monthly reconciliation's correction factors on the settle chain so the monitors and the main workflow "
+    'price at the same prices. What stays modelled is a result, not an omission: the thinking a model does before answering is billed as '
+    'output and never returned, so it is modelled from the effort budget, and all seven agents are Sonnet with an adaptive low budget, so '
+    'none can reach 100% measured and the basis says which part is which. Four agents stay on their reservation, each for its OWN reason, '
+    'recorded in harness/claude_count.json and each reason proved against the generated workflow by _b84_checks so none of them can '
+    'quietly become untrue: the Reply Reader has no run-ledger row at all, so there is no figure to make measured; Keyword Fit and '
+    'Keyword Fit (Text) answer the web app synchronously between its request and Respond Assess, so two more round-trips per agent would '
+    "land on the caller's clock, and build_api.py was outside this change; and Site Brief's builder was outside this change, with nothing "
+    'else in the way - Ledger Settle (Site) already carries the empty call table the new code reads')
+
 # 69. A BUILD THAT INVENTS WHAT IT WAS NOT TOLD, AND A GATE THAT ONLY WORKS ONE WAY (2026-10-15, FIX_PLAN.md §3.15 B-F5 and
 #     docs/system-review-2026-10-14/INVARIANTS.md rule 2). Two build-time checks, in the shape the INVARIANTS note argues for:
 #     "two fixes have never come back and both are enforced by the build".
@@ -8680,5 +8867,8 @@ _b79_checks()
 # section 83 (B11-2): benchmark area 11, on the generated Link Builder - the won links are read again, and a reading
 # that failed is not a loss
 _b83_checks()
+# section 84 (B-C2): every Claude agent of the six scheduled workflows is counted on its main path and priced
+# into its ledger row, and the four left on their reservation can each still show the reason they are
+_b84_checks()
 _b69_checks()
 
