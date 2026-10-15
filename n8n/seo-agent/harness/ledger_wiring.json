@@ -714,7 +714,7 @@
    "balance_end": "DFS Balance End (Tracker)",
    "est": {
     "ai": 0.0,
-    "dfs": 0.15
+    "dfs": 0.015
    },
    "guard": {
     "gate": "After Run Ledger (Tracker)",
@@ -724,7 +724,7 @@
     "refuse": "Refuse Run Ledger (Tracker)"
    },
    "ledger_load": "Load Run Ledger (Tracker)",
-   "measured": "",
+   "measured": "Tracker Report",
    "mode": "rank_tracker",
    "open_runs": "Load Open Runs (Tracker)",
    "plan": "Tracker Plan",

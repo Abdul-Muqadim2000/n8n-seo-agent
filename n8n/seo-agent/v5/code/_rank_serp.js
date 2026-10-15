@@ -162,7 +162,20 @@ const RS = (() => {
     if (Array.isArray(o.top)) { o.top = o.top.map(t => ({ p: t.p, u: t.u })); o.trimmed = 'titles'; }
     s = JSON.stringify(o);
     while (s.length > limit && Array.isArray(o.top) && o.top.length > 1) { o.top.pop(); o.trimmed = 'titles+tail'; s = JSON.stringify(o); }
-    return s.length <= limit ? s : s.slice(0, limit);
+    // B6-7 (2026-10-15, benchmark area 6): found while giving the customer's own keywords the same depth a rung gets. A column with
+    // no `top` to trim was cut mid-string — `competitors_json` on any results page with a full top ten and a long method sentence —
+    // and a sliced JSON string is not JSON, so RS.unpack handed back the default and the WHOLE reading vanished: the "Above you"
+    // column was empty, and nothing anywhere said a thing had been dropped (INVARIANTS rule 1). Nothing is sliced now. The method
+    // sentence goes first (it is a constant every reader already falls back to), then the tails of the lists, longest first, and the
+    // last resort is a small VALID object that says the reading was too long to store.
+    const cut = new Set(String(o.trimmed || '').split('+').filter(Boolean));
+    if (s.length > limit && typeof o.method === 'string') { delete o.method; cut.add('method'); o.trimmed = [...cut].join('+'); s = JSON.stringify(o); }
+    const lists = Object.keys(o).filter(k => k !== 'top' && Array.isArray(o[k]));
+    while (s.length > limit && lists.some(k => o[k].length)) {
+      const k = lists.filter(x => o[x].length).sort((a, b) => o[b].length - o[a].length)[0];
+      o[k].pop(); cut.add('lists'); o.trimmed = [...cut].join('+'); s = JSON.stringify(o);
+    }
+    return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column' });
   };
   const unpack = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };
 

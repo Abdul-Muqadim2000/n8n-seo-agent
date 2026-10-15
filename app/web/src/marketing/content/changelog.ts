@@ -15,6 +15,23 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-15',
+    title: 'Rank tracking now follows the keywords you named, not only the ones in a ladder',
+    summary:
+      'The rank tracker only ever watched the pages of your keyword ladders. The keywords you listed when you set tracking up were checked elsewhere, in a different report, with none of the depth. They now get their own weekly report — position, the reading it is compared with, how much the results page itself moved, share of voice and who is above you — and almost none of it costs anything extra, because the readings were already being bought.',
+    highlights: [
+      'A weekly report for your own keyword list, beside the one for each keyword ladder',
+      'Each keyword gets the same depth a ladder page gets: the previous reading with its date, the measured movement of the results page itself, share of voice and the sites above you',
+      'A reading the weekly site check already took is read, not bought again, and the row says where it came from and when',
+      'A keyword that is also a ladder rung is checked once, with the ladder — never twice',
+      'The week is bounded: the ten keywords whose reading is oldest are checked, and the rest are listed with the limit and the date they were last read',
+      'A keyword whose results page could not be read says “check again” and is left out of every count — it is never reported as not ranking',
+      'A competitor’s brand on your list is set aside with the reason, instead of being tracked as if it were yours',
+      'The report prints what the checks cost, from the figure the data provider reported for exactly those calls',
+    ],
+    features: ['keyword-ladders', 'site-tracking'],
+  },
+  {
+    date: '2026-10-15',
     title: 'A shared report now looks like yours',
     summary:
       'A report you share with a client opens under your own business name and logo, with ours in a single line at the bottom. And a report the run marked unfinished tells the reader so before the first figure, instead of looking like finished work.',

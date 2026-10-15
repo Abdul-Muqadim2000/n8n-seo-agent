@@ -308,7 +308,7 @@
    ],
    "est": {
     "ai": 0.0,
-    "dfs": 0.15
+    "dfs": 0.015
    },
    "plan": "Tracker Plan",
    "plan_out": [

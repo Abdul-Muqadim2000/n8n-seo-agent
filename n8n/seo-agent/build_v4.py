@@ -8463,6 +8463,98 @@ log('A link won once is not a link you still have (2026-10-15, benchmark area 11
 #       URLs differing only by scheme, www, trailing slash or query string are one page. The action merges or differentiates the
 #       two pages and never asks for a third, which is D11 by another name.
 # =============================================================================
+# 86. A TRACKER THAT TRACKS WHATEVER LIST YOU GIVE IT (2026-10-15, benchmark programme area 6 —
+#     docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md gap G6-8 and §7; register row B6-7)
+#
+#     Area 6's own conclusion, in its own words: "Let the tracker watch the keywords the customer actually named, not only the
+#     rungs of a ladder — today a rank tracker that reads `seo_ladders` and nothing else cannot answer 'how am I doing for the
+#     thirty searches my business lives on', which is the question every competing tool is bought to answer; everything else in
+#     this area is depth on a tracker that is watching too narrow a list." Ahrefs' Rank Tracker, Semrush's Position Tracking and
+#     AccuRanker are all bought to watch a list you type in. Ours could not watch one at all: `Tracker Plan` read `seo_ladders`,
+#     so a keyword that was not a rung did not exist to the workflow.
+#
+#     The list was already stored — `seo_sites.keywords`, written by the tracking form and by "Track my site" — and the weekly
+#     Site Tracker already BUYS a live reading of much of it an hour later, into `seo_rank_history` itself (ladder_id = site_id,
+#     rung 0, every G6 column). So the rule is read first, buy second, and the whole fix costs almost nothing:
+#
+#     * a results page the weekly site check read less than 10 days ago is READ, not bought a second time on the same morning —
+#       R28's rule one step up: money is counted once because it is spent once. Our own reading counts for 6 days, so the series
+#       stays weekly rather than slipping to a fortnight, and the two halves (`watch_<site_id>` and `<site_id>`) are ONE series;
+#     * a keyword that is also a ladder rung is checked once, with the ladder, and carried into the list's report with the reason;
+#     * what is bought is bounded — 10 a website and 30 a run, oldest reading first — so a thirty-keyword list costs at most
+#       ~$0.15 a week at the measured $0.015 a check, and every keyword the cap did not reach is NAMED with the cap and its last
+#       reading (INVARIANTS rule 1: a list that is shorter because a rule ran has to say so);
+#     * INVARIANTS rule 2: the list is stored data, so it is read through the same FITR gate the stored rungs pass (section 71).
+#       A competitor's brand typed into a form is still a competitor's brand: no check is bought and the report names it with its
+#       reason. Unlike the Site Tracker's own read path the customer's keywords are deliberately NOT in `protect` — protecting
+#       them would mean the gate could never judge them, which is the whole point of running it;
+#     * INVARIANTS rule 1 / R18: a keyword whose results page could not be read is -1, "check again" — no share of voice, no
+#       movement, out of every count, and the report says it in those words. Never "not ranking".
+#
+#     Two things the money needed, found while doing it:
+#     * the reservation multiplied the per-mode figure by the number of PLAN ITEMS, and this plan emits one item per CHECK, so
+#       $0.15 reserved $0.15 a check — a ten-check week held $1.50 of the day's budget for $0.15 of work. The figure is now the
+#       measured per-check price, so the reservation is what the run will spend and B6-7's own checks move it by what they cost;
+#     * the run settled its reservation although the in-200 gate (B-A10) had MEASURED the provider's own cost for exactly these
+#       calls, each task counted once by its id. The report carries that figure and the settle takes it (R28 / R31).
+#
+#     And one silent data loss, found because a watched keyword's "Above you" column was empty: `RS.pack` cut a column mid-string
+#     when there was no `top` array to trim, and a sliced JSON string is not JSON, so `RS.unpack` handed back the default and the
+#     WHOLE reading disappeared with nothing said. `competitors_json` overflows on any results page with a full top ten. Nothing
+#     is sliced now.
+# =============================================================================
+def _b86_checks():
+    """Benchmark area 6, row B6-7: the customer's own keyword list, on the generated Rank Tracker."""
+    import json as _j
+    _wf = _j.load(open(os.path.join(HERE0, 'workflows', 'SEO_Agent_Rank_Tracker.json')))[0]
+    _code = {n['name']: n['parameters'].get('jsCode', '') for n in _wf['nodes'] if n['type'] == 'n8n-nodes-base.code'}
+    _plan, _rep = _code['Tracker Plan'], _code['Tracker Report']
+    # the second source, with the gate the stored rungs pass (INVARIANTS rule 2, section 71's FITR)
+    assert 'const FITR = {' in _plan and 'FITR.rungs(kws.map(k =>' in _plan, \
+        'B6-7 (INVARIANTS rule 2): the customer\'s stored keywords reach a paid check without the shared read-path gate'
+    assert "kwList(s.keywords)" in _plan, 'B6-7: the plan does not read seo_sites.keywords'
+    for _a86, _m86 in (("LIMITS.watch_site_days", 'B6-7 / R28: the plan would buy a results page the weekly site check already bought'),
+                       ("LIMITS.watch_own_days", 'B6-7: the plan has no weekly rhythm of its own'),
+                       ("already.has(d + '|' + k)", 'B6-7: a keyword that is both a rung and on the list could be bought twice'),
+                       ("LIMITS.max_watch_per_site", 'B6-7: the customer\'s list is unbounded per website'),
+                       ("LIMITS.max_watch_per_run", 'B6-7: one run\'s spend on the customer lists is unbounded'),
+                       ("watchHeld.push(", 'B6-7 (rule 1): a keyword the cap did not reach is dropped with no reason'),
+                       ("const wid = 'watch_' + sid;", 'B6-7: a reading of ours cannot be told from the weekly site check\'s')):
+        assert _a86 in _plan, _m86
+    assert 'watch_keyword: true' in _plan and 'p.watch_keyword' in _rep, \
+        'B6-7: a watched keyword is not told apart from a ladder rung on the way through'
+    for _a86, _m86 in (("const watchMeta = ((plan[0] || {}).watch) || null;", 'B6-7: the report never sees the customer\'s list'),
+                       ("watchlist: true", 'B6-7: the watched keywords are never reported'),
+                       ("RS.churnNone('no live reading of this results page is stored", 'B6-7: a keyword nobody read comes back as no movement'),
+                       ("Not checked this week", 'B6-7: the keywords the cap held back are not named'),
+                       ("Set aside by the keyword rule", 'B6-7: a set-aside keyword is not shown with its reason'),
+                       ('that is "check again", not "not ranking"', 'B6-7 (rule 1 / R18): a reading nobody could take would read as "not ranking"'),
+                       ("No check was bought for your keyword list this week", 'B6-7: a week that bought nothing must say so'),
+                       ("out[0].json.cost_usd = Number(ev.cost_usd)", 'B6-7 / R28: the run settles its reservation instead of what it measured')):
+        assert _a86 in _rep, _m86
+    # the app has to be able to tell the customer's own list from a ladder, and to see what was left out
+    _post86 = next(n for n in _wf['nodes'] if n['name'] == 'POST Progress')['parameters']['jsonBody']
+    for _f86 in ('watchlist: !!$json.watchlist', 'site_id: $json.site_id', 'not_checked: $json.not_checked', 'set_aside: $json.set_aside'):
+        assert _f86 in _post86, 'B6-7: the callback does not carry ' + _f86 + ', so the app cannot tell the two reports apart'
+    # the money: the reservation is per CHECK (the plan emits one item per check) and the settle takes the MEASURED figure
+    _lw86 = json.load(open(os.path.join(HERE0, 'harness', 'ledger_wiring.json'), encoding='utf-8'))['monitors']['SEO Agent — Rank Tracker']
+    assert _lw86['est'] == {'ai': 0.0, 'dfs': 0.015}, \
+        'B6-7: the Rank Tracker reserves a per-SITE figure for every keyword check it plans (%r)' % (_lw86['est'],)
+    assert _lw86['measured'] == 'Tracker Report', 'B6-7 / R28: the Rank Tracker still settles its reservation instead of its measurement'
+    _row86 = _code['Run Ledger Row (Tracker)']
+    assert 'keyword check(s) x the measured per-check price' in _row86, 'B6-7 (rule 1): the reservation does not say what it counted'
+    assert "const MEASURED = 'Tracker Report';" in _code['Ledger Settle (Tracker)'], \
+        'B6-7: the settle was not told where this run\'s measured cost is'
+    # the reading that used to disappear: nothing is ever sliced into something that is not JSON
+    _rs86 = _rd0('code/_rank_serp.js')
+    assert 's.slice(0, limit)' not in _rs86 and "JSON.stringify({ trimmed: 'overflow'" in _rs86, \
+        'B6-7: RS.pack can still cut a stored reading mid-string, which RS.unpack then throws away whole'
+    print('benchmark area 6 (B6-7): the customer\'s own keyword list is watched beside the ladders - gated, bounded at %d a site '
+          'and %d a run, never bought twice, and the run settles the cost it measured'
+          % (int(re.search(r'max_watch_per_site: (\d+)', _plan).group(1)), int(re.search(r'max_watch_per_run: (\d+)', _plan).group(1))))
+
+
+# =============================================================================
 def _b80_checks():
     """Area 7 over the generated Site Tracker: the change test with its own windows and its refusals, the device and country
     splits Search Console always answered, and two of the site's own pages in one search. Walks the built workflow, so a change
@@ -9029,5 +9121,8 @@ _b84_checks()
 
 # section 85 (B6-9 + B9-6): one AI Overview figure in one place, and a state that advances only on evidence
 _b85_checks()
+
+# section 86 (B6-7): benchmark area 6's structural gap - the keywords the customer named, on the generated Rank Tracker
+_b86_checks()
 _b69_checks()
 

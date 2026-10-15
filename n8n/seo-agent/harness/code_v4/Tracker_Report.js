@@ -417,7 +417,20 @@ const RS = (() => {
     if (Array.isArray(o.top)) { o.top = o.top.map(t => ({ p: t.p, u: t.u })); o.trimmed = 'titles'; }
     s = JSON.stringify(o);
     while (s.length > limit && Array.isArray(o.top) && o.top.length > 1) { o.top.pop(); o.trimmed = 'titles+tail'; s = JSON.stringify(o); }
-    return s.length <= limit ? s : s.slice(0, limit);
+    // B6-7 (2026-10-15, benchmark area 6): found while giving the customer's own keywords the same depth a rung gets. A column with
+    // no `top` to trim was cut mid-string — `competitors_json` on any results page with a full top ten and a long method sentence —
+    // and a sliced JSON string is not JSON, so RS.unpack handed back the default and the WHOLE reading vanished: the "Above you"
+    // column was empty, and nothing anywhere said a thing had been dropped (INVARIANTS rule 1). Nothing is sliced now. The method
+    // sentence goes first (it is a constant every reader already falls back to), then the tails of the lists, longest first, and the
+    // last resort is a small VALID object that says the reading was too long to store.
+    const cut = new Set(String(o.trimmed || '').split('+').filter(Boolean));
+    if (s.length > limit && typeof o.method === 'string') { delete o.method; cut.add('method'); o.trimmed = [...cut].join('+'); s = JSON.stringify(o); }
+    const lists = Object.keys(o).filter(k => k !== 'top' && Array.isArray(o[k]));
+    while (s.length > limit && lists.some(k => o[k].length)) {
+      const k = lists.filter(x => o[x].length).sort((a, b) => o[b].length - o[a].length)[0];
+      o[k].pop(); cut.add('lists'); o.trimmed = [...cut].join('+'); s = JSON.stringify(o);
+    }
+    return s.length <= limit ? s : JSON.stringify({ trimmed: 'overflow', note: 'this reading was too long to store in one column' });
   };
   const unpack = (v, dflt) => { if (v && typeof v === 'object') return v; try { const o = JSON.parse(S(v) || 'null'); return o == null ? dflt : o; } catch (e) { return dflt; } };
 
@@ -1121,7 +1134,7 @@ const mobileOf = (kw) => { const n = mobileNow.get(kw); if (n) return n;
   const h = history.filter(x => isMob(x) && x.keyword === kw && validPos(x.position)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))[0];
   return h ? { position: Number(h.position), checked_at: h.checked_at, fresh: false } : null; };
 const byLadder = new Map();
-plan.forEach((p, i) => { if (isMob(p)) return; if (!byLadder.has(p.ladder_id)) byLadder.set(p.ladder_id, []); byLadder.get(p.ladder_id).push({ ...p, result: pos[i] || {} }); });
+plan.forEach((p, i) => { if (isMob(p) || p.watch_keyword) return; if (!byLadder.has(p.ladder_id)) byLadder.set(p.ladder_id, []); byLadder.get(p.ladder_id).push({ ...p, result: pos[i] || {} }); });
 // pages not checked this week (not live yet; checked monthly) keep their last known position, so the ladder picture stays complete
 for (const d of ((plan[0] || {}).deferred_pages || [])) { if (isMob(d) || !byLadder.has(d.ladder_id)) continue; const src = byLadder.get(d.ladder_id)[0]; byLadder.get(d.ladder_id).push({ ...src, ...d, deferred: true, result: { position: d.last_position, url: d.last_url, checked_at: d.last_checked } }); }
 // R16 (2026-10-13, FIX_PLAN §3.11): rungs the fit gate set aside (a competitor's brand, a government portal, stored before the rule).
@@ -1383,4 +1396,146 @@ for (const [id, items] of byLadder) {
     rungs, gains, drops, serp_summary, annotations: marks, lineage, next_step: next, links_to_add, set_aside: aside, api_body: apiBody, done, won, stuck,
     stuck_weeks: stuckWeeks, replan } });   // G32: the proposal, never applied here
 }
+// ====================================================================================================================
+// B6-7 (2026-10-15, benchmark area 6 - docs/system-review-2026-10-14/BENCH_AREA6_rank_tracking.md gap G6-8, section 7):
+// the keywords the CUSTOMER named, reported by the tracker that exists for them.
+// Until now this report had exactly one shape, "a ladder", so a business that named thirty searches when it set tracking up had none
+// of them in the rank tracker: `Tracker Plan` read `seo_ladders` and nothing else. The list is `seo_sites.keywords`, and the readings
+// are the ones this run bought plus the ones the weekly site check already bought (one series, `watch_<site_id>` and `<site_id>` both
+// read here). Every keyword on the list appears, and each one says which it is:
+//   checked this week | read from the reading already bought on <date> | checked with your keyword ladder | waiting for the cap |
+//   set aside by the keyword rule, with the reason.
+// Nothing is inferred from a keyword nobody read: no position, no share of voice, no movement, no place in a count (rule 1).
+const watchMeta = ((plan[0] || {}).watch) || null;
+if (watchMeta && (watchMeta.sites || []).length) {
+  const runChecks = (() => { try { return checkEvidence || null; } catch (e) { return null; } })();
+  const perCheck = (runChecks && runChecks.cost_usd != null && Number(runChecks.asked) > 0) ? Number(runChecks.cost_usd) / Number(runChecks.asked) : null;
+  for (const site of watchMeta.sites) {
+    const sid = String(site.site_id || ''), wid = 'watch_' + sid, dom = normD(site.domain);
+    if (!sid || !dom) continue;
+    const mine = (list) => (list || []).filter(x => String(x.site_id || '') === sid);
+    const carriedW = mine(watchMeta.carried), heldW = mine(watchMeta.held), asideW = mine(watchMeta.set_aside);
+    // one series per keyword: our own weekly readings and the weekly site check's, oldest-last. A failed check (-1) is never a position.
+    const series = (kw) => deskHist.filter(x => String(x.keyword || '').toLowerCase() === kw && validPos(x.position)
+      && (x.ladder_id === wid || x.ladder_id === sid || normD(x.domain) === dom)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
+    const seeds = [];
+    plan.forEach((p, i) => { if (p.watch_keyword && String(p.site_id || '') === sid) seeds.push({ keyword: p.keyword, row: pos[i] || {}, at: (pos[i] || {}).checked_at || nowCheck, how: 'bought' }); });
+    for (const c of carriedW) {
+      const kw = String(c.keyword).toLowerCase(); let row = null, at = '';
+      if (c.source === 'ladder') {   // the ladder bought it in THIS run: the freshest reading there is, and it is not bought twice
+        const i = plan.findIndex(x => !x.watch_keyword && !isMob(x) && normD(x.domain) === dom && String(x.keyword || '').toLowerCase() === kw);
+        if (i >= 0 && pos[i]) { row = pos[i]; at = pos[i].checked_at || nowCheck; }
+      }
+      if (!row) { const h = series(kw)[0]; if (h) { row = h; at = h.checked_at; } }
+      seeds.push({ keyword: c.keyword, row: row || null, at, how: c.source, reason: c.reason });
+    }
+    const rowsW = seeds.map(sd => {
+      const kw = String(sd.keyword).toLowerCase();
+      const read = !!sd.row && sd.row.position != null && sd.row.position !== '';
+      const current = read ? Number(sd.row.position) : null;
+      const prev = read ? (series(kw).filter(h => String(h.checked_at) < String(sd.at || nowCheck))[0] || null) : null;
+      const previous = prev ? Number(prev.position) : null;
+      const delta = (current > 0 && previous > 0) ? previous - current : (current > 0 && previous === 0) ? 100 : (current === 0 && previous > 0) ? -100 : null;
+      const change = !read ? RS.churnNone('no live reading of this results page is stored for this keyword yet')
+        : RS.churn(prev ? prev.snapshot_json : null, sd.row.snapshot_json, {});
+      const f = read ? RS.unpack(sd.row.features_json, null) : null;
+      const c = read ? RS.unpack(sd.row.competitors_json, null) : null;
+      const sov = (read && sd.row.share_of_voice != null && Number(sd.row.share_of_voice) >= 0) ? Number(sd.row.share_of_voice) : null;
+      return { keyword: sd.keyword, how: sd.how, reason: sd.reason || '', read, current, previous, delta, change,
+        at: sd.at || '', url: read ? (sd.row.url || '') : '', features: f, chips: f ? RS.featureChips(f) : [],
+        share_of_voice: sov, above: ((c || {}).above || []).map(x => ({ domain: x.d, position: x.p, tracked: !!x.t })),
+        competitors: ((c || {}).competitors || []).map(x => ({ domain: x.d, position: x.p, tracked: !!x.t })),
+        previous_checked_at: prev ? String(prev.checked_at) : null, move_note: RS.moveNote(delta, change) };
+    }).sort((a, b) => (a.current == null ? 1 : 0) - (b.current == null ? 1 : 0) || (a.current === 0 ? 1 : 0) - (b.current === 0 ? 1 : 0) || (a.current || 0) - (b.current || 0) || a.keyword.localeCompare(b.keyword));
+    if (!rowsW.length && !heldW.length && !asideW.length) continue;
+    const moveOf = (r) => r.keyword + ' (' + posText(r.previous) + ' → ' + posText(r.current) + (r.move_note ? '; ' + r.move_note : '') + ')';
+    const gainsW = rowsW.filter(r => r.delta != null && r.delta >= 5).map(moveOf);
+    const dropsW = rowsW.filter(r => r.delta != null && r.delta <= -5).map(moveOf);
+    const readRows = rowsW.filter(r => r.read);
+    const top10 = readRows.filter(r => r.current > 0 && r.current <= 10).length;
+    const top3 = readRows.filter(r => r.current > 0 && r.current <= 3).length;
+    const striking = readRows.filter(r => r.current >= 4 && r.current <= 20);
+    const unreadable = readRows.filter(r => r.current === -1).length;
+    const comparedW = rowsW.filter(r => r.change && r.change.available).length;
+    const sovRows = readRows.filter(r => r.share_of_voice != null);
+    const howText = (r) => r.how === 'bought' ? 'checked this week'
+      : r.how === 'ladder' ? 'checked with your keyword ladder' + (r.at ? ' on ' + String(r.at).slice(0, 10) : '')
+      : r.how === 'site_check' ? 'read from the weekly site check' + (r.at ? ' of ' + String(r.at).slice(0, 10) : '')
+      : r.how === 'own' ? 'checked on ' + String(r.at || '').slice(0, 10) + ' (a position is checked once a week)'
+      : (r.at ? 'read from the reading of ' + String(r.at).slice(0, 10) : 'not read');
+    const tableW = rowsW.length ? '<table style="border-collapse:collapse;font-size:13px"><tr><th align="left" ' + td + '>Keyword</th><th ' + td + '>Now</th><th ' + td + '>Before</th><th align="left" ' + td + '>Where this reading came from</th><th ' + td + '>Share of voice</th><th align="left" ' + td + '>Page movement</th><th align="left" ' + td + '>Above you</th></tr>' +
+      rowsW.map(r => { const ab = r.above.length ? r.above.slice(0, 3).map(a => esc(a.domain) + ' (#' + a.position + ')' + (a.tracked ? ' *' : '')).join(', ') + (r.above.length > 3 ? ' +' + (r.above.length - 3) + ' more' : '') : (r.current > 0 && r.current <= 10 ? 'nobody on page 1' : '—');
+        const ch = r.change && r.change.available ? esc(r.change.changed + ' of top ' + r.change.depth + ' changed') + ' <span style="color:#64748b;font-size:11px">(' + esc(r.change.band) + ')</span>' : '<span style="color:#64748b;font-size:11px">not available</span>';
+        return '<tr><td ' + td + '>' + esc(r.keyword) + '</td><td align="center" ' + td + '>' + (r.read ? esc(posText(r.current)) : '<span style="color:#64748b;font-size:11px">not read</span>') + '</td><td align="center" ' + td + '>' +
+          (r.previous == null ? 'first reading' : esc(posText(r.previous)) + (r.previous_checked_at ? ' <span style="color:#64748b;font-size:11px">(' + esc(String(r.previous_checked_at).slice(0, 10)) + ')</span>' : '')) + '</td><td ' + td + '>' + esc(howText(r)) +
+          '</td><td align="center" ' + td + '>' + (r.share_of_voice != null ? r.share_of_voice + '%' : '—') + '</td><td ' + td + '>' + ch + '</td><td ' + td + '>' + ab + '</td></tr>'; }).join('') + '</table>' : '';
+    const heldHtml = heldW.length ? '<p style="color:#64748b;font-size:12px"><b>Not checked this week (' + heldW.length + (watchMeta.held_total > heldW.length ? ' of ' + watchMeta.held_total : '') + '):</b> ' +
+      heldW.slice(0, 12).map(h => esc(h.keyword) + ' — ' + esc(h.reason) + (h.last_checked ? ' (last read ' + esc(String(h.last_checked).slice(0, 10)) + ')' : ', never read')).join('; ') + (heldW.length > 12 ? ' (and ' + (heldW.length - 12) + ' more)' : '') + '</p>' : '';
+    const asideHtmlW = asideW.length ? '<p style="color:#b45309"><b>Set aside by the keyword rule:</b> ' + asideW.map(a => esc(a.note)).join(' | ') + '</p>' : '';
+    // ---- what the week cost for THIS list (criterion 2.14). Measured per check by the provider, counted once by task id (R28) ----
+    const costW = (() => {
+      const bought = rowsW.filter(r => r.how === 'bought').length;
+      if (!bought) return '<p style="color:#64748b;font-size:12px">No check was bought for your keyword list this week: every keyword above was read from a results page somebody had already paid for.</p>';
+      if (perCheck == null) return '<p style="color:#64748b;font-size:12px">' + bought + ' live check' + (bought === 1 ? '' : 's') + ' were bought for your keyword list this week. The provider reported no cost for these calls, so none is shown.</p>';
+      return '<p style="color:#64748b;font-size:12px">' + bought + ' live check' + (bought === 1 ? '' : 's') + ' bought for your keyword list this week: about $' + (bought * perCheck).toFixed(4) +
+        ' (measured — $' + Number(runChecks.cost_usd).toFixed(4) + ' for this run’s ' + runChecks.asked + ' checks, $' + perCheck.toFixed(4) + ' each). At this rate a keyword costs about $' +
+        (perCheck * (365 / 7 / 12)).toFixed(3) + ' a month to watch weekly. ' + (carriedW.length ? carriedW.length + ' of your keywords cost nothing this week because a reading already existed. ' : '') + 'The tracker buys at most ' + watchMeta.limits.per_site + ' of them a week, oldest reading first.</p>';
+    })();
+    // the next step says something only when the readings say it (rule 1): a fall the page around it did not share, then the nearest win
+    const ownDrop = rowsW.filter(r => r.delta != null && r.delta <= -5 && r.change && r.change.available && r.change.band === 'still').sort((a, b) => a.delta - b.delta)[0] || null;
+    const nearest = striking.sort((a, b) => a.current - b.current)[0] || null;
+    const nextW = ownDrop ? { action: 'look_at_drop', keyword: ownDrop.keyword, text: '"' + ownDrop.keyword + '" fell from ' + posText(ownDrop.previous) + ' to ' + posText(ownDrop.current) + ' and the rest of that results page barely moved, so this one is about your page: look at the page that ranks for it first.' }
+      : nearest ? { action: 'nearest_win', keyword: nearest.keyword, text: '"' + nearest.keyword + '" is at ' + posText(nearest.current) + ' — the nearest win on your list. Strengthening the page that already ranks for it is cheaper than writing a new one.' }
+      : readRows.length ? { action: 'hold', keyword: '', text: 'Nothing on your keyword list moved five places or more this week, and none of it is within reach of page 1 yet. The readings keep building the trend.' }
+      : { action: 'nothing_read', keyword: '', text: 'No results page could be read for your keyword list this week, so there is nothing to act on: the checks are sent again next week.' };
+    const summaryW = { keywords: site.total, read: readRows.length, checked: rowsW.filter(r => r.how === 'bought').length,
+      carried: carriedW.length, held: heldW.length, set_aside: asideW.length, could_not_be_read: unreadable,
+      top10, top3, striking: striking.length, share_of_voice: sovRows.length ? Math.round(sovRows.reduce((a, r) => a + r.share_of_voice, 0) / sovRows.length * 10) / 10 : null,
+      method: RS.METHOD, page_movement: { compared: comparedW, not_available: rowsW.length - comparedW, labels_basis: RS.CHURN.labels_basis },
+      week_checks: runChecks, limits: watchMeta.limits };
+    const lineageW = [
+      readRows.length ? LN.of('Position per keyword', 'serp', { basis: 'one_sample', period: LN.asOf(nowCheck),
+        sample: LN.sample(readRows.length, 'of the ' + site.total + ' keywords on your list had a results page read (top 50, desktop)'),
+        note: 'one country and one device at one moment; ' + rowsW.filter(r => r.how !== 'bought' && r.read).length + ' of them were read from a results page already bought this week, with the date shown beside each' })
+        : LN.unknown('Position per keyword', 'no results page could be read for any keyword on your list this week'),
+      sovRows.length ? LN.of('Share of voice', 'model', { basis: 'modelled', period: LN.asOf(nowCheck), sample: LN.sample(sovRows.length, 'results pages read'), note: RS.METHOD })
+        : LN.unknown('Share of voice', 'no results page was read, so no share can be modelled'),
+      comparedW ? LN.of('How much the results page itself moved', 'serp', { basis: 'measured', period: LN.asOf(nowCheck),
+        sample: LN.sample(comparedW, 'results pages with a stored earlier reading to compare against'), note: 'counted from the two stored top-ten readings; ' + RS.CHURN.labels_basis })
+        : LN.unknown('How much the results page itself moved', 'no earlier stored reading of these results pages to compare with yet'),
+      (perCheck != null) ? LN.of('What the checks cost', 'serp', { basis: 'measured', period: LN.asOf(nowCheck),
+        sample: LN.sample(runChecks.asked, 'results pages asked for in this run'), note: 'the provider’s own figure for these calls, each task counted once by its id' })
+        : LN.unknown('What the checks cost', 'the provider reported no cost for this run’s calls'),
+    ];
+    const subjectW = '[Tracked keywords] ' + site.domain + ' — ' + readRows.length + ' of ' + site.total + ' read'
+      + (top10 ? ' · ' + top10 + ' in the top 10' : '') + (dropsW.length ? ' · ' + dropsW.length + ' drop(s)' : '');
+    const htmlW = '<p>Hi,</p><p>This week’s positions for the <b>' + site.total + ' keyword' + (site.total === 1 ? '' : 's') + ' you asked us to watch</b> on <b>' + esc(site.domain) + '</b> (Google top 50, desktop). ' +
+      'Your keyword ladders are reported separately — a keyword that is both is checked once, with the ladder.</p>' +
+      (tableW || '<p>No keyword on your list could be read this week.</p>') +
+      '<p><b>Where they stand:</b> ' + top3 + ' in the top 3, ' + top10 + ' in the top 10, ' + striking.length + ' within reach (positions 4-20)' +
+      (unreadable ? ', ' + unreadable + ' could not be read this week (they are checked again next week — that is "check again", not "not ranking")' : '') + '.</p>' +
+      (gainsW.length ? '<p style="color:#15803d"><b>Gains:</b> ' + esc(gainsW.join('; ')) + '</p>' : '') +
+      (dropsW.length ? '<p style="color:#b91c1c"><b>Drops to look at:</b> ' + esc(dropsW.join('; ')) + '</p>' : '') +
+      heldHtml + asideHtmlW +
+      '<p><b>Next step:</b> ' + esc(nextW.text) + '</p>' +
+      '<p style="color:#64748b;font-size:12px">Share of voice is an estimate of the clicks page 1 offers, not measured clicks: ' + esc(RS.METHOD) +
+      ' Domains marked * are the competitors on your list. Page movement is measured: the top ten stored for this reading against the top ten stored for the previous one. ' + esc(RS.CHURN.labels_basis) + '.</p>' +
+      costW + LN.block(lineageW);
+    out.push({ json: { ladder_id: '', watchlist: true, site_id: sid, domain: site.domain, head_keyword: 'the keywords you asked us to watch',
+      email: site.email || '', callback_url: site.callback_url || '', request_id: site.request_id || '',
+      subject: subjectW, html: htmlW, status: 'progress', stage: 'rank_tracker', checked_at: nowCheck,
+      positions: rowsW.map(r => ({ rung: 0, keyword: r.keyword, position: r.read ? r.current : null, previous: r.previous, delta: r.delta,
+        url: r.url, device: 'desktop', source: r.how, source_note: howText(r), read: r.read, reason: r.reason,
+        features: r.features, feature_labels: r.chips, share_of_voice: r.share_of_voice, above: r.above, competitors: r.competitors,
+        previous_checked_at: r.previous_checked_at, checked_at: r.at || null, serp_change: r.change, move_note: r.move_note })),
+      rungs: [], gains: gainsW, drops: dropsW, serp_summary: summaryW, watch_summary: summaryW,
+      not_checked: heldW, set_aside: asideW, annotations: [], lineage: lineageW, next_step: nextW, links_to_add: [],
+      api_body: null, done: false, won: false, stuck: false } });
+  }
+}
+// R28 / R31 (the money is what happened): the week's checks are MEASURED by the in-200 gate, each task counted once by its own id,
+// and until now the Rank Tracker settled its reservation instead. The figure travels on the first item of the report, which is the
+// node the ledger settles from; a run whose evidence block could not be read carries none and the settle keeps saying so.
+if (out.length) { const ev = (() => { try { return checkEvidence || null; } catch (e) { return null; } })();
+  if (ev && ev.cost_usd != null) { out[0].json.cost_usd = Number(ev.cost_usd); out[0].json.cost_basis = String(ev.cost_basis || ''); } }
 return out.length ? out : [{ json: { nothing_to_do: true } }];

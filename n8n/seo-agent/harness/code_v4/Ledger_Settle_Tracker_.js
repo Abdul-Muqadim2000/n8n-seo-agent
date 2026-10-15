@@ -548,7 +548,7 @@ const CC = (() => {
     family, priceOf, tokensOf, callCost, runCost, keysFor, readCal, estOf, pick, calKey, calStat, calRow, monthRow, part, costBasis, split };
 })();
 const ROW = 'Run Ledger Row (Tracker)';
-const MEASURED = '';   // '' when this workflow has no measured figure
+const MEASURED = 'Tracker Report';   // '' when this workflow has no measured figure
 const AI_NODES = [];     // every Claude node of this workflow (the agents a model node is wired to), '[]' when it calls none
 const BAL_END = 'DFS Balance End (Tracker)';     // the free balance probe on the settle chain
 const LEDGER = 'Load Run Ledger (Tracker)';       // the run-ledger rows around this run's window

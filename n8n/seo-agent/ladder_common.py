@@ -359,7 +359,11 @@ LEDGER_EST = {
     # Cadence does, and the guard still sees every audit through the row each spawned run makes before its own crawl.
     'audit_schedule':  {'ai': 0.0,  'dfs': 0.0},     # it plans and spawns; every spawned audit reserves its own row (the crawl is $0.09 there)
     'link_builder':    {'ai': 0.30, 'dfs': 0.05},    # $0.35 / site / month (LINK_BUILDER_SPEC)
-    'rank_tracker':    {'ai': 0.0,  'dfs': 0.15},    # the week's SERP checks of one site's ladders
+    # B6-7 (2026-10-15, benchmark area 6): Monitor_Ledger_Row multiplies this by the number of PLAN ITEMS, and the Rank Tracker's
+    # plan emits one item per keyword check - so $0.15 reserved $0.15 a CHECK and a ten-check week held $1.50 of the day's budget
+    # for $0.15 of work. It is the measured per-check price now (depth 50, $0.015), so the reservation is what the run will spend,
+    # and B6-7's own keyword checks move it by exactly what they cost. The settle takes the provider's measured figure (R28).
+    'rank_tracker':    {'ai': 0.0,  'dfs': 0.015},   # ONE depth-50 SERP check, measured; the plan emits one item per check
     'site_tracker':    {'ai': 0.03, 'dfs': 0.01},    # the site brief; Search Console / GA4 / Trends are free
     'content_cadence': {'ai': 0.0,  'dfs': 0.0},     # it plans and spawns; every page run reserves its own row
     # R32's companion (2026-10-14, FIX_PLAN §3.13): the daily key-page watch spends nothing (25 plain GETs, no DataForSEO, no Claude) but
