@@ -1,6 +1,8 @@
 /*__REACH__*/
 // The site's reach for discovery (v4.8): stored (30 days, same market) or measured by "Run Reach Requests"; null without a domain.
 // A newly measured reach is saved to seo_cache ('reach:<site_id>') next, so the ladder and the keyword check reuse it.
+// B1-2 (2026-10-15, benchmark area 1): the keywords the reach was measured on travel with it (`ranked`, from the pull or from the
+// stored row), so Rank Keywords can measure a reach on a TOPIC and the report can say what the site-wide number rests on.
 const d = $('Seed List').first().json;
 const domain = reachDomain(d.domain);
 if (!domain) return [{ json: { reach: null, domain: '', save: false } }];
@@ -12,4 +14,4 @@ try { reqs = $('Reach Requests (Discovery)').all().map(i => i.json).filter(r => 
 const parsed = reachParse(reqs, res);
 const info = reachFrom(parsed.ranked, parsed.authority);
 const save = info.method !== 'default';
-return [{ json: { ...info, domain, errors: parsed.errors, save, cache_row: save ? reachCacheRow(domain, info, d.location_code) : null } }];
+return [{ json: { ...info, domain, ranked: parsed.ranked, errors: parsed.errors, save, cache_row: save ? reachCacheRow(domain, info, d.location_code, parsed.ranked) : null } }];

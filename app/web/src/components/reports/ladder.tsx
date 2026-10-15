@@ -115,7 +115,7 @@ export function LadderReport({ report }: { report: ReportDetail }) {
               <HeroStat
                 label="Time to rank"
                 value={num(feas.time_to_rank_months) != null ? <WordValue>~{num(feas.time_to_rank_months)} months</WordValue> : '–'}
-                hint={`Visits / month at top 3: ${n(feas.expected_visits_top3)}`}
+                hint={`The writing model's own estimate, not measured \u2014 the plan's modelled range and its chance band are below \u00b7 visits / month at top 3: ${n(feas.expected_visits_top3)} (modelled)`}
               />
             )}
           </>

@@ -27,7 +27,16 @@ let plainRan = false; try { plainRan = !!($('Keyword Fit (Text)').first() || {})
 const brand = String(a.domain || '').split('.')[0].replace(/[^a-z0-9]/g, '');
 const ownBrand = brand.length >= 4 && String(a.keyword).replace(/[^a-z0-9]/g, '').includes(brand);
 const navigational = aiOk ? (o.navigational === true || String(o.navigational).toLowerCase() === 'true') : (String(a.intent || '') === 'navigational' && !ownBrand);
-const reach = a.reach_info.reach;
+// ---- B1-1 / B1-2 (2026-10-15, benchmark area 1): "difficulty for your site" is measured on THIS keyword's topic where the site has a
+// record on it. The leaders personalise per topic (MarketMuse Personalized Difficulty = Keyword Difficulty - a topic-level Topic
+// Authority, and "If you have no Topic Authority, then your Personalized Difficulty = Keyword Difficulty"; Semrush lowers Personal KD
+// with the thematic distance to the domain's core topics). Ours used one number per website, cached 30 days, for every keyword: on
+// 2026-10-13 "erp software uae", "business central partner uae" and "dynamics 365 partner uae" (execs 487-489) were all answered against
+// the same site-wide reach. The topic measurement replaces it only with REACH_CFG.min_top10 on-topic top-10 keywords behind it; below
+// that bar the site reach stays, unchanged, and the answer says which number it used and why - never a penalty for a topic never tried.
+const topic = reachTopic(a.reach_info.ranked === undefined ? null : a.reach_info.ranked, a.keyword, a.reach_info.reach,
+  { domain: a.domain, reason_missing: a.reach_info.cached ? 'the reach stored on ' + String(a.reach_info.cached_at || '').slice(0, 10) + ' was kept without the keywords behind it, so this check has no topic evidence to read' : '' });
+const reach = topic.reach;
 const difficulty_for_you = difficultyForYou(a.kd, reach, { navigational, position: a.position });
 const plan = reachPlan(difficulty_for_you, reachStrong(a.reach_info, a.position));
 const listOf = (v) => (Array.isArray(v) ? v : (typeof v === 'string' ? v.split(/[\n,;]+/) : [])).map(x => String(x == null ? '' : x).toLowerCase().replace(/["“”]/g, '').replace(/\s+/g, ' ').trim()).filter(x => x.length >= 2 && x.length <= 100);
@@ -36,6 +45,11 @@ const alternatives = need && aiOk ? [...new Set(listOf(o.alternatives))].filter(
 const warnings = [];
 if (!aiOk) warnings.push('topic check unavailable: ' + String((out.error && (out.error.message || out.error)) || 'no answer from the model').slice(0, 160) + (plainRan ? ' (the plain-text retry answered nothing either)' : ''));
 if ((a.reach_errors || []).length) warnings.push('reach measured from partial data: ' + a.reach_errors.join('; ').slice(0, 200));
+// B1-1: an encouraging answer that rests on a reach measured on OTHER topics says so where the warnings are read. Only then: a site
+// with no record anywhere is not borrowing anything, and a measurement on this topic needs no caveat.
+if (!topic.used && ['easy', 'reachable'].includes(difficulty_for_you) && (topic.other_topics || []).length)
+  warnings.push('measured against your site-wide reach (' + topic.site_reach + '), which comes from other topics ('
+    + topic.other_topics.slice(0, 3).map(k => '"' + k + '"').join(', ') + '): ' + topic.reason + ', so this is the optimistic case');
 if (!a.known) warnings.push('DataForSEO has no data for this keyword in ' + a.country + ' (volume and difficulty unknown)');
 // D22 (2026-10-11): a stored description written before the site's menu pages were read lists only the homepage's services, which is how
 // "business central partner uae" came back as fit 1. Say so whenever that list is what decided a less-than-core fit.
@@ -43,9 +57,14 @@ if (fit !== null && fit < 2 && /homepage only/.test(String(a.services_source || 
 const body = { ok: true, keyword: a.keyword, country: a.country, volume: a.volume, kd: a.kd, intent: a.intent, cpc: a.cpc, position: a.position, reach,
   difficulty_for_you, plan_type: plan.plan_type, months: plan.months, fit, navigational, alternatives,
   cost_usd: +(Number(a.dfs_cost || 0) + CONFIG.ai_cost_usd * (plainRan ? 2 : 1)).toFixed(4),   // R3: the model is charged even when its answer could not be parsed
-  label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : ''), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
+  label: (reachLabel(difficulty_for_you, plan.plan_type === 'none' ? null : plan) || REACH_DIFF_LABEL[difficulty_for_you]) + (topic.used ? ' \u00b7 measured on this topic' : '') + (fit === null ? ' \u00b7 ' + FIT_UNKNOWN : ''), fit_known: fit !== null, stretch: plan.stretch, position_url: a.position_url,
   chance: plan.plan_type === 'none' ? null : plan.chance, chance_text: plan.plan_type === 'none' ? '' : reachChanceText(plan), base_rate: REACH_BASE_RATE,   // G3 (2026-10-11): the estimated chance band (uncalibrated) and the 2025 base rate
-  reach_info: { method: a.reach_info.method, p75: a.reach_info.p75 ?? null, size_reach: a.reach_info.size_reach ?? null, sample: a.reach_info.sample ?? null, top10: a.reach_info.top10 ?? null, cached: !!a.reach_info.cached, cached_at: a.reach_info.cached_at || null },
+  reach_info: { method: a.reach_info.method, p75: a.reach_info.p75 ?? null, size_reach: a.reach_info.size_reach ?? null, sample: a.reach_info.sample ?? null, top10: a.reach_info.top10 ?? null, cached: !!a.reach_info.cached, cached_at: a.reach_info.cached_at || null,
+    site_reach: topic.site_reach },
+  // B1-1: which number this answer was measured against, what stands behind it, and the sentence that says so in the owner's words
+  reach_basis: topic.used ? 'topic' : 'site', topic_reach: topic.topic_reach, reach_used: reach,
+  topic_evidence: { on_topic: topic.on_topic, top10: topic.top10, sample: topic.sample, best: topic.best, examples: topic.examples, other_topics: topic.other_topics, reason: topic.reason },
+  reach_note: topic.note,
   business_source: a.business_source, warnings };
 // ---- R26 (2026-10-14, FIX_PLAN.md §3.12): an answer with no search data may not sound sure ----
 // Live on 2026-10-14 "business central partner uae" and "dynamics 365 partner uae" came back with volume, difficulty, intent and CPC
