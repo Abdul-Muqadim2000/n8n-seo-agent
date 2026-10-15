@@ -177,7 +177,9 @@ export async function createRun(a: OrgAccess, input: RunInput, opts: CreateRunOp
   // again, and answered with the FIRST run's id. Two of our rows would then carry one request id, and a callback matches the newest
   // of them — so the repeat row would take the result and the original would stay pending for ever. The repeat never existed as a
   // run, so we do not keep a row claiming it did (INVARIANTS Rule 4): we drop ours and hand back the run that is really going.
-  if (repeatResolvesToOriginal(res)) {
+  if (repeatResolvesToOriginal(res) && res.requestId) {
+    // (`res.requestId` is restated for the type checker: `repeatResolvesToOriginal` already proves it is a non-empty string, but a
+    // boolean return cannot narrow it, and `eq(column, string | null)` matches no drizzle overload — the server typecheck fails on it.)
     const original = await db.query.runs.findFirst({
       where: and(eq(schema.runs.orgId, org.id), eq(schema.runs.requestId, res.requestId), ne(schema.runs.id, run.id)),
       orderBy: asc(schema.runs.createdAt),

@@ -15,6 +15,20 @@ export interface ChangelogEntry {
 export const changelog: ChangelogEntry[] = [
   {
     date: '2026-10-15',
+    title: 'One search, one page — decided by Google’s own results, not by a label',
+    summary:
+      'A keyword ladder used to group its supporting keywords by what they looked like. Two searches that Google answers with exactly the same pages could therefore become two pages of yours, competing with each other. Before planning, Ascentra now reads the results page for each supporting keyword and puts the searches that share them on one page.',
+    highlights: [
+      'The results page is read for each supporting keyword, and the searches that share enough of their top seven results become one page',
+      'The grouping holds across difficulty levels, so two keywords Google answers the same way are never split into two pages',
+      'Every plan says which keywords were compared, which could not be read, and what the comparison cost',
+      'A keyword whose results page could not be read keeps its own page: nothing is merged or dropped on a reading that never arrived',
+      'The head term’s results page is counted for how many different websites own it, and a page held by only a few of them lowers how realistic the plan calls itself — with the count, the rule and the reason printed',
+    ],
+    features: ['keyword-ladders', 'keyword-research'],
+  },
+  {
+    date: '2026-10-15',
     title: 'A page losing traffic now gets refreshed, not just reported',
     summary:
       'Ascentra used to tell you a page was decaying and leave it there. It now proves the fall before claiming it — and then writes the refresh. A page counts as losing traffic only when the drop is beyond normal variation and the page is genuinely worse off than it was in the same weeks a year earlier, so a quiet season is never mistaken for a decline.',
