@@ -315,7 +315,18 @@
   "source",
   "lastmod",
   "queries_json",
-  "updated_at"
+  "updated_at",
+  "clicks",
+  "impressions",
+  "position",
+  "prev_clicks",
+  "yoy_clicks",
+  "decay_state",
+  "decay_pct",
+  "decay_lost",
+  "decay_kind",
+  "decay_basis",
+  "measured_at"
  ],
  "LOG": [
   "site_id",

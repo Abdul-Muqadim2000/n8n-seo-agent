@@ -58,6 +58,13 @@ export interface TrendRow extends DtRow {
 /** v4.15 (D11, SITE_MODEL_SPEC.md): the website's page inventory, written weekly by the Site Tracker — what the site already has */
 export interface SitePageRow extends DtRow {
   site_id: string; url: string; title: string; h1: string; source: string; lastmod: string; queries_json: string; updated_at: string;
+  /**
+   * v4.16 (B4-1 / B4-2, benchmark area 4): the page's own Search Console measurement and the decay judgement made of it.
+   * `decay_state` is one of decaying / seasonal / watch / steady / too_small (empty = never measured); `decay_basis` is the
+   * sentence that must travel with the number. The cadence writes a refresh only for `decaying`.
+   */
+  clicks?: number; impressions?: number; position?: number; prev_clicks?: number; yoy_clicks?: number;
+  decay_state?: string; decay_pct?: number; decay_lost?: number; decay_kind?: string; decay_basis?: string; measured_at?: string;
 }
 export interface CadenceRow extends DtRow {
   site_id: string; domain: string; pages_per_week: number; status: string; updated_at: string; request_id: string;

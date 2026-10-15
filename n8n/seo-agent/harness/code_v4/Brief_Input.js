@@ -182,8 +182,16 @@ const SM = (() => {
       business_facts: S(m.business_facts).slice(0, 2000), cta: S(m.cta).slice(0, 200), brand_names: (m.brand_names || []).join(', ').slice(0, 500),
       competitors: (m.competitors || []).join(', ').slice(0, 500), accreditation: S(m.accreditation).slice(0, 200), model_updated_at: S(m.model_updated_at) };
   };
+  // B4-1 / B4-2 (2026-10-15, benchmark area 4): the measurement columns belong to the row, so the kit emits them — a Data Table
+  // node auto-maps every field it is given, and a row that is short of a column is as wrong as one that carries a stray field.
+  // The model itself measures nothing: these are the defaults the Site Tracker's own judgement is written over
+  // (v5/code/Page_Inventory_Site.js), and `''` for decay_state means "never measured", never "steady".
+  const num0 = (v) => (Number(v) || 0);
   const pageRows = (model) => pages(model).map(p => ({ site_id: S((model || {}).site_id), url: S(p.url), title: S(p.title).slice(0, 300), h1: S(p.h1).slice(0, 300),
-    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString() }));
+    source: S(p.source) || 'sitemap', lastmod: S(p.lastmod), queries_json: JSON.stringify(p.queries || []), updated_at: S((model || {}).model_updated_at) || new Date().toISOString(),
+    clicks: num0(p.clicks), impressions: num0(p.impressions), position: num0(p.position), prev_clicks: num0(p.prev_clicks), yoy_clicks: num0(p.yoy_clicks),
+    decay_state: S(p.decay_state), decay_pct: num0(p.decay_pct), decay_lost: num0(p.decay_lost), decay_kind: S(p.decay_kind),
+    decay_basis: S(p.decay_basis).slice(0, 900), measured_at: S(p.measured_at) }));
   return { from, stored, siteUrl, apiTarget, name, nap, services, pages, facts, matchPage, withPages, toRow, pageRows, COLUMNS, isFresh, ageDays, FRESH_DAYS, MATCH_MIN,
     helpers: { bare, normHost, hostOf, siteIdFor, termsOf, pathOf, orgFromHtml, navFromHtml } };
 })();
@@ -256,7 +264,48 @@ const ST = (() => {
       basis: 'Search Console average position, the last 28 days against the 28 days before, on ' + impPrev + ' then ' + imp + ' impressions'
         + (measurable ? '' : ' (under ' + minImp + ' impressions in a period one search can move the average several places)') };
   };
-  return { z, band, change, position, tested, updatesIn, updateNote, UPDATES };
+  // ---- B4-1 (2026-10-15, benchmark area 4 — docs/system-review-2026-10-14/BENCH_AREA4_cadence.md): IS THIS PAGE REALLY LOSING
+  // TRAFFIC, OR ARE THESE WEEKS QUIET EVERY YEAR? Clearscope's Content Decay view compares a page's clicks over 90 days against
+  // THE SAME 90 DAYS A YEAR EARLIER and names the two figures "seasonal difference" and "seasonal growth"
+  // (https://www.clearscope.io/support/content-decay); Ahrefs tells you to flag pages down more than 20% YEAR OVER YEAR
+  // (https://ahrefs.com/blog/content-decay/). Ours compared 28 days with the 28 before and called any 25% fall on 10 earlier
+  // clicks a "decaying page" — the one window that cannot tell a decay from a seasonal dip, at a volume this file's own test
+  // rejects (10 -> 7 clicks is z = -0.73, well inside chance). decay() tests the fall first and then, when the year-ago figure
+  // was read, refuses to call a fall "decay" that the same page also had a year ago.
+  // Two falls are NOT the same thing and need different work, so they are told apart here and nowhere else: clicks down while
+  // impressions held is a click-through loss (title and snippet), clicks down WITH impressions is lost visibility (the page).
+  // o: { clicks, prev_clicks, yoy_clicks, impressions, prev_impressions, min_events, min_pct, period, yoy_period }
+  const decay = (o) => {
+    const x = o || {}; const cur = num(x.clicks), prev = num(x.prev_clicks);
+    const yoy = (x.yoy_clicks === '' || x.yoy_clicks == null) ? null : num(x.yoy_clicks);
+    const minEvents = x.min_events == null ? 40 : num(x.min_events), minPct = x.min_pct == null ? 20 : num(x.min_pct);
+    const per = String(x.period || 'the last 28 days against the 28 days before');
+    const yper = String(x.yoy_period || 'the same 28 days a year earlier');
+    const ch = change(cur, prev, { min_events: minEvents, min_pct: minPct });
+    const imps = change(num(x.impressions), num(x.prev_impressions), { min_events: minEvents * 10, min_pct: minPct });
+    const yc = yoy == null ? null : change(cur, yoy, { min_events: minEvents, min_pct: minPct });
+    const lost = Math.max(0, prev - cur);
+    const kind = ch.direction === 'down' ? ((imps.direction === 'down' && imps.significant) ? 'visibility' : 'clickthrough') : null;
+    const kindNote = kind === 'visibility' ? ' Impressions fell with the clicks (' + imps.text + '), so the page is being shown less often: this is lost visibility, not a snippet problem.'
+      : kind === 'clickthrough' ? ' Impressions held (' + imps.text + '), so the page is still being shown and fewer people click it: look at the title and the description before rewriting the page.' : '';
+    const base = (state, note) => ({ state, lost, pct: ch.pct, kind: (state === 'decaying' || state === 'watch') ? kind : null,
+      clicks: cur, prev_clicks: prev, yoy_clicks: yoy, change: ch, yoy_change: yc, impressions: imps,
+      basis: 'Search Console clicks for this page, ' + per + ' (' + prev + ' → ' + cur + ')'
+        + (yoy == null ? '; ' + yper + ' was not read, so a seasonal dip cannot be ruled out' : '; ' + yper + ': ' + yoy + ' clicks')
+        + '.' + note });
+    if (!ch.measurable) return base('too_small', ' Not enough clicks to test: ' + (cur + prev) + ' over both periods together, against the ' + minEvents + ' this test needs. No fall is claimed.');
+    if (ch.direction !== 'down') return base('steady', ' No fall to explain (' + ch.text + ').');
+    if (ch.real) {
+      if (yc && yc.measurable && yc.direction !== 'down')
+        return base('seasonal', ' But against ' + yper + ' the page is ' + yc.text + ', so these weeks are simply quieter than the ones before them every year. Not decay.'
+          + tested(yc, { source: 'Search Console', period: 'the last 28 days against ' + yper }));
+      return base('decaying', kindNote + tested(ch, { source: 'Search Console', period: per })
+        + (yc ? ' Against ' + yper + ' it is ' + yc.text + '.' : ''));
+    }
+    if (ch.watch) return base('watch', ' Large but inside 95% sampling noise (z ' + ch.z + '), so it is something to watch, not a fall.' + kindNote);
+    return base('steady', ' The fall is smaller than the ' + minPct + '% worth acting on (' + ch.text + ').');
+  };
+  return { z, band, change, position, decay, tested, updatesIn, updateNote, UPDATES };
 })();
 const r1 = (v) => Math.round((Number(v) || 0) * 10) / 10;
 return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A = m.ga4;
@@ -269,7 +318,9 @@ return $('Site Metrics').all().map(i => { const m = i.json; const G = m.gsc, A =
       brand_vs_non_brand: G.brand_split ? { brand_names: G.brand_split.names, brand: { queries: G.brand_split.brand.queries, clicks: G.brand_split.brand.clicks, impressions: G.brand_split.brand.impressions }, non_brand: { queries: G.brand_split.non_brand.queries, clicks: G.brand_split.non_brand.clicks, impressions: G.brand_split.non_brand.impressions }, previous_non_brand_clicks: G.brand_split.previous.non_brand.clicks, note: G.brand_split.note } : null,
       tool_and_scraper_queries: G.scraper_queries || null, rows_read: G.rows_read ?? null, ...(((G.truncated || []).length) ? { rows_truncated: G.truncated } : {}), winners: G.winners.slice(0, 5), losers: G.losers.slice(0, 5), new_queries: G.new_queries.slice(0, 5), lost_queries: G.lost_queries.slice(0, 5),
       striking_distance: G.striking.slice(0, 8).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, clicks: q.clicks, page: q.page })), ctr_gaps: G.ctr_gaps.slice(0, 5).map(q => ({ query: q.query, position: r1(q.position), impressions: q.impressions, ctr: r1(q.ctr * 1000) / 10, expected_ctr: Math.round(q.expected_ctr * 100), page: q.page })),
-      top_pages: G.top_pages.slice(0, 8), decaying_pages: G.decaying_pages.slice(0, 5), rising_pages: G.rising_pages.slice(0, 5) } : { connected: false, error: G.error },
+      // B4-1: the brief gets the decay judgement with its basis, and the pages the evidence refused to call decay, so the
+      // writer cannot turn a seasonal dip into "your traffic is falling".
+      top_pages: G.top_pages.slice(0, 8), decaying_pages: G.decaying_pages.slice(0, 5), decay_not_claimed: (G.not_decay || []).slice(0, 3), decay_check: G.decay_summary || null, rising_pages: G.rising_pages.slice(0, 5) } : { connected: false, error: G.error },
     analytics: A.connected ? { organic: A.organic, all_channels: A.total, organic_share_pct: A.organic_share, channels: A.channels.slice(0, 6), organic_landing_pages: A.landing.slice(0, 8) } : { connected: false, error: A.error },
     tracked_keywords: m.tracked.map(t => ({ keyword: t.keyword, source: t.source + (t.rung ? ' rung ' + t.rung : ''), search_console_position: G.connected ? (t.gsc_position ? r1(t.gsc_position) : 'no impressions in the period') : 'Search Console not connected', previous_position: G.connected && t.gsc_prev_position ? r1(t.gsc_prev_position) : null, impressions: G.connected ? t.impressions : null, clicks: G.connected ? t.clicks : null,
       live_google_position: t.serp_position == null ? 'not checked' : t.serp_position > 0 ? t.serp_position : t.serp_position === 0 ? 'not in the top 50' : 'check failed', live_check_date: t.serp_checked_at ? String(t.serp_checked_at).slice(0, 10) : null, page: t.page || t.serp_url || null })),

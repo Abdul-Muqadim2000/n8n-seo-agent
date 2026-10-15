@@ -965,14 +965,19 @@ export interface AutomationStatus {
 
 export interface QueueItem {
   keyword: string;
-  /** v4.12: ai_answer / ai_refresh = the AI page of the week (AI_GROWTH_SPEC.md) */
-  source: 'ladder' | 'striking' | 'trend' | 'ai_answer' | 'ai_refresh';
+  /**
+   * v4.12: ai_answer / ai_refresh = the AI page of the week (AI_GROWTH_SPEC.md).
+   * v4.16 (B4-3): decay = a refresh of a page the Site Tracker proved is losing traffic, queued ahead of striking and trend.
+   */
+  source: 'ladder' | 'decay' | 'striking' | 'trend' | 'ai_answer' | 'ai_refresh';
   why: string;
   pageType: string;
   existingPageUrl: string;
   ladder: { id: string; rung: number; head: string; pageNo: number } | null;
   /** v4.12: the AI target the page is written for */
   aiTarget?: { targetId: string; question: string; kind: 'answer' | 'refresh' } | null;
+  /** v4.16 (B4-3): the clicks this page lost in 28 days — what put a `decay` refresh where it is in the queue */
+  decayLost?: number;
 }
 
 export interface PipelineStage {

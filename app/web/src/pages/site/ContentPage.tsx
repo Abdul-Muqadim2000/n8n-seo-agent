@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 import { toast } from 'sonner';
-import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Target, TrendingUp, Trophy, Undo2, UserRound, XCircle } from 'lucide-react';
+import { BadgeCheck, Briefcase, CalendarClock, CheckCircle2, Clock, ExternalLink as ExternalIcon, FileText, Flame, Inbox, LayoutGrid, PenSquare, Rows3, Target, TrendingDown, TrendingUp, Trophy, Undo2, UserRound, XCircle } from 'lucide-react';
 import { titleCase, type CaseStudy, type ContentData, type ContentItem, type Report } from '@seo/shared';
 import { GuideButton } from '@/components/guide';
 import { errorMessage } from '@/lib/api';
@@ -65,6 +65,7 @@ export default function ContentPage() {
 
 const SOURCE_LABEL: Record<string, string> = {
   ladder: 'Keyword ladder',
+  decay: 'Losing traffic',
   striking: 'Striking distance',
   trend: 'Rising trend',
   case_study: 'Case study',
@@ -75,6 +76,7 @@ const SOURCE_LABEL: Record<string, string> = {
 const sourceLabel = (s: string) => SOURCE_LABEL[s] ?? (s ? titleCase(s) : 'On demand');
 const SOURCE_ICON: Record<string, ReactNode> = {
   ladder: <TrendingUp />,
+  decay: <TrendingDown />,
   striking: <Target />,
   trend: <Flame />,
   case_study: <Trophy />,
