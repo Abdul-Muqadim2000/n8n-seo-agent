@@ -31,20 +31,20 @@ and correctness, not outcomes.
 
 | # | Area | Now | Compared with | Biggest gaps (2026-10-11) | Reachable (SCORECARD estimate) | After fixes | Re-scored on |
 |---|---|---|---|---|---|---|---|
-| 1 | Keyword research & verdicts | **5** | Semrush (Personal KD) / Ahrefs | fit gate leaks (D4, D8, D22); no check against live pages (D11, D20); 2017 time-to-rank data | 7 | **6** | 2026-10-13 |
-| 2 | Keyword ladders / planning | **4.5** | MarketMuse / Semrush Strategy Builder | competitor-brand rung (D8); hub links to unwritten pages (D9); wrong next step (D16) | 7 | **5.5** | 2026-10-13 |
-| 3 | Content creation & QA | **5** | Surfer / Clearscope | 50 placeholders, NAP unfilled, 3,952 vs 2,100 words (D10); no originality check; QA passes it | 7.5 | **6** | 2026-10-13 |
-| 4 | Content cadence / pipeline | **4.5** | Clearscope (inventory, decay) | pile-up guard undercounts (D5); blind to existing pages (D11); no CMS push | 7 | **5.5** | 2026-10-13 |
-| 5 | Technical audit | **4** | Sitebulb / Ahrefs Site Audit | diff of unlike reports (D2); High false positive since 10-01 (D6, D18); harmful robots fix (D17) | 6.5 | **5** | 2026-10-13 |
-| 6 | Rank tracking | **3** | AccuRanker / Semrush Position Tracking | desktop, weekly, country; no SERP features / AI Overview / competitors; wrong next step (D16) | 6 | **6** | 2026-10-13 |
-| 7 | Site tracking (GSC / GA4 / Trends) | **5** | SEOTesting + Looker Studio | advises duplicating a live page (D11); sparse Trends % (D21); 500 rows, no brand split | 7 | **7** | 2026-10-13 |
-| 8 | AI visibility (incl. pulse) | **6.5** | Profound / Semrush AI Toolkit | 17% of requests errored, no retry (D19); 7 questions; no fact base; missed pulse days (D25) | 8 | **7** | 2026-10-13 |
-| 9 | AI growth | **5** | Profound Actions / AthenaHQ | drafts to government and competitors (D12); bare host to Bing / IndexNow (D15); second writer | 7.5 | **6.5** | 2026-10-13 |
-| 10 | Backlink monitoring | **5** | Ahrefs (+ Linkody re-checks) | PBN pages ranked best links (D3); 4 of 16 flagged; no Google-sample coverage yet | 8 | **7** | 2026-10-13 |
-| 11 | Link building | **6** | Pitchbox / Respona | competitor / homepage / accredited-list pitches, "techand" (D13); invented reply fact (D14); never sent live | 8 | **6.5** | 2026-10-13 |
-| 12 | Reporting & app | **4.5** | AgencyAnalytics / Semrush My Reports | no annotations; change tests for links only; no sharing; contradictory figures (D24) | 6.5 | **4.5** | 2026-10-13 |
-| 13 | Cost control & reliability | **4** | Semrush / Ahrefs (server-side limits) | guards undercount (D1); Mac-hosted schedules, one alert channel (D25); missing retries (D19, D23); RDAP unused (D7) | 8 | **4.5** | 2026-10-13 |
-| | **Overall** | **5** | | area mean 4.8 | area mean 7.2 | **6** (area mean 5.92) | 2026-10-13 |
+| 1 | Keyword research & verdicts | **5** | Semrush (Personal KD) / Ahrefs | fit gate leaks (D4, D8, D22); no check against live pages (D11, D20); 2017 time-to-rank data | 7 | **5.5** (2026-10-13: 6) | 2026-10-15 |
+| 2 | Keyword ladders / planning | **4.5** | MarketMuse / Semrush Strategy Builder | competitor-brand rung (D8); hub links to unwritten pages (D9); wrong next step (D16) | 7 | **4.5** (2026-10-13: 5.5) | 2026-10-15 |
+| 3 | Content creation & QA | **5** | Surfer / Clearscope | 50 placeholders, NAP unfilled, 3,952 vs 2,100 words (D10); no originality check; QA passes it | 7.5 | **6** (2026-10-13: 6) | 2026-10-15 |
+| 4 | Content cadence / pipeline | **4.5** | Clearscope (inventory, decay) | pile-up guard undercounts (D5); blind to existing pages (D11); no CMS push | 7 | **4.5** (2026-10-13: 5.5) | 2026-10-15 |
+| 5 | Technical audit | **4** | Sitebulb / Ahrefs Site Audit | diff of unlike reports (D2); High false positive since 10-01 (D6, D18); harmful robots fix (D17) | 6.5 | **5** (2026-10-13: 5) | 2026-10-15 |
+| 6 | Rank tracking | **3** | AccuRanker / Semrush Position Tracking | desktop, weekly, country; no SERP features / AI Overview / competitors; wrong next step (D16) | 6 | **5.5** (2026-10-13: 6) | 2026-10-15 |
+| 7 | Site tracking (GSC / GA4 / Trends) | **5** | SEOTesting + Looker Studio | advises duplicating a live page (D11); sparse Trends % (D21); 500 rows, no brand split | 7 | **6.5** (2026-10-13: 7) | 2026-10-15 |
+| 8 | AI visibility (incl. pulse) | **6.5** | Profound / Semrush AI Toolkit | 17% of requests errored, no retry (D19); 7 questions; no fact base; missed pulse days (D25) | 8 | **6.5** (2026-10-13: 7) | 2026-10-15 |
+| 9 | AI growth | **5** | Profound Actions / AthenaHQ | drafts to government and competitors (D12); bare host to Bing / IndexNow (D15); second writer | 7.5 | **6 (NL)** (2026-10-13: 6.5) | 2026-10-15 |
+| 10 | Backlink monitoring | **5** | Ahrefs (+ Linkody re-checks) | PBN pages ranked best links (D3); 4 of 16 flagged; no Google-sample coverage yet | 8 | **7** (2026-10-13: 7) | 2026-10-15 |
+| 11 | Link building | **6** | Pitchbox / Respona | competitor / homepage / accredited-list pitches, "techand" (D13); invented reply fact (D14); never sent live | 8 | **6.5** (2026-10-13: 6.5) | 2026-10-15 |
+| 12 | Reporting & app | **4.5** | AgencyAnalytics / Semrush My Reports | no annotations; change tests for links only; no sharing; contradictory figures (D24) | 6.5 | **4.5** (2026-10-13: 4.5) | 2026-10-15 |
+| 13 | Cost control & reliability | **4** | Semrush / Ahrefs (server-side limits) | guards undercount (D1); Mac-hosted schedules, one alert channel (D25); missing retries (D19, D23); RDAP unused (D7) | 8 | **4** (2026-10-13: 4.5) | 2026-10-15 |
+| | **Overall** | **5** | | area mean 4.8 | area mean 7.2 | **5.5** (area mean 5.54; 2026-10-13: 6, area mean 5.92) | 2026-10-15 |
 
 ## 3. Issue register
 
@@ -1829,3 +1829,4 @@ For "To reach 9" #1, also run the audit, keyword and backlink modes on two more 
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 2026-10-11 | 5 | 5 | 4.5 | 5 | 4.5 | 4 | 3 | 5 | 6.5 | 5 | 5 | 6 | 4.5 | 4 | 4.8 | baseline: `RESULTS.md`, `SCORECARD.md` (this folder) |
 | 2026-10-13 | 6 | 6 | 5.5 | 6 | 5.5 | 5 | 6 | 7 | 7 | 6.5 | 7 | 6.5 | 4.5 | 4.5 | 5.92 | first re-rating after Phases 1-4 + 6A + part of Phase 5 (72 items + R1-R9): `../system-review-2026-10-13/RESULTS.md` (21 runs over two passes, $0.91 + $2.88), scored independently in that folder's `SCORECARD.md` |
+| 2026-10-15 | 5.5 | 5.5 | 4.5 | 6 | 4.5 | 5 | 5.5 | 6.5 | 6.5 | 6 | 7 | 6.5 | 4.5 | 4 | 5.54 | third re-rating, after the benchmark programme (13 areas, ~150 register rows, 4 build-time lints): `../system-review-2026-10-15/RESULTS.md` (executions 594–643, $2.45 DataForSEO + $1.41 Claude) + `parts/1`–`4`, scored independently in that folder's `SCORECARD.md` by a clean session with no build context. Overall rounded to the half point (5.54 → 5.5; the whole-point rounding of the earlier rows would print 6). No area rose; five held, eight fell — partly better evidence (every audit finding checked on the live site, the schedule history read), partly 14 High defects (R34–R116, §3.17) |
