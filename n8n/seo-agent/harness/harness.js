@@ -50,7 +50,21 @@ async function expectError(node, input, re, runIndex) {
   else { r.ok = true; r.error = 'threw as expected: ' + r.error.slice(0, 90); }
   return r;
 }
-function mock(node, items) { store[node] = toItems(items); return store[node]; }
+// B-A10 (2026-10-15, INVARIANTS rule 3): every DataForSEO call now sits behind an in-200 retry gate, so the node that used to
+// read `X` reads `X Answers` — the merge node. A scenario that mocks the CALL is mocking its first attempt, and with no retry
+// mocked the merged answers ARE the first attempt's, so the same items stand in for both. The list of gated calls is the
+// build's own (harness/in200.json, written by build section 75), so a call that loses its gate stops being aliased here too,
+// and a scenario that wants the gate itself mocks `X Answers` explicitly — which overrides this. S85 runs the real gate nodes
+// (plan, merge) against real DataForSEO envelopes, so nothing about the gate rests on this alias.
+const GATED = {};
+try { const g = require('./in200.json'); for (const wf of Object.values(g)) for (const n of (wf.gated || [])) GATED[n] = true; } catch (e) {}
+function mock(node, items) {
+  store[node] = toItems(items);
+  // the alias follows EVERY mock of the call, never only the first: S25 mocks `Run Reach Requests` a dozen times in a row with
+  // different answers, and a sticky alias would have fed the first one's reach to all twelve.
+  if (GATED[node]) store[node + ' Answers'] = store[node];
+  return store[node];
+}
 function begin(name) { scenario = name; console.log('\n########## ' + name + ' ##########'); }
 function save(name, content) { fs.writeFileSync(path.join(OUT_DIR, name), typeof content === 'string' ? content : JSON.stringify(content, null, 2)); }
 function report() {

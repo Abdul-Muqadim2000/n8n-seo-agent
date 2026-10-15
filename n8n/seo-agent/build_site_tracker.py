@@ -6,6 +6,7 @@ brief -> HTML e-mail + PDF + callback with ready-to-send API bodies. Code nodes 
 import json, os, re, uuid, sys
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
+import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
 from ladder_common import (dt_schema, LADDER_TABLE, LADDER_COLS, HISTORY_TABLE, HISTORY_COLS, SITES_TABLE, METRICS_TABLE, QUERY_TABLE, SITES_COLS, METRICS_COLS, QUERY_COLS,
                            LOG_TABLE, LOG_COLS, TRENDS_TABLE, TRENDS_COLS, CADENCE_TABLE, CADENCE_COLS, ALERTS_TABLE, ALERTS_COLS, CHECKIN_TABLE, CHECKIN_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_VIS_TABLE, AI_VIS_COLS, BL_SNAP_TABLE, BL_SNAP_COLS, AUDITS_TABLE, AUDITS_COLS, PROSPECT_TABLE, PROSPECT_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS,
@@ -359,7 +360,17 @@ assert not any('/*__PAGE_WATCH__*/' in c_ for c_ in _code.values()), 'page-watch
 assert 'PW.inspectBudget(' in _code['Inspect Requests'] and 'inspect_at' in _code['Inspect Requests'], 'G25: the inspections do not rotate within the quota'
 assert 'index_coverage' in _code['Site Metrics'] and 'page_watch: watch' in _code['Site Metrics'], 'G11 / G25: the weekly item carries neither the index view nor the watch'
 LEDGER_WIRING['SEO Agent — Site Tracker'] = ledger_nodes(N, C, 'site_tracker', 'Site', 'Site Plan', ['Site Report'], at(11, 9))
-write(wf(WF_ID, 'SEO Agent — Site Tracker', N, C), 'SEO_Agent_Site_Tracker.json')
+# ---- B-A10 (2026-10-15, INVARIANTS rule 3): the two paid DataForSEO calls of the week go through the in-200 retry gate ----
+# Both reading sides were already honest about a task error inside a 200 (Parse Trends -> `DataForSEO <code>`, Parse Site SERP ->
+# RS.read -> position -1, "check failed" and never "not in the top 50"); what neither had was a second attempt. A trend that
+# fails is a week of a head term's demand missing from the brief, and a position that fails is a hole in the site's own history.
+_wf_site = wf(WF_ID, 'SEO Agent — Site Tracker', N, C)
+for _h10, _w10, _u10 in (('Google Trends', 'the 12-month search interest for this term', 'term'),
+                         ('SERP Check (Site)', "the live Google results for one of the site's own keywords", 'keyword check')):
+    _gs10 = dfs_gate.splice(_wf_site, _h10, V5, what=_w10, unit=_u10, code_dir=CODE)
+    retry_lint.record_gate('SEO Agent — Site Tracker', _gs10['chain'])
+retry_lint.check_in200(_wf_site)
+write(_wf_site, 'SEO_Agent_Site_Tracker.json')
 
 # =============================================================================
 # SEO Agent — Site Admin: delete / pause / resume / cadence / unpublish for a tracked site (published sub-workflow; run through the Test Runner or Execute Workflow)

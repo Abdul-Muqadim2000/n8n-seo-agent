@@ -8,6 +8,7 @@ import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import env_settings as _env   # B-F5 (2026-10-15): a build with no n8n/.env must refuse, not bake its fallbacks
 _env.require_settings('build_monitors.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
+import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
 from ladder_common import (DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_upsert_params, dt_upsert_params_keys,
                            SITES_TABLE, SITES_COLS, LADDER_TABLE, LADDER_COLS, LOG_TABLE, LOG_COLS, PROFILE_TABLE, PROFILE_COLS, CASE_TABLE, CASE_COLS,
                            MONITORS_TABLE, MONITORS_COLS, AI_PROMPTS_TABLE, AI_PROMPTS_COLS, AI_ANSWERS_TABLE, AI_ANSWERS_COLS, AI_VIS_TABLE, AI_VIS_COLS,
@@ -139,6 +140,14 @@ class WF:
         outs[out].append({'node': b, 'type': 'main', 'index': 0})
     def chain(self, *names):
         for a, b in zip(names, names[1:]): self.link(a, b)
+    def in200_gate(self, http, what, unit='request', **kw):
+        """B-A10 (2026-10-15, INVARIANTS rule 3): the in-200 retry gate around one DataForSEO call — DataForSEO reports most of
+        its failures inside an HTTP 200, which `retryOnFail` never sees. One shape for every call (dfs_gate.py), spliced after the
+        workflow's connections are made, so whatever read the call now reads the merged answers and their evidence."""
+        g = dfs_gate.splice({'name': self.name, 'nodes': self.N, 'connections': self.C}, http, V5, what=what, unit=unit,
+                            code_dir=CODE, code_prefix=self.code_prefix, **kw)
+        retry_lint.record_gate(self.name, g['chain'])
+        return g
     def write(self, fname):
         # R17 (2026-10-14, FIX_PLAN §3.12): the reserve chain goes on the MAIN path, now that every connection of this workflow is made
         if self.name in LEDGER_WIRING:
@@ -156,6 +165,7 @@ class WF:
         w = {'id': self.wid, 'name': self.name, 'active': False, 'settings': {'executionOrder': 'v1', 'errorWorkflow': 'SEOagentErrHandl', 'executionTimeout': self.timeout, 'saveDataErrorExecution': 'all', 'saveDataSuccessExecution': 'all'}, 'tags': [], 'nodes': self.N, 'connections': self.C}
         url_lint.check(w, self.name)   # D15: no node builds a site URL by hand (url_lint.py)
         retry_lint.check(w, self.name)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
+        retry_lint.check_in200(w, self.name)   # B-A10: and the in-200 gate on top, because a 200 can still be a failure
         json.dump([w], open(os.path.join(OUT, fname), 'w'), indent=2, ensure_ascii=False)
         os.makedirs(CODE, exist_ok=True)
         for n in self.N:
@@ -228,6 +238,10 @@ A.chain('AI Metrics', 'AI Vis Rows', 'Save AI Visibility', 'AI Prospect Rows', '
 A.chain('AI Cache Rows', 'Any Cache Rows?'); A.link('Any Cache Rows?', 'Save AI Cache', 0); A.link('Any Cache Rows?', 'Prune Old Answers', 1); A.link('Save AI Cache', 'Prune Old Answers')
 A.chain('Prune Old Answers', 'AI Brief Input', 'AI Brief', 'AI Report', 'Prepare PDF AI', 'Render PDF AI', 'Attach PDF AI', 'Has Email (AI)?'); A.link('Attach PDF AI', 'Build AI Callback'); A.link('Build AI Callback', 'Has Callback (AI)?')
 A.run_ledger('ai_visibility', 'AI', 'AI Plan', ['AI Report'], at(12, 7), measured='AI Metrics')
+# B-A10 (2026-10-15, INVARIANTS rule 3): the monthly question-discovery pull is the one paid call outside the AI gate D19 built.
+# Its failure is silent by construction — *Prompt Jobs* simply finds no new questions — so a 40101 inside a 200 shrinks next
+# month's panel with nobody told, and a smaller panel is exactly what B-L4 had to stop being read as a fall in visibility.
+A.in200_gate('Run Discovery', 'the questions buyers ask AI assistants about this topic', 'question')
 A.sticky(f"""## SEO Agent — AI Visibility Tracker (v4.5, v4.9)
 **Every Monday 07:00** (before the Site Tracker, whose report shows the summary) and on demand (*Manual Run* `{{ domain | site_id, email?, callback_url?, country?, location_code?, competitors?, topics? }}`; form option "Check my AI visibility" / API `mode: ai_visibility`). The **AI Pulse** workflow asks the same panel every other day on the fast engines; this run adds its samples to the week's figures.
 Per site (`seo_sites` + ladder domains; settings in `{MONITORS_TABLE}`: engines, questions (3-50, default 20), daily pulse, competitors, brand names): a stable **question panel** (`{AI_PROMPTS_TABLE}`: buyer stage, topic cluster, monthly AI search volume; written by Claude from the topics, **real questions from the AI-answer database** and the site's long Search Console queries; custom ones through Site Admin `ai_prompts`) is asked to **ChatGPT** and **Gemini** (the real chat interfaces, LLM scraper $0.004), **Perplexity** (sonar, localised, $0.006), **Google AI Mode** ($0.004) and the **AI Overview** of the matching search ($0.002); **Claude** (Haiku + web search, $0.025), the brand question, question discovery and the **market-wide index** (LLM Mentions: your share vs the competitors across the 387M-question database) on the month's first run.
@@ -363,6 +377,13 @@ step('Prospect Rows', 'Any Prospect Rows?', 'Save Prospects', 'Ledger Rows')
 step('Ledger Rows', 'Any Ledger Rows?', 'Save Backlinks', 'BL Snapshot Rows')
 B.chain('BL Snapshot Rows', 'Save BL Snapshot', 'BL Report', 'Prepare PDF BL', 'Render PDF BL', 'Attach PDF BL', 'Has Email (BL)?'); B.link('Attach PDF BL', 'Build BL Callback'); B.link('Build BL Callback', 'Has Callback (BL)?')
 B.run_ledger('backlinks', 'BL', 'BL Plan', ['BL Report'], at(13, 6), measured='Parse Backlinks')
+# B-A10 (2026-10-15, INVARIANTS rule 3): the three paid DataForSEO pulls of the link ledger. Each one's failure is a silent
+# shrinking of the ledger — *Parse Backlinks* counts what came back, so a pull that failed inside a 200 looks like a site with
+# fewer links, which is the shape R20 / B-L5 exist to stop ("not compared" instead of an arrow). A second attempt costs nothing
+# when the first failed (a failed task is billed 0), and `result()` prices both attempts, each task once.
+B.in200_gate('Run BL Requests', 'the link profile this check is built on', 'pull')
+B.in200_gate('Run Gap Requests', 'the sites linking to competitors but not to you', 'pull')
+B.in200_gate('Run Authority', "the referring sites' authority and spam scores", 'pull')
 B.sticky(f"""## SEO Agent — Backlink Monitor (v4.5; v4.10 every source merged + our own link check — BACKLINKS_SPEC.md)
 **Every Monday 07:30**: a light watch (links lost / new since the last check, spam, the valuable links re-checked on their pages) that e-mails only when an **important link was lost** (two misses in a row) or spam arrived; the **first run of each month** is the full report. On demand: *Manual Run* `{{ domain | site_id, light?, email?, callback_url? }}`; form option "Check my backlinks" / API `mode: backlinks`.
 **Sources**: DataForSEO Backlinks (summary, lost, new; full runs: referring domains, one link per domain with details, anchors, most-linked pages, broken, history, Content Analysis mentions, competitors' new links, the quarterly gap); **free**: Bing Webmaster Tools (GetUrlLinks; when SEO_BING_WEBMASTER_API_KEY is set: {'on' if BING_ON else 'off'}), the Search Console Links exports uploaded in the app (`{LINK_IMPORTS_TABLE}`), GA4 referrals (links that send visits), the Common Crawl web graph (`{LINK_GRAPH_TABLE}`, monthly linkgraph job), Wikipedia, Hacker News, GDELT news, web search (SearXNG: mentions, "best X" lists, `site:` lookups); Ahrefs Domain Rating (free key; {'on' if AHREFS_ON else 'off'}).
@@ -560,6 +581,10 @@ lstep('LB Cache Rows', 'Any LB Cache?', 'Save LB Cache', 'LB Report')
 L.chain('LB Report', 'LB Doc', 'Prepare PDF LB', 'Render PDF LB', 'Attach PDF LB')   # L3
 L.link('Attach PDF LB', 'Has Email (LB)?'); L.link('Attach PDF LB', 'Build LB Callback'); L.link('Build LB Callback', 'Has Callback (LB)?')
 L.run_ledger('link_builder', 'LB', 'LB Plan', ['LB Report'], at(17, 4))
+# B-A10 (2026-10-15, INVARIANTS rule 3): the one paid DataForSEO pull of the week's link building — competitors' broken links
+# and their most-linked pages. A failure inside a 200 is a week with fewer opportunities and nobody told; the whole point of
+# this workflow is the pitch it ends with, so the evidence behind one has to be evidence that was really read.
+L.in200_gate('Run LB DFS', "the competitors' links and most-linked pages this week's opportunities come from", 'pull')
 L.sticky(f"""## SEO Agent — Link Builder (v4.13, LINK_BUILDER_SPEC.md)
 **Every Monday 11:00** (after the Backlink Monitor 07:30 and AI Growth 09:30) and on demand (*Manual Run* `{{{{ domain | site_id, free_only?, callback_url?, request_id? }}}}`, started by **SEO Agent — Link Builder API** `POST /webhook/seo-link-builder`). Per site with `link_builder` on (`{MONITORS_TABLE}`, default on).
 **New opportunities** (free): journalist requests (#journorequest on Bluesky, matched to the topics), **journalist digests** (HARO / Source of Sources, read from the customer's own mailbox by the web app and written here as `digest` prospects — nothing arrives until a mailbox is connected), **podcast shows that take guests** (monthly: a free podcast directory → the show's RSS feed → the show's own website; pitched only when it is on topic, still publishing, says it takes guests and has a contact on its own domain), resource pages (web search), dead links on resource / list pages, our old URLs from the Wayback Machine that now 404 (redirects), the listings checklist (own and competitors' pages, member lists, guessed profiles); monthly **competitors' broken backlinks** and their **most-linked pages** (DataForSEO, ≈ $0.07 + ≈ $0.02 a competitor) — the second gives the **linkable-asset ideas** (data study / free tool / template / definitive guide), each tied to the competitor pages that prove it and the referring domains they hold, and never a promise of links. **Every prospect** (also the Backlink Monitor's and AI Growth's) qualified (gone / blocked / sells links / language / already linking), with the evidence to quote, up to 3 contacts, the recipient's country, **our page and the link text** (topic match × position band × links needed, paced). **Outreach Sequence Writer** (Claude): ≤ 10 sequences a week (first e-mail + 2 follow-ups; journalists: 1), then the **draft gate** (*LB Draft QA*, L2): claims against the facts on file, no bracket left to fill, the address on their own domain, a real quote from their page, one link to the page we chose on the canonical host, length and one clear ask, the words we never use, the business name as the site model has it — a draft that fails is held as `needs_edit` with its reasons. **Two subjects a batch** (L7): the writer gives every sequence a second subject in the other style, the drafts take the two in turn (A, B, A, B …) and the app shows the reply rate per style — with **no verdict under 30 first e-mails per variant**. Nothing is sent here: the **web app** sends from the customer's own mailbox after approval.

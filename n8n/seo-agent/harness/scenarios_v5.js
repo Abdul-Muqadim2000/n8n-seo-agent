@@ -4829,7 +4829,11 @@ await guard('retries, AI data, sister domains and the fact base', async () => {
   check('G1: the allow-list holds only what is not idempotent — the report callbacks and the WordPress draft — each with its reason, and those nodes really carry no retry', Object.keys(RW.allow).length === 12 && Object.keys(RW.allow).every(k => /^POST /.test(k) || k === 'Create WP Draft') && Object.values(RW.allow).every(v => String(v).length > 20) && httpNode('SEO Agent v4', 'POST Callback').retryOnFail === false && httpNode('SEO Agent — Publish to WordPress', 'Create WP Draft').retryOnFail === false, JSON.stringify(Object.keys(RW.allow)));
   check('G1: the lint bites — it flags an HTTP node with no retry and one with a weaker retry, honours its allow-list and leaves other node types alone (self-test run by build_v4.py section 37)', RW.selftest.flags_node_without_retry === true && RW.selftest.flags_weaker_retry === true && RW.selftest.honours_allow_list === true && RW.selftest.ignores_other_nodes === true, JSON.stringify(RW.selftest));
   const GATE = ['Run AI Requests', 'AI Retry Requests', 'Any AI Retries?', 'Wait Before AI Retry', 'Run AI Retries', 'Merge AI Answers', 'Parse AI Answers'];
-  check('D19: the retry gate is wired in both AI workflows (the pause is a Wait node, the retry an own DataForSEO call, the answers merged before the parser)', ['SEO Agent — AI Visibility Tracker', 'SEO Agent — AI Pulse'].every(wf => JSON.stringify((RW.ai_gate || {})[wf]) === JSON.stringify(GATE)), JSON.stringify(RW.ai_gate));
+  // B-A10 (2026-10-15): a workflow records as many gate chains as it has DataForSEO calls now (the AI Visibility Tracker also
+  // gates its monthly question-discovery pull), so this asks that D19's seven nodes are all there IN ORDER, not that they are
+  // the only ones recorded.
+  const inOrder = (chain, want) => { const ix = want.map(n => (chain || []).indexOf(n)); return ix.every(i => i >= 0) && ix.every((v, k) => k === 0 || v > ix[k - 1]); };
+  check('D19: the retry gate is wired in both AI workflows (the pause is a Wait node, the retry an own DataForSEO call, the answers merged before the parser)', ['SEO Agent — AI Visibility Tracker', 'SEO Agent — AI Pulse'].every(wf => inOrder((RW.ai_gate || {})[wf], GATE)), JSON.stringify(RW.ai_gate));
 
   // ---------- B. D19: a 50000 task error inside an HTTP 200 is re-sent once, and the retry's answer is used and counted ----------
   const qs = [['Which companies help UAE businesses with e-invoicing before 2027?', 'recommend'], ['What should I check before choosing an e-invoicing provider in the UAE?', 'choose'], ['What is Northwind ERP and what does it offer?', 'brand']];
@@ -12112,6 +12116,146 @@ await guard('B-L1..B-L5 — the five defects the rule-1 lint found', async () =>
     && !wf83.json.lineage.some(l => /site audit/i.test(l.figure)), JSON.stringify(wf83.json.lineage.map(l => [l.figure, l.source, l.basis])));
   check('B-L3: the .doc spells out what "modelled" and "estimated" mean, so a figure cannot be read as a count of anything',
     /provider estimate for a single keyword/.test(doc83) && /is computed, not counted/.test(doc83) && /one results page/.test(doc83), 'footer missing');
+  reset();
+});
+
+// ===================================================================================
+// S85 (2026-10-15, FIX_PLAN.md §3.14 row B-A10; docs/system-review-2026-10-14/INVARIANTS.md rule 3 — build section 75)
+// An answer nobody asked twice for. DataForSEO reports most of its failures INSIDE an HTTP 200, where n8n's `retryOnFail`
+// cannot see them: in execution 549 *SERP Top 10* and *Facts SERP* both came back 40101 inside a 200, neither was re-sent,
+// and a ladder was planned, scored "winnable 68" and written on a results page nobody had ever seen (R18). R18 gated three
+// chains by hand; the ratchet then measured 49 DataForSEO nodes across 12 workflows outside a gate. Section 75 splices the
+// one shape (dfs_gate.py) around the rest.
+// This scenario runs the REAL generated gate nodes against real DataForSEO envelopes and proves the three things the gate
+// exists for: a task error inside a 200 is sent again; a retry that answers is counted ONCE; and a call that fails twice
+// leaves its evidence `unavailable`, with nothing downstream scoring on it.
+// ===================================================================================
+await guard('B-A10 — a failure inside an HTTP 200 is asked again once, counted once, and said out loud when it still fails', async () => {
+  reset(); const SN = 'S85 B-A10 — the in-200 retry gate on every DataForSEO call: asked again once, counted once by task id, and `unavailable` when it still fails';
+  begin(SN);
+  const check = (label, ok, detail) => { H.results.push({ scenario: SN, node: 'assert ' + label, ok: !!ok, ms: 0, error: ok ? '' : String(detail || 'assertion failed').slice(0, 600), items: [] }); console.log('   ' + (ok ? 'ok   ' : 'FAIL ') + label + (ok ? '' : ' -> ' + String(detail || '').slice(0, 400))); };
+  const IN200 = require('./in200.json');
+
+  // the answers DataForSEO really gives, all of them inside an HTTP 200 (R18's own codes)
+  const ok200 = (id, cost, result) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', cost, tasks: [{ id, status_code: 20000, status_message: 'Ok.', cost, result: [result] }] });
+  const taskErr = (id, code, msg) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', cost: 0, tasks: [{ id, status_code: code, status_message: msg, cost: 0, result: null }] });
+  const emptyOk = (id, cost) => ({ version: '0.1.2026', status_code: 20000, status_message: 'Ok.', cost, tasks: [{ id, status_code: 20000, status_message: 'Ok.', cost, result: [] }] });
+  const serpResult = (keyword, domain, position) => ({ keyword, se_results_count: 1200, datetime: '2026-10-15 08:00:00 +00:00', items: Array.from({ length: 10 }, (_, i) => ({ type: 'organic', rank_group: i + 1, rank_absolute: i + 1, domain: i + 1 === position ? 'www.' + domain : 'rival' + (i + 1) + '.example', url: i + 1 === position ? 'https://www.' + domain + '/p/' : 'https://rival' + (i + 1) + '.example/p' })) });
+
+  // ---------- 1. the week's rank checks: three keywords, the middle one 40101 inside a 200 ----------
+  const dom = 'northwind-erp.com';
+  const kws = ['erp uae', 'erp dubai', 'erp partner uae'];
+  const checks = kws.map((k, i) => ({ ladder_id: 'lad_1', keyword: k, domain: dom, rung: i + 1, device: 'desktop', competitors: [], endpoint: 'https://api.dataforseo.com/v3/serp/google/organic/live/advanced', body: [{ keyword: k, depth: 50 }] }));
+  mock('Tracker Plan', checks); mock('Any Checks?', checks);
+  const first = [ok200('t-a', 0.01, serpResult(kws[0], dom, 3)), taskErr('t-b', 40101, 'Internal SE Server Error.'), ok200('t-c', 0.01, serpResult(kws[2], dom, 7))];
+  mock('SERP Check', first);
+  const plan = await run('SERP Check Retry Plan', first);
+  check('B-A10 / R18: a task error 40101 INSIDE an HTTP 200 is a failure — exactly one request is sent again, the one that failed, carrying its own body',
+    plan.length === 1 && plan[0].json.is_retry === true && plan[0].json.retry_of === 1 && plan[0].json.keyword === 'erp dubai'
+    && /Internal SE Server Error/.test(plan[0].json.retry_reason) && plan[0].json.failed_total === 1,
+    JSON.stringify(plan.map(p => p.json)).slice(0, 300));
+
+  mock('SERP Check (Retry)', [ok200('t-b2', 0.01, serpResult(kws[1], dom, 5))]);
+  const merged = await run('SERP Check Answers', first);
+  const ev = merged[0].json.__dfs;
+  check('B-A10: the retry\'s answer takes the failed one\'s PLACE, in order, so everything downstream still pairs request to answer',
+    merged.length === 3 && merged[1].json.tasks[0].id === 't-b2' && merged[0].json.tasks[0].id === 't-a' && merged[2].json.tasks[0].id === 't-c',
+    JSON.stringify(merged.map(m => m.json.tasks[0].id)));
+  check('B-A10 / rule 1: the evidence says what really happened — 3 asked, 3 answered, 1 failed first, 1 sent again, 1 answered on the retry — and is not `unavailable`',
+    ev.asked === 3 && ev.checked === 3 && ev.failed === 0 && ev.retried === 1 && ev.retry_answered === 1 && ev.unavailable === false && /failed/.test(ev.note),
+    JSON.stringify(ev));
+  check('B-A10 / R28: the money is BOTH attempts, each task counted once by its own id — $0.03 over three tasks, never the retry alone and never the pair twice',
+    ev.cost_usd === 0.03 && ev.tasks === 3 && /counted once by task id/.test(ev.cost_basis)
+    && merged[1].json.__dfs_cost_usd === 0.01, JSON.stringify({ cost: ev.cost_usd, tasks: ev.tasks, item: merged[1].json.__dfs_cost_usd }));
+  const pos = await run('Parse Positions', merged);
+  check('B-A10: and the week is whole — the keyword that failed at the first attempt carries its real position (#5) from the retry, not -1',
+    pos.length === 3 && pos[1].json.keyword === 'erp dubai' && pos[1].json.position === 5 && pos[1].json.share_of_voice > 0,
+    JSON.stringify(pos.map(p => [p.json.keyword, p.json.position])));
+
+  // R28 again, on the one case where BOTH attempts are billed: a task that answers 20000 with an EMPTY result did the work and
+  // is charged for, so the retry is a second charge — unless the provider repeats the task id, which is what R28 was about.
+  const billedTwice = [ok200('t-a', 0.01, serpResult(kws[0], dom, 3)), emptyOk('t-b', 0.01), ok200('t-c', 0.01, serpResult(kws[2], dom, 7))];
+  mock('SERP Check', billedTwice);
+  const planEmpty = await run('SERP Check Retry Plan', billedTwice);
+  check('B-A10: a task that answered 20000 with an EMPTY result is asked again on this path — a results page with no items is not a results page',
+    planEmpty.length === 1 && planEmpty[0].json.is_retry === true && planEmpty[0].json.retry_of === 1, JSON.stringify(planEmpty[0].json));
+  mock('SERP Check (Retry)', [ok200('t-b', 0.01, serpResult(kws[1], dom, 5))]);
+  const sameId = await run('SERP Check Answers', billedTwice);
+  check('B-A10 / R28: when the provider repeats the TASK ID across the two attempts it is one task and one charge — $0.03, not $0.04 — which is the overcount R28 fixed, kept out of the gate',
+    sameId[0].json.__dfs.cost_usd === 0.03 && sameId[0].json.__dfs.tasks === 3 && sameId[1].json.__dfs_cost_usd === 0.01,
+    JSON.stringify({ cost: sameId[0].json.__dfs.cost_usd, tasks: sameId[0].json.__dfs.tasks, item: sameId[1].json.__dfs_cost_usd }));
+  mock('SERP Check (Retry)', [ok200('t-b-new', 0.01, serpResult(kws[1], dom, 5))]);
+  const twoIds = await run('SERP Check Answers', billedTwice);
+  check('B-A10 / R28: and when the retry really is a NEW task, both are counted — $0.04 over four tasks; the rule is the id, never "the retry replaced it so forget the first"',
+    twoIds[0].json.__dfs.cost_usd === 0.04 && twoIds[0].json.__dfs.tasks === 4 && twoIds[1].json.__dfs_cost_usd === 0.02,
+    JSON.stringify({ cost: twoIds[0].json.__dfs.cost_usd, tasks: twoIds[0].json.__dfs.tasks, item: twoIds[1].json.__dfs_cost_usd }));
+  mock('SERP Check', first);
+
+  // ---------- 2. it fails twice: `unavailable`, and nothing downstream scores on it ----------
+  reset();
+  mock('Tracker Plan', checks); mock('Any Checks?', checks);
+  const allBad = [taskErr('t-a', 50000, 'Internal Server Error.'), taskErr('t-b', 40101, 'Internal SE Server Error.'), taskErr('t-c', 50000, 'Internal Server Error.')];
+  mock('SERP Check', allBad);
+  const plan2 = await run('SERP Check Retry Plan', allBad);
+  mock('SERP Check (Retry)', plan2.map(() => taskErr('t-again', 50000, 'Internal Server Error.')));
+  const merged2 = await run('SERP Check Answers', allBad);
+  const ev2 = merged2[0].json.__dfs;
+  check('B-A10 / rule 1: every attempt failed, so the evidence is `unavailable` — 3 asked, 0 checked, 3 sent again, 0 answered — in the provider\'s OWN words',
+    ev2.unavailable === true && ev2.asked === 3 && ev2.checked === 0 && ev2.retried === 3 && ev2.retry_answered === 0
+    && /Internal Server Error|Internal SE Server Error/.test(ev2.error), JSON.stringify(ev2));
+  check('B-A10 / rule 1: it says "could not be checked", never "no demand" or "not in the top 50" — the sentence R18 was written for',
+    /could not be checked/.test(ev2.note) && !/no demand|not in the top/.test(ev2.note) && ev2.cost_usd === 0, ev2.note);
+  const pos2 = await run('Parse Positions', merged2);
+  check('B-A10 / rule 1: nothing downstream scores on it — every position is -1 ("check again") and every share of voice is -1, never 0 and never "not in the top 50"',
+    pos2.length === 3 && pos2.every(p => p.json.position === -1 && p.json.share_of_voice === -1),
+    JSON.stringify(pos2.map(p => [p.json.keyword, p.json.position, p.json.share_of_voice])));
+
+  // ---------- 3. what a second attempt cannot help, and what it must never be asked for ----------
+  reset();
+  mock('Tracker Plan', checks); mock('Any Checks?', checks);
+  const perm = [ok200('t-a', 0.01, serpResult(kws[0], dom, 3)), taskErr('t-b', 40501, 'Invalid Field: web_search_country_iso_code.'), taskErr('t-c', 40200, 'Payment Required: insufficient funds.')];
+  mock('SERP Check', perm);
+  const plan3 = await run('SERP Check Retry Plan', perm);
+  check('B-A10: a wrong field and an empty account are PERMANENT — nothing is sent again, and the reason is the provider\'s own (40501 is the live refusal of 2026-10-08)',
+    plan3.length === 1 && plan3[0].json.skip === true && plan3[0].json.failed === 2 && /Invalid Field|insufficient funds/.test(plan3[0].json.reason),
+    JSON.stringify(plan3[0].json));
+  const pairless = await run('SERP Check Retry Plan', [perm[0]]);
+  check('B-A10: when the requests and the answers cannot be paired one to one, NOTHING is sent again — a request re-sent in the wrong place is worse than one not re-sent',
+    pairless[0].json.skip === true && pairless[0].json.unpaired === true && /could not be paired/.test(pairless[0].json.reason),
+    JSON.stringify(pairless[0].json));
+
+  // ---------- 4. the crawl: a call that CREATES a paid task never re-sends an empty result ----------
+  reset();
+  mock('Audit Via Form?', [{ domain: dom, crawl_max_pages: 200 }]);
+  const emptyCrawl = await run('Start Crawl Retry Plan', [emptyOk('crawl-1', 0.09)]);
+  check('B-A10: on_page/task_post CREATES a paid task, so one that answered 20000 with an empty result is NEVER sent again — that would be a second crawl, billed twice',
+    emptyCrawl[0].json.skip === true && emptyCrawl[0].json.is_retry === false, JSON.stringify(emptyCrawl[0].json));
+  const deadCrawl = await run('Start Crawl Retry Plan', [taskErr('crawl-1', 50000, 'Internal Server Error.')]);
+  check('B-A10: but a crawl that never started (50000 inside a 200, billed 0) IS created again — the audit is not quietly run on no pages',
+    deadCrawl[0].json.is_retry === true && deadCrawl[0].json.retry_of === 0, JSON.stringify(deadCrawl[0].json));
+
+  // ---------- 5. the ratchet: every DataForSEO call in every workflow is gated, or excused IN WRITING ----------
+  const wfs = Object.keys(IN200);
+  const totals = wfs.reduce((a, w) => ({ gated: a.gated + IN200[w].gated.length, ungated: a.ungated + IN200[w].ungated.length }), { gated: 0, ungated: 0 });
+  console.log('   in-200 ratchet ->', wfs.length, 'workflows,', totals.gated, 'gated,', totals.ungated, 'on the ratchet');
+  check('B-A10: the ratchet covers all twelve workflows that call DataForSEO, not the main one alone — that hole is how ten `DFS Balance End` nodes had slipped in ungated and unmeasured',
+    wfs.length === 12 && totals.gated >= 70, JSON.stringify({ workflows: wfs.length, ...totals }));
+  check('B-A10: not one node is left on the ratchet without a reason written beside it — an excused node is a decision, and a decision with no reason cannot be told from a debt nobody got to',
+    wfs.every(w => IN200[w].ungated.every(n => String((IN200[w].excused || {})[n] || '').length > 80)),
+    JSON.stringify(wfs.flatMap(w => IN200[w].ungated.filter(n => !(IN200[w].excused || {})[n]).map(n => w + ' / ' + n))));
+  check('B-A10: and what stays is only the two shapes a gate would be wrong for — the free appendix/user_data balance probes, which fail open, and the crawl poll, which already re-asks in its own loop',
+    wfs.every(w => IN200[w].ungated.every(n => /^DFS Balance/.test(n) || n === 'Get Crawl Summary')),
+    JSON.stringify(wfs.flatMap(w => IN200[w].ungated.map(n => w + ' / ' + n))));
+  check('B-A10: every call that scores, ranks or advises is gated now — the week\'s positions, the keyword check, the reach, the crawl, the link ledger and the AI panel among them',
+    ['SERP Check', 'SERP Check (Site)', 'Run Assess Requests', 'Run Reach Requests', 'Candidate SERP', 'Start Crawl', 'Get Crawled Pages', 'Run BL Requests', 'Run Discovery', 'Run LB DFS', 'Ask LLMs', 'Site Authority']
+      .every(n => wfs.some(w => IN200[w].gated.includes(n))),
+    JSON.stringify(['SERP Check', 'Run Assess Requests', 'Start Crawl', 'Run BL Requests'].filter(n => !wfs.some(w => IN200[w].gated.includes(n)))));
+  // every gated call must have its OWN second attempt in the same workflow: `X (Retry)` for the spliced ones, `Run AI Retries`
+  // for D19's AI gate, whose two nodes are named the other way round. A gate with no second attempt is a label.
+  const second = (w, n) => IN200[w].gated.includes(n + ' (Retry)') || (n === 'Run AI Requests' && IN200[w].gated.includes('Run AI Retries'));
+  const unpaired = wfs.flatMap(w => IN200[w].gated.filter(n => !/ \(Retry\)$|Retries$/.test(n) && !second(w, n)).map(n => w + ' / ' + n));
+  check('B-A10: and every gated call has its own second attempt beside it, so the gate is a chain and not a label',
+    !unpaired.length, JSON.stringify(unpaired));
   reset();
 });
 

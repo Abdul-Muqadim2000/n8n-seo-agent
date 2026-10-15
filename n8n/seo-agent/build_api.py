@@ -1,6 +1,7 @@
 import json, re, uuid
 import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
+import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
 # B-A6 (2026-10-15, build section 63): the idempotency log lives in seo_cache, which is where this engine already keeps
 # keyed-with-a-lifetime values (`sitemap:`, `age:`, `desc:`, `reach:`, `cost:`). See the long note beside the nodes for why NOT
 # seo_run_ledger, which the brief for this work assumed.
@@ -408,6 +409,25 @@ for _s, _o in _AC.items():
             for _t in _l: assert _t['node'] in _names, _t['node']
 assert all(n.get('credentials') for n in _AN if n['type'] in ('@n8n/n8n-nodes-langchain.lmChatAnthropic', 'n8n-nodes-base.httpRequest', 'n8n-nodes-base.webhook')), 'keyword check: credential slot missing'
 kwf = {"id": "SEOagentAssess", "name": "SEO Agent — Keyword Check", "active": False, "settings": {"executionOrder": "v1", "errorWorkflow": "SEOagentErrHandl", "executionTimeout": 45}, "tags": [], "nodes": _AN, "connections": _AC}
+# ---- B-A10 (2026-10-15, INVARIANTS rule 3): the keyword check's one DataForSEO call goes through the in-200 retry gate ----
+# This is the synchronous answer a customer waits for: difficulty for your site, the plan type, the topic fit. *Assess Result*
+# already refuses honestly when the overview fails (ok: false -> HTTP 502, never a verdict on nothing), so what was missing was
+# only the second attempt — a 40101 inside a 200 turned a $0.01 question into "we could not check" with no one asking again.
+_gk10 = dfs_gate.splice(kwf, 'Run Assess Requests', os.path.join(_here, 'v5'),
+                        what='the search data behind this keyword check', unit='request', code_dir=_code if os.path.isdir(_code) else None)
+retry_lint.record_gate('SEO Agent — Keyword Check', _gk10['chain'])
+# R28: the price the caller is told is both attempts, each task counted once by its own id — the merged list alone would miss a
+# first attempt that was billed and then replaced (a task answering 20000 with an empty result did the work).
+_ar10 = next(n for n in _AN if n['name'] == 'Assess Result')
+_old10 = "const dfs_cost = +res.reduce((s, x) => s + (x && Array.isArray(x.tasks) ? x.tasks.reduce((a, t) => a + (Number(t && t.cost) || 0), 0) : 0), 0).toFixed(4);"
+assert _ar10['parameters']['jsCode'].count(_old10) == 1, 'B-A10: Assess Result no longer prices the run where it did'
+_ar10['parameters']['jsCode'] = _ar10['parameters']['jsCode'].replace(_old10,
+    "// B-A10 (2026-10-15, R28): what both attempts really cost, each task counted once by its own id — the gate's own figure.\n"
+    "const __ev = (res.find(x => x && x.__dfs) || {}).__dfs || null;\n"
+    "const dfs_cost = __ev && Number.isFinite(Number(__ev.cost_usd)) ? Number(__ev.cost_usd)\n"
+    "  : +res.reduce((s, x) => s + (x && Array.isArray(x.tasks) ? x.tasks.reduce((a, t) => a + (Number(t && t.cost) || 0), 0) : 0), 0).toFixed(4);")
+assert '__dfs' in _ar10['parameters']['jsCode'], 'B-A10: the keyword check does not price both attempts'
+retry_lint.check_in200(kwf)
 url_lint.check(kwf)   # D15: no node builds a site URL by hand (url_lint.py)
 retry_lint.check(kwf)   # G1: every external HTTP node carries the retry rule (retry_lint.py)
 json.dump([freeze_ids(kwf)], open(os.path.join(os.path.dirname(_out), 'SEO_Agent_Keyword_Check.json'), 'w'), indent=2, ensure_ascii=False)

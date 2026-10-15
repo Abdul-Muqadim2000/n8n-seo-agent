@@ -6,6 +6,7 @@ import url_lint   # D15 (2026-10-11 system review): the canonical-host lint
 import env_settings as _env   # B-F5 (2026-10-15): a build with no n8n/.env must refuse, not bake its fallbacks
 _env.require_settings('build_ladder_extras.py')
 import retry_lint   # G1 (2026-10-11 system review): one retry rule for every external HTTP node
+import dfs_gate     # B-A10 (2026-10-15): INVARIANTS rule 3 — the in-200 retry gate, one shape for every DataForSEO call
 from ladder_common import (LADDER_TABLE, HISTORY_TABLE, LADDER_COLS, HISTORY_COLS, LOG_TABLE, PAGES_TABLE, PAGES_COLS, SITES_TABLE, SITES_COLS,
                            MONITORS_TABLE, MONITORS_COLS, DT_TYPE, DT_VERSION, dt_create_params, dt_insert_params, dt_get_all_params, dt_get_where_params,
                            RUN_LEDGER_TABLE, RUN_LEDGER_COLS, dt_update_params, monitor_ledger_js, LEDGER_EST,   # R9 (2026-10-13)
@@ -155,7 +156,33 @@ for a, b in [('Tracker Plan', 'Ensure Run Ledger (Tracker)'), ('Ensure Run Ledge
 LEDGER_WIRING['SEO Agent — Rank Tracker'] = {'mode': 'rank_tracker', 'plan': 'Tracker Plan', 'reserve': 'Run Ledger Row (Tracker)',
                                              'settle': 'Settle Run Ledger (Tracker)', 'settle_from': ['Tracker Report'], 'measured': '', 'est': LEDGER_EST['rank_tracker'],
                                              'resume': 'After Run Ledger (Tracker)'}   # R17 (2026-10-14): hands Tracker Plan's items back
-write(wf('SEOagentTracker1', 'SEO Agent — Rank Tracker', N, C), 'SEO_Agent_Rank_Tracker.json')
+# ---- B-A10 (2026-10-15, INVARIANTS rule 3): the week's rank checks go through the in-200 retry gate ----
+# The reading side was already honest (RS.read counts a task error inside a 200 as failed, position -1 is "check again" and never
+# "does not rank") — what was missing was the second attempt. A week's position, the trend it feeds and the "won" rule all rest on
+# this one call, so a provider-side failure that nobody re-sends is a week of a ladder's history lost for $0.015.
+_wf_tracker = wf('SEOagentTracker1', 'SEO Agent — Rank Tracker', N, C)
+_gt = dfs_gate.splice(_wf_tracker, 'SERP Check', V5, what='the live Google results for the week\'s tracked keywords',
+                      unit='keyword check', code_dir=CODE)
+retry_lint.record_gate('SEO Agent — Rank Tracker', _gt['chain'])
+# and it is SAID: the progress note names what could not be read, so a smaller week is not read as a fall (R19's rule)
+_tr9 = next(n for n in _wf_tracker['nodes'] if n['name'] == 'Tracker Report')
+_js9 = _tr9['parameters']['jsCode']
+_anchor9 = "const plan = $('Tracker Plan').all().map(i => i.json).filter(p => p && !p.nothing_to_do);"
+assert _js9.count(_anchor9) == 1, 'B-A10: the Rank Tracker report does not start from the plan any more'
+_js9 = _js9.replace(_anchor9, _anchor9 + "\n"
+    "// B-A10 (2026-10-15, INVARIANTS rule 3): what the week's checks really did — asked, answered, failed, sent again — read from\n"
+    "// the gate's own evidence block. A week measured on fewer keywords than the last one is not a fall, and now it says so.\n"
+    "const checkEvidence = (() => { try { return $('SERP Check Answers').first().json.__dfs || null; } catch (e) { return null; } })();", 1)
+_sum9 = "head_line: headSerp ? headSerp.line : '', mobile_checked: rowsK.filter(r => (mobiles.get(r.keyword) || {}).fresh).length };"
+assert _js9.count(_sum9) == 1, 'B-A10: the Rank Tracker summary does not end where it used to'
+_js9 = _js9.replace(_sum9, "head_line: headSerp ? headSerp.line : '', mobile_checked: rowsK.filter(r => (mobiles.get(r.keyword) || {}).fresh).length,\n"
+    "    checks: checkEvidence ? { asked: checkEvidence.asked, read: checkEvidence.checked, failed: checkEvidence.failed,\n"
+    "      sent_again: checkEvidence.retried, answered_on_retry: checkEvidence.retry_answered, unavailable: checkEvidence.unavailable,\n"
+    "      note: checkEvidence.note || '', cost_usd: checkEvidence.cost_usd ?? null, cost_basis: checkEvidence.cost_basis || '' } : null };", 1)
+_tr9['parameters']['jsCode'] = _js9
+assert "$('SERP Check Answers')" in _js9 and 'checks: checkEvidence' in _js9, 'B-A10: the Rank Tracker report cannot see what the checks did'
+retry_lint.check_in200(_wf_tracker)
+write(_wf_tracker, 'SEO_Agent_Rank_Tracker.json')
 # R31 (2026-10-14): written AFTER the workflow, because ledger_mainline() fills `ai_nodes` (the Claude nodes the settle checks) and
 # `balance` (the free account reading) into the wiring entry at write time.
 _lw9 = os.path.join(HERE, 'harness', 'ledger_wiring.json')
